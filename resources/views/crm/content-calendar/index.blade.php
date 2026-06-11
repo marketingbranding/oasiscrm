@@ -1,0 +1,101 @@
+@extends('layouts.crm')
+
+@section('title', 'Content Calendar - Oasis CRM')
+
+@section('content')
+    <div class="bg-[#b3bd95] border-2 border-black px-4 py-2 mb-6">
+        <h1 class="font-['Arial_Black'] font-black text-xl uppercase">Content Calendar</h1>
+    </div>
+
+    @if(Auth::user()->isSuperadmin() && isset($branches) && $branches->count() > 0)
+    <div class="bg-white border-2 border-black p-3 mb-6">
+        <form method="GET" action="{{ route('content-calendar.index') }}" class="flex items-center gap-3 flex-wrap">
+            <label class="font-[Helvetica] font-bold text-xs uppercase">Pilih Cabang:</label>
+            <select name="branch_id" onchange="this.form.submit()" class="border-2 border-black px-3 py-1.5 text-sm font-['Times_New_Roman'] bg-white rounded-none">
+                <option value="">— Semua Cabang —</option>
+                @foreach($branches as $b)
+                    <option value="{{ $b->id }}" {{ (string)$selectedBranchId === (string)$b->id ? 'selected' : '' }}>{{ $b->name }}</option>
+                @endforeach
+            </select>
+        </form>
+    </div>
+    @endif
+
+    <div class="flex items-center justify-between mb-4">
+        <div class="flex items-center gap-2">
+            <a href="{{ route('content-calendar.index', ['month' => $prevMonth->month, 'year' => $prevMonth->year, 'branch_id' => request('branch_id')]) }}" class="bg-black text-white px-3 py-1.5 text-sm font-[Helvetica] font-bold border-2 border-black rounded-none hover:bg-gray-800">
+                ← Prev
+            </a>
+            <span class="font-['Arial_Black'] font-black text-lg px-3">{{ $currentMonth->format('F Y') }}</span>
+            <a href="{{ route('content-calendar.index', ['month' => $nextMonth->month, 'year' => $nextMonth->year, 'branch_id' => request('branch_id')]) }}" class="bg-black text-white px-3 py-1.5 text-sm font-[Helvetica] font-bold border-2 border-black rounded-none hover:bg-gray-800">
+                Next →
+            </a>
+        </div>
+        <a href="{{ route('content-calendar.create') }}" class="bg-[#e91d2a] text-white px-4 py-1.5 text-sm font-[Helvetica] font-bold border-2 border-black rounded-none hover:bg-red-600">
+            + Buat Konten
+        </a>
+    </div>
+
+    @php
+        $dayNames = ['Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab', 'Min'];
+        $statusColors = [
+            'draft' => 'bg-[#9ab6c8]',
+            'review' => 'bg-[#e6915d]',
+            'approved' => 'bg-[#b3bd95]',
+            'posted' => 'bg-[#c0d4a7]',
+        ];
+    @endphp
+
+    <div class="border-2 border-black bg-white">
+        <table class="w-full border-collapse" style="table-layout: fixed;">
+            <thead>
+                <tr>
+                    @foreach($dayNames as $name)
+                        <th class="bg-black text-white px-2 py-2 text-center font-[Helvetica] font-bold text-xs uppercase border border-black">{{ $name }}</th>
+                    @endforeach
+                </tr>
+            </thead>
+            <tbody>
+                @forelse($calendar as $week)
+                    <tr>
+                        @foreach($week as $cell)
+                            @php
+                                $hasItems = $cell['day'] && $cell['items']->count() > 0;
+                            @endphp
+                            <td class="p-1.5 align-top border border-black {{ $cell['day'] ? 'bg-white' : 'bg-gray-100' }} {{ $cell['isToday'] ? 'ring-2 ring-inset ring-[#e91d2a]' : '' }}" style="height: 100px; vertical-align: top;">
+                                @if($cell['day'])
+                                    <div class="flex items-center justify-between mb-1">
+                                        <span class="font-['Arial_Black'] font-black text-sm {{ $cell['isToday'] ? 'text-[#e91d2a]' : 'text-black' }}">{{ $cell['day'] }}</span>
+                                        @if($hasItems)
+                                            <span class="text-[10px] font-[Helvetica] font-bold text-gray-500">{{ $cell['items']->count() }}</span>
+                                        @endif
+                                    </div>
+                                    @foreach($cell['items'] as $item)
+                                        <a href="{{ route('content-calendar.edit', $item->id) }}"
+                                           class="block {{ $statusColors[$item->status] ?? 'bg-gray-200' }} border border-black px-1 py-0.5 mb-0.5 text-[10px] font-[Helvetica] font-bold leading-tight text-black truncate rounded-none hover:opacity-80"
+                                           title="{{ $item->title }} — {{ $item->platform }} — {{ strtoupper($item->status) }}">
+                                            {{ $item->title }}
+                                        </a>
+                                    @endforeach
+                                @endif
+                            </td>
+                        @endforeach
+                    </tr>
+                @empty
+                    <tr>
+                        <td colspan="7" class="px-4 py-10 text-center text-sm font-['Times_New_Roman'] border border-black">
+                            Tidak ada konten untuk bulan ini.
+                        </td>
+                    </tr>
+                @endforelse
+            </tbody>
+        </table>
+    </div>
+
+    <div class="mt-4 flex items-center gap-4 text-xs font-[Helvetica] font-bold">
+        <span class="flex items-center gap-1"><span class="bg-[#9ab6c8] border border-black px-2 py-0.5">DRAFT</span> Draft</span>
+        <span class="flex items-center gap-1"><span class="bg-[#e6915d] border border-black px-2 py-0.5">REVIEW</span> Review</span>
+        <span class="flex items-center gap-1"><span class="bg-[#b3bd95] border border-black px-2 py-0.5">APPROVED</span> Approved</span>
+        <span class="flex items-center gap-1"><span class="bg-[#c0d4a7] border border-black px-2 py-0.5">POSTED</span> Posted</span>
+    </div>
+@endsection

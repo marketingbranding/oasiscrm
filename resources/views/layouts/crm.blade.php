@@ -45,6 +45,9 @@
                     <a href="{{ route('branches.index') }}" class="block px-3 py-2 text-sm font-[Helvetica] font-bold text-black hover:bg-[#e6915d] hover:text-black border border-black mb-1 rounded-none {{ request()->routeIs('branches.*') ? 'bg-[#e6915d]' : 'bg-white' }}">
                         <span class="text-[#e6915d]">█</span> Cabang
                     </a>
+                    <a href="{{ route('admin-users.index') }}" class="block px-3 py-2 text-sm font-[Helvetica] font-bold text-black hover:bg-[#8c9ae0] hover:text-black border border-black mb-1 rounded-none {{ request()->routeIs('admin-users.*') ? 'bg-[#8c9ae0]' : 'bg-white' }}">
+                        <span class="text-[#8c9ae0]">█</span> User
+                    </a>
                     @endif
                 </nav>
             </div>

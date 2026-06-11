@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Crm\AdminUserController;
 use App\Http\Controllers\Crm\BranchController;
 use App\Http\Controllers\Crm\ContentCalendarController;
 use App\Http\Controllers\Crm\DashboardController;
@@ -26,6 +27,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('/branches/{branch}/assign', [BranchController::class, 'assignForm'])->name('branches.assign');
         Route::post('/branches/{branch}/assign', [BranchController::class, 'assignStore'])->name('branches.assign-store');
         Route::delete('/branches/{user}/remove-admin', [BranchController::class, 'removeAdmin'])->name('branches.remove-admin');
+
+        Route::resource('admin-users', AdminUserController::class)->except(['show']);
     });
 });
 

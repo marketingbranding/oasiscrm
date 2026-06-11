@@ -12,16 +12,6 @@ use Illuminate\Support\Facades\Hash;
 
 class AdminUserController extends Controller
 {
-    public function __construct()
-    {
-        $this->middleware(function ($request, $next) {
-            if (!Auth::user()->isSuperadmin()) {
-                abort(403);
-            }
-            return $next($request);
-        });
-    }
-
     public function index()
     {
         $users = User::with(['role', 'branch'])

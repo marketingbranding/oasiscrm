@@ -9,9 +9,10 @@
     <link href="https://fonts.bunny.net/css?family=figtree:400,500,600&display=swap" rel="stylesheet" />
     @vite(['resources/css/app.css', 'resources/js/app.js'])
 </head>
-<body class="font-['Times_New_Roman'] antialiased bg-white">
-    <div class="border-2 border-black m-1 sm:m-2">
-        <div class="bg-black text-white font-[Helvetica] font-bold text-sm sm:text-base px-4 py-3 flex items-center justify-between">
+<body class="font-['Times_New_Roman'] antialiased bg-gray-200 min-h-screen flex flex-col">
+    <div class="border-2 border-black m-1 flex flex-col flex-1 bg-white">
+        {{-- Header --}}
+        <div class="bg-black text-white font-[Helvetica] font-bold text-sm sm:text-base px-4 py-3 flex items-center justify-between flex-shrink-0">
             <div class="flex items-center gap-2">
                 <span class="text-[#fcc20f] text-lg">◆</span>
                 <span>OASIS CRM</span>
@@ -29,8 +30,9 @@
             </div>
         </div>
 
-        <div class="flex flex-col sm:flex-row">
-            <div class="w-full sm:w-48 bg-white border-b-2 sm:border-b-0 sm:border-r-2 border-black">
+        {{-- Body --}}
+        <div class="flex flex-col sm:flex-row flex-1 min-h-0">
+            <div class="w-full sm:w-48 bg-white border-b-2 sm:border-b-0 sm:border-r-2 border-black overflow-y-auto">
                 <nav class="p-2">
                     <a href="{{ route('dashboard') }}" class="block px-3 py-2 text-sm font-[Helvetica] font-bold text-black hover:bg-[#9ab6c8] hover:text-black border border-black mb-1 rounded-none {{ request()->routeIs('dashboard') ? 'bg-[#9ab6c8]' : 'bg-white' }}">
                         <span class="text-[#9ab6c8]">█</span> Dashboard
@@ -52,7 +54,7 @@
                 </nav>
             </div>
 
-            <div class="flex-1 p-4 sm:p-6">
+            <div class="flex-1 p-4 sm:p-6 overflow-y-auto">
                 @if(session('success'))
                     <div class="bg-[#b3bd95] border-2 border-black px-4 py-3 mb-4 font-['Times_New_Roman'] text-sm">
                         {{ session('success') }}
@@ -67,7 +69,8 @@
             </div>
         </div>
 
-        <div class="border-t-2 border-black bg-white px-4 py-3 text-center text-xs font-['Times_New_Roman']">
+        {{-- Footer --}}
+        <div class="border-t-2 border-black bg-white px-4 py-3 text-center text-xs font-['Times_New_Roman'] flex-shrink-0">
             © {{ date('Y') }} Oasis CRM — Sistem Manajemen Konten Perumahan
         </div>
     </div>

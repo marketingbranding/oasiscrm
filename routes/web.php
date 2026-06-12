@@ -17,7 +17,7 @@ Route::get('/', function () {
 Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
 
-    Route::resource('content-calendar', ContentCalendarController::class)->except(['show']);
+    Route::resource('content-calendar', ContentCalendarController::class);
 
     Route::get('/database', [DatabaseController::class, 'index'])->name('database.index');
     Route::get('/database/fetch', [DatabaseController::class, 'fetch'])->name('database.fetch');

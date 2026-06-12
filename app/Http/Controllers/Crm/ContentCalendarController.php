@@ -101,6 +101,11 @@ class ContentCalendarController extends Controller
         return redirect()->route('content-calendar.index')->with('success', 'Konten berhasil ditambahkan.');
     }
 
+    public function show(ContentItem $contentItem)
+    {
+        return redirect()->route('content-calendar.edit', $contentItem);
+    }
+
     public function edit(ContentItem $contentItem)
     {
         $user = Auth::user();

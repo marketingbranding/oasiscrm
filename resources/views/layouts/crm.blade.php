@@ -36,7 +36,7 @@
         </div>
 
         {{-- Body --}}
-        <div class="flex flex-col sm:flex-row flex-1 overflow-y-auto">
+        <div class="flex flex-col sm:flex-row flex-1 overflow-y-auto min-h-0">
             <div x-show="sidebarOpen" x-transition.opacity.duration.200ms
                  class="w-full sm:w-48 bg-white border-b-2 sm:border-b-0 sm:border-r-2 border-black">
                 <nav class="p-2">

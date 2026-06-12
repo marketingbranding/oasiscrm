@@ -29,7 +29,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::post('/branches/{branch}/assign', [BranchController::class, 'assignStore'])->name('branches.assign-store');
         Route::delete('/branches/{user}/remove-admin', [BranchController::class, 'removeAdmin'])->name('branches.remove-admin');
 
-        Route::bind('admin_users', fn($value) => \App\Models\User::findOrFail($value));
+        Route::bind('admin_user', fn($value) => \App\Models\User::findOrFail($value));
         Route::resource('admin-users', AdminUserController::class)->except(['show']);
     });
 });

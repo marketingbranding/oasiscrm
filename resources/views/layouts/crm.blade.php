@@ -11,8 +11,9 @@
 </head>
 <body class="font-['Times_New_Roman'] antialiased bg-white h-screen flex flex-col"
       x-data="{ sidebarOpen: localStorage.getItem('sidebarOpen') !== 'false' }">
-    {{-- Header --}}
-    <div class="flex-shrink-0 bg-black text-white font-[Helvetica] font-bold text-sm sm:text-base px-4 py-3 flex items-center justify-between">
+    <div class="flex flex-col flex-1">
+        {{-- Header --}}
+        <div class="flex-shrink-0 bg-black text-white font-[Helvetica] font-bold text-sm sm:text-base px-4 py-3 flex items-center justify-between">
             <div class="flex items-center gap-2">
                 <button @click="sidebarOpen = !sidebarOpen; localStorage.setItem('sidebarOpen', sidebarOpen)"
                         class="hover:text-gray-300 text-base leading-none" title="Toggle sidebar">
@@ -36,7 +37,7 @@
         </div>
 
         {{-- Body --}}
-        <div class="flex flex-col sm:flex-row flex-1 overflow-y-auto min-h-0">
+        <div class="flex flex-col sm:flex-row flex-1 min-h-0">
             <div x-show="sidebarOpen" x-transition.opacity.duration.200ms
                  class="w-full sm:w-48 bg-white border-b-2 sm:border-b-0 sm:border-r-2 border-black">
                 <nav class="p-2">
@@ -60,7 +61,7 @@
                 </nav>
             </div>
 
-            <div class="flex-1 p-4 sm:p-6">
+            <div class="flex-1 p-4 sm:p-6 overflow-y-auto">
                 @if(session('success'))
                     <div class="bg-[#b3bd95] border-2 border-black px-4 py-3 mb-4 font-['Times_New_Roman'] text-sm">
                         {{ session('success') }}
@@ -79,5 +80,6 @@
         <div class="border-t-2 border-black bg-white px-4 py-3 text-center text-xs font-['Times_New_Roman'] flex-shrink-0">
             © {{ date('Y') }} Oasis CRM — Sistem Manajemen Konten Perumahan
         </div>
+    </div>
 </body>
 </html>

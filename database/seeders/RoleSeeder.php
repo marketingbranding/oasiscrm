@@ -40,5 +40,13 @@ class RoleSeeder extends Seeder
             'description' => 'Regular staff with basic CRM access',
             'is_superadmin' => false,
         ]);
+
+        Role::firstOrCreate([
+            'slug' => 'pusat',
+        ], [
+            'name' => 'Pusat',
+            'description' => 'Head office staff with cross-branch content access',
+            'is_superadmin' => false,
+        ]);
     }
 }

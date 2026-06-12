@@ -3,7 +3,7 @@
 @section('title', 'Dashboard - Oasis CRM')
 
 @section('content')
-    @if(isset($branches) && Auth::user()->isSuperadmin() && $branches->count() > 0)
+    @if(isset($branches) && Auth::user()->canViewAllBranches() && $branches->count() > 0)
     <div class="bg-white border-2 border-black p-3 mb-6">
         <form method="GET" action="{{ route('dashboard') }}" class="flex items-center gap-3 flex-wrap">
             <label class="font-[Helvetica] font-bold text-xs uppercase">Pilih Cabang:</label>
@@ -74,7 +74,7 @@
             @endif
         </div>
 
-        @if(Auth::user()->isSuperadmin() && isset($branchStatuses))
+        @if(Auth::user()->canViewAllBranches() && isset($branchStatuses))
         <div class="border-2 border-black">
             <div class="bg-black text-white px-3 py-2 font-[Helvetica] font-bold text-xs uppercase">Status Cabang</div>
             <div class="overflow-x-auto">

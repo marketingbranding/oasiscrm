@@ -15,7 +15,7 @@ class DatabaseController extends Controller
         $user = Auth::user();
         $selectedBranchId = $request->get('branch_id');
 
-        if ($user->isSuperadmin()) {
+        if ($user->canViewAllBranches()) {
             $branches = Branch::where('is_active', true)->get();
             if (!$selectedBranchId && $branches->isNotEmpty()) {
                 $selectedBranchId = $branches->first()->id;
@@ -54,7 +54,7 @@ class DatabaseController extends Controller
         $user = Auth::user();
         $branchId = $request->get('branch_id');
 
-        if (!$user->isSuperadmin()) {
+        if (!$user->canViewAllBranches()) {
             $branchId = $user->branch_id;
         }
 

@@ -15,7 +15,7 @@ class DashboardController extends Controller
         $user = Auth::user();
         $selectedBranchId = $request->get('branch_id');
 
-        if ($user->isSuperadmin()) {
+        if ($user->canViewAllBranches()) {
             $branches = Branch::where('is_active', true)->get();
 
             if ($selectedBranchId) {

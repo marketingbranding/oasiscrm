@@ -24,7 +24,7 @@
                     @enderror
                 </div>
 
-                @if(Auth::user()->isSuperadmin() && isset($branches) && $branches->count() > 0)
+                @if(Auth::user()->canViewAllBranches() && isset($branches) && $branches->count() > 0)
                 <div>
                     <label class="font-[Helvetica] font-bold text-xs uppercase block mb-1">Cabang</label>
                     <select name="branch_id" required class="w-full border-2 border-black px-3 py-2 text-sm font-['Times_New_Roman'] bg-white rounded-none @error('branch_id') border-[#e91d2a] @enderror">

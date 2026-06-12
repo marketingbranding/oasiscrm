@@ -17,7 +17,7 @@ class ContentCalendarController extends Controller
         $year = (int) $request->get('year', now()->year);
         $selectedBranchId = $request->get('branch_id');
 
-        if ($user->isSuperadmin()) {
+        if ($user->canViewAllBranches()) {
             $branches = Branch::where('is_active', true)->get();
             $query = ContentItem::with(['branch', 'creator']);
 
@@ -70,7 +70,7 @@ class ContentCalendarController extends Controller
     public function create()
     {
         $user = Auth::user();
-        if ($user->isSuperadmin()) {
+        if ($user->canViewAllBranches()) {
             $branches = Branch::where('is_active', true)->get();
         } else {
             $branches = collect([$user->branch]);
@@ -83,14 +83,14 @@ class ContentCalendarController extends Controller
         $user = Auth::user();
         $data = $request->validate([
             'title' => 'required|string|max:255',
-            'branch_id' => $user->isSuperadmin() ? 'required|exists:branches,id' : 'nullable',
+            'branch_id' => $user->canViewAllBranches() ? 'required|exists:branches,id' : 'nullable',
             'platform' => 'nullable|string|max:50',
             'scheduled_date' => 'required|date',
             'status' => 'required|in:draft,review,approved,posted',
             'notes' => 'nullable|string',
         ]);
 
-        if (!$user->isSuperadmin()) {
+        if (!$user->canViewAllBranches()) {
             $data['branch_id'] = $user->branch_id;
         }
 
@@ -109,11 +109,11 @@ class ContentCalendarController extends Controller
     public function edit(ContentItem $contentItem)
     {
         $user = Auth::user();
-        if (!$user->isSuperadmin() && $contentItem->branch_id !== $user->branch_id) {
+        if (!$user->canViewAllBranches() && $contentItem->branch_id !== $user->branch_id) {
             abort(403);
         }
 
-        if ($user->isSuperadmin()) {
+        if ($user->canViewAllBranches()) {
             $branches = Branch::where('is_active', true)->get();
         } else {
             $branches = collect([$user->branch]);
@@ -126,13 +126,13 @@ class ContentCalendarController extends Controller
     public function update(Request $request, ContentItem $contentItem)
     {
         $user = Auth::user();
-        if (!$user->isSuperadmin() && $contentItem->branch_id !== $user->branch_id) {
+        if (!$user->canViewAllBranches() && $contentItem->branch_id !== $user->branch_id) {
             abort(403);
         }
 
         $data = $request->validate([
             'title' => 'required|string|max:255',
-            'branch_id' => $user->isSuperadmin() ? 'required|exists:branches,id' : 'nullable',
+            'branch_id' => $user->canViewAllBranches() ? 'required|exists:branches,id' : 'nullable',
             'platform' => 'nullable|string|max:50',
             'scheduled_date' => 'required|date',
             'status' => 'required|in:draft,review,approved,posted',
@@ -146,7 +146,7 @@ class ContentCalendarController extends Controller
     public function destroy(ContentItem $contentItem)
     {
         $user = Auth::user();
-        if (!$user->isSuperadmin() && $contentItem->branch_id !== $user->branch_id) {
+        if (!$user->canViewAllBranches() && $contentItem->branch_id !== $user->branch_id) {
             abort(403);
         }
 

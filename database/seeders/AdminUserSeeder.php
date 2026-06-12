@@ -14,6 +14,7 @@ class AdminUserSeeder extends Seeder
     {
         $superadmin = Role::where('slug', 'superadmin')->first();
         $admin = Role::where('slug', 'admin')->first();
+        $pusat = Role::where('slug', 'pusat')->first();
 
         if ($superadmin) {
             User::updateOrCreate([
@@ -56,6 +57,18 @@ class AdminUserSeeder extends Seeder
                     );
                 }
             }
+        }
+
+        if ($pusat) {
+            User::updateOrCreate([
+                'email' => 'pusat@oasis.com',
+            ], [
+                'name' => 'Pusat',
+                'password' => Hash::make('password'),
+                'role_id' => $pusat->id,
+                'is_active' => true,
+                'email_verified_at' => now(),
+            ]);
         }
     }
 }

@@ -7,7 +7,7 @@
         <h1 class="font-['Arial_Black'] font-black text-xl uppercase">Content Calendar</h1>
     </div>
 
-    @if(Auth::user()->isSuperadmin() && isset($branches) && $branches->count() > 0)
+    @if(Auth::user()->canViewAllBranches() && isset($branches) && $branches->count() > 0)
     <div class="bg-white border-2 border-black p-3 mb-6">
         <form method="GET" action="{{ route('content-calendar.index') }}" class="flex items-center gap-3 flex-wrap">
             <label class="font-[Helvetica] font-bold text-xs uppercase">Pilih Cabang:</label>

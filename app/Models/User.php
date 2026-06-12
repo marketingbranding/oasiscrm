@@ -85,6 +85,11 @@ class User extends Authenticatable
         return $this->role && $this->role->is_superadmin;
     }
 
+    public function canViewAllBranches(): bool
+    {
+        return $this->isSuperadmin() || $this->hasRole('pusat');
+    }
+
     public function contentItems(): HasMany
     {
         return $this->hasMany(ContentItem::class, 'created_by');

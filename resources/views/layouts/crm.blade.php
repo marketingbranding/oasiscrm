@@ -23,14 +23,33 @@
             <span class="text-[#fcc20f] text-lg">◆</span>
             <a href="{{ route('dashboard') }}" class="hover:text-gray-300">OASIS CRM</a>
         </div>
-
+        @auth
+        <div x-data="{ profileOpen: false }" class="relative">
+            <button @click="profileOpen = !profileOpen"
+                    class="flex items-center gap-1.5 text-xs bg-[#c0392b] hover:bg-[#a93226] px-2 py-1.5 border border-white/30 rounded-none">
+                <span>{{ Auth::user()->name }}</span>
+                <span x-show="!profileOpen">▼</span>
+                <span x-show="profileOpen">▲</span>
+            </button>
+            <div x-show="profileOpen" @click.outside="profileOpen = false"
+                 x-transition.opacity.duration.150ms
+                 class="absolute right-0 top-full mt-1 bg-white border-2 border-black text-black min-w-[140px] z-50">
+                <form method="POST" action="{{ route('logout') }}">
+                    @csrf
+                    <button type="submit" class="w-full px-3 py-2 text-xs font-[Helvetica] font-bold hover:bg-[#d77a7a] text-left flex items-center gap-2">
+                        <span>⏻</span> Logout
+                    </button>
+                </form>
+            </div>
+        </div>
+        @endauth
     </div>
 
     {{-- Body --}}
     <div class="flex flex-col sm:flex-row flex-1 pt-14">
         <div x-show="sidebarOpen" x-transition.opacity.duration.200ms
              class="w-full sm:w-56 bg-white border-b-2 sm:border-b-0 sm:border-r-2 border-black flex flex-col">
-            <nav class="p-2 flex-1">
+            <nav class="p-2">
                 <a href="{{ route('dashboard') }}" class="block px-3 py-2 text-sm font-[Helvetica] font-bold text-black hover:bg-[#9ab6c8] hover:text-black border border-black mb-1 rounded-none {{ request()->routeIs('dashboard') ? 'bg-[#9ab6c8]' : 'bg-white' }}">
                     <span class="text-[#9ab6c8]">█</span> Dashboard
                 </a>
@@ -50,24 +69,6 @@
                 </a>
                 @endif
             </nav>
-            @auth
-            <div x-data="{ profileOpen: false }" class="border-t-2 border-black">
-                <button @click="profileOpen = !profileOpen"
-                        class="w-full px-3 py-2.5 text-sm font-[Helvetica] font-bold text-white bg-[#c0392b] hover:bg-[#a93226] border-b border-black flex items-center justify-between">
-                    <span>{{ Auth::user()->name }}</span>
-                    <span x-show="!profileOpen">▲</span>
-                    <span x-show="profileOpen">▼</span>
-                </button>
-                <div x-show="profileOpen" x-transition.opacity.duration.200ms class="p-2 bg-gray-50">
-                    <form method="POST" action="{{ route('logout') }}">
-                        @csrf
-                        <button type="submit" class="w-full bg-[#d77a7a] text-black px-3 py-2 text-xs font-[Helvetica] font-bold border border-black rounded-none hover:bg-red-400 text-left flex items-center gap-2">
-                            <span>⏻</span> Logout
-                        </button>
-                    </form>
-                </div>
-            </div>
-            @endauth
         </div>
 
         <div class="flex-1 p-4 sm:p-6">

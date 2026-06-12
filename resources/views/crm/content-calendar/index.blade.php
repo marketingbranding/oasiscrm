@@ -71,11 +71,19 @@
                                         @endif
                                     </div>
                                     @foreach($cell['items'] as $item)
-                                        <a href="{{ route('content-calendar.edit', $item->id) }}"
-                                           class="block {{ $statusColors[$item->status] ?? 'bg-gray-200' }} border border-black px-1 py-0.5 mb-0.5 text-[10px] font-[Helvetica] font-bold leading-tight text-black truncate rounded-none hover:opacity-80"
-                                           title="{{ $item->title }} — {{ $item->platform }} — {{ strtoupper($item->status) }}">
-                                            {{ $item->title }}
-                                        </a>
+                                        <div class="flex {{ $statusColors[$item->status] ?? 'bg-gray-200' }} border border-black mb-0.5 rounded-none text-[10px] leading-tight">
+                                            <a href="{{ route('content-calendar.edit', $item->id) }}"
+                                               class="flex-1 px-1 py-0.5 font-[Helvetica] font-bold text-black truncate hover:opacity-80"
+                                               title="{{ $item->title }} — {{ $item->platform }} — {{ strtoupper($item->status) }}">
+                                                {{ $item->title }}
+                                            </a>
+                                            <form method="POST" action="{{ route('content-calendar.destroy', ['content_calendar' => $item->id]) }}"
+                                                  onsubmit="return confirm('Hapus konten ini?')" class="inline">
+                                                @csrf
+                                                @method('DELETE')
+                                                <button type="submit" class="px-1 py-0.5 font-bold text-black hover:text-[#e91d2a] border-l border-black leading-tight" title="Hapus">×</button>
+                                            </form>
+                                        </div>
                                     @endforeach
                                 @endif
                             </td>

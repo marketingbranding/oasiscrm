@@ -81,6 +81,9 @@
                                                   onsubmit="return confirm('Hapus konten ini?')" class="inline">
                                                 @csrf
                                                 @method('DELETE')
+                                                <input type="hidden" name="month" value="{{ request('month') }}">
+                                                <input type="hidden" name="year" value="{{ request('year') }}">
+                                                <input type="hidden" name="branch_id" value="{{ request('branch_id') }}">
                                                 <button type="submit" class="px-1 py-0.5 font-bold text-black hover:text-[#e91d2a] border-l border-black leading-tight" title="Hapus">×</button>
                                             </form>
                                         </div>

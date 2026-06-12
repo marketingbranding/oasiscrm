@@ -12,7 +12,7 @@
             Form Konten
         </div>
         <div class="p-4 sm:p-6">
-            <form method="POST" action="{{ route('content-calendar.update', $content->id) }}" class="space-y-4">
+            <form method="POST" action="{{ route('content-calendar.update', $content) }}" class="space-y-4">
                 @csrf
                 @method('PUT')
 
@@ -95,7 +95,7 @@
                             Batal
                         </a>
                     </div>
-                    <form method="POST" action="{{ route('content-calendar.destroy', $content->id) }}" onsubmit="return confirm('Yakin ingin menghapus konten ini?')">
+                    <form method="POST" action="{{ route('content-calendar.destroy', $content) }}" onsubmit="return confirm('Yakin ingin menghapus konten ini?')">
                         @csrf
                         @method('DELETE')
                         <button type="submit" class="bg-white text-[#e91d2a] px-4 py-2 text-sm font-[Helvetica] font-bold border-2 border-[#e91d2a] rounded-none hover:bg-red-50">

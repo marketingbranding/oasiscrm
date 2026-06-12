@@ -53,7 +53,7 @@
             @auth
             <div x-data="{ profileOpen: false }" class="border-t-2 border-black">
                 <button @click="profileOpen = !profileOpen"
-                        class="w-full px-3 py-2.5 text-sm font-[Helvetica] font-bold text-black hover:bg-gray-100 border-b border-black flex items-center justify-between">
+                        class="w-full px-3 py-2.5 text-sm font-[Helvetica] font-bold text-white bg-[#c0392b] hover:bg-[#a93226] border-b border-black flex items-center justify-between">
                     <span>{{ Auth::user()->name }}</span>
                     <span x-show="!profileOpen">▲</span>
                     <span x-show="profileOpen">▼</span>
@@ -82,12 +82,11 @@
                 </div>
             @endif
             @yield('content')
-        </div>
-    </div>
 
-    {{-- Footer --}}
-    <div class="flex-shrink-0 border-t-2 border-black bg-white px-4 py-3 text-center text-xs font-['Times_New_Roman']">
-        © {{ date('Y') }} Oasis CRM — Sistem Manajemen Konten Perumahan
+            <div class="border-t-2 border-black bg-white px-4 py-3 text-center text-xs font-['Times_New_Roman'] mt-6">
+                © {{ date('Y') }} Oasis CRM — Sistem Manajemen Konten Perumahan
+            </div>
+        </div>
     </div>
 </body>
 </html>

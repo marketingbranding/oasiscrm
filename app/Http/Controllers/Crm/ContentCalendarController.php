@@ -103,7 +103,7 @@ class ContentCalendarController extends Controller
 
     public function show(ContentItem $contentItem)
     {
-        return redirect()->route('content-calendar.edit', $contentItem);
+        return redirect()->route('content-calendar.edit', ['content_calendar' => $contentItem->id]);
     }
 
     public function edit(ContentItem $contentItem)

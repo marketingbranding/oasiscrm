@@ -23,24 +23,14 @@
             <span class="text-[#fcc20f] text-lg">◆</span>
             <a href="{{ route('dashboard') }}" class="hover:text-gray-300">OASIS CRM</a>
         </div>
-        <div class="flex items-center gap-4">
-            @auth
-                <span class="font-['Times_New_Roman'] font-normal text-xs">{{ Auth::user()->name }}</span>
-                <form method="POST" action="{{ route('logout') }}" class="inline">
-                    @csrf
-                    <button type="submit" class="bg-[#fcc20f] text-black px-3 py-1 text-xs font-[Helvetica] font-bold border border-black rounded-none hover:bg-yellow-400">
-                        Logout
-                    </button>
-                </form>
-            @endauth
-        </div>
+
     </div>
 
     {{-- Body --}}
     <div class="flex flex-col sm:flex-row flex-1 pt-14">
         <div x-show="sidebarOpen" x-transition.opacity.duration.200ms
-             class="w-full sm:w-56 bg-white border-b-2 sm:border-b-0 sm:border-r-2 border-black">
-            <nav class="p-2">
+             class="w-full sm:w-56 bg-white border-b-2 sm:border-b-0 sm:border-r-2 border-black flex flex-col">
+            <nav class="p-2 flex-1">
                 <a href="{{ route('dashboard') }}" class="block px-3 py-2 text-sm font-[Helvetica] font-bold text-black hover:bg-[#9ab6c8] hover:text-black border border-black mb-1 rounded-none {{ request()->routeIs('dashboard') ? 'bg-[#9ab6c8]' : 'bg-white' }}">
                     <span class="text-[#9ab6c8]">█</span> Dashboard
                 </a>
@@ -60,6 +50,24 @@
                 </a>
                 @endif
             </nav>
+            @auth
+            <div x-data="{ profileOpen: false }" class="border-t-2 border-black">
+                <button @click="profileOpen = !profileOpen"
+                        class="w-full px-3 py-2.5 text-sm font-[Helvetica] font-bold text-black hover:bg-gray-100 border-b border-black flex items-center justify-between">
+                    <span>{{ Auth::user()->name }}</span>
+                    <span x-show="!profileOpen">▲</span>
+                    <span x-show="profileOpen">▼</span>
+                </button>
+                <div x-show="profileOpen" x-transition.opacity.duration.200ms class="p-2 bg-gray-50">
+                    <form method="POST" action="{{ route('logout') }}">
+                        @csrf
+                        <button type="submit" class="w-full bg-[#d77a7a] text-black px-3 py-2 text-xs font-[Helvetica] font-bold border border-black rounded-none hover:bg-red-400 text-left flex items-center gap-2">
+                            <span>⏻</span> Logout
+                        </button>
+                    </form>
+                </div>
+            </div>
+            @endauth
         </div>
 
         <div class="flex-1 p-4 sm:p-6">

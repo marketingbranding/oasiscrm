@@ -98,7 +98,7 @@ class ContentCalendarController extends Controller
 
         ContentItem::create($data);
 
-        return redirect()->route('content-calendar.index')->with('success', 'Konten berhasil ditambahkan.');
+        return         redirect()->route('content-calendar.index', array_filter($request->only(['month', 'year', 'branch_id'])))->with('success', 'Konten berhasil ditambahkan.');
     }
 
     public function show(ContentItem $contentItem)
@@ -140,7 +140,7 @@ class ContentCalendarController extends Controller
         ]);
 
         $contentItem->update($data);
-        return redirect()->route('content-calendar.index')->with('success', 'Konten berhasil diperbarui.');
+        return redirect()->route('content-calendar.index', array_filter($request->only(['month', 'year', 'branch_id'])))->with('success', 'Konten berhasil diperbarui.');
     }
 
     public function destroy(ContentItem $contentItem)
@@ -151,6 +151,6 @@ class ContentCalendarController extends Controller
         }
 
         $contentItem->delete();
-        return redirect()->route('content-calendar.index')->with('success', 'Konten berhasil dihapus.');
+        return redirect()->route('content-calendar.index', array_filter(request()->only(['month', 'year', 'branch_id'])))->with('success', 'Konten berhasil dihapus.');
     }
 }

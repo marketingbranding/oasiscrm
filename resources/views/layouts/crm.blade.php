@@ -7,6 +7,7 @@
     <title>@yield('title', 'Oasis CRM')</title>
     <link rel="preconnect" href="https://fonts.bunny.net">
     <link href="https://fonts.bunny.net/css?family=figtree:400,500,600&display=swap" rel="stylesheet" />
+    <link rel="icon" type="image/svg+xml" href="{{ asset('favicon.svg') }}">
     @vite(['resources/css/app.css', 'resources/js/app.js'])
 </head>
 <body class="font-['Times_New_Roman'] antialiased bg-white min-h-screen flex flex-col"
@@ -20,7 +21,7 @@
                 <span x-show="!sidebarOpen">▶</span>
             </button>
             <span class="text-[#fcc20f] text-lg">◆</span>
-            <span>OASIS CRM</span>
+            <a href="{{ route('dashboard') }}" class="hover:text-gray-300">OASIS CRM</a>
         </div>
         <div class="flex items-center gap-4">
             @auth

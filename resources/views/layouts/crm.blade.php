@@ -12,7 +12,7 @@
 <body class="font-['Times_New_Roman'] antialiased bg-white min-h-screen flex flex-col"
       x-data="{ sidebarOpen: localStorage.getItem('sidebarOpen') !== 'false' }">
     {{-- Header --}}
-    <div class="sticky top-0 z-50 flex-shrink-0 bg-black text-white font-[Helvetica] font-bold text-sm sm:text-base px-4 py-3 flex items-center justify-between">
+    <div class="fixed top-0 left-0 right-0 z-50 flex-shrink-0 bg-black text-white font-[Helvetica] font-bold text-sm sm:text-base px-4 py-3 flex items-center justify-between">
         <div class="flex items-center gap-2">
             <button @click="sidebarOpen = !sidebarOpen; localStorage.setItem('sidebarOpen', sidebarOpen)"
                     class="hover:text-gray-300 text-base leading-none" title="Toggle sidebar">
@@ -36,7 +36,7 @@
     </div>
 
     {{-- Body --}}
-    <div class="flex flex-col sm:flex-row flex-1">
+    <div class="flex flex-col sm:flex-row flex-1 pt-14">
         <div x-show="sidebarOpen" x-transition.opacity.duration.200ms
              class="w-full sm:w-48 bg-white border-b-2 sm:border-b-0 sm:border-r-2 border-black">
             <nav class="p-2">

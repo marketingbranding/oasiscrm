@@ -39,7 +39,7 @@
     {{-- Body --}}
     <div class="flex flex-col sm:flex-row flex-1 pt-14">
         <div x-show="sidebarOpen" x-transition.opacity.duration.200ms
-             class="w-full sm:w-48 bg-white border-b-2 sm:border-b-0 sm:border-r-2 border-black">
+             class="w-full sm:w-56 bg-white border-b-2 sm:border-b-0 sm:border-r-2 border-black">
             <nav class="p-2">
                 <a href="{{ route('dashboard') }}" class="block px-3 py-2 text-sm font-[Helvetica] font-bold text-black hover:bg-[#9ab6c8] hover:text-black border border-black mb-1 rounded-none {{ request()->routeIs('dashboard') ? 'bg-[#9ab6c8]' : 'bg-white' }}">
                     <span class="text-[#9ab6c8]">█</span> Dashboard
@@ -51,6 +51,7 @@
                     <span class="text-[#d77a7a]">█</span> Database
                 </a>
                 @if(Auth::user() && Auth::user()->isSuperadmin())
+                <div class="border-t border-dashed border-gray-400 mx-2 my-2 pt-1 text-[10px] text-gray-500 text-center tracking-[0.2em]">── Pengaturan ──</div>
                 <a href="{{ route('branches.index') }}" class="block px-3 py-2 text-sm font-[Helvetica] font-bold text-black hover:bg-[#e6915d] hover:text-black border border-black mb-1 rounded-none {{ request()->routeIs('branches.*') ? 'bg-[#e6915d]' : 'bg-white' }}">
                     <span class="text-[#e6915d]">█</span> Cabang
                 </a>

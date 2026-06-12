@@ -3,6 +3,7 @@
 @section('title', 'Edit Konten - Oasis CRM')
 
 @section('content')
+    @dd(get_class($content), $content->id, $content->getRouteKey(), $content->exists)
     <div class="bg-[#b3bd95] border-2 border-black px-4 py-2 mb-6">
         <h1 class="font-['Arial_Black'] font-black text-xl uppercase">Edit Konten</h1>
     </div>

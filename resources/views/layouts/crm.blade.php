@@ -9,11 +9,17 @@
     <link href="https://fonts.bunny.net/css?family=figtree:400,500,600&display=swap" rel="stylesheet" />
     @vite(['resources/css/app.css', 'resources/js/app.js'])
 </head>
-<body class="font-['Times_New_Roman'] antialiased bg-gray-200 min-h-screen flex flex-col">
-    <div class="border-2 border-black m-1 flex flex-col flex-1 bg-white">
+<body class="font-['Times_New_Roman'] antialiased bg-white min-h-screen flex flex-col"
+      x-data="{ sidebarOpen: localStorage.getItem('sidebarOpen') !== 'false' }">
+    <div class="flex flex-col flex-1">
         {{-- Header --}}
         <div class="bg-black text-white font-[Helvetica] font-bold text-sm sm:text-base px-4 py-3 flex items-center justify-between flex-shrink-0">
             <div class="flex items-center gap-2">
+                <button @click="sidebarOpen = !sidebarOpen; localStorage.setItem('sidebarOpen', sidebarOpen)"
+                        class="hover:text-gray-300 text-base leading-none" title="Toggle sidebar">
+                    <span x-show="sidebarOpen">◀</span>
+                    <span x-show="!sidebarOpen">▶</span>
+                </button>
                 <span class="text-[#fcc20f] text-lg">◆</span>
                 <span>OASIS CRM</span>
             </div>
@@ -32,7 +38,8 @@
 
         {{-- Body --}}
         <div class="flex flex-col sm:flex-row flex-1 min-h-0">
-            <div class="w-full sm:w-48 bg-white border-b-2 sm:border-b-0 sm:border-r-2 border-black overflow-y-auto">
+            <div x-show="sidebarOpen" x-transition.opacity.duration.200ms
+                 class="w-full sm:w-48 bg-white border-b-2 sm:border-b-0 sm:border-r-2 border-black overflow-y-auto">
                 <nav class="p-2">
                     <a href="{{ route('dashboard') }}" class="block px-3 py-2 text-sm font-[Helvetica] font-bold text-black hover:bg-[#9ab6c8] hover:text-black border border-black mb-1 rounded-none {{ request()->routeIs('dashboard') ? 'bg-[#9ab6c8]' : 'bg-white' }}">
                         <span class="text-[#9ab6c8]">█</span> Dashboard

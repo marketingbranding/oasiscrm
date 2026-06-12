@@ -114,7 +114,8 @@ class ContentCalendarController extends Controller
             $branches = collect([$user->branch]);
         }
 
-        return view('crm.content-calendar.edit', compact('contentItem', 'branches'));
+        $content = $contentItem;
+        return view('crm.content-calendar.edit', compact('content', 'branches'));
     }
 
     public function update(Request $request, ContentItem $contentItem)

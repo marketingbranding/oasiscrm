@@ -9,8 +9,9 @@
     <link href="https://fonts.bunny.net/css?family=figtree:400,500,600&display=swap" rel="stylesheet" />
     @vite(['resources/css/app.css', 'resources/js/app.js'])
 </head>
-<body class="font-['Times_New_Roman'] antialiased bg-white min-h-screen flex flex-col"
+<body class="font-['Times_New_Roman'] antialiased bg-white"
       x-data="{ sidebarOpen: localStorage.getItem('sidebarOpen') !== 'false' }">
+    <div class="flex flex-col min-h-screen overflow-y-auto">
         {{-- Header --}}
         <div class="sticky top-0 z-10 bg-black text-white font-[Helvetica] font-bold text-sm sm:text-base px-4 py-3 flex items-center justify-between flex-shrink-0">
             <div class="flex items-center gap-2">
@@ -79,5 +80,6 @@
         <div class="border-t-2 border-black bg-white px-4 py-3 text-center text-xs font-['Times_New_Roman'] flex-shrink-0">
             © {{ date('Y') }} Oasis CRM — Sistem Manajemen Konten Perumahan
         </div>
+    </div>
 </body>
 </html>

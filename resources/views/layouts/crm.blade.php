@@ -48,7 +48,7 @@
     {{-- Body --}}
     <div class="flex flex-col sm:flex-row flex-1 pt-14">
         <div :class="sidebarOpen ? 'block' : 'hidden'"
-             class="sm:block group w-full sm:w-12 sm:hover:w-56 sm:transition-all sm:duration-200 sm:overflow-x-hidden sm:whitespace-nowrap sm:sticky sm:top-14 sm:max-h-[calc(100vh-3.5rem)] sm:self-start sm:overflow-y-auto bg-white border-b-2 sm:border-b-0 sm:border-r-2 border-black">
+             class="sm:block group w-full sm:fixed sm:left-0 sm:top-14 sm:bottom-0 sm:z-40 sm:w-12 sm:hover:w-56 sm:transition-all sm:duration-200 sm:overflow-x-hidden sm:whitespace-nowrap bg-white sm:border-r-2 border-black">
             <nav class="p-2">
                 <a href="{{ route('dashboard') }}" class="block px-3 py-2 text-sm font-[Helvetica] font-bold text-black hover:bg-[#9ab6c8] hover:text-black border border-black mb-1 rounded-none {{ request()->routeIs('dashboard') ? 'bg-[#9ab6c8]' : 'bg-white' }}">
                     <span class="text-[#9ab6c8]">█</span> <span class="sm:opacity-0 sm:group-hover:opacity-100 sm:transition-opacity sm:duration-200 sm:delay-150">Dashboard</span>
@@ -71,7 +71,7 @@
             </nav>
         </div>
 
-        <div class="flex-1 p-4 sm:p-6">
+        <div class="flex-1 p-4 sm:p-6 sm:ml-12">
             @if(session('success'))
                 <div class="bg-[#b3bd95] border-2 border-black px-4 py-3 mb-4 font-['Times_New_Roman'] text-sm">
                     {{ session('success') }}

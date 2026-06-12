@@ -23,6 +23,9 @@ class ContentCalendarController extends Controller
 
             if ($selectedBranchId) {
                 $query->where('branch_id', $selectedBranchId);
+            } elseif ($user->hasRole('pusat') && $user->branch_id) {
+                $selectedBranchId = $user->branch_id;
+                $query->where('branch_id', $selectedBranchId);
             }
         } else {
             $branches = collect();

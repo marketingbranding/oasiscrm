@@ -60,12 +60,14 @@ class AdminUserSeeder extends Seeder
         }
 
         if ($pusat) {
+            $pusatBranch = Branch::where('code', 'PST')->first();
             User::updateOrCreate([
                 'email' => 'pusat@oasis.com',
             ], [
                 'name' => 'Pusat',
                 'password' => Hash::make('password'),
                 'role_id' => $pusat->id,
+                'branch_id' => $pusatBranch?->id,
                 'is_active' => true,
                 'email_verified_at' => now(),
             ]);

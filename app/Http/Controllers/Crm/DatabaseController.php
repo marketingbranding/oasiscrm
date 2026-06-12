@@ -17,7 +17,11 @@ class DatabaseController extends Controller
 
         if ($user->canViewAllBranches()) {
             $branches = Branch::where('is_active', true)->get();
-            if (!$selectedBranchId && $branches->isNotEmpty()) {
+            if ($selectedBranchId) {
+                // use selected
+            } elseif ($user->hasRole('pusat') && $user->branch_id) {
+                $selectedBranchId = $user->branch_id;
+            } elseif ($branches->isNotEmpty()) {
                 $selectedBranchId = $branches->first()->id;
             }
         } else {
@@ -55,6 +59,8 @@ class DatabaseController extends Controller
         $branchId = $request->get('branch_id');
 
         if (!$user->canViewAllBranches()) {
+            $branchId = $user->branch_id;
+        } elseif (!$branchId && $user->hasRole('pusat') && $user->branch_id) {
             $branchId = $user->branch_id;
         }
 

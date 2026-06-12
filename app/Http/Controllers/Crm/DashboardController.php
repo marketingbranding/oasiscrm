@@ -20,6 +20,9 @@ class DashboardController extends Controller
 
             if ($selectedBranchId) {
                 $branch = Branch::findOrFail($selectedBranchId);
+            } elseif ($user->hasRole('pusat') && $user->branch_id) {
+                $selectedBranchId = $user->branch_id;
+                $branch = Branch::findOrFail($selectedBranchId);
             } else {
                 $branch = null;
             }

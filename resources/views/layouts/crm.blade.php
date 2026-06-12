@@ -16,7 +16,7 @@
     <div class="fixed top-0 left-0 right-0 z-50 flex-shrink-0 bg-black text-white font-[Helvetica] font-bold text-sm sm:text-base px-4 py-3 flex items-center justify-between">
         <div class="flex items-center gap-2">
             <button @click="sidebarOpen = !sidebarOpen; localStorage.setItem('sidebarOpen', sidebarOpen)"
-                    class="hover:text-gray-300 text-base leading-none" title="Toggle sidebar">
+                    class="sm:hidden hover:text-gray-300 text-base leading-none" title="Toggle sidebar">
                 <span x-show="sidebarOpen">◀</span>
                 <span x-show="!sidebarOpen">▶</span>
             </button>
@@ -47,25 +47,25 @@
 
     {{-- Body --}}
     <div class="flex flex-col sm:flex-row flex-1 pt-14">
-        <div x-show="sidebarOpen" x-transition.opacity.duration.200ms
-             class="w-full sm:w-56 bg-white border-b-2 sm:border-b-0 sm:border-r-2 border-black flex flex-col">
+        <div :class="sidebarOpen ? 'block' : 'hidden'"
+             class="sm:block group w-full sm:w-12 sm:hover:w-56 sm:transition-all sm:duration-200 sm:overflow-hidden sm:whitespace-nowrap bg-white border-b-2 sm:border-b-0 sm:border-r-2 border-black">
             <nav class="p-2">
                 <a href="{{ route('dashboard') }}" class="block px-3 py-2 text-sm font-[Helvetica] font-bold text-black hover:bg-[#9ab6c8] hover:text-black border border-black mb-1 rounded-none {{ request()->routeIs('dashboard') ? 'bg-[#9ab6c8]' : 'bg-white' }}">
-                    <span class="text-[#9ab6c8]">█</span> Dashboard
+                    <span class="text-[#9ab6c8]">█</span> <span class="sm:opacity-0 sm:group-hover:opacity-100 sm:transition-opacity sm:duration-200 sm:delay-150">Dashboard</span>
                 </a>
                 <a href="{{ route('content-calendar.index') }}" class="block px-3 py-2 text-sm font-[Helvetica] font-bold text-black hover:bg-[#b3bd95] hover:text-black border border-black mb-1 rounded-none {{ request()->routeIs('content-calendar.*') ? 'bg-[#b3bd95]' : 'bg-white' }}">
-                    <span class="text-[#b3bd95]">█</span> Content Calendar
+                    <span class="text-[#b3bd95]">█</span> <span class="sm:opacity-0 sm:group-hover:opacity-100 sm:transition-opacity sm:duration-200 sm:delay-150">Content Calendar</span>
                 </a>
                 <a href="{{ route('database.index') }}" class="block px-3 py-2 text-sm font-[Helvetica] font-bold text-black hover:bg-[#d77a7a] hover:text-black border border-black mb-1 rounded-none {{ request()->routeIs('database.*') ? 'bg-[#d77a7a]' : 'bg-white' }}">
-                    <span class="text-[#d77a7a]">█</span> Database
+                    <span class="text-[#d77a7a]">█</span> <span class="sm:opacity-0 sm:group-hover:opacity-100 sm:transition-opacity sm:duration-200 sm:delay-150">Database</span>
                 </a>
                 @if(Auth::user() && Auth::user()->isSuperadmin())
                 <div class="border-t border-dashed border-gray-400 mx-2 my-2 pt-1 text-[10px] text-gray-500 text-center tracking-[0.2em]">── Pengaturan ──</div>
                 <a href="{{ route('branches.index') }}" class="block px-3 py-2 text-sm font-[Helvetica] font-bold text-black hover:bg-[#e6915d] hover:text-black border border-black mb-1 rounded-none {{ request()->routeIs('branches.*') ? 'bg-[#e6915d]' : 'bg-white' }}">
-                    <span class="text-[#e6915d]">█</span> Cabang
+                    <span class="text-[#e6915d]">█</span> <span class="sm:opacity-0 sm:group-hover:opacity-100 sm:transition-opacity sm:duration-200 sm:delay-150">Cabang</span>
                 </a>
                 <a href="{{ route('admin-users.index') }}" class="block px-3 py-2 text-sm font-[Helvetica] font-bold text-black hover:bg-[#8c9ae0] hover:text-black border border-black mb-1 rounded-none {{ request()->routeIs('admin-users.*') ? 'bg-[#8c9ae0]' : 'bg-white' }}">
-                    <span class="text-[#8c9ae0]">█</span> User
+                    <span class="text-[#8c9ae0]">█</span> <span class="sm:opacity-0 sm:group-hover:opacity-100 sm:transition-opacity sm:duration-200 sm:delay-150">User</span>
                 </a>
                 @endif
             </nav>

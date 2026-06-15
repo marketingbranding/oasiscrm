@@ -39,8 +39,6 @@ class ProjectController extends Controller
         $data = $request->validate([
             'branch_id' => 'nullable|exists:branches,id',
             'project_name' => 'required|string|max:255',
-            'lead_source' => 'nullable|string|max:255',
-            'category' => 'nullable|string|max:255',
             'is_active' => 'boolean',
         ]);
 
@@ -65,8 +63,6 @@ class ProjectController extends Controller
         $data = $request->validate([
             'branch_id' => 'nullable|exists:branches,id',
             'project_name' => 'required|string|max:255',
-            'lead_source' => 'nullable|string|max:255',
-            'category' => 'nullable|string|max:255',
             'is_active' => 'boolean',
         ]);
 

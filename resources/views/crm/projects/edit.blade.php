@@ -35,19 +35,6 @@
                 </div>
 
                 <div>
-                    <label class="font-[Helvetica] font-bold text-xs uppercase block mb-1">Sumber Lead</label>
-                    <input type="text" name="lead_source" value="{{ old('lead_source', $project->lead_source) }}"
-                           class="w-full border-2 border-black px-3 py-2 text-sm font-['Times_New_Roman'] bg-white rounded-none @error('lead_source') border-[#e91d2a] @enderror">
-                    @error('lead_source') <p class="text-[#e91d2a] text-xs mt-1 font-[Helvetica] font-bold">{{ $message }}</p> @enderror
-                </div>
-
-                <div>
-                    <label class="font-[Helvetica] font-bold text-xs uppercase block mb-1">Kategori</label>
-                    <input type="text" name="category" value="{{ old('category', $project->category) }}"
-                           class="w-full border-2 border-black px-3 py-2 text-sm font-['Times_New_Roman'] bg-white rounded-none">
-                </div>
-
-                <div>
                     <label class="font-[Helvetica] font-bold text-xs uppercase block mb-1">Status</label>
                     <select name="is_active" class="w-full border-2 border-black px-3 py-2 text-sm font-['Times_New_Roman'] bg-white rounded-none">
                         <option value="1" {{ old('is_active', $project->is_active) == '1' ? 'selected' : '' }}>Aktif</option>

@@ -30,8 +30,6 @@
             <thead>
                 <tr class="bg-black text-white">
                     <th class="px-3 py-2 text-left font-[Helvetica] font-bold text-xs uppercase">Proyek</th>
-                    <th class="px-3 py-2 text-left font-[Helvetica] font-bold text-xs uppercase">Sumber</th>
-                    <th class="px-3 py-2 text-left font-[Helvetica] font-bold text-xs uppercase">Kategori</th>
                     <th class="px-3 py-2 text-left font-[Helvetica] font-bold text-xs uppercase">Cabang</th>
                     <th class="px-3 py-2 text-center font-[Helvetica] font-bold text-xs uppercase">Status</th>
                     <th class="px-3 py-2 text-center font-[Helvetica] font-bold text-xs uppercase">Aksi</th>
@@ -41,8 +39,6 @@
                 @forelse($projects as $p)
                 <tr class="hover:bg-gray-50">
                     <td class="px-3 py-2 font-bold">{{ $p->project_name }}</td>
-                    <td class="px-3 py-2">{{ $p->lead_source ?? '—' }}</td>
-                    <td class="px-3 py-2">{{ $p->category ?? '—' }}</td>
                     <td class="px-3 py-2">{{ $p->branch->name ?? '—' }}</td>
                     <td class="px-3 py-2 text-center">
                         <span class="inline-block px-2 py-0.5 text-xs font-[Helvetica] font-bold border border-black {{ $p->is_active ? 'bg-[#b3bd95]' : 'bg-gray-200' }}">
@@ -63,7 +59,7 @@
                 </tr>
                 @empty
                 <tr>
-                    <td colspan="6" class="px-4 py-8 text-center text-sm">Belum ada proyek.</td>
+                    <td colspan="4" class="px-4 py-8 text-center text-sm">Belum ada proyek.</td>
                 </tr>
                 @endforelse
             </tbody>

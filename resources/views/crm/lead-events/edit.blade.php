@@ -146,7 +146,7 @@
             <script>
             var projectData = [
                 @foreach($projects as $p)
-                { name: {{ json_encode($p->project_name) }}, branch: '{{ $p->branch_id }}' },
+                { name: @json($p->project_name), branch: @json($p->branch_id) },
                 @endforeach
             ];
 

@@ -20,6 +20,7 @@ use Illuminate\Notifications\Notifiable;
     'branch_id',
     'phone',
     'is_active',
+    'password_changed_at',
 ])]
 #[Hidden(['password', 'remember_token'])]
 class User extends Authenticatable
@@ -31,6 +32,7 @@ class User extends Authenticatable
     {
         return [
             'email_verified_at' => 'datetime',
+            'password_changed_at' => 'datetime',
             'password' => 'hashed',
             'is_active' => 'boolean',
         ];

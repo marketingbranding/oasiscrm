@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Auth\PasswordChangeController;
 use App\Http\Controllers\Crm\AdminUserController;
 use App\Http\Controllers\Crm\BranchController;
 use App\Http\Controllers\Crm\ContentCalendarController;
@@ -15,6 +16,11 @@ Route::get('/', function () {
 });
 
 Route::middleware(['auth', 'verified'])->group(function () {
+    Route::get('/password/change', [PasswordChangeController::class, 'show'])->name('password.change');
+    Route::put('/password/change', [PasswordChangeController::class, 'update'])->name('password.change.update');
+});
+
+Route::middleware(['auth', 'verified', 'password.changed'])->group(function () {
     Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
 
     Route::bind('content_calendar', fn($value) => \App\Models\ContentItem::findOrFail($value));

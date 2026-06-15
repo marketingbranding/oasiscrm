@@ -25,6 +25,7 @@ class AdminUserSeeder extends Seeder
                 'role_id' => $superadmin->id,
                 'is_active' => true,
                 'email_verified_at' => now(),
+                'password_changed_at' => null,
             ]);
         }
 
@@ -53,6 +54,7 @@ class AdminUserSeeder extends Seeder
                             'branch_id' => $branch->id,
                             'is_active' => true,
                             'email_verified_at' => now(),
+                            'password_changed_at' => null,
                         ]
                     );
                 }
@@ -70,6 +72,7 @@ class AdminUserSeeder extends Seeder
                 'branch_id' => $pusatBranch?->id,
                 'is_active' => true,
                 'email_verified_at' => now(),
+                'password_changed_at' => null,
             ]);
         }
     }

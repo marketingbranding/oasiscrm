@@ -96,14 +96,60 @@
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
                         <label class="font-[Helvetica] font-bold text-xs uppercase block mb-1">Tanggal Mulai</label>
-                        <input type="date" name="start_date" value="{{ old('start_date') }}"
-                               class="w-full border-2 border-black px-3 py-2 text-sm font-['Times_New_Roman'] bg-white rounded-none @error('start_date') border-[#e91d2a] @enderror">
+                        <div class="date-wrapper" style="position:relative">
+                            <div class="date-display w-full border-2 px-3 py-2 text-sm font-['Times_New_Roman'] bg-white cursor-pointer select-none flex items-center justify-between {{ $errors->has('start_date') ? 'border-[#e91d2a]' : 'border-black' }}" tabindex="0">
+                                <span class="date-text">— Pilih Tanggal —</span>
+                                <span class="date-arrow">▼</span>
+                            </div>
+                            <div class="date-calendar" style="display:none;position:absolute;top:100%;left:0;z-index:9999;border:2px solid #000;background:#fff;width:280px">
+                                <div class="cal-header" style="background:#000;color:#fff;display:flex;align-items:center;justify-content:space-between;padding:6px 10px;font-family:'Times New Roman';font-size:14px;font-weight:bold;user-select:none">
+                                    <button class="cal-prev" type="button" style="background:none;border:none;color:#fff;cursor:pointer;font-size:14px;padding:2px 8px;font-family:'Times New Roman';font-weight:bold;line-height:1">◀</button>
+                                    <span class="cal-title">Bulan Tahun</span>
+                                    <button class="cal-next" type="button" style="background:none;border:none;color:#fff;cursor:pointer;font-size:14px;padding:2px 8px;font-family:'Times New Roman';font-weight:bold;line-height:1">▶</button>
+                                </div>
+                                <div class="cal-weekdays" style="display:grid;grid-template-columns:repeat(7,1fr);border-bottom:2px solid #000;font-family:'Times New Roman';font-size:11px;font-weight:bold;text-align:center;background:#f5f5f5;color:#000">
+                                    <span style="padding:5px 0;border-right:1px solid #ddd">Min</span>
+                                    <span style="padding:5px 0;border-right:1px solid #ddd">Sen</span>
+                                    <span style="padding:5px 0;border-right:1px solid #ddd">Sel</span>
+                                    <span style="padding:5px 0;border-right:1px solid #ddd">Rab</span>
+                                    <span style="padding:5px 0;border-right:1px solid #ddd">Kam</span>
+                                    <span style="padding:5px 0;border-right:1px solid #ddd">Jum</span>
+                                    <span style="padding:5px 0">Sab</span>
+                                </div>
+                                <div class="cal-grid" style="display:grid;grid-template-columns:repeat(7,1fr);font-family:'Times New Roman';font-size:13px"></div>
+                            </div>
+                            <input type="date" name="start_date" value="{{ old('start_date') }}"
+                                   style="position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0">
+                        </div>
                         @error('start_date') <p class="text-[#e91d2a] text-xs mt-1 font-[Helvetica] font-bold">{{ $message }}</p> @enderror
                     </div>
                     <div>
                         <label class="font-[Helvetica] font-bold text-xs uppercase block mb-1">Tanggal Selesai</label>
-                        <input type="date" name="end_date" value="{{ old('end_date') }}"
-                               class="w-full border-2 border-black px-3 py-2 text-sm font-['Times_New_Roman'] bg-white rounded-none @error('end_date') border-[#e91d2a] @enderror">
+                        <div class="date-wrapper" style="position:relative">
+                            <div class="date-display w-full border-2 px-3 py-2 text-sm font-['Times_New_Roman'] bg-white cursor-pointer select-none flex items-center justify-between {{ $errors->has('end_date') ? 'border-[#e91d2a]' : 'border-black' }}" tabindex="0">
+                                <span class="date-text">— Pilih Tanggal —</span>
+                                <span class="date-arrow">▼</span>
+                            </div>
+                            <div class="date-calendar" style="display:none;position:absolute;top:100%;left:0;z-index:9999;border:2px solid #000;background:#fff;width:280px">
+                                <div class="cal-header" style="background:#000;color:#fff;display:flex;align-items:center;justify-content:space-between;padding:6px 10px;font-family:'Times New Roman';font-size:14px;font-weight:bold;user-select:none">
+                                    <button class="cal-prev" type="button" style="background:none;border:none;color:#fff;cursor:pointer;font-size:14px;padding:2px 8px;font-family:'Times New Roman';font-weight:bold;line-height:1">◀</button>
+                                    <span class="cal-title">Bulan Tahun</span>
+                                    <button class="cal-next" type="button" style="background:none;border:none;color:#fff;cursor:pointer;font-size:14px;padding:2px 8px;font-family:'Times New Roman';font-weight:bold;line-height:1">▶</button>
+                                </div>
+                                <div class="cal-weekdays" style="display:grid;grid-template-columns:repeat(7,1fr);border-bottom:2px solid #000;font-family:'Times New Roman';font-size:11px;font-weight:bold;text-align:center;background:#f5f5f5;color:#000">
+                                    <span style="padding:5px 0;border-right:1px solid #ddd">Min</span>
+                                    <span style="padding:5px 0;border-right:1px solid #ddd">Sen</span>
+                                    <span style="padding:5px 0;border-right:1px solid #ddd">Sel</span>
+                                    <span style="padding:5px 0;border-right:1px solid #ddd">Rab</span>
+                                    <span style="padding:5px 0;border-right:1px solid #ddd">Kam</span>
+                                    <span style="padding:5px 0;border-right:1px solid #ddd">Jum</span>
+                                    <span style="padding:5px 0">Sab</span>
+                                </div>
+                                <div class="cal-grid" style="display:grid;grid-template-columns:repeat(7,1fr);font-family:'Times New Roman';font-size:13px"></div>
+                            </div>
+                            <input type="date" name="end_date" value="{{ old('end_date') }}"
+                                   style="position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0">
+                        </div>
                         @error('end_date') <p class="text-[#e91d2a] text-xs mt-1 font-[Helvetica] font-bold">{{ $message }}</p> @enderror
                     </div>
                 </div>
@@ -141,6 +187,13 @@
             <style>
             .select-li:hover { background:#e6915d; color:#fff; }
             .select-li.s-selected { background:#e6915d; color:#fff; }
+            .cal-day { padding:5px 2px; text-align:center; cursor:pointer; border-bottom:1px solid #eee; border-right:1px solid #eee; font-family:'Times New Roman'; font-size:13px; color:#000; }
+            .cal-day:nth-child(7n) { border-right:none; }
+            .cal-day:hover { background:#e6915d; color:#fff; }
+            .cal-day.cal-other { color:#ccc; cursor:default; }
+            .cal-day.cal-other:hover { background:transparent; color:#ccc; }
+            .cal-day.cal-today { font-weight:bold; text-decoration:underline; }
+            .cal-day.cal-selected { background:#e6915d; color:#fff; font-weight:bold; }
             </style>
 
             <script>
@@ -149,6 +202,80 @@
                 { name: @json($p->project_name), branch: @json($p->branch_id) },
                 @endforeach
             ];
+
+            var monthsId = ['Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember'];
+
+            function getCalState(wrapper) {
+                var input = wrapper.querySelector('input[type="date"]');
+                if (input && input.value) {
+                    var p = input.value.split('-');
+                    return { year: parseInt(p[0]), month: parseInt(p[1]) - 1 };
+                }
+                return null;
+            }
+
+            function renderCalendar(wrapper) {
+                if (!wrapper.__calState) wrapper.__calState = getCalState(wrapper) || { year: new Date().getFullYear(), month: new Date().getMonth() };
+                var state = wrapper.__calState;
+                var year = state.year, month = state.month;
+                var firstDay = new Date(year, month, 1).getDay();
+                var daysInMonth = new Date(year, month + 1, 0).getDate();
+                var daysInPrev = new Date(year, month, 0).getDate();
+                var grid = wrapper.querySelector('.cal-grid');
+                grid.innerHTML = '';
+                var today = new Date();
+                var selectedVal = wrapper.querySelector('input[type="date"]').value;
+                for (var i = firstDay - 1; i >= 0; i--) {
+                    var c = document.createElement('div');
+                    c.textContent = daysInPrev - i;
+                    c.className = 'cal-day cal-other';
+                    grid.appendChild(c);
+                }
+                for (var d = 1; d <= daysInMonth; d++) {
+                    var c = document.createElement('div');
+                    c.textContent = d;
+                    var ds = year + '-' + String(month+1).padStart(2,'0') + '-' + String(d).padStart(2,'0');
+                    c.className = 'cal-day';
+                    c.dataset.date = ds;
+                    if (selectedVal === ds) c.classList.add('cal-selected');
+                    if (year === today.getFullYear() && month === today.getMonth() && d === today.getDate()) c.classList.add('cal-today');
+                    c.addEventListener('click', function() { selectDate(wrapper, this.dataset.date); });
+                    grid.appendChild(c);
+                }
+                var remaining = 42 - (firstDay + daysInMonth);
+                for (var r = 1; r <= remaining; r++) {
+                    var c = document.createElement('div');
+                    c.textContent = r;
+                    c.className = 'cal-day cal-other';
+                    grid.appendChild(c);
+                }
+                wrapper.querySelector('.cal-title').textContent = monthsId[month] + ' ' + year;
+            }
+
+            function selectDate(wrapper, dateStr) {
+                var input = wrapper.querySelector('input[type="date"]');
+                var textEl = wrapper.querySelector('.date-text');
+                var arrow = wrapper.querySelector('.date-arrow');
+                var calendar = wrapper.querySelector('.date-calendar');
+                input.value = dateStr;
+                var p = dateStr.split('-');
+                textEl.textContent = parseInt(p[2]) + ' ' + monthsId[parseInt(p[1])-1] + ' ' + p[0];
+                calendar.style.display = 'none';
+                arrow.textContent = '\u25BC';
+                var evt = new Event('change', { bubbles: true });
+                input.dispatchEvent(evt);
+                wrapper.__calState = { year: parseInt(p[0]), month: parseInt(p[1]) - 1 };
+                renderCalendar(wrapper);
+            }
+
+            function syncDateDisplay(wrapper) {
+                var input = wrapper.querySelector('input[type="date"]');
+                var textEl = wrapper.querySelector('.date-text');
+                if (input && input.value) {
+                    var p = input.value.split('-');
+                    textEl.textContent = parseInt(p[2]) + ' ' + monthsId[parseInt(p[1])-1] + ' ' + p[0];
+                }
+            }
 
             document.addEventListener('DOMContentLoaded', function() {
                 document.querySelectorAll('.select-wrapper').forEach(function(wrapper) {
@@ -292,6 +419,47 @@
                         branchSelect.dispatchEvent(evt);
                     }
                 }
+
+                document.querySelectorAll('.date-wrapper').forEach(function(wrapper) {
+                    if (wrapper.__dw) return;
+                    wrapper.__dw = true;
+                    var display = wrapper.querySelector('.date-display');
+                    var calendar = wrapper.querySelector('.date-calendar');
+                    var arrow = wrapper.querySelector('.date-arrow');
+                    syncDateDisplay(wrapper);
+                    display.addEventListener('click', function(e) {
+                        e.stopPropagation();
+                        var isOpen = calendar.style.display !== 'none';
+                        if (isOpen) {
+                            calendar.style.display = 'none';
+                            arrow.textContent = '\u25BC';
+                        } else {
+                            calendar.style.display = 'block';
+                            arrow.textContent = '\u25B2';
+                            renderCalendar(wrapper);
+                        }
+                    });
+                    document.addEventListener('click', function(e) {
+                        if (!wrapper.contains(e.target)) {
+                            calendar.style.display = 'none';
+                            arrow.textContent = '\u25BC';
+                        }
+                    });
+                    calendar.querySelector('.cal-prev').addEventListener('click', function(e) {
+                        e.stopPropagation();
+                        if (!wrapper.__calState) wrapper.__calState = { year: new Date().getFullYear(), month: new Date().getMonth() };
+                        wrapper.__calState.month--;
+                        if (wrapper.__calState.month < 0) { wrapper.__calState.month = 11; wrapper.__calState.year--; }
+                        renderCalendar(wrapper);
+                    });
+                    calendar.querySelector('.cal-next').addEventListener('click', function(e) {
+                        e.stopPropagation();
+                        if (!wrapper.__calState) wrapper.__calState = { year: new Date().getFullYear(), month: new Date().getMonth() };
+                        wrapper.__calState.month++;
+                        if (wrapper.__calState.month > 11) { wrapper.__calState.month = 0; wrapper.__calState.year++; }
+                        renderCalendar(wrapper);
+                    });
+                });
             });
             </script>
         </div>

@@ -60,10 +60,11 @@
                     <span class="text-[#d77a7a]">█</span> <span class="sm:opacity-0 sm:group-hover:opacity-100 sm:transition-opacity sm:duration-200 sm:delay-150">Database</span>
                 </a>
                 <a href="{{ route('lead-events.index') }}" class="block px-3 py-2 text-sm font-[Helvetica] font-bold text-black hover:bg-[#e6915d] hover:text-black border border-black mb-1 rounded-none {{ request()->routeIs('lead-events.*') ? 'bg-[#e6915d]' : 'bg-white' }}">
-                    <span class="text-[#e6915d]">█</span> <span class="sm:opacity-0 sm:group-hover:opacity-100 sm:transition-opacity sm:duration-200 sm:delay-150">Lead Events</span>
+                    <span class="text-[#e6915d]">█</span> <span class="sm:opacity-0 sm:group-hover:opacity-100 sm:transition-opacity sm:duration-200 sm:delay-150">Daftar Event</span>
                 </a>
-                <a href="{{ route('lead-daily.index') }}" class="block px-3 py-2 text-sm font-[Helvetica] font-bold text-black hover:bg-[#e6915d] hover:text-black border border-black mb-1 rounded-none {{ request()->routeIs('lead-daily.*') ? 'bg-[#e6915d]' : 'bg-white' }}">
-                    <span class="text-[#e6915d]">█</span> <span class="sm:opacity-0 sm:group-hover:opacity-100 sm:transition-opacity sm:duration-200 sm:delay-150">Daily Leads</span>
+                <div class="border-t border-dashed border-gray-400 mx-2 my-2"></div>
+                <a href="{{ route('lead-daily.index') }}" class="block px-3 py-2 text-sm font-[Helvetica] font-bold text-black hover:bg-[#c0392b] hover:text-black border border-black mb-1 rounded-none {{ request()->routeIs('lead-daily.*') ? 'bg-[#c0392b]' : 'bg-white' }}">
+                    <span class="text-[#c0392b]">█</span> <span class="sm:opacity-0 sm:group-hover:opacity-100 sm:transition-opacity sm:duration-200 sm:delay-150">Lead Harian</span>
                 </a>
                 @if(Auth::user() && Auth::user()->isSuperadmin())
                 <div class="border-t border-dashed border-gray-400 mx-2 my-2 pt-1 text-[10px] text-gray-500 text-center tracking-[0.2em]">── Pengaturan ──</div>

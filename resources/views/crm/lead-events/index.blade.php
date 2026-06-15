@@ -1,10 +1,10 @@
 @extends('layouts.crm')
 
-@section('title', 'Lead Events - Oasis CRM')
+@section('title', 'Daftar Event - Oasis CRM')
 
 @section('content')
     <div class="bg-[#e6915d] border-2 border-black px-4 py-2 mb-6">
-        <h1 class="font-['Arial_Black'] font-black text-xl uppercase">Lead Events</h1>
+        <h1 class="font-['Arial_Black'] font-black text-xl uppercase">Daftar Event</h1>
     </div>
 
     @if(Auth::user()->canViewAllBranches() && isset($branches) && $branches->count() > 0)

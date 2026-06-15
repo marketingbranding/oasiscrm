@@ -1,10 +1,10 @@
 @extends('layouts.crm')
 
-@section('title', 'Daily Leads - Oasis CRM')
+@section('title', 'Lead Harian - Oasis CRM')
 
 @section('content')
     <div class="bg-[#e6915d] border-2 border-black px-4 py-2 mb-6">
-        <h1 class="font-['Arial_Black'] font-black text-xl uppercase">Daily Leads</h1>
+        <h1 class="font-['Arial_Black'] font-black text-xl uppercase">Lead Harian</h1>
     </div>
 
     <div class="bg-white border-2 border-black p-3 mb-6">

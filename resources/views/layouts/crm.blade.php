@@ -73,6 +73,9 @@
                 <a href="{{ route('admin-users.index') }}" class="block px-3 py-2 text-sm font-[Helvetica] font-bold text-black hover:bg-[#8c9ae0] hover:text-black border border-black mb-1 rounded-none {{ request()->routeIs('admin-users.*') ? 'bg-[#8c9ae0]' : 'bg-white' }}">
                     <span class="text-[#8c9ae0]">█</span> <span class="sm:opacity-0 sm:group-hover:opacity-100 sm:transition-opacity sm:duration-200 sm:delay-150">User</span>
                 </a>
+                <a href="{{ route('projects.index') }}" class="block px-3 py-2 text-sm font-[Helvetica] font-bold text-black hover:bg-[#5d8e8e] hover:text-black border border-black mb-1 rounded-none {{ request()->routeIs('projects.*') ? 'bg-[#5d8e8e]' : 'bg-white' }}">
+                    <span class="text-[#5d8e8e]">█</span> <span class="sm:opacity-0 sm:group-hover:opacity-100 sm:transition-opacity sm:duration-200 sm:delay-150">Proyek</span>
+                </a>
                 @endif
             </nav>
         </div>

@@ -8,6 +8,7 @@ use App\Http\Controllers\Crm\DashboardController;
 use App\Http\Controllers\Crm\DatabaseController;
 use App\Http\Controllers\Crm\LeadDailyController;
 use App\Http\Controllers\Crm\LeadEventController;
+use App\Http\Controllers\Crm\ProjectController;
 use App\Http\Controllers\ProfileController;
 use Illuminate\Support\Facades\Route;
 
@@ -45,6 +46,9 @@ Route::middleware(['auth', 'verified', 'password.changed'])->group(function () {
 
         Route::bind('admin_user', fn($value) => \App\Models\User::findOrFail($value));
         Route::resource('admin-users', AdminUserController::class)->except(['show']);
+
+        Route::bind('project', fn($v) => \App\Models\LeadMaster::findOrFail($v));
+        Route::resource('projects', ProjectController::class);
     });
 });
 

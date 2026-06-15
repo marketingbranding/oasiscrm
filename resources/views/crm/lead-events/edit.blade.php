@@ -34,7 +34,7 @@
                            class="w-full border-2 border-black px-3 py-2 text-sm font-['Times_New_Roman'] bg-white rounded-none @error('project_name') border-[#e91d2a] @enderror">
                     <datalist id="project-list">
                         @foreach($projects as $p)
-                            <option value="{{ $p->project_name }}">
+                            <option value="{{ $p->project_name }}" data-branch="{{ $p->branch_id }}">
                         @endforeach
                     </datalist>
                     @error('project_name') <p class="text-[#e91d2a] text-xs mt-1 font-[Helvetica] font-bold">{{ $message }}</p> @enderror
@@ -47,7 +47,7 @@
                     <datalist id="source-list">
                         @foreach($projects as $p)
                             @if($p->lead_source)
-                                <option value="{{ $p->lead_source }}">
+                                <option value="{{ $p->lead_source }}" data-branch="{{ $p->branch_id }}">
                             @endif
                         @endforeach
                     </datalist>
@@ -106,6 +106,22 @@
                     </a>
                 </div>
             </form>
+
+            <script>
+            document.querySelector('[name="branch_id"]')?.addEventListener('change', function() {
+                const branchId = this.value;
+                document.querySelectorAll('#project-list option, #source-list option').forEach(function(opt) {
+                    const optBranch = opt.getAttribute('data-branch');
+                    opt.style.display = (!branchId || !optBranch || optBranch === branchId) ? '' : 'none';
+                });
+            });
+            document.addEventListener('DOMContentLoaded', function() {
+                const branchSelect = document.querySelector('[name="branch_id"]');
+                if (branchSelect) {
+                    branchSelect.dispatchEvent(new Event('change'));
+                }
+            });
+            </script>
 
             <div class="border-t-2 border-black mt-6 pt-4">
                 <form method="POST" action="{{ route('lead-events.destroy', ['lead_event' => $event->id]) }}"

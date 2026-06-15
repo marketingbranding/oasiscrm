@@ -32,7 +32,7 @@
                                 @endforeach
                             </ul>
                         </div>
-                        <select name="branch_id" style="display:none">
+                        <select name="branch_id" style="position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0">
                             <option value="">— Pilih Cabang —</option>
                             @foreach($branches as $b)
                                 <option value="{{ $b->id }}" {{ old('branch_id', $event->branch_id) == $b->id ? 'selected' : '' }}>{{ $b->name }}</option>
@@ -58,7 +58,7 @@
                                 @endforeach
                             </ul>
                         </div>
-                        <select name="project_name" style="display:none">
+                        <select name="project_name" style="position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0">
                             <option value="">— Pilih Proyek —</option>
                             @foreach($projects as $p)
                                 <option value="{{ $p->project_name }}" data-branch="{{ $p->branch_id }}" {{ old('project_name', $event->project_name) === $p->project_name ? 'selected' : '' }}>{{ $p->project_name }}</option>
@@ -83,7 +83,7 @@
                                 @endforeach
                             </ul>
                         </div>
-                        <select name="lead_source" style="display:none">
+                        <select name="lead_source" style="position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0">
                             <option value="">— Pilih Sumber —</option>
                             @foreach($sources as $src)
                                 <option value="{{ $src }}" {{ old('lead_source', $event->lead_source) === $src ? 'selected' : '' }}>{{ $src }}</option>
@@ -156,19 +156,24 @@
                     wrapper.__sw = true;
 
                     var display = wrapper.querySelector('.select-display');
-                    var textEl = display.querySelector('.select-text');
-                    var arrow = display.querySelector('.select-arrow');
+                    var textEl = display ? display.querySelector('.select-text') : null;
+                    var arrow = display ? display.querySelector('.select-arrow') : null;
                     var dropdown = wrapper.querySelector('.select-dropdown');
-                    var search = dropdown.querySelector('.select-search');
-                    var list = dropdown.querySelector('.select-options');
+                    var search = dropdown ? dropdown.querySelector('.select-search') : null;
+                    var list = dropdown ? dropdown.querySelector('.select-options') : null;
                     var select = wrapper.querySelector('select');
+
+                    if (!display || !textEl || !arrow || !dropdown || !search || !list || !select) {
+                        console.warn('CustomSelect init failed for', wrapper);
+                        return;
+                    }
 
                     function sync() {
                         var idx = select.selectedIndex;
                         textEl.textContent = idx > 0 ? select.options[idx].text : select.options[0].text;
                     }
 
-                    display.onclick = function(e) {
+                    display.addEventListener('click', function(e) {
                         e.stopPropagation();
                         var isOpen = dropdown.style.display !== 'none';
                         if (isOpen) {
@@ -179,18 +184,18 @@
                             arrow.textContent = '\u25B2';
                             search.value = '';
                             search.focus();
-                            list.querySelectorAll('li').forEach(function(li) { li.style.display = ''; });
+                            Array.from(list.children).forEach(function(li) { li.style.display = ''; });
                         }
-                    };
+                    });
 
-                    search.oninput = function() {
+                    search.addEventListener('input', function() {
                         var q = this.value.toLowerCase();
-                        list.querySelectorAll('li').forEach(function(li) {
+                        Array.from(list.children).forEach(function(li) {
                             li.style.display = li.textContent.toLowerCase().indexOf(q) !== -1 ? '' : 'none';
                         });
-                    };
+                    });
 
-                    search.onkeydown = function(e) {
+                    search.addEventListener('keydown', function(e) {
                         if (e.key === 'Enter') {
                             var visible = list.querySelector('li:not([style*="display: none"])');
                             if (visible && visible.getAttribute('data-value')) {
@@ -201,12 +206,12 @@
                             dropdown.style.display = 'none';
                             arrow.textContent = '\u25BC';
                         }
-                    };
+                    });
 
-                    list.onclick = function(e) {
+                    list.addEventListener('click', function(e) {
                         var li = e.target.closest('li');
                         if (li) selectOption(li);
-                    };
+                    });
 
                     function selectOption(li) {
                         list.querySelectorAll('li').forEach(function(l) {
@@ -229,6 +234,9 @@
                     });
 
                     sync();
+
+                    var sw = display.offsetWidth;
+                    if (sw > 0) dropdown.style.width = sw + 'px';
                 });
 
                 var branchSelect = document.querySelector('[name="branch_id"]');

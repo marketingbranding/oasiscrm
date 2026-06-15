@@ -59,7 +59,6 @@ class LeadEventController extends Controller
             'start_date' => 'required|date',
             'end_date' => 'nullable|date|after_or_equal:start_date',
             'total_budget' => 'nullable|numeric|min:0',
-            'daily_target' => 'nullable|integer|min:0',
             'status' => 'required|in:berlangsung,selesai',
             'notes' => 'nullable|string',
         ]);
@@ -115,7 +114,6 @@ class LeadEventController extends Controller
             'start_date' => 'required|date',
             'end_date' => 'nullable|date|after_or_equal:start_date',
             'total_budget' => 'nullable|numeric|min:0',
-            'daily_target' => 'nullable|integer|min:0',
             'status' => 'required|in:berlangsung,selesai',
             'notes' => 'nullable|string',
         ]);

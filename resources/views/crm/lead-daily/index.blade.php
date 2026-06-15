@@ -44,7 +44,6 @@
                     <th class="px-3 py-2 text-left font-[Helvetica] font-bold text-xs uppercase">Cabang</th>
                     <th class="px-3 py-2 text-left font-[Helvetica] font-bold text-xs uppercase">Proyek</th>
                     <th class="px-3 py-2 text-center font-[Helvetica] font-bold text-xs uppercase">Hari Ke</th>
-                    <th class="px-3 py-2 text-center font-[Helvetica] font-bold text-xs uppercase">Target</th>
                     <th class="px-3 py-2 text-center font-[Helvetica] font-bold text-xs uppercase">Leads</th>
                     <th class="px-3 py-2 text-center font-[Helvetica] font-bold text-xs uppercase">Kumulatif</th>
                     <th class="px-3 py-2 text-center font-[Helvetica] font-bold text-xs uppercase">Achieve %</th>
@@ -59,7 +58,6 @@
                     <td class="px-3 py-2">{{ $log->branch->name ?? '—' }}</td>
                     <td class="px-3 py-2">{{ $log->leadEvent->project_name }}</td>
                     <td class="px-3 py-2 text-center">{{ $log->day_number ?? '—' }}</td>
-                    <td class="px-3 py-2 text-center">{{ $log->leadEvent->daily_target ?? '—' }}</td>
                     <td class="px-3 py-2 text-center font-bold">{{ $log->leads_count }}</td>
                     <td class="px-3 py-2 text-center">{{ $log->cumulative_leads }}</td>
                     <td class="px-3 py-2 text-center">
@@ -85,7 +83,7 @@
                 </tr>
                 @empty
                 <tr>
-                    <td colspan="10" class="px-4 py-8 text-center text-sm">Belum ada data harian.</td>
+                    <td colspan="9" class="px-4 py-8 text-center text-sm">Belum ada data harian.</td>
                 </tr>
                 @endforelse
             </tbody>

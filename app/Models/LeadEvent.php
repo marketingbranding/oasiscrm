@@ -16,7 +16,6 @@ class LeadEvent extends Model
         'start_date',
         'end_date',
         'total_budget',
-        'daily_target',
         'status',
         'notes',
         'created_by',

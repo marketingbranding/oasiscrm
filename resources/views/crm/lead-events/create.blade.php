@@ -16,37 +16,45 @@
                 @csrf
 
                 @if(Auth::user()->canViewAllBranches() && isset($branches) && $branches->count() > 0)
+                @php $branchMap = $branches->pluck('id', 'name'); @endphp
                 <div>
                     <label class="font-[Helvetica] font-bold text-xs uppercase block mb-1">Cabang</label>
-                    <select name="branch_id" class="searchable-select w-full border-2 border-black px-3 py-2 text-sm font-['Times_New_Roman'] bg-white rounded-none @error('branch_id') border-[#e91d2a] @enderror">
-                        <option value="">— Pilih Cabang —</option>
+                    <input type="text" name="branch_name" value="{{ old('branch_name') }}" list="branch-list" autocomplete="off"
+                           class="w-full border-2 border-black px-3 py-2 text-sm font-['Times_New_Roman'] bg-white rounded-none @error('branch_id') border-[#e91d2a] @enderror"
+                           placeholder="Ketik atau pilih cabang...">
+                    <input type="hidden" name="branch_id" value="{{ old('branch_id') }}">
+                    <datalist id="branch-list">
                         @foreach($branches as $b)
-                            <option value="{{ $b->id }}" {{ old('branch_id') == $b->id ? 'selected' : '' }}>{{ $b->name }}</option>
+                            <option value="{{ $b->name }}" data-id="{{ $b->id }}">
                         @endforeach
-                    </select>
+                    </datalist>
                     @error('branch_id') <p class="text-[#e91d2a] text-xs mt-1 font-[Helvetica] font-bold">{{ $message }}</p> @enderror
                 </div>
                 @endif
 
                 <div>
                     <label class="font-[Helvetica] font-bold text-xs uppercase block mb-1">Proyek</label>
-                    <select name="project_name" class="searchable-select w-full border-2 border-black px-3 py-2 text-sm font-['Times_New_Roman'] bg-white rounded-none @error('project_name') border-[#e91d2a] @enderror">
-                        <option value="">— Pilih Proyek —</option>
+                    <input type="text" name="project_name" value="{{ old('project_name') }}" list="project-list" autocomplete="off"
+                           class="w-full border-2 border-black px-3 py-2 text-sm font-['Times_New_Roman'] bg-white rounded-none @error('project_name') border-[#e91d2a] @enderror"
+                           placeholder="Ketik atau pilih proyek...">
+                    <datalist id="project-list">
                         @foreach($projects as $p)
-                            <option value="{{ $p->project_name }}" data-branch="{{ $p->branch_id }}" {{ old('project_name') === $p->project_name ? 'selected' : '' }}>{{ $p->project_name }}</option>
+                            <option value="{{ $p->project_name }}" data-branch="{{ $p->branch_id }}">
                         @endforeach
-                    </select>
+                    </datalist>
                     @error('project_name') <p class="text-[#e91d2a] text-xs mt-1 font-[Helvetica] font-bold">{{ $message }}</p> @enderror
                 </div>
 
                 <div>
                     <label class="font-[Helvetica] font-bold text-xs uppercase block mb-1">Sumber Lead</label>
-                    <select name="lead_source" class="searchable-select w-full border-2 border-black px-3 py-2 text-sm font-['Times_New_Roman'] bg-white rounded-none @error('lead_source') border-[#e91d2a] @enderror">
-                        <option value="">— Pilih Sumber —</option>
+                    <input type="text" name="lead_source" value="{{ old('lead_source') }}" list="source-list" autocomplete="off"
+                           class="w-full border-2 border-black px-3 py-2 text-sm font-['Times_New_Roman'] bg-white rounded-none @error('lead_source') border-[#e91d2a] @enderror"
+                           placeholder="Ketik atau pilih sumber...">
+                    <datalist id="source-list">
                         @foreach($sources as $src)
-                            <option value="{{ $src }}" data-branch="" {{ old('lead_source') === $src ? 'selected' : '' }}>{{ $src }}</option>
+                            <option value="{{ $src }}">
                         @endforeach
-                    </select>
+                    </datalist>
                     @error('lead_source') <p class="text-[#e91d2a] text-xs mt-1 font-[Helvetica] font-bold">{{ $message }}</p> @enderror
                 </div>
 
@@ -65,19 +73,11 @@
                     </div>
                 </div>
 
-                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div>
-                        <label class="font-[Helvetica] font-bold text-xs uppercase block mb-1">Anggaran Total</label>
-                        <input type="number" name="total_budget" value="{{ old('total_budget') }}"
-                               class="w-full border-2 border-black px-3 py-2 text-sm font-['Times_New_Roman'] bg-white rounded-none @error('total_budget') border-[#e91d2a] @enderror">
-                        @error('total_budget') <p class="text-[#e91d2a] text-xs mt-1 font-[Helvetica] font-bold">{{ $message }}</p> @enderror
-                    </div>
-                    <div>
-                        <label class="font-[Helvetica] font-bold text-xs uppercase block mb-1">Target Lead Harian</label>
-                        <input type="number" name="daily_target" value="{{ old('daily_target') }}"
-                               class="w-full border-2 border-black px-3 py-2 text-sm font-['Times_New_Roman'] bg-white rounded-none @error('daily_target') border-[#e91d2a] @enderror">
-                        @error('daily_target') <p class="text-[#e91d2a] text-xs mt-1 font-[Helvetica] font-bold">{{ $message }}</p> @enderror
-                    </div>
+                <div>
+                    <label class="font-[Helvetica] font-bold text-xs uppercase block mb-1">Anggaran Total</label>
+                    <input type="number" name="total_budget" value="{{ old('total_budget') }}"
+                           class="w-full border-2 border-black px-3 py-2 text-sm font-['Times_New_Roman'] bg-white rounded-none @error('total_budget') border-[#e91d2a] @enderror">
+                    @error('total_budget') <p class="text-[#e91d2a] text-xs mt-1 font-[Helvetica] font-bold">{{ $message }}</p> @enderror
                 </div>
 
                 <div>
@@ -104,109 +104,49 @@
             </form>
 
             <script>
-            function initSearchableSelects() {
-                document.querySelectorAll('select.searchable-select').forEach(function(select) {
-                    if (select.dataset.searchableInitialized) return;
-                    select.dataset.searchableInitialized = '1';
+            var projectData = [
+                @foreach($projects as $p)
+                { name: {{ json_encode($p->project_name) }}, branch: {{ json_encode($p->branch_id) }} },
+                @endforeach
+            ];
 
-                    var allOptions = [];
-                    for (var i = 1; i < select.options.length; i++) {
-                        allOptions.push(select.options[i]);
-                    }
+            var branchMap = {};
+            @if(Auth::user()->canViewAllBranches() && isset($branches))
+                @foreach($branches as $b)
+                branchMap[{{ json_encode($b->name) }}] = '{{ $b->id }}';
+                @endforeach
+            @endif
 
-                    var wrapper = document.createElement('div');
-                    wrapper.className = 'relative';
-
-                    var searchInput = document.createElement('input');
-                    searchInput.type = 'text';
-                    searchInput.className = 'w-full border-b-2 border-black px-3 py-1.5 text-sm font-[\'Times_New_Roman\'] bg-gray-50 rounded-none mb-1';
-                    searchInput.placeholder = 'Cari...';
-
-                    select.parentNode.insertBefore(wrapper, select);
-                    wrapper.appendChild(searchInput);
-                    wrapper.appendChild(select);
-
-                    searchInput.addEventListener('input', function() {
-                        var filter = this.value.toLowerCase();
-                        for (var j = select.options.length - 1; j >= 1; j--) {
-                            select.remove(j);
-                        }
-                        for (var k = 0; k < allOptions.length; k++) {
-                            if (allOptions[k].text.toLowerCase().indexOf(filter) !== -1) {
-                                select.add(allOptions[k]);
-                            }
-                        }
-                    });
-
-                    select.addEventListener('change', function() {
-                        searchInput.value = '';
-                        for (var j = select.options.length - 1; j >= 1; j--) {
-                            select.remove(j);
-                        }
-                        for (var k = 0; k < allOptions.length; k++) {
-                            select.add(allOptions[k]);
-                        }
-                    });
-                });
-            }
-
-            function filterByBranch() {
-                var branchSelect = document.querySelector('[name="branch_id"]');
-                if (!branchSelect) return;
-
-                var projectSelect = document.querySelector('[name="project_name"]');
-                var sourceSelect = document.querySelector('[name="lead_source"]');
-
-                function doFilter() {
-                    var branchId = branchSelect.value;
-
-                    if (projectSelect) {
-                        var projectOptions = projectSelect.searchableAllOptions || [];
-                        if (!projectOptions.length) {
-                            for (var i = 1; i < projectSelect.options.length; i++) {
-                                projectOptions.push(projectSelect.options[i]);
-                            }
-                            projectSelect.searchableAllOptions = projectOptions;
-                        }
-                        for (var j = projectSelect.options.length - 1; j >= 1; j--) {
-                            projectSelect.remove(j);
-                        }
-                        for (var k = 0; k < projectOptions.length; k++) {
-                            var optBranch = projectOptions[k].getAttribute('data-branch');
-                            if (!branchId || !optBranch || optBranch === branchId) {
-                                projectSelect.add(projectOptions[k]);
-                            }
-                        }
-                        var searchInput = projectSelect.previousElementSibling;
-                        if (searchInput) searchInput.value = '';
-                    }
-
-                    if (sourceSelect) {
-                        var sourceOptions = sourceSelect.searchableAllOptions || [];
-                        if (!sourceOptions.length) {
-                            for (var i = 1; i < sourceSelect.options.length; i++) {
-                                sourceOptions.push(sourceSelect.options[i]);
-                            }
-                            sourceSelect.searchableAllOptions = sourceOptions;
-                        }
-                        for (var j = sourceSelect.options.length - 1; j >= 1; j--) {
-                            sourceSelect.remove(j);
-                        }
-                        for (var k = 0; k < sourceOptions.length; k++) {
-                            sourceSelect.add(sourceOptions[k]);
-                        }
-                        var searchInput2 = sourceSelect.previousElementSibling;
-                        if (searchInput2) searchInput2.value = '';
+            function rebuildProjectList(branchId) {
+                var list = document.getElementById('project-list');
+                list.innerHTML = '';
+                for (var i = 0; i < projectData.length; i++) {
+                    if (!branchId || !projectData[i].branch || projectData[i].branch === branchId) {
+                        var opt = document.createElement('option');
+                        opt.value = projectData[i].name;
+                        list.appendChild(opt);
                     }
                 }
-
-                branchSelect.addEventListener('change', doFilter);
-                doFilter();
             }
 
             document.addEventListener('DOMContentLoaded', function() {
-                initSearchableSelects();
-                filterByBranch();
+                var branchInput = document.querySelector('[name="branch_name"]');
+                var branchHidden = document.querySelector('[name="branch_id"]');
+
+                if (branchInput && branchHidden) {
+                    branchInput.addEventListener('input', function() {
+                        var id = branchMap[this.value];
+                        branchHidden.value = id || '';
+                        rebuildProjectList(id || '');
+                    });
+                }
+
+                var initialBranch = branchHidden ? branchHidden.value : '';
+                if (!initialBranch && !branchInput) {
+                    rebuildProjectList('');
+                } else if (initialBranch) {
+                    rebuildProjectList(initialBranch);
+                }
             });
             </script>
         </div>

@@ -38,7 +38,6 @@
                     <th class="px-3 py-2 text-left font-[Helvetica] font-bold text-xs uppercase">Tgl Mulai</th>
                     <th class="px-3 py-2 text-left font-[Helvetica] font-bold text-xs uppercase">Tgl Selesai</th>
                     <th class="px-3 py-2 text-right font-[Helvetica] font-bold text-xs uppercase">Anggaran</th>
-                    <th class="px-3 py-2 text-center font-[Helvetica] font-bold text-xs uppercase">Target</th>
                     <th class="px-3 py-2 text-center font-[Helvetica] font-bold text-xs uppercase">Status</th>
                     <th class="px-3 py-2 text-center font-[Helvetica] font-bold text-xs uppercase">Aksi</th>
                 </tr>
@@ -53,7 +52,6 @@
                     <td class="px-3 py-2">{{ $event->start_date->format('d M Y') }}</td>
                     <td class="px-3 py-2">{{ $event->end_date?->format('d M Y') ?? '—' }}</td>
                     <td class="px-3 py-2 text-right">{{ $event->total_budget ? 'Rp' . number_format($event->total_budget, 0, ',', '.') : '—' }}</td>
-                    <td class="px-3 py-2 text-center">{{ $event->daily_target ?? '—' }}</td>
                     <td class="px-3 py-2 text-center">
                         <span class="inline-block px-2 py-0.5 text-xs font-[Helvetica] font-bold border border-black {{ $event->status === 'selesai' ? 'bg-[#b3bd95]' : 'bg-[#9ab6c8]' }}">
                             {{ strtoupper($event->status) }}
@@ -74,7 +72,7 @@
                 </tr>
                 @empty
                 <tr>
-                    <td colspan="10" class="px-4 py-8 text-center text-sm">Belum ada event.</td>
+                    <td colspan="9" class="px-4 py-8 text-center text-sm">Belum ada event.</td>
                 </tr>
                 @endforelse
             </tbody>

@@ -16,22 +16,23 @@
                 @csrf
 
                 @if(Auth::user()->canViewAllBranches() && isset($branches) && $branches->count() > 0)
+                @php $cabangError = $errors->has('branch_id') ? 'border-[#e91d2a]' : 'border-black'; @endphp
                 <div>
                     <label class="font-[Helvetica] font-bold text-xs uppercase block mb-1">Cabang</label>
-                    <div class="select-wrapper relative">
-                        <div class="select-display w-full border-2 px-3 py-2 text-sm font-['Times_New_Roman'] bg-white cursor-pointer select-none flex items-center justify-between {{ $errors->has('branch_id') ? 'border-[#e91d2a]' : 'border-black' }}" tabindex="0">
+                    <div class="select-wrapper relative" style="position:relative">
+                        <div class="select-display w-full border-2 px-3 py-2 text-sm font-['Times_New_Roman'] bg-white cursor-pointer select-none flex items-center justify-between {{ $cabangError }}" tabindex="0">
                             <span class="select-text">— Pilih Cabang —</span>
-                            <span class="select-arrow text-xs">▼</span>
+                            <span class="select-arrow">▼</span>
                         </div>
-                        <div class="select-dropdown hidden absolute top-full left-0 right-0 z-50 border-2 border-black bg-white">
-                            <input type="text" class="select-search w-full border-b-2 border-black px-3 py-1.5 text-sm font-['Times_New_Roman'] bg-gray-50 outline-none" placeholder="Cari...">
-                            <ul class="select-options list-none m-0 p-0 max-h-48 overflow-y-auto">
+                        <div class="select-dropdown" style="display:none;position:absolute;top:100%;left:0;right:0;z-index:9999;border:2px solid #000;background:#fff">
+                            <input type="text" class="select-search" style="width:100%;border-bottom:2px solid #000;padding:6px 12px;font-size:13px;font-family:'Times New Roman';background:#f9fafb;outline:none;box-sizing:border-box" placeholder="Cari...">
+                            <ul class="select-options" style="list-style:none;margin:0;padding:0;max-height:200px;overflow-y:auto">
                                 @foreach($branches as $b)
-                                    <li data-value="{{ $b->id }}" class="px-3 py-1.5 text-sm font-['Times_New_Roman'] cursor-pointer hover:bg-[#e6915d] hover:text-white {{ old('branch_id') == $b->id ? 'bg-[#e6915d] text-white' : '' }}">{{ $b->name }}</li>
+                                    <li data-value="{{ $b->id }}" style="padding:6px 12px;font-size:13px;font-family:'Times New Roman';cursor:pointer" class="select-li {{ old('branch_id') == $b->id ? 's-selected' : '' }}">{{ $b->name }}</li>
                                 @endforeach
                             </ul>
                         </div>
-                        <select name="branch_id" class="hidden">
+                        <select name="branch_id" style="display:none">
                             <option value="">— Pilih Cabang —</option>
                             @foreach($branches as $b)
                                 <option value="{{ $b->id }}" {{ old('branch_id') == $b->id ? 'selected' : '' }}>{{ $b->name }}</option>
@@ -44,20 +45,20 @@
 
                 <div>
                     <label class="font-[Helvetica] font-bold text-xs uppercase block mb-1">Proyek</label>
-                    <div class="select-wrapper relative">
+                    <div class="select-wrapper relative" style="position:relative">
                         <div class="select-display w-full border-2 px-3 py-2 text-sm font-['Times_New_Roman'] bg-white cursor-pointer select-none flex items-center justify-between {{ $errors->has('project_name') ? 'border-[#e91d2a]' : 'border-black' }}" tabindex="0">
                             <span class="select-text">— Pilih Proyek —</span>
-                            <span class="select-arrow text-xs">▼</span>
+                            <span class="select-arrow">▼</span>
                         </div>
-                        <div class="select-dropdown hidden absolute top-full left-0 right-0 z-50 border-2 border-black bg-white">
-                            <input type="text" class="select-search w-full border-b-2 border-black px-3 py-1.5 text-sm font-['Times_New_Roman'] bg-gray-50 outline-none" placeholder="Cari...">
-                            <ul class="select-options list-none m-0 p-0 max-h-48 overflow-y-auto">
+                        <div class="select-dropdown" style="display:none;position:absolute;top:100%;left:0;right:0;z-index:9999;border:2px solid #000;background:#fff">
+                            <input type="text" class="select-search" style="width:100%;border-bottom:2px solid #000;padding:6px 12px;font-size:13px;font-family:'Times New Roman';background:#f9fafb;outline:none;box-sizing:border-box" placeholder="Cari...">
+                            <ul class="select-options" style="list-style:none;margin:0;padding:0;max-height:200px;overflow-y:auto">
                                 @foreach($projects as $p)
-                                    <li data-value="{{ $p->project_name }}" data-branch="{{ $p->branch_id }}" class="px-3 py-1.5 text-sm font-['Times_New_Roman'] cursor-pointer hover:bg-[#e6915d] hover:text-white {{ old('project_name') === $p->project_name ? 'bg-[#e6915d] text-white' : '' }}">{{ $p->project_name }}</li>
+                                    <li data-value="{{ $p->project_name }}" data-branch="{{ $p->branch_id }}" style="padding:6px 12px;font-size:13px;font-family:'Times New Roman';cursor:pointer" class="select-li {{ old('project_name') === $p->project_name ? 's-selected' : '' }}">{{ $p->project_name }}</li>
                                 @endforeach
                             </ul>
                         </div>
-                        <select name="project_name" class="hidden">
+                        <select name="project_name" style="display:none">
                             <option value="">— Pilih Proyek —</option>
                             @foreach($projects as $p)
                                 <option value="{{ $p->project_name }}" data-branch="{{ $p->branch_id }}" {{ old('project_name') === $p->project_name ? 'selected' : '' }}>{{ $p->project_name }}</option>
@@ -69,20 +70,20 @@
 
                 <div>
                     <label class="font-[Helvetica] font-bold text-xs uppercase block mb-1">Sumber Lead</label>
-                    <div class="select-wrapper relative">
+                    <div class="select-wrapper relative" style="position:relative">
                         <div class="select-display w-full border-2 px-3 py-2 text-sm font-['Times_New_Roman'] bg-white cursor-pointer select-none flex items-center justify-between {{ $errors->has('lead_source') ? 'border-[#e91d2a]' : 'border-black' }}" tabindex="0">
                             <span class="select-text">— Pilih Sumber —</span>
-                            <span class="select-arrow text-xs">▼</span>
+                            <span class="select-arrow">▼</span>
                         </div>
-                        <div class="select-dropdown hidden absolute top-full left-0 right-0 z-50 border-2 border-black bg-white">
-                            <input type="text" class="select-search w-full border-b-2 border-black px-3 py-1.5 text-sm font-['Times_New_Roman'] bg-gray-50 outline-none" placeholder="Cari...">
-                            <ul class="select-options list-none m-0 p-0 max-h-48 overflow-y-auto">
+                        <div class="select-dropdown" style="display:none;position:absolute;top:100%;left:0;right:0;z-index:9999;border:2px solid #000;background:#fff">
+                            <input type="text" class="select-search" style="width:100%;border-bottom:2px solid #000;padding:6px 12px;font-size:13px;font-family:'Times New Roman';background:#f9fafb;outline:none;box-sizing:border-box" placeholder="Cari...">
+                            <ul class="select-options" style="list-style:none;margin:0;padding:0;max-height:200px;overflow-y:auto">
                                 @foreach($sources as $src)
-                                    <li data-value="{{ $src }}" class="px-3 py-1.5 text-sm font-['Times_New_Roman'] cursor-pointer hover:bg-[#e6915d] hover:text-white {{ old('lead_source') === $src ? 'bg-[#e6915d] text-white' : '' }}">{{ $src }}</li>
+                                    <li data-value="{{ $src }}" style="padding:6px 12px;font-size:13px;font-family:'Times New Roman';cursor:pointer" class="select-li {{ old('lead_source') === $src ? 's-selected' : '' }}">{{ $src }}</li>
                                 @endforeach
                             </ul>
                         </div>
-                        <select name="lead_source" class="hidden">
+                        <select name="lead_source" style="display:none">
                             <option value="">— Pilih Sumber —</option>
                             @foreach($sources as $src)
                                 <option value="{{ $src }}" {{ old('lead_source') === $src ? 'selected' : '' }}>{{ $src }}</option>
@@ -137,6 +138,11 @@
                 </div>
             </form>
 
+            <style>
+            .select-li:hover { background:#e6915d; color:#fff; }
+            .select-li.s-selected { background:#e6915d; color:#fff; }
+            </style>
+
             <script>
             var projectData = [
                 @foreach($projects as $p)
@@ -144,138 +150,139 @@
                 @endforeach
             ];
 
-            function initSelectWrapper(wrapper) {
-                if (wrapper.dataset.initialized) return;
-                wrapper.dataset.initialized = '1';
-
-                var display = wrapper.querySelector('.select-display');
-                var textEl = wrapper.querySelector('.select-text');
-                var arrow = wrapper.querySelector('.select-arrow');
-                var dropdown = wrapper.querySelector('.select-dropdown');
-                var search = wrapper.querySelector('.select-search');
-                var list = wrapper.querySelector('.select-options');
-                var select = wrapper.querySelector('select');
-
-                function syncDisplay() {
-                    var idx = select.selectedIndex;
-                    textEl.textContent = idx > 0 ? select.options[idx].text : select.options[0].text;
-                }
-
-                function openDropdown() {
-                    dropdown.classList.remove('hidden');
-                    arrow.textContent = '\u25B2';
-                    search.value = '';
-                    search.focus();
-                    list.querySelectorAll('li').forEach(function(li) { li.style.display = ''; });
-                }
-
-                function closeDropdown() {
-                    dropdown.classList.add('hidden');
-                    arrow.textContent = '\u25BC';
-                }
-
-                function selectOption(li) {
-                    list.querySelectorAll('li').forEach(function(l) {
-                        l.classList.remove('bg-[#e6915d]', 'text-white');
-                    });
-                    li.classList.add('bg-[#e6915d]', 'text-white');
-                    textEl.textContent = li.textContent;
-                    select.value = li.dataset.value;
-                    var evt = new Event('change', { bubbles: true });
-                    select.dispatchEvent(evt);
-                    closeDropdown();
-                }
-
-                display.addEventListener('click', function(e) {
-                    e.stopPropagation();
-                    if (dropdown.classList.contains('hidden')) openDropdown();
-                    else closeDropdown();
-                });
-
-                search.addEventListener('input', function() {
-                    var q = this.value.toLowerCase();
-                    list.querySelectorAll('li').forEach(function(li) {
-                        li.style.display = li.textContent.toLowerCase().indexOf(q) !== -1 ? '' : 'none';
-                    });
-                });
-
-                search.addEventListener('keydown', function(e) {
-                    if (e.key === 'Enter') {
-                        var visible = list.querySelector('li:not([style*="display: none"])');
-                        if (visible && visible.dataset.value) {
-                            selectOption(visible);
-                        }
-                    }
-                    if (e.key === 'Escape') closeDropdown();
-                });
-
-                list.addEventListener('click', function(e) {
-                    var li = e.target.closest('li');
-                    if (li) selectOption(li);
-                });
-
-                document.addEventListener('click', function(e) {
-                    if (!wrapper.contains(e.target)) closeDropdown();
-                });
-
-                syncDisplay();
-            }
-
-            function rebuildProjectOptions(branchId) {
-                var proyekSelect = document.querySelector('[name="project_name"]');
-                if (!proyekSelect) return;
-
-                var wrapper = proyekSelect.closest('.select-wrapper');
-                var list = wrapper.querySelector('.select-options');
-                var displayText = wrapper.querySelector('.select-text');
-                var currentVal = proyekSelect.value;
-
-                while (proyekSelect.options.length > 1) proyekSelect.remove(1);
-
-                list.innerHTML = '';
-                var placeholderLi = document.createElement('li');
-                placeholderLi.dataset.value = '';
-                placeholderLi.textContent = '\u2014 Pilih Proyek \u2014';
-                placeholderLi.className = 'px-3 py-1.5 text-sm font-[\'Times_New_Roman\']';
-                list.appendChild(placeholderLi);
-
-                var hasMatch = false;
-                for (var i = 0; i < projectData.length; i++) {
-                    if (!branchId || !projectData[i].branch || projectData[i].branch === branchId) {
-                        var opt = document.createElement('option');
-                        opt.value = projectData[i].name;
-                        opt.textContent = projectData[i].name;
-                        if (projectData[i].name === currentVal) {
-                            opt.selected = true;
-                            hasMatch = true;
-                        }
-                        proyekSelect.add(opt);
-
-                        var li = document.createElement('li');
-                        li.dataset.value = projectData[i].name;
-                        li.textContent = projectData[i].name;
-                        li.className = 'px-3 py-1.5 text-sm font-[\'Times_New_Roman\'] cursor-pointer hover:bg-[#e6915d] hover:text-white';
-                        if (projectData[i].name === currentVal) {
-                            li.classList.add('bg-[#e6915d]', 'text-white');
-                        }
-                        list.appendChild(li);
-                    }
-                }
-
-                displayText.textContent = hasMatch ? currentVal : '\u2014 Pilih Proyek \u2014';
-                if (!hasMatch) proyekSelect.value = '';
-            }
-
             document.addEventListener('DOMContentLoaded', function() {
-                document.querySelectorAll('.select-wrapper').forEach(initSelectWrapper);
+                document.querySelectorAll('.select-wrapper').forEach(function(wrapper) {
+                    if (wrapper.__sw) return;
+                    wrapper.__sw = true;
+
+                    var display = wrapper.querySelector('.select-display');
+                    var textEl = display.querySelector('.select-text');
+                    var arrow = display.querySelector('.select-arrow');
+                    var dropdown = wrapper.querySelector('.select-dropdown');
+                    var search = dropdown.querySelector('.select-search');
+                    var list = dropdown.querySelector('.select-options');
+                    var select = wrapper.querySelector('select');
+
+                    function sync() {
+                        var idx = select.selectedIndex;
+                        textEl.textContent = idx > 0 ? select.options[idx].text : select.options[0].text;
+                    }
+
+                    display.onclick = function(e) {
+                        e.stopPropagation();
+                        var isOpen = dropdown.style.display !== 'none';
+                        if (isOpen) {
+                            dropdown.style.display = 'none';
+                            arrow.textContent = '\u25BC';
+                        } else {
+                            dropdown.style.display = 'block';
+                            arrow.textContent = '\u25B2';
+                            search.value = '';
+                            search.focus();
+                            list.querySelectorAll('li').forEach(function(li) { li.style.display = ''; });
+                        }
+                    };
+
+                    search.oninput = function() {
+                        var q = this.value.toLowerCase();
+                        list.querySelectorAll('li').forEach(function(li) {
+                            li.style.display = li.textContent.toLowerCase().indexOf(q) !== -1 ? '' : 'none';
+                        });
+                    };
+
+                    search.onkeydown = function(e) {
+                        if (e.key === 'Enter') {
+                            var visible = list.querySelector('li:not([style*="display: none"])');
+                            if (visible && visible.getAttribute('data-value')) {
+                                selectOption(visible);
+                            }
+                        }
+                        if (e.key === 'Escape') {
+                            dropdown.style.display = 'none';
+                            arrow.textContent = '\u25BC';
+                        }
+                    };
+
+                    list.onclick = function(e) {
+                        var li = e.target.closest('li');
+                        if (li) selectOption(li);
+                    };
+
+                    function selectOption(li) {
+                        list.querySelectorAll('li').forEach(function(l) {
+                            l.classList.remove('s-selected');
+                        });
+                        li.classList.add('s-selected');
+                        textEl.textContent = li.textContent;
+                        select.value = li.getAttribute('data-value');
+                        var evt = new Event('change', { bubbles: true });
+                        select.dispatchEvent(evt);
+                        dropdown.style.display = 'none';
+                        arrow.textContent = '\u25BC';
+                    }
+
+                    document.addEventListener('click', function(e) {
+                        if (!wrapper.contains(e.target)) {
+                            dropdown.style.display = 'none';
+                            arrow.textContent = '\u25BC';
+                        }
+                    });
+
+                    sync();
+                });
 
                 var branchSelect = document.querySelector('[name="branch_id"]');
                 if (branchSelect) {
                     branchSelect.addEventListener('change', function() {
-                        rebuildProjectOptions(this.value);
+                        var branchId = this.value;
+                        var proyekSelect = document.querySelector('[name="project_name"]');
+                        if (!proyekSelect) return;
+
+                        var wrapper = proyekSelect.closest('.select-wrapper');
+                        var proyekList = wrapper.querySelector('.select-options');
+                        var proyekText = wrapper.querySelector('.select-text');
+                        var currentVal = proyekSelect.value;
+
+                        while (proyekSelect.options.length > 1) proyekSelect.remove(1);
+
+                        proyekList.innerHTML = '';
+                        var ph = document.createElement('li');
+                        ph.setAttribute('data-value', '');
+                        ph.textContent = '\u2014 Pilih Proyek \u2014';
+                        ph.style.cssText = 'padding:6px 12px;font-size:13px;font-family:\'Times New Roman\';cursor:pointer';
+                        ph.className = 'select-li';
+                        proyekList.appendChild(ph);
+
+                        var hasMatch = false;
+                        for (var i = 0; i < projectData.length; i++) {
+                            if (!branchId || !projectData[i].branch || projectData[i].branch === branchId) {
+                                var opt = document.createElement('option');
+                                opt.value = projectData[i].name;
+                                opt.textContent = projectData[i].name;
+                                if (projectData[i].name === currentVal) {
+                                    opt.selected = true;
+                                    hasMatch = true;
+                                }
+                                proyekSelect.add(opt);
+
+                                var li = document.createElement('li');
+                                li.setAttribute('data-value', projectData[i].name);
+                                li.textContent = projectData[i].name;
+                                li.style.cssText = 'padding:6px 12px;font-size:13px;font-family:\'Times New Roman\';cursor:pointer';
+                                li.className = 'select-li';
+                                if (projectData[i].name === currentVal) li.classList.add('s-selected');
+                                proyekList.appendChild(li);
+                            }
+                        }
+
+                        proyekText.textContent = hasMatch ? currentVal : '\u2014 Pilih Proyek \u2014';
+                        if (!hasMatch) proyekSelect.value = '';
                     });
-                    var initVal = branchSelect.value;
-                    if (initVal) rebuildProjectOptions(initVal);
+
+                    if (branchSelect.value) {
+                        var evt = new Event('change', { bubbles: true });
+                        branchSelect.dispatchEvent(evt);
+                    }
                 }
             });
             </script>

@@ -44,8 +44,9 @@ class LeadEventController extends Controller
         }
 
         $projects = LeadMaster::where('is_active', true)->get();
+        $sources = LeadMaster::where('is_active', true)->whereNotNull('lead_source')->distinct()->orderBy('lead_source')->pluck('lead_source');
 
-        return view('crm.lead-events.create', compact('branches', 'projects'));
+        return view('crm.lead-events.create', compact('branches', 'projects', 'sources'));
     }
 
     public function store(Request $request)
@@ -94,9 +95,10 @@ class LeadEventController extends Controller
         }
 
         $projects = LeadMaster::where('is_active', true)->get();
+        $sources = LeadMaster::where('is_active', true)->whereNotNull('lead_source')->distinct()->orderBy('lead_source')->pluck('lead_source');
         $event = $leadEvent;
 
-        return view('crm.lead-events.edit', compact('event', 'branches', 'projects'));
+        return view('crm.lead-events.edit', compact('event', 'branches', 'projects', 'sources'));
     }
 
     public function update(Request $request, LeadEvent $leadEvent)

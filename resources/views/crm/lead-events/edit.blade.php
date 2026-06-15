@@ -19,7 +19,7 @@
                 @if(Auth::user()->canViewAllBranches() && isset($branches) && $branches->count() > 0)
                 <div>
                     <label class="font-[Helvetica] font-bold text-xs uppercase block mb-1">Cabang</label>
-                    <select name="branch_id" class="w-full border-2 border-black px-3 py-2 text-sm font-['Times_New_Roman'] bg-white rounded-none @error('branch_id') border-[#e91d2a] @enderror">
+                    <select name="branch_id" class="searchable-select w-full border-2 border-black px-3 py-2 text-sm font-['Times_New_Roman'] bg-white rounded-none @error('branch_id') border-[#e91d2a] @enderror">
                         @foreach($branches as $b)
                             <option value="{{ $b->id }}" {{ old('branch_id', $event->branch_id) == $b->id ? 'selected' : '' }}>{{ $b->name }}</option>
                         @endforeach
@@ -30,27 +30,23 @@
 
                 <div>
                     <label class="font-[Helvetica] font-bold text-xs uppercase block mb-1">Proyek</label>
-                    <input type="text" name="project_name" value="{{ old('project_name', $event->project_name) }}" list="project-list"
-                           class="w-full border-2 border-black px-3 py-2 text-sm font-['Times_New_Roman'] bg-white rounded-none @error('project_name') border-[#e91d2a] @enderror">
-                    <datalist id="project-list">
+                    <select name="project_name" class="searchable-select w-full border-2 border-black px-3 py-2 text-sm font-['Times_New_Roman'] bg-white rounded-none @error('project_name') border-[#e91d2a] @enderror">
+                        <option value="">— Pilih Proyek —</option>
                         @foreach($projects as $p)
-                            <option value="{{ $p->project_name }}" data-branch="{{ $p->branch_id }}">
+                            <option value="{{ $p->project_name }}" data-branch="{{ $p->branch_id }}" {{ old('project_name', $event->project_name) === $p->project_name ? 'selected' : '' }}>{{ $p->project_name }}</option>
                         @endforeach
-                    </datalist>
+                    </select>
                     @error('project_name') <p class="text-[#e91d2a] text-xs mt-1 font-[Helvetica] font-bold">{{ $message }}</p> @enderror
                 </div>
 
                 <div>
                     <label class="font-[Helvetica] font-bold text-xs uppercase block mb-1">Sumber Lead</label>
-                    <input type="text" name="lead_source" value="{{ old('lead_source', $event->lead_source) }}" list="source-list"
-                           class="w-full border-2 border-black px-3 py-2 text-sm font-['Times_New_Roman'] bg-white rounded-none @error('lead_source') border-[#e91d2a] @enderror">
-                    <datalist id="source-list">
-                        @foreach($projects as $p)
-                            @if($p->lead_source)
-                                <option value="{{ $p->lead_source }}" data-branch="{{ $p->branch_id }}">
-                            @endif
+                    <select name="lead_source" class="searchable-select w-full border-2 border-black px-3 py-2 text-sm font-['Times_New_Roman'] bg-white rounded-none @error('lead_source') border-[#e91d2a] @enderror">
+                        <option value="">— Pilih Sumber —</option>
+                        @foreach($sources as $src)
+                            <option value="{{ $src }}" {{ old('lead_source', $event->lead_source) === $src ? 'selected' : '' }}>{{ $src }}</option>
                         @endforeach
-                    </datalist>
+                    </select>
                     @error('lead_source') <p class="text-[#e91d2a] text-xs mt-1 font-[Helvetica] font-bold">{{ $message }}</p> @enderror
                 </div>
 
@@ -108,18 +104,90 @@
             </form>
 
             <script>
-            document.querySelector('[name="branch_id"]')?.addEventListener('change', function() {
-                const branchId = this.value;
-                document.querySelectorAll('#project-list option, #source-list option').forEach(function(opt) {
-                    const optBranch = opt.getAttribute('data-branch');
-                    opt.style.display = (!branchId || !optBranch || optBranch === branchId) ? '' : 'none';
+            function initSearchableSelects() {
+                document.querySelectorAll('select.searchable-select').forEach(function(select) {
+                    if (select.dataset.searchableInitialized) return;
+                    select.dataset.searchableInitialized = '1';
+
+                    var allOptions = [];
+                    for (var i = 1; i < select.options.length; i++) {
+                        allOptions.push(select.options[i]);
+                    }
+
+                    var wrapper = document.createElement('div');
+                    wrapper.className = 'relative';
+
+                    var searchInput = document.createElement('input');
+                    searchInput.type = 'text';
+                    searchInput.className = 'w-full border-b-2 border-black px-3 py-1.5 text-sm font-[\'Times_New_Roman\'] bg-gray-50 rounded-none mb-1';
+                    searchInput.placeholder = 'Cari...';
+
+                    select.parentNode.insertBefore(wrapper, select);
+                    wrapper.appendChild(searchInput);
+                    wrapper.appendChild(select);
+
+                    searchInput.addEventListener('input', function() {
+                        var filter = this.value.toLowerCase();
+                        for (var j = select.options.length - 1; j >= 1; j--) {
+                            select.remove(j);
+                        }
+                        for (var k = 0; k < allOptions.length; k++) {
+                            if (allOptions[k].text.toLowerCase().indexOf(filter) !== -1) {
+                                select.add(allOptions[k]);
+                            }
+                        }
+                    });
+
+                    select.addEventListener('change', function() {
+                        searchInput.value = '';
+                        for (var j = select.options.length - 1; j >= 1; j--) {
+                            select.remove(j);
+                        }
+                        for (var k = 0; k < allOptions.length; k++) {
+                            select.add(allOptions[k]);
+                        }
+                    });
                 });
-            });
-            document.addEventListener('DOMContentLoaded', function() {
-                const branchSelect = document.querySelector('[name="branch_id"]');
-                if (branchSelect) {
-                    branchSelect.dispatchEvent(new Event('change'));
+            }
+
+            function filterByBranch() {
+                var branchSelect = document.querySelector('[name="branch_id"]');
+                if (!branchSelect) return;
+
+                var projectSelect = document.querySelector('[name="project_name"]');
+
+                function doFilter() {
+                    var branchId = branchSelect.value;
+
+                    if (projectSelect) {
+                        var projectOptions = projectSelect.searchableAllOptions || [];
+                        if (!projectOptions.length) {
+                            for (var i = 1; i < projectSelect.options.length; i++) {
+                                projectOptions.push(projectSelect.options[i]);
+                            }
+                            projectSelect.searchableAllOptions = projectOptions;
+                        }
+                        for (var j = projectSelect.options.length - 1; j >= 1; j--) {
+                            projectSelect.remove(j);
+                        }
+                        for (var k = 0; k < projectOptions.length; k++) {
+                            var optBranch = projectOptions[k].getAttribute('data-branch');
+                            if (!branchId || !optBranch || optBranch === branchId) {
+                                projectSelect.add(projectOptions[k]);
+                            }
+                        }
+                        var searchInput = projectSelect.previousElementSibling;
+                        if (searchInput) searchInput.value = '';
+                    }
                 }
+
+                branchSelect.addEventListener('change', doFilter);
+                doFilter();
+            }
+
+            document.addEventListener('DOMContentLoaded', function() {
+                initSearchableSelects();
+                filterByBranch();
             });
             </script>
 

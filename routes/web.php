@@ -6,6 +6,8 @@ use App\Http\Controllers\Crm\BranchController;
 use App\Http\Controllers\Crm\ContentCalendarController;
 use App\Http\Controllers\Crm\DashboardController;
 use App\Http\Controllers\Crm\DatabaseController;
+use App\Http\Controllers\Crm\LeadDailyController;
+use App\Http\Controllers\Crm\LeadEventController;
 use App\Http\Controllers\ProfileController;
 use Illuminate\Support\Facades\Route;
 
@@ -28,6 +30,12 @@ Route::middleware(['auth', 'verified', 'password.changed'])->group(function () {
 
     Route::get('/database', [DatabaseController::class, 'index'])->name('database.index');
     Route::get('/database/fetch', [DatabaseController::class, 'fetch'])->name('database.fetch');
+
+    Route::bind('lead_event', fn($v) => \App\Models\LeadEvent::findOrFail($v));
+    Route::resource('lead-events', LeadEventController::class);
+
+    Route::bind('lead_daily', fn($v) => \App\Models\LeadDaily::findOrFail($v));
+    Route::resource('lead-daily', LeadDailyController::class);
 
     Route::middleware('role:superadmin')->group(function () {
         Route::get('/branches', [BranchController::class, 'index'])->name('branches.index');

@@ -59,6 +59,12 @@
                 <a href="{{ route('database.index') }}" class="block px-3 py-2 text-sm font-[Helvetica] font-bold text-black hover:bg-[#d77a7a] hover:text-black border border-black mb-1 rounded-none {{ request()->routeIs('database.*') ? 'bg-[#d77a7a]' : 'bg-white' }}">
                     <span class="text-[#d77a7a]">█</span> <span class="sm:opacity-0 sm:group-hover:opacity-100 sm:transition-opacity sm:duration-200 sm:delay-150">Database</span>
                 </a>
+                <a href="{{ route('lead-events.index') }}" class="block px-3 py-2 text-sm font-[Helvetica] font-bold text-black hover:bg-[#e6915d] hover:text-black border border-black mb-1 rounded-none {{ request()->routeIs('lead-events.*') ? 'bg-[#e6915d]' : 'bg-white' }}">
+                    <span class="text-[#e6915d]">█</span> <span class="sm:opacity-0 sm:group-hover:opacity-100 sm:transition-opacity sm:duration-200 sm:delay-150">Lead Events</span>
+                </a>
+                <a href="{{ route('lead-daily.index') }}" class="block px-3 py-2 text-sm font-[Helvetica] font-bold text-black hover:bg-[#e6915d] hover:text-black border border-black mb-1 rounded-none {{ request()->routeIs('lead-daily.*') ? 'bg-[#e6915d]' : 'bg-white' }}">
+                    <span class="text-[#e6915d]">█</span> <span class="sm:opacity-0 sm:group-hover:opacity-100 sm:transition-opacity sm:duration-200 sm:delay-150">Daily Leads</span>
+                </a>
                 @if(Auth::user() && Auth::user()->isSuperadmin())
                 <div class="border-t border-dashed border-gray-400 mx-2 my-2 pt-1 text-[10px] text-gray-500 text-center tracking-[0.2em]">── Pengaturan ──</div>
                 <a href="{{ route('branches.index') }}" class="block px-3 py-2 text-sm font-[Helvetica] font-bold text-black hover:bg-[#e6915d] hover:text-black border border-black mb-1 rounded-none {{ request()->routeIs('branches.*') ? 'bg-[#e6915d]' : 'bg-white' }}">

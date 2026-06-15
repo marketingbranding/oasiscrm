@@ -13,6 +13,7 @@ class DatabaseSeeder extends Seeder
             BranchSeeder::class,
             AdminUserSeeder::class,
             ContentItemSeeder::class,
+            LeadMasterSeeder::class,
         ]);
     }
 }

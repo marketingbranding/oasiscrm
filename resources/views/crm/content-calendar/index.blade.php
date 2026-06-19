@@ -97,7 +97,7 @@
                                         <div class="flex {{ $statusColors[$item->status] ?? 'bg-gray-200' }} border border-black mb-0.5 rounded-none text-[10px] leading-tight">
                                             <a href="{{ route('content-calendar.edit', $item->id) }}"
                                                class="flex-1 px-1 py-0.5 font-[Helvetica] font-bold text-black truncate hover:opacity-80"
-                                               title="{{ $item->title }} — {{ $item->platform }} — {{ strtoupper($item->status) }}">
+                                               title="{{ $item->title }} — {{ $item->project_name ?? '(tanpa proyek)' }} — {{ $item->platform }} — {{ strtoupper($item->status) }}">
                                                 {{ $item->title }}
                                             </a>
                                             <form method="POST" action="{{ route('content-calendar.destroy', ['content_calendar' => $item->id]) }}"

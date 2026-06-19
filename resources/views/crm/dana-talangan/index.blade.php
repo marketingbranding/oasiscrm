@@ -38,7 +38,10 @@
         </form>
     </div>
 
-    <div class="flex justify-end mb-4">
+    <div class="flex justify-end gap-2 mb-4">
+        <a href="{{ route('dana-talangan.export', request()->only(['branch_id', 'project_name', 'status'])) }}" class="bg-white text-black px-4 py-1.5 text-sm font-[Helvetica] font-bold border-2 border-black rounded-none hover:bg-gray-100">
+            ↓ Export XLSX
+        </a>
         <a href="{{ route('dana-talangan.create') }}" class="bg-[#f1c40f] text-black px-4 py-1.5 text-sm font-[Helvetica] font-bold border-2 border-black rounded-none hover:bg-[#d4ac0d]">
             + Dana Talangan Baru
         </a>

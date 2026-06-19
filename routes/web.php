@@ -42,6 +42,7 @@ Route::middleware(['auth', 'verified', 'password.changed'])->group(function () {
     Route::resource('lead-daily', LeadDailyController::class);
 
     Route::bind('dana_talangan', fn($v) => \App\Models\DanaTalangan::findOrFail($v));
+    Route::get('dana-talangan/export', [DanaTalanganController::class, 'export'])->name('dana-talangan.export');
     Route::resource('dana-talangan', DanaTalanganController::class);
 
     Route::middleware('role:superadmin')->group(function () {

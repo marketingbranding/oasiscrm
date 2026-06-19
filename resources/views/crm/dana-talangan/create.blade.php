@@ -110,8 +110,20 @@
                 <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
                     <div>
                         <label class="font-[Helvetica] font-bold text-xs uppercase block mb-1">Kav</label>
-                        <input type="text" name="kav" value="{{ old('kav') }}"
-                               class="w-full border-2 border-black px-3 py-2 text-sm font-['Times_New_Roman'] bg-white rounded-none @error('kav') border-[#e91d2a] @enderror">
+                        <div class="select-wrapper relative" style="position:relative">
+                            <div class="select-display w-full border-2 px-3 py-2 text-sm font-['Times_New_Roman'] bg-white cursor-pointer select-none flex items-center justify-between border-black @error('kav') border-[#e91d2a] @enderror" tabindex="0">
+                                <span class="select-text">— Pilih Kav —</span>
+                                <span class="select-arrow">▼</span>
+                            </div>
+                            <div class="select-dropdown" style="display:none;position:absolute;top:100%;left:0;right:0;z-index:9999;border:2px solid #000;background:#fff">
+                                <input type="text" class="select-search" style="width:100%;border-bottom:2px solid #000;padding:6px 12px;font-size:13px;font-family:'Times New Roman';background:#f9fafb;outline:none;box-sizing:border-box" placeholder="Cari...">
+                                <ul class="select-options" style="list-style:none;margin:0;padding:0;max-height:200px;overflow-y:auto">
+                                </ul>
+                            </div>
+                            <select name="kav" style="position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0">
+                                <option value="">— Pilih Kav —</option>
+                            </select>
+                        </div>
                         @error('kav') <p class="text-[#e91d2a] text-xs mt-1 font-[Helvetica] font-bold">{{ $message }}</p> @enderror
                     </div>
 
@@ -187,7 +199,13 @@
 <script>
 var projectData = [
     @foreach($projects as $p)
-    { name: @json($p->project_name), branch: @json($p->branch_id) },
+    { id: @json($p->id), name: @json($p->project_name), branch: @json($p->branch_id) },
+    @endforeach
+];
+
+var kavlingData = [
+    @foreach($kavlings as $k)
+    { code: @json($k->kavling_code), name: @json($k->name), project: @json($k->project_id) },
     @endforeach
 ];
 
@@ -320,6 +338,63 @@ document.addEventListener('DOMContentLoaded', function() {
         if (branchSelect.value) {
             var evt = new Event('change', { bubbles: true });
             branchSelect.dispatchEvent(evt);
+        }
+    }
+    var proyekSelect = document.querySelector('[name="project_name"]');
+    if (proyekSelect) {
+        proyekSelect.addEventListener('change', function() {
+            updateKavDropdown(this.value);
+        });
+        if (proyekSelect.value) {
+            updateKavDropdown(proyekSelect.value, @json(old('kav')));
+        }
+    }
+
+    function updateKavDropdown(projectName, preSelectValue) {
+        var selected = null;
+        for (var i = 0; i < projectData.length; i++) {
+            if (projectData[i].name === projectName) { selected = projectData[i]; break; }
+        }
+        var projectId = selected ? selected.id : null;
+        var kavSelect = document.querySelector('[name="kav"]');
+        if (!kavSelect) return;
+        var wrapper = kavSelect.closest('.select-wrapper');
+        var kavList = wrapper ? wrapper.querySelector('.select-options') : null;
+        var kavText = wrapper ? wrapper.querySelector('.select-text') : null;
+        var currentKav = typeof preSelectValue !== 'undefined' ? preSelectValue : kavSelect.value;
+
+        while (kavSelect.options.length > 1) kavSelect.remove(1);
+        if (kavList) kavList.innerHTML = '';
+
+        if (projectId) {
+            for (var i = 0; i < kavlingData.length; i++) {
+                if (kavlingData[i].project == projectId) {
+                    var k = kavlingData[i];
+                    var opt = document.createElement('option');
+                    opt.value = k.code;
+                    opt.textContent = k.code;
+                    if (k.code === currentKav) opt.selected = true;
+                    kavSelect.add(opt);
+
+                    if (kavList) {
+                        var li = document.createElement('li');
+                        li.setAttribute('data-value', k.code);
+                        li.textContent = k.code;
+                        li.style.cssText = 'padding:6px 12px;font-size:13px;font-family:\'Times New Roman\';cursor:pointer';
+                        li.className = 'select-li';
+                        if (k.code === currentKav) li.classList.add('s-selected');
+                        kavList.appendChild(li);
+                    }
+                }
+            }
+        }
+
+        if (kavText) {
+            if (currentKav && kavSelect.value) {
+                kavText.textContent = kavSelect.options[kavSelect.selectedIndex].text;
+            } else {
+                kavText.textContent = '\u2014 Pilih Kav \u2014';
+            }
         }
     }
 });

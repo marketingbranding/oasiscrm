@@ -2,9 +2,11 @@
 
 namespace App\Http\Controllers\Crm;
 
+use App\Exports\DanaTalanganExport;
 use App\Http\Controllers\Controller;
 use App\Models\Branch;
 use App\Models\DanaTalangan;
+use App\Models\Kavling;
 use App\Models\LeadMaster;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -63,7 +65,8 @@ class DanaTalanganController extends Controller
                 ->orderBy('project_name')
                 ->get();
         }
-        return view('crm.dana-talangan.create', compact('branches', 'projects'));
+        $kavlings = Kavling::with('project')->orderBy('kavling_code')->get();
+        return view('crm.dana-talangan.create', compact('branches', 'projects', 'kavlings'));
     }
 
     public function store(Request $request)
@@ -120,7 +123,8 @@ class DanaTalanganController extends Controller
         }
 
         $record = $danaTalangan;
-        return view('crm.dana-talangan.edit', compact('record', 'branches', 'projects'));
+        $kavlings = Kavling::with('project')->orderBy('kavling_code')->get();
+        return view('crm.dana-talangan.edit', compact('record', 'branches', 'projects', 'kavlings'));
     }
 
     public function update(Request $request, DanaTalangan $danaTalangan)
@@ -153,6 +157,28 @@ class DanaTalanganController extends Controller
 
         return redirect()->route('dana-talangan.index', array_filter($request->only(['branch_id', 'project_name', 'status'])))
             ->with('success', 'Data dana talangan berhasil diperbarui.');
+    }
+
+    public function export(Request $request)
+    {
+        $user = Auth::user();
+
+        if ($user->canViewAllBranches()) {
+            $query = DanaTalangan::with(['branch', 'creator']);
+            if ($selectedBranchId = $request->get('branch_id')) {
+                $query->where('branch_id', $selectedBranchId);
+            }
+        } else {
+            $query = DanaTalangan::where('branch_id', $user->branch_id);
+        }
+
+        $query->when($request->get('project_name'), fn($q, $v) => $q->where('project_name', $v));
+        $query->when($request->get('status'), fn($q, $v) => $q->where('status', $v));
+
+        $records = $query->latest('tanggal')->get();
+
+        $filename = 'dana-talangan-' . now()->format('Y-m-d') . '.xlsx';
+        DanaTalanganExport::toBrowser($records, $filename);
     }
 
     public function destroy(DanaTalangan $danaTalangan)

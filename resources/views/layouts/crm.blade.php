@@ -51,35 +51,35 @@
              class="sm:block group w-full sm:fixed sm:left-0 sm:top-14 sm:bottom-0 sm:z-40 sm:w-12 sm:hover:w-56 sm:transition-all sm:duration-200 sm:overflow-x-hidden sm:whitespace-nowrap bg-white sm:border-r-2 border-black">
             <nav class="p-2">
                 <a href="{{ route('dashboard') }}" class="block px-3 py-2 text-sm font-[Helvetica] font-bold text-black hover:bg-[#9ab6c8] hover:text-black border border-black mb-1 rounded-none {{ request()->routeIs('dashboard') ? 'bg-[#9ab6c8]' : 'bg-white' }}">
-                    <span class="text-[#9ab6c8]">█</span> <span class="sm:opacity-0 sm:group-hover:opacity-100 sm:transition-opacity sm:duration-200 sm:delay-150">Dashboard</span>
+                    <span class="text-[#9ab6c8] inline-block w-4 text-center">◆</span> <span class="sm:opacity-0 sm:group-hover:opacity-100 sm:transition-opacity sm:duration-200 sm:delay-150">Dashboard</span>
                 </a>
                 <a href="{{ route('content-calendar.index') }}" class="block px-3 py-2 text-sm font-[Helvetica] font-bold text-black hover:bg-[#b3bd95] hover:text-black border border-black mb-1 rounded-none {{ request()->routeIs('content-calendar.*') ? 'bg-[#b3bd95]' : 'bg-white' }}">
-                    <span class="text-[#b3bd95]">█</span> <span class="sm:opacity-0 sm:group-hover:opacity-100 sm:transition-opacity sm:duration-200 sm:delay-150">Content Calendar</span>
+                    <span class="text-[#b3bd95] inline-block w-4 text-center">☰</span> <span class="sm:opacity-0 sm:group-hover:opacity-100 sm:transition-opacity sm:duration-200 sm:delay-150">Content Calendar</span>
                 </a>
                 <a href="{{ route('database.index') }}" class="block px-3 py-2 text-sm font-[Helvetica] font-bold text-black hover:bg-[#d77a7a] hover:text-black border border-black mb-1 rounded-none {{ request()->routeIs('database.*') ? 'bg-[#d77a7a]' : 'bg-white' }}">
-                    <span class="text-[#d77a7a]">█</span> <span class="sm:opacity-0 sm:group-hover:opacity-100 sm:transition-opacity sm:duration-200 sm:delay-150">Database</span>
+                    <span class="text-[#d77a7a] inline-block w-4 text-center">■</span> <span class="sm:opacity-0 sm:group-hover:opacity-100 sm:transition-opacity sm:duration-200 sm:delay-150">Database</span>
                 </a>
                 <a href="{{ route('lead-events.index') }}" class="block px-3 py-2 text-sm font-[Helvetica] font-bold text-black hover:bg-[#e6915d] hover:text-black border border-black mb-1 rounded-none {{ request()->routeIs('lead-events.*') ? 'bg-[#e6915d]' : 'bg-white' }}">
-                    <span class="text-[#e6915d]">█</span> <span class="sm:opacity-0 sm:group-hover:opacity-100 sm:transition-opacity sm:duration-200 sm:delay-150">Daftar Event</span>
+                    <span class="text-[#e6915d] inline-block w-4 text-center">☐</span> <span class="sm:opacity-0 sm:group-hover:opacity-100 sm:transition-opacity sm:duration-200 sm:delay-150">Daftar Event</span>
                 </a>
                 <div class="border-t border-dashed border-gray-400 mx-2 my-2"></div>
                 <a href="{{ route('lead-daily.index') }}" class="block px-3 py-2 text-sm font-[Helvetica] font-bold text-black hover:bg-[#c0392b] hover:text-black border border-black mb-1 rounded-none {{ request()->routeIs('lead-daily.*') ? 'bg-[#c0392b]' : 'bg-white' }}">
-                    <span class="text-[#c0392b]">█</span> <span class="sm:opacity-0 sm:group-hover:opacity-100 sm:transition-opacity sm:duration-200 sm:delay-150">Lead Harian</span>
+                    <span class="text-[#c0392b] inline-block w-4 text-center">►</span> <span class="sm:opacity-0 sm:group-hover:opacity-100 sm:transition-opacity sm:duration-200 sm:delay-150">Lead Harian</span>
                 </a>
                 <div class="border-t border-dashed border-gray-400 mx-2 my-2"></div>
                 <a href="{{ route('dana-talangan.index') }}" class="block px-3 py-2 text-sm font-[Helvetica] font-bold text-black hover:bg-[#f1c40f] hover:text-black border border-black mb-1 rounded-none {{ request()->routeIs('dana-talangan.*') ? 'bg-[#f1c40f]' : 'bg-white' }}">
-                    <span class="text-[#f1c40f]">█</span> <span class="sm:opacity-0 sm:group-hover:opacity-100 sm:transition-opacity sm:duration-200 sm:delay-150">Dana Talangan</span>
+                    <span class="text-[#f1c40f] inline-block w-4 text-center">$</span> <span class="sm:opacity-0 sm:group-hover:opacity-100 sm:transition-opacity sm:duration-200 sm:delay-150">Dana Talangan</span>
                 </a>
                 @if(Auth::user() && Auth::user()->isSuperadmin())
                 <div class="border-t border-dashed border-gray-400 mx-2 my-2 pt-1 text-[10px] text-gray-500 text-center tracking-[0.2em]">── Pengaturan ──</div>
                 <a href="{{ route('branches.index') }}" class="block px-3 py-2 text-sm font-[Helvetica] font-bold text-black hover:bg-[#e6915d] hover:text-black border border-black mb-1 rounded-none {{ request()->routeIs('branches.*') ? 'bg-[#e6915d]' : 'bg-white' }}">
-                    <span class="text-[#e6915d]">█</span> <span class="sm:opacity-0 sm:group-hover:opacity-100 sm:transition-opacity sm:duration-200 sm:delay-150">Cabang</span>
+                    <span class="text-[#e6915d] inline-block w-4 text-center">●</span> <span class="sm:opacity-0 sm:group-hover:opacity-100 sm:transition-opacity sm:duration-200 sm:delay-150">Cabang</span>
                 </a>
                 <a href="{{ route('projects.index') }}" class="block px-3 py-2 text-sm font-[Helvetica] font-bold text-black hover:bg-[#5d8e8e] hover:text-black border border-black mb-1 rounded-none {{ request()->routeIs('projects.*') ? 'bg-[#5d8e8e]' : 'bg-white' }}">
-                    <span class="text-[#5d8e8e]">█</span> <span class="sm:opacity-0 sm:group-hover:opacity-100 sm:transition-opacity sm:duration-200 sm:delay-150">Proyek</span>
+                    <span class="text-[#5d8e8e] inline-block w-4 text-center">▲</span> <span class="sm:opacity-0 sm:group-hover:opacity-100 sm:transition-opacity sm:duration-200 sm:delay-150">Proyek</span>
                 </a>
                 <a href="{{ route('admin-users.index') }}" class="block px-3 py-2 text-sm font-[Helvetica] font-bold text-black hover:bg-[#8c9ae0] hover:text-black border border-black mb-1 rounded-none {{ request()->routeIs('admin-users.*') ? 'bg-[#8c9ae0]' : 'bg-white' }}">
-                    <span class="text-[#8c9ae0]">█</span> <span class="sm:opacity-0 sm:group-hover:opacity-100 sm:transition-opacity sm:duration-200 sm:delay-150">User</span>
+                    <span class="text-[#8c9ae0] inline-block w-4 text-center">✦</span> <span class="sm:opacity-0 sm:group-hover:opacity-100 sm:transition-opacity sm:duration-200 sm:delay-150">User</span>
                 </a>
                 @endif
             </nav>

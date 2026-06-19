@@ -15,7 +15,7 @@ class ProjectController extends Controller
         $this->ensureSuperadmin();
         $selectedBranchId = $request->get('branch_id');
         $branches = Branch::where('is_active', true)->get();
-        $query = LeadMaster::with('branch');
+        $query = LeadMaster::with('branch')->withCount('kavlings');
 
         if ($selectedBranchId) {
             $query->where('branch_id', $selectedBranchId);

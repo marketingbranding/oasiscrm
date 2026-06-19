@@ -31,6 +31,7 @@
                 <tr class="bg-black text-white">
                     <th class="px-3 py-2 text-left font-[Helvetica] font-bold text-xs uppercase">Proyek</th>
                     <th class="px-3 py-2 text-left font-[Helvetica] font-bold text-xs uppercase">Cabang</th>
+                    <th class="px-3 py-2 text-center font-[Helvetica] font-bold text-xs uppercase">Kavling</th>
                     <th class="px-3 py-2 text-center font-[Helvetica] font-bold text-xs uppercase">Status</th>
                     <th class="px-3 py-2 text-center font-[Helvetica] font-bold text-xs uppercase">Aksi</th>
                 </tr>
@@ -40,6 +41,7 @@
                 <tr class="hover:bg-gray-50">
                     <td class="px-3 py-2 font-bold">{{ $p->project_name }}</td>
                     <td class="px-3 py-2">{{ $p->branch->name ?? '—' }}</td>
+                    <td class="px-3 py-2 text-center font-bold">{{ $p->kavlings_count }}</td>
                     <td class="px-3 py-2 text-center">
                         <span class="inline-block px-2 py-0.5 text-xs font-[Helvetica] font-bold border border-black {{ $p->is_active ? 'bg-[#b3bd95]' : 'bg-gray-200' }}">
                             {{ $p->is_active ? 'AKTIF' : 'NONAKTIF' }}
@@ -47,6 +49,7 @@
                     </td>
                     <td class="px-3 py-2 text-center">
                         <div class="flex items-center justify-center gap-1">
+                            <a href="{{ route('kavlings.index', ['project' => $p->id]) }}" class="text-xs font-[Helvetica] font-bold underline hover:text-[#5d8e8e]">Kavling</a>
                             <a href="{{ route('projects.edit', $p->id) }}" class="text-xs font-[Helvetica] font-bold underline hover:text-[#5d8e8e]">Edit</a>
                             <form method="POST" action="{{ route('projects.destroy', ['project' => $p->id]) }}"
                                   onsubmit="return confirm('Hapus proyek ini?')" class="inline">
@@ -59,7 +62,7 @@
                 </tr>
                 @empty
                 <tr>
-                    <td colspan="4" class="px-4 py-8 text-center text-sm">Belum ada proyek.</td>
+                    <td colspan="5" class="px-4 py-8 text-center text-sm">Belum ada proyek.</td>
                 </tr>
                 @endforelse
             </tbody>

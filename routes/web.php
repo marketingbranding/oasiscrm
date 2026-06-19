@@ -8,6 +8,7 @@ use App\Http\Controllers\Crm\ContentCalendarController;
 use App\Http\Controllers\Crm\DanaTalanganController;
 use App\Http\Controllers\Crm\DashboardController;
 use App\Http\Controllers\Crm\DatabaseController;
+use App\Http\Controllers\Crm\KavlingController;
 use App\Http\Controllers\Crm\LeadDailyController;
 use App\Http\Controllers\Crm\LeadEventController;
 use App\Http\Controllers\Crm\ProjectController;
@@ -54,6 +55,10 @@ Route::middleware(['auth', 'verified', 'password.changed'])->group(function () {
 
         Route::bind('project', fn($v) => \App\Models\LeadMaster::findOrFail($v));
         Route::resource('projects', ProjectController::class);
+        Route::get('/projects/{project}/kavlings', [KavlingController::class, 'index'])->name('kavlings.index');
+        Route::get('/projects/{project}/kavlings/bulk-import', [KavlingController::class, 'bulkImport'])->name('kavlings.bulk-import');
+        Route::post('/projects/{project}/kavlings/bulk-store', [KavlingController::class, 'bulkStore'])->name('kavlings.bulk-store');
+        Route::delete('/kavlings/{kavling}', [KavlingController::class, 'destroy'])->name('kavlings.destroy');
     });
 });
 

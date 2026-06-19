@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class LeadMaster extends Model
 {
@@ -20,5 +21,10 @@ class LeadMaster extends Model
     public function branch(): BelongsTo
     {
         return $this->belongsTo(Branch::class);
+    }
+
+    public function kavlings(): HasMany
+    {
+        return $this->hasMany(Kavling::class, 'project_id');
     }
 }

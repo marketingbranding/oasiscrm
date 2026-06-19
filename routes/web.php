@@ -3,6 +3,7 @@
 use App\Http\Controllers\Auth\PasswordChangeController;
 use App\Http\Controllers\Crm\AdminUserController;
 use App\Http\Controllers\Crm\BranchController;
+use App\Http\Controllers\Crm\BugReportController;
 use App\Http\Controllers\Crm\ContentCalendarController;
 use App\Http\Controllers\Crm\DanaTalanganController;
 use App\Http\Controllers\Crm\DashboardController;
@@ -57,6 +58,8 @@ Route::middleware(['auth', 'verified', 'password.changed'])->group(function () {
 });
 
 Route::middleware('auth')->group(function () {
+    Route::post('/bug-report', [BugReportController::class, 'store'])->name('bug-report.store');
+
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
     Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');

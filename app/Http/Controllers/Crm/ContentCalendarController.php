@@ -17,9 +17,11 @@ class ContentCalendarController extends Controller
         $month = (int) $request->get('month', now()->month);
         $year = (int) $request->get('year', now()->year);
         $selectedBranchId = $request->get('branch_id');
+        $selectedProject = $request->get('project_name');
 
         if ($user->canViewAllBranches()) {
             $branches = Branch::where('is_active', true)->get();
+            $projects = LeadMaster::where('is_active', true)->orderBy('project_name')->get();
             $query = ContentItem::with(['branch', 'creator']);
 
             if ($selectedBranchId) {
@@ -31,8 +33,14 @@ class ContentCalendarController extends Controller
         } else {
             $branches = collect();
             $selectedBranchId = $user->branch_id;
+            $projects = LeadMaster::where('is_active', true)
+                ->where('branch_id', $selectedBranchId)
+                ->orderBy('project_name')
+                ->get();
             $query = ContentItem::with(['branch', 'creator'])->where('branch_id', $selectedBranchId);
         }
+
+        $query->when($selectedProject, fn($q) => $q->where('project_name', $selectedProject));
 
         $contentItems = $query->whereYear('scheduled_date', $year)
             ->whereMonth('scheduled_date', $month)
@@ -68,7 +76,7 @@ class ContentCalendarController extends Controller
             $calendar[] = $weekDays;
         }
 
-        return view('crm.content-calendar.index', compact('calendar', 'currentMonth', 'prevMonth', 'nextMonth', 'branches', 'selectedBranchId'));
+        return view('crm.content-calendar.index', compact('calendar', 'currentMonth', 'prevMonth', 'nextMonth', 'branches', 'selectedBranchId', 'projects', 'selectedProject'));
     }
 
     public function create()
@@ -108,7 +116,7 @@ class ContentCalendarController extends Controller
 
         ContentItem::create($data);
 
-        return         redirect()->route('content-calendar.index', array_filter($request->only(['month', 'year', 'branch_id'])))->with('success', 'Konten berhasil ditambahkan.');
+        return         redirect()->route('content-calendar.index', array_filter($request->only(['month', 'year', 'branch_id', 'project_name'])))->with('success', 'Konten berhasil ditambahkan.');
     }
 
     public function show(ContentItem $contentItem)
@@ -159,7 +167,7 @@ class ContentCalendarController extends Controller
         ]);
 
         $contentItem->update($data);
-        return redirect()->route('content-calendar.index', array_filter($request->only(['month', 'year', 'branch_id'])))->with('success', 'Konten berhasil diperbarui.');
+        return redirect()->route('content-calendar.index', array_filter($request->only(['month', 'year', 'branch_id', 'project_name'])))->with('success', 'Konten berhasil diperbarui.');
     }
 
     public function destroy(ContentItem $contentItem)
@@ -170,6 +178,6 @@ class ContentCalendarController extends Controller
         }
 
         $contentItem->delete();
-        return redirect()->route('content-calendar.index', array_filter(request()->only(['month', 'year', 'branch_id'])))->with('success', 'Konten berhasil dihapus.');
+        return redirect()->route('content-calendar.index', array_filter(request()->only(['month', 'year', 'branch_id', 'project_name'])))->with('success', 'Konten berhasil dihapus.');
     }
 }

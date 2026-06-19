@@ -390,7 +390,7 @@
 
                         var hasMatch = false;
                         for (var i = 0; i < projectData.length; i++) {
-                            if (!branchId || !projectData[i].branch || projectData[i].branch === branchId) {
+                            if (!branchId || !projectData[i].branch || projectData[i].branch == branchId) {
                                 var opt = document.createElement('option');
                                 opt.value = projectData[i].name;
                                 opt.textContent = projectData[i].name;

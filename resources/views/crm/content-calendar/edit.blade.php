@@ -18,6 +18,7 @@
                 <input type="hidden" name="month" value="{{ request('month') }}">
                 <input type="hidden" name="year" value="{{ request('year') }}">
                 <input type="hidden" name="branch_id" value="{{ request('branch_id') }}">
+                <input type="hidden" name="project_name" value="{{ request('project_name') }}">
 
                 <div>
                     <label class="font-[Helvetica] font-bold text-xs uppercase block mb-1">Judul Konten</label>
@@ -119,7 +120,7 @@
                         <button type="submit" class="bg-black text-white px-6 py-2 text-sm font-[Helvetica] font-bold border-2 border-black rounded-none hover:bg-gray-800">
                             Update Konten
                         </button>
-                        <a href="{{ route('content-calendar.index', array_filter(request()->only(['month', 'year', 'branch_id']))) }}" class="bg-white text-black px-6 py-2 text-sm font-[Helvetica] font-bold border-2 border-black rounded-none hover:bg-gray-100">
+                        <a href="{{ route('content-calendar.index', array_filter(request()->only(['month', 'year', 'branch_id', 'project_name']))) }}" class="bg-white text-black px-6 py-2 text-sm font-[Helvetica] font-bold border-2 border-black rounded-none hover:bg-gray-100">
                             Batal
                         </a>
                     </div>
@@ -129,6 +130,7 @@
                         <input type="hidden" name="month" value="{{ request('month') }}">
                         <input type="hidden" name="year" value="{{ request('year') }}">
                         <input type="hidden" name="branch_id" value="{{ request('branch_id') }}">
+                        <input type="hidden" name="project_name" value="{{ request('project_name') }}">
                         <button type="submit" class="bg-white text-[#e91d2a] px-4 py-2 text-sm font-[Helvetica] font-bold border-2 border-[#e91d2a] rounded-none hover:bg-red-50">
                             Hapus
                         </button>
@@ -255,7 +257,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
             var hasMatch = false;
             for (var i = 0; i < projectData.length; i++) {
-                if (!branchId || !projectData[i].branch || projectData[i].branch === branchId) {
+                if (!branchId || !projectData[i].branch || projectData[i].branch == branchId) {
                     var opt = document.createElement('option');
                     opt.value = projectData[i].name;
                     opt.textContent = projectData[i].name;

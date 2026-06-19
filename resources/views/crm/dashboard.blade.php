@@ -3,14 +3,37 @@
 @section('title', 'Dashboard - Oasis CRM')
 
 @section('content')
-    @if(isset($branches) && Auth::user()->canViewAllBranches() && $branches->count() > 0)
+    @if(Auth::user()->canViewAllBranches())
     <div class="bg-white border-2 border-black p-3 mb-6">
         <form method="GET" action="{{ route('dashboard') }}" class="flex items-center gap-3 flex-wrap">
-            <label class="font-[Helvetica] font-bold text-xs uppercase">Pilih Cabang:</label>
+            @if(isset($branches) && $branches->count() > 0)
+            <label class="font-[Helvetica] font-bold text-xs uppercase">Cabang:</label>
             <select name="branch_id" onchange="this.form.submit()" class="border-2 border-black px-3 py-1.5 text-sm font-['Times_New_Roman'] bg-white rounded-none">
                 <option value="">— Semua Cabang —</option>
                 @foreach($branches as $b)
                     <option value="{{ $b->id }}" {{ (string)$selectedBranchId === (string)$b->id ? 'selected' : '' }}>{{ $b->name }}</option>
+                @endforeach
+            </select>
+            @endif
+            @if(isset($projects) && $projects->count() > 0)
+            <label class="font-[Helvetica] font-bold text-xs uppercase">Proyek:</label>
+            <select name="project_name" onchange="this.form.submit()" class="border-2 border-black px-3 py-1.5 text-sm font-['Times_New_Roman'] bg-white rounded-none">
+                <option value="">— Semua Proyek —</option>
+                @foreach($projects as $p)
+                    <option value="{{ $p->project_name }}" {{ $selectedProject === $p->project_name ? 'selected' : '' }}>{{ $p->project_name }}</option>
+                @endforeach
+            </select>
+            @endif
+        </form>
+    </div>
+    @elseif(isset($projects) && $projects->count() > 0)
+    <div class="bg-white border-2 border-black p-3 mb-6">
+        <form method="GET" action="{{ route('dashboard') }}" class="flex items-center gap-3 flex-wrap">
+            <label class="font-[Helvetica] font-bold text-xs uppercase">Proyek:</label>
+            <select name="project_name" onchange="this.form.submit()" class="border-2 border-black px-3 py-1.5 text-sm font-['Times_New_Roman'] bg-white rounded-none">
+                <option value="">— Semua Proyek —</option>
+                @foreach($projects as $p)
+                    <option value="{{ $p->project_name }}" {{ $selectedProject === $p->project_name ? 'selected' : '' }}>{{ $p->project_name }}</option>
                 @endforeach
             </select>
         </form>

@@ -7,14 +7,37 @@
         <h1 class="font-['Arial_Black'] font-black text-xl uppercase">Content Calendar</h1>
     </div>
 
-    @if(Auth::user()->canViewAllBranches() && isset($branches) && $branches->count() > 0)
+    @if(Auth::user()->canViewAllBranches())
     <div class="bg-white border-2 border-black p-3 mb-6">
         <form method="GET" action="{{ route('content-calendar.index') }}" class="flex items-center gap-3 flex-wrap">
-            <label class="font-[Helvetica] font-bold text-xs uppercase">Pilih Cabang:</label>
+            @if(isset($branches) && $branches->count() > 0)
+            <label class="font-[Helvetica] font-bold text-xs uppercase">Cabang:</label>
             <select name="branch_id" onchange="this.form.submit()" class="border-2 border-black px-3 py-1.5 text-sm font-['Times_New_Roman'] bg-white rounded-none">
                 <option value="">— Semua Cabang —</option>
                 @foreach($branches as $b)
                     <option value="{{ $b->id }}" {{ (string)$selectedBranchId === (string)$b->id ? 'selected' : '' }}>{{ $b->name }}</option>
+                @endforeach
+            </select>
+            @endif
+            @if(isset($projects) && $projects->count() > 0)
+            <label class="font-[Helvetica] font-bold text-xs uppercase">Proyek:</label>
+            <select name="project_name" onchange="this.form.submit()" class="border-2 border-black px-3 py-1.5 text-sm font-['Times_New_Roman'] bg-white rounded-none">
+                <option value="">— Semua Proyek —</option>
+                @foreach($projects as $p)
+                    <option value="{{ $p->project_name }}" {{ $selectedProject === $p->project_name ? 'selected' : '' }}>{{ $p->project_name }}</option>
+                @endforeach
+            </select>
+            @endif
+        </form>
+    </div>
+    @elseif(isset($projects) && $projects->count() > 0)
+    <div class="bg-white border-2 border-black p-3 mb-6">
+        <form method="GET" action="{{ route('content-calendar.index') }}" class="flex items-center gap-3 flex-wrap">
+            <label class="font-[Helvetica] font-bold text-xs uppercase">Proyek:</label>
+            <select name="project_name" onchange="this.form.submit()" class="border-2 border-black px-3 py-1.5 text-sm font-['Times_New_Roman'] bg-white rounded-none">
+                <option value="">— Semua Proyek —</option>
+                @foreach($projects as $p)
+                    <option value="{{ $p->project_name }}" {{ $selectedProject === $p->project_name ? 'selected' : '' }}>{{ $p->project_name }}</option>
                 @endforeach
             </select>
         </form>
@@ -23,11 +46,11 @@
 
     <div class="flex items-center justify-between mb-4">
         <div class="flex items-center gap-2">
-            <a href="{{ route('content-calendar.index', ['month' => $prevMonth->month, 'year' => $prevMonth->year, 'branch_id' => request('branch_id')]) }}" class="bg-black text-white px-3 py-1.5 text-sm font-[Helvetica] font-bold border-2 border-black rounded-none hover:bg-gray-800">
+            <a href="{{ route('content-calendar.index', array_filter(['month' => $prevMonth->month, 'year' => $prevMonth->year, 'branch_id' => request('branch_id'), 'project_name' => request('project_name')])) }}" class="bg-black text-white px-3 py-1.5 text-sm font-[Helvetica] font-bold border-2 border-black rounded-none hover:bg-gray-800">
                 ← Prev
             </a>
             <span class="font-['Arial_Black'] font-black text-lg px-3">{{ $currentMonth->format('F Y') }}</span>
-            <a href="{{ route('content-calendar.index', ['month' => $nextMonth->month, 'year' => $nextMonth->year, 'branch_id' => request('branch_id')]) }}" class="bg-black text-white px-3 py-1.5 text-sm font-[Helvetica] font-bold border-2 border-black rounded-none hover:bg-gray-800">
+            <a href="{{ route('content-calendar.index', array_filter(['month' => $nextMonth->month, 'year' => $nextMonth->year, 'branch_id' => request('branch_id'), 'project_name' => request('project_name')])) }}" class="bg-black text-white px-3 py-1.5 text-sm font-[Helvetica] font-bold border-2 border-black rounded-none hover:bg-gray-800">
                 Next →
             </a>
         </div>
@@ -84,6 +107,7 @@
                                                 <input type="hidden" name="month" value="{{ request('month') }}">
                                                 <input type="hidden" name="year" value="{{ request('year') }}">
                                                 <input type="hidden" name="branch_id" value="{{ request('branch_id') }}">
+                                                <input type="hidden" name="project_name" value="{{ request('project_name') }}">
                                                 <button type="submit" class="px-1 py-0.5 font-bold text-black hover:text-[#e91d2a] border-l border-black leading-tight" title="Hapus">×</button>
                                             </form>
                                         </div>

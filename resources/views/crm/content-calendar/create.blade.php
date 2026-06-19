@@ -114,7 +114,7 @@
                     <button type="submit" class="bg-black text-white px-6 py-2 text-sm font-[Helvetica] font-bold border-2 border-black rounded-none hover:bg-gray-800">
                         Simpan Konten
                     </button>
-                    <a href="{{ route('content-calendar.index') }}" class="bg-white text-black px-6 py-2 text-sm font-[Helvetica] font-bold border-2 border-black rounded-none hover:bg-gray-100">
+                    <a href="{{ route('content-calendar.index', array_filter(request()->only(['month', 'year', 'branch_id', 'project_name']))) }}" class="bg-white text-black px-6 py-2 text-sm font-[Helvetica] font-bold border-2 border-black rounded-none hover:bg-gray-100">
                         Batal
                     </a>
                 </div>
@@ -239,7 +239,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
             var hasMatch = false;
             for (var i = 0; i < projectData.length; i++) {
-                if (!branchId || !projectData[i].branch || projectData[i].branch === branchId) {
+                if (!branchId || !projectData[i].branch || projectData[i].branch == branchId) {
                     var opt = document.createElement('option');
                     opt.value = projectData[i].name;
                     opt.textContent = projectData[i].name;

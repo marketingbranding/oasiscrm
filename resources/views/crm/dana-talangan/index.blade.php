@@ -66,7 +66,7 @@
             </thead>
             <tbody class="divide-y divide-black">
                 @forelse($records as $i => $r)
-                <tr class="{{ $r->status === 'lunas' ? 'bg-[#b3bd95]' : '' }} hover:bg-[#d4ac0d]/20">
+                <tr class="{{ $r->status === 'lunas' ? 'bg-[#b3bd95]' : '' }} dt-row">
                     <td class="px-3 py-2">{{ $i + 1 }}</td>
                     <td class="px-3 py-2">{{ $r->tanggal->format('d M Y') }}</td>
                     <td class="px-3 py-2 font-bold">{{ $r->nama_konsumen }}</td>
@@ -113,4 +113,5 @@
             </tbody>
         </table>
     </div>
+<style>.dt-row:hover{background:#fef3cd}</style>
 @endsection

@@ -39,7 +39,7 @@
     </div>
 
     <div class="flex justify-end mb-4">
-        <a href="{{ route('dana-talangan.create') }}" class="bg-[#f1c40f] text-black px-4 py-1.5 text-sm font-[Helvetica] font-bold border-2 border-black rounded-none hover:bg-yellow-500">
+        <a href="{{ route('dana-talangan.create') }}" class="bg-[#f1c40f] text-black px-4 py-1.5 text-sm font-[Helvetica] font-bold border-2 border-black rounded-none hover:bg-[#d4ac0d]">
             + Dana Talangan Baru
         </a>
     </div>
@@ -66,7 +66,7 @@
             </thead>
             <tbody class="divide-y divide-black">
                 @forelse($records as $i => $r)
-                <tr class="{{ $r->status === 'lunas' ? 'bg-[#b3bd95]' : 'hover:bg-gray-50' }}">
+                <tr class="{{ $r->status === 'lunas' ? 'bg-[#b3bd95]' : '' }} hover:bg-[#d4ac0d]/20">
                     <td class="px-3 py-2">{{ $i + 1 }}</td>
                     <td class="px-3 py-2">{{ $r->tanggal->format('d M Y') }}</td>
                     <td class="px-3 py-2 font-bold">{{ $r->nama_konsumen }}</td>

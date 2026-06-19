@@ -186,8 +186,8 @@
     </div>
 
 <style>
-.select-li:hover { background:#f1c40f; color:#000; }
-.select-li.s-selected { background:#f1c40f; color:#000; }
+.select-li:hover { background:#f1c40f; color:#fff; }
+.select-li.s-selected { background:#f1c40f; color:#fff; }
 </style>
 
 <script>

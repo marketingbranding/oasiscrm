@@ -19,7 +19,9 @@ class DashboardController extends Controller
 
         if ($user->canViewAllBranches()) {
             $branches = Branch::where('is_active', true)->get();
-            $projects = LeadMaster::where('is_active', true)->orderBy('project_name')->get();
+            $projects = LeadMaster::where('is_active', true)
+                ->when($selectedBranchId, fn($q) => $q->where('branch_id', $selectedBranchId))
+                ->orderBy('project_name')->get();
 
             if ($selectedBranchId) {
                 $branch = Branch::findOrFail($selectedBranchId);

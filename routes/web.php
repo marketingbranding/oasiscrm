@@ -4,6 +4,7 @@ use App\Http\Controllers\Auth\PasswordChangeController;
 use App\Http\Controllers\Crm\AdminUserController;
 use App\Http\Controllers\Crm\BranchController;
 use App\Http\Controllers\Crm\ContentCalendarController;
+use App\Http\Controllers\Crm\DanaTalanganController;
 use App\Http\Controllers\Crm\DashboardController;
 use App\Http\Controllers\Crm\DatabaseController;
 use App\Http\Controllers\Crm\LeadDailyController;
@@ -37,6 +38,9 @@ Route::middleware(['auth', 'verified', 'password.changed'])->group(function () {
 
     Route::bind('lead_daily', fn($v) => \App\Models\LeadDaily::findOrFail($v));
     Route::resource('lead-daily', LeadDailyController::class);
+
+    Route::bind('dana_talangan', fn($v) => \App\Models\DanaTalangan::findOrFail($v));
+    Route::resource('dana-talangan', DanaTalanganController::class);
 
     Route::middleware('role:superadmin')->group(function () {
         Route::get('/branches', [BranchController::class, 'index'])->name('branches.index');

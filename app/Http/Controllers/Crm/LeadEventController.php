@@ -15,6 +15,7 @@ class LeadEventController extends Controller
     {
         $user = Auth::user();
         $selectedBranchId = $request->get('branch_id');
+        $selectedProjectName = $request->get('project_name');
 
         if ($user->canViewAllBranches()) {
             $branches = Branch::where('is_active', true)->get();
@@ -23,15 +24,29 @@ class LeadEventController extends Controller
             if ($selectedBranchId) {
                 $query->where('branch_id', $selectedBranchId);
             }
+
+            $projects = LeadMaster::where('is_active', true)
+                ->when($selectedBranchId, fn($q) => $q->where('branch_id', $selectedBranchId))
+                ->orderBy('project_name')
+                ->get();
         } else {
             $branches = collect();
             $selectedBranchId = $user->branch_id;
             $query = LeadEvent::with(['branch', 'creator'])->where('branch_id', $selectedBranchId);
+
+            $projects = LeadMaster::where('is_active', true)
+                ->where('branch_id', $user->branch_id)
+                ->orderBy('project_name')
+                ->get();
+        }
+
+        if ($selectedProjectName) {
+            $query->where('project_name', $selectedProjectName);
         }
 
         $events = $query->latest()->get();
 
-        return view('crm.lead-events.index', compact('events', 'branches', 'selectedBranchId'));
+        return view('crm.lead-events.index', compact('events', 'branches', 'selectedBranchId', 'selectedProjectName', 'projects'));
     }
 
     public function create()
@@ -76,7 +91,7 @@ class LeadEventController extends Controller
             $event->update(['event_id' => $prefix . '-' . $counter]);
         }
 
-        return redirect()->route('lead-events.index', array_filter($request->only(['branch_id'])))
+        return redirect()->route('lead-events.index', array_filter($request->only(['branch_id', 'project_name'])))
             ->with('success', 'Event berhasil ditambahkan.');
     }
 
@@ -120,7 +135,7 @@ class LeadEventController extends Controller
 
         $leadEvent->update($data);
 
-        return redirect()->route('lead-events.index', array_filter($request->only(['branch_id'])))
+        return redirect()->route('lead-events.index', array_filter($request->only(['branch_id', 'project_name'])))
             ->with('success', 'Event berhasil diperbarui.');
     }
 
@@ -133,7 +148,7 @@ class LeadEventController extends Controller
 
         $leadEvent->delete();
 
-        return redirect()->route('lead-events.index', array_filter(request()->only(['branch_id'])))
+        return redirect()->route('lead-events.index', array_filter(request()->only(['branch_id', 'project_name'])))
             ->with('success', 'Event berhasil dihapus.');
     }
 

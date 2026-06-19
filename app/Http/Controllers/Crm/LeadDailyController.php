@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Branch;
 use App\Models\LeadDaily;
 use App\Models\LeadEvent;
+use App\Models\LeadMaster;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 
@@ -16,6 +17,7 @@ class LeadDailyController extends Controller
         $user = Auth::user();
         $selectedBranchId = $request->get('branch_id');
         $selectedEventId = $request->get('lead_event_id');
+        $selectedProjectName = $request->get('project_name');
 
         if ($user->canViewAllBranches()) {
             $branches = Branch::where('is_active', true)->get();
@@ -28,6 +30,11 @@ class LeadDailyController extends Controller
             if ($selectedEventId) {
                 $query->where('lead_event_id', $selectedEventId);
             }
+
+            $projects = LeadMaster::where('is_active', true)
+                ->when($selectedBranchId, fn($q) => $q->where('branch_id', $selectedBranchId))
+                ->orderBy('project_name')
+                ->get();
         } else {
             $branches = collect();
             $selectedBranchId = $user->branch_id;
@@ -37,11 +44,21 @@ class LeadDailyController extends Controller
             if ($selectedEventId) {
                 $query->where('lead_event_id', $selectedEventId);
             }
+
+            $projects = LeadMaster::where('is_active', true)
+                ->where('branch_id', $user->branch_id)
+                ->orderBy('project_name')
+                ->get();
+        }
+
+        if ($selectedProjectName) {
+            $query->whereHas('leadEvent', fn($q) => $q->where('project_name', $selectedProjectName));
+            $events = $events->filter(fn($e) => $e->project_name === $selectedProjectName);
         }
 
         $dailyLogs = $query->latest('date')->get();
 
-        return view('crm.lead-daily.index', compact('dailyLogs', 'events', 'branches', 'selectedBranchId', 'selectedEventId'));
+        return view('crm.lead-daily.index', compact('dailyLogs', 'events', 'branches', 'selectedBranchId', 'selectedEventId', 'selectedProjectName', 'projects'));
     }
 
     public function create()
@@ -93,7 +110,7 @@ class LeadDailyController extends Controller
 
         LeadDaily::create($data);
 
-        return redirect()->route('lead-daily.index', array_filter($request->only(['branch_id', 'lead_event_id'])))
+        return redirect()->route('lead-daily.index', array_filter($request->only(['branch_id', 'lead_event_id', 'project_name'])))
             ->with('success', 'Data harian berhasil ditambahkan.');
     }
 
@@ -142,7 +159,7 @@ class LeadDailyController extends Controller
 
         $leadDaily->update($data);
 
-        return redirect()->route('lead-daily.index', array_filter($request->only(['branch_id', 'lead_event_id'])))
+        return redirect()->route('lead-daily.index', array_filter($request->only(['branch_id', 'lead_event_id', 'project_name'])))
             ->with('success', 'Data harian berhasil diperbarui.');
     }
 
@@ -155,7 +172,7 @@ class LeadDailyController extends Controller
 
         $leadDaily->delete();
 
-        return redirect()->route('lead-daily.index', array_filter(request()->only(['branch_id', 'lead_event_id'])))
+        return redirect()->route('lead-daily.index', array_filter(request()->only(['branch_id', 'lead_event_id', 'project_name'])))
             ->with('success', 'Data harian berhasil dihapus.');
     }
 }

@@ -17,7 +17,7 @@ class BranchSeeder extends Seeder
             ['code' => 'PWR', 'name' => 'Purworejo', 'sheet_id' => '1nqQ4P0NC-pcFtNJvfa93yw-LnB5qFlGVaZP12pJmQR4'],
             ['code' => 'JPR', 'name' => 'Jepara', 'sheet_id' => '1Gn1k0L7WWCoD0GsbSQJuRcxxvoUr16MIjFe7Le3rAg4'],
             ['code' => 'PKL', 'name' => 'Pekalongan', 'sheet_id' => '13Lum588xQcU0ySGlwDkbH5zBFqqFbhgS3TTfLWJrAVM'],
-            ['code' => 'BDG', 'name' => 'Bandung', 'sheet_id' => '1AdsQAaWpOTKl6n5s5djiTKyg04HI2gBdMsib6TsggR8'],
+            ['code' => 'BDG', 'name' => 'Sumedang', 'sheet_id' => '1AdsQAaWpOTKl6n5s5djiTKyg04HI2gBdMsib6TsggR8'],
             ['code' => 'PST', 'name' => 'Kantor Pusat', 'sheet_id' => null],
         ];
 

@@ -7,19 +7,27 @@
         <h1 class="font-['Arial_Black'] font-black text-xl uppercase">Daftar Event</h1>
     </div>
 
-    @if(Auth::user()->canViewAllBranches() && isset($branches) && $branches->count() > 0)
     <div class="bg-white border-2 border-black p-3 mb-6">
         <form method="GET" action="{{ route('lead-events.index') }}" class="flex items-center gap-3 flex-wrap">
-            <label class="font-[Helvetica] font-bold text-xs uppercase">Pilih Cabang:</label>
+            @if(Auth::user()->canViewAllBranches() && isset($branches) && $branches->count() > 0)
+            <label class="font-[Helvetica] font-bold text-xs uppercase">Cabang:</label>
             <select name="branch_id" onchange="this.form.submit()" class="border-2 border-black px-3 py-1.5 text-sm font-['Times_New_Roman'] bg-white rounded-none">
                 <option value="">— Semua Cabang —</option>
                 @foreach($branches as $b)
                     <option value="{{ $b->id }}" {{ (string)$selectedBranchId === (string)$b->id ? 'selected' : '' }}>{{ $b->name }}</option>
                 @endforeach
             </select>
+            @endif
+
+            <label class="font-[Helvetica] font-bold text-xs uppercase">Proyek:</label>
+            <select name="project_name" onchange="this.form.submit()" class="border-2 border-black px-3 py-1.5 text-sm font-['Times_New_Roman'] bg-white rounded-none">
+                <option value="">— Semua Proyek —</option>
+                @foreach($projects as $p)
+                    <option value="{{ $p->project_name }}" {{ $selectedProjectName === $p->project_name ? 'selected' : '' }}>{{ $p->project_name }}</option>
+                @endforeach
+            </select>
         </form>
     </div>
-    @endif
 
     <div class="flex justify-end mb-4">
         <a href="{{ route('lead-events.create') }}" class="bg-[#e91d2a] text-white px-4 py-1.5 text-sm font-[Helvetica] font-bold border-2 border-black rounded-none hover:bg-red-600">
@@ -65,6 +73,7 @@
                                 @csrf
                                 @method('DELETE')
                                 <input type="hidden" name="branch_id" value="{{ request('branch_id') }}">
+                                <input type="hidden" name="project_name" value="{{ request('project_name') }}">
                                 <button type="submit" class="text-xs font-[Helvetica] font-bold underline hover:text-[#e91d2a]">Hapus</button>
                             </form>
                         </div>

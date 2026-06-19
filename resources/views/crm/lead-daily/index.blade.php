@@ -19,6 +19,14 @@
             </select>
             @endif
 
+            <label class="font-[Helvetica] font-bold text-xs uppercase">Proyek:</label>
+            <select name="project_name" onchange="this.form.submit()" class="border-2 border-black px-3 py-1.5 text-sm font-['Times_New_Roman'] bg-white rounded-none">
+                <option value="">— Semua Proyek —</option>
+                @foreach($projects as $p)
+                    <option value="{{ $p->project_name }}" {{ $selectedProjectName === $p->project_name ? 'selected' : '' }}>{{ $p->project_name }}</option>
+                @endforeach
+            </select>
+
             <label class="font-[Helvetica] font-bold text-xs uppercase">Event:</label>
             <select name="lead_event_id" onchange="this.form.submit()" class="border-2 border-black px-3 py-1.5 text-sm font-['Times_New_Roman'] bg-white rounded-none">
                 <option value="">— Semua Event —</option>
@@ -76,6 +84,7 @@
                                 @method('DELETE')
                                 <input type="hidden" name="branch_id" value="{{ request('branch_id') }}">
                                 <input type="hidden" name="lead_event_id" value="{{ request('lead_event_id') }}">
+                                <input type="hidden" name="project_name" value="{{ request('project_name') }}">
                                 <button type="submit" class="text-xs font-[Helvetica] font-bold underline hover:text-[#e91d2a]">Hapus</button>
                             </form>
                         </div>

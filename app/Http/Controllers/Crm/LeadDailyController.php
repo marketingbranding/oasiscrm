@@ -67,6 +67,7 @@ class LeadDailyController extends Controller
         if ($user->canViewAllBranches()) {
             $branches = Branch::where('is_active', true)->get();
             $events = LeadEvent::with('branch')->where('status', 'berlangsung')->latest()->get();
+            $projects = LeadMaster::where('is_active', true)->orderBy('project_name')->get();
         } else {
             $branches = collect([$user->branch]);
             $events = LeadEvent::with('branch')
@@ -74,9 +75,13 @@ class LeadDailyController extends Controller
                 ->where('status', 'berlangsung')
                 ->latest()
                 ->get();
+            $projects = LeadMaster::where('is_active', true)
+                ->where('branch_id', $user->branch_id)
+                ->orderBy('project_name')
+                ->get();
         }
 
-        return view('crm.lead-daily.create', compact('branches', 'events'));
+        return view('crm.lead-daily.create', compact('branches', 'events', 'projects'));
     }
 
     public function store(Request $request)

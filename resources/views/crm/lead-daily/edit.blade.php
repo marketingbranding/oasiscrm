@@ -64,6 +64,7 @@
                     @method('DELETE')
                     <input type="hidden" name="branch_id" value="{{ request('branch_id') }}">
                     <input type="hidden" name="lead_event_id" value="{{ request('lead_event_id') }}">
+                    <input type="hidden" name="project_name" value="{{ request('project_name') }}">
                     <button type="submit" class="bg-[#e91d2a] text-white px-6 py-2 text-sm font-[Helvetica] font-bold border-2 border-black rounded-none hover:bg-red-600">
                         Hapus Data Harian
                     </button>

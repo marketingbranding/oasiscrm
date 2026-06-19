@@ -9,6 +9,7 @@ class ContentItem extends Model
 {
     protected $fillable = [
         'branch_id',
+        'project_name',
         'title',
         'platform',
         'scheduled_date',

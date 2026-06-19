@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Crm;
 use App\Http\Controllers\Controller;
 use App\Models\Branch;
 use App\Models\ContentItem;
+use App\Models\LeadMaster;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 
@@ -75,10 +76,15 @@ class ContentCalendarController extends Controller
         $user = Auth::user();
         if ($user->canViewAllBranches()) {
             $branches = Branch::where('is_active', true)->get();
+            $projects = LeadMaster::where('is_active', true)->orderBy('project_name')->get();
         } else {
             $branches = collect([$user->branch]);
+            $projects = LeadMaster::where('is_active', true)
+                ->where('branch_id', $user->branch_id)
+                ->orderBy('project_name')
+                ->get();
         }
-        return view('crm.content-calendar.create', compact('branches'));
+        return view('crm.content-calendar.create', compact('branches', 'projects'));
     }
 
     public function store(Request $request)
@@ -87,6 +93,7 @@ class ContentCalendarController extends Controller
         $data = $request->validate([
             'title' => 'required|string|max:255',
             'branch_id' => $user->canViewAllBranches() ? 'required|exists:branches,id' : 'nullable',
+            'project_name' => 'nullable|string|max:255',
             'platform' => 'nullable|string|max:50',
             'scheduled_date' => 'required|date',
             'status' => 'required|in:draft,review,approved,posted',
@@ -123,7 +130,15 @@ class ContentCalendarController extends Controller
         }
 
         $content = $contentItem;
-        return view('crm.content-calendar.edit', compact('content', 'branches'));
+        if ($user->canViewAllBranches()) {
+            $projects = LeadMaster::where('is_active', true)->orderBy('project_name')->get();
+        } else {
+            $projects = LeadMaster::where('is_active', true)
+                ->where('branch_id', $user->branch_id)
+                ->orderBy('project_name')
+                ->get();
+        }
+        return view('crm.content-calendar.edit', compact('content', 'branches', 'projects'));
     }
 
     public function update(Request $request, ContentItem $contentItem)
@@ -136,6 +151,7 @@ class ContentCalendarController extends Controller
         $data = $request->validate([
             'title' => 'required|string|max:255',
             'branch_id' => $user->canViewAllBranches() ? 'required|exists:branches,id' : 'nullable',
+            'project_name' => 'nullable|string|max:255',
             'platform' => 'nullable|string|max:50',
             'scheduled_date' => 'required|date',
             'status' => 'required|in:draft,review,approved,posted',

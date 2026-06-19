@@ -40,7 +40,7 @@
             <p class="text-sm font-['Times_New_Roman'] mb-4">
                 Mengakses database untuk cabang <strong>{{ $branchCode }}</strong> melalui Google Sheets.
             </p>
-            <a href="{{ $scriptUrl }}" target="_blank"
+            <a href="{{ $scriptUrl }}?sheet_id={{ $selectedBranch->sheet_id }}&branch={{ $branchCode }}" target="_blank"
                class="inline-block bg-black text-white px-6 py-2 text-sm font-[Helvetica] font-bold border-2 border-black rounded-none hover:bg-gray-800">
                 Buka Database
             </a>
@@ -52,7 +52,7 @@
             Live View
         </div>
         <div class="p-0">
-            <iframe src="{{ $scriptUrl }}"
+            <iframe src="{{ $scriptUrl }}?sheet_id={{ $selectedBranch->sheet_id }}&branch={{ $branchCode }}"
                     class="w-full h-[600px] border-0"
                     title="Database View"
                     onerror="this.parentElement.innerHTML='<div class=\'bg-[#d77a7a] border-2 border-black m-4 px-4 py-3 font-[\'Times_New_Roman\'] text-sm\'>Gagal memuat database. Coba buka langsung melalui tombol di atas.</div>'">

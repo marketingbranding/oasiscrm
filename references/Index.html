@@ -51,20 +51,9 @@
     th.nama-konsumen-col { background: #fff3e0 !important; color: #e67e22; }
     td.nama-konsumen-col { background: #fffaf0; }
     .page-size-select { width: auto; font-size: 0.78rem; padding: 0.2rem 0.4rem; border: 1px solid #ddd; border-radius: 4px; }
-    /* ─── Unwrap PivotTable.js's structural table markup ─── */
-    .pivot-wrapper .pvtUi,
-    .pivot-wrapper .pvtUi tbody,
-    .pivot-wrapper .pvtUi tr,
-    .pivot-wrapper .pvtUi td:not(.pvtAxisContainer):not(.pvtVals),
-    .pivot-wrapper .pvtUi table:not(.pvtTable) {
-      display: contents;
-    }
-
-    /* ─── Excel/Sheets-style grid: big table on left, narrow field sidebar on right ─── */
-    .pivot-wrapper {
-      min-height: 400px;
-      overflow-x: auto;
-      display: grid;
+    /* ─── Override .pvtUi table → CSS Grid ─── */
+    .pivot-wrapper .pvtUi {
+      display: grid !important;
       grid-template-columns: minmax(0, 1fr) 280px;
       grid-template-areas:
         "output renderer"
@@ -74,18 +63,27 @@
         "output cols"
         "output vals";
       gap: 0.6rem;
-      align-items: start;
+      width: 100% !important;
+      min-height: 400px;
+      overflow-x: auto;
     }
 
-    .pivot-wrapper table.pvtTable {
+    /* Break table layout on all structural elements */
+    .pivot-wrapper .pvtUi > tbody,
+    .pivot-wrapper .pvtUi > tbody > tr,
+    .pivot-wrapper .pvtUi > tbody > tr > td {
+      display: block !important;
+      width: auto !important;
+      padding: 0 !important;
+      border: none !important;
+    }
+
+    /* Position each zone */
+    .pivot-wrapper .pvtRendererArea {
       grid-area: output;
-      max-height: 70vh;
       overflow: auto;
-      display: block;
+      max-height: 70vh;
     }
-    .pivot-wrapper table.pvtTable thead,
-    .pivot-wrapper table.pvtTable tbody { display: table; width: 100%; }
-
     .pivot-wrapper select.pvtRenderer    { grid-area: renderer; }
     .pivot-wrapper select.pvtAggregator  { grid-area: aggregator; }
     .pivot-wrapper .pvtUnused.pvtAxisContainer { grid-area: unused; max-height: 140px; overflow-y: auto; }
@@ -93,7 +91,13 @@
     .pivot-wrapper .pvtCols.pvtAxisContainer   { grid-area: cols; }
     .pivot-wrapper td.pvtVals                  { grid-area: vals; }
 
-    /* Zone styling stays the same as before */
+    /* Output table - keep as real table */
+    .pivot-wrapper .pvtRendererArea table.pvtTable {
+      display: table;
+      width: 100%;
+    }
+
+    /* Zone styling (unchanged) */
     .pivot-wrapper .pvtAxisContainer,
     .pivot-wrapper td.pvtVals { border-radius: 6px; padding: 0.6rem; min-height: 50px; }
 
@@ -116,7 +120,7 @@
     .pivot-wrapper .pvtCols.pvtAxisContainer::before     { color: #137333; }
     .pivot-wrapper td.pvtVals::before                    { color: #b06000; }
 
-    /* Field chips stay as a tidy wrapping grid */
+    /* Field chips */
     .pivot-wrapper .pvtAxisContainer ul {
       display: flex; flex-wrap: wrap; gap: 0.35rem; list-style: none; margin: 0; padding: 0;
     }

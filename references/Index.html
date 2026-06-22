@@ -8,26 +8,12 @@
   <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
   <link href="https://cdn.jsdelivr.net/npm/pivottable@2.23.0/dist/pivot.min.css" rel="stylesheet">
   <style>
-    :root { --sidebar-width: 260px; --header-height: 56px; }
     * { box-sizing: border-box; margin: 0; padding: 0; }
-    html, body { height: 100%; font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; font-size: 14px; background: #f5f6fa; }
+    html, body { height: 100%; font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; font-size: 15px; background: #f5f6fa; }
     .app-header { position: fixed; top: 0; left: 0; right: 0; height: var(--header-height); background: #1a1a2e; color: #fff; display: flex; align-items: center; padding: 0 1rem; z-index: 1040; gap: 0.75rem; }
     .app-header .brand { font-weight: 700; font-size: 1.1rem; letter-spacing: 0.5px; }
     .app-header .brand small { font-weight: 400; opacity: 0.7; font-size: 0.8rem; }
-    .sidebar-toggle { background: none; border: none; color: #fff; font-size: 1.4rem; cursor: pointer; padding: 0 0.25rem; }
-    .sidebar { position: fixed; top: var(--header-height); left: 0; bottom: 0; width: var(--sidebar-width); background: #fff; border-right: 1px solid #e0e0e0; overflow-y: auto; z-index: 1030; transition: transform 0.25s ease; }
-    .sidebar .search-box { padding: 0.75rem; border-bottom: 1px solid #eee; }
-    .sidebar .search-box input { width: 100%; border: 1px solid #ddd; border-radius: 6px; padding: 0.45rem 0.65rem; font-size: 0.8rem; outline: none; }
-    .sidebar .search-box input:focus { border-color: #4361ee; }
-    .sidebar .sheet-list { list-style: none; padding: 0.25rem 0; margin: 0; }
-    .sidebar .sheet-item { padding: 0.5rem 0.85rem; cursor: pointer; display: flex; align-items: center; gap: 0.5rem; border-left: 3px solid transparent; font-size: 0.82rem; transition: all 0.15s; }
-    .sidebar .sheet-item:hover { background: #f0f2ff; }
-    .sidebar .sheet-item.active { background: #eef0ff; border-left-color: #4361ee; font-weight: 600; color: #4361ee; }
-    .sidebar .sheet-item .icon { width: 18px; text-align: center; font-size: 0.75rem; opacity: 0.6; }
-    .sidebar .sheet-pivot { border-top: 1px solid #eee; margin-top: 0.25rem; padding-top: 0.25rem; }
-    .sidebar .sheet-pivot .sheet-item { color: #e67e22; }
-    .sidebar .sheet-pivot .sheet-item.active { color: #e67e22; border-left-color: #e67e22; }
-    .main-content { margin-left: var(--sidebar-width); padding-top: calc(var(--header-height) + 1rem); padding-left: 1.5rem; padding-right: 1.5rem; min-height: 100vh; transition: margin-left 0.25s ease; }
+    .main-content { padding-top: calc(var(--header-height) + 1rem); padding-left: 1.5rem; padding-right: 1.5rem; padding-bottom: calc(var(--tab-bar-height) + 1rem); min-height: 100vh; }
     .content-card { background: #fff; border-radius: 12px; box-shadow: 0 1px 4px rgba(0,0,0,0.06); padding: 1.25rem; }
     .content-header { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.75rem; margin-bottom: 1rem; }
     .content-header h5 { margin: 0; font-weight: 600; font-size: 1.05rem; }
@@ -68,34 +54,57 @@
     .pivot-wrapper { min-height: 400px; }
     .pivot-wrapper .pvtUi { width: 100% !important; }
     .row-count { font-size: 0.8rem; color: #888; }
-    .sidebar.collapsed { transform: translateX(-100%); }
-    .main-content.expanded { margin-left: 0; }
+    /* ─── Tab Bar (Google Sheets style) ────────────── */
+    .tab-bar { position: fixed; bottom: 0; left: 0; right: 0; height: 40px; background: #f1f3f4; border-top: 1px solid #dadce0; display: flex; align-items: center; z-index: 1030; gap: 0; }
+    .tab-add { background: none; border: none; border-right: 1px solid #dadce0; width: 36px; height: 100%; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 1.1rem; color: #5f6368; flex-shrink: 0; }
+    .tab-add:hover { background: #e8eaed; }
+    .tab-add.active { background: #d2e3fc; color: #1a73e8; }
+    .tab-search-wrap { position: relative; flex-shrink: 0; }
+    .tab-search-popup { position: fixed; bottom: 40px; left: 0; background: #fff; border: 1px solid #dadce0; border-bottom: none; border-radius: 4px 4px 0 0; padding: 0.5rem; display: none; z-index: 1040; box-shadow: 0 -2px 8px rgba(0,0,0,0.1); }
+    .tab-search-popup.show { display: block; }
+    .tab-search-popup input { width: 220px; border: 1px solid #dadce0; border-radius: 4px; padding: 0.4rem 0.6rem; font-size: 0.85rem; outline: none; }
+    .tab-search-popup input:focus { border-color: #1a73e8; }
+    .tab-scroll { flex: 1; overflow: hidden; position: relative; height: 100%; }
+    .tab-list { list-style: none; margin: 0; padding: 0; display: flex; align-items: stretch; height: 100%; overflow-x: auto; scroll-behavior: smooth; -ms-overflow-style: none; scrollbar-width: none; }
+    .tab-list::-webkit-scrollbar { display: none; }
+    .tab-item { cursor: pointer; white-space: nowrap; padding: 0 0.85rem; font-size: 0.85rem; display: flex; align-items: center; color: #5f6368; border-bottom: 3px solid transparent; flex-shrink: 0; transition: all 0.15s; user-select: none; background: #f1f3f4; border-right: 1px solid #dadce0; }
+    .tab-item:hover { background: #e8eaed; }
+    .tab-item.active { background: #fff; font-weight: 600; color: #1a73e8; }
+    .tab-item.tab-pivot { color: #e67e22; background: #fef7e0; }
+    .tab-item.tab-pivot:hover { background: #fcefc8; }
+    .tab-item.tab-pivot.active { background: #fff; border-bottom-color: #e67e22; font-weight: 700; }
+    .tab-arrow { background: none; border: none; border-left: 1px solid #dadce0; width: 32px; height: 100%; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 1.2rem; color: #5f6368; flex-shrink: 0; }
+    .tab-arrow:hover { background: #e8eaed; }
+    :root { --header-height: 56px; --tab-bar-height: 40px; }
     @media (max-width: 768px) {
-      .sidebar { transform: translateX(-100%); }
-      .sidebar.show { transform: translateX(0); }
-      .main-content { margin-left: 0; padding-left: 0.75rem; padding-right: 0.75rem; }
+      .main-content { padding-left: 0.75rem; padding-right: 0.75rem; }
+      .tab-item { padding: 0 0.5rem; font-size: 0.8rem; }
     }
   </style>
 </head>
 <body>
 
 <div class="app-header">
-  <button class="sidebar-toggle" id="sidebarToggle" title="Toggle sidebar">&#9776;</button>
   <div class="brand">OASYNC <small id="cabangName"></small></div>
   <div class="ms-auto d-flex align-items-center gap-2">
     <span class="badge-sheet" id="activeSheetBadge">Pilih sheet</span>
   </div>
 </div>
 
-<div class="sidebar" id="sidebar">
-  <div class="search-box">
-    <input type="text" id="sheetSearch" placeholder="Cari sheet..." autocomplete="off">
+<div class="tab-bar" id="tabBar">
+  <div class="tab-search-wrap">
+    <button class="tab-add" id="tabSearchBtn" title="Cari sheet">🔍</button>
+    <div class="tab-search-popup" id="tabSearchPopup">
+      <input type="text" id="sheetSearch" placeholder="Cari sheet..." autocomplete="off">
+    </div>
   </div>
-  <ul class="sheet-list" id="sheetList"></ul>
-  <ul class="sheet-list sheet-pivot" id="pivotList">
-    <li class="sheet-item" data-view="pivot" id="pivotNav">
-      <span class="icon"><i class="bi bi-bar-chart-fill"></i></span> Pivot Table
-    </li>
+  <div class="tab-scroll">
+    <ul class="tab-list" id="sheetList"></ul>
+  </div>
+  <button class="tab-arrow" id="tabLeft">‹</button>
+  <button class="tab-arrow" id="tabRight">›</button>
+  <ul class="tab-list" style="flex-shrink:0">
+    <li class="tab-item tab-pivot" id="pivotNav">📊 Pivot</li>
   </ul>
 </div>
 
@@ -103,7 +112,7 @@
   <div class="content-card">
     <div class="content-header">
       <div>
-        <h5 id="viewTitle">Pilih sheet dari sidebar</h5>
+        <h5 id="viewTitle">Pilih sheet dari tab bar</h5>
         <span class="row-count" id="rowCount"></span>
       </div>
       <div class="d-flex gap-2 align-items-center">
@@ -204,6 +213,7 @@
   var PIPELINE_SHEETS = ['bi_checking', 'PSJB', 'pemberkasan', 'proses_bank', 'ppjb_dev', 'akad', 'bast'];
   var REFERENCE_SHEETS = ['data_sales', 'data_bank', 'data_kav', 'promo'];
   var refData = {};
+  var TAB_COLORS = ['#4285f4', '#ea4335', '#fbbc04', '#34a853', '#ff6d01', '#46bdc6', '#7b1fa2', '#d81b60'];
 
   function showLoading(text) {
     document.getElementById('loadingText').textContent = text || 'Memuat data...';
@@ -251,11 +261,12 @@
   function renderSheetList(names) {
     var list = document.getElementById('sheetList');
     list.innerHTML = '';
-    names.forEach(function(name) {
+    names.forEach(function(name, i) {
       var li = document.createElement('li');
-      li.className = 'sheet-item';
+      li.className = 'tab-item';
       li.dataset.sheet = name;
-      li.innerHTML = '<span class="icon"><i class="bi bi-table"></i></span> ' + escHtml(name);
+      li.style.borderBottomColor = TAB_COLORS[i % TAB_COLORS.length];
+      li.textContent = name;
       li.onclick = function() { selectSheet(name); };
       list.appendChild(li);
     });
@@ -270,11 +281,17 @@
     var bar = document.getElementById('filterBar');
     bar.classList.remove('show');
     document.getElementById('filterToggleBtn').classList.remove('active');
-    document.querySelectorAll('.sheet-item').forEach(function(el) { el.classList.remove('active'); });
-    document.querySelectorAll('.sheet-item[data-sheet="' + name.replace(/"/g,'\\"') + '"]').forEach(function(el) { el.classList.add('active'); });
-    document.querySelectorAll('.sheet-item[data-view="pivot"]').forEach(function(el) { el.classList.remove('active'); });
+    document.querySelectorAll('.tab-item').forEach(function(el) { el.classList.remove('active'); });
+    document.querySelectorAll('.tab-item[data-sheet="' + name.replace(/"/g,'\\"') + '"]').forEach(function(el) { el.classList.add('active'); });
+    document.querySelectorAll('.tab-item[data-view="pivot"]').forEach(function(el) { el.classList.remove('active'); });
     document.getElementById('activeSheetBadge').textContent = name;
+    scrollTabIntoView(name);
     loadSheetData(name);
+  }
+
+  function scrollTabIntoView(name) {
+    var el = document.querySelector('.tab-item[data-sheet="' + name.replace(/"/g,'\\"') + '"]');
+    if (el) el.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
   }
 
   function loadSheetData(name) {
@@ -602,7 +619,7 @@
 
     if (!currentData || !currentData.rows || currentData.rows.length === 0) {
       if (!currentSheet) {
-        c.innerHTML = '<div class="empty-state"><i class="bi bi-bar-chart"></i>Pilih sheet data terlebih dahulu dari sidebar, lalu klik Pivot Table</div>';
+        c.innerHTML = '<div class="empty-state"><i class="bi bi-bar-chart"></i>Pilih sheet data terlebih dahulu dari tab bar, lalu klik Pivot Table</div>';
         return;
       }
       c.innerHTML = '<div class="empty-state"><i class="bi bi-inbox"></i>Data sheet "' + currentSheet + '" kosong</div>';
@@ -661,24 +678,33 @@
 
   // ─── Search ──────────────────────────────────────
 
+  document.getElementById('tabSearchBtn').addEventListener('click', function() {
+    var popup = document.getElementById('tabSearchPopup');
+    var input = document.getElementById('sheetSearch');
+    popup.classList.toggle('show');
+    this.classList.toggle('active');
+    if (popup.classList.contains('show')) {
+      setTimeout(function() { input.focus(); }, 50);
+    }
+  });
+
   document.getElementById('sheetSearch').addEventListener('input', function() {
     var q = this.value.toLowerCase();
-    document.querySelectorAll('.sheet-item[data-sheet]').forEach(function(el) {
+    document.querySelectorAll('.tab-item[data-sheet]').forEach(function(el) {
       el.style.display = el.dataset.sheet.toLowerCase().indexOf(q) !== -1 ? '' : 'none';
     });
   });
 
-  // ─── Sidebar Toggle ──────────────────────────────
+  // ─── Tab Scroll ──────────────────────────────────
 
-  document.getElementById('sidebarToggle').addEventListener('click', function() {
-    var sidebar = document.getElementById('sidebar');
-    var main = document.getElementById('mainContent');
-    if (window.innerWidth <= 768) {
-      sidebar.classList.toggle('show');
-    } else {
-      sidebar.classList.toggle('collapsed');
-      main.classList.toggle('expanded');
-    }
+  document.getElementById('tabLeft').addEventListener('click', function() {
+    var list = document.getElementById('sheetList');
+    list.scrollBy({ left: -200, behavior: 'smooth' });
+  });
+
+  document.getElementById('tabRight').addEventListener('click', function() {
+    var list = document.getElementById('sheetList');
+    list.scrollBy({ left: 200, behavior: 'smooth' });
   });
 
   // ─── Event Listeners ────────────────────────────
@@ -730,7 +756,7 @@
 
   document.getElementById('pivotNav').addEventListener('click', function() {
     activeView = 'pivot';
-    document.querySelectorAll('.sheet-item').forEach(function(el) { el.classList.remove('active'); });
+    document.querySelectorAll('.tab-item').forEach(function(el) { el.classList.remove('active'); });
     document.getElementById('pivotNav').classList.add('active');
     document.getElementById('addBtn').style.display = 'none';
     document.getElementById('filterToggleBtn').style.display = 'none';

@@ -614,7 +614,7 @@
 
     setTimeout(function() {
       try {
-        if (typeof $ === 'undefined' || !$.pivotUI) {
+        if (typeof $ === 'undefined' || !$.fn.pivotUI) {
           c.innerHTML = '<div class="empty-state"><i class="bi bi-exclamation-triangle"></i>PivotTable.js belum dimuat. Refresh halaman.</div>';
           return;
         }

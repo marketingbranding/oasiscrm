@@ -4,7 +4,6 @@ namespace App\Http\Controllers\Crm;
 
 use App\Http\Controllers\Controller;
 use App\Models\Branch;
-use App\Services\GoogleScriptService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 
@@ -31,47 +30,7 @@ class DatabaseController extends Controller
 
         $selectedBranch = $selectedBranchId ? Branch::find($selectedBranchId) : null;
         $branchCode = $selectedBranch?->code;
-        $scriptUrl = config('services.google_script.webhook_url');
 
-        $data = null;
-        $error = null;
-
-        if ($selectedBranch) {
-            $service = new GoogleScriptService();
-            $result = $service->fetchData([
-                'sheet_id' => $selectedBranch->sheet_id,
-                'branch' => $selectedBranch->code,
-                'branch_id' => $selectedBranch->id,
-            ]);
-
-            $data = $result['data'] ?? null;
-            if (!$result['success']) {
-                $error = $result['error'];
-            }
-        }
-
-        return view('crm.database.index', compact('branches', 'selectedBranch', 'selectedBranchId', 'branchCode', 'scriptUrl', 'data', 'error'));
-    }
-
-    public function fetch(Request $request)
-    {
-        $user = Auth::user();
-        $branchId = $request->get('branch_id');
-
-        if (!$user->canViewAllBranches()) {
-            $branchId = $user->branch_id;
-        } elseif (!$branchId && $user->hasRole('pusat') && $user->branch_id) {
-            $branchId = $user->branch_id;
-        }
-
-        $branch = Branch::findOrFail($branchId);
-        $service = new GoogleScriptService();
-        $result = $service->fetchData([
-            'sheet_id' => $branch->sheet_id,
-            'branch' => $branch->code,
-            'branch_id' => $branch->id,
-        ]);
-
-        return response()->json($result);
+        return view('crm.database.index', compact('branches', 'selectedBranch', 'selectedBranchId', 'branchCode'));
     }
 }

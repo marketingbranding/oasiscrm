@@ -30,31 +30,98 @@ const CABANG_NAMES = {
 };
 
 function doGet(e) {
-  const cabangId = e.parameter.cabang_id || '7';
-  const sheetId = SHEET_IDS[cabangId];
+  const type = e.parameter.type;
 
-  if (!sheetId) {
-    return ContentService
-      .createTextOutput('Cabang tidak ditemukan. ID: ' + cabangId)
-      .setMimeType(ContentService.MimeType.TEXT);
+  // REST: return sheet names + GIDs for a spreadsheet (used by CRM Laravel app)
+  if (type === 'sheets') {
+    const sheetId = e.parameter.sheet_id;
+    if (!sheetId) {
+      return ContentService
+        .createTextOutput(JSON.stringify({ error: 'sheet_id required' }))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+    try {
+      const ss = SpreadsheetApp.openById(sheetId);
+      const sheets = ss.getSheets().map(function(s) {
+        return { name: s.getName(), gid: String(s.getSheetId()) };
+      });
+      return ContentService
+        .createTextOutput(JSON.stringify(sheets))
+        .setMimeType(ContentService.MimeType.JSON);
+    } catch (err) {
+      return ContentService
+        .createTextOutput(JSON.stringify({ error: err.message }))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+  }
+
+  // REST: return CSV data for a specific sheet by name (used by CRM Laravel app)
+  if (type === 'data') {
+    const sheetId = e.parameter.sheet_id;
+    const sheetName = e.parameter.sheet_name;
+    if (!sheetId || !sheetName) {
+      return ContentService
+        .createTextOutput('sheet_id and sheet_name required')
+        .setMimeType(ContentService.MimeType.TEXT);
+    }
+    try {
+      const ss = SpreadsheetApp.openById(sheetId);
+      const sheet = ss.getSheetByName(sheetName);
+      if (!sheet) {
+        return ContentService
+          .createTextOutput('Sheet "' + sheetName + '" not found')
+          .setMimeType(ContentService.MimeType.TEXT);
+      }
+      const data = sheet.getDataRange().getValues();
+      const csv = data.map(function(row) {
+        return row.map(function(cell) {
+          var str;
+          if (cell instanceof Date) {
+            str = Utilities.formatDate(cell, Session.getScriptTimeZone(), 'yyyy-MM-dd');
+          } else {
+            str = String(cell);
+          }
+          if (str.indexOf(',') !== -1 || str.indexOf('"') !== -1 || str.indexOf('\n') !== -1) {
+            return '"' + str.replace(/"/g, '""') + '"';
+          }
+          return str;
+        }).join(',');
+      }).join('\n');
+      return ContentService
+        .createTextOutput(csv)
+        .setMimeType(ContentService.MimeType.CSV);
+    } catch (err) {
+      return ContentService
+        .createTextOutput('Error: ' + err.message)
+        .setMimeType(ContentService.MimeType.TEXT);
+    }
   }
 
   const template = HtmlService.createTemplateFromFile('Index');
-  template.cabangId = cabangId;
-  template.cabangName = CABANG_NAMES[cabangId] || 'Cabang #' + cabangId;
+  const sheetId = e.parameter.sheet_id || SHEET_IDS[e.parameter.cabang_id] || SHEET_IDS['7'];
+  const cabangName = e.parameter.cabang_name || CABANG_NAMES[e.parameter.cabang_id] || 'Database';
+
+  if (!sheetId) {
+    return ContentService
+      .createTextOutput('Spreadsheet tidak ditemukan.')
+      .setMimeType(ContentService.MimeType.TEXT);
+  }
+
+  template.sheetId = sheetId;
+  template.cabangName = cabangName;
   return template.evaluate()
-    .setTitle('OASYNC — ' + (CABANG_NAMES[cabangId] || 'Cabang #' + cabangId))
+    .setTitle('OASYNC — ' + cabangName)
     .addMetaTag('viewport', 'width=device-width, initial-scale=1')
     .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
 }
 
-function getSheetNames(cabangId) {
-  const ss = getSheet(cabangId);
+function getSheetNames(sheetId) {
+  const ss = getSheet(sheetId);
   return ss.getSheets().map(function(s) { return s.getName(); });
 }
 
-function getSheetData(sheetName, cabangId) {
-  const sheet = getSheetById(cabangId, sheetName);
+function getSheetData(sheetName, sheetId) {
+  const sheet = getSheetById(sheetId, sheetName);
   if (!sheet) return { headers: [], rows: [], error: 'Sheet "' + sheetName + '" not found' };
 
   const range = sheet.getDataRange();
@@ -82,11 +149,11 @@ function getSheetData(sheetName, cabangId) {
   return { headers: headers, rows: rows, error: null };
 }
 
-function addRow(sheetName, cabangId, rowData) {
+function addRow(sheetName, sheetId, rowData) {
   const lock = LockService.getScriptLock();
   try {
     lock.waitLock(15000);
-    const sheet = getSheetById(cabangId, sheetName);
+    const sheet = getSheetById(sheetId, sheetName);
     if (!sheet) return { success: false, error: 'Sheet not found' };
 
     const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
@@ -103,11 +170,11 @@ function addRow(sheetName, cabangId, rowData) {
   }
 }
 
-function updateRow(sheetName, cabangId, rowIndex, rowData) {
+function updateRow(sheetName, sheetId, rowIndex, rowData) {
   const lock = LockService.getScriptLock();
   try {
     lock.waitLock(15000);
-    const sheet = getSheetById(cabangId, sheetName);
+    const sheet = getSheetById(sheetId, sheetName);
     if (!sheet) return { success: false, error: 'Sheet not found' };
 
     const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
@@ -124,11 +191,11 @@ function updateRow(sheetName, cabangId, rowIndex, rowData) {
   }
 }
 
-function deleteRow(sheetName, cabangId, rowIndex) {
+function deleteRow(sheetName, sheetId, rowIndex) {
   const lock = LockService.getScriptLock();
   try {
     lock.waitLock(15000);
-    const sheet = getSheetById(cabangId, sheetName);
+    const sheet = getSheetById(sheetId, sheetName);
     if (!sheet) return { success: false, error: 'Sheet not found' };
 
     sheet.deleteRow(rowIndex + 1);
@@ -140,23 +207,14 @@ function deleteRow(sheetName, cabangId, rowIndex) {
   }
 }
 
-function getCabangInfo(cabangId) {
-  return {
-    id: cabangId,
-    name: CABANG_NAMES[cabangId] || 'Cabang #' + cabangId,
-    hasSheet: !!SHEET_IDS[cabangId],
-  };
-}
-
 // ─── Helpers ────────────────────────────────────────────
 
-function getSheet(cabangId) {
-  const sheetId = SHEET_IDS[cabangId];
-  if (!sheetId) throw new Error('No sheet ID for cabang ' + cabangId);
+function getSheet(sheetId) {
+  if (!sheetId) throw new Error('No sheet ID provided');
   return SpreadsheetApp.openById(sheetId);
 }
 
-function getSheetById(cabangId, sheetName) {
-  const ss = getSheet(cabangId);
+function getSheetById(sheetId, sheetName) {
+  const ss = getSheet(sheetId);
   return ss.getSheetByName(sheetName);
 }

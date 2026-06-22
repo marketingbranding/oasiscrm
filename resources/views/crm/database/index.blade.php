@@ -31,148 +31,29 @@
     </div>
     @endif
 
-    @if(isset($branchCode) && !isset($error))
+    @if(isset($branchCode) && $selectedBranch && $selectedBranch->sheet_id)
+    @php
+        $sheetId = $selectedBranch->sheet_id;
+        $webAppUrl = config('services.google_script.webhook_url');
+        $databaseUrl = $webAppUrl . '?sheet_id=' . urlencode($sheetId) . '&cabang_name=' . urlencode($selectedBranch->name);
+    @endphp
     <div class="border-2 border-black mb-4">
-        <div class="bg-black text-white px-3 py-2 font-[Helvetica] font-bold text-xs uppercase">
-            Database — {{ $branchCode }}
+        <div class="bg-black text-white px-3 py-2 font-[Helvetica] font-bold text-xs uppercase flex items-center justify-between">
+            <span>Database — {{ $branchCode }}</span>
+            <a href="https://docs.google.com/spreadsheets/d/{{ $sheetId }}/edit" target="_blank"
+               class="text-xs text-gray-300 hover:text-white underline">Buka Google Sheet</a>
         </div>
-        <div class="p-4">
-            <div id="sheet-tabs" class="flex flex-wrap gap-1 mb-3"></div>
-
-            <div class="mb-3">
-                <input type="text" id="search-input" placeholder="Cari..."
-                       class="border-2 border-black px-3 py-1.5 text-sm font-['Times_New_Roman'] bg-white w-full max-w-xs">
-            </div>
-
-            <div id="table-container" class="overflow-x-auto border-2 border-black">
-                <div class="text-center py-8 text-sm font-['Times_New_Roman']">Memuat data...</div>
-            </div>
-
-            @if($selectedBranch && $selectedBranch->sheet_id)
-            <div class="mt-3">
-                <a href="https://docs.google.com/spreadsheets/d/{{ $selectedBranch->sheet_id }}/edit" target="_blank"
-                   class="inline-block bg-black text-white px-4 py-1.5 text-xs font-[Helvetica] font-bold border-2 border-black rounded-none hover:bg-gray-800">
-                    Buka Google Sheet
-                </a>
-            </div>
-            @endif
+        <div class="bg-white p-8 text-center">
+            <p class="font-['Times_New_Roman'] text-sm mb-4">
+                Buka aplikasi database <strong>{{ $selectedBranch->name }}</strong> untuk mengelola data.
+            </p>
+            <a href="{{ $databaseUrl }}" target="_blank"
+               class="inline-block bg-black text-white px-6 py-3 font-[Helvetica] font-bold border-2 border-black rounded-none hover:bg-gray-800 uppercase text-sm">
+                Buka Database {{ $branchCode }}
+            </a>
         </div>
     </div>
-
-    <script>
-    var rawData = @json($data);
-    var state = { sheet: null, rows: [] };
-
-    function initData(data) {
-        if (!data) {
-            showNoData();
-            return;
-        }
-
-        if (Array.isArray(data)) {
-            if (data.length === 0) { showNoData(); return; }
-            state.rows = data;
-            renderTable(data);
-            return;
-        }
-
-        if (typeof data === 'object') {
-            var keys = Object.keys(data);
-            var sheetKeys = keys.filter(function(k) { return Array.isArray(data[k]); });
-            if (sheetKeys.length === 0) { renderObject(data); return; }
-            renderSheetTabs(data, sheetKeys);
-            return;
-        }
-
-        showInvalid();
-    }
-
-    function renderSheetTabs(data, keys) {
-        var tabsEl = document.getElementById('sheet-tabs');
-        tabsEl.innerHTML = '';
-        keys.forEach(function(key, i) {
-            var btn = document.createElement('button');
-            btn.textContent = key;
-            btn.className = 'px-3 py-1 text-xs font-[Helvetica] font-bold border border-black ' + (i === 0 ? 'bg-black text-white' : 'bg-white text-black hover:bg-gray-100');
-            btn.setAttribute('data-sheet', key);
-            btn.addEventListener('click', function() {
-                tabsEl.querySelectorAll('button').forEach(function(b) {
-                    b.className = 'px-3 py-1 text-xs font-[Helvetica] font-bold border border-black bg-white text-black hover:bg-gray-100';
-                });
-                btn.className = 'px-3 py-1 text-xs font-[Helvetica] font-bold border border-black bg-black text-white';
-                state.rows = data[key] || [];
-                renderTable(state.rows);
-            });
-            tabsEl.appendChild(btn);
-        });
-        state.rows = data[keys[0]] || [];
-        renderTable(state.rows);
-    }
-
-    function renderObject(data) {
-        var container = document.getElementById('table-container');
-        var html = '<table class="w-full text-sm font-[\'Times_New_Roman\']"><tbody>';
-        for (var key in data) {
-            if (Object.prototype.hasOwnProperty.call(data, key)) {
-                html += '<tr class="border-b border-black"><td class="px-3 py-2 font-bold">' + key + '</td><td class="px-3 py-2">' + (data[key] ?? '') + '</td></tr>';
-            }
-        }
-        html += '</tbody></table>';
-        container.innerHTML = html;
-    }
-
-    function renderTable(rows) {
-        var container = document.getElementById('table-container');
-        if (!rows || rows.length === 0) { showNoData(); return; }
-
-        var headers = Object.keys(rows[0]);
-        var q = (document.getElementById('search-input').value || '').toLowerCase();
-        var filtered = q ? rows.filter(function(r) {
-            for (var i = 0; i < headers.length; i++) {
-                var val = String(r[headers[i]] || '').toLowerCase();
-                if (val.indexOf(q) !== -1) return true;
-            }
-            return false;
-        }) : rows;
-
-        var html = '<table class="w-full text-sm font-[\'Times_New_Roman\'] border-collapse">';
-        html += '<thead><tr class="bg-black text-white">';
-        headers.forEach(function(h) {
-            html += '<th class="px-3 py-2 text-left font-[Helvetica] font-bold text-xs uppercase">' + h + '</th>';
-        });
-        html += '</tr></thead><tbody>';
-        filtered.forEach(function(row, i) {
-            html += '<tr class="' + (i % 2 === 0 ? 'bg-white' : 'bg-gray-50') + ' border-b border-black hover:bg-[#fff3cd]">';
-            headers.forEach(function(h) {
-                html += '<td class="px-3 py-1.5">' + (row[h] ?? '') + '</td>';
-            });
-            html += '</tr>';
-        });
-        html += '</tbody></table>';
-
-        if (filtered.length === 0) {
-            html = '<div class="text-center py-8 text-sm font-[\'Times_New_Roman\']">Tidak ada data yang cocok</div>';
-        }
-
-        container.innerHTML = html;
-    }
-
-    function showNoData() {
-        document.getElementById('table-container').innerHTML = '<div class="text-center py-8 text-sm font-[\'Times_New_Roman\']">Tidak ada data.</div>';
-    }
-
-    function showInvalid() {
-        document.getElementById('table-container').innerHTML = '<div class="text-center py-8 text-sm font-[\'Times_New_Roman\']">Format data tidak dikenali.</div>';
-    }
-
-    document.addEventListener('DOMContentLoaded', function() {
-        initData(rawData);
-        document.getElementById('search-input').addEventListener('input', function() {
-            renderTable(state.rows);
-        });
-    });
-    </script>
-    @elseif(!isset($branchCode))
+    @elseif(isset($branchCode))
     <div class="border-2 border-black">
         <div class="bg-white px-6 py-8 text-center">
             <p class="font-['Times_New_Roman'] text-sm">

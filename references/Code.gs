@@ -125,23 +125,17 @@ function getSheetData(sheetName, sheetId) {
   if (!sheet) return { headers: [], rows: [], error: 'Sheet "' + sheetName + '" not found' };
 
   const range = sheet.getDataRange();
-  const values = range.getValues();
+  const values = range.getDisplayValues();
   if (values.length === 0) return { headers: [], rows: [], error: null };
 
-  const headers = values[0].map(function(h) { return String(h); });
+  const headers = values[0];
   const rows = [];
   for (var i = 1; i < values.length; i++) {
     var row = {};
     var hasData = false;
     for (var j = 0; j < headers.length; j++) {
       var val = values[i][j];
-      if (val instanceof Date) {
-        row[headers[j]] = Utilities.formatDate(val, Session.getScriptTimeZone(), 'yyyy-MM-dd');
-      } else if (val !== null && val !== undefined) {
-        row[headers[j]] = String(val);
-      } else {
-        row[headers[j]] = '';
-      }
+      row[headers[j]] = (val !== null && val !== undefined) ? String(val) : '';
       if (row[headers[j]] !== '') hasData = true;
     }
     if (hasData) rows.push(row);

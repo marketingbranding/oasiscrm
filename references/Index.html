@@ -53,6 +53,43 @@
     .page-size-select { width: auto; font-size: 0.78rem; padding: 0.2rem 0.4rem; border: 1px solid #ddd; border-radius: 4px; }
     .pivot-wrapper { min-height: 400px; }
     .pivot-wrapper .pvtUi { width: 100% !important; }
+    .pivot-wrapper table.pvtTable { border-collapse: collapse; width: 100%; font-size: 0.85rem; margin-top: 0.5rem; }
+    .pivot-wrapper table.pvtTable th,
+    .pivot-wrapper table.pvtTable td { border: 1px solid #dadce0; padding: 0.4rem 0.65rem; text-align: left; white-space: nowrap; }
+    .pivot-wrapper table.pvtTable th.pvtColLabel { background: #e8f0fe; font-weight: 600; color: #1a73e8; text-align: center; font-size: 0.82rem; }
+    .pivot-wrapper table.pvtTable th.pvtRowLabel { background: #f8f9fa; font-weight: 600; color: #3c4043; font-size: 0.82rem; }
+    .pivot-wrapper table.pvtTable td.pvtVal { text-align: right; font-variant-numeric: tabular-nums; }
+    .pivot-wrapper table.pvtTable td.pvtTotal,
+    .pivot-wrapper table.pvtTable th.pvtTotal { background: #e6f4ea; font-weight: 600; color: #137333; }
+    .pivot-wrapper table.pvtTable th.pvtTotalLabel { background: #f8f9fa; font-weight: 600; color: #5f6368; text-align: right; }
+    .pivot-wrapper table.pvtTable td.pvtGrandTotal { background: #fce8b2; font-weight: 700; color: #b06000; }
+    .pivot-wrapper table.pvtTable tr:hover td { background: #f1f3f4; }
+    .pivot-wrapper .pvtUi select.pvtRenderer,
+    .pivot-wrapper .pvtUi select.pvtAggregator { border: 1px solid #dadce0; border-radius: 4px; padding: 0.3rem 0.5rem; font-size: 0.82rem; background: #fff; color: #3c4043; cursor: pointer; }
+    .pivot-wrapper .pvtUi select.pvtRenderer:focus,
+    .pivot-wrapper .pvtUi select.pvtAggregator:focus { border-color: #1a73e8; outline: none; }
+    .pivot-wrapper .pvtUi .pvtAxisContainer { border: 1px dashed #dadce0; border-radius: 6px; padding: 0.4rem; min-height: 32px; background: #fafbfc; margin-bottom: 0.3rem; }
+    .pivot-wrapper .pvtUi .pvtAxisContainer li { background: #e8f0fe; border: 1px solid #c2d7f0; border-radius: 4px; padding: 0.2rem 0.5rem; font-size: 0.8rem; cursor: move; display: inline-block; margin: 0.15rem; }
+    .pivot-wrapper .pvtUi .pvtAxisContainer li.pvtFilteredAttribute { background: #fce8b2; border-color: #fdd663; }
+    .pivot-wrapper .pvtUi .pvtAxisContainer li .pvtTriangle { font-size: 0.7rem; margin-left: 0.25rem; cursor: pointer; }
+    .pivot-wrapper .pvtUi .pvtAxisContainer li:hover { background: #d2e3fc; }
+    .pivot-wrapper .pvtUi .pvtSearch { border: 1px solid #dadce0; border-radius: 4px; padding: 0.3rem 0.5rem; font-size: 0.82rem; width: 100%; box-sizing: border-box; margin-bottom: 0.3rem; }
+    .pivot-wrapper .pvtUi .pvtSearch:focus { border-color: #1a73e8; outline: none; }
+    .pivot-wrapper .pvtUi .pvtFilterBox { background: #fff; border: 1px solid #dadce0; border-radius: 8px; box-shadow: 0 2px 12px rgba(0,0,0,0.15); padding: 0.75rem; min-width: 200px; z-index: 1050; }
+    .pivot-wrapper .pvtUi .pvtFilterBox h4 { font-size: 0.9rem; font-weight: 600; margin-bottom: 0.5rem; color: #3c4043; }
+    .pivot-wrapper .pvtUi .pvtFilterBox .count { font-weight: 400; font-size: 0.78rem; color: #5f6368; margin-left: 0.5rem; }
+    .pivot-wrapper .pvtUi .pvtFilterBox button { border: 1px solid #dadce0; border-radius: 4px; padding: 0.25rem 0.6rem; font-size: 0.78rem; background: #fff; cursor: pointer; margin-right: 0.3rem; }
+    .pivot-wrapper .pvtUi .pvtFilterBox button:hover { background: #f1f3f4; }
+    .pivot-wrapper .pvtUi .pvtVals { padding: 0.25rem 0; }
+    .pivot-wrapper .pvtUi .pvtVals select.pvtAttrDropdown { border: 1px solid #dadce0; border-radius: 4px; padding: 0.2rem 0.4rem; font-size: 0.8rem; margin: 0.1rem; }
+    .pivot-wrapper .pvtUi .pvtRowOrder,
+    .pivot-wrapper .pvtUi .pvtColOrder { text-decoration: none; font-size: 1.1rem; color: #5f6368; margin: 0 0.15rem; cursor: pointer; }
+    .pivot-wrapper .pvtUi .pvtRowOrder:hover,
+    .pivot-wrapper .pvtUi .pvtColOrder:hover { color: #1a73e8; }
+    .pivot-wrapper .pvtCheckContainer p { margin: 0.15rem 0; }
+    .pivot-wrapper .pvtCheckContainer label { font-size: 0.82rem; cursor: pointer; display: flex; align-items: center; gap: 0.3rem; padding: 0.1rem 0; }
+    .pivot-wrapper .pvtCheckContainer label:hover { background: #f1f3f4; }
+    .pivot-wrapper .pvtCheckContainer input[type="checkbox"] { cursor: pointer; }
     .row-count { font-size: 0.8rem; color: #888; }
     /* ─── Tab Bar (Google Sheets style) ────────────── */
     .tab-bar { position: fixed; bottom: 0; left: 0; right: 0; height: 40px; background: #f1f3f4; border-top: 1px solid #dadce0; display: flex; align-items: center; z-index: 1030; gap: 0; }

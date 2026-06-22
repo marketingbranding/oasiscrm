@@ -523,7 +523,12 @@
       html += '<tr><td class="row-num">' + rowNum + '</td>';
       currentData.headers.forEach(function(h) {
         var val = row[h] !== undefined ? row[h] : '';
-        html += '<td title="' + escHtml(val) + '">' + escHtml(val) + '</td>';
+        if (val === 'TRUE' || val === 'FALSE') {
+          var checked = val === 'TRUE' ? ' checked' : '';
+          html += '<td title="' + val + '"><input type="checkbox"' + checked + ' disabled style="cursor:default"></td>';
+        } else {
+          html += '<td title="' + escHtml(val) + '">' + escHtml(val) + '</td>';
+        }
         if (showNamaCol && h.toLowerCase() === 'id_kavling') {
           var kav = (row.id_kavling !== undefined && row.id_kavling !== null) ? String(row.id_kavling).trim() : '';
           var nama = namaKonsumenMap[kav] || '';

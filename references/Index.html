@@ -51,98 +51,81 @@
     th.nama-konsumen-col { background: #fff3e0 !important; color: #e67e22; }
     td.nama-konsumen-col { background: #fffaf0; }
     .page-size-select { width: auto; font-size: 0.78rem; padding: 0.2rem 0.4rem; border: 1px solid #ddd; border-radius: 4px; }
-    /* Break the table out of side-by-side layout → stack vertically */
+    /* ─── Unwrap PivotTable.js's structural table markup ─── */
     .pivot-wrapper .pvtUi,
-    .pivot-wrapper .pvtUi > tbody,
-    .pivot-wrapper .pvtUi > tbody > tr {
+    .pivot-wrapper .pvtUi tbody,
+    .pivot-wrapper .pvtUi tr,
+    .pivot-wrapper .pvtUi td:not(.pvtAxisContainer):not(.pvtVals),
+    .pivot-wrapper .pvtUi table:not(.pvtTable) {
+      display: contents;
+    }
+
+    /* ─── Excel/Sheets-style grid: big table on left, narrow field sidebar on right ─── */
+    .pivot-wrapper {
+      min-height: 400px;
+      overflow-x: auto;
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 280px;
+      grid-template-areas:
+        "output renderer"
+        "output aggregator"
+        "output unused"
+        "output rows"
+        "output cols"
+        "output vals";
+      gap: 0.6rem;
+      align-items: start;
+    }
+
+    .pivot-wrapper table.pvtTable {
+      grid-area: output;
+      max-height: 70vh;
+      overflow: auto;
       display: block;
-      width: 100%;
     }
-    .pivot-wrapper .pvtUi > tbody > tr > td {
-      display: block;
-      width: 100% !important;
-    }
+    .pivot-wrapper table.pvtTable thead,
+    .pivot-wrapper table.pvtTable tbody { display: table; width: 100%; }
 
-    /* Unused fields box: full width, scrolls instead of pushing layout */
-    .pivot-wrapper .pvtUnused.pvtAxisContainer {
-      max-height: 160px;
-      overflow-y: auto;
-      margin-bottom: 0.75rem;
-    }
+    .pivot-wrapper select.pvtRenderer    { grid-area: renderer; }
+    .pivot-wrapper select.pvtAggregator  { grid-area: aggregator; }
+    .pivot-wrapper .pvtUnused.pvtAxisContainer { grid-area: unused; max-height: 140px; overflow-y: auto; }
+    .pivot-wrapper .pvtRows.pvtAxisContainer   { grid-area: rows; }
+    .pivot-wrapper .pvtCols.pvtAxisContainer   { grid-area: cols; }
+    .pivot-wrapper td.pvtVals                  { grid-area: vals; }
 
-    /* The nested table (renderer/vals/cols/rows/output) is still a real table — keep it sane */
-    .pivot-wrapper .pvtUi td > table { width: 100%; table-layout: auto; }
-    .pivot-wrapper .pvtUi td > table > tbody > tr > td { display: table-cell; width: auto !important; }
-
-    .pivot-wrapper { min-height: 400px; overflow-x: auto; }
-    .pivot-wrapper .pvtUi { width: 100% !important; border-collapse: separate; border-spacing: 10px; table-layout: fixed; }
-    .pivot-wrapper .pvtUi > tbody > tr > td { vertical-align: top; padding: 0; }
-
-    /* ─── Zone labels (the missing piece) ─── */
+    /* Zone styling stays the same as before */
     .pivot-wrapper .pvtAxisContainer,
-    .pivot-wrapper td.pvtVals { position: relative; }
-    .pivot-wrapper .pvtUnused.pvtAxisContainer::before { content: "📋 FIELD TERSEDIA (drag ke Baris/Kolom)"; }
-    .pivot-wrapper .pvtRows.pvtAxisContainer::before     { content: "↕  BARIS (ROWS)"; }
-    .pivot-wrapper .pvtCols.pvtAxisContainer::before      { content: "↔  KOLOM (COLUMNS)"; }
-    .pivot-wrapper td.pvtVals::before                     { content: "Σ  NILAI & AGREGASI"; }
+    .pivot-wrapper td.pvtVals { border-radius: 6px; padding: 0.6rem; min-height: 50px; }
 
+    .pivot-wrapper .pvtUnused.pvtAxisContainer::before { content: "📋 FIELD TERSEDIA"; }
+    .pivot-wrapper .pvtRows.pvtAxisContainer::before    { content: "↕ BARIS"; }
+    .pivot-wrapper .pvtCols.pvtAxisContainer::before     { content: "↔ KOLOM"; }
+    .pivot-wrapper td.pvtVals::before                    { content: "Σ NILAI"; }
     .pivot-wrapper .pvtAxisContainer::before,
     .pivot-wrapper td.pvtVals::before {
-      display: block;
-      font-size: 0.68rem;
-      font-weight: 700;
-      letter-spacing: 0.3px;
-      text-transform: uppercase;
-      color: #5f6368;
-      margin-bottom: 0.35rem;
+      display: block; font-size: 0.65rem; font-weight: 700; text-transform: uppercase;
+      letter-spacing: 0.3px; color: #5f6368; margin-bottom: 0.3rem;
     }
 
-    /* ─── Color-coded zones so the eye separates them instantly ─── */
     .pivot-wrapper .pvtUnused.pvtAxisContainer { background: #f8f9fa; border: 1px dashed #c6c9cc; }
+    .pivot-wrapper .pvtRows.pvtAxisContainer   { background: #e8f0fe; border: 1px solid #aecbfa; }
+    .pivot-wrapper .pvtCols.pvtAxisContainer   { background: #e6f4ea; border: 1px solid #a8dab5; }
+    .pivot-wrapper td.pvtVals                  { background: #fef7e0; border: 1px solid #fdd663; }
     .pivot-wrapper .pvtUnused.pvtAxisContainer::before { color: #5f6368; }
+    .pivot-wrapper .pvtRows.pvtAxisContainer::before    { color: #1a73e8; }
+    .pivot-wrapper .pvtCols.pvtAxisContainer::before     { color: #137333; }
+    .pivot-wrapper td.pvtVals::before                    { color: #b06000; }
 
-    .pivot-wrapper .pvtRows.pvtAxisContainer { background: #e8f0fe; border: 1px solid #aecbfa; }
-    .pivot-wrapper .pvtRows.pvtAxisContainer::before { color: #1a73e8; }
-
-    .pivot-wrapper .pvtCols.pvtAxisContainer { background: #e6f4ea; border: 1px solid #a8dab5; }
-    .pivot-wrapper .pvtCols.pvtAxisContainer::before { color: #137333; }
-
-    .pivot-wrapper td.pvtVals { background: #fef7e0; border: 1px solid #fdd663; border-radius: 6px; }
-    .pivot-wrapper td.pvtVals::before { color: #b06000; }
-
-    .pivot-wrapper .pvtAxisContainer { border-radius: 6px; padding: 0.6rem; min-height: 64px; }
-
-    /* ─── Tidy grid for the unused-fields list (the messy part) ─── */
-    .pivot-wrapper .pvtUnused.pvtAxisContainer { min-width: 100%; }
-    .pivot-wrapper .pvtUnused.pvtAxisContainer ul {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 0.4rem;
-      list-style: none;
-      margin: 0;
-      padding: 0;
+    /* Field chips stay as a tidy wrapping grid */
+    .pivot-wrapper .pvtAxisContainer ul {
+      display: flex; flex-wrap: wrap; gap: 0.35rem; list-style: none; margin: 0; padding: 0;
     }
     .pivot-wrapper .pvtAxisContainer li {
-      background: #fff;
-      border: 1px solid #d2d5d9;
-      border-radius: 14px;
-      padding: 0.3rem 0.7rem;
-      font-size: 0.78rem;
-      font-weight: 500;
-      cursor: grab;
-      display: inline-flex;
-      align-items: center;
-      margin: 0;
-      box-shadow: 0 1px 2px rgba(0,0,0,0.04);
-      transition: box-shadow 0.15s, transform 0.1s;
+      background: #fff; border: 1px solid #d2d5d9; border-radius: 14px;
+      padding: 0.25rem 0.6rem; font-size: 0.75rem; font-weight: 500; cursor: grab;
+      display: inline-flex; align-items: center; box-shadow: 0 1px 2px rgba(0,0,0,0.04);
     }
-    .pivot-wrapper .pvtAxisContainer li:hover { box-shadow: 0 2px 6px rgba(0,0,0,0.12); transform: translateY(-1px); }
-    .pivot-wrapper .pvtAxisContainer li:active { cursor: grabbing; }
-    .pivot-wrapper .pvtRows.pvtAxisContainer li,
-    .pivot-wrapper .pvtCols.pvtAxisContainer li { background: #fff; border-color: #aecbfa; }
-    .pivot-wrapper .pvtAxisContainer li.pvtFilteredAttribute { background: #fce8b2; border-color: #fdd663; }
-    .pivot-wrapper .pvtAxisContainer li .pvtTriangle { font-size: 0.7rem; margin-left: 0.4rem; cursor: pointer; opacity: 0.6; }
-    .pivot-wrapper .pvtAxisContainer li .pvtTriangle:hover { opacity: 1; }
+    .pivot-wrapper .pvtAxisContainer li:hover { box-shadow: 0 2px 6px rgba(0,0,0,0.12); }
 
     /* ─── Top controls row (renderer + aggregator selects) ─── */
     .pivot-wrapper .pvtUi select.pvtRenderer,

@@ -8,7 +8,7 @@
     </div>
 
     <div class="bg-white border-2 border-black p-3 mb-6">
-        <form method="GET" action="{{ route('dana-talangan.index') }}" class="flex items-center gap-3 flex-wrap">
+        <form method="GET" action="{{ route('dana-talangan.index') }}" class="flex items-center gap-3 flex-wrap filter-bar">
             @if(Auth::user()->canViewAllBranches() && isset($branches) && $branches->count() > 0)
             <label class="font-[Helvetica] font-bold text-xs uppercase">Cabang:</label>
             <select name="branch_id" onchange="this.form.submit()" class="border-2 border-black px-3 py-1.5 text-sm font-['Times_New_Roman'] bg-white rounded-none">

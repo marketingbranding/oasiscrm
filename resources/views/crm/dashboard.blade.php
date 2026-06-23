@@ -3,9 +3,19 @@
 @section('title', 'Dashboard - Oasis CRM')
 
 @section('content')
+    {{-- Quick-Action Buttons --}}
+    <div class="flex flex-col sm:flex-row gap-2 mb-4">
+        <a href="{{ route('lead-daily.create') }}" class="bg-[#c0392b] hover:bg-[#a93226] text-white px-3 py-1.5 text-sm font-[Helvetica] font-bold border-2 border-black rounded-none text-center">+ Input Harian</a>
+        <a href="{{ route('lead-events.create') }}" class="bg-[#e6915d] hover:bg-[#d4854f] text-black px-3 py-1.5 text-sm font-[Helvetica] font-bold border-2 border-black rounded-none text-center">+ Event Baru</a>
+        <a href="{{ route('content-calendar.create') }}" class="bg-[#b3bd95] hover:bg-[#9eaa7a] text-black px-3 py-1.5 text-sm font-[Helvetica] font-bold border-2 border-black rounded-none text-center">+ Buat Konten</a>
+        <a href="{{ route('dana-talangan.create') }}" class="bg-[#f1c40f] hover:bg-[#d4ac0d] text-black px-3 py-1.5 text-sm font-[Helvetica] font-bold border-2 border-black rounded-none text-center">+ Dana Talangan</a>
+        <a href="{{ route('projects.create') }}" class="bg-[#5d8e8e] hover:bg-[#4a7a7a] text-white px-3 py-1.5 text-sm font-[Helvetica] font-bold border-2 border-black rounded-none text-center">+ Proyek Baru</a>
+    </div>
+
+    {{-- Filter Bar --}}
     @if(Auth::user()->canViewAllBranches())
     <div class="bg-white border-2 border-black p-3 mb-6">
-        <form method="GET" action="{{ route('dashboard') }}" class="flex items-center gap-3 flex-wrap">
+        <form method="GET" action="{{ route('dashboard') }}" class="flex items-center gap-3 flex-wrap filter-bar">
             @if(isset($branches) && $branches->count() > 0)
             <label class="font-[Helvetica] font-bold text-xs uppercase">Cabang:</label>
             <select name="branch_id" onchange="this.form.submit()" class="border-2 border-black px-3 py-1.5 text-sm font-['Times_New_Roman'] bg-white rounded-none">
@@ -28,7 +38,7 @@
     </div>
     @elseif(isset($projects) && $projects->count() > 0)
     <div class="bg-white border-2 border-black p-3 mb-6">
-        <form method="GET" action="{{ route('dashboard') }}" class="flex items-center gap-3 flex-wrap">
+        <form method="GET" action="{{ route('dashboard') }}" class="flex items-center gap-3 flex-wrap filter-bar">
             <label class="font-[Helvetica] font-bold text-xs uppercase">Proyek:</label>
             <select name="project_name" onchange="this.form.submit()" class="border-2 border-black px-3 py-1.5 text-sm font-['Times_New_Roman'] bg-white rounded-none">
                 <option value="">— Semua Proyek —</option>
@@ -40,6 +50,7 @@
     </div>
     @endif
 
+    {{-- Header --}}
     @if(isset($branch) && $branch)
     <div class="bg-[#8c9ae0] border-2 border-black px-4 py-2 mb-6">
         <h1 class="font-['Arial_Black'] font-black text-xl uppercase">{{ $branch->name }}</h1>
@@ -50,6 +61,7 @@
     </div>
     @endif
 
+    {{-- Stat Cards --}}
     <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
         <div class="border-2 border-black">
             <div class="bg-white border-b-2 border-black px-3 py-1.5">
@@ -78,6 +90,44 @@
         </div>
     </div>
 
+    {{-- Today's Agenda + Alerts --}}
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+        <div class="border-2 border-black">
+            <div class="bg-black text-white px-3 py-2 font-[Helvetica] font-bold text-xs uppercase">📋 Hari Ini</div>
+            @if(isset($todayAgenda) && $todayAgenda->count() > 0)
+            <div class="divide-y-2 divide-black">
+                @foreach($todayAgenda as $item)
+                <div class="px-3 py-2 text-sm font-['Times_New_Roman'] flex items-start gap-2">
+                    <span style="background:{{ $item['color'] }}; min-width:4px; width:4px; align-self:stretch; display:block;" class="shrink-0"></span>
+                    <div>
+                        <div class="font-bold">{{ $item['label'] }}</div>
+                        <div class="text-xs">{{ $item['subtitle'] }} — <span class="font-[Helvetica] font-bold">{{ strtoupper($item['status']) }}</span></div>
+                    </div>
+                </div>
+                @endforeach
+            </div>
+            @else
+            <div class="px-4 py-6 text-center text-sm font-['Times_New_Roman']">
+                Tidak ada agenda hari ini.
+            </div>
+            @endif
+        </div>
+        @if(isset($overdueContent) && $overdueContent->count() > 0)
+        <div class="border-2 border-black">
+            <div class="bg-black text-white px-3 py-2 font-[Helvetica] font-bold text-xs uppercase">⚠️ Perhatian</div>
+            <div class="divide-y-2 divide-black">
+                @foreach($overdueContent as $item)
+                <div class="px-3 py-2 text-sm font-['Times_New_Roman'] bg-red-50">
+                    <div class="font-bold">{{ $item->title }}</div>
+                    <div class="text-xs text-red-700">Terlewat {{ $item->scheduled_date->diffForHumans() }} — {{ $item->scheduled_date->format('d M Y') }}</div>
+                </div>
+                @endforeach
+            </div>
+        </div>
+        @endif
+    </div>
+
+    {{-- Lower Content --}}
     <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div class="border-2 border-black">
             <div class="bg-black text-white px-3 py-2 font-[Helvetica] font-bold text-xs uppercase">Jadwal Mendatang</div>
@@ -123,22 +173,43 @@
         </div>
         @else
         <div class="border-2 border-black">
-            <div class="bg-black text-white px-3 py-2 font-[Helvetica] font-bold text-xs uppercase">Update Terbaru</div>
-            @if(isset($recentUpdates) && $recentUpdates->count() > 0)
+            <div class="bg-black text-white px-3 py-2 font-[Helvetica] font-bold text-xs uppercase">⚡ Aktivitas Terbaru</div>
+            @if(isset($recentActivity) && $recentActivity->count() > 0)
             <div class="divide-y-2 divide-black">
-                @foreach($recentUpdates as $update)
-                <div class="px-3 py-2 text-sm font-['Times_New_Roman']">
-                    <div class="font-bold">{{ $update->title }}</div>
-                    <div class="text-xs">{{ $update->created_at->diffForHumans() }} — {{ $update->creator->name ?? '' }}</div>
+                @foreach($recentActivity as $act)
+                <div class="px-3 py-2 text-sm font-['Times_New_Roman'] flex items-start gap-2">
+                    <span style="background:{{ $act['color'] }}; width:8px; height:8px; border-radius:50%; display:inline-block; margin-top:6px;" class="shrink-0"></span>
+                    <div>
+                        <div class="font-bold">{{ $act['text'] }}</div>
+                        <div class="text-xs">{{ $act['time']->diffForHumans() }} — {{ $act['user'] }}</div>
+                    </div>
                 </div>
                 @endforeach
             </div>
             @else
-            <div class="px-4 py-6 text-center text-sm">
-                Belum ada update terbaru.
+            <div class="px-4 py-6 text-center text-sm font-['Times_New_Roman']">
+                Belum ada aktivitas terbaru.
             </div>
             @endif
         </div>
         @endif
     </div>
+
+    {{-- Activity Feed for superadmin (full width, below everything) --}}
+    @if(Auth::user()->canViewAllBranches() && isset($recentActivity) && $recentActivity->count() > 0)
+    <div class="border-2 border-black mt-6">
+        <div class="bg-black text-white px-3 py-2 font-[Helvetica] font-bold text-xs uppercase">⚡ Aktivitas Terbaru</div>
+        <div class="divide-y-2 divide-black">
+            @foreach($recentActivity as $act)
+            <div class="px-3 py-2 text-sm font-['Times_New_Roman'] flex items-start gap-2">
+                <span style="background:{{ $act['color'] }}; width:8px; height:8px; border-radius:50%; display:inline-block; margin-top:6px;" class="shrink-0"></span>
+                <div>
+                    <div class="font-bold">{{ $act['text'] }}</div>
+                    <div class="text-xs">{{ $act['time']->diffForHumans() }} — {{ $act['user'] }}</div>
+                </div>
+            </div>
+            @endforeach
+        </div>
+    </div>
+    @endif
 @endsection

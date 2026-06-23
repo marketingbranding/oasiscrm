@@ -9,7 +9,7 @@
 
     @if(Auth::user()->canViewAllBranches() && isset($branches) && $branches->count() > 0)
     <div class="bg-white border-2 border-black p-3 mb-6">
-        <form method="GET" action="{{ route('database.index') }}" class="flex items-center gap-3 flex-wrap">
+        <form method="GET" action="{{ route('database.index') }}" class="flex items-center gap-3 flex-wrap filter-bar">
             <label class="font-[Helvetica] font-bold text-xs uppercase">Pilih Cabang:</label>
             <select name="branch_id" onchange="this.form.submit()" class="border-2 border-black px-3 py-1.5 text-sm font-['Times_New_Roman'] bg-white rounded-none">
                 <option value="">— Pilih Cabang —</option>

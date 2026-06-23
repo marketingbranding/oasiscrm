@@ -9,6 +9,25 @@
     <link href="https://fonts.bunny.net/css?family=figtree:400,500,600&display=swap" rel="stylesheet" />
     <link rel="icon" type="image/svg+xml" href="{{ asset('favicon.svg') }}">
     @vite(['resources/css/app.css', 'resources/js/app.js'])
+    <style>
+        @media (max-width: 767px) {
+            button, select, input, textarea, a, [class*="py-1"] {
+                min-height: 44px !important;
+                font-size: 16px !important;
+            }
+            table th, table td {
+                padding: 6px 4px !important;
+                font-size: 12px !important;
+            }
+            .filter-bar {
+                flex-direction: column !important;
+                gap: 0.5rem !important;
+            }
+            .filter-bar select, .filter-bar input {
+                width: 100% !important;
+            }
+        }
+    </style>
 </head>
 <body class="font-['Times_New_Roman'] antialiased bg-white min-h-screen flex flex-col"
       x-data="{ sidebarOpen: localStorage.getItem('sidebarOpen') !== 'false', sidebarPinned: localStorage.getItem('sidebarPinned') === 'true' }">
@@ -45,10 +64,19 @@
         @endauth
     </div>
 
+    {{-- Backdrop overlay for mobile sidebar --}}
+    <div x-show="sidebarOpen" @click="sidebarOpen = false"
+         class="fixed inset-0 bg-black/40 z-30 sm:hidden" x-cloak></div>
+
     {{-- Body --}}
     <div class="flex flex-col sm:flex-row pt-14">
         <div :class="[sidebarOpen ? 'block' : 'hidden', sidebarPinned ? 'sm:w-56' : 'sm:w-12 sm:hover:w-56']"
-             class="sm:block group w-full sm:fixed sm:left-0 sm:top-14 sm:bottom-0 sm:z-40 sm:transition-all sm:duration-200 sm:overflow-x-hidden sm:whitespace-nowrap bg-white sm:border-r-2 border-black">
+             class="sm:block group w-64 overflow-y-auto shadow-xl
+                    fixed left-0 top-14 bottom-0 z-40
+                    sm:fixed sm:left-0 sm:top-14 sm:bottom-0 sm:z-40
+                    sm:transition-all sm:duration-200
+                    sm:overflow-x-hidden sm:whitespace-nowrap sm:shadow-none
+                    bg-white sm:border-r-2 border-black">
             <nav class="p-2">
                 <div class="mb-1 hidden sm:block">
                     <button @click="sidebarPinned = !sidebarPinned; localStorage.setItem('sidebarPinned', sidebarPinned)"
@@ -131,7 +159,7 @@
     <template x-if="!showBug">
         <button @click="showBug = true; sent = false"
                 class="w-12 h-12 bg-[#c0392b] hover:bg-[#a93226] text-white border-2 border-black rounded-none flex items-center justify-center shadow-lg transition-colors duration-200"
-                title="Laporkan Bug">
+                title="Masukan / Laporkan Bug">
             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5">
                 <path stroke-linecap="round" stroke-linejoin="round" d="M12 20.25c4.97 0 9-3.694 9-8.25s-4.03-8.25-9-8.25S3 7.444 3 12c0 2.104.859 4.023 2.273 5.48.432.447.74 1.04.586 1.641a4.483 4.483 0 0 1-.923 1.785A5.969 5.969 0 0 0 6 21c1.282 0 2.47-.402 3.445-1.087.81.22 1.668.337 2.555.337Z"/>
             </svg>
@@ -140,7 +168,7 @@
     <template x-if="showBug">
         <div class="bg-white border-2 border-black shadow-xl w-80 font-['Times_New_Roman']">
             <div class="bg-[#c0392b] text-white px-3 py-2 flex items-center justify-between text-sm font-bold font-[Helvetica]">
-                <span>Laporkan Bug</span>
+                <span>Masukan / Laporkan Bug</span>
                 <button @click="showBug = false" class="hover:text-gray-300 text-lg leading-none">&times;</button>
             </div>
             <div class="p-3">
@@ -152,15 +180,15 @@
                 </template>
                 <template x-if="!sent">
                     <form @submit.prevent="sending = true; errorMsg = ''; fetch('{{ route('bug-report.store') }}', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': '{{ csrf_token() }}' }, body: JSON.stringify({ message }) }).then(async r => { const text = await r.text(); try { return JSON.parse(text); } catch { return { ok: false, error: text.substring(0,200) }; } }).then(d => { sending = false; if (d.ok) { sent = true; message = ''; } else { alert('Gagal: ' + (d.error || d.message || 'Coba lagi.')); } }).catch(e => { sending = false; alert('Gagal: ' + e.message); })">
-                        <label class="block text-xs font-bold mb-1">Jelaskan bug yang ditemukan:</label>
+                        <label class="block text-xs font-bold mb-1">Jelaskan masukan atau bug yang ditemukan:</label>
                         <textarea x-model="message" required maxlength="2000" rows="4"
                                   class="w-full border-2 border-black px-2 py-1.5 text-sm resize-none focus:outline-none"
-                                  placeholder="Contoh: Tombol submit tidak berfungsi di halaman Lead Harian..."></textarea>
+                                  placeholder="Contoh: Tambah fitur export Excel... atau Tombol submit tidak berfungsi..."></textarea>
                         <div class="flex items-center justify-between mt-2">
                             <span class="text-xs text-gray-500" x-text="message.length + '/2000'"></span>
                             <button type="submit" :disabled="sending || !message.trim()"
                                     class="bg-[#e6915d] hover:bg-[#d4854f] text-black border-2 border-black px-4 py-1 text-sm font-bold font-[Helvetica] disabled:opacity-40 transition-colors duration-200"
-                                    x-text="sending ? 'Mengirim...' : 'Kirim Bug'"></button>
+                                    x-text="sending ? 'Mengirim...' : 'Kirim'"></button>
                         </div>
                     </form>
                 </template>

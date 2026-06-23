@@ -9,7 +9,7 @@
 
     @if(Auth::user()->canViewAllBranches())
     <div class="bg-white border-2 border-black p-3 mb-6">
-        <form method="GET" action="{{ route('content-calendar.index') }}" class="flex items-center gap-3 flex-wrap">
+        <form method="GET" action="{{ route('content-calendar.index') }}" class="flex items-center gap-3 flex-wrap filter-bar">
             @if(isset($branches) && $branches->count() > 0)
             <label class="font-[Helvetica] font-bold text-xs uppercase">Cabang:</label>
             <select name="branch_id" onchange="this.form.submit()" class="border-2 border-black px-3 py-1.5 text-sm font-['Times_New_Roman'] bg-white rounded-none">
@@ -32,7 +32,7 @@
     </div>
     @elseif(isset($projects) && $projects->count() > 0)
     <div class="bg-white border-2 border-black p-3 mb-6">
-        <form method="GET" action="{{ route('content-calendar.index') }}" class="flex items-center gap-3 flex-wrap">
+        <form method="GET" action="{{ route('content-calendar.index') }}" class="flex items-center gap-3 flex-wrap filter-bar">
             <label class="font-[Helvetica] font-bold text-xs uppercase">Proyek:</label>
             <select name="project_name" onchange="this.form.submit()" class="border-2 border-black px-3 py-1.5 text-sm font-['Times_New_Roman'] bg-white rounded-none">
                 <option value="">— Semua Proyek —</option>
@@ -54,7 +54,7 @@
                 Next →
             </a>
         </div>
-        <a href="{{ route('content-calendar.create') }}" class="bg-[#e91d2a] text-white px-4 py-1.5 text-sm font-[Helvetica] font-bold border-2 border-black rounded-none hover:bg-red-600">
+        <a href="{{ route('content-calendar.create') }}" class="bg-[#b3bd95] text-black px-4 py-1.5 text-sm font-[Helvetica] font-bold border-2 border-black rounded-none hover:bg-[#9eaa7a]">
             + Buat Konten
         </a>
     </div>

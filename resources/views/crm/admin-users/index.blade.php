@@ -5,7 +5,7 @@
 @section('content')
     <div class="bg-[#8c9ae0] border-2 border-black px-4 py-2 mb-6 flex items-center justify-between">
         <h1 class="font-['Arial_Black'] font-black text-xl uppercase">Manajemen User</h1>
-        <a href="{{ route('admin-users.create') }}" class="bg-black text-white px-4 py-1.5 text-sm font-[Helvetica] font-bold border-2 border-black rounded-none hover:bg-gray-800">
+        <a href="{{ route('admin-users.create') }}" class="bg-[#8c9ae0] text-black px-4 py-1.5 text-sm font-[Helvetica] font-bold border-2 border-black rounded-none hover:bg-[#7a8ad4]">
             + Tambah User
         </a>
     </div>

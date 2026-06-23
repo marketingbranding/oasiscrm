@@ -51,96 +51,82 @@
     th.nama-konsumen-col { background: #fff3e0 !important; color: #e67e22; }
     td.nama-konsumen-col { background: #fffaf0; }
     .page-size-select { width: auto; font-size: 0.78rem; padding: 0.2rem 0.4rem; border: 1px solid #ddd; border-radius: 4px; }
-    /* ─── Override .pvtUi table → CSS Grid ─── */
-    .pivot-wrapper .pvtUi {
-      display: grid !important;
+    /* ─── Pivot Grid layout (after DOM restructure) ─── */
+    .pivot-grid {
+      display: grid;
       grid-template-columns: minmax(0, 1fr) 280px;
-      grid-template-areas:
-        "output renderer"
-        "output aggregator"
-        "output unused"
-        "output rows"
-        "output cols"
-        "output vals";
+      grid-template-rows: auto auto auto auto auto 1fr;
       gap: 0.6rem;
-      width: 100% !important;
       min-height: 400px;
-      overflow-x: auto;
     }
 
-    /* Break table layout on all structural elements */
-    .pivot-wrapper .pvtUi > tbody,
-    .pivot-wrapper .pvtUi > tbody > tr,
-    .pivot-wrapper .pvtUi > tbody > tr > td {
-      display: block !important;
-      width: auto !important;
-      padding: 0 !important;
-      border: none !important;
-    }
-
-    /* Position each zone */
-    .pivot-wrapper .pvtRendererArea {
-      grid-area: output;
+    .pivot-grid .pvtRendererArea {
+      grid-row: 1 / -1;
+      grid-column: 1;
       overflow: auto;
       max-height: 70vh;
     }
-    .pivot-wrapper select.pvtRenderer    { grid-area: renderer; }
-    .pivot-wrapper select.pvtAggregator  { grid-area: aggregator; }
-    .pivot-wrapper .pvtUnused.pvtAxisContainer { grid-area: unused; max-height: 140px; overflow-y: auto; }
-    .pivot-wrapper .pvtRows.pvtAxisContainer   { grid-area: rows; }
-    .pivot-wrapper .pvtCols.pvtAxisContainer   { grid-area: cols; }
-    .pivot-wrapper td.pvtVals                  { grid-area: vals; }
-
-    /* Output table - keep as real table */
-    .pivot-wrapper .pvtRendererArea table.pvtTable {
+    .pivot-grid .pvtRendererArea table.pvtTable {
       display: table;
       width: 100%;
     }
 
-    /* Zone styling (unchanged) */
-    .pivot-wrapper .pvtAxisContainer,
-    .pivot-wrapper td.pvtVals { border-radius: 6px; padding: 0.6rem; min-height: 50px; }
+    .pivot-grid select.pvtRenderer    { grid-column: 2; grid-row: 1; }
+    .pivot-grid select.pvtAggregator  { grid-column: 2; grid-row: 2; }
+    .pivot-grid .pvtUnused.pvtAxisContainer { grid-column: 2; grid-row: 3; max-height: 140px; overflow-y: auto; }
+    .pivot-grid .pvtRows.pvtAxisContainer   { grid-column: 2; grid-row: 4; }
+    .pivot-grid .pvtCols.pvtAxisContainer   { grid-column: 2; grid-row: 5; }
+    .pivot-grid .pvtVals                    { grid-column: 2; grid-row: 6; }
 
-    .pivot-wrapper .pvtUnused.pvtAxisContainer::before { content: "📋 FIELD TERSEDIA"; }
-    .pivot-wrapper .pvtRows.pvtAxisContainer::before    { content: "↕ BARIS"; }
-    .pivot-wrapper .pvtCols.pvtAxisContainer::before     { content: "↔ KOLOM"; }
-    .pivot-wrapper td.pvtVals::before                    { content: "Σ NILAI"; }
-    .pivot-wrapper .pvtAxisContainer::before,
-    .pivot-wrapper td.pvtVals::before {
+    /* Zone labels */
+    .pivot-grid .pvtUnused.pvtAxisContainer::before { content: "📋 FIELD TERSEDIA"; }
+    .pivot-grid .pvtRows.pvtAxisContainer::before    { content: "↕ BARIS"; }
+    .pivot-grid .pvtCols.pvtAxisContainer::before     { content: "↔ KOLOM"; }
+    .pivot-grid .pvtVals::before                     { content: "Σ NILAI"; }
+    .pivot-grid .pvtAxisContainer::before,
+    .pivot-grid .pvtVals::before {
       display: block; font-size: 0.65rem; font-weight: 700; text-transform: uppercase;
       letter-spacing: 0.3px; color: #5f6368; margin-bottom: 0.3rem;
     }
 
-    .pivot-wrapper .pvtUnused.pvtAxisContainer { background: #f8f9fa; border: 1px dashed #c6c9cc; }
-    .pivot-wrapper .pvtRows.pvtAxisContainer   { background: #e8f0fe; border: 1px solid #aecbfa; }
-    .pivot-wrapper .pvtCols.pvtAxisContainer   { background: #e6f4ea; border: 1px solid #a8dab5; }
-    .pivot-wrapper td.pvtVals                  { background: #fef7e0; border: 1px solid #fdd663; }
-    .pivot-wrapper .pvtUnused.pvtAxisContainer::before { color: #5f6368; }
-    .pivot-wrapper .pvtRows.pvtAxisContainer::before    { color: #1a73e8; }
-    .pivot-wrapper .pvtCols.pvtAxisContainer::before     { color: #137333; }
-    .pivot-wrapper td.pvtVals::before                    { color: #b06000; }
+    /* Zone colors */
+    .pivot-grid .pvtUnused.pvtAxisContainer,
+    .pivot-grid .pvtRows.pvtAxisContainer,
+    .pivot-grid .pvtCols.pvtAxisContainer,
+    .pivot-grid .pvtVals,
+    .pivot-grid .pvtRendererArea {
+      display: block;
+    }
+    .pivot-grid .pvtUnused.pvtAxisContainer { background: #f8f9fa; border: 1px dashed #c6c9cc; border-radius: 6px; padding: 0.6rem; }
+    .pivot-grid .pvtRows.pvtAxisContainer   { background: #e8f0fe; border: 1px solid #aecbfa; border-radius: 6px; padding: 0.6rem; min-height: 50px; }
+    .pivot-grid .pvtCols.pvtAxisContainer   { background: #e6f4ea; border: 1px solid #a8dab5; border-radius: 6px; padding: 0.6rem; min-height: 50px; }
+    .pivot-grid .pvtVals                    { background: #fef7e0; border: 1px solid #fdd663; border-radius: 6px; padding: 0.6rem; min-height: 50px; }
+    .pivot-grid .pvtUnused.pvtAxisContainer::before { color: #5f6368; }
+    .pivot-grid .pvtRows.pvtAxisContainer::before    { color: #1a73e8; }
+    .pivot-grid .pvtCols.pvtAxisContainer::before     { color: #137333; }
+    .pivot-grid .pvtVals::before                     { color: #b06000; }
 
     /* Field chips */
-    .pivot-wrapper .pvtAxisContainer ul {
+    .pivot-grid .pvtAxisContainer ul {
       display: flex; flex-wrap: wrap; gap: 0.35rem; list-style: none; margin: 0; padding: 0;
     }
-    .pivot-wrapper .pvtAxisContainer li {
+    .pivot-grid .pvtAxisContainer li {
       background: #fff; border: 1px solid #d2d5d9; border-radius: 14px;
       padding: 0.25rem 0.6rem; font-size: 0.75rem; font-weight: 500; cursor: grab;
       display: inline-flex; align-items: center; box-shadow: 0 1px 2px rgba(0,0,0,0.04);
     }
-    .pivot-wrapper .pvtAxisContainer li:hover { box-shadow: 0 2px 6px rgba(0,0,0,0.12); }
+    .pivot-grid .pvtAxisContainer li:hover { box-shadow: 0 2px 6px rgba(0,0,0,0.12); }
 
     /* ─── Top controls row (renderer + aggregator selects) ─── */
-    .pivot-wrapper .pvtUi select.pvtRenderer,
-    .pivot-wrapper .pvtUi select.pvtAggregator {
+    .pivot-grid select.pvtRenderer,
+    .pivot-grid select.pvtAggregator {
       border: 1px solid #dadce0; border-radius: 6px; padding: 0.4rem 0.6rem;
       font-size: 0.82rem; font-weight: 500; background: #fff; color: #3c4043;
       cursor: pointer; margin: 0 0.3rem 0.3rem 0;
     }
-    .pivot-wrapper .pvtUi select.pvtRenderer:focus,
-    .pivot-wrapper .pvtUi select.pvtAggregator:focus { border-color: #1a73e8; outline: none; }
-    .pivot-wrapper td.pvtVals select.pvtAttrDropdown {
+    .pivot-grid select.pvtRenderer:focus,
+    .pivot-grid select.pvtAggregator:focus { border-color: #1a73e8; outline: none; }
+    .pivot-grid .pvtVals select.pvtAttrDropdown {
       border: 1px solid #fdd663; border-radius: 6px; padding: 0.25rem 0.5rem;
       font-size: 0.78rem; margin: 0.15rem; background: #fff;
     }
@@ -802,6 +788,25 @@
 
         var saved = pivotStateBySheet[currentSheet];
         $c.pivotUI(data, $.extend({}, baseConfig, saved || {}));
+
+        /* Move pivot controls out of .pvtUi table into .pivot-grid wrapper */
+        setTimeout(function() {
+          var container = document.getElementById('pivotContainer');
+          if (!container) return;
+          var pvtUi = container.querySelector('.pvtUi');
+          if (!pvtUi || container.querySelector('.pivot-grid')) return;
+
+          var grid = document.createElement('div');
+          grid.className = 'pivot-grid';
+
+          var order = ['.pvtRendererArea', 'select.pvtRenderer', 'select.pvtAggregator', '.pvtUnused', '.pvtRows', '.pvtCols', '.pvtVals'];
+          order.forEach(function(sel) {
+            var el = pvtUi.querySelector(sel);
+            if (el) grid.appendChild(el);
+          });
+
+          pvtUi.parentNode.replaceChild(grid, pvtUi);
+        }, 200);
       } catch (ex) {
         c.innerHTML = '<div class="empty-state"><i class="bi bi-exclamation-triangle"></i>Error: ' + escHtml(ex.message) + '</div>';
         console.error('Pivot error:', ex);

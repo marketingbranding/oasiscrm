@@ -9,6 +9,7 @@ use App\Http\Controllers\Crm\DanaTalanganController;
 use App\Http\Controllers\Crm\DashboardController;
 use App\Http\Controllers\Crm\DatabaseController;
 use App\Http\Controllers\Crm\KavlingController;
+use App\Http\Controllers\Crm\KonsumenProgressController;
 use App\Http\Controllers\Crm\LeadDailyController;
 use App\Http\Controllers\Crm\LeadEventController;
 use App\Http\Controllers\Crm\ProjectController;
@@ -34,6 +35,8 @@ Route::middleware(['auth', 'verified', 'password.changed'])->group(function () {
     Route::resource('content-calendar', ContentCalendarController::class);
 
     Route::get('/database', [DatabaseController::class, 'index'])->name('database.index');
+
+    Route::get('/konsumen-progress', [KonsumenProgressController::class, 'index'])->name('konsumen-progress.index');
 
     Route::bind('lead_event', fn($v) => \App\Models\LeadEvent::findOrFail($v));
     Route::get('lead-events/export', [LeadEventController::class, 'export'])->name('lead-events.export');

@@ -30,7 +30,7 @@
     </style>
 </head>
 <body class="font-['Times_New_Roman'] antialiased bg-white min-h-screen flex flex-col"
-      x-data="{ sidebarOpen: localStorage.getItem('sidebarOpen') !== 'false', sidebarPinned: localStorage.getItem('sidebarPinned') === 'true' }">
+      x-data="{ sidebarOpen: localStorage.getItem('sidebarOpen') !== 'false', sidebarPinned: localStorage.getItem('sidebarPinned') === 'true', bellOpen: false }">
     {{-- Header --}}
     <div class="fixed top-0 left-0 right-0 z-50 flex-shrink-0 bg-black text-white font-[Helvetica] font-bold text-sm sm:text-base px-4 py-3 flex items-center justify-between">
         <div class="flex items-center gap-2">
@@ -43,22 +43,34 @@
             <a href="{{ route('dashboard') }}" class="hover:text-gray-300">OASIS CRM</a>
         </div>
         @auth
-        <div x-data="{ profileOpen: false }" class="relative">
-            <button @click="profileOpen = !profileOpen"
-                    class="flex items-center gap-1.5 text-xs bg-[#c0392b] hover:bg-[#a93226] px-2 py-1.5 border border-white/30 rounded-none">
-                <span>{{ Auth::user()->name }}</span>
-                <span x-show="!profileOpen">▼</span>
-                <span x-show="profileOpen">▲</span>
+        <div class="relative flex items-center gap-2" @click.outside="bellOpen = false">
+            <span class="text-xs">{{ Auth::user()->name }}</span>
+            <button @click="bellOpen = !bellOpen"
+                    class="relative flex items-center justify-center w-8 h-8 hover:bg-white/10 rounded-none">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M14.857 17.082a23.848 23.848 0 0 0 5.454-1.31A8.967 8.967 0 0 1 18 9.75V9A6 6 0 0 0 6 9v.75a8.967 8.967 0 0 1-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 0 1-5.714 0m5.714 0a3 3 0 1 1-5.714 0"/>
+                </svg>
+                @if($overdueCount > 0)
+                <span class="absolute -top-1 -right-1 bg-[#c0392b] text-white text-[10px] font-[Helvetica] font-bold min-w-[16px] h-4 flex items-center justify-center border border-white rounded-none px-1">{{ $overdueCount > 9 ? '9+' : $overdueCount }}</span>
+                @endif
             </button>
-            <div x-show="profileOpen" @click.outside="profileOpen = false"
+            <div x-show="bellOpen"
                  x-transition.opacity.duration.150ms
-                 class="absolute right-0 top-full mt-1 bg-white border-2 border-black text-black min-w-[140px] z-50">
-                <form method="POST" action="{{ route('logout') }}">
-                    @csrf
-                    <button type="submit" class="w-full px-3 py-2 text-xs font-[Helvetica] font-bold hover:bg-[#d77a7a] text-left flex items-center gap-2">
-                        <span>⏻</span> Logout
-                    </button>
-                </form>
+                 class="absolute right-0 top-full mt-2 bg-white border-2 border-black text-black min-w-[280px] max-h-80 overflow-y-auto z-50 shadow-xl">
+                <div class="bg-black text-white px-3 py-2 font-[Helvetica] font-bold text-xs uppercase sticky top-0">Perhatian</div>
+                @if($overdueItems->count() > 0)
+                <div class="divide-y divide-black">
+                    @foreach($overdueItems as $item)
+                    <div class="px-3 py-2 text-sm font-['Times_New_Roman']">
+                        <div class="font-bold">{{ $item->title }}</div>
+                        <div class="text-xs text-red-700">Terlewat {{ $item->scheduled_date->diffForHumans() }} — {{ $item->scheduled_date->format('d M Y') }}</div>
+                    </div>
+                    @endforeach
+                </div>
+                <a href="{{ route('dashboard') }}" class="block px-3 py-2 text-xs font-[Helvetica] font-bold text-center bg-gray-100 border-t-2 border-black hover:bg-gray-200">Lihat Semua →</a>
+                @else
+                <div class="px-4 py-6 text-center text-sm font-['Times_New_Roman']">Semua terkendali.</div>
+                @endif
             </div>
         </div>
         @endauth
@@ -70,14 +82,14 @@
 
     {{-- Body --}}
     <div class="flex flex-col sm:flex-row pt-14">
-        <div :class="[sidebarOpen ? 'block' : 'hidden', sidebarPinned ? 'sm:w-56' : 'sm:w-12 sm:hover:w-56']"
-             class="sm:block group w-64 overflow-y-auto shadow-xl
+        <div :class="[sidebarOpen ? 'block' : 'hidden', sidebarPinned ? 'sm:w-56' : 'sm:w-16 sm:hover:w-56']"
+             class="sm:block group w-64 flex flex-col shadow-xl
                     fixed left-0 top-14 bottom-0 z-40
                     sm:fixed sm:left-0 sm:top-14 sm:bottom-0 sm:z-40
                     sm:transition-all sm:duration-200
                     sm:overflow-x-hidden sm:whitespace-nowrap sm:shadow-none
                     bg-white sm:border-r-2 border-black">
-            <nav class="p-2">
+            <nav class="flex-1 overflow-y-auto p-2">
                 <div class="mb-1 hidden sm:block">
                     <button @click="sidebarPinned = !sidebarPinned; localStorage.setItem('sidebarPinned', sidebarPinned)"
                             :class="sidebarPinned ? 'bg-green-50 text-green-700 border-green-500 hover:bg-green-100' : 'text-gray-500 border-gray-300 hover:text-black hover:bg-gray-100'"
@@ -135,9 +147,26 @@
                 </a>
                 @endif
             </nav>
+            @auth
+            <div class="border-t-2 border-black p-2 flex-shrink-0 bg-white">
+                <div class="flex items-center justify-between gap-2 px-2 py-1">
+                    <span :class="sidebarPinned ? '' : 'sm:w-0 sm:overflow-hidden sm:whitespace-nowrap'"
+                          class="text-xs font-[Helvetica] font-bold group-hover:sm:w-auto transition-all duration-200 delay-150">
+                        {{ Auth::user()->name }}
+                    </span>
+                    <form method="POST" action="{{ route('logout') }}" onsubmit="return confirm('Apakah Anda yakin ingin logout?')">
+                        @csrf
+                        <button type="submit" class="flex items-center justify-center w-7 h-7 text-sm bg-[#c0392b] hover:bg-[#a93226] text-white border border-black rounded-none shrink-0"
+                                title="Logout">
+                            <span>⏻</span>
+                        </button>
+                    </form>
+                </div>
+            </div>
+            @endauth
         </div>
 
-        <div :class="sidebarPinned ? 'sm:ml-56' : 'sm:ml-12'" class="flex-1 p-4 sm:p-6">
+        <div :class="sidebarPinned ? 'sm:ml-56' : 'sm:ml-16'" class="flex-1 p-4 sm:p-6">
             @if(session('success'))
                 <div class="bg-[#b3bd95] border-2 border-black px-4 py-3 mb-4 font-['Times_New_Roman'] text-sm">
                     {{ session('success') }}

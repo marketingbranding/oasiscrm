@@ -3,13 +3,33 @@
 @section('title', 'Dashboard - Oasis CRM')
 
 @section('content')
-    {{-- Quick-Action Buttons --}}
-    <div class="flex flex-col sm:flex-row gap-2 mb-4">
-        <a href="{{ route('lead-daily.create') }}" class="bg-[#c0392b] hover:bg-[#a93226] text-white px-3 py-1.5 text-sm font-[Helvetica] font-bold border-2 border-black rounded-none text-center">+ Input Harian</a>
-        <a href="{{ route('lead-events.create') }}" class="bg-[#e6915d] hover:bg-[#d4854f] text-black px-3 py-1.5 text-sm font-[Helvetica] font-bold border-2 border-black rounded-none text-center">+ Event Baru</a>
-        <a href="{{ route('content-calendar.create') }}" class="bg-[#b3bd95] hover:bg-[#9eaa7a] text-black px-3 py-1.5 text-sm font-[Helvetica] font-bold border-2 border-black rounded-none text-center">+ Buat Konten</a>
-        <a href="{{ route('dana-talangan.create') }}" class="bg-[#f1c40f] hover:bg-[#d4ac0d] text-black px-3 py-1.5 text-sm font-[Helvetica] font-bold border-2 border-black rounded-none text-center">+ Dana Talangan</a>
-        <a href="{{ route('projects.create') }}" class="bg-[#5d8e8e] hover:bg-[#4a7a7a] text-white px-3 py-1.5 text-sm font-[Helvetica] font-bold border-2 border-black rounded-none text-center">+ Proyek Baru</a>
+    {{-- Quick-Action Dropdown --}}
+    <div x-data="{ quickOpen: false }" class="relative mb-4" @click.outside="quickOpen = false">
+        <button @click="quickOpen = !quickOpen"
+                class="bg-black hover:bg-gray-800 text-white px-3 py-1.5 text-sm font-[Helvetica] font-bold border-2 border-black rounded-none flex items-center gap-2">
+            <span class="text-lg leading-none">+</span> Buat Baru
+            <span x-show="!quickOpen" class="text-xs">▼</span>
+            <span x-show="quickOpen" class="text-xs">▲</span>
+        </button>
+        <div x-show="quickOpen"
+             x-transition.opacity.duration.150ms
+             class="absolute left-0 top-full mt-1 bg-white border-2 border-black shadow-xl min-w-[200px] z-50">
+            <a href="{{ route('lead-daily.create') }}" class="flex items-center gap-3 px-3 py-2 text-sm font-[Helvetica] font-bold border-l-4 border-[#c0392b] hover:bg-gray-50">
+                <span>+ Input Harian</span>
+            </a>
+            <a href="{{ route('lead-events.create') }}" class="flex items-center gap-3 px-3 py-2 text-sm font-[Helvetica] font-bold border-l-4 border-[#e6915d] hover:bg-gray-50">
+                <span>+ Event Baru</span>
+            </a>
+            <a href="{{ route('content-calendar.create') }}" class="flex items-center gap-3 px-3 py-2 text-sm font-[Helvetica] font-bold border-l-4 border-[#b3bd95] hover:bg-gray-50">
+                <span>+ Buat Konten</span>
+            </a>
+            <a href="{{ route('dana-talangan.create') }}" class="flex items-center gap-3 px-3 py-2 text-sm font-[Helvetica] font-bold border-l-4 border-[#f1c40f] hover:bg-gray-50">
+                <span>+ Dana Talangan</span>
+            </a>
+            <a href="{{ route('projects.create') }}" class="flex items-center gap-3 px-3 py-2 text-sm font-[Helvetica] font-bold border-l-4 border-[#5d8e8e] hover:bg-gray-50">
+                <span>+ Proyek Baru</span>
+            </a>
+        </div>
     </div>
 
     {{-- Filter Bar --}}
@@ -90,39 +110,24 @@
         </div>
     </div>
 
-    {{-- Today's Agenda + Alerts --}}
-    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
-        <div class="border-2 border-black">
-            <div class="bg-black text-white px-3 py-2 font-[Helvetica] font-bold text-xs uppercase">📋 Hari Ini</div>
-            @if(isset($todayAgenda) && $todayAgenda->count() > 0)
-            <div class="divide-y-2 divide-black">
-                @foreach($todayAgenda as $item)
-                <div class="px-3 py-2 text-sm font-['Times_New_Roman'] flex items-start gap-2">
-                    <span style="background:{{ $item['color'] }}; min-width:4px; width:4px; align-self:stretch; display:block;" class="shrink-0"></span>
-                    <div>
-                        <div class="font-bold">{{ $item['label'] }}</div>
-                        <div class="text-xs">{{ $item['subtitle'] }} — <span class="font-[Helvetica] font-bold">{{ strtoupper($item['status']) }}</span></div>
-                    </div>
+    {{-- Today's Agenda --}}
+    <div class="border-2 border-black mb-6">
+        <div class="bg-black text-white px-3 py-2 font-[Helvetica] font-bold text-xs uppercase">📋 Hari Ini</div>
+        @if(isset($todayAgenda) && $todayAgenda->count() > 0)
+        <div class="divide-y-2 divide-black">
+            @foreach($todayAgenda as $item)
+            <div class="px-3 py-2 text-sm font-['Times_New_Roman'] flex items-start gap-2">
+                <span style="background:{{ $item['color'] }}; min-width:4px; width:4px; align-self:stretch; display:block;" class="shrink-0"></span>
+                <div>
+                    <div class="font-bold">{{ $item['label'] }}</div>
+                    <div class="text-xs">{{ $item['subtitle'] }} — <span class="font-[Helvetica] font-bold">{{ strtoupper($item['status']) }}</span></div>
                 </div>
-                @endforeach
             </div>
-            @else
-            <div class="px-4 py-6 text-center text-sm font-['Times_New_Roman']">
-                Tidak ada agenda hari ini.
-            </div>
-            @endif
+            @endforeach
         </div>
-        @if(isset($overdueContent) && $overdueContent->count() > 0)
-        <div class="border-2 border-black">
-            <div class="bg-black text-white px-3 py-2 font-[Helvetica] font-bold text-xs uppercase">⚠️ Perhatian</div>
-            <div class="divide-y-2 divide-black">
-                @foreach($overdueContent as $item)
-                <div class="px-3 py-2 text-sm font-['Times_New_Roman'] bg-red-50">
-                    <div class="font-bold">{{ $item->title }}</div>
-                    <div class="text-xs text-red-700">Terlewat {{ $item->scheduled_date->diffForHumans() }} — {{ $item->scheduled_date->format('d M Y') }}</div>
-                </div>
-                @endforeach
-            </div>
+        @else
+        <div class="px-4 py-6 text-center text-sm font-['Times_New_Roman']">
+            Tidak ada agenda hari ini.
         </div>
         @endif
     </div>

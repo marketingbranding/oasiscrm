@@ -29,7 +29,10 @@
         </form>
     </div>
 
-    <div class="flex justify-end mb-4">
+    <div class="flex justify-end gap-2 mb-4">
+        <a href="{{ route('lead-events.export', request()->only(['branch_id', 'project_name'])) }}" class="bg-white text-black px-4 py-1.5 text-sm font-[Helvetica] font-bold border-2 border-black rounded-none hover:bg-gray-100">
+            ↓ Export XLSX
+        </a>
         <a href="{{ route('lead-events.create') }}" class="bg-[#e6915d] text-black px-4 py-1.5 text-sm font-[Helvetica] font-bold border-2 border-black rounded-none hover:bg-[#d4854f]">
             + Event Baru
         </a>

@@ -7,6 +7,7 @@ use App\Models\Branch;
 use App\Models\LeadDaily;
 use App\Models\LeadEvent;
 use App\Models\LeadMaster;
+use App\Exports\LeadDailyExport;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 
@@ -166,6 +167,31 @@ class LeadDailyController extends Controller
 
         return redirect()->route('lead-daily.index', array_filter($request->only(['branch_id', 'lead_event_id', 'project_name'])))
             ->with('success', 'Data harian berhasil diperbarui.');
+    }
+
+    public function export(Request $request)
+    {
+        $user = Auth::user();
+        $query = LeadDaily::with(['leadEvent', 'branch', 'creator']);
+
+        if (!$user->canViewAllBranches()) {
+            $query->where('branch_id', $user->branch_id);
+        } elseif ($request->filled('branch_id')) {
+            $query->where('branch_id', $request->branch_id);
+        }
+
+        if ($request->filled('lead_event_id')) {
+            $query->where('lead_event_id', $request->lead_event_id);
+        }
+
+        if ($request->filled('project_name')) {
+            $query->whereHas('leadEvent', fn($q) => $q->where('project_name', $request->project_name));
+        }
+
+        $records = $query->latest('date')->get();
+        $filename = 'lead-harian-' . now()->format('Ymd') . '.xlsx';
+
+        LeadDailyExport::toBrowser($records, $filename);
     }
 
     public function destroy(LeadDaily $leadDaily)

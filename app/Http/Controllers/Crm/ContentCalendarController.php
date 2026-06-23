@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Branch;
 use App\Models\ContentItem;
 use App\Models\LeadMaster;
+use App\Exports\ContentItemExport;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 
@@ -170,6 +171,33 @@ class ContentCalendarController extends Controller
 
         $contentItem->update($data);
         return redirect()->route('content-calendar.index', array_filter($request->only(['month', 'year', 'branch_id', 'project_name'])))->with('success', 'Konten berhasil diperbarui.');
+    }
+
+    public function export(Request $request)
+    {
+        $user = Auth::user();
+        $month = (int) $request->get('month', now()->month);
+        $year = (int) $request->get('year', now()->year);
+        $query = ContentItem::with(['branch', 'creator']);
+
+        if (!$user->canViewAllBranches()) {
+            $query->where('branch_id', $user->branch_id);
+        } elseif ($request->filled('branch_id')) {
+            $query->where('branch_id', $request->branch_id);
+        }
+
+        if ($request->filled('project_name')) {
+            $query->where('project_name', $request->project_name);
+        }
+
+        $records = $query->whereYear('scheduled_date', $year)
+            ->whereMonth('scheduled_date', $month)
+            ->orderBy('scheduled_date')
+            ->get();
+
+        $filename = 'content-calendar-' . now()->format('Ymd') . '.xlsx';
+
+        ContentItemExport::toBrowser($records, $filename);
     }
 
     public function destroy(ContentItem $contentItem)

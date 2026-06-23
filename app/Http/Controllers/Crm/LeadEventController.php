@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Branch;
 use App\Models\LeadEvent;
 use App\Models\LeadMaster;
+use App\Exports\LeadEventExport;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 
@@ -137,6 +138,27 @@ class LeadEventController extends Controller
 
         return redirect()->route('lead-events.index', array_filter($request->only(['branch_id', 'project_name'])))
             ->with('success', 'Event berhasil diperbarui.');
+    }
+
+    public function export(Request $request)
+    {
+        $user = Auth::user();
+        $query = LeadEvent::with(['branch', 'creator']);
+
+        if (!$user->canViewAllBranches()) {
+            $query->where('branch_id', $user->branch_id);
+        } elseif ($request->filled('branch_id')) {
+            $query->where('branch_id', $request->branch_id);
+        }
+
+        if ($request->filled('project_name')) {
+            $query->where('project_name', $request->project_name);
+        }
+
+        $records = $query->latest()->get();
+        $filename = 'lead-events-' . now()->format('Ymd') . '.xlsx';
+
+        LeadEventExport::toBrowser($records, $filename);
     }
 
     public function destroy(LeadEvent $leadEvent)

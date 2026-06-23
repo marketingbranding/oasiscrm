@@ -30,14 +30,17 @@ Route::middleware(['auth', 'verified', 'password.changed'])->group(function () {
     Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
 
     Route::bind('content_calendar', fn($value) => \App\Models\ContentItem::findOrFail($value));
+    Route::get('content-calendar/export', [ContentCalendarController::class, 'export'])->name('content-calendar.export');
     Route::resource('content-calendar', ContentCalendarController::class);
 
     Route::get('/database', [DatabaseController::class, 'index'])->name('database.index');
 
     Route::bind('lead_event', fn($v) => \App\Models\LeadEvent::findOrFail($v));
+    Route::get('lead-events/export', [LeadEventController::class, 'export'])->name('lead-events.export');
     Route::resource('lead-events', LeadEventController::class);
 
     Route::bind('lead_daily', fn($v) => \App\Models\LeadDaily::findOrFail($v));
+    Route::get('lead-daily/export', [LeadDailyController::class, 'export'])->name('lead-daily.export');
     Route::resource('lead-daily', LeadDailyController::class);
 
     Route::bind('dana_talangan', fn($v) => \App\Models\DanaTalangan::findOrFail($v));

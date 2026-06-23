@@ -37,7 +37,10 @@
         </form>
     </div>
 
-    <div class="flex justify-end mb-4">
+    <div class="flex justify-end gap-2 mb-4">
+        <a href="{{ route('lead-daily.export', request()->only(['branch_id', 'lead_event_id', 'project_name'])) }}" class="bg-white text-black px-4 py-1.5 text-sm font-[Helvetica] font-bold border-2 border-black rounded-none hover:bg-gray-100">
+            ↓ Export XLSX
+        </a>
         <a href="{{ route('lead-daily.create') }}" class="bg-[#c0392b] text-white px-4 py-1.5 text-sm font-[Helvetica] font-bold border-2 border-black rounded-none hover:bg-[#a93226]">
             + Input Harian
         </a>

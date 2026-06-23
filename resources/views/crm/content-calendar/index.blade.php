@@ -53,6 +53,9 @@
             <a href="{{ route('content-calendar.index', array_filter(['month' => $nextMonth->month, 'year' => $nextMonth->year, 'branch_id' => request('branch_id'), 'project_name' => request('project_name')])) }}" class="bg-black text-white px-3 py-1.5 text-sm font-[Helvetica] font-bold border-2 border-black rounded-none hover:bg-gray-800">
                 Next →
             </a>
+            <a href="{{ route('content-calendar.export', request()->only(['month', 'year', 'branch_id', 'project_name'])) }}" class="bg-white text-black px-3 py-1.5 text-sm font-[Helvetica] font-bold border-2 border-black rounded-none hover:bg-gray-100">
+                ↓ Export XLSX
+            </a>
         </div>
         <a href="{{ route('content-calendar.create') }}" class="bg-[#b3bd95] text-black px-4 py-1.5 text-sm font-[Helvetica] font-bold border-2 border-black rounded-none hover:bg-[#9eaa7a]">
             + Buat Konten

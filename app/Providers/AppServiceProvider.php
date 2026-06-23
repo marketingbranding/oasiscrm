@@ -19,7 +19,7 @@ class AppServiceProvider extends ServiceProvider
         View::composer('layouts.crm', function ($view) {
             $user = Auth::user();
             if (!$user) {
-                $view->with('overdueItems', collect())->with('overdueCount', 0);
+                $view->with('overdueItems', collect())->with('todayItems', collect())->with('totalCount', 0);
                 return;
             }
 
@@ -30,7 +30,16 @@ class AppServiceProvider extends ServiceProvider
                 ->take(10)
                 ->get();
 
-            $view->with('overdueItems', $overdueItems)->with('overdueCount', $overdueItems->count());
+            $todayItems = ContentItem::whereDate('scheduled_date', today())
+                ->where('status', '!=', 'posted')
+                ->when(!$user->canViewAllBranches() && $user->branch_id, fn($q) => $q->where('branch_id', $user->branch_id))
+                ->orderBy('scheduled_date')
+                ->take(10)
+                ->get();
+
+            $totalCount = $overdueItems->count() + $todayItems->count();
+
+            $view->with(compact('overdueItems', 'todayItems', 'totalCount'));
         });
     }
 }

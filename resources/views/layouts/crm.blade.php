@@ -50,15 +50,17 @@
                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5">
                     <path stroke-linecap="round" stroke-linejoin="round" d="M14.857 17.082a23.848 23.848 0 0 0 5.454-1.31A8.967 8.967 0 0 1 18 9.75V9A6 6 0 0 0 6 9v.75a8.967 8.967 0 0 1-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 0 1-5.714 0m5.714 0a3 3 0 1 1-5.714 0"/>
                 </svg>
-                @if($overdueCount > 0)
-                <span class="absolute -top-1 -right-1 bg-[#c0392b] text-white text-[10px] font-[Helvetica] font-bold min-w-[16px] h-4 flex items-center justify-center border border-white rounded-none px-1">{{ $overdueCount > 9 ? '9+' : $overdueCount }}</span>
+                @if($totalCount > 0)
+                <span class="absolute -top-1 -right-1 bg-[#c0392b] text-white text-[10px] font-[Helvetica] font-bold min-w-[16px] h-4 flex items-center justify-center border border-white rounded-none px-1">{{ $totalCount > 9 ? '9+' : $totalCount }}</span>
                 @endif
             </button>
             <div x-show="bellOpen"
                  x-transition.opacity.duration.150ms
                  class="absolute right-0 top-full mt-2 bg-white border-2 border-black text-black min-w-[280px] max-h-80 overflow-y-auto z-50 shadow-xl">
                 <div class="bg-black text-white px-3 py-2 font-[Helvetica] font-bold text-xs uppercase sticky top-0">Perhatian</div>
+                @if($overdueItems->count() > 0 || $todayItems->count() > 0)
                 @if($overdueItems->count() > 0)
+                <div class="bg-[#c0392b] text-white px-3 py-1 font-[Helvetica] font-bold text-[10px] uppercase">Terlewat</div>
                 <div class="divide-y divide-black">
                     @foreach($overdueItems as $item)
                     <div class="px-3 py-2 text-sm font-['Times_New_Roman']">
@@ -67,7 +69,18 @@
                     </div>
                     @endforeach
                 </div>
-                <a href="{{ route('dashboard') }}" class="block px-3 py-2 text-xs font-[Helvetica] font-bold text-center bg-gray-100 border-t-2 border-black hover:bg-gray-200">Lihat Semua →</a>
+                @endif
+                @if($todayItems->count() > 0)
+                <div class="bg-[#f1c40f] text-black px-3 py-1 font-[Helvetica] font-bold text-[10px] uppercase border-t-2 border-black">Hari Ini</div>
+                <div class="divide-y divide-black">
+                    @foreach($todayItems as $item)
+                    <div class="px-3 py-2 text-sm font-['Times_New_Roman']">
+                        <div class="font-bold">{{ $item->title }}</div>
+                        <div class="text-xs text-gray-600">Jadwal: {{ $item->scheduled_date->format('d M Y') }}</div>
+                    </div>
+                    @endforeach
+                </div>
+                @endif
                 @else
                 <div class="px-4 py-6 text-center text-sm font-['Times_New_Roman']">Semua terkendali.</div>
                 @endif
@@ -89,7 +102,7 @@
                     sm:transition-all sm:duration-200
                     sm:overflow-x-hidden sm:whitespace-nowrap sm:shadow-none
                     bg-white sm:border-r-2 border-black">
-            <nav class="flex-1 overflow-y-auto p-2">
+            <nav :class="sidebarPinned ? 'overflow-y-auto' : 'overflow-hidden group-hover:overflow-y-auto'" class="flex-1 p-2">
                 <div class="mb-1 hidden sm:block">
                     <button @click="sidebarPinned = !sidebarPinned; localStorage.setItem('sidebarPinned', sidebarPinned)"
                             :class="sidebarPinned ? 'bg-green-50 text-green-700 border-green-500 hover:bg-green-100' : 'text-gray-500 border-gray-300 hover:text-black hover:bg-gray-100'"
@@ -113,6 +126,9 @@
                 </a>
                 <a href="{{ route('database.index') }}" class="flex items-center px-3 py-2 gap-2 text-sm font-[Helvetica] font-bold text-black hover:bg-[#d77a7a] hover:text-black border border-black mb-1 rounded-none {{ request()->routeIs('database.*') ? 'bg-[#d77a7a]' : 'bg-white' }}">
                     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="text-[#d77a7a] inline-block w-4 h-4 shrink-0"><path stroke-linecap="round" stroke-linejoin="round" d="M20.25 6.375c0 2.278-3.694 4.125-8.25 4.125S3.75 8.653 3.75 6.375m16.5 0c0-2.278-3.694-4.125-8.25-4.125S3.75 4.097 3.75 6.375m16.5 0v11.25c0 2.278-3.694 4.125-8.25 4.125s-8.25-1.847-8.25-4.125V6.375m16.5 0v3.75m-16.5-3.75v3.75m16.5 0v3.75C20.25 16.153 16.556 18 12 18s-8.25-1.847-8.25-4.125v-3.75m16.5 0c0 2.278-3.694 4.125-8.25 4.125s-8.25-1.847-8.25-4.125"/></svg> <span :class="sidebarPinned ? '' : 'sm:w-0 sm:overflow-hidden sm:whitespace-nowrap'" class="group-hover:sm:w-auto transition-all duration-200 delay-150">Database</span>
+                </a>
+                <a href="{{ route('konsumen-progress.index') }}" class="flex items-center px-3 py-2 gap-2 text-sm font-[Helvetica] font-bold text-black hover:bg-[#5d8e8e] hover:text-white border border-black mb-1 rounded-none {{ request()->routeIs('konsumen-progress.*') ? 'bg-[#5d8e8e]' : 'bg-white' }}">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="text-[#5d8e8e] inline-block w-4 h-4 shrink-0"><path stroke-linecap="round" stroke-linejoin="round" d="M18 18.72a9.094 9.094 0 0 0 3.741-.479 3 3 0 0 0-4.682-2.72m.94 3.198.001.031c0 .225-.012.447-.037.666A11.944 11.944 0 0 1 12 21c-2.17 0-4.207-.576-5.963-1.584A6.062 6.062 0 0 1 6 18.719m12 0a5.971 5.971 0 0 0-.941-3.197m0 0A5.995 5.995 0 0 0 12 12.75a5.995 5.995 0 0 0-5.058 2.772m0 0a3 3 0 0 0-4.681 2.72 8.986 8.986 0 0 0 3.74.477m.94-3.197a5.971 5.971 0 0 0-.94 3.197M15 6.75a3 3 0 1 1-6 0 3 3 0 0 1 6 0Zm6 3a2.25 2.25 0 1 1-4.5 0 2.25 2.25 0 0 1 4.5 0Zm-13.5 0a2.25 2.25 0 1 1-4.5 0 2.25 2.25 0 0 1 4.5 0Z"/></svg> <span :class="sidebarPinned ? '' : 'sm:w-0 sm:overflow-hidden sm:whitespace-nowrap'" class="group-hover:sm:w-auto transition-all duration-200 delay-150">Konsumen Progress</span>
                 </a>
                 <div class="border-t border-dashed border-gray-400 mx-2 my-2"></div>
                 <div class="px-2 mb-0.5 text-[9px] font-[Helvetica] font-bold text-gray-400 uppercase tracking-[0.15em]">

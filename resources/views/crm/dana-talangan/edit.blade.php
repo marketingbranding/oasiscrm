@@ -204,18 +204,19 @@
                             Batal
                         </a>
                     </div>
-                    <form method="POST" action="{{ route('dana-talangan.destroy', ['dana_talangan' => $record->id]) }}"
-                          onsubmit="return confirm('Hapus data ini?')">
-                        @csrf
-                        @method('DELETE')
-                        <input type="hidden" name="branch_id" value="{{ request('branch_id') }}">
-                        <input type="hidden" name="project_name" value="{{ request('project_name') }}">
-                        <input type="hidden" name="status" value="{{ request('status') }}">
-                        <button type="submit" class="bg-white text-[#e91d2a] px-4 py-2 text-sm font-[Helvetica] font-bold border-2 border-[#e91d2a] rounded-none hover:bg-red-50">
-                            Hapus
-                        </button>
-                    </form>
                 </div>
+            </form>
+
+            <form method="POST" action="{{ route('dana-talangan.destroy', ['dana_talangan' => $record->id]) }}"
+                  onsubmit="return confirm('Hapus data ini?')" class="pt-4">
+                @csrf
+                @method('DELETE')
+                <input type="hidden" name="branch_id" value="{{ request('branch_id') }}">
+                <input type="hidden" name="project_name" value="{{ request('project_name') }}">
+                <input type="hidden" name="status" value="{{ request('status') }}">
+                <button type="submit" class="bg-white text-[#e91d2a] px-4 py-2 text-sm font-[Helvetica] font-bold border-2 border-[#e91d2a] rounded-none hover:bg-red-50">
+                    Hapus
+                </button>
             </form>
         </div>
     </div>

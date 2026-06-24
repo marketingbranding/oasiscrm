@@ -21,9 +21,15 @@ class ProjectController extends Controller
             $query->where('branch_id', $selectedBranchId);
         }
 
-        $projects = $query->latest()->get();
+        $sortField = $request->get('sort', 'created_at');
+        $sortDir = $request->get('dir', 'desc');
+        $allowedSorts = ['created_at', 'project_name', 'kavlings_count', 'is_active'];
+        if (!in_array($sortField, $allowedSorts)) $sortField = 'created_at';
+        if (!in_array($sortDir, ['asc', 'desc'])) $sortDir = 'desc';
 
-        return view('crm.projects.index', compact('projects', 'branches', 'selectedBranchId'));
+        $projects = $query->orderBy($sortField, $sortDir)->get();
+
+        return view('crm.projects.index', compact('projects', 'branches', 'selectedBranchId', 'sortField', 'sortDir'));
     }
 
     public function create()

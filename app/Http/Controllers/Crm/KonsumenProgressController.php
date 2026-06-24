@@ -54,6 +54,9 @@ class KonsumenProgressController extends Controller
         $errors = [];
 
         if ($selectedBranch && $selectedBranch->sheet_id) {
+            if ($request->has('refresh')) {
+                Cache::forget('pipeline_' . $selectedBranch->sheet_id);
+            }
             $pipeline = $this->fetchPipeline($selectedBranch->sheet_id, $errors);
         }
 
@@ -121,12 +124,14 @@ class KonsumenProgressController extends Controller
             }
 
             $namaMap = [];
+            $phoneMap = [];
             $konsumenData = $results['data_konsumen'] ?? null;
             if ($konsumenData && !$konsumenData['error']) {
                 foreach ($konsumenData['rows'] as $row) {
                     $kav = trim($row['id_kavling'] ?? '');
                     if ($kav !== '') {
                         $namaMap[$kav] = $row['nama_konsumen'] ?? null;
+                        $phoneMap[$kav] = $row['no_hp'] ?? null;
                     }
                 }
             } else {
@@ -154,6 +159,7 @@ class KonsumenProgressController extends Controller
                     $pipeline[$stageKey][] = [
                         'kavling' => $kavling,
                         'nama' => $nama,
+                        'phone' => $phoneMap[$kavling] ?? null,
                     ];
                 }
             }

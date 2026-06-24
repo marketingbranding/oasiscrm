@@ -57,9 +57,15 @@ class LeadDailyController extends Controller
             $events = $events->filter(fn($e) => $e->project_name === $selectedProjectName);
         }
 
-        $dailyLogs = $query->latest('date')->get();
+        $sortField = $request->get('sort', 'date');
+        $sortDir = $request->get('dir', 'desc');
+        $allowedSorts = ['date', 'day_number', 'leads_count', 'cumulative_leads', 'achievement_pct'];
+        if (!in_array($sortField, $allowedSorts)) $sortField = 'date';
+        if (!in_array($sortDir, ['asc', 'desc'])) $sortDir = 'desc';
 
-        return view('crm.lead-daily.index', compact('dailyLogs', 'events', 'branches', 'selectedBranchId', 'selectedEventId', 'selectedProjectName', 'projects'));
+        $dailyLogs = $query->orderBy($sortField, $sortDir)->get();
+
+        return view('crm.lead-daily.index', compact('dailyLogs', 'events', 'branches', 'selectedBranchId', 'selectedEventId', 'selectedProjectName', 'projects', 'sortField', 'sortDir'));
     }
 
     public function create()

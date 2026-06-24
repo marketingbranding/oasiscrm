@@ -10,6 +10,7 @@
     @if(Auth::user()->canViewAllBranches() && isset($branches) && $branches->count() > 0)
     <div class="bg-white border-2 border-black p-3 mb-6">
         <form method="GET" action="{{ route('konsumen-progress.index') }}" class="flex items-center gap-3 flex-wrap filter-bar">
+            <div class="flex items-center gap-3 flex-wrap">
             <label class="font-[Helvetica] font-bold text-xs uppercase">Cabang:</label>
             <select name="branch_id" onchange="this.form.submit()" class="border-2 border-black px-3 py-1.5 text-sm font-['Times_New_Roman'] bg-white rounded-none">
                 <option value="">— Pilih Cabang —</option>
@@ -17,11 +18,23 @@
                     <option value="{{ $b->id }}" {{ (string)$selectedBranchId === (string)$b->id ? 'selected' : '' }}>{{ $b->name }} ({{ $b->code }})</option>
                 @endforeach
             </select>
+            </div>
+
+            <div class="h-6 w-px bg-black mx-1 hidden sm:block"></div>
+
+            <div class="flex items-center gap-2 ml-auto">
+                <a href="{{ request()->fullUrlWithQuery(['refresh' => 1]) }}" class="bg-white text-black px-3 py-1.5 text-sm font-[Helvetica] font-bold border-2 border-black rounded-none hover:bg-gray-100">
+                    ↻ Refresh
+                </a>
+            </div>
         </form>
     </div>
     @elseif($selectedBranch)
-    <div class="bg-[#fcc20f] border-2 border-black px-4 py-2 mb-4">
+    <div class="bg-[#fcc20f] border-2 border-black px-4 py-2 mb-4 flex items-center gap-3">
         <span class="font-['Arial_Black'] font-black text-lg uppercase">Cabang: {{ $selectedBranch->code }}</span>
+        <a href="{{ request()->fullUrlWithQuery(['refresh' => 1]) }}" class="bg-white text-black px-3 py-1 text-xs font-[Helvetica] font-bold border-2 border-black rounded-none hover:bg-gray-100 ml-auto">
+            ↻ Refresh
+        </a>
     </div>
     @endif
 
@@ -61,15 +74,17 @@
     <div x-data="{ stage: '{{ $defaultStage }}' }">
         <style>
             [x-cloak] { display: none !important; }
+            .tabs-scroll { scrollbar-width: none; -ms-overflow-style: none; }
+            .tabs-scroll::-webkit-scrollbar { display: none; }
         </style>
 
-        <div class="flex overflow-x-auto border-b-2 border-black mb-2">
+        <div class="flex flex-wrap border-b-2 border-black mb-2">
             @foreach($stages as $key => $cfg)
             @php $count = count($pipeline[$key] ?? []); @endphp
             <button @click="stage = '{{ $key }}'"
                     :class="stage === '{{ $key }}' ? 'border-b-transparent' : 'bg-white'"
                     :style="stage === '{{ $key }}' ? 'background-color: {{ $cfg['color'] }}; color: {{ in_array($key, $darkTextStages) ? 'white' : 'black' }};' : 'color: black;'"
-                    class="relative mb-[-2px] z-10 px-3 py-2 border-2 border-black text-[10px] sm:text-xs font-[Helvetica] font-bold uppercase whitespace-nowrap flex items-center gap-1.5 cursor-pointer shrink-0 hover:bg-gray-100 transition-colors duration-150">
+                    class="relative mb-[-2px] z-10 px-3 py-2 border-2 border-black text-[10px] sm:text-xs font-[Helvetica] font-bold uppercase whitespace-nowrap flex items-center gap-1.5 cursor-pointer shrink-0">
                 <span>{{ $cfg['label'] }}</span>
                 <span class="bg-[#c0392b] text-white text-[10px] font-[Helvetica] font-bold border border-white flex items-center justify-center w-5 h-5">{{ $count }}</span>
             </button>
@@ -89,6 +104,11 @@
                 <div class="border-2 border-black bg-white px-3 py-2 hover:bg-gray-50">
                     <div class="font-['Times_New_Roman'] font-bold text-sm truncate" title="{{ $item['nama'] }}">{{ $item['nama'] }}</div>
                     <div class="font-['Helvetica'] text-[11px] text-gray-600 mt-0.5 truncate" title="{{ $item['kavling'] }}">{{ $item['kavling'] }}</div>
+                    @if(!empty($item['phone']))
+                    <div class="font-['Helvetica'] text-[11px] text-gray-600 mt-0.5">
+                        <a href="tel:{{ $item['phone'] }}" class="underline hover:text-[#5d8e8e]">{{ $item['phone'] }}</a>
+                    </div>
+                    @endif
                 </div>
                 @endforeach
             </div>

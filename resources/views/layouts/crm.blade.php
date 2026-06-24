@@ -54,7 +54,7 @@
                 <span class="absolute -top-1 -right-1 bg-[#c0392b] text-white text-[10px] font-[Helvetica] font-bold min-w-[16px] h-4 flex items-center justify-center border border-white rounded-none px-1">{{ $totalCount > 9 ? '9+' : $totalCount }}</span>
                 @endif
             </button>
-            <div x-show="bellOpen"
+            <div x-show="bellOpen" x-cloak
                  x-transition.opacity.duration.150ms
                  class="absolute right-0 top-full mt-2 bg-white border-2 border-black text-black min-w-[280px] max-h-80 overflow-y-auto z-50 shadow-xl">
                 <div class="bg-black text-white px-3 py-2 font-[Helvetica] font-bold text-xs uppercase sticky top-0">Perhatian</div>
@@ -119,7 +119,7 @@
     {{-- Body --}}
     <div class="flex flex-col sm:flex-row pt-14">
         <div :class="[sidebarOpen ? 'block' : 'hidden', sidebarPinned ? 'sm:w-56' : 'sm:w-16 sm:hover:w-56']"
-             class="sm:block group w-64 flex flex-col shadow-xl
+             class="sm:block group w-64 sm:w-16 flex flex-col shadow-xl
                     fixed left-0 top-14 bottom-0 z-40
                     sm:fixed sm:left-0 sm:top-14 sm:bottom-0 sm:z-40
                     sm:transition-all sm:duration-200
@@ -150,7 +150,7 @@
                 <a href="{{ route('database.index') }}" class="flex items-center px-3 py-2 gap-2 text-sm font-[Helvetica] font-bold text-black hover:bg-[#d77a7a] hover:text-black border border-black mb-1 rounded-none {{ request()->routeIs('database.*') ? 'bg-[#d77a7a]' : 'bg-white' }}">
                     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="text-[#d77a7a] inline-block w-4 h-4 shrink-0"><path stroke-linecap="round" stroke-linejoin="round" d="M20.25 6.375c0 2.278-3.694 4.125-8.25 4.125S3.75 8.653 3.75 6.375m16.5 0c0-2.278-3.694-4.125-8.25-4.125S3.75 4.097 3.75 6.375m16.5 0v11.25c0 2.278-3.694 4.125-8.25 4.125s-8.25-1.847-8.25-4.125V6.375m16.5 0v3.75m-16.5-3.75v3.75m16.5 0v3.75C20.25 16.153 16.556 18 12 18s-8.25-1.847-8.25-4.125v-3.75m16.5 0c0 2.278-3.694 4.125-8.25 4.125s-8.25-1.847-8.25-4.125"/></svg> <span :class="sidebarPinned ? '' : 'sm:w-0 sm:overflow-hidden sm:whitespace-nowrap'" class="group-hover:sm:w-auto transition-all duration-200 delay-150">Database</span>
                 </a>
-                <a href="{{ route('konsumen-progress.index') }}" class="flex items-center px-3 py-2 gap-2 text-sm font-[Helvetica] font-bold text-black hover:bg-[#5d8e8e] hover:text-white border border-black mb-1 rounded-none {{ request()->routeIs('konsumen-progress.*') ? 'bg-[#5d8e8e]' : 'bg-white' }}">
+                <a href="{{ route('konsumen-progress.index') }}" class="flex items-center px-3 py-2 gap-2 text-sm font-[Helvetica] font-bold text-black hover:bg-[#5d8e8e] hover:text-black border border-black mb-1 rounded-none {{ request()->routeIs('konsumen-progress.*') ? 'bg-[#5d8e8e]' : 'bg-white' }}">
                     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="text-[#5d8e8e] inline-block w-4 h-4 shrink-0"><path stroke-linecap="round" stroke-linejoin="round" d="M18 18.72a9.094 9.094 0 0 0 3.741-.479 3 3 0 0 0-4.682-2.72m.94 3.198.001.031c0 .225-.012.447-.037.666A11.944 11.944 0 0 1 12 21c-2.17 0-4.207-.576-5.963-1.584A6.062 6.062 0 0 1 6 18.719m12 0a5.971 5.971 0 0 0-.941-3.197m0 0A5.995 5.995 0 0 0 12 12.75a5.995 5.995 0 0 0-5.058 2.772m0 0a3 3 0 0 0-4.681 2.72 8.986 8.986 0 0 0 3.74.477m.94-3.197a5.971 5.971 0 0 0-.94 3.197M15 6.75a3 3 0 1 1-6 0 3 3 0 0 1 6 0Zm6 3a2.25 2.25 0 1 1-4.5 0 2.25 2.25 0 0 1 4.5 0Zm-13.5 0a2.25 2.25 0 1 1-4.5 0 2.25 2.25 0 0 1 4.5 0Z"/></svg> <span :class="sidebarPinned ? '' : 'sm:w-0 sm:overflow-hidden sm:whitespace-nowrap'" class="group-hover:sm:w-auto transition-all duration-200 delay-150">Konsumen Progress</span>
                 </a>
                 <div class="border-t border-dashed border-gray-400 mx-2 my-2"></div>
@@ -233,7 +233,7 @@
             @endif
         </div>
 
-        <div :class="sidebarPinned ? 'sm:ml-56' : 'sm:ml-16'" class="flex-1 p-4 sm:p-6">
+        <div :class="sidebarPinned ? 'sm:ml-56' : 'sm:ml-16'" class="flex-1 p-4 sm:p-6 sm:ml-16">
             @yield('content')
 
             <div class="border-t-2 border-black bg-white px-4 py-3 text-center text-xs font-['Times_New_Roman'] mt-6">
@@ -241,7 +241,7 @@
             </div>
         </div>
     </div>
-<div x-data="{ showBug: false, message: '', sending: false, sent: false }" class="fixed bottom-4 right-4 z-50">
+<div x-data="{ showBug: false, message: '', sending: false, sent: false }" class="fixed bottom-4 right-4 z-50" x-cloak>
     <template x-if="!showBug">
         <button @click="showBug = true; sent = false"
                 class="w-12 h-12 bg-[#c0392b] hover:bg-[#a93226] text-white border-2 border-black rounded-none flex items-center justify-center shadow-lg transition-colors duration-200"

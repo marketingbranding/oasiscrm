@@ -47,9 +47,15 @@ class DanaTalanganController extends Controller
         $query->when($selectedProject, fn($q) => $q->where('project_name', $selectedProject));
         $query->when($selectedStatus, fn($q) => $q->where('status', $selectedStatus));
 
-        $records = $query->latest('tanggal')->get();
+        $sortField = $request->get('sort', 'tanggal');
+        $sortDir = $request->get('dir', 'desc');
+        $allowedSorts = ['tanggal', 'nama_konsumen', 'kav', 'project_name', 'pekerjaan', 'status_perkawinan', 'umur', 'nama_marketing', 'status'];
+        if (!in_array($sortField, $allowedSorts)) $sortField = 'tanggal';
+        if (!in_array($sortDir, ['asc', 'desc'])) $sortDir = 'desc';
 
-        return view('crm.dana-talangan.index', compact('records', 'branches', 'projects', 'selectedBranchId', 'selectedProject', 'selectedStatus'));
+        $records = $query->orderBy($sortField, $sortDir)->get();
+
+        return view('crm.dana-talangan.index', compact('records', 'branches', 'projects', 'selectedBranchId', 'selectedProject', 'selectedStatus', 'sortField', 'sortDir'));
     }
 
     public function create()

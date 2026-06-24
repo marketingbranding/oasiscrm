@@ -57,18 +57,189 @@
                 <tr class="bg-black text-white">
                     <th class="w-10 px-3 py-2 text-center font-[Helvetica] font-bold text-xs uppercase"><input type="checkbox" id="select-all" class="cursor-pointer"></th>
                     <th class="px-3 py-2 text-left font-[Helvetica] font-bold text-xs uppercase">No</th>
-                    <th class="px-3 py-2 text-left font-[Helvetica] font-bold text-xs uppercase">Tanggal</th>
-                    <th class="px-3 py-2 text-left font-[Helvetica] font-bold text-xs uppercase">Nama Konsumen</th>
-                    <th class="px-3 py-2 text-left font-[Helvetica] font-bold text-xs uppercase">Kav</th>
-                    <th class="px-3 py-2 text-left font-[Helvetica] font-bold text-xs uppercase">Proyek</th>
+                    <th class="px-3 py-2 text-left font-[Helvetica] font-bold text-xs uppercase">
+                        @php
+                            $isActive = request('sort') === 'tanggal';
+                            $currentDir = request('dir');
+                            if (!$isActive) {
+                                $linkParams = array_merge(request()->query(), ['sort' => 'tanggal', 'dir' => 'asc']);
+                                $arrow = '';
+                            } elseif ($currentDir === 'asc') {
+                                $linkParams = array_merge(request()->query(), ['sort' => 'tanggal', 'dir' => 'desc']);
+                                $arrow = '▲';
+                            } else {
+                                $linkParams = collect(request()->query())->except(['sort', 'dir'])->toArray();
+                                $arrow = '▼';
+                            }
+                        @endphp
+                        <a href="{{ route('dana-talangan.index', $linkParams) }}" class="hover:underline text-white">
+                            Tanggal
+                            @if($isActive)<span class="ml-0.5">{{ $arrow }}</span>@endif
+                        </a>
+                    </th>
+                    <th class="px-3 py-2 text-left font-[Helvetica] font-bold text-xs uppercase">
+                        @php
+                            $isActive = request('sort') === 'nama_konsumen';
+                            $currentDir = request('dir');
+                            if (!$isActive) {
+                                $linkParams = array_merge(request()->query(), ['sort' => 'nama_konsumen', 'dir' => 'asc']);
+                                $arrow = '';
+                            } elseif ($currentDir === 'asc') {
+                                $linkParams = array_merge(request()->query(), ['sort' => 'nama_konsumen', 'dir' => 'desc']);
+                                $arrow = '▲';
+                            } else {
+                                $linkParams = collect(request()->query())->except(['sort', 'dir'])->toArray();
+                                $arrow = '▼';
+                            }
+                        @endphp
+                        <a href="{{ route('dana-talangan.index', $linkParams) }}" class="hover:underline text-white">
+                            Nama Konsumen
+                            @if($isActive)<span class="ml-0.5">{{ $arrow }}</span>@endif
+                        </a>
+                    </th>
+                    <th class="px-3 py-2 text-left font-[Helvetica] font-bold text-xs uppercase">
+                        @php
+                            $isActive = request('sort') === 'kav';
+                            $currentDir = request('dir');
+                            if (!$isActive) {
+                                $linkParams = array_merge(request()->query(), ['sort' => 'kav', 'dir' => 'asc']);
+                                $arrow = '';
+                            } elseif ($currentDir === 'asc') {
+                                $linkParams = array_merge(request()->query(), ['sort' => 'kav', 'dir' => 'desc']);
+                                $arrow = '▲';
+                            } else {
+                                $linkParams = collect(request()->query())->except(['sort', 'dir'])->toArray();
+                                $arrow = '▼';
+                            }
+                        @endphp
+                        <a href="{{ route('dana-talangan.index', $linkParams) }}" class="hover:underline text-white">
+                            Kav
+                            @if($isActive)<span class="ml-0.5">{{ $arrow }}</span>@endif
+                        </a>
+                    </th>
+                    <th class="px-3 py-2 text-left font-[Helvetica] font-bold text-xs uppercase">
+                        @php
+                            $isActive = request('sort') === 'project_name';
+                            $currentDir = request('dir');
+                            if (!$isActive) {
+                                $linkParams = array_merge(request()->query(), ['sort' => 'project_name', 'dir' => 'asc']);
+                                $arrow = '';
+                            } elseif ($currentDir === 'asc') {
+                                $linkParams = array_merge(request()->query(), ['sort' => 'project_name', 'dir' => 'desc']);
+                                $arrow = '▲';
+                            } else {
+                                $linkParams = collect(request()->query())->except(['sort', 'dir'])->toArray();
+                                $arrow = '▼';
+                            }
+                        @endphp
+                        <a href="{{ route('dana-talangan.index', $linkParams) }}" class="hover:underline text-white">
+                            Proyek
+                            @if($isActive)<span class="ml-0.5">{{ $arrow }}</span>@endif
+                        </a>
+                    </th>
                     <th class="px-3 py-2 text-center font-[Helvetica] font-bold text-xs uppercase">Pinjam Nama</th>
-                    <th class="px-3 py-2 text-left font-[Helvetica] font-bold text-xs uppercase">Pekerjaan</th>
-                    <th class="px-3 py-2 text-left font-[Helvetica] font-bold text-xs uppercase">Status Kawin</th>
-                    <th class="px-3 py-2 text-center font-[Helvetica] font-bold text-xs uppercase">Umur</th>
-                    <th class="px-3 py-2 text-left font-[Helvetica] font-bold text-xs uppercase">Marketing</th>
+                    <th class="px-3 py-2 text-left font-[Helvetica] font-bold text-xs uppercase">
+                        @php
+                            $isActive = request('sort') === 'pekerjaan';
+                            $currentDir = request('dir');
+                            if (!$isActive) {
+                                $linkParams = array_merge(request()->query(), ['sort' => 'pekerjaan', 'dir' => 'asc']);
+                                $arrow = '';
+                            } elseif ($currentDir === 'asc') {
+                                $linkParams = array_merge(request()->query(), ['sort' => 'pekerjaan', 'dir' => 'desc']);
+                                $arrow = '▲';
+                            } else {
+                                $linkParams = collect(request()->query())->except(['sort', 'dir'])->toArray();
+                                $arrow = '▼';
+                            }
+                        @endphp
+                        <a href="{{ route('dana-talangan.index', $linkParams) }}" class="hover:underline text-white">
+                            Pekerjaan
+                            @if($isActive)<span class="ml-0.5">{{ $arrow }}</span>@endif
+                        </a>
+                    </th>
+                    <th class="px-3 py-2 text-left font-[Helvetica] font-bold text-xs uppercase">
+                        @php
+                            $isActive = request('sort') === 'status_perkawinan';
+                            $currentDir = request('dir');
+                            if (!$isActive) {
+                                $linkParams = array_merge(request()->query(), ['sort' => 'status_perkawinan', 'dir' => 'asc']);
+                                $arrow = '';
+                            } elseif ($currentDir === 'asc') {
+                                $linkParams = array_merge(request()->query(), ['sort' => 'status_perkawinan', 'dir' => 'desc']);
+                                $arrow = '▲';
+                            } else {
+                                $linkParams = collect(request()->query())->except(['sort', 'dir'])->toArray();
+                                $arrow = '▼';
+                            }
+                        @endphp
+                        <a href="{{ route('dana-talangan.index', $linkParams) }}" class="hover:underline text-white">
+                            Status Kawin
+                            @if($isActive)<span class="ml-0.5">{{ $arrow }}</span>@endif
+                        </a>
+                    </th>
+                    <th class="px-3 py-2 text-center font-[Helvetica] font-bold text-xs uppercase">
+                        @php
+                            $isActive = request('sort') === 'umur';
+                            $currentDir = request('dir');
+                            if (!$isActive) {
+                                $linkParams = array_merge(request()->query(), ['sort' => 'umur', 'dir' => 'asc']);
+                                $arrow = '';
+                            } elseif ($currentDir === 'asc') {
+                                $linkParams = array_merge(request()->query(), ['sort' => 'umur', 'dir' => 'desc']);
+                                $arrow = '▲';
+                            } else {
+                                $linkParams = collect(request()->query())->except(['sort', 'dir'])->toArray();
+                                $arrow = '▼';
+                            }
+                        @endphp
+                        <a href="{{ route('dana-talangan.index', $linkParams) }}" class="hover:underline text-white">
+                            Umur
+                            @if($isActive)<span class="ml-0.5">{{ $arrow }}</span>@endif
+                        </a>
+                    </th>
+                    <th class="px-3 py-2 text-left font-[Helvetica] font-bold text-xs uppercase">
+                        @php
+                            $isActive = request('sort') === 'nama_marketing';
+                            $currentDir = request('dir');
+                            if (!$isActive) {
+                                $linkParams = array_merge(request()->query(), ['sort' => 'nama_marketing', 'dir' => 'asc']);
+                                $arrow = '';
+                            } elseif ($currentDir === 'asc') {
+                                $linkParams = array_merge(request()->query(), ['sort' => 'nama_marketing', 'dir' => 'desc']);
+                                $arrow = '▲';
+                            } else {
+                                $linkParams = collect(request()->query())->except(['sort', 'dir'])->toArray();
+                                $arrow = '▼';
+                            }
+                        @endphp
+                        <a href="{{ route('dana-talangan.index', $linkParams) }}" class="hover:underline text-white">
+                            Marketing
+                            @if($isActive)<span class="ml-0.5">{{ $arrow }}</span>@endif
+                        </a>
+                    </th>
                     <th class="px-3 py-2 text-left font-[Helvetica] font-bold text-xs uppercase">Penyelesaian</th>
                     <th class="px-3 py-2 text-center font-[Helvetica] font-bold text-xs uppercase">Konfirmasi</th>
-                    <th class="px-3 py-2 text-center font-[Helvetica] font-bold text-xs uppercase">Status</th>
+                    <th class="px-3 py-2 text-center font-[Helvetica] font-bold text-xs uppercase">
+                        @php
+                            $isActive = request('sort') === 'status';
+                            $currentDir = request('dir');
+                            if (!$isActive) {
+                                $linkParams = array_merge(request()->query(), ['sort' => 'status', 'dir' => 'asc']);
+                                $arrow = '';
+                            } elseif ($currentDir === 'asc') {
+                                $linkParams = array_merge(request()->query(), ['sort' => 'status', 'dir' => 'desc']);
+                                $arrow = '▲';
+                            } else {
+                                $linkParams = collect(request()->query())->except(['sort', 'dir'])->toArray();
+                                $arrow = '▼';
+                            }
+                        @endphp
+                        <a href="{{ route('dana-talangan.index', $linkParams) }}" class="hover:underline text-white">
+                            Status
+                            @if($isActive)<span class="ml-0.5">{{ $arrow }}</span>@endif
+                        </a>
+                    </th>
                     <th class="px-3 py-2 text-center font-[Helvetica] font-bold text-xs uppercase">Aksi</th>
                 </tr>
             </thead>

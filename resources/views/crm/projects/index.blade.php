@@ -33,10 +33,67 @@
         <table class="w-full text-sm font-['Times_New_Roman']">
             <thead>
                 <tr class="bg-black text-white">
-                    <th class="px-3 py-2 text-left font-[Helvetica] font-bold text-xs uppercase">Proyek</th>
+                    <th class="px-3 py-2 text-left font-[Helvetica] font-bold text-xs uppercase">
+                        @php
+                            $isActive = request('sort') === 'project_name';
+                            $currentDir = request('dir');
+                            if (!$isActive) {
+                                $linkParams = array_merge(request()->query(), ['sort' => 'project_name', 'dir' => 'asc']);
+                                $arrow = '';
+                            } elseif ($currentDir === 'asc') {
+                                $linkParams = array_merge(request()->query(), ['sort' => 'project_name', 'dir' => 'desc']);
+                                $arrow = '▲';
+                            } else {
+                                $linkParams = collect(request()->query())->except(['sort', 'dir'])->toArray();
+                                $arrow = '▼';
+                            }
+                        @endphp
+                        <a href="{{ route('projects.index', $linkParams) }}" class="hover:underline text-white">
+                            Proyek
+                            @if($isActive)<span class="ml-0.5">{{ $arrow }}</span>@endif
+                        </a>
+                    </th>
                     <th class="px-3 py-2 text-left font-[Helvetica] font-bold text-xs uppercase">Cabang</th>
-                    <th class="px-3 py-2 text-center font-[Helvetica] font-bold text-xs uppercase">Kavling</th>
-                    <th class="px-3 py-2 text-center font-[Helvetica] font-bold text-xs uppercase">Status</th>
+                    <th class="px-3 py-2 text-center font-[Helvetica] font-bold text-xs uppercase">
+                        @php
+                            $isActive = request('sort') === 'kavlings_count';
+                            $currentDir = request('dir');
+                            if (!$isActive) {
+                                $linkParams = array_merge(request()->query(), ['sort' => 'kavlings_count', 'dir' => 'asc']);
+                                $arrow = '';
+                            } elseif ($currentDir === 'asc') {
+                                $linkParams = array_merge(request()->query(), ['sort' => 'kavlings_count', 'dir' => 'desc']);
+                                $arrow = '▲';
+                            } else {
+                                $linkParams = collect(request()->query())->except(['sort', 'dir'])->toArray();
+                                $arrow = '▼';
+                            }
+                        @endphp
+                        <a href="{{ route('projects.index', $linkParams) }}" class="hover:underline text-white">
+                            Kavling
+                            @if($isActive)<span class="ml-0.5">{{ $arrow }}</span>@endif
+                        </a>
+                    </th>
+                    <th class="px-3 py-2 text-center font-[Helvetica] font-bold text-xs uppercase">
+                        @php
+                            $isActive = request('sort') === 'is_active';
+                            $currentDir = request('dir');
+                            if (!$isActive) {
+                                $linkParams = array_merge(request()->query(), ['sort' => 'is_active', 'dir' => 'asc']);
+                                $arrow = '';
+                            } elseif ($currentDir === 'asc') {
+                                $linkParams = array_merge(request()->query(), ['sort' => 'is_active', 'dir' => 'desc']);
+                                $arrow = '▲';
+                            } else {
+                                $linkParams = collect(request()->query())->except(['sort', 'dir'])->toArray();
+                                $arrow = '▼';
+                            }
+                        @endphp
+                        <a href="{{ route('projects.index', $linkParams) }}" class="hover:underline text-white">
+                            Status
+                            @if($isActive)<span class="ml-0.5">{{ $arrow }}</span>@endif
+                        </a>
+                    </th>
                     <th class="px-3 py-2 text-center font-[Helvetica] font-bold text-xs uppercase">Aksi</th>
                 </tr>
             </thead>

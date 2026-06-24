@@ -47,14 +47,147 @@
             <thead>
                 <tr class="bg-black text-white">
                     <th class="w-10 px-3 py-2 text-center font-[Helvetica] font-bold text-xs uppercase"><input type="checkbox" id="select-all" class="cursor-pointer"></th>
-                    <th class="px-3 py-2 text-left font-[Helvetica] font-bold text-xs uppercase">Event ID</th>
+                    <th class="px-3 py-2 text-left font-[Helvetica] font-bold text-xs uppercase">
+                        @php
+                            $isActive = request('sort') === 'event_id';
+                            $currentDir = request('dir');
+                            if (!$isActive) {
+                                $linkParams = array_merge(request()->query(), ['sort' => 'event_id', 'dir' => 'asc']);
+                                $arrow = '';
+                            } elseif ($currentDir === 'asc') {
+                                $linkParams = array_merge(request()->query(), ['sort' => 'event_id', 'dir' => 'desc']);
+                                $arrow = '▲';
+                            } else {
+                                $linkParams = collect(request()->query())->except(['sort', 'dir'])->toArray();
+                                $arrow = '▼';
+                            }
+                        @endphp
+                        <a href="{{ route('lead-events.index', $linkParams) }}" class="hover:underline text-white">
+                            Event ID
+                            @if($isActive)<span class="ml-0.5">{{ $arrow }}</span>@endif
+                        </a>
+                    </th>
                     <th class="px-3 py-2 text-left font-[Helvetica] font-bold text-xs uppercase">Cabang</th>
-                    <th class="px-3 py-2 text-left font-[Helvetica] font-bold text-xs uppercase">Proyek</th>
-                    <th class="px-3 py-2 text-left font-[Helvetica] font-bold text-xs uppercase">Sumber Lead</th>
-                    <th class="px-3 py-2 text-left font-[Helvetica] font-bold text-xs uppercase">Tgl Mulai</th>
-                    <th class="px-3 py-2 text-left font-[Helvetica] font-bold text-xs uppercase">Tgl Selesai</th>
-                    <th class="px-3 py-2 text-right font-[Helvetica] font-bold text-xs uppercase">Anggaran</th>
-                    <th class="px-3 py-2 text-center font-[Helvetica] font-bold text-xs uppercase">Status</th>
+                    <th class="px-3 py-2 text-left font-[Helvetica] font-bold text-xs uppercase">
+                        @php
+                            $isActive = request('sort') === 'project_name';
+                            $currentDir = request('dir');
+                            if (!$isActive) {
+                                $linkParams = array_merge(request()->query(), ['sort' => 'project_name', 'dir' => 'asc']);
+                                $arrow = '';
+                            } elseif ($currentDir === 'asc') {
+                                $linkParams = array_merge(request()->query(), ['sort' => 'project_name', 'dir' => 'desc']);
+                                $arrow = '▲';
+                            } else {
+                                $linkParams = collect(request()->query())->except(['sort', 'dir'])->toArray();
+                                $arrow = '▼';
+                            }
+                        @endphp
+                        <a href="{{ route('lead-events.index', $linkParams) }}" class="hover:underline text-white">
+                            Proyek
+                            @if($isActive)<span class="ml-0.5">{{ $arrow }}</span>@endif
+                        </a>
+                    </th>
+                    <th class="px-3 py-2 text-left font-[Helvetica] font-bold text-xs uppercase">
+                        @php
+                            $isActive = request('sort') === 'lead_source';
+                            $currentDir = request('dir');
+                            if (!$isActive) {
+                                $linkParams = array_merge(request()->query(), ['sort' => 'lead_source', 'dir' => 'asc']);
+                                $arrow = '';
+                            } elseif ($currentDir === 'asc') {
+                                $linkParams = array_merge(request()->query(), ['sort' => 'lead_source', 'dir' => 'desc']);
+                                $arrow = '▲';
+                            } else {
+                                $linkParams = collect(request()->query())->except(['sort', 'dir'])->toArray();
+                                $arrow = '▼';
+                            }
+                        @endphp
+                        <a href="{{ route('lead-events.index', $linkParams) }}" class="hover:underline text-white">
+                            Sumber Lead
+                            @if($isActive)<span class="ml-0.5">{{ $arrow }}</span>@endif
+                        </a>
+                    </th>
+                    <th class="px-3 py-2 text-left font-[Helvetica] font-bold text-xs uppercase">
+                        @php
+                            $isActive = request('sort') === 'start_date';
+                            $currentDir = request('dir');
+                            if (!$isActive) {
+                                $linkParams = array_merge(request()->query(), ['sort' => 'start_date', 'dir' => 'asc']);
+                                $arrow = '';
+                            } elseif ($currentDir === 'asc') {
+                                $linkParams = array_merge(request()->query(), ['sort' => 'start_date', 'dir' => 'desc']);
+                                $arrow = '▲';
+                            } else {
+                                $linkParams = collect(request()->query())->except(['sort', 'dir'])->toArray();
+                                $arrow = '▼';
+                            }
+                        @endphp
+                        <a href="{{ route('lead-events.index', $linkParams) }}" class="hover:underline text-white">
+                            Tgl Mulai
+                            @if($isActive)<span class="ml-0.5">{{ $arrow }}</span>@endif
+                        </a>
+                    </th>
+                    <th class="px-3 py-2 text-left font-[Helvetica] font-bold text-xs uppercase">
+                        @php
+                            $isActive = request('sort') === 'end_date';
+                            $currentDir = request('dir');
+                            if (!$isActive) {
+                                $linkParams = array_merge(request()->query(), ['sort' => 'end_date', 'dir' => 'asc']);
+                                $arrow = '';
+                            } elseif ($currentDir === 'asc') {
+                                $linkParams = array_merge(request()->query(), ['sort' => 'end_date', 'dir' => 'desc']);
+                                $arrow = '▲';
+                            } else {
+                                $linkParams = collect(request()->query())->except(['sort', 'dir'])->toArray();
+                                $arrow = '▼';
+                            }
+                        @endphp
+                        <a href="{{ route('lead-events.index', $linkParams) }}" class="hover:underline text-white">
+                            Tgl Selesai
+                            @if($isActive)<span class="ml-0.5">{{ $arrow }}</span>@endif
+                        </a>
+                    </th>
+                    <th class="px-3 py-2 text-right font-[Helvetica] font-bold text-xs uppercase">
+                        @php
+                            $isActive = request('sort') === 'total_budget';
+                            $currentDir = request('dir');
+                            if (!$isActive) {
+                                $linkParams = array_merge(request()->query(), ['sort' => 'total_budget', 'dir' => 'asc']);
+                                $arrow = '';
+                            } elseif ($currentDir === 'asc') {
+                                $linkParams = array_merge(request()->query(), ['sort' => 'total_budget', 'dir' => 'desc']);
+                                $arrow = '▲';
+                            } else {
+                                $linkParams = collect(request()->query())->except(['sort', 'dir'])->toArray();
+                                $arrow = '▼';
+                            }
+                        @endphp
+                        <a href="{{ route('lead-events.index', $linkParams) }}" class="hover:underline text-white">
+                            Anggaran
+                            @if($isActive)<span class="ml-0.5">{{ $arrow }}</span>@endif
+                        </a>
+                    </th>
+                    <th class="px-3 py-2 text-center font-[Helvetica] font-bold text-xs uppercase">
+                        @php
+                            $isActive = request('sort') === 'status';
+                            $currentDir = request('dir');
+                            if (!$isActive) {
+                                $linkParams = array_merge(request()->query(), ['sort' => 'status', 'dir' => 'asc']);
+                                $arrow = '';
+                            } elseif ($currentDir === 'asc') {
+                                $linkParams = array_merge(request()->query(), ['sort' => 'status', 'dir' => 'desc']);
+                                $arrow = '▲';
+                            } else {
+                                $linkParams = collect(request()->query())->except(['sort', 'dir'])->toArray();
+                                $arrow = '▼';
+                            }
+                        @endphp
+                        <a href="{{ route('lead-events.index', $linkParams) }}" class="hover:underline text-white">
+                            Status
+                            @if($isActive)<span class="ml-0.5">{{ $arrow }}</span>@endif
+                        </a>
+                    </th>
                     <th class="px-3 py-2 text-center font-[Helvetica] font-bold text-xs uppercase">Aksi</th>
                 </tr>
             </thead>

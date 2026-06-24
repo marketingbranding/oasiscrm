@@ -55,14 +55,109 @@
             <thead>
                 <tr class="bg-black text-white">
                     <th class="w-10 px-3 py-2 text-center font-[Helvetica] font-bold text-xs uppercase"><input type="checkbox" id="select-all" class="cursor-pointer"></th>
-                    <th class="px-3 py-2 text-left font-[Helvetica] font-bold text-xs uppercase">Tanggal</th>
+                    <th class="px-3 py-2 text-left font-[Helvetica] font-bold text-xs uppercase">
+                        @php
+                            $isActive = request('sort') === 'date';
+                            $currentDir = request('dir');
+                            if (!$isActive) {
+                                $linkParams = array_merge(request()->query(), ['sort' => 'date', 'dir' => 'asc']);
+                                $arrow = '';
+                            } elseif ($currentDir === 'asc') {
+                                $linkParams = array_merge(request()->query(), ['sort' => 'date', 'dir' => 'desc']);
+                                $arrow = '▲';
+                            } else {
+                                $linkParams = collect(request()->query())->except(['sort', 'dir'])->toArray();
+                                $arrow = '▼';
+                            }
+                        @endphp
+                        <a href="{{ route('lead-daily.index', $linkParams) }}" class="hover:underline text-white">
+                            Tanggal
+                            @if($isActive)<span class="ml-0.5">{{ $arrow }}</span>@endif
+                        </a>
+                    </th>
                     <th class="px-3 py-2 text-left font-[Helvetica] font-bold text-xs uppercase">Event</th>
                     <th class="px-3 py-2 text-left font-[Helvetica] font-bold text-xs uppercase">Cabang</th>
                     <th class="px-3 py-2 text-left font-[Helvetica] font-bold text-xs uppercase">Proyek</th>
-                    <th class="px-3 py-2 text-center font-[Helvetica] font-bold text-xs uppercase">Hari Ke</th>
-                    <th class="px-3 py-2 text-center font-[Helvetica] font-bold text-xs uppercase">Leads</th>
-                    <th class="px-3 py-2 text-center font-[Helvetica] font-bold text-xs uppercase">Kumulatif</th>
-                    <th class="px-3 py-2 text-center font-[Helvetica] font-bold text-xs uppercase">Achieve %</th>
+                    <th class="px-3 py-2 text-center font-[Helvetica] font-bold text-xs uppercase">
+                        @php
+                            $isActive = request('sort') === 'day_number';
+                            $currentDir = request('dir');
+                            if (!$isActive) {
+                                $linkParams = array_merge(request()->query(), ['sort' => 'day_number', 'dir' => 'asc']);
+                                $arrow = '';
+                            } elseif ($currentDir === 'asc') {
+                                $linkParams = array_merge(request()->query(), ['sort' => 'day_number', 'dir' => 'desc']);
+                                $arrow = '▲';
+                            } else {
+                                $linkParams = collect(request()->query())->except(['sort', 'dir'])->toArray();
+                                $arrow = '▼';
+                            }
+                        @endphp
+                        <a href="{{ route('lead-daily.index', $linkParams) }}" class="hover:underline text-white">
+                            Hari Ke
+                            @if($isActive)<span class="ml-0.5">{{ $arrow }}</span>@endif
+                        </a>
+                    </th>
+                    <th class="px-3 py-2 text-center font-[Helvetica] font-bold text-xs uppercase">
+                        @php
+                            $isActive = request('sort') === 'leads_count';
+                            $currentDir = request('dir');
+                            if (!$isActive) {
+                                $linkParams = array_merge(request()->query(), ['sort' => 'leads_count', 'dir' => 'asc']);
+                                $arrow = '';
+                            } elseif ($currentDir === 'asc') {
+                                $linkParams = array_merge(request()->query(), ['sort' => 'leads_count', 'dir' => 'desc']);
+                                $arrow = '▲';
+                            } else {
+                                $linkParams = collect(request()->query())->except(['sort', 'dir'])->toArray();
+                                $arrow = '▼';
+                            }
+                        @endphp
+                        <a href="{{ route('lead-daily.index', $linkParams) }}" class="hover:underline text-white">
+                            Leads
+                            @if($isActive)<span class="ml-0.5">{{ $arrow }}</span>@endif
+                        </a>
+                    </th>
+                    <th class="px-3 py-2 text-center font-[Helvetica] font-bold text-xs uppercase">
+                        @php
+                            $isActive = request('sort') === 'cumulative_leads';
+                            $currentDir = request('dir');
+                            if (!$isActive) {
+                                $linkParams = array_merge(request()->query(), ['sort' => 'cumulative_leads', 'dir' => 'asc']);
+                                $arrow = '';
+                            } elseif ($currentDir === 'asc') {
+                                $linkParams = array_merge(request()->query(), ['sort' => 'cumulative_leads', 'dir' => 'desc']);
+                                $arrow = '▲';
+                            } else {
+                                $linkParams = collect(request()->query())->except(['sort', 'dir'])->toArray();
+                                $arrow = '▼';
+                            }
+                        @endphp
+                        <a href="{{ route('lead-daily.index', $linkParams) }}" class="hover:underline text-white">
+                            Kumulatif
+                            @if($isActive)<span class="ml-0.5">{{ $arrow }}</span>@endif
+                        </a>
+                    </th>
+                    <th class="px-3 py-2 text-center font-[Helvetica] font-bold text-xs uppercase">
+                        @php
+                            $isActive = request('sort') === 'achievement_pct';
+                            $currentDir = request('dir');
+                            if (!$isActive) {
+                                $linkParams = array_merge(request()->query(), ['sort' => 'achievement_pct', 'dir' => 'asc']);
+                                $arrow = '';
+                            } elseif ($currentDir === 'asc') {
+                                $linkParams = array_merge(request()->query(), ['sort' => 'achievement_pct', 'dir' => 'desc']);
+                                $arrow = '▲';
+                            } else {
+                                $linkParams = collect(request()->query())->except(['sort', 'dir'])->toArray();
+                                $arrow = '▼';
+                            }
+                        @endphp
+                        <a href="{{ route('lead-daily.index', $linkParams) }}" class="hover:underline text-white">
+                            Achieve %
+                            @if($isActive)<span class="ml-0.5">{{ $arrow }}</span>@endif
+                        </a>
+                    </th>
                     <th class="px-3 py-2 text-center font-[Helvetica] font-bold text-xs uppercase">Aksi</th>
                 </tr>
             </thead>

@@ -50,7 +50,7 @@
         </form>
     </div>
 
-    <div class="border-2 border-black bg-white overflow-x-auto">
+    <div class="table-scroll border-2 border-black bg-white overflow-auto max-h-[calc(100vh-12rem)]">
         <table class="w-full text-sm font-['Times_New_Roman']">
             <thead>
                 <tr class="bg-black text-white">
@@ -248,4 +248,13 @@ function bulkDelete() {
     document.getElementById('bulk-form').submit();
 }
 </script>
+<style>
+.table-scroll thead th {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    background-color: black;
+    color: white;
+}
+</style>
 @endsection

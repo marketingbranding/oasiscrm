@@ -46,7 +46,6 @@
             'akad' => ['label' => 'Akad', 'color' => '#5d8e8e'],
             'bast' => ['label' => 'BAST', 'color' => '#c0d4a7'],
         ];
-<<<<<<< HEAD
 
         $darkTextStages = ['proses_bank', 'ppjb_dev', 'akad'];
         $defaultStage = 'bast';
@@ -98,30 +97,6 @@
                 <p class="text-sm text-gray-400 font-['Times_New_Roman'] italic">—</p>
             </div>
             @endif
-=======
-    @endphp
-
-    @if($selectedBranch && $selectedBranch->sheet_id)
-    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-7 gap-4">
-        @foreach($stages as $key => $cfg)
-        @php $items = $pipeline[$key] ?? []; @endphp
-        <div class="border-2 border-black bg-white flex flex-col">
-            <div class="px-3 py-2 font-[Helvetica] font-bold text-xs uppercase flex items-center justify-between"
-                 style="background-color: {{ $cfg['color'] }}; color: {{ in_array($key, ['proses_bank', 'ppjb_dev', 'akad']) ? 'white' : 'black' }};">
-                <span>{{ $cfg['label'] }}</span>
-                <span class="bg-white text-black px-2 py-0.5 text-[10px] border border-black">{{ count($items) }}</span>
-            </div>
-            <div class="divide-y divide-black overflow-y-auto" style="max-height: 500px;">
-                @forelse($items as $item)
-                <div class="px-3 py-2 hover:bg-gray-50">
-                    <div class="font-['Times_New_Roman'] font-bold text-sm">{{ $item['nama'] }}</div>
-                    <div class="font-['Helvetica'] text-[11px] text-gray-600 mt-0.5">{{ $item['kavling'] }}</div>
-                </div>
-                @empty
-                <div class="px-3 py-6 text-center text-xs text-gray-400 font-['Times_New_Roman']">—</div>
-                @endforelse
-            </div>
->>>>>>> a8222ac7249e5144acb855977bb858b5a31a9fa2
         </div>
         @endforeach
     </div>

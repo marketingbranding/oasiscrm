@@ -5,16 +5,11 @@ namespace App\Http\Controllers\Crm;
 use App\Http\Controllers\Controller;
 use App\Models\Branch;
 use App\Services\GoogleScriptService;
-<<<<<<< HEAD
 use Illuminate\Http\Client\Pool;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
-=======
-use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Auth;
->>>>>>> a8222ac7249e5144acb855977bb858b5a31a9fa2
 
 class KonsumenProgressController extends Controller
 {
@@ -67,13 +62,11 @@ class KonsumenProgressController extends Controller
 
     private function fetchPipeline(string $sheetId, array &$errors): array
     {
-<<<<<<< HEAD
         $cacheKey = 'pipeline_' . $sheetId;
 
         return Cache::remember($cacheKey, now()->addMinutes(5), function () use ($sheetId, &$errors) {
             $allNames = array_merge(['data_konsumen'], array_reverse(array_keys($this->stages)));
 
-            // Check cache per tab first
             $webhookUrl = config('services.google_script.webhook_url');
             $results = [];
             $toFetch = [];
@@ -88,7 +81,6 @@ class KonsumenProgressController extends Controller
                 }
             }
 
-            // Fetch uncached tabs in parallel
             if (!empty($toFetch) && $webhookUrl) {
                 $responses = Http::pool(function (Pool $pool) use ($webhookUrl, $sheetId, $toFetch) {
                     foreach ($toFetch as $name) {
@@ -128,7 +120,6 @@ class KonsumenProgressController extends Controller
                 }
             }
 
-            // Build namaMap from data_konsumen
             $namaMap = [];
             $konsumenData = $results['data_konsumen'] ?? null;
             if ($konsumenData && !$konsumenData['error']) {
@@ -142,7 +133,6 @@ class KonsumenProgressController extends Controller
                 $errors[] = 'data_konsumen: ' . ($konsumenData['error'] ?? 'Gagal memuat data');
             }
 
-            // Process stages from highest to lowest
             $seen = [];
             $pipeline = [];
             foreach (array_reverse(array_keys($this->stages)) as $stageKey) {
@@ -168,7 +158,6 @@ class KonsumenProgressController extends Controller
                 }
             }
 
-            // Fill missing stages with empty arrays
             foreach (array_keys($this->stages) as $key) {
                 if (!isset($pipeline[$key])) {
                     $pipeline[$key] = [];
@@ -205,61 +194,5 @@ class KonsumenProgressController extends Controller
             $rows[] = $row;
         }
         return $rows;
-=======
-        // Build nama lookup from data_konsumen tab
-        $namaMap = [];
-        $konsumenResult = $this->googleScript->fetchSheetCsv($sheetId, 'data_konsumen');
-        if ($konsumenResult['success']) {
-            foreach ($konsumenResult['data'] as $row) {
-                $kav = trim($row['id_kavling'] ?? '');
-                if ($kav !== '') {
-                    $namaMap[$kav] = $row['nama_konsumen'] ?? null;
-                }
-            }
-        } else {
-            $errors[] = 'data_konsumen: ' . ($konsumenResult['error'] ?? 'Gagal memuat data');
-        }
-
-        // Fetch all stages from highest (bast) to lowest (bi_checking)
-        // so first occurrence of id_kavling = highest stage
-        $stageKeys = array_keys($this->stages);
-        $stageKeysReversed = array_reverse($stageKeys);
-
-        $seen = [];
-        $pipeline = [];
-        foreach ($stageKeysReversed as $stageKey) {
-            $result = $this->googleScript->fetchSheetCsv($sheetId, $stageKey);
-
-            if (!$result['success']) {
-                $errors[] = $this->stages[$stageKey] . ': ' . ($result['error'] ?? 'Gagal memuat data');
-                continue;
-            }
-
-            $rows = $result['data'] ?? [];
-            $pipeline[$stageKey] = [];
-
-            foreach ($rows as $row) {
-                $kavling = trim($row['id_kavling'] ?? '');
-                if ($kavling === '') continue;
-                $nama = $namaMap[$kavling] ?? null;
-                if ($nama === null) continue;
-                if (isset($seen[$kavling])) continue;
-                $seen[$kavling] = true;
-                $pipeline[$stageKey][] = [
-                    'kavling' => $kavling,
-                    'nama' => $nama,
-                ];
-            }
-        }
-
-        // Fill missing stages with empty arrays
-        foreach ($stageKeys as $key) {
-            if (!isset($pipeline[$key])) {
-                $pipeline[$key] = [];
-            }
-        }
-
-        return $pipeline;
->>>>>>> a8222ac7249e5144acb855977bb858b5a31a9fa2
     }
 }

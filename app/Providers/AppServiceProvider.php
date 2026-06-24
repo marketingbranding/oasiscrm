@@ -3,6 +3,8 @@
 namespace App\Providers;
 
 use App\Models\ContentItem;
+use App\Models\DanaTalangan;
+use App\Models\LeadEvent;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\View;
 use Illuminate\Support\ServiceProvider;
@@ -19,27 +21,43 @@ class AppServiceProvider extends ServiceProvider
         View::composer('layouts.crm', function ($view) {
             $user = Auth::user();
             if (!$user) {
-                $view->with('overdueItems', collect())->with('todayItems', collect())->with('totalCount', 0);
+                $view->with('overdueItems', collect())->with('todayItems', collect())->with('needsConfirmation', collect())->with('overdueEvents', collect())->with('totalCount', 0);
                 return;
             }
 
+            $branchScope = fn($q) => $q->when(!$user->canViewAllBranches() && $user->branch_id, fn($q2) => $q2->where('branch_id', $user->branch_id));
+
             $overdueItems = ContentItem::whereDate('scheduled_date', '<', today())
                 ->where('status', '!=', 'posted')
-                ->when(!$user->canViewAllBranches() && $user->branch_id, fn($q) => $q->where('branch_id', $user->branch_id))
+                ->tap($branchScope)
                 ->orderBy('scheduled_date')
                 ->take(10)
                 ->get();
 
             $todayItems = ContentItem::whereDate('scheduled_date', today())
                 ->where('status', '!=', 'posted')
-                ->when(!$user->canViewAllBranches() && $user->branch_id, fn($q) => $q->where('branch_id', $user->branch_id))
+                ->tap($branchScope)
                 ->orderBy('scheduled_date')
                 ->take(10)
                 ->get();
 
-            $totalCount = $overdueItems->count() + $todayItems->count();
+            $needsConfirmation = DanaTalangan::where('status', 'aktif')
+                ->where('konfirmasi_keuangan', false)
+                ->tap($branchScope)
+                ->orderBy('tanggal')
+                ->take(10)
+                ->get();
 
-            $view->with(compact('overdueItems', 'todayItems', 'totalCount'));
+            $overdueEvents = LeadEvent::whereDate('end_date', '<', today())
+                ->where('status', 'berlangsung')
+                ->tap($branchScope)
+                ->orderBy('end_date')
+                ->take(10)
+                ->get();
+
+            $totalCount = $overdueItems->count() + $todayItems->count() + $needsConfirmation->count() + $overdueEvents->count();
+
+            $view->with(compact('overdueItems', 'todayItems', 'needsConfirmation', 'overdueEvents', 'totalCount'));
         });
     }
 }

@@ -181,6 +181,24 @@ class DanaTalanganController extends Controller
         DanaTalanganExport::toBrowser($records, $filename);
     }
 
+    public function bulkDestroy(Request $request)
+    {
+        $ids = array_filter(explode(',', $request->input('selected_ids', '')));
+        if (empty($ids)) {
+            return back()->with('error', 'Tidak ada data yang dipilih.');
+        }
+
+        $user = Auth::user();
+        $query = DanaTalangan::whereIn('id', $ids);
+        if (!$user->canViewAllBranches()) {
+            $query->where('branch_id', $user->branch_id);
+        }
+        $count = $query->delete();
+
+        return redirect()->route('dana-talangan.index', array_filter($request->only(['branch_id', 'project_name', 'status'])))
+            ->with('success', "$count data dana talangan berhasil dihapus.");
+    }
+
     public function destroy(DanaTalangan $danaTalangan)
     {
         $user = Auth::user();

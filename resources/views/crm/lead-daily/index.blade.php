@@ -54,6 +54,7 @@
         <table class="w-full text-sm font-['Times_New_Roman']">
             <thead>
                 <tr class="bg-black text-white">
+                    <th class="w-10 px-3 py-2 text-center font-[Helvetica] font-bold text-xs uppercase"><input type="checkbox" id="select-all" class="cursor-pointer"></th>
                     <th class="px-3 py-2 text-left font-[Helvetica] font-bold text-xs uppercase">Tanggal</th>
                     <th class="px-3 py-2 text-left font-[Helvetica] font-bold text-xs uppercase">Event</th>
                     <th class="px-3 py-2 text-left font-[Helvetica] font-bold text-xs uppercase">Cabang</th>
@@ -68,6 +69,7 @@
             <tbody class="divide-y divide-black">
                 @forelse($dailyLogs as $log)
                 <tr class="hover:bg-gray-50">
+                    <td class="w-10 px-3 py-2 text-center"><input type="checkbox" class="row-checkbox cursor-pointer" value="{{ $log->id }}"></td>
                     <td class="px-3 py-2">{{ $log->date->format('d M Y') }}</td>
                     <td class="px-3 py-2 font-bold">{{ $log->leadEvent->event_id ?? '#' . $log->lead_event_id }}</td>
                     <td class="px-3 py-2">{{ $log->branch->name ?? '—' }}</td>
@@ -99,10 +101,56 @@
                 </tr>
                 @empty
                 <tr>
-                    <td colspan="9" class="px-4 py-8 text-center text-sm">Belum ada data harian.</td>
+                    <td colspan="10" class="px-4 py-8 text-center text-sm">Belum ada data harian.</td>
                 </tr>
                 @endforelse
             </tbody>
         </table>
     </div>
+<div id="bulk-bar" class="fixed bottom-4 left-4 z-50 bg-white border-2 border-black shadow-lg hidden">
+    <div class="flex items-center gap-3 px-4 py-3">
+        <span class="text-sm font-[Helvetica] font-bold"><span id="bulk-count">0</span> data terpilih</span>
+        <button onclick="bulkDelete()" class="bg-[#e91d2a] text-white px-4 py-1.5 text-sm font-[Helvetica] font-bold border-2 border-black rounded-none hover:bg-[#c0392b] cursor-pointer">
+            Hapus Terpilih
+        </button>
+    </div>
+</div>
+
+<form id="bulk-form" method="POST" action="{{ route('lead-daily.bulk-destroy') }}" class="hidden">
+    @csrf
+    <input type="hidden" name="selected_ids" id="bulk-ids">
+    @foreach(request()->only(['branch_id', 'lead_event_id', 'project_name']) as $k => $v)
+        <input type="hidden" name="{{ $k }}" value="{{ $v }}">
+    @endforeach
+</form>
+
+<script>
+let selected = new Set();
+document.getElementById('select-all')?.addEventListener('change', function() {
+    document.querySelectorAll('.row-checkbox').forEach(cb => {
+        cb.checked = this.checked;
+        this.checked ? selected.add(cb.value) : selected.delete(cb.value);
+    });
+    toggleBulkBar();
+});
+document.querySelectorAll('.row-checkbox').forEach(cb => {
+    cb.addEventListener('change', function() {
+        this.checked ? selected.add(this.value) : selected.delete(this.value);
+        toggleBulkBar();
+    });
+});
+function toggleBulkBar() {
+    const bar = document.getElementById('bulk-bar');
+    const count = selected.size;
+    document.getElementById('bulk-count').textContent = count;
+    bar.style.display = count > 0 ? 'block' : 'none';
+}
+function bulkDelete() {
+    const count = selected.size;
+    if (!count) return;
+    if (!confirm('Hapus ' + count + ' data terpilih?')) return;
+    document.getElementById('bulk-ids').value = Array.from(selected).join(',');
+    document.getElementById('bulk-form').submit();
+}
+</script>
 @endsection

@@ -194,6 +194,24 @@ class LeadDailyController extends Controller
         LeadDailyExport::toBrowser($records, $filename);
     }
 
+    public function bulkDestroy(Request $request)
+    {
+        $ids = array_filter(explode(',', $request->input('selected_ids', '')));
+        if (empty($ids)) {
+            return back()->with('error', 'Tidak ada data yang dipilih.');
+        }
+
+        $user = Auth::user();
+        $query = LeadDaily::whereIn('id', $ids);
+        if (!$user->canViewAllBranches()) {
+            $query->where('branch_id', $user->branch_id);
+        }
+        $count = $query->delete();
+
+        return redirect()->route('lead-daily.index', array_filter($request->only(['branch_id', 'lead_event_id', 'project_name'])))
+            ->with('success', "$count data harian berhasil dihapus.");
+    }
+
     public function destroy(LeadDaily $leadDaily)
     {
         $user = Auth::user();

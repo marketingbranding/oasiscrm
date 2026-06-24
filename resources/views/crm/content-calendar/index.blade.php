@@ -10,6 +10,7 @@
     @if(Auth::user()->canViewAllBranches())
     <div class="bg-white border-2 border-black p-3 mb-6">
         <form method="GET" action="{{ route('content-calendar.index') }}" class="flex items-center gap-3 flex-wrap filter-bar">
+            <div class="flex items-center gap-3 flex-wrap">
             @if(isset($branches) && $branches->count() > 0)
             <label class="font-[Helvetica] font-bold text-xs uppercase">Cabang:</label>
             <select name="branch_id" onchange="this.form.submit()" class="border-2 border-black px-3 py-1.5 text-sm font-['Times_New_Roman'] bg-white rounded-none">
@@ -28,11 +29,24 @@
                 @endforeach
             </select>
             @endif
+            </div>
+
+            <div class="h-6 w-px bg-black mx-1 hidden sm:block"></div>
+
+            <div class="flex items-center gap-2 ml-auto">
+                <a href="{{ route('content-calendar.export', request()->only(['month', 'year', 'branch_id', 'project_name'])) }}" class="bg-white text-black px-3 py-1.5 text-sm font-[Helvetica] font-bold border-2 border-black rounded-none hover:bg-gray-100">
+                    ↓ Export XLSX
+                </a>
+                <a href="{{ route('content-calendar.create') }}" class="bg-[#b3bd95] text-black px-4 py-1.5 text-sm font-[Helvetica] font-bold border-2 border-black rounded-none hover:bg-[#9eaa7a]">
+                    + Buat Konten
+                </a>
+            </div>
         </form>
     </div>
     @elseif(isset($projects) && $projects->count() > 0)
     <div class="bg-white border-2 border-black p-3 mb-6">
         <form method="GET" action="{{ route('content-calendar.index') }}" class="flex items-center gap-3 flex-wrap filter-bar">
+            <div class="flex items-center gap-3 flex-wrap">
             <label class="font-[Helvetica] font-bold text-xs uppercase">Proyek:</label>
             <select name="project_name" onchange="this.form.submit()" class="border-2 border-black px-3 py-1.5 text-sm font-['Times_New_Roman'] bg-white rounded-none">
                 <option value="">— Semua Proyek —</option>
@@ -40,11 +54,23 @@
                     <option value="{{ $p->project_name }}" {{ $selectedProject === $p->project_name ? 'selected' : '' }}>{{ $p->project_name }}</option>
                 @endforeach
             </select>
+            </div>
+
+            <div class="h-6 w-px bg-black mx-1 hidden sm:block"></div>
+
+            <div class="flex items-center gap-2 ml-auto">
+                <a href="{{ route('content-calendar.export', request()->only(['month', 'year', 'branch_id', 'project_name'])) }}" class="bg-white text-black px-3 py-1.5 text-sm font-[Helvetica] font-bold border-2 border-black rounded-none hover:bg-gray-100">
+                    ↓ Export XLSX
+                </a>
+                <a href="{{ route('content-calendar.create') }}" class="bg-[#b3bd95] text-black px-4 py-1.5 text-sm font-[Helvetica] font-bold border-2 border-black rounded-none hover:bg-[#9eaa7a]">
+                    + Buat Konten
+                </a>
+            </div>
         </form>
     </div>
     @endif
 
-    <div class="flex items-center justify-between mb-4">
+    <div class="flex mb-4">
         <div class="flex items-center gap-2">
             <a href="{{ route('content-calendar.index', array_filter(['month' => $prevMonth->month, 'year' => $prevMonth->year, 'branch_id' => request('branch_id'), 'project_name' => request('project_name')])) }}" class="bg-black text-white px-3 py-1.5 text-sm font-[Helvetica] font-bold border-2 border-black rounded-none hover:bg-gray-800">
                 ← Prev
@@ -53,13 +79,7 @@
             <a href="{{ route('content-calendar.index', array_filter(['month' => $nextMonth->month, 'year' => $nextMonth->year, 'branch_id' => request('branch_id'), 'project_name' => request('project_name')])) }}" class="bg-black text-white px-3 py-1.5 text-sm font-[Helvetica] font-bold border-2 border-black rounded-none hover:bg-gray-800">
                 Next →
             </a>
-            <a href="{{ route('content-calendar.export', request()->only(['month', 'year', 'branch_id', 'project_name'])) }}" class="bg-white text-black px-3 py-1.5 text-sm font-[Helvetica] font-bold border-2 border-black rounded-none hover:bg-gray-100">
-                ↓ Export XLSX
-            </a>
         </div>
-        <a href="{{ route('content-calendar.create') }}" class="bg-[#b3bd95] text-black px-4 py-1.5 text-sm font-[Helvetica] font-bold border-2 border-black rounded-none hover:bg-[#9eaa7a]">
-            + Buat Konten
-        </a>
     </div>
 
     @php

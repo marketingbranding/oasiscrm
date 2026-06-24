@@ -9,6 +9,7 @@
 
     <div class="bg-white border-2 border-black p-3 mb-6">
         <form method="GET" action="{{ route('projects.index') }}" class="flex items-center gap-3 flex-wrap filter-bar">
+            <div class="flex items-center gap-3 flex-wrap">
             <label class="font-[Helvetica] font-bold text-xs uppercase">Pilih Cabang:</label>
             <select name="branch_id" onchange="this.form.submit()" class="border-2 border-black px-3 py-1.5 text-sm font-['Times_New_Roman'] bg-white rounded-none">
                 <option value="">— Semua Cabang —</option>
@@ -16,13 +17,16 @@
                     <option value="{{ $b->id }}" {{ (string)$selectedBranchId === (string)$b->id ? 'selected' : '' }}>{{ $b->name }}</option>
                 @endforeach
             </select>
-        </form>
-    </div>
+            </div>
 
-    <div class="flex justify-end mb-4">
-        <a href="{{ route('projects.create') }}" class="bg-[#5d8e8e] text-white px-4 py-1.5 text-sm font-[Helvetica] font-bold border-2 border-black rounded-none hover:bg-[#4a7a7a]">
-            + Proyek Baru
-        </a>
+            <div class="h-6 w-px bg-black mx-1 hidden sm:block"></div>
+
+            <div class="flex items-center gap-2 ml-auto">
+                <a href="{{ route('projects.create') }}" class="bg-[#5d8e8e] text-white px-4 py-1.5 text-sm font-[Helvetica] font-bold border-2 border-black rounded-none hover:bg-[#4a7a7a]">
+                    + Proyek Baru
+                </a>
+            </div>
+        </form>
     </div>
 
     <div class="border-2 border-black bg-white overflow-x-auto">

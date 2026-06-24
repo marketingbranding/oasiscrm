@@ -40,14 +40,17 @@ Route::middleware(['auth', 'verified', 'password.changed'])->group(function () {
 
     Route::bind('lead_event', fn($v) => \App\Models\LeadEvent::findOrFail($v));
     Route::get('lead-events/export', [LeadEventController::class, 'export'])->name('lead-events.export');
+    Route::post('lead-events/bulk-delete', [LeadEventController::class, 'bulkDestroy'])->name('lead-events.bulk-destroy');
     Route::resource('lead-events', LeadEventController::class);
 
     Route::bind('lead_daily', fn($v) => \App\Models\LeadDaily::findOrFail($v));
     Route::get('lead-daily/export', [LeadDailyController::class, 'export'])->name('lead-daily.export');
+    Route::post('lead-daily/bulk-delete', [LeadDailyController::class, 'bulkDestroy'])->name('lead-daily.bulk-destroy');
     Route::resource('lead-daily', LeadDailyController::class);
 
     Route::bind('dana_talangan', fn($v) => \App\Models\DanaTalangan::findOrFail($v));
     Route::get('dana-talangan/export', [DanaTalanganController::class, 'export'])->name('dana-talangan.export');
+    Route::post('dana-talangan/bulk-delete', [DanaTalanganController::class, 'bulkDestroy'])->name('dana-talangan.bulk-destroy');
     Route::resource('dana-talangan', DanaTalanganController::class);
 
     Route::middleware('role:superadmin')->group(function () {
@@ -65,6 +68,7 @@ Route::middleware(['auth', 'verified', 'password.changed'])->group(function () {
         Route::get('/projects/{project}/kavlings/bulk-import', [KavlingController::class, 'bulkImport'])->name('kavlings.bulk-import');
         Route::post('/projects/{project}/kavlings/bulk-store', [KavlingController::class, 'bulkStore'])->name('kavlings.bulk-store');
         Route::delete('/kavlings/{kavling}', [KavlingController::class, 'destroy'])->name('kavlings.destroy');
+        Route::post('kavlings/bulk-delete', [KavlingController::class, 'bulkDestroy'])->name('kavlings.bulk-destroy');
     });
 });
 

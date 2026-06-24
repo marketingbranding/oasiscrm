@@ -80,6 +80,22 @@ class KavlingController extends Controller
             ->with('success', $message);
     }
 
+    public function bulkDestroy(Request $request)
+    {
+        if (!Auth::user()->isSuperadmin()) {
+            abort(403);
+        }
+
+        $ids = array_filter(explode(',', $request->input('selected_ids', '')));
+        if (empty($ids)) {
+            return back()->with('error', 'Tidak ada data yang dipilih.');
+        }
+
+        $count = Kavling::whereIn('id', $ids)->delete();
+
+        return back()->with('success', "$count kavling berhasil dihapus.");
+    }
+
     public function destroy(Kavling $kavling)
     {
         if (!Auth::user()->isSuperadmin()) {

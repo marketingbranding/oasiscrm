@@ -237,7 +237,7 @@
             @yield('content')
 
             <div class="border-t-2 border-black bg-white px-4 py-3 text-center text-xs font-['Times_New_Roman'] mt-6">
-                © {{ date('Y') }} Oasis CRM — Sistem Manajemen Konten Perumahan
+                © {{ date('Y') }} Oasis CRM
             </div>
         </div>
     </div>

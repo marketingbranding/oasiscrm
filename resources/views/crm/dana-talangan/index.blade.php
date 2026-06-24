@@ -9,6 +9,7 @@
 
     <div class="bg-white border-2 border-black p-3 mb-6">
         <form method="GET" action="{{ route('dana-talangan.index') }}" class="flex items-center gap-3 flex-wrap filter-bar">
+            <div class="flex items-center gap-3 flex-wrap">
             @if(Auth::user()->canViewAllBranches() && isset($branches) && $branches->count() > 0)
             <label class="font-[Helvetica] font-bold text-xs uppercase">Cabang:</label>
             <select name="branch_id" onchange="this.form.submit()" class="border-2 border-black px-3 py-1.5 text-sm font-['Times_New_Roman'] bg-white rounded-none">
@@ -35,16 +36,19 @@
                 <option value="aktif" {{ $selectedStatus === 'aktif' ? 'selected' : '' }}>Aktif</option>
                 <option value="lunas" {{ $selectedStatus === 'lunas' ? 'selected' : '' }}>Lunas</option>
             </select>
-        </form>
-    </div>
+            </div>
 
-    <div class="flex justify-end gap-2 mb-4">
-        <a href="{{ route('dana-talangan.export', request()->only(['branch_id', 'project_name', 'status'])) }}" class="bg-white text-black px-4 py-1.5 text-sm font-[Helvetica] font-bold border-2 border-black rounded-none hover:bg-gray-100">
-            ↓ Export XLSX
-        </a>
-        <a href="{{ route('dana-talangan.create') }}" class="bg-[#f1c40f] text-black px-4 py-1.5 text-sm font-[Helvetica] font-bold border-2 border-black rounded-none hover:bg-[#d4ac0d]">
-            + Dana Talangan Baru
-        </a>
+            <div class="h-6 w-px bg-black mx-1 hidden sm:block"></div>
+
+            <div class="flex items-center gap-2 ml-auto">
+                <a href="{{ route('dana-talangan.export', request()->only(['branch_id', 'project_name', 'status'])) }}" class="bg-white text-black px-4 py-1.5 text-sm font-[Helvetica] font-bold border-2 border-black rounded-none hover:bg-gray-100">
+                    ↓ Export XLSX
+                </a>
+                <a href="{{ route('dana-talangan.create') }}" class="bg-[#f1c40f] text-black px-4 py-1.5 text-sm font-[Helvetica] font-bold border-2 border-black rounded-none hover:bg-[#d4ac0d]">
+                    + Dana Talangan Baru
+                </a>
+            </div>
+        </form>
     </div>
 
     <div class="border-2 border-black bg-white overflow-x-auto">

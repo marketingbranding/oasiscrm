@@ -9,6 +9,7 @@
 
     <div class="bg-white border-2 border-black p-3 mb-6">
         <form method="GET" action="{{ route('lead-daily.index') }}" class="flex items-center gap-3 flex-wrap filter-bar">
+            <div class="flex items-center gap-3 flex-wrap">
             @if(Auth::user()->canViewAllBranches() && isset($branches) && $branches->count() > 0)
             <label class="font-[Helvetica] font-bold text-xs uppercase">Cabang:</label>
             <select name="branch_id" onchange="this.form.submit()" class="border-2 border-black px-3 py-1.5 text-sm font-['Times_New_Roman'] bg-white rounded-none">
@@ -34,16 +35,19 @@
                     <option value="{{ $e->id }}" {{ (string)$selectedEventId === (string)$e->id ? 'selected' : '' }}>{{ $e->event_id ?? $e->project_name }} — {{ $e->branch->name ?? '' }}</option>
                 @endforeach
             </select>
-        </form>
-    </div>
+            </div>
 
-    <div class="flex justify-end gap-2 mb-4">
-        <a href="{{ route('lead-daily.export', request()->only(['branch_id', 'lead_event_id', 'project_name'])) }}" class="bg-white text-black px-4 py-1.5 text-sm font-[Helvetica] font-bold border-2 border-black rounded-none hover:bg-gray-100">
-            ↓ Export XLSX
-        </a>
-        <a href="{{ route('lead-daily.create') }}" class="bg-[#c0392b] text-white px-4 py-1.5 text-sm font-[Helvetica] font-bold border-2 border-black rounded-none hover:bg-[#a93226]">
-            + Input Harian
-        </a>
+            <div class="h-6 w-px bg-black mx-1 hidden sm:block"></div>
+
+            <div class="flex items-center gap-2 ml-auto">
+                <a href="{{ route('lead-daily.export', request()->only(['branch_id', 'lead_event_id', 'project_name'])) }}" class="bg-white text-black px-4 py-1.5 text-sm font-[Helvetica] font-bold border-2 border-black rounded-none hover:bg-gray-100">
+                    ↓ Export XLSX
+                </a>
+                <a href="{{ route('lead-daily.create') }}" class="bg-[#c0392b] text-white px-4 py-1.5 text-sm font-[Helvetica] font-bold border-2 border-black rounded-none hover:bg-[#a93226]">
+                    + Input Harian
+                </a>
+            </div>
+        </form>
     </div>
 
     <div class="border-2 border-black bg-white overflow-x-auto">

@@ -205,17 +205,35 @@
             @endauth
         </div>
 
-        <div :class="sidebarPinned ? 'sm:ml-56' : 'sm:ml-16'" class="flex-1 p-4 sm:p-6">
+        {{-- Floating toast notifications --}}
+        <div class="fixed top-16 right-4 z-[999] flex flex-col gap-2 max-w-sm pointer-events-none">
             @if(session('success'))
-                <div class="bg-[#b3bd95] border-2 border-black px-4 py-3 mb-4 font-['Times_New_Roman'] text-sm">
-                    {{ session('success') }}
-                </div>
+            <div x-data="{ show: true }"
+                 x-init="setTimeout(() => show = false, 4000)"
+                 x-show="show"
+                 x-transition:leave="transition ease-out duration-500"
+                 x-transition:leave-start="opacity-100 translate-x-0"
+                 x-transition:leave-end="opacity-0 translate-x-4"
+                 class="bg-[#b3bd95] border-2 border-black px-3 py-2 font-['Times_New_Roman'] text-xs shadow-xl flex items-start justify-between gap-3 min-w-[250px] pointer-events-auto">
+                <span>{{ session('success') }}</span>
+                <button @click="show = false" class="text-black/60 hover:text-black font-bold text-lg leading-none shrink-0">&times;</button>
+            </div>
             @endif
             @if(session('error'))
-                <div class="bg-[#d77a7a] border-2 border-black px-4 py-3 mb-4 font-['Times_New_Roman'] text-sm">
-                    {{ session('error') }}
-                </div>
+            <div x-data="{ show: true }"
+                 x-init="setTimeout(() => show = false, 4000)"
+                 x-show="show"
+                 x-transition:leave="transition ease-out duration-500"
+                 x-transition:leave-start="opacity-100 translate-x-0"
+                 x-transition:leave-end="opacity-0 translate-x-4"
+                 class="bg-[#d77a7a] border-2 border-black px-3 py-2 font-['Times_New_Roman'] text-xs shadow-xl flex items-start justify-between gap-3 min-w-[250px] pointer-events-auto">
+                <span>{{ session('error') }}</span>
+                <button @click="show = false" class="text-black/60 hover:text-black font-bold text-lg leading-none shrink-0">&times;</button>
+            </div>
             @endif
+        </div>
+
+        <div :class="sidebarPinned ? 'sm:ml-56' : 'sm:ml-16'" class="flex-1 p-4 sm:p-6">
             @yield('content')
 
             <div class="border-t-2 border-black bg-white px-4 py-3 text-center text-xs font-['Times_New_Roman'] mt-6">

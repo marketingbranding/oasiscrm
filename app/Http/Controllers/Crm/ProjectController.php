@@ -27,9 +27,14 @@ class ProjectController extends Controller
         if (!in_array($sortField, $allowedSorts)) $sortField = 'created_at';
         if (!in_array($sortDir, ['asc', 'desc'])) $sortDir = 'desc';
 
-        $projects = $query->orderBy($sortField, $sortDir)->get();
+        $perPage = $request->get('per_page', '15');
+        if ($perPage === 'all') {
+            $projects = $query->orderBy($sortField, $sortDir)->get();
+        } else {
+            $projects = $query->orderBy($sortField, $sortDir)->paginate((int) $perPage)->withQueryString();
+        }
 
-        return view('crm.projects.index', compact('projects', 'branches', 'selectedBranchId', 'sortField', 'sortDir'));
+        return view('crm.projects.index', compact('projects', 'branches', 'selectedBranchId', 'sortField', 'sortDir', 'perPage'));
     }
 
     public function create()

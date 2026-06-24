@@ -45,9 +45,14 @@ class LeadEventController extends Controller
             $query->where('project_name', $selectedProjectName);
         }
 
-        $events = $query->latest()->get();
+        $perPage = $request->get('per_page', '15');
+        if ($perPage === 'all') {
+            $events = $query->latest()->get();
+        } else {
+            $events = $query->latest()->paginate((int) $perPage)->withQueryString();
+        }
 
-        return view('crm.lead-events.index', compact('events', 'branches', 'selectedBranchId', 'selectedProjectName', 'projects'));
+        return view('crm.lead-events.index', compact('events', 'branches', 'selectedBranchId', 'selectedProjectName', 'projects', 'perPage'));
     }
 
     public function create()

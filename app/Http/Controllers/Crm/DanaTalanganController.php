@@ -53,9 +53,14 @@ class DanaTalanganController extends Controller
         if (!in_array($sortField, $allowedSorts)) $sortField = 'tanggal';
         if (!in_array($sortDir, ['asc', 'desc'])) $sortDir = 'desc';
 
-        $records = $query->orderBy($sortField, $sortDir)->get();
+        $perPage = $request->get('per_page', '15');
+        if ($perPage === 'all') {
+            $records = $query->orderBy($sortField, $sortDir)->get();
+        } else {
+            $records = $query->orderBy($sortField, $sortDir)->paginate((int) $perPage)->withQueryString();
+        }
 
-        return view('crm.dana-talangan.index', compact('records', 'branches', 'projects', 'selectedBranchId', 'selectedProject', 'selectedStatus', 'sortField', 'sortDir'));
+        return view('crm.dana-talangan.index', compact('records', 'branches', 'projects', 'selectedBranchId', 'selectedProject', 'selectedStatus', 'sortField', 'sortDir', 'perPage'));
     }
 
     public function create()

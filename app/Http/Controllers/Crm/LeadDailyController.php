@@ -63,9 +63,14 @@ class LeadDailyController extends Controller
         if (!in_array($sortField, $allowedSorts)) $sortField = 'date';
         if (!in_array($sortDir, ['asc', 'desc'])) $sortDir = 'desc';
 
-        $dailyLogs = $query->orderBy($sortField, $sortDir)->get();
+        $perPage = $request->get('per_page', '15');
+        if ($perPage === 'all') {
+            $dailyLogs = $query->orderBy($sortField, $sortDir)->get();
+        } else {
+            $dailyLogs = $query->orderBy($sortField, $sortDir)->paginate((int) $perPage)->withQueryString();
+        }
 
-        return view('crm.lead-daily.index', compact('dailyLogs', 'events', 'branches', 'selectedBranchId', 'selectedEventId', 'selectedProjectName', 'projects', 'sortField', 'sortDir'));
+        return view('crm.lead-daily.index', compact('dailyLogs', 'events', 'branches', 'selectedBranchId', 'selectedEventId', 'selectedProjectName', 'projects', 'sortField', 'sortDir', 'perPage'));
     }
 
     public function create()

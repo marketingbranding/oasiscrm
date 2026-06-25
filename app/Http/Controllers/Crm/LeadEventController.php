@@ -11,6 +11,7 @@ use App\Models\LeadEvent;
 use App\Models\LeadMaster;
 use App\Models\LeadSource;
 use App\Exports\LeadEventExport;
+use App\Imports\LeadEventImport;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 
@@ -100,6 +101,42 @@ class LeadEventController extends Controller
 
         return redirect()->route('lead-events.index', array_filter($request->only(['branch_id', 'project_name'])))
             ->with('success', 'Event berhasil diperbarui.');
+    }
+
+    public function exportTemplate()
+    {
+        LeadEventExport::generateTemplate();
+    }
+
+    public function import()
+    {
+        return view('crm.lead-events.import');
+    }
+
+    public function importStore(Request $request)
+    {
+        $request->validate(['file' => 'required|file|mimes:xlsx']);
+
+        $user = Auth::user();
+        $branchId = $user->canViewAllBranches()
+            ? $request->get('branch_id')
+            : $user->branch_id;
+
+        $result = LeadEventImport::import(
+            $request->file('file')->getPathname(),
+            $branchId,
+            $request->only(['branch_id', 'project_name'])
+        );
+
+        $message = $result['imported'] . ' data berhasil diimport.';
+        if (!empty($result['errors'])) {
+            return redirect()->route('lead-events.import')
+                ->with('success', $message)
+                ->with('import_errors', $result['errors']);
+        }
+
+        return redirect()->route('lead-events.index')
+            ->with('success', $message);
     }
 
     public function export(Request $request)

@@ -123,9 +123,9 @@
                     fixed left-0 top-14 bottom-0 z-40
                     sm:fixed sm:left-0 sm:top-14 sm:bottom-0 sm:z-40
                     sm:transition-all sm:duration-200
-                    sm:overflow-x-hidden sm:whitespace-nowrap sm:shadow-none
+                     sm:overflow-x-hidden sm:whitespace-nowrap sm:shadow-none
                     bg-white sm:border-r-2 border-black">
-            <nav :class="sidebarPinned ? 'overflow-y-auto' : 'overflow-hidden group-hover:overflow-y-auto'" class="flex-1 p-2">
+            <nav class="overflow-y-auto flex-1 min-h-0 p-2">
                 <div class="mb-1 hidden sm:block">
                     <button @click="sidebarPinned = !sidebarPinned; localStorage.setItem('sidebarPinned', sidebarPinned)"
                             :class="sidebarPinned ? 'bg-green-50 text-green-700 border-green-500 hover:bg-green-100' : 'text-gray-500 border-gray-300 hover:text-black hover:bg-gray-100'"
@@ -190,15 +190,15 @@
                 @endif
             </nav>
             @auth
-            <div class="border-t-2 border-black p-2 flex-shrink-0 bg-white">
+            <div class="border-t-2 border-black p-2 flex-shrink-0 flex-grow bg-[#c0392b]">
                 <div class="flex items-center justify-between gap-2 px-2 py-1">
                     <span :class="sidebarPinned ? '' : 'sm:w-0 sm:overflow-hidden sm:whitespace-nowrap'"
-                          class="text-xs font-[Helvetica] font-bold group-hover:sm:w-auto transition-all duration-200 delay-150">
+                          class="text-xs font-[Helvetica] font-bold text-[#fcc20f] group-hover:sm:w-auto transition-all duration-200 delay-150">
                         {{ Auth::user()->name }}
                     </span>
                     <form method="POST" action="{{ route('logout') }}" onsubmit="return confirm('Apakah Anda yakin ingin logout?')">
                         @csrf
-                        <button type="submit" class="flex items-center justify-center w-7 h-7 text-sm bg-[#c0392b] hover:bg-[#a93226] text-white border border-black rounded-none shrink-0"
+                        <button type="submit" class="flex items-center justify-center w-7 h-7 text-sm bg-[#c0392b] hover:bg-[#a93226] text-white border-2 border-white shadow-[inset_0_-2px_0_0_rgba(0,0,0,0.3)] rounded-none shrink-0"
                                 title="Logout">
                             <span>⏻</span>
                         </button>

@@ -43,6 +43,16 @@ Route::middleware(['auth', 'verified', 'password.changed'])->group(function () {
     Route::post('lead-sources/{leadSource}/toggle-active', [LeadSourceController::class, 'toggleActive'])->name('lead-sources.toggle-active');
     Route::resource('lead-sources', LeadSourceController::class);
 
+    Route::get('lead-daily/export-template', [LeadDailyController::class, 'exportTemplate'])->name('lead-daily.export-template');
+    Route::get('lead-daily/import', [LeadDailyController::class, 'import'])->name('lead-daily.import');
+    Route::post('lead-daily/import', [LeadDailyController::class, 'importStore'])->name('lead-daily.import-store');
+    Route::get('lead-events/export-template', [LeadEventController::class, 'exportTemplate'])->name('lead-events.export-template');
+    Route::get('lead-events/import', [LeadEventController::class, 'import'])->name('lead-events.import');
+    Route::post('lead-events/import', [LeadEventController::class, 'importStore'])->name('lead-events.import-store');
+    Route::get('content-calendar/export-template', [ContentCalendarController::class, 'exportTemplate'])->name('content-calendar.export-template');
+    Route::get('content-calendar/import', [ContentCalendarController::class, 'import'])->name('content-calendar.import');
+    Route::post('content-calendar/import', [ContentCalendarController::class, 'importStore'])->name('content-calendar.import-store');
+
     Route::bind('lead_event', fn($v) => \App\Models\LeadEvent::findOrFail($v));
     Route::get('lead-events/export', [LeadEventController::class, 'export'])->name('lead-events.export');
     Route::post('lead-events/bulk-delete', [LeadEventController::class, 'bulkDestroy'])->name('lead-events.bulk-destroy');

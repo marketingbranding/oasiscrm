@@ -10,6 +10,7 @@ use App\Models\Branch;
 use App\Models\ContentItem;
 use App\Models\LeadMaster;
 use App\Exports\ContentItemExport;
+use App\Imports\ContentItemImport;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 
@@ -129,6 +130,42 @@ class ContentCalendarController extends Controller
 
         $contentItem->update($data);
         return redirect()->route('content-calendar.index', array_filter($request->only(['month', 'year', 'branch_id', 'project_name'])))->with('success', 'Konten berhasil diperbarui.');
+    }
+
+    public function exportTemplate()
+    {
+        ContentItemExport::generateTemplate();
+    }
+
+    public function import()
+    {
+        return view('crm.content-calendar.import');
+    }
+
+    public function importStore(Request $request)
+    {
+        $request->validate(['file' => 'required|file|mimes:xlsx']);
+
+        $user = Auth::user();
+        $branchId = $user->canViewAllBranches()
+            ? $request->get('branch_id')
+            : $user->branch_id;
+
+        $result = ContentItemImport::import(
+            $request->file('file')->getPathname(),
+            $branchId,
+            $request->only(['branch_id', 'project_name'])
+        );
+
+        $message = $result['imported'] . ' data berhasil diimport.';
+        if (!empty($result['errors'])) {
+            return redirect()->route('content-calendar.import')
+                ->with('success', $message)
+                ->with('import_errors', $result['errors']);
+        }
+
+        return redirect()->route('content-calendar.index')
+            ->with('success', $message);
     }
 
     public function export(Request $request)

@@ -11,6 +11,7 @@ use App\Models\LeadDaily;
 use App\Models\LeadEvent;
 use App\Models\LeadMaster;
 use App\Exports\LeadDailyExport;
+use App\Imports\LeadDailyImport;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 
@@ -160,6 +161,42 @@ class LeadDailyController extends Controller
 
         return redirect()->route('lead-daily.index', array_filter($request->only(['branch_id', 'lead_event_id', 'project_name'])))
             ->with('success', 'Data harian berhasil diperbarui.');
+    }
+
+    public function exportTemplate()
+    {
+        LeadDailyExport::generateTemplate();
+    }
+
+    public function import()
+    {
+        return view('crm.lead-daily.import');
+    }
+
+    public function importStore(Request $request)
+    {
+        $request->validate(['file' => 'required|file|mimes:xlsx']);
+
+        $user = Auth::user();
+        $branchId = $user->canViewAllBranches()
+            ? $request->get('branch_id')
+            : $user->branch_id;
+
+        $result = LeadDailyImport::import(
+            $request->file('file')->getPathname(),
+            $branchId,
+            $request->only(['branch_id', 'lead_event_id', 'project_name'])
+        );
+
+        $message = $result['imported'] . ' data berhasil diimport.';
+        if (!empty($result['errors'])) {
+            return redirect()->route('lead-daily.import')
+                ->with('success', $message)
+                ->with('import_errors', $result['errors']);
+        }
+
+        return redirect()->route('lead-daily.index')
+            ->with('success', $message);
     }
 
     public function export(Request $request)

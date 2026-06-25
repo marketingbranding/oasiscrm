@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Crm;
 
 use App\Exports\DanaTalanganExport;
+use App\Imports\DanaTalanganImport;
 use App\Http\Controllers\Controller;
 use App\Models\Branch;
 use App\Models\DanaTalangan;
@@ -196,6 +197,42 @@ class DanaTalanganController extends Controller
 
         $filename = 'dana-talangan-' . now()->format('Y-m-d') . '.xlsx';
         DanaTalanganExport::toBrowser($records, $filename);
+    }
+
+    public function exportTemplate()
+    {
+        DanaTalanganExport::generateTemplate();
+    }
+
+    public function import()
+    {
+        return view('crm.dana-talangan.import');
+    }
+
+    public function importStore(Request $request)
+    {
+        $request->validate(['file' => 'required|file|mimes:xlsx']);
+
+        $user = Auth::user();
+        $branchId = $user->canViewAllBranches()
+            ? $request->get('branch_id')
+            : $user->branch_id;
+
+        $result = DanaTalanganImport::import(
+            $request->file('file')->getPathname(),
+            $branchId,
+            $request->only(['branch_id', 'project_name', 'status'])
+        );
+
+        $message = $result['imported'] . ' data berhasil diimport.';
+        if (!empty($result['errors'])) {
+            return redirect()->route('dana-talangan.import')
+                ->with('success', $message)
+                ->with('import_errors', $result['errors']);
+        }
+
+        return redirect()->route('dana-talangan.index')
+            ->with('success', $message);
     }
 
     public function bulkDestroy(Request $request)

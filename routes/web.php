@@ -51,6 +51,9 @@ Route::middleware(['auth', 'verified', 'password.changed'])->group(function () {
 
     Route::bind('dana_talangan', fn($v) => \App\Models\DanaTalangan::findOrFail($v));
     Route::get('dana-talangan/export', [DanaTalanganController::class, 'export'])->name('dana-talangan.export');
+    Route::get('dana-talangan/export-template', [DanaTalanganController::class, 'exportTemplate'])->name('dana-talangan.export-template');
+    Route::get('dana-talangan/import', [DanaTalanganController::class, 'import'])->name('dana-talangan.import');
+    Route::post('dana-talangan/import', [DanaTalanganController::class, 'importStore'])->name('dana-talangan.import-store');
     Route::post('dana-talangan/bulk-delete', [DanaTalanganController::class, 'bulkDestroy'])->name('dana-talangan.bulk-destroy');
     Route::post('dana-talangan/bulk-update', [DanaTalanganController::class, 'bulkUpdate'])->name('dana-talangan.bulk-update');
     Route::resource('dana-talangan', DanaTalanganController::class);

@@ -3,6 +3,9 @@
 namespace App\Http\Controllers\Crm;
 
 use App\Http\Controllers\Controller;
+use App\Http\Controllers\Crm\Traits\FilterableBranch;
+use App\Http\Requests\Crm\StoreContentItemRequest;
+use App\Http\Requests\Crm\UpdateContentItemRequest;
 use App\Models\Branch;
 use App\Models\ContentItem;
 use App\Models\LeadMaster;
@@ -12,36 +15,18 @@ use Illuminate\Support\Facades\Auth;
 
 class ContentCalendarController extends Controller
 {
+    use FilterableBranch;
+
     public function index(Request $request)
     {
-        $user = Auth::user();
         $month = (int) $request->get('month', now()->month);
         $year = (int) $request->get('year', now()->year);
-        $selectedBranchId = $request->get('branch_id');
+        $selectedBranchId = $this->resolveSelectedBranchId($request->get('branch_id'));
         $selectedProject = $request->get('project_name');
 
-        if ($user->canViewAllBranches()) {
-            $branches = Branch::where('is_active', true)->get();
-            $projects = LeadMaster::where('is_active', true)
-                ->when($selectedBranchId, fn($q) => $q->where('branch_id', $selectedBranchId))
-                ->orderBy('project_name')->get();
-            $query = ContentItem::with(['branch', 'creator']);
-
-            if ($selectedBranchId) {
-                $query->where('branch_id', $selectedBranchId);
-            } elseif ($user->hasRole('pusat') && $user->branch_id) {
-                $selectedBranchId = $user->branch_id;
-                $query->where('branch_id', $selectedBranchId);
-            }
-        } else {
-            $branches = collect();
-            $selectedBranchId = $user->branch_id;
-            $projects = LeadMaster::where('is_active', true)
-                ->where('branch_id', $selectedBranchId)
-                ->orderBy('project_name')
-                ->get();
-            $query = ContentItem::with(['branch', 'creator'])->where('branch_id', $selectedBranchId);
-        }
+        $branches = $this->resolveBranches();
+        $projects = $this->resolveBranchProjects($selectedBranchId);
+        $query = $this->applyBranchScope(ContentItem::with(['branch', 'creator']), $selectedBranchId);
 
         $query->when($selectedProject, fn($q) => $q->where('project_name', $selectedProject));
 
@@ -84,12 +69,11 @@ class ContentCalendarController extends Controller
 
     public function create()
     {
+        $branches = $this->resolveBranches();
         $user = Auth::user();
         if ($user->canViewAllBranches()) {
-            $branches = Branch::where('is_active', true)->get();
             $projects = LeadMaster::where('is_active', true)->orderBy('project_name')->get();
         } else {
-            $branches = collect([$user->branch]);
             $projects = LeadMaster::where('is_active', true)
                 ->where('branch_id', $user->branch_id)
                 ->orderBy('project_name')
@@ -98,18 +82,10 @@ class ContentCalendarController extends Controller
         return view('crm.content-calendar.create', compact('branches', 'projects'));
     }
 
-    public function store(Request $request)
+    public function store(StoreContentItemRequest $request)
     {
         $user = Auth::user();
-        $data = $request->validate([
-            'title' => 'required|string|max:255',
-            'branch_id' => $user->canViewAllBranches() ? 'required|exists:branches,id' : 'nullable',
-            'project_name' => 'nullable|string|max:255',
-            'platform' => 'nullable|string|max:50',
-            'scheduled_date' => 'required|date',
-            'status' => 'required|in:draft,review,approved,posted',
-            'notes' => 'nullable|string',
-        ]);
+        $data = $request->validated();
 
         if (!$user->canViewAllBranches()) {
             $data['branch_id'] = $user->branch_id;
@@ -119,7 +95,7 @@ class ContentCalendarController extends Controller
 
         ContentItem::create($data);
 
-        return         redirect()->route('content-calendar.index', array_filter($request->only(['month', 'year', 'branch_id', 'project_name'])))->with('success', 'Konten berhasil ditambahkan.');
+        return redirect()->route('content-calendar.index', array_filter($request->only(['month', 'year', 'branch_id', 'project_name'])))->with('success', 'Konten berhasil ditambahkan.');
     }
 
     public function show(ContentItem $contentItem)
@@ -134,12 +110,7 @@ class ContentCalendarController extends Controller
             abort(403);
         }
 
-        if ($user->canViewAllBranches()) {
-            $branches = Branch::where('is_active', true)->get();
-        } else {
-            $branches = collect([$user->branch]);
-        }
-
+        $branches = $this->resolveBranches();
         $content = $contentItem;
         if ($user->canViewAllBranches()) {
             $projects = LeadMaster::where('is_active', true)->orderBy('project_name')->get();
@@ -152,22 +123,9 @@ class ContentCalendarController extends Controller
         return view('crm.content-calendar.edit', compact('content', 'branches', 'projects'));
     }
 
-    public function update(Request $request, ContentItem $contentItem)
+    public function update(UpdateContentItemRequest $request, ContentItem $contentItem)
     {
-        $user = Auth::user();
-        if (!$user->canViewAllBranches() && $contentItem->branch_id !== $user->branch_id) {
-            abort(403);
-        }
-
-        $data = $request->validate([
-            'title' => 'required|string|max:255',
-            'branch_id' => $user->canViewAllBranches() ? 'required|exists:branches,id' : 'nullable',
-            'project_name' => 'nullable|string|max:255',
-            'platform' => 'nullable|string|max:50',
-            'scheduled_date' => 'required|date',
-            'status' => 'required|in:draft,review,approved,posted',
-            'notes' => 'nullable|string',
-        ]);
+        $data = $request->validated();
 
         $contentItem->update($data);
         return redirect()->route('content-calendar.index', array_filter($request->only(['month', 'year', 'branch_id', 'project_name'])))->with('success', 'Konten berhasil diperbarui.');

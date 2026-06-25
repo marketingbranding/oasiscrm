@@ -3,6 +3,8 @@
 namespace App\Http\Controllers\Crm;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Crm\StoreProjectRequest;
+use App\Http\Requests\Crm\UpdateProjectRequest;
 use App\Models\Branch;
 use App\Models\LeadMaster;
 use Illuminate\Http\Request;
@@ -47,15 +49,9 @@ class ProjectController extends Controller
         return view('crm.projects.create', compact('branches'));
     }
 
-    public function store(Request $request)
+    public function store(StoreProjectRequest $request)
     {
-        $this->ensureSuperadmin();
-        $data = $request->validate([
-            'branch_id' => 'nullable|exists:branches,id',
-            'project_name' => 'required|string|max:255',
-            'is_active' => 'boolean',
-        ]);
-
+        $data = $request->validated();
         $data['is_active'] = $request->boolean('is_active', true);
 
         LeadMaster::create($data);
@@ -71,15 +67,9 @@ class ProjectController extends Controller
         return view('crm.projects.edit', compact('project', 'branches'));
     }
 
-    public function update(Request $request, LeadMaster $project)
+    public function update(UpdateProjectRequest $request, LeadMaster $project)
     {
-        $this->ensureSuperadmin();
-        $data = $request->validate([
-            'branch_id' => 'nullable|exists:branches,id',
-            'project_name' => 'required|string|max:255',
-            'is_active' => 'boolean',
-        ]);
-
+        $data = $request->validated();
         $data['is_active'] = $request->boolean('is_active', true);
 
         $project->update($data);

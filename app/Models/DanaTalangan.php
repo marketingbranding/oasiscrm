@@ -2,11 +2,13 @@
 
 namespace App\Models;
 
+use App\Models\Traits\LogsActivity;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class DanaTalangan extends Model
 {
+    use LogsActivity;
     protected $fillable = [
         'tanggal',
         'nama_konsumen',
@@ -42,5 +44,10 @@ class DanaTalangan extends Model
     public function creator(): BelongsTo
     {
         return $this->belongsTo(User::class, 'created_by');
+    }
+
+    protected function activityLabel(): string
+    {
+        return $this->nama_konsumen . ' (Dana Talangan)';
     }
 }

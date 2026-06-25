@@ -12,6 +12,7 @@ use App\Http\Controllers\Crm\KavlingController;
 use App\Http\Controllers\Crm\KonsumenProgressController;
 use App\Http\Controllers\Crm\LeadDailyController;
 use App\Http\Controllers\Crm\LeadEventController;
+use App\Http\Controllers\Crm\LeadSourceController;
 use App\Http\Controllers\Crm\ProjectController;
 use App\Http\Controllers\ProfileController;
 use Illuminate\Support\Facades\Route;
@@ -37,6 +38,10 @@ Route::middleware(['auth', 'verified', 'password.changed'])->group(function () {
     Route::get('/database', [DatabaseController::class, 'index'])->name('database.index');
 
     Route::get('/konsumen-progress', [KonsumenProgressController::class, 'index'])->name('konsumen-progress.index');
+
+    Route::post('lead-sources/bulk-delete', [LeadSourceController::class, 'bulkDestroy'])->name('lead-sources.bulk-destroy');
+    Route::post('lead-sources/{leadSource}/toggle-active', [LeadSourceController::class, 'toggleActive'])->name('lead-sources.toggle-active');
+    Route::resource('lead-sources', LeadSourceController::class);
 
     Route::bind('lead_event', fn($v) => \App\Models\LeadEvent::findOrFail($v));
     Route::get('lead-events/export', [LeadEventController::class, 'export'])->name('lead-events.export');

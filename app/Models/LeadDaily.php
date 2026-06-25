@@ -2,11 +2,13 @@
 
 namespace App\Models;
 
+use App\Models\Traits\LogsActivity;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class LeadDaily extends Model
 {
+    use LogsActivity;
     protected $table = 'lead_daily';
 
     protected $fillable = [
@@ -40,5 +42,10 @@ class LeadDaily extends Model
     public function creator(): BelongsTo
     {
         return $this->belongsTo(User::class, 'created_by');
+    }
+
+    protected function activityLabel(): string
+    {
+        return 'Lead Harian #' . $this->id;
     }
 }

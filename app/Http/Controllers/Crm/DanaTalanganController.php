@@ -5,6 +5,9 @@ namespace App\Http\Controllers\Crm;
 use App\Exports\DanaTalanganExport;
 use App\Imports\DanaTalanganImport;
 use App\Http\Controllers\Controller;
+use App\Http\Controllers\Crm\Traits\FilterableBranch;
+use App\Http\Requests\Crm\StoreDanaTalanganRequest;
+use App\Http\Requests\Crm\UpdateDanaTalanganRequest;
 use App\Models\Branch;
 use App\Models\DanaTalangan;
 use App\Models\Kavling;
@@ -14,36 +17,18 @@ use Illuminate\Support\Facades\Auth;
 
 class DanaTalanganController extends Controller
 {
+    use FilterableBranch;
+
     public function index(Request $request)
     {
         $user = Auth::user();
-        $selectedBranchId = $request->get('branch_id');
+        $selectedBranchId = $this->resolveSelectedBranchId($request->get('branch_id'));
         $selectedProject = $request->get('project_name');
         $selectedStatus = $request->get('status');
 
-        if ($user->canViewAllBranches()) {
-            $branches = Branch::where('is_active', true)->get();
-            $projects = LeadMaster::where('is_active', true)
-                ->when($selectedBranchId, fn($q) => $q->where('branch_id', $selectedBranchId))
-                ->orderBy('project_name')
-                ->get();
-            $query = DanaTalangan::with(['branch', 'creator']);
-
-            if ($selectedBranchId) {
-                $query->where('branch_id', $selectedBranchId);
-            } elseif ($user->hasRole('pusat') && $user->branch_id) {
-                $selectedBranchId = $user->branch_id;
-                $query->where('branch_id', $selectedBranchId);
-            }
-        } else {
-            $branches = collect();
-            $selectedBranchId = $user->branch_id;
-            $projects = LeadMaster::where('is_active', true)
-                ->where('branch_id', $selectedBranchId)
-                ->orderBy('project_name')
-                ->get();
-            $query = DanaTalangan::with(['branch', 'creator'])->where('branch_id', $selectedBranchId);
-        }
+        $branches = $this->resolveBranches();
+        $projects = $this->resolveBranchProjects($selectedBranchId);
+        $query = $this->applyBranchScope(DanaTalangan::with(['branch', 'creator']), $selectedBranchId);
 
         $query->when($selectedProject, fn($q) => $q->where('project_name', $selectedProject));
         $query->when($selectedStatus, fn($q) => $q->where('status', $selectedStatus));
@@ -73,36 +58,25 @@ class DanaTalanganController extends Controller
     public function create()
     {
         $user = Auth::user();
+        $branches = $this->resolveBranches();
+
         if ($user->canViewAllBranches()) {
-            $branches = Branch::where('is_active', true)->get();
             $projects = LeadMaster::where('is_active', true)->orderBy('project_name')->get();
         } else {
-            $branches = collect([$user->branch]);
             $projects = LeadMaster::where('is_active', true)
                 ->where('branch_id', $user->branch_id)
                 ->orderBy('project_name')
                 ->get();
         }
+
         $kavlings = Kavling::with('project')->orderBy('kavling_code')->get();
         return view('crm.dana-talangan.create', compact('branches', 'projects', 'kavlings'));
     }
 
-    public function store(Request $request)
+    public function store(StoreDanaTalanganRequest $request)
     {
         $user = Auth::user();
-        $data = $request->validate([
-            'tanggal' => 'required|date',
-            'nama_konsumen' => 'required|string|max:255',
-            'kav' => 'nullable|string|max:100',
-            'branch_id' => $user->canViewAllBranches() ? 'required|exists:branches,id' : 'nullable',
-            'project_name' => 'nullable|string|max:255',
-            'pinjam_nama' => 'nullable|boolean',
-            'pekerjaan' => 'nullable|string|max:255',
-            'status_perkawinan' => 'nullable|string|max:100',
-            'umur' => 'nullable|integer|min:0|max:150',
-            'nama_marketing' => 'nullable|string|max:255',
-            'penyelesaian' => 'nullable|string',
-        ]);
+        $data = $request->validated();
 
         if (!$user->canViewAllBranches()) {
             $data['branch_id'] = $user->branch_id;
@@ -129,11 +103,10 @@ class DanaTalanganController extends Controller
             abort(403);
         }
 
+        $branches = $this->resolveBranches();
         if ($user->canViewAllBranches()) {
-            $branches = Branch::where('is_active', true)->get();
             $projects = LeadMaster::where('is_active', true)->orderBy('project_name')->get();
         } else {
-            $branches = collect([$user->branch]);
             $projects = LeadMaster::where('is_active', true)
                 ->where('branch_id', $user->branch_id)
                 ->orderBy('project_name')
@@ -145,28 +118,10 @@ class DanaTalanganController extends Controller
         return view('crm.dana-talangan.edit', compact('record', 'branches', 'projects', 'kavlings'));
     }
 
-    public function update(Request $request, DanaTalangan $danaTalangan)
+    public function update(UpdateDanaTalanganRequest $request, DanaTalangan $danaTalangan)
     {
         $user = Auth::user();
-        if (!$user->canViewAllBranches() && $danaTalangan->branch_id !== $user->branch_id) {
-            abort(403);
-        }
-
-        $data = $request->validate([
-            'tanggal' => 'required|date',
-            'nama_konsumen' => 'required|string|max:255',
-            'kav' => 'nullable|string|max:100',
-            'branch_id' => $user->canViewAllBranches() ? 'required|exists:branches,id' : 'nullable',
-            'project_name' => 'nullable|string|max:255',
-            'pinjam_nama' => 'nullable|boolean',
-            'pekerjaan' => 'nullable|string|max:255',
-            'status_perkawinan' => 'nullable|string|max:100',
-            'umur' => 'nullable|integer|min:0|max:150',
-            'nama_marketing' => 'nullable|string|max:255',
-            'penyelesaian' => 'nullable|string',
-            'konfirmasi_keuangan' => 'nullable|boolean',
-            'status' => 'required|in:aktif,lunas',
-        ]);
+        $data = $request->validated();
 
         $data['pinjam_nama'] = $request->boolean('pinjam_nama');
         $data['konfirmasi_keuangan'] = $request->boolean('konfirmasi_keuangan');
@@ -180,14 +135,12 @@ class DanaTalanganController extends Controller
     public function export(Request $request)
     {
         $user = Auth::user();
+        $query = DanaTalangan::with(['branch', 'creator']);
 
-        if ($user->canViewAllBranches()) {
-            $query = DanaTalangan::with(['branch', 'creator']);
-            if ($selectedBranchId = $request->get('branch_id')) {
-                $query->where('branch_id', $selectedBranchId);
-            }
-        } else {
-            $query = DanaTalangan::where('branch_id', $user->branch_id);
+        if (!$user->canViewAllBranches()) {
+            $query->where('branch_id', $user->branch_id);
+        } elseif ($request->filled('branch_id')) {
+            $query->where('branch_id', $request->branch_id);
         }
 
         $query->when($request->get('project_name'), fn($q, $v) => $q->where('project_name', $v));
@@ -242,11 +195,7 @@ class DanaTalanganController extends Controller
             return back()->with('error', 'Tidak ada data yang dipilih.');
         }
 
-        $user = Auth::user();
-        $query = DanaTalangan::whereIn('id', $ids);
-        if (!$user->canViewAllBranches()) {
-            $query->where('branch_id', $user->branch_id);
-        }
+        $query = $this->applyBranchScope(DanaTalangan::whereIn('id', $ids), null);
         $count = $query->delete();
 
         return redirect()->route('dana-talangan.index', array_filter($request->only(['branch_id', 'project_name', 'status'])))
@@ -261,11 +210,7 @@ class DanaTalanganController extends Controller
             return back()->with('error', 'Tidak ada data yang dipilih.');
         }
 
-        $user = Auth::user();
-        $query = DanaTalangan::whereIn('id', $ids);
-        if (!$user->canViewAllBranches()) {
-            $query->where('branch_id', $user->branch_id);
-        }
+        $query = $this->applyBranchScope(DanaTalangan::whereIn('id', $ids), null);
         $count = $query->update(['status' => $newStatus]);
 
         return redirect()->route('dana-talangan.index', array_filter($request->only(['branch_id', 'project_name', 'status'])))

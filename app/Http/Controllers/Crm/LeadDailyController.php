@@ -3,6 +3,9 @@
 namespace App\Http\Controllers\Crm;
 
 use App\Http\Controllers\Controller;
+use App\Http\Controllers\Crm\Traits\FilterableBranch;
+use App\Http\Requests\Crm\StoreLeadDailyRequest;
+use App\Http\Requests\Crm\UpdateLeadDailyRequest;
 use App\Models\Branch;
 use App\Models\LeadDaily;
 use App\Models\LeadEvent;
@@ -13,43 +16,29 @@ use Illuminate\Support\Facades\Auth;
 
 class LeadDailyController extends Controller
 {
+    use FilterableBranch;
+
     public function index(Request $request)
     {
         $user = Auth::user();
-        $selectedBranchId = $request->get('branch_id');
+        $selectedBranchId = $this->resolveSelectedBranchId($request->get('branch_id'));
         $selectedEventId = $request->get('lead_event_id');
         $selectedProjectName = $request->get('project_name');
 
+        $branches = $this->resolveBranches();
+
         if ($user->canViewAllBranches()) {
-            $branches = Branch::where('is_active', true)->get();
             $events = LeadEvent::with('branch')->latest()->get();
-            $query = LeadDaily::with(['leadEvent', 'branch', 'creator']);
-
-            if ($selectedBranchId) {
-                $query->where('branch_id', $selectedBranchId);
-            }
-            if ($selectedEventId) {
-                $query->where('lead_event_id', $selectedEventId);
-            }
-
-            $projects = LeadMaster::where('is_active', true)
-                ->when($selectedBranchId, fn($q) => $q->where('branch_id', $selectedBranchId))
-                ->orderBy('project_name')
-                ->get();
+            $eventsQuery = null;
         } else {
-            $branches = collect();
-            $selectedBranchId = $user->branch_id;
             $events = LeadEvent::with('branch')->where('branch_id', $selectedBranchId)->latest()->get();
-            $query = LeadDaily::with(['leadEvent', 'branch', 'creator'])
-                ->where('branch_id', $selectedBranchId);
-            if ($selectedEventId) {
-                $query->where('lead_event_id', $selectedEventId);
-            }
+        }
 
-            $projects = LeadMaster::where('is_active', true)
-                ->where('branch_id', $user->branch_id)
-                ->orderBy('project_name')
-                ->get();
+        $projects = $this->resolveBranchProjects($selectedBranchId);
+        $query = $this->applyBranchScope(LeadDaily::with(['leadEvent', 'branch', 'creator']), $selectedBranchId);
+
+        if ($selectedEventId) {
+            $query->where('lead_event_id', $selectedEventId);
         }
 
         if ($selectedProjectName) {
@@ -101,15 +90,10 @@ class LeadDailyController extends Controller
         return view('crm.lead-daily.create', compact('branches', 'events', 'projects'));
     }
 
-    public function store(Request $request)
+    public function store(StoreLeadDailyRequest $request)
     {
         $user = Auth::user();
-        $data = $request->validate([
-            'lead_event_id' => 'required|exists:lead_events,id',
-            'branch_id' => 'required|exists:branches,id',
-            'date' => 'required|date',
-            'leads_count' => 'required|integer|min:0',
-        ]);
+        $data = $request->validated();
 
         $event = LeadEvent::findOrFail($data['lead_event_id']);
 
@@ -153,17 +137,10 @@ class LeadDailyController extends Controller
         return view('crm.lead-daily.edit', compact('daily', 'events'));
     }
 
-    public function update(Request $request, LeadDaily $leadDaily)
+    public function update(UpdateLeadDailyRequest $request, LeadDaily $leadDaily)
     {
         $user = Auth::user();
-        if (!$user->canViewAllBranches() && $leadDaily->branch_id !== $user->branch_id) {
-            abort(403);
-        }
-
-        $data = $request->validate([
-            'date' => 'required|date',
-            'leads_count' => 'required|integer|min:0',
-        ]);
+        $data = $request->validated();
 
         $event = $leadDaily->leadEvent;
         $data['day_number'] = $event->start_date->diffInDays(now()->parse($data['date'])) + 1;
@@ -217,11 +194,7 @@ class LeadDailyController extends Controller
             return back()->with('error', 'Tidak ada data yang dipilih.');
         }
 
-        $user = Auth::user();
-        $query = LeadDaily::whereIn('id', $ids);
-        if (!$user->canViewAllBranches()) {
-            $query->where('branch_id', $user->branch_id);
-        }
+        $query = $this->applyBranchScope(LeadDaily::whereIn('id', $ids), null);
         $count = $query->delete();
 
         return redirect()->route('lead-daily.index', array_filter($request->only(['branch_id', 'lead_event_id', 'project_name'])))

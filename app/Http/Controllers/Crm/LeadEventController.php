@@ -3,43 +3,29 @@
 namespace App\Http\Controllers\Crm;
 
 use App\Http\Controllers\Controller;
+use App\Http\Controllers\Crm\Traits\FilterableBranch;
+use App\Http\Requests\Crm\StoreLeadEventRequest;
+use App\Http\Requests\Crm\UpdateLeadEventRequest;
 use App\Models\Branch;
 use App\Models\LeadEvent;
 use App\Models\LeadMaster;
+use App\Models\LeadSource;
 use App\Exports\LeadEventExport;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 
 class LeadEventController extends Controller
 {
+    use FilterableBranch;
+
     public function index(Request $request)
     {
-        $user = Auth::user();
-        $selectedBranchId = $request->get('branch_id');
+        $selectedBranchId = $this->resolveSelectedBranchId($request->get('branch_id'));
         $selectedProjectName = $request->get('project_name');
 
-        if ($user->canViewAllBranches()) {
-            $branches = Branch::where('is_active', true)->get();
-            $query = LeadEvent::with(['branch', 'creator']);
-
-            if ($selectedBranchId) {
-                $query->where('branch_id', $selectedBranchId);
-            }
-
-            $projects = LeadMaster::where('is_active', true)
-                ->when($selectedBranchId, fn($q) => $q->where('branch_id', $selectedBranchId))
-                ->orderBy('project_name')
-                ->get();
-        } else {
-            $branches = collect();
-            $selectedBranchId = $user->branch_id;
-            $query = LeadEvent::with(['branch', 'creator'])->where('branch_id', $selectedBranchId);
-
-            $projects = LeadMaster::where('is_active', true)
-                ->where('branch_id', $user->branch_id)
-                ->orderBy('project_name')
-                ->get();
-        }
+        $branches = $this->resolveBranches();
+        $projects = $this->resolveBranchProjects($selectedBranchId);
+        $query = $this->applyBranchScope(LeadEvent::with(['branch', 'creator']), $selectedBranchId);
 
         if ($selectedProjectName) {
             $query->where('project_name', $selectedProjectName);
@@ -62,32 +48,17 @@ class LeadEventController extends Controller
 
     public function create()
     {
-        $user = Auth::user();
-        if ($user->canViewAllBranches()) {
-            $branches = Branch::where('is_active', true)->get();
-        } else {
-            $branches = collect([$user->branch]);
-        }
-
+        $branches = $this->resolveBranches();
         $projects = LeadMaster::where('is_active', true)->get();
-        $sources = LeadMaster::where('is_active', true)->whereNotNull('lead_source')->distinct()->orderBy('lead_source')->pluck('lead_source');
+        $sources = LeadSource::where('is_active', true)->orderBy('name')->pluck('name');
 
         return view('crm.lead-events.create', compact('branches', 'projects', 'sources'));
     }
 
-    public function store(Request $request)
+    public function store(StoreLeadEventRequest $request)
     {
         $user = Auth::user();
-        $data = $request->validate([
-            'branch_id' => $user->canViewAllBranches() ? 'required|exists:branches,id' : 'nullable',
-            'project_name' => 'required|string|max:255',
-            'lead_source' => 'required|string|max:255',
-            'start_date' => 'required|date',
-            'end_date' => 'nullable|date|after_or_equal:start_date',
-            'total_budget' => 'nullable|numeric|min:0',
-            'status' => 'required|in:berlangsung,selesai',
-            'notes' => 'nullable|string',
-        ]);
+        $data = $request->validated();
 
         if (!$user->canViewAllBranches()) {
             $data['branch_id'] = $user->branch_id;
@@ -113,36 +84,17 @@ class LeadEventController extends Controller
             abort(403);
         }
 
-        if ($user->canViewAllBranches()) {
-            $branches = Branch::where('is_active', true)->get();
-        } else {
-            $branches = collect([$user->branch]);
-        }
-
+        $branches = $this->resolveBranches();
         $projects = LeadMaster::where('is_active', true)->get();
-        $sources = LeadMaster::where('is_active', true)->whereNotNull('lead_source')->distinct()->orderBy('lead_source')->pluck('lead_source');
+        $sources = LeadSource::where('is_active', true)->orderBy('name')->pluck('name');
         $event = $leadEvent;
 
         return view('crm.lead-events.edit', compact('event', 'branches', 'projects', 'sources'));
     }
 
-    public function update(Request $request, LeadEvent $leadEvent)
+    public function update(UpdateLeadEventRequest $request, LeadEvent $leadEvent)
     {
-        $user = Auth::user();
-        if (!$user->canViewAllBranches() && $leadEvent->branch_id !== $user->branch_id) {
-            abort(403);
-        }
-
-        $data = $request->validate([
-            'branch_id' => $user->canViewAllBranches() ? 'required|exists:branches,id' : 'nullable',
-            'project_name' => 'required|string|max:255',
-            'lead_source' => 'required|string|max:255',
-            'start_date' => 'required|date',
-            'end_date' => 'nullable|date|after_or_equal:start_date',
-            'total_budget' => 'nullable|numeric|min:0',
-            'status' => 'required|in:berlangsung,selesai',
-            'notes' => 'nullable|string',
-        ]);
+        $data = $request->validated();
 
         $leadEvent->update($data);
 
@@ -178,11 +130,7 @@ class LeadEventController extends Controller
             return back()->with('error', 'Tidak ada data yang dipilih.');
         }
 
-        $user = Auth::user();
-        $query = LeadEvent::whereIn('id', $ids);
-        if (!$user->canViewAllBranches()) {
-            $query->where('branch_id', $user->branch_id);
-        }
+        $query = $this->applyBranchScope(LeadEvent::whereIn('id', $ids), null);
         $count = $query->delete();
 
         return redirect()->route('lead-events.index', array_filter($request->only(['branch_id', 'project_name'])))
@@ -202,11 +150,7 @@ class LeadEventController extends Controller
             $newStatus = 'berlangsung';
         }
 
-        $user = Auth::user();
-        $query = LeadEvent::whereIn('id', $ids);
-        if (!$user->canViewAllBranches()) {
-            $query->where('branch_id', $user->branch_id);
-        }
+        $query = $this->applyBranchScope(LeadEvent::whereIn('id', $ids), null);
         $count = $query->update(['status' => $newStatus]);
 
         return redirect()->route('lead-events.index', array_filter($request->only(['branch_id', 'project_name'])))

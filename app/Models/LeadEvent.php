@@ -2,12 +2,14 @@
 
 namespace App\Models;
 
+use App\Models\Traits\LogsActivity;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class LeadEvent extends Model
 {
+    use LogsActivity;
     protected $fillable = [
         'branch_id',
         'event_id',
@@ -57,5 +59,10 @@ class LeadEvent extends Model
             return null;
         }
         return $this->total_budget / $total;
+    }
+
+    protected function activityLabel(): string
+    {
+        return $this->event_id ?? $this->project_name . ' (Event)';
     }
 }

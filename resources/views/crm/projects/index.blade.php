@@ -17,6 +17,11 @@
                     <option value="{{ $b->id }}" {{ (string)$selectedBranchId === (string)$b->id ? 'selected' : '' }}>{{ $b->name }}</option>
                 @endforeach
             </select>
+                <label class="font-[Helvetica] font-bold text-xs uppercase">Cari:</label>
+                <input name="search" value="{{ request('search') }}"
+                       placeholder="Nama Proyek..."
+                       class="border-2 border-black px-3 py-1.5 text-sm font-['Times_New_Roman'] bg-white rounded-none"
+                       onkeydown="if(event.key==='Enter') this.form.submit()">
             </div>
 
             <div class="h-6 w-px bg-black mx-1 hidden sm:block"></div>

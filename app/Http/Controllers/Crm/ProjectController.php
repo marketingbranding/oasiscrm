@@ -20,6 +20,9 @@ class ProjectController extends Controller
         if ($selectedBranchId) {
             $query->where('branch_id', $selectedBranchId);
         }
+        $query->when($request->get('search'), fn($q, $v) => $q->where(function($q) use ($v) {
+            $q->where('project_name', 'like', "%{$v}%");
+        }));
 
         $sortField = $request->get('sort', 'created_at');
         $sortDir = $request->get('dir', 'desc');

@@ -27,6 +27,11 @@
                     <option value="{{ $p->project_name }}" {{ $selectedProjectName === $p->project_name ? 'selected' : '' }}>{{ $p->project_name }}</option>
                 @endforeach
             </select>
+                <label class="font-[Helvetica] font-bold text-xs uppercase">Cari:</label>
+                <input name="search" value="{{ request('search') }}"
+                       placeholder="Proyek, Sumber, Lokasi..."
+                       class="border-2 border-black px-3 py-1.5 text-sm font-['Times_New_Roman'] bg-white rounded-none"
+                       onkeydown="if(event.key==='Enter') this.form.submit()">
             </div>
 
             <div class="h-6 w-px bg-black mx-1 hidden sm:block"></div>
@@ -257,6 +262,15 @@
 <div id="bulk-bar" class="fixed bottom-4 left-4 z-50 bg-white border-2 border-black shadow-lg hidden">
     <div class="flex items-center gap-3 px-4 py-3">
         <span class="text-sm font-[Helvetica] font-bold"><span id="bulk-count">0</span> data terpilih</span>
+        <div class="h-6 w-px bg-black mx-1"></div>
+        <select id="bulk-new-status" class="border-2 border-black px-2 py-1.5 text-xs font-['Times_New_Roman'] bg-white">
+            <option value="berlangsung">→ Berlangsung</option>
+            <option value="selesai">→ Selesai</option>
+        </select>
+        <button onclick="bulkUpdateStatus()" class="bg-[#e6915d] text-black px-4 py-1.5 text-sm font-[Helvetica] font-bold border-2 border-black rounded-none hover:bg-[#d4854f] cursor-pointer">
+            Update Status
+        </button>
+        <div class="h-6 w-px bg-black mx-1"></div>
         <button onclick="bulkDelete()" class="bg-[#e91d2a] text-white px-4 py-1.5 text-sm font-[Helvetica] font-bold border-2 border-black rounded-none hover:bg-[#c0392b] cursor-pointer">
             Hapus Terpilih
         </button>
@@ -266,6 +280,15 @@
 <form id="bulk-form" method="POST" action="{{ route('lead-events.bulk-destroy') }}" class="hidden">
     @csrf
     <input type="hidden" name="selected_ids" id="bulk-ids">
+    @foreach(request()->only(['branch_id', 'project_name']) as $k => $v)
+        <input type="hidden" name="{{ $k }}" value="{{ $v }}">
+    @endforeach
+</form>
+
+<form id="bulk-update-form" method="POST" action="{{ route('lead-events.bulk-update') }}" class="hidden">
+    @csrf
+    <input type="hidden" name="selected_ids" id="bulk-update-ids">
+    <input type="hidden" name="new_status" id="bulk-update-status">
     @foreach(request()->only(['branch_id', 'project_name']) as $k => $v)
         <input type="hidden" name="{{ $k }}" value="{{ $v }}">
     @endforeach
@@ -298,6 +321,15 @@ function bulkDelete() {
     if (!confirm('Hapus ' + count + ' data terpilih?')) return;
     document.getElementById('bulk-ids').value = Array.from(selected).join(',');
     document.getElementById('bulk-form').submit();
+}
+function bulkUpdateStatus() {
+    const count = selected.size;
+    if (!count) return;
+    const status = document.getElementById('bulk-new-status').value;
+    if (!confirm('Ubah status ' + count + ' data terpilih menjadi ' + status + '?')) return;
+    document.getElementById('bulk-update-ids').value = Array.from(selected).join(',');
+    document.getElementById('bulk-update-status').value = status;
+    document.getElementById('bulk-update-form').submit();
 }
 </script>
 <style>

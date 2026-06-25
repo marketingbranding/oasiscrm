@@ -36,6 +36,11 @@
                 <option value="aktif" {{ $selectedStatus === 'aktif' ? 'selected' : '' }}>Aktif</option>
                 <option value="lunas" {{ $selectedStatus === 'lunas' ? 'selected' : '' }}>Lunas</option>
             </select>
+                <label class="font-[Helvetica] font-bold text-xs uppercase">Cari:</label>
+                <input name="search" value="{{ request('search') }}"
+                       placeholder="Nama, Kav, Proyek..."
+                       class="border-2 border-black px-3 py-1.5 text-sm font-['Times_New_Roman'] bg-white rounded-none"
+                       onkeydown="if(event.key==='Enter') this.form.submit()">
             </div>
 
             <div class="h-6 w-px bg-black mx-1 hidden sm:block"></div>
@@ -260,7 +265,7 @@
                     <td class="px-3 py-2 max-w-[200px] truncate" title="{{ $r->penyelesaian }}">{{ $r->penyelesaian ?? '—' }}</td>
                     <td class="px-3 py-2 text-center">
                         @if($r->konfirmasi_keuangan)
-                            <span class="text-[#b3bd95] font-bold">✓</span>
+                            <span class="text-green-800 font-bold">✓</span>
                         @else
                             <span class="text-gray-400">—</span>
                         @endif
@@ -323,6 +328,15 @@
 <div id="bulk-bar" class="fixed bottom-4 left-4 z-50 bg-white border-2 border-black shadow-lg hidden">
     <div class="flex items-center gap-3 px-4 py-3">
         <span class="text-sm font-[Helvetica] font-bold"><span id="bulk-count">0</span> data terpilih</span>
+        <div class="h-6 w-px bg-black mx-1"></div>
+        <select id="bulk-new-status" class="border-2 border-black px-2 py-1.5 text-xs font-['Times_New_Roman'] bg-white">
+            <option value="aktif">→ Aktif</option>
+            <option value="lunas">→ Lunas</option>
+        </select>
+        <button onclick="bulkUpdateStatus()" class="bg-[#f1c40f] text-black px-4 py-1.5 text-sm font-[Helvetica] font-bold border-2 border-black rounded-none hover:bg-[#e0b80e] cursor-pointer">
+            Update Status
+        </button>
+        <div class="h-6 w-px bg-black mx-1"></div>
         <button onclick="bulkDelete()" class="bg-[#e91d2a] text-white px-4 py-1.5 text-sm font-[Helvetica] font-bold border-2 border-black rounded-none hover:bg-[#c0392b] cursor-pointer">
             Hapus Terpilih
         </button>
@@ -332,6 +346,15 @@
 <form id="bulk-form" method="POST" action="{{ route('dana-talangan.bulk-destroy') }}" class="hidden">
     @csrf
     <input type="hidden" name="selected_ids" id="bulk-ids">
+    @foreach(request()->only(['branch_id', 'project_name', 'status']) as $k => $v)
+        <input type="hidden" name="{{ $k }}" value="{{ $v }}">
+    @endforeach
+</form>
+
+<form id="bulk-update-form" method="POST" action="{{ route('dana-talangan.bulk-update') }}" class="hidden">
+    @csrf
+    <input type="hidden" name="selected_ids" id="bulk-update-ids">
+    <input type="hidden" name="new_status" id="bulk-update-status">
     @foreach(request()->only(['branch_id', 'project_name', 'status']) as $k => $v)
         <input type="hidden" name="{{ $k }}" value="{{ $v }}">
     @endforeach
@@ -364,6 +387,15 @@ function bulkDelete() {
     if (!confirm('Hapus ' + count + ' data terpilih?')) return;
     document.getElementById('bulk-ids').value = Array.from(selected).join(',');
     document.getElementById('bulk-form').submit();
+}
+function bulkUpdateStatus() {
+    const count = selected.size;
+    if (!count) return;
+    const status = document.getElementById('bulk-new-status').value;
+    if (!confirm('Ubah status ' + count + ' data terpilih menjadi ' + status + '?')) return;
+    document.getElementById('bulk-update-ids').value = Array.from(selected).join(',');
+    document.getElementById('bulk-update-status').value = status;
+    document.getElementById('bulk-update-form').submit();
 }
 </script>
 <style>

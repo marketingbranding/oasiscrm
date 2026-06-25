@@ -46,6 +46,12 @@ class DanaTalanganController extends Controller
 
         $query->when($selectedProject, fn($q) => $q->where('project_name', $selectedProject));
         $query->when($selectedStatus, fn($q) => $q->where('status', $selectedStatus));
+        $query->when($request->get('search'), fn($q, $v) => $q->where(function($q) use ($v) {
+            $q->where('nama_konsumen', 'like', "%{$v}%")
+              ->orWhere('kav', 'like', "%{$v}%")
+              ->orWhere('project_name', 'like', "%{$v}%")
+              ->orWhere('nama_marketing', 'like', "%{$v}%");
+        }));
 
         $sortField = $request->get('sort', 'tanggal');
         $sortDir = $request->get('dir', 'desc');
@@ -208,6 +214,25 @@ class DanaTalanganController extends Controller
 
         return redirect()->route('dana-talangan.index', array_filter($request->only(['branch_id', 'project_name', 'status'])))
             ->with('success', "$count data dana talangan berhasil dihapus.");
+    }
+
+    public function bulkUpdate(Request $request)
+    {
+        $ids = array_filter(explode(',', $request->input('selected_ids', '')));
+        $newStatus = $request->input('new_status', 'aktif');
+        if (empty($ids)) {
+            return back()->with('error', 'Tidak ada data yang dipilih.');
+        }
+
+        $user = Auth::user();
+        $query = DanaTalangan::whereIn('id', $ids);
+        if (!$user->canViewAllBranches()) {
+            $query->where('branch_id', $user->branch_id);
+        }
+        $count = $query->update(['status' => $newStatus]);
+
+        return redirect()->route('dana-talangan.index', array_filter($request->only(['branch_id', 'project_name', 'status'])))
+            ->with('success', "$count data dana talangan berhasil diperbarui.");
     }
 
     public function destroy(DanaTalangan $danaTalangan)

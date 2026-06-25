@@ -56,6 +56,11 @@ class LeadDailyController extends Controller
             $query->whereHas('leadEvent', fn($q) => $q->where('project_name', $selectedProjectName));
             $events = $events->filter(fn($e) => $e->project_name === $selectedProjectName);
         }
+        $query->when($request->get('search'), fn($q, $v) => $q->where(function($q) use ($v) {
+            $q->whereHas('leadEvent', fn($q) => $q->where('project_name', 'like', "%{$v}%")
+                  ->orWhere('lead_source', 'like', "%{$v}%"))
+              ->orWhere('location', 'like', "%{$v}%");
+        }));
 
         $sortField = $request->get('sort', 'date');
         $sortDir = $request->get('dir', 'desc');

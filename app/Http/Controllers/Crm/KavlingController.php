@@ -16,11 +16,21 @@ class KavlingController extends Controller
             abort(403);
         }
 
+        $search = request()->get('search');
+        $kavlingsQuery = $project->kavlings();
+
+        if ($search) {
+            $kavlingsQuery->where(function($q) use ($search) {
+                $q->where('kavling_code', 'like', "%{$search}%")
+                  ->orWhere('name', 'like', "%{$search}%");
+            });
+        }
+
         $perPage = request()->get('per_page', '15');
         if ($perPage === 'all') {
-            $kavlings = $project->kavlings()->orderBy('kavling_code')->get();
+            $kavlings = $kavlingsQuery->orderBy('kavling_code')->get();
         } else {
-            $kavlings = $project->kavlings()->orderBy('kavling_code')->paginate((int) $perPage)->withQueryString();
+            $kavlings = $kavlingsQuery->orderBy('kavling_code')->paginate((int) $perPage)->withQueryString();
         }
 
         return view('crm.kavlings.index', compact('project', 'kavlings', 'perPage'));

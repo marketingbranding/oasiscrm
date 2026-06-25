@@ -44,6 +44,11 @@ class LeadEventController extends Controller
         if ($selectedProjectName) {
             $query->where('project_name', $selectedProjectName);
         }
+        $query->when($request->get('search'), fn($q, $v) => $q->where(function($q) use ($v) {
+            $q->where('project_name', 'like', "%{$v}%")
+              ->orWhere('lead_source', 'like', "%{$v}%")
+              ->orWhere('location', 'like', "%{$v}%");
+        }));
 
         $perPage = $request->get('per_page', '15');
         if ($perPage === 'all') {
@@ -182,6 +187,30 @@ class LeadEventController extends Controller
 
         return redirect()->route('lead-events.index', array_filter($request->only(['branch_id', 'project_name'])))
             ->with('success', "$count event berhasil dihapus.");
+    }
+
+    public function bulkUpdate(Request $request)
+    {
+        $ids = array_filter(explode(',', $request->input('selected_ids', '')));
+        $newStatus = $request->input('new_status', 'berlangsung');
+        if (empty($ids)) {
+            return back()->with('error', 'Tidak ada data yang dipilih.');
+        }
+
+        $allowedStatus = ['berlangsung', 'selesai'];
+        if (!in_array($newStatus, $allowedStatus)) {
+            $newStatus = 'berlangsung';
+        }
+
+        $user = Auth::user();
+        $query = LeadEvent::whereIn('id', $ids);
+        if (!$user->canViewAllBranches()) {
+            $query->where('branch_id', $user->branch_id);
+        }
+        $count = $query->update(['status' => $newStatus]);
+
+        return redirect()->route('lead-events.index', array_filter($request->only(['branch_id', 'project_name'])))
+            ->with('success', "$count event berhasil diperbarui.");
     }
 
     public function destroy(LeadEvent $leadEvent)

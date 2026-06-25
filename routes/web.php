@@ -41,6 +41,7 @@ Route::middleware(['auth', 'verified', 'password.changed'])->group(function () {
     Route::bind('lead_event', fn($v) => \App\Models\LeadEvent::findOrFail($v));
     Route::get('lead-events/export', [LeadEventController::class, 'export'])->name('lead-events.export');
     Route::post('lead-events/bulk-delete', [LeadEventController::class, 'bulkDestroy'])->name('lead-events.bulk-destroy');
+    Route::post('lead-events/bulk-update', [LeadEventController::class, 'bulkUpdate'])->name('lead-events.bulk-update');
     Route::resource('lead-events', LeadEventController::class);
 
     Route::bind('lead_daily', fn($v) => \App\Models\LeadDaily::findOrFail($v));
@@ -51,6 +52,7 @@ Route::middleware(['auth', 'verified', 'password.changed'])->group(function () {
     Route::bind('dana_talangan', fn($v) => \App\Models\DanaTalangan::findOrFail($v));
     Route::get('dana-talangan/export', [DanaTalanganController::class, 'export'])->name('dana-talangan.export');
     Route::post('dana-talangan/bulk-delete', [DanaTalanganController::class, 'bulkDestroy'])->name('dana-talangan.bulk-destroy');
+    Route::post('dana-talangan/bulk-update', [DanaTalanganController::class, 'bulkUpdate'])->name('dana-talangan.bulk-update');
     Route::resource('dana-talangan', DanaTalanganController::class);
 
     Route::middleware('role:superadmin')->group(function () {

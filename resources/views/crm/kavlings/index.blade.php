@@ -16,6 +16,18 @@
         </a>
     </div>
 
+    <div class="bg-white border-2 border-black p-3 mb-6">
+        <form method="GET" action="{{ url()->current() }}" class="flex items-center gap-3 flex-wrap filter-bar">
+            <div class="flex items-center gap-3 flex-wrap">
+                <label class="font-[Helvetica] font-bold text-xs uppercase">Cari:</label>
+                <input name="search" value="{{ request('search') }}"
+                       placeholder="Kode atau Nama Kavling..."
+                       class="border-2 border-black px-3 py-1.5 text-sm font-['Times_New_Roman'] bg-white rounded-none"
+                       onkeydown="if(event.key==='Enter') this.form.submit()">
+            </div>
+        </form>
+    </div>
+
     <div class="table-scroll border-2 border-black bg-white overflow-auto max-h-[calc(100vh-12rem)]">
         <table class="w-full text-sm font-['Times_New_Roman']">
             <thead>

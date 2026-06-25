@@ -35,6 +35,11 @@
                     <option value="{{ $e->id }}" {{ (string)$selectedEventId === (string)$e->id ? 'selected' : '' }}>{{ $e->event_id ?? $e->project_name }} — {{ $e->branch->name ?? '' }}</option>
                 @endforeach
             </select>
+                <label class="font-[Helvetica] font-bold text-xs uppercase">Cari:</label>
+                <input name="search" value="{{ request('search') }}"
+                       placeholder="Proyek, Lokasi..."
+                       class="border-2 border-black px-3 py-1.5 text-sm font-['Times_New_Roman'] bg-white rounded-none"
+                       onkeydown="if(event.key==='Enter') this.form.submit()">
             </div>
 
             <div class="h-6 w-px bg-black mx-1 hidden sm:block"></div>

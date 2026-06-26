@@ -2,6 +2,7 @@
 
 namespace App\Imports;
 
+use App\Imports\Concerns\ParsesImport;
 use App\Models\Branch;
 use App\Models\DanaTalangan;
 use PhpOffice\PhpSpreadsheet\IOFactory;
@@ -9,34 +10,7 @@ use Illuminate\Support\Facades\Auth;
 
 class DanaTalanganImport
 {
-    private static function parseDate(string $value): ?string
-    {
-        $value = trim($value);
-        if (empty($value)) return null;
-
-        if (is_numeric($value)) {
-            $unix = ($value - 25569) * 86400;
-            return date('Y-m-d', (int) $unix);
-        }
-
-        $formats = ['d M Y', 'd/m/Y', 'Y-m-d', 'd-m-Y', 'd/m/y', 'd F Y'];
-        foreach ($formats as $fmt) {
-            $dt = \DateTime::createFromFormat($fmt, $value);
-            if ($dt) return $dt->format('Y-m-d');
-        }
-
-        try {
-            return (new \Carbon\Carbon($value))->format('Y-m-d');
-        } catch (\Exception $e) {
-            return null;
-        }
-    }
-
-    private static function parseBool(string $value): bool
-    {
-        $v = strtoupper(trim($value));
-        return in_array($v, ['YA', 'TRUE', '1', '✓', 'YES']);
-    }
+    use ParsesImport;
 
     public static function import(string $filePath, ?int $branchId = null, ?array $preservedParams = []): array
     {
@@ -45,23 +19,10 @@ class DanaTalanganImport
         $rowNum = 0;
         $user = Auth::user();
 
-        $reader = IOFactory::createReaderForFile($filePath);
-        $reader->setReadDataOnly(true);
-        $spreadsheet = $reader->load($filePath);
-        $sheet = $spreadsheet->getActiveSheet();
-        $rows = $sheet->toArray();
+        [$spreadsheet, $sheet, $rows] = self::spreadsheetLoad($filePath);
 
-        // --- Detect if file has Cabang column (template format) ---
-        $hasCabang = false;
-        $branchNames = [];
-        if (isset($rows[1]) && is_array($rows[1])) {
-            $firstDataRow = array_values($rows[1]);
-            $firstVal = trim((string) ($firstDataRow[0] ?? ''));
-            if (!empty($firstVal) && !is_numeric($firstVal)) {
-                $branchNames = Branch::where('is_active', true)->pluck('name')->toArray();
-                $hasCabang = in_array($firstVal, $branchNames);
-            }
-        }
+        [$hasCabang, $branchNames] = self::detectHasCabang($rows);
+        $branchNameToId = self::branchNameToIdMap();
 
         foreach ($rows as $cells) {
             $rowNum++;
@@ -85,17 +46,10 @@ class DanaTalanganImport
 
             $offset = $hasCabang ? 1 : 0;
 
-            // Read branch from file if available
             $branchFromFile = null;
             if ($hasCabang) {
                 $cabangName = trim((string) ($cells[0] ?? ''));
-                if (!empty($cabangName) && !empty($branchNames)) {
-                    $branchIdx = array_search($cabangName, $branchNames);
-                    if ($branchIdx !== false) {
-                        $branch = Branch::where('name', $branchNames[$branchIdx])->first();
-                        $branchFromFile = $branch ? $branch->id : null;
-                    }
-                }
+                $branchFromFile = self::resolveBranchFromFile($cabangName, $branchNameToId, $branchNames);
             }
 
             $tanggalRaw = $cells[1 + $offset] ?? '';
@@ -152,7 +106,7 @@ class DanaTalanganImport
             }
         }
 
-        $spreadsheet->disconnectWorksheets();
+        self::spreadsheetDisconnect($spreadsheet);
 
         return [
             'imported' => $imported,

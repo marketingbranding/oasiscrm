@@ -2,20 +2,20 @@
 
 namespace App\Exports;
 
+use App\Exports\Concerns\ExcelStyle;
 use App\Models\Branch;
 use App\Models\Kavling;
 use App\Models\LeadMaster;
 use Illuminate\Support\Collection;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
 use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
-use PhpOffice\PhpSpreadsheet\Style\Fill;
-use PhpOffice\PhpSpreadsheet\Style\Border;
-use PhpOffice\PhpSpreadsheet\Style\Alignment;
 use PhpOffice\PhpSpreadsheet\Cell\Coordinate;
 use PhpOffice\PhpSpreadsheet\Cell\DataValidation;
 
 class DanaTalanganExport
 {
+    use ExcelStyle;
+
     private static function headers(): array
     {
         return [
@@ -30,50 +30,22 @@ class DanaTalanganExport
         return array_merge(['Cabang'], self::headers());
     }
 
-    private static function applyStyles(Spreadsheet $spreadsheet, array $headers, int $lastRow): void
+    private static function exportWidths(): array
     {
-        $sheet = $spreadsheet->getActiveSheet();
-        $colCount = count($headers);
-        $lastCol = Coordinate::stringFromColumnIndex($colCount);
-
-        $sheet->getStyle('A1:' . $lastCol . '1')->applyFromArray([
-            'font' => ['bold' => true, 'color' => ['rgb' => 'FFFFFF'], 'size' => 11, 'name' => 'Times New Roman'],
-            'fill' => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['rgb' => '000000']],
-            'borders' => ['allBorders' => ['borderStyle' => Border::BORDER_THIN]],
-            'alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER, 'vertical' => Alignment::VERTICAL_CENTER],
-        ]);
-
-        if ($lastRow > 1) {
-            $sheet->getStyle('A2:' . $lastCol . $lastRow)->applyFromArray([
-                'borders' => ['allBorders' => ['borderStyle' => Border::BORDER_THIN]],
-                'font' => ['size' => 10, 'name' => 'Times New Roman'],
-            ]);
-        }
-
-        $defaultWidths = [
+        return [
             'A' => 5, 'B' => 14, 'C' => 30, 'D' => 10, 'E' => 25,
             'F' => 14, 'G' => 20, 'H' => 15, 'I' => 7,
             'J' => 20, 'K' => 30, 'L' => 14, 'M' => 10,
         ];
-
-        if ($colCount === 14) {
-            $defaultWidths = [
-                'A' => 22, 'B' => 5, 'C' => 14, 'D' => 30, 'E' => 10, 'F' => 25,
-                'G' => 14, 'H' => 20, 'I' => 15, 'J' => 7,
-                'K' => 20, 'L' => 30, 'M' => 14, 'N' => 10,
-            ];
-        }
-
-        foreach ($defaultWidths as $col => $w) {
-            $sheet->getColumnDimension($col)->setWidth($w);
-        }
-
-        $sheet->freezePane('A2');
     }
 
-    private static function cell(int $col, int $row): string
+    private static function templateWidths(): array
     {
-        return Coordinate::stringFromColumnIndex($col) . $row;
+        return [
+            'A' => 22, 'B' => 5, 'C' => 14, 'D' => 30, 'E' => 10, 'F' => 25,
+            'G' => 14, 'H' => 20, 'I' => 15, 'J' => 7,
+            'K' => 20, 'L' => 30, 'M' => 14, 'N' => 10,
+        ];
     }
 
     public static function toBrowser(Collection $records, string $filename): void
@@ -83,9 +55,7 @@ class DanaTalanganExport
         $sheet->setTitle('Dana Talangan');
 
         $headers = self::headers();
-        foreach ($headers as $i => $h) {
-            $sheet->setCellValue(self::cell($i + 1, 1), $h);
-        }
+        self::writeHeaderRow($sheet, $headers);
 
         foreach ($records as $i => $r) {
             $row = $i + 2;
@@ -105,29 +75,20 @@ class DanaTalanganExport
         }
 
         $rowCount = $records->count() + 1;
-        self::applyStyles($spreadsheet, $headers, $rowCount);
-
-        $lastCol = Coordinate::stringFromColumnIndex(count($headers));
-        $sheet->setAutoFilter('A1:' . $lastCol . $rowCount);
+        self::applyStyles($spreadsheet, $headers, $rowCount, self::exportWidths());
+        self::addAutoFilter($sheet, $headers, $rowCount);
 
         $writer = new Xlsx($spreadsheet);
-        header('Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-        header('Content-Disposition: attachment; filename="' . $filename . '"');
-        header('Cache-Control: max-age=0');
-        $writer->save('php://output');
-        exit;
+        self::downloadXlsx($writer, $filename);
     }
 
     public static function generateTemplate(): void
     {
         $spreadsheet = new Spreadsheet();
         $sheet = $spreadsheet->getActiveSheet();
-        $sheet->setTitle('Template');
 
         $headers = self::templateHeaders();
-        foreach ($headers as $i => $h) {
-            $sheet->setCellValue(self::cell($i + 1, 1), $h);
-        }
+        self::generateTemplateOpen($spreadsheet, $headers);
 
         $maxRow = 101;
 
@@ -160,17 +121,12 @@ class DanaTalanganExport
             $projCol++;
         }
 
-        // --- Date format C:Tanggal ---
-        $sheet->getStyle('C2:C' . $maxRow)
-            ->getNumberFormat()
-            ->setFormatCode('DD/MM/YYYY');
-        $sheet->setCellValue('C2', date('Y-m-d'));
+        // --- C:Tanggal date format ---
+        self::dateColumnStyle($sheet, 'C2:C' . $maxRow, date('Y-m-d'));
 
         // --- A:Cabang dropdown ---
         $branches = Branch::where('is_active', true)->pluck('name')->toArray();
-        if (!empty($branches)) {
-            $sheet->setDataValidation('A2:A' . $maxRow, self::listValidation($branches));
-        }
+        self::branchDropdown($sheet, 'A', $maxRow, $branches);
 
         // --- F:Proyek dropdown (from helper sheet row 1) ---
         if ($projects->count() > 0) {
@@ -201,30 +157,9 @@ class DanaTalanganExport
         // --- N:Status dropdown ---
         $sheet->setDataValidation('N2:N' . $maxRow, self::listValidation(['aktif', 'lunas']));
 
-        self::applyStyles($spreadsheet, $headers, $maxRow);
+        self::applyStyles($spreadsheet, $headers, $maxRow, self::templateWidths());
 
         $writer = new Xlsx($spreadsheet);
-        header('Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-        header('Content-Disposition: attachment; filename="template-dana-talangan.xlsx"');
-        header('Cache-Control: max-age=0');
-        $writer->save('php://output');
-        exit;
-    }
-
-    private static function listValidation(array|string $source): DataValidation
-    {
-        $validation = new DataValidation();
-        $validation->setType(DataValidation::TYPE_LIST);
-        $validation->setErrorStyle(DataValidation::STYLE_STOP);
-        $validation->setAllowBlank(true);
-        $validation->setShowDropDown(false);
-
-        if (is_array($source)) {
-            $validation->setFormula1('"' . implode(',', $source) . '"');
-        } else {
-            $validation->setFormula1('=' . $source);
-        }
-
-        return $validation;
+        self::downloadXlsx($writer, 'template-dana-talangan.xlsx');
     }
 }

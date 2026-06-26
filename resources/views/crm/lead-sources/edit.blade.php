@@ -3,9 +3,7 @@
 @section('title', 'Edit Sumber Lead - Oasis CRM')
 
 @section('content')
-    <div class="bg-[#5d8e8e] border-2 border-black px-4 py-2 mb-6">
-        <h1 class="font-['Arial_Black'] font-black text-xl uppercase">Edit Sumber Lead</h1>
-    </div>
+    <x-crm.page-header color="#5d8e8e" title="Edit Sumber Lead" />
 
     <div class="border-2 border-black bg-white">
         <div class="bg-black text-white px-4 py-2 font-[Helvetica] font-bold text-xs uppercase">

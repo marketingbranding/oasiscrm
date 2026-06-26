@@ -4,6 +4,9 @@ namespace App\Http\Controllers\Crm;
 
 use App\Http\Controllers\Controller;
 use App\Http\Controllers\Crm\Traits\FilterableBranch;
+use App\Http\Controllers\Crm\Traits\Exportable;
+use App\Http\Controllers\Crm\Traits\Importable;
+use App\Http\Controllers\Crm\Traits\BulkOperations;
 use App\Http\Requests\Crm\StoreLeadDailyRequest;
 use App\Http\Requests\Crm\UpdateLeadDailyRequest;
 use App\Models\Branch;
@@ -18,6 +21,22 @@ use Illuminate\Support\Facades\Auth;
 class LeadDailyController extends Controller
 {
     use FilterableBranch;
+    use Exportable;
+    use Importable;
+    use BulkOperations;
+
+    protected string $exportClass = LeadDailyExport::class;
+
+    protected string $importView = 'crm.lead-daily.import';
+    protected string $importClass = LeadDailyImport::class;
+    protected array $importPreservedParams = ['branch_id', 'lead_event_id', 'project_name'];
+    protected string $importErrorRoute = 'lead-daily.import';
+    protected string $importSuccessRoute = 'lead-daily.index';
+
+    protected string $bulkModel = LeadDaily::class;
+    protected string $bulkLabel = 'data harian';
+    protected string $bulkRedirectRoute = 'lead-daily.index';
+    protected array $bulkRedirectParams = ['branch_id', 'lead_event_id', 'project_name'];
 
     public function index(Request $request)
     {
@@ -163,42 +182,6 @@ class LeadDailyController extends Controller
             ->with('success', 'Data harian berhasil diperbarui.');
     }
 
-    public function exportTemplate()
-    {
-        LeadDailyExport::generateTemplate();
-    }
-
-    public function import()
-    {
-        return view('crm.lead-daily.import');
-    }
-
-    public function importStore(Request $request)
-    {
-        $request->validate(['file' => 'required|file|mimes:xlsx']);
-
-        $user = Auth::user();
-        $branchId = $user->canViewAllBranches()
-            ? $request->get('branch_id')
-            : $user->branch_id;
-
-        $result = LeadDailyImport::import(
-            $request->file('file')->getPathname(),
-            $branchId,
-            $request->only(['branch_id', 'lead_event_id', 'project_name'])
-        );
-
-        $message = $result['imported'] . ' data berhasil diimport.';
-        if (!empty($result['errors'])) {
-            return redirect()->route('lead-daily.import')
-                ->with('success', $message)
-                ->with('import_errors', $result['errors']);
-        }
-
-        return redirect()->route('lead-daily.index')
-            ->with('success', $message);
-    }
-
     public function export(Request $request)
     {
         $user = Auth::user();
@@ -222,20 +205,6 @@ class LeadDailyController extends Controller
         $filename = 'lead-harian-' . now()->format('Ymd') . '.xlsx';
 
         LeadDailyExport::toBrowser($records, $filename);
-    }
-
-    public function bulkDestroy(Request $request)
-    {
-        $ids = array_filter(explode(',', $request->input('selected_ids', '')));
-        if (empty($ids)) {
-            return back()->with('error', 'Tidak ada data yang dipilih.');
-        }
-
-        $query = $this->applyBranchScope(LeadDaily::whereIn('id', $ids), null);
-        $count = $query->delete();
-
-        return redirect()->route('lead-daily.index', array_filter($request->only(['branch_id', 'lead_event_id', 'project_name'])))
-            ->with('success', "$count data harian berhasil dihapus.");
     }
 
     public function destroy(LeadDaily $leadDaily)

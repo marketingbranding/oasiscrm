@@ -4,6 +4,10 @@ namespace App\Http\Controllers\Crm;
 
 use App\Http\Controllers\Controller;
 use App\Http\Controllers\Crm\Traits\FilterableBranch;
+use App\Http\Controllers\Crm\Traits\RedirectsShowToEdit;
+use App\Http\Controllers\Crm\Traits\Exportable;
+use App\Http\Controllers\Crm\Traits\Importable;
+use App\Http\Controllers\Crm\Traits\BulkOperations;
 use App\Http\Requests\Crm\StoreLeadEventRequest;
 use App\Http\Requests\Crm\UpdateLeadEventRequest;
 use App\Models\Branch;
@@ -18,6 +22,28 @@ use Illuminate\Support\Facades\Auth;
 class LeadEventController extends Controller
 {
     use FilterableBranch;
+    use RedirectsShowToEdit;
+    use Exportable;
+    use Importable;
+    use BulkOperations;
+
+    protected string $showEditRoute = 'lead-events.edit';
+    protected string $showEditParam = 'lead_event';
+
+    protected string $exportClass = LeadEventExport::class;
+
+    protected string $importView = 'crm.lead-events.import';
+    protected string $importClass = LeadEventImport::class;
+    protected array $importPreservedParams = ['branch_id', 'project_name'];
+    protected string $importErrorRoute = 'lead-events.import';
+    protected string $importSuccessRoute = 'lead-events.index';
+
+    protected string $bulkModel = LeadEvent::class;
+    protected string $bulkLabel = 'event';
+    protected array $bulkStatusOptions = ['berlangsung', 'selesai'];
+    protected string $bulkDefaultStatus = 'berlangsung';
+    protected string $bulkRedirectRoute = 'lead-events.index';
+    protected array $bulkRedirectParams = ['branch_id', 'project_name'];
 
     public function index(Request $request)
     {
@@ -103,46 +129,10 @@ class LeadEventController extends Controller
             ->with('success', 'Event berhasil diperbarui.');
     }
 
-    public function exportTemplate()
-    {
-        LeadEventExport::generateTemplate();
-    }
-
-    public function import()
-    {
-        return view('crm.lead-events.import');
-    }
-
-    public function importStore(Request $request)
-    {
-        $request->validate(['file' => 'required|file|mimes:xlsx']);
-
-        $user = Auth::user();
-        $branchId = $user->canViewAllBranches()
-            ? $request->get('branch_id')
-            : $user->branch_id;
-
-        $result = LeadEventImport::import(
-            $request->file('file')->getPathname(),
-            $branchId,
-            $request->only(['branch_id', 'project_name'])
-        );
-
-        $message = $result['imported'] . ' data berhasil diimport.';
-        if (!empty($result['errors'])) {
-            return redirect()->route('lead-events.import')
-                ->with('success', $message)
-                ->with('import_errors', $result['errors']);
-        }
-
-        return redirect()->route('lead-events.index')
-            ->with('success', $message);
-    }
-
     public function export(Request $request)
     {
         $user = Auth::user();
-        $query = LeadEvent::with(['branch', 'creator']);
+        $query = LeadEvent::with(['branch', 'creator'])->withSum('dailyLogs', 'leads_count');
 
         if (!$user->canViewAllBranches()) {
             $query->where('branch_id', $user->branch_id);
@@ -160,40 +150,6 @@ class LeadEventController extends Controller
         LeadEventExport::toBrowser($records, $filename);
     }
 
-    public function bulkDestroy(Request $request)
-    {
-        $ids = array_filter(explode(',', $request->input('selected_ids', '')));
-        if (empty($ids)) {
-            return back()->with('error', 'Tidak ada data yang dipilih.');
-        }
-
-        $query = $this->applyBranchScope(LeadEvent::whereIn('id', $ids), null);
-        $count = $query->delete();
-
-        return redirect()->route('lead-events.index', array_filter($request->only(['branch_id', 'project_name'])))
-            ->with('success', "$count event berhasil dihapus.");
-    }
-
-    public function bulkUpdate(Request $request)
-    {
-        $ids = array_filter(explode(',', $request->input('selected_ids', '')));
-        $newStatus = $request->input('new_status', 'berlangsung');
-        if (empty($ids)) {
-            return back()->with('error', 'Tidak ada data yang dipilih.');
-        }
-
-        $allowedStatus = ['berlangsung', 'selesai'];
-        if (!in_array($newStatus, $allowedStatus)) {
-            $newStatus = 'berlangsung';
-        }
-
-        $query = $this->applyBranchScope(LeadEvent::whereIn('id', $ids), null);
-        $count = $query->update(['status' => $newStatus]);
-
-        return redirect()->route('lead-events.index', array_filter($request->only(['branch_id', 'project_name'])))
-            ->with('success', "$count event berhasil diperbarui.");
-    }
-
     public function destroy(LeadEvent $leadEvent)
     {
         $user = Auth::user();
@@ -205,10 +161,5 @@ class LeadEventController extends Controller
 
         return redirect()->route('lead-events.index', array_filter(request()->only(['branch_id', 'project_name'])))
             ->with('success', 'Event berhasil dihapus.');
-    }
-
-    public function show(LeadEvent $leadEvent)
-    {
-        return redirect()->route('lead-events.edit', ['lead_event' => $leadEvent->id]);
     }
 }

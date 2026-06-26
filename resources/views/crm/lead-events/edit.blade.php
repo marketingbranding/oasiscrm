@@ -3,9 +3,7 @@
 @section('title', 'Edit Event - Oasis CRM')
 
 @section('content')
-    <div class="bg-[#e6915d] border-2 border-black px-4 py-2 mb-6">
-        <h1 class="font-['Arial_Black'] font-black text-xl uppercase">Edit Event</h1>
-    </div>
+    <x-crm.page-header color="#e6915d" title="Edit Event" />
 
     <div class="border-2 border-black bg-white">
         <div class="bg-black text-white px-4 py-2 font-[Helvetica] font-bold text-xs uppercase">
@@ -19,7 +17,7 @@
                 @if(Auth::user()->canViewAllBranches() && isset($branches) && $branches->count() > 0)
                 <div>
                     <label class="font-[Helvetica] font-bold text-xs uppercase block mb-1">Cabang</label>
-                    <div class="select-wrapper relative" style="position:relative">
+                    <div class="select-wrapper" data-accent="#e6915d" style="position:relative">
                         <div class="select-display w-full border-2 px-3 py-2 text-sm font-['Times_New_Roman'] bg-white cursor-pointer select-none flex items-center justify-between {{ $errors->has('branch_id') ? 'border-[#e91d2a]' : 'border-black' }}" tabindex="0">
                             <span class="select-text">— Pilih Cabang —</span>
                             <span class="select-arrow">▼</span>
@@ -45,7 +43,7 @@
 
                 <div>
                     <label class="font-[Helvetica] font-bold text-xs uppercase block mb-1">Proyek</label>
-                    <div class="select-wrapper relative" style="position:relative">
+                    <div class="select-wrapper" data-accent="#e6915d" style="position:relative">
                         <div class="select-display w-full border-2 px-3 py-2 text-sm font-['Times_New_Roman'] bg-white cursor-pointer select-none flex items-center justify-between {{ $errors->has('project_name') ? 'border-[#e91d2a]' : 'border-black' }}" tabindex="0">
                             <span class="select-text">— Pilih Proyek —</span>
                             <span class="select-arrow">▼</span>
@@ -70,7 +68,7 @@
 
                 <div>
                     <label class="font-[Helvetica] font-bold text-xs uppercase block mb-1">Sumber Lead</label>
-                    <div class="select-wrapper relative" style="position:relative">
+                    <div class="select-wrapper" data-accent="#e6915d" style="position:relative">
                         <div class="select-display w-full border-2 px-3 py-2 text-sm font-['Times_New_Roman'] bg-white cursor-pointer select-none flex items-center justify-between {{ $errors->has('lead_source') ? 'border-[#e91d2a]' : 'border-black' }}" tabindex="0">
                             <span class="select-text">— Pilih Sumber —</span>
                             <span class="select-arrow">▼</span>
@@ -96,7 +94,7 @@
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
                         <label class="font-[Helvetica] font-bold text-xs uppercase block mb-1">Tanggal Mulai</label>
-                        <div class="date-wrapper" style="position:relative">
+                        <div class="date-wrapper" data-accent="#e6915d" style="position:relative">
                             <div class="date-display w-full border-2 px-3 py-2 text-sm font-['Times_New_Roman'] bg-white cursor-pointer select-none flex items-center justify-between {{ $errors->has('start_date') ? 'border-[#e91d2a]' : 'border-black' }}" tabindex="0">
                                 <span class="date-text">— Pilih Tanggal —</span>
                                 <span class="date-arrow">▼</span>
@@ -125,7 +123,7 @@
                     </div>
                     <div>
                         <label class="font-[Helvetica] font-bold text-xs uppercase block mb-1">Tanggal Selesai</label>
-                        <div class="date-wrapper" style="position:relative">
+                        <div class="date-wrapper" data-accent="#e6915d" style="position:relative">
                             <div class="date-display w-full border-2 px-3 py-2 text-sm font-['Times_New_Roman'] bg-white cursor-pointer select-none flex items-center justify-between {{ $errors->has('end_date') ? 'border-[#e91d2a]' : 'border-black' }}" tabindex="0">
                                 <span class="date-text">— Pilih Tanggal —</span>
                                 <span class="date-arrow">▼</span>
@@ -184,285 +182,6 @@
                 </div>
             </form>
 
-            <style>
-            .select-li:hover { background:#e6915d; color:#fff; }
-            .select-li.s-selected { background:#e6915d; color:#fff; }
-            .cal-day { padding:5px 2px; text-align:center; cursor:pointer; border-bottom:1px solid #eee; border-right:1px solid #eee; font-family:'Times New Roman'; font-size:13px; color:#000; }
-            .cal-day:nth-child(7n) { border-right:none; }
-            .cal-day:hover { background:#e6915d; color:#fff; }
-            .cal-day.cal-other { color:#ccc; cursor:default; }
-            .cal-day.cal-other:hover { background:transparent; color:#ccc; }
-            .cal-day.cal-today { font-weight:bold; text-decoration:underline; }
-            .cal-day.cal-selected { background:#e6915d; color:#fff; font-weight:bold; }
-            </style>
-
-            <script>
-            var projectData = [
-                @foreach($projects as $p)
-                { name: @json($p->project_name), branch: @json($p->branch_id) },
-                @endforeach
-            ];
-
-            var monthsId = ['Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember'];
-
-            function getCalState(wrapper) {
-                var input = wrapper.querySelector('input[type="date"]');
-                if (input && input.value) {
-                    var p = input.value.split('-');
-                    return { year: parseInt(p[0]), month: parseInt(p[1]) - 1 };
-                }
-                return null;
-            }
-
-            function renderCalendar(wrapper) {
-                if (!wrapper.__calState) wrapper.__calState = getCalState(wrapper) || { year: new Date().getFullYear(), month: new Date().getMonth() };
-                var state = wrapper.__calState;
-                var year = state.year, month = state.month;
-                var firstDay = new Date(year, month, 1).getDay();
-                var daysInMonth = new Date(year, month + 1, 0).getDate();
-                var daysInPrev = new Date(year, month, 0).getDate();
-                var grid = wrapper.querySelector('.cal-grid');
-                grid.innerHTML = '';
-                var today = new Date();
-                var selectedVal = wrapper.querySelector('input[type="date"]').value;
-                for (var i = firstDay - 1; i >= 0; i--) {
-                    var c = document.createElement('div');
-                    c.textContent = daysInPrev - i;
-                    c.className = 'cal-day cal-other';
-                    grid.appendChild(c);
-                }
-                for (var d = 1; d <= daysInMonth; d++) {
-                    var c = document.createElement('div');
-                    c.textContent = d;
-                    var ds = year + '-' + String(month+1).padStart(2,'0') + '-' + String(d).padStart(2,'0');
-                    c.className = 'cal-day';
-                    c.dataset.date = ds;
-                    if (selectedVal === ds) c.classList.add('cal-selected');
-                    if (year === today.getFullYear() && month === today.getMonth() && d === today.getDate()) c.classList.add('cal-today');
-                    c.addEventListener('click', function() { selectDate(wrapper, this.dataset.date); });
-                    grid.appendChild(c);
-                }
-                var remaining = 42 - (firstDay + daysInMonth);
-                for (var r = 1; r <= remaining; r++) {
-                    var c = document.createElement('div');
-                    c.textContent = r;
-                    c.className = 'cal-day cal-other';
-                    grid.appendChild(c);
-                }
-                wrapper.querySelector('.cal-title').textContent = monthsId[month] + ' ' + year;
-            }
-
-            function selectDate(wrapper, dateStr) {
-                var input = wrapper.querySelector('input[type="date"]');
-                var textEl = wrapper.querySelector('.date-text');
-                var arrow = wrapper.querySelector('.date-arrow');
-                var calendar = wrapper.querySelector('.date-calendar');
-                input.value = dateStr;
-                var p = dateStr.split('-');
-                textEl.textContent = parseInt(p[2]) + ' ' + monthsId[parseInt(p[1])-1] + ' ' + p[0];
-                calendar.style.display = 'none';
-                arrow.textContent = '\u25BC';
-                var evt = new Event('change', { bubbles: true });
-                input.dispatchEvent(evt);
-                wrapper.__calState = { year: parseInt(p[0]), month: parseInt(p[1]) - 1 };
-                renderCalendar(wrapper);
-            }
-
-            function syncDateDisplay(wrapper) {
-                var input = wrapper.querySelector('input[type="date"]');
-                var textEl = wrapper.querySelector('.date-text');
-                if (input && input.value) {
-                    var p = input.value.split('-');
-                    textEl.textContent = parseInt(p[2]) + ' ' + monthsId[parseInt(p[1])-1] + ' ' + p[0];
-                }
-            }
-
-            document.addEventListener('DOMContentLoaded', function() {
-                document.querySelectorAll('.select-wrapper').forEach(function(wrapper) {
-                    if (wrapper.__sw) return;
-                    wrapper.__sw = true;
-
-                    var display = wrapper.querySelector('.select-display');
-                    var textEl = display ? display.querySelector('.select-text') : null;
-                    var arrow = display ? display.querySelector('.select-arrow') : null;
-                    var dropdown = wrapper.querySelector('.select-dropdown');
-                    var search = dropdown ? dropdown.querySelector('.select-search') : null;
-                    var list = dropdown ? dropdown.querySelector('.select-options') : null;
-                    var select = wrapper.querySelector('select');
-
-                    if (!display || !textEl || !arrow || !dropdown || !search || !list || !select) {
-                        console.warn('CustomSelect init failed for', wrapper);
-                        return;
-                    }
-
-                    function sync() {
-                        var idx = select.selectedIndex;
-                        textEl.textContent = idx > 0 ? select.options[idx].text : select.options[0].text;
-                    }
-
-                    display.addEventListener('click', function(e) {
-                        e.stopPropagation();
-                        var isOpen = dropdown.style.display !== 'none';
-                        if (isOpen) {
-                            dropdown.style.display = 'none';
-                            arrow.textContent = '\u25BC';
-                        } else {
-                            dropdown.style.display = 'block';
-                            arrow.textContent = '\u25B2';
-                            search.value = '';
-                            search.focus();
-                            Array.from(list.children).forEach(function(li) { li.style.display = ''; });
-                        }
-                    });
-
-                    search.addEventListener('input', function() {
-                        var q = this.value.toLowerCase();
-                        Array.from(list.children).forEach(function(li) {
-                            li.style.display = li.textContent.toLowerCase().indexOf(q) !== -1 ? '' : 'none';
-                        });
-                    });
-
-                    search.addEventListener('keydown', function(e) {
-                        if (e.key === 'Enter') {
-                            var visible = list.querySelector('li:not([style*="display: none"])');
-                            if (visible && visible.getAttribute('data-value')) {
-                                selectOption(visible);
-                            }
-                        }
-                        if (e.key === 'Escape') {
-                            dropdown.style.display = 'none';
-                            arrow.textContent = '\u25BC';
-                        }
-                    });
-
-                    list.addEventListener('click', function(e) {
-                        var li = e.target.closest('li');
-                        if (li) selectOption(li);
-                    });
-
-                    function selectOption(li) {
-                        list.querySelectorAll('li').forEach(function(l) {
-                            l.classList.remove('s-selected');
-                        });
-                        li.classList.add('s-selected');
-                        textEl.textContent = li.textContent;
-                        select.value = li.getAttribute('data-value');
-                        var evt = new Event('change', { bubbles: true });
-                        select.dispatchEvent(evt);
-                        dropdown.style.display = 'none';
-                        arrow.textContent = '\u25BC';
-                    }
-
-                    document.addEventListener('click', function(e) {
-                        if (!wrapper.contains(e.target)) {
-                            dropdown.style.display = 'none';
-                            arrow.textContent = '\u25BC';
-                        }
-                    });
-
-                    sync();
-
-                    var sw = display.offsetWidth;
-                    if (sw > 0) dropdown.style.width = sw + 'px';
-                });
-
-                var branchSelect = document.querySelector('[name="branch_id"]');
-                if (branchSelect) {
-                    branchSelect.addEventListener('change', function() {
-                        var branchId = this.value;
-                        var proyekSelect = document.querySelector('[name="project_name"]');
-                        if (!proyekSelect) return;
-
-                        var wrapper = proyekSelect.closest('.select-wrapper');
-                        var proyekList = wrapper.querySelector('.select-options');
-                        var proyekText = wrapper.querySelector('.select-text');
-                        var currentVal = proyekSelect.value;
-
-                        while (proyekSelect.options.length > 1) proyekSelect.remove(1);
-
-                        proyekList.innerHTML = '';
-                        var ph = document.createElement('li');
-                        ph.setAttribute('data-value', '');
-                        ph.textContent = '\u2014 Pilih Proyek \u2014';
-                        ph.style.cssText = 'padding:6px 12px;font-size:13px;font-family:\'Times New Roman\';cursor:pointer';
-                        ph.className = 'select-li';
-                        proyekList.appendChild(ph);
-
-                        var hasMatch = false;
-                        for (var i = 0; i < projectData.length; i++) {
-                            if (!branchId || !projectData[i].branch || projectData[i].branch == branchId) {
-                                var opt = document.createElement('option');
-                                opt.value = projectData[i].name;
-                                opt.textContent = projectData[i].name;
-                                if (projectData[i].name === currentVal) {
-                                    opt.selected = true;
-                                    hasMatch = true;
-                                }
-                                proyekSelect.add(opt);
-
-                                var li = document.createElement('li');
-                                li.setAttribute('data-value', projectData[i].name);
-                                li.textContent = projectData[i].name;
-                                li.style.cssText = 'padding:6px 12px;font-size:13px;font-family:\'Times New Roman\';cursor:pointer';
-                                li.className = 'select-li';
-                                if (projectData[i].name === currentVal) li.classList.add('s-selected');
-                                proyekList.appendChild(li);
-                            }
-                        }
-
-                        proyekText.textContent = hasMatch ? currentVal : '\u2014 Pilih Proyek \u2014';
-                        if (!hasMatch) proyekSelect.value = '';
-                    });
-
-                    if (branchSelect.value) {
-                        var evt = new Event('change', { bubbles: true });
-                        branchSelect.dispatchEvent(evt);
-                    }
-                }
-
-                document.querySelectorAll('.date-wrapper').forEach(function(wrapper) {
-                    if (wrapper.__dw) return;
-                    wrapper.__dw = true;
-                    var display = wrapper.querySelector('.date-display');
-                    var calendar = wrapper.querySelector('.date-calendar');
-                    var arrow = wrapper.querySelector('.date-arrow');
-                    syncDateDisplay(wrapper);
-                    display.addEventListener('click', function(e) {
-                        e.stopPropagation();
-                        var isOpen = calendar.style.display !== 'none';
-                        if (isOpen) {
-                            calendar.style.display = 'none';
-                            arrow.textContent = '\u25BC';
-                        } else {
-                            calendar.style.display = 'block';
-                            arrow.textContent = '\u25B2';
-                            renderCalendar(wrapper);
-                        }
-                    });
-                    document.addEventListener('click', function(e) {
-                        if (!wrapper.contains(e.target)) {
-                            calendar.style.display = 'none';
-                            arrow.textContent = '\u25BC';
-                        }
-                    });
-                    calendar.querySelector('.cal-prev').addEventListener('click', function(e) {
-                        e.stopPropagation();
-                        if (!wrapper.__calState) wrapper.__calState = { year: new Date().getFullYear(), month: new Date().getMonth() };
-                        wrapper.__calState.month--;
-                        if (wrapper.__calState.month < 0) { wrapper.__calState.month = 11; wrapper.__calState.year--; }
-                        renderCalendar(wrapper);
-                    });
-                    calendar.querySelector('.cal-next').addEventListener('click', function(e) {
-                        e.stopPropagation();
-                        if (!wrapper.__calState) wrapper.__calState = { year: new Date().getFullYear(), month: new Date().getMonth() };
-                        wrapper.__calState.month++;
-                        if (wrapper.__calState.month > 11) { wrapper.__calState.month = 0; wrapper.__calState.year++; }
-                        renderCalendar(wrapper);
-                    });
-                });
-            });
-            </script>
-
             <div class="border-t-2 border-black mt-6 pt-4">
                 <form method="POST" action="{{ route('lead-events.destroy', ['lead_event' => $event->id]) }}"
                       onsubmit="return confirm('Hapus event ini? Semua data harian terkait akan ikut terhapus.')">
@@ -475,4 +194,68 @@
             </div>
         </div>
     </div>
+
+<script>
+var projectData = [
+    @foreach($projects as $p)
+    { name: @json($p->project_name), branch: @json($p->branch_id) },
+    @endforeach
+];
+
+document.addEventListener('DOMContentLoaded', function() {
+    var branchSelect = document.querySelector('[name="branch_id"]');
+    if (branchSelect) {
+        branchSelect.addEventListener('change', function() {
+            var branchId = this.value;
+            var proyekSelect = document.querySelector('[name="project_name"]');
+            if (!proyekSelect) return;
+
+            var wrapper = proyekSelect.closest('.select-wrapper');
+            var proyekList = wrapper.querySelector('.select-options');
+            var proyekText = wrapper.querySelector('.select-text');
+            var currentVal = proyekSelect.value;
+
+            while (proyekSelect.options.length > 1) proyekSelect.remove(1);
+
+            proyekList.innerHTML = '';
+            var ph = document.createElement('li');
+            ph.setAttribute('data-value', '');
+            ph.textContent = '\u2014 Pilih Proyek \u2014';
+            ph.style.cssText = 'padding:6px 12px;font-size:13px;font-family:\'Times New Roman\';cursor:pointer';
+            ph.className = 'select-li';
+            proyekList.appendChild(ph);
+
+            var hasMatch = false;
+            for (var i = 0; i < projectData.length; i++) {
+                if (!branchId || !projectData[i].branch || projectData[i].branch == branchId) {
+                    var opt = document.createElement('option');
+                    opt.value = projectData[i].name;
+                    opt.textContent = projectData[i].name;
+                    if (projectData[i].name === currentVal) {
+                        opt.selected = true;
+                        hasMatch = true;
+                    }
+                    proyekSelect.add(opt);
+
+                    var li = document.createElement('li');
+                    li.setAttribute('data-value', projectData[i].name);
+                    li.textContent = projectData[i].name;
+                    li.style.cssText = 'padding:6px 12px;font-size:13px;font-family:\'Times New Roman\';cursor:pointer';
+                    li.className = 'select-li';
+                    if (projectData[i].name === currentVal) li.classList.add('s-selected');
+                    proyekList.appendChild(li);
+                }
+            }
+
+            proyekText.textContent = hasMatch ? currentVal : '\u2014 Pilih Proyek \u2014';
+            if (!hasMatch) proyekSelect.value = '';
+        });
+
+        if (branchSelect.value) {
+            var evt = new Event('change', { bubbles: true });
+            branchSelect.dispatchEvent(evt);
+        }
+    }
+});
+</script>
 @endsection

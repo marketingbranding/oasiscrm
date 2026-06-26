@@ -4,6 +4,9 @@ namespace App\Http\Controllers\Crm;
 
 use App\Http\Controllers\Controller;
 use App\Http\Controllers\Crm\Traits\FilterableBranch;
+use App\Http\Controllers\Crm\Traits\RedirectsShowToEdit;
+use App\Http\Controllers\Crm\Traits\Exportable;
+use App\Http\Controllers\Crm\Traits\Importable;
 use App\Http\Requests\Crm\StoreContentItemRequest;
 use App\Http\Requests\Crm\UpdateContentItemRequest;
 use App\Models\Branch;
@@ -17,6 +20,20 @@ use Illuminate\Support\Facades\Auth;
 class ContentCalendarController extends Controller
 {
     use FilterableBranch;
+    use RedirectsShowToEdit;
+    use Exportable;
+    use Importable;
+
+    protected string $showEditRoute = 'content-calendar.edit';
+    protected string $showEditParam = 'content_calendar';
+
+    protected string $exportClass = ContentItemExport::class;
+
+    protected string $importView = 'crm.content-calendar.import';
+    protected string $importClass = ContentItemImport::class;
+    protected array $importPreservedParams = ['branch_id', 'project_name'];
+    protected string $importErrorRoute = 'content-calendar.import';
+    protected string $importSuccessRoute = 'content-calendar.index';
 
     public function index(Request $request)
     {
@@ -99,11 +116,6 @@ class ContentCalendarController extends Controller
         return redirect()->route('content-calendar.index', array_filter($request->only(['month', 'year', 'branch_id', 'project_name'])))->with('success', 'Konten berhasil ditambahkan.');
     }
 
-    public function show(ContentItem $contentItem)
-    {
-        return redirect()->route('content-calendar.edit', ['content_calendar' => $contentItem->id]);
-    }
-
     public function edit(ContentItem $contentItem)
     {
         $user = Auth::user();
@@ -130,42 +142,6 @@ class ContentCalendarController extends Controller
 
         $contentItem->update($data);
         return redirect()->route('content-calendar.index', array_filter($request->only(['month', 'year', 'branch_id', 'project_name'])))->with('success', 'Konten berhasil diperbarui.');
-    }
-
-    public function exportTemplate()
-    {
-        ContentItemExport::generateTemplate();
-    }
-
-    public function import()
-    {
-        return view('crm.content-calendar.import');
-    }
-
-    public function importStore(Request $request)
-    {
-        $request->validate(['file' => 'required|file|mimes:xlsx']);
-
-        $user = Auth::user();
-        $branchId = $user->canViewAllBranches()
-            ? $request->get('branch_id')
-            : $user->branch_id;
-
-        $result = ContentItemImport::import(
-            $request->file('file')->getPathname(),
-            $branchId,
-            $request->only(['branch_id', 'project_name'])
-        );
-
-        $message = $result['imported'] . ' data berhasil diimport.';
-        if (!empty($result['errors'])) {
-            return redirect()->route('content-calendar.import')
-                ->with('success', $message)
-                ->with('import_errors', $result['errors']);
-        }
-
-        return redirect()->route('content-calendar.index')
-            ->with('success', $message);
     }
 
     public function export(Request $request)

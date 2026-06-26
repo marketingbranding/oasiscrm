@@ -3,9 +3,7 @@
 @section('title', 'Atur Admin - Oasis CRM')
 
 @section('content')
-    <div class="bg-[#8c9ae0] border-2 border-black px-4 py-2 mb-6">
-        <h1 class="font-['Arial_Black'] font-black text-xl uppercase">{{ $branch->name }}</h1>
-    </div>
+    <x-crm.page-header color="#8c9ae0" title="{{ $branch->name }}" />
 
     <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {{-- Current Admins --}}

@@ -3,9 +3,7 @@
 @section('title', 'Import Lead Harian - Oasis CRM')
 
 @section('content')
-    <div class="bg-[#c0392b] border-2 border-black px-4 py-2 mb-6">
-        <h1 class="font-['Arial_Black'] font-black text-xl text-white uppercase">Import Lead Harian</h1>
-    </div>
+    <x-crm.page-header color="#c0392b" title="Import Lead Harian" text-color="text-white" />
 
     <div class="bg-white border-2 border-black p-4 mb-6">
         <div class="text-sm font-['Times_New_Roman'] mb-4 leading-relaxed">

@@ -3,9 +3,7 @@
 @section('title', 'Cabang - Oasis CRM')
 
 @section('content')
-    <div class="bg-[#8c9ae0] border-2 border-black px-4 py-2 mb-6">
-        <h1 class="font-['Arial_Black'] font-black text-xl uppercase">Manajemen Cabang</h1>
-    </div>
+    <x-crm.page-header color="#8c9ae0" title="Manajemen Cabang" />
 
     <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
         @php

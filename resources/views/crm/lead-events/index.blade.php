@@ -3,9 +3,7 @@
 @section('title', 'Daftar Event - Oasis CRM')
 
 @section('content')
-    <div class="bg-[#e6915d] border-2 border-black px-4 py-2 mb-6">
-        <h1 class="font-['Arial_Black'] font-black text-xl uppercase">Daftar Event</h1>
-    </div>
+    <x-crm.page-header color="#e6915d" title="Daftar Event" />
 
     <div class="bg-white border-2 border-black p-3 mb-6">
         <form method="GET" action="{{ route('lead-events.index') }}" class="flex items-center gap-3 flex-wrap filter-bar">
@@ -37,26 +35,7 @@
             <div class="h-6 w-px bg-black mx-1 hidden sm:block"></div>
 
             <div class="flex items-center gap-2 ml-auto">
-                <div class="relative" x-data="{ exportOpen: false }" @click.outside="exportOpen = false">
-                    <button type="button" @click="exportOpen = !exportOpen"
-                            class="bg-white text-black px-4 py-1.5 text-sm font-[Helvetica] font-bold border-2 border-black rounded-none hover:bg-gray-100 flex items-center gap-1">
-                        ↓ Export/Import
-                        <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
-                        </svg>
-                    </button>
-                    <div x-show="exportOpen" x-cloak
-                         class="absolute right-0 top-full mt-1 bg-white border-2 border-black z-50 min-w-[160px] shadow-xl">
-                        <a href="{{ route('lead-events.export', request()->only(['branch_id', 'project_name'])) }}"
-                           class="block px-4 py-2 text-sm font-['Times_New_Roman'] hover:bg-gray-100 border-b-2 border-black whitespace-nowrap">
-                            ↓ Export XLSX
-                        </a>
-                        <a href="{{ route('lead-events.import') }}"
-                           class="block px-4 py-2 text-sm font-['Times_New_Roman'] hover:bg-gray-100 whitespace-nowrap">
-                            ↑ Import XLSX
-                        </a>
-                    </div>
-                </div>
+                <x-crm.export-import export-route="lead-events.export" import-route="lead-events.import" :params="request()->only(['branch_id', 'project_name'])" />
                 <a href="{{ route('lead-events.create') }}" class="bg-[#e6915d] text-black px-4 py-1.5 text-sm font-[Helvetica] font-bold border-2 border-black rounded-none hover:bg-[#d4854f]">
                     + Event Baru
                 </a>
@@ -69,147 +48,14 @@
             <thead>
                 <tr class="bg-black text-white">
                     <th class="w-10 px-3 py-2 text-center font-[Helvetica] font-bold text-xs uppercase"><input type="checkbox" id="select-all" class="cursor-pointer"></th>
-                    <th class="px-3 py-2 text-left font-[Helvetica] font-bold text-xs uppercase">
-                        @php
-                            $isActive = request('sort') === 'event_id';
-                            $currentDir = request('dir');
-                            if (!$isActive) {
-                                $linkParams = array_merge(request()->query(), ['sort' => 'event_id', 'dir' => 'asc']);
-                                $arrow = '';
-                            } elseif ($currentDir === 'asc') {
-                                $linkParams = array_merge(request()->query(), ['sort' => 'event_id', 'dir' => 'desc']);
-                                $arrow = '▲';
-                            } else {
-                                $linkParams = collect(request()->query())->except(['sort', 'dir'])->toArray();
-                                $arrow = '▼';
-                            }
-                        @endphp
-                        <a href="{{ route('lead-events.index', $linkParams) }}" class="hover:underline text-white">
-                            Event ID
-                            @if($isActive)<span class="ml-0.5">{{ $arrow }}</span>@endif
-                        </a>
-                    </th>
+                    <x-crm.sortable-th field="event_id" route="lead-events.index" label="Event ID" />
                     <th class="px-3 py-2 text-left font-[Helvetica] font-bold text-xs uppercase">Cabang</th>
-                    <th class="px-3 py-2 text-left font-[Helvetica] font-bold text-xs uppercase">
-                        @php
-                            $isActive = request('sort') === 'project_name';
-                            $currentDir = request('dir');
-                            if (!$isActive) {
-                                $linkParams = array_merge(request()->query(), ['sort' => 'project_name', 'dir' => 'asc']);
-                                $arrow = '';
-                            } elseif ($currentDir === 'asc') {
-                                $linkParams = array_merge(request()->query(), ['sort' => 'project_name', 'dir' => 'desc']);
-                                $arrow = '▲';
-                            } else {
-                                $linkParams = collect(request()->query())->except(['sort', 'dir'])->toArray();
-                                $arrow = '▼';
-                            }
-                        @endphp
-                        <a href="{{ route('lead-events.index', $linkParams) }}" class="hover:underline text-white">
-                            Proyek
-                            @if($isActive)<span class="ml-0.5">{{ $arrow }}</span>@endif
-                        </a>
-                    </th>
-                    <th class="px-3 py-2 text-left font-[Helvetica] font-bold text-xs uppercase">
-                        @php
-                            $isActive = request('sort') === 'lead_source';
-                            $currentDir = request('dir');
-                            if (!$isActive) {
-                                $linkParams = array_merge(request()->query(), ['sort' => 'lead_source', 'dir' => 'asc']);
-                                $arrow = '';
-                            } elseif ($currentDir === 'asc') {
-                                $linkParams = array_merge(request()->query(), ['sort' => 'lead_source', 'dir' => 'desc']);
-                                $arrow = '▲';
-                            } else {
-                                $linkParams = collect(request()->query())->except(['sort', 'dir'])->toArray();
-                                $arrow = '▼';
-                            }
-                        @endphp
-                        <a href="{{ route('lead-events.index', $linkParams) }}" class="hover:underline text-white">
-                            Sumber Lead
-                            @if($isActive)<span class="ml-0.5">{{ $arrow }}</span>@endif
-                        </a>
-                    </th>
-                    <th class="px-3 py-2 text-left font-[Helvetica] font-bold text-xs uppercase">
-                        @php
-                            $isActive = request('sort') === 'start_date';
-                            $currentDir = request('dir');
-                            if (!$isActive) {
-                                $linkParams = array_merge(request()->query(), ['sort' => 'start_date', 'dir' => 'asc']);
-                                $arrow = '';
-                            } elseif ($currentDir === 'asc') {
-                                $linkParams = array_merge(request()->query(), ['sort' => 'start_date', 'dir' => 'desc']);
-                                $arrow = '▲';
-                            } else {
-                                $linkParams = collect(request()->query())->except(['sort', 'dir'])->toArray();
-                                $arrow = '▼';
-                            }
-                        @endphp
-                        <a href="{{ route('lead-events.index', $linkParams) }}" class="hover:underline text-white">
-                            Tgl Mulai
-                            @if($isActive)<span class="ml-0.5">{{ $arrow }}</span>@endif
-                        </a>
-                    </th>
-                    <th class="px-3 py-2 text-left font-[Helvetica] font-bold text-xs uppercase">
-                        @php
-                            $isActive = request('sort') === 'end_date';
-                            $currentDir = request('dir');
-                            if (!$isActive) {
-                                $linkParams = array_merge(request()->query(), ['sort' => 'end_date', 'dir' => 'asc']);
-                                $arrow = '';
-                            } elseif ($currentDir === 'asc') {
-                                $linkParams = array_merge(request()->query(), ['sort' => 'end_date', 'dir' => 'desc']);
-                                $arrow = '▲';
-                            } else {
-                                $linkParams = collect(request()->query())->except(['sort', 'dir'])->toArray();
-                                $arrow = '▼';
-                            }
-                        @endphp
-                        <a href="{{ route('lead-events.index', $linkParams) }}" class="hover:underline text-white">
-                            Tgl Selesai
-                            @if($isActive)<span class="ml-0.5">{{ $arrow }}</span>@endif
-                        </a>
-                    </th>
-                    <th class="px-3 py-2 text-right font-[Helvetica] font-bold text-xs uppercase">
-                        @php
-                            $isActive = request('sort') === 'total_budget';
-                            $currentDir = request('dir');
-                            if (!$isActive) {
-                                $linkParams = array_merge(request()->query(), ['sort' => 'total_budget', 'dir' => 'asc']);
-                                $arrow = '';
-                            } elseif ($currentDir === 'asc') {
-                                $linkParams = array_merge(request()->query(), ['sort' => 'total_budget', 'dir' => 'desc']);
-                                $arrow = '▲';
-                            } else {
-                                $linkParams = collect(request()->query())->except(['sort', 'dir'])->toArray();
-                                $arrow = '▼';
-                            }
-                        @endphp
-                        <a href="{{ route('lead-events.index', $linkParams) }}" class="hover:underline text-white">
-                            Anggaran
-                            @if($isActive)<span class="ml-0.5">{{ $arrow }}</span>@endif
-                        </a>
-                    </th>
-                    <th class="px-3 py-2 text-center font-[Helvetica] font-bold text-xs uppercase">
-                        @php
-                            $isActive = request('sort') === 'status';
-                            $currentDir = request('dir');
-                            if (!$isActive) {
-                                $linkParams = array_merge(request()->query(), ['sort' => 'status', 'dir' => 'asc']);
-                                $arrow = '';
-                            } elseif ($currentDir === 'asc') {
-                                $linkParams = array_merge(request()->query(), ['sort' => 'status', 'dir' => 'desc']);
-                                $arrow = '▲';
-                            } else {
-                                $linkParams = collect(request()->query())->except(['sort', 'dir'])->toArray();
-                                $arrow = '▼';
-                            }
-                        @endphp
-                        <a href="{{ route('lead-events.index', $linkParams) }}" class="hover:underline text-white">
-                            Status
-                            @if($isActive)<span class="ml-0.5">{{ $arrow }}</span>@endif
-                        </a>
-                    </th>
+                    <x-crm.sortable-th field="project_name" route="lead-events.index" label="Proyek" />
+                    <x-crm.sortable-th field="lead_source" route="lead-events.index" label="Sumber Lead" />
+                    <x-crm.sortable-th field="start_date" route="lead-events.index" label="Tgl Mulai" />
+                    <x-crm.sortable-th field="end_date" route="lead-events.index" label="Tgl Selesai" />
+                    <x-crm.sortable-th field="total_budget" route="lead-events.index" label="Anggaran" align="right" />
+                    <x-crm.sortable-th field="status" route="lead-events.index" label="Status" align="center" />
                     <th class="px-3 py-2 text-center font-[Helvetica] font-bold text-xs uppercase">Aksi</th>
                 </tr>
             </thead>
@@ -251,104 +97,17 @@
             </tbody>
         </table>
     </div>
-    <div class="flex items-center justify-between px-4 py-3 border-t-2 border-black bg-white">
-        <div class="text-xs font-['Times_New_Roman']">
-            @if(method_exists($events, 'total'))
-                {{ $events->firstItem() }}–{{ $events->lastItem() }} dari {{ $events->total() }}
-            @else
-                Semua {{ $events->count() }} data
-            @endif
-        </div>
-        <div class="flex items-center gap-2">
-            <span class="text-xs font-['Times_New_Roman']">Tampilkan</span>
-            <select onchange="window.location.href=this.value"
-                    class="border border-black text-xs px-1 py-0.5 font-['Times_New_Roman'] bg-white">
-                <option value="{{ request()->fullUrlWithQuery(['per_page' => 15]) }}" {{ ($perPage ?? '15') == '15' ? 'selected' : '' }}>15</option>
-                <option value="{{ request()->fullUrlWithQuery(['per_page' => 30]) }}" {{ ($perPage ?? '15') == '30' ? 'selected' : '' }}>30</option>
-                <option value="{{ request()->fullUrlWithQuery(['per_page' => 50]) }}" {{ ($perPage ?? '15') == '50' ? 'selected' : '' }}>50</option>
-                <option value="{{ request()->fullUrlWithQuery(['per_page' => 100]) }}" {{ ($perPage ?? '15') == '100' ? 'selected' : '' }}>100</option>
-                <option value="{{ request()->fullUrlWithQuery(['per_page' => 'all']) }}" {{ ($perPage ?? '15') == 'all' ? 'selected' : '' }}>Semua</option>
-            </select>
-        </div>
-        <div class="flex items-center gap-1">
-            @if(method_exists($events, 'links'))
-                {{ $events->links() }}
-            @endif
-        </div>
-    </div>
-<div id="bulk-bar" class="fixed bottom-4 left-4 z-50 bg-white border-2 border-black shadow-lg hidden">
-    <div class="flex items-center gap-3 px-4 py-3">
-        <span class="text-sm font-[Helvetica] font-bold"><span id="bulk-count">0</span> data terpilih</span>
-        <div class="h-6 w-px bg-black mx-1"></div>
-        <select id="bulk-new-status" class="border-2 border-black px-2 py-1.5 text-xs font-['Times_New_Roman'] bg-white">
-            <option value="berlangsung">→ Berlangsung</option>
-            <option value="selesai">→ Selesai</option>
-        </select>
-        <button onclick="bulkUpdateStatus()" class="bg-[#e6915d] text-black px-4 py-1.5 text-sm font-[Helvetica] font-bold border-2 border-black rounded-none hover:bg-[#d4854f] cursor-pointer">
-            Update Status
-        </button>
-        <div class="h-6 w-px bg-black mx-1"></div>
-        <button onclick="bulkDelete()" class="bg-[#e91d2a] text-white px-4 py-1.5 text-sm font-[Helvetica] font-bold border-2 border-black rounded-none hover:bg-[#c0392b] cursor-pointer">
-            Hapus Terpilih
-        </button>
-    </div>
-</div>
 
-<form id="bulk-form" method="POST" action="{{ route('lead-events.bulk-destroy') }}" class="hidden">
-    @csrf
-    <input type="hidden" name="selected_ids" id="bulk-ids">
-    @foreach(request()->only(['branch_id', 'project_name']) as $k => $v)
-        <input type="hidden" name="{{ $k }}" value="{{ $v }}">
-    @endforeach
-</form>
+    <x-crm.pagination :collection="$events" :per-page="$perPage" />
 
-<form id="bulk-update-form" method="POST" action="{{ route('lead-events.bulk-update') }}" class="hidden">
-    @csrf
-    <input type="hidden" name="selected_ids" id="bulk-update-ids">
-    <input type="hidden" name="new_status" id="bulk-update-status">
-    @foreach(request()->only(['branch_id', 'project_name']) as $k => $v)
-        <input type="hidden" name="{{ $k }}" value="{{ $v }}">
-    @endforeach
-</form>
+    <x-crm.bulk-bar
+        destroy-route="{{ route('lead-events.bulk-destroy') }}"
+        update-route="{{ route('lead-events.bulk-update') }}"
+        :status-options="['berlangsung' => 'Berlangsung', 'selesai' => 'Selesai']"
+        status-label="Event"
+        accent-color="#e6915d"
+        :params="request()->only(['branch_id', 'project_name'])" />
 
-<script>
-let selected = new Set();
-document.getElementById('select-all')?.addEventListener('change', function() {
-    document.querySelectorAll('.row-checkbox').forEach(cb => {
-        cb.checked = this.checked;
-        this.checked ? selected.add(cb.value) : selected.delete(cb.value);
-    });
-    toggleBulkBar();
-});
-document.querySelectorAll('.row-checkbox').forEach(cb => {
-    cb.addEventListener('change', function() {
-        this.checked ? selected.add(this.value) : selected.delete(this.value);
-        toggleBulkBar();
-    });
-});
-function toggleBulkBar() {
-    const bar = document.getElementById('bulk-bar');
-    const count = selected.size;
-    document.getElementById('bulk-count').textContent = count;
-    bar.style.display = count > 0 ? 'block' : 'none';
-}
-function bulkDelete() {
-    const count = selected.size;
-    if (!count) return;
-    if (!confirm('Hapus ' + count + ' data terpilih?')) return;
-    document.getElementById('bulk-ids').value = Array.from(selected).join(',');
-    document.getElementById('bulk-form').submit();
-}
-function bulkUpdateStatus() {
-    const count = selected.size;
-    if (!count) return;
-    const status = document.getElementById('bulk-new-status').value;
-    if (!confirm('Ubah status ' + count + ' data terpilih menjadi ' + status + '?')) return;
-    document.getElementById('bulk-update-ids').value = Array.from(selected).join(',');
-    document.getElementById('bulk-update-status').value = status;
-    document.getElementById('bulk-update-form').submit();
-}
-</script>
 <style>
 .table-scroll thead th {
     position: sticky;

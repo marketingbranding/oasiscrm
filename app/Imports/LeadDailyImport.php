@@ -2,6 +2,7 @@
 
 namespace App\Imports;
 
+use App\Imports\Concerns\ParsesImport;
 use App\Models\Branch;
 use App\Models\LeadDaily;
 use App\Models\LeadEvent;
@@ -10,36 +11,7 @@ use Illuminate\Support\Facades\Auth;
 
 class LeadDailyImport
 {
-    private static function parseDate(string $value): ?string
-    {
-        $value = trim($value);
-        if (empty($value)) return null;
-
-        if (is_numeric($value)) {
-            $unix = ($value - 25569) * 86400;
-            return date('Y-m-d', (int) $unix);
-        }
-
-        $formats = ['d M Y', 'd/m/Y', 'Y-m-d', 'd-m-Y', 'd/m/y', 'd F Y'];
-        foreach ($formats as $fmt) {
-            $dt = \DateTime::createFromFormat($fmt, $value);
-            if ($dt) return $dt->format('Y-m-d');
-        }
-
-        try {
-            return (new \Carbon\Carbon($value))->format('Y-m-d');
-        } catch (\Exception $e) {
-            return null;
-        }
-    }
-
-    private static function parseNumeric(string $value): ?float
-    {
-        $value = trim($value);
-        if (empty($value)) return null;
-        $value = str_replace(['.', ','], ['', '.'], $value);
-        return is_numeric($value) ? (float) $value : null;
-    }
+    use ParsesImport;
 
     public static function import(string $filePath, ?int $branchId = null, ?array $preservedParams = []): array
     {
@@ -48,25 +20,16 @@ class LeadDailyImport
         $rowNum = 0;
         $user = Auth::user();
 
-        $reader = IOFactory::createReaderForFile($filePath);
-        $reader->setReadDataOnly(true);
-        $spreadsheet = $reader->load($filePath);
-        $sheet = $spreadsheet->getActiveSheet();
-        $rows = $sheet->toArray();
+        [$spreadsheet, $sheet, $rows] = self::spreadsheetLoad($filePath);
 
-        $hasCabang = false;
-        $branchNames = [];
-        if (isset($rows[1]) && is_array($rows[1])) {
-            $firstDataRow = array_values($rows[1]);
-            $firstVal = trim((string) ($firstDataRow[0] ?? ''));
-            if (!empty($firstVal) && !is_numeric($firstVal)) {
-                $branchNames = Branch::where('is_active', true)->pluck('name')->toArray();
-                $hasCabang = in_array($firstVal, $branchNames);
-            }
-        }
+        [$hasCabang, $branchNames] = self::detectHasCabang($rows);
 
-        // Pre-fetch events for lookup
-        $events = LeadEvent::pluck('id', 'event_id');
+        // Pre-fetch events for N+1 safety: id + start_date + daily_target keyed by event_id
+        $eventData = LeadEvent::get(['id', 'event_id', 'start_date', 'daily_target'])->keyBy('event_id');
+        // Pre-build branch name→id map for N+1 safety
+        $branchNameToId = self::branchNameToIdMap();
+        // In-memory cumulative per event (avoids DB sum per row)
+        $cumulativeMap = [];
 
         foreach ($rows as $cells) {
             $rowNum++;
@@ -83,13 +46,7 @@ class LeadDailyImport
             $branchFromFile = null;
             if ($hasCabang) {
                 $cabangName = trim((string) ($cells[0] ?? ''));
-                if (!empty($cabangName) && !empty($branchNames)) {
-                    $branchIdx = array_search($cabangName, $branchNames);
-                    if ($branchIdx !== false) {
-                        $branch = Branch::where('name', $branchNames[$branchIdx])->first();
-                        $branchFromFile = $branch ? $branch->id : null;
-                    }
-                }
+                $branchFromFile = self::resolveBranchFromFile($cabangName, $branchNameToId, $branchNames);
             }
 
             $tanggalRaw = $cells[0 + $offset] ?? '';
@@ -113,15 +70,9 @@ class LeadDailyImport
             // Extract event_id from format "EV-xxx — ProjectName (Branch)" or plain "EV-xxx"
             $eventIdParsed = explode(' — ', $eventIdRaw)[0];
 
-            $leadEventId = $events[$eventIdParsed] ?? null;
-            if (!$leadEventId) {
+            $leadEvent = $eventData[$eventIdParsed] ?? null;
+            if (!$leadEvent) {
                 $errors[] = "Baris {$rowNum}: Event ID '{$eventIdParsed}' tidak ditemukan.";
-                continue;
-            }
-
-            $event = LeadEvent::find($leadEventId);
-            if (!$event) {
-                $errors[] = "Baris {$rowNum}: Event dengan ID '{$eventIdParsed}' tidak ditemukan.";
                 continue;
             }
 
@@ -133,23 +84,22 @@ class LeadDailyImport
 
             $resolvedBranchId = $branchFromFile ?? $branchId ?? $user->branch_id ?? 1;
 
-            $dayNumber = !empty($hariKeRaw) ? (int) $hariKeRaw : ($event->start_date ? $event->start_date->diffInDays(now()->parse($tanggal)) + 1 : null);
+            $dayNumber = !empty($hariKeRaw) ? (int) $hariKeRaw : ($leadEvent->start_date ? $leadEvent->start_date->diffInDays(now()->parse($tanggal)) + 1 : null);
 
             $cumulativeLeads = !empty($kumulatifRaw)
                 ? (int) self::parseNumeric($kumulatifRaw)
-                : LeadDaily::where('lead_event_id', $leadEventId)
-                    ->where('date', '<=', $tanggal)
-                    ->sum('leads_count') + $leadsCount;
+                : ($cumulativeMap[$leadEvent->id] ?? 0) + $leadsCount;
+            $cumulativeMap[$leadEvent->id] = $cumulativeLeads;
 
             $achievementPct = null;
             if (!empty($achievementRaw)) {
                 $achievementPct = (float) str_replace('%', '', $achievementRaw);
-            } elseif ($event->daily_target && $event->daily_target > 0) {
-                $achievementPct = round(($leadsCount / $event->daily_target) * 100, 2);
+            } elseif ($leadEvent->daily_target && $leadEvent->daily_target > 0) {
+                $achievementPct = round(($leadsCount / $leadEvent->daily_target) * 100, 2);
             }
 
             $data = [
-                'lead_event_id' => $leadEventId,
+                'lead_event_id' => $leadEvent->id,
                 'branch_id' => $resolvedBranchId,
                 'date' => $tanggal,
                 'day_number' => $dayNumber,
@@ -167,7 +117,7 @@ class LeadDailyImport
             }
         }
 
-        $spreadsheet->disconnectWorksheets();
+        self::spreadsheetDisconnect($spreadsheet);
 
         return [
             'imported' => $imported,

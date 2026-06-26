@@ -2,20 +2,18 @@
 
 namespace App\Exports;
 
+use App\Exports\Concerns\ExcelStyle;
 use App\Models\Branch;
 use App\Models\LeadEvent;
 use App\Models\LeadMaster;
 use Illuminate\Support\Collection;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
 use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
-use PhpOffice\PhpSpreadsheet\Style\Fill;
-use PhpOffice\PhpSpreadsheet\Style\Border;
-use PhpOffice\PhpSpreadsheet\Style\Alignment;
-use PhpOffice\PhpSpreadsheet\Cell\Coordinate;
-use PhpOffice\PhpSpreadsheet\Cell\DataValidation;
 
 class LeadDailyExport
 {
+    use ExcelStyle;
+
     private static function headers(): array
     {
         return [
@@ -29,62 +27,9 @@ class LeadDailyExport
         return ['Cabang', 'Tanggal', 'Event ID', 'Proyek', 'Hari Ke', 'Leads', 'Kumulatif', 'Achieve %'];
     }
 
-    private static function applyStyles(Spreadsheet $spreadsheet, array $headers, int $lastRow): void
+    private static function widths(): array
     {
-        $sheet = $spreadsheet->getActiveSheet();
-        $colCount = count($headers);
-        $lastCol = Coordinate::stringFromColumnIndex($colCount);
-
-        $sheet->getStyle('A1:' . $lastCol . '1')->applyFromArray([
-            'font' => ['bold' => true, 'color' => ['rgb' => 'FFFFFF'], 'size' => 11, 'name' => 'Times New Roman'],
-            'fill' => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['rgb' => '000000']],
-            'borders' => ['allBorders' => ['borderStyle' => Border::BORDER_THIN]],
-            'alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER, 'vertical' => Alignment::VERTICAL_CENTER],
-        ]);
-
-        if ($lastRow > 1) {
-            $sheet->getStyle('A2:' . $lastCol . $lastRow)->applyFromArray([
-                'borders' => ['allBorders' => ['borderStyle' => Border::BORDER_THIN]],
-                'font' => ['size' => 10, 'name' => 'Times New Roman'],
-            ]);
-        }
-
-        $defaultWidths = [
-            'A' => 14, 'B' => 14, 'C' => 22, 'D' => 14,
-            'E' => 10, 'F' => 10, 'G' => 14, 'H' => 14,
-        ];
-
-        if ($colCount === 8) {
-            $defaultWidths = ['A' => 14, 'B' => 14, 'C' => 22, 'D' => 14, 'E' => 10, 'F' => 10, 'G' => 14, 'H' => 14];
-        }
-
-        foreach ($defaultWidths as $col => $w) {
-            $sheet->getColumnDimension($col)->setWidth($w);
-        }
-
-        $sheet->freezePane('A2');
-    }
-
-    private static function cell(int $col, int $row): string
-    {
-        return Coordinate::stringFromColumnIndex($col) . $row;
-    }
-
-    private static function listValidation(array|string $source): DataValidation
-    {
-        $validation = new DataValidation();
-        $validation->setType(DataValidation::TYPE_LIST);
-        $validation->setErrorStyle(DataValidation::STYLE_STOP);
-        $validation->setAllowBlank(true);
-        $validation->setShowDropDown(false);
-
-        if (is_array($source)) {
-            $validation->setFormula1('"' . implode(',', $source) . '"');
-        } else {
-            $validation->setFormula1('=' . $source);
-        }
-
-        return $validation;
+        return ['A' => 14, 'B' => 14, 'C' => 22, 'D' => 14, 'E' => 10, 'F' => 10, 'G' => 14, 'H' => 14];
     }
 
     public static function toBrowser(Collection $records, string $filename): void
@@ -94,9 +39,7 @@ class LeadDailyExport
         $sheet->setTitle('Lead Harian');
 
         $headers = self::headers();
-        foreach ($headers as $i => $h) {
-            $sheet->setCellValue(self::cell($i + 1, 1), $h);
-        }
+        self::writeHeaderRow($sheet, $headers);
 
         foreach ($records as $i => $r) {
             $row = $i + 2;
@@ -111,43 +54,29 @@ class LeadDailyExport
         }
 
         $rowCount = $records->count() + 1;
-        self::applyStyles($spreadsheet, $headers, $rowCount);
-
-        $lastCol = Coordinate::stringFromColumnIndex(count($headers));
-        $sheet->setAutoFilter('A1:' . $lastCol . $rowCount);
+        self::applyStyles($spreadsheet, $headers, $rowCount, self::widths());
+        self::addAutoFilter($sheet, $headers, $rowCount);
 
         $writer = new Xlsx($spreadsheet);
-        header('Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-        header('Content-Disposition: attachment; filename="' . $filename . '"');
-        header('Cache-Control: max-age=0');
-        $writer->save('php://output');
-        exit;
+        self::downloadXlsx($writer, $filename);
     }
 
     public static function generateTemplate(): void
     {
         $spreadsheet = new Spreadsheet();
         $sheet = $spreadsheet->getActiveSheet();
-        $sheet->setTitle('Template');
 
         $headers = self::templateHeaders();
-        foreach ($headers as $i => $h) {
-            $sheet->setCellValue(self::cell($i + 1, 1), $h);
-        }
+        self::generateTemplateOpen($spreadsheet, $headers);
 
         $maxRow = 101;
 
         // --- A:Cabang dropdown ---
         $branches = Branch::where('is_active', true)->pluck('name')->toArray();
-        if (!empty($branches)) {
-            $sheet->setDataValidation('A2:A' . $maxRow, self::listValidation($branches));
-        }
+        self::branchDropdown($sheet, 'A', $maxRow, $branches);
 
         // --- B:Tanggal date format ---
-        $sheet->getStyle('B2:B' . $maxRow)
-            ->getNumberFormat()
-            ->setFormatCode('DD/MM/YYYY');
-        $sheet->setCellValue('B2', date('Y-m-d'));
+        self::dateColumnStyle($sheet, 'B2:B' . $maxRow, date('Y-m-d'));
 
         // --- C:Event ID dropdown ---
         $events = LeadEvent::with('branch')
@@ -165,13 +94,9 @@ class LeadDailyExport
             $sheet->setDataValidation('D2:D' . $maxRow, self::listValidation($projects));
         }
 
-        self::applyStyles($spreadsheet, $headers, $maxRow);
+        self::applyStyles($spreadsheet, $headers, $maxRow, self::widths());
 
         $writer = new Xlsx($spreadsheet);
-        header('Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-        header('Content-Disposition: attachment; filename="template-lead-harian.xlsx"');
-        header('Cache-Control: max-age=0');
-        $writer->save('php://output');
-        exit;
+        self::downloadXlsx($writer, 'template-lead-harian.xlsx');
     }
 }

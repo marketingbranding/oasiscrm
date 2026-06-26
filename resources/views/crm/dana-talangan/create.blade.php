@@ -3,9 +3,7 @@
 @section('title', 'Buat Dana Talangan - Oasis CRM')
 
 @section('content')
-    <div class="bg-[#f1c40f] border-2 border-black px-4 py-2 mb-6">
-        <h1 class="font-['Arial_Black'] font-black text-xl uppercase">Buat Dana Talangan</h1>
-    </div>
+    <x-crm.page-header color="#f1c40f" title="Buat Dana Talangan" />
 
     <div class="border-2 border-black bg-white">
         <div class="bg-black text-white px-4 py-2 font-[Helvetica] font-bold text-xs uppercase">
@@ -18,7 +16,7 @@
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
                         <label class="font-[Helvetica] font-bold text-xs uppercase block mb-1">Tanggal</label>
-                        <div class="date-wrapper" style="position:relative">
+                        <div class="date-wrapper" data-accent="#f1c40f" style="position:relative">
                             <div class="date-display w-full border-2 px-3 py-2 text-sm font-['Times_New_Roman'] bg-white cursor-pointer select-none flex items-center justify-between border-black @error('tanggal') border-[#e91d2a] @enderror" tabindex="0">
                                 <span class="date-text">— Pilih Tanggal —</span>
                                 <span class="date-arrow">▼</span>
@@ -58,7 +56,7 @@
                 @php $cabangError = $errors->has('branch_id') ? 'border-[#e91d2a]' : 'border-black'; @endphp
                 <div>
                     <label class="font-[Helvetica] font-bold text-xs uppercase block mb-1">Cabang</label>
-                    <div class="select-wrapper relative" style="position:relative">
+                    <div class="select-wrapper" data-accent="#f1c40f" style="position:relative">
                         <div class="select-display w-full border-2 px-3 py-2 text-sm font-['Times_New_Roman'] bg-white cursor-pointer select-none flex items-center justify-between {{ $cabangError }}" tabindex="0">
                             <span class="select-text">— Pilih Cabang —</span>
                             <span class="select-arrow">▼</span>
@@ -84,7 +82,7 @@
 
                 <div>
                     <label class="font-[Helvetica] font-bold text-xs uppercase block mb-1">Proyek</label>
-                    <div class="select-wrapper relative" style="position:relative">
+                    <div class="select-wrapper" data-accent="#f1c40f" style="position:relative">
                         <div class="select-display w-full border-2 px-3 py-2 text-sm font-['Times_New_Roman'] bg-white cursor-pointer select-none flex items-center justify-between border-black" tabindex="0">
                             <span class="select-text">— Pilih Proyek —</span>
                             <span class="select-arrow">▼</span>
@@ -110,7 +108,7 @@
                 <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
                     <div>
                         <label class="font-[Helvetica] font-bold text-xs uppercase block mb-1">Kav</label>
-                        <div class="select-wrapper relative" style="position:relative">
+                        <div class="select-wrapper" data-accent="#f1c40f" style="position:relative">
                             <div class="select-display w-full border-2 px-3 py-2 text-sm font-['Times_New_Roman'] bg-white cursor-pointer select-none flex items-center justify-between border-black @error('kav') border-[#e91d2a] @enderror" tabindex="0">
                                 <span class="select-text">— Pilih Kav —</span>
                                 <span class="select-arrow">▼</span>
@@ -184,18 +182,6 @@
         </div>
     </div>
 
-<style>
-.select-li:hover { background:#f1c40f; color:#fff; }
-.select-li.s-selected { background:#f1c40f; color:#fff; }
-.cal-day { padding:5px 2px;text-align:center;cursor:pointer;border-bottom:1px solid #eee;border-right:1px solid #eee;font-family:'Times New Roman';font-size:13px;color:#000; }
-.cal-day:nth-child(7n) { border-right:none; }
-.cal-day:hover { background:#f1c40f; color:#fff; }
-.cal-day.cal-other { color:#ccc; cursor:default; }
-.cal-day.cal-other:hover { background:transparent; color:#ccc; }
-.cal-day.cal-today { font-weight:bold; text-decoration:underline; }
-.cal-day.cal-selected { background:#f1c40f; color:#fff; font-weight:bold; }
-</style>
-
 <script>
 var projectData = [
     @foreach($projects as $p)
@@ -210,86 +196,6 @@ var kavlingData = [
 ];
 
 document.addEventListener('DOMContentLoaded', function() {
-    document.querySelectorAll('.select-wrapper').forEach(function(wrapper) {
-        if (wrapper.__sw) return;
-        wrapper.__sw = true;
-        var display = wrapper.querySelector('.select-display');
-        var textEl = display ? display.querySelector('.select-text') : null;
-        var arrow = display ? display.querySelector('.select-arrow') : null;
-        var dropdown = wrapper.querySelector('.select-dropdown');
-        var search = dropdown ? dropdown.querySelector('.select-search') : null;
-        var list = dropdown ? dropdown.querySelector('.select-options') : null;
-        var select = wrapper.querySelector('select');
-        if (!display || !textEl || !arrow || !dropdown || !search || !list || !select) return;
-
-        function sync() {
-            var idx = select.selectedIndex;
-            textEl.textContent = idx > 0 ? select.options[idx].text : select.options[0].text;
-        }
-
-        display.addEventListener('click', function(e) {
-            e.stopPropagation();
-            var isOpen = dropdown.style.display !== 'none';
-            if (isOpen) {
-                dropdown.style.display = 'none';
-                arrow.textContent = '\u25BC';
-            } else {
-                dropdown.style.display = 'block';
-                arrow.textContent = '\u25B2';
-                search.value = '';
-                search.focus();
-                Array.from(list.children).forEach(function(li) { li.style.display = ''; });
-            }
-        });
-
-        search.addEventListener('input', function() {
-            var q = this.value.toLowerCase();
-            Array.from(list.children).forEach(function(li) {
-                li.style.display = li.textContent.toLowerCase().indexOf(q) !== -1 ? '' : 'none';
-            });
-        });
-
-        search.addEventListener('keydown', function(e) {
-            if (e.key === 'Enter') {
-                var visible = list.querySelector('li:not([style*="display: none"])');
-                if (visible && visible.getAttribute('data-value')) {
-                    selectOption(visible);
-                }
-            }
-            if (e.key === 'Escape') {
-                dropdown.style.display = 'none';
-                arrow.textContent = '\u25BC';
-            }
-        });
-
-        list.addEventListener('click', function(e) {
-            var li = e.target.closest('li');
-            if (li) selectOption(li);
-        });
-
-        function selectOption(li) {
-            list.querySelectorAll('li').forEach(function(l) { l.classList.remove('s-selected'); });
-            li.classList.add('s-selected');
-            textEl.textContent = li.textContent;
-            select.value = li.getAttribute('data-value');
-            var evt = new Event('change', { bubbles: true });
-            select.dispatchEvent(evt);
-            dropdown.style.display = 'none';
-            arrow.textContent = '\u25BC';
-        }
-
-        document.addEventListener('click', function(e) {
-            if (!wrapper.contains(e.target)) {
-                dropdown.style.display = 'none';
-                arrow.textContent = '\u25BC';
-            }
-        });
-
-        sync();
-        var sw = display.offsetWidth;
-        if (sw > 0) dropdown.style.width = sw + 'px';
-    });
-
     var branchSelect = document.querySelector('[name="branch_id"]');
     if (branchSelect) {
         branchSelect.addEventListener('change', function() {
@@ -340,6 +246,7 @@ document.addEventListener('DOMContentLoaded', function() {
             branchSelect.dispatchEvent(evt);
         }
     }
+
     var proyekSelect = document.querySelector('[name="project_name"]');
     if (proyekSelect) {
         proyekSelect.addEventListener('change', function() {
@@ -397,135 +304,6 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         }
     }
-});
-
-// --- Date Calendar ---
-var monthsId = ['Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember'];
-
-function getCalState(wrapper) {
-    var input = wrapper.querySelector('input[type="date"]');
-    if (input && input.value) {
-        var p = input.value.split('-');
-        return { year: parseInt(p[0], 10), month: parseInt(p[1], 10) - 1 };
-    }
-    return null;
-}
-
-function renderCalendar(wrapper) {
-    if (!wrapper.__calState)
-        wrapper.__calState = getCalState(wrapper) || { year: new Date().getFullYear(), month: new Date().getMonth() };
-    var state = wrapper.__calState;
-    var y = state.year, m = state.month;
-    var first = new Date(y, m, 1).getDay();
-    var days = new Date(y, m + 1, 0).getDate();
-    var prevDays = new Date(y, m, 0).getDate();
-    var grid = wrapper.querySelector('.cal-grid');
-    var title = wrapper.querySelector('.cal-title');
-    if (!grid || !title) return;
-    grid.innerHTML = '';
-    for (var i = 0; i < 42; i++) {
-        var div = document.createElement('div');
-        div.className = 'cal-day';
-        if (i < first) {
-            div.textContent = prevDays - first + i + 1;
-            div.classList.add('cal-other');
-        } else if (i >= first + days) {
-            div.textContent = i - first - days + 1;
-            div.classList.add('cal-other');
-        } else {
-            var dayNum = i - first + 1;
-            var ds = y + '-' + String(m + 1).padStart(2, '0') + '-' + String(dayNum).padStart(2, '0');
-            div.textContent = dayNum;
-            div.setAttribute('data-date', ds);
-            var input = wrapper.querySelector('input[type="date"]');
-            if (input && input.value === ds) div.classList.add('cal-selected');
-            var today = new Date();
-            var todayStr = today.getFullYear() + '-' + String(today.getMonth() + 1).padStart(2, '0') + '-' + String(today.getDate()).padStart(2, '0');
-            if (ds === todayStr) div.classList.add('cal-today');
-            (function(d) { div.addEventListener('click', function() { selectDate(wrapper, d); }); })(ds);
-        }
-        grid.appendChild(div);
-    }
-    title.textContent = monthsId[m] + ' ' + y;
-}
-
-function selectDate(wrapper, dateStr) {
-    var input = wrapper.querySelector('input[type="date"]');
-    if (!input) return;
-    input.value = dateStr;
-    var parts = dateStr.split('-');
-    var d = parseInt(parts[2], 10);
-    var m = parseInt(parts[1], 10) - 1;
-    var y = parseInt(parts[0], 10);
-    var textEl = wrapper.querySelector('.date-text');
-    if (textEl) textEl.textContent = d + ' ' + monthsId[m] + ' ' + y;
-    var cal = wrapper.querySelector('.date-calendar');
-    if (cal) cal.style.display = 'none';
-    var arrow = wrapper.querySelector('.date-arrow');
-    if (arrow) arrow.textContent = '\u25BC';
-    var evt = document.createEvent('HTMLEvents');
-    evt.initEvent('change', true, false);
-    input.dispatchEvent(evt);
-    wrapper.__calState = { year: y, month: m };
-    renderCalendar(wrapper);
-}
-
-function syncDateDisplay(wrapper) {
-    var input = wrapper.querySelector('input[type="date"]');
-    var textEl = wrapper.querySelector('.date-text');
-    if (input && textEl && input.value) {
-        var parts = input.value.split('-');
-        var d = parseInt(parts[2], 10);
-        var m = parseInt(parts[1], 10) - 1;
-        var y = parseInt(parts[0], 10);
-        textEl.textContent = d + ' ' + monthsId[m] + ' ' + y;
-    }
-}
-
-document.addEventListener('DOMContentLoaded', function() {
-    document.querySelectorAll('.date-wrapper').forEach(function(wrapper) {
-        if (wrapper.__dw) return;
-        wrapper.__dw = true;
-        var display = wrapper.querySelector('.date-display');
-        var calendar = wrapper.querySelector('.date-calendar');
-        var arrow = wrapper.querySelector('.date-arrow');
-        if (!display || !calendar) return;
-        syncDateDisplay(wrapper);
-        display.addEventListener('click', function(e) {
-            e.stopPropagation();
-            var isOpen = calendar.style.display !== 'none';
-            if (isOpen) {
-                calendar.style.display = 'none';
-                if (arrow) arrow.textContent = '\u25BC';
-            } else {
-                calendar.style.display = 'block';
-                if (arrow) arrow.textContent = '\u25B2';
-                renderCalendar(wrapper);
-            }
-        });
-        document.addEventListener('click', function(e) {
-            if (!wrapper.contains(e.target)) {
-                calendar.style.display = 'none';
-                if (arrow) arrow.textContent = '\u25BC';
-            }
-        });
-        var prev = calendar.querySelector('.cal-prev');
-        var next = calendar.querySelector('.cal-next');
-        if (prev) prev.addEventListener('click', function(e) {
-            e.stopPropagation();
-            if (!wrapper.__calState) wrapper.__calState = { year: new Date().getFullYear(), month: new Date().getMonth() };
-            wrapper.__calState.month--;
-            if (wrapper.__calState.month < 0) { wrapper.__calState.month = 11; wrapper.__calState.year--; }
-            renderCalendar(wrapper);
-        });
-        if (next) next.addEventListener('click', function(e) {
-            e.stopPropagation();
-            if (!wrapper.__calState) wrapper.__calState = { year: new Date().getFullYear(), month: new Date().getMonth() };
-            wrapper.__calState.month++;
-            if (wrapper.__calState.month > 11) { wrapper.__calState.month = 0; wrapper.__calState.year++; }
-            renderCalendar(wrapper);
-        });
-    });
 });
 </script>
 @endsection

@@ -3,9 +3,7 @@
 @section('title', 'Proyek - Oasis CRM')
 
 @section('content')
-    <div class="bg-[#5d8e8e] border-2 border-black px-4 py-2 mb-6">
-        <h1 class="font-['Arial_Black'] font-black text-xl uppercase">Manajemen Proyek</h1>
-    </div>
+    <x-crm.page-header color="#5d8e8e" title="Manajemen Proyek" />
 
     <div class="bg-white border-2 border-black p-3 mb-6">
         <form method="GET" action="{{ route('projects.index') }}" class="flex items-center gap-3 flex-wrap filter-bar">

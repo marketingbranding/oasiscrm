@@ -6,6 +6,10 @@ use App\Exports\DanaTalanganExport;
 use App\Imports\DanaTalanganImport;
 use App\Http\Controllers\Controller;
 use App\Http\Controllers\Crm\Traits\FilterableBranch;
+use App\Http\Controllers\Crm\Traits\RedirectsShowToEdit;
+use App\Http\Controllers\Crm\Traits\Exportable;
+use App\Http\Controllers\Crm\Traits\Importable;
+use App\Http\Controllers\Crm\Traits\BulkOperations;
 use App\Http\Requests\Crm\StoreDanaTalanganRequest;
 use App\Http\Requests\Crm\UpdateDanaTalanganRequest;
 use App\Models\Branch;
@@ -18,6 +22,28 @@ use Illuminate\Support\Facades\Auth;
 class DanaTalanganController extends Controller
 {
     use FilterableBranch;
+    use RedirectsShowToEdit;
+    use Exportable;
+    use Importable;
+    use BulkOperations;
+
+    protected string $showEditRoute = 'dana-talangan.edit';
+    protected string $showEditParam = 'dana_talangan';
+
+    protected string $exportClass = DanaTalanganExport::class;
+
+    protected string $importView = 'crm.dana-talangan.import';
+    protected string $importClass = DanaTalanganImport::class;
+    protected array $importPreservedParams = ['branch_id', 'project_name', 'status'];
+    protected string $importErrorRoute = 'dana-talangan.import';
+    protected string $importSuccessRoute = 'dana-talangan.index';
+
+    protected string $bulkModel = DanaTalangan::class;
+    protected string $bulkLabel = 'data dana talangan';
+    protected array $bulkStatusOptions = ['aktif', 'lunas'];
+    protected string $bulkDefaultStatus = 'aktif';
+    protected string $bulkRedirectRoute = 'dana-talangan.index';
+    protected array $bulkRedirectParams = ['branch_id', 'project_name', 'status'];
 
     public function index(Request $request)
     {
@@ -91,11 +117,6 @@ class DanaTalanganController extends Controller
             ->with('success', 'Data dana talangan berhasil ditambahkan.');
     }
 
-    public function show(DanaTalangan $danaTalangan)
-    {
-        return redirect()->route('dana-talangan.edit', ['dana_talangan' => $danaTalangan->id]);
-    }
-
     public function edit(DanaTalangan $danaTalangan)
     {
         $user = Auth::user();
@@ -150,71 +171,6 @@ class DanaTalanganController extends Controller
 
         $filename = 'dana-talangan-' . now()->format('Y-m-d') . '.xlsx';
         DanaTalanganExport::toBrowser($records, $filename);
-    }
-
-    public function exportTemplate()
-    {
-        DanaTalanganExport::generateTemplate();
-    }
-
-    public function import()
-    {
-        return view('crm.dana-talangan.import');
-    }
-
-    public function importStore(Request $request)
-    {
-        $request->validate(['file' => 'required|file|mimes:xlsx']);
-
-        $user = Auth::user();
-        $branchId = $user->canViewAllBranches()
-            ? $request->get('branch_id')
-            : $user->branch_id;
-
-        $result = DanaTalanganImport::import(
-            $request->file('file')->getPathname(),
-            $branchId,
-            $request->only(['branch_id', 'project_name', 'status'])
-        );
-
-        $message = $result['imported'] . ' data berhasil diimport.';
-        if (!empty($result['errors'])) {
-            return redirect()->route('dana-talangan.import')
-                ->with('success', $message)
-                ->with('import_errors', $result['errors']);
-        }
-
-        return redirect()->route('dana-talangan.index')
-            ->with('success', $message);
-    }
-
-    public function bulkDestroy(Request $request)
-    {
-        $ids = array_filter(explode(',', $request->input('selected_ids', '')));
-        if (empty($ids)) {
-            return back()->with('error', 'Tidak ada data yang dipilih.');
-        }
-
-        $query = $this->applyBranchScope(DanaTalangan::whereIn('id', $ids), null);
-        $count = $query->delete();
-
-        return redirect()->route('dana-talangan.index', array_filter($request->only(['branch_id', 'project_name', 'status'])))
-            ->with('success', "$count data dana talangan berhasil dihapus.");
-    }
-
-    public function bulkUpdate(Request $request)
-    {
-        $ids = array_filter(explode(',', $request->input('selected_ids', '')));
-        $newStatus = $request->input('new_status', 'aktif');
-        if (empty($ids)) {
-            return back()->with('error', 'Tidak ada data yang dipilih.');
-        }
-
-        $query = $this->applyBranchScope(DanaTalangan::whereIn('id', $ids), null);
-        $count = $query->update(['status' => $newStatus]);
-
-        return redirect()->route('dana-talangan.index', array_filter($request->only(['branch_id', 'project_name', 'status'])))
-            ->with('success', "$count data dana talangan berhasil diperbarui.");
     }
 
     public function destroy(DanaTalangan $danaTalangan)

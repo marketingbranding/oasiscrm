@@ -3,9 +3,7 @@
 @section('title', 'Lead Harian - Oasis CRM')
 
 @section('content')
-    <div class="bg-[#e6915d] border-2 border-black px-4 py-2 mb-6">
-        <h1 class="font-['Arial_Black'] font-black text-xl uppercase">Lead Harian</h1>
-    </div>
+    <x-crm.page-header color="#e6915d" title="Lead Harian" />
 
     <div class="bg-white border-2 border-black p-3 mb-6">
         <form method="GET" action="{{ route('lead-daily.index') }}" class="flex items-center gap-3 flex-wrap filter-bar">
@@ -45,26 +43,7 @@
             <div class="h-6 w-px bg-black mx-1 hidden sm:block"></div>
 
             <div class="flex items-center gap-2 ml-auto">
-                <div class="relative" x-data="{ exportOpen: false }" @click.outside="exportOpen = false">
-                    <button type="button" @click="exportOpen = !exportOpen"
-                            class="bg-white text-black px-4 py-1.5 text-sm font-[Helvetica] font-bold border-2 border-black rounded-none hover:bg-gray-100 flex items-center gap-1">
-                        ↓ Export/Import
-                        <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
-                        </svg>
-                    </button>
-                    <div x-show="exportOpen" x-cloak
-                         class="absolute right-0 top-full mt-1 bg-white border-2 border-black z-50 min-w-[160px] shadow-xl">
-                        <a href="{{ route('lead-daily.export', request()->only(['branch_id', 'lead_event_id', 'project_name'])) }}"
-                           class="block px-4 py-2 text-sm font-['Times_New_Roman'] hover:bg-gray-100 border-b-2 border-black whitespace-nowrap">
-                            ↓ Export XLSX
-                        </a>
-                        <a href="{{ route('lead-daily.import') }}"
-                           class="block px-4 py-2 text-sm font-['Times_New_Roman'] hover:bg-gray-100 whitespace-nowrap">
-                            ↑ Import XLSX
-                        </a>
-                    </div>
-                </div>
+                <x-crm.export-import export-route="lead-daily.export" import-route="lead-daily.import" :params="request()->only(['branch_id', 'lead_event_id', 'project_name'])" />
                 <a href="{{ route('lead-daily.create') }}" class="bg-[#c0392b] text-white px-4 py-1.5 text-sm font-[Helvetica] font-bold border-2 border-black rounded-none hover:bg-[#a93226]">
                     + Input Harian
                 </a>
@@ -77,109 +56,14 @@
             <thead>
                 <tr class="bg-black text-white">
                     <th class="w-10 px-3 py-2 text-center font-[Helvetica] font-bold text-xs uppercase"><input type="checkbox" id="select-all" class="cursor-pointer"></th>
-                    <th class="px-3 py-2 text-left font-[Helvetica] font-bold text-xs uppercase">
-                        @php
-                            $isActive = request('sort') === 'date';
-                            $currentDir = request('dir');
-                            if (!$isActive) {
-                                $linkParams = array_merge(request()->query(), ['sort' => 'date', 'dir' => 'asc']);
-                                $arrow = '';
-                            } elseif ($currentDir === 'asc') {
-                                $linkParams = array_merge(request()->query(), ['sort' => 'date', 'dir' => 'desc']);
-                                $arrow = '▲';
-                            } else {
-                                $linkParams = collect(request()->query())->except(['sort', 'dir'])->toArray();
-                                $arrow = '▼';
-                            }
-                        @endphp
-                        <a href="{{ route('lead-daily.index', $linkParams) }}" class="hover:underline text-white">
-                            Tanggal
-                            @if($isActive)<span class="ml-0.5">{{ $arrow }}</span>@endif
-                        </a>
-                    </th>
+                    <x-crm.sortable-th field="date" route="lead-daily.index" label="Tanggal" :currentSort="$sortField" :currentDir="$sortDir" />
                     <th class="px-3 py-2 text-left font-[Helvetica] font-bold text-xs uppercase">Event</th>
                     <th class="px-3 py-2 text-left font-[Helvetica] font-bold text-xs uppercase">Cabang</th>
                     <th class="px-3 py-2 text-left font-[Helvetica] font-bold text-xs uppercase">Proyek</th>
-                    <th class="px-3 py-2 text-center font-[Helvetica] font-bold text-xs uppercase">
-                        @php
-                            $isActive = request('sort') === 'day_number';
-                            $currentDir = request('dir');
-                            if (!$isActive) {
-                                $linkParams = array_merge(request()->query(), ['sort' => 'day_number', 'dir' => 'asc']);
-                                $arrow = '';
-                            } elseif ($currentDir === 'asc') {
-                                $linkParams = array_merge(request()->query(), ['sort' => 'day_number', 'dir' => 'desc']);
-                                $arrow = '▲';
-                            } else {
-                                $linkParams = collect(request()->query())->except(['sort', 'dir'])->toArray();
-                                $arrow = '▼';
-                            }
-                        @endphp
-                        <a href="{{ route('lead-daily.index', $linkParams) }}" class="hover:underline text-white">
-                            Hari Ke
-                            @if($isActive)<span class="ml-0.5">{{ $arrow }}</span>@endif
-                        </a>
-                    </th>
-                    <th class="px-3 py-2 text-center font-[Helvetica] font-bold text-xs uppercase">
-                        @php
-                            $isActive = request('sort') === 'leads_count';
-                            $currentDir = request('dir');
-                            if (!$isActive) {
-                                $linkParams = array_merge(request()->query(), ['sort' => 'leads_count', 'dir' => 'asc']);
-                                $arrow = '';
-                            } elseif ($currentDir === 'asc') {
-                                $linkParams = array_merge(request()->query(), ['sort' => 'leads_count', 'dir' => 'desc']);
-                                $arrow = '▲';
-                            } else {
-                                $linkParams = collect(request()->query())->except(['sort', 'dir'])->toArray();
-                                $arrow = '▼';
-                            }
-                        @endphp
-                        <a href="{{ route('lead-daily.index', $linkParams) }}" class="hover:underline text-white">
-                            Leads
-                            @if($isActive)<span class="ml-0.5">{{ $arrow }}</span>@endif
-                        </a>
-                    </th>
-                    <th class="px-3 py-2 text-center font-[Helvetica] font-bold text-xs uppercase">
-                        @php
-                            $isActive = request('sort') === 'cumulative_leads';
-                            $currentDir = request('dir');
-                            if (!$isActive) {
-                                $linkParams = array_merge(request()->query(), ['sort' => 'cumulative_leads', 'dir' => 'asc']);
-                                $arrow = '';
-                            } elseif ($currentDir === 'asc') {
-                                $linkParams = array_merge(request()->query(), ['sort' => 'cumulative_leads', 'dir' => 'desc']);
-                                $arrow = '▲';
-                            } else {
-                                $linkParams = collect(request()->query())->except(['sort', 'dir'])->toArray();
-                                $arrow = '▼';
-                            }
-                        @endphp
-                        <a href="{{ route('lead-daily.index', $linkParams) }}" class="hover:underline text-white">
-                            Kumulatif
-                            @if($isActive)<span class="ml-0.5">{{ $arrow }}</span>@endif
-                        </a>
-                    </th>
-                    <th class="px-3 py-2 text-center font-[Helvetica] font-bold text-xs uppercase">
-                        @php
-                            $isActive = request('sort') === 'achievement_pct';
-                            $currentDir = request('dir');
-                            if (!$isActive) {
-                                $linkParams = array_merge(request()->query(), ['sort' => 'achievement_pct', 'dir' => 'asc']);
-                                $arrow = '';
-                            } elseif ($currentDir === 'asc') {
-                                $linkParams = array_merge(request()->query(), ['sort' => 'achievement_pct', 'dir' => 'desc']);
-                                $arrow = '▲';
-                            } else {
-                                $linkParams = collect(request()->query())->except(['sort', 'dir'])->toArray();
-                                $arrow = '▼';
-                            }
-                        @endphp
-                        <a href="{{ route('lead-daily.index', $linkParams) }}" class="hover:underline text-white">
-                            Achieve %
-                            @if($isActive)<span class="ml-0.5">{{ $arrow }}</span>@endif
-                        </a>
-                    </th>
+                    <x-crm.sortable-th field="day_number" route="lead-daily.index" label="Hari Ke" :currentSort="$sortField" :currentDir="$sortDir" align="center" />
+                    <x-crm.sortable-th field="leads_count" route="lead-daily.index" label="Leads" :currentSort="$sortField" :currentDir="$sortDir" align="center" />
+                    <x-crm.sortable-th field="cumulative_leads" route="lead-daily.index" label="Kumulatif" :currentSort="$sortField" :currentDir="$sortDir" align="center" />
+                    <x-crm.sortable-th field="achievement_pct" route="lead-daily.index" label="Achieve %" :currentSort="$sortField" :currentDir="$sortDir" align="center" />
                     <th class="px-3 py-2 text-center font-[Helvetica] font-bold text-xs uppercase">Aksi</th>
                 </tr>
             </thead>
@@ -224,77 +108,13 @@
             </tbody>
         </table>
     </div>
-    <div class="flex items-center justify-between px-4 py-3 border-t-2 border-black bg-white">
-        <div class="text-xs font-['Times_New_Roman']">
-            @if(method_exists($dailyLogs, 'total'))
-                {{ $dailyLogs->firstItem() }}–{{ $dailyLogs->lastItem() }} dari {{ $dailyLogs->total() }}
-            @else
-                Semua {{ $dailyLogs->count() }} data
-            @endif
-        </div>
-        <div class="flex items-center gap-2">
-            <span class="text-xs font-['Times_New_Roman']">Tampilkan</span>
-            <select onchange="window.location.href=this.value"
-                    class="border border-black text-xs px-1 py-0.5 font-['Times_New_Roman'] bg-white">
-                <option value="{{ request()->fullUrlWithQuery(['per_page' => 15]) }}" {{ ($perPage ?? '15') == '15' ? 'selected' : '' }}>15</option>
-                <option value="{{ request()->fullUrlWithQuery(['per_page' => 30]) }}" {{ ($perPage ?? '15') == '30' ? 'selected' : '' }}>30</option>
-                <option value="{{ request()->fullUrlWithQuery(['per_page' => 50]) }}" {{ ($perPage ?? '15') == '50' ? 'selected' : '' }}>50</option>
-                <option value="{{ request()->fullUrlWithQuery(['per_page' => 100]) }}" {{ ($perPage ?? '15') == '100' ? 'selected' : '' }}>100</option>
-                <option value="{{ request()->fullUrlWithQuery(['per_page' => 'all']) }}" {{ ($perPage ?? '15') == 'all' ? 'selected' : '' }}>Semua</option>
-            </select>
-        </div>
-        <div class="flex items-center gap-1">
-            @if(method_exists($dailyLogs, 'links'))
-                {{ $dailyLogs->links() }}
-            @endif
-        </div>
-    </div>
-<div id="bulk-bar" class="fixed bottom-4 left-4 z-50 bg-white border-2 border-black shadow-lg hidden">
-    <div class="flex items-center gap-3 px-4 py-3">
-        <span class="text-sm font-[Helvetica] font-bold"><span id="bulk-count">0</span> data terpilih</span>
-        <button onclick="bulkDelete()" class="bg-[#e91d2a] text-white px-4 py-1.5 text-sm font-[Helvetica] font-bold border-2 border-black rounded-none hover:bg-[#c0392b] cursor-pointer">
-            Hapus Terpilih
-        </button>
-    </div>
-</div>
 
-<form id="bulk-form" method="POST" action="{{ route('lead-daily.bulk-destroy') }}" class="hidden">
-    @csrf
-    <input type="hidden" name="selected_ids" id="bulk-ids">
-    @foreach(request()->only(['branch_id', 'lead_event_id', 'project_name']) as $k => $v)
-        <input type="hidden" name="{{ $k }}" value="{{ $v }}">
-    @endforeach
-</form>
+    <x-crm.pagination :collection="$dailyLogs" :per-page="$perPage" />
 
-<script>
-let selected = new Set();
-document.getElementById('select-all')?.addEventListener('change', function() {
-    document.querySelectorAll('.row-checkbox').forEach(cb => {
-        cb.checked = this.checked;
-        this.checked ? selected.add(cb.value) : selected.delete(cb.value);
-    });
-    toggleBulkBar();
-});
-document.querySelectorAll('.row-checkbox').forEach(cb => {
-    cb.addEventListener('change', function() {
-        this.checked ? selected.add(this.value) : selected.delete(this.value);
-        toggleBulkBar();
-    });
-});
-function toggleBulkBar() {
-    const bar = document.getElementById('bulk-bar');
-    const count = selected.size;
-    document.getElementById('bulk-count').textContent = count;
-    bar.style.display = count > 0 ? 'block' : 'none';
-}
-function bulkDelete() {
-    const count = selected.size;
-    if (!count) return;
-    if (!confirm('Hapus ' + count + ' data terpilih?')) return;
-    document.getElementById('bulk-ids').value = Array.from(selected).join(',');
-    document.getElementById('bulk-form').submit();
-}
-</script>
+    <x-crm.bulk-bar
+        destroy-route="{{ route('lead-daily.bulk-destroy') }}"
+        :params="request()->only(['branch_id', 'lead_event_id', 'project_name'])" />
+
 <style>
 .table-scroll thead th {
     position: sticky;

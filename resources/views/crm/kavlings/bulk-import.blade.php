@@ -3,9 +3,7 @@
 @section('title', 'Import Kavling - ' . $project->project_name . ' - Oasis CRM')
 
 @section('content')
-    <div class="bg-[#5d8e8e] border-2 border-black px-4 py-2 mb-6">
-        <h1 class="font-['Arial_Black'] font-black text-xl uppercase">Import Kavling — {{ $project->project_name }}</h1>
-    </div>
+    <x-crm.page-header color="#5d8e8e" title="Import Kavling — {{ $project->project_name }}" />
 
     <div class="bg-white border-2 border-black p-4">
         <form method="POST" action="{{ route('kavlings.bulk-store', ['project' => $project->id]) }}">

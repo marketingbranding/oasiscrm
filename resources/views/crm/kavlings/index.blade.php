@@ -3,9 +3,7 @@
 @section('title', 'Kavling - ' . $project->project_name . ' - Oasis CRM')
 
 @section('content')
-    <div class="bg-[#5d8e8e] border-2 border-black px-4 py-2 mb-6">
-        <h1 class="font-['Arial_Black'] font-black text-xl uppercase">Kavling — {{ $project->project_name }}</h1>
-    </div>
+    <x-crm.page-header color="#5d8e8e" title="Kavling — {{ $project->project_name }}" />
 
     <div class="flex justify-end mb-4 gap-2">
         <a href="{{ route('projects.index') }}" class="bg-white text-black px-4 py-1.5 text-sm font-[Helvetica] font-bold border-2 border-black rounded-none hover:bg-gray-100">

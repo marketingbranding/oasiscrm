@@ -3,9 +3,7 @@
 @section('title', 'Import Content Calendar - Oasis CRM')
 
 @section('content')
-    <div class="bg-[#b3bd95] border-2 border-black px-4 py-2 mb-6">
-        <h1 class="font-['Arial_Black'] font-black text-xl uppercase">Import Content Calendar</h1>
-    </div>
+    <x-crm.page-header color="#b3bd95" title="Import Content Calendar" />
 
     <div class="bg-white border-2 border-black p-4 mb-6">
         <div class="text-sm font-['Times_New_Roman'] mb-4 leading-relaxed">

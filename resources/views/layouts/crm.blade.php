@@ -60,50 +60,38 @@
                 <div class="bg-black text-white px-3 py-2 font-[Helvetica] font-bold text-xs uppercase sticky top-0">Perhatian</div>
                 @php $hasAny = $overdueItems->count() > 0 || $todayItems->count() > 0 || $needsConfirmation->count() > 0 || $overdueEvents->count() > 0; @endphp
                 @if($hasAny)
-                @if($overdueItems->count() > 0)
-                <div class="bg-[#c0392b] text-white px-3 py-1 font-[Helvetica] font-bold text-[10px] uppercase">Terlewat</div>
-                <div class="divide-y divide-black">
+                <x-crm.notif-section :items="$overdueItems" color="#c0392b" label="Terlewat" text-color="text-white">
                     @foreach($overdueItems as $item)
                     <div class="px-3 py-2 text-sm font-['Times_New_Roman']">
                         <div class="font-bold">{{ $item->title }}</div>
                         <div class="text-xs text-red-700">Terlewat {{ $item->scheduled_date->diffForHumans() }} — {{ $item->scheduled_date->format('d M Y') }}</div>
                     </div>
                     @endforeach
-                </div>
-                @endif
-                @if($todayItems->count() > 0)
-                <div class="bg-[#f1c40f] text-black px-3 py-1 font-[Helvetica] font-bold text-[10px] uppercase border-t-2 border-black">Hari Ini</div>
-                <div class="divide-y divide-black">
+                </x-crm.notif-section>
+                <x-crm.notif-section :items="$todayItems" color="#f1c40f" label="Hari Ini" text-color="text-black">
                     @foreach($todayItems as $item)
                     <div class="px-3 py-2 text-sm font-['Times_New_Roman']">
                         <div class="font-bold">{{ $item->title }}</div>
                         <div class="text-xs text-gray-600">Jadwal: {{ $item->scheduled_date->format('d M Y') }}</div>
                     </div>
                     @endforeach
-                </div>
-                @endif
-                @if($needsConfirmation->count() > 0)
-                <div class="bg-[#e6915d] text-black px-3 py-1 font-[Helvetica] font-bold text-[10px] uppercase border-t-2 border-black">Perlu Konfirmasi</div>
-                <div class="divide-y divide-black">
+                </x-crm.notif-section>
+                <x-crm.notif-section :items="$needsConfirmation" color="#e6915d" label="Perlu Konfirmasi" text-color="text-black">
                     @foreach($needsConfirmation as $item)
                     <div class="px-3 py-2 text-sm font-['Times_New_Roman']">
                         <div class="font-bold">[Dana] {{ $item->nama_konsumen }} — {{ $item->kav }}</div>
                         <div class="text-xs text-orange-700">Butuh konfirmasi keuangan — {{ $item->tanggal->format('d M Y') }}</div>
                     </div>
                     @endforeach
-                </div>
-                @endif
-                @if($overdueEvents->count() > 0)
-                <div class="bg-[#5d8e8e] text-white px-3 py-1 font-[Helvetica] font-bold text-[10px] uppercase border-t-2 border-black">Event Terlewat</div>
-                <div class="divide-y divide-black">
+                </x-crm.notif-section>
+                <x-crm.notif-section :items="$overdueEvents" color="#5d8e8e" label="Event Terlewat" text-color="text-white">
                     @foreach($overdueEvents as $item)
                     <div class="px-3 py-2 text-sm font-['Times_New_Roman']">
                         <div class="font-bold">[Event] {{ $item->event_id ?? $item->project_name }}</div>
                         <div class="text-xs text-teal-700">Seharusnya selesai {{ $item->end_date->format('d M Y') }}</div>
                     </div>
                     @endforeach
-                </div>
-                @endif
+                </x-crm.notif-section>
                 @else
                 <div class="px-4 py-6 text-center text-sm font-['Times_New_Roman']">Semua terkendali.</div>
                 @endif

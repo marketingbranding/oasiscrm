@@ -2,9 +2,22 @@
 @tailwind components;
 @tailwind utilities;
 
-/* --- Date Calendar Widget --- */
-.date-wrapper {
+/* --- Date Calendar + Custom Select Widgets --- */
+.date-wrapper,
+.select-wrapper {
     position: relative;
+}
+.cal-day:hover,
+.select-li:hover,
+.select-li.s-hover,
+.cal-day.cal-selected,
+.select-li.s-selected {
+    background: var(--accent, #f1c40f);
+    color: #fff;
+}
+.cal-day.cal-selected,
+.select-li.s-selected {
+    font-weight: bold;
 }
 .cal-day {
     padding: 5px 2px;
@@ -20,10 +33,6 @@
 .cal-day:nth-child(7n) {
     border-right: none;
 }
-.cal-day:hover {
-    background: var(--accent, #f1c40f);
-    color: #fff;
-}
 .cal-day.cal-other {
     color: #ccc;
     cursor: default;
@@ -35,16 +44,6 @@
 .cal-day.cal-today {
     font-weight: bold;
     text-decoration: underline;
-}
-.cal-day.cal-selected {
-    background: var(--accent, #f1c40f);
-    color: #fff;
-    font-weight: bold;
-}
-
-/* --- Custom Select Widget --- */
-.select-wrapper {
-    position: relative;
 }
 .select-li {
     padding: 6px 12px;

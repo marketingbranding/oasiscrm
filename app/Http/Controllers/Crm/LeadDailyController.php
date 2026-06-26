@@ -7,6 +7,7 @@ use App\Http\Controllers\Crm\Traits\FilterableBranch;
 use App\Http\Controllers\Crm\Traits\Exportable;
 use App\Http\Controllers\Crm\Traits\Importable;
 use App\Http\Controllers\Crm\Traits\BulkOperations;
+use App\Http\Controllers\Crm\Traits\RedirectsShowToEdit;
 use App\Http\Requests\Crm\StoreLeadDailyRequest;
 use App\Http\Requests\Crm\UpdateLeadDailyRequest;
 use App\Models\Branch;
@@ -24,8 +25,11 @@ class LeadDailyController extends Controller
     use Exportable;
     use Importable;
     use BulkOperations;
+    use RedirectsShowToEdit;
 
     protected string $exportClass = LeadDailyExport::class;
+    protected string $showEditRoute = 'lead-daily.edit';
+    protected string $showEditParam = 'lead_daily';
 
     protected string $importView = 'crm.lead-daily.import';
     protected string $importClass = LeadDailyImport::class;

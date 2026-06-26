@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Crm;
 
 use App\Http\Controllers\Controller;
+use App\Http\Controllers\Crm\Traits\RedirectsShowToEdit;
 use App\Models\LeadSource;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -10,6 +11,10 @@ use Illuminate\Validation\Rule;
 
 class LeadSourceController extends Controller
 {
+    use RedirectsShowToEdit;
+
+    protected string $showEditRoute = 'lead-sources.edit';
+    protected string $showEditParam = 'lead_source';
     public function index()
     {
         $sources = LeadSource::latest()->get();

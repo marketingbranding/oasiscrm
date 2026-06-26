@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Crm;
 
 use App\Http\Controllers\Controller;
 use App\Models\Branch;
+use App\Services\GoogleScriptService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 
@@ -14,13 +15,9 @@ class DatabaseController extends Controller
         $user = Auth::user();
         $selectedBranchId = $request->get('branch_id');
 
-        if ($user->canViewAllBranches()) {
+        if ($user->isSuperadmin()) {
             $branches = Branch::where('is_active', true)->get();
-            if ($selectedBranchId) {
-                // use selected
-            } elseif ($user->hasRole('pusat') && $user->branch_id) {
-                $selectedBranchId = $user->branch_id;
-            } elseif ($branches->isNotEmpty()) {
+            if (!$selectedBranchId && $branches->isNotEmpty()) {
                 $selectedBranchId = $branches->first()->id;
             }
         } else {
@@ -30,7 +27,55 @@ class DatabaseController extends Controller
 
         $selectedBranch = $selectedBranchId ? Branch::find($selectedBranchId) : null;
         $branchCode = $selectedBranch?->code;
+        $scriptUrl = config('services.google_script.webhook_url');
 
-        return view('crm.database.index', compact('branches', 'selectedBranch', 'selectedBranchId', 'branchCode'));
+        $databaseUrl = null;
+        if ($selectedBranch && $selectedBranch->sheet_id) {
+            $databaseUrl = $scriptUrl . '?' . http_build_query([
+                'sheet_id' => $selectedBranch->sheet_id,
+                'cabang_name' => $selectedBranch->name,
+                'branch' => $selectedBranch->code,
+                'branch_id' => $selectedBranch->id,
+            ]);
+        }
+
+        $data = null;
+        $error = null;
+
+        if ($selectedBranch) {
+            $service = new GoogleScriptService();
+            $result = $service->fetchData([
+                'sheet_id' => $selectedBranch->sheet_id,
+                'branch' => $selectedBranch->code,
+                'branch_id' => $selectedBranch->id,
+            ]);
+
+            $data = $result['data'] ?? null;
+            if (!$result['success']) {
+                $error = $result['error'];
+            }
+        }
+
+        return view('crm.database.index', compact('branches', 'selectedBranch', 'selectedBranchId', 'branchCode', 'scriptUrl', 'databaseUrl', 'data', 'error'));
+    }
+
+    public function fetch(Request $request)
+    {
+        $user = Auth::user();
+        $branchId = $request->get('branch_id');
+
+        if (!$user->isSuperadmin()) {
+            $branchId = $user->branch_id;
+        }
+
+        $branch = Branch::findOrFail($branchId);
+        $service = new GoogleScriptService();
+        $result = $service->fetchData([
+            'sheet_id' => $branch->sheet_id,
+            'branch' => $branch->code,
+            'branch_id' => $branch->id,
+        ]);
+
+        return response()->json($result);
     }
 }

@@ -7,9 +7,9 @@
         <h1 class="font-['Arial_Black'] font-black text-xl uppercase">Database</h1>
     </div>
 
-    @if(Auth::user()->canViewAllBranches() && isset($branches) && $branches->count() > 0)
+    @if(Auth::user()->isSuperadmin() && isset($branches) && $branches->count() > 0)
     <div class="bg-white border-2 border-black p-3 mb-6">
-        <form method="GET" action="{{ route('database.index') }}" class="flex items-center gap-3 flex-wrap filter-bar">
+        <form method="GET" action="{{ route('database.index') }}" class="flex items-center gap-3 flex-wrap">
             <label class="font-[Helvetica] font-bold text-xs uppercase">Pilih Cabang:</label>
             <select name="branch_id" onchange="this.form.submit()" class="border-2 border-black px-3 py-1.5 text-sm font-['Times_New_Roman'] bg-white rounded-none">
                 <option value="">— Pilih Cabang —</option>
@@ -31,33 +31,39 @@
     </div>
     @endif
 
-    @if(isset($branchCode) && $selectedBranch && $selectedBranch->sheet_id)
-    @php
-        $sheetId = $selectedBranch->sheet_id;
-        $webAppUrl = config('services.google_script.webhook_url');
-        $databaseUrl = $webAppUrl . '?sheet_id=' . urlencode($sheetId) . '&cabang_name=' . urlencode($selectedBranch->name);
-    @endphp
+    @if(isset($branchCode) && !isset($error))
     <div class="border-2 border-black mb-4">
-        <div class="bg-black text-white px-3 py-2 font-[Helvetica] font-bold text-xs uppercase flex items-center justify-between">
-            <span>Database — {{ $branchCode }}</span>
-            <a href="https://docs.google.com/spreadsheets/d/{{ $sheetId }}/edit" target="_blank"
-               class="text-xs text-gray-300 hover:text-white underline">Buka Google Sheet</a>
+        <div class="bg-black text-white px-3 py-2 font-[Helvetica] font-bold text-xs uppercase">
+            Akses Database — {{ $branchCode }}
         </div>
-        <div class="bg-white p-8 text-center">
-            <p class="font-['Times_New_Roman'] text-sm mb-4">
-                Buka aplikasi database <strong>{{ $selectedBranch->name }}</strong> untuk mengelola data.
+        <div class="p-4">
+            <p class="text-sm font-['Times_New_Roman'] mb-4">
+                Mengakses database untuk cabang <strong>{{ $branchCode }}</strong> melalui Google Sheets.
             </p>
-            <a href="{{ $databaseUrl }}" target="_blank"
-               class="inline-block bg-black text-white px-6 py-3 font-[Helvetica] font-bold border-2 border-black rounded-none hover:bg-gray-800 uppercase text-sm">
-                Buka Database {{ $branchCode }}
+            <a href="{{ $databaseUrl ?: $scriptUrl }}" target="_blank"
+               class="inline-block bg-black text-white px-6 py-2 text-sm font-[Helvetica] font-bold border-2 border-black rounded-none hover:bg-gray-800">
+                Buka Database
             </a>
         </div>
     </div>
-    @elseif(isset($branchCode))
+
+    <div class="border-2 border-black">
+        <div class="bg-black text-white px-3 py-2 font-[Helvetica] font-bold text-xs uppercase">
+            Live View
+        </div>
+        <div class="p-0">
+            <iframe src="{{ $databaseUrl ?: $scriptUrl }}"
+                    class="w-full h-[600px] border-0"
+                    title="Database View"
+                    onerror="this.parentElement.innerHTML='<div class=\'bg-[#d77a7a] border-2 border-black m-4 px-4 py-3 font-[\'Times_New_Roman\'] text-sm\'>Gagal memuat database. Coba buka langsung melalui tombol di atas.</div>'">
+            </iframe>
+        </div>
+    </div>
+    @elseif(!isset($branchCode))
     <div class="border-2 border-black">
         <div class="bg-white px-6 py-8 text-center">
             <p class="font-['Times_New_Roman'] text-sm">
-                @if(Auth::user()->canViewAllBranches())
+                @if(Auth::user()->isSuperadmin())
                     Silakan pilih cabang terlebih dahulu untuk mengakses database.
                 @else
                     Database branch belum tersedia. Hubungi superadmin.

@@ -36,6 +36,7 @@ Route::middleware(['auth', 'verified', 'password.changed'])->group(function () {
     Route::resource('content-calendar', ContentCalendarController::class);
 
     Route::get('/database', [DatabaseController::class, 'index'])->name('database.index');
+    Route::get('/database/fetch', [DatabaseController::class, 'fetch'])->name('database.fetch');
 
     Route::get('/konsumen-progress', [KonsumenProgressController::class, 'index'])->name('konsumen-progress.index');
 

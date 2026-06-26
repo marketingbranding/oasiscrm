@@ -29,6 +29,37 @@ const CABANG_NAMES = {
   11: 'Bandung',
 };
 
+function doPost(e) {
+  const action = e.parameter.action;
+  const sheetId = e.parameter.sheet_id;
+  const sheetName = e.parameter.sheet_name;
+
+  try {
+    if (action === 'addRow') {
+      const rowData = JSON.parse(e.parameter.row_data);
+      return jsonOutput(addRow(sheetName, sheetId, rowData));
+    }
+    if (action === 'updateRow') {
+      const rowIndex = parseInt(e.parameter.row_index);
+      const rowData = JSON.parse(e.parameter.row_data);
+      return jsonOutput(updateRow(sheetName, sheetId, rowIndex, rowData));
+    }
+    if (action === 'deleteRow') {
+      const rowIndex = parseInt(e.parameter.row_index);
+      return jsonOutput(deleteRow(sheetName, sheetId, rowIndex));
+    }
+    return jsonOutput({ success: false, error: 'Unknown action: ' + action });
+  } catch (err) {
+    return jsonOutput({ success: false, error: err.message });
+  }
+}
+
+function jsonOutput(data) {
+  return ContentService
+    .createTextOutput(JSON.stringify(data))
+    .setMimeType(ContentService.MimeType.JSON);
+}
+
 function doGet(e) {
   const type = e.parameter.type;
 

@@ -13,7 +13,7 @@ function initCustomSelects() {
         if (!dropdown) {
             dropdown = document.createElement('div');
             dropdown.className = 'select-dropdown';
-            dropdown.style.cssText = 'display:none;position:absolute;top:100%;left:0;z-index:50;border:2px solid #000;background:#fff;width:100%;max-height:200px;overflow-y:auto';
+            dropdown.style.cssText = 'display:none;position:absolute;top:100%;left:0;z-index:50;border:2px solid #000;background:#fff;max-height:200px;overflow-y:auto;box-sizing:border-box';
             dropdown.innerHTML =
                 '<input type="text" class="select-search" placeholder="Cari..." style="width:100%;border:none;border-bottom:1px solid #ddd;padding:6px 12px;font-size:13px;font-family:\'Times New Roman\';outline:none;box-sizing:border-box">';
             const list = document.createElement('ul');
@@ -112,8 +112,9 @@ function initCustomSelects() {
         });
 
         syncDisplay();
-        const sw = display.offsetWidth;
-        if (sw > 0) dropdown.style.width = sw + 'px';
+        dropdown.style.right = 'auto';
+        dropdown.style.width = '';
+        dropdown.style.minWidth = '';
     });
 }
 

@@ -1,4 +1,4 @@
-@props(['field' => '', 'route' => '', 'label' => '', 'currentSort' => null, 'currentDir' => null, 'align' => 'left'])
+@props(['field' => '', 'route' => '', 'label' => '', 'currentSort' => null, 'currentDir' => null, 'align' => 'left', 'classes' => ''])
 @php
     $currentSort = $currentSort ?? request('sort', '');
     $currentDir = $currentDir ?? request('dir', '');
@@ -15,7 +15,7 @@
     }
     $alignClass = $align === 'center' ? 'text-center' : ($align === 'right' ? 'text-right' : 'text-left');
 @endphp
-<th class="px-3 py-2 {{ $alignClass }} font-[Helvetica] font-bold text-xs uppercase">
+<th class="px-3 py-2 {{ $alignClass }} font-[Helvetica] font-bold text-xs uppercase {{ $classes }}">
     <a href="{{ route($route, $linkParams) }}" class="hover:underline text-white">
         {{ $label }}
         @if($isActive)<span class="ml-0.5">{{ $arrow }}</span>@endif

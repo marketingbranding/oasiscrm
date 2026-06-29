@@ -15,6 +15,12 @@ class LeadSourceController extends Controller
 
     protected string $showEditRoute = 'lead-sources.edit';
     protected string $showEditParam = 'lead_source';
+
+    private function resolveRedirect(Request $request): string
+    {
+        return $request->input('redirect_to', route('lead-sources.index'));
+    }
+
     public function index()
     {
         $sources = LeadSource::latest()->get();
@@ -36,7 +42,7 @@ class LeadSourceController extends Controller
 
         LeadSource::create($data);
 
-        return redirect()->route('lead-sources.index')
+        return redirect($this->resolveRedirect($request))
             ->with('success', 'Sumber lead berhasil ditambahkan.');
     }
 
@@ -55,15 +61,15 @@ class LeadSourceController extends Controller
 
         $leadSource->update($data);
 
-        return redirect()->route('lead-sources.index')
+        return redirect($this->resolveRedirect($request))
             ->with('success', 'Sumber lead berhasil diperbarui.');
     }
 
-    public function destroy(LeadSource $leadSource)
+    public function destroy(Request $request, LeadSource $leadSource)
     {
         $leadSource->delete();
 
-        return redirect()->route('lead-sources.index')
+        return redirect($this->resolveRedirect($request))
             ->with('success', 'Sumber lead berhasil dihapus.');
     }
 
@@ -76,17 +82,17 @@ class LeadSourceController extends Controller
 
         $count = LeadSource::whereIn('id', $ids)->delete();
 
-        return redirect()->route('lead-sources.index')
+        return redirect($this->resolveRedirect($request))
             ->with('success', "$count sumber lead berhasil dihapus.");
     }
 
-    public function toggleActive(LeadSource $leadSource)
+    public function toggleActive(Request $request, LeadSource $leadSource)
     {
         $leadSource->update([
             'is_active' => !$leadSource->is_active,
         ]);
 
-        return redirect()->route('lead-sources.index')
+        return redirect($this->resolveRedirect($request))
             ->with('success', 'Status sumber lead berhasil diperbarui.');
     }
 }

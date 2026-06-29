@@ -70,7 +70,10 @@ class LeadEventController extends Controller
             $events = $query->latest()->paginate((int) $perPage)->withQueryString();
         }
 
-        return view('crm.lead-events.index', compact('events', 'branches', 'selectedBranchId', 'selectedProjectName', 'projects', 'perPage'));
+        $tab = $request->get('tab', 'events');
+        $sources = LeadSource::latest()->get();
+
+        return view('crm.lead-events.index', compact('events', 'branches', 'selectedBranchId', 'selectedProjectName', 'projects', 'perPage', 'tab', 'sources'));
     }
 
     public function create()

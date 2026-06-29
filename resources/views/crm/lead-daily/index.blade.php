@@ -52,7 +52,7 @@
     </div>
 
     <div class="table-scroll border-2 border-black bg-white overflow-auto max-h-[calc(100vh-12rem)]">
-        <table class="w-full text-sm font-['Times_New_Roman']">
+        <table class="min-w-full text-sm font-['Times_New_Roman']">
             <thead>
                 <tr class="bg-black text-white">
                     <th class="w-10 px-3 py-2 text-center font-[Helvetica] font-bold text-xs uppercase"><input type="checkbox" id="select-all" class="cursor-pointer"></th>

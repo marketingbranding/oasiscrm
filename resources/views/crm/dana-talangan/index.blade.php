@@ -53,22 +53,22 @@
     </div>
 
     <div class="table-scroll border-2 border-black bg-white overflow-auto max-h-[calc(100vh-12rem)]">
-        <table class="w-full text-sm font-['Times_New_Roman']">
+        <table class="min-w-full text-sm font-['Times_New_Roman']">
             <thead>
                 <tr class="bg-black text-white">
                     <th class="w-10 px-3 py-2 text-center font-[Helvetica] font-bold text-xs uppercase"><input type="checkbox" id="select-all" class="cursor-pointer"></th>
                     <th class="px-3 py-2 text-left font-[Helvetica] font-bold text-xs uppercase">No</th>
                     <x-crm.sortable-th field="tanggal" route="dana-talangan.index" label="Tanggal" :currentSort="$sortField" :currentDir="$sortDir" />
                     <x-crm.sortable-th field="nama_konsumen" route="dana-talangan.index" label="Nama Konsumen" :currentSort="$sortField" :currentDir="$sortDir" />
-                    <x-crm.sortable-th field="kav" route="dana-talangan.index" label="Kav" :currentSort="$sortField" :currentDir="$sortDir" />
-                    <x-crm.sortable-th field="project_name" route="dana-talangan.index" label="Proyek" :currentSort="$sortField" :currentDir="$sortDir" />
-                    <th class="px-3 py-2 text-center font-[Helvetica] font-bold text-xs uppercase">Pinjam Nama</th>
-                    <x-crm.sortable-th field="pekerjaan" route="dana-talangan.index" label="Pekerjaan" :currentSort="$sortField" :currentDir="$sortDir" />
-                    <x-crm.sortable-th field="status_perkawinan" route="dana-talangan.index" label="Status Kawin" :currentSort="$sortField" :currentDir="$sortDir" />
-                    <x-crm.sortable-th field="umur" route="dana-talangan.index" label="Umur" :currentSort="$sortField" :currentDir="$sortDir" align="center" />
-                    <x-crm.sortable-th field="nama_marketing" route="dana-talangan.index" label="Marketing" :currentSort="$sortField" :currentDir="$sortDir" />
-                    <th class="px-3 py-2 text-left font-[Helvetica] font-bold text-xs uppercase">Penyelesaian</th>
-                    <th class="px-3 py-2 text-center font-[Helvetica] font-bold text-xs uppercase">Konfirmasi</th>
+                    <x-crm.sortable-th field="kav" route="dana-talangan.index" label="Kav" :currentSort="$sortField" :currentDir="$sortDir" classes="hidden lg:table-cell" />
+                    <x-crm.sortable-th field="project_name" route="dana-talangan.index" label="Proyek" :currentSort="$sortField" :currentDir="$sortDir" classes="hidden lg:table-cell" />
+                    <th class="px-3 py-2 text-center font-[Helvetica] font-bold text-xs uppercase hidden lg:table-cell">Pinjam Nama</th>
+                    <x-crm.sortable-th field="pekerjaan" route="dana-talangan.index" label="Pekerjaan" :currentSort="$sortField" :currentDir="$sortDir" classes="hidden lg:table-cell" />
+                    <x-crm.sortable-th field="status_perkawinan" route="dana-talangan.index" label="Status Kawin" :currentSort="$sortField" :currentDir="$sortDir" classes="hidden lg:table-cell" />
+                    <x-crm.sortable-th field="umur" route="dana-talangan.index" label="Umur" :currentSort="$sortField" :currentDir="$sortDir" align="center" classes="hidden lg:table-cell" />
+                    <x-crm.sortable-th field="nama_marketing" route="dana-talangan.index" label="Marketing" :currentSort="$sortField" :currentDir="$sortDir" classes="hidden lg:table-cell" />
+                    <th class="px-3 py-2 text-left font-[Helvetica] font-bold text-xs uppercase hidden lg:table-cell">Penyelesaian</th>
+                    <th class="px-3 py-2 text-center font-[Helvetica] font-bold text-xs uppercase hidden lg:table-cell">Konfirmasi</th>
                     <x-crm.sortable-th field="status" route="dana-talangan.index" label="Status" :currentSort="$sortField" :currentDir="$sortDir" align="center" />
                     <th class="px-3 py-2 text-center font-[Helvetica] font-bold text-xs uppercase">Aksi</th>
                 </tr>

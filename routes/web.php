@@ -10,8 +10,7 @@ use App\Http\Controllers\Crm\DashboardController;
 use App\Http\Controllers\Crm\DatabaseController;
 use App\Http\Controllers\Crm\KavlingController;
 use App\Http\Controllers\Crm\KonsumenProgressController;
-use App\Http\Controllers\Crm\LeadDailyController;
-use App\Http\Controllers\Crm\LeadEventController;
+use App\Http\Controllers\Crm\LeadController;
 use App\Http\Controllers\Crm\LeadSourceController;
 use App\Http\Controllers\Crm\ProjectController;
 use App\Http\Controllers\ProfileController;
@@ -44,26 +43,14 @@ Route::middleware(['auth', 'verified', 'password.changed'])->group(function () {
     Route::post('lead-sources/{leadSource}/toggle-active', [LeadSourceController::class, 'toggleActive'])->name('lead-sources.toggle-active');
     Route::resource('lead-sources', LeadSourceController::class);
 
-    Route::get('lead-daily/export-template', [LeadDailyController::class, 'exportTemplate'])->name('lead-daily.export-template');
-    Route::get('lead-daily/import', [LeadDailyController::class, 'import'])->name('lead-daily.import');
-    Route::post('lead-daily/import', [LeadDailyController::class, 'importStore'])->name('lead-daily.import-store');
-    Route::get('lead-events/export-template', [LeadEventController::class, 'exportTemplate'])->name('lead-events.export-template');
-    Route::get('lead-events/import', [LeadEventController::class, 'import'])->name('lead-events.import');
-    Route::post('lead-events/import', [LeadEventController::class, 'importStore'])->name('lead-events.import-store');
     Route::get('content-calendar/export-template', [ContentCalendarController::class, 'exportTemplate'])->name('content-calendar.export-template');
     Route::get('content-calendar/import', [ContentCalendarController::class, 'import'])->name('content-calendar.import');
     Route::post('content-calendar/import', [ContentCalendarController::class, 'importStore'])->name('content-calendar.import-store');
 
-    Route::bind('lead_event', fn($v) => \App\Models\LeadEvent::findOrFail($v));
-    Route::get('lead-events/export', [LeadEventController::class, 'export'])->name('lead-events.export');
-    Route::post('lead-events/bulk-delete', [LeadEventController::class, 'bulkDestroy'])->name('lead-events.bulk-destroy');
-    Route::post('lead-events/bulk-update', [LeadEventController::class, 'bulkUpdate'])->name('lead-events.bulk-update');
-    Route::resource('lead-events', LeadEventController::class);
-
-    Route::bind('lead_daily', fn($v) => \App\Models\LeadDaily::findOrFail($v));
-    Route::get('lead-daily/export', [LeadDailyController::class, 'export'])->name('lead-daily.export');
-    Route::post('lead-daily/bulk-delete', [LeadDailyController::class, 'bulkDestroy'])->name('lead-daily.bulk-destroy');
-    Route::resource('lead-daily', LeadDailyController::class);
+    Route::bind('lead', fn($v) => \App\Models\Lead::findOrFail($v));
+    Route::get('leads/export', [LeadController::class, 'export'])->name('leads.export');
+    Route::post('leads/bulk-delete', [LeadController::class, 'bulkDestroy'])->name('leads.bulk-destroy');
+    Route::resource('leads', LeadController::class);
 
     Route::bind('dana_talangan', fn($v) => \App\Models\DanaTalangan::findOrFail($v));
     Route::get('dana-talangan/export', [DanaTalanganController::class, 'export'])->name('dana-talangan.export');

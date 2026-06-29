@@ -40,7 +40,11 @@ class LeadSourceController extends Controller
         ]);
         $data['is_active'] = $request->boolean('is_active', true);
 
-        LeadSource::create($data);
+        $source = LeadSource::create($data);
+
+        if ($request->wantsJson()) {
+            return response()->json(['success' => true, 'id' => $source->id, 'name' => $source->name]);
+        }
 
         return redirect($this->resolveRedirect($request))
             ->with('success', 'Sumber lead berhasil ditambahkan.');
@@ -68,6 +72,10 @@ class LeadSourceController extends Controller
     public function destroy(Request $request, LeadSource $leadSource)
     {
         $leadSource->delete();
+
+        if ($request->wantsJson()) {
+            return response()->json(['success' => true]);
+        }
 
         return redirect($this->resolveRedirect($request))
             ->with('success', 'Sumber lead berhasil dihapus.');

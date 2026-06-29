@@ -45,7 +45,7 @@ function initCustomSelects() {
         }
 
         function openDropdown() {
-            populateOptions();
+            (wrapper.__refreshOptions || populateOptions)();
             dropdown.style.display = 'block';
             arrow.textContent = '\u25B2';
             search.value = '';
@@ -115,6 +115,7 @@ function initCustomSelects() {
         dropdown.style.right = 'auto';
         dropdown.style.width = '';
         dropdown.style.minWidth = '';
+        wrapper.__refreshOptions = populateOptions;
     });
 }
 

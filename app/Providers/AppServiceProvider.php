@@ -4,7 +4,7 @@ namespace App\Providers;
 
 use App\Models\ContentItem;
 use App\Models\DanaTalangan;
-use App\Models\LeadEvent;
+use App\Models\Lead;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\View;
 use Illuminate\Support\ServiceProvider;
@@ -21,7 +21,7 @@ class AppServiceProvider extends ServiceProvider
         View::composer('layouts.crm', function ($view) {
             $user = Auth::user();
             if (!$user) {
-                $view->with('overdueItems', collect())->with('todayItems', collect())->with('needsConfirmation', collect())->with('overdueEvents', collect())->with('totalCount', 0);
+                $view->with('overdueItems', collect())->with('todayItems', collect())->with('needsConfirmation', collect())->with('totalCount', 0);
                 return;
             }
 
@@ -48,16 +48,11 @@ class AppServiceProvider extends ServiceProvider
                 ->take(10)
                 ->get();
 
-            $overdueEvents = LeadEvent::whereDate('end_date', '<', today())
-                ->where('status', 'berlangsung')
-                ->tap($branchScope)
-                ->orderBy('end_date')
-                ->take(10)
-                ->get();
+            $overdueEvents = collect();
 
-            $totalCount = $overdueItems->count() + $todayItems->count() + $needsConfirmation->count() + $overdueEvents->count();
+            $totalCount = $overdueItems->count() + $todayItems->count() + $needsConfirmation->count();
 
-            $view->with(compact('overdueItems', 'todayItems', 'needsConfirmation', 'overdueEvents', 'totalCount'));
+            $view->with(compact('overdueItems', 'todayItems', 'needsConfirmation', 'totalCount'));
         });
     }
 }

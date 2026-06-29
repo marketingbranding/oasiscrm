@@ -12,16 +12,6 @@ return new class extends Migration
             $table->index(['status', 'konfirmasi_keuangan', 'tanggal']);
         });
 
-        Schema::table('lead_events', function (Blueprint $table) {
-            $table->index(['status', 'end_date']);
-            $table->index('event_id');
-        });
-
-        Schema::table('lead_daily', function (Blueprint $table) {
-            $table->index('date');
-            $table->index(['lead_event_id', 'date']);
-        });
-
         Schema::table('content_items', function (Blueprint $table) {
             $table->index(['status', 'scheduled_date']);
         });
@@ -29,6 +19,8 @@ return new class extends Migration
         Schema::table('lead_master', function (Blueprint $table) {
             $table->index(['is_active', 'branch_id', 'project_name']);
         });
+
+
 
         Schema::table('activity_log', function (Blueprint $table) {
             $table->index(['subject_type', 'subject_id', 'created_at']);
@@ -41,16 +33,6 @@ return new class extends Migration
             $table->dropIndex(['status', 'konfirmasi_keuangan', 'tanggal']);
         });
 
-        Schema::table('lead_events', function (Blueprint $table) {
-            $table->dropIndex(['status', 'end_date']);
-            $table->dropIndex(['event_id']);
-        });
-
-        Schema::table('lead_daily', function (Blueprint $table) {
-            $table->dropIndex(['date']);
-            $table->dropIndex(['lead_event_id', 'date']);
-        });
-
         Schema::table('content_items', function (Blueprint $table) {
             $table->dropIndex(['status', 'scheduled_date']);
         });
@@ -58,6 +40,8 @@ return new class extends Migration
         Schema::table('lead_master', function (Blueprint $table) {
             $table->dropIndex(['is_active', 'branch_id', 'project_name']);
         });
+
+
 
         Schema::table('activity_log', function (Blueprint $table) {
             $table->dropIndex(['subject_type', 'subject_id', 'created_at']);

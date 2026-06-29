@@ -6,8 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Branch;
 use App\Models\ContentItem;
 use App\Models\DanaTalangan;
-use App\Models\LeadDaily;
-use App\Models\LeadEvent;
+use App\Models\Lead;
 use App\Models\LeadMaster;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -103,22 +102,16 @@ class DashboardController extends Controller
                 'status' => $i->status,
             ]));
 
-        LeadEvent::where(function ($q) {
-                $q->whereDate('start_date', '=', today())
-                  ->orWhere(function ($q) {
-                      $q->whereDate('start_date', '<', today())
-                        ->whereDate('end_date', '>=', today());
-                  });
-            })
+        Lead::whereDate('tanggal_lead', today())
             ->when($branchId, fn($q) => $q->where('branch_id', $branchId))
             ->get()
-            ->each(fn($e) => $agenda->push([
-                'label' => $e->project_name,
-                'subtitle' => $e->lead_source,
-                'time' => $e->start_date,
-                'type' => 'Event',
+            ->each(fn($l) => $agenda->push([
+                'label' => $l->nama_konsumen,
+                'subtitle' => $l->proyek . ' — ' . $l->sumber,
+                'time' => $l->tanggal_lead,
+                'type' => 'Lead',
                 'color' => '#e6915d',
-                'status' => $e->status,
+                'status' => $l->status_lead,
             ]));
 
         return $agenda->sortBy('time')->values();
@@ -148,23 +141,14 @@ class DashboardController extends Controller
                 'text' => $i->title, 'time' => $i->created_at, 'user' => $i->creator?->name ?? '-',
             ]));
 
-        LeadDaily::with('creator', 'leadEvent')
+        Lead::with('creator')
             ->when($branchId, fn($q) => $q->where('branch_id', $branchId))
+            ->when($projectName, fn($q) => $q->where('proyek', $projectName))
             ->latest()->take(5)->get()
-            ->each(fn($d) => $activity->push([
-                'type' => 'Lead Harian', 'color' => '#c0392b',
-                'text' => $d->leads_count . ' leads' . ($d->leadEvent ? ' untuk ' . $d->leadEvent->project_name : ''),
-                'time' => $d->created_at, 'user' => $d->creator?->name ?? '-',
-            ]));
-
-        LeadEvent::with('creator')
-            ->when($branchId, fn($q) => $q->where('branch_id', $branchId))
-            ->when($projectName, fn($q) => $q->where('project_name', $projectName))
-            ->latest()->take(5)->get()
-            ->each(fn($e) => $activity->push([
-                'type' => 'Event', 'color' => '#e6915d',
-                'text' => $e->project_name . ($e->lead_source ? ' (' . $e->lead_source . ')' : ''),
-                'time' => $e->created_at, 'user' => $e->creator?->name ?? '-',
+            ->each(fn($l) => $activity->push([
+                'type' => 'Lead', 'color' => '#e6915d',
+                'text' => $l->nama_konsumen . ' (' . $l->id_lead . ')',
+                'time' => $l->created_at, 'user' => $l->creator?->name ?? '-',
             ]));
 
         DanaTalangan::with('creator')

@@ -168,7 +168,7 @@ class ContentCalendarController extends Controller
 
         $filename = 'content-calendar-' . now()->format('Ymd') . '.xlsx';
 
-        ContentItemExport::toBrowser($records, $filename);
+        return ContentItemExport::toBrowser($records, $filename);
     }
 
     public function destroy(ContentItem $contentItem)

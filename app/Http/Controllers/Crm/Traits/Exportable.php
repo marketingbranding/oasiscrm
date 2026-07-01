@@ -7,6 +7,6 @@ trait Exportable
     public function exportTemplate()
     {
         $class = $this->exportClass;
-        $class::generateTemplate();
+        return $class::generateTemplate();
     }
 }

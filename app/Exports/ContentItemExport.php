@@ -8,6 +8,7 @@ use App\Models\LeadMaster;
 use Illuminate\Support\Collection;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
 use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class ContentItemExport
 {
@@ -36,7 +37,7 @@ class ContentItemExport
         return ['A' => 14, 'B' => 30, 'C' => 14, 'D' => 22, 'E' => 14, 'F' => 12, 'G' => 30];
     }
 
-    public static function toBrowser(Collection $records, string $filename): void
+    public static function toBrowser(Collection $records, string $filename): StreamedResponse
     {
         $spreadsheet = new Spreadsheet();
         $sheet = $spreadsheet->getActiveSheet();
@@ -65,7 +66,7 @@ class ContentItemExport
         self::downloadXlsx($writer, $filename);
     }
 
-    public static function generateTemplate(): void
+    public static function generateTemplate(): StreamedResponse
     {
         $spreadsheet = new Spreadsheet();
         $sheet = $spreadsheet->getActiveSheet();

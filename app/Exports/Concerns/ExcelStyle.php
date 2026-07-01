@@ -9,6 +9,7 @@ use PhpOffice\PhpSpreadsheet\Style\Border;
 use PhpOffice\PhpSpreadsheet\Style\Alignment;
 use PhpOffice\PhpSpreadsheet\Cell\Coordinate;
 use PhpOffice\PhpSpreadsheet\Cell\DataValidation;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 trait ExcelStyle
 {
@@ -61,13 +62,13 @@ trait ExcelStyle
         $sheet->freezePane('A2');
     }
 
-    protected static function downloadXlsx(Xlsx $writer, string $filename): never
+    protected static function downloadXlsx(Xlsx $writer, string $filename): StreamedResponse
     {
-        header('Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-        header('Content-Disposition: attachment; filename="' . $filename . '"');
-        header('Cache-Control: max-age=0');
-        $writer->save('php://output');
-        exit;
+        return response()->streamDownload(function () use ($writer) {
+            $writer->save('php://output');
+        }, $filename, [
+            'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        ]);
     }
 
     protected static function generateTemplateOpen(Spreadsheet $spreadsheet, array $headers, int $maxRow = 101): void

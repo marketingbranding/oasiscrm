@@ -11,7 +11,7 @@ use PhpOffice\PhpSpreadsheet\Spreadsheet;
 use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
 use PhpOffice\PhpSpreadsheet\Cell\Coordinate;
 use PhpOffice\PhpSpreadsheet\Cell\DataValidation;
-use Symfony\Component\HttpFoundation\StreamedResponse;
+use Symfony\Component\HttpFoundation\BinaryFileResponse;
 
 class DanaTalanganExport
 {
@@ -49,7 +49,7 @@ class DanaTalanganExport
         ];
     }
 
-    public static function toBrowser(Collection $records, string $filename): StreamedResponse
+    public static function toBrowser(Collection $records, string $filename): BinaryFileResponse
     {
         $spreadsheet = new Spreadsheet();
         $sheet = $spreadsheet->getActiveSheet();
@@ -83,7 +83,7 @@ class DanaTalanganExport
         return self::downloadXlsx($writer, $filename);
     }
 
-    public static function generateTemplate(): StreamedResponse
+    public static function generateTemplate(): BinaryFileResponse
     {
         $spreadsheet = new Spreadsheet();
         $sheet = $spreadsheet->getActiveSheet();

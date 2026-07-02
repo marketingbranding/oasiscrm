@@ -7,6 +7,7 @@ use App\Http\Controllers\Crm\BugReportController;
 use App\Http\Controllers\Crm\ContentCalendarController;
 use App\Http\Controllers\Crm\DanaTalanganController;
 use App\Http\Controllers\Crm\DashboardController;
+use App\Http\Controllers\Crm\FeedbackReportController;
 use App\Http\Controllers\Crm\DatabaseController;
 use App\Http\Controllers\Crm\KavlingController;
 use App\Http\Controllers\Crm\KonsumenProgressController;
@@ -60,6 +61,13 @@ Route::middleware(['auth', 'verified', 'password.changed'])->group(function () {
     Route::post('dana-talangan/bulk-delete', [DanaTalanganController::class, 'bulkDestroy'])->name('dana-talangan.bulk-destroy');
     Route::post('dana-talangan/bulk-update', [DanaTalanganController::class, 'bulkUpdate'])->name('dana-talangan.bulk-update');
     Route::resource('dana-talangan', DanaTalanganController::class);
+
+    Route::bind('feedback_report', fn($v) => \App\Models\FeedbackReport::findOrFail($v));
+    Route::post('feedback-reports/{feedback_report}/approve', [FeedbackReportController::class, 'approve'])->name('feedback-reports.approve');
+    Route::post('feedback-reports/{feedback_report}/reject', [FeedbackReportController::class, 'reject'])->name('feedback-reports.reject');
+    Route::post('feedback-reports/{feedback_report}/implement', [FeedbackReportController::class, 'markImplemented'])->name('feedback-reports.implement');
+    Route::post('feedback-reports/{feedback_report}/fix', [FeedbackReportController::class, 'markFixed'])->name('feedback-reports.fix');
+    Route::resource('feedback-reports', FeedbackReportController::class);
 
     Route::middleware('role:superadmin')->group(function () {
         Route::get('/branches', [BranchController::class, 'index'])->name('branches.index');

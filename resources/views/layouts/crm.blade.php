@@ -161,6 +161,13 @@
                 <a href="{{ route('dana-talangan.index') }}" class="flex items-center px-3 py-2 gap-2 text-sm font-[Helvetica] font-bold text-black hover:bg-[#f1c40f] hover:text-black border border-black mb-1 rounded-none {{ request()->routeIs('dana-talangan.*') ? 'bg-[#f1c40f]' : 'bg-white' }}">
                     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" :class="sidebarPinned ? 'text-[#f1c40f]' : 'text-black group-hover:text-[#f1c40f]'" class="inline-block w-4 h-4 shrink-0"><path stroke-linecap="round" stroke-linejoin="round" d="M2.25 18.75a60.07 60.07 0 0 1 15.797 2.101c.727.198 1.453-.342 1.453-1.096V18.75M3.75 4.5v.75A.75.75 0 0 1 3 6h-.75m0 0v-.375c0-.621.504-1.125 1.125-1.125H20.25M2.25 6v9m18-10.5v.75c0 .414.336.75.75.75h.75m-1.5-1.5h.375c.621 0 1.125.504 1.125 1.125v9.75c0 .621-.504 1.125-1.125 1.125h-.375m1.5-1.5H21a.75.75 0 0 0-.75.75v.75m0 0H3.75m0 0h-.375a1.125 1.125 0 0 1-1.125-1.125V15m1.5 1.5v-.75A.75.75 0 0 0 3 15h-.75M15 10.5a3 3 0 1 1-6 0 3 3 0 0 1 6 0Zm3 0h.008v.008H18V10.5Zm-12 0h.008v.008H6V10.5Z"/></svg> <span :class="sidebarPinned ? '' : 'sm:w-0 sm:overflow-hidden sm:whitespace-nowrap'" class="group-hover:sm:w-auto transition-all duration-200 delay-150">Dana Talangan</span>
                 </a>
+                <a href="{{ route('feedback-reports.index') }}" class="flex items-center px-3 py-2 gap-2 text-sm font-[Helvetica] font-bold text-black hover:bg-[#c0392b] hover:text-white border border-black mb-1 rounded-none {{ request()->routeIs('feedback-reports.*') ? 'bg-[#c0392b] text-white' : 'bg-white' }}">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" :class="sidebarPinned ? 'text-[#c0392b]' : 'text-black group-hover:text-white'" class="inline-block w-4 h-4 shrink-0"><path stroke-linecap="round" stroke-linejoin="round" d="M12 20.25c4.97 0 9-3.694 9-8.25s-4.03-8.25-9-8.25S3 7.444 3 12c0 2.104.859 4.023 2.273 5.48.432.447.74 1.04.586 1.641a4.483 4.483 0 0 1-.923 1.785A5.969 5.969 0 0 0 6 21c1.282 0 2.47-.402 3.445-1.087.81.22 1.668.337 2.555.337Z"/></svg>
+                    <span :class="sidebarPinned ? '' : 'sm:w-0 sm:overflow-hidden sm:whitespace-nowrap'" class="group-hover:sm:w-auto transition-all duration-200 delay-150">Laporan / Masukan</span>
+                    @if(isset($pendingFeedbackCount) && $pendingFeedbackCount > 0)
+                    <span class="ml-auto bg-[#c0392b] text-white text-[10px] font-[Helvetica] font-bold min-w-[18px] h-4 flex items-center justify-center border border-white rounded-none px-1">{{ $pendingFeedbackCount > 9 ? '9+' : $pendingFeedbackCount }}</span>
+                    @endif
+                </a>
                 @if(Auth::user() && Auth::user()->isSuperadmin())
                 <div class="border-t border-dashed border-gray-400 mx-2 my-2"></div>
                 <div class="px-2 mb-0.5 text-[9px] font-[Helvetica] font-bold text-gray-400 uppercase tracking-[0.15em]">
@@ -232,7 +239,7 @@
             </div>
         </div>
     </div>
-<div x-data="{ showBug: false, message: '', sending: false, sent: false }" class="fixed bottom-4 right-4 z-50" x-cloak>
+<div x-data="{ showBug: false, type: 'masukan', title: '', description: '', sending: false, sent: false }" class="fixed bottom-4 right-4 z-50" x-cloak>
     <template x-if="!showBug">
         <button @click="showBug = true; sent = false"
                 class="w-12 h-12 bg-[#c0392b] hover:bg-[#a93226] text-white border-2 border-black rounded-none flex items-center justify-center shadow-lg transition-colors duration-200"
@@ -256,15 +263,27 @@
                     </div>
                 </template>
                 <template x-if="!sent">
-                    <form @submit.prevent="sending = true; errorMsg = ''; fetch('{{ route('bug-report.store') }}', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': '{{ csrf_token() }}' }, body: JSON.stringify({ message }) }).then(async r => { const text = await r.text(); try { return JSON.parse(text); } catch { return { ok: false, error: text.substring(0,200) }; } }).then(d => { sending = false; if (d.ok) { sent = true; message = ''; } else { alert('Gagal: ' + (d.error || d.message || 'Coba lagi.')); } }).catch(e => { sending = false; alert('Gagal: ' + e.message); })">
-                        <label class="block text-xs font-bold mb-1">Jelaskan masukan atau bug yang ditemukan:</label>
-                        <textarea x-model="message" required maxlength="2000" rows="4"
+                    <form @submit.prevent="sending = true; fetch('{{ route('feedback-reports.store') }}', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': '{{ csrf_token() }}' }, body: JSON.stringify({ type: type, title: title, description: description }) }).then(async r => { const text = await r.text(); try { return JSON.parse(text); } catch { return { ok: false, error: text.substring(0,200) }; } }).then(d => { sending = false; if (d.ok || d.redirect) { sent = true; type = 'masukan'; title = ''; description = ''; } else { alert('Gagal: ' + (d.error || d.message || 'Coba lagi.')); } }).catch(e => { sending = false; alert('Gagal: ' + e.message); })">
+                        <div class="flex gap-2 mb-2">
+                            <label class="flex items-center gap-1 text-xs cursor-pointer">
+                                <input type="radio" x-model="type" value="masukan" class="cursor-pointer">
+                                <span class="inline-block px-1.5 py-0.5 text-[10px] font-[Helvetica] font-bold border border-black bg-[#e6915d] text-white">MASUKAN</span>
+                            </label>
+                            <label class="flex items-center gap-1 text-xs cursor-pointer">
+                                <input type="radio" x-model="type" value="bug" class="cursor-pointer">
+                                <span class="inline-block px-1.5 py-0.5 text-[10px] font-[Helvetica] font-bold border border-black bg-[#d77a7a] text-white">BUG</span>
+                            </label>
+                        </div>
+                        <input x-model="title" required maxlength="255"
+                               class="w-full border-2 border-black px-2 py-1.5 text-sm mb-2"
+                               placeholder="Judul singkat...">
+                        <textarea x-model="description" required maxlength="5000" rows="3"
                                   class="w-full border-2 border-black px-2 py-1.5 text-sm resize-none focus:outline-none"
-                                  placeholder="Contoh: Tambah fitur export Excel... atau Tombol submit tidak berfungsi..."></textarea>
+                                  placeholder="Jelaskan detailnya..."></textarea>
                         <div class="flex items-center justify-between mt-2">
-                            <span class="text-xs text-gray-500" x-text="message.length + '/2000'"></span>
-                            <button type="submit" :disabled="sending || !message.trim()"
-                                    class="bg-[#e6915d] hover:bg-[#d4854f] text-black border-2 border-black px-4 py-1 text-sm font-bold font-[Helvetica] disabled:opacity-40 transition-colors duration-200"
+                            <span class="text-xs text-gray-500" x-text="description.length + '/5000'"></span>
+                            <button type="submit" :disabled="sending || !title.trim() || !description.trim()"
+                                    class="bg-[#c0392b] hover:bg-[#a93226] text-white border-2 border-black px-4 py-1 text-sm font-bold font-[Helvetica] disabled:opacity-40 transition-colors duration-200"
                                     x-text="sending ? 'Mengirim...' : 'Kirim'"></button>
                         </div>
                     </form>

@@ -4,6 +4,7 @@ namespace App\Providers;
 
 use App\Models\ContentItem;
 use App\Models\DanaTalangan;
+use App\Models\FeedbackReport;
 use App\Models\Lead;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\View;
@@ -50,9 +51,13 @@ class AppServiceProvider extends ServiceProvider
 
             $overdueEvents = collect();
 
+            $pendingFeedbackCount = FeedbackReport::where('status', 'pending')
+                ->tap($branchScope)
+                ->count();
+
             $totalCount = $overdueItems->count() + $todayItems->count() + $needsConfirmation->count();
 
-            $view->with(compact('overdueItems', 'todayItems', 'needsConfirmation', 'totalCount'));
+            $view->with(compact('overdueItems', 'todayItems', 'needsConfirmation', 'totalCount', 'pendingFeedbackCount'));
         });
     }
 }

@@ -523,11 +523,13 @@
                                        placeholder="Catatan (opsional)...">
                                 <div class="flex gap-2">
                                     <button @click="doAction(selectedReport.id, 'approve')"
-                                            class="flex-1 bg-[#27ae60] hover:bg-[#1e8449] text-white border-2 border-black px-3 py-1.5 text-sm font-bold font-[Helvetica] transition-colors duration-200">
+                                            style="background-color:#27ae60;color:#fff;"
+                                            class="flex-1 border-2 border-black px-3 py-1.5 text-sm font-bold font-[Helvetica]">
                                         Setuju
                                     </button>
                                     <button @click="doAction(selectedReport.id, 'reject')"
-                                            class="flex-1 bg-[#c0392b] hover:bg-[#a93226] text-white border-2 border-black px-3 py-1.5 text-sm font-bold font-[Helvetica] transition-colors duration-200">
+                                            style="background-color:#c0392b;color:#fff;"
+                                            class="flex-1 border-2 border-black px-3 py-1.5 text-sm font-bold font-[Helvetica]">
                                         Tolak
                                     </button>
                                 </div>
@@ -538,11 +540,13 @@
                             <div class="border-t-2 border-black pt-3">
                                 <div class="flex gap-2">
                                     <button @click="doAction(selectedReport.id, 'implement')"
-                                            class="flex-1 bg-[#2980b9] hover:bg-[#1f618d] text-white border-2 border-black px-3 py-1.5 text-sm font-bold font-[Helvetica] transition-colors duration-200">
+                                            style="background-color:#2980b9;color:#fff;"
+                                            class="flex-1 border-2 border-black px-3 py-1.5 text-sm font-bold font-[Helvetica]">
                                         Implementasi
                                     </button>
                                     <button @click="doAction(selectedReport.id, 'fix')"
-                                            class="flex-1 bg-[#7f8c8d] hover:bg-[#6c7a7a] text-white border-2 border-black px-3 py-1.5 text-sm font-bold font-[Helvetica] transition-colors duration-200">
+                                            style="background-color:#7f8c8d;color:#fff;"
+                                            class="flex-1 border-2 border-black px-3 py-1.5 text-sm font-bold font-[Helvetica]">
                                         Fixed
                                     </button>
                                 </div>

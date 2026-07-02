@@ -35,7 +35,7 @@ class FeedbackReportController extends Controller
     public function fetchRecent(Request $request)
     {
         $user = Auth::user();
-        $isSuper = $user->canViewAllBranches();
+        $isSuper = $user->isSuperadmin();
 
         $query = FeedbackReport::with(['creator', 'branch']);
 
@@ -74,7 +74,7 @@ class FeedbackReportController extends Controller
     public function fetchHistory(Request $request)
     {
         $user = Auth::user();
-        $isSuper = $user->canViewAllBranches();
+        $isSuper = $user->isSuperadmin();
 
         $query = FeedbackReport::with(['creator', 'branch', 'reviewer']);
 
@@ -110,7 +110,7 @@ class FeedbackReportController extends Controller
     public function approve(Request $request, FeedbackReport $feedbackReport)
     {
         $user = Auth::user();
-        if (!$user->canViewAllBranches()) {
+        if (!$user->isSuperadmin()) {
             return response()->json(['ok' => false, 'error' => 'Unauthorized'], 403);
         }
 
@@ -127,7 +127,7 @@ class FeedbackReportController extends Controller
     public function reject(Request $request, FeedbackReport $feedbackReport)
     {
         $user = Auth::user();
-        if (!$user->canViewAllBranches()) {
+        if (!$user->isSuperadmin()) {
             return response()->json(['ok' => false, 'error' => 'Unauthorized'], 403);
         }
 
@@ -144,7 +144,7 @@ class FeedbackReportController extends Controller
     public function markImplemented(Request $request, FeedbackReport $feedbackReport)
     {
         $user = Auth::user();
-        if (!$user->canViewAllBranches()) {
+        if (!$user->isSuperadmin()) {
             return response()->json(['ok' => false, 'error' => 'Unauthorized'], 403);
         }
 
@@ -160,7 +160,7 @@ class FeedbackReportController extends Controller
     public function markFixed(Request $request, FeedbackReport $feedbackReport)
     {
         $user = Auth::user();
-        if (!$user->canViewAllBranches()) {
+        if (!$user->isSuperadmin()) {
             return response()->json(['ok' => false, 'error' => 'Unauthorized'], 403);
         }
 

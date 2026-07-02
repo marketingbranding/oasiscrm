@@ -239,54 +239,183 @@
             </div>
         </div>
     </div>
-<div x-data="{ showBug: false, type: 'masukan', title: '', description: '', sending: false, sent: false }" class="fixed bottom-4 right-4 z-50" x-cloak>
-    <template x-if="!showBug">
-        <button @click="showBug = true; sent = false"
-                class="w-12 h-12 bg-[#c0392b] hover:bg-[#a93226] text-white border-2 border-black rounded-none flex items-center justify-center shadow-lg transition-colors duration-200"
-                title="Masukan / Laporkan Bug">
+<div x-data="{
+    open: false,
+    tab: 'notifikasi',
+    reports: [],
+    pendingCount: {{ $pendingFeedbackCount ?? 0 }},
+    isSuperadmin: false,
+    loading: false,
+    type: 'masukan',
+    title: '',
+    description: '',
+    sending: false,
+    sent: false,
+    adminNotes: {},
+
+    fetchReports() {
+        this.loading = true;
+        fetch('{{ route('feedback-reports.fetch-recent') }}')
+            .then(r => r.json())
+            .then(d => {
+                if (d.ok) {
+                    this.reports = d.reports;
+                    this.pendingCount = d.pending_count;
+                    this.isSuperadmin = d.is_superadmin;
+                }
+            })
+            .finally(() => { this.loading = false; });
+    },
+
+    doAction(id, action) {
+        const note = this.adminNotes[id] || '';
+        fetch('feedback-reports/' + id + '/' + action, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': '{{ csrf_token() }}' },
+            body: JSON.stringify({ admin_note: note })
+        })
+        .then(r => r.json())
+        .then(d => {
+            if (d.ok) {
+                delete this.adminNotes[id];
+                this.fetchReports();
+            } else {
+                alert(d.error || 'Gagal');
+            }
+        })
+        .catch(e => alert('Gagal: ' + e.message));
+    },
+
+    statusLabel(status) {
+        const map = { pending: 'PENDING', approved: 'DISETUJUI', rejected: 'DITOLAK', implemented: 'IMPLEMENTASI', fixed: 'FIXED' };
+        return map[status] || status;
+    },
+
+    statusClass(status) {
+        const map = { pending: 'bg-[#f1c40f]', approved: 'bg-[#27ae60] text-white', rejected: 'bg-[#c0392b] text-white', implemented: 'bg-[#2980b9] text-white', fixed: 'bg-[#7f8c8d] text-white' };
+        return map[status] || 'bg-gray-300';
+    }
+}" class="fixed bottom-4 right-4 z-50" x-cloak>
+    <template x-if="!open">
+        <button @click="open = true; sent = false; fetchReports()"
+                class="relative w-12 h-12 bg-[#c0392b] hover:bg-[#a93226] text-white border-2 border-black rounded-none flex items-center justify-center shadow-lg transition-colors duration-200"
+                title="Laporan / Masukan">
             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5">
                 <path stroke-linecap="round" stroke-linejoin="round" d="M12 20.25c4.97 0 9-3.694 9-8.25s-4.03-8.25-9-8.25S3 7.444 3 12c0 2.104.859 4.023 2.273 5.48.432.447.74 1.04.586 1.641a4.483 4.483 0 0 1-.923 1.785A5.969 5.969 0 0 0 6 21c1.282 0 2.47-.402 3.445-1.087.81.22 1.668.337 2.555.337Z"/>
             </svg>
+            <span x-show="pendingCount > 0"
+                  class="absolute -top-2 -right-2 bg-[#c0392b] text-white text-[10px] font-[Helvetica] font-bold min-w-[18px] h-[18px] flex items-center justify-center border-2 border-white rounded-none px-1 shadow-md"
+                  x-text="pendingCount > 9 ? '9+' : pendingCount"></span>
         </button>
     </template>
-    <template x-if="showBug">
-        <div class="bg-white border-2 border-black shadow-xl w-80 font-['Times_New_Roman']">
-            <div class="bg-[#c0392b] text-white px-3 py-2 flex items-center justify-between text-sm font-bold font-[Helvetica]">
-                <span>Masukan / Laporkan Bug</span>
-                <button @click="showBug = false" class="hover:text-gray-300 text-lg leading-none">&times;</button>
+    <template x-if="open">
+        <div class="bg-white border-2 border-black shadow-xl w-80 font-['Times_New_Roman'] max-h-[80vh] flex flex-col">
+            <div class="bg-[#c0392b] text-white px-3 py-2 flex items-center justify-between text-sm font-bold font-[Helvetica] shrink-0">
+                <span>Laporan / Masukan</span>
+                <button @click="open = false" class="hover:text-gray-300 text-lg leading-none">&times;</button>
             </div>
-            <div class="p-3">
-                <template x-if="sent">
-                    <div class="text-center py-4 text-sm text-green-700 font-bold border-2 border-green-700 bg-green-50 px-3 py-2">
-                        Terkirim! Terima kasih atas laporannya.
-                        <button @click="showBug = false" class="block mx-auto mt-2 text-xs text-gray-500 underline">Tutup</button>
+
+            <div class="flex border-b-2 border-black shrink-0">
+                <button @click="tab = 'notifikasi'; fetchReports()"
+                        :class="tab === 'notifikasi' ? 'bg-black text-white' : 'bg-gray-100 text-black hover:bg-gray-200'"
+                        class="flex-1 px-3 py-2 text-xs font-[Helvetica] font-bold border-r-2 border-black transition-colors duration-150">
+                    <span x-text="'📋 Notifikasi (' + pendingCount + ')'"></span>
+                </button>
+                <button @click="tab = 'kirim'"
+                        :class="tab === 'kirim' ? 'bg-black text-white' : 'bg-gray-100 text-black hover:bg-gray-200'"
+                        class="flex-1 px-3 py-2 text-xs font-[Helvetica] font-bold transition-colors duration-150">
+                    ✏️ Kirim
+                </button>
+            </div>
+
+            <div class="overflow-y-auto flex-1 min-h-0">
+                {{-- Tab: Notifikasi --}}
+                <template x-if="tab === 'notifikasi'">
+                    <div>
+                        <template x-if="loading">
+                            <div class="p-6 text-center text-sm text-gray-500">Memuat...</div>
+                        </template>
+                        <template x-if="!loading && reports.length === 0">
+                            <div class="p-6 text-center text-sm text-gray-500">Belum ada laporan.</div>
+                        </template>
+                        <template x-if="!loading && reports.length > 0">
+                            <div>
+                                <template x-for="r in reports" :key="r.id">
+                                    <div class="px-3 py-2.5 border-b border-gray-200 hover:bg-gray-50">
+                                        <div class="flex items-start justify-between gap-2 mb-1">
+                                            <span class="text-sm font-bold truncate max-w-[180px]" x-text="r.title" :title="r.description"></span>
+                                            <span class="inline-block px-1.5 py-0.5 text-[10px] font-[Helvetica] font-bold border border-black shrink-0"
+                                                  :class="r.type === 'bug' ? 'bg-[#d77a7a] text-white' : 'bg-[#e6915d] text-white'"
+                                                  x-text="r.type === 'bug' ? 'BUG' : 'MASUKAN'"></span>
+                                        </div>
+                                        <div class="flex items-center gap-2 text-[11px] text-gray-600 mb-1.5">
+                                            <span x-text="r.creator_name"></span>
+                                            <span x-text="'• ' + r.branch_name"></span>
+                                            <span x-text="r.created_at" class="ml-auto text-gray-400"></span>
+                                        </div>
+                                        <div class="flex items-center gap-2">
+                                            <span class="inline-block px-1.5 py-0.5 text-[10px] font-[Helvetica] font-bold border border-black"
+                                                  :class="statusClass(r.status)"
+                                                  x-text="statusLabel(r.status)"></span>
+                                            <template x-if="isSuperadmin && r.status === 'pending'">
+                                                <div class="flex items-center gap-1 ml-auto">
+                                                    <input x-model="adminNotes[r.id]"
+                                                           class="w-20 border border-black px-1 py-0.5 text-[10px]"
+                                                           placeholder="Catatan...">
+                                                    <button @click="doAction(r.id, 'approve')"
+                                                            class="text-[10px] font-[Helvetica] font-bold bg-[#27ae60] text-white border border-black px-1.5 py-0.5 hover:bg-[#1e8449]">
+                                                        Y
+                                                    </button>
+                                                    <button @click="doAction(r.id, 'reject')"
+                                                            class="text-[10px] font-[Helvetica] font-bold bg-[#c0392b] text-white border border-black px-1.5 py-0.5 hover:bg-[#a93226]">
+                                                        X
+                                                    </button>
+                                                </div>
+                                            </template>
+                                        </div>
+                                    </div>
+                                </template>
+                            </div>
+                        </template>
                     </div>
                 </template>
-                <template x-if="!sent">
-                    <form @submit.prevent="sending = true; fetch('{{ route('feedback-reports.store') }}', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': '{{ csrf_token() }}' }, body: JSON.stringify({ type: type, title: title, description: description }) }).then(async r => { const text = await r.text(); try { return JSON.parse(text); } catch { return { ok: false, error: text.substring(0,200) }; } }).then(d => { sending = false; if (d.ok || d.redirect) { sent = true; type = 'masukan'; title = ''; description = ''; } else { alert('Gagal: ' + (d.error || d.message || 'Coba lagi.')); } }).catch(e => { sending = false; alert('Gagal: ' + e.message); })">
-                        <div class="flex gap-2 mb-2">
-                            <label class="flex items-center gap-1 text-xs cursor-pointer">
-                                <input type="radio" x-model="type" value="masukan" class="cursor-pointer">
-                                <span class="inline-block px-1.5 py-0.5 text-[10px] font-[Helvetica] font-bold border border-black bg-[#e6915d] text-white">MASUKAN</span>
-                            </label>
-                            <label class="flex items-center gap-1 text-xs cursor-pointer">
-                                <input type="radio" x-model="type" value="bug" class="cursor-pointer">
-                                <span class="inline-block px-1.5 py-0.5 text-[10px] font-[Helvetica] font-bold border border-black bg-[#d77a7a] text-white">BUG</span>
-                            </label>
-                        </div>
-                        <input x-model="title" required maxlength="255"
-                               class="w-full border-2 border-black px-2 py-1.5 text-sm mb-2"
-                               placeholder="Judul singkat...">
-                        <textarea x-model="description" required maxlength="5000" rows="3"
-                                  class="w-full border-2 border-black px-2 py-1.5 text-sm resize-none focus:outline-none"
-                                  placeholder="Jelaskan detailnya..."></textarea>
-                        <div class="flex items-center justify-between mt-2">
-                            <span class="text-xs text-gray-500" x-text="description.length + '/5000'"></span>
-                            <button type="submit" :disabled="sending || !title.trim() || !description.trim()"
-                                    class="bg-[#c0392b] hover:bg-[#a93226] text-white border-2 border-black px-4 py-1 text-sm font-bold font-[Helvetica] disabled:opacity-40 transition-colors duration-200"
-                                    x-text="sending ? 'Mengirim...' : 'Kirim'"></button>
-                        </div>
-                    </form>
+
+                {{-- Tab: Kirim --}}
+                <template x-if="tab === 'kirim'">
+                    <div class="p-3">
+                        <template x-if="sent">
+                            <div class="text-center py-4 text-sm text-green-700 font-bold border-2 border-green-700 bg-green-50 px-3 py-2">
+                                Terkirim! Terima kasih atas laporannya.
+                                <button @click="sent = false; type = 'masukan'; title = ''; description = ''" class="block mx-auto mt-2 text-xs text-gray-500 underline">Kirim lagi</button>
+                            </div>
+                        </template>
+                        <template x-if="!sent">
+                            <form @submit.prevent="sending = true; fetch('{{ route('feedback-reports.store') }}', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': '{{ csrf_token() }}' }, body: JSON.stringify({ type: type, title: title, description: description }) }).then(async r => { const text = await r.text(); try { return JSON.parse(text); } catch { return { ok: false, error: text.substring(0,200) }; } }).then(d => { sending = false; if (d.ok || d.redirect) { sent = true; type = 'masukan'; title = ''; description = ''; fetchReports(); } else { alert('Gagal: ' + (d.error || d.message || 'Coba lagi.')); } }).catch(e => { sending = false; alert('Gagal: ' + e.message); })">
+                                <div class="flex gap-2 mb-2">
+                                    <label class="flex items-center gap-1 text-xs cursor-pointer">
+                                        <input type="radio" x-model="type" value="masukan" class="cursor-pointer">
+                                        <span class="inline-block px-1.5 py-0.5 text-[10px] font-[Helvetica] font-bold border border-black bg-[#e6915d] text-white">MASUKAN</span>
+                                    </label>
+                                    <label class="flex items-center gap-1 text-xs cursor-pointer">
+                                        <input type="radio" x-model="type" value="bug" class="cursor-pointer">
+                                        <span class="inline-block px-1.5 py-0.5 text-[10px] font-[Helvetica] font-bold border border-black bg-[#d77a7a] text-white">BUG</span>
+                                    </label>
+                                </div>
+                                <input x-model="title" required maxlength="255"
+                                       class="w-full border-2 border-black px-2 py-1.5 text-sm mb-2"
+                                       placeholder="Judul singkat...">
+                                <textarea x-model="description" required maxlength="5000" rows="3"
+                                          class="w-full border-2 border-black px-2 py-1.5 text-sm resize-none focus:outline-none"
+                                          placeholder="Jelaskan detailnya..."></textarea>
+                                <div class="flex items-center justify-between mt-2">
+                                    <span class="text-xs text-gray-500" x-text="description.length + '/5000'"></span>
+                                    <button type="submit" :disabled="sending || !title.trim() || !description.trim()"
+                                            class="bg-[#c0392b] hover:bg-[#a93226] text-white border-2 border-black px-4 py-1 text-sm font-bold font-[Helvetica] disabled:opacity-40 transition-colors duration-200"
+                                            x-text="sending ? 'Mengirim...' : 'Kirim'"></button>
+                                </div>
+                            </form>
+                        </template>
+                    </div>
                 </template>
             </div>
         </div>

@@ -113,11 +113,52 @@ class FeedbackReportController extends Controller
             ->with('success', 'Laporan berhasil dihapus.');
     }
 
+    public function fetchRecent(Request $request)
+    {
+        $user = Auth::user();
+        $isSuper = $user->canViewAllBranches();
+
+        $query = FeedbackReport::with(['creator', 'branch']);
+
+        if ($isSuper) {
+            $query->where('status', 'pending');
+        } else {
+            $query->where('user_id', $user->id);
+        }
+
+        $reports = $query->orderBy('created_at', 'desc')->take(10)->get()->map(function ($r) {
+            return [
+                'id' => $r->id,
+                'type' => $r->type,
+                'title' => $r->title,
+                'description' => $r->description,
+                'status' => $r->status,
+                'creator_name' => $r->creator->name ?? '—',
+                'branch_name' => $r->branch->name ?? '—',
+                'admin_note' => $r->admin_note,
+                'created_at' => $r->created_at->format('d M Y H:i'),
+            ];
+        });
+
+        $pendingCount = FeedbackReport::where('status', 'pending')
+            ->when(!$isSuper, fn($q) => $q->where('user_id', $user->id))
+            ->count();
+
+        return response()->json([
+            'ok' => true,
+            'reports' => $reports,
+            'pending_count' => $pendingCount,
+            'is_superadmin' => $isSuper,
+        ]);
+    }
+
     public function approve(Request $request, FeedbackReport $feedbackReport)
     {
         $user = Auth::user();
         if (!$user->canViewAllBranches()) {
-            abort(403);
+            return $request->expectsJson()
+                ? response()->json(['ok' => false, 'error' => 'Unauthorized'], 403)
+                : abort(403);
         }
 
         $feedbackReport->update([
@@ -127,6 +168,10 @@ class FeedbackReportController extends Controller
             'reviewed_at' => now(),
         ]);
 
+        if ($request->expectsJson()) {
+            return response()->json(['ok' => true, 'message' => 'Laporan disetujui.']);
+        }
+
         return redirect()->back()->with('success', 'Laporan disetujui.');
     }
 
@@ -134,7 +179,9 @@ class FeedbackReportController extends Controller
     {
         $user = Auth::user();
         if (!$user->canViewAllBranches()) {
-            abort(403);
+            return $request->expectsJson()
+                ? response()->json(['ok' => false, 'error' => 'Unauthorized'], 403)
+                : abort(403);
         }
 
         $feedbackReport->update([
@@ -144,14 +191,20 @@ class FeedbackReportController extends Controller
             'reviewed_at' => now(),
         ]);
 
+        if ($request->expectsJson()) {
+            return response()->json(['ok' => true, 'message' => 'Laporan ditolak.']);
+        }
+
         return redirect()->back()->with('success', 'Laporan ditolak.');
     }
 
-    public function markImplemented(FeedbackReport $feedbackReport)
+    public function markImplemented(Request $request, FeedbackReport $feedbackReport)
     {
         $user = Auth::user();
         if (!$user->canViewAllBranches()) {
-            abort(403);
+            return $request->expectsJson()
+                ? response()->json(['ok' => false, 'error' => 'Unauthorized'], 403)
+                : abort(403);
         }
 
         $feedbackReport->update([
@@ -160,14 +213,20 @@ class FeedbackReportController extends Controller
             'reviewed_at' => now(),
         ]);
 
+        if ($request->expectsJson()) {
+            return response()->json(['ok' => true, 'message' => 'Ditandai sebagai implementasi.']);
+        }
+
         return redirect()->back()->with('success', 'Laporan ditandai sebagai sudah diimplementasi.');
     }
 
-    public function markFixed(FeedbackReport $feedbackReport)
+    public function markFixed(Request $request, FeedbackReport $feedbackReport)
     {
         $user = Auth::user();
         if (!$user->canViewAllBranches()) {
-            abort(403);
+            return $request->expectsJson()
+                ? response()->json(['ok' => false, 'error' => 'Unauthorized'], 403)
+                : abort(403);
         }
 
         $feedbackReport->update([
@@ -175,6 +234,10 @@ class FeedbackReportController extends Controller
             'reviewed_by' => $user->id,
             'reviewed_at' => now(),
         ]);
+
+        if ($request->expectsJson()) {
+            return response()->json(['ok' => true, 'message' => 'Ditandai sebagai fixed.']);
+        }
 
         return redirect()->back()->with('success', 'Bug ditandai sebagai sudah diperbaiki.');
     }

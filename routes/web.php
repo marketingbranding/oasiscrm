@@ -62,6 +62,7 @@ Route::middleware(['auth', 'verified', 'password.changed'])->group(function () {
     Route::post('dana-talangan/bulk-update', [DanaTalanganController::class, 'bulkUpdate'])->name('dana-talangan.bulk-update');
     Route::resource('dana-talangan', DanaTalanganController::class);
 
+    Route::get('feedback-reports/fetch-recent', [FeedbackReportController::class, 'fetchRecent'])->name('feedback-reports.fetch-recent');
     Route::bind('feedback_report', fn($v) => \App\Models\FeedbackReport::findOrFail($v));
     Route::post('feedback-reports/{feedback_report}/approve', [FeedbackReportController::class, 'approve'])->name('feedback-reports.approve');
     Route::post('feedback-reports/{feedback_report}/reject', [FeedbackReportController::class, 'reject'])->name('feedback-reports.reject');

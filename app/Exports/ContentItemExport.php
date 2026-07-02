@@ -99,6 +99,6 @@ class ContentItemExport
         self::applyStyles($spreadsheet, $headers, $maxRow, self::templateWidths());
 
         $writer = new Xlsx($spreadsheet);
-        return self::downloadXlsx($writer, 'template-content-calendar.xls');
+        return self::downloadXlsx($writer, 'template-content-calendar.xlsx');
     }
 }

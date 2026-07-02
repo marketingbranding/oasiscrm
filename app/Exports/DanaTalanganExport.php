@@ -161,6 +161,6 @@ class DanaTalanganExport
         self::applyStyles($spreadsheet, $headers, $maxRow, self::templateWidths());
 
         $writer = new Xlsx($spreadsheet);
-        return self::downloadXlsx($writer, 'template-dana-talangan.xls');
+        return self::downloadXlsx($writer, 'template-dana-talangan.xlsx');
     }
 }

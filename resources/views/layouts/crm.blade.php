@@ -161,13 +161,6 @@
                 <a href="{{ route('dana-talangan.index') }}" class="flex items-center px-3 py-2 gap-2 text-sm font-[Helvetica] font-bold text-black hover:bg-[#f1c40f] hover:text-black border border-black mb-1 rounded-none {{ request()->routeIs('dana-talangan.*') ? 'bg-[#f1c40f]' : 'bg-white' }}">
                     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" :class="sidebarPinned ? 'text-[#f1c40f]' : 'text-black group-hover:text-[#f1c40f]'" class="inline-block w-4 h-4 shrink-0"><path stroke-linecap="round" stroke-linejoin="round" d="M2.25 18.75a60.07 60.07 0 0 1 15.797 2.101c.727.198 1.453-.342 1.453-1.096V18.75M3.75 4.5v.75A.75.75 0 0 1 3 6h-.75m0 0v-.375c0-.621.504-1.125 1.125-1.125H20.25M2.25 6v9m18-10.5v.75c0 .414.336.75.75.75h.75m-1.5-1.5h.375c.621 0 1.125.504 1.125 1.125v9.75c0 .621-.504 1.125-1.125 1.125h-.375m1.5-1.5H21a.75.75 0 0 0-.75.75v.75m0 0H3.75m0 0h-.375a1.125 1.125 0 0 1-1.125-1.125V15m1.5 1.5v-.75A.75.75 0 0 0 3 15h-.75M15 10.5a3 3 0 1 1-6 0 3 3 0 0 1 6 0Zm3 0h.008v.008H18V10.5Zm-12 0h.008v.008H6V10.5Z"/></svg> <span :class="sidebarPinned ? '' : 'sm:w-0 sm:overflow-hidden sm:whitespace-nowrap'" class="group-hover:sm:w-auto transition-all duration-200 delay-150">Dana Talangan</span>
                 </a>
-                <a href="{{ route('feedback-reports.index') }}" class="flex items-center px-3 py-2 gap-2 text-sm font-[Helvetica] font-bold text-black hover:bg-[#c0392b] hover:text-white border border-black mb-1 rounded-none {{ request()->routeIs('feedback-reports.*') ? 'bg-[#c0392b] text-white' : 'bg-white' }}">
-                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" :class="sidebarPinned ? 'text-[#c0392b]' : 'text-black group-hover:text-white'" class="inline-block w-4 h-4 shrink-0"><path stroke-linecap="round" stroke-linejoin="round" d="M12 20.25c4.97 0 9-3.694 9-8.25s-4.03-8.25-9-8.25S3 7.444 3 12c0 2.104.859 4.023 2.273 5.48.432.447.74 1.04.586 1.641a4.483 4.483 0 0 1-.923 1.785A5.969 5.969 0 0 0 6 21c1.282 0 2.47-.402 3.445-1.087.81.22 1.668.337 2.555.337Z"/></svg>
-                    <span :class="sidebarPinned ? '' : 'sm:w-0 sm:overflow-hidden sm:whitespace-nowrap'" class="group-hover:sm:w-auto transition-all duration-200 delay-150">Laporan / Masukan</span>
-                    @if(isset($pendingFeedbackCount) && $pendingFeedbackCount > 0)
-                    <span class="ml-auto bg-[#c0392b] text-white text-[10px] font-[Helvetica] font-bold min-w-[18px] h-4 flex items-center justify-center border border-white rounded-none px-1">{{ $pendingFeedbackCount > 9 ? '9+' : $pendingFeedbackCount }}</span>
-                    @endif
-                </a>
                 @if(Auth::user() && Auth::user()->isSuperadmin())
                 <div class="border-t border-dashed border-gray-400 mx-2 my-2"></div>
                 <div class="px-2 mb-0.5 text-[9px] font-[Helvetica] font-bold text-gray-400 uppercase tracking-[0.15em]">
@@ -242,16 +235,22 @@
 <div x-data="{
     open: false,
     tab: 'notifikasi',
+    previousTab: 'notifikasi',
     reports: [],
-    pendingCount: {{ $pendingFeedbackCount ?? 0 }},
+    pendingCount: 0,
     isSuperadmin: false,
     loading: false,
+    adminNotes: {},
+    selectedReport: null,
+    historyReports: [],
+    historyNextUrl: null,
+    hasMoreHistory: false,
+    loadingHistory: false,
     type: 'masukan',
     title: '',
     description: '',
     sending: false,
     sent: false,
-    adminNotes: {},
 
     fetchReports() {
         this.loading = true;
@@ -267,6 +266,46 @@
             .finally(() => { this.loading = false; });
     },
 
+    fetchHistory() {
+        this.loadingHistory = true;
+        fetch('{{ route('feedback-reports.fetch-history') }}')
+            .then(r => r.json())
+            .then(d => {
+                if (d.ok) {
+                    this.historyReports = d.reports;
+                    this.historyNextUrl = d.next_page_url;
+                    this.hasMoreHistory = d.has_more;
+                }
+            })
+            .finally(() => { this.loadingHistory = false; });
+    },
+
+    loadMore() {
+        if (!this.historyNextUrl || this.loadingHistory) return;
+        this.loadingHistory = true;
+        fetch(this.historyNextUrl)
+            .then(r => r.json())
+            .then(d => {
+                if (d.ok) {
+                    this.historyReports = this.historyReports.concat(d.reports);
+                    this.historyNextUrl = d.next_page_url;
+                    this.hasMoreHistory = d.has_more;
+                }
+            })
+            .finally(() => { this.loadingHistory = false; });
+    },
+
+    showDetail(r) {
+        this.previousTab = this.tab;
+        this.selectedReport = r;
+        this.tab = 'detail';
+    },
+
+    backFromDetail() {
+        this.tab = this.previousTab;
+        this.selectedReport = null;
+    },
+
     doAction(id, action) {
         const note = this.adminNotes[id] || '';
         fetch('feedback-reports/' + id + '/' + action, {
@@ -279,6 +318,14 @@
             if (d.ok) {
                 delete this.adminNotes[id];
                 this.fetchReports();
+                this.fetchHistory();
+                if (this.selectedReport && this.selectedReport.id === id) {
+                    this.selectedReport.status = action === 'approve' ? 'approved'
+                        : action === 'reject' ? 'rejected'
+                        : action === 'implement' ? 'implemented'
+                        : 'fixed';
+                    this.selectedReport.admin_note = this.adminNotes[id] || this.selectedReport.admin_note;
+                }
             } else {
                 alert(d.error || 'Gagal');
             }
@@ -297,7 +344,7 @@
     }
 }" class="fixed bottom-4 right-4 z-50" x-cloak>
     <template x-if="!open">
-        <button @click="open = true; sent = false; fetchReports()"
+        <button @click="open = true; sent = false; fetchReports(); fetchHistory()"
                 class="relative w-12 h-12 bg-[#c0392b] hover:bg-[#a93226] text-white border-2 border-black rounded-none flex items-center justify-center shadow-lg transition-colors duration-200"
                 title="Laporan / Masukan">
             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5">
@@ -310,16 +357,31 @@
     </template>
     <template x-if="open">
         <div class="bg-white border-2 border-black shadow-xl w-80 font-['Times_New_Roman'] max-h-[80vh] flex flex-col">
+            {{-- Header --}}
             <div class="bg-[#c0392b] text-white px-3 py-2 flex items-center justify-between text-sm font-bold font-[Helvetica] shrink-0">
-                <span>Laporan / Masukan</span>
+                <template x-if="tab !== 'detail'">
+                    <span>Laporan / Masukan</span>
+                </template>
+                <template x-if="tab === 'detail'">
+                    <button @click="backFromDetail()" class="flex items-center gap-1 hover:text-gray-300 text-xs font-[Helvetica] font-bold">
+                        ← Kembali
+                    </button>
+                </template>
                 <button @click="open = false" class="hover:text-gray-300 text-lg leading-none">&times;</button>
             </div>
 
+            {{-- Tab nav (hidden in detail view) --}}
+            <template x-if="tab !== 'detail'">
             <div class="flex border-b-2 border-black shrink-0">
                 <button @click="tab = 'notifikasi'; fetchReports()"
                         :class="tab === 'notifikasi' ? 'bg-black text-white' : 'bg-gray-100 text-black hover:bg-gray-200'"
                         class="flex-1 px-3 py-2 text-xs font-[Helvetica] font-bold border-r-2 border-black transition-colors duration-150">
                     <span x-text="'📋 Notifikasi (' + pendingCount + ')'"></span>
+                </button>
+                <button @click="tab = 'history'; fetchHistory()"
+                        :class="tab === 'history' ? 'bg-black text-white' : 'bg-gray-100 text-black hover:bg-gray-200'"
+                        class="flex-1 px-3 py-2 text-xs font-[Helvetica] font-bold border-r-2 border-black transition-colors duration-150">
+                    📜 History
                 </button>
                 <button @click="tab = 'kirim'"
                         :class="tab === 'kirim' ? 'bg-black text-white' : 'bg-gray-100 text-black hover:bg-gray-200'"
@@ -327,9 +389,10 @@
                     ✏️ Kirim
                 </button>
             </div>
+            </template>
 
             <div class="overflow-y-auto flex-1 min-h-0">
-                {{-- Tab: Notifikasi --}}
+                {{-- Notifikasi tab --}}
                 <template x-if="tab === 'notifikasi'">
                     <div>
                         <template x-if="loading">
@@ -341,7 +404,8 @@
                         <template x-if="!loading && reports.length > 0">
                             <div>
                                 <template x-for="r in reports" :key="r.id">
-                                    <div class="px-3 py-2.5 border-b border-gray-200 hover:bg-gray-50">
+                                    <div @click="showDetail(r)"
+                                         class="px-3 py-2.5 border-b border-gray-200 hover:bg-gray-100 cursor-pointer">
                                         <div class="flex items-start justify-between gap-2 mb-1">
                                             <span class="text-sm font-bold truncate max-w-[180px]" x-text="r.title" :title="r.description"></span>
                                             <span class="inline-block px-1.5 py-0.5 text-[10px] font-[Helvetica] font-bold border border-black shrink-0"
@@ -357,21 +421,6 @@
                                             <span class="inline-block px-1.5 py-0.5 text-[10px] font-[Helvetica] font-bold border border-black"
                                                   :class="statusClass(r.status)"
                                                   x-text="statusLabel(r.status)"></span>
-                                            <template x-if="isSuperadmin && r.status === 'pending'">
-                                                <div class="flex items-center gap-1 ml-auto">
-                                                    <input x-model="adminNotes[r.id]"
-                                                           class="w-20 border border-black px-1 py-0.5 text-[10px]"
-                                                           placeholder="Catatan...">
-                                                    <button @click="doAction(r.id, 'approve')"
-                                                            class="text-[10px] font-[Helvetica] font-bold bg-[#27ae60] text-white border border-black px-1.5 py-0.5 hover:bg-[#1e8449]">
-                                                        Y
-                                                    </button>
-                                                    <button @click="doAction(r.id, 'reject')"
-                                                            class="text-[10px] font-[Helvetica] font-bold bg-[#c0392b] text-white border border-black px-1.5 py-0.5 hover:bg-[#a93226]">
-                                                        X
-                                                    </button>
-                                                </div>
-                                            </template>
                                         </div>
                                     </div>
                                 </template>
@@ -380,7 +429,119 @@
                     </div>
                 </template>
 
-                {{-- Tab: Kirim --}}
+                {{-- History tab --}}
+                <template x-if="tab === 'history'">
+                    <div>
+                        <template x-if="loadingHistory && historyReports.length === 0">
+                            <div class="p-6 text-center text-sm text-gray-500">Memuat...</div>
+                        </template>
+                        <template x-if="!loadingHistory && historyReports.length === 0">
+                            <div class="p-6 text-center text-sm text-gray-500">Belum ada riwayat.</div>
+                        </template>
+                        <template x-if="historyReports.length > 0">
+                            <div>
+                                <template x-for="r in historyReports" :key="r.id">
+                                    <div @click="showDetail(r)"
+                                         class="px-3 py-2.5 border-b border-gray-200 hover:bg-gray-100 cursor-pointer">
+                                        <div class="flex items-start justify-between gap-2 mb-1">
+                                            <span class="text-sm font-bold truncate max-w-[180px]" x-text="r.title"></span>
+                                            <span class="inline-block px-1.5 py-0.5 text-[10px] font-[Helvetica] font-bold border border-black shrink-0"
+                                                  :class="r.type === 'bug' ? 'bg-[#d77a7a] text-white' : 'bg-[#e6915d] text-white'"
+                                                  x-text="r.type === 'bug' ? 'BUG' : 'MASUKAN'"></span>
+                                        </div>
+                                        <div class="flex items-center gap-2 text-[11px] text-gray-600 mb-1.5">
+                                            <span x-text="r.creator_name"></span>
+                                            <span x-text="'• ' + r.branch_name"></span>
+                                            <span x-text="r.created_at" class="ml-auto text-gray-400"></span>
+                                        </div>
+                                        <div>
+                                            <span class="inline-block px-1.5 py-0.5 text-[10px] font-[Helvetica] font-bold border border-black"
+                                                  :class="statusClass(r.status)"
+                                                  x-text="statusLabel(r.status)"></span>
+                                        </div>
+                                    </div>
+                                </template>
+                                <template x-if="hasMoreHistory">
+                                    <div class="p-3 text-center">
+                                        <button @click="loadMore()" :disabled="loadingHistory"
+                                                class="text-xs font-[Helvetica] font-bold underline hover:text-[#c0392b] disabled:opacity-40"
+                                                x-text="loadingHistory ? 'Memuat...' : 'Muat lebih'"></button>
+                                    </div>
+                                </template>
+                            </div>
+                        </template>
+                    </div>
+                </template>
+
+                {{-- Detail view --}}
+                <template x-if="tab === 'detail' && selectedReport">
+                    <div class="p-3">
+                        <div class="flex items-start justify-between gap-2 mb-2">
+                            <span class="text-sm font-bold" x-text="selectedReport.title"></span>
+                            <span class="inline-block px-1.5 py-0.5 text-[10px] font-[Helvetica] font-bold border border-black shrink-0"
+                                  :class="selectedReport.type === 'bug' ? 'bg-[#d77a7a] text-white' : 'bg-[#e6915d] text-white'"
+                                  x-text="selectedReport.type === 'bug' ? 'BUG' : 'MASUKAN'"></span>
+                        </div>
+
+                        <div class="text-[11px] text-gray-600 mb-2 space-y-0.5">
+                            <div><span class="font-bold">Pelapor:</span> <span x-text="selectedReport.creator_name"></span></div>
+                            <div><span class="font-bold">Cabang:</span> <span x-text="selectedReport.branch_name"></span></div>
+                            <div><span class="font-bold">Tanggal:</span> <span x-text="selectedReport.created_at"></span></div>
+                        </div>
+
+                        <div class="mb-2">
+                            <span class="inline-block px-1.5 py-0.5 text-[10px] font-[Helvetica] font-bold border border-black"
+                                  :class="statusClass(selectedReport.status)"
+                                  x-text="statusLabel(selectedReport.status)"></span>
+                        </div>
+
+                        <div class="bg-gray-50 border border-black p-2 mb-3 text-sm whitespace-pre-wrap break-words max-h-32 overflow-y-auto">
+                            <span x-text="selectedReport.description || '(Tidak ada deskripsi)'"></span>
+                        </div>
+
+                        <template x-if="selectedReport.admin_note">
+                            <div class="mb-3">
+                                <div class="text-[10px] font-[Helvetica] font-bold uppercase text-gray-500 mb-0.5">Catatan Admin:</div>
+                                <div class="bg-yellow-50 border border-black p-2 text-sm whitespace-pre-wrap break-words" x-text="selectedReport.admin_note"></div>
+                            </div>
+                        </template>
+
+                        <template x-if="isSuperadmin && selectedReport.status === 'pending'">
+                            <div class="border-t-2 border-black pt-3">
+                                <input x-model="adminNotes[selectedReport.id]"
+                                       class="w-full border-2 border-black px-2 py-1.5 text-sm mb-2"
+                                       placeholder="Catatan (opsional)...">
+                                <div class="flex gap-2">
+                                    <button @click="doAction(selectedReport.id, 'approve')"
+                                            class="flex-1 bg-[#27ae60] hover:bg-[#1e8449] text-white border-2 border-black px-3 py-1.5 text-sm font-bold font-[Helvetica] transition-colors duration-200">
+                                        Setuju
+                                    </button>
+                                    <button @click="doAction(selectedReport.id, 'reject')"
+                                            class="flex-1 bg-[#c0392b] hover:bg-[#a93226] text-white border-2 border-black px-3 py-1.5 text-sm font-bold font-[Helvetica] transition-colors duration-200">
+                                        Tolak
+                                    </button>
+                                </div>
+                            </div>
+                        </template>
+
+                        <template x-if="isSuperadmin && selectedReport.status === 'approved'">
+                            <div class="border-t-2 border-black pt-3">
+                                <div class="flex gap-2">
+                                    <button @click="doAction(selectedReport.id, 'implement')"
+                                            class="flex-1 bg-[#2980b9] hover:bg-[#1f618d] text-white border-2 border-black px-3 py-1.5 text-sm font-bold font-[Helvetica] transition-colors duration-200">
+                                        Implementasi
+                                    </button>
+                                    <button @click="doAction(selectedReport.id, 'fix')"
+                                            class="flex-1 bg-[#7f8c8d] hover:bg-[#6c7a7a] text-white border-2 border-black px-3 py-1.5 text-sm font-bold font-[Helvetica] transition-colors duration-200">
+                                        Fixed
+                                    </button>
+                                </div>
+                            </div>
+                        </template>
+                    </div>
+                </template>
+
+                {{-- Kirim tab --}}
                 <template x-if="tab === 'kirim'">
                     <div class="p-3">
                         <template x-if="sent">

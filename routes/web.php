@@ -62,13 +62,13 @@ Route::middleware(['auth', 'verified', 'password.changed'])->group(function () {
     Route::post('dana-talangan/bulk-update', [DanaTalanganController::class, 'bulkUpdate'])->name('dana-talangan.bulk-update');
     Route::resource('dana-talangan', DanaTalanganController::class);
 
+    Route::post('feedback-reports', [FeedbackReportController::class, 'store'])->name('feedback-reports.store');
     Route::get('feedback-reports/fetch-recent', [FeedbackReportController::class, 'fetchRecent'])->name('feedback-reports.fetch-recent');
-    Route::bind('feedback_report', fn($v) => \App\Models\FeedbackReport::findOrFail($v));
-    Route::post('feedback-reports/{feedback_report}/approve', [FeedbackReportController::class, 'approve'])->name('feedback-reports.approve');
-    Route::post('feedback-reports/{feedback_report}/reject', [FeedbackReportController::class, 'reject'])->name('feedback-reports.reject');
-    Route::post('feedback-reports/{feedback_report}/implement', [FeedbackReportController::class, 'markImplemented'])->name('feedback-reports.implement');
-    Route::post('feedback-reports/{feedback_report}/fix', [FeedbackReportController::class, 'markFixed'])->name('feedback-reports.fix');
-    Route::resource('feedback-reports', FeedbackReportController::class);
+    Route::get('feedback-reports/fetch-history', [FeedbackReportController::class, 'fetchHistory'])->name('feedback-reports.fetch-history');
+    Route::post('feedback-reports/{feedbackReport}/approve', [FeedbackReportController::class, 'approve'])->name('feedback-reports.approve');
+    Route::post('feedback-reports/{feedbackReport}/reject', [FeedbackReportController::class, 'reject'])->name('feedback-reports.reject');
+    Route::post('feedback-reports/{feedbackReport}/implement', [FeedbackReportController::class, 'markImplemented'])->name('feedback-reports.implement');
+    Route::post('feedback-reports/{feedbackReport}/fix', [FeedbackReportController::class, 'markFixed'])->name('feedback-reports.fix');
 
     Route::middleware('role:superadmin')->group(function () {
         Route::get('/branches', [BranchController::class, 'index'])->name('branches.index');

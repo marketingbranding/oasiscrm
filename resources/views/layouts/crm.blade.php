@@ -338,9 +338,19 @@
         return map[status] || status;
     },
 
-    statusClass(status) {
-        const map = { pending: 'bg-[#f1c40f]', approved: 'bg-[#27ae60] text-white', rejected: 'bg-[#c0392b] text-white', implemented: 'bg-[#2980b9] text-white', fixed: 'bg-[#7f8c8d] text-white' };
-        return map[status] || 'bg-gray-300';
+    typeStyle(type) {
+        return { backgroundColor: type === 'bug' ? '#d77a7a' : '#e6915d', color: '#fff' };
+    },
+
+    statusStyle(status) {
+        const map = {
+            pending: { backgroundColor: '#f1c40f', color: '#000' },
+            approved: { backgroundColor: '#27ae60', color: '#fff' },
+            rejected: { backgroundColor: '#c0392b', color: '#fff' },
+            implemented: { backgroundColor: '#2980b9', color: '#fff' },
+            fixed: { backgroundColor: '#7f8c8d', color: '#fff' },
+        };
+        return map[status] || { backgroundColor: '#ccc', color: '#000' };
     }
 }" class="fixed bottom-4 right-4 z-50" x-cloak>
     <template x-if="!open">
@@ -409,8 +419,8 @@
                                         <div class="flex items-start justify-between gap-2 mb-1">
                                             <span class="text-sm font-bold truncate max-w-[180px]" x-text="r.title" :title="r.description"></span>
                                             <span class="inline-block px-1.5 py-0.5 text-[10px] font-[Helvetica] font-bold border border-black shrink-0"
-                                                  :class="r.type === 'bug' ? 'bg-[#d77a7a] text-white' : 'bg-[#e6915d] text-white'"
-                                                  x-text="r.type === 'bug' ? 'BUG' : 'MASUKAN'"></span>
+                                                   :style="typeStyle(r.type)"
+                                                   x-text="r.type === 'bug' ? 'BUG' : 'MASUKAN'"></span>
                                         </div>
                                         <div class="flex items-center gap-2 text-[11px] text-gray-600 mb-1.5">
                                             <span x-text="r.creator_name"></span>
@@ -419,7 +429,7 @@
                                         </div>
                                         <div class="flex items-center gap-2">
                                             <span class="inline-block px-1.5 py-0.5 text-[10px] font-[Helvetica] font-bold border border-black"
-                                                  :class="statusClass(r.status)"
+                                                  :style="statusStyle(r.status)"
                                                   x-text="statusLabel(r.status)"></span>
                                         </div>
                                     </div>
@@ -446,7 +456,7 @@
                                         <div class="flex items-start justify-between gap-2 mb-1">
                                             <span class="text-sm font-bold truncate max-w-[180px]" x-text="r.title"></span>
                                             <span class="inline-block px-1.5 py-0.5 text-[10px] font-[Helvetica] font-bold border border-black shrink-0"
-                                                  :class="r.type === 'bug' ? 'bg-[#d77a7a] text-white' : 'bg-[#e6915d] text-white'"
+                                                  :style="typeStyle(r.type)"
                                                   x-text="r.type === 'bug' ? 'BUG' : 'MASUKAN'"></span>
                                         </div>
                                         <div class="flex items-center gap-2 text-[11px] text-gray-600 mb-1.5">
@@ -456,7 +466,7 @@
                                         </div>
                                         <div>
                                             <span class="inline-block px-1.5 py-0.5 text-[10px] font-[Helvetica] font-bold border border-black"
-                                                  :class="statusClass(r.status)"
+                                                  :style="statusStyle(r.status)"
                                                   x-text="statusLabel(r.status)"></span>
                                         </div>
                                     </div>
@@ -479,7 +489,7 @@
                         <div class="flex items-start justify-between gap-2 mb-2">
                             <span class="text-sm font-bold" x-text="selectedReport.title"></span>
                             <span class="inline-block px-1.5 py-0.5 text-[10px] font-[Helvetica] font-bold border border-black shrink-0"
-                                  :class="selectedReport.type === 'bug' ? 'bg-[#d77a7a] text-white' : 'bg-[#e6915d] text-white'"
+                                  :style="typeStyle(selectedReport.type)"
                                   x-text="selectedReport.type === 'bug' ? 'BUG' : 'MASUKAN'"></span>
                         </div>
 
@@ -491,7 +501,7 @@
 
                         <div class="mb-2">
                             <span class="inline-block px-1.5 py-0.5 text-[10px] font-[Helvetica] font-bold border border-black"
-                                  :class="statusClass(selectedReport.status)"
+                                  :style="statusStyle(selectedReport.status)"
                                   x-text="statusLabel(selectedReport.status)"></span>
                         </div>
 

@@ -62,7 +62,7 @@ class FeedbackReportController extends Controller
 
         $data['user_id'] = $user->id;
 
-        if (!$user->canViewAllBranches()) {
+        if (!$user->isSuperadmin()) {
             $data['branch_id'] = $user->branch_id;
         }
 

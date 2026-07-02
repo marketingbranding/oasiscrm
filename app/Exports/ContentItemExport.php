@@ -63,7 +63,7 @@ class ContentItemExport
         self::addAutoFilter($sheet, $headers, $rowCount);
 
         $writer = new Xlsx($spreadsheet);
-        self::downloadXlsx($writer, $filename);
+        return self::downloadXlsx($writer, $filename);
     }
 
     public static function generateTemplate(): StreamedResponse
@@ -99,6 +99,6 @@ class ContentItemExport
         self::applyStyles($spreadsheet, $headers, $maxRow, self::templateWidths());
 
         $writer = new Xlsx($spreadsheet);
-        self::downloadXlsx($writer, 'template-content-calendar.xlsx');
+        return self::downloadXlsx($writer, 'template-content-calendar.xlsx');
     }
 }

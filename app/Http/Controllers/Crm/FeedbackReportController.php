@@ -67,10 +67,16 @@ class FeedbackReportController extends Controller
         }
 
         if (empty($data['branch_id'])) {
-            return redirect()->back()->withInput()->with('error', 'Pilih cabang terlebih dahulu.');
+            return $request->expectsJson()
+                ? response()->json(['ok' => false, 'error' => 'Pilih cabang terlebih dahulu.'], 422)
+                : redirect()->back()->withInput()->with('error', 'Pilih cabang terlebih dahulu.');
         }
 
         FeedbackReport::create($data);
+
+        if ($request->expectsJson()) {
+            return response()->json(['ok' => true, 'message' => 'Laporan berhasil dikirim.']);
+        }
 
         return redirect()->route('feedback-reports.index', array_filter($request->only(['branch_id', 'type', 'status'])))
             ->with('success', 'Laporan berhasil dikirim.');

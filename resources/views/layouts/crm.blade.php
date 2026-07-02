@@ -271,7 +271,7 @@
         const note = this.adminNotes[id] || '';
         fetch('feedback-reports/' + id + '/' + action, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': '{{ csrf_token() }}' },
+            headers: { 'Accept': 'application/json', 'Content-Type': 'application/json', 'X-CSRF-TOKEN': '{{ csrf_token() }}' },
             body: JSON.stringify({ admin_note: note })
         })
         .then(r => r.json())
@@ -390,7 +390,7 @@
                             </div>
                         </template>
                         <template x-if="!sent">
-                            <form @submit.prevent="sending = true; fetch('{{ route('feedback-reports.store') }}', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': '{{ csrf_token() }}' }, body: JSON.stringify({ type: type, title: title, description: description }) }).then(async r => { const text = await r.text(); try { return JSON.parse(text); } catch { return { ok: false, error: text.substring(0,200) }; } }).then(d => { sending = false; if (d.ok || d.redirect) { sent = true; type = 'masukan'; title = ''; description = ''; fetchReports(); } else { alert('Gagal: ' + (d.error || d.message || 'Coba lagi.')); } }).catch(e => { sending = false; alert('Gagal: ' + e.message); })">
+                            <form @submit.prevent="sending = true; fetch('{{ route('feedback-reports.store') }}', { method: 'POST', headers: { 'Accept': 'application/json', 'Content-Type': 'application/json', 'X-CSRF-TOKEN': '{{ csrf_token() }}' }, body: JSON.stringify({ type: type, title: title, description: description }) }).then(async r => { const text = await r.text(); try { return JSON.parse(text); } catch { return { ok: false, error: text.substring(0,200) }; } }).then(d => { sending = false; if (d.ok) { sent = true; type = 'masukan'; title = ''; description = ''; fetchReports(); } else { alert('Gagal: ' + (d.error || d.message || 'Coba lagi.')); } }).catch(e => { sending = false; alert('Gagal: ' + e.message); })">
                                 <div class="flex gap-2 mb-2">
                                     <label class="flex items-center gap-1 text-xs cursor-pointer">
                                         <input type="radio" x-model="type" value="masukan" class="cursor-pointer">

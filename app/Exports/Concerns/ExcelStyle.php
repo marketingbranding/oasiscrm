@@ -3,6 +3,7 @@
 namespace App\Exports\Concerns;
 
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
+use PhpOffice\PhpSpreadsheet\Writer\Xls;
 use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
 use PhpOffice\PhpSpreadsheet\Style\Fill;
 use PhpOffice\PhpSpreadsheet\Style\Border;
@@ -62,7 +63,7 @@ trait ExcelStyle
         $sheet->freezePane('A2');
     }
 
-    protected static function downloadXlsx(Xlsx $writer, string $filename): BinaryFileResponse
+    protected static function downloadXlsx(Xlsx|Xls $writer, string $filename): BinaryFileResponse
     {
         $tempPath = storage_path('app/temp/' . $filename);
         $dir = dirname($tempPath);
@@ -72,8 +73,12 @@ trait ExcelStyle
 
         $writer->save($tempPath);
 
+        $contentType = $writer instanceof Xlsx
+            ? 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+            : 'application/vnd.ms-excel';
+
         return response()->download($tempPath, $filename, [
-            'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            'Content-Type' => $contentType,
         ])->deleteFileAfterSend(true);
     }
 

@@ -7,7 +7,7 @@ use App\Models\Branch;
 use App\Models\LeadMaster;
 use Illuminate\Support\Collection;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
-use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
+use PhpOffice\PhpSpreadsheet\Writer\Xls;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
 
 class ContentItemExport
@@ -62,7 +62,7 @@ class ContentItemExport
         self::applyStyles($spreadsheet, $headers, $rowCount, self::exportWidths());
         self::addAutoFilter($sheet, $headers, $rowCount);
 
-        $writer = new Xlsx($spreadsheet);
+        $writer = new Xls($spreadsheet);
         return self::downloadXlsx($writer, $filename);
     }
 
@@ -99,6 +99,6 @@ class ContentItemExport
         self::applyStyles($spreadsheet, $headers, $maxRow, self::templateWidths());
 
         $writer = new Xlsx($spreadsheet);
-        return self::downloadXlsx($writer, 'template-content-calendar.xlsx');
+        return self::downloadXlsx($writer, 'template-content-calendar.xls');
     }
 }

@@ -169,7 +169,7 @@ class DanaTalanganController extends Controller
 
         $records = $query->latest('tanggal')->get();
 
-        $filename = 'dana-talangan-' . now()->format('Y-m-d') . '.xlsx';
+        $filename = 'dana-talangan-' . now()->format('Y-m-d') . '.xls';
         return DanaTalanganExport::toBrowser($records, $filename);
     }
 

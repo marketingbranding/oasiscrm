@@ -166,7 +166,7 @@ class ContentCalendarController extends Controller
             ->orderBy('scheduled_date')
             ->get();
 
-        $filename = 'content-calendar-' . now()->format('Ymd') . '.xlsx';
+        $filename = 'content-calendar-' . now()->format('Ymd') . '.xls';
 
         return ContentItemExport::toBrowser($records, $filename);
     }

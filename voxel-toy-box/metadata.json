@@ -1,0 +1,8 @@
+{
+  "name": "Remix: Voxel Toy Box",
+  "description": "Create, visualize, and rebuild sculptures using the same set of blocks.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

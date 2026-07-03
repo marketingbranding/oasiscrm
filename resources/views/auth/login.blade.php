@@ -8,6 +8,23 @@
     <link rel="preconnect" href="https://fonts.bunny.net">
     <link href="https://fonts.bunny.net/css?family=figtree:400,500,600&display=swap" rel="stylesheet" />
     @vite(['resources/css/app.css', 'resources/js/app.js'])
+    <style>
+        .login-scene::after {
+            content: "";
+            position: absolute;
+            inset: 0;
+            pointer-events: none;
+            background:
+                repeating-linear-gradient(to bottom, rgba(0,0,0,0.08) 0, rgba(0,0,0,0.08) 1px, transparent 1px, transparent 5px),
+                radial-gradient(circle at 28% 24%, rgba(252,194,15,0.28), transparent 24%),
+                linear-gradient(135deg, rgba(230,145,93,0.22), rgba(179,189,149,0.14));
+            mix-blend-mode: multiply;
+        }
+
+        .login-scene canvas {
+            display: block;
+        }
+    </style>
 </head>
 <body class="font-['Times_New_Roman'] antialiased bg-white">
     <div class="border-2 border-black m-1 sm:m-2 min-h-screen flex flex-col">
@@ -16,12 +33,23 @@
             <span>OASIS CRM</span>
         </div>
 
-        <div class="flex-1 flex items-center justify-center p-4">
-            <div class="w-full max-w-md border-2 border-black bg-white">
-                <div class="bg-[#e91d2a] text-white px-4 py-3">
-                    <h1 class="font-['Arial_Black'] font-black text-lg uppercase">Silakan Login</h1>
-                </div>
-                <div class="p-6">
+        <div class="flex-1 grid min-h-0 grid-cols-1 md:grid-cols-[minmax(0,1fr)_360px] bg-[#f4d28b] overflow-hidden">
+            <div class="login-scene relative hidden h-full min-h-0 md:block border-r-2 border-black bg-[#f4d28b]" data-login-voxel>
+                <button type="button" data-login-voxel-toggle disabled
+                        class="absolute left-1/2 bottom-6 z-10 -translate-x-1/2 border-2 border-black bg-black px-8 py-3 font-[Helvetica] text-xs font-black uppercase tracking-[0.22em] text-white shadow-[5px_5px_0_0_#000] transition hover:bg-[#e91d2a] disabled:cursor-wait disabled:opacity-70">
+                    BREAK
+                </button>
+            </div>
+
+            <div class="flex items-center justify-center bg-[#f4d28b] p-6 md:p-8">
+                <div class="w-full max-w-xs">
+                    <div class="mb-6 border-b-2 border-black pb-4">
+                        <h1 class="font-[Helvetica] text-4xl font-black leading-none tracking-[-0.06em] text-black">OASIS</h1>
+                        <p class="mt-2 font-['Times_New_Roman'] text-sm leading-tight text-black">
+                            Operational Administration System for Integrated Support
+                        </p>
+                    </div>
+
                     @if(session('status'))
                     <div class="bg-[#b3bd95] border-2 border-black px-4 py-3 mb-4 font-['Times_New_Roman'] text-sm">
                         {{ session('status') }}
@@ -75,5 +103,6 @@
             © {{ date('Y') }} Oasis CRM — Sistem Manajemen Konten Perumahan
         </div>
     </div>
+    <script type="module" src="{{ asset('js/login-voxel.js') }}"></script>
 </body>
 </html>

@@ -24,10 +24,50 @@
         .login-scene canvas {
             display: block;
         }
+
+        .login-auth-overlay {
+            opacity: 0;
+            pointer-events: none;
+            transform: translateY(10px);
+            transition: opacity 180ms ease, transform 180ms ease;
+        }
+
+        .login-auth-overlay.is-active {
+            opacity: 1;
+            pointer-events: auto;
+            transform: translateY(0);
+        }
+
+        .login-auth-overlay::before {
+            content: "";
+            position: absolute;
+            inset: 0;
+            background: repeating-linear-gradient(to bottom, rgba(255,255,255,0.08) 0, rgba(255,255,255,0.08) 1px, transparent 1px, transparent 5px);
+            animation: login-scanline 520ms linear infinite;
+        }
+
+        .login-progress-bar {
+            animation: login-progress 820ms steps(10, end) forwards;
+        }
+
+        .login-auth-form.is-submitting {
+            opacity: 0.58;
+            pointer-events: none;
+        }
+
+        @keyframes login-scanline {
+            from { transform: translateY(-5px); }
+            to { transform: translateY(5px); }
+        }
+
+        @keyframes login-progress {
+            from { width: 12%; }
+            to { width: 100%; }
+        }
     </style>
 </head>
 <body class="font-['Times_New_Roman'] antialiased bg-white">
-    <div class="border-2 border-black m-1 sm:m-2 min-h-screen flex flex-col">
+    <div class="m-1 flex h-[calc(100dvh-0.5rem)] flex-col border-2 border-black sm:m-2 sm:h-[calc(100dvh-1rem)]">
         <div class="bg-black text-white font-[Helvetica] font-bold text-sm sm:text-base px-4 py-3 flex items-center">
             <span class="text-[#fcc20f] text-lg mr-2">◆</span>
             <span>OASIS CRM</span>
@@ -41,7 +81,7 @@
                 </button>
             </div>
 
-            <div class="flex items-center justify-center bg-[#f4d28b] p-6 md:p-8">
+            <div class="flex min-h-0 items-center justify-center overflow-y-auto bg-[#f4d28b] p-6 md:p-8">
                 <div class="w-full max-w-xs">
                     <div class="mb-6 border-b-2 border-black pb-4">
                         <h1 class="font-[Helvetica] text-4xl font-black leading-none tracking-[-0.06em] text-black">OASIS</h1>
@@ -56,7 +96,7 @@
                     </div>
                     @endif
 
-                    <form method="POST" action="{{ route('login') }}" class="space-y-4">
+                    <form method="POST" action="{{ route('login') }}" class="login-auth-form space-y-4" data-login-auth-form>
                         @csrf
 
                         <div>
@@ -85,7 +125,7 @@
                         </div>
 
                         <div class="flex items-center justify-between pt-2">
-                            <button type="submit" class="bg-black text-white px-8 py-2 text-sm font-[Helvetica] font-bold border-2 border-black rounded-none hover:bg-gray-800">
+                            <button type="submit" data-login-auth-button class="bg-black text-white px-8 py-2 text-sm font-[Helvetica] font-bold border-2 border-black rounded-none hover:bg-gray-800 disabled:cursor-wait disabled:bg-[#e91d2a]">
                                 Login
                             </button>
                             @if(Route::has('password.request'))
@@ -103,6 +143,41 @@
             © {{ date('Y') }} Oasis CRM — Sistem Manajemen Konten Perumahan
         </div>
     </div>
+    <div data-login-auth-overlay aria-hidden="true" class="login-auth-overlay fixed inset-0 z-50 flex items-center justify-center bg-black/88 px-5">
+        <div class="relative w-full max-w-sm border-2 border-white bg-black p-5 text-white shadow-[8px_8px_0_0_#e91d2a]">
+            <div class="mb-4 font-[Helvetica] text-xs font-black uppercase tracking-[0.28em] text-[#fcc20f]">OASIS</div>
+            <div class="font-[Helvetica] text-lg font-black uppercase leading-none">Accessing System</div>
+            <div class="mt-2 font-['Times_New_Roman'] text-sm">Initializing support environment...</div>
+            <div class="mt-5 h-5 border-2 border-white bg-black p-1">
+                <div class="login-progress-bar h-full bg-[#fcc20f]"></div>
+            </div>
+            <div class="mt-3 font-[Helvetica] text-[10px] font-bold uppercase tracking-[0.2em] text-white/80">Please wait</div>
+        </div>
+    </div>
     <script type="module" src="{{ asset('js/login-voxel.js') }}"></script>
+    <script>
+        (() => {
+            const form = document.querySelector('[data-login-auth-form]');
+            const button = document.querySelector('[data-login-auth-button]');
+            const overlay = document.querySelector('[data-login-auth-overlay]');
+
+            if (!form || !button || !overlay) return;
+
+            form.addEventListener('submit', (event) => {
+                if (form.dataset.submitting === 'true') return;
+                if (!form.checkValidity()) return;
+
+                event.preventDefault();
+                form.dataset.submitting = 'true';
+                form.classList.add('is-submitting');
+                button.disabled = true;
+                button.textContent = 'AUTHENTICATING...';
+                overlay.classList.add('is-active');
+                overlay.setAttribute('aria-hidden', 'false');
+
+                window.setTimeout(() => HTMLFormElement.prototype.submit.call(form), 850);
+            });
+        })();
+    </script>
 </body>
 </html>

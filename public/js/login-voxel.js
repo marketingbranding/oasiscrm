@@ -184,6 +184,7 @@ class LoginVoxelScene {
         this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
         this.renderer.shadowMap.enabled = true;
         this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+        this.renderer.domElement.setAttribute('data-login-voxel-canvas', '');
         this.container.appendChild(this.renderer.domElement);
 
         this.controls = new OrbitControls(this.camera, this.renderer.domElement);
@@ -200,7 +201,11 @@ class LoginVoxelScene {
         this.createMesh();
         this.resize();
 
-        this.resizeHandler = () => this.resize();
+        this.resizeFrame = null;
+        this.resizeHandler = () => {
+            cancelAnimationFrame(this.resizeFrame);
+            this.resizeFrame = requestAnimationFrame(() => this.resize());
+        };
         if ('ResizeObserver' in window) {
             this.resizeObserver = new ResizeObserver(this.resizeHandler);
             this.resizeObserver.observe(this.container);
@@ -402,6 +407,8 @@ class LoginVoxelScene {
         const rect = this.container.getBoundingClientRect();
         const width = Math.max(1, rect.width);
         const height = Math.max(1, rect.height);
+        if (width < 2 || height < 2) return;
+
         const aspect = width / height;
         const distance = aspect < 1.05 ? 66 : aspect < 1.35 ? 58 : 52;
         const direction = this.camera.position.clone().normalize();
@@ -426,11 +433,12 @@ class LoginVoxelScene {
 
     destroy() {
         cancelAnimationFrame(this.frame);
+        cancelAnimationFrame(this.resizeFrame);
         if (this.resizeObserver) this.resizeObserver.disconnect();
         else window.removeEventListener('resize', this.resizeHandler);
         this.controls.dispose();
         this.renderer.dispose();
-        this.container.innerHTML = '';
+        this.renderer.domElement.remove();
     }
 }
 

@@ -47,7 +47,8 @@
         }
 
         .login-progress-bar {
-            animation: login-progress 820ms steps(10, end) forwards;
+            width: 8%;
+            transition: width 120ms linear;
         }
 
         .login-auth-form.is-submitting {
@@ -60,10 +61,6 @@
             to { transform: translateY(5px); }
         }
 
-        @keyframes login-progress {
-            from { width: 12%; }
-            to { width: 100%; }
-        }
     </style>
 </head>
 <body class="font-['Times_New_Roman'] antialiased bg-white">
@@ -149,9 +146,12 @@
             <div class="font-[Helvetica] text-lg font-black uppercase leading-none">Accessing System</div>
             <div class="mt-2 font-['Times_New_Roman'] text-sm">Initializing support environment...</div>
             <div class="mt-5 h-5 border-2 border-white bg-black p-1">
-                <div class="login-progress-bar h-full bg-[#fcc20f]"></div>
+                <div data-login-progress class="login-progress-bar h-full bg-[#fcc20f]"></div>
             </div>
-            <div class="mt-3 font-[Helvetica] text-[10px] font-bold uppercase tracking-[0.2em] text-white/80">Please wait</div>
+            <div class="mt-3 flex items-center justify-between font-[Helvetica] text-[10px] font-bold uppercase tracking-[0.2em] text-white/80">
+                <span>Please wait</span>
+                <span data-login-progress-label>8%</span>
+            </div>
         </div>
     </div>
     <script type="module" src="{{ asset('js/login-voxel.js') }}"></script>
@@ -160,12 +160,38 @@
             const form = document.querySelector('[data-login-auth-form]');
             const button = document.querySelector('[data-login-auth-button]');
             const overlay = document.querySelector('[data-login-auth-overlay]');
+            const progress = document.querySelector('[data-login-progress]');
+            const progressLabel = document.querySelector('[data-login-progress-label]');
 
             if (!form || !button || !overlay) return;
+
+            const setProgress = (value) => {
+                const percent = Math.max(8, Math.min(100, Math.round(value)));
+                if (progress) progress.style.width = `${percent}%`;
+                if (progressLabel) progressLabel.textContent = `${percent}%`;
+            };
+
+            const animateProgress = (duration) => {
+                const startedAt = performance.now();
+
+                const tick = (now) => {
+                    const elapsed = now - startedAt;
+                    const ratio = Math.min(elapsed / duration, 1);
+                    const eased = 1 - Math.pow(1 - ratio, 2.35);
+                    const target = ratio < 0.72 ? 8 + eased * 70 : 78 + ((ratio - 0.72) / 0.28) * 17;
+
+                    setProgress(target);
+                    if (ratio < 1 && form.dataset.submitting === 'true') requestAnimationFrame(tick);
+                };
+
+                requestAnimationFrame(tick);
+            };
 
             form.addEventListener('submit', (event) => {
                 if (form.dataset.submitting === 'true') return;
                 if (!form.checkValidity()) return;
+
+                const submitDelay = 1100;
 
                 event.preventDefault();
                 form.dataset.submitting = 'true';
@@ -174,8 +200,13 @@
                 button.textContent = 'AUTHENTICATING...';
                 overlay.classList.add('is-active');
                 overlay.setAttribute('aria-hidden', 'false');
+                setProgress(8);
+                animateProgress(submitDelay);
 
-                window.setTimeout(() => HTMLFormElement.prototype.submit.call(form), 850);
+                window.setTimeout(() => {
+                    setProgress(100);
+                    window.setTimeout(() => HTMLFormElement.prototype.submit.call(form), 120);
+                }, submitDelay);
             });
         })();
     </script>

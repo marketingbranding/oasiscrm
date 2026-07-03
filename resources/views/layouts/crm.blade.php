@@ -119,7 +119,7 @@
                     sm:transition-all sm:duration-200
                      sm:overflow-x-hidden sm:whitespace-nowrap sm:shadow-none
                     bg-white sm:border-r-2 border-black">
-            <nav class="overflow-y-auto flex-1 min-h-0 p-2">
+            <nav :class="sidebarPinned ? 'sm:overflow-y-auto' : 'sm:overflow-y-hidden sm:group-hover:overflow-y-auto'" class="overflow-x-hidden overflow-y-auto flex-1 min-h-0 p-2">
                 <div class="mb-1 hidden sm:block">
                     <button @click="sidebarPinned = !sidebarPinned; localStorage.setItem('sidebarPinned', sidebarPinned)"
                             :class="sidebarPinned ? 'bg-green-50 text-green-700 border-green-500 hover:bg-green-100' : 'text-gray-500 border-gray-300 hover:text-black hover:bg-gray-100'"
@@ -224,7 +224,7 @@
             @endif
         </div>
 
-        <div :class="sidebarPinned ? 'sm:ml-56' : 'sm:ml-16'" class="flex-1 p-4 sm:p-6 sm:ml-16">
+        <div :class="sidebarPinned ? 'sm:ml-56' : 'sm:ml-16'" class="flex-1 min-w-0 max-w-full overflow-x-hidden p-4 sm:p-6 sm:ml-16">
             @yield('content')
 
             <div class="border-t-2 border-black bg-white px-4 py-3 text-center text-xs font-['Times_New_Roman'] mt-6">

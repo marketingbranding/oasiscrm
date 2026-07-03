@@ -13,7 +13,9 @@
             <form method="POST" action="{{ route('dana-talangan.update', ['dana_talangan' => $record->id]) }}" class="space-y-4">
                 @csrf
                 @method('PUT')
+                @if(Auth::user()->canViewAllBranches())
                 <input type="hidden" name="branch_id" value="{{ request('branch_id') }}">
+                @endif
                 <input type="hidden" name="project_name" value="{{ request('project_name') }}">
                 <input type="hidden" name="status" value="{{ request('status') }}">
 
@@ -209,7 +211,9 @@
                   onsubmit="return confirm('Hapus data ini?')" class="pt-4">
                 @csrf
                 @method('DELETE')
+                @if(Auth::user()->canViewAllBranches())
                 <input type="hidden" name="branch_id" value="{{ request('branch_id') }}">
+                @endif
                 <input type="hidden" name="project_name" value="{{ request('project_name') }}">
                 <input type="hidden" name="status" value="{{ request('status') }}">
                 <button type="submit" class="bg-white text-[#e91d2a] px-4 py-2 text-sm font-[Helvetica] font-bold border-2 border-[#e91d2a] rounded-none hover:bg-red-50">

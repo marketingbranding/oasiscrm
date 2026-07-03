@@ -15,7 +15,9 @@
                 @method('PUT')
                 <input type="hidden" name="month" value="{{ request('month') }}">
                 <input type="hidden" name="year" value="{{ request('year') }}">
+                @if(Auth::user()->canViewAllBranches())
                 <input type="hidden" name="branch_id" value="{{ request('branch_id') }}">
+                @endif
                 <input type="hidden" name="project_name" value="{{ request('project_name') }}">
 
                 <div>
@@ -150,7 +152,9 @@
                         @method('DELETE')
                         <input type="hidden" name="month" value="{{ request('month') }}">
                         <input type="hidden" name="year" value="{{ request('year') }}">
+                        @if(Auth::user()->canViewAllBranches())
                         <input type="hidden" name="branch_id" value="{{ request('branch_id') }}">
+                        @endif
                         <input type="hidden" name="project_name" value="{{ request('project_name') }}">
                         <button type="submit" class="bg-white text-[#e91d2a] px-4 py-2 text-sm font-[Helvetica] font-bold border-2 border-[#e91d2a] rounded-none hover:bg-red-50">
                             Hapus

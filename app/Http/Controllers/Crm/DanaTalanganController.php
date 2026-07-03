@@ -144,6 +144,10 @@ class DanaTalanganController extends Controller
         $user = Auth::user();
         $data = $request->validated();
 
+        if (!$user->canViewAllBranches()) {
+            unset($data['branch_id']);
+        }
+
         $data['pinjam_nama'] = $request->boolean('pinjam_nama');
         $data['konfirmasi_keuangan'] = $request->boolean('konfirmasi_keuangan');
 

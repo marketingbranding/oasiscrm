@@ -24,7 +24,7 @@ class UpdateDanaTalanganRequest extends FormRequest
             'tanggal' => 'required|date',
             'nama_konsumen' => 'required|string|max:255',
             'kav' => 'nullable|string|max:100',
-            'branch_id' => $user->canViewAllBranches() ? 'required|exists:branches,id' : 'nullable',
+            'branch_id' => $user->canViewAllBranches() ? 'required|exists:branches,id' : 'exclude',
             'project_name' => 'nullable|string|max:255',
             'pinjam_nama' => 'nullable|boolean',
             'pekerjaan' => 'nullable|string|max:255',

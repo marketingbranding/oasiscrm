@@ -148,7 +148,7 @@ class DatabaseSheetSyncService
             if (count(array_filter($rowData, fn ($value) => $value !== '')) === 0) continue;
 
             $syncId = ($rowData['oasis_sync_id'] ?? '') ?: (string) Str::uuid();
-            $deletedAt = $rowData['oasis_deleted_at'] ?? null;
+            $deletedAt = ($rowData['oasis_deleted_at'] ?? '') ?: null;
 
             $records[] = [
                 'branch_id' => $branch->id,

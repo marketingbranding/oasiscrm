@@ -4,13 +4,18 @@ namespace App\Http\Controllers\Crm;
 
 use App\Http\Controllers\Controller;
 use App\Models\Branch;
-use App\Services\GoogleScriptService;
+use App\Models\DatabaseSheetRecord;
+use App\Models\DatabaseSheetSyncStatus;
+use App\Services\DatabaseSheetSyncService;
+use App\Services\DatabaseSheetWriteService;
+use App\Services\GoogleSheetsApiService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Throwable;
 
 class DatabaseController extends Controller
 {
-    public function index(Request $request)
+    public function index(Request $request, GoogleSheetsApiService $googleSheets)
     {
         $user = Auth::user();
         $selectedBranchId = $request->get('branch_id');
@@ -26,56 +31,128 @@ class DatabaseController extends Controller
         }
 
         $selectedBranch = $selectedBranchId ? Branch::find($selectedBranchId) : null;
-        $branchCode = $selectedBranch?->code;
-        $scriptUrl = config('services.google_script.webhook_url');
+        $sheetNames = [];
+        $records = [];
+        $syncStatus = null;
+        $isStale = true;
 
-        $databaseUrl = null;
         if ($selectedBranch && $selectedBranch->sheet_id) {
-            $databaseUrl = $scriptUrl . '?' . http_build_query([
-                'sheet_id' => $selectedBranch->sheet_id,
-                'cabang_name' => $selectedBranch->name,
-                'branch' => $selectedBranch->code,
-                'branch_id' => $selectedBranch->id,
-            ]);
-        }
+            $syncStatus = DatabaseSheetSyncStatus::where('branch_id', $selectedBranch->id)->first();
+            $isStale = $syncStatus?->finished_at
+                ? $syncStatus->finished_at->lt(now()->subMinutes((int) config('services.google_sheets.cache_stale_minutes', 30)))
+                : true;
 
-        $data = null;
-        $error = null;
+            $recordRows = DatabaseSheetRecord::where('branch_id', $selectedBranch->id)
+                ->whereNull('oasis_deleted_at')
+                ->orderBy('sheet_name')
+                ->orderBy('row_number')
+                ->get();
 
-        if ($selectedBranch) {
-            $service = new GoogleScriptService();
-            $result = $service->fetchData([
-                'sheet_id' => $selectedBranch->sheet_id,
-                'branch' => $selectedBranch->code,
-                'branch_id' => $selectedBranch->id,
-            ]);
-
-            $data = $result['data'] ?? null;
-            if (!$result['success']) {
-                $error = $result['error'];
+            foreach ($recordRows as $row) {
+                $records[$row->sheet_name][] = $row;
             }
+
+            $orderedSheetNames = [];
+            $sheetSeen = [];
+
+            try {
+                $apiSheetNames = $googleSheets->sheetTitles($selectedBranch->sheet_id);
+                foreach ($apiSheetNames as $name) {
+                    $orderedSheetNames[] = $name;
+                    $sheetSeen[$name] = true;
+                    if (!isset($records[$name])) {
+                        $records[$name] = [];
+                    }
+                }
+            } catch (Throwable $e) {
+                // API unavailable, show only sheets with records
+            }
+
+            foreach ($records as $name => $rows) {
+                if (!isset($sheetSeen[$name])) {
+                    $orderedSheetNames[] = $name;
+                    $sheetSeen[$name] = true;
+                }
+            }
+
+            $sheetNames = $orderedSheetNames;
         }
 
-        return view('crm.database.index', compact('branches', 'selectedBranch', 'selectedBranchId', 'branchCode', 'scriptUrl', 'databaseUrl', 'data', 'error'));
+        return view('crm.database.index', compact('branches', 'selectedBranch', 'selectedBranchId', 'sheetNames', 'records', 'syncStatus', 'isStale'));
     }
 
-    public function fetch(Request $request)
+    public function sync(Request $request, DatabaseSheetSyncService $syncService)
     {
         $user = Auth::user();
-        $branchId = $request->get('branch_id');
+        $branchId = $user->isSuperadmin() ? $request->input('branch_id') : $user->branch_id;
+        $branch = $branchId ? Branch::find($branchId) : null;
 
-        if (!$user->isSuperadmin()) {
-            $branchId = $user->branch_id;
+        if (!$branch) {
+            return back()->with('error', 'Branch tidak ditemukan.');
         }
 
-        $branch = Branch::findOrFail($branchId);
-        $service = new GoogleScriptService();
-        $result = $service->fetchData([
-            'sheet_id' => $branch->sheet_id,
-            'branch' => $branch->code,
-            'branch_id' => $branch->id,
+        $result = $syncService->syncBranch($branch);
+        if (!$result['ok']) {
+            return back()->with('error', 'Sync gagal: ' . $result['message']);
+        }
+
+        $totalRows = array_sum($result['summary']);
+
+        return back()->with('success', 'Sync selesai: ' . count($result['summary']) . ' sheets, ' . $totalRows . ' rows.');
+    }
+
+    public function store(Request $request, DatabaseSheetWriteService $writeService)
+    {
+        $request->validate([
+            'sheet_name' => 'required|string',
+            'branch_id' => 'required|exists:branches,id',
         ]);
 
-        return response()->json($result);
+        $branch = Branch::findOrFail($request->input('branch_id'));
+        $sheetName = $request->input('sheet_name');
+
+        if (!$writeService->createRecord($branch, $sheetName, $request->except(['_token', 'sheet_name', 'branch_id']))) {
+            return back()->with('error', 'Gagal menambah data. Tidak ada template row atau Google Sheets tidak merespons.');
+        }
+
+        return back()->with('success', 'Data berhasil ditambahkan.');
+    }
+
+    public function update(Request $request, DatabaseSheetRecord $record, DatabaseSheetWriteService $writeService)
+    {
+        $branch = $record->branch;
+        if (!$branch) {
+            return back()->with('error', 'Branch tidak ditemukan.');
+        }
+
+        $user = Auth::user();
+        if (!$user->isSuperadmin() && $user->branch_id !== $branch->id) {
+            abort(403);
+        }
+
+        if (!$writeService->updateRecord($record, $request->except(['_token', '_method']))) {
+            return back()->with('error', 'Gagal update. Perubahan tersimpan di database lokal, tapi gagal push ke Google Sheets: ' . $record->last_sync_error);
+        }
+
+        return back()->with('success', 'Data berhasil diupdate dan tersinkron ke Google Sheets.');
+    }
+
+    public function destroy(DatabaseSheetRecord $record, DatabaseSheetWriteService $writeService)
+    {
+        $branch = $record->branch;
+        if (!$branch) {
+            return back()->with('error', 'Branch tidak ditemukan.');
+        }
+
+        $user = Auth::user();
+        if (!$user->isSuperadmin() && $user->branch_id !== $branch->id) {
+            abort(403);
+        }
+
+        if (!$writeService->softDelete($record, $user->id)) {
+            return back()->with('error', 'Gagal menghapus. Data tetap dihapus di database lokal, tapi gagal sync ke Google Sheets: ' . $record->last_sync_error);
+        }
+
+        return back()->with('success', 'Data berhasil dihapus.');
     }
 }

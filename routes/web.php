@@ -4,6 +4,7 @@ use App\Http\Controllers\Auth\PasswordChangeController;
 use App\Http\Controllers\Crm\AdminUserController;
 use App\Http\Controllers\Crm\BranchController;
 use App\Http\Controllers\Crm\BugReportController;
+use App\Http\Controllers\Crm\ChangelogController;
 use App\Http\Controllers\Crm\ContentCalendarController;
 use App\Http\Controllers\Crm\DanaTalanganController;
 use App\Http\Controllers\Crm\DashboardController;
@@ -37,10 +38,16 @@ Route::middleware(['auth', 'verified', 'password.changed'])->group(function () {
 
     Route::get('/database', [DatabaseController::class, 'index'])->name('database.index');
     Route::get('/database/fetch', [DatabaseController::class, 'fetch'])->name('database.fetch');
+    Route::post('/database/sync', [DatabaseController::class, 'sync'])->name('database.sync');
+    Route::post('/database/records', [DatabaseController::class, 'store'])->name('database.records.store');
+    Route::put('/database/records/{record}', [DatabaseController::class, 'update'])->name('database.records.update');
+    Route::delete('/database/records/{record}', [DatabaseController::class, 'destroy'])->name('database.records.destroy');
 
     Route::get('/konsumen-progress', [KonsumenProgressController::class, 'index'])->name('konsumen-progress.index');
     Route::get('/konsumen-progress/stage', [KonsumenProgressController::class, 'stage'])->name('konsumen-progress.stage');
     Route::post('/konsumen-progress/sync', [KonsumenProgressController::class, 'sync'])->name('konsumen-progress.sync');
+
+    Route::get('changelogs', [ChangelogController::class, 'index'])->name('changelogs.index');
 
     Route::post('lead-sources/bulk-delete', [LeadSourceController::class, 'bulkDestroy'])->name('lead-sources.bulk-destroy');
     Route::post('lead-sources/{leadSource}/toggle-active', [LeadSourceController::class, 'toggleActive'])->name('lead-sources.toggle-active');
@@ -73,6 +80,8 @@ Route::middleware(['auth', 'verified', 'password.changed'])->group(function () {
     Route::post('feedback-reports/{feedbackReport}/fix', [FeedbackReportController::class, 'markFixed'])->name('feedback-reports.fix');
 
     Route::middleware('role:superadmin')->group(function () {
+        Route::resource('changelogs', ChangelogController::class)->except('index');
+
         Route::get('/branches', [BranchController::class, 'index'])->name('branches.index');
         Route::get('/branches/{branch}/assign', [BranchController::class, 'assignForm'])->name('branches.assign');
         Route::post('/branches/{branch}/assign', [BranchController::class, 'assignStore'])->name('branches.assign-store');

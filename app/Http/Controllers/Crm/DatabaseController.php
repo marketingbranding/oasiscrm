@@ -76,9 +76,45 @@ class DatabaseController extends Controller
             }
 
             $sheetNames = $orderedSheetNames;
+
+            // Only keep first sheet's records in memory; rest load via AJAX
+            $firstSheet = $sheetNames[0] ?? null;
+            foreach (array_keys($records) as $name) {
+                if ($name !== $firstSheet) {
+                    unset($records[$name]);
+                }
+            }
         }
 
         return view('crm.database.index', compact('branches', 'selectedBranch', 'selectedBranchId', 'sheetNames', 'records', 'syncStatus', 'isStale'));
+    }
+
+    public function sheetData(Request $request, $branchId, $sheetName)
+    {
+        $branch = Branch::findOrFail($branchId);
+
+        $rows = DatabaseSheetRecord::where('branch_id', $branch->id)
+            ->where('sheet_name', $sheetName)
+            ->whereNull('oasis_deleted_at')
+            ->orderBy('row_number')
+            ->get(['id', 'row_number', 'row_data', 'headers', 'formula_columns']);
+
+        $sample = $rows->first();
+        $headers = $sample ? $sample->headers : [];
+        $formulaColumns = $sample ? ($sample->formula_columns ?? []) : [];
+
+        $records = $rows->map(fn($r) => [
+            'id' => $r->id,
+            'row_number' => $r->row_number,
+            'row_data' => $r->row_data,
+        ]);
+
+        return response()->json([
+            'sheet_name' => $sheetName,
+            'headers' => $headers,
+            'formula_columns' => $formulaColumns,
+            'records' => $records,
+        ]);
     }
 
     public function sync(Request $request, DatabaseSheetSyncService $syncService)

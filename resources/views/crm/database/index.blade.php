@@ -60,7 +60,28 @@
     @endif
 
     @if($selectedBranch && !empty($sheetNames))
-    <div x-data="{ tab: '{{ $sheetNames[0] ?? '' }}', editing: null, adding: false }">
+    @php
+        $firstSheet = $sheetNames[0] ?? '';
+        $initialRows = $records[$firstSheet] ?? [];
+        $initialSample = $initialRows[0] ?? null;
+        $initialHeaders = $initialSample ? $initialSample->headers : [];
+        $initialFormulaCols = $initialSample ? ($initialSample->formula_columns ?? []) : [];
+        $initialRecordsJson = json_encode(array_map(fn($r) => [
+            'id' => $r->id,
+            'row_number' => $r->row_number,
+            'row_data' => $r->row_data,
+        ], $initialRows));
+        $initialHeadersJson = json_encode($initialHeaders);
+        $initialFormulaJson = json_encode($initialFormulaCols);
+    @endphp
+    <div x-data="databaseTabs({
+        branchId: '{{ $selectedBranch->id }}',
+        editBaseUrl: '{{ url('database/records') }}',
+        firstSheet: '{{ $firstSheet }}',
+        initialHeaders: {{ $initialHeadersJson }},
+        initialFormulaCols: {{ $initialFormulaJson }},
+        initialRecords: {{ $initialRecordsJson }}
+    })">
         <style>
             [x-cloak] { display: none !important; }
             .tab-wrap { overflow-x:auto; overflow-y:hidden; white-space:nowrap; max-width:100%; border-bottom:2px solid #000; margin-bottom:12px; scroll-behavior:smooth; }
@@ -74,6 +95,7 @@
             .tab-btn.active { background:#d77a7a; color:#fff; position:relative; }
             .tab-btn.active::after { content:''; position:absolute; bottom:-2px; left:0; right:0; height:2px; background:#d77a7a; z-index:11; }
             .tab-btn:hover:not(.active) { background:#f5f5f5; }
+            .tab-btn.loading { opacity:0.6; cursor:wait; }
             .db-table { font-size:12px; border-collapse:collapse; width:100%; }
             .db-table th { position:sticky; top:0; z-index:5;
                         border:2px solid #000; background:#000; color:#fff;
@@ -87,118 +109,106 @@
 
         <div class="tab-wrap" x-on:wheel="if ($event.currentTarget.scrollWidth > $event.currentTarget.clientWidth) { (function(e){e._sd=(e._sd||0)+$event.deltaY;if(!e._st){e._st=true;requestAnimationFrame(function(){var d=e._sd;e._sd=0;e._st=false;e.scrollLeft+=Math.sign(d)*Math.min(Math.abs(d)*1.5,160)})}}($event.currentTarget)); $event.preventDefault(); }">
             @foreach($sheetNames as $name)
-            @php $rowCount = count($records[$name] ?? []); @endphp
-            <button @click="tab = '{{ $name }}'"
-                    :class="tab === '{{ $name }}' ? 'active' : ''"
+            <button @click="switchTab('{{ $name }}')"
+                    :class="{ 'active': tab === '{{ $name }}', 'loading': loading && tab === '{{ $name }}' }"
                     class="tab-btn">
-                {{ $name }} <span :class="tab === '{{ $name }}' ? 'text-white/70' : 'text-gray-500'" style="font-size:9px;font-weight:400;">({{ $rowCount }})</span>
+                {{ $name }} <span :class="tab === '{{ $name }}' ? 'text-white/70' : 'text-gray-500'" style="font-size:9px;font-weight:400;">(<span x-text="sheetCount('{{ $name }}')">0</span>)</span>
             </button>
             @endforeach
         </div>
 
-        @foreach($sheetNames as $name)
-        @php
-            $rows = $records[$name] ?? [];
-            $sample = $rows[0] ?? null;
-            $hasData = $sample !== null;
-            $headers = $hasData ? $sample->headers : [];
-            $formulaColumns = $hasData ? ($sample->formula_columns ?? []) : [];
-            $editableHeaders = array_values(array_filter($headers, fn($h) => !in_array($h, $formulaColumns, true) && !in_array($h, ['oasis_sync_id', 'oasis_deleted_at', 'oasis_deleted_by'], true)));
-        @endphp
-        <div x-show="tab === '{{ $name }}'" x-cloak x-transition:enter="transition ease-out duration-200" x-transition:enter-start="opacity-0" x-transition:enter-end="opacity-100">
-            <div class="mb-3 flex items-center gap-2" style="min-height:32px;">
-                @if($hasData)
-                <button @click="adding = '{{ $name }}'"
-                        class="bg-black text-white px-3 py-1 text-xs font-[Helvetica] font-bold border-2 border-black hover:bg-gray-800" style="border-radius:0;">
-                    + Tambah Data
-                </button>
-                @endif
-                <a href="https://docs.google.com/spreadsheets/d/{{ $selectedBranch->sheet_id }}" target="_blank"
-                   class="bg-white text-black px-3 py-1 text-xs font-[Helvetica] font-bold border-2 border-black hover:bg-gray-100" style="border-radius:0;">
-                    Buka Google Sheet
-                </a>
-            </div>
+        {{-- Tab content -- rendered per sheet name --}}
+        <template x-for="name in sheetNameList" :key="name">
+            <div x-show="tab === name" x-cloak x-transition:enter="transition ease-out duration-200" x-transition:enter-start="opacity-0" x-transition:enter-end="opacity-100">
+                <div class="mb-3 flex items-center gap-2" style="min-height:32px;">
+                    <template x-if="currentData(name) && currentData(name).records.length > 0">
+                        <button @click="adding = name"
+                                class="bg-black text-white px-3 py-1 text-xs font-[Helvetica] font-bold border-2 border-black hover:bg-gray-800" style="border-radius:0;">
+                            + Tambah Data
+                        </button>
+                    </template>
+                    <a href="https://docs.google.com/spreadsheets/d/{{ $selectedBranch->sheet_id }}" target="_blank"
+                       class="bg-white text-black px-3 py-1 text-xs font-[Helvetica] font-bold border-2 border-black hover:bg-gray-100" style="border-radius:0;">
+                        Buka Google Sheet
+                    </a>
+                </div>
 
-            @if($hasData)
-            <div class="overflow-auto border-2 border-black" style="max-height:65vh;">
-                <table class="db-table">
-                    <thead>
-                        <tr>
-                            <th style="width:44px;text-align:center;">#</th>
-                            @foreach($headers as $h)
-                                @if(in_array($h, ['oasis_sync_id', 'oasis_deleted_at', 'oasis_deleted_by'], true)) @continue @endif
-                                <th class="{{ in_array($h, $formulaColumns, true) ? 'formula-col' : '' }}" style="min-width:120px;">
-                                    {{ $h }}
-                                    @if(in_array($h, $formulaColumns, true))
-                                        <span style="font-size:9px;font-weight:400;color:#fcc20f;">[f]</span>
-                                    @endif
-                                </th>
-                            @endforeach
-                            <th style="width:100px;">Aksi</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        @foreach($rows as $rec)
-                        @php $data = $rec->row_data; @endphp
-                        <tr>
-                            <td style="text-align:center;color:#6b7280;">{{ $rec->row_number }}</td>
-                            @foreach($headers as $h)
-                                @if(in_array($h, ['oasis_sync_id', 'oasis_deleted_at', 'oasis_deleted_by'], true)) @continue @endif
-                                @php $isFormula = in_array($h, $formulaColumns, true); @endphp
-                                <td style="color:{{ $isFormula ? '#9ca3af' : '#000' }};font-style:{{ $isFormula ? 'italic' : 'normal' }};max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="{{ $data[$h] ?? '' }}">
-                                    {{ $data[$h] ?? '' }}
-                                </td>
-                            @endforeach
-                            <td style="white-space:nowrap;">
-                                <button @click="editing = {{ $rec->id }}"
-                                        class="font-[Helvetica] font-bold underline" style="font-size:11px;color:#0000ee;margin-right:8px;">Edit</button>
-                                <form method="POST" action="{{ route('database.records.destroy', $rec) }}" style="display:inline;" onsubmit="return confirm('Hapus data ini?')">
-                                    @csrf @method('DELETE')
-                                    <button type="submit" class="font-[Helvetica] font-bold underline" style="font-size:11px;color:#c0392b;">Hapus</button>
-                                </form>
-                            </td>
-                        </tr>
-                        @endforeach
-                    </tbody>
-                </table>
+                <div x-show="!isLoaded(name)" class="border-2 border-black bg-white px-4 py-8 text-center">
+                    <p class="text-sm font-['Times_New_Roman'] italic" style="color:#6b7280;" x-text="loading ? 'Memuat data...' : 'Klik tab untuk memuat data.'"></p>
+                </div>
+
+                <template x-if="isLoaded(name) && currentData(name).records.length > 0">
+                    <div class="overflow-auto border-2 border-black" style="max-height:65vh;">
+                        <table class="db-table">
+                            <thead>
+                                <tr>
+                                    <th style="width:44px;text-align:center;">#</th>
+                                    <template x-for="h in currentData(name).headers" :key="h">
+                                        <th x-show="!['oasis_sync_id','oasis_deleted_at','oasis_deleted_by'].includes(h)"
+                                            :class="currentData(name).formula_columns.includes(h) ? 'formula-col' : ''"
+                                            style="min-width:120px;">
+                                            <span x-text="h"></span>
+                                            <template x-if="currentData(name).formula_columns.includes(h)">
+                                                <span style="font-size:9px;font-weight:400;color:#fcc20f;">[f]</span>
+                                            </template>
+                                        </th>
+                                    </template>
+                                    <th style="width:100px;">Aksi</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <template x-for="rec in currentData(name).records" :key="rec.id">
+                                    <tr>
+                                        <td style="text-align:center;color:#6b7280;" x-text="rec.row_number"></td>
+                                        <template x-for="h in currentData(name).headers" :key="h">
+                                            <td x-show="!['oasis_sync_id','oasis_deleted_at','oasis_deleted_by'].includes(h)"
+                                                :style="'color:' + (currentData(name).formula_columns.includes(h) ? '#9ca3af' : '#000') + ';font-style:' + (currentData(name).formula_columns.includes(h) ? 'italic' : 'normal') + ';max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;'"
+                                                :title="rec.row_data[h] || ''"
+                                                x-text="rec.row_data[h] || ''">
+                                            </td>
+                                        </template>
+                                        <td style="white-space:nowrap;">
+                                            <button @click="editRecord(rec)"
+                                                    class="font-[Helvetica] font-bold underline" style="font-size:11px;color:#0000ee;margin-right:8px;">Edit</button>
+                                            <form method="POST" :action="editBaseUrl + '/' + rec.id" style="display:inline;" @submit.prevent="confirm('Hapus data ini?') && $el.submit()">
+                                                @csrf @method('DELETE')
+                                                <button type="submit" class="font-[Helvetica] font-bold underline" style="font-size:11px;color:#c0392b;">Hapus</button>
+                                            </form>
+                                        </td>
+                                    </tr>
+                                </template>
+                            </tbody>
+                        </table>
+                    </div>
+                </template>
+
+                <template x-if="isLoaded(name) && currentData(name).records.length === 0">
+                    <div class="border-2 border-black bg-white px-4 py-8 text-center">
+                        <p class="text-sm font-['Times_New_Roman'] italic" style="color:#9ca3af;">—</p>
+                    </div>
+                </template>
             </div>
-            @else
-            <div class="border-2 border-black bg-white px-4 py-8 text-center">
-                <p class="text-sm font-['Times_New_Roman'] italic" style="color:#9ca3af;">—</p>
-            </div>
-            @endif
-        </div>
-        @endforeach
+        </template>
 
         {{-- Edit Modal --}}
         <div x-cloak x-show="editing" class="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4"
              @keydown.escape.window="editing = null">
-            @foreach($sheetNames as $name)
-            @php
-                $rows = $records[$name] ?? [];
-                $sample = $rows[0] ?? null;
-                $headers = $sample ? $sample->headers : [];
-                $formulaColumns = $sample ? ($sample->formula_columns ?? []) : [];
-                $editableHeaders = array_values(array_filter($headers, fn($h) => !in_array($h, $formulaColumns, true) && !in_array($h, ['oasis_sync_id', 'oasis_deleted_at', 'oasis_deleted_by'], true)));
-            @endphp
-            @foreach($rows as $rec)
-            <div x-show="editing === {{ $rec->id }}" x-cloak
-                 @click.away="editing = null"
+            <div @click.away="editing = null"
                  class="w-full max-w-2xl border-2 border-black bg-white p-5 shadow-[8px_8px_0_0_#000] max-h-[80vh] overflow-y-auto">
                 <div class="flex items-center justify-between mb-4">
-                    <h2 class="font-[Helvetica] font-bold text-sm uppercase">Edit — {{ $name }}</h2>
+                    <h2 class="font-[Helvetica] font-bold text-sm uppercase" x-text="'Edit — ' + tab"></h2>
                     <button @click="editing = null" class="text-black font-bold text-lg leading-none">&times;</button>
                 </div>
-                <form method="POST" action="{{ route('database.records.update', $rec) }}">
+                <form method="POST" :action="editBaseUrl + '/' + editing.id">
                     @csrf @method('PUT')
                     <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                        @foreach($editableHeaders as $eh)
-                        <div>
-                            <label class="font-[Helvetica] font-bold text-[10px] uppercase block mb-0.5">{{ $eh }}</label>
-                            <input name="{{ $eh }}" value="{{ $rec->row_data[$eh] ?? '' }}"
-                                   class="w-full border-2 border-black px-2 py-1 text-sm font-['Times_New_Roman'] rounded-none">
-                        </div>
-                        @endforeach
+                        <template x-for="h in editableHeaders()" :key="h">
+                            <div>
+                                <label class="font-[Helvetica] font-bold text-[10px] uppercase block mb-0.5" x-text="h"></label>
+                                <input :name="h" x-model="editForm[h]"
+                                       class="w-full border-2 border-black px-2 py-1 text-sm font-['Times_New_Roman'] rounded-none">
+                            </div>
+                        </template>
                     </div>
                     <div class="flex items-center gap-2 mt-4">
                         <button type="submit" class="bg-black text-white px-6 py-1.5 text-sm font-[Helvetica] font-bold border-2 border-black rounded-none hover:bg-gray-800">Simpan</button>
@@ -206,48 +216,39 @@
                     </div>
                 </form>
             </div>
-            @endforeach
-            @endforeach
         </div>
 
         {{-- Add Modal --}}
         <div x-cloak x-show="adding" class="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4"
              @keydown.escape.window="adding = null">
-            @foreach($sheetNames as $name)
-            @php
-                $rows = $records[$name] ?? [];
-                $sample = $rows[0] ?? null;
-                $headers = $sample ? $sample->headers : [];
-                $formulaColumns = $sample ? ($sample->formula_columns ?? []) : [];
-                $editableHeaders = array_values(array_filter($headers, fn($h) => !in_array($h, $formulaColumns, true) && !in_array($h, ['oasis_sync_id', 'oasis_deleted_at', 'oasis_deleted_by'], true)));
-            @endphp
-            <div x-show="adding === '{{ $name }}'" x-cloak
-                 @click.away="adding = null"
-                 class="w-full max-w-2xl border-2 border-black bg-white p-5 shadow-[8px_8px_0_0_#000] max-h-[80vh] overflow-y-auto">
-                <div class="flex items-center justify-between mb-4">
-                    <h2 class="font-[Helvetica] font-bold text-sm uppercase">Tambah Data — {{ $name }}</h2>
-                    <button @click="adding = null" class="text-black font-bold text-lg leading-none">&times;</button>
-                </div>
-                <form method="POST" action="{{ route('database.records.store') }}">
-                    @csrf
-                    <input type="hidden" name="sheet_name" value="{{ $name }}">
-                    <input type="hidden" name="branch_id" value="{{ $selectedBranchId }}">
-                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                        @foreach($editableHeaders as $eh)
-                        <div>
-                            <label class="font-[Helvetica] font-bold text-[10px] uppercase block mb-0.5">{{ $eh }}</label>
-                            <input name="{{ $eh }}" value=""
-                                   class="w-full border-2 border-black px-2 py-1 text-sm font-['Times_New_Roman'] rounded-none">
+            <template x-for="name in sheetNameList" :key="name">
+                <div x-show="adding === name" x-cloak
+                     @click.away="adding = null"
+                     class="w-full max-w-2xl border-2 border-black bg-white p-5 shadow-[8px_8px_0_0_#000] max-h-[80vh] overflow-y-auto">
+                    <div class="flex items-center justify-between mb-4">
+                        <h2 class="font-[Helvetica] font-bold text-sm uppercase" x-text="'Tambah Data — ' + name"></h2>
+                        <button @click="adding = null" class="text-black font-bold text-lg leading-none">&times;</button>
+                    </div>
+                    <form method="POST" :action="'{{ url('database/records') }}'">
+                        @csrf
+                        <input type="hidden" name="sheet_name" :value="name">
+                        <input type="hidden" name="branch_id" value="{{ $selectedBranchId }}">
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            <template x-for="h in addHeaders(name)" :key="h">
+                                <div>
+                                    <label class="font-[Helvetica] font-bold text-[10px] uppercase block mb-0.5" x-text="h"></label>
+                                    <input :name="h" value=""
+                                           class="w-full border-2 border-black px-2 py-1 text-sm font-['Times_New_Roman'] rounded-none">
+                                </div>
+                            </template>
                         </div>
-                        @endforeach
-                    </div>
-                    <div class="flex items-center gap-2 mt-4">
-                        <button type="submit" class="bg-black text-white px-6 py-1.5 text-sm font-[Helvetica] font-bold border-2 border-black rounded-none hover:bg-gray-800">Simpan</button>
-                        <button type="button" @click="adding = null" class="bg-white text-black px-6 py-1.5 text-sm font-[Helvetica] font-bold border-2 border-black rounded-none hover:bg-gray-100">Batal</button>
-                    </div>
-                </form>
-            </div>
-            @endforeach
+                        <div class="flex items-center gap-2 mt-4">
+                            <button type="submit" class="bg-black text-white px-6 py-1.5 text-sm font-[Helvetica] font-bold border-2 border-black rounded-none hover:bg-gray-800">Simpan</button>
+                            <button type="button" @click="adding = null" class="bg-white text-black px-6 py-1.5 text-sm font-[Helvetica] font-bold border-2 border-black rounded-none hover:bg-gray-100">Batal</button>
+                        </div>
+                    </form>
+                </div>
+            </template>
         </div>
     </div>
     @elseif($selectedBranch)
@@ -272,3 +273,84 @@
     </div>
     @endif
 @endsection
+
+@push('scripts')
+<script>
+document.addEventListener('alpine:init', () => {
+    Alpine.data('databaseTabs', (config) => ({
+        tab: config.firstSheet,
+        branchId: config.branchId,
+        editBaseUrl: config.editBaseUrl,
+        loading: false,
+        editing: null,
+        editForm: {},
+        adding: null,
+        cache: {},
+        loaded: {},
+
+        init() {
+            this.cache[config.firstSheet] = {
+                headers: config.initialHeaders,
+                formula_columns: config.initialFormulaCols,
+                records: config.initialRecords,
+            };
+            this.loaded[config.firstSheet] = true;
+            this.sheetNameList = @json($sheetNames);
+        },
+
+        currentData(name) {
+            return this.cache[name] || null;
+        },
+
+        isLoaded(name) {
+            return !!this.loaded[name];
+        },
+
+        sheetCount(name) {
+            const s = this.cache[name];
+            return s ? (s.records ? s.records.length : 0) : 0;
+        },
+
+        async switchTab(name) {
+            this.tab = name;
+            if (this.loaded[name]) return;
+            this.loading = true;
+            try {
+                const res = await fetch(`/database/sheet/${this.branchId}/${encodeURIComponent(name)}`);
+                const data = await res.json();
+                this.cache[name] = data;
+                this.loaded[name] = true;
+            } catch (e) {
+                this.cache[name] = { headers: [], formula_columns: [], records: [] };
+                this.loaded[name] = true;
+            } finally {
+                this.loading = false;
+            }
+        },
+
+        editRecord(rec) {
+            this.editing = rec;
+            this.editForm = JSON.parse(JSON.stringify(rec.row_data));
+        },
+
+        editableHeaders() {
+            const sheet = this.cache[this.tab];
+            if (!sheet) return [];
+            return (sheet.headers || []).filter(h =>
+                !sheet.formula_columns.includes(h) &&
+                !['oasis_sync_id', 'oasis_deleted_at', 'oasis_deleted_by'].includes(h)
+            );
+        },
+
+        addHeaders(name) {
+            const sheet = this.cache[name];
+            if (!sheet) return [];
+            return (sheet.headers || []).filter(h =>
+                !sheet.formula_columns.includes(h) &&
+                !['oasis_sync_id', 'oasis_deleted_at', 'oasis_deleted_by'].includes(h)
+            );
+        },
+    }));
+});
+</script>
+@endpush

@@ -80,13 +80,17 @@ class DatabaseSheetSyncService
 
     private function fail(DatabaseSheetSyncStatus $status, Branch $branch, string $message): array
     {
+        $truncated = mb_strlen($message) > 5000
+            ? mb_substr($message, 0, 5000) . '...'
+            : $message;
+
         $status->update([
             'status' => 'failed',
-            'message' => $message,
+            'message' => $truncated,
             'finished_at' => now(),
         ]);
 
-        return ['ok' => false, 'branch' => $branch->name, 'message' => $message, 'summary' => []];
+        return ['ok' => false, 'branch' => $branch->name, 'message' => $truncated, 'summary' => []];
     }
 
     private function normalizedHeaders(array $headers): array

@@ -4,17 +4,14 @@ namespace App\Http\Controllers\Crm;
 
 use App\Http\Controllers\Controller;
 use App\Models\Branch;
-use App\Services\GoogleScriptService;
-use Illuminate\Http\Client\Pool;
+use App\Models\KonsumenProgressSheetRow;
+use App\Models\KonsumenProgressSyncStatus;
+use App\Services\KonsumenProgressSyncService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\Cache;
-use Illuminate\Support\Facades\Http;
 
 class KonsumenProgressController extends Controller
 {
-    private GoogleScriptService $googleScript;
-
     private array $stages = [
         'bi_checking' => 'BI Checking',
         'PSJB' => 'PSJB',
@@ -24,11 +21,6 @@ class KonsumenProgressController extends Controller
         'akad' => 'Akad',
         'bast' => 'BAST',
     ];
-
-    public function __construct(GoogleScriptService $googleScript)
-    {
-        $this->googleScript = $googleScript;
-    }
 
     public function index(Request $request)
     {
@@ -52,153 +44,157 @@ class KonsumenProgressController extends Controller
         $selectedBranch = $selectedBranchId ? Branch::find($selectedBranchId) : null;
         $pipeline = [];
         $errors = [];
+        $syncStatus = $selectedBranch
+            ? KonsumenProgressSyncStatus::where('branch_id', $selectedBranch->id)->first()
+            : null;
+        $isStale = $syncStatus?->finished_at
+            ? $syncStatus->finished_at->lt(now()->subMinutes((int) config('services.google_sheets.cache_stale_minutes', 30)))
+            : true;
 
-        if ($selectedBranch && $selectedBranch->sheet_id) {
-            if ($request->has('refresh')) {
-                Cache::forget('pipeline_' . $selectedBranch->sheet_id);
-            }
-            $pipeline = $this->fetchPipeline($selectedBranch->sheet_id, $errors);
-        }
-
-        return view('crm.konsumen-progress.index', compact('branches', 'selectedBranch', 'selectedBranchId', 'pipeline', 'errors'));
+        return view('crm.konsumen-progress.index', compact('branches', 'selectedBranch', 'selectedBranchId', 'pipeline', 'errors', 'syncStatus', 'isStale'));
     }
 
-    private function fetchPipeline(string $sheetId, array &$errors): array
+    public function sync(Request $request, KonsumenProgressSyncService $syncService)
     {
-        $cacheKey = 'pipeline_' . $sheetId;
+        $branch = $this->resolveBranch($request);
+        if (!$branch) {
+            return back()->with('error', 'Branch tidak ditemukan.');
+        }
 
-        return Cache::remember($cacheKey, now()->addMinutes(5), function () use ($sheetId, &$errors) {
-            $allNames = array_merge(['data_konsumen'], array_reverse(array_keys($this->stages)));
+        $result = $syncService->syncBranch($branch);
+        if (!$result['ok']) {
+            return back()->with('error', 'Sync gagal: ' . $result['message']);
+        }
 
-            $webhookUrl = config('services.google_script.webhook_url');
-            $results = [];
-            $toFetch = [];
-
-            foreach ($allNames as $name) {
-                $tabCacheKey = 'google_sheet_csv_' . $sheetId . '_' . $name;
-                $cached = Cache::get($tabCacheKey);
-                if ($cached !== null && isset($cached['success']) && $cached['success']) {
-                    $results[$name] = ['rows' => $cached['data'], 'error' => null];
-                } else {
-                    $toFetch[] = $name;
-                }
-            }
-
-            if (!empty($toFetch) && $webhookUrl) {
-                $responses = Http::pool(function (Pool $pool) use ($webhookUrl, $sheetId, $toFetch) {
-                    foreach ($toFetch as $name) {
-                        $req = $pool->as($name)->timeout(30)
-                            ->withHeaders(['Accept' => 'application/json', 'Content-Type' => 'application/json']);
-                        if (!config('services.google_script.verify_ssl')) {
-                            $req = $req->withoutVerifying();
-                        }
-                        $req->get($webhookUrl, [
-                            'type' => 'data',
-                            'sheet_id' => $sheetId,
-                            'sheet_name' => $name,
-                        ]);
-                    }
-                });
-
-                foreach ($toFetch as $name) {
-                    $resp = $responses[$name] ?? null;
-                    $tabCacheKey = 'google_sheet_csv_' . $sheetId . '_' . $name;
-
-                    if ($resp instanceof \Illuminate\Http\Client\Response) {
-                        if ($resp->ok() && str_contains($resp->header('Content-Type') ?? '', 'csv')) {
-                            $body = $resp->body();
-                            $lines = explode("\n", trim($body));
-                            $rows = count($lines) >= 2 ? $this->parseCsv($lines) : [];
-                            Cache::put($tabCacheKey, ['success' => true, 'data' => $rows], now()->addMinutes(5));
-                            $results[$name] = ['rows' => $rows, 'error' => null];
-                        } else {
-                            $errMsg = 'HTTP ' . $resp->status() . ': ' . substr($resp->body(), 0, 200);
-                            $results[$name] = ['rows' => [], 'error' => $errMsg];
-                        }
-                    } elseif ($resp instanceof \Throwable) {
-                        $results[$name] = ['rows' => [], 'error' => $resp->getMessage()];
-                    } else {
-                        $results[$name] = ['rows' => [], 'error' => 'Tidak ada respons dari server'];
-                    }
-                }
-            }
-
-            $namaMap = [];
-            $phoneMap = [];
-            $konsumenData = $results['data_konsumen'] ?? null;
-            if ($konsumenData && !$konsumenData['error']) {
-                foreach ($konsumenData['rows'] as $row) {
-                    $kav = trim($row['id_kavling'] ?? '');
-                    if ($kav !== '') {
-                        $namaMap[$kav] = $row['nama_konsumen'] ?? null;
-                        $phoneMap[$kav] = $row['no_hp'] ?? null;
-                    }
-                }
-            } else {
-                $errors[] = 'data_konsumen: ' . ($konsumenData['error'] ?? 'Gagal memuat data');
-            }
-
-            $seen = [];
-            $pipeline = [];
-            foreach (array_reverse(array_keys($this->stages)) as $stageKey) {
-                $data = $results[$stageKey] ?? null;
-                $pipeline[$stageKey] = [];
-
-                if ($data && $data['error']) {
-                    $errors[] = $this->stages[$stageKey] . ': ' . $data['error'];
-                    continue;
-                }
-
-                foreach (($data['rows'] ?? []) as $row) {
-                    $kavling = trim($row['id_kavling'] ?? '');
-                    if ($kavling === '') continue;
-                    $nama = $namaMap[$kavling] ?? null;
-                    if ($nama === null) continue;
-                    if (isset($seen[$kavling])) continue;
-                    $seen[$kavling] = true;
-                    $pipeline[$stageKey][] = [
-                        'kavling' => $kavling,
-                        'nama' => $nama,
-                        'phone' => $phoneMap[$kavling] ?? null,
-                    ];
-                }
-            }
-
-            foreach (array_keys($this->stages) as $key) {
-                if (!isset($pipeline[$key])) {
-                    $pipeline[$key] = [];
-                }
-            }
-
-            return $pipeline;
-        });
+        return back()->with('success', 'Sync selesai: ' . array_sum($result['summary']) . ' rows diperbarui.');
     }
 
-    private function parseCsv(array $lines): array
+    public function stage(Request $request)
     {
-        $rawHeaders = str_getcsv(array_shift($lines));
-        $headerIndices = [];
-        $headers = [];
-        $counts = [];
-        foreach ($rawHeaders as $i => $h) {
-            if ($h === '') continue;
-            if (!isset($counts[$h])) $counts[$h] = 0;
-            $counts[$h]++;
-            $header = $counts[$h] > 1 ? $h . '_' . $counts[$h] : $h;
-            $headerIndices[] = $i;
-            $headers[] = $header;
+        $stageKey = $request->query('stage', 'bast');
+        if (!array_key_exists($stageKey, $this->stages)) {
+            abort(404);
         }
-        $rows = [];
-        foreach ($lines as $line) {
-            $line = trim($line);
-            if ($line === '') continue;
-            $cells = str_getcsv($line);
-            $row = [];
-            foreach ($headerIndices as $j => $idx) {
-                $row[$headers[$j]] = $cells[$idx] ?? '';
+
+        $branch = $this->resolveBranch($request);
+        if (!$branch || !$branch->sheet_id) {
+            return response()->json([
+                'ok' => false,
+                'items' => [],
+                'count' => 0,
+                'error' => 'Database branch belum tersedia.',
+            ], 422);
+        }
+
+        $result = $this->fetchStage($branch, $stageKey);
+
+        return response()->json([
+            'ok' => $result['error'] === null,
+            'items' => $result['items'],
+            'count' => count($result['items']),
+            'error' => $result['error'],
+            'warnings' => $result['warnings'],
+            'stale' => $result['stale'],
+        ], $result['error'] ? 502 : 200);
+    }
+
+    private function resolveBranch(Request $request): ?Branch
+    {
+        $user = Auth::user();
+        $branchId = $user->canViewAllBranches() ? $request->input('branch_id') : $user->branch_id;
+
+        if (!$branchId && $user->canViewAllBranches()) {
+            $branchId = Branch::where('is_active', true)->value('id');
+        }
+
+        return $branchId ? Branch::find($branchId) : null;
+    }
+
+    private function fetchStage(Branch $branch, string $stageKey): array
+    {
+        $warnings = [];
+        $stale = $this->isBranchCacheStale($branch);
+        $konsumenRows = $this->sheetRows($branch, 'data_konsumen');
+        $stageRows = $this->sheetRows($branch, $stageKey);
+
+        if (empty($konsumenRows)) {
+            return [
+                'items' => [],
+                'error' => 'Data lokal belum tersedia. Klik Sync Sekarang terlebih dahulu.',
+                'warnings' => [],
+                'stale' => $stale,
+            ];
+        }
+
+        $namaMap = [];
+        $phoneMap = [];
+        foreach ($konsumenRows as $row) {
+            $kav = trim($row['id_kavling'] ?? '');
+            if ($kav !== '') {
+                $namaMap[$kav] = $row['nama_konsumen'] ?? null;
+                $phoneMap[$kav] = $row['no_hp'] ?? null;
             }
-            $rows[] = $row;
         }
-        return $rows;
+
+        $laterKavlings = [];
+        foreach ($this->laterStages($stageKey) as $laterStage) {
+            foreach ($this->sheetRows($branch, $laterStage) as $row) {
+                $kavling = trim($row['id_kavling'] ?? '');
+                if ($kavling !== '') {
+                    $laterKavlings[$kavling] = true;
+                }
+            }
+        }
+
+        $items = [];
+        $seen = [];
+        foreach ($stageRows as $row) {
+            $kavling = trim($row['id_kavling'] ?? '');
+            if ($kavling === '' || isset($seen[$kavling]) || isset($laterKavlings[$kavling])) continue;
+
+            $nama = $namaMap[$kavling] ?? null;
+            if ($nama === null) continue;
+
+            $seen[$kavling] = true;
+            $items[] = [
+                'kavling' => $kavling,
+                'nama' => $nama,
+                'phone' => $phoneMap[$kavling] ?? null,
+            ];
+        }
+
+        return [
+            'items' => $items,
+            'error' => null,
+            'warnings' => $warnings,
+            'stale' => $stale,
+        ];
+    }
+
+    private function laterStages(string $stageKey): array
+    {
+        $ordered = array_keys($this->stages);
+        $index = array_search($stageKey, $ordered, true);
+
+        return $index === false ? [] : array_slice($ordered, $index + 1);
+    }
+
+    private function sheetRows(Branch $branch, string $sheetName): array
+    {
+        return KonsumenProgressSheetRow::query()
+            ->where('branch_id', $branch->id)
+            ->where('sheet_name', $sheetName)
+            ->orderBy('id')
+            ->get()
+            ->pluck('row_data')
+            ->all();
+    }
+
+    private function isBranchCacheStale(Branch $branch): bool
+    {
+        $status = KonsumenProgressSyncStatus::where('branch_id', $branch->id)->first();
+
+        return !$status?->finished_at
+            || $status->finished_at->lt(now()->subMinutes((int) config('services.google_sheets.cache_stale_minutes', 30)));
     }
 }

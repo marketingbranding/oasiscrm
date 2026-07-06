@@ -1,0 +1,32 @@
+<?php
+
+namespace App\Models;
+
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+
+class KonsumenProgressSyncStatus extends Model
+{
+    protected $fillable = [
+        'branch_id',
+        'status',
+        'message',
+        'summary',
+        'started_at',
+        'finished_at',
+    ];
+
+    protected function casts(): array
+    {
+        return [
+            'summary' => 'array',
+            'started_at' => 'datetime',
+            'finished_at' => 'datetime',
+        ];
+    }
+
+    public function branch(): BelongsTo
+    {
+        return $this->belongsTo(Branch::class);
+    }
+}

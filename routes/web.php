@@ -39,6 +39,8 @@ Route::middleware(['auth', 'verified', 'password.changed'])->group(function () {
     Route::get('/database/fetch', [DatabaseController::class, 'fetch'])->name('database.fetch');
 
     Route::get('/konsumen-progress', [KonsumenProgressController::class, 'index'])->name('konsumen-progress.index');
+    Route::get('/konsumen-progress/stage', [KonsumenProgressController::class, 'stage'])->name('konsumen-progress.stage');
+    Route::post('/konsumen-progress/sync', [KonsumenProgressController::class, 'sync'])->name('konsumen-progress.sync');
 
     Route::post('lead-sources/bulk-delete', [LeadSourceController::class, 'bulkDestroy'])->name('lead-sources.bulk-destroy');
     Route::post('lead-sources/{leadSource}/toggle-active', [LeadSourceController::class, 'toggleActive'])->name('lead-sources.toggle-active');

@@ -26,7 +26,14 @@ return [
     'google_script' => [
         'webhook_url' => env('GOOGLE_SCRIPT_WEBHOOK_URL'),
         'timeout' => env('GOOGLE_SCRIPT_TIMEOUT', 30),
+        'stage_timeout' => env('GOOGLE_SCRIPT_STAGE_TIMEOUT', 12),
         'verify_ssl' => env('GOOGLE_SCRIPT_VERIFY_SSL', false),
+    ],
+
+    'google_sheets' => [
+        'credentials_path' => env('GOOGLE_SHEETS_CREDENTIALS_PATH', storage_path('app/google/service-account.json')),
+        'cache_stale_minutes' => env('GOOGLE_SHEETS_CACHE_STALE_MINUTES', 30),
+        'verify_ssl' => env('GOOGLE_SHEETS_VERIFY_SSL', true),
     ],
 
 ];

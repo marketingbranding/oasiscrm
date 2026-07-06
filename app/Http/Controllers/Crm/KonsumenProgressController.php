@@ -51,6 +51,10 @@ class KonsumenProgressController extends Controller
             ? $syncStatus->finished_at->lt(now()->subMinutes((int) config('services.google_sheets.cache_stale_minutes', 30)))
             : true;
 
+        if ($selectedBranch && $selectedBranch->sheet_id) {
+            $pipeline = $this->fetchPipeline($selectedBranch, $errors);
+        }
+
         return view('crm.konsumen-progress.index', compact('branches', 'selectedBranch', 'selectedBranchId', 'pipeline', 'errors', 'syncStatus', 'isStale'));
     }
 
@@ -177,6 +181,67 @@ class KonsumenProgressController extends Controller
         $index = array_search($stageKey, $ordered, true);
 
         return $index === false ? [] : array_slice($ordered, $index + 1);
+    }
+
+    private function fetchPipeline(Branch $branch, array &$errors): array
+    {
+        $rowsBySheet = $this->allSheetRows($branch);
+        $konsumenRows = $rowsBySheet['data_konsumen'] ?? [];
+
+        if (empty($konsumenRows)) {
+            $errors[] = 'Data lokal belum tersedia. Klik Sync Sekarang terlebih dahulu.';
+        }
+
+        $namaMap = [];
+        $phoneMap = [];
+        foreach ($konsumenRows as $row) {
+            $kav = trim($row['id_kavling'] ?? '');
+            if ($kav !== '') {
+                $namaMap[$kav] = $row['nama_konsumen'] ?? null;
+                $phoneMap[$kav] = $row['no_hp'] ?? null;
+            }
+        }
+
+        $seen = [];
+        $pipeline = [];
+        foreach (array_reverse(array_keys($this->stages)) as $stageKey) {
+            $pipeline[$stageKey] = [];
+            foreach (($rowsBySheet[$stageKey] ?? []) as $row) {
+                $kavling = trim($row['id_kavling'] ?? '');
+                if ($kavling === '' || isset($seen[$kavling])) continue;
+
+                $nama = $namaMap[$kavling] ?? null;
+                if ($nama === null) continue;
+
+                $seen[$kavling] = true;
+                $pipeline[$stageKey][] = [
+                    'kavling' => $kavling,
+                    'nama' => $nama,
+                    'phone' => $phoneMap[$kavling] ?? null,
+                ];
+            }
+        }
+
+        foreach (array_keys($this->stages) as $stageKey) {
+            $pipeline[$stageKey] ??= [];
+        }
+
+        return $pipeline;
+    }
+
+    private function allSheetRows(Branch $branch): array
+    {
+        $rowsBySheet = [];
+        $rows = KonsumenProgressSheetRow::query()
+            ->where('branch_id', $branch->id)
+            ->orderBy('id')
+            ->get(['sheet_name', 'row_data']);
+
+        foreach ($rows as $row) {
+            $rowsBySheet[$row->sheet_name][] = $row->row_data;
+        }
+
+        return $rowsBySheet;
     }
 
     private function sheetRows(Branch $branch, string $sheetName): array

@@ -87,15 +87,16 @@
 
         $darkTextStages = ['proses_bank', 'ppjb_dev', 'akad'];
         $defaultStage = 'bast';
+        foreach (array_reverse(array_keys($stages)) as $key) {
+            if (!empty($pipeline[$key] ?? [])) {
+                $defaultStage = $key;
+                break;
+            }
+        }
     @endphp
 
     @if($selectedBranch && $selectedBranch->sheet_id)
-    <div x-data="konsumenProgress({
-            endpoint: '{{ route('konsumen-progress.stage') }}',
-            branchId: '{{ $selectedBranchId }}',
-            initialStage: '{{ $defaultStage }}',
-            refresh: {{ request()->boolean('refresh') ? 'true' : 'false' }}
-        })" x-init="init()">
+    <div x-data="{ stage: '{{ $defaultStage }}' }">
         <style>
             [x-cloak] { display: none !important; }
             .tabs-scroll { scrollbar-width: none; -ms-overflow-style: none; }
@@ -104,130 +105,46 @@
 
         <div class="flex flex-wrap border-b-2 border-black mb-2">
             @foreach($stages as $key => $cfg)
-            <button @click="selectStage('{{ $key }}')"
+            @php $count = count($pipeline[$key] ?? []); @endphp
+            <button @click="stage = '{{ $key }}'"
                     :class="stage === '{{ $key }}' ? 'border-b-transparent' : 'bg-white'"
                     :style="stage === '{{ $key }}' ? 'background-color: {{ $cfg['color'] }}; color: {{ in_array($key, $darkTextStages) ? 'white' : 'black' }};' : 'color: black;'"
                     class="relative mb-[-2px] z-10 px-3 py-2 border-2 border-black text-[10px] sm:text-xs font-[Helvetica] font-bold uppercase whitespace-nowrap flex items-center gap-1.5 cursor-pointer shrink-0">
                 <span>{{ $cfg['label'] }}</span>
-                <span class="bg-[#c0392b] text-white text-[10px] font-[Helvetica] font-bold border border-white flex items-center justify-center min-w-5 h-5 px-1" x-text="counts['{{ $key }}'] ?? '...'">...</span>
+                <span class="bg-[#c0392b] text-white text-[10px] font-[Helvetica] font-bold border border-white flex items-center justify-center min-w-5 h-5 px-1">{{ $count }}</span>
             </button>
             @endforeach
         </div>
 
-        <div x-cloak
+        @foreach($stages as $key => $cfg)
+        @php $items = $pipeline[$key] ?? []; @endphp
+        <div x-show="stage === '{{ $key }}'"
+             x-cloak
              x-transition:enter="transition ease-out duration-200"
              x-transition:enter-start="opacity-0"
              x-transition:enter-end="opacity-100">
-            <template x-if="loading[stage]">
-                <div class="border-2 border-black bg-white px-4 py-8 text-center">
-                    <p class="font-[Helvetica] text-xs font-bold uppercase tracking-wider">Memuat data stage...</p>
-                    <p class="mt-2 font-['Times_New_Roman'] text-sm text-gray-600">Tab lain tidak ikut dimuat supaya halaman tetap cepat.</p>
-                </div>
-            </template>
-
-            <template x-if="errors[stage] && !loading[stage]">
-                <div class="border-2 border-black bg-[#d77a7a] px-4 py-3 font-['Times_New_Roman'] text-sm">
-                    <strong class="font-bold">Gagal memuat stage:</strong>
-                    <span x-text="errors[stage]"></span>
-                    <button type="button" @click="reloadStage(stage)" class="ml-3 bg-white text-black px-3 py-1 text-xs font-[Helvetica] font-bold border-2 border-black rounded-none hover:bg-gray-100">Coba Lagi</button>
-                </div>
-            </template>
-
-            <template x-if="warnings[stage]?.length && !loading[stage] && !errors[stage]">
-                <div class="border-2 border-black bg-[#fcc20f] px-4 py-3 mb-3 font-['Times_New_Roman'] text-sm">
-                    <strong class="font-bold">Sebagian data pembanding gagal dimuat.</strong>
-                    <span>Data stage tetap ditampilkan, tetapi hitungan bisa berubah setelah cache berikutnya.</span>
-                </div>
-            </template>
-
-            <template x-if="stale[stage] && !loading[stage] && !errors[stage]">
-                <div class="border-2 border-black bg-[#b3bd95] px-4 py-3 mb-3 font-['Times_New_Roman'] text-sm">
-                    Menampilkan cache terakhir karena Google Script sempat lambat/tidak merespons.
-                </div>
-            </template>
-
-            <template x-if="!loading[stage] && !errors[stage] && (items[stage] || []).length > 0">
+            @if(count($items) > 0)
             <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
-                <template x-for="item in items[stage]" :key="item.kavling">
-                    <div class="border-2 border-black bg-white px-3 py-2 hover:bg-gray-50">
-                        <div class="font-['Times_New_Roman'] font-bold text-sm truncate" :title="item.nama" x-text="item.nama"></div>
-                        <div class="font-['Helvetica'] text-[11px] text-gray-600 mt-0.5 truncate" :title="item.kavling" x-text="item.kavling"></div>
-                        <template x-if="item.phone">
-                            <div class="font-['Helvetica'] text-[11px] text-gray-600 mt-0.5">
-                                <a :href="'tel:' + item.phone" class="underline hover:text-[#5d8e8e]" x-text="item.phone"></a>
-                            </div>
-                        </template>
+                @foreach($items as $item)
+                <div class="border-2 border-black bg-white px-3 py-2 hover:bg-gray-50">
+                    <div class="font-['Times_New_Roman'] font-bold text-sm truncate" title="{{ $item['nama'] }}">{{ $item['nama'] }}</div>
+                    <div class="font-['Helvetica'] text-[11px] text-gray-600 mt-0.5 truncate" title="{{ $item['kavling'] }}">{{ $item['kavling'] }}</div>
+                    @if(!empty($item['phone']))
+                    <div class="font-['Helvetica'] text-[11px] text-gray-600 mt-0.5">
+                        <a href="tel:{{ $item['phone'] }}" class="underline hover:text-[#5d8e8e]">{{ $item['phone'] }}</a>
                     </div>
-                </template>
-            </div>
-            </template>
-
-            <template x-if="!loading[stage] && !errors[stage] && loaded[stage] && (items[stage] || []).length === 0">
-                <div class="border-2 border-black bg-white px-4 py-8 text-center">
-                <p class="text-sm text-gray-400 font-['Times_New_Roman'] italic">—</p>
+                    @endif
                 </div>
-            </template>
+                @endforeach
+            </div>
+            @else
+            <div class="border-2 border-black bg-white px-4 py-8 text-center">
+                <p class="text-sm text-gray-400 font-['Times_New_Roman'] italic">—</p>
+            </div>
+            @endif
         </div>
+        @endforeach
     </div>
-    <script>
-        function konsumenProgress(config) {
-            return {
-                stage: config.initialStage,
-                items: {},
-                counts: {},
-                loading: {},
-                loaded: {},
-                errors: {},
-                warnings: {},
-                stale: {},
-
-                init() {
-                    this.loadStage(this.stage);
-                },
-
-                selectStage(stage) {
-                    this.stage = stage;
-                    this.loadStage(stage);
-                },
-
-                reloadStage(stage) {
-                    delete this.loaded[stage];
-                    this.loadStage(stage, true);
-                },
-
-                loadStage(stage, force = false) {
-                    if (this.loaded[stage] && !force) return;
-
-                    this.loading[stage] = true;
-                    this.errors[stage] = null;
-                    const params = new URLSearchParams({ stage, branch_id: config.branchId });
-                    if (config.refresh || force) params.set('refresh', '1');
-
-                    fetch(`${config.endpoint}?${params.toString()}`, { headers: { Accept: 'application/json' } })
-                        .then(async (response) => {
-                            const payload = await response.json().catch(() => ({}));
-                            if (!response.ok || !payload.ok) throw new Error(payload.error || 'Gagal memuat data.');
-                            return payload;
-                        })
-                        .then((payload) => {
-                            this.items[stage] = payload.items || [];
-                            this.counts[stage] = payload.count || 0;
-                            this.warnings[stage] = payload.warnings || [];
-                            this.stale[stage] = !!payload.stale;
-                            this.loaded[stage] = true;
-                        })
-                        .catch((error) => {
-                            this.items[stage] = [];
-                            this.counts[stage] = 0;
-                            this.errors[stage] = error.message;
-                        })
-                        .finally(() => {
-                            this.loading[stage] = false;
-                        });
-                }
-            };
-        }
-    </script>
     @else
     <div class="border-2 border-black bg-white px-6 py-8 text-center">
         <p class="font-['Times_New_Roman'] text-sm">

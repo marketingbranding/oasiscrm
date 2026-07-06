@@ -10,6 +10,7 @@
     <link rel="icon" type="image/svg+xml" href="{{ asset('favicon.svg') }}">
     @vite(['resources/css/app.css', 'resources/js/app.js'])
     <style>
+        [x-cloak] { display: none !important; }
         @media (max-width: 767px) {
             button, select, input, textarea, a, [class*="py-1"] {
                 min-height: 44px !important;

@@ -114,7 +114,7 @@
                             @php
                                 $hasItems = $cell['day'] && $cell['items']->count() > 0;
                             @endphp
-                            <td class="p-1.5 align-top border border-black {{ $cell['day'] ? 'bg-white' : 'bg-gray-100' }} {{ $cell['isToday'] ? 'ring-2 ring-inset ring-[#e91d2a]' : '' }}" style="height: 124px; vertical-align: top;">
+                            <td class="p-1.5 align-top border border-black {{ $cell['day'] ? 'bg-white' : 'bg-gray-100' }} {{ $cell['isToday'] ? 'ring-2 ring-inset ring-[#e91d2a]' : '' }}" style="height: 140px; vertical-align: top;">
                                 @if($cell['day'])
                                     <div class="flex items-center justify-between mb-1">
                                         <span class="font-['Arial_Black'] font-black text-sm {{ $cell['isToday'] ? 'text-[#e91d2a]' : 'text-black' }}">{{ $cell['day'] }}</span>
@@ -126,9 +126,11 @@
                                         @php
                                             $deadline = $item->deadline_date ?? $item->scheduled_date;
                                             $isOverdue = $deadline->isPast() && !$deadline->isToday() && $item->status !== 'completed';
+                                            $isApproaching = !$isOverdue && $item->status !== 'completed' && $deadline->isFuture() && $deadline->diffInDays(now()) <= 3;
+                                            $daysLeft = $isApproaching ? round($deadline->diffInDays(now()), 1) : null;
                                             $duration = $item->start_date ? $item->start_date->diffInDays($deadline) : null;
                                         @endphp
-                                        <div class="{{ $statusColors[$item->status] ?? 'bg-gray-200' }} border {{ $isOverdue ? 'border-[#e91d2a] border-2' : 'border-black' }} mb-1 rounded-none text-[10px] leading-tight {{ $item->status === 'completed' ? 'opacity-70' : '' }}">
+                                        <div class="{{ $statusColors[$item->status] ?? 'bg-gray-200' }} border {{ $isOverdue ? 'border-[#e91d2a] border-2' : 'border-black' }} mb-1 rounded-none text-xs leading-tight {{ $item->status === 'completed' ? 'opacity-70' : '' }} {{ $isApproaching ? 'border-t-2 border-t-black' : '' }}">
                                             <a href="#"
                                                @click.prevent="openDetail({{ $item->id }})"
                                                class="block px-1 py-0.5 font-[Helvetica] font-bold text-black hover:opacity-80"
@@ -136,6 +138,11 @@
                                                 <span class="block truncate">{{ $item->title }}</span>
                                                 <span class="block font-['Times_New_Roman'] font-normal truncate">{{ $item->project_name ?? 'Tanpa proyek' }} @if($item->pic_names && count($item->pic_names) > 0) — {{ implode(', ', $item->pic_names) }} @endif</span>
                                                 <span class="block font-[Helvetica] font-bold">{{ $statusLabels[$item->status] ?? strtoupper($item->status) }} · {{ $priorityLabels[$item->priority] ?? strtoupper($item->priority ?? 'medium') }} @if($duration !== null) · {{ $duration }}d @endif</span>
+                                                @if($isApproaching && $daysLeft !== null)
+                                                    <span class="block text-[10px] font-[Helvetica] font-bold {{ $daysLeft == 0 ? 'text-[#e91d2a]' : 'text-black' }}">
+                                                        {{ $daysLeft == 0 ? 'Deadline hari ini!' : ($daysLeft == 1 ? 'Besok deadline!' : $daysLeft . ' hari lagi') }}
+                                                    </span>
+                                                @endif
                                             </a>
                                             <form method="POST" action="{{ route('content-calendar.destroy', ['content_calendar' => $item->id]) }}" onsubmit="return confirm('Hapus task ini?')" class="border-t border-black">
                                                 @csrf
@@ -172,6 +179,7 @@
         <span class="flex items-center gap-1"><span class="bg-[#b3bd95] border border-black px-2 py-0.5">COMPLETED</span> Completed</span>
         <span class="flex items-center gap-1"><span class="bg-[#d77a7a] border border-black px-2 py-0.5">LOST TRACK</span> Lost Track</span>
         <span class="flex items-center gap-1"><span class="border-2 border-[#e91d2a] px-2 py-0.5">OVERDUE</span> Past deadline</span>
+        <span class="flex items-center gap-1"><span class="border-t-2 border-t-black border border-black px-2 py-0.5">APPROACHING</span> ≤3 hari</span>
     </div>
 
     {{-- Detail Modal --}}
@@ -208,11 +216,11 @@
                         </div>
                         <div>
                             <span class="font-mono text-[10px] tracking-wider uppercase text-gray-500">Mulai</span>
-                            <p x-text="task.start_date || '—'" class="mt-0.5 text-gray-900"></p>
+                            <p x-text="formatDate(task.start_date)" class="mt-0.5 text-gray-900"></p>
                         </div>
                         <div>
                             <span class="font-mono text-[10px] tracking-wider uppercase text-gray-500">Deadline</span>
-                            <p x-text="task.deadline_date || task.scheduled_date || '—'" class="mt-0.5 text-gray-900"></p>
+                            <p x-text="formatDate(task.deadline_date || task.scheduled_date)" class="mt-0.5 text-gray-900"></p>
                         </div>
                         <div>
                             <span class="font-mono text-[10px] tracking-wider uppercase text-gray-500">Status</span>
@@ -264,6 +272,10 @@ function taskDetailModal() {
         loading: false,
         task: null,
         statusColors: { todo: '#9ab6c8', in_progress: '#e6915d', completed: '#b3bd95', lost_track: '#d77a7a' },
+        formatDate(dateStr) {
+            if (!dateStr) return '—';
+            return new Date(dateStr).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' });
+        },
         openDetail(id) {
             this.open = true;
             this.loading = true;

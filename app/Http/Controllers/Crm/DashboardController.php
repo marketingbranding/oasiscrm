@@ -39,6 +39,8 @@ class DashboardController extends Controller
                 ->when($selectedProject, fn($q) => $q->where('project_name', $selectedProject));
 
             $totalContent = (clone $baseQuery)->count();
+            $totalPosted = (clone $baseQuery)->where('status', 'completed')->count();
+            $completionRate = $totalContent > 0 ? round($totalPosted / $totalContent * 100) : 0;
 
             $upcomingContent = (clone $baseQuery)
                 ->where('scheduled_date', '>=', now()->today())
@@ -48,13 +50,20 @@ class DashboardController extends Controller
                 ->get();
 
             $overdueCount = (clone $baseQuery)->whereDate('deadline_date', '<', now())->where('status', '!=', 'completed')->count();
-            $upcomingWeekCount = (clone $baseQuery)->whereDate('deadline_date', '>=', now())->whereDate('deadline_date', '<=', now()->addDays(7))->where('status', '!=', 'completed')->count();
+            $upcomingWeek = (clone $baseQuery)
+                ->whereDate('deadline_date', '>=', now())
+                ->whereDate('deadline_date', '<=', now()->addDays(7))
+                ->where('status', '!=', 'completed')
+                ->orderBy('deadline_date')
+                ->get();
+            $upcomingWeekCount = $upcomingWeek->count();
             $topPics = $this->getTopPics($selectedBranchId, $selectedProject);
 
             $branchStatuses = Branch::withCount(['contentItems'])->where('is_active', true)->get()->map(function ($b) use ($selectedProject) {
                 $q = ContentItem::where('branch_id', $b->id);
                 if ($selectedProject) { $q->where('project_name', $selectedProject); }
                 $b->posted_count = (clone $q)->where('status', 'completed')->count();
+                $b->completion_rate = $b->content_items_count > 0 ? round($b->posted_count / $b->content_items_count * 100) : 0;
                 return $b;
             });
 
@@ -62,7 +71,7 @@ class DashboardController extends Controller
             $overdueContent = $this->getOverdueContent($selectedBranchId, $selectedProject);
             $recentActivity = $this->getRecentActivity($selectedBranchId, $selectedProject);
 
-            return view('crm.dashboard', compact('branches', 'projects', 'branch', 'selectedBranchId', 'selectedProject', 'totalContent', 'upcomingContent', 'branchStatuses', 'todayAgenda', 'overdueContent', 'recentActivity', 'overdueCount', 'upcomingWeekCount', 'topPics'));
+            return view('crm.dashboard', compact('branches', 'projects', 'branch', 'selectedBranchId', 'selectedProject', 'totalContent', 'totalPosted', 'completionRate', 'upcomingContent', 'upcomingWeek', 'branchStatuses', 'todayAgenda', 'overdueContent', 'recentActivity', 'overdueCount', 'upcomingWeekCount', 'topPics'));
         }
 
         $branch = $user->branch;
@@ -80,17 +89,24 @@ class DashboardController extends Controller
             ->when($selectedProject, fn($q) => $q->where('project_name', $selectedProject));
 
         $totalContent = (clone $baseQuery)->count();
-        $upcomingContent = (clone $baseQuery)->where('scheduled_date', '>=', now()->today())->where('status', '!=', 'completed')->orderBy('scheduled_date')->take(5)->get();
         $totalPosted = (clone $baseQuery)->where('status', 'completed')->count();
+        $completionRate = $totalContent > 0 ? round($totalPosted / $totalContent * 100) : 0;
+        $upcomingContent = (clone $baseQuery)->where('scheduled_date', '>=', now()->today())->where('status', '!=', 'completed')->orderBy('scheduled_date')->take(5)->get();
         $overdueCount = (clone $baseQuery)->whereDate('deadline_date', '<', now())->where('status', '!=', 'completed')->count();
-        $upcomingWeekCount = (clone $baseQuery)->whereDate('deadline_date', '>=', now())->whereDate('deadline_date', '<=', now()->addDays(7))->where('status', '!=', 'completed')->count();
+        $upcomingWeek = (clone $baseQuery)
+            ->whereDate('deadline_date', '>=', now())
+            ->whereDate('deadline_date', '<=', now()->addDays(7))
+            ->where('status', '!=', 'completed')
+            ->orderBy('deadline_date')
+            ->get();
+        $upcomingWeekCount = $upcomingWeek->count();
         $topPics = $this->getTopPics($branch->id, $selectedProject);
 
         $todayAgenda = $this->getTodayAgenda($branch->id, $selectedProject);
         $overdueContent = $this->getOverdueContent($branch->id, $selectedProject);
         $recentActivity = $this->getRecentActivity($branch->id, $selectedProject);
 
-        return view('crm.dashboard', compact('branch', 'projects', 'totalContent', 'upcomingContent', 'totalPosted', 'selectedProject', 'todayAgenda', 'overdueContent', 'recentActivity', 'overdueCount', 'upcomingWeekCount', 'topPics'));
+        return view('crm.dashboard', compact('branch', 'projects', 'totalContent', 'totalPosted', 'completionRate', 'upcomingContent', 'upcomingWeek', 'selectedProject', 'todayAgenda', 'overdueContent', 'recentActivity', 'overdueCount', 'upcomingWeekCount', 'topPics'));
     }
 
     private function getTodayAgenda($branchId = null, $projectName = null)
@@ -127,11 +143,11 @@ class DashboardController extends Controller
 
     private function getOverdueContent($branchId = null, $projectName = null)
     {
-        return ContentItem::whereDate('scheduled_date', '<', today())
+        return ContentItem::whereDate('deadline_date', '<', today())
             ->where('status', '!=', 'completed')
             ->when($branchId, fn($q) => $q->where('branch_id', $branchId))
             ->when($projectName, fn($q) => $q->where('project_name', $projectName))
-            ->orderBy('scheduled_date')
+            ->orderBy('deadline_date')
             ->take(5)
             ->get();
     }

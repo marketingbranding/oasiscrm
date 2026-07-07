@@ -35,6 +35,8 @@ Route::middleware(['auth', 'verified', 'password.changed'])->group(function () {
     Route::bind('content_calendar', fn($value) => \App\Models\ContentItem::findOrFail($value));
     Route::get('content-calendar/export', [ContentCalendarController::class, 'export'])->name('content-calendar.export');
     Route::get('content-calendar/{content_calendar}/detail', [ContentCalendarController::class, 'detail'])->name('content-calendar.detail');
+    Route::post('content-calendar/bulk-update', [ContentCalendarController::class, 'bulkUpdate'])->name('content-calendar.bulk-update');
+    Route::post('content-calendar/bulk-delete', [ContentCalendarController::class, 'bulkDelete'])->name('content-calendar.bulk-delete');
     Route::resource('content-calendar', ContentCalendarController::class);
 
     Route::get('/database', [DatabaseController::class, 'index'])->name('database.index');

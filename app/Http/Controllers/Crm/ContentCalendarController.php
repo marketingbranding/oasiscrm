@@ -58,6 +58,7 @@ class ContentCalendarController extends Controller
             ->whereMonth('scheduled_date', $month)
             ->orderBy('scheduled_date')
             ->get();
+        $allItemIds = $contentItems->pluck('id')->values()->toArray();
 
         $currentMonth = now()->setYear($year)->setMonth($month);
         $prevMonth = (clone $currentMonth)->subMonth();
@@ -88,7 +89,7 @@ class ContentCalendarController extends Controller
             $calendar[] = $weekDays;
         }
 
-        return view('crm.content-calendar.index', compact('calendar', 'currentMonth', 'prevMonth', 'nextMonth', 'branches', 'selectedBranchId', 'projects', 'selectedProject', 'selectedStatus', 'selectedPriority', 'selectedPic'));
+        return view('crm.content-calendar.index', compact('calendar', 'currentMonth', 'prevMonth', 'nextMonth', 'branches', 'selectedBranchId', 'projects', 'selectedProject', 'selectedStatus', 'selectedPriority', 'selectedPic', 'allItemIds'));
     }
 
     public function create()
@@ -211,6 +212,86 @@ class ContentCalendarController extends Controller
 
         $contentItem->delete();
         return redirect()->route('content-calendar.index', array_filter(request()->only(['month', 'year', 'branch_id', 'project_name', 'status', 'priority', 'pic'])))->with('success', 'Task berhasil dihapus.');
+    }
+
+    public function bulkUpdate(Request $request)
+    {
+        $data = $request->validate([
+            'ids' => ['required', 'array', 'min:1'],
+            'ids.*' => ['integer'],
+            'status' => ['nullable', 'in:todo,in_progress,completed,lost_track'],
+            'priority' => ['nullable', 'in:low,medium,high,urgent'],
+            'pic_names' => ['nullable', 'array'],
+            'pic_names.*' => ['nullable', 'string', 'max:255'],
+        ]);
+
+        $ids = $data['ids'];
+        $status = $data['status'] ?? null;
+        $priority = $data['priority'] ?? null;
+        $picNames = array_values(array_filter(array_map(
+            fn ($name) => trim((string) $name),
+            $data['pic_names'] ?? []
+        )));
+
+        $user = Auth::user();
+        $query = ContentItem::whereIn('id', $ids);
+
+        if (!$user->canViewAllBranches()) {
+            $query->where('branch_id', $user->branch_id);
+        }
+
+        $items = $query->get();
+
+        foreach ($items as $item) {
+            $updateData = [];
+
+            if ($status) {
+                $updateData['status'] = $status;
+                if ($status === 'completed') {
+                    $updateData['completed_at'] = $item->completed_at ?? now();
+                } elseif ($item->status === 'completed' && $status !== 'completed') {
+                    $updateData['completed_at'] = null;
+                }
+            }
+
+            if ($priority) {
+                $updateData['priority'] = $priority;
+            }
+
+            if (!empty($picNames)) {
+                $existingPics = is_array($item->pic_names) ? $item->pic_names : [];
+                $mergedPics = array_values(array_unique(array_merge($existingPics, $picNames)));
+                $updateData['pic_names'] = $mergedPics;
+            }
+
+            if (!empty($updateData)) {
+                $item->update($updateData);
+            }
+        }
+
+        return redirect()->back()->with('success', count($items) . ' task berhasil diperbarui.');
+    }
+
+    public function bulkDelete(Request $request)
+    {
+        $data = $request->validate([
+            'ids' => ['required', 'array', 'min:1'],
+            'ids.*' => ['integer'],
+        ]);
+
+        $ids = $data['ids'];
+
+        $user = Auth::user();
+        $query = ContentItem::whereIn('id', $ids);
+
+        if (!$user->canViewAllBranches()) {
+            $query->where('branch_id', $user->branch_id);
+        }
+
+        $count = $query->count();
+        $query->delete();
+
+        return redirect()->back()->with('success', $count . ' task berhasil dihapus.');
     }
 
     private function normalizeTaskData(array $data, ?ContentItem $existing = null): array

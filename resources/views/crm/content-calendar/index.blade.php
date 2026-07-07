@@ -3,7 +3,7 @@
 @section('title', 'Task Tracker - Oasis CRM')
 
 @section('content')
-    <div x-data="taskDetailModal()">
+    <div x-data="taskDetailModal(@json($allItemIds))">
     <x-crm.page-header color="#b3bd95" title="Task Tracker" />
 
     <div class="bg-white border-2 border-black p-3 mb-6">
@@ -73,6 +73,10 @@
             <a href="{{ route('content-calendar.index', array_filter(['month' => $nextMonth->month, 'year' => $nextMonth->year, 'branch_id' => request('branch_id'), 'project_name' => request('project_name'), 'status' => request('status'), 'priority' => request('priority'), 'pic' => request('pic')])) }}" class="bg-black text-white px-3 py-1.5 text-sm font-[Helvetica] font-bold border-2 border-black rounded-none hover:bg-gray-800">
                 Next →
             </a>
+            <label class="flex items-center gap-1 ml-4 cursor-pointer select-none">
+                <input type="checkbox" @change="selectAll()" :checked="selectedIds.length === allItemIds.length && allItemIds.length > 0" class="w-4 h-4 accent-[#b3bd95]">
+                <span class="font-[Helvetica] font-bold text-xs uppercase">Pilih Semua</span>
+            </label>
         </div>
     </div>
 
@@ -136,26 +140,34 @@
                                                     {{ $deadline->isToday() ? 'Deadline hari ini!' : ($deadline->isTomorrow() ? 'Besok deadline!' : $daysLeft . ' hari lagi') }}
                                                 </div>
                                             @endif
-                                            <a href="#"
-                                               @click.prevent="openDetail({{ $item->id }})"
-                                               class="block px-1 py-0.5 font-[Helvetica] font-bold text-black hover:opacity-80"
-                                               title="{{ $item->title }} — {{ $item->project_name ?? '(tanpa proyek)' }} — {{ $statusLabels[$item->status] ?? strtoupper($item->status) }}">
-                                                <span class="block truncate">{{ $item->title }}</span>
-                                                <span class="block font-['Times_New_Roman'] font-normal truncate">{{ $item->project_name ?? 'Tanpa proyek' }} @if($item->pic_names && count($item->pic_names) > 0) — {{ implode(', ', $item->pic_names) }} @endif</span>
-                                                <span class="block font-[Helvetica] font-bold">{{ $statusLabels[$item->status] ?? strtoupper($item->status) }} · {{ $priorityLabels[$item->priority] ?? strtoupper($item->priority ?? 'medium') }} @if($duration !== null) · {{ $duration }}d @endif</span>
-                                            </a>
-                                            <form method="POST" action="{{ route('content-calendar.destroy', ['content_calendar' => $item->id]) }}" onsubmit="return confirm('Hapus task ini?')" class="border-t border-black">
-                                                @csrf
-                                                @method('DELETE')
-                                                <input type="hidden" name="month" value="{{ request('month') }}">
-                                                <input type="hidden" name="year" value="{{ request('year') }}">
-                                                <input type="hidden" name="branch_id" value="{{ request('branch_id') }}">
-                                                <input type="hidden" name="project_name" value="{{ request('project_name') }}">
-                                                <input type="hidden" name="status" value="{{ request('status') }}">
-                                                <input type="hidden" name="priority" value="{{ request('priority') }}">
-                                                <input type="hidden" name="pic" value="{{ request('pic') }}">
-                                                <button type="submit" class="w-full px-1 py-0.5 font-bold text-black hover:text-[#e91d2a] leading-tight" title="Hapus">×</button>
-                                            </form>
+                                            <div class="flex items-start">
+                                                <input type="checkbox"
+                                                       :checked="isSelected({{ $item->id }})"
+                                                       @click.stop="toggle({{ $item->id }})"
+                                                       class="mt-1 ml-1 w-3 h-3 shrink-0 accent-[#b3bd95] cursor-pointer">
+                                                <div class="flex-1 min-w-0">
+                                                    <a href="#"
+                                                       @click.prevent="openDetail({{ $item->id }})"
+                                                       class="block px-1 pt-0.5 pb-0 font-[Helvetica] font-bold text-black hover:opacity-80"
+                                                       title="{{ $item->title }} — {{ $item->project_name ?? '(tanpa proyek)' }} — {{ $statusLabels[$item->status] ?? strtoupper($item->status) }}">
+                                                        <span class="block truncate">{{ $item->title }}</span>
+                                                        <span class="block font-['Times_New_Roman'] font-normal truncate">{{ $item->project_name ?? 'Tanpa proyek' }} @if($item->pic_names && count($item->pic_names) > 0) — {{ implode(', ', $item->pic_names) }} @endif</span>
+                                                        <span class="block font-[Helvetica] font-bold">{{ $statusLabels[$item->status] ?? strtoupper($item->status) }} · {{ $priorityLabels[$item->priority] ?? strtoupper($item->priority ?? 'medium') }} @if($duration !== null) · {{ $duration }}d @endif</span>
+                                                    </a>
+                                                    <form method="POST" action="{{ route('content-calendar.destroy', ['content_calendar' => $item->id]) }}" onsubmit="return confirm('Hapus task ini?')" class="border-t border-black">
+                                                        @csrf
+                                                        @method('DELETE')
+                                                        <input type="hidden" name="month" value="{{ request('month') }}">
+                                                        <input type="hidden" name="year" value="{{ request('year') }}">
+                                                        <input type="hidden" name="branch_id" value="{{ request('branch_id') }}">
+                                                        <input type="hidden" name="project_name" value="{{ request('project_name') }}">
+                                                        <input type="hidden" name="status" value="{{ request('status') }}">
+                                                        <input type="hidden" name="priority" value="{{ request('priority') }}">
+                                                        <input type="hidden" name="pic" value="{{ request('pic') }}">
+                                                        <button type="submit" class="w-full px-1 py-0.5 font-bold text-black hover:text-[#e91d2a] leading-tight" title="Hapus">×</button>
+                                                    </form>
+                                                </div>
+                                            </div>
                                         </div>
                                     @endforeach
                                 @endif
@@ -181,6 +193,40 @@
         <span class="flex items-center gap-1"><span class="border-2 border-[#e91d2a] px-2 py-0.5">OVERDUE</span> Past deadline</span>
         <span class="flex items-center gap-1"><span class="bg-[#e91d2a] text-yellow-300 border border-black px-2 py-0.5">APPROACHING</span> ≤7 hari</span>
     </div>
+
+    {{-- Bulk Action Bar --}}
+    <form method="POST" x-ref="bulkForm" x-show="selectedIds.length > 0" x-cloak class="sticky bottom-0 z-30 bg-white border-t-2 border-black shadow-[0_-4px_0_#000]">
+        @csrf
+        <template x-for="id in selectedIds" :key="'bulk_' + id">
+            <input type="hidden" name="ids[]" :value="id">
+        </template>
+        <div class="flex items-center gap-3 px-4 py-3 flex-wrap">
+            <span class="font-[Helvetica] font-bold text-xs uppercase" x-text="selectedIds.length + ' task dipilih'"></span>
+
+            <select name="status" class="border-2 border-black px-2 py-1.5 text-xs font-['Times_New_Roman'] bg-white rounded-none">
+                <option value="">— Status —</option>
+                <option value="todo">To Do</option>
+                <option value="in_progress">In Progress</option>
+                <option value="completed">Completed</option>
+                <option value="lost_track">Lost Track</option>
+            </select>
+
+            <select name="priority" class="border-2 border-black px-2 py-1.5 text-xs font-['Times_New_Roman'] bg-white rounded-none">
+                <option value="">— Prioritas —</option>
+                <option value="low">Low</option>
+                <option value="medium">Medium</option>
+                <option value="high">High</option>
+                <option value="urgent">Urgent</option>
+            </select>
+
+            <input type="text" name="pic_names[]" placeholder="Tambah PIC..."
+                   class="border-2 border-black px-2 py-1.5 text-xs font-['Times_New_Roman'] bg-white rounded-none w-28">
+
+            <button type="button" @click="submitBulkUpdate()" class="bg-black text-white px-4 py-1.5 text-xs font-[Helvetica] font-bold border-2 border-black rounded-none hover:bg-gray-800">Update</button>
+            <button type="button" @click="submitBulkDelete()" class="bg-[#d77a7a] text-white px-4 py-1.5 text-xs font-[Helvetica] font-bold border-2 border-black rounded-none hover:bg-[#c06666]">Hapus</button>
+            <button type="button" @click="clearSelection()" class="underline text-xs font-[Helvetica] font-bold">Batal</button>
+        </div>
+    </form>
 
     {{-- Detail Modal --}}
     <div x-show="open"
@@ -266,12 +312,66 @@
 
 @push('scripts')
 <script>
-function taskDetailModal() {
+function taskDetailModal(allItemIds = []) {
     return {
+        allItemIds,
+        selectedIds: [],
         open: false,
         loading: false,
         task: null,
         statusColors: { todo: '#9ab6c8', in_progress: '#e6915d', completed: '#b3bd95', lost_track: '#d77a7a' },
+        isSelected(id) {
+            return this.selectedIds.includes(id);
+        },
+        toggle(id) {
+            const index = this.selectedIds.indexOf(id);
+            if (index === -1) {
+                this.selectedIds.push(id);
+            } else {
+                this.selectedIds.splice(index, 1);
+            }
+        },
+        selectAll() {
+            if (this.selectedIds.length === this.allItemIds.length) {
+                this.selectedIds = [];
+                return;
+            }
+
+            this.selectedIds = [...this.allItemIds];
+        },
+        clearSelection() {
+            this.selectedIds = [];
+        },
+        submitBulkUpdate() {
+            if (this.selectedIds.length === 0) return;
+
+            this.$refs.bulkForm.action = '{{ route('content-calendar.bulk-update') }}';
+            this.$refs.bulkForm.submit();
+        },
+        submitBulkDelete() {
+            if (this.selectedIds.length === 0) return;
+            if (!confirm('Hapus ' + this.selectedIds.length + ' task terpilih?')) return;
+
+            const form = document.createElement('form');
+            form.method = 'POST';
+            form.action = '{{ route('content-calendar.bulk-delete') }}';
+
+            const token = this.$refs.bulkForm.querySelector('input[name="_token"]');
+            if (token) {
+                form.appendChild(token.cloneNode(true));
+            }
+
+            this.selectedIds.forEach((id) => {
+                const input = document.createElement('input');
+                input.type = 'hidden';
+                input.name = 'ids[]';
+                input.value = id;
+                form.appendChild(input);
+            });
+
+            document.body.appendChild(form);
+            form.submit();
+        },
         formatDate(dateStr) {
             if (!dateStr) return '—';
             return new Date(dateStr).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' });

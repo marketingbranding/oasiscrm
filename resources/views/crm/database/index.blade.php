@@ -106,6 +106,7 @@
             .db-table tbody tr:nth-child(even) { background:#f9fafb; }
             .db-table tbody tr:hover { background:#fef3c7; }
 
+
         </style>
 
         <div class="tab-wrap" x-on:wheel="if ($event.currentTarget.scrollWidth > $event.currentTarget.clientWidth) { (function(e){e._sd=(e._sd||0)+$event.deltaY;if(!e._st){e._st=true;requestAnimationFrame(function(){var d=e._sd;e._sd=0;e._st=false;e.scrollLeft+=Math.sign(d)*Math.min(Math.abs(d)*1.5,160)})}}($event.currentTarget)); $event.preventDefault(); }">
@@ -163,7 +164,7 @@
                                         <td style="text-align:center;color:#6b7280;" x-text="rec.row_number"></td>
                                         <template x-for="h in currentData(name).headers" :key="h">
                                             <td x-show="!['oasis_sync_id','oasis_deleted_at','oasis_deleted_by'].includes(h)"
-                                                :style="'background:' + (currentData(name).formula_columns.includes(h) ? '#dbeafe' : 'transparent') + ';color:' + (currentData(name).formula_columns.includes(h) ? '#6b7280' : '#000') + ';font-style:' + (currentData(name).formula_columns.includes(h) ? 'italic' : 'normal') + ';max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;'"
+                                                :style="'background:' + (currentData(name).formula_columns.includes(h) ? '#b6d7a8' : 'transparent') + ';color:' + (currentData(name).formula_columns.includes(h) ? '#6b7280' : '#000') + ';font-style:' + (currentData(name).formula_columns.includes(h) ? 'italic' : 'normal') + ';max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;'"
                                                 :title="rec.row_data[h] || ''"
                                                 x-text="rec.row_data[h] || ''">
                                             </td>

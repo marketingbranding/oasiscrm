@@ -129,6 +129,45 @@
         @endif
     </div>
 
+    {{-- Task Tracker Widgets --}}
+    <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
+        <div class="border-2 border-black">
+            <div class="bg-white border-b-2 border-black px-3 py-1.5">
+                <span class="font-[Helvetica] font-bold text-xs uppercase">Overdue</span>
+            </div>
+            <div class="bg-[#d77a7a] px-4 py-4">
+                <span class="font-['Arial_Black'] font-black text-3xl">{{ $overdueCount ?? 0 }}</span>
+                <span class="font-[Helvetica] font-bold text-xs ml-1">LEWAT DEADLINE</span>
+            </div>
+        </div>
+        <div class="border-2 border-black">
+            <div class="bg-white border-b-2 border-black px-3 py-1.5">
+                <span class="font-[Helvetica] font-bold text-xs uppercase">Deadline 7 Hari</span>
+            </div>
+            <div class="bg-[#e6915d] px-4 py-4">
+                <span class="font-['Arial_Black'] font-black text-3xl">{{ $upcomingWeekCount ?? 0 }}</span>
+                <span class="font-[Helvetica] font-bold text-xs ml-1">SEGERA</span>
+            </div>
+        </div>
+        <div class="border-2 border-black">
+            <div class="bg-white border-b-2 border-black px-3 py-1.5">
+                <span class="font-[Helvetica] font-bold text-xs uppercase">PIC Teratas</span>
+            </div>
+            <div class="bg-[#b3bd95] px-4 py-3">
+                @if(isset($topPics) && count($topPics) > 0)
+                    @foreach($topPics as $name => $count)
+                    <div class="flex items-center justify-between text-sm font-[Helvetica] font-bold {{ $loop->last ? '' : 'mb-1' }}">
+                        <span>{{ $name }}</span>
+                        <span class="bg-white border border-black px-2 py-0.5 text-xs">{{ $count }} task</span>
+                    </div>
+                    @endforeach
+                @else
+                    <span class="text-sm font-['Times_New_Roman']">—</span>
+                @endif
+            </div>
+        </div>
+    </div>
+
     {{-- Lower Content --}}
     <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div class="border-2 border-black">

@@ -3,6 +3,7 @@
 @section('title', 'Leads - Oasis CRM')
 
 @section('content')
+<div x-data="crmDetailModal('/leads', '/leads', {baru:'#9ab6c8',proses:'#e6915d',deal:'#b3bd95',batal:'#d77a7a'})">
 <x-crm.page-header color="#e6915d" title="Leads" />
 
 <div class="bg-white border-2 border-black p-3 mb-6">
@@ -70,7 +71,7 @@
             @forelse($leads as $lead)
             <tr class="hover:bg-gray-50">
                 <td class="w-10 px-3 py-2 text-center"><input type="checkbox" class="row-checkbox cursor-pointer" value="{{ $lead->id }}"></td>
-                <td class="px-3 py-2 font-bold text-xs">{{ $lead->id_lead }}</td>
+                <td class="px-3 py-2 font-bold text-xs cursor-pointer hover:underline" @click.prevent="openDetail({{ $lead->id }})">{{ $lead->id_lead }}</td>
                 <td class="px-3 py-2 hidden lg:table-cell">{{ $lead->id_promo ?? '—' }}</td>
                 <td class="px-3 py-2 whitespace-nowrap">{{ $lead->tanggal_lead->format('d M Y') }}</td>
                 <td class="px-3 py-2 hidden lg:table-cell">{{ $lead->sumber }}</td>
@@ -115,6 +116,24 @@
     destroy-route="{{ route('leads.bulk-destroy') }}"
     :params="request()->only(['branch_id', 'proyek'])" />
 
+<x-crm.detail-modal
+    title-key="id_lead"
+    notes-key="keterangan"
+    creator-key="creator.name"
+    :fields="[
+        ['key' => 'nama_konsumen', 'label' => 'Nama', 'colspan' => 2],
+        ['key' => 'no_hp', 'label' => 'No HP'],
+        ['key' => 'proyek', 'label' => 'Proyek', 'colspan' => 2],
+        ['key' => 'sumber', 'label' => 'Sumber'],
+        ['key' => 'platform', 'label' => 'Platform'],
+        ['key' => 'campaign', 'label' => 'Campaign'],
+        ['key' => 'sales_pic', 'label' => 'Sales PIC', 'colspan' => 2],
+        ['key' => 'tanggal_lead', 'label' => 'Tanggal', 'type' => 'date'],
+        ['key' => 'status_lead', 'label' => 'Status', 'type' => 'badge'],
+    ]"
+    status-colors='{"baru":"#9ab6c8","proses":"#e6915d","deal":"#b3bd95","batal":"#d77a7a"}'
+/>
+</div>
 <style>
 .table-scroll thead th {
     position: sticky;

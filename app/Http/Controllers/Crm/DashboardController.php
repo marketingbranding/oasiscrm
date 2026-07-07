@@ -47,6 +47,10 @@ class DashboardController extends Controller
                 ->take(5)
                 ->get();
 
+            $overdueCount = (clone $baseQuery)->whereDate('deadline_date', '<', now())->where('status', '!=', 'completed')->count();
+            $upcomingWeekCount = (clone $baseQuery)->whereDate('deadline_date', '>=', now())->whereDate('deadline_date', '<=', now()->addDays(7))->where('status', '!=', 'completed')->count();
+            $topPics = $this->getTopPics($selectedBranchId, $selectedProject);
+
             $branchStatuses = Branch::withCount(['contentItems'])->where('is_active', true)->get()->map(function ($b) use ($selectedProject) {
                 $q = ContentItem::where('branch_id', $b->id);
                 if ($selectedProject) { $q->where('project_name', $selectedProject); }
@@ -58,7 +62,7 @@ class DashboardController extends Controller
             $overdueContent = $this->getOverdueContent($selectedBranchId, $selectedProject);
             $recentActivity = $this->getRecentActivity($selectedBranchId, $selectedProject);
 
-            return view('crm.dashboard', compact('branches', 'projects', 'branch', 'selectedBranchId', 'selectedProject', 'totalContent', 'upcomingContent', 'branchStatuses', 'todayAgenda', 'overdueContent', 'recentActivity'));
+            return view('crm.dashboard', compact('branches', 'projects', 'branch', 'selectedBranchId', 'selectedProject', 'totalContent', 'upcomingContent', 'branchStatuses', 'todayAgenda', 'overdueContent', 'recentActivity', 'overdueCount', 'upcomingWeekCount', 'topPics'));
         }
 
         $branch = $user->branch;
@@ -78,12 +82,15 @@ class DashboardController extends Controller
         $totalContent = (clone $baseQuery)->count();
         $upcomingContent = (clone $baseQuery)->where('scheduled_date', '>=', now()->today())->where('status', '!=', 'completed')->orderBy('scheduled_date')->take(5)->get();
         $totalPosted = (clone $baseQuery)->where('status', 'completed')->count();
+        $overdueCount = (clone $baseQuery)->whereDate('deadline_date', '<', now())->where('status', '!=', 'completed')->count();
+        $upcomingWeekCount = (clone $baseQuery)->whereDate('deadline_date', '>=', now())->whereDate('deadline_date', '<=', now()->addDays(7))->where('status', '!=', 'completed')->count();
+        $topPics = $this->getTopPics($branch->id, $selectedProject);
 
         $todayAgenda = $this->getTodayAgenda($branch->id, $selectedProject);
         $overdueContent = $this->getOverdueContent($branch->id, $selectedProject);
         $recentActivity = $this->getRecentActivity($branch->id, $selectedProject);
 
-        return view('crm.dashboard', compact('branch', 'projects', 'totalContent', 'upcomingContent', 'totalPosted', 'selectedProject', 'todayAgenda', 'overdueContent', 'recentActivity'));
+        return view('crm.dashboard', compact('branch', 'projects', 'totalContent', 'upcomingContent', 'totalPosted', 'selectedProject', 'todayAgenda', 'overdueContent', 'recentActivity', 'overdueCount', 'upcomingWeekCount', 'topPics'));
     }
 
     private function getTodayAgenda($branchId = null, $projectName = null)
@@ -163,5 +170,29 @@ class DashboardController extends Controller
             ]));
 
         return $activity->sortByDesc('time')->take(10)->values();
+    }
+
+    private function getTopPics($branchId = null, $projectName = null): array
+    {
+        $tasks = ContentItem::where('status', '!=', 'completed')
+            ->whereNotNull('pic_names')
+            ->when($branchId, fn($q) => $q->where('branch_id', $branchId))
+            ->when($projectName, fn($q) => $q->where('project_name', $projectName))
+            ->get(['pic_names']);
+
+        $counts = [];
+        foreach ($tasks as $task) {
+            if (is_array($task->pic_names)) {
+                foreach ($task->pic_names as $name) {
+                    $name = trim((string) $name);
+                    if ($name !== '') {
+                        $counts[$name] = ($counts[$name] ?? 0) + 1;
+                    }
+                }
+            }
+        }
+
+        arsort($counts);
+        return array_slice($counts, 0, 5);
     }
 }

@@ -3,6 +3,7 @@
 @section('title', 'Dana Talangan - Oasis CRM')
 
 @section('content')
+<div x-data="crmDetailModal('/dana-talangan', '/dana-talangan', {aktif:'#9ab6c8',lunas:'#b3bd95'})">
     <x-crm.page-header color="#f1c40f" title="Dana Talangan" />
 
     <div class="bg-white border-2 border-black p-3 mb-6">
@@ -79,7 +80,7 @@
                     <td class="w-10 px-3 py-2 text-center"><input type="checkbox" class="row-checkbox cursor-pointer" value="{{ $r->id }}"></td>
                     <td class="px-3 py-2">{{ $i + 1 }}</td>
                     <td class="px-3 py-2">{{ $r->tanggal->format('d M Y') }}</td>
-                    <td class="px-3 py-2 font-bold">{{ $r->nama_konsumen }}</td>
+                    <td class="px-3 py-2 font-bold cursor-pointer hover:underline" @click.prevent="openDetail({{ $r->id }})">{{ $r->nama_konsumen }}</td>
                     <td class="px-3 py-2">{{ $r->kav ?? '—' }}</td>
                     <td class="px-3 py-2">{{ $r->project_name ?? '—' }}</td>
                     <td class="px-3 py-2 text-center">{{ $r->pinjam_nama ? 'YA' : 'TIDAK' }}</td>
@@ -134,6 +135,25 @@
         accent-color="#f1c40f"
         :params="request()->only(['branch_id', 'project_name', 'status'])" />
 
+<x-crm.detail-modal
+    title-key="nama_konsumen"
+    notes-key="penyelesaian"
+    creator-key="creator.name"
+    :fields="[
+        ['key' => 'kav', 'label' => 'Kav'],
+        ['key' => 'project_name', 'label' => 'Proyek'],
+        ['key' => 'tanggal', 'label' => 'Tanggal', 'type' => 'date'],
+        ['key' => 'pinjam_nama', 'label' => 'Pinjam Nama', 'type' => 'boolean'],
+        ['key' => 'pekerjaan', 'label' => 'Pekerjaan'],
+        ['key' => 'status_perkawinan', 'label' => 'Status Kawin'],
+        ['key' => 'umur', 'label' => 'Umur'],
+        ['key' => 'nama_marketing', 'label' => 'Marketing', 'colspan' => 2],
+        ['key' => 'konfirmasi_keuangan', 'label' => 'Konfirmasi Keuangan', 'type' => 'boolean'],
+        ['key' => 'status', 'label' => 'Status', 'type' => 'badge'],
+    ]"
+    status-colors='{"aktif":"#9ab6c8","lunas":"#b3bd95"}'
+/>
+</div>
 <style>.dt-row:hover{background:#fef3cd}</style>
 <style>
 .table-scroll thead th {

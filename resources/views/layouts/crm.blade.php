@@ -602,6 +602,36 @@
         </div>
     </template>
 </div>
+<script>
+document.addEventListener('alpine:init', function () {
+    Alpine.data('crmDetailModal', function (fetchBase, editBase, statusColors) {
+        return {
+            open: false,
+            loading: false,
+            task: null,
+            sc: statusColors || {},
+            openDetail: function (id) {
+                this.open = true;
+                this.loading = true;
+                this.task = null;
+                var self = this;
+                fetch(fetchBase + '/' + id + '/detail')
+                    .then(function (r) { return r.json(); })
+                    .then(function (data) { self.task = data; self.loading = false; })
+                    .catch(function () { self.loading = false; alert('Gagal memuat detail.'); });
+            },
+            close: function () {
+                this.open = false;
+                this.loading = false;
+                this.task = null;
+            },
+            get editUrl() {
+                return this.task ? editBase + '/' + this.task.id + '/edit' : '#';
+            }
+        };
+    });
+});
+</script>
 @stack('scripts')
 </body>
 </html>

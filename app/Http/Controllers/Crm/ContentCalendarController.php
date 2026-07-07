@@ -31,7 +31,7 @@ class ContentCalendarController extends Controller
 
     protected string $importView = 'crm.content-calendar.import';
     protected string $importClass = ContentItemImport::class;
-    protected array $importPreservedParams = ['branch_id', 'project_name'];
+    protected array $importPreservedParams = ['branch_id', 'project_name', 'status', 'priority', 'pic'];
     protected string $importErrorRoute = 'content-calendar.import';
     protected string $importSuccessRoute = 'content-calendar.index';
 
@@ -43,6 +43,7 @@ class ContentCalendarController extends Controller
         $selectedProject = $request->get('project_name');
         $selectedStatus = $request->get('status');
         $selectedPriority = $request->get('priority');
+        $selectedPic = $request->get('pic');
 
         $branches = $this->resolveBranches();
         $projects = $this->resolveBranchProjects($selectedBranchId);
@@ -51,6 +52,7 @@ class ContentCalendarController extends Controller
         $query->when($selectedProject, fn($q) => $q->where('project_name', $selectedProject));
         $query->when($selectedStatus, fn($q) => $q->where('status', $selectedStatus));
         $query->when($selectedPriority, fn($q) => $q->where('priority', $selectedPriority));
+        $query->when($selectedPic, fn($q) => $q->whereRaw('LOWER(pic_names) LIKE ?', ['%"' . mb_strtolower($selectedPic) . '"%']));
 
         $contentItems = $query->whereYear('scheduled_date', $year)
             ->whereMonth('scheduled_date', $month)
@@ -86,7 +88,7 @@ class ContentCalendarController extends Controller
             $calendar[] = $weekDays;
         }
 
-        return view('crm.content-calendar.index', compact('calendar', 'currentMonth', 'prevMonth', 'nextMonth', 'branches', 'selectedBranchId', 'projects', 'selectedProject', 'selectedStatus', 'selectedPriority'));
+        return view('crm.content-calendar.index', compact('calendar', 'currentMonth', 'prevMonth', 'nextMonth', 'branches', 'selectedBranchId', 'projects', 'selectedProject', 'selectedStatus', 'selectedPriority', 'selectedPic'));
     }
 
     public function create()
@@ -118,7 +120,7 @@ class ContentCalendarController extends Controller
 
         ContentItem::create($data);
 
-        return redirect()->route('content-calendar.index', array_filter($request->only(['month', 'year', 'branch_id', 'project_name', 'status', 'priority'])))->with('success', 'Task berhasil ditambahkan.');
+        return redirect()->route('content-calendar.index', array_filter($request->only(['month', 'year', 'branch_id', 'project_name', 'status', 'priority', 'pic'])))->with('success', 'Task berhasil ditambahkan.');
     }
 
     public function edit(ContentItem $contentItem)
@@ -147,7 +149,7 @@ class ContentCalendarController extends Controller
         $data = $this->normalizeTaskData($data, $contentItem);
 
         $contentItem->update($data);
-        return redirect()->route('content-calendar.index', array_filter($request->only(['month', 'year', 'branch_id', 'project_name', 'status', 'priority'])))->with('success', 'Task berhasil diperbarui.');
+        return redirect()->route('content-calendar.index', array_filter($request->only(['month', 'year', 'branch_id', 'project_name', 'status', 'priority', 'pic'])))->with('success', 'Task berhasil diperbarui.');
     }
 
     public function export(Request $request)
@@ -175,6 +177,10 @@ class ContentCalendarController extends Controller
             $query->where('priority', $request->priority);
         }
 
+        if ($request->filled('pic')) {
+            $query->whereRaw('LOWER(pic_names) LIKE ?', ['%"' . mb_strtolower($request->pic) . '"%']);
+        }
+
         $records = $query->whereYear('scheduled_date', $year)
             ->whereMonth('scheduled_date', $month)
             ->orderBy('scheduled_date')
@@ -185,6 +191,17 @@ class ContentCalendarController extends Controller
         return ContentItemExport::toBrowser($records, $filename);
     }
 
+    public function detail(ContentItem $contentItem)
+    {
+        $user = Auth::user();
+        if (!$user->canViewAllBranches() && $contentItem->branch_id !== $user->branch_id) {
+            abort(403);
+        }
+
+        $contentItem->load('creator');
+        return response()->json($contentItem);
+    }
+
     public function destroy(ContentItem $contentItem)
     {
         $user = Auth::user();
@@ -193,7 +210,7 @@ class ContentCalendarController extends Controller
         }
 
         $contentItem->delete();
-        return redirect()->route('content-calendar.index', array_filter(request()->only(['month', 'year', 'branch_id', 'project_name', 'status', 'priority'])))->with('success', 'Task berhasil dihapus.');
+        return redirect()->route('content-calendar.index', array_filter(request()->only(['month', 'year', 'branch_id', 'project_name', 'status', 'priority', 'pic'])))->with('success', 'Task berhasil dihapus.');
     }
 
     private function normalizeTaskData(array $data, ?ContentItem $existing = null): array

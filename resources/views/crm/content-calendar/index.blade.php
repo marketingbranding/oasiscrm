@@ -3,6 +3,7 @@
 @section('title', 'Task Tracker - Oasis CRM')
 
 @section('content')
+    <div x-data="taskDetailModal()">
     <x-crm.page-header color="#b3bd95" title="Task Tracker" />
 
     <div class="bg-white border-2 border-black p-3 mb-6">
@@ -45,12 +46,17 @@
                     <option value="high" {{ $selectedPriority === 'high' ? 'selected' : '' }}>High</option>
                     <option value="urgent" {{ $selectedPriority === 'urgent' ? 'selected' : '' }}>Urgent</option>
                 </select>
+
+                <label class="font-[Helvetica] font-bold text-xs uppercase">PIC:</label>
+                <input type="text" name="pic" value="{{ $selectedPic ?? '' }}" placeholder="Cari PIC..."
+                       onchange="this.form.submit()"
+                       class="border-2 border-black px-3 py-1.5 text-sm font-['Times_New_Roman'] bg-white rounded-none w-32">
             </div>
 
             <div class="h-6 w-px bg-black mx-1 hidden sm:block"></div>
 
             <div class="flex items-center gap-2 ml-auto">
-                <x-crm.export-import export-route="content-calendar.export" import-route="content-calendar.import" :params="request()->only(['month', 'year', 'branch_id', 'project_name', 'status', 'priority'])" />
+                <x-crm.export-import export-route="content-calendar.export" import-route="content-calendar.import" :params="request()->only(['month', 'year', 'branch_id', 'project_name', 'status', 'priority', 'pic'])" />
                 <a href="{{ route('content-calendar.create') }}" class="bg-[#b3bd95] text-black px-4 py-1.5 text-sm font-[Helvetica] font-bold border-2 border-black rounded-none hover:bg-[#9eaa7a]">
                     + Task Baru
                 </a>
@@ -60,11 +66,11 @@
 
     <div class="flex mb-4">
         <div class="flex items-center gap-2">
-            <a href="{{ route('content-calendar.index', array_filter(['month' => $prevMonth->month, 'year' => $prevMonth->year, 'branch_id' => request('branch_id'), 'project_name' => request('project_name'), 'status' => request('status'), 'priority' => request('priority')])) }}" class="bg-black text-white px-3 py-1.5 text-sm font-[Helvetica] font-bold border-2 border-black rounded-none hover:bg-gray-800">
+            <a href="{{ route('content-calendar.index', array_filter(['month' => $prevMonth->month, 'year' => $prevMonth->year, 'branch_id' => request('branch_id'), 'project_name' => request('project_name'), 'status' => request('status'), 'priority' => request('priority'), 'pic' => request('pic')])) }}" class="bg-black text-white px-3 py-1.5 text-sm font-[Helvetica] font-bold border-2 border-black rounded-none hover:bg-gray-800">
                 ← Prev
             </a>
             <span class="font-['Arial_Black'] font-black text-lg px-3">{{ $currentMonth->format('F Y') }}</span>
-            <a href="{{ route('content-calendar.index', array_filter(['month' => $nextMonth->month, 'year' => $nextMonth->year, 'branch_id' => request('branch_id'), 'project_name' => request('project_name'), 'status' => request('status'), 'priority' => request('priority')])) }}" class="bg-black text-white px-3 py-1.5 text-sm font-[Helvetica] font-bold border-2 border-black rounded-none hover:bg-gray-800">
+            <a href="{{ route('content-calendar.index', array_filter(['month' => $nextMonth->month, 'year' => $nextMonth->year, 'branch_id' => request('branch_id'), 'project_name' => request('project_name'), 'status' => request('status'), 'priority' => request('priority'), 'pic' => request('pic')])) }}" class="bg-black text-white px-3 py-1.5 text-sm font-[Helvetica] font-bold border-2 border-black rounded-none hover:bg-gray-800">
                 Next →
             </a>
         </div>
@@ -123,7 +129,8 @@
                                             $duration = $item->start_date ? $item->start_date->diffInDays($deadline) : null;
                                         @endphp
                                         <div class="{{ $statusColors[$item->status] ?? 'bg-gray-200' }} border {{ $isOverdue ? 'border-[#e91d2a] border-2' : 'border-black' }} mb-1 rounded-none text-[10px] leading-tight {{ $item->status === 'completed' ? 'opacity-70' : '' }}">
-                                            <a href="{{ route('content-calendar.edit', $item->id) }}"
+                                            <a href="#"
+                                               @click.prevent="openDetail({{ $item->id }})"
                                                class="block px-1 py-0.5 font-[Helvetica] font-bold text-black hover:opacity-80"
                                                title="{{ $item->title }} — {{ $item->project_name ?? '(tanpa proyek)' }} — {{ $statusLabels[$item->status] ?? strtoupper($item->status) }}">
                                                 <span class="block truncate">{{ $item->title }}</span>
@@ -139,6 +146,7 @@
                                                 <input type="hidden" name="project_name" value="{{ request('project_name') }}">
                                                 <input type="hidden" name="status" value="{{ request('status') }}">
                                                 <input type="hidden" name="priority" value="{{ request('priority') }}">
+                                                <input type="hidden" name="pic" value="{{ request('pic') }}">
                                                 <button type="submit" class="w-full px-1 py-0.5 font-bold text-black hover:text-[#e91d2a] leading-tight" title="Hapus">×</button>
                                             </form>
                                         </div>
@@ -165,4 +173,118 @@
         <span class="flex items-center gap-1"><span class="bg-[#d77a7a] border border-black px-2 py-0.5">LOST TRACK</span> Lost Track</span>
         <span class="flex items-center gap-1"><span class="border-2 border-[#e91d2a] px-2 py-0.5">OVERDUE</span> Past deadline</span>
     </div>
+
+    {{-- Detail Modal --}}
+    <div x-show="open"
+         x-cloak
+         @keydown.escape.window="close()"
+         class="fixed inset-0 z-50 flex items-center justify-center p-4"
+         style="background: rgba(0,0,0,0.5);">
+        <div @click.away="close()"
+             class="relative bg-[#f5f0eb] border border-black w-full max-w-lg mx-auto max-h-[80vh] overflow-y-auto shadow-[4px_4px_0_#000] rotate-[-0.3deg]">
+            {{-- paper clip --}}
+            <div class="absolute -top-2 -right-2 z-10 text-2xl select-none" aria-hidden="true">&#x1F4CE;</div>
+            {{-- typewriter header --}}
+            <div class="bg-[#2a2a2a] text-white px-4 py-2.5 font-mono text-xs tracking-[0.2em] uppercase flex items-center justify-between border-b border-[#d4c9b8]">
+                <span x-text="task ? task.title : 'Detail Task'" class="truncate mr-2"></span>
+                <button @click="close()" class="text-white/70 hover:text-white text-lg leading-none shrink-0">&times;</button>
+            </div>
+            <div x-show="loading" class="p-6 text-center text-sm font-['Times_New_Roman'] text-gray-500">Memuat...</div>
+            <template x-if="!loading && task">
+                <div class="text-sm font-['Times_New_Roman']">
+                    {{-- detail body --}}
+                    <div class="px-5 py-4 border-b border-dashed border-[#d4c9b8]">
+                        <p x-text="task.task_detail || '—'" class="text-sm leading-relaxed text-gray-800 italic"></p>
+                    </div>
+                    {{-- fields grid --}}
+                    <div class="px-5 py-4 grid grid-cols-2 gap-x-6 gap-y-3 text-sm border-b border-dashed border-[#d4c9b8]">
+                        <div>
+                            <span class="font-mono text-[10px] tracking-wider uppercase text-gray-500">Proyek</span>
+                            <p x-text="task.project_name || '—'" class="mt-0.5 text-gray-900"></p>
+                        </div>
+                        <div>
+                            <span class="font-mono text-[10px] tracking-wider uppercase text-gray-500">Channel</span>
+                            <p x-text="task.platform || '—'" class="mt-0.5 text-gray-900"></p>
+                        </div>
+                        <div>
+                            <span class="font-mono text-[10px] tracking-wider uppercase text-gray-500">Mulai</span>
+                            <p x-text="task.start_date || '—'" class="mt-0.5 text-gray-900"></p>
+                        </div>
+                        <div>
+                            <span class="font-mono text-[10px] tracking-wider uppercase text-gray-500">Deadline</span>
+                            <p x-text="task.deadline_date || task.scheduled_date || '—'" class="mt-0.5 text-gray-900"></p>
+                        </div>
+                        <div>
+                            <span class="font-mono text-[10px] tracking-wider uppercase text-gray-500">Status</span>
+                            <p class="mt-0.5">
+                                <span x-text="task.status ? task.status.replace('_', ' ').toUpperCase() : '—'"
+                                      class="border border-black px-1.5 py-0.5 text-[10px] font-mono font-bold tracking-wider"
+                                      :style="'background:' + (statusColors[task.status] || '#ccc')"></span>
+                            </p>
+                        </div>
+                        <div>
+                            <span class="font-mono text-[10px] tracking-wider uppercase text-gray-500">Prioritas</span>
+                            <p x-text="task.priority ? task.priority.toUpperCase() : '—'" class="mt-0.5 text-gray-900 font-bold"></p>
+                        </div>
+                        <div class="col-span-2">
+                            <span class="font-mono text-[10px] tracking-wider uppercase text-gray-500">PIC</span>
+                            <div class="flex flex-wrap gap-1.5 mt-1">
+                                <template x-for="name in (task.pic_names || [])" :key="name">
+                                    <span class="border border-black bg-[#b3bd95] px-2 py-0.5 text-[11px] font-mono font-bold" x-text="name"></span>
+                                </template>
+                                <span x-show="!task.pic_names || task.pic_names.length === 0" class="text-sm text-gray-500">—</span>
+                            </div>
+                        </div>
+                    </div>
+                    {{-- notes --}}
+                    <div class="px-5 py-4 border-b border-dashed border-[#d4c9b8]">
+                        <span class="font-mono text-[10px] tracking-wider uppercase text-gray-500">Catatan</span>
+                        <p x-text="task.notes || '—'" class="mt-1 text-sm leading-relaxed text-gray-800"></p>
+                    </div>
+                    {{-- footer --}}
+                    <div class="px-5 py-3 flex items-center justify-between text-[10px] text-gray-500 font-mono">
+                        <span x-text="'Dibuat oleh: ' + (task.creator ? task.creator.name : '—')"></span>
+                        <div class="flex gap-2">
+                            <button @click="close()" class="bg-white text-black px-3 py-1 text-xs font-mono font-bold border border-black hover:bg-gray-100">Tutup</button>
+                            <a :href="'/content-calendar/' + task.id + '/edit'" class="bg-[#b3bd95] text-black px-3 py-1 text-xs font-mono font-bold border border-black hover:bg-[#9eaa7a]">Edit</a>
+                        </div>
+                    </div>
+                </div>
+            </template>
+        </div>
+    </div>
+    </div>
 @endsection
+
+@push('scripts')
+<script>
+function taskDetailModal() {
+    return {
+        open: false,
+        loading: false,
+        task: null,
+        statusColors: { todo: '#9ab6c8', in_progress: '#e6915d', completed: '#b3bd95', lost_track: '#d77a7a' },
+        openDetail(id) {
+            this.open = true;
+            this.loading = true;
+            this.task = null;
+            fetch('/content-calendar/' + id + '/detail')
+                .then(r => r.json())
+                .then(data => {
+                    this.task = data;
+                    this.loading = false;
+                })
+                .catch(() => {
+                    this.loading = false;
+                    alert('Gagal memuat detail task.');
+                });
+        },
+        close() {
+            this.open = false;
+            this.loading = false;
+            this.task = null;
+        }
+    };
+}
+</script>
+@endpush

@@ -34,6 +34,7 @@ Route::middleware(['auth', 'verified', 'password.changed'])->group(function () {
 
     Route::bind('content_calendar', fn($value) => \App\Models\ContentItem::findOrFail($value));
     Route::get('content-calendar/export', [ContentCalendarController::class, 'export'])->name('content-calendar.export');
+    Route::get('content-calendar/{content_calendar}/detail', [ContentCalendarController::class, 'detail'])->name('content-calendar.detail');
     Route::resource('content-calendar', ContentCalendarController::class);
 
     Route::get('/database', [DatabaseController::class, 'index'])->name('database.index');
@@ -59,6 +60,7 @@ Route::middleware(['auth', 'verified', 'password.changed'])->group(function () {
     Route::post('content-calendar/import', [ContentCalendarController::class, 'importStore'])->name('content-calendar.import-store');
 
     Route::bind('lead', fn($v) => \App\Models\Lead::findOrFail($v));
+    Route::get('leads/{lead}/detail', [LeadController::class, 'detail'])->name('leads.detail');
     Route::get('leads/export', [LeadController::class, 'export'])->name('leads.export');
     Route::post('leads/bulk-delete', [LeadController::class, 'bulkDestroy'])->name('leads.bulk-destroy');
     Route::resource('leads', LeadController::class);
@@ -70,6 +72,7 @@ Route::middleware(['auth', 'verified', 'password.changed'])->group(function () {
     Route::post('dana-talangan/import', [DanaTalanganController::class, 'importStore'])->name('dana-talangan.import-store');
     Route::post('dana-talangan/bulk-delete', [DanaTalanganController::class, 'bulkDestroy'])->name('dana-talangan.bulk-destroy');
     Route::post('dana-talangan/bulk-update', [DanaTalanganController::class, 'bulkUpdate'])->name('dana-talangan.bulk-update');
+    Route::get('dana-talangan/{dana_talangan}/detail', [DanaTalanganController::class, 'detail'])->name('dana-talangan.detail');
     Route::resource('dana-talangan', DanaTalanganController::class);
 
     Route::post('feedback-reports', [FeedbackReportController::class, 'store'])->name('feedback-reports.store');

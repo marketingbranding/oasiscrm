@@ -177,6 +177,17 @@ class DanaTalanganController extends Controller
         return DanaTalanganExport::toBrowser($records, $filename);
     }
 
+    public function detail(DanaTalangan $danaTalangan)
+    {
+        $user = Auth::user();
+        if (!$user->canViewAllBranches() && $danaTalangan->branch_id !== $user->branch_id) {
+            abort(403);
+        }
+
+        $danaTalangan->load('creator');
+        return response()->json($danaTalangan);
+    }
+
     public function destroy(DanaTalangan $danaTalangan)
     {
         $user = Auth::user();

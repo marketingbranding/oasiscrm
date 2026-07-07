@@ -186,6 +186,17 @@ class LeadController extends Controller
             ->with('success', 'Lead berhasil diperbarui.');
     }
 
+    public function detail(Lead $lead)
+    {
+        $user = Auth::user();
+        if (!$user->canViewAllBranches() && $lead->branch_id !== $user->branch_id) {
+            abort(403);
+        }
+
+        $lead->load('creator');
+        return response()->json($lead);
+    }
+
     public function destroy(Lead $lead)
     {
         $user = Auth::user();

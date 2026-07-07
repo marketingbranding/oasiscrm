@@ -53,7 +53,7 @@
                 <th class="w-10 px-3 py-2 text-center font-[Helvetica] font-bold text-xs uppercase"><input type="checkbox" id="select-all" class="cursor-pointer"></th>
                 <x-crm.sortable-th field="id_lead" route="leads.index" label="ID Lead" :currentSort="$sortField" :currentDir="$sortDir" />
                 <th class="px-3 py-2 text-left font-[Helvetica] font-bold text-xs uppercase hidden lg:table-cell">ID Promo</th>
-                <x-crm.sortable-th field="tanggal_lead" route="leads.index" label="Tgl Lead" :currentSort="$sortField" :currentDir="$sortDir" />
+                <x-crm.sortable-th field="tanggal_lead" route="leads.index" label="Tgl Lead" :currentSort="$sortField" :currentDir="$sortDir" type="date" />
                 <x-crm.sortable-th field="sumber" route="leads.index" label="Sumber" :currentSort="$sortField" :currentDir="$sortDir" classes="hidden lg:table-cell" />
                 <th class="px-3 py-2 text-left font-[Helvetica] font-bold text-xs uppercase hidden lg:table-cell">Platform</th>
                 <th class="px-3 py-2 text-left font-[Helvetica] font-bold text-xs uppercase hidden lg:table-cell">Campaign</th>

@@ -58,7 +58,7 @@
                 <tr class="bg-black text-white">
                     <th class="w-10 px-3 py-2 text-center font-[Helvetica] font-bold text-xs uppercase"><input type="checkbox" id="select-all" class="cursor-pointer"></th>
                     <th class="px-3 py-2 text-left font-[Helvetica] font-bold text-xs uppercase">No</th>
-                    <x-crm.sortable-th field="tanggal" route="dana-talangan.index" label="Tanggal" :currentSort="$sortField" :currentDir="$sortDir" />
+                    <x-crm.sortable-th field="tanggal" route="dana-talangan.index" label="Tanggal" :currentSort="$sortField" :currentDir="$sortDir" type="date" />
                     <x-crm.sortable-th field="nama_konsumen" route="dana-talangan.index" label="Nama Konsumen" :currentSort="$sortField" :currentDir="$sortDir" />
                     <x-crm.sortable-th field="kav" route="dana-talangan.index" label="Kav" :currentSort="$sortField" :currentDir="$sortDir" classes="hidden lg:table-cell" />
                     <x-crm.sortable-th field="project_name" route="dana-talangan.index" label="Proyek" :currentSort="$sortField" :currentDir="$sortDir" classes="hidden lg:table-cell" />

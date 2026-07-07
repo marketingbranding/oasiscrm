@@ -164,7 +164,7 @@
                                         <td style="text-align:center;color:#6b7280;" x-text="rec.row_number"></td>
                                         <template x-for="h in currentData(name).headers" :key="h">
                                             <td x-show="!['oasis_sync_id','oasis_deleted_at','oasis_deleted_by'].includes(h)"
-                                                :style="'background:' + (currentData(name).formula_columns.includes(h) ? '#b6d7a8' : 'transparent') + ';color:' + (currentData(name).formula_columns.includes(h) ? '#6b7280' : '#000') + ';font-style:' + (currentData(name).formula_columns.includes(h) ? 'italic' : 'normal') + ';max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;'"
+                                                :style="'background:' + (currentData(name).formula_columns.includes(h) ? '#b6d7a8' : 'transparent') + ';color:#000;font-style:' + (currentData(name).formula_columns.includes(h) ? 'italic' : 'normal') + ';font-style:' + (currentData(name).formula_columns.includes(h) ? 'italic' : 'normal') + ';max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;'"
                                                 :title="rec.row_data[h] || ''"
                                                 x-text="rec.row_data[h] || ''">
                                             </td>

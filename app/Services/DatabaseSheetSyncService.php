@@ -152,7 +152,7 @@ class DatabaseSheetSyncService
             if (count(array_filter($rowData, fn ($value) => $value !== '')) === 0) continue;
 
             $syncId = ($rowData['oasis_sync_id'] ?? '') ?: (string) Str::uuid();
-            $deletedAt = ($rowData['oasis_deleted_at'] ?? '') ?: null;
+            $deletedAt = $this->validDeletedAt($rowData['oasis_deleted_at'] ?? '');
 
             $records[] = [
                 'branch_id' => $branch->id,
@@ -184,5 +184,20 @@ class DatabaseSheetSyncService
         }
 
         return $letter;
+    }
+
+    private function validDeletedAt(string $value): ?string
+    {
+        $value = trim($value);
+
+        if ($value === '') {
+            return null;
+        }
+
+        try {
+            return now()->parse($value)->toDateTimeString();
+        } catch (Throwable) {
+            return null;
+        }
     }
 }

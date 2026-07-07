@@ -42,6 +42,7 @@ class DashboardController extends Controller
 
             $upcomingContent = (clone $baseQuery)
                 ->where('scheduled_date', '>=', now()->today())
+                ->where('status', '!=', 'completed')
                 ->orderBy('scheduled_date')
                 ->take(5)
                 ->get();
@@ -49,7 +50,7 @@ class DashboardController extends Controller
             $branchStatuses = Branch::withCount(['contentItems'])->where('is_active', true)->get()->map(function ($b) use ($selectedProject) {
                 $q = ContentItem::where('branch_id', $b->id);
                 if ($selectedProject) { $q->where('project_name', $selectedProject); }
-                $b->posted_count = (clone $q)->where('status', 'posted')->count();
+                $b->posted_count = (clone $q)->where('status', 'completed')->count();
                 return $b;
             });
 
@@ -75,8 +76,8 @@ class DashboardController extends Controller
             ->when($selectedProject, fn($q) => $q->where('project_name', $selectedProject));
 
         $totalContent = (clone $baseQuery)->count();
-        $upcomingContent = (clone $baseQuery)->where('scheduled_date', '>=', now()->today())->orderBy('scheduled_date')->take(5)->get();
-        $totalPosted = (clone $baseQuery)->where('status', 'posted')->count();
+        $upcomingContent = (clone $baseQuery)->where('scheduled_date', '>=', now()->today())->where('status', '!=', 'completed')->orderBy('scheduled_date')->take(5)->get();
+        $totalPosted = (clone $baseQuery)->where('status', 'completed')->count();
 
         $todayAgenda = $this->getTodayAgenda($branch->id, $selectedProject);
         $overdueContent = $this->getOverdueContent($branch->id, $selectedProject);
@@ -97,7 +98,7 @@ class DashboardController extends Controller
                 'label' => $i->title,
                 'subtitle' => $i->platform,
                 'time' => $i->scheduled_date,
-                'type' => 'Konten',
+                'type' => 'Task',
                 'color' => '#b3bd95',
                 'status' => $i->status,
             ]));
@@ -120,7 +121,7 @@ class DashboardController extends Controller
     private function getOverdueContent($branchId = null, $projectName = null)
     {
         return ContentItem::whereDate('scheduled_date', '<', today())
-            ->where('status', '!=', 'posted')
+            ->where('status', '!=', 'completed')
             ->when($branchId, fn($q) => $q->where('branch_id', $branchId))
             ->when($projectName, fn($q) => $q->where('project_name', $projectName))
             ->orderBy('scheduled_date')
@@ -137,7 +138,7 @@ class DashboardController extends Controller
             ->when($projectName, fn($q) => $q->where('project_name', $projectName))
             ->latest()->take(5)->get()
             ->each(fn($i) => $activity->push([
-                'type' => 'Konten', 'color' => '#b3bd95',
+                'type' => 'Task', 'color' => '#b3bd95',
                 'text' => $i->title, 'time' => $i->created_at, 'user' => $i->creator?->name ?? '-',
             ]));
 

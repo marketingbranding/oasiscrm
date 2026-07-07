@@ -17,7 +17,7 @@
             <div class="{{ $cardColors[$index % count($cardColors)] }} px-3 py-3">
                 <h3 class="font-['Arial_Black'] font-black text-base mb-1">{{ $branch->name }}</h3>
                 <div class="text-xs font-['Times_New_Roman'] space-y-0.5">
-                    <div>Konten: <strong>{{ $branch->content_items_count ?? 0 }}</strong></div>
+                    <div>Task: <strong>{{ $branch->content_items_count ?? 0 }}</strong></div>
                     <div>Admin: <strong>{{ $branch->admins_count ?? 0 }}</strong></div>
                 </div>
             </div>

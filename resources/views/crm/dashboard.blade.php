@@ -18,7 +18,7 @@
                 <span>+ Lead Baru</span>
             </a>
             <a href="{{ route('content-calendar.create') }}" class="flex items-center gap-3 px-3 py-2 text-sm font-[Helvetica] font-bold border-l-4 border-[#b3bd95] hover:bg-gray-50">
-                <span>+ Buat Konten</span>
+                <span>+ Task Baru</span>
             </a>
             <a href="{{ route('dana-talangan.create') }}" class="flex items-center gap-3 px-3 py-2 text-sm font-[Helvetica] font-bold border-l-4 border-[#f1c40f] hover:bg-gray-50">
                 <span>+ Dana Talangan</span>
@@ -82,7 +82,7 @@
     <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
         <div class="border-2 border-black">
             <div class="bg-white border-b-2 border-black px-3 py-1.5">
-                <span class="font-[Helvetica] font-bold text-xs uppercase">Total Konten</span>
+                <span class="font-[Helvetica] font-bold text-xs uppercase">Total Task</span>
             </div>
             <div class="bg-[#b3bd95] px-4 py-4">
                 <span class="font-['Arial_Black'] font-black text-3xl">{{ $totalContent ?? 0 }}</span>
@@ -90,7 +90,7 @@
         </div>
         <div class="border-2 border-black">
             <div class="bg-white border-b-2 border-black px-3 py-1.5">
-                <span class="font-[Helvetica] font-bold text-xs uppercase">Jadwal Mendatang</span>
+                <span class="font-[Helvetica] font-bold text-xs uppercase">Deadline Mendatang</span>
             </div>
             <div class="bg-[#9ab6c8] px-4 py-4">
                 <span class="font-['Arial_Black'] font-black text-3xl">{{ $upcomingContent ? $upcomingContent->count() : 0 }}</span>
@@ -98,11 +98,11 @@
         </div>
         <div class="border-2 border-black">
             <div class="bg-white border-b-2 border-black px-3 py-1.5">
-                <span class="font-[Helvetica] font-bold text-xs uppercase">Status Konten</span>
+                <span class="font-[Helvetica] font-bold text-xs uppercase">Task Selesai</span>
             </div>
             <div class="bg-[#c0d4a7] px-4 py-4">
                 <span class="font-['Arial_Black'] font-black text-3xl">{{ $totalPosted ?? 0 }}</span>
-                <span class="font-[Helvetica] font-bold text-xs ml-1">POSTED</span>
+                <span class="font-[Helvetica] font-bold text-xs ml-1">COMPLETED</span>
             </div>
         </div>
     </div>
@@ -132,7 +132,7 @@
     {{-- Lower Content --}}
     <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div class="border-2 border-black">
-            <div class="bg-black text-white px-3 py-2 font-[Helvetica] font-bold text-xs uppercase">Jadwal Mendatang</div>
+            <div class="bg-black text-white px-3 py-2 font-[Helvetica] font-bold text-xs uppercase">Deadline Mendatang</div>
             @if(isset($upcomingContent) && $upcomingContent->count() > 0)
             <div class="divide-y-2 divide-black">
                 @foreach($upcomingContent as $item)
@@ -144,7 +144,7 @@
             </div>
             @else
             <div class="px-4 py-6 text-center text-sm font-['Times_New_Roman']">
-                Tidak ada jadwal konten mendatang.
+                Tidak ada deadline task mendatang.
             </div>
             @endif
         </div>
@@ -158,7 +158,7 @@
                         <tr class="border-b-2 border-black bg-white">
                             <th class="text-left px-3 py-2 font-[Helvetica] font-bold text-xs uppercase">Cabang</th>
                             <th class="text-center px-3 py-2 font-[Helvetica] font-bold text-xs uppercase">Total</th>
-                            <th class="text-center px-3 py-2 font-[Helvetica] font-bold text-xs uppercase">Posted</th>
+                            <th class="text-center px-3 py-2 font-[Helvetica] font-bold text-xs uppercase">Completed</th>
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-black">

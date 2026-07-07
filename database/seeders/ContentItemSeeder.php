@@ -13,20 +13,28 @@ class ContentItemSeeder extends Seeder
     {
         $branches = Branch::all();
         $platforms = ['Instagram', 'Facebook', 'TikTok', 'Twitter', 'Website'];
-        $statuses = ['draft', 'review', 'approved', 'posted'];
+        $statuses = ['todo', 'in_progress', 'completed', 'lost_track'];
 
         foreach ($branches as $branch) {
             $admin = User::where('branch_id', $branch->id)->first()
                 ?? User::where('email', 'admin@oasis.com')->first();
 
             for ($i = 1; $i <= 5; $i++) {
+                $deadline = now()->addDays(rand(1, 30));
+                $status = $statuses[array_rand($statuses)];
+
                 ContentItem::create([
                     'branch_id' => $branch->id,
-                    'title' => "Konten {$branch->name} - Item {$i}",
+                    'title' => "Task {$branch->name} - Item {$i}",
+                    'task_detail' => "Detail task {$branch->name} item {$i}",
                     'platform' => $platforms[array_rand($platforms)],
-                    'scheduled_date' => now()->addDays(rand(1, 30)),
-                    'status' => $statuses[array_rand($statuses)],
-                    'notes' => "Catatan untuk konten {$branch->name} item {$i}",
+                    'start_date' => now()->addDays(rand(0, 10)),
+                    'deadline_date' => $deadline,
+                    'scheduled_date' => $deadline,
+                    'priority' => collect(['low', 'medium', 'high', 'urgent'])->random(),
+                    'status' => $status,
+                    'completed_at' => $status === 'completed' ? now() : null,
+                    'notes' => "Catatan untuk task {$branch->name} item {$i}",
                     'created_by' => $admin->id,
                 ]);
             }

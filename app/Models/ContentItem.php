@@ -13,9 +13,15 @@ class ContentItem extends Model
         'branch_id',
         'project_name',
         'title',
+        'task_detail',
         'platform',
+        'start_date',
+        'deadline_date',
+        'priority',
+        'pic_names',
         'scheduled_date',
         'status',
+        'completed_at',
         'notes',
         'created_by',
     ];
@@ -24,6 +30,10 @@ class ContentItem extends Model
     {
         return [
             'scheduled_date' => 'date',
+            'start_date' => 'date',
+            'deadline_date' => 'date',
+            'pic_names' => 'array',
+            'completed_at' => 'datetime',
         ];
     }
 
@@ -39,6 +49,6 @@ class ContentItem extends Model
 
     protected function activityLabel(): string
     {
-        return $this->title . ' (Konten)';
+        return $this->title . ' (Task)';
     }
 }

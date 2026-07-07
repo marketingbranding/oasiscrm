@@ -17,11 +17,16 @@ class StoreContentItemRequest extends FormRequest
         $user = Auth::user();
         return [
             'title' => 'required|string|max:255',
+            'task_detail' => 'nullable|string',
             'branch_id' => $user->canViewAllBranches() ? 'required|exists:branches,id' : 'nullable',
             'project_name' => 'nullable|string|max:255',
             'platform' => 'nullable|string|max:50',
-            'scheduled_date' => 'required|date',
-            'status' => 'required|in:draft,review,approved,posted',
+            'start_date' => 'nullable|date',
+            'deadline_date' => 'required|date',
+            'priority' => 'required|in:low,medium,high,urgent',
+            'pic_names' => 'nullable|array',
+            'pic_names.*' => 'nullable|string|max:100',
+            'status' => 'required|in:todo,in_progress,completed,lost_track',
             'notes' => 'nullable|string',
         ];
     }

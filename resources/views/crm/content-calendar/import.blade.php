@@ -1,9 +1,9 @@
 @extends('layouts.crm')
 
-@section('title', 'Import Content Calendar - Oasis CRM')
+@section('title', 'Import Task Tracker - Oasis CRM')
 
 @section('content')
-    <x-crm.page-header color="#b3bd95" title="Import Content Calendar" />
+    <x-crm.page-header color="#b3bd95" title="Import Task Tracker" />
 
     <div class="bg-white border-2 border-black p-4 mb-6">
         <div class="text-sm font-['Times_New_Roman'] mb-4 leading-relaxed">
@@ -14,7 +14,7 @@
                 <li>Upload file yang sudah diisi.</li>
             </ol>
             <p class="mt-2 text-xs text-gray-600">
-                Kolom wajib: <strong>Judul</strong> dan <strong>Tanggal</strong>.
+                Kolom wajib: <strong>Task</strong> dan <strong>Deadline</strong>.
                 Baris dengan data tidak valid akan dilewati.
             </p>
         </div>

@@ -43,24 +43,31 @@ class ContentItemImport
             }
 
             $judul = trim($cells[0 + $offset] ?? '');
-            $platform = trim($cells[1 + $offset] ?? '');
-            $projectName = trim($cells[2 + $offset] ?? '');
-            $tanggalRaw = $cells[3 + $offset] ?? '';
-            $statusRaw = trim($cells[4 + $offset] ?? '');
-            $catatan = trim($cells[5 + $offset] ?? '');
+            $detail = trim($cells[1 + $offset] ?? '');
+            $platform = trim($cells[2 + $offset] ?? '');
+            $projectName = trim($cells[3 + $offset] ?? '');
+            $startRaw = $cells[4 + $offset] ?? '';
+            $deadlineRaw = $cells[5 + $offset] ?? '';
+            $priorityRaw = strtolower(trim($cells[6 + $offset] ?? ''));
+            $picNames = trim($cells[7 + $offset] ?? '');
+            $statusRaw = strtolower(trim($cells[8 + $offset] ?? ''));
+            $catatan = trim($cells[9 + $offset] ?? '');
 
             if (empty($judul)) {
                 $errors[] = "Baris {$rowNum}: Judul kosong.";
                 continue;
             }
 
-            $tanggal = self::parseDate((string) $tanggalRaw);
-            if (empty($tanggal)) {
-                $errors[] = "Baris {$rowNum}: Tanggal tidak valid ('{$tanggalRaw}').";
+            $startDate = self::parseDate((string) $startRaw) ?: null;
+            $deadline = self::parseDate((string) $deadlineRaw);
+            if (empty($deadline)) {
+                $errors[] = "Baris {$rowNum}: Deadline tidak valid ('{$deadlineRaw}').";
                 continue;
             }
 
-            $status = in_array(strtolower($statusRaw), ['rencana', 'terbit']) ? strtolower($statusRaw) : 'rencana';
+            $priority = in_array($priorityRaw, ['low', 'medium', 'high', 'urgent'], true) ? $priorityRaw : 'medium';
+            $status = in_array($statusRaw, ['todo', 'in_progress', 'completed', 'lost_track'], true) ? $statusRaw : 'todo';
+            $picNamesArray = $picNames !== '' ? array_map('trim', explode(',', $picNames)) : [];
 
             $resolvedBranchId = $branchFromFile ?? $branchId ?? $user->branch_id ?? 1;
 
@@ -68,9 +75,15 @@ class ContentItemImport
                 'branch_id' => $resolvedBranchId,
                 'project_name' => $projectName ?: null,
                 'title' => $judul,
+                'task_detail' => $detail ?: null,
                 'platform' => $platform ?: null,
-                'scheduled_date' => $tanggal,
+                'start_date' => $startDate,
+                'deadline_date' => $deadline,
+                'scheduled_date' => $deadline,
+                'priority' => $priority,
+                'pic_names' => $picNamesArray ?: null,
                 'status' => $status,
+                'completed_at' => $status === 'completed' ? now() : null,
                 'notes' => $catatan ?: null,
                 'created_by' => $user->id,
             ];

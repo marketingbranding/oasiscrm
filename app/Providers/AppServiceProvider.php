@@ -28,14 +28,14 @@ class AppServiceProvider extends ServiceProvider
             $branchScope = fn($q) => $q->when(!$user->canViewAllBranches() && $user->branch_id, fn($q2) => $q2->where('branch_id', $user->branch_id));
 
             $overdueItems = ContentItem::whereDate('scheduled_date', '<', today())
-                ->where('status', '!=', 'posted')
+                ->where('status', '!=', 'completed')
                 ->tap($branchScope)
                 ->orderBy('scheduled_date')
                 ->take(10)
                 ->get();
 
             $todayItems = ContentItem::whereDate('scheduled_date', today())
-                ->where('status', '!=', 'posted')
+                ->where('status', '!=', 'completed')
                 ->tap($branchScope)
                 ->orderBy('scheduled_date')
                 ->take(10)

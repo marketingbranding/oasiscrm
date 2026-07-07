@@ -126,11 +126,16 @@
                                         @php
                                             $deadline = $item->deadline_date ?? $item->scheduled_date;
                                             $isOverdue = $deadline->isPast() && !$deadline->isToday() && $item->status !== 'completed';
-                                            $isApproaching = !$isOverdue && $item->status !== 'completed' && $deadline->isFuture() && $deadline->diffInDays(now()) <= 3;
+                                            $isApproaching = !$isOverdue && $item->status !== 'completed' && $deadline->diffInDays(now()) <= 7;
                                             $daysLeft = $isApproaching ? round($deadline->diffInDays(now()), 1) : null;
                                             $duration = $item->start_date ? $item->start_date->diffInDays($deadline) : null;
                                         @endphp
-                                        <div class="{{ $statusColors[$item->status] ?? 'bg-gray-200' }} border {{ $isOverdue ? 'border-[#e91d2a] border-2' : 'border-black' }} mb-1 rounded-none text-xs leading-tight {{ $item->status === 'completed' ? 'opacity-70' : '' }} {{ $isApproaching ? 'border-t-2 border-t-black' : '' }}">
+                                        <div class="{{ $statusColors[$item->status] ?? 'bg-gray-200' }} border {{ $isOverdue ? 'border-[#e91d2a] border-2' : 'border-black' }} mb-1 rounded-none text-xs leading-tight {{ $item->status === 'completed' ? 'opacity-70' : '' }}">
+                                            @if($isApproaching)
+                                                <div class="bg-[#e91d2a] text-yellow-300 text-[10px] font-mono font-bold text-center px-1 py-0.5">
+                                                    {{ $deadline->isToday() ? 'Deadline hari ini!' : ($deadline->isTomorrow() ? 'Besok deadline!' : $daysLeft . ' hari lagi') }}
+                                                </div>
+                                            @endif
                                             <a href="#"
                                                @click.prevent="openDetail({{ $item->id }})"
                                                class="block px-1 py-0.5 font-[Helvetica] font-bold text-black hover:opacity-80"
@@ -138,11 +143,6 @@
                                                 <span class="block truncate">{{ $item->title }}</span>
                                                 <span class="block font-['Times_New_Roman'] font-normal truncate">{{ $item->project_name ?? 'Tanpa proyek' }} @if($item->pic_names && count($item->pic_names) > 0) — {{ implode(', ', $item->pic_names) }} @endif</span>
                                                 <span class="block font-[Helvetica] font-bold">{{ $statusLabels[$item->status] ?? strtoupper($item->status) }} · {{ $priorityLabels[$item->priority] ?? strtoupper($item->priority ?? 'medium') }} @if($duration !== null) · {{ $duration }}d @endif</span>
-                                                @if($isApproaching && $daysLeft !== null)
-                                                    <span class="block text-[10px] font-[Helvetica] font-bold {{ $daysLeft == 0 ? 'text-[#e91d2a]' : 'text-black' }}">
-                                                        {{ $daysLeft == 0 ? 'Deadline hari ini!' : ($daysLeft == 1 ? 'Besok deadline!' : $daysLeft . ' hari lagi') }}
-                                                    </span>
-                                                @endif
                                             </a>
                                             <form method="POST" action="{{ route('content-calendar.destroy', ['content_calendar' => $item->id]) }}" onsubmit="return confirm('Hapus task ini?')" class="border-t border-black">
                                                 @csrf
@@ -179,7 +179,7 @@
         <span class="flex items-center gap-1"><span class="bg-[#b3bd95] border border-black px-2 py-0.5">COMPLETED</span> Completed</span>
         <span class="flex items-center gap-1"><span class="bg-[#d77a7a] border border-black px-2 py-0.5">LOST TRACK</span> Lost Track</span>
         <span class="flex items-center gap-1"><span class="border-2 border-[#e91d2a] px-2 py-0.5">OVERDUE</span> Past deadline</span>
-        <span class="flex items-center gap-1"><span class="border-t-2 border-t-black border border-black px-2 py-0.5">APPROACHING</span> ≤3 hari</span>
+        <span class="flex items-center gap-1"><span class="bg-[#e91d2a] text-yellow-300 border border-black px-2 py-0.5">APPROACHING</span> ≤7 hari</span>
     </div>
 
     {{-- Detail Modal --}}

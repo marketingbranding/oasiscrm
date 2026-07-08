@@ -122,7 +122,7 @@
         {{-- Tab content -- rendered per sheet name --}}
         <template x-for="name in sheetNameList" :key="name">
             <div x-show="tab === name" x-cloak x-transition:enter="transition ease-out duration-200" x-transition:enter-start="opacity-0" x-transition:enter-end="opacity-100">
-                <div class="mb-3 flex items-center gap-2" style="min-height:32px;">
+                <div class="mb-3 flex items-center gap-2 flex-wrap" style="min-height:32px;">
                     <template x-if="currentData(name) && currentData(name).records.length > 0">
                         <button @click="adding = name"
                                 class="bg-black text-white px-3 py-1 text-xs font-[Helvetica] font-bold border-2 border-black hover:bg-gray-800" style="border-radius:0;">
@@ -133,6 +133,10 @@
                        class="bg-white text-black px-3 py-1 text-xs font-[Helvetica] font-bold border-2 border-black hover:bg-gray-100" style="border-radius:0;">
                         Buka Google Sheet
                     </a>
+                    <template x-if="isLoaded(name)">
+                        <input type="text" x-model="filterText" placeholder="Cari..."
+                               class="border-2 border-black px-2 py-1 text-xs font-['Times_New_Roman'] rounded-none w-32 sm:w-48 ml-auto">
+                    </template>
                 </div>
 
                 <div x-show="!isLoaded(name)" class="border-2 border-black bg-white px-4 py-8 text-center">
@@ -148,8 +152,9 @@
                                     <template x-for="h in currentData(name).headers" :key="h">
                                         <th x-show="!['oasis_sync_id','oasis_deleted_at','oasis_deleted_by'].includes(h)"
                                             :class="currentData(name).formula_columns.includes(h) ? 'formula-col' : ''"
-                                            style="min-width:120px;">
-                                            <span x-text="h"></span>
+                                            @click="sortBy(h)"
+                                            :style="'min-width:120px;cursor:pointer;user-select:none;' + (sortColumn === h ? 'background:#5b7db9;' : '')">
+                                            <span x-text="h + sortIcon(h)"></span>
                                             <template x-if="currentData(name).formula_columns.includes(h)">
                                                 <span style="font-size:9px;font-weight:400;color:#fcc20f;">[f]</span>
                                             </template>
@@ -159,7 +164,7 @@
                                 </tr>
                             </thead>
                             <tbody>
-                                <template x-for="rec in currentData(name).records" :key="rec.id">
+                                <template x-for="rec in sortedRecords(name)" :key="rec.id">
                                     <tr>
                                         <td style="text-align:center;color:#6b7280;" x-text="rec.row_number"></td>
                                         <template x-for="h in currentData(name).headers" :key="h">
@@ -187,6 +192,12 @@
                 <template x-if="isLoaded(name) && currentData(name).records.length === 0">
                     <div class="border-2 border-black bg-white px-4 py-8 text-center">
                         <p class="text-sm font-['Times_New_Roman'] italic" style="color:#9ca3af;">—</p>
+                    </div>
+                </template>
+
+                <template x-if="isLoaded(name) && currentData(name).records.length > 0 && sortedRecords(name).length === 0">
+                    <div class="border-2 border-black bg-white px-4 py-8 text-center">
+                        <p class="text-sm font-['Times_New_Roman'] italic" style="color:#9ca3af;">Tidak ada hasil yang cocok.</p>
                     </div>
                 </template>
             </div>
@@ -289,6 +300,9 @@ document.addEventListener('alpine:init', () => {
         adding: null,
         cache: {},
         loaded: {},
+        sortColumn: null,
+        sortDirection: 'asc',
+        filterText: '',
 
         init() {
             this.cache[config.firstSheet] = {
@@ -351,6 +365,63 @@ document.addEventListener('alpine:init', () => {
                 !sheet.formula_columns.includes(h) &&
                 !['oasis_sync_id', 'oasis_deleted_at', 'oasis_deleted_by'].includes(h)
             );
+        },
+
+        sortedRecords(name) {
+            const data = this.cache[name];
+            if (!data) return [];
+            let records = [...data.records];
+
+            if (this.filterText) {
+                const ft = this.filterText.toLowerCase();
+                const visibleHeaders = data.headers.filter(h =>
+                    !['oasis_sync_id', 'oasis_deleted_at', 'oasis_deleted_by'].includes(h)
+                );
+                records = records.filter(r =>
+                    visibleHeaders.some(h => {
+                        const val = r.row_data[h];
+                        return val && String(val).toLowerCase().includes(ft);
+                    })
+                );
+            }
+
+            if (this.sortColumn) {
+                records.sort((a, b) => {
+                    const rawA = a.row_data[this.sortColumn];
+                    const rawB = b.row_data[this.sortColumn];
+                    const numA = parseFloat(rawA);
+                    const numB = parseFloat(rawB);
+                    if (!isNaN(numA) && !isNaN(numB)) {
+                        return this.sortDirection === 'asc' ? numA - numB : numB - numA;
+                    }
+                    const va = (rawA || '').toLowerCase();
+                    const vb = (rawB || '').toLowerCase();
+                    if (va < vb) return this.sortDirection === 'asc' ? -1 : 1;
+                    if (va > vb) return this.sortDirection === 'asc' ? 1 : -1;
+                    return 0;
+                });
+            }
+
+            return records;
+        },
+
+        sortBy(header) {
+            if (this.sortColumn === header) {
+                if (this.sortDirection === 'asc') {
+                    this.sortDirection = 'desc';
+                } else {
+                    this.sortColumn = null;
+                    this.sortDirection = 'asc';
+                }
+            } else {
+                this.sortColumn = header;
+                this.sortDirection = 'asc';
+            }
+        },
+
+        sortIcon(header) {
+            if (this.sortColumn !== header) return '';
+            return this.sortDirection === 'asc' ? ' ▼' : ' ▲';
         },
     }));
 });

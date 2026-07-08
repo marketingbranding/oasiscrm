@@ -118,6 +118,7 @@
 
             .db-table.frozen th.col-id_kavling, .db-table.frozen td.col-id_kavling {
                 position:sticky; left:44px; z-index:9;
+                box-shadow:3px 0 0 0 #000;
             }
             .db-table.frozen thead th.col-id_kavling { z-index:12; }
 

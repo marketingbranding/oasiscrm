@@ -170,8 +170,16 @@
                                         <template x-for="h in currentData(name).headers" :key="h">
                                             <td x-show="!['oasis_sync_id','oasis_deleted_at','oasis_deleted_by'].includes(h)"
                                                 :style="'background:' + (currentData(name).formula_columns.includes(h) ? '#b6d7a8' : 'transparent') + ';color:#000;font-style:' + (currentData(name).formula_columns.includes(h) ? 'italic' : 'normal') + ';font-style:' + (currentData(name).formula_columns.includes(h) ? 'italic' : 'normal') + ';max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;'"
-                                                :title="rec.row_data[h] || ''"
-                                                x-text="rec.row_data[h] || ''">
+                                                :title="rec.row_data[h] || ''">
+                                                 <template x-if="['true', 'false', '1', '0'].includes((rec.row_data[h] || '').toLowerCase())">
+                                                     <span class="inline-flex items-center justify-center w-5 h-5 border-2 border-black text-[10px] font-bold leading-none"
+                                                           :class="['true', '1'].includes((rec.row_data[h] || '').toLowerCase()) ? 'bg-[#22c55e] text-white' : 'bg-white text-transparent'"
+                                                           x-text="['true', '1'].includes((rec.row_data[h] || '').toLowerCase()) ? '✓' : ''">
+                                                     </span>
+                                                 </template>
+                                                 <template x-if="!['true', 'false', '1', '0'].includes((rec.row_data[h] || '').toLowerCase())">
+                                                    <span x-text="rec.row_data[h] || ''"></span>
+                                                </template>
                                             </td>
                                         </template>
                                         <td style="white-space:nowrap;">
@@ -218,8 +226,19 @@
                         <template x-for="h in editableHeaders()" :key="h">
                             <div>
                                 <label class="font-[Helvetica] font-bold text-[10px] uppercase block mb-0.5" x-text="h"></label>
-                                <input :name="h" x-model="editForm[h]"
-                                       class="w-full border-2 border-black px-2 py-1 text-sm font-['Times_New_Roman'] rounded-none">
+                                 <template x-if="['true', 'false', '1', '0'].includes((editForm[h] || '').toLowerCase())">
+                                     <label class="flex items-center gap-2 cursor-pointer">
+                                         <input type="checkbox"
+                                                :checked="['true', '1'].includes((editForm[h] || '').toLowerCase())"
+                                                @change="editForm[h] = $event.target.checked ? 'true' : 'false'"
+                                                class="w-5 h-5 accent-[#5d8e8e] border-2 border-black cursor-pointer rounded-none">
+                                         <span class="text-xs font-['Times_New_Roman']" x-text="['true', '1'].includes((editForm[h] || '').toLowerCase()) ? 'Aktif' : 'Tidak'"></span>
+                                     </label>
+                                 </template>
+                                 <template x-if="!['true', 'false', '1', '0'].includes((editForm[h] || '').toLowerCase())">
+                                    <input :name="h" x-model="editForm[h]"
+                                           class="w-full border-2 border-black px-2 py-1 text-sm font-['Times_New_Roman'] rounded-none">
+                                </template>
                             </div>
                         </template>
                     </div>
@@ -250,8 +269,18 @@
                             <template x-for="h in addHeaders(name)" :key="h">
                                 <div>
                                     <label class="font-[Helvetica] font-bold text-[10px] uppercase block mb-0.5" x-text="h"></label>
-                                    <input :name="h" value=""
-                                           class="w-full border-2 border-black px-2 py-1 text-sm font-['Times_New_Roman'] rounded-none">
+                                     <template x-if="isBooleanColumn(name, h)">
+                                         <label class="flex items-center gap-2 cursor-pointer">
+                                             <input type="checkbox" :name="h" value="true"
+                                                    @change="$event.target.nextElementSibling.textContent = $event.target.checked ? 'Aktif' : 'Tidak'"
+                                                    class="w-5 h-5 accent-[#5d8e8e] border-2 border-black cursor-pointer rounded-none">
+                                             <span class="text-xs font-['Times_New_Roman']">Tidak</span>
+                                         </label>
+                                     </template>
+                                     <template x-if="!isBooleanColumn(name, h)">
+                                        <input :name="h" value=""
+                                               class="w-full border-2 border-black px-2 py-1 text-sm font-['Times_New_Roman'] rounded-none">
+                                    </template>
                                 </div>
                             </template>
                         </div>
@@ -422,6 +451,14 @@ document.addEventListener('alpine:init', () => {
         sortIcon(header) {
             if (this.sortColumn !== header) return '';
             return this.sortDirection === 'asc' ? ' ▼' : ' ▲';
+        },
+
+        isBooleanColumn(sheetName, header) {
+            const data = this.cache[sheetName];
+            if (!data || !data.records) return false;
+            return data.records.some(r =>
+                ['true', 'false', '1', '0'].includes((r.row_data[header] || '').toLowerCase())
+            );
         },
     }));
 });

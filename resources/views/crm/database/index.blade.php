@@ -105,6 +105,21 @@
                         font-family:'Times New Roman',serif; }
             .db-table tbody tr:nth-child(even) { background:#f9fafb; }
             .db-table tbody tr:hover { background:#fef3c7; }
+            .db-table th.row-num, .db-table td.row-num {
+                width:44px; min-width:44px; max-width:44px;
+            }
+            .db-table.frozen th.row-num, .db-table.frozen td.row-num {
+                position:sticky; left:0; z-index:10;
+            }
+            .db-table.frozen thead th.row-num { z-index:13; }
+            .db-table.frozen tbody td.row-num { z-index:10; background:#fff !important; }
+            .db-table.frozen tbody tr:nth-child(even) td.row-num { background:#f9fafb !important; }
+            .db-table.frozen tbody tr:hover td.row-num { background:#fef3c7 !important; }
+
+            .db-table.frozen th.col-id_kavling, .db-table.frozen td.col-id_kavling {
+                position:sticky; left:44px; z-index:9;
+            }
+            .db-table.frozen thead th.col-id_kavling { z-index:12; }
 
 
         </style>
@@ -145,16 +160,21 @@
 
                 <template x-if="isLoaded(name) && currentData(name).records.length > 0">
                     <div class="overflow-auto border-2 border-black" style="max-height:65vh;">
-                        <table class="db-table">
+                        <table class="db-table" :class="{ frozen: frozen }">
                             <thead>
                                 <tr>
-                                    <th style="width:44px;text-align:center;">#</th>
+                                    <th :class="{ 'row-num': frozen }" style="width:44px;text-align:center;">#</th>
                                     <template x-for="h in currentData(name).headers" :key="h">
                                         <th x-show="!['oasis_sync_id','oasis_deleted_at','oasis_deleted_by'].includes(h)"
-                                            :class="currentData(name).formula_columns.includes(h) ? 'formula-col' : ''"
+                                            :class="(currentData(name).formula_columns.includes(h) ? 'formula-col ' : '') + (isIdKavlingColumn(h) ? 'col-id_kavling' : '')"
                                             @click="sortBy(h)"
                                             :style="'min-width:120px;cursor:pointer;user-select:none;' + (sortColumn === h ? 'background:#5b7db9;' : '')">
                                             <span x-text="h + sortIcon(h)"></span>
+                                            <span x-show="isIdKavlingColumn(h)"
+                                                  @click.stop="frozen = !frozen"
+                                                  style="cursor:pointer;margin-left:4px;font-size:10px;font-weight:400;"
+                                                  x-text="frozen ? '🔒' : '🔓'">
+                                            </span>
                                             <template x-if="currentData(name).formula_columns.includes(h)">
                                                 <span style="font-size:9px;font-weight:400;color:#fcc20f;">[f]</span>
                                             </template>
@@ -166,10 +186,11 @@
                             <tbody>
                                 <template x-for="rec in sortedRecords(name)" :key="rec.id">
                                     <tr>
-                                        <td style="text-align:center;color:#6b7280;" x-text="rec.row_number"></td>
+                                        <td :class="{ 'row-num': frozen }" style="text-align:center;color:#6b7280;" x-text="rec.row_number"></td>
                                         <template x-for="h in currentData(name).headers" :key="h">
                                             <td x-show="!['oasis_sync_id','oasis_deleted_at','oasis_deleted_by'].includes(h)"
-                                                :style="'background:' + (currentData(name).formula_columns.includes(h) ? '#b6d7a8' : 'transparent') + ';color:#000;font-style:' + (currentData(name).formula_columns.includes(h) ? 'italic' : 'normal') + ';font-style:' + (currentData(name).formula_columns.includes(h) ? 'italic' : 'normal') + ';max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;'"
+                                                :class="isIdKavlingColumn(h) ? 'col-id_kavling' : ''"
+                                                :style="'background:' + (currentData(name).formula_columns.includes(h) ? '#b6d7a8' : (isIdKavlingColumn(h) && frozen ? '#fff' : 'transparent')) + ';color:#000;font-style:' + (currentData(name).formula_columns.includes(h) ? 'italic' : 'normal') + ';font-style:' + (currentData(name).formula_columns.includes(h) ? 'italic' : 'normal') + ';max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;'"
                                                 :title="rec.row_data[h] || ''">
                                                  <template x-if="['true', 'false', '1', '0'].includes((rec.row_data[h] || '').toLowerCase())">
                                                      <span class="inline-flex items-center justify-center w-5 h-5 border-2 border-black text-[10px] font-bold leading-none"
@@ -332,6 +353,7 @@ document.addEventListener('alpine:init', () => {
         sortColumn: null,
         sortDirection: 'asc',
         filterText: '',
+        frozen: true,
 
         init() {
             this.cache[config.firstSheet] = {
@@ -459,6 +481,12 @@ document.addEventListener('alpine:init', () => {
             return data.records.some(r =>
                 ['true', 'false', '1', '0'].includes((r.row_data[header] || '').toLowerCase())
             );
+        },
+
+        isIdKavlingColumn(h) {
+            if (!h) return false;
+            const lower = h.toLowerCase().replace(/[\s_-]/g, '');
+            return lower === 'idkavling';
         },
     }));
 });

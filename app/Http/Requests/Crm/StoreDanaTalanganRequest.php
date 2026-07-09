@@ -28,6 +28,7 @@ class StoreDanaTalanganRequest extends FormRequest
             'nama_marketing' => 'nullable|string|max:255',
             'tgl_komitmen' => 'nullable|date',
             'penyelesaian' => 'nullable|string',
+            'status' => 'required|in:sanggup,tidak_sanggup,lunas',
         ];
     }
 }

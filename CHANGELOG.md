@@ -17,14 +17,14 @@
 
 ### 2026-07-09 — Penyederhanaan Leads, Database, dan Dana Talangan
 
-### Ditambahkan
+### Ditambahkan — Fitur baru: deep-link Database, quick add Lead, dan date picker Dana Talangan
 - Deep-link modul Database — halaman Database sekarang bisa langsung membuka tab tertentu melalui parameter `sheet`, misalnya `?sheet=lead`.
 - Quick add Lead — tombol `+ Lead Baru` di Dashboard sekarang membuka modal "Tambah Data — lead" langsung dari modul Database melalui `?sheet=lead&add=1`.
 - Dashboard Lead berbasis Google Sheet — data Lead di agenda hari ini dan aktivitas terbaru sekarang dibaca dari tab `lead` pada Database, bukan dari tabel lokal `leads`.
 - Kolom `TGL Komitmen` pada Dana Talangan — ditambahkan ke form, tabel, detail, export, import, validasi, model, dan database.
 - Custom date picker untuk `TGL Komitmen` — menggunakan date picker internal yang sama seperti `Tanggal Lead` dan `Tanggal` Dana Talangan.
 
-### Diubah
+### Diubah — Modifikasi navigasi, label, dan alur Leads
 - Modul Leads standalone dihapus dari alur utama karena belum digunakan branch dan datanya kosong.
 - Sidebar Leads dihapus.
 - Tombol quick add Lead tetap dipertahankan, tetapi diarahkan ke tab `lead` di modul Database.
@@ -32,14 +32,27 @@
 - Pencarian Dana Talangan sekarang juga mencakup kolom `penyelesaian`.
 - Matching tab Database untuk deep-link dibuat case-insensitive, sehingga `lead`, `Lead`, atau `LEAD` tetap bisa terbuka.
 
-### Diperbaiki
+### Diperbaiki — Bug fix: quick add modal, dashboard widget, spasi Masukan, notifikasi
 - Quick add Lead tidak membuka modal — diperbaiki dengan mengarahkan ke tab `lead` yang benar.
 - Dashboard Lead widget sebelumnya membaca tab yang salah — sekarang membaca dari tab `lead`.
 - Spasi berlebih pada Bug/Masukan dipangkas otomatis saat submit dan saat admin memberi catatan.
 - Jumlah notifikasi Bug/Masukan sekarang muncul saat halaman pertama kali dimuat.
 
-### Dihapus
+### Dihapus — Pembersihan modul Leads standalone
 - Route standalone `leads.*`.
 - Controller standalone `LeadController`.
 - View standalone `resources/views/crm/leads/`.
 - Menu sidebar Leads standalone.
+
+### 2026-07-09 — Opsi Status Cicilan Dana Talangan
+
+### Diubah — Status `aktif/lunas` menjadi 3 opsi baru
+- Opsi status Dana Talangan sekarang: `Sanggup`, `Tidak Sanggup`, `Lunas`.
+- Label header tabel, filter, form, detail modal, export, dan bulk bar diubah menjadi `Status Cicilan`.
+- Default status baru di database: `sanggup`.
+- Validasi create & edit menerima `sanggup`, `tidak_sanggup`, `lunas`.
+- Controller bulk status options diperbarui.
+- Data lama dengan status `aktif` otomatis dipetakan ke `sanggup` via migration.
+- Warna baris tabel: `lunas` hijau, `tidak_sanggup` merah, `sanggup` biru.
+- Export template dropdown diperbarui dengan 3 opsi.
+- Import menerima nilai `sanggup`, `tidak_sanggup`, `lunas`; nilai `aktif` lama dipetakan ke `sanggup`.

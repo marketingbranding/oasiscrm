@@ -40,8 +40,8 @@ class DanaTalanganController extends Controller
 
     protected string $bulkModel = DanaTalangan::class;
     protected string $bulkLabel = 'data dana talangan';
-    protected array $bulkStatusOptions = ['aktif', 'lunas'];
-    protected string $bulkDefaultStatus = 'aktif';
+    protected array $bulkStatusOptions = ['sanggup', 'tidak_sanggup', 'lunas'];
+    protected string $bulkDefaultStatus = 'sanggup';
     protected string $bulkRedirectRoute = 'dana-talangan.index';
     protected array $bulkRedirectParams = ['branch_id', 'project_name', 'status'];
 

@@ -22,7 +22,7 @@ class DanaTalanganExport
         return [
             'No', 'Tanggal', 'Nama Konsumen', 'Kav', 'Proyek',
             'Pinjam Nama', 'Pekerjaan', 'Status Kawin', 'Umur',
-            'Marketing', 'TGL Komitmen', 'Penyelesaian', 'Konfirmasi', 'Status',
+            'Marketing', 'TGL Komitmen', 'Penyelesaian', 'Konfirmasi', 'Status Cicilan',
         ];
     }
 
@@ -157,7 +157,7 @@ class DanaTalanganExport
         $sheet->setDataValidation('N2:N' . $maxRow, self::listValidation(['YA', 'TIDAK']));
 
         // --- O:Status dropdown ---
-        $sheet->setDataValidation('O2:O' . $maxRow, self::listValidation(['aktif', 'lunas']));
+        $sheet->setDataValidation('O2:O' . $maxRow, self::listValidation(['sanggup', 'tidak_sanggup', 'lunas']));
 
         self::applyStyles($spreadsheet, $headers, $maxRow, self::templateWidths());
 

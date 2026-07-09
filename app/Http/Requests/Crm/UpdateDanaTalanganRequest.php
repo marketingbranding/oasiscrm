@@ -34,7 +34,7 @@ class UpdateDanaTalanganRequest extends FormRequest
             'tgl_komitmen' => 'nullable|date',
             'penyelesaian' => 'nullable|string',
             'konfirmasi_keuangan' => 'nullable|boolean',
-            'status' => 'required|in:aktif,lunas',
+            'status' => 'required|in:sanggup,tidak_sanggup,lunas',
         ];
     }
 }

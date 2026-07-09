@@ -3,7 +3,7 @@
 @section('title', 'Dana Talangan - Oasis CRM')
 
 @section('content')
-<div x-data="crmDetailModal('/dana-talangan', '/dana-talangan', {aktif:'#9ab6c8',lunas:'#b3bd95'})">
+<div x-data="crmDetailModal('/dana-talangan', '/dana-talangan', {sanggup:'#9ab6c8',tidak_sanggup:'#d77a7a',lunas:'#b3bd95'})">
     <x-crm.page-header color="#f1c40f" title="Dana Talangan" />
 
     <div class="bg-white border-2 border-black p-3 mb-6">
@@ -29,10 +29,11 @@
             </select>
             @endif
 
-            <label class="font-[Helvetica] font-bold text-xs uppercase">Status:</label>
+            <label class="font-[Helvetica] font-bold text-xs uppercase">Status Cicilan:</label>
             <select name="status" onchange="this.form.submit()" class="border-2 border-black px-3 py-1.5 text-sm font-['Times_New_Roman'] bg-white rounded-none">
                 <option value="">— Semua Status —</option>
-                <option value="aktif" {{ $selectedStatus === 'aktif' ? 'selected' : '' }}>Aktif</option>
+                <option value="sanggup" {{ $selectedStatus === 'sanggup' ? 'selected' : '' }}>Sanggup</option>
+                <option value="tidak_sanggup" {{ $selectedStatus === 'tidak_sanggup' ? 'selected' : '' }}>Tidak Sanggup</option>
                 <option value="lunas" {{ $selectedStatus === 'lunas' ? 'selected' : '' }}>Lunas</option>
             </select>
                 <label class="font-[Helvetica] font-bold text-xs uppercase">Cari:</label>
@@ -71,13 +72,13 @@
                     <x-crm.sortable-th field="tgl_komitmen" route="dana-talangan.index" label="TGL Komitmen" :currentSort="$sortField" :currentDir="$sortDir" classes="hidden lg:table-cell" />
                     <th class="px-3 py-2 text-left font-[Helvetica] font-bold text-xs uppercase hidden lg:table-cell">Progress Penagihan</th>
                     <th class="px-3 py-2 text-center font-[Helvetica] font-bold text-xs uppercase hidden lg:table-cell">Konfirmasi</th>
-                    <x-crm.sortable-th field="status" route="dana-talangan.index" label="Status" :currentSort="$sortField" :currentDir="$sortDir" align="center" />
+                    <x-crm.sortable-th field="status" route="dana-talangan.index" label="Status Cicilan" :currentSort="$sortField" :currentDir="$sortDir" align="center" />
                     <th class="px-3 py-2 text-center font-[Helvetica] font-bold text-xs uppercase">Aksi</th>
                 </tr>
             </thead>
             <tbody class="divide-y divide-black">
                 @forelse($records as $i => $r)
-                <tr class="{{ $r->status === 'lunas' ? 'bg-[#b3bd95]' : '' }} dt-row">
+                <tr class="{{ $r->status === 'lunas' ? 'bg-[#b3bd95]' : ($r->status === 'tidak_sanggup' ? 'bg-[#d77a7a]' : '') }} dt-row">
                     <td class="w-10 px-3 py-2 text-center"><input type="checkbox" class="row-checkbox cursor-pointer" value="{{ $r->id }}"></td>
                     <td class="px-3 py-2">{{ $i + 1 }}</td>
                     <td class="px-3 py-2">{{ $r->tanggal->format('d M Y') }}</td>
@@ -99,8 +100,8 @@
                         @endif
                     </td>
                     <td class="px-3 py-2 text-center">
-                        <span class="inline-block px-2 py-0.5 text-xs font-[Helvetica] font-bold border border-black {{ $r->status === 'lunas' ? 'bg-white' : 'bg-[#9ab6c8]' }}">
-                            {{ strtoupper($r->status) }}
+                        <span class="inline-block px-2 py-0.5 text-xs font-[Helvetica] font-bold border border-black {{ $r->status === 'lunas' ? 'bg-white' : ($r->status === 'tidak_sanggup' ? 'bg-[#d77a7a] text-white' : 'bg-[#9ab6c8]') }}">
+                            {{ $r->status === 'sanggup' ? 'SANGGUP' : ($r->status === 'tidak_sanggup' ? 'TIDAK SANGGUP' : 'LUNAS') }}
                         </span>
                     </td>
                     <td class="px-3 py-2 text-center">
@@ -132,8 +133,8 @@
     <x-crm.bulk-bar
         destroy-route="{{ route('dana-talangan.bulk-destroy') }}"
         update-route="{{ route('dana-talangan.bulk-update') }}"
-        :status-options="['aktif' => 'Aktif', 'lunas' => 'Lunas']"
-        status-label="Status"
+        :status-options="['sanggup' => 'Sanggup', 'tidak_sanggup' => 'Tidak Sanggup', 'lunas' => 'Lunas']"
+        status-label="Status Cicilan"
         accent-color="#f1c40f"
         :params="request()->only(['branch_id', 'project_name', 'status'])" />
 
@@ -152,9 +153,9 @@
         ['key' => 'nama_marketing', 'label' => 'Marketing', 'colspan' => 2],
         ['key' => 'tgl_komitmen', 'label' => 'TGL Komitmen', 'type' => 'date'],
         ['key' => 'konfirmasi_keuangan', 'label' => 'Konfirmasi Keuangan', 'type' => 'boolean'],
-        ['key' => 'status', 'label' => 'Status', 'type' => 'badge'],
+        ['key' => 'status', 'label' => 'Status Cicilan', 'type' => 'badge'],
     ]"
-    status-colors='{"aktif":"#9ab6c8","lunas":"#b3bd95"}'
+    status-colors='{"sanggup":"#9ab6c8","tidak_sanggup":"#d77a7a","lunas":"#b3bd95"}'
 />
 </div>
 <style>.dt-row:hover{background:#fef3cd}</style>

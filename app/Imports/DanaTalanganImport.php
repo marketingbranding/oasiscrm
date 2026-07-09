@@ -78,7 +78,7 @@ class DanaTalanganImport
             }
 
             $umur = is_numeric($umurRaw) ? (int) $umurRaw : null;
-            $status = in_array(strtolower($statusRaw), ['lunas', 'aktif']) ? strtolower($statusRaw) : 'aktif';
+            $status = in_array(strtolower($statusRaw), ['lunas', 'sanggup', 'tidak_sanggup']) ? strtolower(str_replace(' ', '_', $statusRaw)) : 'sanggup';
 
             $resolvedBranchId = $branchFromFile ?? $branchId ?? $user->branch_id ?? 1;
 

@@ -12,6 +12,14 @@ class StoreFeedbackReportRequest extends FormRequest
         return true;
     }
 
+    protected function prepareForValidation(): void
+    {
+        $this->merge([
+            'title' => trim($this->title ?? ''),
+            'description' => trim($this->description ?? ''),
+        ]);
+    }
+
     public function rules(): array
     {
         $user = Auth::user();

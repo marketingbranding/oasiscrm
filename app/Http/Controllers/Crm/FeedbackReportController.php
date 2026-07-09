@@ -15,6 +15,7 @@ class FeedbackReportController extends Controller
         $user = Auth::user();
         $data = $request->validated();
 
+        $data['description'] = trim($data['description'] ?? '');
         $data['user_id'] = $user->id;
 
         if (!$user->isSuperadmin()) {
@@ -116,7 +117,7 @@ class FeedbackReportController extends Controller
 
         $feedbackReport->update([
             'status' => 'approved',
-            'admin_note' => $request->input('admin_note', $feedbackReport->admin_note),
+            'admin_note' => trim($request->input('admin_note', $feedbackReport->admin_note ?? '')),
             'reviewed_by' => $user->id,
             'reviewed_at' => now(),
         ]);
@@ -133,7 +134,7 @@ class FeedbackReportController extends Controller
 
         $feedbackReport->update([
             'status' => 'rejected',
-            'admin_note' => $request->input('admin_note', $feedbackReport->admin_note),
+            'admin_note' => trim($request->input('admin_note', $feedbackReport->admin_note ?? '')),
             'reviewed_by' => $user->id,
             'reviewed_at' => now(),
         ]);

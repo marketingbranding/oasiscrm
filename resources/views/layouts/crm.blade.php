@@ -358,7 +358,7 @@
         };
         return map[status] || { backgroundColor: '#ccc', color: '#000' };
     }
-}" class="fixed bottom-4 right-4 z-50" x-cloak>
+}" class="fixed bottom-4 right-4 z-50" x-cloak x-init="fetchReports()">
     <template x-if="!open">
         <button @click="open = true; sent = false; fetchReports(); fetchHistory()"
                 class="relative w-12 h-12 bg-[#c0392b] hover:bg-[#a93226] text-white border-2 border-black rounded-none flex items-center justify-center shadow-lg transition-colors duration-200"
@@ -511,14 +511,14 @@
                                   x-text="statusLabel(selectedReport.status)"></span>
                         </div>
 
-                        <div class="bg-gray-50 border border-black p-2 mb-3 text-sm whitespace-pre-wrap break-words max-h-32 overflow-y-auto">
-                            <span x-text="selectedReport.description || '(Tidak ada deskripsi)'"></span>
+                        <div class="bg-gray-50 border border-black p-2 mb-3 text-sm whitespace-pre-line break-words max-h-32 overflow-y-auto">
+                            <span x-text="(selectedReport.description || '').trim() || '(Tidak ada deskripsi)'"></span>
                         </div>
 
                         <template x-if="selectedReport.admin_note">
                             <div class="mb-3">
                                 <div class="text-[10px] font-[Helvetica] font-bold uppercase text-gray-500 mb-0.5">Catatan Admin:</div>
-                                <div class="bg-yellow-50 border border-black p-2 text-sm whitespace-pre-wrap break-words" x-text="selectedReport.admin_note"></div>
+                                <div class="bg-yellow-50 border border-black p-2 text-sm whitespace-pre-line break-words" x-text="(selectedReport.admin_note || '').trim()"></div>
                             </div>
                         </template>
 
@@ -582,10 +582,10 @@
                                         <span class="inline-block px-1.5 py-0.5 text-[10px] font-[Helvetica] font-bold border border-black bg-[#d77a7a] text-white">BUG</span>
                                     </label>
                                 </div>
-                                <input x-model="title" required maxlength="255"
+                                <input x-model.trim="title" required maxlength="255"
                                        class="w-full border-2 border-black px-2 py-1.5 text-sm mb-2"
                                        placeholder="Judul singkat...">
-                                <textarea x-model="description" required maxlength="5000" rows="3"
+                                <textarea x-model.trim="description" required maxlength="5000" rows="3"
                                           class="w-full border-2 border-black px-2 py-1.5 text-sm resize-none focus:outline-none"
                                           placeholder="Jelaskan detailnya..."></textarea>
                                 <div class="flex items-center justify-between mt-2">

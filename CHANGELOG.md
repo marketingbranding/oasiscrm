@@ -84,3 +84,19 @@
 - Kolom body tabel Dana Talangan mengikuti visibility header pada layar kecil agar tidak misalignment.
 - Empty state Database sheet kosong menjelaskan kebutuhan baris contoh sebelum tambah data.
 - Bulk update/delete Task Tracker mempertahankan konteks filter/bulan saat redirect.
+
+### 2026-07-10 — Dashboard: Widget Pipeline Konsumen
+
+### Ditambahkan — Widget Konsumen Progress
+- Grafik pipeline 7 tahap (BI Checking → PSJB → Pemberkasan → Proses Bank → PPJB Dev → Akad → BAST) menggantikan widget Status Cabang.
+- Data konsumen dihitung unik per tahap terakhir, deduplikasi lintas tahap dengan `branch_id|kavling` key.
+- Ketika cabang dipilih: menampilkan pipeline cabang tersebut.
+- Ketika tidak ada cabang dipilih (superadmin): menampilkan agregasi seluruh cabang aktif.
+- Sumber data: tabel `konsumen_progress_sheet_rows` yang sudah ada (sync via `KonsumenProgressSyncService`).
+
+### Dihapus — Widget Status Cabang
+- Widget batang Status Cabang (completion rate per cabang) dihapus dari dashboard.
+- Kode controller `$branchStatuses` beserta query `ContentItem` per-cabang dibersihkan.
+
+### Diperbaiki — Missing import
+- Menambahkan `use App\Models\DatabaseSheetSyncStatus` ke `DashboardController` untuk memperbaiki `Class not found` error.

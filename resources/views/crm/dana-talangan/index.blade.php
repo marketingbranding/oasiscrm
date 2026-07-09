@@ -68,7 +68,8 @@
                     <x-crm.sortable-th field="status_perkawinan" route="dana-talangan.index" label="Status Kawin" :currentSort="$sortField" :currentDir="$sortDir" classes="hidden lg:table-cell" />
                     <x-crm.sortable-th field="umur" route="dana-talangan.index" label="Umur" :currentSort="$sortField" :currentDir="$sortDir" align="center" classes="hidden lg:table-cell" />
                     <x-crm.sortable-th field="nama_marketing" route="dana-talangan.index" label="Marketing" :currentSort="$sortField" :currentDir="$sortDir" classes="hidden lg:table-cell" />
-                    <th class="px-3 py-2 text-left font-[Helvetica] font-bold text-xs uppercase hidden lg:table-cell">Penyelesaian</th>
+                    <x-crm.sortable-th field="tgl_komitmen" route="dana-talangan.index" label="TGL Komitmen" :currentSort="$sortField" :currentDir="$sortDir" classes="hidden lg:table-cell" />
+                    <th class="px-3 py-2 text-left font-[Helvetica] font-bold text-xs uppercase hidden lg:table-cell">Progress Penagihan</th>
                     <th class="px-3 py-2 text-center font-[Helvetica] font-bold text-xs uppercase hidden lg:table-cell">Konfirmasi</th>
                     <x-crm.sortable-th field="status" route="dana-talangan.index" label="Status" :currentSort="$sortField" :currentDir="$sortDir" align="center" />
                     <th class="px-3 py-2 text-center font-[Helvetica] font-bold text-xs uppercase">Aksi</th>
@@ -88,6 +89,7 @@
                     <td class="px-3 py-2">{{ $r->status_perkawinan ?? '—' }}</td>
                     <td class="px-3 py-2 text-center">{{ $r->umur ?? '—' }}</td>
                     <td class="px-3 py-2">{{ $r->nama_marketing ?? '—' }}</td>
+                    <td class="px-3 py-2">{{ $r->tgl_komitmen ? \Carbon\Carbon::parse($r->tgl_komitmen)->format('d M Y') : '—' }}</td>
                     <td class="px-3 py-2 max-w-[200px] truncate" title="{{ $r->penyelesaian }}">{{ $r->penyelesaian ?? '—' }}</td>
                     <td class="px-3 py-2 text-center">
                         @if($r->konfirmasi_keuangan)
@@ -118,7 +120,7 @@
                 </tr>
                 @empty
                 <tr>
-                    <td colspan="15" class="px-4 py-8 text-center text-sm">Belum ada data dana talangan.</td>
+                    <td colspan="16" class="px-4 py-8 text-center text-sm">Belum ada data dana talangan.</td>
                 </tr>
                 @endforelse
             </tbody>
@@ -148,6 +150,7 @@
         ['key' => 'status_perkawinan', 'label' => 'Status Kawin'],
         ['key' => 'umur', 'label' => 'Umur'],
         ['key' => 'nama_marketing', 'label' => 'Marketing', 'colspan' => 2],
+        ['key' => 'tgl_komitmen', 'label' => 'TGL Komitmen', 'type' => 'date'],
         ['key' => 'konfirmasi_keuangan', 'label' => 'Konfirmasi Keuangan', 'type' => 'boolean'],
         ['key' => 'status', 'label' => 'Status', 'type' => 'badge'],
     ]"

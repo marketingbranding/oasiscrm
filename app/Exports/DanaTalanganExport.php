@@ -22,7 +22,7 @@ class DanaTalanganExport
         return [
             'No', 'Tanggal', 'Nama Konsumen', 'Kav', 'Proyek',
             'Pinjam Nama', 'Pekerjaan', 'Status Kawin', 'Umur',
-            'Marketing', 'Penyelesaian', 'Konfirmasi', 'Status',
+            'Marketing', 'TGL Komitmen', 'Penyelesaian', 'Konfirmasi', 'Status',
         ];
     }
 
@@ -36,7 +36,7 @@ class DanaTalanganExport
         return [
             'A' => 5, 'B' => 14, 'C' => 30, 'D' => 10, 'E' => 25,
             'F' => 14, 'G' => 20, 'H' => 15, 'I' => 7,
-            'J' => 20, 'K' => 30, 'L' => 14, 'M' => 10,
+            'J' => 20, 'K' => 14, 'L' => 30, 'M' => 14, 'N' => 10,
         ];
     }
 
@@ -45,7 +45,7 @@ class DanaTalanganExport
         return [
             'A' => 22, 'B' => 5, 'C' => 14, 'D' => 30, 'E' => 10, 'F' => 25,
             'G' => 14, 'H' => 20, 'I' => 15, 'J' => 7,
-            'K' => 20, 'L' => 30, 'M' => 14, 'N' => 10,
+            'K' => 20, 'L' => 14, 'M' => 30, 'N' => 14, 'O' => 10,
         ];
     }
 
@@ -70,9 +70,10 @@ class DanaTalanganExport
             $sheet->setCellValue(self::cell(8, $row), $r->status_perkawinan ?? '—');
             $sheet->setCellValue(self::cell(9, $row), $r->umur ?? '—');
             $sheet->setCellValue(self::cell(10, $row), $r->nama_marketing ?? '—');
-            $sheet->setCellValue(self::cell(11, $row), $r->penyelesaian ?? '—');
-            $sheet->setCellValue(self::cell(12, $row), $r->konfirmasi_keuangan ? '✓' : '—');
-            $sheet->setCellValue(self::cell(13, $row), strtoupper($r->status));
+            $sheet->setCellValue(self::cell(11, $row), $r->tgl_komitmen ? $r->tgl_komitmen->format('d M Y') : '—');
+            $sheet->setCellValue(self::cell(12, $row), $r->penyelesaian ?? '—');
+            $sheet->setCellValue(self::cell(13, $row), $r->konfirmasi_keuangan ? '✓' : '—');
+            $sheet->setCellValue(self::cell(14, $row), strtoupper($r->status));
         }
 
         $rowCount = $records->count() + 1;
@@ -152,11 +153,11 @@ class DanaTalanganExport
         // --- G:Pinjam Nama dropdown ---
         $sheet->setDataValidation('G2:G' . $maxRow, self::listValidation(['YA', 'TIDAK']));
 
-        // --- M:Konfirmasi dropdown ---
-        $sheet->setDataValidation('M2:M' . $maxRow, self::listValidation(['YA', 'TIDAK']));
+        // --- N:Konfirmasi dropdown ---
+        $sheet->setDataValidation('N2:N' . $maxRow, self::listValidation(['YA', 'TIDAK']));
 
-        // --- N:Status dropdown ---
-        $sheet->setDataValidation('N2:N' . $maxRow, self::listValidation(['aktif', 'lunas']));
+        // --- O:Status dropdown ---
+        $sheet->setDataValidation('O2:O' . $maxRow, self::listValidation(['aktif', 'lunas']));
 
         self::applyStyles($spreadsheet, $headers, $maxRow, self::templateWidths());
 

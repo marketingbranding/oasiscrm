@@ -62,12 +62,13 @@ class DanaTalanganController extends Controller
             $q->where('nama_konsumen', 'like', "%{$v}%")
               ->orWhere('kav', 'like', "%{$v}%")
               ->orWhere('project_name', 'like', "%{$v}%")
-              ->orWhere('nama_marketing', 'like', "%{$v}%");
+              ->orWhere('nama_marketing', 'like', "%{$v}%")
+              ->orWhere('penyelesaian', 'like', "%{$v}%");
         }));
 
         $sortField = $request->get('sort', 'tanggal');
         $sortDir = $request->get('dir', 'desc');
-        $allowedSorts = ['tanggal', 'nama_konsumen', 'kav', 'project_name', 'pekerjaan', 'status_perkawinan', 'umur', 'nama_marketing', 'status'];
+        $allowedSorts = ['tanggal', 'nama_konsumen', 'kav', 'project_name', 'pekerjaan', 'status_perkawinan', 'umur', 'nama_marketing', 'tgl_komitmen', 'status'];
         if (!in_array($sortField, $allowedSorts)) $sortField = 'tanggal';
         if (!in_array($sortDir, ['asc', 'desc'])) $sortDir = 'desc';
 

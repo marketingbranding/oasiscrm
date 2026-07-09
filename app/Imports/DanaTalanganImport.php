@@ -34,13 +34,13 @@ class DanaTalanganImport
 
             $cells = array_values($cells);
 
-            $minExpected = $hasCabang ? 14 : 13;
+            $minExpected = $hasCabang ? 15 : 14;
             if (count($cells) < $minExpected) {
-                if (count($cells) < 13) {
-                    $cells = array_pad($cells, 13, '');
-                }
-                if ($hasCabang && count($cells) < 14) {
+                if (count($cells) < 14) {
                     $cells = array_pad($cells, 14, '');
+                }
+                if ($hasCabang && count($cells) < 15) {
+                    $cells = array_pad($cells, 15, '');
                 }
             }
 
@@ -61,9 +61,10 @@ class DanaTalanganImport
             $statusKawin = trim($cells[7 + $offset] ?? '');
             $umurRaw = trim($cells[8 + $offset] ?? '');
             $marketing = trim($cells[9 + $offset] ?? '');
-            $penyelesaian = trim($cells[10 + $offset] ?? '');
-            $konfirmasiRaw = trim($cells[11 + $offset] ?? '');
-            $statusRaw = trim($cells[12 + $offset] ?? '');
+            $tglKomitmen = trim($cells[10 + $offset] ?? '');
+            $penyelesaian = trim($cells[11 + $offset] ?? '');
+            $konfirmasiRaw = trim($cells[12 + $offset] ?? '');
+            $statusRaw = trim($cells[13 + $offset] ?? '');
 
             if (empty($namaKonsumen)) {
                 $errors[] = "Baris {$rowNum}: Nama konsumen kosong.";
@@ -92,6 +93,7 @@ class DanaTalanganImport
                 'status_perkawinan' => $statusKawin ?: null,
                 'umur' => $umur,
                 'nama_marketing' => $marketing ?: null,
+                'tgl_komitmen' => self::parseDate((string) $tglKomitmen) ?: null,
                 'penyelesaian' => $penyelesaian ?: null,
                 'konfirmasi_keuangan' => self::parseBool((string) $konfirmasiRaw),
                 'status' => $status,

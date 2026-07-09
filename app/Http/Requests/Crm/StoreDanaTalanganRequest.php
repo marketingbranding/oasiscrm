@@ -26,6 +26,7 @@ class StoreDanaTalanganRequest extends FormRequest
             'status_perkawinan' => 'nullable|string|max:100',
             'umur' => 'nullable|integer|min:0|max:150',
             'nama_marketing' => 'nullable|string|max:255',
+            'tgl_komitmen' => 'nullable|date',
             'penyelesaian' => 'nullable|string',
         ];
     }

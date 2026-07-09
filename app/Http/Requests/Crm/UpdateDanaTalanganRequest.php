@@ -31,6 +31,7 @@ class UpdateDanaTalanganRequest extends FormRequest
             'status_perkawinan' => 'nullable|string|max:100',
             'umur' => 'nullable|integer|min:0|max:150',
             'nama_marketing' => 'nullable|string|max:255',
+            'tgl_komitmen' => 'nullable|date',
             'penyelesaian' => 'nullable|string',
             'konfirmasi_keuangan' => 'nullable|boolean',
             'status' => 'required|in:aktif,lunas',

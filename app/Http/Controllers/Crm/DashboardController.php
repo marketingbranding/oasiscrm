@@ -7,7 +7,10 @@ use App\Models\Branch;
 use App\Models\ContentItem;
 use App\Models\DanaTalangan;
 use App\Models\DatabaseSheetRecord;
+use App\Models\DatabaseSheetSyncStatus;
+use App\Models\KonsumenProgressSheetRow;
 use App\Models\LeadMaster;
+use App\Services\KonsumenProgressSyncService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 
@@ -34,22 +37,15 @@ class DashboardController extends Controller
                 $branch = null;
             }
 
-            $branchStatuses = Branch::withCount(['contentItems'])->where('is_active', true)->get()->map(function ($b) use ($selectedProject) {
-                $q = ContentItem::where('branch_id', $b->id);
-                if ($selectedProject) { $q->where('project_name', $selectedProject); }
-                $b->posted_count = (clone $q)->where('status', 'completed')->count();
-                $b->completion_rate = $b->content_items_count > 0 ? round($b->posted_count / $b->content_items_count * 100) : 0;
-                return $b;
-            });
-
             $recentActivity = $this->getRecentActivity($selectedBranchId, $selectedProject);
 
             $leadStats = $this->getLeadStats($selectedBranchId, $selectedProject);
             $danaStats = $this->getDanaTalanganStats($selectedBranchId, $selectedProject);
             $actionQueue = $this->getActionQueue($selectedBranchId, $selectedProject);
             $syncHealth = $this->getSyncHealth($selectedBranchId);
+            $konsumenProgress = $this->getKonsumenProgress($selectedBranchId);
 
-            return view('crm.dashboard', compact('branches', 'projects', 'branch', 'selectedBranchId', 'selectedProject', 'branchStatuses', 'recentActivity', 'leadStats', 'danaStats', 'actionQueue', 'syncHealth'));
+            return view('crm.dashboard', compact('branches', 'projects', 'branch', 'selectedBranchId', 'selectedProject', 'recentActivity', 'leadStats', 'danaStats', 'actionQueue', 'syncHealth', 'konsumenProgress'));
         }
 
         $branch = $user->branch;
@@ -69,8 +65,9 @@ class DashboardController extends Controller
         $danaStats = $this->getDanaTalanganStats($branch->id, $selectedProject);
         $actionQueue = $this->getActionQueue($branch->id, $selectedProject);
         $syncHealth = $this->getSyncHealth($branch->id);
+        $konsumenProgress = $this->getKonsumenProgress($branch->id);
 
-        return view('crm.dashboard', compact('branch', 'projects', 'selectedProject', 'recentActivity', 'leadStats', 'danaStats', 'actionQueue', 'syncHealth'));
+        return view('crm.dashboard', compact('branch', 'projects', 'selectedProject', 'recentActivity', 'leadStats', 'danaStats', 'actionQueue', 'syncHealth', 'konsumenProgress'));
     }
 
     private function getRecentActivity($branchId = null, $projectName = null)
@@ -277,5 +274,53 @@ class DashboardController extends Controller
             'isStale' => $isStale,
             'summary' => $syncStatus->summary,
         ];
+    }
+
+    private function getKonsumenProgress($branchId = null): array
+    {
+        $stages = KonsumenProgressSyncService::STAGES;
+
+        $query = KonsumenProgressSheetRow::query()
+            ->whereIn('sheet_name', array_keys($stages));
+
+        if ($branchId) {
+            $query->where('branch_id', $branchId);
+        } else {
+            $query->whereIn('branch_id', Branch::where('is_active', true)->pluck('id'));
+        }
+
+        $rows = $query->get(['branch_id', 'sheet_name', 'row_data']);
+
+        $rowsBySheet = [];
+        foreach ($rows as $row) {
+            $rowsBySheet[$row->sheet_name][] = ['branch_id' => $row->branch_id, 'row_data' => $row->row_data];
+        }
+
+        $seen = [];
+        $pipeline = [];
+
+        foreach (array_reverse(array_keys($stages)) as $stageKey) {
+            $count = 0;
+            foreach (($rowsBySheet[$stageKey] ?? []) as $entry) {
+                $kavling = trim($entry['row_data']['id_kavling'] ?? '');
+                $key = $entry['branch_id'] . '|' . $kavling;
+                if ($kavling === '' || isset($seen[$key])) continue;
+                $seen[$key] = true;
+                $count++;
+            }
+            $pipeline[$stageKey] = [
+                'label' => $stages[$stageKey],
+                'count' => $count,
+            ];
+        }
+
+        foreach (array_keys($stages) as $stageKey) {
+            $pipeline[$stageKey] ??= [
+                'label' => $stages[$stageKey],
+                'count' => 0,
+            ];
+        }
+
+        return $pipeline;
     }
 }

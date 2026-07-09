@@ -148,58 +148,25 @@
     </div>
     @endif
 
-    {{-- === STATUS CABANG (bar chart) === --}}
-    @if(Auth::user()->canViewAllBranches() && isset($branchStatuses))
-    <div x-data="{ chartView: true }" class="border-2 border-black mb-4">
-        <div class="bg-black text-white px-3 py-2 font-[Helvetica] font-bold text-xs uppercase flex items-center justify-between">
-            <span>Status Cabang</span>
-            <button @click="chartView = !chartView" class="text-white/70 hover:text-white text-[10px]">
-                <span x-text="chartView ? 'Lihat Tabel' : 'Lihat Grafik'"></span>
-            </button>
-        </div>
-
-        {{-- Bar Chart View --}}
-        <div x-show="chartView" class="px-3 py-3">
+    {{-- === KONSUMEN PROGRESS PIPELINE === --}}
+    @if(isset($konsumenProgress) && count($konsumenProgress) > 0)
+    <div class="border-2 border-black mb-4">
+        <div class="bg-black text-white px-3 py-2 font-[Helvetica] font-bold text-xs uppercase">Konsumen Progress</div>
+        <div class="px-3 py-3">
             @php
-                $sorted = $branchStatuses->sortBy('completion_rate');
+                $maxCount = max(array_column($konsumenProgress, 'count'));
             @endphp
-            @foreach($sorted as $bs)
+            @foreach($konsumenProgress as $stage)
             <div class="mb-2">
                 <div class="flex items-center justify-between text-xs font-[Helvetica] font-bold mb-0.5">
-                    <span>{{ $bs->name }}</span>
-                    <span>{{ $bs->posted_count }}/{{ $bs->content_items_count }} ({{ $bs->completion_rate }}%)</span>
+                    <span>{{ $stage['label'] }}</span>
+                    <span>{{ $stage['count'] }}</span>
                 </div>
                 <div class="w-full bg-gray-200 border border-black" style="height:16px;">
-                    <div class="h-full {{ $bs->completion_rate >= 75 ? 'bg-[#b3bd95]' : ($bs->completion_rate >= 50 ? 'bg-[#e6915d]' : 'bg-[#d77a7a]') }}" style="width:{{ $bs->completion_rate }}%;"></div>
+                    <div class="h-full bg-gray-600" style="width:{{ $maxCount > 0 ? round($stage['count'] / $maxCount * 100) : 0 }}%;"></div>
                 </div>
             </div>
             @endforeach
-        </div>
-
-        {{-- Table View --}}
-        <div x-show="!chartView" x-cloak>
-            <div class="overflow-x-auto">
-                <table class="w-full text-sm font-['Times_New_Roman']">
-                    <thead>
-                        <tr class="border-b-2 border-black bg-white">
-                            <th class="text-left px-3 py-2 font-[Helvetica] font-bold text-xs uppercase">Cabang</th>
-                            <th class="text-center px-3 py-2 font-[Helvetica] font-bold text-xs uppercase">Total</th>
-                            <th class="text-center px-3 py-2 font-[Helvetica] font-bold text-xs uppercase">Completed</th>
-                            <th class="text-center px-3 py-2 font-[Helvetica] font-bold text-xs uppercase">%</th>
-                        </tr>
-                    </thead>
-                    <tbody class="divide-y divide-black">
-                        @foreach($sorted as $bs)
-                        <tr class="hover:bg-gray-50">
-                            <td class="px-3 py-2 font-bold">{{ $bs->name }}</td>
-                            <td class="px-3 py-2 text-center">{{ $bs->content_items_count }}</td>
-                            <td class="px-3 py-2 text-center">{{ $bs->posted_count }}</td>
-                            <td class="px-3 py-2 text-center font-[Helvetica] font-bold">{{ $bs->completion_rate }}%</td>
-                        </tr>
-                        @endforeach
-                    </tbody>
-                </table>
-            </div>
         </div>
     </div>
     @endif

@@ -6,7 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Branch;
 use App\Models\ContentItem;
 use App\Models\DanaTalangan;
-use App\Models\Lead;
+use App\Models\DatabaseSheetRecord;
 use App\Models\LeadMaster;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -126,16 +126,19 @@ class DashboardController extends Controller
                 'status' => $i->status,
             ]));
 
-        Lead::whereDate('tanggal_lead', today())
+        DatabaseSheetRecord::whereRaw('LOWER(sheet_name) = ?', ['lead'])
+            ->whereNull('oasis_deleted_at')
+            ->where('row_data->tanggal_lead', today()->format('Y-m-d'))
             ->when($branchId, fn($q) => $q->where('branch_id', $branchId))
+            ->when($projectName, fn($q) => $q->where('row_data->proyek', $projectName))
             ->get()
-            ->each(fn($l) => $agenda->push([
-                'label' => $l->nama_konsumen,
-                'subtitle' => $l->proyek . ' — ' . $l->sumber,
-                'time' => $l->tanggal_lead,
+            ->each(fn($r) => $agenda->push([
+                'label' => $r->row_data['nama_konsumen'] ?? '-',
+                'subtitle' => ($r->row_data['proyek'] ?? '-') . ' — ' . ($r->row_data['sumber'] ?? '-'),
+                'time' => $r->row_data['tanggal_lead'] ?? today(),
                 'type' => 'Lead',
                 'color' => '#e6915d',
-                'status' => $l->status_lead,
+                'status' => $r->row_data['status_lead'] ?? '-',
             ]));
 
         return $agenda->sortBy('time')->values();
@@ -165,14 +168,15 @@ class DashboardController extends Controller
                 'text' => $i->title, 'time' => $i->created_at, 'user' => $i->creator?->name ?? '-',
             ]));
 
-        Lead::with('creator')
+        DatabaseSheetRecord::whereRaw('LOWER(sheet_name) = ?', ['lead'])
+            ->whereNull('oasis_deleted_at')
             ->when($branchId, fn($q) => $q->where('branch_id', $branchId))
-            ->when($projectName, fn($q) => $q->where('proyek', $projectName))
+            ->when($projectName, fn($q) => $q->where('row_data->proyek', $projectName))
             ->latest()->take(5)->get()
-            ->each(fn($l) => $activity->push([
+            ->each(fn($r) => $activity->push([
                 'type' => 'Lead', 'color' => '#e6915d',
-                'text' => $l->nama_konsumen . ' (' . $l->id_lead . ')',
-                'time' => $l->created_at, 'user' => $l->creator?->name ?? '-',
+                'text' => ($r->row_data['nama_konsumen'] ?? '-') . ' (' . ($r->row_data['id_lead'] ?? '#'.$r->id) . ')',
+                'time' => $r->created_at, 'user' => '-',
             ]));
 
         DanaTalangan::with('creator')

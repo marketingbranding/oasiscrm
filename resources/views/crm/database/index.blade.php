@@ -80,7 +80,9 @@
         firstSheet: '{{ $firstSheet }}',
         initialHeaders: {{ $initialHeadersJson }},
         initialFormulaCols: {{ $initialFormulaJson }},
-        initialRecords: {{ $initialRecordsJson }}
+        initialRecords: {{ $initialRecordsJson }},
+        requestSheet: '{{ $requestSheet ?? '' }}',
+        requestAdd: {{ ($requestAdd ?? false) ? 'true' : 'false' }}
     })">
         <style>
             [x-cloak] { display: none !important; }
@@ -364,6 +366,23 @@ document.addEventListener('alpine:init', () => {
             };
             this.loaded[config.firstSheet] = true;
             this.sheetNameList = @json($sheetNames);
+
+            if (config.requestSheet) {
+                const lowerRequest = config.requestSheet.toLowerCase();
+                const match = this.sheetNameList.find(s => s.toLowerCase() === lowerRequest);
+                if (match) {
+                    if (match !== config.firstSheet) {
+                        this.$nextTick(() => this.switchTabWithAdd(match, config.requestAdd));
+                    } else if (config.requestAdd) {
+                        this.$nextTick(() => { this.adding = this.tab; });
+                    }
+                }
+            }
+        },
+
+        async switchTabWithAdd(name, doAdd) {
+            await this.switchTab(name);
+            if (doAdd) this.adding = name;
         },
 
         currentData(name) {

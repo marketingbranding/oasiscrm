@@ -150,13 +150,6 @@
                 </a>
                 <div class="border-t border-dashed border-gray-400 mx-2 my-2"></div>
                 <div class="px-2 mb-0.5 text-[9px] font-[Helvetica] font-bold text-gray-400 uppercase tracking-[0.15em]">
-                    <span :class="sidebarPinned ? '' : 'sm:w-0 sm:overflow-hidden sm:whitespace-nowrap'" class="group-hover:sm:w-auto transition-all duration-200 delay-150">Leads</span>
-                </div>
-                <a href="{{ route('leads.index') }}" class="flex items-center px-3 py-2 gap-2 text-sm font-[Helvetica] font-bold text-black hover:bg-[#e6915d] hover:text-black border border-black mb-1 rounded-none {{ request()->routeIs('leads.*') ? 'bg-[#e6915d]' : 'bg-white' }}">
-                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" :class="sidebarPinned ? 'text-[#e6915d]' : 'text-black group-hover:text-[#e6915d]'" class="inline-block w-4 h-4 shrink-0"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 6a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0ZM4.501 20.118a7.5 7.5 0 0 1 14.998 0A17.933 17.933 0 0 1 12 21.75c-2.676 0-5.216-.584-7.499-1.632Z"/></svg> <span :class="sidebarPinned ? '' : 'sm:w-0 sm:overflow-hidden sm:whitespace-nowrap'" class="group-hover:sm:w-auto transition-all duration-200 delay-150">Leads</span>
-                </a>
-                <div class="border-t border-dashed border-gray-400 mx-2 my-2"></div>
-                <div class="px-2 mb-0.5 text-[9px] font-[Helvetica] font-bold text-gray-400 uppercase tracking-[0.15em]">
                     <span :class="sidebarPinned ? '' : 'sm:w-0 sm:overflow-hidden sm:whitespace-nowrap'" class="group-hover:sm:w-auto transition-all duration-200 delay-150">Laporan</span>
                 </div>
                 <a href="{{ route('dana-talangan.index') }}" class="flex items-center px-3 py-2 gap-2 text-sm font-[Helvetica] font-bold text-black hover:bg-[#f1c40f] hover:text-black border border-black mb-1 rounded-none {{ request()->routeIs('dana-talangan.*') ? 'bg-[#f1c40f]' : 'bg-white' }}">

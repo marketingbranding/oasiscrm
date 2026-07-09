@@ -14,7 +14,7 @@
         <div x-show="quickOpen"
              x-transition.opacity.duration.150ms
              class="absolute left-0 top-full mt-1 bg-white border-2 border-black shadow-xl min-w-[200px] z-50">
-            <a href="{{ route('leads.create') }}" class="flex items-center gap-3 px-3 py-2 text-sm font-[Helvetica] font-bold border-l-4 border-[#e6915d] hover:bg-gray-50">
+            <a href="{{ route('database.index', ['sheet' => 'lead', 'add' => 1]) }}" class="flex items-center gap-3 px-3 py-2 text-sm font-[Helvetica] font-bold border-l-4 border-[#e6915d] hover:bg-gray-50">
                 <span>+ Lead Baru</span>
             </a>
             <a href="{{ route('content-calendar.create') }}" class="flex items-center gap-3 px-3 py-2 text-sm font-[Helvetica] font-bold border-l-4 border-[#b3bd95] hover:bg-gray-50">

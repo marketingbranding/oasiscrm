@@ -86,7 +86,10 @@ class DatabaseController extends Controller
             }
         }
 
-        return view('crm.database.index', compact('branches', 'selectedBranch', 'selectedBranchId', 'sheetNames', 'records', 'syncStatus', 'isStale'));
+        $requestSheet = $request->get('sheet');
+        $requestAdd = $request->boolean('add');
+
+        return view('crm.database.index', compact('branches', 'selectedBranch', 'selectedBranchId', 'sheetNames', 'records', 'syncStatus', 'isStale', 'requestSheet', 'requestAdd'));
     }
 
     public function sheetData(Request $request, $branchId, $sheetName)

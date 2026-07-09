@@ -12,7 +12,6 @@ use App\Http\Controllers\Crm\FeedbackReportController;
 use App\Http\Controllers\Crm\DatabaseController;
 use App\Http\Controllers\Crm\KavlingController;
 use App\Http\Controllers\Crm\KonsumenProgressController;
-use App\Http\Controllers\Crm\LeadController;
 use App\Http\Controllers\Crm\LeadSourceController;
 use App\Http\Controllers\Crm\ProjectController;
 use App\Http\Controllers\ProfileController;
@@ -60,12 +59,6 @@ Route::middleware(['auth', 'verified', 'password.changed'])->group(function () {
     Route::get('content-calendar/export-template', [ContentCalendarController::class, 'exportTemplate'])->name('content-calendar.export-template');
     Route::get('content-calendar/import', [ContentCalendarController::class, 'import'])->name('content-calendar.import');
     Route::post('content-calendar/import', [ContentCalendarController::class, 'importStore'])->name('content-calendar.import-store');
-
-    Route::bind('lead', fn($v) => \App\Models\Lead::findOrFail($v));
-    Route::get('leads/{lead}/detail', [LeadController::class, 'detail'])->name('leads.detail');
-    Route::get('leads/export', [LeadController::class, 'export'])->name('leads.export');
-    Route::post('leads/bulk-delete', [LeadController::class, 'bulkDestroy'])->name('leads.bulk-destroy');
-    Route::resource('leads', LeadController::class);
 
     Route::bind('dana_talangan', fn($v) => \App\Models\DanaTalangan::findOrFail($v));
     Route::get('dana-talangan/export', [DanaTalanganController::class, 'export'])->name('dana-talangan.export');

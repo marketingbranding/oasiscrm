@@ -15,7 +15,7 @@ class BranchController extends Controller
     public function index()
     {
         $this->ensureSuperadmin();
-        $branches = Branch::withCount(['contentItems', 'primaryUsers'])->where('is_active', true)->get();
+        $branches = Branch::withCount(['contentItems', 'primaryUsers as admins_count'])->where('is_active', true)->get();
         return view('crm.branches.index', compact('branches'));
     }
 

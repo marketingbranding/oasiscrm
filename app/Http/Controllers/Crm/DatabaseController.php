@@ -96,6 +96,11 @@ class DatabaseController extends Controller
     {
         $branch = Branch::findOrFail($branchId);
 
+        $user = Auth::user();
+        if (!$user->isSuperadmin() && $user->branch_id !== $branch->id) {
+            abort(403);
+        }
+
         $rows = DatabaseSheetRecord::where('branch_id', $branch->id)
             ->where('sheet_name', $sheetName)
             ->whereNull('oasis_deleted_at')
@@ -149,6 +154,11 @@ class DatabaseController extends Controller
 
         $branch = Branch::findOrFail($request->input('branch_id'));
         $sheetName = $request->input('sheet_name');
+
+        $user = Auth::user();
+        if (!$user->isSuperadmin() && $user->branch_id !== $branch->id) {
+            abort(403);
+        }
 
         if (!$writeService->createRecord($branch, $sheetName, $request->except(['_token', 'sheet_name', 'branch_id']))) {
             return back()->with('error', 'Gagal menambah data. Tidak ada template row atau Google Sheets tidak merespons.');

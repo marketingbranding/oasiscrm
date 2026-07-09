@@ -39,7 +39,6 @@ Route::middleware(['auth', 'verified', 'password.changed'])->group(function () {
     Route::resource('content-calendar', ContentCalendarController::class);
 
     Route::get('/database', [DatabaseController::class, 'index'])->name('database.index');
-    Route::get('/database/fetch', [DatabaseController::class, 'fetch'])->name('database.fetch');
     Route::get('/database/sheet/{branchId}/{sheetName}', [DatabaseController::class, 'sheetData'])->name('database.sheet');
     Route::post('/database/sync', [DatabaseController::class, 'sync'])->name('database.sync');
     Route::post('/database/records', [DatabaseController::class, 'store'])->name('database.records.store');

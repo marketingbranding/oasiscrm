@@ -19,7 +19,7 @@
                         <div class="font-bold">{{ $admin->name }}</div>
                         <div class="text-xs">{{ $admin->email }}</div>
                     </div>
-                    <form method="POST" action="{{ route('branches.remove-admin', [$branch->id, $admin->id]) }}" onsubmit="return confirm('Yakin ingin menghapus admin ini?')">
+                    <form method="POST" action="{{ route('branches.remove-admin', $admin->id) }}" onsubmit="return confirm('Yakin ingin menghapus admin ini?')">
                         @csrf
                         @method('DELETE')
                         <button type="submit" class="bg-white text-[#e91d2a] px-3 py-1 text-xs font-[Helvetica] font-bold border-2 border-[#e91d2a] rounded-none hover:bg-red-50">

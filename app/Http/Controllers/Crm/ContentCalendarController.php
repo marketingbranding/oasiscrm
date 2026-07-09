@@ -269,7 +269,15 @@ class ContentCalendarController extends Controller
             }
         }
 
-        return redirect()->back()->with('success', count($items) . ' task berhasil diperbarui.');
+        return redirect()->route('content-calendar.index', array_filter([
+            'month' => $request->input('month'),
+            'year' => $request->input('year'),
+            'branch_id' => $request->input('branch_id'),
+            'project_name' => $request->input('project_name'),
+            'status' => $request->input('status_filter'),
+            'priority' => $request->input('priority_filter'),
+            'pic' => $request->input('pic'),
+        ]))->with('success', count($items) . ' task berhasil diperbarui.');
     }
 
     public function bulkDelete(Request $request)
@@ -291,7 +299,15 @@ class ContentCalendarController extends Controller
         $count = $query->count();
         $query->delete();
 
-        return redirect()->back()->with('success', $count . ' task berhasil dihapus.');
+        return redirect()->route('content-calendar.index', array_filter([
+            'month' => $request->input('month'),
+            'year' => $request->input('year'),
+            'branch_id' => $request->input('branch_id'),
+            'project_name' => $request->input('project_name'),
+            'status' => $request->input('status_filter'),
+            'priority' => $request->input('priority_filter'),
+            'pic' => $request->input('pic'),
+        ]))->with('success', $count . ' task berhasil dihapus.');
     }
 
     private function normalizeTaskData(array $data, ?ContentItem $existing = null): array

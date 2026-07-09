@@ -141,7 +141,7 @@
         <template x-for="name in sheetNameList" :key="name">
             <div x-show="tab === name" x-cloak x-transition:enter="transition ease-out duration-200" x-transition:enter-start="opacity-0" x-transition:enter-end="opacity-100">
                 <div class="mb-3 flex items-center gap-2 flex-wrap" style="min-height:32px;">
-                    <template x-if="currentData(name) && currentData(name).records.length > 0">
+                    <template x-if="canAdd(name)">
                         <button @click="adding = name"
                                 class="bg-black text-white px-3 py-1 text-xs font-[Helvetica] font-bold border-2 border-black hover:bg-gray-800" style="border-radius:0;">
                             + Tambah Data
@@ -223,7 +223,7 @@
 
                 <template x-if="isLoaded(name) && currentData(name).records.length === 0">
                     <div class="border-2 border-black bg-white px-4 py-8 text-center">
-                        <p class="text-sm font-['Times_New_Roman'] italic" style="color:#9ca3af;">—</p>
+                        <p class="text-sm font-['Times_New_Roman'] italic" style="color:#9ca3af;">Sheet kosong. Tambahkan minimal satu baris contoh di Google Sheet, lalu Sync agar form tambah data bisa dibuat.</p>
                     </div>
                 </template>
 
@@ -373,7 +373,7 @@ document.addEventListener('alpine:init', () => {
                 if (match) {
                     if (match !== config.firstSheet) {
                         this.$nextTick(() => this.switchTabWithAdd(match, config.requestAdd));
-                    } else if (config.requestAdd) {
+                    } else if (config.requestAdd && this.canAdd(this.tab)) {
                         this.$nextTick(() => { this.adding = this.tab; });
                     }
                 }
@@ -382,7 +382,12 @@ document.addEventListener('alpine:init', () => {
 
         async switchTabWithAdd(name, doAdd) {
             await this.switchTab(name);
-            if (doAdd) this.adding = name;
+            if (doAdd && this.canAdd(name)) this.adding = name;
+        },
+
+        canAdd(name) {
+            const data = this.cache[name];
+            return !!(data && data.records && data.records.length > 0);
         },
 
         currentData(name) {
@@ -403,7 +408,7 @@ document.addEventListener('alpine:init', () => {
             if (this.loaded[name]) return;
             this.loading = true;
             try {
-                const res = await fetch(`/database/sheet/${this.branchId}/${encodeURIComponent(name)}`);
+                const res = await fetch(`{{ url('database/sheet') }}/${this.branchId}/${encodeURIComponent(name)}`);
                 const data = await res.json();
                 this.cache[name] = data;
                 this.loaded[name] = true;

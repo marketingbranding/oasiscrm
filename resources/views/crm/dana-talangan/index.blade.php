@@ -83,16 +83,16 @@
                     <td class="px-3 py-2">{{ $i + 1 }}</td>
                     <td class="px-3 py-2">{{ $r->tanggal->format('d M Y') }}</td>
                     <td class="px-3 py-2 font-bold cursor-pointer hover:underline" @click.prevent="openDetail({{ $r->id }})">{{ $r->nama_konsumen }}</td>
-                    <td class="px-3 py-2">{{ $r->kav ?? '—' }}</td>
-                    <td class="px-3 py-2">{{ $r->project_name ?? '—' }}</td>
-                    <td class="px-3 py-2 text-center">{{ $r->pinjam_nama ? 'YA' : 'TIDAK' }}</td>
-                    <td class="px-3 py-2">{{ $r->pekerjaan ?? '—' }}</td>
-                    <td class="px-3 py-2">{{ $r->status_perkawinan ?? '—' }}</td>
-                    <td class="px-3 py-2 text-center">{{ $r->umur ?? '—' }}</td>
-                    <td class="px-3 py-2">{{ $r->nama_marketing ?? '—' }}</td>
-                    <td class="px-3 py-2">{{ $r->tgl_komitmen ? \Carbon\Carbon::parse($r->tgl_komitmen)->format('d M Y') : '—' }}</td>
-                    <td class="px-3 py-2 max-w-[200px] truncate" title="{{ $r->penyelesaian }}">{{ $r->penyelesaian ?? '—' }}</td>
-                    <td class="px-3 py-2 text-center">
+                    <td class="px-3 py-2 hidden lg:table-cell">{{ $r->kav ?? '—' }}</td>
+                    <td class="px-3 py-2 hidden lg:table-cell">{{ $r->project_name ?? '—' }}</td>
+                    <td class="px-3 py-2 text-center hidden lg:table-cell">{{ $r->pinjam_nama ? 'YA' : 'TIDAK' }}</td>
+                    <td class="px-3 py-2 hidden lg:table-cell">{{ $r->pekerjaan ?? '—' }}</td>
+                    <td class="px-3 py-2 hidden lg:table-cell">{{ $r->status_perkawinan ?? '—' }}</td>
+                    <td class="px-3 py-2 text-center hidden lg:table-cell">{{ $r->umur ?? '—' }}</td>
+                    <td class="px-3 py-2 hidden lg:table-cell">{{ $r->nama_marketing ?? '—' }}</td>
+                    <td class="px-3 py-2 hidden lg:table-cell">{{ $r->tgl_komitmen ? \Carbon\Carbon::parse($r->tgl_komitmen)->format('d M Y') : '—' }}</td>
+                    <td class="px-3 py-2 max-w-[200px] truncate hidden lg:table-cell" title="{{ $r->penyelesaian }}">{{ $r->penyelesaian ?? '—' }}</td>
+                    <td class="px-3 py-2 text-center hidden lg:table-cell">
                         @if($r->konfirmasi_keuangan)
                             <span class="text-green-800 font-bold">✓</span>
                         @else

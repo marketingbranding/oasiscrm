@@ -310,7 +310,7 @@
 
     doAction(id, action) {
         const note = this.adminNotes[id] || '';
-        fetch('feedback-reports/' + id + '/' + action, {
+        fetch('{{ url('feedback-reports') }}/' + id + '/' + action, {
             method: 'POST',
             headers: { 'Accept': 'application/json', 'Content-Type': 'application/json', 'X-CSRF-TOKEN': '{{ csrf_token() }}' },
             body: JSON.stringify({ admin_note: note })

@@ -197,6 +197,13 @@
     {{-- Bulk Action Bar --}}
     <form method="POST" x-ref="bulkForm" x-show="selectedIds.length > 0" x-cloak class="sticky bottom-0 z-30 bg-white border-t-2 border-black shadow-[0_-4px_0_#000]">
         @csrf
+        <input type="hidden" name="month" value="{{ request('month') }}">
+        <input type="hidden" name="year" value="{{ request('year') }}">
+        <input type="hidden" name="branch_id" value="{{ request('branch_id') }}">
+        <input type="hidden" name="project_name" value="{{ request('project_name') }}">
+        <input type="hidden" name="status_filter" value="{{ request('status') }}">
+        <input type="hidden" name="priority_filter" value="{{ request('priority') }}">
+        <input type="hidden" name="pic" value="{{ request('pic') }}">
         <template x-for="id in selectedIds" :key="'bulk_' + id">
             <input type="hidden" name="ids[]" :value="id">
         </template>
@@ -300,7 +307,7 @@
                         <span x-text="'Dibuat oleh: ' + (task.creator ? task.creator.name : '—')"></span>
                         <div class="flex gap-2">
                             <button @click="close()" class="bg-white text-black px-3 py-1 text-xs font-mono font-bold border border-black hover:bg-gray-100">Tutup</button>
-                            <a :href="'/content-calendar/' + task.id + '/edit'" class="bg-[#b3bd95] text-black px-3 py-1 text-xs font-mono font-bold border border-black hover:bg-[#9eaa7a]">Edit</a>
+                            <a :href="'{{ url('content-calendar') }}/' + task.id + '/edit'" class="bg-[#b3bd95] text-black px-3 py-1 text-xs font-mono font-bold border border-black hover:bg-[#9eaa7a]">Edit</a>
                         </div>
                     </div>
                 </div>
@@ -361,6 +368,11 @@ function taskDetailModal(allItemIds = []) {
                 form.appendChild(token.cloneNode(true));
             }
 
+            ['month', 'year', 'branch_id', 'project_name', 'status_filter', 'priority_filter', 'pic'].forEach((name) => {
+                const input = this.$refs.bulkForm.querySelector('input[name="' + name + '"]');
+                if (input) form.appendChild(input.cloneNode(true));
+            });
+
             this.selectedIds.forEach((id) => {
                 const input = document.createElement('input');
                 input.type = 'hidden';
@@ -380,7 +392,7 @@ function taskDetailModal(allItemIds = []) {
             this.open = true;
             this.loading = true;
             this.task = null;
-            fetch('/content-calendar/' + id + '/detail')
+            fetch('{{ url('content-calendar') }}/' + id + '/detail')
                 .then(r => r.json())
                 .then(data => {
                     this.task = data;

@@ -23,9 +23,11 @@
             <a href="{{ route('dana-talangan.create') }}" class="flex items-center gap-3 px-3 py-2 text-sm font-[Helvetica] font-bold border-l-4 border-[#f1c40f] hover:bg-gray-50">
                 <span>+ Dana Talangan</span>
             </a>
-            <a href="{{ route('projects.create') }}" class="flex items-center gap-3 px-3 py-2 text-sm font-[Helvetica] font-bold border-l-4 border-[#5d8e8e] hover:bg-gray-50">
-                <span>+ Proyek Baru</span>
-            </a>
+            @if(Auth::user()->isSuperadmin())
+                <a href="{{ route('projects.create') }}" class="flex items-center gap-3 px-3 py-2 text-sm font-[Helvetica] font-bold border-l-4 border-[#5d8e8e] hover:bg-gray-50">
+                    <span>+ Proyek Baru</span>
+                </a>
+            @endif
         </div>
     </div>
 

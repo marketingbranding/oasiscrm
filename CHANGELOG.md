@@ -71,3 +71,16 @@
 - Dukungan `--dry-run` untuk melihat apa yang akan dihapus tanpa menjalankan.
 - Dukungan `--branch={id}` untuk membersihkan branch tertentu.
 - Command `sheet:cleanup-meta` terdaftar di artisan.
+
+### 2026-07-09 — Audit Konsistensi UI CRM
+
+### Diperbaiki — Bug aksi, route, dan tampilan
+- Tombol hapus admin cabang sekarang menargetkan user admin yang benar.
+- Jumlah admin di kartu cabang memakai counter relasi yang sesuai.
+- Quick action `+ Proyek Baru` hanya tampil untuk superadmin.
+- Route `database.fetch` yang mengarah ke method tidak ada dihapus.
+- Endpoint data sheet Database sekarang memvalidasi akses branch user.
+- URL fetch/action di widget feedback, detail task, dan Database sheet dibuat absolut agar tidak rusak di halaman nested.
+- Kolom body tabel Dana Talangan mengikuti visibility header pada layar kecil agar tidak misalignment.
+- Empty state Database sheet kosong menjelaskan kebutuhan baris contoh sebelum tambah data.
+- Bulk update/delete Task Tracker mempertahankan konteks filter/bulan saat redirect.

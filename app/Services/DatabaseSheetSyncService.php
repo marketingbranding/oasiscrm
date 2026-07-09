@@ -48,11 +48,6 @@ class DatabaseSheetSyncService
                     }
 
                     $headers = $this->normalizedHeaders($values[0] ?? []);
-                    try {
-                        $headers = $this->ensureMetadataHeaders($branch, $sheetName, $headers);
-                    } catch (Throwable $e) {
-                        // sheet protected, track metadata locally only
-                    }
                     $formulaColumns = $this->formulaColumns($headers, $formulas);
                     $insertRows = $this->buildRecords($branch, $sheetName, $headers, $values, $formulaColumns, $syncedAt);
                     $summary[$sheetName] = count($insertRows);
@@ -107,21 +102,6 @@ class DatabaseSheetSyncService
         }
 
         return $result;
-    }
-
-    private function ensureMetadataHeaders(Branch $branch, string $sheetName, array $headers): array
-    {
-        $missing = array_values(array_diff(self::META_COLUMNS, $headers));
-        if (empty($missing)) {
-            return $headers;
-        }
-
-        $headers = array_merge($headers, $missing);
-        $endColumn = $this->columnLetter(count($headers));
-        $range = $this->googleSheets->quoteSheetName($sheetName) . '!A1:' . $endColumn . '1';
-        $this->googleSheets->updateRange($branch->sheet_id, $range, [$headers]);
-
-        return $headers;
     }
 
     private function formulaColumns(array $headers, array $formulaRows): array

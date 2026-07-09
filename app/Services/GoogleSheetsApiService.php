@@ -138,6 +138,24 @@ class GoogleSheetsApiService
         ]));
     }
 
+    public function deleteColumns(string $spreadsheetId, int $sheetId, int $startIndex, int $endIndex): void
+    {
+        $request = new Request([
+            'deleteDimension' => [
+                'range' => [
+                    'sheetId' => $sheetId,
+                    'dimension' => 'COLUMNS',
+                    'startIndex' => $startIndex,
+                    'endIndex' => $endIndex,
+                ],
+            ],
+        ]);
+
+        $this->sheets->spreadsheets->batchUpdate($spreadsheetId, new BatchUpdateSpreadsheetRequest([
+            'requests' => [$request],
+        ]));
+    }
+
     public function quoteSheetName(string $sheetName): string
     {
         return "'" . str_replace("'", "''", $sheetName) . "'";

@@ -33,7 +33,6 @@ class DatabaseSheetWriteService
 
         if (empty($rowData['oasis_sync_id'])) {
             $rowData['oasis_sync_id'] = (string) Str::uuid();
-            $changed['oasis_sync_id'] = $rowData['oasis_sync_id'];
         }
 
         try {
@@ -42,7 +41,7 @@ class DatabaseSheetWriteService
             }
 
             $record->update([
-                'oasis_sync_id' => $rowData['oasis_sync_id'] ?? $record->oasis_sync_id,
+                'oasis_sync_id' => $record->oasis_sync_id ?: $rowData['oasis_sync_id'],
                 'row_data' => $rowData,
                 'sync_status' => 'synced',
                 'last_sync_error' => null,
@@ -74,13 +73,15 @@ class DatabaseSheetWriteService
         $formulaColumns = $template->formula_columns ?? [];
         $rowNumber = ((int) DatabaseSheetRecord::where('branch_id', $branch->id)->where('sheet_name', $sheetName)->max('row_number')) + 1;
         $rowData = array_fill_keys($headers, '');
-        $rowData['oasis_sync_id'] = (string) Str::uuid();
+        $syncId = (string) Str::uuid();
 
         foreach ($this->editableHeaders($headers, $formulaColumns) as $header) {
             if (array_key_exists($header, $input)) {
                 $rowData[$header] = trim((string) $input[$header]);
             }
         }
+
+        $rowData['oasis_sync_id'] = $syncId;
 
         try {
             $sheetIds = $this->googleSheets->sheetIds($branch->sheet_id);
@@ -91,14 +92,13 @@ class DatabaseSheetWriteService
             foreach ($this->editableHeaders($headers, $formulaColumns) as $header) {
                 $this->updateCell($branch, $sheetName, $rowNumber, $headers, $header, $rowData[$header] ?? '');
             }
-            $this->updateCell($branch, $sheetName, $rowNumber, $headers, 'oasis_sync_id', $rowData['oasis_sync_id']);
 
             DatabaseSheetRecord::create([
                 'branch_id' => $branch->id,
                 'sheet_id' => $branch->sheet_id,
                 'sheet_name' => $sheetName,
                 'row_number' => $rowNumber,
-                'oasis_sync_id' => $rowData['oasis_sync_id'],
+                'oasis_sync_id' => $syncId,
                 'headers' => $headers,
                 'row_data' => $rowData,
                 'formula_columns' => $formulaColumns,
@@ -120,9 +120,6 @@ class DatabaseSheetWriteService
         $rowData['oasis_deleted_by'] = (string) $userId;
 
         try {
-            $this->updateCell($record->branch, $record->sheet_name, $record->row_number, $record->headers, 'oasis_deleted_at', $deletedAt);
-            $this->updateCell($record->branch, $record->sheet_name, $record->row_number, $record->headers, 'oasis_deleted_by', (string) $userId);
-
             $record->update([
                 'row_data' => $rowData,
                 'oasis_deleted_at' => $deletedAt,
@@ -143,7 +140,7 @@ class DatabaseSheetWriteService
     public function editableHeaders(array $headers, array $formulaColumns): array
     {
         return array_values(array_filter($headers, fn ($header) => !in_array($header, $formulaColumns, true)
-            && !in_array($header, ['oasis_deleted_at', 'oasis_deleted_by'], true)));
+            && !in_array($header, ['oasis_sync_id', 'oasis_deleted_at', 'oasis_deleted_by'], true)));
     }
 
     private function updateCell(Branch $branch, string $sheetName, int $rowNumber, array $headers, string $header, string $value): void

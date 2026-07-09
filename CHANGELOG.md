@@ -56,3 +56,18 @@
 - Warna baris tabel: `lunas` hijau, `tidak_sanggup` merah, `sanggup` biru.
 - Export template dropdown diperbarui dengan 3 opsi.
 - Import menerima nilai `sanggup`, `tidak_sanggup`, `lunas`; nilai `aktif` lama dipetakan ke `sanggup`.
+
+### 2026-07-09 — Metadata Internal Dipisahkan dari Google Sheet
+
+### Diubah — Metadata tidak lagi ditulis ke Google Sheet
+- Tiga kolom metadata (`oasis_sync_id`, `oasis_deleted_at`, `oasis_deleted_by`) tidak lagi ditambahkan oleh `ensureMetadataHeaders()` saat sync.
+- `createRecord()` dan `updateRecord()` tidak lagi menulis `oasis_sync_id` ke cell sheet.
+- `softDelete()` tidak lagi menulis `oasis_deleted_at`/`oasis_deleted_by` ke cell sheet.
+- Metadata tetap disimpan secara lokal di tabel `database_sheet_records` untuk operasi internal.
+- `editableHeaders()` kini juga mengecualikan `oasis_sync_id` dari daftar yang bisa diedit pengguna.
+
+### Ditambahkan — Command Pembersihan
+- `php artisan sheet:cleanup-meta` untuk menghapus kolom metadata yang sudah telanjur ada di sheet lama.
+- Dukungan `--dry-run` untuk melihat apa yang akan dihapus tanpa menjalankan.
+- Dukungan `--branch={id}` untuk membersihkan branch tertentu.
+- Command `sheet:cleanup-meta` terdaftar di artisan.

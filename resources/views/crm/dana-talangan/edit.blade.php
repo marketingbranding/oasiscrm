@@ -172,8 +172,31 @@
 
                 <div>
                     <label class="font-[Helvetica] font-bold text-xs uppercase block mb-1">TGL Komitmen</label>
-                    <input type="date" name="tgl_komitmen" value="{{ old('tgl_komitmen', $record->tgl_komitmen ? \Carbon\Carbon::parse($record->tgl_komitmen)->format('Y-m-d') : '') }}"
-                           class="w-full border-2 border-black px-3 py-2 text-sm font-['Times_New_Roman'] bg-white rounded-none @error('tgl_komitmen') border-[#e91d2a] @enderror">
+                    <div class="date-wrapper" data-accent="#f1c40f" style="position:relative">
+                        <div class="date-display w-full border-2 px-3 py-2 text-sm font-['Times_New_Roman'] bg-white cursor-pointer select-none flex items-center justify-between border-black @error('tgl_komitmen') border-[#e91d2a] @enderror" tabindex="0">
+                            <span class="date-text">— Pilih TGL Komitmen —</span>
+                            <span class="date-arrow">▼</span>
+                        </div>
+                        <div class="date-calendar" style="display:none;position:absolute;top:100%;left:0;z-index:9999;border:2px solid #000;background:#fff;width:280px">
+                            <div class="cal-header" style="background:#000;color:#fff;display:flex;align-items:center;justify-content:space-between;padding:6px 10px;font-family:'Times New Roman';font-size:14px;font-weight:bold;user-select:none">
+                                <button class="cal-prev" type="button" style="background:none;border:none;color:#fff;cursor:pointer;font-size:14px;padding:2px 8px;font-family:'Times New Roman';font-weight:bold;line-height:1">◀</button>
+                                <span class="cal-title">Bulan Tahun</span>
+                                <button class="cal-next" type="button" style="background:none;border:none;color:#fff;cursor:pointer;font-size:14px;padding:2px 8px;font-family:'Times New Roman';font-weight:bold;line-height:1">▶</button>
+                            </div>
+                            <div class="cal-weekdays" style="display:grid;grid-template-columns:repeat(7,1fr);border-bottom:2px solid #000;font-family:'Times New Roman';font-size:11px;font-weight:bold;text-align:center;background:#f5f5f5;color:#000">
+                                <span style="padding:5px 0;border-right:1px solid #ddd">Min</span>
+                                <span style="padding:5px 0;border-right:1px solid #ddd">Sen</span>
+                                <span style="padding:5px 0;border-right:1px solid #ddd">Sel</span>
+                                <span style="padding:5px 0;border-right:1px solid #ddd">Rab</span>
+                                <span style="padding:5px 0;border-right:1px solid #ddd">Kam</span>
+                                <span style="padding:5px 0;border-right:1px solid #ddd">Jum</span>
+                                <span style="padding:5px 0">Sab</span>
+                            </div>
+                            <div class="cal-grid" style="display:grid;grid-template-columns:repeat(7,1fr);font-family:'Times New Roman';font-size:13px"></div>
+                        </div>
+                        <input type="date" name="tgl_komitmen" value="{{ old('tgl_komitmen', $record->tgl_komitmen ? \Carbon\Carbon::parse($record->tgl_komitmen)->format('Y-m-d') : '') }}"
+                               style="position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0">
+                    </div>
                     @error('tgl_komitmen') <p class="text-[#e91d2a] text-xs mt-1 font-[Helvetica] font-bold">{{ $message }}</p> @enderror
                 </div>
 

@@ -34,31 +34,6 @@ class DashboardController extends Controller
                 $branch = null;
             }
 
-            $baseQuery = ContentItem::query()
-                ->when($selectedBranchId, fn($q) => $q->where('branch_id', $selectedBranchId))
-                ->when($selectedProject, fn($q) => $q->where('project_name', $selectedProject));
-
-            $totalContent = (clone $baseQuery)->count();
-            $totalPosted = (clone $baseQuery)->where('status', 'completed')->count();
-            $completionRate = $totalContent > 0 ? round($totalPosted / $totalContent * 100) : 0;
-
-            $upcomingContent = (clone $baseQuery)
-                ->where('scheduled_date', '>=', now()->today())
-                ->where('status', '!=', 'completed')
-                ->orderBy('scheduled_date')
-                ->take(5)
-                ->get();
-
-            $overdueCount = (clone $baseQuery)->whereDate('deadline_date', '<', now())->where('status', '!=', 'completed')->count();
-            $upcomingWeek = (clone $baseQuery)
-                ->whereDate('deadline_date', '>=', now())
-                ->whereDate('deadline_date', '<=', now()->addDays(7))
-                ->where('status', '!=', 'completed')
-                ->orderBy('deadline_date')
-                ->get();
-            $upcomingWeekCount = $upcomingWeek->count();
-            $topPics = $this->getTopPics($selectedBranchId, $selectedProject);
-
             $branchStatuses = Branch::withCount(['contentItems'])->where('is_active', true)->get()->map(function ($b) use ($selectedProject) {
                 $q = ContentItem::where('branch_id', $b->id);
                 if ($selectedProject) { $q->where('project_name', $selectedProject); }
@@ -67,11 +42,14 @@ class DashboardController extends Controller
                 return $b;
             });
 
-            $todayAgenda = $this->getTodayAgenda($selectedBranchId, $selectedProject);
-            $overdueContent = $this->getOverdueContent($selectedBranchId, $selectedProject);
             $recentActivity = $this->getRecentActivity($selectedBranchId, $selectedProject);
 
-            return view('crm.dashboard', compact('branches', 'projects', 'branch', 'selectedBranchId', 'selectedProject', 'totalContent', 'totalPosted', 'completionRate', 'upcomingContent', 'upcomingWeek', 'branchStatuses', 'todayAgenda', 'overdueContent', 'recentActivity', 'overdueCount', 'upcomingWeekCount', 'topPics'));
+            $leadStats = $this->getLeadStats($selectedBranchId, $selectedProject);
+            $danaStats = $this->getDanaTalanganStats($selectedBranchId, $selectedProject);
+            $actionQueue = $this->getActionQueue($selectedBranchId, $selectedProject);
+            $syncHealth = $this->getSyncHealth($selectedBranchId);
+
+            return view('crm.dashboard', compact('branches', 'projects', 'branch', 'selectedBranchId', 'selectedProject', 'branchStatuses', 'recentActivity', 'leadStats', 'danaStats', 'actionQueue', 'syncHealth'));
         }
 
         $branch = $user->branch;
@@ -85,74 +63,14 @@ class DashboardController extends Controller
             ->orderBy('project_name')
             ->get();
 
-        $baseQuery = ContentItem::where('branch_id', $branch->id)
-            ->when($selectedProject, fn($q) => $q->where('project_name', $selectedProject));
-
-        $totalContent = (clone $baseQuery)->count();
-        $totalPosted = (clone $baseQuery)->where('status', 'completed')->count();
-        $completionRate = $totalContent > 0 ? round($totalPosted / $totalContent * 100) : 0;
-        $upcomingContent = (clone $baseQuery)->where('scheduled_date', '>=', now()->today())->where('status', '!=', 'completed')->orderBy('scheduled_date')->take(5)->get();
-        $overdueCount = (clone $baseQuery)->whereDate('deadline_date', '<', now())->where('status', '!=', 'completed')->count();
-        $upcomingWeek = (clone $baseQuery)
-            ->whereDate('deadline_date', '>=', now())
-            ->whereDate('deadline_date', '<=', now()->addDays(7))
-            ->where('status', '!=', 'completed')
-            ->orderBy('deadline_date')
-            ->get();
-        $upcomingWeekCount = $upcomingWeek->count();
-        $topPics = $this->getTopPics($branch->id, $selectedProject);
-
-        $todayAgenda = $this->getTodayAgenda($branch->id, $selectedProject);
-        $overdueContent = $this->getOverdueContent($branch->id, $selectedProject);
         $recentActivity = $this->getRecentActivity($branch->id, $selectedProject);
 
-        return view('crm.dashboard', compact('branch', 'projects', 'totalContent', 'totalPosted', 'completionRate', 'upcomingContent', 'upcomingWeek', 'selectedProject', 'todayAgenda', 'overdueContent', 'recentActivity', 'overdueCount', 'upcomingWeekCount', 'topPics'));
-    }
+        $leadStats = $this->getLeadStats($branch->id, $selectedProject);
+        $danaStats = $this->getDanaTalanganStats($branch->id, $selectedProject);
+        $actionQueue = $this->getActionQueue($branch->id, $selectedProject);
+        $syncHealth = $this->getSyncHealth($branch->id);
 
-    private function getTodayAgenda($branchId = null, $projectName = null)
-    {
-        $agenda = collect();
-
-        ContentItem::whereDate('scheduled_date', today())
-            ->when($branchId, fn($q) => $q->where('branch_id', $branchId))
-            ->when($projectName, fn($q) => $q->where('project_name', $projectName))
-            ->get()
-            ->each(fn($i) => $agenda->push([
-                'label' => $i->title,
-                'subtitle' => $i->platform,
-                'time' => $i->scheduled_date,
-                'type' => 'Task',
-                'color' => '#b3bd95',
-                'status' => $i->status,
-            ]));
-
-        DatabaseSheetRecord::whereRaw('LOWER(sheet_name) = ?', ['lead'])
-            ->whereNull('oasis_deleted_at')
-            ->where('row_data->tanggal_lead', today()->format('Y-m-d'))
-            ->when($branchId, fn($q) => $q->where('branch_id', $branchId))
-            ->when($projectName, fn($q) => $q->where('row_data->proyek', $projectName))
-            ->get()
-            ->each(fn($r) => $agenda->push([
-                'label' => $r->row_data['nama_konsumen'] ?? '-',
-                'subtitle' => ($r->row_data['proyek'] ?? '-') . ' — ' . ($r->row_data['sumber'] ?? '-'),
-                'time' => $r->row_data['tanggal_lead'] ?? today(),
-                'type' => 'Lead',
-                'color' => '#e6915d',
-                'status' => $r->row_data['status_lead'] ?? '-',
-            ]));
-
-        return $agenda->sortBy('time')->values();
-    }
-
-    private function getOverdueContent($branchId = null, $projectName = null)
-    {
-        return ContentItem::whereDate('deadline_date', '<', today())
-            ->where('status', '!=', 'completed')
-            ->when($branchId, fn($q) => $q->where('branch_id', $branchId))
-            ->when($projectName, fn($q) => $q->where('project_name', $projectName))
-            ->orderBy('deadline_date')
-            ->take(5)
-            ->get();
+        return view('crm.dashboard', compact('branch', 'projects', 'selectedProject', 'recentActivity', 'leadStats', 'danaStats', 'actionQueue', 'syncHealth'));
     }
 
     private function getRecentActivity($branchId = null, $projectName = null)
@@ -192,27 +110,172 @@ class DashboardController extends Controller
         return $activity->sortByDesc('time')->take(10)->values();
     }
 
-    private function getTopPics($branchId = null, $projectName = null): array
+    private function getLeadStats($branchId = null, $projectName = null): array
     {
-        $tasks = ContentItem::where('status', '!=', 'completed')
-            ->whereNotNull('pic_names')
-            ->when($branchId, fn($q) => $q->where('branch_id', $branchId))
-            ->when($projectName, fn($q) => $q->where('project_name', $projectName))
-            ->get(['pic_names']);
+        $query = DatabaseSheetRecord::whereRaw('LOWER(sheet_name) = ?', ['lead'])
+            ->whereNull('oasis_deleted_at')
+            ->when($branchId, fn($q) => $q->where('branch_id', $branchId));
 
-        $counts = [];
-        foreach ($tasks as $task) {
-            if (is_array($task->pic_names)) {
-                foreach ($task->pic_names as $name) {
-                    $name = trim((string) $name);
-                    if ($name !== '') {
-                        $counts[$name] = ($counts[$name] ?? 0) + 1;
-                    }
-                }
-            }
+        if ($projectName) {
+            $query->where('row_data->proyek', $projectName);
         }
 
-        arsort($counts);
-        return array_slice($counts, 0, 5);
+        $today = now()->format('Y-m-d');
+        $startOfMonth = now()->startOfMonth()->format('Y-m-d');
+        $endOfMonth = now()->endOfMonth()->format('Y-m-d');
+
+        $leadToday = (clone $query)
+            ->where('row_data->tanggal_lead', $today)
+            ->count();
+
+        $leadThisMonth = (clone $query)
+            ->where('row_data->tanggal_lead', '>=', $startOfMonth)
+            ->where('row_data->tanggal_lead', '<=', $endOfMonth)
+            ->count();
+
+        $sourceRecords = (clone $query)->get(['row_data']);
+        $sourceCounts = [];
+        foreach ($sourceRecords as $r) {
+            $source = $r->row_data['sumber'] ?? null;
+            if ($source) {
+                $sourceCounts[$source] = ($sourceCounts[$source] ?? 0) + 1;
+            }
+        }
+        arsort($sourceCounts);
+        $topSource = array_key_first($sourceCounts) ?: '—';
+
+        $latestLeads = (clone $query)
+            ->latest()
+            ->take(5)
+            ->get()
+            ->map(fn($r) => [
+                'nama' => $r->row_data['nama_konsumen'] ?? '-',
+                'source' => $r->row_data['sumber'] ?? '-',
+                'tanggal' => $r->row_data['tanggal_lead'] ?? '-',
+                'project' => $r->row_data['proyek'] ?? '-',
+            ]);
+
+        return compact('leadToday', 'leadThisMonth', 'topSource', 'latestLeads');
+    }
+
+    private function getDanaTalanganStats($branchId = null, $projectName = null): array
+    {
+        $query = DanaTalangan::when($branchId, fn($q) => $q->where('branch_id', $branchId))
+            ->when($projectName, fn($q) => $q->where('project_name', $projectName));
+
+        $tidakSanggup = (clone $query)->where('status', 'tidak_sanggup')->count();
+        $belumKonfirmasi = (clone $query)->where('konfirmasi_keuangan', false)->count();
+        $hariIni = (clone $query)->whereDate('tgl_komitmen', today())->count();
+        $overdue = (clone $query)
+            ->whereDate('tgl_komitmen', '<', today())
+            ->where('status', '!=', 'lunas')
+            ->count();
+
+        return compact('tidakSanggup', 'belumKonfirmasi', 'hariIni', 'overdue');
+    }
+
+    private function getActionQueue($branchId = null, $projectName = null)
+    {
+        $queue = collect();
+
+        DanaTalangan::whereDate('tgl_komitmen', '<', today())
+            ->where('status', '!=', 'lunas')
+            ->when($branchId, fn($q) => $q->where('branch_id', $branchId))
+            ->when($projectName, fn($q) => $q->where('project_name', $projectName))
+            ->latest('tgl_komitmen')
+            ->take(5)
+            ->get()
+            ->each(fn($d) => $queue->push([
+                'text' => 'Dana Talangan: ' . $d->nama_konsumen . ($d->project_name ? ' (' . $d->project_name . ')' : ''),
+                'urgency' => 1,
+                'type' => 'dana_overdue',
+                'link' => route('dana-talangan.index'),
+                'time' => $d->tgl_komitmen,
+            ]));
+
+        DanaTalangan::where('konfirmasi_keuangan', false)
+            ->where('status', '!=', 'lunas')
+            ->when($branchId, fn($q) => $q->where('branch_id', $branchId))
+            ->when($projectName, fn($q) => $q->where('project_name', $projectName))
+            ->latest()
+            ->take(5)
+            ->get()
+            ->each(fn($d) => $queue->push([
+                'text' => 'Konfirmasi Dana: ' . $d->nama_konsumen . ($d->project_name ? ' (' . $d->project_name . ')' : ''),
+                'urgency' => 2,
+                'type' => 'dana_confirm',
+                'link' => route('dana-talangan.index'),
+                'time' => $d->created_at,
+            ]));
+
+        ContentItem::whereDate('deadline_date', '<', today())
+            ->where('status', '!=', 'completed')
+            ->when($branchId, fn($q) => $q->where('branch_id', $branchId))
+            ->when($projectName, fn($q) => $q->where('project_name', $projectName))
+            ->orderBy('deadline_date')
+            ->take(5)
+            ->get()
+            ->each(fn($t) => $queue->push([
+                'text' => 'Task overdue: ' . $t->title,
+                'urgency' => 3,
+                'type' => 'task_overdue',
+                'link' => route('content-calendar.index'),
+                'time' => $t->deadline_date,
+            ]));
+
+        ContentItem::whereDate('scheduled_date', today())
+            ->where('status', '!=', 'completed')
+            ->when($branchId, fn($q) => $q->where('branch_id', $branchId))
+            ->when($projectName, fn($q) => $q->where('project_name', $projectName))
+            ->orderBy('scheduled_date')
+            ->take(5)
+            ->get()
+            ->each(fn($t) => $queue->push([
+                'text' => 'Task hari ini: ' . $t->title,
+                'urgency' => 4,
+                'type' => 'task_today',
+                'link' => route('content-calendar.index'),
+                'time' => $t->scheduled_date,
+            ]));
+
+        DatabaseSheetRecord::whereRaw('LOWER(sheet_name) = ?', ['lead'])
+            ->whereNull('oasis_deleted_at')
+            ->where('row_data->tanggal_lead', today()->format('Y-m-d'))
+            ->when($branchId, fn($q) => $q->where('branch_id', $branchId))
+            ->when($projectName, fn($q) => $q->where('row_data->proyek', $projectName))
+            ->latest()
+            ->take(5)
+            ->get()
+            ->each(fn($r) => $queue->push([
+                'text' => 'Lead baru: ' . ($r->row_data['nama_konsumen'] ?? '-'),
+                'urgency' => 5,
+                'type' => 'lead_today',
+                'link' => route('database.index', ['sheet' => 'lead']),
+                'time' => $r->created_at,
+            ]));
+
+        return $queue->sortBy('urgency')->take(10)->values();
+    }
+
+    private function getSyncHealth($branchId = null): ?array
+    {
+        if (!$branchId) return null;
+
+        $syncStatus = DatabaseSheetSyncStatus::where('branch_id', $branchId)->first();
+        if (!$syncStatus) {
+            return ['status' => 'never', 'message' => 'Belum pernah sync', 'isStale' => true];
+        }
+
+        $isStale = $syncStatus->finished_at
+            ? $syncStatus->finished_at->lt(now()->subMinutes(30))
+            : true;
+
+        return [
+            'status' => $syncStatus->status,
+            'message' => $syncStatus->message,
+            'finished_at' => $syncStatus->finished_at,
+            'isStale' => $isStale,
+            'summary' => $syncStatus->summary,
+        ];
     }
 }

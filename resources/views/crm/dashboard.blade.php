@@ -80,204 +80,153 @@
     </div>
     @endif
 
-    {{-- === ALERT ROW: Overdue + Deadline 7 Hari (prominent) === --}}
-    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
-        <div class="border-2 border-black">
-            <div class="bg-black text-white px-3 py-1.5 font-[Helvetica] font-bold text-xs uppercase tracking-wider">Overdue</div>
-            <div class="bg-[#d77a7a] px-5 py-5">
-                <span class="font-['Arial_Black'] font-black text-4xl">{{ $overdueCount ?? 0 }}</span>
-                <span class="font-[Helvetica] font-bold text-sm ml-2 uppercase tracking-wider">Lewat Deadline</span>
+    {{-- === LEADS KPI === --}}
+    @if(isset($leadStats))
+    <div class="mb-4">
+        <div class="text-[10px] font-[Helvetica] font-bold uppercase tracking-wider mb-1 text-gray-600">LEADS</div>
+        <div class="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
+            <div class="border-2 border-black bg-white px-2 py-1.5">
+                <div class="font-[Helvetica] font-bold text-[10px] uppercase leading-tight text-gray-500">Hari Ini</div>
+                <div class="font-['Arial_Black'] font-black text-2xl leading-tight">{{ $leadStats['leadToday'] }}</div>
             </div>
-        </div>
-        <div class="border-2 border-black">
-            <div class="bg-black text-white px-3 py-1.5 font-[Helvetica] font-bold text-xs uppercase tracking-wider">Deadline 7 Hari</div>
-            <div class="bg-[#e6915d] px-5 py-5">
-                <span class="font-['Arial_Black'] font-black text-4xl">{{ $upcomingWeekCount ?? 0 }}</span>
-                <span class="font-[Helvetica] font-bold text-sm ml-2 uppercase tracking-wider">Segera</span>
+            <div class="border-2 border-black bg-white px-2 py-1.5">
+                <div class="font-[Helvetica] font-bold text-[10px] uppercase leading-tight text-gray-500">Bulan Ini</div>
+                <div class="font-['Arial_Black'] font-black text-2xl leading-tight">{{ $leadStats['leadThisMonth'] }}</div>
             </div>
-        </div>
-    </div>
-
-    {{-- === HEALTH ROW: Total + Completed + % === --}}
-    <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
-        <div class="border-2 border-black">
-            <div class="bg-white border-b-2 border-black px-3 py-1.5">
-                <span class="font-[Helvetica] font-bold text-xs uppercase">Total Task</span>
+            <div class="border-2 border-black bg-white px-2 py-1.5">
+                <div class="font-[Helvetica] font-bold text-[10px] uppercase leading-tight text-gray-500">Sumber Teratas</div>
+                <div class="font-['Arial_Black'] font-black text-lg leading-tight truncate">{{ $leadStats['topSource'] }}</div>
             </div>
-            <div class="bg-gray-100 px-4 py-4">
-                <span class="font-['Arial_Black'] font-black text-3xl">{{ $totalContent ?? 0 }}</span>
-            </div>
-        </div>
-        <div class="border-2 border-black">
-            <div class="bg-white border-b-2 border-black px-3 py-1.5">
-                <span class="font-[Helvetica] font-bold text-xs uppercase">Completed</span>
-            </div>
-            <div class="bg-[#b3bd95] px-4 py-4">
-                <span class="font-['Arial_Black'] font-black text-3xl">{{ $totalPosted ?? 0 }}</span>
-                <span class="font-[Helvetica] font-bold text-xs ml-1">SELESAI</span>
-            </div>
-        </div>
-        <div class="border-2 border-black">
-            <div class="bg-white border-b-2 border-black px-3 py-1.5">
-                <span class="font-[Helvetica] font-bold text-xs uppercase">Completion Rate</span>
-            </div>
-            <div class="bg-[#8c9ae0] px-4 py-4">
-                <span class="font-['Arial_Black'] font-black text-3xl">{{ $completionRate ?? 0 }}<span class="text-xl">%</span></span>
-            </div>
-        </div>
-    </div>
-
-    {{-- === TABBED TASK LIST === --}}
-    <div x-data="{ tab: 'today' }" class="border-2 border-black mb-6">
-        <div class="bg-black text-white px-3 py-2 font-[Helvetica] font-bold text-xs uppercase flex items-center gap-4">
-            <button @click="tab = 'today'" :class="tab === 'today' ? 'text-white underline' : 'text-white/60 hover:text-white'" class="uppercase">📋 Hari Ini</button>
-            <button @click="tab = 'upcoming'" :class="tab === 'upcoming' ? 'text-white underline' : 'text-white/60 hover:text-white'" class="uppercase">📅 Akan Datang (7 Hari)</button>
-            <button @click="tab = 'overdue'" :class="tab === 'overdue' ? 'text-white underline' : 'text-white/60 hover:text-white'" class="uppercase">⚠️ Terlewat</button>
-        </div>
-
-        {{-- Today Tab --}}
-        <div x-show="tab === 'today'" x-cloak>
-            @if(isset($todayAgenda) && $todayAgenda->count() > 0)
-            <div class="divide-y divide-black">
-                @foreach($todayAgenda as $item)
-                <div class="px-3 py-2 text-sm font-['Times_New_Roman'] flex items-start gap-2">
-                    <span style="background:{{ $item['color'] }}; min-width:4px; width:4px; align-self:stretch; display:block;" class="shrink-0"></span>
-                    <div>
-                        <div class="font-bold">{{ $item['label'] }}</div>
-                        <div class="text-xs">{{ $item['subtitle'] }} — <span class="font-[Helvetica] font-bold">{{ strtoupper($item['status']) }}</span></div>
-                    </div>
-                </div>
-                @endforeach
-            </div>
-            @else
-            <div class="px-4 py-6 text-center text-sm font-['Times_New_Roman']">
-                Tidak ada agenda hari ini.
-            </div>
-            @endif
-        </div>
-
-        {{-- Upcoming Tab --}}
-        <div x-show="tab === 'upcoming'" x-cloak>
-            @if(isset($upcomingWeek) && $upcomingWeek->count() > 0)
-            <div class="divide-y divide-black">
-                @foreach($upcomingWeek as $item)
-                <div class="px-3 py-2 text-sm font-['Times_New_Roman'] flex items-start gap-2">
-                    <span style="background:#e6915d; min-width:4px; width:4px; align-self:stretch; display:block;" class="shrink-0"></span>
-                    <div class="flex-1">
-                        <div class="font-bold">{{ $item->title }}</div>
-                        <div class="text-xs">{{ $item->deadline_date?->format('d M') }} — {{ $item->branch->name ?? '' }} — <span class="font-[Helvetica] font-bold">{{ strtoupper($item->status) }}</span></div>
-                    </div>
-                    <span class="text-xs font-[Helvetica] font-bold whitespace-nowrap">{{ $item->deadline_date?->diffForHumans() }}</span>
-                </div>
-                @endforeach
-            </div>
-            @else
-            <div class="px-4 py-6 text-center text-sm font-['Times_New_Roman']">
-                Tidak ada deadline dalam 7 hari ke depan.
-            </div>
-            @endif
-        </div>
-
-        {{-- Overdue Tab --}}
-        <div x-show="tab === 'overdue'" x-cloak>
-            @if(isset($overdueContent) && $overdueContent->count() > 0)
-            <div class="divide-y divide-black">
-                @foreach($overdueContent as $item)
-                <div class="px-3 py-2 text-sm font-['Times_New_Roman'] flex items-start gap-2">
-                    <span style="background:#d77a7a; min-width:4px; width:4px; align-self:stretch; display:block;" class="shrink-0"></span>
-                    <div class="flex-1">
-                        <div class="font-bold">{{ $item->title }}</div>
-                        <div class="text-xs">{{ $item->deadline_date?->format('d M') }} — {{ $item->branch->name ?? '' }} — <span class="font-[Helvetica] font-bold">{{ strtoupper($item->status) }}</span></div>
-                    </div>
-                    <span class="text-xs font-[Helvetica] font-bold text-[#e91d2a] whitespace-nowrap">{{ $item->deadline_date?->diffForHumans() }}</span>
-                </div>
-                @endforeach
-            </div>
-            @else
-            <div class="px-4 py-6 text-center text-sm font-['Times_New_Roman']">
-                Tidak ada task terlewat.
-            </div>
-            @endif
-        </div>
-    </div>
-
-    {{-- === BOTTOM 2-COL: Status Cabang (bar chart) + PIC Teratas === --}}
-    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
-        {{-- Status Cabang --}}
-        @if(Auth::user()->canViewAllBranches() && isset($branchStatuses))
-        <div x-data="{ chartView: true }" class="lg:col-span-2 border-2 border-black">
-            <div class="bg-black text-white px-3 py-2 font-[Helvetica] font-bold text-xs uppercase flex items-center justify-between">
-                <span>Status Cabang</span>
-                <button @click="chartView = !chartView" class="text-white/70 hover:text-white text-[10px]">
-                    <span x-text="chartView ? 'Lihat Tabel' : 'Lihat Grafik'"></span>
-                </button>
-            </div>
-
-            {{-- Bar Chart View --}}
-            <div x-show="chartView" class="px-3 py-3">
-                @php
-                    $sorted = $branchStatuses->sortBy('completion_rate');
-                @endphp
-                @foreach($sorted as $bs)
-                <div class="mb-2">
-                    <div class="flex items-center justify-between text-xs font-[Helvetica] font-bold mb-0.5">
-                        <span>{{ $bs->name }}</span>
-                        <span>{{ $bs->posted_count }}/{{ $bs->content_items_count }} ({{ $bs->completion_rate }}%)</span>
-                    </div>
-                    <div class="w-full bg-gray-200 border border-black" style="height:16px;">
-                        <div class="h-full {{ $bs->completion_rate >= 75 ? 'bg-[#b3bd95]' : ($bs->completion_rate >= 50 ? 'bg-[#e6915d]' : 'bg-[#d77a7a]') }}" style="width:{{ $bs->completion_rate }}%;"></div>
-                    </div>
-                </div>
-                @endforeach
-            </div>
-
-            {{-- Table View --}}
-            <div x-show="!chartView" x-cloak>
-                <div class="overflow-x-auto">
-                    <table class="w-full text-sm font-['Times_New_Roman']">
-                        <thead>
-                            <tr class="border-b-2 border-black bg-white">
-                                <th class="text-left px-3 py-2 font-[Helvetica] font-bold text-xs uppercase">Cabang</th>
-                                <th class="text-center px-3 py-2 font-[Helvetica] font-bold text-xs uppercase">Total</th>
-                                <th class="text-center px-3 py-2 font-[Helvetica] font-bold text-xs uppercase">Completed</th>
-                                <th class="text-center px-3 py-2 font-[Helvetica] font-bold text-xs uppercase">%</th>
-                            </tr>
-                        </thead>
-                        <tbody class="divide-y divide-black">
-                            @foreach($sorted as $bs)
-                            <tr class="hover:bg-gray-50">
-                                <td class="px-3 py-2 font-bold">{{ $bs->name }}</td>
-                                <td class="px-3 py-2 text-center">{{ $bs->content_items_count }}</td>
-                                <td class="px-3 py-2 text-center">{{ $bs->posted_count }}</td>
-                                <td class="px-3 py-2 text-center font-[Helvetica] font-bold">{{ $bs->completion_rate }}%</td>
-                            </tr>
-                            @endforeach
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-        </div>
-        @endif
-
-        {{-- PIC Teratas --}}
-        <div class="border-2 border-black">
-            <div class="bg-black text-white px-3 py-2 font-[Helvetica] font-bold text-xs uppercase">PIC Teratas</div>
-            <div class="px-3 py-3">
-                @if(isset($topPics) && count($topPics) > 0)
-                    @foreach($topPics as $name => $count)
-                    <div class="flex items-center justify-between text-sm font-[Helvetica] font-bold {{ $loop->last ? '' : 'mb-1.5' }}">
-                        <span>{{ $name }}</span>
-                        <span class="bg-white border border-black px-2 py-0.5 text-xs">{{ $count }} task</span>
-                    </div>
-                    @endforeach
+            <div class="border-2 border-black bg-white px-2 py-1.5">
+                <div class="font-[Helvetica] font-bold text-[10px] uppercase leading-tight text-gray-500">Lead Terbaru</div>
+                @if($leadStats['latestLeads']->count() > 0)
+                    <div class="text-[10px] font-['Times_New_Roman'] leading-tight truncate">{{ $leadStats['latestLeads']->first()['nama'] }} — {{ $leadStats['latestLeads']->first()['source'] }}</div>
                 @else
-                    <div class="text-center py-4">
-                        <span class="text-sm font-['Times_New_Roman'] text-gray-500">Belum ada data PIC periode ini.</span>
-                    </div>
+                    <div class="text-[10px] font-['Times_New_Roman'] leading-tight text-gray-500">—</div>
                 @endif
             </div>
         </div>
     </div>
+    @endif
+
+    {{-- === DANA TALANGAN STATUS === --}}
+    @if(isset($danaStats))
+    <div class="mb-4">
+        <div class="text-[10px] font-[Helvetica] font-bold uppercase tracking-wider mb-1 text-gray-600">DANA TALANGAN</div>
+        <div class="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
+            <div class="border-2 border-black bg-[#d77a7a] px-2 py-1.5 text-white">
+                <div class="font-[Helvetica] font-bold text-[10px] uppercase leading-tight">Tidak Sanggup</div>
+                <div class="font-['Arial_Black'] font-black text-2xl leading-tight">{{ $danaStats['tidakSanggup'] }}</div>
+            </div>
+            <div class="border-2 border-black bg-[#f1c40f] px-2 py-1.5">
+                <div class="font-[Helvetica] font-bold text-[10px] uppercase leading-tight">Belum Konfirmasi</div>
+                <div class="font-['Arial_Black'] font-black text-2xl leading-tight">{{ $danaStats['belumKonfirmasi'] }}</div>
+            </div>
+            <div class="border-2 border-black bg-white px-2 py-1.5">
+                <div class="font-[Helvetica] font-bold text-[10px] uppercase leading-tight text-gray-500">Komitmen Hari Ini</div>
+                <div class="font-['Arial_Black'] font-black text-2xl leading-tight">{{ $danaStats['hariIni'] }}</div>
+            </div>
+            <div class="border-2 border-black bg-[#d77a7a] px-2 py-1.5 text-white">
+                <div class="font-[Helvetica] font-bold text-[10px] uppercase leading-tight">Komitmen Overdue</div>
+                <div class="font-['Arial_Black'] font-black text-2xl leading-tight">{{ $danaStats['overdue'] }}</div>
+            </div>
+        </div>
+    </div>
+    @endif
+
+    {{-- === COMPACT ACTION QUEUE === --}}
+    @if(isset($actionQueue) && $actionQueue->count() > 0)
+    <div class="border-2 border-black mb-4">
+        <div class="bg-black text-white px-2 py-1 font-[Helvetica] font-bold text-[10px] uppercase">🔔 Action Queue</div>
+        @php $typeLabels = ['dana_overdue' => 'Dana', 'dana_confirm' => 'Dana', 'task_overdue' => 'Task', 'task_today' => 'Task', 'lead_today' => 'Lead']; @endphp
+        @foreach($actionQueue as $aq)
+        <div class="px-2 py-1 text-xs font-['Times_New_Roman'] border-t border-black flex items-center gap-1.5 hover:bg-gray-50">
+            <span class="text-[10px] font-[Helvetica] font-bold uppercase {{ $aq['urgency'] <= 2 ? 'text-[#e91d2a]' : 'text-gray-500' }}">{{ $typeLabels[$aq['type']] ?? $aq['type'] }}</span>
+            <a href="{{ $aq['link'] }}" class="font-bold hover:underline truncate block flex-1">{{ $aq['text'] }}</a>
+        </div>
+        @endforeach
+    </div>
+    @endif
+
+    {{-- === STATUS CABANG (bar chart) === --}}
+    @if(Auth::user()->canViewAllBranches() && isset($branchStatuses))
+    <div x-data="{ chartView: true }" class="border-2 border-black mb-4">
+        <div class="bg-black text-white px-3 py-2 font-[Helvetica] font-bold text-xs uppercase flex items-center justify-between">
+            <span>Status Cabang</span>
+            <button @click="chartView = !chartView" class="text-white/70 hover:text-white text-[10px]">
+                <span x-text="chartView ? 'Lihat Tabel' : 'Lihat Grafik'"></span>
+            </button>
+        </div>
+
+        {{-- Bar Chart View --}}
+        <div x-show="chartView" class="px-3 py-3">
+            @php
+                $sorted = $branchStatuses->sortBy('completion_rate');
+            @endphp
+            @foreach($sorted as $bs)
+            <div class="mb-2">
+                <div class="flex items-center justify-between text-xs font-[Helvetica] font-bold mb-0.5">
+                    <span>{{ $bs->name }}</span>
+                    <span>{{ $bs->posted_count }}/{{ $bs->content_items_count }} ({{ $bs->completion_rate }}%)</span>
+                </div>
+                <div class="w-full bg-gray-200 border border-black" style="height:16px;">
+                    <div class="h-full {{ $bs->completion_rate >= 75 ? 'bg-[#b3bd95]' : ($bs->completion_rate >= 50 ? 'bg-[#e6915d]' : 'bg-[#d77a7a]') }}" style="width:{{ $bs->completion_rate }}%;"></div>
+                </div>
+            </div>
+            @endforeach
+        </div>
+
+        {{-- Table View --}}
+        <div x-show="!chartView" x-cloak>
+            <div class="overflow-x-auto">
+                <table class="w-full text-sm font-['Times_New_Roman']">
+                    <thead>
+                        <tr class="border-b-2 border-black bg-white">
+                            <th class="text-left px-3 py-2 font-[Helvetica] font-bold text-xs uppercase">Cabang</th>
+                            <th class="text-center px-3 py-2 font-[Helvetica] font-bold text-xs uppercase">Total</th>
+                            <th class="text-center px-3 py-2 font-[Helvetica] font-bold text-xs uppercase">Completed</th>
+                            <th class="text-center px-3 py-2 font-[Helvetica] font-bold text-xs uppercase">%</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-black">
+                        @foreach($sorted as $bs)
+                        <tr class="hover:bg-gray-50">
+                            <td class="px-3 py-2 font-bold">{{ $bs->name }}</td>
+                            <td class="px-3 py-2 text-center">{{ $bs->content_items_count }}</td>
+                            <td class="px-3 py-2 text-center">{{ $bs->posted_count }}</td>
+                            <td class="px-3 py-2 text-center font-[Helvetica] font-bold">{{ $bs->completion_rate }}%</td>
+                        </tr>
+                        @endforeach
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    @endif
+
+    {{-- === COMPACT SYNC HEALTH === --}}
+    @if(isset($syncHealth))
+    <div class="border-2 border-black px-2 py-1 mb-4 flex items-center gap-2 text-xs font-['Times_New_Roman']">
+        <span class="text-[10px] font-[Helvetica] font-bold uppercase">🔄 Sync</span>
+        @if($syncHealth['isStale'])
+            <span class="text-[#e91d2a] font-bold">⚠️ Stale</span>
+            <span class="text-gray-500">{{ ($syncHealth['finished_at'] ?? null) ? 'Sync terakhir ' . $syncHealth['finished_at']->diffForHumans() : 'Belum pernah sync' }}</span>
+        @else
+            <span class="text-[#b3bd95] font-bold">✅ Synced</span>
+            <span class="text-gray-500">{{ ($syncHealth['finished_at'] ?? null)?->diffForHumans() }}</span>
+        @endif
+        @if($syncHealth['message'] ?? null)
+            <span class="text-gray-400">· {{ $syncHealth['message'] }}</span>
+        @endif
+        <form method="POST" action="{{ route('database.sync') }}" class="inline ml-auto">
+            @csrf
+            @if($selectedBranchId)
+            <input type="hidden" name="branch_id" value="{{ $selectedBranchId }}">
+            @endif
+            <button type="submit" class="bg-white text-black px-2 py-0.5 text-[10px] font-[Helvetica] font-bold border border-black hover:bg-gray-100 cursor-pointer">Sync</button>
+        </form>
+    </div>
+    @endif
 
     {{-- === ACTIVITY FEED (full width, bottom) === --}}
     @if(isset($recentActivity) && $recentActivity->count() > 0)

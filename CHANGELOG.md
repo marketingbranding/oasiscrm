@@ -14,3 +14,32 @@
 
 ### Diubah — Modifikasi file utama
 - Berkas `resources/views/crm/database/index.blade.php` — semua perubahan di file ini (~30 baris CSS, ~10 modifikasi template, 3 method Alpine baru).
+
+### 2026-07-09 — Penyederhanaan Leads, Database, dan Dana Talangan
+
+### Ditambahkan
+- Deep-link modul Database — halaman Database sekarang bisa langsung membuka tab tertentu melalui parameter `sheet`, misalnya `?sheet=lead`.
+- Quick add Lead — tombol `+ Lead Baru` di Dashboard sekarang membuka modal "Tambah Data — lead" langsung dari modul Database melalui `?sheet=lead&add=1`.
+- Dashboard Lead berbasis Google Sheet — data Lead di agenda hari ini dan aktivitas terbaru sekarang dibaca dari tab `lead` pada Database, bukan dari tabel lokal `leads`.
+- Kolom `TGL Komitmen` pada Dana Talangan — ditambahkan ke form, tabel, detail, export, import, validasi, model, dan database.
+- Custom date picker untuk `TGL Komitmen` — menggunakan date picker internal yang sama seperti `Tanggal Lead` dan `Tanggal` Dana Talangan.
+
+### Diubah
+- Modul Leads standalone dihapus dari alur utama karena belum digunakan branch dan datanya kosong.
+- Sidebar Leads dihapus.
+- Tombol quick add Lead tetap dipertahankan, tetapi diarahkan ke tab `lead` di modul Database.
+- Label Dana Talangan `Penyelesaian` diubah menjadi `Progress Penagihan`, tanpa mengubah nama kolom database.
+- Pencarian Dana Talangan sekarang juga mencakup kolom `penyelesaian`.
+- Matching tab Database untuk deep-link dibuat case-insensitive, sehingga `lead`, `Lead`, atau `LEAD` tetap bisa terbuka.
+
+### Diperbaiki
+- Quick add Lead tidak membuka modal — diperbaiki dengan mengarahkan ke tab `lead` yang benar.
+- Dashboard Lead widget sebelumnya membaca tab yang salah — sekarang membaca dari tab `lead`.
+- Spasi berlebih pada Bug/Masukan dipangkas otomatis saat submit dan saat admin memberi catatan.
+- Jumlah notifikasi Bug/Masukan sekarang muncul saat halaman pertama kali dimuat.
+
+### Dihapus
+- Route standalone `leads.*`.
+- Controller standalone `LeadController`.
+- View standalone `resources/views/crm/leads/`.
+- Menu sidebar Leads standalone.

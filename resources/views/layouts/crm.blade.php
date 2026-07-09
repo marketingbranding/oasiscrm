@@ -9,6 +9,7 @@
     <link href="https://fonts.bunny.net/css?family=figtree:400,500,600&display=swap" rel="stylesheet" />
     <link rel="icon" type="image/svg+xml" href="{{ asset('favicon.svg') }}">
     @vite(['resources/css/app.css', 'resources/js/app.js'])
+    <script>!function(){if(localStorage.getItem('sidebarPinned')==='true'){var s=document.createElement('style');s.id='crm-pinned-style';s.textContent='#crm-sidebar{width:14rem!important}#crm-main{margin-left:14rem!important}';document.head.appendChild(s)}}()</script>
     <style>
         [x-cloak] { display: none !important; }
         @media (max-width: 767px) {
@@ -44,7 +45,8 @@
     </style>
 </head>
 <body class="font-['Times_New_Roman'] antialiased bg-white min-h-screen flex flex-col"
-      x-data="{ sidebarOpen: localStorage.getItem('sidebarOpen') !== 'false', sidebarPinned: localStorage.getItem('sidebarPinned') === 'true', bellOpen: false }">
+      x-data="{ sidebarOpen: localStorage.getItem('sidebarOpen') !== 'false', sidebarPinned: localStorage.getItem('sidebarPinned') === 'true', bellOpen: false }"
+      x-init="document.getElementById('crm-pinned-style')&&document.getElementById('crm-pinned-style').remove()">
     {{-- Header --}}
     <div class="fixed top-0 left-0 right-0 z-50 flex-shrink-0 bg-black text-white font-[Helvetica] font-bold text-sm sm:text-base px-4 py-3 flex items-center justify-between">
         <div class="flex items-center gap-2">
@@ -113,7 +115,7 @@
 
     {{-- Body --}}
     <div class="flex flex-col sm:flex-row pt-14">
-        <div :class="[sidebarOpen ? 'block' : 'hidden', sidebarPinned ? 'sm:w-56' : 'sm:w-16 sm:hover:w-56']"
+        <div id="crm-sidebar" :class="[sidebarOpen ? 'block' : 'hidden', sidebarPinned ? 'sm:w-56' : 'sm:w-16 sm:hover:w-56']"
              class="sm:block group w-64 sm:w-16 flex flex-col shadow-xl
                     fixed left-0 top-14 bottom-0 z-40
                     sm:fixed sm:left-0 sm:top-14 sm:bottom-0 sm:z-40
@@ -122,7 +124,7 @@
                     bg-white sm:border-r-2 border-black">
             <nav :class="sidebarPinned ? 'sm:overflow-y-auto' : 'sm:overflow-y-hidden sm:group-hover:overflow-y-auto'" class="overflow-x-hidden overflow-y-auto flex-1 min-h-0 p-2">
                 <div class="mb-1 hidden sm:block">
-                    <button @click="sidebarPinned = !sidebarPinned; localStorage.setItem('sidebarPinned', sidebarPinned)"
+                    <button @click="sidebarPinned = !sidebarPinned; localStorage.setItem('sidebarPinned', sidebarPinned); document.documentElement.classList.toggle('sidebar-pinned', sidebarPinned)"
                             :class="sidebarPinned ? 'bg-green-50 text-green-700 border-green-500 hover:bg-green-100' : 'text-gray-500 border-gray-300 hover:text-black hover:bg-gray-100'"
                             class="w-full flex items-center px-2 py-1.5 gap-2 text-[10px] font-[Helvetica] font-bold border rounded-none transition-colors duration-200"
                             :title="sidebarPinned ? 'Lepas pin sidebar' : 'Pin sidebar'">
@@ -223,7 +225,8 @@
             @endif
         </div>
 
-        <div :class="sidebarPinned ? 'sm:ml-56' : 'sm:ml-16'" class="flex-1 min-w-0 max-w-full overflow-x-hidden p-4 sm:p-6 sm:ml-16">
+        <div id="crm-main" :class="sidebarPinned ? 'sm:ml-56' : 'sm:ml-16'"
+             class="flex-1 min-w-0 max-w-full overflow-x-hidden p-4 sm:p-6 sm:ml-16">
             @yield('content')
 
             <div class="border-t-2 border-black bg-white px-4 py-3 text-center text-xs font-['Times_New_Roman'] mt-6">

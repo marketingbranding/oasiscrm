@@ -1,189 +1,64 @@
-# AGENTS.md
+# Oasis CRM — AGENTS.md
 
-This file provides guidance to AI coding agents (Claude Code, Cursor, Copilot, Antigravity, etc.) when working with code in this repository.
+Laravel 13 CRM with SQLite (dev), Google Sheets sync, Alpine.js + Tailwind UI.
 
-## Repository Overview
+## Commands
 
-A collection of skills for Claude.ai and Claude Code for senior software engineers. Skills are packaged instructions and scripts that extend Claude and your coding agents capabilities.
+- `composer test` — runs `php artisan config:clear` then `php artisan test`
+- `php artisan test tests/Feature/DashboardTest.php` — single test file
+- `php artisan optimize:clear` — after any controller/view change
+- `php artisan view:cache` — re-compile Blade templates
+- `php artisan sheet:cleanup-meta` — remove stale Google Sheet metadata columns (`--dry-run`, `--branch=`)
+- `composer dev` — concurrent server + queue + logs + Vite
+- `npm run build` — Vite production build
 
-## OpenCode Integration
+## Controller changes — mandatory steps
 
-OpenCode uses a **skill-driven execution model** powered by the `skill` tool and this repository's `/skills` directory.
+After editing any controller:
 
-### Core Rules
+1. `php artisan optimize:clear` (clears config, cache, compiled, events, routes, views)
+2. `php artisan view:cache`
+3. Run affected tests
+4. Verify in browser (superadmin + branch-admin views, with and without branch/project filter)
 
-- If a task matches a skill, you MUST invoke it
-- Skills are located in `skills/<skill-name>/SKILL.md`
-- Never implement directly if a skill applies
-- Always follow the skill instructions exactly (do not partially apply them)
+## Architecture
 
-### Intent → Skill Mapping
+- **Two sync systems with independent routes and tables:** `database.sync` (DatabaseController) syncs leads/general sheets to `database_sheet_records`; `konsumen-progress.sync` (KonsumenProgressController) syncs pipeline stage sheets to `konsumen_progress_sheet_rows`. Dashboard Sync button calls `database.sync`, not the progress sync.
+- **Google Sheets:** 5 service classes under `app/Services/` (api, read, write, sync, konsumen sync)
+- **Views** extend `layouts.crm` (not `layouts.app`). Uses `@yield('content')`, no Blade components.
+- **Dashboard data sources:** Lead KPI and Action Queue query `database_sheet_records` (Google Sheet cache); Dana Talangan queries local `dana_talangans` table; Konsumen Progress queries `konsumen_progress_sheet_rows`; Sync Health queries `database_sheet_sync_statuses`.
+- **Cache & session** both use `database` driver (SQLite table-based).
 
-The agent should automatically map user intent to skills:
+## Routes & auth
 
-- Feature / new functionality → `spec-driven-development`, then `incremental-implementation`, `test-driven-development`
-- Planning / breakdown → `planning-and-task-breakdown`
-- Bug / failure / unexpected behavior → `debugging-and-error-recovery`
-- Code review → `code-review-and-quality`
-- Refactoring / simplification → `code-simplification`
-- API or interface design → `api-and-interface-design`
-- UI work → `frontend-ui-engineering`
+- All CRM routes behind `auth` + `verified` + `password.changed` middleware
+- Superadmin-only routes nested under `role:superadmin` middleware
+- `canViewAllBranches()` = `isSuperadmin()` || `hasRole('pusat')`
+- Roles: `superadmin`, `admin`, `manager`, `staff`, `pusat`
 
-### Lifecycle Mapping (Implicit Commands)
+## Dashboard gotchas
 
-OpenCode does not support slash commands like `/spec` or `/plan`.
+- **Branch-admin path must pass `$selectedBranchId`.** The Blade view at line 190 uses `$selectedBranchId` in the sync form. If omitted, an undefined-variable 500 is raised. Set `$selectedBranchId = $branch->id` in the branch-admin path and include in `compact()`.
+- **When no branch is selected (superadmin):** `$selectedBranchId` is null → `getKonsumenProgress()` aggregates across all active branches; `getSyncHealth()` returns null (section hidden via `@if(isset($syncHealth))`). Data queries that accept nullable `$branchId` show all branches.
+- **Sync buttons on dashboard** post to `database.sync`. The separate `konsumen-progress.sync` route is not connected to the dashboard.
 
-Instead, the agent must internally follow this lifecycle:
+## Models
 
-- DEFINE → `spec-driven-development`
-- PLAN → `planning-and-task-breakdown`
-- BUILD → `incremental-implementation` + `test-driven-development`
-- VERIFY → `debugging-and-error-recovery`
-- REVIEW → `code-review-and-quality`
-- SHIP → `shipping-and-launch`
+Key models and their backing tables:
 
-### Execution Model
+| Model | Table | Purpose |
+|-------|-------|---------|
+| `DatabaseSheetRecord` | `database_sheet_records` | Cached Google Sheet rows (leads, etc.) |
+| `DatabaseSheetSyncStatus` | `database_sheet_sync_statuses` | Last sync status per branch |
+| `KonsumenProgressSheetRow` | `konsumen_progress_sheet_rows` | Cached pipeline stage rows |
+| `KonsumenProgressSyncStatus` | `konsumen_progress_sync_statuses` | Pipeline sync status per branch |
+| `DanaTalangan` | `dana_talangans` | Dana talangan records |
+| `ContentItem` | `content_items` | Task tracker items |
 
-For every request:
+`KonsumenProgressSheetRow.row_data` is a JSON `array` cast — always access as array, not object.
 
-1. Determine if any skill applies (even 1% chance)
-2. Invoke the appropriate skill using the `skill` tool
-3. Follow the skill workflow strictly
-4. Only proceed to implementation after required steps (spec, plan, etc.) are complete
+## Test patterns
 
-### Anti-Rationalization
-
-The following thoughts are incorrect and must be ignored:
-
-- "This is too small for a skill"
-- "I can just quickly implement this"
-- "I’ll gather context first"
-
-Correct behavior:
-
-- Always check for and use skills first
-
-This ensures OpenCode behaves similarly to Claude Code with full workflow enforcement.
-
-## Orchestration: Personas, Skills, and Commands
-
-This repo has three composable layers. They have different jobs and should not be confused:
-
-- **Skills** (`skills/<name>/SKILL.md`) — workflows with steps and exit criteria. The *how*. Mandatory hops when an intent matches.
-- **Personas** (`agents/<role>.md`) — roles with a perspective and an output format. The *who*.
-- **Slash commands** (`.claude/commands/*.md`) — user-facing entry points. The *when*. The orchestration layer.
-
-Composition rule: **the user (or a slash command) is the orchestrator. Personas do not invoke other personas.** A persona may invoke skills.
-
-The only multi-persona orchestration pattern this repo endorses is **parallel fan-out with a merge step** — used by `/ship` to run `code-reviewer`, `security-auditor`, and `test-engineer` concurrently and synthesize their reports. Do not build a "router" persona that decides which other persona to call; that's the job of slash commands and intent mapping.
-
-See [agents/README.md](agents/README.md) for the decision matrix and [references/orchestration-patterns.md](references/orchestration-patterns.md) for the full pattern catalog.
-
-**Claude Code interop:** the personas in `agents/` work as Claude Code subagents (auto-discovered from this plugin's `agents/` directory) and as Agent Teams teammates (referenced by name when spawning). Two platform constraints align with our rules: subagents cannot spawn other subagents, and teams cannot nest. Plugin agents silently ignore the `hooks`, `mcpServers`, and `permissionMode` frontmatter fields.
-
-## Creating a New Skill
-
-### Directory Structure
-
-```
-skills/
-  {skill-name}/           # kebab-case directory name
-    SKILL.md              # Required: skill definition
-    scripts/              # Required: executable scripts
-      {script-name}.sh    # Bash scripts (preferred)
-  {skill-name}.zip        # Required: packaged for distribution
-```
-
-### Naming Conventions
-
-- **Skill directory**: `kebab-case` (e.g. `web-quality`)
-- **SKILL.md**: Always uppercase, always this exact filename
-- **Scripts**: `kebab-case.sh` (e.g., `deploy.sh`, `fetch-logs.sh`)
-- **Zip file**: Must match directory name exactly: `{skill-name}.zip`
-
-### SKILL.md Format
-
-```markdown
----
-name: {skill-name}
-description: {One sentence describing what the skill does, followed by one or more "Use when" trigger conditions. Include trigger phrases like "Deploy my app" or "Check logs" when helpful.}
----
-
-# {Skill Title}
-
-{Brief overview of what the skill does and why it matters.}
-
-## How It Works
-
-{Numbered list explaining the skill's workflow}
-
-Equivalent headings like `Workflow`, `Core Process`, or `When to Use` are fine when they communicate the same structure clearly.
-
-## Usage (Optional)
-
-Include this section only if the skill ships runnable helpers under `scripts/`. Markdown-only skills can omit both the section and the directory entirely.
-
-```bash
-bash /mnt/skills/user/{skill-name}/scripts/{script}.sh [args]
-```
-
-**Arguments:**
-- `arg1` - Description (defaults to X)
-
-**Examples:**
-{Show 2-3 common usage patterns}
-
-## Output
-
-{Show example output users will see}
-
-## Present Results to User
-
-{Template for how Claude should format results when presenting to users}
-
-## Troubleshooting
-
-{Common issues and solutions, especially network/permissions errors}
-```
-
-### Best Practices for Context Efficiency
-
-Skills are loaded on-demand — only the skill name and description are loaded at startup. The full `SKILL.md` loads into context only when the agent decides the skill is relevant. To minimize context usage:
-
-- **Keep SKILL.md under 500 lines** — put detailed reference material in separate files
-- **Write specific descriptions** — helps the agent know exactly when to activate the skill
-- **Use progressive disclosure** — reference supporting files that get read only when needed
-- **Prefer scripts over inline code** — script execution doesn't consume context (only output does)
-- **File references work one level deep** — link directly from SKILL.md to supporting files
-
-### Script Requirements
-
-- Use `#!/bin/bash` shebang
-- Use `set -e` for fail-fast behavior
-- Write status messages to stderr: `echo "Message" >&2`
-- Write machine-readable output (JSON) to stdout
-- Include a cleanup trap for temp files
-- Reference the script path as `/mnt/skills/user/{skill-name}/scripts/{script}.sh`
-
-### Creating the Zip Package
-
-After creating or updating a skill:
-
-```bash
-cd skills
-zip -r {skill-name}.zip {skill-name}/
-```
-
-### End-User Installation
-
-Document these two installation methods for users:
-
-**Claude Code:**
-```bash
-cp -r skills/{skill-name} ~/.claude/skills/
-```
-
-**claude.ai:**
-Add the skill to project knowledge or paste SKILL.md contents into the conversation.
-
-If the skill requires network access, instruct users to add required domains at `claude.ai/settings/capabilities`.
+- In-memory SQLite (`RefreshDatabase`) — no external DB needed
+- Factory for User exists; no factories for other models (create directly in tests)
+- Routes under `password.changed` middleware: set `password_changed_at` on test users to avoid redirect

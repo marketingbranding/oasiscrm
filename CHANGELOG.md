@@ -98,5 +98,7 @@
 - Widget batang Status Cabang (completion rate per cabang) dihapus dari dashboard.
 - Kode controller `$branchStatuses` beserta query `ContentItem` per-cabang dibersihkan.
 
-### Diperbaiki — Missing import
+### Diperbaiki — Error dashboard
 - Menambahkan `use App\Models\DatabaseSheetSyncStatus` ke `DashboardController` untuk memperbaiki `Class not found` error.
+- Dashboard admin cabang kini menerima `selectedBranchId` dari cabang user, sehingga widget Sync tidak lagi memicu error 500 akibat variabel yang tidak tersedia.
+- Akses `selectedBranchId` pada template dibuat defensif dan ditambahkan feature test untuk memastikan dashboard admin cabang merespons HTTP 200.

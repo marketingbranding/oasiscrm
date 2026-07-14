@@ -187,7 +187,7 @@
         @endif
         <form method="POST" action="{{ route('database.sync') }}" class="inline ml-auto">
             @csrf
-            @if($selectedBranchId)
+            @if($selectedBranchId ?? null)
             <input type="hidden" name="branch_id" value="{{ $selectedBranchId }}">
             @endif
             <button type="submit" class="bg-white text-black px-2 py-0.5 text-[10px] font-[Helvetica] font-bold border border-black hover:bg-gray-100 cursor-pointer">Sync</button>

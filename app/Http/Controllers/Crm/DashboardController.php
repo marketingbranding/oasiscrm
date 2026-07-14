@@ -54,6 +54,8 @@ class DashboardController extends Controller
             return view('crm.dashboard', compact('branches', 'branch', 'selectedBranchId'))->with('error', 'Anda belum memiliki cabang.');
         }
 
+        $selectedBranchId = $branch->id;
+
         $projects = LeadMaster::where('is_active', true)
             ->where('branch_id', $branch->id)
             ->orderBy('project_name')
@@ -67,7 +69,7 @@ class DashboardController extends Controller
         $syncHealth = $this->getSyncHealth($branch->id);
         $konsumenProgress = $this->getKonsumenProgress($branch->id);
 
-        return view('crm.dashboard', compact('branch', 'projects', 'selectedProject', 'recentActivity', 'leadStats', 'danaStats', 'actionQueue', 'syncHealth', 'konsumenProgress'));
+        return view('crm.dashboard', compact('branch', 'selectedBranchId', 'projects', 'selectedProject', 'recentActivity', 'leadStats', 'danaStats', 'actionQueue', 'syncHealth', 'konsumenProgress'));
     }
 
     private function getRecentActivity($branchId = null, $projectName = null)

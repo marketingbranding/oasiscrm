@@ -9,7 +9,7 @@ class SyncDanaTalangan extends Command
 {
     protected $signature = 'dana-talangan:sync {--dry-run : Preview changes without writing data}';
 
-    protected $description = 'Synchronize Dana Talangan with its monthly Google Sheets tabs';
+    protected $description = 'Synchronize Dana Talangan with the canonical Google Sheets tab';
 
     public function handle(DanaTalanganGoogleService $service): int
     {
@@ -21,13 +21,14 @@ class SyncDanaTalangan extends Command
         }
 
         $summary = $result['summary'];
-        $this->table(['Matched', 'Imported', 'Updated', 'Pushed', 'Deleted', 'Legacy', 'Warnings'], [[
+        $this->table(['Matched', 'Imported', 'Updated', 'Pushed', 'Deleted', 'Inferred', 'Repaired', 'Warnings'], [[
             $summary['matched'],
             $summary['imported'],
             $summary['updated'],
             $summary['pushed'],
             $summary['deleted'],
-            $summary['legacy_local'],
+            $summary['inferred_projects'],
+            $summary['repaired_metadata'],
             count($summary['warnings']),
         ]]);
         foreach ($summary['warnings'] as $warning) {

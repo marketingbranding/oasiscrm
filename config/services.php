@@ -35,7 +35,10 @@ return [
         'cache_stale_minutes' => env('GOOGLE_SHEETS_CACHE_STALE_MINUTES', 30),
         'verify_ssl' => env('GOOGLE_SHEETS_VERIFY_SSL', true),
         'dana_talangan_spreadsheet_id' => env('DANA_TALANGAN_SHEET_ID'),
-        'dana_talangan_template_sheet' => env('DANA_TALANGAN_TEMPLATE_SHEET', 'Juli'),
+        'dana_talangan_sheet_name' => env('DANA_TALANGAN_SHEET_NAME', 'Talangan'),
+        'dana_talangan_project_branches' => [
+            'Mulyoharjo' => 'JPR',
+        ],
     ],
 
 ];

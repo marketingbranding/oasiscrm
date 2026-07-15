@@ -23,7 +23,7 @@ class UpdateDanaTalanganRequest extends FormRequest
         $user = Auth::user();
 
         return [
-            'tanggal' => 'required|date|after_or_equal:2026-07-01',
+            'tanggal' => 'required|date',
             'nama_konsumen' => 'required|string|max:255',
             'kav' => 'nullable|string|max:100',
             'branch_id' => $user->canViewAllBranches() ? 'required|exists:branches,id' : 'exclude',

@@ -11,11 +11,13 @@
 
 ### 2026-07-15 — Sinkronisasi Dua Arah Dana Talangan
 
-- Modul Dana Talangan menggunakan tab bulan dengan template kanonis dari tab `Juli`.
+- Modul Dana Talangan menggunakan satu tab kanonis bernama `Talangan` untuk seluruh tahun.
 - Tambah, Edit, Hapus, import, dan bulk update mengirim perubahan ke Google Sheets.
 - Perubahan dari Google masuk ke cache lokal melalui Sync manual atau command terjadwal setiap 10 menit.
-- Tab bulan baru dibuat otomatis dari template Juli; mulai 2027 nama tab menyertakan tahun.
-- Cabang dipetakan dari Proyek dan tiga kolom metadata sinkronisasi disimpan tersembunyi di Google Sheets.
+- Tab lama hanya dibaca untuk menginfer Proyek yang kosong; tidak digunakan sebagai sumber record.
+- Cabang dipetakan dari Proyek, termasuk alias Mulyoharjo ke Jepara, dan tiga kolom metadata sinkronisasi disimpan tersembunyi di Google Sheets.
+- Pencarian nama menampilkan jumlah pengajuan per konsumen secara case-insensitive.
+- Filter mendukung rentang tanggal atau rentang bulan berdasarkan Tanggal pengajuan.
 
 ### 2026-07-08 — Peningkatan Modul Database
 

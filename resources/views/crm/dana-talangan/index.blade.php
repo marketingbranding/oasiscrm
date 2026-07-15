@@ -26,18 +26,10 @@
     ...crmDetailModal('/dana-talangan', '/dana-talangan', {sanggup:'#9ab6c8',tidak_sanggup:'#d77a7a',lunas:'#b3bd95'}),
     adding: {{ $errors->any() && old('form_mode') !== 'edit' ? 'true' : 'false' }},
     editingRecord: @js($oldEditingRecord),
+    filterMode: @js($filterMode),
     openEdit(record) { this.editingRecord = record; },
 }">
     <x-crm.page-header color="#f1c40f" title="Dana Talangan" />
-
-    <div class="flex items-end gap-1 overflow-x-auto mb-4 border-b-2 border-black tabs-scroll">
-        @foreach($monthTabs as $month)
-        <a href="{{ route('dana-talangan.index', array_merge(request()->except(['page', 'month']), ['month' => $month])) }}"
-           class="shrink-0 border-2 border-b-0 border-black px-4 py-2 text-xs font-[Helvetica] font-bold uppercase {{ $selectedMonth === $month ? 'bg-[#f1c40f]' : 'bg-white hover:bg-gray-100' }}">
-            {{ $month }}
-        </a>
-        @endforeach
-    </div>
 
     <div class="border-2 border-black bg-white px-4 py-3 mb-4 flex flex-wrap items-center justify-between gap-3">
         <div class="font-['Times_New_Roman'] text-sm">
@@ -58,54 +50,88 @@
         </div>
     </div>
 
+    @if($syncStatus?->message)
+    <div class="border-2 border-black bg-[#fef3cd] px-4 py-3 mb-4 text-sm font-['Times_New_Roman'] whitespace-pre-line">{{ $syncStatus->message }}</div>
+    @endif
+
     <div class="bg-white border-2 border-black p-3 mb-6">
-        <form method="GET" action="{{ route('dana-talangan.index') }}" class="flex items-center gap-3 flex-wrap filter-bar">
-            <input type="hidden" name="month" value="{{ $selectedMonth }}">
-            <div class="flex items-center gap-3 flex-wrap">
+        <form method="GET" action="{{ route('dana-talangan.index') }}" class="space-y-3 filter-bar">
+            <div class="flex items-end gap-3 flex-wrap">
             @if(Auth::user()->canViewAllBranches() && isset($branches) && $branches->count() > 0)
-            <label class="font-[Helvetica] font-bold text-xs uppercase">Cabang:</label>
-            <select name="branch_id" onchange="this.form.submit()" class="border-2 border-black px-3 py-1.5 text-sm font-['Times_New_Roman'] bg-white rounded-none">
+            <div><label class="font-[Helvetica] font-bold text-xs uppercase block mb-1">Cabang</label>
+            <select name="branch_id" class="border-2 border-black px-3 py-1.5 text-sm font-['Times_New_Roman'] bg-white rounded-none">
                 <option value="">— Semua Cabang —</option>
                 @foreach($branches as $b)
                     <option value="{{ $b->id }}" {{ (string)$selectedBranchId === (string)$b->id ? 'selected' : '' }}>{{ $b->name }}</option>
                 @endforeach
-            </select>
+            </select></div>
             @endif
 
             @if(isset($projects) && $projects->count() > 0)
-            <label class="font-[Helvetica] font-bold text-xs uppercase">Proyek:</label>
-            <select name="project_name" onchange="this.form.submit()" class="border-2 border-black px-3 py-1.5 text-sm font-['Times_New_Roman'] bg-white rounded-none">
+            <div><label class="font-[Helvetica] font-bold text-xs uppercase block mb-1">Proyek</label>
+            <select name="project_name" class="border-2 border-black px-3 py-1.5 text-sm font-['Times_New_Roman'] bg-white rounded-none">
                 <option value="">— Semua Proyek —</option>
-                @foreach($projects as $p)
-                    <option value="{{ $p->project_name }}" {{ $selectedProject === $p->project_name ? 'selected' : '' }}>{{ $p->project_name }}</option>
+                @foreach($projectOptions as $projectName)
+                    <option value="{{ $projectName }}" {{ $selectedProject === $projectName ? 'selected' : '' }}>{{ $projectName }}</option>
                 @endforeach
-            </select>
+            </select></div>
             @endif
 
-            <label class="font-[Helvetica] font-bold text-xs uppercase">Status Cicilan:</label>
-            <select name="status" onchange="this.form.submit()" class="border-2 border-black px-3 py-1.5 text-sm font-['Times_New_Roman'] bg-white rounded-none">
+            <div><label class="font-[Helvetica] font-bold text-xs uppercase block mb-1">Status Cicilan</label>
+            <select name="status" class="border-2 border-black px-3 py-1.5 text-sm font-['Times_New_Roman'] bg-white rounded-none">
                 <option value="">— Semua Status —</option>
                 <option value="sanggup" {{ $selectedStatus === 'sanggup' ? 'selected' : '' }}>Sanggup</option>
                 <option value="tidak_sanggup" {{ $selectedStatus === 'tidak_sanggup' ? 'selected' : '' }}>Tidak Sanggup</option>
                 <option value="lunas" {{ $selectedStatus === 'lunas' ? 'selected' : '' }}>Lunas</option>
-            </select>
-                <label class="font-[Helvetica] font-bold text-xs uppercase">Cari:</label>
-                <input name="search" value="{{ request('search') }}"
-                       placeholder="Nama, Kav, Proyek..."
-                       class="border-2 border-black px-3 py-1.5 text-sm font-['Times_New_Roman'] bg-white rounded-none"
-                       onkeydown="if(event.key==='Enter') this.form.submit()">
+            </select></div>
+            <div class="grow min-w-[220px]"><label class="font-[Helvetica] font-bold text-xs uppercase block mb-1">Cari Nama Konsumen</label>
+                <input name="search" value="{{ $search }}" placeholder="Ketik nama konsumen..." class="w-full border-2 border-black px-3 py-1.5 text-sm font-['Times_New_Roman'] bg-white rounded-none">
             </div>
-
-            <div class="h-6 w-px bg-black mx-1 hidden sm:block"></div>
-
-            <div class="flex items-center gap-2 ml-auto">
-                <x-crm.export-import export-route="dana-talangan.export" import-route="dana-talangan.import" :params="request()->only(['branch_id', 'project_name', 'status', 'month'])" />
+            <div class="flex items-center gap-2 ml-auto pb-0.5">
+                <x-crm.export-import export-route="dana-talangan.export" import-route="dana-talangan.import" :params="request()->only(['branch_id', 'project_name', 'status', 'search', 'filter_mode', 'date_from', 'date_to', 'month_from', 'month_to'])" />
                 <button type="button" @click="adding = true" class="bg-[#f1c40f] text-black px-4 py-1.5 text-sm font-[Helvetica] font-bold border-2 border-black rounded-none hover:bg-[#d4ac0d]">
                     + Dana Talangan Baru
                 </button>
             </div>
+            </div>
+
+            <div class="border-t-2 border-black pt-3 flex items-end gap-3 flex-wrap">
+                <div><label class="font-[Helvetica] font-bold text-xs uppercase block mb-1">Mode Rentang</label>
+                    <select name="filter_mode" x-model="filterMode" class="border-2 border-black px-3 py-1.5 text-sm font-['Times_New_Roman'] bg-white">
+                        <option value="date">Rentang Tanggal</option><option value="month">Rentang Bulan</option>
+                    </select>
+                </div>
+                <template x-if="filterMode === 'date'">
+                    <div class="flex items-end gap-3 flex-wrap">
+                        <div><label class="font-[Helvetica] font-bold text-xs uppercase block mb-1">Dari Tanggal</label><div class="date-wrapper" data-accent="#f1c40f" style="position:relative"><div class="date-display min-w-[170px] border-2 border-black px-3 py-1.5 text-sm font-['Times_New_Roman'] bg-white cursor-pointer flex justify-between" tabindex="0"><span class="date-text">— Pilih Tanggal —</span><span class="date-arrow">▼</span></div><input type="date" name="date_from" value="{{ $dateFrom }}" style="position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0"></div></div>
+                        <div><label class="font-[Helvetica] font-bold text-xs uppercase block mb-1">Sampai Tanggal</label><div class="date-wrapper" data-accent="#f1c40f" style="position:relative"><div class="date-display min-w-[170px] border-2 border-black px-3 py-1.5 text-sm font-['Times_New_Roman'] bg-white cursor-pointer flex justify-between" tabindex="0"><span class="date-text">— Pilih Tanggal —</span><span class="date-arrow">▼</span></div><input type="date" name="date_to" value="{{ $dateTo }}" style="position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0"></div></div>
+                    </div>
+                </template>
+                <template x-if="filterMode === 'month'">
+                    <div class="flex items-end gap-3 flex-wrap">
+                        <div><label class="font-[Helvetica] font-bold text-xs uppercase block mb-1">Dari Bulan</label><input type="month" name="month_from" value="{{ $monthFrom }}" class="border-2 border-black px-3 py-1.5 text-sm font-['Times_New_Roman'] bg-white"></div>
+                        <div><label class="font-[Helvetica] font-bold text-xs uppercase block mb-1">Sampai Bulan</label><input type="month" name="month_to" value="{{ $monthTo }}" class="border-2 border-black px-3 py-1.5 text-sm font-['Times_New_Roman'] bg-white"></div>
+                    </div>
+                </template>
+                <button class="bg-black text-white border-2 border-black px-5 py-1.5 text-sm font-[Helvetica] font-bold">Terapkan</button>
+                <a href="{{ route('dana-talangan.index') }}" class="bg-white border-2 border-black px-5 py-1.5 text-sm font-[Helvetica] font-bold hover:bg-gray-100">Reset</a>
+            </div>
         </form>
     </div>
+
+    @if($search !== '')
+    <div class="border-2 border-black bg-[#fef3cd] p-4 mb-4">
+        <div class="font-[Helvetica] font-bold text-xs uppercase mb-2">Riwayat Pengajuan Konsumen</div>
+        @forelse($trackingSummary as $tracking)
+        <div class="flex flex-wrap items-center justify-between gap-2 border-t border-black py-2 first:border-t-0">
+            <strong class="font-['Times_New_Roman']">{{ $tracking['name'] }}</strong>
+            <span class="font-['Times_New_Roman'] text-sm"><b>{{ $tracking['total'] }} kali</b> diajukan · {{ $tracking['within_range'] }} dalam rentang aktif</span>
+        </div>
+        @empty
+        <p class="font-['Times_New_Roman'] text-sm italic">Nama konsumen tidak ditemukan.</p>
+        @endforelse
+    </div>
+    @endif
 
     <div class="table-scroll border-2 border-black bg-white overflow-auto max-h-[calc(100vh-12rem)]">
         <table class="min-w-full text-sm font-['Times_New_Roman']">
@@ -183,7 +209,6 @@
                                 <input type="hidden" name="branch_id" value="{{ request('branch_id') }}">
                                 <input type="hidden" name="project_name" value="{{ request('project_name') }}">
                                  <input type="hidden" name="status" value="{{ request('status') }}">
-                                <input type="hidden" name="month" value="{{ $selectedMonth }}">
                                 <button type="submit" class="text-xs font-[Helvetica] font-bold underline hover:text-[#e91d2a]">Hapus</button>
                             </form>
                         </div>
@@ -205,13 +230,12 @@
          @keydown.escape.window="adding = false">
         <div @click.away="adding = false" class="w-full max-w-4xl border-2 border-black bg-white p-5 shadow-[8px_8px_0_0_#000] max-h-[90vh] overflow-y-auto">
             <div class="flex items-center justify-between mb-4">
-                <h2 class="font-[Helvetica] font-bold text-sm uppercase">Tambah Dana Talangan — {{ $selectedMonth }}</h2>
+                <h2 class="font-[Helvetica] font-bold text-sm uppercase">Tambah Dana Talangan</h2>
                 <button type="button" @click="adding = false" class="text-lg font-bold">&times;</button>
             </div>
             <form method="POST" action="{{ route('dana-talangan.store') }}" class="space-y-4">
                 @csrf
                 <input type="hidden" name="form_mode" value="add">
-                <input type="hidden" name="month" value="{{ $selectedMonth }}">
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
                         <label class="font-[Helvetica] font-bold text-xs uppercase block mb-1">Tanggal</label>
@@ -242,8 +266,8 @@
                         <label class="font-[Helvetica] font-bold text-xs uppercase block mb-1">Proyek</label>
                         <select name="project_name" required class="w-full border-2 border-black px-3 py-2 text-sm font-['Times_New_Roman'] bg-white">
                             <option value="">— Pilih Proyek —</option>
-                            @foreach($projects as $project)
-                            <option value="{{ $project->project_name }}" {{ old('project_name', $selectedProject) === $project->project_name ? 'selected' : '' }}>{{ $project->project_name }}</option>
+                            @foreach($projectOptions as $projectName)
+                            <option value="{{ $projectName }}" {{ old('project_name', $selectedProject) === $projectName ? 'selected' : '' }}>{{ $projectName }}</option>
                             @endforeach
                         </select>
                     </div>
@@ -314,14 +338,13 @@
                 @csrf @method('PUT')
                 <input type="hidden" name="form_mode" value="edit">
                 <input type="hidden" name="record_id" :value="editingRecord.id">
-                <input type="hidden" name="month" value="{{ $selectedMonth }}">
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div><label class="font-[Helvetica] font-bold text-xs uppercase block mb-1">Tanggal</label><div class="date-wrapper" data-accent="#f1c40f" style="position:relative"><div class="date-display w-full border-2 border-black px-3 py-2 text-sm font-['Times_New_Roman'] bg-white cursor-pointer select-none flex items-center justify-between" tabindex="0"><span class="date-text">— Pilih Tanggal —</span><span class="date-arrow">▼</span></div><input type="date" name="tanggal" x-model="editingRecord.tanggal" required style="position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0"></div></div>
                     <div><label class="font-[Helvetica] font-bold text-xs uppercase block mb-1">Nama Konsumen</label><input name="nama_konsumen" x-model="editingRecord.nama_konsumen" required class="w-full border-2 border-black px-3 py-2 text-sm font-['Times_New_Roman']"></div>
                     @if(Auth::user()->canViewAllBranches())
                     <div><label class="font-[Helvetica] font-bold text-xs uppercase block mb-1">Cabang</label><select name="branch_id" x-model="editingRecord.branch_id" required class="w-full border-2 border-black px-3 py-2 text-sm font-['Times_New_Roman'] bg-white">@foreach($branches as $branch)<option value="{{ $branch->id }}">{{ $branch->name }}</option>@endforeach</select></div>
                     @endif
-                    <div><label class="font-[Helvetica] font-bold text-xs uppercase block mb-1">Proyek</label><select name="project_name" x-model="editingRecord.project_name" required class="w-full border-2 border-black px-3 py-2 text-sm font-['Times_New_Roman'] bg-white">@foreach($projects as $project)<option value="{{ $project->project_name }}">{{ $project->project_name }}</option>@endforeach</select></div>
+                    <div><label class="font-[Helvetica] font-bold text-xs uppercase block mb-1">Proyek</label><select name="project_name" x-model="editingRecord.project_name" required class="w-full border-2 border-black px-3 py-2 text-sm font-['Times_New_Roman'] bg-white">@foreach($projectOptions as $projectName)<option value="{{ $projectName }}">{{ $projectName }}</option>@endforeach</select></div>
                     <div><label class="font-[Helvetica] font-bold text-xs uppercase block mb-1">Kav</label><select name="kav" x-model="editingRecord.kav" class="w-full border-2 border-black px-3 py-2 text-sm font-['Times_New_Roman'] bg-white"><option value="">— Pilih Kav —</option>@foreach($kavlings as $kavling)<option value="{{ $kavling->kavling_code }}">{{ $kavling->kavling_code }}</option>@endforeach</select></div>
                     <div><label class="font-[Helvetica] font-bold text-xs uppercase block mb-1">Marketing</label><input name="nama_marketing" x-model="editingRecord.nama_marketing" class="w-full border-2 border-black px-3 py-2 text-sm font-['Times_New_Roman']"></div>
                     <div><label class="font-[Helvetica] font-bold text-xs uppercase block mb-1">Pekerjaan</label><input name="pekerjaan" x-model="editingRecord.pekerjaan" class="w-full border-2 border-black px-3 py-2 text-sm font-['Times_New_Roman']"></div>
@@ -347,7 +370,7 @@
         :status-options="['sanggup' => 'Sanggup', 'tidak_sanggup' => 'Tidak Sanggup', 'lunas' => 'Lunas']"
         status-label="Status Cicilan"
         accent-color="#f1c40f"
-        :params="request()->only(['branch_id', 'project_name', 'status', 'month'])" />
+        :params="request()->only(['branch_id', 'project_name', 'status', 'search', 'filter_mode', 'date_from', 'date_to', 'month_from', 'month_to'])" />
 
 <x-crm.detail-modal
     title-key="nama_konsumen"

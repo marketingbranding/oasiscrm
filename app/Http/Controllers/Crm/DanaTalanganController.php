@@ -17,6 +17,7 @@ use App\Models\DanaTalanganSyncStatus;
 use App\Models\Kavling;
 use App\Models\LeadMaster;
 use App\Services\DanaTalanganGoogleService;
+use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 
@@ -54,37 +55,59 @@ class DanaTalanganController extends Controller
 
     protected string $bulkRedirectRoute = 'dana-talangan.index';
 
-    protected array $bulkRedirectParams = ['branch_id', 'project_name', 'status', 'month'];
+    protected array $bulkRedirectParams = ['branch_id', 'project_name', 'status', 'search', 'filter_mode', 'date_from', 'date_to', 'month_from', 'month_to'];
 
-    public function index(Request $request, DanaTalanganGoogleService $googleService)
+    public function index(Request $request)
     {
         $user = Auth::user();
         $selectedBranchId = $this->resolveSelectedBranchId($request->get('branch_id'));
         $selectedProject = $request->get('project_name');
         $selectedStatus = $request->get('status');
-        $monthTabs = $googleService->tabs();
-        $selectedMonth = $request->get('month', $googleService->sheetNameForDate(now()) ?? 'Juli');
-        if (! in_array($selectedMonth, $monthTabs, true)) {
-            $selectedMonth = $monthTabs[0] ?? 'Juli';
-        }
+        [$filterMode, $dateFrom, $dateTo, $monthFrom, $monthTo, $rangeStart, $rangeEnd] = $this->resolveDateRange($request);
 
         $branches = $this->resolveBranches();
         $projects = $this->resolveBranchProjects($selectedBranchId);
+        $syncedProjectNames = $this->applyBranchScope(DanaTalangan::query(), $selectedBranchId)
+            ->whereNotNull('project_name')
+            ->distinct()
+            ->pluck('project_name');
+        $projectOptions = $projects->pluck('project_name')->merge($syncedProjectNames)->filter()->unique()->sort()->values();
         $query = $this->applyBranchScope(DanaTalangan::with(['branch', 'creator']), $selectedBranchId);
 
-        if ($range = $googleService->dateRangeForSheet($selectedMonth)) {
-            $query->whereBetween('tanggal', $range);
+        if ($rangeStart) {
+            $query->whereDate('tanggal', '>=', $rangeStart);
+        }
+        if ($rangeEnd) {
+            $query->whereDate('tanggal', '<=', $rangeEnd);
         }
 
         $query->when($selectedProject, fn ($q) => $q->where('project_name', $selectedProject));
         $query->when($selectedStatus, fn ($q) => $q->where('status', $selectedStatus));
-        $query->when($request->get('search'), fn ($q, $v) => $q->where(function ($q) use ($v) {
-            $q->where('nama_konsumen', 'like', "%{$v}%")
-                ->orWhere('kav', 'like', "%{$v}%")
-                ->orWhere('project_name', 'like', "%{$v}%")
-                ->orWhere('nama_marketing', 'like', "%{$v}%")
-                ->orWhere('penyelesaian', 'like', "%{$v}%");
-        }));
+        $search = trim((string) $request->get('search'));
+        $query->when($search !== '', fn ($q) => $q->whereRaw('LOWER(nama_konsumen) LIKE ?', ['%'.mb_strtolower($search).'%']));
+
+        $trackingSummary = collect();
+        if ($search !== '') {
+            $trackingRecords = $this->applyBranchScope(DanaTalangan::query(), $selectedBranchId)
+                ->whereRaw('LOWER(nama_konsumen) LIKE ?', ['%'.mb_strtolower($search).'%'])
+                ->orderBy('tanggal')
+                ->get(['nama_konsumen', 'tanggal']);
+            $trackingSummary = $trackingRecords
+                ->groupBy(fn ($record) => mb_strtolower(preg_replace('/\s+/', ' ', trim($record->nama_konsumen))))
+                ->map(function ($group) use ($rangeStart, $rangeEnd) {
+                    $withinRange = $group->filter(function ($record) use ($rangeStart, $rangeEnd) {
+                        $date = $record->tanggal->format('Y-m-d');
+
+                        return (! $rangeStart || $date >= $rangeStart) && (! $rangeEnd || $date <= $rangeEnd);
+                    })->count();
+
+                    return [
+                        'name' => $group->first()->nama_konsumen,
+                        'total' => $group->count(),
+                        'within_range' => $withinRange,
+                    ];
+                })->values();
+        }
 
         $sortField = $request->get('sort', 'tanggal');
         $sortDir = $request->get('dir', 'desc');
@@ -106,7 +129,7 @@ class DanaTalanganController extends Controller
         $kavlings = Kavling::with('project')->orderBy('kavling_code')->get();
         $syncStatus = DanaTalanganSyncStatus::where('spreadsheet_id', config('services.google_sheets.dana_talangan_spreadsheet_id'))->first();
 
-        return view('crm.dana-talangan.index', compact('records', 'branches', 'projects', 'kavlings', 'selectedBranchId', 'selectedProject', 'selectedStatus', 'sortField', 'sortDir', 'perPage', 'monthTabs', 'selectedMonth', 'syncStatus'));
+        return view('crm.dana-talangan.index', compact('records', 'branches', 'projects', 'projectOptions', 'kavlings', 'selectedBranchId', 'selectedProject', 'selectedStatus', 'sortField', 'sortDir', 'perPage', 'syncStatus', 'search', 'trackingSummary', 'filterMode', 'dateFrom', 'dateTo', 'monthFrom', 'monthTo'));
     }
 
     public function create()
@@ -137,11 +160,8 @@ class DanaTalanganController extends Controller
             $data['branch_id'] = $user->branch_id;
         }
 
-        $projectBranchId = LeadMaster::where('is_active', true)
-            ->where('project_name', $data['project_name'])
-            ->where('branch_id', $data['branch_id'])
-            ->value('branch_id');
-        if (! $projectBranchId) {
+        $projectBranchId = $googleService->branchIdForProject($data['project_name']);
+        if (! $projectBranchId || (int) $data['branch_id'] !== $projectBranchId) {
             return back()->withInput()->withErrors(['project_name' => 'Proyek tidak terdaftar pada cabang yang dipilih.']);
         }
         $data['branch_id'] = $projectBranchId;
@@ -152,11 +172,11 @@ class DanaTalanganController extends Controller
 
         $record = DanaTalangan::create($data);
         if (! $googleService->push($record, $user->id)) {
-            return redirect()->route('dana-talangan.index', ['month' => $googleService->sheetNameForDate($record->tanggal)])
+            return redirect()->route('dana-talangan.index')
                 ->with('error', 'Data lokal tersimpan, tetapi gagal dikirim ke Google Sheets: '.$record->last_sync_error);
         }
 
-        return redirect()->route('dana-talangan.index', array_filter($request->only(['branch_id', 'project_name', 'status', 'month'])))
+        return redirect()->route('dana-talangan.index', array_filter($request->only($this->bulkRedirectParams)))
             ->with('success', 'Data dana talangan berhasil ditambahkan.');
     }
 
@@ -192,11 +212,8 @@ class DanaTalanganController extends Controller
             $data['branch_id'] = $user->branch_id;
         }
 
-        $projectBranchId = LeadMaster::where('is_active', true)
-            ->where('project_name', $data['project_name'])
-            ->where('branch_id', $data['branch_id'])
-            ->value('branch_id');
-        if (! $projectBranchId) {
+        $projectBranchId = $googleService->branchIdForProject($data['project_name']);
+        if (! $projectBranchId || (int) $data['branch_id'] !== $projectBranchId) {
             return back()->withInput()->withErrors(['project_name' => 'Proyek tidak terdaftar pada cabang yang dipilih.']);
         }
         $data['branch_id'] = $projectBranchId;
@@ -206,15 +223,15 @@ class DanaTalanganController extends Controller
 
         $danaTalangan->update($data);
         if (! $googleService->push($danaTalangan, $user->id)) {
-            return redirect()->route('dana-talangan.index', ['month' => $googleService->sheetNameForDate($danaTalangan->tanggal)])
+            return redirect()->route('dana-talangan.index')
                 ->with('error', 'Data lokal diperbarui, tetapi gagal dikirim ke Google Sheets: '.$danaTalangan->last_sync_error);
         }
 
-        return redirect()->route('dana-talangan.index', array_filter($request->only(['branch_id', 'project_name', 'status', 'month'])))
+        return redirect()->route('dana-talangan.index', array_filter($request->only($this->bulkRedirectParams)))
             ->with('success', 'Data dana talangan berhasil diperbarui.');
     }
 
-    public function export(Request $request, DanaTalanganGoogleService $googleService)
+    public function export(Request $request)
     {
         $user = Auth::user();
         $query = DanaTalangan::with(['branch', 'creator']);
@@ -227,8 +244,16 @@ class DanaTalanganController extends Controller
 
         $query->when($request->get('project_name'), fn ($q, $v) => $q->where('project_name', $v));
         $query->when($request->get('status'), fn ($q, $v) => $q->where('status', $v));
-        if ($request->filled('month') && ($range = $googleService->dateRangeForSheet($request->month))) {
-            $query->whereBetween('tanggal', $range);
+        $query->when(trim((string) $request->get('search')) !== '', fn ($q) => $q->whereRaw(
+            'LOWER(nama_konsumen) LIKE ?',
+            ['%'.mb_strtolower(trim((string) $request->get('search'))).'%']
+        ));
+        [, , , , , $rangeStart, $rangeEnd] = $this->resolveDateRange($request);
+        if ($rangeStart) {
+            $query->whereDate('tanggal', '>=', $rangeStart);
+        }
+        if ($rangeEnd) {
+            $query->whereDate('tanggal', '<=', $rangeEnd);
         }
 
         $records = $query->latest('tanggal')->get();
@@ -261,7 +286,7 @@ class DanaTalanganController extends Controller
             return back()->with('error', 'Gagal menghapus data dari Google Sheets: '.$danaTalangan->last_sync_error);
         }
 
-        return redirect()->route('dana-talangan.index', array_filter(request()->only(['branch_id', 'project_name', 'status'])))
+        return redirect()->route('dana-talangan.index', array_filter(request()->only($this->bulkRedirectParams)))
             ->with('success', 'Data dana talangan berhasil dihapus.');
     }
 
@@ -320,5 +345,36 @@ class DanaTalanganController extends Controller
         }
 
         return $this->applyBranchScope(DanaTalangan::whereIn('id', $ids), null)->get();
+    }
+
+    private function resolveDateRange(Request $request): array
+    {
+        $filterMode = $request->get('filter_mode', 'date');
+        $filterMode = in_array($filterMode, ['date', 'month'], true) ? $filterMode : 'date';
+        $dateFrom = $request->get('date_from');
+        $dateTo = $request->get('date_to');
+        $monthFrom = $request->get('month_from');
+        $monthTo = $request->get('month_to');
+        $start = null;
+        $end = null;
+
+        try {
+            if ($filterMode === 'month') {
+                $start = $monthFrom ? Carbon::createFromFormat('!Y-m', $monthFrom)->startOfMonth()->toDateString() : null;
+                $end = $monthTo ? Carbon::createFromFormat('!Y-m', $monthTo)->endOfMonth()->toDateString() : null;
+            } else {
+                $start = $dateFrom ? Carbon::createFromFormat('!Y-m-d', $dateFrom)->toDateString() : null;
+                $end = $dateTo ? Carbon::createFromFormat('!Y-m-d', $dateTo)->toDateString() : null;
+            }
+        } catch (\Throwable) {
+            $start = null;
+            $end = null;
+        }
+
+        if ($start && $end && $start > $end) {
+            [$start, $end] = [$end, $start];
+        }
+
+        return [$filterMode, $dateFrom, $dateTo, $monthFrom, $monthTo, $start, $end];
     }
 }

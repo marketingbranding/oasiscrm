@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\Branch;
 use App\Models\DanaTalangan;
 use App\Models\DanaTalanganSyncStatus;
 use App\Models\LeadMaster;
@@ -31,146 +32,137 @@ class DanaTalanganGoogleService
 
     public const META_HEADERS = ['oasis_sync_id', 'oasis_deleted_at', 'oasis_deleted_by'];
 
-    private const MONTHS = [
-        1 => 'Januari', 2 => 'Februari', 3 => 'Maret', 4 => 'April',
-        5 => 'Mei', 6 => 'Juni', 7 => 'Juli', 8 => 'Agustus',
-        9 => 'September', 10 => 'Oktober', 11 => 'November', 12 => 'Desember',
-    ];
-
     public function __construct(private GoogleSheetsApiService $googleSheets) {}
 
     public function sync(?int $actorId = null, bool $dryRun = false): array
     {
         $spreadsheetId = $this->spreadsheetId();
-        $status = null;
-        if (! $dryRun) {
-            $status = DanaTalanganSyncStatus::updateOrCreate(
-                ['spreadsheet_id' => $spreadsheetId],
-                ['status' => 'running', 'message' => null, 'started_at' => now(), 'finished_at' => null]
-            );
-        }
-
+        $status = $dryRun ? null : DanaTalanganSyncStatus::updateOrCreate(
+            ['spreadsheet_id' => $spreadsheetId],
+            ['status' => 'running', 'message' => null, 'started_at' => now(), 'finished_at' => null]
+        );
         $summary = [
-            'tabs' => [],
+            'sheet' => $this->sheetName(),
             'matched' => 0,
             'imported' => 0,
             'updated' => 0,
             'pushed' => 0,
             'deleted' => 0,
-            'legacy_local' => 0,
+            'inferred_projects' => 0,
+            'repaired_metadata' => 0,
             'warnings' => [],
         ];
 
         try {
             $sheetIds = $this->googleSheets->sheetIds($spreadsheetId);
-            $syncSheets = array_values(array_filter(array_keys($sheetIds), fn ($name) => $this->isSyncSheet($name)));
-            if (! in_array($this->templateSheet(), $syncSheets, true)) {
-                throw new \RuntimeException('Tab template Juli tidak ditemukan.');
+            $sheetName = $this->sheetName();
+            if (! isset($sheetIds[$sheetName])) {
+                throw new \RuntimeException("Tab {$sheetName} tidak ditemukan.");
             }
 
-            $ranges = [];
-            foreach ($syncSheets as $sheetName) {
-                $ranges[] = $this->googleSheets->quoteSheetName($sheetName).'!A:Q';
-                if (! $dryRun) {
-                    $this->ensureMetadataColumns($spreadsheetId, $sheetName, $sheetIds[$sheetName]);
-                }
+            if (! $dryRun) {
+                $this->ensureMetadataColumns($spreadsheetId, $sheetName, $sheetIds[$sheetName]);
             }
 
+            $ranges = [$this->googleSheets->quoteSheetName($sheetName).'!A:Q'];
+            $legacySheets = array_values(array_filter(array_keys($sheetIds), fn ($name) => $name !== $sheetName));
+            foreach ($legacySheets as $legacySheet) {
+                $ranges[] = $this->googleSheets->quoteSheetName($legacySheet).'!A:E';
+            }
             $rowsBySheet = $this->googleSheets->batchGetRaw($spreadsheetId, $ranges, 'FORMATTED_VALUE');
-            $projectBranches = $this->projectBranchMap();
+            $rows = $rowsBySheet[$sheetName] ?? [];
+            if (! $this->hasCanonicalHeaders($rows[0] ?? [])) {
+                throw new \RuntimeException("Header tab {$sheetName} tidak sesuai format Oasis.");
+            }
+
+            $historyProjects = $this->historicalProjectMap($rowsBySheet, $legacySheets);
+            $projectResolver = $this->projectResolver();
             $activeIds = [];
             $deletedIds = [];
-            $processedSheets = [];
             $matchedLocalIds = [];
 
-            foreach ($syncSheets as $sheetName) {
-                $rows = $rowsBySheet[$sheetName] ?? [];
-                if (! $this->hasCanonicalHeaders($rows[0] ?? [])) {
-                    $summary['warnings'][] = "Tab {$sheetName} dilewati karena header tidak sesuai template Juli.";
+            foreach (array_slice($rows, 1) as $offset => $cells) {
+                $rowNumber = $offset + 2;
+                $name = trim((string) ($cells[2] ?? ''));
+                $syncId = trim((string) ($cells[14] ?? ''));
+                $deletedAt = trim((string) ($cells[15] ?? ''));
+
+                if ($name === '') {
+                    if ($syncId !== '') {
+                        $deletedIds[$syncId] = true;
+                    }
 
                     continue;
                 }
 
-                $summary['tabs'][] = $sheetName;
-                $processedSheets[] = $sheetName;
-                foreach (array_slice($rows, 1) as $offset => $cells) {
-                    $rowNumber = $offset + 2;
-                    $syncId = trim((string) ($cells[14] ?? ''));
-                    $deletedAt = trim((string) ($cells[15] ?? ''));
-                    $name = trim((string) ($cells[2] ?? ''));
+                $metadataStale = $deletedAt !== '';
+                if ($metadataStale) {
+                    $syncId = '';
+                    $summary['repaired_metadata']++;
+                }
 
-                    if ($deletedAt !== '' || ($name === '' && $syncId !== '')) {
-                        if ($syncId !== '') {
-                            $deletedIds[$syncId] = true;
-                        }
+                $resolved = $this->rowToData($cells, $historyProjects, $projectResolver, $actorId);
+                if (! $resolved) {
+                    $summary['warnings'][] = "{$sheetName} baris {$rowNumber}: tanggal, Proyek, atau Cabang belum dapat dipetakan.";
 
+                    continue;
+                }
+                [$data, $projectInferred] = $resolved;
+                if ($projectInferred) {
+                    $summary['inferred_projects']++;
+                }
+
+                $record = $syncId === '' ? null : DanaTalangan::withTrashed()->where('oasis_sync_id', $syncId)->first();
+                if (! $record) {
+                    $record = $this->findFingerprintMatch($data, $matchedLocalIds);
+                    if ($record) {
+                        $summary['matched']++;
+                    }
+                }
+
+                if (! $record) {
+                    $summary['imported']++;
+                    if ($dryRun) {
                         continue;
                     }
+                    $record = new DanaTalangan;
+                } else {
+                    $summary['updated']++;
+                }
 
-                    if ($name === '') {
-                        continue;
+                $syncId = $syncId ?: ($record->oasis_sync_id ?: (string) Str::uuid());
+                $activeIds[$syncId] = true;
+                if ($record->exists) {
+                    $matchedLocalIds[$record->id] = true;
+                }
+
+                if (! $dryRun) {
+                    if ($record->trashed()) {
+                        $record->restoreQuietly();
                     }
-                    if ($syncId !== '') {
-                        $activeIds[$syncId] = true;
+                    $record->fill($data + [
+                        'oasis_sync_id' => $syncId,
+                        'sheet_name' => $sheetName,
+                        'sheet_row_number' => $rowNumber,
+                        'sync_status' => 'synced',
+                        'last_sync_error' => null,
+                        'source_hash' => $this->dataHash($data),
+                        'last_synced_at' => now(),
+                    ])->saveQuietly();
+
+                    if ($metadataStale || ($cells[14] ?? '') === '') {
+                        $this->googleSheets->updateRange(
+                            $spreadsheetId,
+                            $this->googleSheets->quoteSheetName($sheetName)."!O{$rowNumber}:Q{$rowNumber}",
+                            [[$syncId, '', '']]
+                        );
                     }
-
-                    $data = $this->rowToData($cells, $projectBranches, $actorId);
-                    if (! $data) {
-                        $summary['warnings'][] = "{$sheetName} baris {$rowNumber}: proyek tidak dikenali atau tanggal tidak valid.";
-
-                        continue;
-                    }
-
-                    $record = $syncId === '' ? null : DanaTalangan::withTrashed()->where('oasis_sync_id', $syncId)->first();
-                    if (! $record) {
-                        $record = $this->findFingerprintMatch($data, $matchedLocalIds);
-                        if ($record) {
-                            $summary['matched']++;
-                        }
-                    }
-
-                    if (! $record) {
-                        $summary['imported']++;
-                        if ($dryRun) {
-                            continue;
-                        }
-                        $record = new DanaTalangan;
-                    } else {
-                        $summary['updated']++;
-                    }
-
-                    $syncId = $syncId ?: ($record->oasis_sync_id ?: (string) Str::uuid());
-                    $activeIds[$syncId] = true;
-                    $matchedLocalIds[$record->id ?? 0] = true;
-                    if (! $dryRun) {
-                        if ($record->trashed()) {
-                            $record->restoreQuietly();
-                        }
-                        $record->fill($data + [
-                            'oasis_sync_id' => $syncId,
-                            'sheet_name' => $sheetName,
-                            'sheet_row_number' => $rowNumber,
-                            'sync_status' => 'synced',
-                            'last_sync_error' => null,
-                            'source_hash' => $this->dataHash($data),
-                            'last_synced_at' => now(),
-                        ])->saveQuietly();
-
-                        if (($cells[14] ?? '') === '') {
-                            $this->googleSheets->updateRange(
-                                $spreadsheetId,
-                                $this->googleSheets->quoteSheetName($sheetName)."!O{$rowNumber}:Q{$rowNumber}",
-                                [[$syncId, '', '']]
-                            );
-                        }
-
-                        $targetSheet = $this->sheetNameForDate($record->tanggal);
-                        if ($targetSheet && $targetSheet !== $sheetName) {
-                            $summary['warnings'][] = "{$sheetName} baris {$rowNumber} dipindahkan ke {$targetSheet} berdasarkan tanggal.";
-                            if ($this->push($record, $actorId)) {
-                                $summary['pushed']++;
-                            }
-                        }
+                    if ($projectInferred && trim((string) ($cells[4] ?? '')) === '') {
+                        $this->googleSheets->updateRange(
+                            $spreadsheetId,
+                            $this->googleSheets->quoteSheetName($sheetName)."!E{$rowNumber}",
+                            [[$data['project_name']]]
+                        );
                     }
                 }
             }
@@ -185,13 +177,11 @@ class DanaTalanganGoogleService
                 }
             }
 
-            $localRecords = DanaTalangan::whereDate('tanggal', '>=', '2026-07-01')->get();
-            foreach ($localRecords as $record) {
+            foreach (DanaTalangan::all() as $record) {
                 if ($record->oasis_sync_id && isset($activeIds[$record->oasis_sync_id])) {
                     continue;
                 }
-
-                if ($record->oasis_sync_id && $record->last_synced_at && in_array($record->sheet_name, $processedSheets, true)) {
+                if ($record->oasis_sync_id && $record->last_synced_at && $record->sheet_name === $sheetName) {
                     $summary['deleted']++;
                     if (! $dryRun) {
                         $record->deleteQuietly();
@@ -206,8 +196,7 @@ class DanaTalanganGoogleService
                 }
             }
 
-            $summary['legacy_local'] = DanaTalangan::whereDate('tanggal', '<', '2026-07-01')->count();
-            if (! $dryRun) {
+            if ($status) {
                 $status->update([
                     'status' => empty($summary['warnings']) ? 'success' : 'warning',
                     'message' => empty($summary['warnings']) ? null : implode("\n", $summary['warnings']),
@@ -230,46 +219,32 @@ class DanaTalanganGoogleService
     {
         try {
             $spreadsheetId = $this->spreadsheetId();
-            $targetSheet = $this->sheetNameForDate($record->tanggal);
-            if (! $targetSheet) {
-                throw new \RuntimeException('Data sebelum Juli 2026 tidak disinkronkan ke format baru.');
-            }
-
+            $sheetName = $this->sheetName();
             $sheetIds = $this->googleSheets->sheetIds($spreadsheetId);
-            if (! isset($sheetIds[$targetSheet])) {
-                $sheetIds[$targetSheet] = $this->createMonthSheet($spreadsheetId, $targetSheet, $sheetIds);
+            if (! isset($sheetIds[$sheetName])) {
+                throw new \RuntimeException("Tab {$sheetName} tidak ditemukan.");
             }
-            $this->ensureMetadataColumns($spreadsheetId, $targetSheet, $sheetIds[$targetSheet]);
+            $this->ensureMetadataColumns($spreadsheetId, $sheetName, $sheetIds[$sheetName]);
 
             $syncId = $record->oasis_sync_id ?: (string) Str::uuid();
-            if ($record->sheet_name && $record->sheet_name !== $targetSheet && $record->sheet_row_number) {
-                $this->clearRecordRow($record, $actorId);
-                $record->sheet_row_number = null;
-            }
-
             $rows = $this->googleSheets->batchGetRaw(
                 $spreadsheetId,
-                [$this->googleSheets->quoteSheetName($targetSheet).'!A:Q'],
+                [$this->googleSheets->quoteSheetName($sheetName).'!A:Q'],
                 'FORMATTED_VALUE'
-            )[$targetSheet] ?? [];
-            $rowNumber = $this->findSyncRow($rows, $syncId)
-                ?? ($record->sheet_name === $targetSheet ? $record->sheet_row_number : null)
-                ?? $this->firstAvailableRow($rows);
-
+            )[$sheetName] ?? [];
+            $rowNumber = $this->findSyncRow($rows, $syncId) ?? $this->firstAvailableRow($rows);
             if ($rowNumber > 2 && $rowNumber > count($rows)) {
-                $this->googleSheets->copyRowFormat($spreadsheetId, $sheetIds[$targetSheet], 2, $rowNumber);
+                $this->googleSheets->copyRowFormat($spreadsheetId, $sheetIds[$sheetName], 2, $rowNumber);
             }
 
-            $values = $this->recordToRow($record, $syncId, $rowNumber);
             $this->googleSheets->updateRange(
                 $spreadsheetId,
-                $this->googleSheets->quoteSheetName($targetSheet)."!A{$rowNumber}:Q{$rowNumber}",
-                [$values]
+                $this->googleSheets->quoteSheetName($sheetName)."!A{$rowNumber}:Q{$rowNumber}",
+                [$this->recordToRow($record, $syncId, $rowNumber)]
             );
-
             $record->forceFill([
                 'oasis_sync_id' => $syncId,
-                'sheet_name' => $targetSheet,
+                'sheet_name' => $sheetName,
                 'sheet_row_number' => $rowNumber,
                 'sync_status' => 'synced',
                 'last_sync_error' => null,
@@ -288,7 +263,7 @@ class DanaTalanganGoogleService
     public function delete(DanaTalangan $record, ?int $actorId = null): bool
     {
         try {
-            if ($record->sheet_name && $record->sheet_row_number) {
+            if ($record->sheet_row_number) {
                 $this->clearRecordRow($record, $actorId);
             }
             $record->delete();
@@ -301,57 +276,14 @@ class DanaTalanganGoogleService
         }
     }
 
-    public function tabs(): array
+    public function sheetName(): string
     {
-        $status = DanaTalanganSyncStatus::where('spreadsheet_id', $this->spreadsheetId())->first();
-        $tabs = $status?->summary['tabs'] ?? [];
-        foreach (DanaTalangan::whereDate('tanggal', '>=', '2026-07-01')->pluck('tanggal') as $date) {
-            $tabs[] = $this->sheetNameForDate($date);
-        }
-        $tabs = array_values(array_unique(array_filter($tabs)));
-        if (! in_array($this->templateSheet(), $tabs, true)) {
-            $tabs[] = $this->templateSheet();
-        }
-
-        usort($tabs, function ($left, $right) {
-            $leftRange = $this->dateRangeForSheet($left);
-            $rightRange = $this->dateRangeForSheet($right);
-
-            return ($leftRange[0] ?? $left) <=> ($rightRange[0] ?? $right);
-        });
-
-        return $tabs;
+        return (string) config('services.google_sheets.dana_talangan_sheet_name', 'Talangan');
     }
 
-    public function sheetNameForDate($date): ?string
+    public function branchIdForProject(string $project): ?int
     {
-        $date = $date instanceof Carbon ? $date : Carbon::parse($date);
-        if ($date->lt(Carbon::create(2026, 7, 1))) {
-            return null;
-        }
-
-        $name = self::MONTHS[$date->month];
-
-        return $date->year === 2026 ? $name : $name.' '.$date->year;
-    }
-
-    public function dateRangeForSheet(string $sheetName): ?array
-    {
-        $year = 2026;
-        $monthName = $sheetName;
-        if (preg_match('/^(.+)\s+(20\d{2})$/u', $sheetName, $match)) {
-            $monthName = $match[1];
-            $year = (int) $match[2];
-        }
-
-        $month = array_search($monthName, self::MONTHS, true);
-        if ($month === false || ($year === 2026 && $month < 7)) {
-            return null;
-        }
-
-        $start = Carbon::create($year, $month, 1)->startOfDay();
-
-        return [$start->toDateString(), $start->copy()->endOfMonth()->toDateString()];
+        return $this->resolveProjectBranch($project, $this->projectResolver());
     }
 
     private function spreadsheetId(): string
@@ -364,26 +296,6 @@ class DanaTalanganGoogleService
         return $id;
     }
 
-    private function templateSheet(): string
-    {
-        return (string) config('services.google_sheets.dana_talangan_template_sheet', 'Juli');
-    }
-
-    private function isSyncSheet(string $name): bool
-    {
-        if ($name === $this->templateSheet()) {
-            return true;
-        }
-        foreach (array_slice(self::MONTHS, 7, null, true) as $month) {
-            if ($name === $month) {
-                return true;
-            }
-        }
-
-        return (bool) preg_match('/^('.implode('|', self::MONTHS).')\s+(20\d{2})$/u', $name, $match)
-            && (int) $match[2] >= 2027;
-    }
-
     private function ensureMetadataColumns(string $spreadsheetId, string $sheetName, int $sheetId): void
     {
         $this->googleSheets->updateRange(
@@ -394,52 +306,40 @@ class DanaTalanganGoogleService
         $this->googleSheets->hideColumns($spreadsheetId, $sheetId, 14, 17);
     }
 
-    private function createMonthSheet(string $spreadsheetId, string $sheetName, array $sheetIds): int
-    {
-        $templateId = $sheetIds[$this->templateSheet()] ?? null;
-        if (! $templateId) {
-            throw new \RuntimeException('Tab template Juli tidak ditemukan.');
-        }
-
-        $sheetId = $this->googleSheets->duplicateSheet($spreadsheetId, $templateId, $sheetName);
-        $quoted = $this->googleSheets->quoteSheetName($sheetName);
-        $this->googleSheets->clearRange($spreadsheetId, $quoted.'!A2:Q1000');
-        $numbers = array_map(fn ($number) => [$number], range(1, 100));
-        $this->googleSheets->updateRange($spreadsheetId, $quoted.'!A2:A101', $numbers);
-        $this->ensureMetadataColumns($spreadsheetId, $sheetName, $sheetId);
-
-        return $sheetId;
-    }
-
     private function clearRecordRow(DanaTalangan $record, ?int $actorId): void
     {
         $spreadsheetId = $this->spreadsheetId();
-        $range = $this->googleSheets->quoteSheetName($record->sheet_name)."!A{$record->sheet_row_number}:Q{$record->sheet_row_number}";
+        $sheetName = $this->sheetName();
+        $rows = $this->googleSheets->batchGetRaw(
+            $spreadsheetId,
+            [$this->googleSheets->quoteSheetName($sheetName).'!A:Q'],
+            'FORMATTED_VALUE'
+        )[$sheetName] ?? [];
+        $rowNumber = $this->findSyncRow($rows, (string) $record->oasis_sync_id) ?? $record->sheet_row_number;
         $values = array_fill(0, 17, '');
-        $values[0] = $record->sheet_row_number - 1;
+        $values[0] = $rowNumber - 1;
         $values[14] = $record->oasis_sync_id;
         $values[15] = now()->toIso8601String();
         $values[16] = (string) ($actorId ?? 'system');
-        $this->googleSheets->updateRange($spreadsheetId, $range, [$values]);
+        $this->googleSheets->updateRange(
+            $spreadsheetId,
+            $this->googleSheets->quoteSheetName($sheetName)."!A{$rowNumber}:Q{$rowNumber}",
+            [$values]
+        );
     }
 
-    private function hasCanonicalHeaders(array $headers): bool
-    {
-        foreach (self::VISIBLE_HEADERS as $index => $header) {
-            if ($this->normalize($headers[$index] ?? '') !== $this->normalize($header)) {
-                return false;
-            }
-        }
-
-        return true;
-    }
-
-    private function rowToData(array $cells, array $projectBranches, ?int $actorId): ?array
+    private function rowToData(array $cells, array $historyProjects, array $projectResolver, ?int $actorId): ?array
     {
         $date = $this->parseDate($cells[1] ?? null);
+        $name = trim((string) ($cells[2] ?? ''));
         $project = trim((string) ($cells[4] ?? ''));
-        $branchId = $projectBranches[$this->normalize($project)] ?? null;
-        if (! $date || ! $this->sheetNameForDate($date) || ! $branchId) {
+        $inferred = false;
+        if ($project === '') {
+            $project = $historyProjects[$this->normalize($name)] ?? '';
+            $inferred = $project !== '';
+        }
+        $branchId = $this->resolveProjectBranch($project, $projectResolver);
+        if (! $date || ! $branchId) {
             return null;
         }
 
@@ -448,9 +348,9 @@ class DanaTalanganGoogleService
             return null;
         }
 
-        return [
+        return [[
             'tanggal' => $date,
-            'nama_konsumen' => trim((string) ($cells[2] ?? '')),
+            'nama_konsumen' => $name,
             'kav' => $this->nullable($cells[3] ?? null),
             'project_name' => $project,
             'pinjam_nama' => $this->boolean($cells[5] ?? null),
@@ -464,7 +364,83 @@ class DanaTalanganGoogleService
             'status' => $this->status($cells[13] ?? null),
             'branch_id' => $branchId,
             'created_by' => $creatorId,
-        ];
+        ], $inferred];
+    }
+
+    private function projectResolver(): array
+    {
+        $projects = LeadMaster::where('is_active', true)->whereNotNull('branch_id')->get(['project_name', 'branch_id']);
+        $exact = [];
+        foreach ($projects as $project) {
+            $exact[$this->normalize($project->project_name)] = (int) $project->branch_id;
+        }
+        $aliases = [];
+        foreach (config('services.google_sheets.dana_talangan_project_branches', []) as $project => $branchCode) {
+            $branchId = Branch::where('code', $branchCode)->value('id');
+            if ($branchId) {
+                $aliases[$this->normalize($project)] = (int) $branchId;
+            }
+        }
+
+        return ['exact' => $exact, 'aliases' => $aliases, 'projects' => $projects];
+    }
+
+    private function resolveProjectBranch(string $project, array $resolver): ?int
+    {
+        $normalized = $this->normalize($project);
+        if ($normalized === '') {
+            return null;
+        }
+        if (isset($resolver['aliases'][$normalized])) {
+            return $resolver['aliases'][$normalized];
+        }
+        if (isset($resolver['exact'][$normalized])) {
+            return $resolver['exact'][$normalized];
+        }
+
+        $branches = [];
+        foreach ($resolver['projects'] as $masterProject) {
+            $master = $this->normalize($masterProject->project_name);
+            if (str_starts_with($master, $normalized) || str_starts_with($normalized, $master)) {
+                $branches[(int) $masterProject->branch_id] = true;
+            }
+        }
+
+        return count($branches) === 1 ? (int) array_key_first($branches) : null;
+    }
+
+    private function historicalProjectMap(array $rowsBySheet, array $legacySheets): array
+    {
+        $projectsByName = [];
+        foreach ($legacySheets as $sheetName) {
+            foreach (array_slice($rowsBySheet[$sheetName] ?? [], 1) as $cells) {
+                $name = $this->normalize($cells[2] ?? '');
+                $project = trim((string) ($cells[4] ?? ''));
+                if ($name !== '' && $project !== '') {
+                    $projectsByName[$name][$this->normalize($project)] = $project;
+                }
+            }
+        }
+
+        $result = [];
+        foreach ($projectsByName as $name => $projects) {
+            if (count($projects) === 1) {
+                $result[$name] = array_values($projects)[0];
+            }
+        }
+
+        return $result;
+    }
+
+    private function hasCanonicalHeaders(array $headers): bool
+    {
+        foreach (self::VISIBLE_HEADERS as $index => $header) {
+            if ($this->normalize($headers[$index] ?? '') !== $this->normalize($header)) {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     private function recordToRow(DanaTalangan $record, string $syncId, int $rowNumber): array
@@ -492,17 +468,18 @@ class DanaTalanganGoogleService
 
     private function findFingerprintMatch(array $data, array $matchedIds): ?DanaTalangan
     {
-        return DanaTalangan::whereNull('oasis_sync_id')
-            ->whereDate('tanggal', $data['tanggal'])
+        return DanaTalangan::whereDate('tanggal', $data['tanggal'])
             ->whereRaw('LOWER(nama_konsumen) = ?', [mb_strtolower($data['nama_konsumen'])])
             ->whereRaw('LOWER(COALESCE(kav, ?)) = ?', ['', mb_strtolower((string) $data['kav'])])
-            ->whereRaw('LOWER(COALESCE(project_name, ?)) = ?', ['', mb_strtolower((string) $data['project_name'])])
             ->get()
             ->first(fn ($record) => ! isset($matchedIds[$record->id]));
     }
 
     private function findSyncRow(array $rows, string $syncId): ?int
     {
+        if ($syncId === '') {
+            return null;
+        }
         foreach (array_slice($rows, 1) as $offset => $cells) {
             if (($cells[14] ?? '') === $syncId) {
                 return $offset + 2;
@@ -521,15 +498,6 @@ class DanaTalanganGoogleService
         }
 
         return max(2, count($rows) + 1);
-    }
-
-    private function projectBranchMap(): array
-    {
-        return LeadMaster::where('is_active', true)
-            ->whereNotNull('branch_id')
-            ->get(['project_name', 'branch_id'])
-            ->mapWithKeys(fn ($project) => [$this->normalize($project->project_name) => $project->branch_id])
-            ->all();
     }
 
     private function parseDate($value): ?string
@@ -557,13 +525,11 @@ class DanaTalanganGoogleService
 
     private function dataHash(array $data): string
     {
-        $fields = array_intersect_key($data, array_flip([
+        return hash('sha256', json_encode(array_intersect_key($data, array_flip([
             'tanggal', 'nama_konsumen', 'kav', 'project_name', 'pinjam_nama', 'pekerjaan',
             'status_perkawinan', 'umur', 'nama_marketing', 'tgl_komitmen', 'penyelesaian',
             'konfirmasi_keuangan', 'status', 'branch_id',
-        ]));
-
-        return hash('sha256', json_encode($fields));
+        ]))));
     }
 
     private function status($value): string
@@ -575,7 +541,7 @@ class DanaTalanganGoogleService
 
     private function boolean($value): bool
     {
-        return in_array(mb_strtolower(trim((string) $value)), ['1', 'true', 'ya', 'yes', 'y', '✓'], true);
+        return in_array(mb_strtolower(trim((string) $value)), ['1', 'true', 'ya', 'iya', 'yes', 'y', '✓'], true);
     }
 
     private function nullable($value): ?string

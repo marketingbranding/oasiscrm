@@ -5,9 +5,7 @@ namespace App\Services;
 use Google\Client as GoogleClient;
 use Google\Service\Sheets;
 use Google\Service\Sheets\BatchUpdateSpreadsheetRequest;
-use Google\Service\Sheets\ClearValuesRequest;
 use Google\Service\Sheets\CopyPasteRequest;
-use Google\Service\Sheets\DuplicateSheetRequest;
 use Google\Service\Sheets\GridRange;
 use Google\Service\Sheets\Request;
 use Google\Service\Sheets\ValueRange;
@@ -179,30 +177,6 @@ class GoogleSheetsApiService
             'valueInputOption' => 'USER_ENTERED',
             'insertDataOption' => 'INSERT_ROWS',
         ]);
-    }
-
-    public function clearRange(string $spreadsheetId, string $range): void
-    {
-        $this->sheets->spreadsheets_values->clear($spreadsheetId, $range, new ClearValuesRequest);
-    }
-
-    public function duplicateSheet(string $spreadsheetId, int $sourceSheetId, string $newSheetName): int
-    {
-        $response = $this->sheets->spreadsheets->batchUpdate($spreadsheetId, new BatchUpdateSpreadsheetRequest([
-            'requests' => [new Request([
-                'duplicateSheet' => new DuplicateSheetRequest([
-                    'sourceSheetId' => $sourceSheetId,
-                    'newSheetName' => $newSheetName,
-                ]),
-            ])],
-        ]));
-
-        $properties = ($response->getReplies()[0] ?? null)?->getDuplicateSheet()?->getProperties();
-        if (! $properties) {
-            throw new RuntimeException('Google Sheets tidak mengembalikan ID tab baru.');
-        }
-
-        return (int) $properties->getSheetId();
     }
 
     public function hideColumns(string $spreadsheetId, int $sheetId, int $startIndex, int $endIndex): void

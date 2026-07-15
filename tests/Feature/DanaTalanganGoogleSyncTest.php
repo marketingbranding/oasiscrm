@@ -22,31 +22,28 @@ class DanaTalanganGoogleSyncTest extends TestCase
         parent::setUp();
         config([
             'services.google_sheets.dana_talangan_spreadsheet_id' => 'spreadsheet-id',
-            'services.google_sheets.dana_talangan_template_sheet' => 'Juli',
+            'services.google_sheets.dana_talangan_sheet_name' => 'Talangan',
+            'services.google_sheets.dana_talangan_project_branches' => [],
         ]);
     }
 
-    public function test_month_sheet_names_use_july_template_and_year_after_2026(): void
+    public function test_service_uses_single_talangan_sheet(): void
     {
         $service = new DanaTalanganGoogleService(Mockery::mock(GoogleSheetsApiService::class));
 
-        $this->assertNull($service->sheetNameForDate('2026-06-30'));
-        $this->assertSame('Juli', $service->sheetNameForDate('2026-07-01'));
-        $this->assertSame('Desember', $service->sheetNameForDate('2026-12-01'));
-        $this->assertSame('Januari 2027', $service->sheetNameForDate('2027-01-01'));
-        $this->assertSame(['2027-02-01', '2027-02-28'], $service->dateRangeForSheet('Februari 2027'));
+        $this->assertSame('Talangan', $service->sheetName());
     }
 
-    public function test_dry_run_reports_unsynced_local_july_record_without_writing(): void
+    public function test_dry_run_reports_unsynced_local_record_without_writing(): void
     {
         [$branch, $user] = $this->makeBranchAndUser();
         $record = $this->makeRecord($branch, $user);
 
         $google = Mockery::mock(GoogleSheetsApiService::class);
-        $google->shouldReceive('sheetIds')->once()->andReturn(['Juli' => 123]);
-        $google->shouldReceive('quoteSheetName')->once()->with('Juli')->andReturn("'Juli'");
+        $google->shouldReceive('sheetIds')->once()->andReturn(['Talangan' => 123]);
+        $google->shouldReceive('quoteSheetName')->once()->with('Talangan')->andReturn("'Talangan'");
         $google->shouldReceive('batchGetRaw')->once()->andReturn([
-            'Juli' => [DanaTalanganGoogleService::VISIBLE_HEADERS],
+            'Talangan' => [DanaTalanganGoogleService::VISIBLE_HEADERS],
         ]);
 
         $result = (new DanaTalanganGoogleService($google))->sync($user->id, true);
@@ -56,40 +53,40 @@ class DanaTalanganGoogleSyncTest extends TestCase
         $this->assertNull($record->fresh()->oasis_sync_id);
     }
 
-    public function test_push_writes_record_to_first_available_july_row(): void
+    public function test_push_writes_record_to_first_available_talangan_row(): void
     {
         [$branch, $user] = $this->makeBranchAndUser();
         $record = $this->makeRecord($branch, $user);
         $headers = array_merge(DanaTalanganGoogleService::VISIBLE_HEADERS, DanaTalanganGoogleService::META_HEADERS);
 
         $google = Mockery::mock(GoogleSheetsApiService::class);
-        $google->shouldReceive('sheetIds')->once()->andReturn(['Juli' => 123]);
-        $google->shouldReceive('quoteSheetName')->times(3)->with('Juli')->andReturn("'Juli'");
+        $google->shouldReceive('sheetIds')->once()->andReturn(['Talangan' => 123]);
+        $google->shouldReceive('quoteSheetName')->times(3)->with('Talangan')->andReturn("'Talangan'");
         $google->shouldReceive('hideColumns')->once()->with('spreadsheet-id', 123, 14, 17);
         $google->shouldReceive('updateRange')->once()->with(
             'spreadsheet-id',
-            "'Juli'!O1:Q1",
+            "'Talangan'!O1:Q1",
             [DanaTalanganGoogleService::META_HEADERS]
         );
         $google->shouldReceive('batchGetRaw')->once()->andReturn([
-            'Juli' => [$headers, [1, '', '', '', '', '', '', '', '', '', '', '', false, '', '', '', '']],
+            'Talangan' => [$headers, [1, '', '', '', '', '', '', '', '', '', '', '', false, '', '', '', '']],
         ]);
         $google->shouldReceive('updateRange')->once()->withArgs(function ($spreadsheetId, $range, $values) {
             return $spreadsheetId === 'spreadsheet-id'
-                && $range === "'Juli'!A2:Q2"
+                && $range === "'Talangan'!A2:Q2"
                 && $values[0][2] === 'Konsumen Test'
                 && $values[0][14] !== '';
         });
 
         $this->assertTrue((new DanaTalanganGoogleService($google))->push($record, $user->id));
         $record->refresh();
-        $this->assertSame('Juli', $record->sheet_name);
+        $this->assertSame('Talangan', $record->sheet_name);
         $this->assertSame(2, $record->sheet_row_number);
         $this->assertSame('synced', $record->sync_status);
         $this->assertNotNull($record->oasis_sync_id);
     }
 
-    public function test_branch_user_can_open_month_tab_with_add_and_edit_modals(): void
+    public function test_branch_user_can_open_tracking_filters_and_modals(): void
     {
         [$branch, $user] = $this->makeBranchAndUser();
         $project = LeadMaster::create([
@@ -100,11 +97,12 @@ class DanaTalanganGoogleSyncTest extends TestCase
         Kavling::create(['project_id' => $project->id, 'kavling_code' => 'A-01', 'name' => 'A-01']);
         $this->makeRecord($branch, $user);
 
-        $response = $this->actingAs($user)->get(route('dana-talangan.index', ['month' => 'Juli']));
+        $response = $this->actingAs($user)->get(route('dana-talangan.index'));
 
         $response
             ->assertOk()
-            ->assertSee('Juli')
+            ->assertSee('Rentang Tanggal')
+            ->assertSee('Cari Nama Konsumen')
             ->assertSee('Sync Sekarang')
             ->assertSee('Tambah Dana Talangan')
             ->assertSee('Konsumen Test');
@@ -119,6 +117,7 @@ class DanaTalanganGoogleSyncTest extends TestCase
             'is_active' => true,
         ]);
         $googleService = Mockery::mock(DanaTalanganGoogleService::class);
+        $googleService->shouldReceive('branchIdForProject')->once()->with('Proyek Test')->andReturn($branch->id);
         $googleService->shouldReceive('push')->once()->withArgs(fn ($record, $actorId) => $record instanceof DanaTalangan && $record->nama_konsumen === 'Konsumen Baru' && $actorId === $user->id
         )->andReturnTrue();
         $this->app->instance(DanaTalanganGoogleService::class, $googleService);
@@ -130,7 +129,6 @@ class DanaTalanganGoogleSyncTest extends TestCase
             'status' => 'sanggup',
             'pinjam_nama' => '0',
             'konfirmasi_keuangan' => '0',
-            'month' => 'Juli',
         ]);
 
         $response->assertRedirect();
@@ -138,6 +136,70 @@ class DanaTalanganGoogleSyncTest extends TestCase
             'nama_konsumen' => 'Konsumen Baru',
             'branch_id' => $branch->id,
         ]);
+    }
+
+    public function test_search_counts_same_name_case_insensitively_within_date_range(): void
+    {
+        [$branch, $user] = $this->makeBranchAndUser();
+        $first = $this->makeRecord($branch, $user);
+        $first->update(['nama_konsumen' => 'Konsumen Test', 'tanggal' => '2026-01-10']);
+        $second = $this->makeRecord($branch, $user);
+        $second->update(['nama_konsumen' => 'konsumen   test', 'tanggal' => '2026-03-10']);
+
+        $response = $this->actingAs($user)->get(route('dana-talangan.index', [
+            'search' => 'KONSUMEN',
+            'filter_mode' => 'date',
+            'date_from' => '2026-03-01',
+            'date_to' => '2026-03-31',
+        ]));
+
+        $response
+            ->assertOk()
+            ->assertSee('2 kali')
+            ->assertSee('1 dalam rentang aktif');
+    }
+
+    public function test_month_range_filters_by_submission_date(): void
+    {
+        [$branch, $user] = $this->makeBranchAndUser();
+        $january = $this->makeRecord($branch, $user);
+        $january->update(['nama_konsumen' => 'Pengajuan Januari', 'tanggal' => '2026-01-10']);
+        $march = $this->makeRecord($branch, $user);
+        $march->update(['nama_konsumen' => 'Pengajuan Maret', 'tanggal' => '2026-03-10']);
+
+        $response = $this->actingAs($user)->get(route('dana-talangan.index', [
+            'filter_mode' => 'month',
+            'month_from' => '2026-03',
+            'month_to' => '2026-03',
+        ]));
+
+        $response->assertOk();
+        $names = collect($response->viewData('records')->items())->pluck('nama_konsumen')->all();
+        $this->assertSame(['Pengajuan Maret'], $names);
+    }
+
+    public function test_dry_run_repairs_stale_metadata_and_infers_project_from_history(): void
+    {
+        [$branch, $user] = $this->makeBranchAndUser();
+        LeadMaster::create(['branch_id' => $branch->id, 'project_name' => 'Mlonggo 1', 'is_active' => true]);
+        $mainRow = [1, '30/06/2026', 'SISKA AULIA FIRNANDA', '', '', 'TIDAK', '', '', '', '', '10/07/2026', '', '', 'SANGGUP', 'old-id', 'deleted', '1'];
+        $historyRow = [1, '30/06/2026', 'SISKA AULIA FIRNANDA', 'Z-07', 'Mlonggo'];
+
+        $google = Mockery::mock(GoogleSheetsApiService::class);
+        $google->shouldReceive('sheetIds')->once()->andReturn(['Juni' => 456, 'Talangan' => 123]);
+        $google->shouldReceive('quoteSheetName')->twice()->andReturnUsing(fn ($name) => "'{$name}'");
+        $google->shouldReceive('batchGetRaw')->once()->andReturn([
+            'Talangan' => [DanaTalanganGoogleService::VISIBLE_HEADERS, $mainRow],
+            'Juni' => [['No', 'Tanggal', 'Nama Konsumen', 'Kav', 'Proyek'], $historyRow],
+        ]);
+
+        $result = (new DanaTalanganGoogleService($google))->sync($user->id, true);
+
+        $this->assertTrue($result['ok']);
+        $this->assertSame(1, $result['summary']['imported']);
+        $this->assertSame(1, $result['summary']['inferred_projects']);
+        $this->assertSame(1, $result['summary']['repaired_metadata']);
+        $this->assertSame([], $result['summary']['warnings']);
     }
 
     private function makeBranchAndUser(): array

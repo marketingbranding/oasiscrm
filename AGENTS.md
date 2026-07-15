@@ -24,7 +24,7 @@ After editing any controller:
 ## Architecture
 
 - **Two sync systems with independent routes and tables:** `database.sync` (DatabaseController) syncs leads/general sheets to `database_sheet_records`; `konsumen-progress.sync` (KonsumenProgressController) syncs pipeline stage sheets to `konsumen_progress_sheet_rows`. Dashboard Sync button calls `database.sync`, not the progress sync.
-- **Dana Talangan has its own monthly two-way sync:** `dana-talangan.sync` and `dana-talangan:sync` use `DanaTalanganGoogleService`. The local `dana_talangans` table remains the dashboard cache; Google wins during Sync, while web CRUD pushes immediately. Only `Juli` and later tabs use the canonical Oasis layout; never use pre-July tabs as templates.
+- **Dana Talangan has its own two-way sync:** `dana-talangan.sync` and `dana-talangan:sync` use `DanaTalanganGoogleService`. The single canonical Google tab is `Talangan`; older month tabs are reference-only for inferring missing projects. The local `dana_talangans` table remains the dashboard cache; Google wins during Sync, while web CRUD pushes immediately.
 - **Google Sheets:** 5 service classes under `app/Services/` (api, read, write, sync, konsumen sync)
 - **Views** extend `layouts.crm` (not `layouts.app`). Uses `@yield('content')`, no Blade components.
 - **Dashboard data sources:** Lead KPI and Action Queue query `database_sheet_records` (Google Sheet cache); Dana Talangan queries local `dana_talangans` table; Konsumen Progress queries `konsumen_progress_sheet_rows`; Sync Health queries `database_sheet_sync_statuses`.

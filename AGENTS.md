@@ -37,6 +37,8 @@ After editing any controller:
 - **CRM data tables must use the shared `.crm-table-scroll` and `.crm-data-table` classes** from `resources/css/app.css`; the Database module is the canonical reference. Do not recreate grid, sticky-header, stripe, hover, typography, or scrolling styles inline in individual Blade views.
 - Wide tables must keep important columns available through horizontal scrolling instead of hiding them on mobile. Use frozen identity columns where needed, keep actions in the final column, truncate long text with a full-value `title`, and render booleans with `.crm-boolean-box`. Domain/status colors belong in badges or specific cells, not as a replacement for the base zebra/hover row styling.
 - Sortable CRM table headers should sort by direct header click and show `▼`/`▲` on the active column, matching the Database module. Do not introduce a dropdown sort menu unless the product explicitly requires one.
+- Table action cells must match the Database module: `Edit` is a blue (`#0000ee`) bold underlined action, `Hapus` is red (`#c0392b`) bold underlined action with confirmation, and both remain on one line in the final column. Use generated Laravel URLs/routes rather than hardcoded paths, and safely encode any record data passed to Alpine.
+- New table implementations must preserve the full canonical behavior together: 2px black cell grid, sticky black uppercase headers, compact Helvetica/Times typography, zebra rows, yellow hover, horizontal scrolling, correct pagination row numbers, direct-click sorting, frozen identity columns when useful, boolean boxes, and consistent final-column actions. Do not copy only part of the visual treatment.
 
 ## Routes & auth
 
@@ -62,7 +64,7 @@ Key models and their backing tables:
 | `KonsumenProgressSheetRow` | `konsumen_progress_sheet_rows` | Cached pipeline stage rows |
 | `KonsumenProgressSyncStatus` | `konsumen_progress_sync_statuses` | Pipeline sync status per branch |
 | `DanaTalangan` | `dana_talangans` | Dana talangan records |
-| `DanaTalanganSyncStatus` | `dana_talangan_sync_statuses` | Global monthly sheet sync status |
+| `DanaTalanganSyncStatus` | `dana_talangan_sync_statuses` | Global Talangan sheet sync status |
 | `ContentItem` | `content_items` | Task tracker items |
 
 `KonsumenProgressSheetRow.row_data` is a JSON `array` cast — always access as array, not object.

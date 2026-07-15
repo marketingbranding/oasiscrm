@@ -46,6 +46,7 @@ function selectDate(wrapper, dateStr) {
     const textEl = wrapper.querySelector('.date-text');
     if (textEl) textEl.textContent = d + ' ' + monthsId[m] + ' ' + y;
     closeCalendar(wrapper);
+    input.dispatchEvent(new Event('input', { bubbles: true }));
     input.dispatchEvent(new Event('change', { bubbles: true }));
     wrapper.__calState = { year: y, month: m };
     renderCalendar(wrapper, wrapper.__calState);
@@ -160,3 +161,14 @@ if (document.readyState === 'loading') {
 } else {
     initDatePickers();
 }
+
+const datePickerObserver = new MutationObserver(function(mutations) {
+    if (mutations.some(mutation => Array.from(mutation.addedNodes).some(node =>
+        node.nodeType === Node.ELEMENT_NODE
+        && (node.matches?.('.date-wrapper') || node.querySelector?.('.date-wrapper'))
+    ))) {
+        initDatePickers();
+    }
+});
+
+datePickerObserver.observe(document.documentElement, { childList: true, subtree: true });

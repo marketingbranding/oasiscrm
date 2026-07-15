@@ -281,9 +281,19 @@
                                         <template x-for="option in fieldOptions(tab, h, editForm[h])" :key="option">
                                             <option :value="option" x-text="option"></option>
                                         </template>
-                                    </select>
+                                     </select>
                                  </template>
-                                 <template x-if="!['checkbox', 'select'].includes(fieldType(tab, h, editForm[h]))">
+                                 <template x-if="fieldType(tab, h, editForm[h]) === 'date'">
+                                    <div class="date-wrapper" data-accent="#d77a7a" style="position:relative">
+                                        <div class="date-display w-full border-2 border-black px-2 py-1 text-sm font-['Times_New_Roman'] bg-white cursor-pointer select-none flex items-center justify-between" tabindex="0">
+                                            <span class="date-text">— Pilih Tanggal —</span>
+                                            <span class="date-arrow">▼</span>
+                                        </div>
+                                        <input type="date" :name="h" x-model="editForm[h]"
+                                               style="position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0">
+                                    </div>
+                                 </template>
+                                 <template x-if="!['checkbox', 'select', 'date'].includes(fieldType(tab, h, editForm[h]))">
                                     <input :type="fieldType(tab, h, editForm[h])" :name="h" x-model="editForm[h]"
                                            class="w-full border-2 border-black px-2 py-1 text-sm font-['Times_New_Roman'] rounded-none">
                                  </template>
@@ -333,9 +343,19 @@
                                             <template x-for="option in fieldOptions(name, h)" :key="option">
                                                 <option :value="option" x-text="option"></option>
                                             </template>
-                                        </select>
+                                         </select>
                                      </template>
-                                     <template x-if="!['checkbox', 'select'].includes(fieldType(name, h))">
+                                     <template x-if="fieldType(name, h) === 'date'">
+                                        <div class="date-wrapper" data-accent="#d77a7a" style="position:relative">
+                                            <div class="date-display w-full border-2 border-black px-2 py-1 text-sm font-['Times_New_Roman'] bg-white cursor-pointer select-none flex items-center justify-between" tabindex="0">
+                                                <span class="date-text">— Pilih Tanggal —</span>
+                                                <span class="date-arrow">▼</span>
+                                            </div>
+                                            <input type="date" :name="h" value=""
+                                                   style="position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0">
+                                        </div>
+                                     </template>
+                                     <template x-if="!['checkbox', 'select', 'date'].includes(fieldType(name, h))">
                                         <input :type="fieldType(name, h)" :name="h" value=""
                                                class="w-full border-2 border-black px-2 py-1 text-sm font-['Times_New_Roman'] rounded-none">
                                      </template>

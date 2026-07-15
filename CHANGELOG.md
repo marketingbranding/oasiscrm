@@ -3,6 +3,7 @@
 ### 2026-07-15 — Input Dinamis Modul Database
 
 - Form Tambah dan Edit sekarang mengikuti data validation Google Sheets: dropdown, checkbox, tanggal, waktu, dan tanggal-waktu.
+- Kolom tanggal pada form dinamis menggunakan date picker Oasis yang sama dengan modul Dana Talangan.
 - Dropdown mendukung pilihan langsung maupun pilihan dari range atau named range.
 - Metadata kolom disimpan saat Sync sehingga form tetap dapat dibuka tanpa membaca Google Sheets secara langsung.
 - Baris baru menyalin format dan data validation dari baris contoh selain menyalin formula.

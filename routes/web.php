@@ -8,13 +8,17 @@ use App\Http\Controllers\Crm\ChangelogController;
 use App\Http\Controllers\Crm\ContentCalendarController;
 use App\Http\Controllers\Crm\DanaTalanganController;
 use App\Http\Controllers\Crm\DashboardController;
-use App\Http\Controllers\Crm\FeedbackReportController;
 use App\Http\Controllers\Crm\DatabaseController;
+use App\Http\Controllers\Crm\FeedbackReportController;
 use App\Http\Controllers\Crm\KavlingController;
 use App\Http\Controllers\Crm\KonsumenProgressController;
 use App\Http\Controllers\Crm\LeadSourceController;
 use App\Http\Controllers\Crm\ProjectController;
 use App\Http\Controllers\ProfileController;
+use App\Models\ContentItem;
+use App\Models\DanaTalangan;
+use App\Models\LeadMaster;
+use App\Models\User;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', function () {
@@ -31,7 +35,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
 Route::middleware(['auth', 'verified', 'password.changed'])->group(function () {
     Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
 
-    Route::bind('content_calendar', fn($value) => \App\Models\ContentItem::findOrFail($value));
+    Route::bind('content_calendar', fn ($value) => ContentItem::findOrFail($value));
     Route::get('content-calendar/export', [ContentCalendarController::class, 'export'])->name('content-calendar.export');
     Route::get('content-calendar/{content_calendar}/detail', [ContentCalendarController::class, 'detail'])->name('content-calendar.detail');
     Route::post('content-calendar/bulk-update', [ContentCalendarController::class, 'bulkUpdate'])->name('content-calendar.bulk-update');
@@ -59,7 +63,8 @@ Route::middleware(['auth', 'verified', 'password.changed'])->group(function () {
     Route::get('content-calendar/import', [ContentCalendarController::class, 'import'])->name('content-calendar.import');
     Route::post('content-calendar/import', [ContentCalendarController::class, 'importStore'])->name('content-calendar.import-store');
 
-    Route::bind('dana_talangan', fn($v) => \App\Models\DanaTalangan::findOrFail($v));
+    Route::bind('dana_talangan', fn ($v) => DanaTalangan::findOrFail($v));
+    Route::post('dana-talangan/sync', [DanaTalanganController::class, 'sync'])->name('dana-talangan.sync');
     Route::get('dana-talangan/export', [DanaTalanganController::class, 'export'])->name('dana-talangan.export');
     Route::get('dana-talangan/export-template', [DanaTalanganController::class, 'exportTemplate'])->name('dana-talangan.export-template');
     Route::get('dana-talangan/import', [DanaTalanganController::class, 'import'])->name('dana-talangan.import');
@@ -85,10 +90,10 @@ Route::middleware(['auth', 'verified', 'password.changed'])->group(function () {
         Route::post('/branches/{branch}/assign', [BranchController::class, 'assignStore'])->name('branches.assign-store');
         Route::delete('/branches/{user}/remove-admin', [BranchController::class, 'removeAdmin'])->name('branches.remove-admin');
 
-        Route::bind('admin_user', fn($value) => \App\Models\User::findOrFail($value));
+        Route::bind('admin_user', fn ($value) => User::findOrFail($value));
         Route::resource('admin-users', AdminUserController::class)->except(['show']);
 
-        Route::bind('project', fn($v) => \App\Models\LeadMaster::findOrFail($v));
+        Route::bind('project', fn ($v) => LeadMaster::findOrFail($v));
         Route::resource('projects', ProjectController::class);
         Route::get('/projects/{project}/kavlings', [KavlingController::class, 'index'])->name('kavlings.index');
         Route::get('/projects/{project}/kavlings/bulk-import', [KavlingController::class, 'bulkImport'])->name('kavlings.bulk-import');

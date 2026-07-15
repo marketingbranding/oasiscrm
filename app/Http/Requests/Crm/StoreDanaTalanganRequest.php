@@ -15,12 +15,13 @@ class StoreDanaTalanganRequest extends FormRequest
     public function rules(): array
     {
         $user = Auth::user();
+
         return [
-            'tanggal' => 'required|date',
+            'tanggal' => 'required|date|after_or_equal:2026-07-01',
             'nama_konsumen' => 'required|string|max:255',
             'kav' => 'nullable|string|max:100',
             'branch_id' => $user->canViewAllBranches() ? 'required|exists:branches,id' : 'nullable',
-            'project_name' => 'nullable|string|max:255',
+            'project_name' => 'required|string|max:255',
             'pinjam_nama' => 'nullable|boolean',
             'pekerjaan' => 'nullable|string|max:255',
             'status_perkawinan' => 'nullable|string|max:100',
@@ -28,6 +29,7 @@ class StoreDanaTalanganRequest extends FormRequest
             'nama_marketing' => 'nullable|string|max:255',
             'tgl_komitmen' => 'nullable|date',
             'penyelesaian' => 'nullable|string',
+            'konfirmasi_keuangan' => 'nullable|boolean',
             'status' => 'required|in:sanggup,tidak_sanggup,lunas',
         ];
     }

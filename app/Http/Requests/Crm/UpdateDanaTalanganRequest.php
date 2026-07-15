@@ -11,21 +11,23 @@ class UpdateDanaTalanganRequest extends FormRequest
     {
         $user = Auth::user();
         $danaTalangan = $this->route('dana_talangan');
-        if (!$user->canViewAllBranches() && $danaTalangan->branch_id !== $user->branch_id) {
+        if (! $user->canViewAllBranches() && $danaTalangan->branch_id !== $user->branch_id) {
             return false;
         }
+
         return true;
     }
 
     public function rules(): array
     {
         $user = Auth::user();
+
         return [
-            'tanggal' => 'required|date',
+            'tanggal' => 'required|date|after_or_equal:2026-07-01',
             'nama_konsumen' => 'required|string|max:255',
             'kav' => 'nullable|string|max:100',
             'branch_id' => $user->canViewAllBranches() ? 'required|exists:branches,id' : 'exclude',
-            'project_name' => 'nullable|string|max:255',
+            'project_name' => 'required|string|max:255',
             'pinjam_nama' => 'nullable|boolean',
             'pekerjaan' => 'nullable|string|max:255',
             'status_perkawinan' => 'nullable|string|max:100',

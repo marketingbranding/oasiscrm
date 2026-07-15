@@ -9,6 +9,14 @@
 - Baris baru menyalin format dan data validation dari baris contoh selain menyalin formula.
 - Nilai dropdown ketat dan format tanggal divalidasi sebelum dikirim ke Google Sheets.
 
+### 2026-07-15 — Sinkronisasi Dua Arah Dana Talangan
+
+- Modul Dana Talangan menggunakan tab bulan dengan template kanonis dari tab `Juli`.
+- Tambah, Edit, Hapus, import, dan bulk update mengirim perubahan ke Google Sheets.
+- Perubahan dari Google masuk ke cache lokal melalui Sync manual atau command terjadwal setiap 10 menit.
+- Tab bulan baru dibuat otomatis dari template Juli; mulai 2027 nama tab menyertakan tahun.
+- Cabang dipetakan dari Proyek dan tiga kolom metadata sinkronisasi disimpan tersembunyi di Google Sheets.
+
 ### 2026-07-08 — Peningkatan Modul Database
 
 ### Ditambahkan — Fitur baru: deteksi boolean, freeze kolom, dan pencocokan header fleksibel

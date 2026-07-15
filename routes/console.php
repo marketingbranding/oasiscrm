@@ -9,3 +9,4 @@ Artisan::command('inspire', function () {
 })->purpose('Display an inspiring quote');
 
 Schedule::command('konsumen-progress:sync')->everyTenMinutes()->withoutOverlapping();
+Schedule::command('dana-talangan:sync')->everyTenMinutes()->withoutOverlapping();

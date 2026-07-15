@@ -34,6 +34,8 @@ return [
         'credentials_path' => env('GOOGLE_SHEETS_CREDENTIALS_PATH', storage_path('app/google/service-account.json')),
         'cache_stale_minutes' => env('GOOGLE_SHEETS_CACHE_STALE_MINUTES', 30),
         'verify_ssl' => env('GOOGLE_SHEETS_VERIFY_SSL', true),
+        'dana_talangan_spreadsheet_id' => env('DANA_TALANGAN_SHEET_ID'),
+        'dana_talangan_template_sheet' => env('DANA_TALANGAN_TEMPLATE_SHEET', 'Juli'),
     ],
 
 ];

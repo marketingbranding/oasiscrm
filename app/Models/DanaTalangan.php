@@ -5,11 +5,20 @@ namespace App\Models;
 use App\Models\Traits\LogsActivity;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\SoftDeletes;
 
 class DanaTalangan extends Model
 {
-    use LogsActivity;
+    use LogsActivity, SoftDeletes;
+
     protected $fillable = [
+        'oasis_sync_id',
+        'sheet_name',
+        'sheet_row_number',
+        'sync_status',
+        'last_sync_error',
+        'source_hash',
+        'last_synced_at',
         'tanggal',
         'nama_konsumen',
         'kav',
@@ -35,6 +44,7 @@ class DanaTalangan extends Model
             'pinjam_nama' => 'boolean',
             'konfirmasi_keuangan' => 'boolean',
             'umur' => 'integer',
+            'last_synced_at' => 'datetime',
         ];
     }
 
@@ -50,6 +60,6 @@ class DanaTalangan extends Model
 
     protected function activityLabel(): string
     {
-        return $this->nama_konsumen . ' (Dana Talangan)';
+        return $this->nama_konsumen.' (Dana Talangan)';
     }
 }

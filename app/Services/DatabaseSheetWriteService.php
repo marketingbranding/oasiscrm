@@ -9,9 +9,7 @@ use Throwable;
 
 class DatabaseSheetWriteService
 {
-    public function __construct(private GoogleSheetsApiService $googleSheets, private DatabaseSheetSyncService $syncService)
-    {
-    }
+    public function __construct(private GoogleSheetsApiService $googleSheets, private DatabaseSheetSyncService $syncService) {}
 
     public function updateRecord(DatabaseSheetRecord $record, array $input): bool
     {
@@ -67,10 +65,13 @@ class DatabaseSheetWriteService
             ->orderByDesc('row_number')
             ->first();
 
-        if (!$template) return false;
+        if (! $template) {
+            return false;
+        }
 
         $headers = $template->headers;
         $formulaColumns = $template->formula_columns ?? [];
+        $columnMetadata = $template->column_metadata ?? [];
         $rowNumber = ((int) DatabaseSheetRecord::where('branch_id', $branch->id)->where('sheet_name', $sheetName)->max('row_number')) + 1;
         $rowData = array_fill_keys($headers, '');
         $syncId = (string) Str::uuid();
@@ -86,6 +87,7 @@ class DatabaseSheetWriteService
         try {
             $sheetIds = $this->googleSheets->sheetIds($branch->sheet_id);
             if (isset($sheetIds[$sheetName])) {
+                $this->googleSheets->copyRowFormat($branch->sheet_id, $sheetIds[$sheetName], $template->row_number, $rowNumber);
                 $this->googleSheets->copyRowFormulas($branch->sheet_id, $sheetIds[$sheetName], $template->row_number, $rowNumber);
             }
 
@@ -102,6 +104,7 @@ class DatabaseSheetWriteService
                 'headers' => $headers,
                 'row_data' => $rowData,
                 'formula_columns' => $formulaColumns,
+                'column_metadata' => $columnMetadata,
                 'sync_status' => 'synced',
                 'last_synced_at' => now(),
             ]);
@@ -139,17 +142,19 @@ class DatabaseSheetWriteService
 
     public function editableHeaders(array $headers, array $formulaColumns): array
     {
-        return array_values(array_filter($headers, fn ($header) => !in_array($header, $formulaColumns, true)
-            && !in_array($header, ['oasis_sync_id', 'oasis_deleted_at', 'oasis_deleted_by'], true)));
+        return array_values(array_filter($headers, fn ($header) => ! in_array($header, $formulaColumns, true)
+            && ! in_array($header, ['oasis_sync_id', 'oasis_deleted_at', 'oasis_deleted_by'], true)));
     }
 
     private function updateCell(Branch $branch, string $sheetName, int $rowNumber, array $headers, string $header, string $value): void
     {
         $index = array_search($header, $headers, true);
-        if ($index === false) return;
+        if ($index === false) {
+            return;
+        }
 
         $column = $this->syncService->columnLetter($index + 1);
-        $range = $this->googleSheets->quoteSheetName($sheetName) . '!' . $column . $rowNumber;
+        $range = $this->googleSheets->quoteSheetName($sheetName).'!'.$column.$rowNumber;
         $this->googleSheets->updateRange($branch->sheet_id, $range, [[$value]]);
     }
 }

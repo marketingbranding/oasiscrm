@@ -59,6 +59,17 @@
     </div>
     @endif
 
+    @if($errors->any())
+    <div class="bg-[#d77a7a] border-2 border-black px-4 py-3 mb-4 font-['Times_New_Roman'] text-sm">
+        <strong class="font-bold">Data belum dapat disimpan:</strong>
+        <ul class="list-disc pl-5 mt-1">
+            @foreach($errors->all() as $error)
+            <li>{{ $error }}</li>
+            @endforeach
+        </ul>
+    </div>
+    @endif
+
     @if($selectedBranch && !empty($sheetNames))
     @php
         $firstSheet = $sheetNames[0] ?? '';
@@ -66,6 +77,7 @@
         $initialSample = $initialRows[0] ?? null;
         $initialHeaders = $initialSample ? $initialSample->headers : [];
         $initialFormulaCols = $initialSample ? ($initialSample->formula_columns ?? []) : [];
+        $initialColumnMetadata = $initialSample ? ($initialSample->column_metadata ?? []) : [];
         $initialRecordsJson = json_encode(array_map(fn($r) => [
             'id' => $r->id,
             'row_number' => $r->row_number,
@@ -73,6 +85,7 @@
         ], $initialRows));
         $initialHeadersJson = json_encode($initialHeaders);
         $initialFormulaJson = json_encode($initialFormulaCols);
+        $initialColumnMetadataJson = json_encode($initialColumnMetadata);
     @endphp
     <div x-data="databaseTabs({
         branchId: '{{ $selectedBranch->id }}',
@@ -80,6 +93,7 @@
         firstSheet: '{{ $firstSheet }}',
         initialHeaders: {{ $initialHeadersJson }},
         initialFormulaCols: {{ $initialFormulaJson }},
+        initialColumnMetadata: {{ $initialColumnMetadataJson }},
         initialRecords: {{ $initialRecordsJson }},
         requestSheet: '{{ $requestSheet ?? '' }}',
         requestAdd: {{ ($requestAdd ?? false) ? 'true' : 'false' }}
@@ -250,19 +264,29 @@
                         <template x-for="h in editableHeaders()" :key="h">
                             <div>
                                 <label class="font-[Helvetica] font-bold text-[10px] uppercase block mb-0.5" x-text="h"></label>
-                                 <template x-if="['true', 'false'].includes((editForm[h] || '').toLowerCase())">
+                                 <template x-if="fieldType(tab, h, editForm[h]) === 'checkbox'">
                                       <label class="flex items-center gap-2 cursor-pointer">
+                                          <input type="hidden" :name="h" :value="editForm[h]">
                                           <input type="checkbox"
-                                                 :checked="(editForm[h] || '').toLowerCase() === 'true'"
-                                                 @change="editForm[h] = $event.target.checked ? 'true' : 'false'"
+                                                 :checked="isChecked(tab, h, editForm[h])"
+                                                 @change="editForm[h] = $event.target.checked ? checkedValue(tab, h) : uncheckedValue(tab, h)"
                                                  class="w-5 h-5 accent-[#5d8e8e] border-2 border-black cursor-pointer rounded-none">
-                                          <span class="text-xs font-['Times_New_Roman']" x-text="(editForm[h] || '').toLowerCase() === 'true' ? 'Aktif' : 'Tidak'"></span>
+                                          <span class="text-xs font-['Times_New_Roman']" x-text="isChecked(tab, h, editForm[h]) ? 'Aktif' : 'Tidak'"></span>
                                       </label>
                                  </template>
-                                 <template x-if="!['true', 'false'].includes((editForm[h] || '').toLowerCase())">
-                                    <input :name="h" x-model="editForm[h]"
+                                 <template x-if="fieldType(tab, h, editForm[h]) === 'select'">
+                                    <select :name="h" x-model="editForm[h]"
+                                            class="w-full border-2 border-black px-2 py-1 text-sm font-['Times_New_Roman'] bg-white rounded-none">
+                                        <option value="">— Pilih —</option>
+                                        <template x-for="option in fieldOptions(tab, h, editForm[h])" :key="option">
+                                            <option :value="option" x-text="option"></option>
+                                        </template>
+                                    </select>
+                                 </template>
+                                 <template x-if="!['checkbox', 'select'].includes(fieldType(tab, h, editForm[h]))">
+                                    <input :type="fieldType(tab, h, editForm[h])" :name="h" x-model="editForm[h]"
                                            class="w-full border-2 border-black px-2 py-1 text-sm font-['Times_New_Roman'] rounded-none">
-                                </template>
+                                 </template>
                             </div>
                         </template>
                     </div>
@@ -293,18 +317,28 @@
                             <template x-for="h in addHeaders(name)" :key="h">
                                 <div>
                                     <label class="font-[Helvetica] font-bold text-[10px] uppercase block mb-0.5" x-text="h"></label>
-                                     <template x-if="isBooleanColumn(name, h)">
+                                     <template x-if="fieldType(name, h) === 'checkbox'">
                                          <label class="flex items-center gap-2 cursor-pointer">
-                                             <input type="checkbox" :name="h" value="true"
+                                             <input type="hidden" :name="h" :value="uncheckedValue(name, h)">
+                                             <input type="checkbox" :name="h" :value="checkedValue(name, h)"
                                                     @change="$event.target.nextElementSibling.textContent = $event.target.checked ? 'Aktif' : 'Tidak'"
                                                     class="w-5 h-5 accent-[#5d8e8e] border-2 border-black cursor-pointer rounded-none">
                                              <span class="text-xs font-['Times_New_Roman']">Tidak</span>
                                          </label>
                                      </template>
-                                     <template x-if="!isBooleanColumn(name, h)">
-                                        <input :name="h" value=""
+                                     <template x-if="fieldType(name, h) === 'select'">
+                                        <select :name="h"
+                                                class="w-full border-2 border-black px-2 py-1 text-sm font-['Times_New_Roman'] bg-white rounded-none">
+                                            <option value="">— Pilih —</option>
+                                            <template x-for="option in fieldOptions(name, h)" :key="option">
+                                                <option :value="option" x-text="option"></option>
+                                            </template>
+                                        </select>
+                                     </template>
+                                     <template x-if="!['checkbox', 'select'].includes(fieldType(name, h))">
+                                        <input :type="fieldType(name, h)" :name="h" value=""
                                                class="w-full border-2 border-black px-2 py-1 text-sm font-['Times_New_Roman'] rounded-none">
-                                    </template>
+                                     </template>
                                 </div>
                             </template>
                         </div>
@@ -362,6 +396,7 @@ document.addEventListener('alpine:init', () => {
             this.cache[config.firstSheet] = {
                 headers: config.initialHeaders,
                 formula_columns: config.initialFormulaCols,
+                column_metadata: config.initialColumnMetadata,
                 records: config.initialRecords,
             };
             this.loaded[config.firstSheet] = true;
@@ -413,7 +448,7 @@ document.addEventListener('alpine:init', () => {
                 this.cache[name] = data;
                 this.loaded[name] = true;
             } catch (e) {
-                this.cache[name] = { headers: [], formula_columns: [], records: [] };
+                this.cache[name] = { headers: [], formula_columns: [], column_metadata: {}, records: [] };
                 this.loaded[name] = true;
             } finally {
                 this.loading = false;
@@ -423,6 +458,9 @@ document.addEventListener('alpine:init', () => {
         editRecord(rec) {
             this.editing = rec;
             this.editForm = JSON.parse(JSON.stringify(rec.row_data));
+            for (const header of this.editableHeaders()) {
+                this.editForm[header] = this.normalizeInputValue(this.tab, header, this.editForm[header]);
+            }
         },
 
         editableHeaders() {
@@ -506,6 +544,64 @@ document.addEventListener('alpine:init', () => {
             return data.records.some(r =>
                 ['true', 'false'].includes((r.row_data[header] || '').toLowerCase())
             );
+        },
+
+        columnMetadata(sheetName, header) {
+            return this.cache[sheetName]?.column_metadata?.[header] || {};
+        },
+
+        fieldType(sheetName, header, value = '') {
+            const type = this.columnMetadata(sheetName, header).type;
+            if (['select', 'checkbox', 'date', 'datetime-local', 'time'].includes(type)) {
+                return type;
+            }
+            if (['true', 'false'].includes(String(value || '').toLowerCase()) || this.isBooleanColumn(sheetName, header)) {
+                return 'checkbox';
+            }
+            return 'text';
+        },
+
+        fieldOptions(sheetName, header, currentValue = '') {
+            const options = [...(this.columnMetadata(sheetName, header).options || [])];
+            const current = String(currentValue || '').trim();
+            if (current && !options.includes(current)) options.push(current);
+            return options;
+        },
+
+        checkedValue(sheetName, header) {
+            return this.columnMetadata(sheetName, header).checked_value || 'true';
+        },
+
+        uncheckedValue(sheetName, header) {
+            return this.columnMetadata(sheetName, header).unchecked_value || 'false';
+        },
+
+        isChecked(sheetName, header, value) {
+            return String(value || '').toLowerCase() === String(this.checkedValue(sheetName, header)).toLowerCase();
+        },
+
+        normalizeInputValue(sheetName, header, value) {
+            const type = this.fieldType(sheetName, header, value);
+            const raw = String(value || '').trim();
+            if (!raw || !['date', 'datetime-local', 'time'].includes(type)) return raw;
+
+            if (type === 'time') {
+                const time = raw.match(/(\d{1,2}):(\d{2})/);
+                return time ? `${time[1].padStart(2, '0')}:${time[2]}` : raw;
+            }
+
+            const match = raw.match(/^(\d{1,4})[\/\-.](\d{1,2})[\/\-.](\d{1,4})(?:[ T](\d{1,2}):(\d{2}))?/);
+            if (!match) return raw;
+
+            const yearFirst = match[1].length === 4;
+            const year = yearFirst ? match[1] : match[3];
+            const month = (yearFirst ? match[2] : match[2]).padStart(2, '0');
+            const day = (yearFirst ? match[3] : match[1]).padStart(2, '0');
+            const date = `${year}-${month}-${day}`;
+
+            return type === 'datetime-local'
+                ? `${date}T${(match[4] || '00').padStart(2, '0')}:${match[5] || '00'}`
+                : date;
         },
 
         isIdKavlingColumn(h) {

@@ -1,5 +1,13 @@
 ## Catatan Perubahan (Changelog)
 
+### 2026-07-15 — Input Dinamis Modul Database
+
+- Form Tambah dan Edit sekarang mengikuti data validation Google Sheets: dropdown, checkbox, tanggal, waktu, dan tanggal-waktu.
+- Dropdown mendukung pilihan langsung maupun pilihan dari range atau named range.
+- Metadata kolom disimpan saat Sync sehingga form tetap dapat dibuka tanpa membaca Google Sheets secara langsung.
+- Baris baru menyalin format dan data validation dari baris contoh selain menyalin formula.
+- Nilai dropdown ketat dan format tanggal divalidasi sebelum dikirim ke Google Sheets.
+
 ### 2026-07-08 — Peningkatan Modul Database
 
 ### Ditambahkan — Fitur baru: deteksi boolean, freeze kolom, dan pencocokan header fleksibel

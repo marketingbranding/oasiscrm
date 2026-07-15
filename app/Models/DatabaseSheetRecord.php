@@ -16,6 +16,7 @@ class DatabaseSheetRecord extends Model
         'headers',
         'row_data',
         'formula_columns',
+        'column_metadata',
         'sync_status',
         'last_sync_error',
         'last_synced_at',
@@ -29,6 +30,7 @@ class DatabaseSheetRecord extends Model
             'headers' => 'array',
             'row_data' => 'array',
             'formula_columns' => 'array',
+            'column_metadata' => 'array',
             'last_synced_at' => 'datetime',
             'oasis_deleted_at' => 'datetime',
         ];

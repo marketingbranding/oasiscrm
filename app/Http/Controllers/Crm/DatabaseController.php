@@ -11,6 +11,7 @@ use App\Services\DatabaseSheetWriteService;
 use App\Services\GoogleSheetsApiService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Validation\ValidationException;
 use Throwable;
 
 class DatabaseController extends Controller
@@ -22,7 +23,7 @@ class DatabaseController extends Controller
 
         if ($user->isSuperadmin()) {
             $branches = Branch::where('is_active', true)->get();
-            if (!$selectedBranchId && $branches->isNotEmpty()) {
+            if (! $selectedBranchId && $branches->isNotEmpty()) {
                 $selectedBranchId = $branches->first()->id;
             }
         } else {
@@ -60,7 +61,7 @@ class DatabaseController extends Controller
                 foreach ($apiSheetNames as $name) {
                     $orderedSheetNames[] = $name;
                     $sheetSeen[$name] = true;
-                    if (!isset($records[$name])) {
+                    if (! isset($records[$name])) {
                         $records[$name] = [];
                     }
                 }
@@ -69,7 +70,7 @@ class DatabaseController extends Controller
             }
 
             foreach ($records as $name => $rows) {
-                if (!isset($sheetSeen[$name])) {
+                if (! isset($sheetSeen[$name])) {
                     $orderedSheetNames[] = $name;
                     $sheetSeen[$name] = true;
                 }
@@ -97,7 +98,7 @@ class DatabaseController extends Controller
         $branch = Branch::findOrFail($branchId);
 
         $user = Auth::user();
-        if (!$user->isSuperadmin() && $user->branch_id !== $branch->id) {
+        if (! $user->isSuperadmin() && $user->branch_id !== $branch->id) {
             abort(403);
         }
 
@@ -105,13 +106,14 @@ class DatabaseController extends Controller
             ->where('sheet_name', $sheetName)
             ->whereNull('oasis_deleted_at')
             ->orderBy('row_number')
-            ->get(['id', 'row_number', 'row_data', 'headers', 'formula_columns']);
+            ->get(['id', 'row_number', 'row_data', 'headers', 'formula_columns', 'column_metadata']);
 
         $sample = $rows->first();
         $headers = $sample ? $sample->headers : [];
         $formulaColumns = $sample ? ($sample->formula_columns ?? []) : [];
+        $columnMetadata = $sample ? ($sample->column_metadata ?? []) : [];
 
-        $records = $rows->map(fn($r) => [
+        $records = $rows->map(fn ($r) => [
             'id' => $r->id,
             'row_number' => $r->row_number,
             'row_data' => $r->row_data,
@@ -121,6 +123,7 @@ class DatabaseController extends Controller
             'sheet_name' => $sheetName,
             'headers' => $headers,
             'formula_columns' => $formulaColumns,
+            'column_metadata' => $columnMetadata,
             'records' => $records,
         ]);
     }
@@ -131,18 +134,18 @@ class DatabaseController extends Controller
         $branchId = $user->isSuperadmin() ? $request->input('branch_id') : $user->branch_id;
         $branch = $branchId ? Branch::find($branchId) : null;
 
-        if (!$branch) {
+        if (! $branch) {
             return back()->with('error', 'Branch tidak ditemukan.');
         }
 
         $result = $syncService->syncBranch($branch);
-        if (!$result['ok']) {
-            return back()->with('error', 'Sync gagal: ' . $result['message']);
+        if (! $result['ok']) {
+            return back()->with('error', 'Sync gagal: '.$result['message']);
         }
 
         $totalRows = array_sum($result['summary']);
 
-        return back()->with('success', 'Sync selesai: ' . count($result['summary']) . ' sheets, ' . $totalRows . ' rows.');
+        return back()->with('success', 'Sync selesai: '.count($result['summary']).' sheets, '.$totalRows.' rows.');
     }
 
     public function store(Request $request, DatabaseSheetWriteService $writeService)
@@ -156,11 +159,18 @@ class DatabaseController extends Controller
         $sheetName = $request->input('sheet_name');
 
         $user = Auth::user();
-        if (!$user->isSuperadmin() && $user->branch_id !== $branch->id) {
+        if (! $user->isSuperadmin() && $user->branch_id !== $branch->id) {
             abort(403);
         }
 
-        if (!$writeService->createRecord($branch, $sheetName, $request->except(['_token', 'sheet_name', 'branch_id']))) {
+        $input = $request->except(['_token', 'sheet_name', 'branch_id']);
+        $template = DatabaseSheetRecord::where('branch_id', $branch->id)
+            ->where('sheet_name', $sheetName)
+            ->orderByDesc('row_number')
+            ->first();
+        $this->validateTypedInput($input, $template?->column_metadata ?? []);
+
+        if (! $writeService->createRecord($branch, $sheetName, $input)) {
             return back()->with('error', 'Gagal menambah data. Tidak ada template row atau Google Sheets tidak merespons.');
         }
 
@@ -170,17 +180,20 @@ class DatabaseController extends Controller
     public function update(Request $request, DatabaseSheetRecord $record, DatabaseSheetWriteService $writeService)
     {
         $branch = $record->branch;
-        if (!$branch) {
+        if (! $branch) {
             return back()->with('error', 'Branch tidak ditemukan.');
         }
 
         $user = Auth::user();
-        if (!$user->isSuperadmin() && $user->branch_id !== $branch->id) {
+        if (! $user->isSuperadmin() && $user->branch_id !== $branch->id) {
             abort(403);
         }
 
-        if (!$writeService->updateRecord($record, $request->except(['_token', '_method']))) {
-            return back()->with('error', 'Gagal update. Perubahan tersimpan di database lokal, tapi gagal push ke Google Sheets: ' . $record->last_sync_error);
+        $input = $request->except(['_token', '_method']);
+        $this->validateTypedInput($input, $record->column_metadata ?? [], $record->row_data ?? []);
+
+        if (! $writeService->updateRecord($record, $input)) {
+            return back()->with('error', 'Gagal update. Perubahan tersimpan di database lokal, tapi gagal push ke Google Sheets: '.$record->last_sync_error);
         }
 
         return back()->with('success', 'Data berhasil diupdate dan tersinkron ke Google Sheets.');
@@ -189,19 +202,56 @@ class DatabaseController extends Controller
     public function destroy(DatabaseSheetRecord $record, DatabaseSheetWriteService $writeService)
     {
         $branch = $record->branch;
-        if (!$branch) {
+        if (! $branch) {
             return back()->with('error', 'Branch tidak ditemukan.');
         }
 
         $user = Auth::user();
-        if (!$user->isSuperadmin() && $user->branch_id !== $branch->id) {
+        if (! $user->isSuperadmin() && $user->branch_id !== $branch->id) {
             abort(403);
         }
 
-        if (!$writeService->softDelete($record, $user->id)) {
-            return back()->with('error', 'Gagal menghapus. Data tetap dihapus di database lokal, tapi gagal sync ke Google Sheets: ' . $record->last_sync_error);
+        if (! $writeService->softDelete($record, $user->id)) {
+            return back()->with('error', 'Gagal menghapus. Data tetap dihapus di database lokal, tapi gagal sync ke Google Sheets: '.$record->last_sync_error);
         }
 
         return back()->with('success', 'Data berhasil dihapus.');
+    }
+
+    private function validateTypedInput(array $input, array $columnMetadata, array $existingValues = []): void
+    {
+        $errors = [];
+
+        foreach ($columnMetadata as $header => $metadata) {
+            $value = trim((string) ($input[$header] ?? ''));
+            if ($value === '') {
+                continue;
+            }
+
+            $type = $metadata['type'] ?? 'text';
+            if ($type === 'select' && ! empty($metadata['strict']) && ! empty($metadata['options'])
+                && ! in_array($value, $metadata['options'], true)
+                && $value !== (string) ($existingValues[$header] ?? '')) {
+                $errors[$header] = 'Pilihan untuk '.$header.' tidak valid.';
+            }
+
+            $format = match ($type) {
+                'date' => 'Y-m-d',
+                'datetime-local' => 'Y-m-d\TH:i',
+                'time' => 'H:i',
+                default => null,
+            };
+
+            if ($format) {
+                $date = \DateTimeImmutable::createFromFormat('!'.$format, $value);
+                if (! $date || $date->format($format) !== $value) {
+                    $errors[$header] = 'Format '.$header.' tidak valid.';
+                }
+            }
+        }
+
+        if ($errors) {
+            throw ValidationException::withMessages($errors);
+        }
     }
 }

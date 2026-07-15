@@ -13,9 +13,7 @@ class DatabaseSheetSyncService
 {
     public const META_COLUMNS = ['oasis_sync_id', 'oasis_deleted_at', 'oasis_deleted_by'];
 
-    public function __construct(private GoogleSheetsApiService $googleSheets)
-    {
-    }
+    public function __construct(private GoogleSheetsApiService $googleSheets) {}
 
     public function syncBranch(Branch $branch): array
     {
@@ -24,19 +22,20 @@ class DatabaseSheetSyncService
             ['status' => 'running', 'message' => null, 'started_at' => now()]
         );
 
-        if (!$branch->sheet_id) {
+        if (! $branch->sheet_id) {
             return $this->fail($status, $branch, 'Branch belum memiliki sheet_id.');
         }
 
         try {
             $sheetNames = $this->googleSheets->sheetTitles($branch->sheet_id);
-            $ranges = array_map(fn ($sheet) => $this->googleSheets->quoteSheetName($sheet) . '!A:ZZ', $sheetNames);
+            $ranges = array_map(fn ($sheet) => $this->googleSheets->quoteSheetName($sheet).'!A:ZZ', $sheetNames);
             $valuesBySheet = $this->googleSheets->batchGetRaw($branch->sheet_id, $ranges, 'FORMATTED_VALUE');
             $formulasBySheet = $this->googleSheets->batchGetRaw($branch->sheet_id, $ranges, 'FORMULA');
+            $metadataBySheet = $this->googleSheets->columnMetadata($branch->sheet_id, $sheetNames);
             $syncedAt = now();
             $summary = [];
 
-            DB::transaction(function () use ($branch, $sheetNames, $valuesBySheet, $formulasBySheet, $syncedAt, &$summary) {
+            DB::transaction(function () use ($branch, $sheetNames, $valuesBySheet, $formulasBySheet, $metadataBySheet, $syncedAt, &$summary) {
                 DatabaseSheetRecord::where('branch_id', $branch->id)->delete();
 
                 foreach ($sheetNames as $sheetName) {
@@ -44,16 +43,18 @@ class DatabaseSheetSyncService
                     $formulas = $formulasBySheet[$sheetName] ?? [];
                     if (empty($values)) {
                         $summary[$sheetName] = 0;
+
                         continue;
                     }
 
                     $headers = $this->normalizedHeaders($values[0] ?? []);
                     $formulaColumns = $this->formulaColumns($headers, $formulas);
-                    $insertRows = $this->buildRecords($branch, $sheetName, $headers, $values, $formulaColumns, $syncedAt);
+                    $columnMetadata = $this->metadataForHeaders($headers, $metadataBySheet[$sheetName] ?? []);
+                    $insertRows = $this->buildRecords($branch, $sheetName, $headers, $values, $formulaColumns, $columnMetadata, $syncedAt);
                     $summary[$sheetName] = count($insertRows);
 
                     foreach (array_chunk($insertRows, 500) as $chunk) {
-                        if (!empty($chunk)) {
+                        if (! empty($chunk)) {
                             DatabaseSheetRecord::insert($chunk);
                         }
                     }
@@ -76,7 +77,7 @@ class DatabaseSheetSyncService
     private function fail(DatabaseSheetSyncStatus $status, Branch $branch, string $message): array
     {
         $truncated = mb_strlen($message) > 5000
-            ? mb_substr($message, 0, 5000) . '...'
+            ? mb_substr($message, 0, 5000).'...'
             : $message;
 
         $status->update([
@@ -95,10 +96,10 @@ class DatabaseSheetSyncService
         foreach ($headers as $index => $header) {
             $header = trim((string) $header);
             if ($header === '') {
-                $header = 'kolom_' . ($index + 1);
+                $header = 'kolom_'.($index + 1);
             }
             $counts[$header] = ($counts[$header] ?? 0) + 1;
-            $result[] = $counts[$header] > 1 ? $header . '_' . $counts[$header] : $header;
+            $result[] = $counts[$header] > 1 ? $header.'_'.$counts[$header] : $header;
         }
 
         return $result;
@@ -109,7 +110,9 @@ class DatabaseSheetSyncService
         $formulaColumns = [];
         foreach (array_slice($formulaRows, 1) as $row) {
             foreach ($headers as $index => $header) {
-                if (in_array($header, self::META_COLUMNS, true)) continue;
+                if (in_array($header, self::META_COLUMNS, true)) {
+                    continue;
+                }
                 $value = (string) ($row[$index] ?? '');
                 if (str_starts_with($value, '=')) {
                     $formulaColumns[] = $header;
@@ -120,7 +123,7 @@ class DatabaseSheetSyncService
         return array_values(array_unique($formulaColumns));
     }
 
-    private function buildRecords(Branch $branch, string $sheetName, array $headers, array $values, array $formulaColumns, $syncedAt): array
+    private function buildRecords(Branch $branch, string $sheetName, array $headers, array $values, array $formulaColumns, array $columnMetadata, $syncedAt): array
     {
         $records = [];
         foreach (array_slice($values, 1) as $offset => $cells) {
@@ -129,7 +132,9 @@ class DatabaseSheetSyncService
                 $rowData[$header] = trim((string) ($cells[$index] ?? ''));
             }
 
-            if (count(array_filter($rowData, fn ($value) => $value !== '')) === 0) continue;
+            if (count(array_filter($rowData, fn ($value) => $value !== '')) === 0) {
+                continue;
+            }
 
             $syncId = ($rowData['oasis_sync_id'] ?? '') ?: (string) Str::uuid();
             $deletedAt = $this->validDeletedAt($rowData['oasis_deleted_at'] ?? '');
@@ -143,6 +148,7 @@ class DatabaseSheetSyncService
                 'headers' => json_encode($headers),
                 'row_data' => json_encode($rowData),
                 'formula_columns' => json_encode($formulaColumns),
+                'column_metadata' => json_encode($columnMetadata),
                 'sync_status' => 'synced',
                 'last_synced_at' => $syncedAt,
                 'oasis_deleted_at' => $deletedAt,
@@ -154,12 +160,24 @@ class DatabaseSheetSyncService
         return $records;
     }
 
+    private function metadataForHeaders(array $headers, array $metadataByIndex): array
+    {
+        $metadata = [];
+        foreach ($headers as $index => $header) {
+            if (isset($metadataByIndex[$index])) {
+                $metadata[$header] = $metadataByIndex[$index];
+            }
+        }
+
+        return $metadata;
+    }
+
     public function columnLetter(int $columnNumber): string
     {
         $letter = '';
         while ($columnNumber > 0) {
             $columnNumber--;
-            $letter = chr(65 + ($columnNumber % 26)) . $letter;
+            $letter = chr(65 + ($columnNumber % 26)).$letter;
             $columnNumber = intdiv($columnNumber, 26);
         }
 

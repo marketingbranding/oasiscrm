@@ -111,6 +111,9 @@ class DanaTalanganGoogleSyncTest extends TestCase
             ->assertSee('Tanggal ▲')
             ->assertDontSee('aria-label="Sort Tanggal"', false)
             ->assertSee('Konsumen Test');
+        $this->assertMatchesRegularExpression('/<button[^>]+@click="openEdit\(.+?\)"[^>]*>Edit<\/button>/s', $response->getContent());
+        $this->assertStringContainsString('color:#0000ee', $response->getContent());
+        $this->assertStringContainsString('color:#c0392b', $response->getContent());
     }
 
     public function test_branch_user_store_pushes_new_record_to_google_service(): void
@@ -141,6 +144,35 @@ class DanaTalanganGoogleSyncTest extends TestCase
             'nama_konsumen' => 'Konsumen Baru',
             'branch_id' => $branch->id,
         ]);
+    }
+
+    public function test_branch_user_can_update_and_delete_from_action_column(): void
+    {
+        [$branch, $user] = $this->makeBranchAndUser();
+        LeadMaster::create([
+            'branch_id' => $branch->id,
+            'project_name' => 'Proyek Test',
+            'is_active' => true,
+        ]);
+        $record = $this->makeRecord($branch, $user);
+        $googleService = Mockery::mock(DanaTalanganGoogleService::class);
+        $googleService->shouldReceive('branchIdForProject')->once()->with('Proyek Test')->andReturn($branch->id);
+        $googleService->shouldReceive('push')->once()->andReturnTrue();
+        $googleService->shouldReceive('delete')->once()->withArgs(fn ($deletedRecord, $actorId) => $deletedRecord->is($record) && $actorId === $user->id
+        )->andReturnTrue();
+        $this->app->instance(DanaTalanganGoogleService::class, $googleService);
+
+        $this->actingAs($user)->put(route('dana-talangan.update', $record), [
+            'tanggal' => '2026-07-15',
+            'nama_konsumen' => 'Konsumen Diperbarui',
+            'project_name' => 'Proyek Test',
+            'status' => 'sanggup',
+            'pinjam_nama' => '0',
+            'konfirmasi_keuangan' => '0',
+        ])->assertRedirect();
+
+        $this->assertDatabaseHas('dana_talangans', ['id' => $record->id, 'nama_konsumen' => 'Konsumen Diperbarui']);
+        $this->actingAs($user)->delete(route('dana-talangan.destroy', $record))->assertRedirect();
     }
 
     public function test_search_counts_same_name_case_insensitively_within_date_range(): void

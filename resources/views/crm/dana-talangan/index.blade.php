@@ -28,6 +28,7 @@
     editingRecord: @js($oldEditingRecord),
     filterMode: @js($filterMode),
     tableFrozen: true,
+    updateBaseUrl: @js(url('dana-talangan')),
     openEdit(record) { this.editingRecord = record; },
 }">
     <x-crm.page-header color="#f1c40f" title="Dana Talangan" />
@@ -189,7 +190,7 @@
                     </td>
                     <td class="crm-actions">
                         <div class="flex items-center justify-center gap-1">
-                            <button type="button" @click='openEdit(@js([
+                            <button type="button" @click="openEdit(@js([
                                 "id" => $r->id,
                                 "tanggal" => $r->tanggal?->format("Y-m-d"),
                                 "nama_konsumen" => $r->nama_konsumen,
@@ -205,15 +206,15 @@
                                 "konfirmasi_keuangan" => $r->konfirmasi_keuangan,
                                 "branch_id" => $r->branch_id,
                                 "status" => $r->status,
-                            ]))' class="text-xs font-[Helvetica] font-bold underline hover:text-[#f1c40f]">Edit</button>
+                            ]))" class="font-[Helvetica] font-bold underline" style="font-size:11px;color:#0000ee;margin-right:8px;">Edit</button>
                             <form method="POST" action="{{ route('dana-talangan.destroy', ['dana_talangan' => $r->id]) }}"
-                                  onsubmit="return confirm('Hapus data ini?')" class="inline">
+                                  class="inline" @submit.prevent="confirm('Hapus data ini?') && $el.submit()">
                                 @csrf
                                 @method('DELETE')
                                 <input type="hidden" name="branch_id" value="{{ request('branch_id') }}">
                                 <input type="hidden" name="project_name" value="{{ request('project_name') }}">
                                  <input type="hidden" name="status" value="{{ request('status') }}">
-                                <button type="submit" class="text-xs font-[Helvetica] font-bold underline hover:text-[#e91d2a]">Hapus</button>
+                                <button type="submit" class="font-[Helvetica] font-bold underline" style="font-size:11px;color:#c0392b;">Hapus</button>
                             </form>
                         </div>
                     </td>
@@ -338,7 +339,7 @@
         <template x-if="editingRecord">
         <div @click.away="editingRecord = null" class="w-full max-w-4xl border-2 border-black bg-white p-5 shadow-[8px_8px_0_0_#000] max-h-[90vh] overflow-y-auto">
             <div class="flex items-center justify-between mb-4"><h2 class="font-[Helvetica] font-bold text-sm uppercase">Edit Dana Talangan</h2><button type="button" @click="editingRecord = null" class="text-lg font-bold">&times;</button></div>
-            <form method="POST" :action="'/dana-talangan/' + editingRecord?.id" class="space-y-4">
+            <form method="POST" :action="updateBaseUrl + '/' + editingRecord.id" class="space-y-4">
                 @csrf @method('PUT')
                 <input type="hidden" name="form_mode" value="edit">
                 <input type="hidden" name="record_id" :value="editingRecord.id">

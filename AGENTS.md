@@ -34,6 +34,9 @@ After editing any controller:
 
 - **Date fields must use the existing Oasis date picker**, not a visible native `<input type="date">` or a new calendar library. Use the `.date-wrapper` / `.date-display` / `.date-text` / `.date-arrow` structure backed by a visually hidden `<input type="date">`; behavior is implemented globally in `resources/js/crm-datepicker.js`. See `resources/views/crm/dana-talangan/create.blade.php` for the canonical markup.
 - For date fields rendered dynamically by Alpine, keep the same markup and hidden native input so the global date-picker initializer can attach behavior. Extend `crm-datepicker.js` if dynamic initialization needs adjustment; do not duplicate calendar logic inside a Blade view.
+- **CRM data tables must use the shared `.crm-table-scroll` and `.crm-data-table` classes** from `resources/css/app.css`; the Database module is the canonical reference. Do not recreate grid, sticky-header, stripe, hover, typography, or scrolling styles inline in individual Blade views.
+- Wide tables must keep important columns available through horizontal scrolling instead of hiding them on mobile. Use frozen identity columns where needed, keep actions in the final column, truncate long text with a full-value `title`, and render booleans with `.crm-boolean-box`. Domain/status colors belong in badges or specific cells, not as a replacement for the base zebra/hover row styling.
+- Sortable CRM table headers should sort by direct header click and show `▼`/`▲` on the active column, matching the Database module. Do not introduce a dropdown sort menu unless the product explicitly requires one.
 
 ## Routes & auth
 

@@ -71,3 +71,93 @@
     background-color: black;
     color: white;
 }
+
+/* --- Canonical CRM data table --- */
+.crm-table-scroll {
+    max-height: 65vh;
+    overflow: auto;
+    border: 2px solid #000;
+    background: #fff;
+}
+
+.crm-data-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12px;
+}
+
+.crm-data-table th {
+    position: sticky;
+    top: 0;
+    z-index: 5;
+    min-width: 120px;
+    border: 2px solid #000;
+    background: #000;
+    color: #fff;
+    padding: 6px 8px;
+    text-align: left;
+    white-space: nowrap;
+    font-family: Helvetica, sans-serif;
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+}
+
+.crm-data-table td {
+    max-width: 300px;
+    overflow: hidden;
+    border: 2px solid #000;
+    padding: 4px 8px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-family: 'Times New Roman', serif;
+}
+
+.crm-data-table tbody tr:nth-child(even) {
+    background: #f9fafb;
+}
+
+.crm-data-table tbody tr:hover {
+    background: #fef3c7;
+}
+
+.crm-data-table th.crm-row-num,
+.crm-data-table td.crm-row-num,
+.crm-data-table th.crm-select-col,
+.crm-data-table td.crm-select-col {
+    width: 44px;
+    min-width: 44px;
+    max-width: 44px;
+    text-align: center;
+}
+
+.crm-data-table th.crm-actions,
+.crm-data-table td.crm-actions {
+    width: 100px;
+    min-width: 100px;
+    text-align: center;
+    white-space: nowrap;
+}
+
+.crm-boolean-box {
+    display: inline-flex;
+    width: 20px;
+    height: 20px;
+    align-items: center;
+    justify-content: center;
+    border: 2px solid #000;
+    background: #fff;
+    color: transparent;
+    font-size: 10px;
+    font-weight: 700;
+    line-height: 1;
+}
+
+.crm-boolean-box.is-checked {
+    background: #22c55e;
+    color: #fff;
+}
+
+.crm-data-table input[type='checkbox'] {
+    min-height: 0 !important;
+}

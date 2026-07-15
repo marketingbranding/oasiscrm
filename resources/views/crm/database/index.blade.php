@@ -112,15 +112,6 @@
             .tab-btn.active::after { content:''; position:absolute; bottom:-2px; left:0; right:0; height:2px; background:#d77a7a; z-index:11; }
             .tab-btn:hover:not(.active) { background:#f5f5f5; }
             .tab-btn.loading { opacity:0.6; cursor:wait; }
-            .db-table { font-size:12px; border-collapse:collapse; width:100%; }
-            .db-table th { position:sticky; top:0; z-index:5;
-                        border:2px solid #000; background:#000; color:#fff;
-                        font-family:Helvetica,sans-serif; font-weight:700; font-size:10px;
-                        text-transform:uppercase; padding:6px 8px; white-space:nowrap; text-align:left; }
-            .db-table td { border:2px solid #000; padding:4px 8px;
-                        font-family:'Times New Roman',serif; }
-            .db-table tbody tr:nth-child(even) { background:#f9fafb; }
-            .db-table tbody tr:hover { background:#fef3c7; }
             .db-table th.row-num, .db-table td.row-num {
                 width:44px; min-width:44px; max-width:44px;
             }
@@ -176,8 +167,8 @@
                 </div>
 
                 <template x-if="isLoaded(name) && currentData(name).records.length > 0">
-                    <div class="overflow-auto border-2 border-black" style="max-height:65vh;">
-                        <table class="db-table" :class="{ frozen: frozen }">
+                    <div class="crm-table-scroll">
+                        <table class="crm-data-table db-table" :class="{ frozen: frozen }">
                             <thead>
                                 <tr>
                                     <th :class="{ 'row-num': frozen }" style="width:44px;text-align:center;">#</th>
@@ -210,8 +201,8 @@
                                                 :style="'background:' + (currentData(name).formula_columns.includes(h) ? '#b6d7a8' : (isIdKavlingColumn(h) && frozen ? '#fff' : 'transparent')) + ';color:#000;font-style:' + (currentData(name).formula_columns.includes(h) ? 'italic' : 'normal') + ';font-style:' + (currentData(name).formula_columns.includes(h) ? 'italic' : 'normal') + ';max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;'"
                                                 :title="rec.row_data[h] || ''">
                                                  <template x-if="['true', 'false'].includes((rec.row_data[h] || '').toLowerCase())">
-                                                      <span class="inline-flex items-center justify-center w-5 h-5 border-2 border-black text-[10px] font-bold leading-none"
-                                                            :class="(rec.row_data[h] || '').toLowerCase() === 'true' ? 'bg-[#22c55e] text-white' : 'bg-white text-transparent'"
+                                                      <span class="crm-boolean-box"
+                                                            :class="(rec.row_data[h] || '').toLowerCase() === 'true' ? 'is-checked' : ''"
                                                             x-text="(rec.row_data[h] || '').toLowerCase() === 'true' ? '✓' : ''">
                                                       </span>
                                                   </template>

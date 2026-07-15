@@ -18,6 +18,9 @@
 - Cabang dipetakan dari Proyek, termasuk alias Mulyoharjo ke Jepara, dan tiga kolom metadata sinkronisasi disimpan tersembunyi di Google Sheets.
 - Pencarian nama menampilkan jumlah pengajuan per konsumen secara case-insensitive.
 - Filter mendukung rentang tanggal atau rentang bulan berdasarkan Tanggal pengajuan.
+- Tabel Dana Talangan mengikuti standar tabel Database: grid 2px, header sticky, zebra/hover, horizontal scroll, boolean boxes, serta frozen Pilih + No + Nama.
+- Style tabel CRM dipusatkan melalui `.crm-table-scroll` dan `.crm-data-table` agar modul baru tetap konsisten.
+- Sorting Dana Talangan menggunakan klik langsung pada header dengan indikator `▼`/`▲`, sama seperti Modul Database.
 
 ### 2026-07-08 — Peningkatan Modul Database
 

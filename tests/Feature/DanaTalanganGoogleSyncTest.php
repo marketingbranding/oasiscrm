@@ -105,6 +105,11 @@ class DanaTalanganGoogleSyncTest extends TestCase
             ->assertSee('Cari Nama Konsumen')
             ->assertSee('Sync Sekarang')
             ->assertSee('Tambah Dana Talangan')
+            ->assertSee('crm-table-scroll', false)
+            ->assertSee('crm-data-table', false)
+            ->assertSee('crm-boolean-box', false)
+            ->assertSee('Tanggal ▲')
+            ->assertDontSee('aria-label="Sort Tanggal"', false)
             ->assertSee('Konsumen Test');
     }
 

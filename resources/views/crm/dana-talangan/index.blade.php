@@ -27,6 +27,7 @@
     adding: {{ $errors->any() && old('form_mode') !== 'edit' ? 'true' : 'false' }},
     editingRecord: @js($oldEditingRecord),
     filterMode: @js($filterMode),
+    tableFrozen: true,
     openEdit(record) { this.editingRecord = record; },
 }">
     <x-crm.page-header color="#f1c40f" title="Dana Talangan" />
@@ -133,57 +134,60 @@
     </div>
     @endif
 
-    <div class="table-scroll border-2 border-black bg-white overflow-auto max-h-[calc(100vh-12rem)]">
-        <table class="min-w-full text-sm font-['Times_New_Roman']">
+    <div class="crm-table-scroll">
+        <table class="crm-data-table dana-table" :class="{ frozen: tableFrozen }">
             <thead>
-                <tr class="bg-black text-white">
-                    <th class="w-10 px-3 py-2 text-center font-[Helvetica] font-bold text-xs uppercase"><input type="checkbox" id="select-all" class="cursor-pointer"></th>
-                    <th class="px-3 py-2 text-left font-[Helvetica] font-bold text-xs uppercase">No</th>
-                    <x-crm.sortable-th field="tanggal" route="dana-talangan.index" label="Tanggal" :currentSort="$sortField" :currentDir="$sortDir" type="date" />
-                    <x-crm.sortable-th field="nama_konsumen" route="dana-talangan.index" label="Nama Konsumen" :currentSort="$sortField" :currentDir="$sortDir" />
-                    <x-crm.sortable-th field="kav" route="dana-talangan.index" label="Kav" :currentSort="$sortField" :currentDir="$sortDir" classes="hidden lg:table-cell" />
-                    <x-crm.sortable-th field="project_name" route="dana-talangan.index" label="Proyek" :currentSort="$sortField" :currentDir="$sortDir" classes="hidden lg:table-cell" />
-                    <th class="px-3 py-2 text-center font-[Helvetica] font-bold text-xs uppercase hidden lg:table-cell">Pinjam Nama</th>
-                    <x-crm.sortable-th field="pekerjaan" route="dana-talangan.index" label="Pekerjaan" :currentSort="$sortField" :currentDir="$sortDir" classes="hidden lg:table-cell" />
-                    <x-crm.sortable-th field="status_perkawinan" route="dana-talangan.index" label="Status Kawin" :currentSort="$sortField" :currentDir="$sortDir" classes="hidden lg:table-cell" />
-                    <x-crm.sortable-th field="umur" route="dana-talangan.index" label="Umur" :currentSort="$sortField" :currentDir="$sortDir" align="center" classes="hidden lg:table-cell" />
-                    <x-crm.sortable-th field="nama_marketing" route="dana-talangan.index" label="Marketing" :currentSort="$sortField" :currentDir="$sortDir" classes="hidden lg:table-cell" />
-                    <x-crm.sortable-th field="tgl_komitmen" route="dana-talangan.index" label="TGL Komitmen" :currentSort="$sortField" :currentDir="$sortDir" classes="hidden lg:table-cell" />
-                    <th class="px-3 py-2 text-left font-[Helvetica] font-bold text-xs uppercase hidden lg:table-cell">Progress Penagihan</th>
-                    <th class="px-3 py-2 text-center font-[Helvetica] font-bold text-xs uppercase hidden lg:table-cell">Konfirmasi</th>
-                    <x-crm.sortable-th field="status" route="dana-talangan.index" label="Status Cicilan" :currentSort="$sortField" :currentDir="$sortDir" align="center" />
-                    <th class="px-3 py-2 text-center font-[Helvetica] font-bold text-xs uppercase">Aksi</th>
+                <tr>
+                    <th class="crm-select-col"><input type="checkbox" id="select-all" class="cursor-pointer"></th>
+                    <th class="crm-row-num">No</th>
+                    <th class="name-col" style="{{ $sortField === 'nama_konsumen' ? 'background:#5b7db9;' : '' }}">
+                        <div class="flex items-center justify-between gap-2">
+                            <a href="{{ route('dana-talangan.index', array_merge(request()->query(), ['sort' => 'nama_konsumen', 'dir' => $sortField === 'nama_konsumen' && $sortDir === 'asc' ? 'desc' : 'asc', 'page' => null])) }}">
+                                Nama Konsumen{{ $sortField === 'nama_konsumen' ? ($sortDir === 'asc' ? ' ▼' : ' ▲') : '' }}
+                            </a>
+                            <button type="button" @click="tableFrozen = !tableFrozen" class="text-[10px] font-normal" :title="tableFrozen ? 'Lepas kolom frozen' : 'Bekukan kolom'" x-text="tableFrozen ? '🔒' : '🔓'"></button>
+                        </div>
+                    </th>
+                    <x-crm.click-sort-th field="tanggal" route="dana-talangan.index" label="Tanggal" :currentSort="$sortField" :currentDir="$sortDir" />
+                    <x-crm.click-sort-th field="kav" route="dana-talangan.index" label="Kav" :currentSort="$sortField" :currentDir="$sortDir" />
+                    <x-crm.click-sort-th field="project_name" route="dana-talangan.index" label="Proyek" :currentSort="$sortField" :currentDir="$sortDir" />
+                    <th>Pinjam Nama</th>
+                    <x-crm.click-sort-th field="pekerjaan" route="dana-talangan.index" label="Pekerjaan" :currentSort="$sortField" :currentDir="$sortDir" />
+                    <x-crm.click-sort-th field="status_perkawinan" route="dana-talangan.index" label="Status Kawin" :currentSort="$sortField" :currentDir="$sortDir" />
+                    <x-crm.click-sort-th field="umur" route="dana-talangan.index" label="Umur" :currentSort="$sortField" :currentDir="$sortDir" align="center" />
+                    <x-crm.click-sort-th field="nama_marketing" route="dana-talangan.index" label="Marketing" :currentSort="$sortField" :currentDir="$sortDir" />
+                    <x-crm.click-sort-th field="tgl_komitmen" route="dana-talangan.index" label="TGL Komitmen" :currentSort="$sortField" :currentDir="$sortDir" />
+                    <th>Progress Penagihan</th>
+                    <th>Konfirmasi</th>
+                    <x-crm.click-sort-th field="status" route="dana-talangan.index" label="Status Cicilan" :currentSort="$sortField" :currentDir="$sortDir" align="center" />
+                    <th class="crm-actions">Aksi</th>
                 </tr>
             </thead>
-            <tbody class="divide-y divide-black">
+            <tbody>
                 @forelse($records as $i => $r)
-                <tr class="{{ $r->status === 'lunas' ? 'bg-[#b3bd95]' : ($r->status === 'tidak_sanggup' ? 'bg-[#d77a7a]' : '') }} dt-row">
-                    <td class="w-10 px-3 py-2 text-center"><input type="checkbox" class="row-checkbox cursor-pointer" value="{{ $r->id }}"></td>
-                    <td class="px-3 py-2">{{ $i + 1 }}</td>
-                    <td class="px-3 py-2">{{ $r->tanggal->format('d M Y') }}</td>
-                    <td class="px-3 py-2 font-bold cursor-pointer hover:underline" @click.prevent="openDetail({{ $r->id }})">{{ $r->nama_konsumen }}</td>
-                    <td class="px-3 py-2 hidden lg:table-cell">{{ $r->kav ?? '—' }}</td>
-                    <td class="px-3 py-2 hidden lg:table-cell">{{ $r->project_name ?? '—' }}</td>
-                    <td class="px-3 py-2 text-center hidden lg:table-cell">{{ $r->pinjam_nama ? 'YA' : 'TIDAK' }}</td>
-                    <td class="px-3 py-2 hidden lg:table-cell">{{ $r->pekerjaan ?? '—' }}</td>
-                    <td class="px-3 py-2 hidden lg:table-cell">{{ $r->status_perkawinan ?? '—' }}</td>
-                    <td class="px-3 py-2 text-center hidden lg:table-cell">{{ $r->umur ?? '—' }}</td>
-                    <td class="px-3 py-2 hidden lg:table-cell">{{ $r->nama_marketing ?? '—' }}</td>
-                    <td class="px-3 py-2 hidden lg:table-cell">{{ $r->tgl_komitmen ? \Carbon\Carbon::parse($r->tgl_komitmen)->format('d M Y') : '—' }}</td>
-                    <td class="px-3 py-2 max-w-[200px] truncate hidden lg:table-cell" title="{{ $r->penyelesaian }}">{{ $r->penyelesaian ?? '—' }}</td>
-                    <td class="px-3 py-2 text-center hidden lg:table-cell">
-                        @if($r->konfirmasi_keuangan)
-                            <span class="text-green-800 font-bold">✓</span>
-                        @else
-                            <span class="text-gray-400">—</span>
-                        @endif
+                <tr>
+                    <td class="crm-select-col"><input type="checkbox" class="row-checkbox cursor-pointer" value="{{ $r->id }}"></td>
+                    <td class="crm-row-num">{{ method_exists($records, 'firstItem') ? $records->firstItem() + $i : $i + 1 }}</td>
+                    <td class="name-col font-bold cursor-pointer hover:underline" title="{{ $r->nama_konsumen }}" @click.prevent="openDetail({{ $r->id }})">{{ $r->nama_konsumen }}</td>
+                    <td title="{{ $r->tanggal->format('d M Y') }}">{{ $r->tanggal->format('d M Y') }}</td>
+                    <td title="{{ $r->kav ?? '' }}">{{ $r->kav ?? '—' }}</td>
+                    <td title="{{ $r->project_name ?? '' }}">{{ $r->project_name ?? '—' }}</td>
+                    <td class="text-center"><span class="crm-boolean-box {{ $r->pinjam_nama ? 'is-checked' : '' }}">{{ $r->pinjam_nama ? '✓' : '' }}</span></td>
+                    <td title="{{ $r->pekerjaan ?? '' }}">{{ $r->pekerjaan ?? '—' }}</td>
+                    <td title="{{ $r->status_perkawinan ?? '' }}">{{ $r->status_perkawinan ?? '—' }}</td>
+                    <td class="text-center">{{ $r->umur ?? '—' }}</td>
+                    <td title="{{ $r->nama_marketing ?? '' }}">{{ $r->nama_marketing ?? '—' }}</td>
+                    <td>{{ $r->tgl_komitmen ? \Carbon\Carbon::parse($r->tgl_komitmen)->format('d M Y') : '—' }}</td>
+                    <td title="{{ $r->penyelesaian }}">{{ $r->penyelesaian ?? '—' }}</td>
+                    <td class="text-center">
+                        <span class="crm-boolean-box {{ $r->konfirmasi_keuangan ? 'is-checked' : '' }}">{{ $r->konfirmasi_keuangan ? '✓' : '' }}</span>
                     </td>
-                    <td class="px-3 py-2 text-center">
+                    <td class="text-center">
                         <span class="inline-block px-2 py-0.5 text-xs font-[Helvetica] font-bold border border-black {{ $r->status === 'lunas' ? 'bg-white' : ($r->status === 'tidak_sanggup' ? 'bg-[#d77a7a] text-white' : 'bg-[#9ab6c8]') }}">
                             {{ $r->status === 'sanggup' ? 'SANGGUP' : ($r->status === 'tidak_sanggup' ? 'TIDAK SANGGUP' : 'LUNAS') }}
                         </span>
                     </td>
-                    <td class="px-3 py-2 text-center">
+                    <td class="crm-actions">
                         <div class="flex items-center justify-center gap-1">
                             <button type="button" @click='openEdit(@js([
                                 "id" => $r->id,
@@ -392,14 +396,39 @@
     status-colors='{"sanggup":"#9ab6c8","tidak_sanggup":"#d77a7a","lunas":"#b3bd95"}'
 />
 </div>
-<style>.dt-row:hover{background:#fef3cd}</style>
 <style>
-.table-scroll thead th {
-    position: sticky;
-    top: 0;
-    z-index: 10;
-    background-color: black;
-    color: white;
+.dana-table th.name-col,
+.dana-table td.name-col {
+    min-width: 220px;
+    max-width: 220px;
 }
+.dana-table.frozen th.crm-select-col,
+.dana-table.frozen td.crm-select-col {
+    position: sticky;
+    left: 0;
+}
+.dana-table.frozen th.crm-row-num,
+.dana-table.frozen td.crm-row-num {
+    position: sticky;
+    left: 44px;
+}
+.dana-table.frozen th.name-col,
+.dana-table.frozen td.name-col {
+    position: sticky;
+    left: 88px;
+    box-shadow: 3px 0 0 #000;
+}
+.dana-table.frozen thead th.crm-select-col { z-index: 15; }
+.dana-table.frozen thead th.crm-row-num { z-index: 14; }
+.dana-table.frozen thead th.name-col { z-index: 13; }
+.dana-table.frozen tbody td.crm-select-col { z-index: 12; background: #fff; }
+.dana-table.frozen tbody td.crm-row-num { z-index: 11; background: #fff; }
+.dana-table.frozen tbody td.name-col { z-index: 10; background: #fff; }
+.dana-table.frozen tbody tr:nth-child(even) td.crm-select-col,
+.dana-table.frozen tbody tr:nth-child(even) td.crm-row-num,
+.dana-table.frozen tbody tr:nth-child(even) td.name-col { background: #f9fafb; }
+.dana-table.frozen tbody tr:hover td.crm-select-col,
+.dana-table.frozen tbody tr:hover td.crm-row-num,
+.dana-table.frozen tbody tr:hover td.name-col { background: #fef3c7; }
 </style>
 @endsection

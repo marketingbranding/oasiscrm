@@ -103,6 +103,8 @@ class DanaTalanganGoogleSyncTest extends TestCase
             ->assertOk()
             ->assertSee('Rentang Tanggal')
             ->assertSee('Cari Nama Konsumen')
+            ->assertSee('Filter Dana Talangan')
+            ->assertSee('Terapkan Filter')
             ->assertSee('Sync Sekarang')
             ->assertSee('Tambah Dana Talangan')
             ->assertSee('crm-table-scroll', false)
@@ -193,7 +195,9 @@ class DanaTalanganGoogleSyncTest extends TestCase
         $response
             ->assertOk()
             ->assertSee('2 kali')
-            ->assertSee('1 dalam rentang aktif');
+            ->assertSee('1 dalam rentang aktif')
+            ->assertSee('Filter aktif:')
+            ->assertSee('Tanggal: 2026-03-01 - 2026-03-31');
     }
 
     public function test_month_range_filters_by_submission_date(): void

@@ -21,12 +21,27 @@
         'branch_id' => old('branch_id'),
         'status' => old('status', 'sanggup'),
     ] : null;
+    $activeFilters = [];
+    if ($selectedBranchId && Auth::user()->canViewAllBranches()) {
+        $activeFilters[] = 'Cabang: '.($branches->firstWhere('id', $selectedBranchId)?->name ?? $selectedBranchId);
+    }
+    if ($selectedProject) $activeFilters[] = 'Proyek: '.$selectedProject;
+    if ($selectedStatus) {
+        $activeFilters[] = 'Status: '.(['sanggup' => 'Sanggup', 'tidak_sanggup' => 'Tidak Sanggup', 'lunas' => 'Lunas'][$selectedStatus] ?? $selectedStatus);
+    }
+    if ($filterMode === 'date' && ($dateFrom || $dateTo)) {
+        $activeFilters[] = 'Tanggal: '.($dateFrom ?: 'awal').' - '.($dateTo ?: 'akhir');
+    }
+    if ($filterMode === 'month' && ($monthFrom || $monthTo)) {
+        $activeFilters[] = 'Bulan: '.($monthFrom ?: 'awal').' - '.($monthTo ?: 'akhir');
+    }
 @endphp
 <div x-data="{
     ...crmDetailModal('/dana-talangan', '/dana-talangan', {sanggup:'#9ab6c8',tidak_sanggup:'#d77a7a',lunas:'#b3bd95'}),
     adding: {{ $errors->any() && old('form_mode') !== 'edit' ? 'true' : 'false' }},
     editingRecord: @js($oldEditingRecord),
     filterMode: @js($filterMode),
+    filterOpen: false,
     tableFrozen: true,
     updateBaseUrl: @js(url('dana-talangan')),
     openEdit(record) { this.editingRecord = record; },
@@ -56,69 +71,58 @@
     <div class="border-2 border-black bg-[#fef3cd] px-4 py-3 mb-4 text-sm font-['Times_New_Roman'] whitespace-pre-line">{{ $syncStatus->message }}</div>
     @endif
 
-    <div class="bg-white border-2 border-black p-3 mb-6">
-        <form method="GET" action="{{ route('dana-talangan.index') }}" class="space-y-3 filter-bar">
-            <div class="flex items-end gap-3 flex-wrap">
-            @if(Auth::user()->canViewAllBranches() && isset($branches) && $branches->count() > 0)
-            <div><label class="font-[Helvetica] font-bold text-xs uppercase block mb-1">Cabang</label>
-            <select name="branch_id" class="border-2 border-black px-3 py-1.5 text-sm font-['Times_New_Roman'] bg-white rounded-none">
-                <option value="">— Semua Cabang —</option>
-                @foreach($branches as $b)
-                    <option value="{{ $b->id }}" {{ (string)$selectedBranchId === (string)$b->id ? 'selected' : '' }}>{{ $b->name }}</option>
+    <div class="bg-white border-2 border-black p-3 mb-3">
+        <div class="flex items-center gap-2 flex-wrap">
+            <form method="GET" action="{{ route('dana-talangan.index') }}" class="flex grow min-w-[240px] max-w-xl">
+                @foreach(request()->only(['branch_id', 'project_name', 'status', 'filter_mode', 'date_from', 'date_to', 'month_from', 'month_to', 'sort', 'dir', 'per_page']) as $key => $value)
+                    @if($value !== null && $value !== '')<input type="hidden" name="{{ $key }}" value="{{ $value }}">@endif
                 @endforeach
-            </select></div>
-            @endif
-
-            @if(isset($projects) && $projects->count() > 0)
-            <div><label class="font-[Helvetica] font-bold text-xs uppercase block mb-1">Proyek</label>
-            <select name="project_name" class="border-2 border-black px-3 py-1.5 text-sm font-['Times_New_Roman'] bg-white rounded-none">
-                <option value="">— Semua Proyek —</option>
-                @foreach($projectOptions as $projectName)
-                    <option value="{{ $projectName }}" {{ $selectedProject === $projectName ? 'selected' : '' }}>{{ $projectName }}</option>
-                @endforeach
-            </select></div>
-            @endif
-
-            <div><label class="font-[Helvetica] font-bold text-xs uppercase block mb-1">Status Cicilan</label>
-            <select name="status" class="border-2 border-black px-3 py-1.5 text-sm font-['Times_New_Roman'] bg-white rounded-none">
-                <option value="">— Semua Status —</option>
-                <option value="sanggup" {{ $selectedStatus === 'sanggup' ? 'selected' : '' }}>Sanggup</option>
-                <option value="tidak_sanggup" {{ $selectedStatus === 'tidak_sanggup' ? 'selected' : '' }}>Tidak Sanggup</option>
-                <option value="lunas" {{ $selectedStatus === 'lunas' ? 'selected' : '' }}>Lunas</option>
-            </select></div>
-            <div class="grow min-w-[220px]"><label class="font-[Helvetica] font-bold text-xs uppercase block mb-1">Cari Nama Konsumen</label>
-                <input name="search" value="{{ $search }}" placeholder="Ketik nama konsumen..." class="w-full border-2 border-black px-3 py-1.5 text-sm font-['Times_New_Roman'] bg-white rounded-none">
-            </div>
-            <div class="flex items-center gap-2 ml-auto pb-0.5">
+                <input name="search" value="{{ $search }}" placeholder="Cari nama konsumen..." aria-label="Cari Nama Konsumen" class="min-w-0 grow border-2 border-r-0 border-black px-3 py-1.5 text-sm font-['Times_New_Roman'] bg-white rounded-none">
+                <button class="border-2 border-black bg-black text-white px-4 py-1.5 text-sm font-[Helvetica] font-bold">Cari</button>
+            </form>
+            <button type="button" @click="filterOpen = true" class="relative inline-flex items-center gap-2 border-2 border-black bg-white px-4 py-1.5 text-sm font-[Helvetica] font-bold hover:bg-gray-100">
+                <svg viewBox="0 0 20 20" fill="currentColor" class="w-4 h-4" aria-hidden="true"><path d="M2.75 3.5a.75.75 0 0 1 .75-.75h13a.75.75 0 0 1 .53 1.28l-5.28 5.28v4.94a.75.75 0 0 1-.36.64l-3 1.8A.75.75 0 0 1 7.25 16V9.31L1.97 4.03a.75.75 0 0 1 .78-1.23v.7Zm2.56.75 3.22 3.22a.75.75 0 0 1 .22.53v6.68l1.5-.9V8a.75.75 0 0 1 .22-.53l3.22-3.22H5.31Z"/></svg>
+                Filter
+                @if(count($activeFilters) > 0)<span class="inline-flex min-w-5 h-5 items-center justify-center bg-[#c0392b] text-white px-1 text-[10px]">{{ count($activeFilters) }}</span>@endif
+            </button>
+            <div class="ml-auto flex items-center gap-2">
                 <x-crm.export-import export-route="dana-talangan.export" import-route="dana-talangan.import" :params="request()->only(['branch_id', 'project_name', 'status', 'search', 'filter_mode', 'date_from', 'date_to', 'month_from', 'month_to'])" />
-                <button type="button" @click="adding = true" class="bg-[#f1c40f] text-black px-4 py-1.5 text-sm font-[Helvetica] font-bold border-2 border-black rounded-none hover:bg-[#d4ac0d]">
-                    + Dana Talangan Baru
-                </button>
+                <button type="button" @click="adding = true" class="bg-[#f1c40f] text-black px-4 py-1.5 text-sm font-[Helvetica] font-bold border-2 border-black rounded-none hover:bg-[#d4ac0d]">+ Dana Talangan Baru</button>
             </div>
-            </div>
+        </div>
+    </div>
 
-            <div class="border-t-2 border-black pt-3 flex items-end gap-3 flex-wrap">
-                <div><label class="font-[Helvetica] font-bold text-xs uppercase block mb-1">Mode Rentang</label>
-                    <select name="filter_mode" x-model="filterMode" class="border-2 border-black px-3 py-1.5 text-sm font-['Times_New_Roman'] bg-white">
-                        <option value="date">Rentang Tanggal</option><option value="month">Rentang Bulan</option>
-                    </select>
+    @if(count($activeFilters) > 0)
+    <div class="flex flex-wrap items-center gap-2 mb-4">
+        <span class="font-[Helvetica] font-bold text-[10px] uppercase">Filter aktif:</span>
+        @foreach($activeFilters as $activeFilter)
+        <span class="border-2 border-black bg-[#fef3cd] px-2 py-1 text-xs font-['Times_New_Roman']">{{ $activeFilter }}</span>
+        @endforeach
+        <a href="{{ route('dana-talangan.index', array_filter(['search' => $search])) }}" class="text-xs font-[Helvetica] font-bold underline text-[#c0392b]">Hapus semua filter</a>
+    </div>
+    @endif
+
+    <div x-cloak x-show="filterOpen" class="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4" @keydown.escape.window="filterOpen = false">
+        <div @click.away="filterOpen = false" class="w-full max-w-2xl border-2 border-black bg-white p-5 shadow-[8px_8px_0_0_#000] max-h-[90vh] overflow-y-auto">
+            <div class="flex items-center justify-between mb-4"><h2 class="font-[Helvetica] font-bold text-sm uppercase">Filter Dana Talangan</h2><button type="button" @click="filterOpen = false" class="text-lg font-bold">&times;</button></div>
+            <form method="GET" action="{{ route('dana-talangan.index') }}" class="space-y-4">
+                @if($search !== '')<input type="hidden" name="search" value="{{ $search }}">@endif
+                @foreach(request()->only(['sort', 'dir', 'per_page']) as $key => $value)
+                    @if($value !== null && $value !== '')<input type="hidden" name="{{ $key }}" value="{{ $value }}">@endif
+                @endforeach
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    @if(Auth::user()->canViewAllBranches() && isset($branches) && $branches->count() > 0)
+                    <div><label class="font-[Helvetica] font-bold text-xs uppercase block mb-1">Cabang</label><select name="branch_id" class="w-full border-2 border-black px-3 py-2 text-sm font-['Times_New_Roman'] bg-white"><option value="">— Semua Cabang —</option>@foreach($branches as $b)<option value="{{ $b->id }}" {{ (string)$selectedBranchId === (string)$b->id ? 'selected' : '' }}>{{ $b->name }}</option>@endforeach</select></div>
+                    @endif
+                    <div><label class="font-[Helvetica] font-bold text-xs uppercase block mb-1">Proyek</label><select name="project_name" class="w-full border-2 border-black px-3 py-2 text-sm font-['Times_New_Roman'] bg-white"><option value="">— Semua Proyek —</option>@foreach($projectOptions as $projectName)<option value="{{ $projectName }}" {{ $selectedProject === $projectName ? 'selected' : '' }}>{{ $projectName }}</option>@endforeach</select></div>
+                    <div><label class="font-[Helvetica] font-bold text-xs uppercase block mb-1">Status Cicilan</label><select name="status" class="w-full border-2 border-black px-3 py-2 text-sm font-['Times_New_Roman'] bg-white"><option value="">— Semua Status —</option><option value="sanggup" {{ $selectedStatus === 'sanggup' ? 'selected' : '' }}>Sanggup</option><option value="tidak_sanggup" {{ $selectedStatus === 'tidak_sanggup' ? 'selected' : '' }}>Tidak Sanggup</option><option value="lunas" {{ $selectedStatus === 'lunas' ? 'selected' : '' }}>Lunas</option></select></div>
+                    <div><label class="font-[Helvetica] font-bold text-xs uppercase block mb-1">Mode Rentang</label><select name="filter_mode" x-model="filterMode" class="w-full border-2 border-black px-3 py-2 text-sm font-['Times_New_Roman'] bg-white"><option value="date">Rentang Tanggal</option><option value="month">Rentang Bulan</option></select></div>
                 </div>
-                <template x-if="filterMode === 'date'">
-                    <div class="flex items-end gap-3 flex-wrap">
-                        <div><label class="font-[Helvetica] font-bold text-xs uppercase block mb-1">Dari Tanggal</label><div class="date-wrapper" data-accent="#f1c40f" style="position:relative"><div class="date-display min-w-[170px] border-2 border-black px-3 py-1.5 text-sm font-['Times_New_Roman'] bg-white cursor-pointer flex justify-between" tabindex="0"><span class="date-text">— Pilih Tanggal —</span><span class="date-arrow">▼</span></div><input type="date" name="date_from" value="{{ $dateFrom }}" style="position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0"></div></div>
-                        <div><label class="font-[Helvetica] font-bold text-xs uppercase block mb-1">Sampai Tanggal</label><div class="date-wrapper" data-accent="#f1c40f" style="position:relative"><div class="date-display min-w-[170px] border-2 border-black px-3 py-1.5 text-sm font-['Times_New_Roman'] bg-white cursor-pointer flex justify-between" tabindex="0"><span class="date-text">— Pilih Tanggal —</span><span class="date-arrow">▼</span></div><input type="date" name="date_to" value="{{ $dateTo }}" style="position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0"></div></div>
-                    </div>
-                </template>
-                <template x-if="filterMode === 'month'">
-                    <div class="flex items-end gap-3 flex-wrap">
-                        <div><label class="font-[Helvetica] font-bold text-xs uppercase block mb-1">Dari Bulan</label><input type="month" name="month_from" value="{{ $monthFrom }}" class="border-2 border-black px-3 py-1.5 text-sm font-['Times_New_Roman'] bg-white"></div>
-                        <div><label class="font-[Helvetica] font-bold text-xs uppercase block mb-1">Sampai Bulan</label><input type="month" name="month_to" value="{{ $monthTo }}" class="border-2 border-black px-3 py-1.5 text-sm font-['Times_New_Roman'] bg-white"></div>
-                    </div>
-                </template>
-                <button class="bg-black text-white border-2 border-black px-5 py-1.5 text-sm font-[Helvetica] font-bold">Terapkan</button>
-                <a href="{{ route('dana-talangan.index') }}" class="bg-white border-2 border-black px-5 py-1.5 text-sm font-[Helvetica] font-bold hover:bg-gray-100">Reset</a>
-            </div>
-        </form>
+                <template x-if="filterMode === 'date'"><div class="grid grid-cols-1 sm:grid-cols-2 gap-4"><div><label class="font-[Helvetica] font-bold text-xs uppercase block mb-1">Dari Tanggal</label><div class="date-wrapper" data-accent="#f1c40f" style="position:relative"><div class="date-display w-full border-2 border-black px-3 py-2 text-sm font-['Times_New_Roman'] bg-white cursor-pointer flex justify-between" tabindex="0"><span class="date-text">— Pilih Tanggal —</span><span class="date-arrow">▼</span></div><input type="date" name="date_from" value="{{ $dateFrom }}" style="position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0"></div></div><div><label class="font-[Helvetica] font-bold text-xs uppercase block mb-1">Sampai Tanggal</label><div class="date-wrapper" data-accent="#f1c40f" style="position:relative"><div class="date-display w-full border-2 border-black px-3 py-2 text-sm font-['Times_New_Roman'] bg-white cursor-pointer flex justify-between" tabindex="0"><span class="date-text">— Pilih Tanggal —</span><span class="date-arrow">▼</span></div><input type="date" name="date_to" value="{{ $dateTo }}" style="position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0"></div></div></div></template>
+                <template x-if="filterMode === 'month'"><div class="grid grid-cols-1 sm:grid-cols-2 gap-4"><div><label class="font-[Helvetica] font-bold text-xs uppercase block mb-1">Dari Bulan</label><input type="month" name="month_from" value="{{ $monthFrom }}" class="w-full border-2 border-black px-3 py-2 text-sm font-['Times_New_Roman'] bg-white"></div><div><label class="font-[Helvetica] font-bold text-xs uppercase block mb-1">Sampai Bulan</label><input type="month" name="month_to" value="{{ $monthTo }}" class="w-full border-2 border-black px-3 py-2 text-sm font-['Times_New_Roman'] bg-white"></div></div></template>
+                <div class="flex flex-wrap gap-2 pt-2"><button class="bg-black text-white border-2 border-black px-6 py-2 text-sm font-[Helvetica] font-bold">Terapkan Filter</button><a href="{{ route('dana-talangan.index', array_filter(['search' => $search])) }}" class="bg-white border-2 border-black px-6 py-2 text-sm font-[Helvetica] font-bold">Reset Filter</a></div>
+            </form>
+        </div>
     </div>
 
     @if($search !== '')

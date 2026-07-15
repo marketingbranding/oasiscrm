@@ -21,6 +21,7 @@
 - Tabel Dana Talangan mengikuti standar tabel Database: grid 2px, header sticky, zebra/hover, horizontal scroll, boolean boxes, serta frozen Pilih + No + Nama.
 - Style tabel CRM dipusatkan melalui `.crm-table-scroll` dan `.crm-data-table` agar modul baru tetap konsisten.
 - Sorting Dana Talangan menggunakan klik langsung pada header dengan indikator `▼`/`▲`, sama seperti Modul Database.
+- Filter Dana Talangan dipindahkan ke satu modal agar toolbar hanya menampilkan pencarian nama, tombol Filter, Export/Import, dan Tambah; jumlah serta ringkasan filter aktif tetap terlihat.
 
 ### 2026-07-08 — Peningkatan Modul Database
 

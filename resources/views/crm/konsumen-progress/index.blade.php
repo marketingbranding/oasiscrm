@@ -93,16 +93,70 @@
                 break;
             }
         }
+
+        $allItemsFlat = [];
+        foreach ($stages as $key => $cfg) {
+            foreach ($pipeline[$key] ?? [] as $item) {
+                $allItemsFlat[] = [
+                    'nama' => $item['nama'],
+                    'kavling' => $item['kavling'],
+                    'phone' => $item['phone'] ?? null,
+                    'stage_key' => $key,
+                    'stage_label' => $cfg['label'],
+                    'stage_color' => $cfg['color'],
+                ];
+            }
+        }
     @endphp
 
+<script>window.__kpItems = @json($allItemsFlat);</script>
+
     @if($selectedBranch && $selectedBranch->sheet_id)
-    <div x-data="{ stage: '{{ $defaultStage }}' }">
+    <div x-data="{
+        stage: '{{ $defaultStage }}',
+        searchQuery: '',
+        allItems: window.__kpItems,
+        get hasQuery() { return this.searchQuery.trim().length > 0; },
+        get groupedResults() {
+            const q = this.searchQuery.toLowerCase().trim();
+            if (!q) return {};
+            const matched = this.allItems.filter(item =>
+                item.nama.toLowerCase().includes(q) || item.kavling.toLowerCase().includes(q)
+            );
+            const groups = {};
+            matched.forEach(item => {
+                if (!groups[item.stage_key]) {
+                    groups[item.stage_key] = { label: item.stage_label, color: item.stage_color, items: [] };
+                }
+                groups[item.stage_key].items.push(item);
+            });
+            return groups;
+        },
+        get totalResults() {
+            return Object.values(this.groupedResults).reduce((sum, g) => sum + g.items.length, 0);
+        },
+        get resultMessage() {
+            const q = this.searchQuery.trim();
+            if (!q) return '';
+            return 'Menampilkan ' + this.totalResults + ' hasil untuk &quot;' + q + '&quot;';
+        }
+    }">
         <style>
             [x-cloak] { display: none !important; }
             .tabs-scroll { scrollbar-width: none; -ms-overflow-style: none; }
             .tabs-scroll::-webkit-scrollbar { display: none; }
         </style>
 
+        <div class="mb-4 flex flex-wrap items-center gap-2">
+            <input type="text" x-model="searchQuery" placeholder="Cari nama atau kavling..."
+                   class="border-2 border-black px-3 py-1.5 text-sm w-full sm:w-64 font-['Times_New_Roman'] bg-white">
+            <button x-show="hasQuery" @click="searchQuery = ''"
+                    class="text-sm font-['Helvetica'] underline hover:text-[#5d8e8e]">Clear</button>
+            <span x-show="hasQuery" class="text-sm font-['Times_New_Roman'] text-gray-600"
+                  x-text="resultMessage"></span>
+        </div>
+
+        <div x-show="!hasQuery">
         <div class="flex flex-wrap border-b-2 border-black mb-2">
             @foreach($stages as $key => $cfg)
             @php $count = count($pipeline[$key] ?? []); @endphp
@@ -144,6 +198,37 @@
             @endif
         </div>
         @endforeach
+    </div>
+
+        <div x-show="hasQuery">
+            <template x-if="totalResults === 0">
+                <div class="border-2 border-black bg-white px-6 py-8 text-center">
+                    <p class="font-['Times_New_Roman'] text-sm italic">Tidak ada konsumen ditemukan.</p>
+                </div>
+            </template>
+            <template x-for="(group, key) in groupedResults" :key="key">
+                <div class="mb-4">
+                    <div class="font-['Helvetica'] text-xs font-bold uppercase px-3 py-1 border-2 border-black mb-2 flex items-center gap-2"
+                         :style="'background-color: ' + group.color + '; color: ' + (['proses_bank','ppjb_dev','akad'].includes(key) ? 'white' : 'black')">
+                        <span x-text="group.label"></span>
+                        <span class="bg-[#c0392b] text-white text-[10px] px-1.5 py-0.5" x-text="group.items.length"></span>
+                    </div>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
+                        <template x-for="item in group.items" :key="item.kavling">
+                            <div class="border-2 border-black bg-white px-3 py-2 hover:bg-gray-50">
+                                <div class="font-['Times_New_Roman'] font-bold text-sm truncate" x-text="item.nama" :title="item.nama"></div>
+                                <div class="font-['Helvetica'] text-[11px] text-gray-600 mt-0.5 truncate" x-text="item.kavling" :title="item.kavling"></div>
+                                <template x-if="item.phone">
+                                    <div class="font-['Helvetica'] text-[11px] text-gray-600 mt-0.5">
+                                        <a :href="'tel:' + item.phone" class="underline hover:text-[#5d8e8e]" x-text="item.phone"></a>
+                                    </div>
+                                </template>
+                            </div>
+                        </template>
+                    </div>
+                </div>
+            </template>
+        </div>
     </div>
     @else
     <div class="border-2 border-black bg-white px-6 py-8 text-center">

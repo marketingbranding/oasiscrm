@@ -12,11 +12,13 @@ use App\Http\Controllers\Crm\Traits\RedirectsShowToEdit;
 use App\Http\Requests\Crm\StoreDanaTalanganRequest;
 use App\Http\Requests\Crm\UpdateDanaTalanganRequest;
 use App\Imports\DanaTalanganImport;
+use App\Models\Branch;
 use App\Models\DanaTalangan;
 use App\Models\DanaTalanganSyncStatus;
 use App\Models\Kavling;
 use App\Models\LeadMaster;
 use App\Services\DanaTalanganGoogleService;
+use App\Services\DanaTalanganOptionService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -67,6 +69,11 @@ class DanaTalanganController extends Controller
 
         $branches = $this->resolveBranches();
         $projects = $this->resolveBranchProjects($selectedBranchId);
+        $formProjects = LeadMaster::where('is_active', true)
+            ->whereNotNull('branch_id')
+            ->when(! $user->canViewAllBranches(), fn ($query) => $query->where('branch_id', $user->branch_id))
+            ->orderBy('project_name')
+            ->get(['id', 'project_name', 'branch_id']);
         $syncedProjectNames = $this->applyBranchScope(DanaTalangan::query(), $selectedBranchId)
             ->whereNotNull('project_name')
             ->distinct()
@@ -126,10 +133,9 @@ class DanaTalanganController extends Controller
             $records = $query->orderBy($sortField, $sortDir)->paginate((int) $perPage)->withQueryString();
         }
 
-        $kavlings = Kavling::with('project')->orderBy('kavling_code')->get();
         $syncStatus = DanaTalanganSyncStatus::where('spreadsheet_id', config('services.google_sheets.dana_talangan_spreadsheet_id'))->first();
 
-        return view('crm.dana-talangan.index', compact('records', 'branches', 'projects', 'projectOptions', 'kavlings', 'selectedBranchId', 'selectedProject', 'selectedStatus', 'sortField', 'sortDir', 'perPage', 'syncStatus', 'search', 'trackingSummary', 'filterMode', 'dateFrom', 'dateTo', 'monthFrom', 'monthTo'));
+        return view('crm.dana-talangan.index', compact('records', 'branches', 'projects', 'formProjects', 'projectOptions', 'selectedBranchId', 'selectedProject', 'selectedStatus', 'sortField', 'sortDir', 'perPage', 'syncStatus', 'search', 'trackingSummary', 'filterMode', 'dateFrom', 'dateTo', 'monthFrom', 'monthTo'));
     }
 
     public function create()
@@ -151,7 +157,7 @@ class DanaTalanganController extends Controller
         return view('crm.dana-talangan.create', compact('branches', 'projects', 'kavlings'));
     }
 
-    public function store(StoreDanaTalanganRequest $request, DanaTalanganGoogleService $googleService)
+    public function store(StoreDanaTalanganRequest $request, DanaTalanganGoogleService $googleService, DanaTalanganOptionService $optionService)
     {
         $user = Auth::user();
         $data = $request->validated();
@@ -165,6 +171,10 @@ class DanaTalanganController extends Controller
             return back()->withInput()->withErrors(['project_name' => 'Proyek tidak terdaftar pada cabang yang dipilih.']);
         }
         $data['branch_id'] = $projectBranchId;
+        $branch = Branch::findOrFail($projectBranchId);
+        if (! $optionService->isValidKavling($branch, $data['project_name'], $data['kav'] ?? null)) {
+            return back()->withInput()->withErrors(['kav' => 'Kav tidak terdaftar pada Proyek yang dipilih.']);
+        }
 
         $data['pinjam_nama'] = $request->boolean('pinjam_nama');
         $data['konfirmasi_keuangan'] = $request->boolean('konfirmasi_keuangan');
@@ -203,7 +213,7 @@ class DanaTalanganController extends Controller
         return view('crm.dana-talangan.edit', compact('record', 'branches', 'projects', 'kavlings'));
     }
 
-    public function update(UpdateDanaTalanganRequest $request, DanaTalangan $danaTalangan, DanaTalanganGoogleService $googleService)
+    public function update(UpdateDanaTalanganRequest $request, DanaTalangan $danaTalangan, DanaTalanganGoogleService $googleService, DanaTalanganOptionService $optionService)
     {
         $user = Auth::user();
         $data = $request->validated();
@@ -217,6 +227,11 @@ class DanaTalanganController extends Controller
             return back()->withInput()->withErrors(['project_name' => 'Proyek tidak terdaftar pada cabang yang dipilih.']);
         }
         $data['branch_id'] = $projectBranchId;
+        $branch = Branch::findOrFail($projectBranchId);
+        $kavChanged = $this->normalizeKav($data['kav'] ?? null) !== $this->normalizeKav($danaTalangan->kav);
+        if ($kavChanged && ! $optionService->isValidKavling($branch, $data['project_name'], $data['kav'] ?? null)) {
+            return back()->withInput()->withErrors(['kav' => 'Kav tidak terdaftar pada Proyek yang dipilih.']);
+        }
 
         $data['pinjam_nama'] = $request->boolean('pinjam_nama');
         $data['konfirmasi_keuangan'] = $request->boolean('konfirmasi_keuangan');
@@ -302,6 +317,26 @@ class DanaTalanganController extends Controller
         return back()->with('success', "Sync selesai: {$summary['updated']} diperbarui, {$summary['imported']} diimpor, {$summary['pushed']} dikirim.");
     }
 
+    public function kavlingOptions(Request $request, DanaTalanganGoogleService $googleService, DanaTalanganOptionService $optionService)
+    {
+        $validated = $request->validate([
+            'branch_id' => 'required|integer|exists:branches,id',
+            'project_name' => 'required|string|max:255',
+        ]);
+        $user = Auth::user();
+        $branch = Branch::where('is_active', true)->findOrFail($validated['branch_id']);
+        if (! $user->canViewAllBranches() && $branch->id !== $user->branch_id) {
+            abort(403);
+        }
+        if ($googleService->branchIdForProject($validated['project_name']) !== $branch->id) {
+            abort(422, 'Proyek tidak terdaftar pada cabang yang dipilih.');
+        }
+
+        return response()->json([
+            'options' => $optionService->kavlings($branch, $validated['project_name']),
+        ]);
+    }
+
     public function importStore(Request $request, DanaTalanganGoogleService $googleService)
     {
         $response = $this->traitImportStore($request);
@@ -376,5 +411,10 @@ class DanaTalanganController extends Controller
         }
 
         return [$filterMode, $dateFrom, $dateTo, $monthFrom, $monthTo, $start, $end];
+    }
+
+    private function normalizeKav(?string $value): string
+    {
+        return mb_strtolower(preg_replace('/[^a-z0-9]+/i', '', trim((string) $value)));
     }
 }

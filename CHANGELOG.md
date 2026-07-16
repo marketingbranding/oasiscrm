@@ -25,6 +25,7 @@
 - Grid tabel CRM menggunakan separated borders agar garis cell pada frozen columns tetap terlihat ketika tabel digeser di Chrome/Edge.
 - Date picker Oasis otomatis membuka ke atas saat ruang bawah sempit, tidak menambah scrollbar modal, menutup setelah tanggal dipilih, dan menyediakan tombol `Hari Ini`.
 - Rentang bulan Dana Talangan menggunakan month picker Oasis dengan navigasi tahun, grid 12 bulan, tombol `Bulan Ini`, dan auto-position yang sama dengan date picker.
+- Form Tambah/Edit Dana Talangan memakai cascading Cabang → Proyek → Kav; Proyek berasal dari LeadMaster dan Kav dari `data_kav` spreadsheet cabang dengan permission superadmin/pusat versus admin cabang.
 
 ### 2026-07-08 — Peningkatan Modul Database
 

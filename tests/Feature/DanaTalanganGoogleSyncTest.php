@@ -4,10 +4,13 @@ namespace Tests\Feature;
 
 use App\Models\Branch;
 use App\Models\DanaTalangan;
+use App\Models\DatabaseSheetRecord;
 use App\Models\Kavling;
 use App\Models\LeadMaster;
+use App\Models\Role;
 use App\Models\User;
 use App\Services\DanaTalanganGoogleService;
+use App\Services\DanaTalanganOptionService;
 use App\Services\GoogleSheetsApiService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Mockery;
@@ -107,6 +110,9 @@ class DanaTalanganGoogleSyncTest extends TestCase
             ->assertSee('Terapkan Filter')
             ->assertSee('month-wrapper', false)
             ->assertSee('month-display', false)
+            ->assertSee('kavlingOptionsUrl', false)
+            ->assertSee('changeAddBranch()', false)
+            ->assertSee('changeAddProject()', false)
             ->assertSee('Sync Sekarang')
             ->assertSee('Tambah Dana Talangan')
             ->assertSee('crm-table-scroll', false)
@@ -148,6 +154,30 @@ class DanaTalanganGoogleSyncTest extends TestCase
             'nama_konsumen' => 'Konsumen Baru',
             'branch_id' => $branch->id,
         ]);
+    }
+
+    public function test_store_rejects_kavling_outside_selected_project(): void
+    {
+        [$branch, $user] = $this->makeBranchAndUser();
+        LeadMaster::create(['branch_id' => $branch->id, 'project_name' => 'Proyek Test', 'is_active' => true]);
+        $googleService = Mockery::mock(DanaTalanganGoogleService::class);
+        $googleService->shouldReceive('branchIdForProject')->once()->with('Proyek Test')->andReturn($branch->id);
+        $googleService->shouldNotReceive('push');
+        $optionService = Mockery::mock(DanaTalanganOptionService::class);
+        $optionService->shouldReceive('isValidKavling')->once()->andReturnFalse();
+        $this->app->instance(DanaTalanganGoogleService::class, $googleService);
+        $this->app->instance(DanaTalanganOptionService::class, $optionService);
+
+        $response = $this->actingAs($user)->post(route('dana-talangan.store'), [
+            'tanggal' => '2026-07-15',
+            'nama_konsumen' => 'Konsumen Invalid',
+            'project_name' => 'Proyek Test',
+            'kav' => 'ZZ99',
+            'status' => 'sanggup',
+        ]);
+
+        $response->assertSessionHasErrors('kav');
+        $this->assertDatabaseMissing('dana_talangans', ['nama_konsumen' => 'Konsumen Invalid']);
     }
 
     public function test_branch_user_can_update_and_delete_from_action_column(): void
@@ -243,6 +273,58 @@ class DanaTalanganGoogleSyncTest extends TestCase
         $this->assertSame(1, $result['summary']['inferred_projects']);
         $this->assertSame(1, $result['summary']['repaired_metadata']);
         $this->assertSame([], $result['summary']['warnings']);
+    }
+
+    public function test_kavling_options_use_cached_data_kav_for_oasis_project(): void
+    {
+        [$branch, $user] = $this->makeBranchAndUser();
+        DatabaseSheetRecord::create([
+            'branch_id' => $branch->id,
+            'sheet_id' => 'sheet-id',
+            'sheet_name' => 'data_kav',
+            'row_number' => 2,
+            'headers' => ['proyek', 'kode_kavling'],
+            'row_data' => ['proyek' => 'Marison Regency Kuwasen', 'kode_kavling' => 'D05'],
+            'formula_columns' => [],
+        ]);
+        DatabaseSheetRecord::create([
+            'branch_id' => $branch->id,
+            'sheet_id' => 'sheet-id',
+            'sheet_name' => 'data_kav',
+            'row_number' => 3,
+            'headers' => ['proyek', 'kode_kavling'],
+            'row_data' => ['proyek' => 'Marison Regency Kuwasen', 'kode_kavling' => 'D12'],
+            'formula_columns' => [],
+        ]);
+
+        $service = new DanaTalanganOptionService(Mockery::mock(GoogleSheetsApiService::class));
+
+        $this->assertSame(['D05', 'D12'], $service->kavlings($branch, 'Kuwasen'));
+        $this->assertTrue($service->isValidKavling($branch, 'Kuwasen', 'D-12'));
+    }
+
+    public function test_admin_cannot_request_kavlings_from_another_branch_but_pusat_can(): void
+    {
+        [$branch, $admin] = $this->makeBranchAndUser();
+        $otherBranch = Branch::create(['name' => 'Cabang Lain', 'code' => 'OTHER', 'is_active' => true]);
+        $googleService = Mockery::mock(DanaTalanganGoogleService::class);
+        $googleService->shouldReceive('branchIdForProject')->once()->with('Proyek Lain')->andReturn($otherBranch->id);
+        $optionService = Mockery::mock(DanaTalanganOptionService::class);
+        $optionService->shouldReceive('kavlings')->once()->withArgs(fn ($requestedBranch, $project) => $requestedBranch->is($otherBranch) && $project === 'Proyek Lain')->andReturn(['A01']);
+        $this->app->instance(DanaTalanganGoogleService::class, $googleService);
+        $this->app->instance(DanaTalanganOptionService::class, $optionService);
+
+        $this->actingAs($admin)->getJson(route('dana-talangan.kavling-options', [
+            'branch_id' => $otherBranch->id,
+            'project_name' => 'Proyek Lain',
+        ]))->assertForbidden();
+
+        $pusatRole = Role::create(['name' => 'Pusat', 'slug' => 'pusat', 'is_superadmin' => false]);
+        $pusat = User::factory()->create(['role_id' => $pusatRole->id, 'password_changed_at' => now()]);
+        $this->actingAs($pusat)->getJson(route('dana-talangan.kavling-options', [
+            'branch_id' => $otherBranch->id,
+            'project_name' => 'Proyek Lain',
+        ]))->assertOk()->assertJsonPath('options.0', 'A01');
     }
 
     private function makeBranchAndUser(): array

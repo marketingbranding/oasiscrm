@@ -64,6 +64,7 @@ Route::middleware(['auth', 'verified', 'password.changed'])->group(function () {
     Route::post('content-calendar/import', [ContentCalendarController::class, 'importStore'])->name('content-calendar.import-store');
 
     Route::bind('dana_talangan', fn ($v) => DanaTalangan::findOrFail($v));
+    Route::get('dana-talangan/kavling-options', [DanaTalanganController::class, 'kavlingOptions'])->name('dana-talangan.kavling-options');
     Route::post('dana-talangan/sync', [DanaTalanganController::class, 'sync'])->name('dana-talangan.sync');
     Route::get('dana-talangan/export', [DanaTalanganController::class, 'export'])->name('dana-talangan.export');
     Route::get('dana-talangan/export-template', [DanaTalanganController::class, 'exportTemplate'])->name('dana-talangan.export-template');

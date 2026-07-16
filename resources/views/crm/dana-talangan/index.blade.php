@@ -44,8 +44,64 @@
     filterOpen: false,
     tableFrozen: true,
     updateBaseUrl: @js(url('dana-talangan')),
-    openEdit(record) { this.editingRecord = record; },
-}">
+    kavlingOptionsUrl: @js(route('dana-talangan.kavling-options')),
+    projectCatalog: @js($formProjects->map(fn ($project) => ['id' => $project->id, 'name' => $project->project_name, 'branch_id' => $project->branch_id])->values()),
+    addForm: {
+        branch_id: @js((string) old('branch_id', $selectedBranchId)),
+        project_name: @js(old('project_name', '')),
+        kav: @js(old('kav', '')),
+    },
+    addKavlings: [],
+    editKavlings: [],
+    addKavLoading: false,
+    editKavLoading: false,
+    projectsFor(branchId, current = '') {
+        const projects = this.projectCatalog.filter(project => String(project.branch_id) === String(branchId || ''));
+        if (current && !projects.some(project => project.name === current)) {
+            projects.push({ id: null, name: current, branch_id: branchId });
+        }
+        return projects;
+    },
+    normalizeKav(value) { return String(value || '').toLowerCase().replace(/[^a-z0-9]/g, ''); },
+    async fetchKavlings(branchId, projectName) {
+        if (!branchId || !projectName) return [];
+        const params = new URLSearchParams({ branch_id: branchId, project_name: projectName });
+        const response = await fetch(this.kavlingOptionsUrl + '?' + params.toString(), { headers: { Accept: 'application/json' } });
+        if (!response.ok) return [];
+        const data = await response.json();
+        return data.options || [];
+    },
+    async loadAddKavlings(preserve = false) {
+        const projectName = this.addForm.project_name;
+        const current = preserve ? this.addForm.kav : '';
+        this.addKavLoading = true;
+        this.addKavlings = await this.fetchKavlings(this.addForm.branch_id, projectName);
+        if (projectName !== this.addForm.project_name) { this.addKavLoading = false; return; }
+        if (current && !this.addKavlings.some(code => this.normalizeKav(code) === this.normalizeKav(current))) this.addKavlings.push(current);
+        if (!preserve) this.addForm.kav = '';
+        this.addKavLoading = false;
+    },
+    changeAddBranch() { this.addForm.project_name = ''; this.addForm.kav = ''; this.addKavlings = []; },
+    changeAddProject() { this.addForm.kav = ''; this.loadAddKavlings(); },
+    openEdit(record) {
+        this.editingRecord = record;
+        this.editKavlings = [];
+        this.$nextTick(() => this.loadEditKavlings(true));
+    },
+    async loadEditKavlings(preserve = false) {
+        if (!this.editingRecord) return;
+        const projectName = this.editingRecord.project_name;
+        const current = preserve ? this.editingRecord.kav : '';
+        this.editKavLoading = true;
+        this.editKavlings = await this.fetchKavlings(this.editingRecord.branch_id, projectName);
+        if (!this.editingRecord || projectName !== this.editingRecord.project_name) { this.editKavLoading = false; return; }
+        if (current && !this.editKavlings.some(code => this.normalizeKav(code) === this.normalizeKav(current))) this.editKavlings.push(current);
+        if (!preserve) this.editingRecord.kav = '';
+        this.editKavLoading = false;
+    },
+    changeEditBranch() { this.editingRecord.project_name = ''; this.editingRecord.kav = ''; this.editKavlings = []; },
+    changeEditProject() { this.editingRecord.kav = ''; this.loadEditKavlings(); },
+}" x-init="if (addForm.project_name) loadAddKavlings(true)">
     <x-crm.page-header color="#f1c40f" title="Dana Talangan" />
 
     <div class="border-2 border-black bg-white px-4 py-3 mb-4 flex flex-wrap items-center justify-between gap-3">
@@ -284,30 +340,26 @@
                     @if(Auth::user()->canViewAllBranches())
                     <div>
                         <label class="font-[Helvetica] font-bold text-xs uppercase block mb-1">Cabang</label>
-                        <select name="branch_id" required class="w-full border-2 border-black px-3 py-2 text-sm font-['Times_New_Roman'] bg-white">
+                        <select name="branch_id" x-model="addForm.branch_id" @change="changeAddBranch()" required class="w-full border-2 border-black px-3 py-2 text-sm font-['Times_New_Roman'] bg-white">
                             <option value="">— Pilih Cabang —</option>
                             @foreach($branches as $branch)
-                            <option value="{{ $branch->id }}" {{ old('branch_id', $selectedBranchId) == $branch->id ? 'selected' : '' }}>{{ $branch->name }}</option>
+                            <option value="{{ $branch->id }}">{{ $branch->name }}</option>
                             @endforeach
                         </select>
                     </div>
                     @endif
                     <div>
                         <label class="font-[Helvetica] font-bold text-xs uppercase block mb-1">Proyek</label>
-                        <select name="project_name" required class="w-full border-2 border-black px-3 py-2 text-sm font-['Times_New_Roman'] bg-white">
+                        <select name="project_name" x-model="addForm.project_name" @change="changeAddProject()" :disabled="!addForm.branch_id" required class="w-full border-2 border-black px-3 py-2 text-sm font-['Times_New_Roman'] bg-white disabled:bg-gray-100">
                             <option value="">— Pilih Proyek —</option>
-                            @foreach($projectOptions as $projectName)
-                            <option value="{{ $projectName }}" {{ old('project_name', $selectedProject) === $projectName ? 'selected' : '' }}>{{ $projectName }}</option>
-                            @endforeach
+                            <template x-for="project in projectsFor(addForm.branch_id, addForm.project_name)" :key="project.id || project.name"><option :value="project.name" x-text="project.name"></option></template>
                         </select>
                     </div>
                     <div>
                         <label class="font-[Helvetica] font-bold text-xs uppercase block mb-1">Kav</label>
-                        <select name="kav" class="w-full border-2 border-black px-3 py-2 text-sm font-['Times_New_Roman'] bg-white">
-                            <option value="">— Pilih Kav —</option>
-                            @foreach($kavlings as $kavling)
-                            <option value="{{ $kavling->kavling_code }}" {{ old('kav') === $kavling->kavling_code ? 'selected' : '' }}>{{ $kavling->kavling_code }}</option>
-                            @endforeach
+                        <select name="kav" x-model="addForm.kav" :disabled="!addForm.project_name || addKavLoading" class="w-full border-2 border-black px-3 py-2 text-sm font-['Times_New_Roman'] bg-white disabled:bg-gray-100">
+                            <option value="" x-text="addKavLoading ? 'Memuat kavling...' : (!addForm.project_name ? '— Pilih proyek terlebih dahulu —' : (addKavlings.length ? '— Pilih Kav —' : '— Tidak ada kavling —'))"></option>
+                            <template x-for="code in addKavlings" :key="code"><option :value="code" x-text="code"></option></template>
                         </select>
                     </div>
                     <div>
@@ -372,10 +424,10 @@
                     <div><label class="font-[Helvetica] font-bold text-xs uppercase block mb-1">Tanggal</label><div class="date-wrapper" data-accent="#f1c40f" style="position:relative"><div class="date-display w-full border-2 border-black px-3 py-2 text-sm font-['Times_New_Roman'] bg-white cursor-pointer select-none flex items-center justify-between" tabindex="0"><span class="date-text">— Pilih Tanggal —</span><span class="date-arrow">▼</span></div><input type="date" name="tanggal" x-model="editingRecord.tanggal" required style="position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0"></div></div>
                     <div><label class="font-[Helvetica] font-bold text-xs uppercase block mb-1">Nama Konsumen</label><input name="nama_konsumen" x-model="editingRecord.nama_konsumen" required class="w-full border-2 border-black px-3 py-2 text-sm font-['Times_New_Roman']"></div>
                     @if(Auth::user()->canViewAllBranches())
-                    <div><label class="font-[Helvetica] font-bold text-xs uppercase block mb-1">Cabang</label><select name="branch_id" x-model="editingRecord.branch_id" required class="w-full border-2 border-black px-3 py-2 text-sm font-['Times_New_Roman'] bg-white">@foreach($branches as $branch)<option value="{{ $branch->id }}">{{ $branch->name }}</option>@endforeach</select></div>
+                    <div><label class="font-[Helvetica] font-bold text-xs uppercase block mb-1">Cabang</label><select name="branch_id" x-model="editingRecord.branch_id" @change="changeEditBranch()" required class="w-full border-2 border-black px-3 py-2 text-sm font-['Times_New_Roman'] bg-white">@foreach($branches as $branch)<option value="{{ $branch->id }}">{{ $branch->name }}</option>@endforeach</select></div>
                     @endif
-                    <div><label class="font-[Helvetica] font-bold text-xs uppercase block mb-1">Proyek</label><select name="project_name" x-model="editingRecord.project_name" required class="w-full border-2 border-black px-3 py-2 text-sm font-['Times_New_Roman'] bg-white">@foreach($projectOptions as $projectName)<option value="{{ $projectName }}">{{ $projectName }}</option>@endforeach</select></div>
-                    <div><label class="font-[Helvetica] font-bold text-xs uppercase block mb-1">Kav</label><select name="kav" x-model="editingRecord.kav" class="w-full border-2 border-black px-3 py-2 text-sm font-['Times_New_Roman'] bg-white"><option value="">— Pilih Kav —</option>@foreach($kavlings as $kavling)<option value="{{ $kavling->kavling_code }}">{{ $kavling->kavling_code }}</option>@endforeach</select></div>
+                    <div><label class="font-[Helvetica] font-bold text-xs uppercase block mb-1">Proyek</label><select name="project_name" x-model="editingRecord.project_name" @change="changeEditProject()" required class="w-full border-2 border-black px-3 py-2 text-sm font-['Times_New_Roman'] bg-white"><template x-for="project in projectsFor(editingRecord.branch_id, editingRecord.project_name)" :key="project.id || project.name"><option :value="project.name" x-text="project.name"></option></template></select></div>
+                    <div><label class="font-[Helvetica] font-bold text-xs uppercase block mb-1">Kav</label><select name="kav" x-model="editingRecord.kav" :disabled="editKavLoading" class="w-full border-2 border-black px-3 py-2 text-sm font-['Times_New_Roman'] bg-white disabled:bg-gray-100"><option value="" x-text="editKavLoading ? 'Memuat kavling...' : (editKavlings.length ? '— Pilih Kav —' : '— Tidak ada kavling —')"></option><template x-for="code in editKavlings" :key="code"><option :value="code" x-text="code"></option></template></select></div>
                     <div><label class="font-[Helvetica] font-bold text-xs uppercase block mb-1">Marketing</label><input name="nama_marketing" x-model="editingRecord.nama_marketing" class="w-full border-2 border-black px-3 py-2 text-sm font-['Times_New_Roman']"></div>
                     <div><label class="font-[Helvetica] font-bold text-xs uppercase block mb-1">Pekerjaan</label><input name="pekerjaan" x-model="editingRecord.pekerjaan" class="w-full border-2 border-black px-3 py-2 text-sm font-['Times_New_Roman']"></div>
                     <div><label class="font-[Helvetica] font-bold text-xs uppercase block mb-1">Status Kawin</label><input name="status_perkawinan" x-model="editingRecord.status_perkawinan" class="w-full border-2 border-black px-3 py-2 text-sm font-['Times_New_Roman']"></div>

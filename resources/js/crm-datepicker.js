@@ -1,4 +1,11 @@
+import { positionPickerPopup } from './crm-picker-position';
+
 const monthsId = ['Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember'];
+
+function todayString() {
+    const today = new Date();
+    return today.getFullYear() + '-' + String(today.getMonth() + 1).padStart(2, '0') + '-' + String(today.getDate()).padStart(2, '0');
+}
 
 function renderCalendar(wrapper, state) {
     const y = state.year, m = state.month;
@@ -25,9 +32,7 @@ function renderCalendar(wrapper, state) {
             div.dataset.date = ds;
             const input = wrapper.querySelector('input[type="date"]');
             if (input && input.value === ds) div.classList.add('cal-selected');
-            const today = new Date();
-            const todayStr = today.getFullYear() + '-' + String(today.getMonth() + 1).padStart(2, '0') + '-' + String(today.getDate()).padStart(2, '0');
-            if (ds === todayStr) div.classList.add('cal-today');
+            if (ds === todayString()) div.classList.add('cal-today');
             div.addEventListener('click', function() { selectDate(wrapper, ds); });
         }
         grid.appendChild(div);
@@ -83,7 +88,7 @@ function initDatePickers() {
         } else {
             cal = document.createElement('div');
             cal.className = 'date-calendar';
-            cal.style.cssText = 'display:none;position:absolute;top:100%;left:0;z-index:9999;border:2px solid #000;background:#fff;width:280px';
+            cal.style.cssText = 'display:none;position:fixed;top:0;left:0;z-index:9999;border:2px solid #000;background:#fff;width:280px';
             const accent = wrapper.dataset.accent || '#f1c40f';
             cal.innerHTML =
                 '<div class="cal-header" style="background:#000;color:#fff;display:flex;align-items:center;justify-content:space-between;padding:6px 10px;font-family:\'Times New Roman\';font-size:14px;font-weight:bold;user-select:none">' +
@@ -100,9 +105,20 @@ function initDatePickers() {
                 '<span style="padding:5px 0;border-right:1px solid #ddd">Jum</span>' +
                 '<span style="padding:5px 0">Sab</span>' +
                 '</div>' +
-                '<div class="cal-grid" style="display:grid;grid-template-columns:repeat(7,1fr)"></div>';
+                '<div class="cal-grid" style="display:grid;grid-template-columns:repeat(7,1fr)"></div>' +
+                '<div class="cal-footer" style="border-top:2px solid #000;padding:6px;text-align:center;background:#f5f5f5">' +
+                '<button class="cal-today-btn" type="button" style="border:2px solid #000;background:#fff;color:#000;padding:4px 14px;cursor:pointer;font-family:Helvetica,sans-serif;font-size:11px;font-weight:bold;text-transform:uppercase">Hari Ini</button>' +
+                '</div>';
             cal.style.setProperty('--accent', accent);
             wrapper.appendChild(cal);
+        }
+
+        if (!cal.querySelector('.cal-today-btn')) {
+            const footer = document.createElement('div');
+            footer.className = 'cal-footer';
+            footer.style.cssText = 'border-top:2px solid #000;padding:6px;text-align:center;background:#f5f5f5';
+            footer.innerHTML = '<button class="cal-today-btn" type="button" style="border:2px solid #000;background:#fff;color:#000;padding:4px 14px;cursor:pointer;font-family:Helvetica,sans-serif;font-size:11px;font-weight:bold;text-transform:uppercase">Hari Ini</button>';
+            cal.appendChild(footer);
         }
 
         if (!display || !cal) return;
@@ -114,7 +130,12 @@ function initDatePickers() {
             if (isOpen) {
                 closeCalendar(wrapper);
             } else {
+                document.dispatchEvent(new CustomEvent('oasis:picker-open', { detail: { wrapper } }));
+                document.querySelectorAll('.date-wrapper').forEach(function(otherWrapper) {
+                    if (otherWrapper !== wrapper) closeCalendar(otherWrapper);
+                });
                 cal.style.display = 'block';
+                cal.style.visibility = 'hidden';
                 const arrow = wrapper.querySelector('.date-arrow');
                 if (arrow) arrow.textContent = '\u25B2';
                 if (!wrapper.__calState) {
@@ -128,6 +149,8 @@ function initDatePickers() {
                     }
                 }
                 renderCalendar(wrapper, wrapper.__calState);
+                positionPickerPopup(wrapper, cal, '.date-display');
+                cal.style.visibility = 'visible';
             }
         });
 
@@ -139,6 +162,7 @@ function initDatePickers() {
             wrapper.__calState.month--;
             if (wrapper.__calState.month < 0) { wrapper.__calState.month = 11; wrapper.__calState.year--; }
             renderCalendar(wrapper, wrapper.__calState);
+            positionPickerPopup(wrapper, cal, '.date-display');
         });
         if (next) next.addEventListener('click', function(e) {
             e.stopPropagation();
@@ -146,6 +170,27 @@ function initDatePickers() {
             wrapper.__calState.month++;
             if (wrapper.__calState.month > 11) { wrapper.__calState.month = 0; wrapper.__calState.year++; }
             renderCalendar(wrapper, wrapper.__calState);
+            positionPickerPopup(wrapper, cal, '.date-display');
+        });
+
+        const todayButton = cal.querySelector('.cal-today-btn');
+        if (todayButton) todayButton.addEventListener('click', function(e) {
+            e.stopPropagation();
+            selectDate(wrapper, todayString());
+        });
+
+        const reposition = function() {
+            if (cal.style.display !== 'none') positionPickerPopup(wrapper, cal, '.date-display');
+        };
+        window.addEventListener('resize', reposition);
+        window.addEventListener('scroll', reposition, true);
+
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape') closeCalendar(wrapper);
+        });
+
+        document.addEventListener('oasis:picker-open', function(e) {
+            if (e.detail?.wrapper !== wrapper) closeCalendar(wrapper);
         });
 
         document.addEventListener('click', function(e) {

@@ -4,8 +4,89 @@
 
 /* --- Date Calendar + Custom Select Widgets --- */
 .date-wrapper,
+.month-wrapper,
 .select-wrapper {
     position: relative;
+}
+
+.month-picker-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 6px 10px;
+    background: #000;
+    color: #fff;
+    font-family: 'Times New Roman', serif;
+    font-size: 14px;
+    font-weight: 700;
+    user-select: none;
+}
+
+.month-picker-header button {
+    border: 0;
+    background: transparent;
+    color: #fff;
+    padding: 2px 8px;
+    cursor: pointer;
+    font-family: 'Times New Roman', serif;
+    font-size: 14px;
+    font-weight: 700;
+    line-height: 1;
+}
+
+.month-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+}
+
+.month-option {
+    min-height: 38px;
+    border: 0;
+    border-right: 1px solid #ddd;
+    border-bottom: 1px solid #ddd;
+    background: #fff;
+    color: #000;
+    cursor: pointer;
+    font-family: 'Times New Roman', serif;
+    font-size: 12px;
+}
+
+.month-option:nth-child(3n) {
+    border-right: 0;
+}
+
+.month-option:hover,
+.month-option.is-selected {
+    background: var(--accent, #f1c40f);
+    color: #fff;
+}
+
+.month-option.is-selected {
+    font-weight: 700;
+}
+
+.month-option.is-current {
+    text-decoration: underline;
+    text-underline-offset: 2px;
+}
+
+.month-picker-footer {
+    border-top: 1px solid #000;
+    padding: 6px;
+    background: #f5f5f5;
+    text-align: center;
+}
+
+.month-current-button {
+    border: 2px solid #000;
+    background: #fff;
+    color: #000;
+    padding: 4px 14px;
+    cursor: pointer;
+    font-family: Helvetica, sans-serif;
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
 }
 .cal-day:hover,
 .select-li:hover,

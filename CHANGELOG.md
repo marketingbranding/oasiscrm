@@ -23,6 +23,8 @@
 - Sorting Dana Talangan menggunakan klik langsung pada header dengan indikator `▼`/`▲`, sama seperti Modul Database.
 - Filter Dana Talangan dipindahkan ke satu modal agar toolbar hanya menampilkan pencarian nama, tombol Filter, Export/Import, dan Tambah; jumlah serta ringkasan filter aktif tetap terlihat.
 - Grid tabel CRM menggunakan separated borders agar garis cell pada frozen columns tetap terlihat ketika tabel digeser di Chrome/Edge.
+- Date picker Oasis otomatis membuka ke atas saat ruang bawah sempit, tidak menambah scrollbar modal, menutup setelah tanggal dipilih, dan menyediakan tombol `Hari Ini`.
+- Rentang bulan Dana Talangan menggunakan month picker Oasis dengan navigasi tahun, grid 12 bulan, tombol `Bulan Ini`, dan auto-position yang sama dengan date picker.
 
 ### 2026-07-08 — Peningkatan Modul Database
 

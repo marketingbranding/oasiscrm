@@ -119,7 +119,28 @@
                     <div><label class="font-[Helvetica] font-bold text-xs uppercase block mb-1">Mode Rentang</label><select name="filter_mode" x-model="filterMode" class="w-full border-2 border-black px-3 py-2 text-sm font-['Times_New_Roman'] bg-white"><option value="date">Rentang Tanggal</option><option value="month">Rentang Bulan</option></select></div>
                 </div>
                 <template x-if="filterMode === 'date'"><div class="grid grid-cols-1 sm:grid-cols-2 gap-4"><div><label class="font-[Helvetica] font-bold text-xs uppercase block mb-1">Dari Tanggal</label><div class="date-wrapper" data-accent="#f1c40f" style="position:relative"><div class="date-display w-full border-2 border-black px-3 py-2 text-sm font-['Times_New_Roman'] bg-white cursor-pointer flex justify-between" tabindex="0"><span class="date-text">— Pilih Tanggal —</span><span class="date-arrow">▼</span></div><input type="date" name="date_from" value="{{ $dateFrom }}" style="position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0"></div></div><div><label class="font-[Helvetica] font-bold text-xs uppercase block mb-1">Sampai Tanggal</label><div class="date-wrapper" data-accent="#f1c40f" style="position:relative"><div class="date-display w-full border-2 border-black px-3 py-2 text-sm font-['Times_New_Roman'] bg-white cursor-pointer flex justify-between" tabindex="0"><span class="date-text">— Pilih Tanggal —</span><span class="date-arrow">▼</span></div><input type="date" name="date_to" value="{{ $dateTo }}" style="position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0"></div></div></div></template>
-                <template x-if="filterMode === 'month'"><div class="grid grid-cols-1 sm:grid-cols-2 gap-4"><div><label class="font-[Helvetica] font-bold text-xs uppercase block mb-1">Dari Bulan</label><input type="month" name="month_from" value="{{ $monthFrom }}" class="w-full border-2 border-black px-3 py-2 text-sm font-['Times_New_Roman'] bg-white"></div><div><label class="font-[Helvetica] font-bold text-xs uppercase block mb-1">Sampai Bulan</label><input type="month" name="month_to" value="{{ $monthTo }}" class="w-full border-2 border-black px-3 py-2 text-sm font-['Times_New_Roman'] bg-white"></div></div></template>
+                <template x-if="filterMode === 'month'">
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div>
+                            <label class="font-[Helvetica] font-bold text-xs uppercase block mb-1">Dari Bulan</label>
+                            <div class="month-wrapper" data-accent="#f1c40f">
+                                <div class="month-display w-full border-2 border-black px-3 py-2 text-sm font-['Times_New_Roman'] bg-white cursor-pointer select-none flex items-center justify-between" tabindex="0">
+                                    <span class="month-text">— Pilih Bulan —</span><span class="month-arrow">▼</span>
+                                </div>
+                                <input type="month" name="month_from" value="{{ $monthFrom }}" style="position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0">
+                            </div>
+                        </div>
+                        <div>
+                            <label class="font-[Helvetica] font-bold text-xs uppercase block mb-1">Sampai Bulan</label>
+                            <div class="month-wrapper" data-accent="#f1c40f">
+                                <div class="month-display w-full border-2 border-black px-3 py-2 text-sm font-['Times_New_Roman'] bg-white cursor-pointer select-none flex items-center justify-between" tabindex="0">
+                                    <span class="month-text">— Pilih Bulan —</span><span class="month-arrow">▼</span>
+                                </div>
+                                <input type="month" name="month_to" value="{{ $monthTo }}" style="position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0">
+                            </div>
+                        </div>
+                    </div>
+                </template>
                 <div class="flex flex-wrap gap-2 pt-2"><button class="bg-black text-white border-2 border-black px-6 py-2 text-sm font-[Helvetica] font-bold">Terapkan Filter</button><a href="{{ route('dana-talangan.index', array_filter(['search' => $search])) }}" class="bg-white border-2 border-black px-6 py-2 text-sm font-[Helvetica] font-bold">Reset Filter</a></div>
             </form>
         </div>

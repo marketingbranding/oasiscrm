@@ -39,6 +39,7 @@ After editing any controller:
 - Sortable CRM table headers should sort by direct header click and show `▼`/`▲` on the active column, matching the Database module. Do not introduce a dropdown sort menu unless the product explicitly requires one.
 - Table action cells must match the Database module: `Edit` is a blue (`#0000ee`) bold underlined action, `Hapus` is red (`#c0392b`) bold underlined action with confirmation, and both remain on one line in the final column. Use generated Laravel URLs/routes rather than hardcoded paths, and safely encode any record data passed to Alpine.
 - New table implementations must preserve the full canonical behavior together: 2px black cell grid, sticky black uppercase headers, compact Helvetica/Times typography, zebra rows, yellow hover, horizontal scrolling, correct pagination row numbers, direct-click sorting, frozen identity columns when useful, boolean boxes, and consistent final-column actions. Do not copy only part of the visual treatment.
+- Keep `.crm-data-table` on the shared separated-border model (`border-collapse: separate`, zero spacing, single-sided 2px cell borders). Do not switch it back to collapsed borders: Chrome/Edge paint collapsed borders below sticky cells, causing frozen-column grid lines to disappear while scrolling.
 
 ## Routes & auth
 

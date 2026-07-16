@@ -22,6 +22,7 @@
 - Style tabel CRM dipusatkan melalui `.crm-table-scroll` dan `.crm-data-table` agar modul baru tetap konsisten.
 - Sorting Dana Talangan menggunakan klik langsung pada header dengan indikator `▼`/`▲`, sama seperti Modul Database.
 - Filter Dana Talangan dipindahkan ke satu modal agar toolbar hanya menampilkan pencarian nama, tombol Filter, Export/Import, dan Tambah; jumlah serta ringkasan filter aktif tetap terlihat.
+- Grid tabel CRM menggunakan separated borders agar garis cell pada frozen columns tetap terlihat ketika tabel digeser di Chrome/Edge.
 
 ### 2026-07-08 — Peningkatan Modul Database
 

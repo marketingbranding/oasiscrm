@@ -82,7 +82,8 @@
 
 .crm-data-table {
     width: 100%;
-    border-collapse: collapse;
+    border-collapse: separate;
+    border-spacing: 0;
     font-size: 12px;
 }
 
@@ -91,8 +92,11 @@
     top: 0;
     z-index: 5;
     min-width: 120px;
-    border: 2px solid #000;
+    border: 0;
+    border-right: 2px solid #000;
+    border-bottom: 2px solid #000;
     background: #000;
+    background-clip: padding-box;
     color: #fff;
     padding: 6px 8px;
     text-align: left;
@@ -106,11 +110,22 @@
 .crm-data-table td {
     max-width: 300px;
     overflow: hidden;
-    border: 2px solid #000;
+    border: 0;
+    border-right: 2px solid #000;
+    border-bottom: 2px solid #000;
     padding: 4px 8px;
     text-overflow: ellipsis;
     white-space: nowrap;
     font-family: 'Times New Roman', serif;
+}
+
+.crm-data-table th:last-child,
+.crm-data-table td:last-child {
+    border-right: 0;
+}
+
+.crm-data-table tbody tr:last-child td {
+    border-bottom: 0;
 }
 
 .crm-data-table tbody tr:nth-child(even) {

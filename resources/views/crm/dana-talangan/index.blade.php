@@ -411,17 +411,20 @@
 .dana-table.frozen td.crm-select-col {
     position: sticky;
     left: 0;
+    background-clip: padding-box;
 }
 .dana-table.frozen th.crm-row-num,
 .dana-table.frozen td.crm-row-num {
     position: sticky;
     left: 44px;
+    background-clip: padding-box;
 }
 .dana-table.frozen th.name-col,
 .dana-table.frozen td.name-col {
     position: sticky;
     left: 88px;
     box-shadow: 3px 0 0 #000;
+    background-clip: padding-box;
 }
 .dana-table.frozen thead th.crm-select-col { z-index: 15; }
 .dana-table.frozen thead th.crm-row-num { z-index: 14; }

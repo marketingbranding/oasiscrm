@@ -37,6 +37,9 @@ Route::middleware(['auth', 'verified', 'password.changed'])->group(function () {
 
     Route::bind('content_calendar', fn ($value) => ContentItem::findOrFail($value));
     Route::get('content-calendar/export', [ContentCalendarController::class, 'export'])->name('content-calendar.export');
+    Route::get('content-calendar/export-template', [ContentCalendarController::class, 'exportTemplate'])->name('content-calendar.export-template');
+    Route::get('content-calendar/import', [ContentCalendarController::class, 'import'])->name('content-calendar.import');
+    Route::post('content-calendar/import', [ContentCalendarController::class, 'importStore'])->name('content-calendar.import-store');
     Route::get('content-calendar/{content_calendar}/detail', [ContentCalendarController::class, 'detail'])->name('content-calendar.detail');
     Route::post('content-calendar/bulk-update', [ContentCalendarController::class, 'bulkUpdate'])->name('content-calendar.bulk-update');
     Route::post('content-calendar/bulk-delete', [ContentCalendarController::class, 'bulkDelete'])->name('content-calendar.bulk-delete');
@@ -58,10 +61,6 @@ Route::middleware(['auth', 'verified', 'password.changed'])->group(function () {
     Route::post('lead-sources/bulk-delete', [LeadSourceController::class, 'bulkDestroy'])->name('lead-sources.bulk-destroy');
     Route::post('lead-sources/{leadSource}/toggle-active', [LeadSourceController::class, 'toggleActive'])->name('lead-sources.toggle-active');
     Route::resource('lead-sources', LeadSourceController::class);
-
-    Route::get('content-calendar/export-template', [ContentCalendarController::class, 'exportTemplate'])->name('content-calendar.export-template');
-    Route::get('content-calendar/import', [ContentCalendarController::class, 'import'])->name('content-calendar.import');
-    Route::post('content-calendar/import', [ContentCalendarController::class, 'importStore'])->name('content-calendar.import-store');
 
     Route::bind('dana_talangan', fn ($v) => DanaTalangan::findOrFail($v));
     Route::get('dana-talangan/kavling-options', [DanaTalanganController::class, 'kavlingOptions'])->name('dana-talangan.kavling-options');

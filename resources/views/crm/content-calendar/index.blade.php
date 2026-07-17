@@ -1,413 +1,208 @@
 @extends('layouts.crm')
-
-@section('title', 'Task Tracker - Oasis CRM')
-
+@section('title', 'Work Planner - Oasis CRM')
 @section('content')
-    <div x-data="taskDetailModal(@json($allItemIds))">
-    <x-crm.page-header color="#b3bd95" title="Task Tracker" />
+@php
+    $tabs = ['today' => 'Hari Ini', 'calendar' => 'Kalender', 'tasks' => 'Tugas', 'content' => 'Konten', 'all' => 'Semua'];
+    $statusLabels = [
+        'todo'=>'To Do','in_progress'=>'In Progress','completed'=>'Completed','lost_track'=>'Lost Track',
+        'planned'=>'Planned','confirmed'=>'Confirmed','done'=>'Done','cancelled'=>'Cancelled',
+        'idea'=>'Idea','draft'=>'Draft','review'=>'Review','scheduled'=>'Scheduled','published'=>'Published',
+    ];
+    $fixedType = $viewMode === 'tasks' ? 'task' : ($viewMode === 'content' ? 'content' : null);
+    $activeFilters = [];
+    if ($selectedBranchId && Auth::user()->canViewAllBranches()) $activeFilters[] = 'Cabang: '.($branches->firstWhere('id', $selectedBranchId)?->name ?? $selectedBranchId);
+    if ($selectedProject) $activeFilters[] = 'Proyek: '.$selectedProject;
+    if ($selectedType && !$fixedType) $activeFilters[] = 'Tipe: '.ucfirst($selectedType);
+    if ($selectedStatus) $activeFilters[] = 'Status: '.($statusLabels[$selectedStatus] ?? $selectedStatus);
+    if ($selectedPriority) $activeFilters[] = 'Prioritas: '.ucfirst($selectedPriority);
+    if ($selectedPic) $activeFilters[] = 'PIC: '.$selectedPic;
+@endphp
+<div x-data="plannerPage(@js($allItemIds), {
+    branchId: @js((string) $selectedBranchId),
+    projectName: @js($selectedProject ?: ''),
+    type: @js($fixedType ?: ($selectedType ?: '')),
+    status: @js($selectedStatus ?: ''),
+    fixedType: @js($fixedType),
+    returnView: @js($viewMode),
+    projects: @js($filterProjects->map(fn($project) => ['name' => $project->project_name, 'branch_id' => (string) $project->branch_id])->values()),
+})">
+    <x-crm.page-header color="#b3bd95" title="Work Planner" />
 
-    <div class="bg-white border-2 border-black p-3 mb-6">
-        <form method="GET" action="{{ route('content-calendar.index') }}" class="flex items-center gap-3 flex-wrap filter-bar">
-            <div class="flex items-center gap-3 flex-wrap">
-                @if(Auth::user()->canViewAllBranches() && isset($branches) && $branches->count() > 0)
-                    <label class="font-[Helvetica] font-bold text-xs uppercase">Cabang:</label>
-                    <select name="branch_id" onchange="this.form.submit()" class="border-2 border-black px-3 py-1.5 text-sm font-['Times_New_Roman'] bg-white rounded-none">
-                        <option value="">— Semua Cabang —</option>
-                        @foreach($branches as $b)
-                            <option value="{{ $b->id }}" {{ (string)$selectedBranchId === (string)$b->id ? 'selected' : '' }}>{{ $b->name }}</option>
-                        @endforeach
-                    </select>
-                @endif
+    <nav class="flex overflow-x-auto border-b-2 border-black mb-4">
+        @foreach($tabs as $key => $label)
+        <a href="{{ route('content-calendar.index', ['view'=>$key]) }}" class="shrink-0 border-2 border-b-0 border-black px-4 py-2 text-xs font-[Helvetica] font-bold uppercase {{ $viewMode === $key ? 'bg-[#b3bd95]' : 'bg-white' }}">{{ $label }}</a>
+        @endforeach
+    </nav>
 
-                @if(isset($projects) && $projects->count() > 0)
-                    <label class="font-[Helvetica] font-bold text-xs uppercase">Proyek:</label>
-                    <select name="project_name" onchange="this.form.submit()" class="border-2 border-black px-3 py-1.5 text-sm font-['Times_New_Roman'] bg-white rounded-none">
-                        <option value="">— Semua Proyek —</option>
-                        @foreach($projects as $p)
-                            <option value="{{ $p->project_name }}" {{ $selectedProject === $p->project_name ? 'selected' : '' }}>{{ $p->project_name }}</option>
-                        @endforeach
-                    </select>
-                @endif
-
-                <label class="font-[Helvetica] font-bold text-xs uppercase">Status:</label>
-                <select name="status" onchange="this.form.submit()" class="border-2 border-black px-3 py-1.5 text-sm font-['Times_New_Roman'] bg-white rounded-none">
-                    <option value="">— Semua Status —</option>
-                    <option value="todo" {{ $selectedStatus === 'todo' ? 'selected' : '' }}>To Do</option>
-                    <option value="in_progress" {{ $selectedStatus === 'in_progress' ? 'selected' : '' }}>In Progress</option>
-                    <option value="completed" {{ $selectedStatus === 'completed' ? 'selected' : '' }}>Completed</option>
-                    <option value="lost_track" {{ $selectedStatus === 'lost_track' ? 'selected' : '' }}>Lost Track</option>
-                </select>
-
-                <label class="font-[Helvetica] font-bold text-xs uppercase">Prioritas:</label>
-                <select name="priority" onchange="this.form.submit()" class="border-2 border-black px-3 py-1.5 text-sm font-['Times_New_Roman'] bg-white rounded-none">
-                    <option value="">— Semua —</option>
-                    <option value="low" {{ $selectedPriority === 'low' ? 'selected' : '' }}>Low</option>
-                    <option value="medium" {{ $selectedPriority === 'medium' ? 'selected' : '' }}>Medium</option>
-                    <option value="high" {{ $selectedPriority === 'high' ? 'selected' : '' }}>High</option>
-                    <option value="urgent" {{ $selectedPriority === 'urgent' ? 'selected' : '' }}>Urgent</option>
-                </select>
-
-                <label class="font-[Helvetica] font-bold text-xs uppercase">PIC:</label>
-                <input type="text" name="pic" value="{{ $selectedPic ?? '' }}" placeholder="Cari PIC..."
-                       onchange="this.form.submit()"
-                       class="border-2 border-black px-3 py-1.5 text-sm font-['Times_New_Roman'] bg-white rounded-none w-32">
-            </div>
-
-            <div class="h-6 w-px bg-black mx-1 hidden sm:block"></div>
-
-            <div class="flex items-center gap-2 ml-auto">
-                <x-crm.export-import export-route="content-calendar.export" import-route="content-calendar.import" :params="request()->only(['month', 'year', 'branch_id', 'project_name', 'status', 'priority', 'pic'])" />
-                <a href="{{ route('content-calendar.create') }}" class="bg-[#b3bd95] text-black px-4 py-1.5 text-sm font-[Helvetica] font-bold border-2 border-black rounded-none hover:bg-[#9eaa7a]">
-                    + Task Baru
-                </a>
-            </div>
-        </form>
-    </div>
-
-    <div class="flex mb-4">
-        <div class="flex items-center gap-2">
-            <a href="{{ route('content-calendar.index', array_filter(['month' => $prevMonth->month, 'year' => $prevMonth->year, 'branch_id' => request('branch_id'), 'project_name' => request('project_name'), 'status' => request('status'), 'priority' => request('priority'), 'pic' => request('pic')])) }}" class="bg-black text-white px-3 py-1.5 text-sm font-[Helvetica] font-bold border-2 border-black rounded-none hover:bg-gray-800">
-                ← Prev
-            </a>
-            <span class="font-['Arial_Black'] font-black text-lg px-3">{{ $currentMonth->format('F Y') }}</span>
-            <a href="{{ route('content-calendar.index', array_filter(['month' => $nextMonth->month, 'year' => $nextMonth->year, 'branch_id' => request('branch_id'), 'project_name' => request('project_name'), 'status' => request('status'), 'priority' => request('priority'), 'pic' => request('pic')])) }}" class="bg-black text-white px-3 py-1.5 text-sm font-[Helvetica] font-bold border-2 border-black rounded-none hover:bg-gray-800">
-                Next →
-            </a>
-            <label class="flex items-center gap-1 ml-4 cursor-pointer select-none">
-                <input type="checkbox" @change="selectAll()" :checked="selectedIds.length === allItemIds.length && allItemIds.length > 0" class="w-4 h-4 accent-[#b3bd95]">
-                <span class="font-[Helvetica] font-bold text-xs uppercase">Pilih Semua</span>
-            </label>
-        </div>
-    </div>
-
-    @php
-        $dayNames = ['Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab', 'Min'];
-        $statusColors = [
-            'todo' => 'bg-[#9ab6c8]',
-            'in_progress' => 'bg-[#e6915d]',
-            'completed' => 'bg-[#b3bd95]',
-            'lost_track' => 'bg-[#d77a7a]',
-        ];
-        $statusLabels = [
-            'todo' => 'TO DO',
-            'in_progress' => 'IN PROGRESS',
-            'completed' => 'COMPLETED',
-            'lost_track' => 'LOST TRACK',
-        ];
-        $priorityLabels = [
-            'low' => 'LOW',
-            'medium' => 'MED',
-            'high' => 'HIGH',
-            'urgent' => 'URGENT',
-        ];
-    @endphp
-
-    <div class="border-2 border-black bg-white">
-        <table class="w-full border-collapse" style="table-layout: fixed;">
-            <thead>
-                <tr>
-                    @foreach($dayNames as $name)
-                        <th class="bg-black text-white px-2 py-2 text-center font-[Helvetica] font-bold text-xs uppercase border border-black">{{ $name }}</th>
-                    @endforeach
-                </tr>
-            </thead>
-            <tbody>
-                @forelse($calendar as $week)
-                    <tr>
-                        @foreach($week as $cell)
-                            @php
-                                $hasItems = $cell['day'] && $cell['items']->count() > 0;
-                            @endphp
-                            <td class="p-1.5 align-top border border-black {{ $cell['day'] ? 'bg-white' : 'bg-gray-100' }} {{ $cell['isToday'] ? 'ring-2 ring-inset ring-[#e91d2a]' : '' }}" style="height: 140px; vertical-align: top;">
-                                @if($cell['day'])
-                                    <div class="flex items-center justify-between mb-1">
-                                        <span class="font-['Arial_Black'] font-black text-sm {{ $cell['isToday'] ? 'text-[#e91d2a]' : 'text-black' }}">{{ $cell['day'] }}</span>
-                                        @if($hasItems)
-                                            <span class="text-[10px] font-[Helvetica] font-bold text-gray-500">{{ $cell['items']->count() }}</span>
-                                        @endif
-                                    </div>
-                                    @foreach($cell['items'] as $item)
-                                        @php
-                                            $deadline = $item->deadline_date ?? $item->scheduled_date;
-                                            $isOverdue = $deadline->isPast() && !$deadline->isToday() && $item->status !== 'completed';
-                                            $isApproaching = !$isOverdue && $item->status !== 'completed' && $deadline->diffInDays(now()) <= 7;
-                                            $daysLeft = $isApproaching ? round($deadline->diffInDays(now()), 1) : null;
-                                            $duration = $item->start_date ? $item->start_date->diffInDays($deadline) : null;
-                                        @endphp
-                                        <div class="{{ $statusColors[$item->status] ?? 'bg-gray-200' }} border {{ $isOverdue ? 'border-[#e91d2a] border-2' : 'border-black' }} mb-1 rounded-none text-xs leading-tight {{ $item->status === 'completed' ? 'opacity-70' : '' }}">
-                                            @if($isApproaching)
-                                                <div class="bg-[#e91d2a] text-yellow-300 text-[10px] font-mono font-bold text-center px-1 py-0.5">
-                                                    {{ $deadline->isToday() ? 'Deadline hari ini!' : ($deadline->isTomorrow() ? 'Besok deadline!' : $daysLeft . ' hari lagi') }}
-                                                </div>
-                                            @endif
-                                            <div class="flex items-start">
-                                                <input type="checkbox"
-                                                       :checked="isSelected({{ $item->id }})"
-                                                       @click.stop="toggle({{ $item->id }})"
-                                                       class="mt-1 ml-1 w-3 h-3 shrink-0 accent-[#b3bd95] cursor-pointer">
-                                                <div class="flex-1 min-w-0">
-                                                    <a href="#"
-                                                       @click.prevent="openDetail({{ $item->id }})"
-                                                       class="block px-1 pt-0.5 pb-0 font-[Helvetica] font-bold text-black hover:opacity-80"
-                                                       title="{{ $item->title }} — {{ $item->project_name ?? '(tanpa proyek)' }} — {{ $statusLabels[$item->status] ?? strtoupper($item->status) }}">
-                                                        <span class="block truncate">{{ $item->title }}</span>
-                                                        <span class="block font-['Times_New_Roman'] font-normal truncate">{{ $item->project_name ?? 'Tanpa proyek' }} @if($item->pic_names && count($item->pic_names) > 0) — {{ implode(', ', $item->pic_names) }} @endif</span>
-                                                        <span class="block font-[Helvetica] font-bold">{{ $statusLabels[$item->status] ?? strtoupper($item->status) }} · {{ $priorityLabels[$item->priority] ?? strtoupper($item->priority ?? 'medium') }} @if($duration !== null) · {{ $duration }}d @endif</span>
-                                                    </a>
-                                                    <form method="POST" action="{{ route('content-calendar.destroy', ['content_calendar' => $item->id]) }}" onsubmit="return confirm('Hapus task ini?')" class="border-t border-black">
-                                                        @csrf
-                                                        @method('DELETE')
-                                                        <input type="hidden" name="month" value="{{ request('month') }}">
-                                                        <input type="hidden" name="year" value="{{ request('year') }}">
-                                                        <input type="hidden" name="branch_id" value="{{ request('branch_id') }}">
-                                                        <input type="hidden" name="project_name" value="{{ request('project_name') }}">
-                                                        <input type="hidden" name="status" value="{{ request('status') }}">
-                                                        <input type="hidden" name="priority" value="{{ request('priority') }}">
-                                                        <input type="hidden" name="pic" value="{{ request('pic') }}">
-                                                        <button type="submit" class="w-full px-1 py-0.5 font-bold text-black hover:text-[#e91d2a] leading-tight" title="Hapus">×</button>
-                                                    </form>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    @endforeach
-                                @endif
-                            </td>
-                        @endforeach
-                    </tr>
-                @empty
-                    <tr>
-                        <td colspan="7" class="px-4 py-10 text-center text-sm font-['Times_New_Roman'] border border-black">
-                            Tidak ada task untuk bulan ini.
-                        </td>
-                    </tr>
-                @endforelse
-            </tbody>
-        </table>
-    </div>
-
-    <div class="mt-4 flex items-center gap-4 text-xs font-[Helvetica] font-bold flex-wrap">
-        <span class="flex items-center gap-1"><span class="bg-[#9ab6c8] border border-black px-2 py-0.5">TO DO</span> To Do</span>
-        <span class="flex items-center gap-1"><span class="bg-[#e6915d] border border-black px-2 py-0.5">IN PROGRESS</span> In Progress</span>
-        <span class="flex items-center gap-1"><span class="bg-[#b3bd95] border border-black px-2 py-0.5">COMPLETED</span> Completed</span>
-        <span class="flex items-center gap-1"><span class="bg-[#d77a7a] border border-black px-2 py-0.5">LOST TRACK</span> Lost Track</span>
-        <span class="flex items-center gap-1"><span class="border-2 border-[#e91d2a] px-2 py-0.5">OVERDUE</span> Past deadline</span>
-        <span class="flex items-center gap-1"><span class="bg-[#e91d2a] text-yellow-300 border border-black px-2 py-0.5">APPROACHING</span> ≤7 hari</span>
-    </div>
-
-    {{-- Bulk Action Bar --}}
-    <form method="POST" x-ref="bulkForm" x-show="selectedIds.length > 0" x-cloak class="sticky bottom-0 z-30 bg-white border-t-2 border-black shadow-[0_-4px_0_#000]">
-        @csrf
-        <input type="hidden" name="month" value="{{ request('month') }}">
-        <input type="hidden" name="year" value="{{ request('year') }}">
-        <input type="hidden" name="branch_id" value="{{ request('branch_id') }}">
-        <input type="hidden" name="project_name" value="{{ request('project_name') }}">
-        <input type="hidden" name="status_filter" value="{{ request('status') }}">
-        <input type="hidden" name="priority_filter" value="{{ request('priority') }}">
-        <input type="hidden" name="pic" value="{{ request('pic') }}">
-        <template x-for="id in selectedIds" :key="'bulk_' + id">
-            <input type="hidden" name="ids[]" :value="id">
-        </template>
-        <div class="flex items-center gap-3 px-4 py-3 flex-wrap">
-            <span class="font-[Helvetica] font-bold text-xs uppercase" x-text="selectedIds.length + ' task dipilih'"></span>
-
-            <select name="status" class="border-2 border-black px-2 py-1.5 text-xs font-['Times_New_Roman'] bg-white rounded-none">
-                <option value="">— Status —</option>
-                <option value="todo">To Do</option>
-                <option value="in_progress">In Progress</option>
-                <option value="completed">Completed</option>
-                <option value="lost_track">Lost Track</option>
-            </select>
-
-            <select name="priority" class="border-2 border-black px-2 py-1.5 text-xs font-['Times_New_Roman'] bg-white rounded-none">
-                <option value="">— Prioritas —</option>
-                <option value="low">Low</option>
-                <option value="medium">Medium</option>
-                <option value="high">High</option>
-                <option value="urgent">Urgent</option>
-            </select>
-
-            <input type="text" name="pic_names[]" placeholder="Tambah PIC..."
-                   class="border-2 border-black px-2 py-1.5 text-xs font-['Times_New_Roman'] bg-white rounded-none w-28">
-
-            <button type="button" @click="submitBulkUpdate()" class="bg-black text-white px-4 py-1.5 text-xs font-[Helvetica] font-bold border-2 border-black rounded-none hover:bg-gray-800">Update</button>
-            <button type="button" @click="submitBulkDelete()" class="bg-[#d77a7a] text-white px-4 py-1.5 text-xs font-[Helvetica] font-bold border-2 border-black rounded-none hover:bg-[#c06666]">Hapus</button>
-            <button type="button" @click="clearSelection()" class="underline text-xs font-[Helvetica] font-bold">Batal</button>
-        </div>
-    </form>
-
-    {{-- Detail Modal --}}
-    <div x-show="open"
-         x-cloak
-         @keydown.escape.window="close()"
-         class="fixed inset-0 z-50 flex items-center justify-center p-4"
-         style="background: rgba(0,0,0,0.5);">
-        <div @click.away="close()"
-             class="relative bg-[#f5f0eb] border border-black w-full max-w-lg mx-auto max-h-[80vh] overflow-y-auto shadow-[4px_4px_0_#000] rotate-[-0.3deg]">
-            {{-- paper clip --}}
-            <div class="absolute -top-2 -right-2 z-10 text-2xl select-none" aria-hidden="true">&#x1F4CE;</div>
-            {{-- typewriter header --}}
-            <div class="bg-[#2a2a2a] text-white px-4 py-2.5 font-mono text-xs tracking-[0.2em] uppercase flex items-center justify-between border-b border-[#d4c9b8]">
-                <span x-text="task ? task.title : 'Detail Task'" class="truncate mr-2"></span>
-                <button @click="close()" class="text-white/70 hover:text-white text-lg leading-none shrink-0">&times;</button>
-            </div>
-            <div x-show="loading" class="p-6 text-center text-sm font-['Times_New_Roman'] text-gray-500">Memuat...</div>
-            <template x-if="!loading && task">
-                <div class="text-sm font-['Times_New_Roman']">
-                    {{-- detail body --}}
-                    <div class="px-5 py-4 border-b border-dashed border-[#d4c9b8]">
-                        <p x-text="task.task_detail || '—'" class="text-sm leading-relaxed text-gray-800 italic"></p>
-                    </div>
-                    {{-- fields grid --}}
-                    <div class="px-5 py-4 grid grid-cols-2 gap-x-6 gap-y-3 text-sm border-b border-dashed border-[#d4c9b8]">
-                        <div>
-                            <span class="font-mono text-[10px] tracking-wider uppercase text-gray-500">Proyek</span>
-                            <p x-text="task.project_name || '—'" class="mt-0.5 text-gray-900"></p>
-                        </div>
-                        <div>
-                            <span class="font-mono text-[10px] tracking-wider uppercase text-gray-500">Channel</span>
-                            <p x-text="task.platform || '—'" class="mt-0.5 text-gray-900"></p>
-                        </div>
-                        <div>
-                            <span class="font-mono text-[10px] tracking-wider uppercase text-gray-500">Mulai</span>
-                            <p x-text="formatDate(task.start_date)" class="mt-0.5 text-gray-900"></p>
-                        </div>
-                        <div>
-                            <span class="font-mono text-[10px] tracking-wider uppercase text-gray-500">Deadline</span>
-                            <p x-text="formatDate(task.deadline_date || task.scheduled_date)" class="mt-0.5 text-gray-900"></p>
-                        </div>
-                        <div>
-                            <span class="font-mono text-[10px] tracking-wider uppercase text-gray-500">Status</span>
-                            <p class="mt-0.5">
-                                <span x-text="task.status ? task.status.replace('_', ' ').toUpperCase() : '—'"
-                                      class="border border-black px-1.5 py-0.5 text-[10px] font-mono font-bold tracking-wider"
-                                      :style="'background:' + (statusColors[task.status] || '#ccc')"></span>
-                            </p>
-                        </div>
-                        <div>
-                            <span class="font-mono text-[10px] tracking-wider uppercase text-gray-500">Prioritas</span>
-                            <p x-text="task.priority ? task.priority.toUpperCase() : '—'" class="mt-0.5 text-gray-900 font-bold"></p>
-                        </div>
-                        <div class="col-span-2">
-                            <span class="font-mono text-[10px] tracking-wider uppercase text-gray-500">PIC</span>
-                            <div class="flex flex-wrap gap-1.5 mt-1">
-                                <template x-for="name in (task.pic_names || [])" :key="name">
-                                    <span class="border border-black bg-[#b3bd95] px-2 py-0.5 text-[11px] font-mono font-bold" x-text="name"></span>
-                                </template>
-                                <span x-show="!task.pic_names || task.pic_names.length === 0" class="text-sm text-gray-500">—</span>
-                            </div>
-                        </div>
-                    </div>
-                    {{-- notes --}}
-                    <div class="px-5 py-4 border-b border-dashed border-[#d4c9b8]">
-                        <span class="font-mono text-[10px] tracking-wider uppercase text-gray-500">Catatan</span>
-                        <p x-text="task.notes || '—'" class="mt-1 text-sm leading-relaxed text-gray-800"></p>
-                    </div>
-                    {{-- footer --}}
-                    <div class="px-5 py-3 flex items-center justify-between text-[10px] text-gray-500 font-mono">
-                        <span x-text="'Dibuat oleh: ' + (task.creator ? task.creator.name : '—')"></span>
-                        <div class="flex gap-2">
-                            <button @click="close()" class="bg-white text-black px-3 py-1 text-xs font-mono font-bold border border-black hover:bg-gray-100">Tutup</button>
-                            <a :href="'{{ url('content-calendar') }}/' + task.id + '/edit'" class="bg-[#b3bd95] text-black px-3 py-1 text-xs font-mono font-bold border border-black hover:bg-[#9eaa7a]">Edit</a>
-                        </div>
+    <div class="border-2 border-black bg-white p-3 mb-3">
+        <div class="flex items-center gap-2 flex-wrap">
+            <form method="GET" action="{{ route('content-calendar.index') }}" class="flex grow min-w-[240px] max-w-xl">
+                @foreach(request()->except(['search','page','view','item_type','status']) as $key => $value) @if(is_scalar($value) && $value !== '')<input type="hidden" name="{{ $key }}" value="{{ $value }}">@endif @endforeach
+                <input type="hidden" name="view" value="{{ $viewMode }}">
+                @if($selectedType)<input type="hidden" name="item_type" value="{{ $selectedType }}">@endif
+                @if($selectedStatus)<input type="hidden" name="status" value="{{ $selectedStatus }}">@endif
+                <input name="search" value="{{ $search }}" aria-label="Cari Work Planner" placeholder="Cari judul atau detail..." class="min-w-0 grow border-2 border-r-0 border-black px-3 py-1.5 text-sm">
+                <button class="border-2 border-black bg-black text-white px-4 py-1.5 text-sm font-bold">Cari</button>
+            </form>
+            <button type="button" @click="filterOpen=true" class="inline-flex items-center gap-2 border-2 border-black bg-white px-4 py-1.5 text-sm font-bold hover:bg-gray-100">
+                <svg viewBox="0 0 20 20" fill="currentColor" class="w-4 h-4"><path d="M2.75 3.5a.75.75 0 0 1 .75-.75h13a.75.75 0 0 1 .53 1.28l-5.28 5.28v4.94a.75.75 0 0 1-.36.64l-3 1.8A.75.75 0 0 1 7.25 16V9.31L1.97 4.03a.75.75 0 0 1 .78-1.23v.7Zm2.56.75 3.22 3.22a.75.75 0 0 1 .22.53v6.68l1.5-.9V8a.75.75 0 0 1 .22-.53l3.22-3.22H5.31Z"/></svg>
+                Filter @if(count($activeFilters))<span class="bg-[#c0392b] text-white min-w-5 h-5 px-1 inline-flex items-center justify-center text-[10px]">{{ count($activeFilters) }}</span>@endif
+            </button>
+            <div class="ml-auto flex gap-2 items-center">
+                <x-crm.export-import export-route="content-calendar.export" import-route="content-calendar.import" :params="request()->query()" />
+                <div class="relative" @click.outside="addOpen=false">
+                    <button type="button" @click="addOpen=!addOpen" class="border-2 border-black bg-[#b3bd95] px-4 py-1.5 text-sm font-bold">+ Tambah ▼</button>
+                    <div x-show="addOpen" x-cloak class="absolute right-0 top-full mt-1 z-40 w-44 border-2 border-black bg-white shadow-[4px_4px_0_#000]">
+                        <a href="{{ route('content-calendar.create', ['type'=>'task','view'=>$viewMode]) }}" class="block border-l-4 border-[#9ab6c8] px-3 py-2 text-sm font-bold hover:bg-gray-100">Task</a>
+                        <a href="{{ route('content-calendar.create', ['type'=>'agenda','view'=>$viewMode]) }}" class="block border-l-4 border-[#e6915d] px-3 py-2 text-sm font-bold hover:bg-gray-100">Agenda</a>
+                        <a href="{{ route('content-calendar.create', ['type'=>'content','view'=>$viewMode]) }}" class="block border-l-4 border-[#8c9ae0] px-3 py-2 text-sm font-bold hover:bg-gray-100">Konten</a>
                     </div>
                 </div>
-            </template>
+            </div>
         </div>
     </div>
+
+    @if(count($activeFilters))
+    <div class="flex flex-wrap gap-2 items-center mb-4"><span class="text-[10px] font-bold uppercase">Filter aktif:</span>@foreach($activeFilters as $activeFilter)<span class="border-2 border-black bg-[#fef3cd] px-2 py-1 text-xs">{{ $activeFilter }}</span>@endforeach<a href="{{ route('content-calendar.index', array_filter(['view'=>$viewMode,'month'=>$month,'year'=>$year,'search'=>$search])) }}" class="text-xs text-[#c0392b] font-bold underline">Hapus semua filter</a></div>
+    @endif
+
+    <div x-show="filterOpen" x-cloak class="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4" @keydown.escape.window="filterOpen=false">
+        <div @click.away="filterOpen=false" class="w-full max-w-2xl border-2 border-black bg-white p-5 shadow-[8px_8px_0_#000] max-h-[90vh] overflow-y-auto">
+            <div class="flex justify-between items-center mb-4"><h2 class="text-sm font-bold uppercase">Filter Work Planner</h2><button @click="filterOpen=false" type="button">×</button></div>
+            <form method="GET" action="{{ route('content-calendar.index') }}" class="space-y-4">
+                <input type="hidden" name="view" value="{{ $viewMode }}"><input type="hidden" name="month" value="{{ $month }}"><input type="hidden" name="year" value="{{ $year }}">@if($search)<input type="hidden" name="search" value="{{ $search }}">@endif
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    @if(Auth::user()->canViewAllBranches())<div><label class="block text-xs font-bold uppercase mb-1">Cabang</label><select name="branch_id" x-model="filterBranch" @change="filterProject=''" class="w-full border-2 border-black px-3 py-2 bg-white"><option value="">Semua Cabang</option>@foreach($branches as $branch)<option value="{{ $branch->id }}">{{ $branch->name }}</option>@endforeach</select></div>@endif
+                    <div><label class="block text-xs font-bold uppercase mb-1">Proyek</label><select name="project_name" x-model="filterProject" class="w-full border-2 border-black px-3 py-2 bg-white"><option value="">Semua Proyek</option><template x-for="project in filterProjectOptions"><option :value="project.name" x-text="project.name"></option></template></select></div>
+                    <div><label class="block text-xs font-bold uppercase mb-1">Tipe</label>@if($fixedType)<div class="border-2 border-black bg-gray-100 px-3 py-2">{{ ucfirst($fixedType) }} <span class="text-xs font-normal">(konteks tab)</span></div>@else<select name="item_type" x-model="filterType" @change="syncFilterStatus()" class="w-full border-2 border-black px-3 py-2 bg-white"><option value="">Semua Tipe</option><option value="task">Task</option><option value="agenda">Agenda</option><option value="content">Konten</option></select>@endif</div>
+                    <div><label class="block text-xs font-bold uppercase mb-1">Status</label><select name="status" x-model="filterStatus" class="w-full border-2 border-black px-3 py-2 bg-white"><option value="">Semua Status</option><template x-for="option in filterStatusOptions"><option :value="option.value" x-text="option.label"></option></template></select></div>
+                    <div x-show="!filterType || filterType==='task'"><label class="block text-xs font-bold uppercase mb-1">Prioritas</label><select name="priority" class="w-full border-2 border-black px-3 py-2 bg-white"><option value="">Semua Prioritas</option>@foreach(['low','medium','high','urgent'] as $priority)<option value="{{ $priority }}" {{ $selectedPriority===$priority?'selected':'' }}>{{ ucfirst($priority) }}</option>@endforeach</select></div>
+                    <div><label class="block text-xs font-bold uppercase mb-1">PIC</label><input name="pic" value="{{ $selectedPic }}" placeholder="Nama PIC" class="w-full border-2 border-black px-3 py-2"></div>
+                </div>
+                <div class="flex gap-2"><button class="bg-black text-white border-2 border-black px-6 py-2 text-sm font-bold">Terapkan Filter</button><a href="{{ route('content-calendar.index', array_filter(['view'=>$viewMode,'month'=>$month,'year'=>$year,'search'=>$search])) }}" class="border-2 border-black px-6 py-2 text-sm font-bold">Reset Filter</a></div>
+            </form>
+        </div>
     </div>
+
+    @if($viewMode === 'today')
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <section class="border-2 border-black bg-[#fff8ed]"><h2 class="bg-[#e6915d] border-b-2 border-black px-3 py-2 text-xs font-bold uppercase">Agenda Hari Ini · {{ $agendaToday->count() }}</h2><div class="p-3 space-y-2">@forelse($agendaToday as $plannerItem) @include('crm.content-calendar._item-card') @empty <p class="text-sm italic">Tidak ada agenda hari ini.</p> @endforelse</div></section>
+        <section class="border-2 border-black bg-[#f4f8fb]"><h2 class="bg-[#9ab6c8] border-b-2 border-black px-3 py-2 text-xs font-bold uppercase">Task Hari Ini · {{ $tasksToday->count() }}</h2><div class="p-3 space-y-2">@forelse($tasksToday as $plannerItem) @include('crm.content-calendar._item-card') @empty <p class="text-sm italic">Tidak ada task jatuh tempo hari ini.</p> @endforelse</div></section>
+        <section class="border-2 border-black bg-[#fff1f1]"><h2 class="bg-[#d77a7a] border-b-2 border-black px-3 py-2 text-xs font-bold uppercase">Overdue · {{ $overdueTasks->count() }}</h2><div class="p-3 space-y-2">@forelse($overdueTasks as $plannerItem) @include('crm.content-calendar._item-card') @empty <p class="text-sm italic">Tidak ada task overdue.</p> @endforelse</div></section>
+        <section class="border-2 border-black bg-[#f4f3ff]"><h2 class="bg-[#8c9ae0] text-white border-b-2 border-black px-3 py-2 text-xs font-bold uppercase">Konten Hari Ini · {{ $contentToday->count() }}</h2><div class="p-3 space-y-2">@forelse($contentToday as $plannerItem) @include('crm.content-calendar._item-card') @empty <p class="text-sm italic">Tidak ada konten terbit hari ini.</p> @endforelse</div></section>
+    </div>
+    @if($tomorrowItems->isNotEmpty())<section class="border-2 border-black bg-white mt-4"><h2 class="bg-black text-white px-3 py-2 text-xs font-bold uppercase">Besok / H-1 · {{ $tomorrowItems->count() }}</h2><div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 p-3">@foreach($tomorrowItems as $plannerItem) @include('crm.content-calendar._item-card') @endforeach</div></section>@endif
+
+    @elseif($viewMode === 'calendar')
+    <div class="flex items-center gap-3 mb-3"><a href="{{ route('content-calendar.index', array_merge(request()->query(), ['view'=>'calendar','month'=>$prevMonth->month,'year'=>$prevMonth->year])) }}" class="border-2 border-black bg-black text-white px-3 py-1 text-xs font-bold">←</a><strong>{{ $currentMonth->translatedFormat('F Y') }}</strong><a href="{{ route('content-calendar.index', array_merge(request()->query(), ['view'=>'calendar','month'=>$nextMonth->month,'year'=>$nextMonth->year])) }}" class="border-2 border-black bg-black text-white px-3 py-1 text-xs font-bold">→</a></div>
+    <div class="overflow-x-auto border-2 border-black bg-white">
+        <div class="min-w-[840px] grid grid-cols-7">
+            @foreach(['Sen','Sel','Rab','Kam','Jum','Sab','Min'] as $day)
+            <div class="bg-black text-white border-r-2 last:border-r-0 border-black p-2 text-center text-xs font-bold uppercase">{{ $day }}</div>
+            @endforeach
+            @foreach($calendar as $week)
+                @foreach($week as $cell)
+                @php
+                    $dayPayload = $cell['items']->map(fn($item) => [
+                        'id' => $item->id,
+                        'title' => $item->title,
+                        'item_type' => $item->item_type,
+                        'status' => $statusLabels[$item->status] ?? str_replace('_', ' ', $item->status),
+                        'time' => $item->start_time ? substr($item->start_time, 0, 5) : null,
+                        'location' => $item->location,
+                    ])->values();
+                    $dayLabel = $cell['day'] ? $currentMonth->copy()->day($cell['day'])->translatedFormat('l, d F Y') : '';
+                @endphp
+                <div class="aspect-square min-h-0 overflow-hidden {{ $loop->last ? 'border-r-0' : 'border-r-2' }} border-t-2 border-black p-1.5 bg-white {{ $cell['isToday']?'ring-2 ring-inset ring-[#c0392b]':'' }}">
+                    @if($cell['day'])
+                    <button type="button" @click="openDay(@js($dayLabel), @js($dayPayload))" class="font-[Helvetica] font-bold text-xs {{ $cell['isToday']?'bg-[#c0392b] text-white px-1':'' }}">{{ $cell['day'] }}</button>
+                    <div class="space-y-1 mt-1">
+                        @foreach($cell['items']->take(3) as $plannerItem)
+                        @php $chipColor = ['task'=>'#9ab6c8','agenda'=>'#e6915d','content'=>'#8c9ae0'][$plannerItem->item_type] ?? '#ccc'; @endphp
+                        <button type="button" @click="openDetail({{ $plannerItem->id }})" title="{{ $plannerItem->title }}" class="block w-full truncate border border-black border-l-4 bg-white px-1 py-0.5 text-left text-[9px] leading-tight" style="border-left-color:{{ $chipColor }}">
+                            @if($plannerItem->start_time)<span class="font-bold">{{ substr($plannerItem->start_time, 0, 5) }}</span> @endif{{ $plannerItem->title }}
+                        </button>
+                        @endforeach
+                        @if($cell['items']->count() > 3)
+                        <button type="button" @click="openDay(@js($dayLabel), @js($dayPayload))" class="block w-full text-left text-[9px] font-bold underline text-[#0000ee]">+{{ $cell['items']->count() - 3 }} lainnya</button>
+                        @endif
+                    </div>
+                    @endif
+                </div>
+                @endforeach
+            @endforeach
+        </div>
+    </div>
+
+    @elseif(in_array($viewMode, ['tasks','content']))
+    <div class="flex gap-3 overflow-x-auto pb-3">
+        @foreach($boardColumns as $status => $columnItems)
+        <section class="w-72 shrink-0 border-2 border-black bg-gray-100"><h2 class="bg-black text-white px-3 py-2 text-xs font-bold uppercase">{{ $statusLabels[$status] ?? $status }} · {{ $columnItems->count() }}</h2><div class="p-2 space-y-2 min-h-40">@foreach($columnItems as $plannerItem) @include('crm.content-calendar._item-card') @endforeach</div></section>
+        @endforeach
+    </div>
+
+    @else
+    <div class="crm-table-scroll"><table class="crm-data-table"><thead><tr><th class="crm-select-col"><input type="checkbox" @change="selectAll()"></th><th>Tipe</th><th>Judul</th><th>Tanggal</th><th>Cabang</th><th>Proyek</th><th>Status</th><th>PIC</th><th class="crm-actions">Aksi</th></tr></thead><tbody>@forelse($items as $plannerItem)<tr><td class="crm-select-col"><input type="checkbox" :checked="isSelected({{ $plannerItem->id }})" @click="toggle({{ $plannerItem->id }})"></td><td>{{ strtoupper($plannerItem->item_type) }}</td><td title="{{ $plannerItem->title }}"><button @click="openDetail({{ $plannerItem->id }})" class="font-bold underline">{{ $plannerItem->title }}</button></td><td>{{ $plannerItem->scheduled_date->format('d M Y') }}</td><td>{{ $plannerItem->branch?->name }}</td><td>{{ $plannerItem->project_name ?: '—' }}</td><td>{{ $statusLabels[$plannerItem->status] ?? $plannerItem->status }}</td><td>{{ $plannerItem->assignees->pluck('name')->merge($plannerItem->pic_names ?? [])->join(', ') ?: '—' }}</td><td class="crm-actions"><a href="{{ route('content-calendar.edit', ['content_calendar'=>$plannerItem->id, 'view'=>$viewMode]) }}" style="color:#0000ee;font-weight:bold;text-decoration:underline">Edit</a> <form method="POST" action="{{ route('content-calendar.destroy',$plannerItem) }}" class="inline" onsubmit="return confirm('Hapus item ini?')">@csrf @method('DELETE')<button style="color:#c0392b;font-weight:bold;text-decoration:underline">Hapus</button></form></td></tr>@empty<tr><td colspan="9" class="text-center py-8 italic">Tidak ada item.</td></tr>@endforelse</tbody></table></div><div class="mt-3">{{ $items->links() }}</div>
+    @endif
+
+    <form method="POST" x-ref="bulkForm" x-show="selectedIds.length" x-cloak class="sticky bottom-0 z-30 bg-white border-2 border-black mt-4 p-3 flex gap-2 items-center flex-wrap">@csrf<template x-for="id in selectedIds"><input type="hidden" name="ids[]" :value="id"></template><strong class="text-xs" x-text="selectedIds.length + ' item dipilih'"></strong><input name="status" placeholder="Status" class="border-2 border-black px-2 py-1 text-xs"><select name="priority" class="border-2 border-black px-2 py-1 text-xs"><option value="">Prioritas</option><option>low</option><option>medium</option><option>high</option><option>urgent</option></select><button type="button" @click="submitBulkUpdate()" class="bg-black text-white border-2 border-black px-3 py-1 text-xs">Update</button><button type="button" @click="submitBulkDelete()" class="bg-[#d77a7a] border-2 border-black px-3 py-1 text-xs">Hapus</button></form>
+
+    <div x-show="dayOpen" x-cloak class="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4" @keydown.escape.window="dayOpen=false">
+        <div @click.away="dayOpen=false" class="bg-[#f5f0eb] border-2 border-black max-w-xl w-full max-h-[85vh] overflow-y-auto shadow-[6px_6px_0_#000]">
+            <div class="sticky top-0 z-10 bg-black text-white px-4 py-2 flex items-center justify-between"><strong x-text="dayLabel"></strong><button type="button" @click="dayOpen=false">×</button></div>
+            <div class="p-3 space-y-2">
+                <template x-if="dayItems.length === 0"><p class="py-6 text-center italic">Tidak ada aktivitas.</p></template>
+                <template x-for="item in dayItems" :key="item.id">
+                    <article class="border-2 border-black bg-white p-3 flex items-start gap-3">
+                        <span class="shrink-0 border border-black px-2 py-1 text-[9px] font-bold" :style="'background:' + typeColor(item.item_type)" x-text="item.item_type.toUpperCase()"></span>
+                        <button type="button" @click="openDetail(item.id)" class="min-w-0 grow text-left">
+                            <strong class="block truncate" x-text="item.title"></strong>
+                            <span class="block text-xs text-gray-600"><span x-show="item.time" x-text="item.time + ' · '"></span><span x-text="item.status"></span><span x-show="item.location" x-text="' · ' + item.location"></span></span>
+                        </button>
+                        <a :href="editBaseUrl + '/' + item.id + '/edit?view=calendar'" class="shrink-0 font-bold underline" style="color:#0000ee">Edit</a>
+                    </article>
+                </template>
+            </div>
+        </div>
+    </div>
+
+    <div x-show="detailOpen" x-cloak class="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4" @keydown.escape.window="detailOpen=false"><div @click.away="detailOpen=false" class="bg-[#f5f0eb] border-2 border-black max-w-lg w-full max-h-[85vh] overflow-y-auto shadow-[6px_6px_0_#000]"><div class="bg-black text-white px-4 py-2 flex justify-between"><strong x-text="detail?.title || 'Detail'"></strong><button @click="detailOpen=false">×</button></div><template x-if="detail"><div class="p-4 space-y-3 text-sm"><p x-text="detail.task_detail || '—'" class="italic"></p><div class="grid grid-cols-2 gap-3"><div><b>Tipe</b><p x-text="detail.item_type"></p></div><div><b>Status</b><p x-text="detail.status"></p></div><div><b>Tanggal</b><p x-text="formatDate(detail.scheduled_date)"></p></div><div><b>Visibilitas</b><p x-text="detail.visibility"></p></div><div><b>Lokasi</b><p x-text="detail.location || '—'"></p></div><div><b>Platform</b><p x-text="detail.platform || '—'"></p></div></div><div><b>PIC</b><p x-text="[...(detail.assignees || []).map(u=>u.name), ...(detail.pic_names || [])].join(', ') || '—'"></p></div><div><b>Catatan</b><p x-text="detail.notes || '—'"></p></div><div class="flex justify-end"><a :href="editBaseUrl + '/' + detail.id + '/edit?view=' + returnView" class="border-2 border-black bg-[#b3bd95] px-3 py-1 font-bold">Edit</a></div></div></template></div></div>
+</div>
 @endsection
 
 @push('scripts')
 <script>
-function taskDetailModal(allItemIds = []) {
+function plannerPage(ids, config) {
     return {
-        allItemIds,
-        selectedIds: [],
-        open: false,
-        loading: false,
-        task: null,
-        statusColors: { todo: '#9ab6c8', in_progress: '#e6915d', completed: '#b3bd95', lost_track: '#d77a7a' },
-        isSelected(id) {
-            return this.selectedIds.includes(id);
+        allItemIds: ids || [], selectedIds: [], detailOpen: false, detail: null,
+        dayOpen: false, dayLabel: '', dayItems: [],
+        filterOpen: false, addOpen: false,
+        filterBranch: config.branchId || '', filterProject: config.projectName || '',
+        filterType: config.type || '', filterStatus: config.status || '', fixedType: config.fixedType,
+        returnView: config.returnView || 'today',
+        filterProjects: config.projects || [],
+        filterStatuses: {
+            task: [{value:'todo',label:'To Do'},{value:'in_progress',label:'In Progress'},{value:'completed',label:'Completed'},{value:'lost_track',label:'Lost Track'}],
+            agenda: [{value:'planned',label:'Planned'},{value:'confirmed',label:'Confirmed'},{value:'done',label:'Done'},{value:'cancelled',label:'Cancelled'}],
+            content: [{value:'idea',label:'Idea'},{value:'draft',label:'Draft'},{value:'review',label:'Review'},{value:'scheduled',label:'Scheduled'},{value:'published',label:'Published'},{value:'cancelled',label:'Cancelled'}],
         },
-        toggle(id) {
-            const index = this.selectedIds.indexOf(id);
-            if (index === -1) {
-                this.selectedIds.push(id);
-            } else {
-                this.selectedIds.splice(index, 1);
-            }
+        detailBaseUrl: @js(url('content-calendar')), editBaseUrl: @js(url('content-calendar')),
+        get filterProjectOptions() { return this.filterProjects.filter(project => !this.filterBranch || String(project.branch_id) === String(this.filterBranch)); },
+        get filterStatusOptions() {
+            if (this.filterType) return this.filterStatuses[this.filterType] || [];
+            const seen = new Set();
+            return Object.values(this.filterStatuses).flat().filter(option => !seen.has(option.value) && seen.add(option.value));
         },
-        selectAll() {
-            if (this.selectedIds.length === this.allItemIds.length) {
-                this.selectedIds = [];
-                return;
-            }
-
-            this.selectedIds = [...this.allItemIds];
-        },
-        clearSelection() {
-            this.selectedIds = [];
-        },
-        submitBulkUpdate() {
-            if (this.selectedIds.length === 0) return;
-
-            this.$refs.bulkForm.action = '{{ route('content-calendar.bulk-update') }}';
-            this.$refs.bulkForm.submit();
-        },
-        submitBulkDelete() {
-            if (this.selectedIds.length === 0) return;
-            if (!confirm('Hapus ' + this.selectedIds.length + ' task terpilih?')) return;
-
-            const form = document.createElement('form');
-            form.method = 'POST';
-            form.action = '{{ route('content-calendar.bulk-delete') }}';
-
-            const token = this.$refs.bulkForm.querySelector('input[name="_token"]');
-            if (token) {
-                form.appendChild(token.cloneNode(true));
-            }
-
-            ['month', 'year', 'branch_id', 'project_name', 'status_filter', 'priority_filter', 'pic'].forEach((name) => {
-                const input = this.$refs.bulkForm.querySelector('input[name="' + name + '"]');
-                if (input) form.appendChild(input.cloneNode(true));
-            });
-
-            this.selectedIds.forEach((id) => {
-                const input = document.createElement('input');
-                input.type = 'hidden';
-                input.name = 'ids[]';
-                input.value = id;
-                form.appendChild(input);
-            });
-
-            document.body.appendChild(form);
-            form.submit();
-        },
-        formatDate(dateStr) {
-            if (!dateStr) return '—';
-            return new Date(dateStr).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' });
-        },
-        openDetail(id) {
-            this.open = true;
-            this.loading = true;
-            this.task = null;
-            fetch('{{ url('content-calendar') }}/' + id + '/detail')
-                .then(r => r.json())
-                .then(data => {
-                    this.task = data;
-                    this.loading = false;
-                })
-                .catch(() => {
-                    this.loading = false;
-                    alert('Gagal memuat detail task.');
-                });
-        },
-        close() {
-            this.open = false;
-            this.loading = false;
-            this.task = null;
-        }
+        syncFilterStatus() { if (!this.filterStatusOptions.some(option => option.value === this.filterStatus)) this.filterStatus=''; },
+        isSelected(id) { return this.selectedIds.includes(id); },
+        toggle(id) { this.isSelected(id) ? this.selectedIds.splice(this.selectedIds.indexOf(id),1) : this.selectedIds.push(id); },
+        selectAll() { this.selectedIds = this.selectedIds.length === this.allItemIds.length ? [] : [...this.allItemIds]; },
+        openDetail(id) { this.detailOpen=true; fetch(this.detailBaseUrl+'/'+id+'/detail').then(r=>r.json()).then(data=>this.detail=data); },
+        openDay(label, items) { this.dayLabel=label; this.dayItems=items || []; this.dayOpen=true; },
+        typeColor(type) { return {task:'#9ab6c8',agenda:'#e6915d',content:'#8c9ae0'}[type] || '#ccc'; },
+        formatDate(value) { return value ? new Date(value).toLocaleDateString('id-ID',{day:'numeric',month:'short',year:'numeric'}) : '—'; },
+        submitBulkUpdate() { this.$refs.bulkForm.action=@js(route('content-calendar.bulk-update')); this.$refs.bulkForm.submit(); },
+        submitBulkDelete() { if(confirm('Hapus item terpilih?')) { this.$refs.bulkForm.action=@js(route('content-calendar.bulk-delete')); this.$refs.bulkForm.submit(); } },
     };
 }
 </script>

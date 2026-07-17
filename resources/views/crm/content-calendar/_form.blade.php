@@ -1,0 +1,177 @@
+@php
+    $editing = isset($item) && $item;
+    $type = old('item_type', $item?->item_type ?? $defaultType ?? 'task');
+    $branchId = old('branch_id', $item?->branch_id ?? Auth::user()->branch_id);
+    $selectedUsers = old('assigned_user_ids', $item?->assignees?->pluck('id')->all() ?? []);
+    $externalPics = old('pic_names', $item?->pic_names ?? []);
+@endphp
+<form method="POST" action="{{ $editing ? route('content-calendar.update', $item) : route('content-calendar.store') }}"
+      x-data="plannerForm({
+        type: @js($type),
+        branchId: @js((string) $branchId),
+        projectName: @js(old('project_name', $item?->project_name)),
+        status: @js(old('status', $item?->status ?? ($type === 'agenda' ? 'planned' : ($type === 'content' ? 'idea' : 'todo')))),
+        agendaType: @js(old('agenda_type', $item?->agenda_type ?? 'visit')),
+        platform: @js(old('platform', $item?->platform ?? 'Instagram')),
+        contentFormat: @js(old('content_format', $item?->content_format ?? 'feed')),
+        projects: @js($projects->map(fn($project) => ['name' => $project->project_name, 'branch_id' => (string) $project->branch_id])->values()),
+        users: @js($users->map(fn($user) => ['id' => $user->id, 'name' => $user->name, 'branch_id' => (string) $user->branch_id])->values()),
+        externalPics: @js($externalPics),
+    })" class="space-y-5">
+    @csrf
+    @if($editing) @method('PUT') @endif
+    <input type="hidden" name="return_view" value="{{ request('view', 'today') }}">
+
+    <div>
+        <label class="font-[Helvetica] font-bold text-xs uppercase block mb-2">Jenis Aktivitas</label>
+        <div class="grid grid-cols-3 gap-2">
+            <template x-for="option in typeOptions" :key="option.value">
+                <button type="button" @click="changeType(option.value)"
+                        class="border-2 border-black px-3 py-3 text-sm font-[Helvetica] font-bold"
+                        :class="type === option.value ? option.active : 'bg-white hover:bg-gray-100'">
+                    <span x-text="option.label"></span>
+                </button>
+            </template>
+        </div>
+        <input type="hidden" name="item_type" :value="type">
+    </div>
+
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div class="sm:col-span-2">
+            <label class="font-[Helvetica] font-bold text-xs uppercase block mb-1">Judul</label>
+            <input name="title" value="{{ old('title', $item?->title) }}" required class="w-full border-2 border-black px-3 py-2 text-sm font-['Times_New_Roman']">
+            @error('title')<p class="text-[#c0392b] text-xs mt-1 font-bold">{{ $message }}</p>@enderror
+        </div>
+        <div class="sm:col-span-2">
+            <label class="font-[Helvetica] font-bold text-xs uppercase block mb-1">Detail</label>
+            <textarea name="task_detail" rows="3" class="w-full border-2 border-black px-3 py-2 text-sm font-['Times_New_Roman']">{{ old('task_detail', $item?->task_detail) }}</textarea>
+        </div>
+
+        @if(Auth::user()->canViewAllBranches())
+        <div>
+            <label class="font-[Helvetica] font-bold text-xs uppercase block mb-1">Cabang</label>
+            <select name="branch_id" x-model="branchId" @change="projectName = ''" required class="w-full border-2 border-black px-3 py-2 text-sm bg-white">
+                <option value="">— Pilih Cabang —</option>
+                @foreach($branches as $branch)<option value="{{ $branch->id }}">{{ $branch->name }}</option>@endforeach
+            </select>
+        </div>
+        @endif
+        <div>
+            <label class="font-[Helvetica] font-bold text-xs uppercase block mb-1">Proyek</label>
+            <select name="project_name" x-model="projectName" :disabled="!branchId" class="w-full border-2 border-black px-3 py-2 text-sm bg-white disabled:bg-gray-100">
+                <option value="">— Tanpa Proyek —</option>
+                <template x-for="project in filteredProjects" :key="project.name"><option :value="project.name" x-text="project.name"></option></template>
+            </select>
+        </div>
+        <div>
+            <label class="font-[Helvetica] font-bold text-xs uppercase block mb-1">Visibilitas</label>
+            <select name="visibility" class="w-full border-2 border-black px-3 py-2 text-sm bg-white">
+                <option value="team" {{ old('visibility', $item?->visibility ?? 'team') === 'team' ? 'selected' : '' }}>Tim Cabang</option>
+                <option value="personal" {{ old('visibility', $item?->visibility) === 'personal' ? 'selected' : '' }}>Personal + PIC</option>
+            </select>
+        </div>
+        <div>
+            <label class="font-[Helvetica] font-bold text-xs uppercase block mb-1">Status</label>
+            <select name="status" x-model="status" class="w-full border-2 border-black px-3 py-2 text-sm bg-white">
+                <template x-for="option in statusOptions[type]" :key="option.value"><option :value="option.value" x-text="option.label"></option></template>
+            </select>
+        </div>
+    </div>
+
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div>
+            <label class="font-[Helvetica] font-bold text-xs uppercase block mb-1" x-text="type === 'agenda' ? 'Tanggal Mulai' : (type === 'content' ? 'Mulai Produksi' : 'Tanggal Mulai')"></label>
+            <div class="date-wrapper" data-accent="#b3bd95">
+                <div class="date-display w-full border-2 border-black px-3 py-2 text-sm font-['Times_New_Roman'] bg-white cursor-pointer flex justify-between" tabindex="0"><span class="date-text">— Pilih Tanggal —</span><span class="date-arrow">▼</span></div>
+                <input type="date" name="start_date" value="{{ old('start_date', $item?->start_date?->format('Y-m-d')) }}" :required="type === 'agenda'" style="position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0">
+            </div>
+        </div>
+        <div>
+            <label class="font-[Helvetica] font-bold text-xs uppercase block mb-1" x-text="type === 'agenda' ? 'Tanggal Selesai' : (type === 'content' ? 'Jadwal Publikasi' : 'Deadline')"></label>
+            <div class="date-wrapper" data-accent="#b3bd95">
+                <div class="date-display w-full border-2 border-black px-3 py-2 text-sm font-['Times_New_Roman'] bg-white cursor-pointer flex justify-between" tabindex="0"><span class="date-text">— Pilih Tanggal —</span><span class="date-arrow">▼</span></div>
+                <input type="date" name="deadline_date" value="{{ old('deadline_date', $item?->deadline_date?->format('Y-m-d')) }}" required style="position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0">
+            </div>
+        </div>
+        <template x-if="type === 'agenda'">
+            <div class="contents">
+                <div><label class="font-[Helvetica] font-bold text-xs uppercase block mb-1">Jam Mulai</label><input type="time" name="start_time" value="{{ old('start_time', $item?->start_time) }}" required class="w-full border-2 border-black px-3 py-2 text-sm bg-white"></div>
+                <div><label class="font-[Helvetica] font-bold text-xs uppercase block mb-1">Jam Selesai</label><input type="time" name="end_time" value="{{ old('end_time', $item?->end_time) }}" class="w-full border-2 border-black px-3 py-2 text-sm bg-white"></div>
+            </div>
+        </template>
+    </div>
+
+    <template x-if="type === 'task'">
+        <div><label class="font-[Helvetica] font-bold text-xs uppercase block mb-1">Prioritas</label><select name="priority" class="w-full border-2 border-black px-3 py-2 text-sm bg-white"><option value="low">Low</option><option value="medium" {{ old('priority', $item?->priority ?? 'medium') === 'medium' ? 'selected' : '' }}>Medium</option><option value="high" {{ old('priority', $item?->priority) === 'high' ? 'selected' : '' }}>High</option><option value="urgent" {{ old('priority', $item?->priority) === 'urgent' ? 'selected' : '' }}>Urgent</option></select></div>
+    </template>
+
+    <template x-if="type === 'agenda'">
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div><label class="font-[Helvetica] font-bold text-xs uppercase block mb-1">Jenis Agenda</label><select name="agenda_type" x-model="agendaType" class="w-full border-2 border-black px-3 py-2 text-sm bg-white"><option value="visit">Kunjungan</option><option value="meeting">Meeting</option><option value="survey">Survey</option><option value="follow_up">Follow Up</option><option value="event">Event</option><option value="other">Lainnya</option></select></div>
+            <div><label class="font-[Helvetica] font-bold text-xs uppercase block mb-1">Lokasi</label><input name="location" value="{{ old('location', $item?->location) }}" class="w-full border-2 border-black px-3 py-2 text-sm"></div>
+        </div>
+    </template>
+
+    <template x-if="type === 'content'">
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div><label class="font-[Helvetica] font-bold text-xs uppercase block mb-1">Platform</label><select name="platform" x-model="platform" class="w-full border-2 border-black px-3 py-2 text-sm bg-white"><option value="Instagram">Instagram</option><option value="Facebook">Facebook</option><option value="TikTok">TikTok</option><option value="YouTube">YouTube</option><option value="Website">Website</option></select></div>
+            <div><label class="font-[Helvetica] font-bold text-xs uppercase block mb-1">Format Konten</label><select name="content_format" x-model="contentFormat" class="w-full border-2 border-black px-3 py-2 text-sm bg-white"><option value="feed">Feed</option><option value="reels">Reels</option><option value="story">Story</option><option value="video">Video</option><option value="article">Artikel</option><option value="banner">Banner</option></select></div>
+            <div><label class="font-[Helvetica] font-bold text-xs uppercase block mb-1">Link Aset</label><input type="url" name="asset_url" value="{{ old('asset_url', $item?->asset_url) }}" class="w-full border-2 border-black px-3 py-2 text-sm"></div>
+        </div>
+    </template>
+
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div>
+            <label class="font-[Helvetica] font-bold text-xs uppercase block mb-1">PIC Akun Oasis</label>
+            <select name="assigned_user_ids[]" multiple size="5" class="w-full border-2 border-black px-3 py-2 text-sm bg-white">
+                <template x-for="user in filteredUsers" :key="user.id"><option :value="user.id" x-text="user.name" :selected="selectedUserIds.includes(user.id)"></option></template>
+            </select>
+            <p class="text-[11px] mt-1 font-['Times_New_Roman']">Gunakan Ctrl/Cmd untuk memilih beberapa akun.</p>
+        </div>
+        <div>
+            <label class="font-[Helvetica] font-bold text-xs uppercase block mb-1">PIC Eksternal</label>
+            <div class="flex gap-2"><input x-model="draftPic" @keydown.enter.prevent="addExternalPic()" placeholder="Nama PIC di luar Oasis" class="grow border-2 border-black px-3 py-2 text-sm"><button type="button" @click="addExternalPic()" class="border-2 border-black bg-black text-white px-4 font-bold">+</button></div>
+            <div class="flex flex-wrap gap-2 mt-2"><template x-for="(name,index) in externalPics" :key="name"><span class="border-2 border-black bg-[#b3bd95] px-2 py-1 text-xs font-bold"><span x-text="name"></span><button type="button" @click="externalPics.splice(index,1)" class="ml-1">×</button><input type="hidden" name="pic_names[]" :value="name"></span></template></div>
+        </div>
+    </div>
+
+    <div><label class="font-[Helvetica] font-bold text-xs uppercase block mb-1">Catatan / Progress</label><textarea name="notes" rows="4" class="w-full border-2 border-black px-3 py-2 text-sm font-['Times_New_Roman']">{{ old('notes', $item?->notes) }}</textarea></div>
+
+    @if($errors->any())<div class="border-2 border-black bg-[#d77a7a] px-3 py-2 text-sm">{{ $errors->first() }}</div>@endif
+    <div class="flex gap-3"><button class="bg-black text-white border-2 border-black px-6 py-2 text-sm font-bold">{{ $editing ? 'Simpan Perubahan' : 'Simpan Item' }}</button><a href="{{ route('content-calendar.index', ['view' => request('view', 'today')]) }}" class="bg-white border-2 border-black px-6 py-2 text-sm font-bold">Batal</a></div>
+</form>
+
+@push('scripts')
+<script>
+function plannerForm(config) {
+    return {
+        type: config.type,
+        branchId: config.branchId,
+        projectName: config.projectName || '',
+        status: config.status,
+        agendaType: config.agendaType,
+        platform: config.platform,
+        contentFormat: config.contentFormat,
+        projects: config.projects,
+        users: config.users,
+        externalPics: Array.isArray(config.externalPics) ? config.externalPics : [],
+        selectedUserIds: @json(array_map('intval', $selectedUsers)),
+        draftPic: '',
+        typeOptions: [
+            { value:'task', label:'TASK', active:'bg-[#9ab6c8]' },
+            { value:'agenda', label:'AGENDA', active:'bg-[#e6915d]' },
+            { value:'content', label:'KONTEN', active:'bg-[#8c9ae0] text-white' },
+        ],
+        statusOptions: {
+            task: [{value:'todo',label:'To Do'},{value:'in_progress',label:'In Progress'},{value:'completed',label:'Completed'},{value:'lost_track',label:'Lost Track'}],
+            agenda: [{value:'planned',label:'Planned'},{value:'confirmed',label:'Confirmed'},{value:'done',label:'Done'},{value:'cancelled',label:'Cancelled'}],
+            content: [{value:'idea',label:'Idea'},{value:'draft',label:'Draft'},{value:'review',label:'Review'},{value:'scheduled',label:'Scheduled'},{value:'published',label:'Published'},{value:'cancelled',label:'Cancelled'}],
+        },
+        get filteredProjects() { return this.projects.filter(project => String(project.branch_id) === String(this.branchId)); },
+        get filteredUsers() { return this.users.filter(user => String(user.branch_id) === String(this.branchId)); },
+        changeType(type) { this.type = type; this.status = this.statusOptions[type][0].value; },
+        addExternalPic() { const value = this.draftPic.trim(); if (value && !this.externalPics.includes(value)) this.externalPics.push(value); this.draftPic = ''; },
+    };
+}
+</script>
+@endpush

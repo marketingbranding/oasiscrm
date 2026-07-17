@@ -48,6 +48,11 @@ class User extends Authenticatable
         return $this->belongsTo(Branch::class);
     }
 
+    public function assignedPlannerItems(): BelongsToMany
+    {
+        return $this->belongsToMany(ContentItem::class)->withTimestamps();
+    }
+
     public function roles(): BelongsToMany
     {
         return $this->belongsToMany(Role::class)

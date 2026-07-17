@@ -3,9 +3,7 @@
 namespace App\Imports;
 
 use App\Imports\Concerns\ParsesImport;
-use App\Models\Branch;
 use App\Models\ContentItem;
-use PhpOffice\PhpSpreadsheet\IOFactory;
 use Illuminate\Support\Facades\Auth;
 
 class ContentItemImport
@@ -23,12 +21,16 @@ class ContentItemImport
 
         [$hasCabang, $branchNames] = self::detectHasCabang($rows);
         $branchNameToId = self::branchNameToIdMap();
+        $header = array_map(fn ($value) => mb_strtolower(trim((string) $value)), array_values($rows[0] ?? []));
+        $newFormat = in_array('tipe', $header, true);
 
         foreach ($rows as $cells) {
             $rowNum++;
-            if ($rowNum === 1) continue;
+            if ($rowNum === 1) {
+                continue;
+            }
 
-            if (!is_array($cells) || count($cells) < 2) {
+            if (! is_array($cells) || count($cells) < 2) {
                 continue;
             }
 
@@ -42,19 +44,46 @@ class ContentItemImport
                 $branchFromFile = self::resolveBranchFromFile($cabangName, $branchNameToId, $branchNames);
             }
 
-            $judul = trim($cells[0 + $offset] ?? '');
-            $detail = trim($cells[1 + $offset] ?? '');
-            $platform = trim($cells[2 + $offset] ?? '');
-            $projectName = trim($cells[3 + $offset] ?? '');
-            $startRaw = $cells[4 + $offset] ?? '';
-            $deadlineRaw = $cells[5 + $offset] ?? '';
-            $priorityRaw = strtolower(trim($cells[6 + $offset] ?? ''));
-            $picNames = trim($cells[7 + $offset] ?? '');
-            $statusRaw = strtolower(trim($cells[8 + $offset] ?? ''));
-            $catatan = trim($cells[9 + $offset] ?? '');
+            if ($newFormat) {
+                $type = strtolower(trim($cells[1] ?? 'task'));
+                $visibility = strtolower(trim($cells[2] ?? 'team'));
+                $judul = trim($cells[3] ?? '');
+                $detail = trim($cells[4] ?? '');
+                $platform = trim($cells[5] ?? '');
+                $projectName = trim($cells[6] ?? '');
+                $startRaw = $cells[7] ?? '';
+                $startTime = trim($cells[8] ?? '');
+                $deadlineRaw = $cells[9] ?? '';
+                $endTime = trim($cells[10] ?? '');
+                $priorityRaw = strtolower(trim($cells[11] ?? ''));
+                $picNames = trim($cells[12] ?? '');
+                $statusRaw = strtolower(trim($cells[13] ?? ''));
+                $agendaType = trim($cells[14] ?? '');
+                $location = trim($cells[15] ?? '');
+                $contentFormat = trim($cells[16] ?? '');
+                $assetUrl = trim($cells[17] ?? '');
+                $catatan = trim($cells[18] ?? '');
+            } else {
+                $type = 'task';
+                $visibility = 'team';
+                $judul = trim($cells[0 + $offset] ?? '');
+                $detail = trim($cells[1 + $offset] ?? '');
+                $platform = trim($cells[2 + $offset] ?? '');
+                $projectName = trim($cells[3 + $offset] ?? '');
+                $startRaw = $cells[4 + $offset] ?? '';
+                $startTime = '';
+                $deadlineRaw = $cells[5 + $offset] ?? '';
+                $endTime = '';
+                $priorityRaw = strtolower(trim($cells[6 + $offset] ?? ''));
+                $picNames = trim($cells[7 + $offset] ?? '');
+                $statusRaw = strtolower(trim($cells[8 + $offset] ?? ''));
+                $agendaType = $location = $contentFormat = $assetUrl = '';
+                $catatan = trim($cells[9 + $offset] ?? '');
+            }
 
             if (empty($judul)) {
                 $errors[] = "Baris {$rowNum}: Judul kosong.";
+
                 continue;
             }
 
@@ -62,28 +91,39 @@ class ContentItemImport
             $deadline = self::parseDate((string) $deadlineRaw);
             if (empty($deadline)) {
                 $errors[] = "Baris {$rowNum}: Deadline tidak valid ('{$deadlineRaw}').";
+
                 continue;
             }
 
+            $type = in_array($type, ContentItem::TYPES, true) ? $type : 'task';
+            $visibility = in_array($visibility, ['personal', 'team'], true) ? $visibility : 'team';
             $priority = in_array($priorityRaw, ['low', 'medium', 'high', 'urgent'], true) ? $priorityRaw : 'medium';
-            $status = in_array($statusRaw, ['todo', 'in_progress', 'completed', 'lost_track'], true) ? $statusRaw : 'todo';
+            $status = in_array($statusRaw, ContentItem::STATUSES[$type], true) ? $statusRaw : ContentItem::STATUSES[$type][0];
             $picNamesArray = $picNames !== '' ? array_map('trim', explode(',', $picNames)) : [];
 
             $resolvedBranchId = $branchFromFile ?? $branchId ?? $user->branch_id ?? 1;
 
             $data = [
                 'branch_id' => $resolvedBranchId,
+                'item_type' => $type,
+                'visibility' => $visibility,
                 'project_name' => $projectName ?: null,
                 'title' => $judul,
                 'task_detail' => $detail ?: null,
                 'platform' => $platform ?: null,
                 'start_date' => $startDate,
+                'start_time' => $startTime ?: null,
                 'deadline_date' => $deadline,
-                'scheduled_date' => $deadline,
+                'end_time' => $endTime ?: null,
+                'scheduled_date' => $type === 'agenda' ? ($startDate ?: $deadline) : $deadline,
+                'agenda_type' => $agendaType ?: null,
+                'location' => $location ?: null,
+                'content_format' => $contentFormat ?: null,
+                'asset_url' => $assetUrl ?: null,
                 'priority' => $priority,
                 'pic_names' => $picNamesArray ?: null,
                 'status' => $status,
-                'completed_at' => $status === 'completed' ? now() : null,
+                'completed_at' => in_array($status, ['completed', 'done', 'published', 'cancelled'], true) ? now() : null,
                 'notes' => $catatan ?: null,
                 'created_by' => $user->id,
             ];

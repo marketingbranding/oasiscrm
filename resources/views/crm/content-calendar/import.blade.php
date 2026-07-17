@@ -1,9 +1,9 @@
 @extends('layouts.crm')
 
-@section('title', 'Import Task Tracker - Oasis CRM')
+@section('title', 'Import Work Planner - Oasis CRM')
 
 @section('content')
-    <x-crm.page-header color="#b3bd95" title="Import Task Tracker" />
+    <x-crm.page-header color="#b3bd95" title="Import Work Planner" />
 
     <div class="bg-white border-2 border-black p-4 mb-6">
         <div class="text-sm font-['Times_New_Roman'] mb-4 leading-relaxed">
@@ -14,7 +14,8 @@
                 <li>Upload file yang sudah diisi.</li>
             </ol>
             <p class="mt-2 text-xs text-gray-600">
-                Kolom wajib: <strong>Task</strong> dan <strong>Deadline</strong>.
+                Kolom wajib: <strong>Tipe</strong>, <strong>Judul</strong>, dan <strong>Deadline/Publikasi</strong>.
+                Template Task Tracker lama tetap dapat diimpor dan otomatis dianggap sebagai Task Tim.
                 Baris dengan data tidak valid akan dilewati.
             </p>
         </div>

@@ -13,12 +13,6 @@
             <form method="POST" action="{{ route('dana-talangan.update', ['dana_talangan' => $record->id]) }}" class="space-y-4">
                 @csrf
                 @method('PUT')
-                @if(Auth::user()->canViewAllBranches())
-                <input type="hidden" name="branch_id" value="{{ request('branch_id') }}">
-                @endif
-                <input type="hidden" name="project_name" value="{{ request('project_name') }}">
-                <input type="hidden" name="status" value="{{ request('status') }}">
-
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
                         <label class="font-[Helvetica] font-bold text-xs uppercase block mb-1">Tanggal</label>
@@ -232,7 +226,7 @@
                         <button type="submit" class="bg-black text-white px-6 py-2 text-sm font-[Helvetica] font-bold border-2 border-black rounded-none hover:bg-gray-800">
                             Update
                         </button>
-                        <a href="{{ route('dana-talangan.index', array_filter(request()->only(['branch_id', 'project_name', 'status']))) }}" class="bg-white text-black px-6 py-2 text-sm font-[Helvetica] font-bold border-2 border-black rounded-none hover:bg-gray-100">
+                        <a href="{{ route('dana-talangan.index') }}" class="bg-white text-black px-6 py-2 text-sm font-[Helvetica] font-bold border-2 border-black rounded-none hover:bg-gray-100">
                             Batal
                         </a>
                     </div>
@@ -243,11 +237,6 @@
                   onsubmit="return confirm('Hapus data ini?')" class="pt-4">
                 @csrf
                 @method('DELETE')
-                @if(Auth::user()->canViewAllBranches())
-                <input type="hidden" name="branch_id" value="{{ request('branch_id') }}">
-                @endif
-                <input type="hidden" name="project_name" value="{{ request('project_name') }}">
-                <input type="hidden" name="status" value="{{ request('status') }}">
                 <button type="submit" class="bg-white text-[#e91d2a] px-4 py-2 text-sm font-[Helvetica] font-bold border-2 border-[#e91d2a] rounded-none hover:bg-red-50">
                     Hapus
                 </button>

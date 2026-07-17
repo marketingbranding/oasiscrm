@@ -186,7 +186,7 @@ class DanaTalanganController extends Controller
                 ->with('error', 'Data lokal tersimpan, tetapi gagal dikirim ke Google Sheets: '.$record->last_sync_error);
         }
 
-        return redirect()->route('dana-talangan.index', array_filter($request->only($this->bulkRedirectParams)))
+        return redirect()->route('dana-talangan.index')
             ->with('success', 'Data dana talangan berhasil ditambahkan.');
     }
 
@@ -242,7 +242,7 @@ class DanaTalanganController extends Controller
                 ->with('error', 'Data lokal diperbarui, tetapi gagal dikirim ke Google Sheets: '.$danaTalangan->last_sync_error);
         }
 
-        return redirect()->route('dana-talangan.index', array_filter($request->only($this->bulkRedirectParams)))
+        return redirect()->route('dana-talangan.index')
             ->with('success', 'Data dana talangan berhasil diperbarui.');
     }
 

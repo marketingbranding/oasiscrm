@@ -1,5 +1,18 @@
 ## Catatan Perubahan (Changelog)
 
+### 2026-07-17 — Work Planner
+
+- Task Tracker menjadi Work Planner dengan tipe Task, Agenda, dan Konten dalam satu kalender.
+- Halaman utama `Hari Ini` menampilkan timeline agenda, task deadline/overdue, konten terbit, dan reminder H-1.
+- Item mendukung visibility Personal atau Tim; superadmin/pusat melihat semua, sedangkan user cabang hanya melihat item tim atau personal yang terkait dengannya.
+- PIC dapat menggunakan akun Oasis melalui assignment atau nama eksternal.
+- Ditambahkan Kalender, board Tugas, pipeline Konten, tabel Semua Aktivitas, dan form dinamis per tipe.
+- Notification bell menampilkan overdue, hari ini, dan besok berdasarkan visibility Work Planner.
+- Import lama tetap menjadi Task Tim; template baru mendukung field Agenda dan Konten.
+- Toolbar Work Planner diringkas menjadi Search, modal Filter dengan badge/chips aktif, Export/Import, dan satu dropdown Tambah untuk Task/Agenda/Konten.
+- Tab Work Planner tidak lagi mengaktifkan filter tipe otomatis; pindah tab dan redirect setelah Tambah/Edit kembali dalam kondisi filter kosong. Dana Talangan juga tidak lagi memakai field record sebagai filter redirect setelah simpan.
+- Kalender Work Planner memakai grid 7 kolom dengan kotak rasio tetap; maksimal tiga chip tampil per hari dan sisanya dibuka melalui modal aktivitas harian.
+
 ### 2026-07-15 — Input Dinamis Modul Database
 
 - Form Tambah dan Edit sekarang mengikuti data validation Google Sheets: dropdown, checkbox, tanggal, waktu, dan tanggal-waktu.

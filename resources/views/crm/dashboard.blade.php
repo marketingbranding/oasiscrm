@@ -17,8 +17,14 @@
             <a href="{{ route('database.index', ['sheet' => 'lead', 'add' => 1]) }}" class="flex items-center gap-3 px-3 py-2 text-sm font-[Helvetica] font-bold border-l-4 border-[#e6915d] hover:bg-gray-50">
                 <span>+ Lead Baru</span>
             </a>
-            <a href="{{ route('content-calendar.create') }}" class="flex items-center gap-3 px-3 py-2 text-sm font-[Helvetica] font-bold border-l-4 border-[#b3bd95] hover:bg-gray-50">
+            <a href="{{ route('content-calendar.create', ['type' => 'task']) }}" class="flex items-center gap-3 px-3 py-2 text-sm font-[Helvetica] font-bold border-l-4 border-[#9ab6c8] hover:bg-gray-50">
                 <span>+ Task Baru</span>
+            </a>
+            <a href="{{ route('content-calendar.create', ['type' => 'agenda']) }}" class="flex items-center gap-3 px-3 py-2 text-sm font-[Helvetica] font-bold border-l-4 border-[#e6915d] hover:bg-gray-50">
+                <span>+ Agenda Baru</span>
+            </a>
+            <a href="{{ route('content-calendar.create', ['type' => 'content']) }}" class="flex items-center gap-3 px-3 py-2 text-sm font-[Helvetica] font-bold border-l-4 border-[#8c9ae0] hover:bg-gray-50">
+                <span>+ Konten Baru</span>
             </a>
             <a href="{{ route('dana-talangan.create') }}" class="flex items-center gap-3 px-3 py-2 text-sm font-[Helvetica] font-bold border-l-4 border-[#f1c40f] hover:bg-gray-50">
                 <span>+ Dana Talangan</span>

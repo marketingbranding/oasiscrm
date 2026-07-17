@@ -29,6 +29,7 @@ After editing any controller:
 - **Google Sheets:** 5 service classes under `app/Services/` (api, read, write, sync, konsumen sync)
 - **Views** extend `layouts.crm` (not `layouts.app`). Uses `@yield('content')`, no Blade components.
 - **Dashboard data sources:** Lead KPI and Action Queue query `database_sheet_records` (Google Sheet cache); Dana Talangan queries local `dana_talangans` table; Konsumen Progress queries `konsumen_progress_sheet_rows`; Sync Health queries `database_sheet_sync_statuses`.
+- **Work Planner reuses `content_items`:** `item_type` is `task`, `agenda`, or `content`; legacy rows are Task/Tim. `scheduled_date` is the common calendar/reminder date (task deadline, agenda start, content publication). Personal items are visible to creator/assigned users plus superadmin/pusat; Team items are visible within the branch.
 - **Cache & session** both use `database` driver (SQLite table-based).
 
 ## UI conventions
@@ -43,6 +44,7 @@ After editing any controller:
 - Table action cells must match the Database module: `Edit` is a blue (`#0000ee`) bold underlined action, `Hapus` is red (`#c0392b`) bold underlined action with confirmation, and both remain on one line in the final column. Use generated Laravel URLs/routes rather than hardcoded paths, and safely encode any record data passed to Alpine.
 - New table implementations must preserve the full canonical behavior together: 2px black cell grid, sticky black uppercase headers, compact Helvetica/Times typography, zebra rows, yellow hover, horizontal scrolling, correct pagination row numbers, direct-click sorting, frozen identity columns when useful, boolean boxes, and consistent final-column actions. Do not copy only part of the visual treatment.
 - Keep `.crm-data-table` on the shared separated-border model (`border-collapse: separate`, zero spacing, single-sided 2px cell borders). Do not switch it back to collapsed borders: Chrome/Edge paint collapsed borders below sticky cells, causing frozen-column grid lines to disappear while scrolling.
+- Navigation tabs are view context, not filters: changing tabs must not inject `item_type`, `status`, or other domain filters into the URL. Filters become active only after the user submits the Filter form. Form data fields must never be reused as redirect filter parameters; use a dedicated, validated return parameter such as `return_view` and redirect without filter query strings after create/update.
 
 ## Routes & auth
 
@@ -69,7 +71,7 @@ Key models and their backing tables:
 | `KonsumenProgressSyncStatus` | `konsumen_progress_sync_statuses` | Pipeline sync status per branch |
 | `DanaTalangan` | `dana_talangans` | Dana talangan records |
 | `DanaTalanganSyncStatus` | `dana_talangan_sync_statuses` | Global Talangan sheet sync status |
-| `ContentItem` | `content_items` | Task tracker items |
+| `ContentItem` | `content_items` | Work Planner task, agenda, and content items |
 
 `KonsumenProgressSheetRow.row_data` is a JSON `array` cast — always access as array, not object.
 

@@ -216,7 +216,7 @@
                     <button type="submit" class="bg-black text-white px-6 py-2 text-sm font-[Helvetica] font-bold border-2 border-black rounded-none hover:bg-gray-800">
                         Simpan
                     </button>
-                    <a href="{{ route('dana-talangan.index', array_filter(request()->only(['branch_id', 'project_name', 'status']))) }}" class="bg-white text-black px-6 py-2 text-sm font-[Helvetica] font-bold border-2 border-black rounded-none hover:bg-gray-100">
+                    <a href="{{ route('dana-talangan.index') }}" class="bg-white text-black px-6 py-2 text-sm font-[Helvetica] font-bold border-2 border-black rounded-none hover:bg-gray-100">
                         Batal
                     </a>
                 </div>

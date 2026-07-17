@@ -149,7 +149,7 @@ class DanaTalanganGoogleSyncTest extends TestCase
             'konfirmasi_keuangan' => '0',
         ]);
 
-        $response->assertRedirect();
+        $response->assertRedirect(route('dana-talangan.index'));
         $this->assertDatabaseHas('dana_talangans', [
             'nama_konsumen' => 'Konsumen Baru',
             'branch_id' => $branch->id,
@@ -203,7 +203,7 @@ class DanaTalanganGoogleSyncTest extends TestCase
             'status' => 'sanggup',
             'pinjam_nama' => '0',
             'konfirmasi_keuangan' => '0',
-        ])->assertRedirect();
+        ])->assertRedirect(route('dana-talangan.index'));
 
         $this->assertDatabaseHas('dana_talangans', ['id' => $record->id, 'nama_konsumen' => 'Konsumen Diperbarui']);
         $this->actingAs($user)->delete(route('dana-talangan.destroy', $record))->assertRedirect();

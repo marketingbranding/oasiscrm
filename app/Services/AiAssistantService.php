@@ -36,6 +36,25 @@ class AiAssistantService
             ];
         }
 
+        try {
+            $messages = $this->baseMessages($user, $conversation);
+            $messages[] = ['role' => 'user', 'content' => $message];
+            $response = $this->provider->chat($messages);
+            $content = trim((string) ($response['message']['content'] ?? ''));
+
+            if ($content !== '') {
+                return [
+                    'content' => $content,
+                    'provider' => $response['provider'] ?? 'provider',
+                    'model' => $response['model'] ?? null,
+                    'tool_results' => [],
+                    'actions' => [],
+                ];
+            }
+        } catch (AiProviderException) {
+            // Fall through to deterministic local guidance when providers are unavailable.
+        }
+
         return [
             'content' => $this->unsupportedAnswer(),
             'provider' => 'local',

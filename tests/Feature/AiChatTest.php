@@ -331,9 +331,36 @@ class AiChatTest extends TestCase
             'message' => 'data apa yang bisa kamu cari?',
         ])->assertOk()->assertSeeText('Saya bisa membaca data berikut:')->assertSeeText('Dana Talangan');
 
+        config(['ai.enabled' => false]);
         $this->actingAs($user)->postJson(route('ai-chat.chat'), [
             'message' => 'di dashboard cabang mana yang perlu dicek?',
         ])->assertOk()->assertSeeText('Saya belum mengenali pertanyaan itu.');
+    }
+
+    public function test_unknown_question_uses_configured_provider(): void
+    {
+        [, $user] = $this->superadminUser();
+        config([
+            'ai.primary.provider' => 'openrouter',
+            'ai.primary.api_key' => 'test-key',
+            'ai.primary.model' => 'test-model',
+            'ai.fallback.provider' => 'nvidia',
+            'ai.fallback.api_key' => null,
+        ]);
+        Http::fake(fn () => Http::response([
+            'choices' => [[
+                'message' => ['role' => 'assistant', 'content' => 'Jawaban dari provider.'],
+            ]],
+        ]));
+
+        $this->actingAs($user)->postJson(route('ai-chat.chat'), [
+            'message' => 'tolong jelaskan cara membaca dashboard ini',
+        ])->assertOk()
+            ->assertJsonPath('provider', 'openrouter')
+            ->assertJsonPath('model', 'test-model')
+            ->assertJsonPath('message.content', 'Jawaban dari provider.');
+
+        Http::assertSent(fn ($request) => str_ends_with($request->url(), '/chat/completions'));
     }
 
     public function test_user_cannot_open_other_users_conversation(): void

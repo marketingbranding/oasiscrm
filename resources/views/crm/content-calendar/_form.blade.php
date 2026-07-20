@@ -12,8 +12,9 @@
         projectName: @js(old('project_name', $item?->project_name)),
         status: @js(old('status', $item?->status ?? ($type === 'agenda' ? 'planned' : ($type === 'content' ? 'idea' : 'todo')))),
         agendaType: @js(old('agenda_type', $item?->agenda_type ?? 'visit')),
-        platform: @js(old('platform', $item?->platform ?? 'Instagram')),
-        contentFormat: @js(old('content_format', $item?->content_format ?? 'feed')),
+        tujuanKonten: @js(old('tujuan_konten', $item?->tujuan_konten ?? 'Edukasi')),
+        platform: @js(old('platform', $item?->platform ?? 'Sosial Media')),
+        contentFormat: @js(old('content_format', $item?->content_format ?? 'Video')),
         projects: @js($projects->map(fn($project) => ['name' => $project->project_name, 'branch_id' => (string) $project->branch_id])->values()),
         users: @js($users->map(fn($user) => ['id' => $user->id, 'name' => $user->name, 'branch_id' => (string) $user->branch_id])->values()),
         externalPics: @js($externalPics),
@@ -42,9 +43,9 @@
             <input name="title" value="{{ old('title', $item?->title) }}" required class="w-full border-2 border-black px-3 py-2 text-sm font-['Times_New_Roman']">
             @error('title')<p class="text-[#c0392b] text-xs mt-1 font-bold">{{ $message }}</p>@enderror
         </div>
-        <div class="sm:col-span-2">
+        <div class="sm:col-span-2" x-show="type !== 'content'">
             <label class="font-[Helvetica] font-bold text-xs uppercase block mb-1">Detail</label>
-            <textarea name="task_detail" rows="3" class="w-full border-2 border-black px-3 py-2 text-sm font-['Times_New_Roman']">{{ old('task_detail', $item?->task_detail) }}</textarea>
+            <textarea name="task_detail" rows="3" :disabled="type === 'content'" class="w-full border-2 border-black px-3 py-2 text-sm font-['Times_New_Roman']">{{ old('task_detail', $item?->task_detail) }}</textarea>
         </div>
 
         @if(Auth::user()->canViewAllBranches())
@@ -56,20 +57,21 @@
             </select>
         </div>
         @endif
-        <div>
+        <div x-show="type !== 'content'">
             <label class="font-[Helvetica] font-bold text-xs uppercase block mb-1">Proyek</label>
-            <select name="project_name" x-model="projectName" :disabled="!branchId" class="w-full border-2 border-black px-3 py-2 text-sm bg-white disabled:bg-gray-100">
+            <select name="project_name" x-model="projectName" :disabled="type === 'content' || !branchId" class="w-full border-2 border-black px-3 py-2 text-sm bg-white disabled:bg-gray-100">
                 <option value="">— Tanpa Proyek —</option>
                 <template x-for="project in filteredProjects" :key="project.name"><option :value="project.name" x-text="project.name"></option></template>
             </select>
         </div>
-        <div>
+        <div x-show="type !== 'content'">
             <label class="font-[Helvetica] font-bold text-xs uppercase block mb-1">Visibilitas</label>
-            <select name="visibility" class="w-full border-2 border-black px-3 py-2 text-sm bg-white">
+            <select name="visibility" :disabled="type === 'content'" class="w-full border-2 border-black px-3 py-2 text-sm bg-white">
                 <option value="team" {{ old('visibility', $item?->visibility ?? 'team') === 'team' ? 'selected' : '' }}>Tim Cabang</option>
                 <option value="personal" {{ old('visibility', $item?->visibility) === 'personal' ? 'selected' : '' }}>Personal + PIC</option>
             </select>
         </div>
+        <template x-if="type === 'content'"><input type="hidden" name="visibility" value="team"></template>
         <div>
             <label class="font-[Helvetica] font-bold text-xs uppercase block mb-1">Status</label>
             <select name="status" x-model="status" class="w-full border-2 border-black px-3 py-2 text-sm bg-white">
@@ -80,17 +82,17 @@
 
     <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div>
-            <label class="font-[Helvetica] font-bold text-xs uppercase block mb-1" x-text="type === 'agenda' ? 'Tanggal Mulai' : (type === 'content' ? 'Mulai Produksi' : 'Tanggal Mulai')"></label>
+            <label class="font-[Helvetica] font-bold text-xs uppercase block mb-1" x-text="type === 'content' ? 'Tanggal Konten' : (type === 'agenda' ? 'Tanggal Mulai' : 'Tanggal Mulai')"></label>
             <div class="date-wrapper" data-accent="#b3bd95">
                 <div class="date-display w-full border-2 border-black px-3 py-2 text-sm font-['Times_New_Roman'] bg-white cursor-pointer flex justify-between" tabindex="0"><span class="date-text">— Pilih Tanggal —</span><span class="date-arrow">▼</span></div>
-                <input type="date" name="start_date" value="{{ old('start_date', $item?->start_date?->format('Y-m-d')) }}" :required="type === 'agenda'" style="position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0">
+                <input type="date" name="start_date" value="{{ old('start_date', $item?->start_date?->format('Y-m-d') ?? ($item?->item_type === 'content' ? $item?->scheduled_date?->format('Y-m-d') : null)) }}" :required="type === 'agenda' || type === 'content'" style="position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0">
             </div>
         </div>
-        <div>
+        <div x-show="type !== 'content'">
             <label class="font-[Helvetica] font-bold text-xs uppercase block mb-1" x-text="type === 'agenda' ? 'Tanggal Selesai' : (type === 'content' ? 'Jadwal Publikasi' : 'Deadline')"></label>
             <div class="date-wrapper" data-accent="#b3bd95">
                 <div class="date-display w-full border-2 border-black px-3 py-2 text-sm font-['Times_New_Roman'] bg-white cursor-pointer flex justify-between" tabindex="0"><span class="date-text">— Pilih Tanggal —</span><span class="date-arrow">▼</span></div>
-                <input type="date" name="deadline_date" value="{{ old('deadline_date', $item?->deadline_date?->format('Y-m-d')) }}" required style="position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0">
+                <input type="date" name="deadline_date" value="{{ old('deadline_date', $item?->deadline_date?->format('Y-m-d')) }}" :required="type !== 'content'" :disabled="type === 'content'" style="position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0">
             </div>
         </div>
         <template x-if="type === 'agenda'">
@@ -114,16 +116,16 @@
 
     <template x-if="type === 'content'">
         <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <div><label class="font-[Helvetica] font-bold text-xs uppercase block mb-1">Platform</label><select name="platform" x-model="platform" class="w-full border-2 border-black px-3 py-2 text-sm bg-white"><option value="Instagram">Instagram</option><option value="Facebook">Facebook</option><option value="TikTok">TikTok</option><option value="YouTube">YouTube</option><option value="Website">Website</option></select></div>
-            <div><label class="font-[Helvetica] font-bold text-xs uppercase block mb-1">Format Konten</label><select name="content_format" x-model="contentFormat" class="w-full border-2 border-black px-3 py-2 text-sm bg-white"><option value="feed">Feed</option><option value="reels">Reels</option><option value="story">Story</option><option value="video">Video</option><option value="article">Artikel</option><option value="banner">Banner</option></select></div>
-            <div><label class="font-[Helvetica] font-bold text-xs uppercase block mb-1">Link Aset</label><input type="url" name="asset_url" value="{{ old('asset_url', $item?->asset_url) }}" class="w-full border-2 border-black px-3 py-2 text-sm"></div>
+            <div><label class="font-[Helvetica] font-bold text-xs uppercase block mb-1">Tujuan Konten</label><select name="tujuan_konten" x-model="tujuanKonten" class="w-full border-2 border-black px-3 py-2 text-sm bg-white"><option value="Edukasi">Edukasi</option><option value="Entertainment">Entertainment</option><option value="Inspirasi">Inspirasi</option></select></div>
+            <div><label class="font-[Helvetica] font-bold text-xs uppercase block mb-1">Platform</label><select name="platform" x-model="platform" class="w-full border-2 border-black px-3 py-2 text-sm bg-white"><option value="Sosial Media">Sosial Media</option><option value="Website">Website</option></select></div>
+            <div><label class="font-[Helvetica] font-bold text-xs uppercase block mb-1">Format Konten</label><select name="content_format" x-model="contentFormat" class="w-full border-2 border-black px-3 py-2 text-sm bg-white"><option value="Video">Video</option><option value="Gambar">Gambar</option><option value="Video Karosel">Video Karosel</option><option value="Karosel">Karosel</option><option value="Artikel">Artikel</option></select></div>
         </div>
     </template>
 
-    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4" x-show="type !== 'content'">
         <div>
             <label class="font-[Helvetica] font-bold text-xs uppercase block mb-1">PIC Akun Oasis</label>
-            <select name="assigned_user_ids[]" multiple size="5" class="w-full border-2 border-black px-3 py-2 text-sm bg-white">
+            <select name="assigned_user_ids[]" multiple size="5" :disabled="type === 'content'" class="w-full border-2 border-black px-3 py-2 text-sm bg-white">
                 <template x-for="user in filteredUsers" :key="user.id"><option :value="user.id" x-text="user.name" :selected="selectedUserIds.includes(user.id)"></option></template>
             </select>
             <p class="text-[11px] mt-1 font-['Times_New_Roman']">Gunakan Ctrl/Cmd untuk memilih beberapa akun.</p>
@@ -135,7 +137,7 @@
         </div>
     </div>
 
-    <div><label class="font-[Helvetica] font-bold text-xs uppercase block mb-1">Catatan / Progress</label><textarea name="notes" rows="4" class="w-full border-2 border-black px-3 py-2 text-sm font-['Times_New_Roman']">{{ old('notes', $item?->notes) }}</textarea></div>
+    <div><label class="font-[Helvetica] font-bold text-xs uppercase block mb-1" x-text="type === 'content' ? 'Catatan' : 'Catatan / Progress'"></label><textarea name="notes" rows="4" class="w-full border-2 border-black px-3 py-2 text-sm font-['Times_New_Roman']">{{ old('notes', $item?->notes) }}</textarea></div>
 
     @if($errors->any())<div class="border-2 border-black bg-[#d77a7a] px-3 py-2 text-sm">{{ $errors->first() }}</div>@endif
     <div class="flex gap-3"><button class="bg-black text-white border-2 border-black px-6 py-2 text-sm font-bold">{{ $editing ? 'Simpan Perubahan' : 'Simpan Item' }}</button><a href="{{ route('content-calendar.index', ['view' => request('view', 'today')]) }}" class="bg-white border-2 border-black px-6 py-2 text-sm font-bold">Batal</a></div>
@@ -150,6 +152,7 @@ function plannerForm(config) {
         projectName: config.projectName || '',
         status: config.status,
         agendaType: config.agendaType,
+        tujuanKonten: config.tujuanKonten,
         platform: config.platform,
         contentFormat: config.contentFormat,
         projects: config.projects,
@@ -165,7 +168,7 @@ function plannerForm(config) {
         statusOptions: {
             task: [{value:'todo',label:'To Do'},{value:'in_progress',label:'In Progress'},{value:'completed',label:'Completed'},{value:'lost_track',label:'Lost Track'}],
             agenda: [{value:'planned',label:'Planned'},{value:'confirmed',label:'Confirmed'},{value:'done',label:'Done'},{value:'cancelled',label:'Cancelled'}],
-            content: [{value:'idea',label:'Idea'},{value:'draft',label:'Draft'},{value:'review',label:'Review'},{value:'scheduled',label:'Scheduled'},{value:'published',label:'Published'},{value:'cancelled',label:'Cancelled'}],
+            content: [{value:'idea',label:'Ide'},{value:'content_in_progress',label:'Dalam Proses'},{value:'done_editing',label:'Selesai Edit'},{value:'uploaded',label:'Di Upload'}],
         },
         get filteredProjects() { return this.projects.filter(project => String(project.branch_id) === String(this.branchId)); },
         get filteredUsers() { return this.users.filter(user => String(user.branch_id) === String(this.branchId)); },

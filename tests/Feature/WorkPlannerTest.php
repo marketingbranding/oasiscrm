@@ -63,7 +63,7 @@ class WorkPlannerTest extends TestCase
         $this->assertTrue($item->assignees->contains($assignee));
     }
 
-    public function test_content_uses_publish_date_and_pipeline_status(): void
+    public function test_content_uses_content_fields_without_dates_or_pic(): void
     {
         [$branch, $user] = $this->branchAndUser();
 
@@ -71,18 +71,22 @@ class WorkPlannerTest extends TestCase
             'item_type' => 'content',
             'visibility' => 'team',
             'title' => 'Reels Progress',
-            'platform' => 'Instagram',
-            'content_format' => 'reels',
-            'start_date' => '2026-07-18',
-            'deadline_date' => '2026-07-22',
-            'status' => 'review',
-            'asset_url' => 'https://example.com/asset',
+            'tujuan_konten' => 'Edukasi',
+            'platform' => 'Sosial Media',
+            'content_format' => 'Video',
+            'start_date' => '2026-07-22',
+            'status' => 'done_editing',
+            'pic_names' => ['Vendor Foto'],
         ])->assertRedirect();
 
         $item = ContentItem::where('title', 'Reels Progress')->firstOrFail();
         $this->assertSame('content', $item->item_type);
         $this->assertSame('2026-07-22', $item->scheduled_date->format('Y-m-d'));
-        $this->assertSame('review', $item->status);
+        $this->assertSame('2026-07-22', $item->start_date->format('Y-m-d'));
+        $this->assertNull($item->deadline_date);
+        $this->assertSame('done_editing', $item->status);
+        $this->assertSame('Edukasi', $item->tujuan_konten);
+        $this->assertSame([], $item->pic_names);
     }
 
     public function test_personal_items_are_hidden_from_colleagues_but_visible_to_assignees_and_pusat(): void
@@ -106,7 +110,7 @@ class WorkPlannerTest extends TestCase
         [$branch, $user] = $this->branchAndUser();
         $this->makeItem($branch, $user, ['item_type' => 'task', 'title' => 'Task Hari Ini']);
         $this->makeItem($branch, $user, ['item_type' => 'agenda', 'title' => 'Agenda Hari Ini', 'status' => 'planned']);
-        $this->makeItem($branch, $user, ['item_type' => 'content', 'title' => 'Konten Hari Ini', 'status' => 'scheduled']);
+        $this->makeItem($branch, $user, ['item_type' => 'content', 'title' => 'Konten Hari Ini', 'status' => 'idea']);
 
         $this->actingAs($user)->get(route('content-calendar.index'))->assertOk()
             ->assertSee('Agenda Hari Ini')->assertSee('Task Hari Ini')->assertSee('Konten Hari Ini')
@@ -154,8 +158,9 @@ class WorkPlannerTest extends TestCase
         $this->actingAs($user)->get(route('content-calendar.create', ['type' => 'content']))
             ->assertOk()
             ->assertSee('Jenis Aktivitas')
+            ->assertSee('Tanggal Konten')
             ->assertSee('Format Konten')
-            ->assertSee('PIC Akun Oasis');
+            ->assertSee('Tujuan Konten');
 
         $this->actingAs($user)->get(route('content-calendar.export-template'))
             ->assertOk()

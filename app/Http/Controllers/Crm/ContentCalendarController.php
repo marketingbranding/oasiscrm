@@ -116,7 +116,7 @@ class ContentCalendarController extends Controller
             $data['boardColumns'] = collect(ContentItem::STATUSES['task'])->mapWithKeys(fn ($status) => [$status => $items->where('status', $status)->values()]);
             $data['allItemIds'] = $items->pluck('id')->all();
         } elseif ($viewMode === 'content') {
-            $items = (clone $baseQuery)->where('item_type', 'content')->orderBy('scheduled_date')->get();
+            $items = (clone $baseQuery)->where('item_type', 'content')->latest('updated_at')->get();
             $data['boardColumns'] = collect(ContentItem::STATUSES['content'])->mapWithKeys(fn ($status) => [$status => $items->where('status', $status)->values()]);
             $data['allItemIds'] = $items->pluck('id')->all();
         } else {
@@ -137,6 +137,9 @@ class ContentCalendarController extends Controller
         $user = Auth::user();
         $data = $request->validated();
         $assigneeIds = Arr::pull($data, 'assigned_user_ids', []);
+        if (($data['item_type'] ?? null) === 'content') {
+            $assigneeIds = [];
+        }
         if (! $user->canViewAllBranches()) {
             $data['branch_id'] = $user->branch_id;
         }
@@ -163,6 +166,9 @@ class ContentCalendarController extends Controller
         $this->authorize('update', $contentItem);
         $data = $request->validated();
         $assigneeIds = Arr::pull($data, 'assigned_user_ids', []);
+        if (($data['item_type'] ?? null) === 'content') {
+            $assigneeIds = [];
+        }
         if (! Auth::user()->canViewAllBranches()) {
             $data['branch_id'] = Auth::user()->branch_id;
         }
@@ -264,8 +270,26 @@ class ContentCalendarController extends Controller
 
     private function normalizePlannerData(array $data, ?ContentItem $existing = null): array
     {
-        $data['scheduled_date'] = $data['item_type'] === 'agenda' ? $data['start_date'] : $data['deadline_date'];
+        $data['scheduled_date'] = match ($data['item_type']) {
+            'agenda' => $data['start_date'] ?? null,
+            'content' => $data['start_date'] ?? null,
+            default => $data['deadline_date'] ?? null,
+        };
         $data['pic_names'] = array_values(array_filter(array_map(fn ($name) => trim((string) $name), $data['pic_names'] ?? [])));
+        if ($data['item_type'] === 'content') {
+            $data['visibility'] = 'team';
+            $data['project_name'] = null;
+            $data['task_detail'] = null;
+            $data['start_date'] = $data['start_date'] ?? null;
+            $data['deadline_date'] = null;
+            $data['start_time'] = null;
+            $data['end_time'] = null;
+            $data['agenda_type'] = null;
+            $data['location'] = null;
+            $data['asset_url'] = null;
+            $data['priority'] = 'medium';
+            $data['pic_names'] = [];
+        }
         if ($data['item_type'] !== 'agenda') {
             $data['agenda_type'] = null;
             $data['location'] = null;
@@ -274,6 +298,7 @@ class ContentCalendarController extends Controller
         }
         if ($data['item_type'] !== 'content') {
             $data['content_format'] = null;
+            $data['tujuan_konten'] = null;
             $data['asset_url'] = null;
         }
         if ($data['item_type'] !== 'task') {
@@ -289,7 +314,7 @@ class ContentCalendarController extends Controller
         $status = $data['status'] ?? $existing?->status;
         $finished = in_array($status, match ($type) {
             'agenda' => ['done', 'cancelled'],
-            'content' => ['published', 'cancelled'],
+            'content' => ['uploaded'],
             default => ['completed'],
         }, true);
         $data['completed_at'] = $finished ? ($existing?->completed_at ?? now()) : null;

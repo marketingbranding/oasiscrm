@@ -27,7 +27,7 @@ class AiChatTest extends TestCase
             'title' => 'Reels Akad Jepara',
             'scheduled_date' => today(),
             'deadline_date' => today(),
-            'status' => 'scheduled',
+            'status' => 'idea',
             'created_by' => $user->id,
         ]);
 
@@ -65,7 +65,7 @@ class AiChatTest extends TestCase
             'title' => 'Konten Tanpa Provider',
             'scheduled_date' => today(),
             'deadline_date' => today(),
-            'status' => 'scheduled',
+            'status' => 'idea',
             'created_by' => $user->id,
         ]);
 

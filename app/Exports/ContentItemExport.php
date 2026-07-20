@@ -20,13 +20,13 @@ class ContentItemExport
         return [
             'Tipe', 'Visibilitas', 'Judul', 'Detail', 'Platform', 'Cabang', 'Proyek',
             'Mulai', 'Jam Mulai', 'Deadline/Publikasi', 'Jam Selesai', 'Prioritas', 'PIC',
-            'Status', 'Jenis Agenda', 'Lokasi', 'Format Konten', 'Link Aset', 'Catatan', 'Dibuat Oleh',
+            'Status', 'Jenis Agenda', 'Lokasi', 'Format Konten', 'Tujuan Konten', 'Catatan', 'Dibuat Oleh',
         ];
     }
 
     private static function templateHeaders(): array
     {
-        return ['Cabang', 'Tipe', 'Visibilitas', 'Judul', 'Detail', 'Platform', 'Proyek', 'Mulai', 'Jam Mulai', 'Deadline/Publikasi', 'Jam Selesai', 'Prioritas', 'PIC Eksternal', 'Status', 'Jenis Agenda', 'Lokasi', 'Format Konten', 'Link Aset', 'Catatan'];
+        return ['Cabang', 'Tipe', 'Visibilitas', 'Judul', 'Detail', 'Platform', 'Proyek', 'Mulai', 'Jam Mulai', 'Deadline/Publikasi', 'Jam Selesai', 'Prioritas', 'PIC Eksternal', 'Status', 'Jenis Agenda', 'Lokasi', 'Format Konten', 'Tujuan Konten', 'Catatan'];
     }
 
     private static function exportWidths(): array
@@ -55,7 +55,7 @@ class ContentItemExport
                 $r->branch->name ?? null, $r->project_name, $r->start_date?->format('Y-m-d'),
                 $r->start_time, $r->deadline_date?->format('Y-m-d'), $r->end_time, $r->priority,
                 $r->assignees->pluck('name')->merge($r->pic_names ?? [])->join(', '), $r->status,
-                $r->agenda_type, $r->location, $r->content_format, $r->asset_url, $r->notes,
+                $r->agenda_type, $r->location, $r->content_format, $r->tujuan_konten, $r->notes,
                 $r->creator->name ?? null,
             ];
             foreach ($values as $column => $value) {
@@ -90,7 +90,7 @@ class ContentItemExport
         $sheet->setDataValidation('C2:C'.$maxRow, self::listValidation(['team', 'personal']));
 
         // --- F:Platform dropdown ---
-        $platforms = ['Instagram', 'Facebook', 'TikTok', 'Twitter / X', 'Website', 'Blog', 'YouTube', 'LinkedIn', 'WhatsApp', 'Email'];
+        $platforms = ['Sosial Media', 'Website'];
         $sheet->setDataValidation('F2:F'.$maxRow, self::listValidation($platforms));
 
         // --- E:Proyek dropdown ---
@@ -108,6 +108,8 @@ class ContentItemExport
 
         // --- J:Status dropdown ---
         $sheet->setDataValidation('N2:N'.$maxRow, self::listValidation(array_unique(array_merge(...array_values(ContentItem::STATUSES)))));
+        $sheet->setDataValidation('Q2:Q'.$maxRow, self::listValidation(['Video', 'Gambar', 'Video Karosel', 'Karosel', 'Artikel']));
+        $sheet->setDataValidation('R2:R'.$maxRow, self::listValidation(['Edukasi', 'Entertainment', 'Inspirasi']));
 
         self::applyStyles($spreadsheet, $headers, $maxRow, self::templateWidths());
 

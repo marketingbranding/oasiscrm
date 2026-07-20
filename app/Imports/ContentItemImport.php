@@ -61,7 +61,7 @@ class ContentItemImport
                 $agendaType = trim($cells[14] ?? '');
                 $location = trim($cells[15] ?? '');
                 $contentFormat = trim($cells[16] ?? '');
-                $assetUrl = trim($cells[17] ?? '');
+                $tujuanKonten = trim($cells[17] ?? '');
                 $catatan = trim($cells[18] ?? '');
             } else {
                 $type = 'task';
@@ -77,7 +77,7 @@ class ContentItemImport
                 $priorityRaw = strtolower(trim($cells[6 + $offset] ?? ''));
                 $picNames = trim($cells[7 + $offset] ?? '');
                 $statusRaw = strtolower(trim($cells[8 + $offset] ?? ''));
-                $agendaType = $location = $contentFormat = $assetUrl = '';
+                $agendaType = $location = $contentFormat = $tujuanKonten = '';
                 $catatan = trim($cells[9 + $offset] ?? '');
             }
 
@@ -89,7 +89,7 @@ class ContentItemImport
 
             $startDate = self::parseDate((string) $startRaw) ?: null;
             $deadline = self::parseDate((string) $deadlineRaw);
-            if (empty($deadline)) {
+            if ($type !== 'content' && empty($deadline)) {
                 $errors[] = "Baris {$rowNum}: Deadline tidak valid ('{$deadlineRaw}').";
 
                 continue;
@@ -107,23 +107,24 @@ class ContentItemImport
                 'branch_id' => $resolvedBranchId,
                 'item_type' => $type,
                 'visibility' => $visibility,
-                'project_name' => $projectName ?: null,
+                'project_name' => $type === 'content' ? null : ($projectName ?: null),
                 'title' => $judul,
-                'task_detail' => $detail ?: null,
+                'task_detail' => $type === 'content' ? null : ($detail ?: null),
                 'platform' => $platform ?: null,
-                'start_date' => $startDate,
-                'start_time' => $startTime ?: null,
-                'deadline_date' => $deadline,
-                'end_time' => $endTime ?: null,
-                'scheduled_date' => $type === 'agenda' ? ($startDate ?: $deadline) : $deadline,
-                'agenda_type' => $agendaType ?: null,
-                'location' => $location ?: null,
-                'content_format' => $contentFormat ?: null,
-                'asset_url' => $assetUrl ?: null,
+                'start_date' => $type === 'content' ? null : $startDate,
+                'start_time' => $type === 'content' ? null : ($startTime ?: null),
+                'deadline_date' => $type === 'content' ? null : $deadline,
+                'end_time' => $type === 'content' ? null : ($endTime ?: null),
+                'scheduled_date' => $type === 'content' ? null : ($type === 'agenda' ? ($startDate ?: $deadline) : $deadline),
+                'agenda_type' => $type === 'content' ? null : ($agendaType ?: null),
+                'location' => $type === 'content' ? null : ($location ?: null),
+                'content_format' => $type === 'content' ? ($contentFormat ?: null) : null,
+                'tujuan_konten' => $type === 'content' ? ($tujuanKonten ?: null) : null,
+                'asset_url' => null,
                 'priority' => $priority,
-                'pic_names' => $picNamesArray ?: null,
+                'pic_names' => $type === 'content' ? null : ($picNamesArray ?: null),
                 'status' => $status,
-                'completed_at' => in_array($status, ['completed', 'done', 'published', 'cancelled'], true) ? now() : null,
+                'completed_at' => in_array($status, ['completed', 'done', 'uploaded', 'cancelled'], true) ? now() : null,
                 'notes' => $catatan ?: null,
                 'created_by' => $user->id,
             ];

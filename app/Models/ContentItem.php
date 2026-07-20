@@ -17,7 +17,7 @@ class ContentItem extends Model
     public const STATUSES = [
         'task' => ['todo', 'in_progress', 'completed', 'lost_track'],
         'agenda' => ['planned', 'confirmed', 'done', 'cancelled'],
-        'content' => ['idea', 'draft', 'review', 'scheduled', 'published', 'cancelled'],
+        'content' => ['idea', 'content_in_progress', 'done_editing', 'uploaded'],
     ];
 
     protected $fillable = [
@@ -35,6 +35,7 @@ class ContentItem extends Model
         'deadline_date',
         'end_time',
         'content_format',
+        'tujuan_konten',
         'asset_url',
         'priority',
         'pic_names',
@@ -89,7 +90,7 @@ class ContentItem extends Model
     {
         return in_array($this->status, match ($this->item_type) {
             'agenda' => ['done', 'cancelled'],
-            'content' => ['published', 'cancelled'],
+            'content' => ['uploaded'],
             default => ['completed'],
         }, true);
     }

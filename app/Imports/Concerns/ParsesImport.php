@@ -75,7 +75,7 @@ trait ParsesImport
             $firstDataRow = array_values($rows[1]);
             $firstVal = trim((string) ($firstDataRow[0] ?? ''));
             if (!empty($firstVal) && !is_numeric($firstVal)) {
-                $branchNames = Branch::where('is_active', true)->pluck('name')->toArray();
+                $branchNames = Branch::where('is_active', true)->forDropdown()->pluck('name')->toArray();
                 $hasCabang = in_array($firstVal, $branchNames);
             }
         }
@@ -96,6 +96,6 @@ trait ParsesImport
 
     protected static function branchNameToIdMap(): array
     {
-        return Branch::where('is_active', true)->pluck('id', 'name')->toArray();
+        return Branch::where('is_active', true)->forDropdown()->pluck('id', 'name')->toArray();
     }
 }

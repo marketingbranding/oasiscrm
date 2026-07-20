@@ -127,7 +127,7 @@ class DanaTalanganExport
         self::dateColumnStyle($sheet, 'C2:C' . $maxRow, date('Y-m-d'));
 
         // --- A:Cabang dropdown ---
-        $branches = Branch::where('is_active', true)->pluck('name')->toArray();
+        $branches = Branch::where('is_active', true)->forDropdown()->pluck('name')->toArray();
         self::branchDropdown($sheet, 'A', $maxRow, $branches);
 
         // --- F:Proyek dropdown (from helper sheet row 1) ---

@@ -16,7 +16,7 @@ class ProjectController extends Controller
     {
         $this->ensureSuperadmin();
         $selectedBranchId = $request->get('branch_id');
-        $branches = Branch::where('is_active', true)->get();
+        $branches = Branch::where('is_active', true)->forDropdown()->get();
         $query = LeadMaster::with('branch')->withCount('kavlings');
 
         if ($selectedBranchId) {
@@ -45,7 +45,7 @@ class ProjectController extends Controller
     public function create()
     {
         $this->ensureSuperadmin();
-        $branches = Branch::where('is_active', true)->get();
+        $branches = Branch::where('is_active', true)->forDropdown()->get();
         return view('crm.projects.create', compact('branches'));
     }
 
@@ -63,7 +63,7 @@ class ProjectController extends Controller
     public function edit(LeadMaster $project)
     {
         $this->ensureSuperadmin();
-        $branches = Branch::where('is_active', true)->get();
+        $branches = Branch::where('is_active', true)->forDropdown()->get();
         return view('crm.projects.edit', compact('project', 'branches'));
     }
 

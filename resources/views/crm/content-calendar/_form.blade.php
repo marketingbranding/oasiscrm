@@ -53,7 +53,7 @@
             <label class="font-[Helvetica] font-bold text-xs uppercase block mb-1">Cabang</label>
             <select name="branch_id" x-model="branchId" @change="projectName = ''" required class="w-full border-2 border-black px-3 py-2 text-sm bg-white">
                 <option value="">— Pilih Cabang —</option>
-                @foreach($branches as $branch)<option value="{{ $branch->id }}">{{ $branch->name }}</option>@endforeach
+                @foreach($branches as $branch)<option value="{{ $branch->id }}" @if(str_contains(mb_strtolower($branch->name), 'pusat')) style="color:#b8860b;font-weight:700;background:#fff3b0" @endif>{{ $branch->name }}</option>@endforeach
             </select>
         </div>
         @endif

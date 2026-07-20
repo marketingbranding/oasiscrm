@@ -23,7 +23,7 @@ class DashboardController extends Controller
         $selectedProject = $request->get('project_name');
 
         if ($user->canViewAllBranches()) {
-            $branches = Branch::where('is_active', true)->get();
+            $branches = Branch::where('is_active', true)->forDropdown()->get();
             $projects = LeadMaster::where('is_active', true)
                 ->when($selectedBranchId, fn($q) => $q->where('branch_id', $selectedBranchId))
                 ->orderBy('project_name')->get();
@@ -50,7 +50,7 @@ class DashboardController extends Controller
 
         $branch = $user->branch;
         if (!$branch) {
-            $branches = Branch::where('is_active', true)->get();
+            $branches = Branch::where('is_active', true)->forDropdown()->get();
             return view('crm.dashboard', compact('branches', 'branch', 'selectedBranchId'))->with('error', 'Anda belum memiliki cabang.');
         }
 

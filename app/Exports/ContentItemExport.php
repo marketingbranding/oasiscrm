@@ -83,7 +83,7 @@ class ContentItemExport
         $maxRow = 101;
 
         // --- A:Cabang dropdown ---
-        $branches = Branch::where('is_active', true)->pluck('name')->toArray();
+        $branches = Branch::where('is_active', true)->forDropdown()->pluck('name')->toArray();
         self::branchDropdown($sheet, 'A', $maxRow, $branches);
 
         $sheet->setDataValidation('B2:B'.$maxRow, self::listValidation(['task', 'agenda', 'content']));

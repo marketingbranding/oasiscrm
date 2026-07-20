@@ -65,14 +65,14 @@
                             <input type="text" class="select-search" style="width:100%;border-bottom:2px solid #000;padding:6px 12px;font-size:13px;font-family:'Times New Roman';background:#f9fafb;outline:none;box-sizing:border-box" placeholder="Cari...">
                             <ul class="select-options" style="list-style:none;margin:0;padding:0;max-height:200px;overflow-y:auto">
                                 @foreach($branches as $b)
-                                    <li data-value="{{ $b->id }}" style="padding:6px 12px;font-size:13px;font-family:'Times New Roman';cursor:pointer" class="select-li {{ old('branch_id') == $b->id ? 's-selected' : '' }}">{{ $b->name }}</li>
+                                    <li data-value="{{ $b->id }}" style="padding:6px 12px;font-size:13px;font-family:'Times New Roman';cursor:pointer;{{ str_contains(mb_strtolower($b->name), 'pusat') ? 'color:#b8860b;font-weight:700;background:#fff3b0' : '' }}" class="select-li {{ old('branch_id') == $b->id ? 's-selected' : '' }}">{{ $b->name }}</li>
                                 @endforeach
                             </ul>
                         </div>
                         <select name="branch_id" style="position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0">
                             <option value="">— Pilih Cabang —</option>
                             @foreach($branches as $b)
-                                <option value="{{ $b->id }}" {{ old('branch_id') == $b->id ? 'selected' : '' }}>{{ $b->name }}</option>
+                                <option value="{{ $b->id }}" {{ old('branch_id') == $b->id ? 'selected' : '' }} @if(str_contains(mb_strtolower($b->name), 'pusat')) style="color:#b8860b;font-weight:700;background:#fff3b0" @endif>{{ $b->name }}</option>
                             @endforeach
                         </select>
                     </div>

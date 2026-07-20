@@ -24,7 +24,7 @@ class AdminUserController extends Controller
     public function create()
     {
         $roles = Role::all();
-        $branches = Branch::where('is_active', true)->get();
+        $branches = Branch::where('is_active', true)->forDropdown()->get();
 
         return view('crm.admin-users.create', compact('roles', 'branches'));
     }
@@ -52,7 +52,7 @@ class AdminUserController extends Controller
     public function edit(User $user)
     {
         $roles = Role::all();
-        $branches = Branch::where('is_active', true)->get();
+        $branches = Branch::where('is_active', true)->forDropdown()->get();
 
         return view('crm.admin-users.edit', compact('user', 'roles', 'branches'));
     }

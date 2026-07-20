@@ -28,7 +28,7 @@ class KonsumenProgressController extends Controller
         $selectedBranchId = $request->get('branch_id');
 
         if ($user->canViewAllBranches()) {
-            $branches = Branch::where('is_active', true)->get();
+            $branches = Branch::where('is_active', true)->forDropdown()->get();
             if ($selectedBranchId) {
                 // use selected
             } elseif ($user->hasRole('pusat') && $user->branch_id) {

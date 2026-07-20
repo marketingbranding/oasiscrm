@@ -13,7 +13,7 @@ trait FilterableBranch
     protected function resolveBranches(): Collection
     {
         if (Auth::user()->canViewAllBranches()) {
-            return Branch::where('is_active', true)->get();
+            return Branch::where('is_active', true)->forDropdown()->get();
         }
         return collect();
     }

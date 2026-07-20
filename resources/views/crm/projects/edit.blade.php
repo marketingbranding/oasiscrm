@@ -19,7 +19,7 @@
                     <select name="branch_id" class="w-full border-2 border-black px-3 py-2 text-sm font-['Times_New_Roman'] bg-white rounded-none">
                         <option value="">— Tidak Terikat Cabang —</option>
                         @foreach($branches as $b)
-                            <option value="{{ $b->id }}" {{ old('branch_id', $project->branch_id) == $b->id ? 'selected' : '' }}>{{ $b->name }}</option>
+                            <option value="{{ $b->id }}" {{ old('branch_id', $project->branch_id) == $b->id ? 'selected' : '' }} @if(str_contains(mb_strtolower($b->name), 'pusat')) style="color:#b8860b;font-weight:700;background:#fff3b0" @endif>{{ $b->name }}</option>
                         @endforeach
                     </select>
                     @error('branch_id') <p class="text-[#e91d2a] text-xs mt-1 font-[Helvetica] font-bold">{{ $message }}</p> @enderror

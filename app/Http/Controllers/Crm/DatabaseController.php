@@ -22,7 +22,7 @@ class DatabaseController extends Controller
         $selectedBranchId = $request->get('branch_id');
 
         if ($user->isSuperadmin()) {
-            $branches = Branch::where('is_active', true)->get();
+            $branches = Branch::where('is_active', true)->forDropdown()->get();
             if (! $selectedBranchId && $branches->isNotEmpty()) {
                 $selectedBranchId = $branches->first()->id;
             }

@@ -94,6 +94,29 @@ class AiToolRegistry
             ]];
         }
 
+        if (Str::contains($lower, ['cari customer', 'cari konsumen', 'search customer', 'search konsumen', 'coba cari'])) {
+            $query = preg_replace('/\b(coba cari|cari|search)\s+(customer|konsumen)?\b/i', '', $message);
+            $query = preg_replace('/\b(bernama|atas nama)\b/i', '', (string) $query);
+
+            return [[
+                'name' => 'search_customer',
+                'arguments' => [
+                    'query' => trim((string) $query),
+                    'branch_id' => $branchId,
+                ],
+            ]];
+        }
+
+        if (! empty($context['search_query']) && $branchId && Str::contains($lower, ['bukan', 'cabang', 'di ', 'untuk'])) {
+            return [[
+                'name' => 'search_customer',
+                'arguments' => [
+                    'query' => $context['search_query'],
+                    'branch_id' => $branchId,
+                ],
+            ]];
+        }
+
         if (Str::contains($lower, ['akad', 'booking', 'sp3k', 'bast', 'pipeline', 'konsumen', 'konsumennya', 'pemberkasan', 'wawancara', 'realisasi', 'jumlahnya'])) {
             preg_match('/(akad|booking|sp3k|bast|pemberkasan|wawancara|realisasi|pipeline|konsumen)/i', $message, $match);
             $stage = Str::lower($match[1] ?? ($context['stage'] ?? ''));
@@ -127,18 +150,6 @@ class AiToolRegistry
                 'status' => Str::contains($lower, 'lunas') ? 'lunas' : null,
                 'query' => isset($nameMatch[1]) ? trim($nameMatch[1]) : null,
             ]]];
-        }
-
-        if (Str::contains($lower, ['cari customer', 'cari konsumen', 'search customer', 'search konsumen'])) {
-            $query = preg_replace('/\b(cari|search)\s+(customer|konsumen)\b/i', '', $message);
-
-            return [[
-                'name' => 'search_customer',
-                'arguments' => [
-                    'query' => trim((string) $query),
-                    'branch_id' => $branchId,
-                ],
-            ]];
         }
 
         if (Str::contains($lower, ['hari ini', 'summary', 'ringkasan'])) {

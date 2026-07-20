@@ -118,6 +118,11 @@ class AiChatTest extends TestCase
                         ]],
                     ],
                 ]],
+            ])
+            ->push([
+                'choices' => [[
+                    'message' => ['role' => 'assistant', 'content' => 'Ada 1 data akad untuk Jepara.'],
+                ]],
             ]);
 
         $response = $this->actingAs($user)->postJson(route('ai-chat.chat'), [
@@ -126,6 +131,7 @@ class AiChatTest extends TestCase
 
         $response
             ->assertOk()
+            ->assertJsonPath('provider', 'openrouter')
             ->assertJsonPath('message.content', 'Ada 1 data akad untuk Jepara.');
 
         $conversation = AiChatConversation::firstOrFail();
@@ -217,23 +223,12 @@ class AiChatTest extends TestCase
         ])->assertOk()->assertSeeText('Untuk superadmin atau pusat, sebutkan cabang dulu');
     }
 
-    public function test_local_parser_ignores_provider_tool_choice_for_known_pipeline_question(): void
+    public function test_local_parser_handles_known_pipeline_question_when_provider_is_unavailable(): void
     {
         [, $user] = $this->superadminUser();
         Branch::create(['name' => 'Solo', 'code' => 'SLO', 'is_active' => true]);
-        config(['ai.primary.api_key' => 'test-key']);
-        Http::fake(fn () => Http::response([
-            'choices' => [[
-                'message' => [
-                    'role' => 'assistant',
-                    'tool_calls' => [[
-                        'id' => 'wrong_tool',
-                        'type' => 'function',
-                        'function' => ['name' => 'search_customer', 'arguments' => json_encode(['query' => 'bast'])],
-                    ]],
-                ],
-            ]],
-        ]));
+        config(['ai.enabled' => false]);
+        Http::fake(fn () => Http::response(['should_not' => 'be used'], 500));
 
         $this->actingAs($user)->postJson(route('ai-chat.chat'), [
             'message' => 'Jumlah bast untuk cabang solo ada berapa?',

@@ -21,25 +21,46 @@ class AiAssistantService
 
     public function reply(User $user, string $message, ?AiChatConversation $conversation = null): array
     {
-        $context = $this->contextFromConversation($conversation);
-        $toolResults = $this->inferAndExecute($message, $user, $context);
-
-        if ($toolResults !== []) {
-            $content = $this->localAnswer($message, $toolResults, $user);
-
-            return [
-                'content' => $content !== '' ? $content : 'Saya belum bisa menemukan data yang relevan untuk pertanyaan itu.',
-                'provider' => 'local',
-                'model' => 'tools',
-                'tool_results' => $toolResults,
-                'actions' => $this->resolveSyncActions($toolResults, $user),
-            ];
-        }
-
         try {
             $messages = $this->baseMessages($user, $conversation);
             $messages[] = ['role' => 'user', 'content' => $message];
-            $response = $this->provider->chat($messages);
+
+            $response = $this->provider->chat($messages, $this->tools->definitions());
+            $toolResults = $this->executeProviderToolCalls($response['message'] ?? [], $user);
+
+            if ($toolResults !== []) {
+                $messages[] = $this->assistantToolCallMessage($response['message']);
+                foreach ($toolResults as $toolResult) {
+                    $messages[] = [
+                        'role' => 'tool',
+                        'tool_call_id' => $toolResult['tool_call_id'],
+                        'name' => $toolResult['name'],
+                        'content' => json_encode($toolResult['result'], JSON_UNESCAPED_UNICODE),
+                    ];
+                }
+
+                try {
+                    $finalResponse = $this->provider->chat($messages, $this->tools->definitions());
+                    $content = trim((string) ($finalResponse['message']['content'] ?? ''));
+
+                    return [
+                        'content' => $content !== '' ? $content : $this->localAnswer($message, $toolResults, $user),
+                        'provider' => $finalResponse['provider'] ?? ($response['provider'] ?? 'provider'),
+                        'model' => $finalResponse['model'] ?? ($response['model'] ?? null),
+                        'tool_results' => $toolResults,
+                        'actions' => $this->resolveSyncActions($toolResults, $user),
+                    ];
+                } catch (AiProviderException) {
+                    return [
+                        'content' => $this->localAnswer($message, $toolResults, $user),
+                        'provider' => 'local',
+                        'model' => 'tools',
+                        'tool_results' => $toolResults,
+                        'actions' => $this->resolveSyncActions($toolResults, $user),
+                    ];
+                }
+            }
+
             $content = trim((string) ($response['message']['content'] ?? ''));
 
             if ($content !== '') {
@@ -52,7 +73,18 @@ class AiAssistantService
                 ];
             }
         } catch (AiProviderException) {
-            // Fall through to deterministic local guidance when providers are unavailable.
+            $context = $this->contextFromConversation($conversation);
+            $toolResults = $this->inferAndExecute($message, $user, $context);
+
+            if ($toolResults !== []) {
+                return [
+                    'content' => $this->localAnswer($message, $toolResults, $user),
+                    'provider' => 'local',
+                    'model' => 'tools',
+                    'tool_results' => $toolResults,
+                    'actions' => $this->resolveSyncActions($toolResults, $user),
+                ];
+            }
         }
 
         return [
@@ -61,6 +93,39 @@ class AiAssistantService
             'model' => 'tools',
             'tool_results' => [],
             'actions' => [],
+        ];
+    }
+
+    private function executeProviderToolCalls(array $message, User $user): array
+    {
+        return collect($message['tool_calls'] ?? [])
+            ->filter(fn ($call) => ($call['type'] ?? null) === 'function')
+            ->map(function (array $call) use ($user) {
+                $name = (string) ($call['function']['name'] ?? '');
+                $arguments = json_decode((string) ($call['function']['arguments'] ?? '{}'), true);
+                if (! is_array($arguments)) {
+                    $arguments = [];
+                }
+
+                $arguments = array_filter($arguments, fn ($value) => filled($value));
+
+                return [
+                    'tool_call_id' => $call['id'] ?? Str::uuid()->toString(),
+                    'name' => $name,
+                    'arguments' => $arguments,
+                    'result' => $this->tools->execute($name, $arguments, $user),
+                ];
+            })
+            ->values()
+            ->all();
+    }
+
+    private function assistantToolCallMessage(array $message): array
+    {
+        return [
+            'role' => 'assistant',
+            'content' => $message['content'] ?? null,
+            'tool_calls' => $message['tool_calls'] ?? [],
         ];
     }
 
@@ -177,7 +242,7 @@ class AiAssistantService
 
         $messages = [[
             'role' => 'system',
-            'content' => "Anda adalah Oasis AI, asisten read-only untuk Oasis CRM. Untuk pertanyaan data Oasis, wajib gunakan tools dan jangan mengarang angka, status, nama, cabang, penyebab, atau kesimpulan yang tidak ada di tool result. Jika data tidak tersedia, katakan data belum tersedia. User: {$user->name}. Role: {$role}. Cabang utama: {$branch}. Akses: {$access}. Hari ini: ".today()->toDateString().'.',
+            'content' => "Anda adalah Oasis AI, asisten read-only untuk Oasis CRM. Jawab natural dalam bahasa Indonesia yang ringkas. Untuk obrolan umum, boleh menjawab langsung sebagai asisten CRM. Untuk pertanyaan data Oasis (Database, Konsumen Progress/pipeline, Dana Talangan, Work Planner, cabang, atau pencarian konsumen), wajib gunakan tools yang tersedia dan jangan mengarang angka, status, nama, cabang, penyebab, atau kesimpulan yang tidak ada di tool result. Jika data tidak tersedia, katakan data belum tersedia dan sarankan Sync Sekarang bila action sync muncul di UI. User: {$user->name}. Role: {$role}. Cabang utama: {$branch}. Akses: {$access}. Hari ini: ".today()->toDateString().'.',
         ]];
 
         $history = collect($conversation?->messages ?? [])
@@ -209,13 +274,17 @@ class AiAssistantService
     {
         foreach (array_reverse($conversation?->messages ?? []) as $message) {
             $toolResult = collect($message['tool_results'] ?? [])
-                ->first(fn ($result) => ($result['name'] ?? null) === 'count_by_stage');
+                ->first(fn ($result) => in_array($result['name'] ?? null, ['count_by_stage', 'search_customer'], true));
 
             if ($toolResult) {
-                return [
-                    'stage' => $toolResult['arguments']['stage'] ?? $toolResult['result']['stage'] ?? null,
-                    'branch_id' => $toolResult['arguments']['branch_id'] ?? null,
-                ];
+                if (($toolResult['name'] ?? null) === 'search_customer') {
+                    return [
+                        'search_query' => $toolResult['arguments']['query'] ?? $toolResult['result']['query'] ?? null,
+                        'branch_id' => $toolResult['arguments']['branch_id'] ?? null,
+                    ];
+                }
+
+                return ['stage' => $toolResult['arguments']['stage'] ?? $toolResult['result']['stage'] ?? null, 'branch_id' => $toolResult['arguments']['branch_id'] ?? null];
             }
         }
 

@@ -47,6 +47,7 @@ Route::middleware(['auth', 'verified', 'password.changed'])->group(function () {
     Route::get('content-calendar/import', [ContentCalendarController::class, 'import'])->name('content-calendar.import');
     Route::post('content-calendar/import', [ContentCalendarController::class, 'importStore'])->name('content-calendar.import-store');
     Route::get('content-calendar/{content_calendar}/detail', [ContentCalendarController::class, 'detail'])->name('content-calendar.detail');
+    Route::patch('content-calendar/{content_calendar}/status', [ContentCalendarController::class, 'updateStatus'])->name('content-calendar.update-status');
     Route::post('content-calendar/bulk-update', [ContentCalendarController::class, 'bulkUpdate'])->name('content-calendar.bulk-update');
     Route::post('content-calendar/bulk-delete', [ContentCalendarController::class, 'bulkDelete'])->name('content-calendar.bulk-delete');
     Route::resource('content-calendar', ContentCalendarController::class);

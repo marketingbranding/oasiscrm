@@ -2,13 +2,18 @@
 @section('title', 'Work Planner - Oasis CRM')
 @section('content')
 @php
-    $tabs = ['today' => 'Hari Ini', 'calendar' => 'Kalender', 'tasks' => 'Tugas', 'content' => 'Konten', 'all' => 'Semua'];
+    $tabs = ['today' => 'Hari Ini', 'calendar' => 'Kalender', 'tasks' => 'Tugas', 'agenda' => 'Agenda', 'content' => 'Konten', 'all' => 'Semua'];
     $statusLabels = [
         'todo'=>'To Do','in_progress'=>'In Progress','completed'=>'Completed','lost_track'=>'Lost Track',
         'planned'=>'Planned','confirmed'=>'Confirmed','done'=>'Done','cancelled'=>'Cancelled',
         'idea'=>'Ide','content_in_progress'=>'Dalam Proses','done_editing'=>'Selesai Edit','uploaded'=>'Di Upload',
     ];
-    $fixedType = $viewMode === 'tasks' ? 'task' : ($viewMode === 'content' ? 'content' : null);
+    $fixedType = match ($viewMode) {
+        'tasks' => 'task',
+        'agenda' => 'agenda',
+        'content' => 'content',
+        default => null,
+    };
     $activeFilters = [];
     if ($selectedBranchId && Auth::user()->canViewAllBranches()) $activeFilters[] = 'Cabang: '.($branches->firstWhere('id', $selectedBranchId)?->name ?? $selectedBranchId);
     if ($selectedProject) $activeFilters[] = 'Proyek: '.$selectedProject;
@@ -134,10 +139,10 @@
         </div>
     </div>
 
-    @elseif(in_array($viewMode, ['tasks','content']))
+    @elseif(in_array($viewMode, ['tasks','agenda','content']))
     <div class="flex gap-3 overflow-x-auto pb-3">
         @foreach($boardColumns as $status => $columnItems)
-        <section class="w-72 shrink-0 border-2 border-black bg-gray-100"><h2 class="bg-black text-white px-3 py-2 text-xs font-bold uppercase">{{ $statusLabels[$status] ?? $status }} · {{ $columnItems->count() }}</h2><div class="p-2 space-y-2 min-h-40">@foreach($columnItems as $plannerItem) @include('crm.content-calendar._item-card') @endforeach</div></section>
+        <section class="w-72 shrink-0 border-2 border-black bg-gray-100"><h2 class="bg-black text-white px-3 py-2 text-xs font-bold uppercase"><span>{{ $statusLabels[$status] ?? $status }}</span> · <span class="board-count">{{ $columnItems->count() }}</span></h2><div class="sortable-column p-2 space-y-2 min-h-40" data-status="{{ $status }}">@foreach($columnItems as $plannerItem) @include('crm.content-calendar._item-card') @endforeach</div></section>
         @endforeach
     </div>
 
@@ -181,6 +186,7 @@ function plannerPage(ids, config) {
         filterType: config.type || '', filterStatus: config.status || '', fixedType: config.fixedType,
         returnView: config.returnView || 'today',
         filterProjects: config.projects || [],
+        init() { this.$nextTick(() => this.initSortable()); },
         filterStatuses: {
             task: [{value:'todo',label:'To Do'},{value:'in_progress',label:'In Progress'},{value:'completed',label:'Completed'},{value:'lost_track',label:'Lost Track'}],
             agenda: [{value:'planned',label:'Planned'},{value:'confirmed',label:'Confirmed'},{value:'done',label:'Done'},{value:'cancelled',label:'Cancelled'}],
@@ -194,6 +200,50 @@ function plannerPage(ids, config) {
             return Object.values(this.filterStatuses).flat().filter(option => !seen.has(option.value) && seen.add(option.value));
         },
         syncFilterStatus() { if (!this.filterStatusOptions.some(option => option.value === this.filterStatus)) this.filterStatus=''; },
+        initSortable() {
+            if (!window.Sortable) return;
+            document.querySelectorAll('.sortable-column').forEach(column => {
+                if (column.dataset.sortableReady) return;
+                column.dataset.sortableReady = '1';
+                window.Sortable.create(column, {
+                    group: 'work-planner-board',
+                    draggable: '.planner-board-card',
+                    animation: 150,
+                    ghostClass: 'opacity-50',
+                    onEnd: (event) => this.updateDraggedStatus(event),
+                });
+            });
+        },
+        async updateDraggedStatus(event) {
+            const itemId = event.item?.dataset?.itemId;
+            const newStatus = event.to?.dataset?.status;
+            const oldStatus = event.from?.dataset?.status;
+            if (!itemId || !newStatus || newStatus === oldStatus) return;
+            this.refreshBoardCounts();
+            try {
+                const response = await fetch(`${this.detailBaseUrl}/${itemId}/status`, {
+                    method: 'PATCH',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json',
+                        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.content || '',
+                    },
+                    body: JSON.stringify({ status: newStatus }),
+                });
+                if (!response.ok) throw new Error(await response.text());
+            } catch (error) {
+                const reference = event.from.children[event.oldIndex] || null;
+                event.from.insertBefore(event.item, reference);
+                this.refreshBoardCounts();
+                alert('Status gagal diperbarui. Silakan coba lagi.');
+            }
+        },
+        refreshBoardCounts() {
+            document.querySelectorAll('.sortable-column').forEach(column => {
+                const count = column.closest('section')?.querySelector('.board-count');
+                if (count) count.textContent = column.querySelectorAll('.planner-board-card').length;
+            });
+        },
         isSelected(id) { return this.selectedIds.includes(id); },
         toggle(id) { this.isSelected(id) ? this.selectedIds.splice(this.selectedIds.indexOf(id),1) : this.selectedIds.push(id); },
         selectAll() { this.selectedIds = this.selectedIds.length === this.allItemIds.length ? [] : [...this.allItemIds]; },

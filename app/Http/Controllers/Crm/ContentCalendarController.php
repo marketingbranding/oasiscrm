@@ -44,14 +44,19 @@ class ContentCalendarController extends Controller
     public function index(Request $request)
     {
         $user = Auth::user();
-        $viewMode = in_array($request->get('view'), ['today', 'calendar', 'tasks', 'content', 'all'], true)
+        $viewMode = in_array($request->get('view'), ['today', 'calendar', 'tasks', 'agenda', 'content', 'all'], true)
             ? $request->get('view') : 'today';
         $month = (int) $request->get('month', now()->month);
         $year = (int) $request->get('year', now()->year);
         $selectedBranchId = $this->resolveSelectedBranchId($request->get('branch_id'));
         $selectedProject = $request->get('project_name');
         $selectedType = $request->get('item_type');
-        $contextType = $viewMode === 'tasks' ? 'task' : ($viewMode === 'content' ? 'content' : null);
+        $contextType = match ($viewMode) {
+            'tasks' => 'task',
+            'agenda' => 'agenda',
+            'content' => 'content',
+            default => null,
+        };
         if ($contextType) {
             $selectedType = null;
         }
@@ -114,6 +119,10 @@ class ContentCalendarController extends Controller
         } elseif ($viewMode === 'tasks') {
             $items = (clone $baseQuery)->where('item_type', 'task')->orderBy('scheduled_date')->get();
             $data['boardColumns'] = collect(ContentItem::STATUSES['task'])->mapWithKeys(fn ($status) => [$status => $items->where('status', $status)->values()]);
+            $data['allItemIds'] = $items->pluck('id')->all();
+        } elseif ($viewMode === 'agenda') {
+            $items = (clone $baseQuery)->where('item_type', 'agenda')->orderBy('scheduled_date')->orderBy('start_time')->get();
+            $data['boardColumns'] = collect(ContentItem::STATUSES['agenda'])->mapWithKeys(fn ($status) => [$status => $items->where('status', $status)->values()]);
             $data['allItemIds'] = $items->pluck('id')->all();
         } elseif ($viewMode === 'content') {
             $items = (clone $baseQuery)->where('item_type', 'content')->latest('updated_at')->get();
@@ -197,6 +206,27 @@ class ContentCalendarController extends Controller
         $this->authorize('view', $contentItem);
 
         return response()->json($contentItem->load(['creator', 'assignees', 'branch']));
+    }
+
+    public function updateStatus(Request $request, ContentItem $contentItem)
+    {
+        $this->authorize('update', $contentItem);
+
+        $status = (string) $request->input('status');
+        if (! in_array($status, ContentItem::STATUSES[$contentItem->item_type] ?? [], true)) {
+            return response()->json([
+                'message' => 'Status tidak valid untuk tipe item ini.',
+                'errors' => ['status' => ['Status tidak valid untuk tipe item ini.']],
+            ], 422);
+        }
+
+        $contentItem->update($this->normalizeCompletion(['status' => $status], $contentItem));
+
+        return response()->json([
+            'success' => true,
+            'status' => $contentItem->status,
+            'completed_at' => $contentItem->completed_at?->toIso8601String(),
+        ]);
     }
 
     public function destroy(ContentItem $contentItem)
@@ -378,6 +408,6 @@ class ContentCalendarController extends Controller
     {
         $view = $request->input('return_view', 'today');
 
-        return in_array($view, ['today', 'calendar', 'tasks', 'content', 'all'], true) ? $view : 'today';
+        return in_array($view, ['today', 'calendar', 'tasks', 'agenda', 'content', 'all'], true) ? $view : 'today';
     }
 }

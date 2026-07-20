@@ -115,7 +115,7 @@ class WorkPlannerTest extends TestCase
         $this->actingAs($user)->get(route('content-calendar.index'))->assertOk()
             ->assertSee('Agenda Hari Ini')->assertSee('Task Hari Ini')->assertSee('Konten Hari Ini')
             ->assertSee('Filter Work Planner')->assertSee('+ Tambah');
-        foreach (['calendar', 'tasks', 'content', 'all'] as $view) {
+        foreach (['calendar', 'tasks', 'agenda', 'content', 'all'] as $view) {
             $this->actingAs($user)->get(route('content-calendar.index', ['view' => $view]))->assertOk();
         }
     }
@@ -214,6 +214,51 @@ class WorkPlannerTest extends TestCase
             ->assertSee('+2 lainnya')
             ->assertSee('openDay(', false)
             ->assertSee('Aktivitas 5');
+    }
+
+    public function test_agenda_tab_renders_status_board(): void
+    {
+        [$branch, $user] = $this->branchAndUser();
+        $this->makeItem($branch, $user, [
+            'item_type' => 'agenda',
+            'title' => 'Meeting Cabang',
+            'status' => 'planned',
+            'agenda_type' => 'meeting',
+            'start_date' => today(),
+            'scheduled_date' => today(),
+            'start_time' => '10:00',
+        ]);
+
+        $this->actingAs($user)->get(route('content-calendar.index', ['view' => 'agenda']))
+            ->assertOk()
+            ->assertSee('Agenda')
+            ->assertSee('Meeting Cabang')
+            ->assertSee('sortable-column', false)
+            ->assertSee('data-status="planned"', false);
+    }
+
+    public function test_board_status_can_be_updated_for_matching_item_type(): void
+    {
+        [$branch, $user] = $this->branchAndUser();
+        $item = $this->makeItem($branch, $user, ['status' => 'todo']);
+
+        $this->actingAs($user)->patchJson(route('content-calendar.update-status', $item), [
+            'status' => 'completed',
+        ])->assertOk()->assertJsonPath('status', 'completed');
+
+        $item->refresh();
+        $this->assertSame('completed', $item->status);
+        $this->assertNotNull($item->completed_at);
+    }
+
+    public function test_board_status_rejects_status_from_other_type(): void
+    {
+        [$branch, $user] = $this->branchAndUser();
+        $item = $this->makeItem($branch, $user, ['status' => 'todo']);
+
+        $this->actingAs($user)->patchJson(route('content-calendar.update-status', $item), [
+            'status' => 'uploaded',
+        ])->assertUnprocessable();
     }
 
     private function branchAndUser(): array

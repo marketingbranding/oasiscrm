@@ -3,7 +3,7 @@
     $typeLabels = ['task' => 'TASK', 'agenda' => 'AGENDA', 'content' => 'KONTEN'];
     $statusLabels = ['idea' => 'Ide', 'content_in_progress' => 'Dalam Proses', 'done_editing' => 'Selesai Edit', 'uploaded' => 'Di Upload'];
 @endphp
-<article class="border-2 border-black bg-white p-2 shadow-[2px_2px_0_#000] hover:bg-[#fef3c7]">
+<article class="planner-board-card border-2 border-black bg-white p-2 shadow-[2px_2px_0_#000] hover:bg-[#fef3c7]" data-item-id="{{ $plannerItem->id }}" data-item-type="{{ $plannerItem->item_type }}">
     <div class="flex items-start gap-2">
         <input type="checkbox" class="mt-1 shrink-0" :checked="isSelected({{ $plannerItem->id }})" @click.stop="toggle({{ $plannerItem->id }})">
         <button type="button" @click="openDetail({{ $plannerItem->id }})" class="min-w-0 grow text-left">

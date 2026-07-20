@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Auth\PasswordChangeController;
+use App\Http\Controllers\Crm\AiChatController;
 use App\Http\Controllers\Crm\AdminUserController;
 use App\Http\Controllers\Crm\BranchController;
 use App\Http\Controllers\Crm\BugReportController;
@@ -34,6 +35,11 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
 Route::middleware(['auth', 'verified', 'password.changed'])->group(function () {
     Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
+
+    Route::get('/ai-chat', [AiChatController::class, 'index'])->name('ai-chat.index');
+    Route::get('/ai-chat/{conversation}', [AiChatController::class, 'show'])->name('ai-chat.show');
+    Route::post('/ai-chat', [AiChatController::class, 'chat'])->middleware('throttle:30,60')->name('ai-chat.chat');
+    Route::delete('/ai-chat/{conversation}', [AiChatController::class, 'destroy'])->name('ai-chat.destroy');
 
     Route::bind('content_calendar', fn ($value) => ContentItem::findOrFail($value));
     Route::get('content-calendar/export', [ContentCalendarController::class, 'export'])->name('content-calendar.export');

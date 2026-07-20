@@ -242,6 +242,7 @@
             </div>
         </div>
     </div>
+@include('crm.ai-chat._widget')
 <div x-data="{
     open: false,
     tab: 'notifikasi',

@@ -12,6 +12,7 @@
 - Toolbar Work Planner diringkas menjadi Search, modal Filter dengan badge/chips aktif, Export/Import, dan satu dropdown Tambah untuk Task/Agenda/Konten.
 - Tab Work Planner tidak lagi mengaktifkan filter tipe otomatis; pindah tab dan redirect setelah Tambah/Edit kembali dalam kondisi filter kosong. Dana Talangan juga tidak lagi memakai field record sebagai filter redirect setelah simpan.
 - Kalender Work Planner memakai grid 7 kolom dengan kotak rasio tetap; maksimal tiga chip tampil per hari dan sisanya dibuka melalui modal aktivitas harian.
+- Oasis AI Chat read-only ditambahkan sebagai floating widget global dengan provider OpenAI-compatible, fallback Ollama, histori percakapan per user, rate limit, dan tools yang selalu menghormati akses cabang user.
 
 ### 2026-07-15 — Input Dinamis Modul Database
 

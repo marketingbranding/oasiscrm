@@ -16,50 +16,25 @@ class AiAssistantService
 
     public function reply(User $user, string $message, ?AiChatConversation $conversation = null): array
     {
-        $messages = $this->baseMessages($user, $conversation);
-        $messages[] = ['role' => 'user', 'content' => $message];
+        $context = $this->contextFromConversation($conversation);
+        $toolResults = $this->inferAndExecute($message, $user, $context);
 
-        $toolResults = [];
-        $providerMeta = ['provider' => 'local', 'model' => 'tools'];
+        if ($toolResults !== []) {
+            $content = $this->localAnswer($message, $toolResults, $user);
 
-        try {
-            $first = $this->provider->chat($messages, $this->tools->definitions());
-            $providerMeta = ['provider' => $first['provider'], 'model' => $first['model']];
-            $assistantMessage = $first['message'];
-
-            if (! empty($assistantMessage['tool_calls'])) {
-                $messages[] = $assistantMessage;
-                foreach (array_slice($assistantMessage['tool_calls'], 0, 3) as $toolCall) {
-                    $name = $toolCall['function']['name'] ?? '';
-                    $arguments = json_decode($toolCall['function']['arguments'] ?? '{}', true) ?: [];
-                    $result = $this->tools->execute($name, $arguments, $user);
-                    $toolResults[] = ['name' => $name, 'arguments' => $arguments, 'result' => $result];
-                    $messages[] = [
-                        'role' => 'tool',
-                        'tool_call_id' => $toolCall['id'] ?? $name,
-                        'content' => json_encode($result, JSON_UNESCAPED_UNICODE),
-                    ];
-                }
-
-                $content = $this->localAnswer($message, $toolResults, $user);
-            } else {
-                $toolResults = $this->inferAndExecute($message, $user);
-                $content = $toolResults !== []
-                    ? $this->localAnswer($message, $toolResults, $user)
-                    : $this->unsupportedAnswer();
-            }
-        } catch (AiProviderException) {
-            $toolResults = $this->inferAndExecute($message, $user);
-            $content = $toolResults !== [] ? $this->localAnswer($message, $toolResults, $user) : $this->unsupportedAnswer();
+            return [
+                'content' => $content !== '' ? $content : 'Saya belum bisa menemukan data yang relevan untuk pertanyaan itu.',
+                'provider' => 'local',
+                'model' => 'tools',
+                'tool_results' => $toolResults,
+            ];
         }
 
-        $content = $content !== '' ? $content : 'Saya belum bisa menemukan data yang relevan untuk pertanyaan itu.';
-
         return [
-            'content' => $content,
-            'provider' => $providerMeta['provider'],
-            'model' => $providerMeta['model'],
-            'tool_results' => $toolResults,
+            'content' => $this->unsupportedAnswer(),
+            'provider' => 'local',
+            'model' => 'tools',
+            'tool_results' => [],
         ];
     }
 
@@ -88,15 +63,32 @@ class AiAssistantService
         return $messages;
     }
 
-    private function inferAndExecute(string $message, User $user): array
+    private function inferAndExecute(string $message, User $user, array $context = []): array
     {
-        return collect($this->tools->inferTools($message, $user))
+        return collect($this->tools->inferTools($message, $user, $context))
             ->map(fn (array $tool) => [
                 'name' => $tool['name'],
                 'arguments' => array_filter($tool['arguments'] ?? [], fn ($value) => filled($value)),
                 'result' => $this->tools->execute($tool['name'], array_filter($tool['arguments'] ?? [], fn ($value) => filled($value)), $user),
             ])
             ->all();
+    }
+
+    private function contextFromConversation(?AiChatConversation $conversation): array
+    {
+        foreach (array_reverse($conversation?->messages ?? []) as $message) {
+            $toolResult = collect($message['tool_results'] ?? [])
+                ->first(fn ($result) => ($result['name'] ?? null) === 'count_by_stage');
+
+            if ($toolResult) {
+                return [
+                    'stage' => $toolResult['arguments']['stage'] ?? $toolResult['result']['stage'] ?? null,
+                    'branch_id' => $toolResult['arguments']['branch_id'] ?? null,
+                ];
+            }
+        }
+
+        return [];
     }
 
     private function synthesizeWithProvider(array $messages, array $toolResults, array $providerMeta, string $fallback): string
@@ -136,6 +128,7 @@ class AiAssistantService
             'search_customer' => 'Ditemukan '.count($result['results'] ?? []).' hasil terkait "'.($result['query'] ?? $message).'" di '.$branch.'.',
             'get_branch_info' => $this->localBranchAnswer($result),
             'get_supported_capabilities' => $this->localCapabilitiesAnswer($result),
+            'ask_clarification' => $result['message'] ?? 'Sebutkan cabang dan data yang ingin dicek.',
             default => 'Saya menemukan ringkasan data untuk '.$branch.'. Work Planner hari ini: '.($result['work_planner']['count'] ?? 0).' item; Dana Talangan: '.($result['dana_talangan']['count'] ?? 0).' data; Pipeline: '.($result['pipeline']['count'] ?? 0).' data.',
         };
     }

@@ -1,12 +1,12 @@
 @auth
-<div x-data="aiChatWidget()" class="fixed bottom-4 right-24 z-[998] font-['Times_New_Roman']" @keydown.escape.window="open=false">
+<div x-data="aiChatWidget()" class="fixed bottom-4 left-4 z-[998] font-['Times_New_Roman']" @keydown.escape.window="open=false">
     <button type="button" @click="open = !open; if (open && !loaded) loadConversations()"
             class="h-11 px-3 bg-[#8c9ae0] border-2 border-black shadow-[4px_4px_0_#000] font-[Helvetica] font-bold text-xs">
         Oasis AI
     </button>
 
     <div x-show="open" x-cloak @click.outside="open=false"
-         class="absolute bottom-16 right-0 w-[360px] max-w-[calc(100vw-2rem)] h-[520px] max-h-[calc(100vh-6rem)] bg-[#f5f0eb] border-2 border-black shadow-[6px_6px_0_#000] flex flex-col overflow-hidden">
+         class="absolute bottom-16 left-0 w-[360px] max-w-[calc(100vw-2rem)] h-[520px] max-h-[calc(100vh-6rem)] bg-[#f5f0eb] border-2 border-black shadow-[6px_6px_0_#000] flex flex-col overflow-hidden">
         <div class="bg-black text-white px-3 py-2 flex items-center justify-between gap-2 font-[Helvetica] font-bold">
             <div>
                 <div class="text-sm">Oasis AI - Asisten Magang</div>

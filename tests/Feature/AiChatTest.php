@@ -159,6 +159,87 @@ class AiChatTest extends TestCase
             ->assertJsonPath('message.content', 'Ada 1 data bast untuk Solo.');
     }
 
+    public function test_follow_up_pipeline_question_reuses_branch_and_stage_context(): void
+    {
+        [, $user] = $this->superadminUser();
+        $solo = Branch::create(['name' => 'Solo', 'code' => 'SLO', 'is_active' => true]);
+        $malang = Branch::create(['name' => 'Malang', 'code' => 'MLG', 'is_active' => true]);
+
+        foreach (range(1, 7) as $number) {
+            KonsumenProgressSheetRow::create([
+                'branch_id' => $solo->id,
+                'sheet_id' => 'solo-sheet',
+                'sheet_name' => 'BAST',
+                'row_hash' => 'solo-bast-'.$number,
+                'row_data' => ['nama' => 'Solo '.$number],
+            ]);
+        }
+
+        foreach (range(1, 3) as $number) {
+            KonsumenProgressSheetRow::create([
+                'branch_id' => $malang->id,
+                'sheet_id' => 'malang-sheet',
+                'sheet_name' => 'BAST',
+                'row_hash' => 'malang-bast-'.$number,
+                'row_data' => ['nama' => 'Malang '.$number],
+            ]);
+        }
+
+        $first = $this->actingAs($user)->postJson(route('ai-chat.chat'), [
+            'message' => 'Jumlah bast untuk cabang solo ada berapa?',
+        ]);
+
+        $first
+            ->assertOk()
+            ->assertJsonPath('message.content', 'Ada 7 data bast untuk Solo.');
+
+        $conversationId = $first->json('conversation_id');
+
+        $this->actingAs($user)->postJson(route('ai-chat.chat'), [
+            'conversation_id' => $conversationId,
+            'message' => 'jumlah konsumennya ada berapa?',
+        ])->assertOk()->assertJsonPath('message.content', 'Ada 7 data bast untuk Solo.');
+
+        $this->actingAs($user)->postJson(route('ai-chat.chat'), [
+            'conversation_id' => $conversationId,
+            'message' => 'bukan semua cabang tapi untuk cabang solo saja',
+        ])->assertOk()->assertJsonPath('message.content', 'Ada 7 data bast untuk Solo.');
+    }
+
+    public function test_superadmin_pipeline_follow_up_without_context_asks_for_branch(): void
+    {
+        [, $user] = $this->superadminUser();
+
+        $this->actingAs($user)->postJson(route('ai-chat.chat'), [
+            'message' => 'jumlah konsumennya ada berapa?',
+        ])->assertOk()->assertSeeText('Untuk superadmin atau pusat, sebutkan cabang dulu');
+    }
+
+    public function test_local_parser_ignores_provider_tool_choice_for_known_pipeline_question(): void
+    {
+        [, $user] = $this->superadminUser();
+        Branch::create(['name' => 'Solo', 'code' => 'SLO', 'is_active' => true]);
+        config(['ai.primary.api_key' => 'test-key']);
+        Http::fake(fn () => Http::response([
+            'choices' => [[
+                'message' => [
+                    'role' => 'assistant',
+                    'tool_calls' => [[
+                        'id' => 'wrong_tool',
+                        'type' => 'function',
+                        'function' => ['name' => 'search_customer', 'arguments' => json_encode(['query' => 'bast'])],
+                    ]],
+                ],
+            ]],
+        ]));
+
+        $this->actingAs($user)->postJson(route('ai-chat.chat'), [
+            'message' => 'Jumlah bast untuk cabang solo ada berapa?',
+        ])->assertOk()->assertJsonPath('message.content', 'Ada 0 data bast untuk Solo.');
+
+        Http::assertNothingSent();
+    }
+
     public function test_dana_talangan_answer_includes_grounded_record_detail(): void
     {
         [, $user] = $this->superadminUser();

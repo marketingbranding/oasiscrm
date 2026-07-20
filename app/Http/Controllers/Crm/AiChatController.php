@@ -78,7 +78,12 @@ class AiChatController extends Controller
         $reply = $assistant->reply($request->user(), $data['message'], $conversation);
         $messages = $conversation?->messages ?? [];
         $messages[] = ['role' => 'user', 'content' => $data['message'], 'at' => now()->toIso8601String()];
-        $messages[] = ['role' => 'assistant', 'content' => $reply['content'], 'at' => now()->toIso8601String()];
+        $messages[] = [
+            'role' => 'assistant',
+            'content' => $reply['content'],
+            'tool_results' => $reply['tool_results'] ?? [],
+            'at' => now()->toIso8601String(),
+        ];
 
         $payload = [
             'user_id' => $request->user()->id,

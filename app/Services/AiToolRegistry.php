@@ -60,15 +60,16 @@ class AiToolRegistry
             'get_today_summary' => $this->todaySummary($arguments, $user),
             'get_branch_info' => $this->branchInfo($arguments, $user),
             'get_supported_capabilities' => $this->supportedCapabilities(),
+            'ask_clarification' => ['message' => $arguments['message'] ?? 'Sebutkan cabang dan data yang ingin dicek.'],
             default => ['error' => 'Tool tidak dikenal.'],
         };
     }
 
-    public function inferTools(string $message, User $user): array
+    public function inferTools(string $message, User $user, array $context = []): array
     {
         $lower = Str::lower($message);
         $today = today();
-        $branchId = $this->resolveBranchIdFromText($message, $user);
+        $branchId = $this->resolveBranchIdFromText($message, $user) ?? ($context['branch_id'] ?? null);
 
         if (Str::contains($lower, ['data apa', 'bisa cari', 'bisa kamu cari', 'bisa kamu baca', 'kemampuan', 'capability'])) {
             return [['name' => 'get_supported_capabilities', 'arguments' => []]];
@@ -93,9 +94,19 @@ class AiToolRegistry
             ]];
         }
 
-        if (Str::contains($lower, ['akad', 'booking', 'sp3k', 'bast', 'pipeline', 'konsumen', 'pemberkasan', 'wawancara', 'realisasi'])) {
+        if (Str::contains($lower, ['akad', 'booking', 'sp3k', 'bast', 'pipeline', 'konsumen', 'konsumennya', 'pemberkasan', 'wawancara', 'realisasi', 'jumlahnya'])) {
             preg_match('/(akad|booking|sp3k|bast|pemberkasan|wawancara|realisasi|pipeline|konsumen)/i', $message, $match);
-            $stage = Str::lower($match[1] ?? '');
+            $stage = Str::lower($match[1] ?? ($context['stage'] ?? ''));
+            if (in_array($stage, ['pipeline', 'konsumen', ''], true) && ! empty($context['stage'])) {
+                $stage = Str::lower((string) $context['stage']);
+            }
+
+            if ($user->canViewAllBranches() && ! $branchId) {
+                return [[
+                    'name' => 'ask_clarification',
+                    'arguments' => ['message' => 'Untuk superadmin atau pusat, sebutkan cabang dulu supaya saya tidak membaca semua cabang. Contoh: "jumlah BAST cabang Solo".'],
+                ]];
+            }
 
             return [[
                 'name' => 'count_by_stage',
@@ -120,6 +131,16 @@ class AiToolRegistry
 
         if (Str::contains($lower, ['hari ini', 'summary', 'ringkasan'])) {
             return [['name' => 'get_today_summary', 'arguments' => []]];
+        }
+
+        if (! empty($context['stage']) && $branchId && Str::contains($lower, ['cabang', 'bukan semua', 'untuk'])) {
+            return [[
+                'name' => 'count_by_stage',
+                'arguments' => [
+                    'stage' => $context['stage'],
+                    'branch_id' => $branchId,
+                ],
+            ]];
         }
 
         return [];

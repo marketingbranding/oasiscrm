@@ -10,6 +10,7 @@ use App\Models\KonsumenProgressSyncStatus;
 use App\Models\User;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 
@@ -23,10 +24,11 @@ class AiAssistantService
     public function reply(User $user, string $message, ?AiChatConversation $conversation = null): array
     {
         $context = $this->contextFromConversation($conversation);
-        if (config('ai.routing_mode', 'hybrid') === 'hybrid') {
+        $routingMode = Str::lower(trim((string) config('ai.routing_mode', 'hybrid')));
+        if ($routingMode === 'hybrid') {
             $toolResults = $this->inferAndExecute($message, $user, $context);
             if ($toolResults !== []) {
-                if (config('ai.synthesize_tool_results', false)) {
+                if (config('ai.synthesize_tool_results', false) && ($toolResults[0]['name'] ?? null) !== 'count_by_stage') {
                     try {
                         $messages = $this->baseMessages($user, $conversation);
                         $messages[] = ['role' => 'user', 'content' => $message];
@@ -62,6 +64,7 @@ class AiAssistantService
         }
 
         try {
+            $this->traceProviderRoute($routingMode, null, []);
             $messages = $this->baseMessages($user, $conversation);
             $messages[] = ['role' => 'user', 'content' => $message];
 
@@ -168,6 +171,11 @@ class AiAssistantService
                 }
 
                 $arguments = array_filter($arguments, fn ($value) => filled($value));
+                $this->traceProviderRoute(
+                    Str::lower(trim((string) config('ai.routing_mode', 'hybrid'))),
+                    $name,
+                    $arguments
+                );
 
                 return [
                     'tool_call_id' => $call['id'] ?? Str::uuid()->toString(),
@@ -222,7 +230,9 @@ class AiAssistantService
             return $user->branch_id;
         }
 
-        return filled($toolResult['arguments']['branch_id'] ?? null) ? (int) $toolResult['arguments']['branch_id'] : null;
+        $branchId = $toolResult['arguments']['branch_id'] ?? $toolResult['result']['branch_id'] ?? null;
+
+        return filled($branchId) ? (int) $branchId : null;
     }
 
     private function syncActionForModule(string $module, ?int $branchId): ?array
@@ -238,26 +248,38 @@ class AiAssistantService
             return null;
         }
 
+        if ($status?->status === 'running') {
+            return null;
+        }
+
+        $failure = $status?->status === 'failed' ? ' Sync terakhir gagal; silakan coba lagi.' : '';
+
         return match ($module) {
             'database' => [
                 'key' => 'database',
                 'label' => 'Sync Sekarang',
-                'hint' => 'Database sheet belum sync atau sudah lewat '.config('ai.sync_stale_minutes', 5).' menit.',
-                'route' => route('database.sync'),
+                'method' => 'POST',
+                'url' => route('database.sync'),
+                'hint' => 'Database sheet belum sync atau sudah lewat '.config('ai.sync_stale_minutes', 5).' menit.'.$failure,
+                'success_message' => 'Sync Database berhasil. Silakan ulangi pertanyaan untuk membaca data terbaru.',
                 'payload' => array_filter(['branch_id' => $branchId]),
             ],
             'konsumen_progress' => [
                 'key' => 'konsumen_progress',
                 'label' => 'Sync Sekarang',
-                'hint' => 'Konsumen Progress belum sync atau sudah lewat '.config('ai.sync_stale_minutes', 5).' menit.',
-                'route' => route('konsumen-progress.sync'),
+                'method' => 'POST',
+                'url' => route('konsumen-progress.sync'),
+                'hint' => 'Konsumen Progress belum sync atau sudah lewat '.config('ai.sync_stale_minutes', 5).' menit.'.$failure,
+                'success_message' => 'Sync Konsumen Progress berhasil. Silakan ulangi pertanyaan untuk membaca data terbaru.',
                 'payload' => array_filter(['branch_id' => $branchId]),
             ],
             'dana_talangan' => [
                 'key' => 'dana_talangan',
                 'label' => 'Sync Sekarang',
-                'hint' => 'Dana Talangan belum sync atau sudah lewat '.config('ai.sync_stale_minutes', 5).' menit.',
-                'route' => route('dana-talangan.sync'),
+                'method' => 'POST',
+                'url' => route('dana-talangan.sync'),
+                'hint' => 'Dana Talangan belum sync atau sudah lewat '.config('ai.sync_stale_minutes', 5).' menit.'.$failure,
+                'success_message' => 'Sync Dana Talangan berhasil. Silakan ulangi pertanyaan untuk membaca data terbaru.',
                 'payload' => [],
             ],
             default => null,
@@ -344,7 +366,10 @@ class AiAssistantService
                     ];
                 }
 
-                return ['stage' => $toolResult['arguments']['stage'] ?? $toolResult['result']['stage'] ?? null, 'branch_id' => $toolResult['arguments']['branch_id'] ?? null];
+                return [
+                    'stage' => $this->tools->canonicalStage($toolResult['arguments']['stage'] ?? $toolResult['result']['stage'] ?? null),
+                    'branch_id' => $toolResult['arguments']['branch_id'] ?? $toolResult['result']['branch_id'] ?? null,
+                ];
             }
         }
 
@@ -472,5 +497,22 @@ class AiAssistantService
         $limitations = collect($result['limitations'] ?? [])->map(fn ($item) => '- '.$item)->implode("\n");
 
         return "Saya bisa membaca data berikut:\n{$capabilities}\n\nBatasan:\n{$limitations}";
+    }
+
+    private function traceProviderRoute(string $routingMode, ?string $toolName, array $arguments): void
+    {
+        if (! app()->environment(['local', 'testing'])) {
+            return;
+        }
+
+        Log::debug('Oasis AI routing trace', [
+            'routing_mode' => $routingMode,
+            'message_intent' => $toolName ? 'provider_tool' : 'ambiguous',
+            'tool_name' => $toolName,
+            'stage_argument' => $arguments['stage'] ?? null,
+            'branch_id' => $arguments['branch_id'] ?? null,
+            'route_source' => 'provider',
+            'synthesis_enabled' => (bool) config('ai.synthesize_tool_results', false),
+        ]);
     }
 }

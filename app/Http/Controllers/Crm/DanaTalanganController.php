@@ -310,7 +310,7 @@ class DanaTalanganController extends Controller
         $result = $googleService->sync(Auth::id());
         if (! $result['ok']) {
             if ($request->expectsJson()) {
-                return response()->json(['ok' => false, 'message' => 'Sync Dana Talangan gagal: '.$result['message']], 422);
+                return response()->json(['ok' => false, 'message' => 'Sync Dana Talangan gagal: '.$result['message'], 'summary' => $result['summary'] ?? []], 422);
             }
 
             return back()->with('error', 'Sync Dana Talangan gagal: '.$result['message']);
@@ -319,7 +319,12 @@ class DanaTalanganController extends Controller
         $summary = $result['summary'];
 
         if ($request->expectsJson()) {
-            return response()->json(['ok' => true, 'message' => "Sync selesai: {$summary['updated']} diperbarui, {$summary['imported']} diimpor, {$summary['pushed']} dikirim."]);
+            return response()->json([
+                'ok' => true,
+                'message' => "Sync selesai: {$summary['updated']} diperbarui, {$summary['imported']} diimpor, {$summary['pushed']} dikirim.",
+                'summary' => $summary,
+                'finished_at' => now()->toIso8601String(),
+            ]);
         }
 
         return back()->with('success', "Sync selesai: {$summary['updated']} diperbarui, {$summary['imported']} diimpor, {$summary['pushed']} dikirim.");

@@ -39,10 +39,10 @@
                         <div :class="message.role === 'user' ? 'bg-[#8c9ae0]' : 'bg-[#f1c40f]'" class="border-b-2 border-black px-2 py-1 text-[10px] font-[Helvetica] font-bold uppercase" x-text="message.role === 'user' ? 'Kamu' : 'Oasis AI'"></div>
                         <div :class="message.role === 'user' ? 'bg-[#eef1ff]' : 'bg-white'" class="px-2 py-2 whitespace-pre-line leading-snug" x-text="message.content"></div>
                         <div x-show="message.role === 'assistant' && (message.actions || []).length" class="border-t-2 border-black bg-white px-2 py-1.5 space-y-1">
-                            <template x-for="action in (message.actions || [])" :key="action.key || action.route">
+                            <template x-for="action in (message.actions || [])" :key="action.key || actionUrl(action)">
                                 <div>
                                     <p class="text-[10px] leading-tight text-gray-700 mb-1" x-text="action.hint || 'Data mungkin perlu di-sync ulang.'"></p>
-                                    <button type="button" @click="triggerSync(action)" :disabled="syncing === action.route"
+                                    <button type="button" @click="triggerSync(action, message)" :disabled="!!syncing"
                                             class="border-2 border-black bg-[#b3bd95] hover:bg-[#9ead82] px-2 py-1 text-[10px] font-[Helvetica] font-bold disabled:opacity-50"
                                             x-text="syncLabel(action)"></button>
                                 </div>
@@ -97,7 +97,7 @@ document.addEventListener('alpine:init', function () {
                         throw new Error('Server mengembalikan HTML, bukan JSON. Status ' + r.status + '. Cek login/migrate/log Laravel.');
                     }
 
-                    if (!r.ok) throw new Error(data.message || data.error || 'Gagal memproses request AI chat.');
+                    if (!r.ok) throw new Error((data.message || data.error || 'Request gagal.') + ' (HTTP ' + r.status + ')');
                     return data;
                 });
             },
@@ -120,29 +120,35 @@ document.addEventListener('alpine:init', function () {
             },
             newChat() { this.conversationId = null; this.messages = []; this.input = ''; this.providerLabel = 'read-only'; },
             ask(text) { this.input = text; this.send(); },
+            actionUrl(action) { return action?.url || action?.route || ''; },
             syncLabel(action) {
-                if (this.syncing === action.route) return 'Sync...';
-                if (this.syncStatus[action.route] === 'success') return 'Sync Berhasil';
-                if (this.syncStatus[action.route] === 'error') return 'Sync Gagal';
+                const url = this.actionUrl(action);
+                if (this.syncing === url) return 'Menyinkronkan...';
+                if (this.syncStatus[url] === 'error') return 'Coba Sync Lagi';
                 return action.label || 'Sync Sekarang';
             },
-            triggerSync(action) {
-                if (!action || !action.route || this.syncing) return;
-                this.syncing = action.route;
-                this.syncStatus[action.route] = null;
-                const body = new URLSearchParams(action.payload || {});
-                fetch(action.route, {
+            triggerSync(action, message) {
+                const url = this.actionUrl(action);
+                if (!url || this.syncing) return;
+                this.syncing = url;
+                this.syncStatus[url] = null;
+                fetch(url, {
                     method: action.method || 'POST',
-                    headers: { Accept: 'application/json', 'X-CSRF-TOKEN': this.csrf, 'Content-Type': 'application/x-www-form-urlencoded' },
-                    body,
-                }).then(r => {
-                    if (!r.ok) throw new Error('Sync gagal.');
-                    this.syncStatus[action.route] = 'success';
-                }).catch(() => {
-                    this.syncStatus[action.route] = 'error';
+                    headers: { Accept: 'application/json', 'Content-Type': 'application/json', 'X-CSRF-TOKEN': this.csrf },
+                    body: JSON.stringify(action.payload || {}),
+                }).then(r => this.parseResponse(r)).then(data => {
+                    message.actions = (message.actions || []).filter(item => item.key !== action.key);
+                    this.messages.push({
+                        role: 'assistant',
+                        content: action.success_message || data.message || 'Sync berhasil. Silakan ulangi pertanyaan untuk membaca data terbaru.',
+                    });
+                    this.scrollDown();
+                }).catch(error => {
+                    this.syncStatus[url] = 'error';
+                    this.messages.push({ role: 'assistant', content: 'Sync gagal: ' + error.message });
+                    this.scrollDown();
                 }).finally(() => {
                     this.syncing = null;
-                    setTimeout(() => { this.syncStatus[action.route] = null; }, 2500);
                 });
             },
             send() {

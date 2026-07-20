@@ -12,8 +12,11 @@ use App\Models\KonsumenProgressSyncStatus;
 use App\Models\KonsumenProgressSheetRow;
 use App\Models\Role;
 use App\Models\User;
+use App\Services\AiToolRegistry;
+use App\Services\KonsumenProgressSyncService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
+use Mockery;
 use Tests\TestCase;
 
 class AiChatTest extends TestCase
@@ -219,7 +222,8 @@ class AiChatTest extends TestCase
         $response
             ->assertOk()
             ->assertJsonPath('message.actions.0.label', 'Sync Sekarang')
-            ->assertJsonPath('message.actions.0.route', route('konsumen-progress.sync'))
+            ->assertJsonPath('message.actions.0.method', 'POST')
+            ->assertJsonPath('message.actions.0.url', route('konsumen-progress.sync'))
             ->assertJsonPath('message.actions.0.payload.branch_id', $branch->id);
     }
 
@@ -255,7 +259,216 @@ class AiChatTest extends TestCase
         $response
             ->assertOk()
             ->assertJsonFragment(['key' => 'database'])
-            ->assertJsonFragment(['route' => route('database.sync')]);
+            ->assertJsonFragment(['url' => route('database.sync')]);
+    }
+
+    public function test_exact_pemberkasan_magelang_query_is_deterministic_and_never_calls_provider(): void
+    {
+        [, $user] = $this->superadminUser();
+        $magelang = Branch::create(['name' => 'Magelang', 'code' => 'MGL', 'is_active' => true]);
+        $this->pipelineCustomer($magelang, 'MGL-01', 'Konsumen Pemberkasan', 'pemberkasan');
+        KonsumenProgressSyncStatus::create(['branch_id' => $magelang->id, 'status' => 'success', 'finished_at' => now()]);
+        config(['ai.routing_mode' => 'hybrid', 'ai.synthesize_tool_results' => false]);
+        Http::fake(fn () => Http::response(['unexpected' => true], 500));
+
+        $first = $this->actingAs($user)->postJson(route('ai-chat.chat'), [
+            'message' => 'Berapa konsumen pemberkasan cabang Magelang?',
+        ]);
+        $first->assertOk()
+            ->assertSeeText('Ada 1 data Pemberkasan untuk Magelang.')
+            ->assertDontSeeText('Semua stage');
+
+        $conversation = AiChatConversation::findOrFail($first->json('conversation_id'));
+        $this->assertSame('pemberkasan', $conversation->messages[1]['tool_results'][0]['arguments']['stage']);
+        $this->assertSame($magelang->id, $conversation->messages[1]['tool_results'][0]['arguments']['branch_id']);
+
+        $second = $this->actingAs($user)->postJson(route('ai-chat.chat'), [
+            'conversation_id' => $conversation->id,
+            'message' => 'Berapa konsumen pemberkasan cabang Magelang?',
+        ]);
+        $second->assertOk()->assertSeeText('Ada 1 data Pemberkasan untuk Magelang.');
+        $conversation->refresh();
+        $this->assertSame('pemberkasan', $conversation->messages[3]['tool_results'][0]['arguments']['stage']);
+        Http::assertNothingSent();
+    }
+
+    public function test_explicit_stage_overrides_previous_all_or_invalid_stage_context(): void
+    {
+        [, $user] = $this->superadminUser();
+        $magelang = Branch::create(['name' => 'Magelang', 'code' => 'MGL', 'is_active' => true]);
+        $this->pipelineCustomer($magelang, 'MGL-02', 'Konsumen Context', 'pemberkasan');
+        config(['ai.routing_mode' => 'hybrid', 'ai.synthesize_tool_results' => false]);
+
+        foreach (['semua stage', 'pemberkasan cabang Magelang'] as $storedStage) {
+            $conversation = AiChatConversation::create([
+                'user_id' => $user->id,
+                'title' => 'Context test',
+                'messages' => [[
+                    'role' => 'assistant',
+                    'content' => 'context lama',
+                    'tool_results' => [[
+                        'name' => 'count_by_stage',
+                        'arguments' => ['stage' => $storedStage, 'branch_id' => $magelang->id],
+                        'result' => ['stage' => $storedStage, 'branch_id' => $magelang->id],
+                    ]],
+                ]],
+            ]);
+
+            $response = $this->actingAs($user)->postJson(route('ai-chat.chat'), [
+                'conversation_id' => $conversation->id,
+                'message' => 'Berapa konsumen pemberkasan cabang Magelang?',
+            ]);
+            $response->assertOk()->assertSeeText('Ada 1 data Pemberkasan untuk Magelang.');
+            $conversation->refresh();
+            $this->assertSame('pemberkasan', collect($conversation->messages)->last()['tool_results'][0]['arguments']['stage']);
+        }
+    }
+
+    public function test_supported_pipeline_aliases_and_all_stage_query_route_canonically(): void
+    {
+        [, $user] = $this->superadminUser();
+        $branches = [
+            'Solo' => Branch::create(['name' => 'Solo', 'code' => 'SLO', 'is_active' => true]),
+            'Jepara' => Branch::create(['name' => 'Jepara', 'code' => 'JPR', 'is_active' => true]),
+            'Magelang' => Branch::create(['name' => 'Magelang', 'code' => 'MGL', 'is_active' => true]),
+            'Malang' => Branch::create(['name' => 'Malang', 'code' => 'MLG', 'is_active' => true]),
+        ];
+        $cases = [
+            ['jumlah akad cabang Solo', 'Solo', 'akad'],
+            ['berapa proses bank cabang Jepara', 'Jepara', 'proses_bank'],
+            ['berapa PPJB Dev cabang Magelang', 'Magelang', 'ppjb_dev'],
+            ['berapa BI Checking cabang Malang', 'Malang', 'bi_checking'],
+        ];
+        foreach ($cases as [$message, $branchName, $stage]) {
+            $this->pipelineCustomer($branches[$branchName], $branchName.'-01', $branchName.' Customer', $stage);
+            $response = $this->actingAs($user)->postJson(route('ai-chat.chat'), ['message' => $message]);
+            $response->assertOk();
+            $conversation = AiChatConversation::findOrFail($response->json('conversation_id'));
+            $this->assertSame($stage, $conversation->messages[1]['tool_results'][0]['arguments']['stage']);
+        }
+
+        $all = $this->actingAs($user)->postJson(route('ai-chat.chat'), ['message' => 'jumlah semua pipeline cabang Magelang']);
+        $all->assertOk()->assertSeeText('Semua stage');
+        $conversation = AiChatConversation::findOrFail($all->json('conversation_id'));
+        $this->assertArrayNotHasKey('stage', $conversation->messages[1]['tool_results'][0]['arguments']);
+    }
+
+    public function test_provider_composite_stage_argument_is_rejected_without_counting_all_stages(): void
+    {
+        [, $user] = $this->superadminUser();
+        $magelang = Branch::create(['name' => 'Magelang', 'code' => 'MGL', 'is_active' => true]);
+        config(['ai.routing_mode' => 'provider', 'ai.primary.api_key' => 'test-key']);
+        Http::fakeSequence()
+            ->push([
+                'choices' => [[
+                    'message' => [
+                        'role' => 'assistant',
+                        'content' => null,
+                        'tool_calls' => [[
+                            'id' => 'invalid-stage',
+                            'type' => 'function',
+                            'function' => [
+                                'name' => 'count_by_stage',
+                                'arguments' => json_encode(['stage' => 'pemberkasan cabang Magelang', 'branch_id' => $magelang->id]),
+                            ],
+                        ]],
+                    ],
+                ]],
+            ])
+            ->push(['choices' => [['message' => ['role' => 'assistant', 'content' => 'Stage tidak dikenali.']]]]);
+
+        $response = $this->actingAs($user)->postJson(route('ai-chat.chat'), ['message' => 'cek pipeline Magelang']);
+        $response->assertOk();
+        $conversation = AiChatConversation::findOrFail($response->json('conversation_id'));
+        $result = $conversation->messages[1]['tool_results'][0]['result'];
+        $this->assertSame('pemberkasan cabang Magelang', $result['received_stage']);
+        $this->assertStringContainsString('tidak dikenali', $result['error']);
+        $this->assertArrayNotHasKey('count', $result);
+    }
+
+    public function test_count_by_stage_schema_and_capabilities_only_advertise_supported_stages(): void
+    {
+        $definition = collect(app(AiToolRegistry::class)->definitions())
+            ->first(fn ($tool) => $tool['function']['name'] === 'count_by_stage');
+        $this->assertSame(['bi_checking', 'PSJB', 'pemberkasan', 'proses_bank', 'ppjb_dev', 'akad', 'bast'], $definition['function']['parameters']['properties']['stage']['enum']);
+        $this->assertStringNotContainsString('booking', strtolower($definition['function']['description']));
+        $this->assertStringNotContainsString('sp3k', strtolower($definition['function']['description']));
+
+        [, $user] = $this->superadminUser();
+        $response = $this->actingAs($user)->postJson(route('ai-chat.chat'), ['message' => 'data apa yang bisa kamu cari?']);
+        $response->assertOk()->assertDontSeeText('Booking')->assertDontSeeText('SP3K')->assertDontSeeText('Wawancara');
+    }
+
+    public function test_stale_magelang_result_returns_explicit_sync_action_contract(): void
+    {
+        [, $user] = $this->superadminUser();
+        $magelang = Branch::create(['name' => 'Magelang', 'code' => 'MGL', 'is_active' => true]);
+        KonsumenProgressSyncStatus::create(['branch_id' => $magelang->id, 'status' => 'success', 'finished_at' => now()->subMinutes(10)]);
+
+        $response = $this->actingAs($user)->postJson(route('ai-chat.chat'), [
+            'message' => 'Berapa konsumen pemberkasan cabang Magelang?',
+        ]);
+        $response->assertOk()
+            ->assertJsonPath('message.actions.0.key', 'konsumen_progress')
+            ->assertJsonPath('message.actions.0.method', 'POST')
+            ->assertJsonPath('message.actions.0.url', route('konsumen-progress.sync'))
+            ->assertJsonPath('message.actions.0.payload.branch_id', $magelang->id);
+    }
+
+    public function test_running_sync_does_not_return_another_sync_action(): void
+    {
+        [$branch, $user] = $this->branchAndUser();
+        KonsumenProgressSyncStatus::create(['branch_id' => $branch->id, 'status' => 'running', 'started_at' => now()]);
+
+        $this->actingAs($user)->postJson(route('ai-chat.chat'), [
+            'message' => 'jumlah akad ada berapa?',
+        ])->assertOk()->assertJsonPath('message.actions', []);
+    }
+
+    public function test_branch_user_sync_json_ignores_manipulated_branch_and_returns_summary(): void
+    {
+        [$branch, $user] = $this->branchAndUser();
+        $other = Branch::create(['name' => 'Magelang', 'code' => 'MGL', 'is_active' => true]);
+        $sync = Mockery::mock(KonsumenProgressSyncService::class);
+        $sync->shouldReceive('syncBranch')->once()
+            ->with(Mockery::on(fn (Branch $selected) => $selected->is($branch)))
+            ->andReturn(['ok' => true, 'message' => 'OK', 'summary' => ['akad' => 2]]);
+        $this->app->instance(KonsumenProgressSyncService::class, $sync);
+
+        $this->actingAs($user)->postJson(route('konsumen-progress.sync'), ['branch_id' => $other->id])
+            ->assertOk()
+            ->assertJsonPath('ok', true)
+            ->assertJsonPath('summary.akad', 2)
+            ->assertJsonStructure(['message', 'finished_at']);
+    }
+
+    public function test_failed_sync_json_returns_useful_error(): void
+    {
+        [$branch, $user] = $this->branchAndUser();
+        $sync = Mockery::mock(KonsumenProgressSyncService::class);
+        $sync->shouldReceive('syncBranch')->once()
+            ->with(Mockery::on(fn (Branch $selected) => $selected->is($branch)))
+            ->andReturn(['ok' => false, 'message' => 'Google API unavailable', 'summary' => []]);
+        $this->app->instance(KonsumenProgressSyncService::class, $sync);
+
+        $this->actingAs($user)->postJson(route('konsumen-progress.sync'), ['branch_id' => $branch->id])
+            ->assertUnprocessable()
+            ->assertJsonPath('ok', false)
+            ->assertJsonPath('message', 'Sync gagal: Google API unavailable');
+    }
+
+    public function test_ai_widget_contains_csrf_json_sync_and_visible_states(): void
+    {
+        [, $user] = $this->branchAndUser();
+
+        $this->actingAs($user)->get(route('content-calendar.index'))
+            ->assertOk()
+            ->assertSee('name="csrf-token"', false)
+            ->assertSee('Menyinkronkan...', false)
+            ->assertSee("'Content-Type': 'application/json'", false)
+            ->assertSee('JSON.stringify(action.payload || {})', false)
+            ->assertSee('Sync gagal:', false)
+            ->assertSee('action.success_message', false);
     }
 
     public function test_pipeline_count_uses_current_stage_projection_and_deduplicates_id_kavling(): void

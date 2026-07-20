@@ -131,7 +131,7 @@ class DatabaseController extends Controller
     public function sync(Request $request, DatabaseSheetSyncService $syncService)
     {
         $user = Auth::user();
-        $branchId = $user->isSuperadmin() ? $request->input('branch_id') : $user->branch_id;
+        $branchId = $user->canViewAllBranches() ? $request->input('branch_id') : $user->branch_id;
         $branch = $branchId ? Branch::find($branchId) : null;
 
         if (! $branch) {
@@ -145,7 +145,7 @@ class DatabaseController extends Controller
         $result = $syncService->syncBranch($branch);
         if (! $result['ok']) {
             if ($request->expectsJson()) {
-                return response()->json(['ok' => false, 'message' => 'Sync gagal: '.$result['message']], 422);
+                return response()->json(['ok' => false, 'message' => 'Sync gagal: '.$result['message'], 'summary' => $result['summary'] ?? []], 422);
             }
 
             return back()->with('error', 'Sync gagal: '.$result['message']);
@@ -154,7 +154,12 @@ class DatabaseController extends Controller
         $totalRows = array_sum($result['summary']);
 
         if ($request->expectsJson()) {
-            return response()->json(['ok' => true, 'message' => 'Sync selesai: '.count($result['summary']).' sheets, '.$totalRows.' rows.']);
+            return response()->json([
+                'ok' => true,
+                'message' => 'Sync selesai: '.count($result['summary']).' sheets, '.$totalRows.' rows.',
+                'summary' => $result['summary'],
+                'finished_at' => now()->toIso8601String(),
+            ]);
         }
 
         return back()->with('success', 'Sync selesai: '.count($result['summary']).' sheets, '.$totalRows.' rows.');

@@ -12,6 +12,7 @@ use App\Models\KonsumenProgressSyncStatus;
 use App\Models\User;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 
@@ -27,8 +28,8 @@ class AiToolRegistry
     public function definitions(): array
     {
         return [
-            $this->tool('count_by_stage', 'Hitung jumlah konsumen di stage pipeline tertentu, misalnya akad, booking, sp3k, atau semua stage.', [
-                'stage' => ['type' => 'string', 'description' => 'Nama stage/sheet, contoh: akad. Opsional.'],
+            $this->tool('count_by_stage', 'Hitung konsumen pada current stage canonical: BI Checking, PSJB, Pemberkasan, Proses Bank, PPJB Dev, Akad, atau BAST. Kirim cabang hanya melalui branch_id. Omit stage hanya jika user meminta semua stage.', [
+                'stage' => ['type' => 'string', 'enum' => array_keys(KonsumenPipelineService::STAGES), 'description' => 'Satu nilai stage canonical saja, tanpa nama atau teks cabang.'],
                 'date_from' => ['type' => 'string', 'description' => 'Tanggal awal YYYY-MM-DD. Opsional.'],
                 'date_to' => ['type' => 'string', 'description' => 'Tanggal akhir YYYY-MM-DD. Opsional.'],
                 'branch_id' => ['type' => 'integer', 'description' => 'ID cabang. Hanya berlaku untuk superadmin/pusat.'],
@@ -79,7 +80,9 @@ class AiToolRegistry
     {
         $lower = Str::lower($message);
         $today = today();
-        $branchId = $this->resolveBranchIdFromText($message, $user) ?? ($context['branch_id'] ?? null);
+        $explicitBranchId = $this->resolveBranchIdFromText($message, $user);
+        $branchId = $explicitBranchId ?? ($context['branch_id'] ?? null);
+        $explicitStage = $this->pipelineService->stageFromText($message);
 
         if (Str::contains($lower, ['data apa', 'bisa cari', 'bisa kamu cari', 'bisa kamu baca', 'kemampuan', 'capability'])) {
             return [['name' => 'get_supported_capabilities', 'arguments' => []]];
@@ -127,12 +130,14 @@ class AiToolRegistry
             ]];
         }
 
-        if (Str::contains($lower, ['akad', 'booking', 'sp3k', 'bast', 'pipeline', 'konsumen', 'konsumennya', 'pemberkasan', 'wawancara', 'realisasi', 'jumlahnya'])) {
-            preg_match('/(akad|booking|sp3k|bast|pemberkasan|wawancara|realisasi|pipeline|konsumen)/i', $message, $match);
-            $stage = Str::lower($match[1] ?? ($context['stage'] ?? ''));
-            if (in_array($stage, ['pipeline', 'konsumen', ''], true) && ! empty($context['stage'])) {
-                $stage = Str::lower((string) $context['stage']);
-            }
+        $allStagesRequested = Str::contains($lower, ['semua pipeline', 'semua stage', 'seluruh pipeline', 'seluruh stage']);
+        $pipelineIntent = $explicitStage !== null
+            || $allStagesRequested
+            || Str::contains($lower, ['jumlah pipeline', 'berapa pipeline', 'jumlah konsumen', 'berapa konsumen', 'jumlahnya', 'konsumennya']);
+
+        if ($pipelineIntent) {
+            $contextStage = $this->pipelineService->canonicalStage($context['stage'] ?? null);
+            $stage = $explicitStage ?? ($allStagesRequested ? null : $contextStage);
 
             if ($user->canViewAllBranches() && ! $branchId) {
                 return [[
@@ -141,15 +146,18 @@ class AiToolRegistry
                 ]];
             }
 
-            return [[
+            $tool = [
                 'name' => 'count_by_stage',
                 'arguments' => [
-                    'stage' => ! in_array($stage, ['pipeline', 'konsumen', ''], true) ? $stage : null,
+                    'stage' => $stage,
                     'date_from' => Str::contains($lower, 'hari ini') ? $today->toDateString() : null,
                     'date_to' => Str::contains($lower, 'hari ini') ? $today->toDateString() : null,
                     'branch_id' => $branchId,
                 ],
-            ]];
+            ];
+            $this->trace('local_parser', 'pipeline_count', $tool, $user);
+
+            return [$tool];
         }
 
         if (Str::contains($lower, ['dana talangan', 'talangan', 'lunas'])) {
@@ -243,8 +251,15 @@ class AiToolRegistry
         $stageInput = trim((string) ($arguments['stage'] ?? ''));
         $stage = $this->pipelineService->canonicalStage($stageInput);
         if ($stageInput !== '' && ! $stage) {
-            return ['error' => 'Stage tidak valid.', 'stage' => $stageInput, 'valid_stages' => array_keys($this->pipelineService->stages()), 'source_module' => 'Konsumen Progress'];
+            return [
+                'error' => 'Stage "'.$stageInput.'" tidak dikenali. Stage yang tersedia: '.$this->humanList($this->pipelineService->validStageLabels()).'.',
+                'received_stage' => $stageInput,
+                'valid_stages' => array_keys($this->pipelineService->stages()),
+                'source_module' => 'Konsumen Progress',
+            ];
         }
+
+        $this->trace('execution', 'pipeline_count', ['name' => 'count_by_stage', 'arguments' => ['stage' => $stage, 'branch_id' => $branchId]], $user);
 
         $dateFrom = $this->dateOrNull($arguments['date_from'] ?? null);
         $dateTo = $this->dateOrNull($arguments['date_to'] ?? null);
@@ -254,6 +269,7 @@ class AiToolRegistry
 
         return [
             'source_module' => 'Konsumen Progress',
+            'branch_id' => $branchId,
             'branch' => $branch->name,
             'stage' => $stage ?: 'semua stage',
             'stage_label' => $stage ? $this->pipelineService->stages()[$stage] : 'Semua stage',
@@ -442,7 +458,7 @@ class AiToolRegistry
                 'Daftar dan jumlah cabang',
                 'Dana Talangan: jumlah, status, nama konsumen, kav, proyek, tanggal, dan konfirmasi keuangan',
                 'Work Planner: jadwal task, agenda, dan konten berdasarkan tanggal/cabang',
-                'Konsumen Progress: jumlah per stage seperti akad, booking, SP3K, BAST, pemberkasan, wawancara, realisasi',
+                'Konsumen Progress: current-stage BI Checking, PSJB, Pemberkasan, Proses Bank, PPJB Dev, Akad, dan BAST',
                 'Database sheet cache: pencarian kata kunci pada data hasil sync Google Sheets',
                 'Pencarian nama konsumen lintas Dana Talangan, Konsumen Progress, dan Database',
             ],
@@ -519,5 +535,38 @@ class AiToolRegistry
             'is_stale' => ! $lastSyncedAt || $status?->status !== 'success' || $lastSyncedAt->lt(now()->subMinutes($staleAfter)),
             'stale_after_minutes' => $staleAfter,
         ];
+    }
+
+    public function canonicalStage(?string $stage): ?string
+    {
+        return $this->pipelineService->canonicalStage($stage);
+    }
+
+    private function humanList(array $items): string
+    {
+        if (count($items) < 2) {
+            return implode('', $items);
+        }
+
+        $last = array_pop($items);
+
+        return implode(', ', $items).', dan '.$last;
+    }
+
+    private function trace(string $routeSource, string $intent, array $tool, User $user): void
+    {
+        if (! app()->environment(['local', 'testing'])) {
+            return;
+        }
+
+        Log::debug('Oasis AI routing trace', [
+            'routing_mode' => config('ai.routing_mode', 'hybrid'),
+            'message_intent' => $intent,
+            'tool_name' => $tool['name'] ?? null,
+            'stage_argument' => $tool['arguments']['stage'] ?? null,
+            'branch_id' => $user->canViewAllBranches() ? ($tool['arguments']['branch_id'] ?? null) : $user->branch_id,
+            'route_source' => $routeSource,
+            'synthesis_enabled' => (bool) config('ai.synthesize_tool_results', false),
+        ]);
     }
 }

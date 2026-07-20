@@ -60,6 +60,27 @@ class KonsumenPipelineService
         return self::STAGE_ALIASES[$key] ?? null;
     }
 
+    public function stageFromText(string $text): ?string
+    {
+        $aliases = array_keys(self::STAGE_ALIASES);
+        usort($aliases, fn (string $left, string $right) => mb_strlen($right) <=> mb_strlen($left));
+        $normalized = Str::lower($text);
+
+        foreach ($aliases as $alias) {
+            $pattern = '/(?<![\pL\pN_])'.str_replace('\ ', '\s+', preg_quote($alias, '/')).'(?![\pL\pN_])/iu';
+            if (preg_match($pattern, $normalized) === 1) {
+                return self::STAGE_ALIASES[$alias];
+            }
+        }
+
+        return null;
+    }
+
+    public function validStageLabels(): array
+    {
+        return array_values(self::STAGES);
+    }
+
     public function buildPipeline(Branch $branch, ?Carbon $dateFrom = null, ?Carbon $dateTo = null): array
     {
         $rowsBySheet = $this->rowsBySheet($branch);

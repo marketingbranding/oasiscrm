@@ -364,20 +364,7 @@
         return map[status] || { backgroundColor: '#ccc', color: '#000' };
     }
 }" class="fixed bottom-4 right-4 z-50" x-cloak x-init="fetchReports()">
-    <template x-if="!open">
-        <button @click="open = true; sent = false; fetchReports(); fetchHistory()"
-                class="relative w-12 h-12 bg-[#c0392b] hover:bg-[#a93226] text-white border-2 border-black rounded-none flex items-center justify-center shadow-lg transition-colors duration-200"
-                title="Laporan / Masukan">
-            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5">
-                <path stroke-linecap="round" stroke-linejoin="round" d="M12 20.25c4.97 0 9-3.694 9-8.25s-4.03-8.25-9-8.25S3 7.444 3 12c0 2.104.859 4.023 2.273 5.48.432.447.74 1.04.586 1.641a4.483 4.483 0 0 1-.923 1.785A5.969 5.969 0 0 0 6 21c1.282 0 2.47-.402 3.445-1.087.81.22 1.668.337 2.555.337Z"/>
-            </svg>
-            <span x-show="pendingCount > 0"
-                  class="absolute -top-2 -right-2 bg-[#c0392b] text-white text-[10px] font-[Helvetica] font-bold min-w-[18px] h-[18px] flex items-center justify-center border-2 border-white rounded-none px-1 shadow-md"
-                  x-text="pendingCount > 9 ? '9+' : pendingCount"></span>
-        </button>
-    </template>
-    <template x-if="open">
-        <div class="bg-white border-2 border-black shadow-xl w-80 font-['Times_New_Roman'] max-h-[80vh] flex flex-col">
+    <div x-show="open" x-cloak @click.outside="open = false" class="absolute bottom-16 right-0 bg-white border-2 border-black shadow-xl w-80 font-['Times_New_Roman'] max-h-[80vh] flex flex-col">
             {{-- Header --}}
             <div class="bg-[#c0392b] text-white px-3 py-2 flex items-center justify-between text-sm font-bold font-[Helvetica] shrink-0">
                 <template x-if="tab !== 'detail'">
@@ -604,8 +591,18 @@
                     </div>
                 </template>
             </div>
-        </div>
-    </template>
+    </div>
+
+    <button @click="open = !open; sent = false; if (open) { fetchReports(); fetchHistory(); }"
+            class="relative w-12 h-12 bg-[#c0392b] hover:bg-[#a93226] text-white border-2 border-black rounded-none flex items-center justify-center shadow-lg transition-colors duration-200"
+            title="Laporan / Masukan">
+        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M12 20.25c4.97 0 9-3.694 9-8.25s-4.03-8.25-9-8.25S3 7.444 3 12c0 2.104.859 4.023 2.273 5.48.432.447.74 1.04.586 1.641a4.483 4.483 0 0 1-.923 1.785A5.969 5.969 0 0 0 6 21c1.282 0 2.47-.402 3.445-1.087.81.22 1.668.337 2.555.337Z"/>
+        </svg>
+        <span x-show="pendingCount > 0"
+              class="absolute -top-2 -right-2 bg-[#c0392b] text-white text-[10px] font-[Helvetica] font-bold min-w-[18px] h-[18px] flex items-center justify-center border-2 border-white rounded-none px-1 shadow-md"
+              x-text="pendingCount > 9 ? '9+' : pendingCount"></span>
+    </button>
 </div>
 <script>
 document.addEventListener('alpine:init', function () {

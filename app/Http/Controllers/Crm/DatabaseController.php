@@ -135,15 +135,27 @@ class DatabaseController extends Controller
         $branch = $branchId ? Branch::find($branchId) : null;
 
         if (! $branch) {
+            if ($request->expectsJson()) {
+                return response()->json(['ok' => false, 'message' => 'Branch tidak ditemukan.'], 422);
+            }
+
             return back()->with('error', 'Branch tidak ditemukan.');
         }
 
         $result = $syncService->syncBranch($branch);
         if (! $result['ok']) {
+            if ($request->expectsJson()) {
+                return response()->json(['ok' => false, 'message' => 'Sync gagal: '.$result['message']], 422);
+            }
+
             return back()->with('error', 'Sync gagal: '.$result['message']);
         }
 
         $totalRows = array_sum($result['summary']);
+
+        if ($request->expectsJson()) {
+            return response()->json(['ok' => true, 'message' => 'Sync selesai: '.count($result['summary']).' sheets, '.$totalRows.' rows.']);
+        }
 
         return back()->with('success', 'Sync selesai: '.count($result['summary']).' sheets, '.$totalRows.' rows.');
     }

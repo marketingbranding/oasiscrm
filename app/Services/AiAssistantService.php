@@ -4,7 +4,12 @@ namespace App\Services;
 
 use App\Exceptions\AiProviderException;
 use App\Models\AiChatConversation;
+use App\Models\DanaTalanganSyncStatus;
+use App\Models\DatabaseSheetSyncStatus;
+use App\Models\KonsumenProgressSyncStatus;
 use App\Models\User;
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 
 class AiAssistantService
@@ -27,6 +32,7 @@ class AiAssistantService
                 'provider' => 'local',
                 'model' => 'tools',
                 'tool_results' => $toolResults,
+                'actions' => $this->resolveSyncActions($toolResults, $user),
             ];
         }
 
@@ -35,7 +41,113 @@ class AiAssistantService
             'provider' => 'local',
             'model' => 'tools',
             'tool_results' => [],
+            'actions' => [],
         ];
+    }
+
+    private function resolveSyncActions(array $toolResults, User $user): array
+    {
+        $actions = [];
+
+        foreach ($toolResults as $toolResult) {
+            $name = $toolResult['name'] ?? null;
+            $branchId = $this->syncBranchId($toolResult, $user);
+
+            $modules = match ($name) {
+                'count_by_stage' => ['konsumen_progress'],
+                'get_dana_talangan_summary' => ['dana_talangan'],
+                'search_customer' => ['database', 'konsumen_progress', 'dana_talangan'],
+                'get_today_summary' => ['database', 'konsumen_progress', 'dana_talangan'],
+                default => [],
+            };
+
+            foreach ($modules as $module) {
+                $action = $this->syncActionForModule($module, $branchId);
+                if ($action && ! collect($actions)->contains(fn ($existing) => ($existing['key'] ?? null) === $action['key'])) {
+                    $actions[] = $action;
+                }
+            }
+        }
+
+        return $actions;
+    }
+
+    private function syncBranchId(array $toolResult, User $user): ?int
+    {
+        if (! $user->canViewAllBranches()) {
+            return $user->branch_id;
+        }
+
+        return filled($toolResult['arguments']['branch_id'] ?? null) ? (int) $toolResult['arguments']['branch_id'] : null;
+    }
+
+    private function syncActionForModule(string $module, ?int $branchId): ?array
+    {
+        $status = match ($module) {
+            'database' => $branchId ? $this->latestBranchSync(DatabaseSheetSyncStatus::class, 'database_sheet_sync_statuses', $branchId) : null,
+            'konsumen_progress' => $branchId ? $this->latestBranchSync(KonsumenProgressSyncStatus::class, 'konsumen_progress_sync_statuses', $branchId) : null,
+            'dana_talangan' => $this->latestGlobalSync(DanaTalanganSyncStatus::class, 'dana_talangan_sync_statuses'),
+            default => null,
+        };
+
+        if (! $this->syncIsStale($status)) {
+            return null;
+        }
+
+        return match ($module) {
+            'database' => [
+                'key' => 'database',
+                'label' => 'Sync Sekarang',
+                'hint' => 'Database sheet belum sync atau sudah lewat '.config('ai.sync_stale_minutes', 5).' menit.',
+                'route' => route('database.sync'),
+                'payload' => array_filter(['branch_id' => $branchId]),
+            ],
+            'konsumen_progress' => [
+                'key' => 'konsumen_progress',
+                'label' => 'Sync Sekarang',
+                'hint' => 'Konsumen Progress belum sync atau sudah lewat '.config('ai.sync_stale_minutes', 5).' menit.',
+                'route' => route('konsumen-progress.sync'),
+                'payload' => array_filter(['branch_id' => $branchId]),
+            ],
+            'dana_talangan' => [
+                'key' => 'dana_talangan',
+                'label' => 'Sync Sekarang',
+                'hint' => 'Dana Talangan belum sync atau sudah lewat '.config('ai.sync_stale_minutes', 5).' menit.',
+                'route' => route('dana-talangan.sync'),
+                'payload' => [],
+            ],
+            default => null,
+        };
+    }
+
+    /** @param class-string<Model> $model */
+    private function latestBranchSync(string $model, string $table, int $branchId): ?Model
+    {
+        if (! Schema::hasTable($table)) {
+            return null;
+        }
+
+        return $model::query()->where('branch_id', $branchId)->latest('finished_at')->first();
+    }
+
+    /** @param class-string<Model> $model */
+    private function latestGlobalSync(string $model, string $table): ?Model
+    {
+        if (! Schema::hasTable($table)) {
+            return null;
+        }
+
+        return $model::query()->latest('finished_at')->first();
+    }
+
+    private function syncIsStale(?Model $status): bool
+    {
+        if (! $status || ! $status->finished_at) {
+            return true;
+        }
+
+        return $status->status !== 'success'
+            || $status->finished_at->lt(now()->subMinutes((int) config('ai.sync_stale_minutes', 5)));
     }
 
     private function baseMessages(User $user, ?AiChatConversation $conversation): array

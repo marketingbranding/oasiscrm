@@ -129,6 +129,18 @@ class AiToolRegistry
             ]]];
         }
 
+        if (Str::contains($lower, ['cari customer', 'cari konsumen', 'search customer', 'search konsumen'])) {
+            $query = preg_replace('/\b(cari|search)\s+(customer|konsumen)\b/i', '', $message);
+
+            return [[
+                'name' => 'search_customer',
+                'arguments' => [
+                    'query' => trim((string) $query),
+                    'branch_id' => $branchId,
+                ],
+            ]];
+        }
+
         if (Str::contains($lower, ['hari ini', 'summary', 'ringkasan'])) {
             return [['name' => 'get_today_summary', 'arguments' => []]];
         }

@@ -6,6 +6,8 @@ use App\Models\AiChatConversation;
 use App\Models\Branch;
 use App\Models\ContentItem;
 use App\Models\DanaTalangan;
+use App\Models\DatabaseSheetSyncStatus;
+use App\Models\KonsumenProgressSyncStatus;
 use App\Models\KonsumenProgressSheetRow;
 use App\Models\Role;
 use App\Models\User;
@@ -238,6 +240,62 @@ class AiChatTest extends TestCase
         ])->assertOk()->assertJsonPath('message.content', 'Ada 0 data bast untuk Solo.');
 
         Http::assertNothingSent();
+    }
+
+    public function test_pipeline_question_includes_sync_action_when_cache_is_stale(): void
+    {
+        [$branch, $user] = $this->branchAndUser();
+        config(['ai.sync_stale_minutes' => 5]);
+        KonsumenProgressSyncStatus::create([
+            'branch_id' => $branch->id,
+            'status' => 'success',
+            'finished_at' => now()->subMinutes(10),
+        ]);
+
+        $response = $this->actingAs($user)->postJson(route('ai-chat.chat'), [
+            'message' => 'jumlah akad ada berapa?',
+        ]);
+
+        $response
+            ->assertOk()
+            ->assertJsonPath('message.actions.0.label', 'Sync Sekarang')
+            ->assertJsonPath('message.actions.0.route', route('konsumen-progress.sync'))
+            ->assertJsonPath('message.actions.0.payload.branch_id', $branch->id);
+    }
+
+    public function test_pipeline_question_does_not_include_sync_action_when_cache_is_fresh(): void
+    {
+        [$branch, $user] = $this->branchAndUser();
+        config(['ai.sync_stale_minutes' => 5]);
+        KonsumenProgressSyncStatus::create([
+            'branch_id' => $branch->id,
+            'status' => 'success',
+            'finished_at' => now()->subMinute(),
+        ]);
+
+        $this->actingAs($user)->postJson(route('ai-chat.chat'), [
+            'message' => 'jumlah akad ada berapa?',
+        ])->assertOk()->assertJsonPath('message.actions', []);
+    }
+
+    public function test_search_customer_includes_database_sync_action_when_cache_is_stale(): void
+    {
+        [$branch, $user] = $this->branchAndUser();
+        config(['ai.sync_stale_minutes' => 5]);
+        DatabaseSheetSyncStatus::create([
+            'branch_id' => $branch->id,
+            'status' => 'success',
+            'finished_at' => now()->subMinutes(20),
+        ]);
+
+        $response = $this->actingAs($user)->postJson(route('ai-chat.chat'), [
+            'message' => 'cari customer budi',
+        ]);
+
+        $response
+            ->assertOk()
+            ->assertJsonFragment(['key' => 'database'])
+            ->assertJsonFragment(['route' => route('database.sync')]);
     }
 
     public function test_dana_talangan_answer_includes_grounded_record_detail(): void

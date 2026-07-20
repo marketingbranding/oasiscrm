@@ -62,12 +62,24 @@ class KonsumenProgressController extends Controller
     {
         $branch = $this->resolveBranch($request);
         if (!$branch) {
+            if ($request->expectsJson()) {
+                return response()->json(['ok' => false, 'message' => 'Branch tidak ditemukan.'], 422);
+            }
+
             return back()->with('error', 'Branch tidak ditemukan.');
         }
 
         $result = $syncService->syncBranch($branch);
         if (!$result['ok']) {
+            if ($request->expectsJson()) {
+                return response()->json(['ok' => false, 'message' => 'Sync gagal: '.$result['message']], 422);
+            }
+
             return back()->with('error', 'Sync gagal: ' . $result['message']);
+        }
+
+        if ($request->expectsJson()) {
+            return response()->json(['ok' => true, 'message' => 'Sync selesai: '.array_sum($result['summary']).' rows diperbarui.']);
         }
 
         return back()->with('success', 'Sync selesai: ' . array_sum($result['summary']) . ' rows diperbarui.');

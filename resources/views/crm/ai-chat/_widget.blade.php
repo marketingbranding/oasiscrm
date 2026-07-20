@@ -38,6 +38,16 @@
                     <div class="max-w-[88%] min-w-[45%] border-2 border-black bg-white text-sm leading-snug break-words">
                         <div :class="message.role === 'user' ? 'bg-[#8c9ae0]' : 'bg-[#f1c40f]'" class="border-b-2 border-black px-2 py-1 text-[10px] font-[Helvetica] font-bold uppercase" x-text="message.role === 'user' ? 'Kamu' : 'Oasis AI'"></div>
                         <div :class="message.role === 'user' ? 'bg-[#eef1ff]' : 'bg-white'" class="px-2 py-2 whitespace-pre-line leading-snug" x-text="message.content"></div>
+                        <div x-show="message.role === 'assistant' && (message.actions || []).length" class="border-t-2 border-black bg-white px-2 py-1.5 space-y-1">
+                            <template x-for="action in (message.actions || [])" :key="action.key || action.route">
+                                <div>
+                                    <p class="text-[10px] leading-tight text-gray-700 mb-1" x-text="action.hint || 'Data mungkin perlu di-sync ulang.'"></p>
+                                    <button type="button" @click="triggerSync(action)" :disabled="syncing === action.route"
+                                            class="border-2 border-black bg-[#b3bd95] hover:bg-[#9ead82] px-2 py-1 text-[10px] font-[Helvetica] font-bold disabled:opacity-50"
+                                            x-text="syncLabel(action)"></button>
+                                </div>
+                            </template>
+                        </div>
                     </div>
                 </div>
             </template>
@@ -70,6 +80,8 @@ document.addEventListener('alpine:init', function () {
             open: false,
             loaded: false,
             loading: false,
+            syncing: null,
+            syncStatus: {},
             input: '',
             conversationId: null,
             conversations: [],
@@ -108,6 +120,31 @@ document.addEventListener('alpine:init', function () {
             },
             newChat() { this.conversationId = null; this.messages = []; this.input = ''; this.providerLabel = 'read-only'; },
             ask(text) { this.input = text; this.send(); },
+            syncLabel(action) {
+                if (this.syncing === action.route) return 'Sync...';
+                if (this.syncStatus[action.route] === 'success') return 'Sync Berhasil';
+                if (this.syncStatus[action.route] === 'error') return 'Sync Gagal';
+                return action.label || 'Sync Sekarang';
+            },
+            triggerSync(action) {
+                if (!action || !action.route || this.syncing) return;
+                this.syncing = action.route;
+                this.syncStatus[action.route] = null;
+                const body = new URLSearchParams(action.payload || {});
+                fetch(action.route, {
+                    method: action.method || 'POST',
+                    headers: { Accept: 'application/json', 'X-CSRF-TOKEN': this.csrf, 'Content-Type': 'application/x-www-form-urlencoded' },
+                    body,
+                }).then(r => {
+                    if (!r.ok) throw new Error('Sync gagal.');
+                    this.syncStatus[action.route] = 'success';
+                }).catch(() => {
+                    this.syncStatus[action.route] = 'error';
+                }).finally(() => {
+                    this.syncing = null;
+                    setTimeout(() => { this.syncStatus[action.route] = null; }, 2500);
+                });
+            },
             send() {
                 if (this.loading || !this.input) return;
                 const text = this.input;

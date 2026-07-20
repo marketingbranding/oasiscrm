@@ -5,6 +5,7 @@ return [
     'timeout' => (int) env('AI_CHAT_TIMEOUT', 30),
     'max_messages' => (int) env('AI_CHAT_MAX_MESSAGES', 12),
     'max_input_length' => (int) env('AI_CHAT_MAX_INPUT_LENGTH', 1000),
+    'sync_stale_minutes' => (int) env('AI_SYNC_STALE_MINUTES', 5),
 
     'primary' => [
         'provider' => env('AI_PRIMARY_PROVIDER', 'openrouter'),

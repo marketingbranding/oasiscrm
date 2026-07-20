@@ -81,6 +81,7 @@ class AiChatController extends Controller
         $messages[] = [
             'role' => 'assistant',
             'content' => $reply['content'],
+            'actions' => $reply['actions'] ?? [],
             'tool_results' => $reply['tool_results'] ?? [],
             'at' => now()->toIso8601String(),
         ];
@@ -105,6 +106,7 @@ class AiChatController extends Controller
             'message' => [
                 'role' => 'assistant',
                 'content' => $reply['content'],
+                'actions' => $reply['actions'] ?? [],
             ],
             'provider' => $reply['provider'],
             'model' => $reply['model'],

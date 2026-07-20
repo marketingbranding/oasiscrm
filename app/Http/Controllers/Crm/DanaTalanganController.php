@@ -305,14 +305,22 @@ class DanaTalanganController extends Controller
             ->with('success', 'Data dana talangan berhasil dihapus.');
     }
 
-    public function sync(DanaTalanganGoogleService $googleService)
+    public function sync(Request $request, DanaTalanganGoogleService $googleService)
     {
         $result = $googleService->sync(Auth::id());
         if (! $result['ok']) {
+            if ($request->expectsJson()) {
+                return response()->json(['ok' => false, 'message' => 'Sync Dana Talangan gagal: '.$result['message']], 422);
+            }
+
             return back()->with('error', 'Sync Dana Talangan gagal: '.$result['message']);
         }
 
         $summary = $result['summary'];
+
+        if ($request->expectsJson()) {
+            return response()->json(['ok' => true, 'message' => "Sync selesai: {$summary['updated']} diperbarui, {$summary['imported']} diimpor, {$summary['pushed']} dikirim."]);
+        }
 
         return back()->with('success', "Sync selesai: {$summary['updated']} diperbarui, {$summary['imported']} diimpor, {$summary['pushed']} dikirim.");
     }

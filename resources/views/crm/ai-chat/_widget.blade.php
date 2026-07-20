@@ -1,6 +1,6 @@
 @auth
 <div x-data="aiChatWidget()" class="fixed bottom-4 right-20 z-[998] font-['Times_New_Roman']" @keydown.escape.window="open=false">
-    <button type="button" @click="open = !open; if (open && !loaded) loadConversations()"
+    <button type="button" @click="toggleChat()"
             class="relative w-12 h-12 bg-[#8c9ae0] hover:bg-[#7585d8] border-2 border-black rounded-none flex items-center justify-center shadow-lg transition-colors duration-200 font-[Helvetica] font-bold text-sm"
             title="Oasis AI - Asisten Magang">
         AI
@@ -19,7 +19,12 @@
         <div class="border-b-2 border-black bg-white px-2 py-1 flex gap-1 overflow-x-auto">
             <button type="button" @click="newChat()" class="shrink-0 border border-black bg-[#b3bd95] px-2 py-1 text-[11px] font-bold font-[Helvetica]">Chat Baru</button>
             <template x-for="conversation in conversations" :key="conversation.id">
-                <button type="button" @click="loadConversation(conversation.id)" class="shrink-0 border border-black bg-white hover:bg-[#fcc20f] px-2 py-1 text-[11px] max-w-32 truncate" x-text="conversation.title"></button>
+                <div class="shrink-0 flex border border-black bg-white">
+                    <button type="button" @click="loadConversation(conversation.id)" class="hover:bg-[#fcc20f] px-2 py-1 text-[11px] max-w-28 truncate" x-text="conversation.title"></button>
+                    <button type="button" @click.stop="deleteConversation(conversation, $event)" :disabled="deletingConversationId === conversation.id"
+                            class="border-l border-black px-1.5 text-[11px] font-bold text-[#c0392b] hover:bg-red-50 disabled:opacity-40"
+                            title="Hapus percakapan" aria-label="Hapus percakapan">×</button>
+                </div>
             </template>
         </div>
 
@@ -38,6 +43,7 @@
                     <div class="max-w-[88%] min-w-[45%] border-2 border-black bg-white text-sm leading-snug break-words">
                         <div :class="message.role === 'user' ? 'bg-[#8c9ae0]' : 'bg-[#f1c40f]'" class="border-b-2 border-black px-2 py-1 text-[10px] font-[Helvetica] font-bold uppercase" x-text="message.role === 'user' ? 'Kamu' : 'Oasis AI'"></div>
                         <div :class="message.role === 'user' ? 'bg-[#eef1ff]' : 'bg-white'" class="px-2 py-2 whitespace-pre-line leading-snug" x-text="message.content"></div>
+                        <div x-show="formatMessageTime(message.at)" class="bg-white px-2 pb-1 text-[9px] text-gray-500" x-text="formatMessageTime(message.at)"></div>
                         <div x-show="message.role === 'assistant' && (message.actions || []).length" class="border-t-2 border-black bg-white px-2 py-1.5 space-y-1">
                             <template x-for="action in (message.actions || [])" :key="action.key || actionUrl(action)">
                                 <div>
@@ -61,8 +67,8 @@
         </div>
 
         <form @submit.prevent="send()" class="border-t-2 border-black bg-white p-1.5">
-            <textarea x-model.trim="input" rows="1" maxlength="1000" :disabled="loading"
-                      @keydown.enter.prevent="if (!$event.shiftKey) send()"
+            <textarea x-ref="chatInput" x-model.trim="input" rows="1" maxlength="1000" :disabled="loading"
+                      @keydown.enter="if (!$event.shiftKey) { $event.preventDefault(); send(); }"
                       class="w-full border-2 border-black px-2 py-1 text-sm resize-none focus:outline-none"
                       placeholder="Tanya Oasis..."></textarea>
             <div class="flex items-center justify-between mt-1">
@@ -82,6 +88,7 @@ document.addEventListener('alpine:init', function () {
             loading: false,
             syncing: null,
             syncStatus: {},
+            deletingConversationId: null,
             input: '',
             conversationId: null,
             conversations: [],
@@ -89,6 +96,7 @@ document.addEventListener('alpine:init', function () {
             providerLabel: 'read-only',
             csrf: document.querySelector('meta[name="csrf-token"]').getAttribute('content'),
             showUrl: '{{ route('ai-chat.show', ['conversation' => '__ID__']) }}',
+            deleteUrl: '{{ route('ai-chat.destroy', ['conversation' => '__ID__']) }}',
             parseResponse(r) {
                 return r.text().then(text => {
                     let data = null;
@@ -104,8 +112,8 @@ document.addEventListener('alpine:init', function () {
             loadConversations() {
                 fetch('{{ route('ai-chat.index') }}', { headers: { Accept: 'application/json' } })
                     .then(r => this.parseResponse(r))
-                    .then(data => { this.conversations = data.conversations || []; this.loaded = true; })
-                    .catch(e => { this.loaded = true; this.providerLabel = 'error'; this.messages.push({ role: 'assistant', content: 'Gagal memuat histori AI: ' + e.message }); });
+                    .then(data => { this.conversations = data.conversations || []; this.loaded = true; if (this.open) this.focusInput(); })
+                    .catch(e => { this.loaded = true; this.providerLabel = 'error'; this.messages.push({ role: 'assistant', content: 'Gagal memuat histori AI: ' + e.message, at: new Date().toISOString() }); this.focusInput(); });
             },
             loadConversation(id) {
                 fetch(this.showUrl.replace('__ID__', id), { headers: { Accept: 'application/json' } })
@@ -115,11 +123,52 @@ document.addEventListener('alpine:init', function () {
                         this.messages = data.conversation.messages || [];
                         this.providerLabel = [data.conversation.provider, data.conversation.model].filter(Boolean).join(' · ') || 'read-only';
                         this.scrollDown();
+                        this.focusInput();
                     })
-                    .catch(e => { this.messages.push({ role: 'assistant', content: 'Gagal memuat percakapan: ' + e.message }); });
+                    .catch(e => { this.messages.push({ role: 'assistant', content: 'Gagal memuat percakapan: ' + e.message, at: new Date().toISOString() }); this.focusInput(); });
             },
-            newChat() { this.conversationId = null; this.messages = []; this.input = ''; this.providerLabel = 'read-only'; },
+            toggleChat() {
+                this.open = !this.open;
+                if (!this.open) return;
+                if (!this.loaded) this.loadConversations();
+                else this.focusInput();
+            },
+            newChat() { this.conversationId = null; this.messages = []; this.input = ''; this.providerLabel = 'read-only'; this.focusInput(); },
             ask(text) { this.input = text; this.send(); },
+            focusInput() {
+                this.$nextTick(() => {
+                    if (this.$refs.chatInput && !this.loading) this.$refs.chatInput.focus();
+                });
+            },
+            formatMessageTime(value) {
+                if (!value) return '';
+                const date = new Date(value);
+                if (Number.isNaN(date.getTime())) return '';
+                const now = new Date();
+                const time = date.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', hour12: false });
+                const isToday = date.getFullYear() === now.getFullYear()
+                    && date.getMonth() === now.getMonth()
+                    && date.getDate() === now.getDate();
+                return isToday ? time : date.toLocaleDateString(undefined, { day: '2-digit', month: 'short', year: 'numeric' }) + ', ' + time;
+            },
+            deleteConversation(conversation, event) {
+                event?.stopPropagation();
+                if (!conversation || this.deletingConversationId || !confirm('Hapus percakapan ini?')) return;
+                this.deletingConversationId = conversation.id;
+                fetch(this.deleteUrl.replace('__ID__', conversation.id), {
+                    method: 'DELETE',
+                    headers: { Accept: 'application/json', 'X-CSRF-TOKEN': this.csrf },
+                }).then(r => this.parseResponse(r)).then(() => {
+                    this.conversations = this.conversations.filter(item => item.id !== conversation.id);
+                    if (this.conversationId === conversation.id) this.newChat();
+                }).catch(error => {
+                    this.messages.push({ role: 'assistant', content: 'Gagal menghapus percakapan: ' + error.message, at: new Date().toISOString() });
+                }).finally(() => {
+                    this.deletingConversationId = null;
+                    this.scrollDown();
+                    this.focusInput();
+                });
+            },
             actionUrl(action) { return action?.url || action?.route || ''; },
             syncLabel(action) {
                 const url = this.actionUrl(action);
@@ -141,21 +190,23 @@ document.addEventListener('alpine:init', function () {
                     this.messages.push({
                         role: 'assistant',
                         content: action.success_message || data.message || 'Sync berhasil. Silakan ulangi pertanyaan untuk membaca data terbaru.',
+                        at: new Date().toISOString(),
                     });
                     this.scrollDown();
                 }).catch(error => {
                     this.syncStatus[url] = 'error';
-                    this.messages.push({ role: 'assistant', content: 'Sync gagal: ' + error.message });
+                    this.messages.push({ role: 'assistant', content: 'Sync gagal: ' + error.message, at: new Date().toISOString() });
                     this.scrollDown();
                 }).finally(() => {
                     this.syncing = null;
+                    this.focusInput();
                 });
             },
             send() {
                 if (this.loading || !this.input) return;
                 const text = this.input;
                 this.input = '';
-                this.messages.push({ role: 'user', content: text });
+                this.messages.push({ role: 'user', content: text, at: new Date().toISOString() });
                 this.loading = true;
                 this.scrollDown();
                 fetch('{{ route('ai-chat.chat') }}', {
@@ -164,14 +215,16 @@ document.addEventListener('alpine:init', function () {
                     body: JSON.stringify({ message: text, conversation_id: this.conversationId })
                 }).then(r => this.parseResponse(r)).then(data => {
                     this.conversationId = data.conversation_id;
+                    if (!data.message.at) data.message.at = new Date().toISOString();
                     this.messages.push(data.message);
                     this.providerLabel = [data.provider, data.model].filter(Boolean).join(' · ');
                     this.loadConversations();
                 }).catch(e => {
-                    this.messages.push({ role: 'assistant', content: 'Gagal: ' + e.message });
+                    this.messages.push({ role: 'assistant', content: 'Gagal: ' + e.message, at: new Date().toISOString() });
                 }).finally(() => {
                     this.loading = false;
                     this.scrollDown();
+                    this.focusInput();
                 });
             },
             scrollDown() { this.$nextTick(() => { if (this.$refs.messages) this.$refs.messages.scrollTop = this.$refs.messages.scrollHeight; }); }

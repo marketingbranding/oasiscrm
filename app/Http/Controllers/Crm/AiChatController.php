@@ -77,13 +77,15 @@ class AiChatController extends Controller
 
         $reply = $assistant->reply($request->user(), $data['message'], $conversation);
         $messages = $conversation?->messages ?? [];
-        $messages[] = ['role' => 'user', 'content' => $data['message'], 'at' => now()->toIso8601String()];
+        $userMessageAt = now()->toIso8601String();
+        $assistantMessageAt = now()->toIso8601String();
+        $messages[] = ['role' => 'user', 'content' => $data['message'], 'at' => $userMessageAt];
         $messages[] = [
             'role' => 'assistant',
             'content' => $reply['content'],
             'actions' => $reply['actions'] ?? [],
             'tool_results' => $this->sanitizeToolResults($reply['tool_results'] ?? []),
-            'at' => now()->toIso8601String(),
+            'at' => $assistantMessageAt,
         ];
         $messages = array_slice($messages, -1 * (int) config('ai.max_stored_messages', 50));
 
@@ -108,6 +110,7 @@ class AiChatController extends Controller
                 'role' => 'assistant',
                 'content' => $reply['content'],
                 'actions' => $reply['actions'] ?? [],
+                'at' => $assistantMessageAt,
             ],
             'provider' => $reply['provider'],
             'model' => $reply['model'],

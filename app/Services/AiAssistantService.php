@@ -362,7 +362,7 @@ class AiAssistantService
                 if (($toolResult['name'] ?? null) === 'search_customer') {
                     return [
                         'search_query' => $toolResult['arguments']['query'] ?? $toolResult['result']['query'] ?? null,
-                        'branch_id' => $toolResult['arguments']['branch_id'] ?? null,
+                        'branch_id' => $toolResult['arguments']['branch_id'] ?? $toolResult['result']['branch_id'] ?? null,
                     ];
                 }
 
@@ -413,7 +413,7 @@ class AiAssistantService
             'count_by_stage' => 'Ada '.($result['count'] ?? 0).' data '.($result['stage_label'] ?? $result['stage'] ?? 'pipeline').' untuk '.$branch.'.',
             'get_content_schedule' => $this->localContentAnswer($result),
             'get_dana_talangan_summary' => $this->localDanaTalanganAnswer($result),
-            'search_customer' => 'Ditemukan '.count($result['results'] ?? []).' hasil terkait "'.($result['query'] ?? $message).'" di '.$branch.'.',
+            'search_customer' => $this->localCustomerSearchAnswer($result, $message),
             'get_branch_info' => $this->localBranchAnswer($result),
             'get_supported_capabilities' => $this->localCapabilitiesAnswer($result),
             'ask_clarification' => $result['message'] ?? 'Sebutkan cabang dan data yang ingin dicek.',
@@ -444,6 +444,23 @@ class AiAssistantService
         $byDate = $items->groupBy('date')->map(fn ($items, $date) => $date.': '.$items->pluck('title')->implode(', '))->values()->implode('; ');
 
         return 'Ada '.$items->count().' jadwal '.($result['item_type'] ?? 'item').' pada periode '.$result['date_from'].' sampai '.$result['date_to'].' untuk '.$result['branch'].'. '.$byDate.'.';
+    }
+
+    private function localCustomerSearchAnswer(array $result, string $message): string
+    {
+        $count = count($result['results'] ?? []);
+        $query = trim((string) ($result['query'] ?? $message));
+        $branch = $result['branch'] ?? 'cabang terkait';
+        if ($count > 0) {
+            return 'Ditemukan '.$count.' hasil terkait '.$query.' di cabang '.$branch.'.';
+        }
+
+        $isStale = collect($result['freshness'] ?? [])->contains(fn ($freshness) => (bool) ($freshness['is_stale'] ?? false));
+        if ($isStale) {
+            return 'Tidak ditemukan konsumen atas nama '.$query.' di cabang '.$branch.' berdasarkan sync terakhir. Data mungkin belum terbaru.';
+        }
+
+        return 'Tidak ditemukan konsumen atas nama '.$query.' di cabang '.$branch.' berdasarkan data sinkronisasi saat ini.';
     }
 
     private function localDanaTalanganAnswer(array $result): string

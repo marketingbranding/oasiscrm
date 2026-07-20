@@ -81,8 +81,14 @@ class AiToolRegistry
         $lower = Str::lower($message);
         $today = today();
         $explicitBranchId = $this->resolveBranchIdFromText($message, $user);
-        $branchId = $explicitBranchId ?? ($context['branch_id'] ?? null);
+        $branchId = $user->canViewAllBranches()
+            ? ($explicitBranchId ?? ($context['branch_id'] ?? null))
+            : $user->branch_id;
         $explicitStage = $this->pipelineService->stageFromText($message);
+        $mentionedBranch = $this->resolveMentionedBranch($message);
+        $previousSearchQuery = trim((string) ($context['search_query'] ?? ''));
+        $newSearchQuery = $this->extractCustomerSearchQuery($message);
+        $searchCommand = preg_match('/\b(?:coba\s+cari|cari|search|cek\s+konsumen|ada\s+konsumen)\b/iu', $message) === 1;
 
         if (Str::contains($lower, ['data apa', 'bisa cari', 'bisa kamu cari', 'bisa kamu baca', 'kemampuan', 'capability'])) {
             return [['name' => 'get_supported_capabilities', 'arguments' => []]];
@@ -107,26 +113,38 @@ class AiToolRegistry
             ]];
         }
 
-        if (Str::contains($lower, ['cari customer', 'cari konsumen', 'search customer', 'search konsumen', 'coba cari'])) {
-            $query = preg_replace('/\b(coba cari|cari|search)\s+(customer|konsumen)?\b/i', '', $message);
-            $query = preg_replace('/\b(bernama|atas nama)\b/i', '', (string) $query);
+        $customerSearchIntent = $newSearchQuery !== null || ($previousSearchQuery !== '' && $mentionedBranch) || $searchCommand;
+        if ($customerSearchIntent && $mentionedBranch && ! $user->canViewAllBranches() && $mentionedBranch->id !== $user->branch_id) {
+            return [[
+                'name' => 'ask_clarification',
+                'arguments' => ['message' => 'Pencarian tetap dibatasi ke cabang '.($user->branch?->name ?? 'akun Anda').' sesuai akses akun Anda.'],
+            ]];
+        }
 
+        if ($newSearchQuery !== null) {
             return [[
                 'name' => 'search_customer',
                 'arguments' => [
-                    'query' => trim((string) $query),
+                    'query' => $newSearchQuery,
                     'branch_id' => $branchId,
                 ],
             ]];
         }
 
-        if (! empty($context['search_query']) && $branchId && Str::contains($lower, ['bukan', 'cabang', 'di ', 'untuk'])) {
+        if ($previousSearchQuery !== '' && $mentionedBranch) {
             return [[
                 'name' => 'search_customer',
                 'arguments' => [
-                    'query' => $context['search_query'],
+                    'query' => $previousSearchQuery,
                     'branch_id' => $branchId,
                 ],
+            ]];
+        }
+
+        if ($searchCommand) {
+            return [[
+                'name' => 'ask_clarification',
+                'arguments' => ['message' => 'Sebutkan nama konsumen yang ingin dicari.'],
             ]];
         }
 
@@ -223,17 +241,61 @@ class AiToolRegistry
 
     private function resolveBranchIdFromText(string $text, User $user): ?int
     {
-        $lower = Str::lower($text);
-        $branch = Branch::query()
-            ->where('is_active', true)
-            ->get(['id', 'name', 'code'])
-            ->first(fn (Branch $branch) => Str::contains($lower, Str::lower($branch->name)) || Str::contains($lower, Str::lower($branch->code)));
+        $branch = $this->resolveMentionedBranch($text);
 
         if (! $branch) {
             return null;
         }
 
         return $user->canViewAllBranches() ? $branch->id : $user->branch_id;
+    }
+
+    public function extractCustomerSearchQuery(string $message): ?string
+    {
+        if (preg_match('/\b(?:coba\s+cari|cari|search|cek\s+konsumen|ada\s+konsumen)\b/iu', $message) !== 1) {
+            return null;
+        }
+
+        $query = preg_replace('/^.*?\b(?:coba\s+cari|cari|search|cek\s+konsumen|ada\s+konsumen)\b\s*/iu', '', trim($message));
+        $query = preg_replace('/^(?:konsumen|customer)\b\s*/iu', '', (string) $query);
+        $query = preg_replace('/^(?:bernama|atas\s+nama)\b\s*/iu', '', (string) $query);
+
+        $branch = $this->resolveMentionedBranch($message);
+        if ($branch) {
+            $names = array_filter([$branch->name, $branch->code]);
+            $branchPattern = implode('|', array_map(fn ($value) => preg_quote((string) $value, '/'), $names));
+            $query = preg_replace('/(?:\s+(?:di|cabang|untuk(?:\s+cabang)?)\s+|^(?:di|cabang|untuk(?:\s+cabang)?)\s+)(?:'.$branchPattern.')[\s?!.,]*$/iu', '', (string) $query);
+        }
+
+        $query = trim((string) preg_replace('/\s+/', ' ', (string) $query), " \t\n\r\0\x0B?!.,");
+        if ($query === '' || preg_match('/^(?:di|cabang|untuk|yang|kalau|sekarang)$/iu', $query) === 1) {
+            return null;
+        }
+
+        if ($branch && in_array(Str::lower($query), [Str::lower($branch->name), Str::lower($branch->code), 'cabang '.Str::lower($branch->name), 'di '.Str::lower($branch->name)], true)) {
+            return null;
+        }
+
+        return $query;
+    }
+
+    private function resolveMentionedBranch(string $text): ?Branch
+    {
+        $lower = Str::lower($text);
+        $match = null;
+        $lastPosition = -1;
+
+        foreach (Branch::where('is_active', true)->get(['id', 'name', 'code']) as $branch) {
+            foreach ([$branch->name, $branch->code] as $needle) {
+                $position = mb_strripos($lower, Str::lower((string) $needle));
+                if ($position !== false && $position >= $lastPosition) {
+                    $match = $branch;
+                    $lastPosition = $position;
+                }
+            }
+        }
+
+        return $match;
     }
 
     private function countByStage(array $arguments, User $user): array
@@ -362,7 +424,8 @@ class AiToolRegistry
     private function searchCustomer(array $arguments, User $user): array
     {
         $branchId = $this->allowedBranchId($arguments, $user);
-        $term = Str::lower(trim((string) ($arguments['query'] ?? '')));
+        $queryText = trim((string) ($arguments['query'] ?? ''));
+        $term = Str::lower($queryText);
 
         if ($term === '') {
             return ['error' => 'Kata kunci pencarian kosong.'];
@@ -415,8 +478,9 @@ class AiToolRegistry
 
         return [
             'source_module' => 'Customer Search',
+            'branch_id' => $branchId,
             'branch' => $this->branchName($branchId),
-            'query' => $term,
+            'query' => $queryText,
             'results' => $pipeline->concat($database)->concat($dana)->take(20)->values()->all(),
             'freshness' => [
                 'database' => $this->syncMeta('database', $branchId),

@@ -678,6 +678,201 @@ class AiChatTest extends TestCase
         $this->actingAs($otherUser)->deleteJson(route('ai-chat.destroy', $conversation))->assertNotFound();
     }
 
+    public function test_user_can_delete_own_conversation_and_it_disappears_from_index(): void
+    {
+        [$branch, $user] = $this->branchAndUser();
+        $conversation = AiChatConversation::create([
+            'user_id' => $user->id,
+            'branch_id' => $branch->id,
+            'title' => 'Percakapan untuk dihapus',
+            'messages' => [],
+        ]);
+
+        $this->actingAs($user)->deleteJson(route('ai-chat.destroy', $conversation))
+            ->assertOk()
+            ->assertJsonPath('ok', true);
+        $this->assertDatabaseMissing('ai_chat_conversations', ['id' => $conversation->id]);
+        $this->actingAs($user)->getJson(route('ai-chat.index'))
+            ->assertOk()
+            ->assertJsonMissing(['id' => $conversation->id]);
+    }
+
+    public function test_chat_response_assistant_timestamp_matches_persisted_timestamp(): void
+    {
+        [, $user] = $this->branchAndUser();
+        config(['ai.enabled' => false]);
+
+        $response = $this->actingAs($user)->postJson(route('ai-chat.chat'), [
+            'message' => 'data apa yang bisa kamu cari?',
+        ])->assertOk()->assertJsonStructure(['message' => ['role', 'content', 'actions', 'at']]);
+
+        $conversation = AiChatConversation::findOrFail($response->json('conversation_id'));
+        $this->assertSame($conversation->messages[1]['at'], $response->json('message.at'));
+    }
+
+    public function test_historical_messages_without_timestamp_remain_readable(): void
+    {
+        [$branch, $user] = $this->branchAndUser();
+        $conversation = AiChatConversation::create([
+            'user_id' => $user->id,
+            'branch_id' => $branch->id,
+            'title' => 'Riwayat lama',
+            'messages' => [['role' => 'assistant', 'content' => 'Pesan tanpa timestamp']],
+        ]);
+
+        $this->actingAs($user)->getJson(route('ai-chat.show', $conversation))
+            ->assertOk()
+            ->assertJsonPath('conversation.messages.0.content', 'Pesan tanpa timestamp')
+            ->assertJsonMissingPath('conversation.messages.0.at');
+    }
+
+    public function test_customer_search_follow_up_reuses_query_and_changes_only_branch(): void
+    {
+        [, $user] = $this->superadminUser();
+        $solo = Branch::create(['name' => 'Solo', 'code' => 'SLO', 'is_active' => true]);
+        $magelang = Branch::create(['name' => 'Magelang', 'code' => 'MGL', 'is_active' => true]);
+        config(['ai.routing_mode' => 'hybrid', 'ai.synthesize_tool_results' => false]);
+        Http::fake(fn () => Http::response(['unexpected' => true], 500));
+
+        $first = $this->actingAs($user)->postJson(route('ai-chat.chat'), [
+            'message' => 'cari konsumen atas nama Indra Maulana di Solo',
+        ])->assertOk();
+        $conversationId = $first->json('conversation_id');
+
+        $second = $this->actingAs($user)->postJson(route('ai-chat.chat'), [
+            'conversation_id' => $conversationId,
+            'message' => 'coba cari di magelang',
+        ])->assertOk()
+            ->assertSeeText('Indra Maulana')
+            ->assertDontSeeText('atas nama di magelang');
+
+        $conversation = AiChatConversation::findOrFail($conversationId);
+        $tool = collect($conversation->messages)->last()['tool_results'][0];
+        $this->assertSame('search_customer', $tool['name']);
+        $this->assertSame('Indra Maulana', $tool['arguments']['query']);
+        $this->assertSame($magelang->id, $tool['arguments']['branch_id']);
+        $this->assertNotSame($solo->id, $tool['arguments']['branch_id']);
+        Http::assertNothingSent();
+    }
+
+    public function test_zero_result_context_survives_repeated_branch_refinements_and_reload(): void
+    {
+        [, $user] = $this->superadminUser();
+        foreach ([['Solo', 'SLO'], ['Magelang', 'MGL'], ['Jepara', 'JPR']] as [$name, $code]) {
+            Branch::create(['name' => $name, 'code' => $code, 'is_active' => true]);
+        }
+        config(['ai.routing_mode' => 'hybrid', 'ai.synthesize_tool_results' => false]);
+
+        $first = $this->actingAs($user)->postJson(route('ai-chat.chat'), [
+            'message' => 'cari konsumen Indra Maulana di Solo',
+        ])->assertOk()->assertSeeText('Tidak ditemukan konsumen atas nama Indra Maulana');
+        $conversationId = $first->json('conversation_id');
+
+        $this->actingAs($user)->getJson(route('ai-chat.show', $conversationId))->assertOk();
+        foreach (['coba cari di Magelang', 'kalau Jepara?', 'sekarang Solo'] as $message) {
+            $this->actingAs($user)->postJson(route('ai-chat.chat'), [
+                'conversation_id' => $conversationId,
+                'message' => $message,
+            ])->assertOk()->assertSeeText('Indra Maulana')->assertDontSeeText('atas nama di ');
+        }
+
+        $conversation = AiChatConversation::findOrFail($conversationId);
+        foreach (collect($conversation->messages)->where('role', 'assistant')->skip(1) as $message) {
+            $this->assertSame('Indra Maulana', $message['tool_results'][0]['arguments']['query']);
+        }
+    }
+
+    public function test_new_explicit_customer_query_replaces_context_and_strips_branch_clause(): void
+    {
+        [, $user] = $this->superadminUser();
+        $solo = Branch::create(['name' => 'Solo', 'code' => 'SLO', 'is_active' => true]);
+        $magelang = Branch::create(['name' => 'Magelang', 'code' => 'MGL', 'is_active' => true]);
+        $first = $this->actingAs($user)->postJson(route('ai-chat.chat'), ['message' => 'cari konsumen Indra Maulana di Solo']);
+
+        $this->actingAs($user)->postJson(route('ai-chat.chat'), [
+            'conversation_id' => $first->json('conversation_id'),
+            'message' => 'cari konsumen Budi Santoso di Magelang',
+        ])->assertOk();
+
+        $conversation = AiChatConversation::findOrFail($first->json('conversation_id'));
+        $tool = collect($conversation->messages)->last()['tool_results'][0];
+        $this->assertSame('Budi Santoso', $tool['arguments']['query']);
+        $this->assertSame($magelang->id, $tool['arguments']['branch_id']);
+        $this->assertNotSame($solo->id, $tool['arguments']['branch_id']);
+    }
+
+    public function test_customer_query_extractor_distinguishes_name_from_branch_refinement(): void
+    {
+        Branch::create(['name' => 'Magelang', 'code' => 'MGL', 'is_active' => true]);
+        $tools = app(AiToolRegistry::class);
+
+        $this->assertNull($tools->extractCustomerSearchQuery('coba cari di Magelang'));
+        $this->assertNull($tools->extractCustomerSearchQuery('cari cabang Magelang'));
+        $this->assertSame('Indra Maulana', $tools->extractCustomerSearchQuery('cari konsumen Indra Maulana di Magelang'));
+        $this->assertSame('Budi', $tools->extractCustomerSearchQuery('cari konsumen Budi'));
+    }
+
+    public function test_branch_user_cannot_refine_customer_search_to_other_branch(): void
+    {
+        [$solo, $user] = $this->branchAndUser('Solo', 'SLO');
+        Branch::create(['name' => 'Magelang', 'code' => 'MGL', 'is_active' => true]);
+        $first = $this->actingAs($user)->postJson(route('ai-chat.chat'), ['message' => 'cari konsumen Indra Maulana']);
+
+        $response = $this->actingAs($user)->postJson(route('ai-chat.chat'), [
+            'conversation_id' => $first->json('conversation_id'),
+            'message' => 'coba cari di Magelang',
+        ])->assertOk()->assertSeeText('Pencarian tetap dibatasi ke cabang Solo sesuai akses akun Anda.');
+
+        $conversation = AiChatConversation::findOrFail($first->json('conversation_id'));
+        $tool = collect($conversation->messages)->last()['tool_results'][0];
+        $this->assertSame('ask_clarification', $tool['name']);
+        $this->assertSame($solo->id, $conversation->branch_id);
+        $this->assertArrayNotHasKey('branch_id', $tool['arguments']);
+    }
+
+    public function test_sync_success_does_not_remove_customer_search_context(): void
+    {
+        [, $user] = $this->superadminUser();
+        $solo = Branch::create(['name' => 'Solo', 'code' => 'SLO', 'is_active' => true]);
+        $magelang = Branch::create(['name' => 'Magelang', 'code' => 'MGL', 'is_active' => true]);
+        $first = $this->actingAs($user)->postJson(route('ai-chat.chat'), ['message' => 'cari konsumen Indra Maulana di Solo']);
+        $sync = Mockery::mock(KonsumenProgressSyncService::class);
+        $sync->shouldReceive('syncBranch')->once()->andReturn(['ok' => true, 'message' => 'OK', 'summary' => ['data_konsumen' => 0]]);
+        $this->app->instance(KonsumenProgressSyncService::class, $sync);
+        $this->actingAs($user)->postJson(route('konsumen-progress.sync'), ['branch_id' => $solo->id])->assertOk();
+
+        $this->actingAs($user)->postJson(route('ai-chat.chat'), [
+            'conversation_id' => $first->json('conversation_id'),
+            'message' => 'coba cari di Magelang',
+        ])->assertOk();
+
+        $conversation = AiChatConversation::findOrFail($first->json('conversation_id'));
+        $tool = collect($conversation->messages)->last()['tool_results'][0];
+        $this->assertSame('Indra Maulana', $tool['arguments']['query']);
+        $this->assertSame($magelang->id, $tool['arguments']['branch_id']);
+    }
+
+    public function test_ai_widget_has_delete_timestamp_focus_and_shift_enter_contract(): void
+    {
+        [, $user] = $this->branchAndUser();
+
+        $response = $this->actingAs($user)->get(route('content-calendar.index'));
+        $response
+            ->assertOk()
+            ->assertSee('x-ref="chatInput"', false)
+            ->assertSee('focusInput()', false)
+            ->assertSee('@keydown.enter="if (!$event.shiftKey) { $event.preventDefault(); send(); }"', false)
+            ->assertDontSee('@keydown.enter.prevent', false)
+            ->assertSee('@click.stop="deleteConversation(conversation, $event)"', false)
+            ->assertSee("method: 'DELETE'", false)
+            ->assertSee("headers: { Accept: 'application/json', 'X-CSRF-TOKEN': this.csrf }", false)
+            ->assertSee('this.conversations = this.conversations.filter', false)
+            ->assertSee('formatMessageTime(value)', false)
+            ->assertSee("if (!value) return '';", false)
+            ->assertSee('event?.stopPropagation()', false);
+        $this->assertMatchesRegularExpression('/this\.loading = false;\s*this\.scrollDown\(\);\s*this\.focusInput\(\);/', $response->getContent());
+    }
+
     private function branchAndUser(string $branchName = 'Jepara', string $branchCode = 'JPR'): array
     {
         $role = Role::firstOrCreate(['slug' => 'admin'], ['name' => 'Admin', 'is_superadmin' => false]);

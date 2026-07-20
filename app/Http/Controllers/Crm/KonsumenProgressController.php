@@ -4,23 +4,15 @@ namespace App\Http\Controllers\Crm;
 
 use App\Http\Controllers\Controller;
 use App\Models\Branch;
-use App\Models\KonsumenProgressSheetRow;
 use App\Models\KonsumenProgressSyncStatus;
+use App\Services\KonsumenPipelineService;
 use App\Services\KonsumenProgressSyncService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 
 class KonsumenProgressController extends Controller
 {
-    private array $stages = [
-        'bi_checking' => 'BI Checking',
-        'PSJB' => 'PSJB',
-        'pemberkasan' => 'Pemberkasan',
-        'proses_bank' => 'Proses Bank',
-        'ppjb_dev' => 'PPJB Dev',
-        'akad' => 'Akad',
-        'bast' => 'BAST',
-    ];
+    public function __construct(private readonly KonsumenPipelineService $pipelineService) {}
 
     public function index(Request $request)
     {
@@ -52,7 +44,10 @@ class KonsumenProgressController extends Controller
             : true;
 
         if ($selectedBranch && $selectedBranch->sheet_id) {
-            $pipeline = $this->fetchPipeline($selectedBranch, $errors);
+            $pipeline = $this->pipelineService->buildPipeline($selectedBranch);
+            if (array_sum(array_map('count', $pipeline)) === 0) {
+                $errors[] = 'Data lokal belum tersedia. Klik Sync Sekarang terlebih dahulu.';
+            }
         }
 
         return view('crm.konsumen-progress.index', compact('branches', 'selectedBranch', 'selectedBranchId', 'pipeline', 'errors', 'syncStatus', 'isStale'));
@@ -88,7 +83,7 @@ class KonsumenProgressController extends Controller
     public function stage(Request $request)
     {
         $stageKey = $request->query('stage', 'bast');
-        if (!array_key_exists($stageKey, $this->stages)) {
+        if (! array_key_exists($stageKey, $this->pipelineService->stages())) {
             abort(404);
         }
 
@@ -102,16 +97,16 @@ class KonsumenProgressController extends Controller
             ], 422);
         }
 
-        $result = $this->fetchStage($branch, $stageKey);
+        $items = $this->pipelineService->customersForStage($branch, $stageKey);
 
         return response()->json([
-            'ok' => $result['error'] === null,
-            'items' => $result['items'],
-            'count' => count($result['items']),
-            'error' => $result['error'],
-            'warnings' => $result['warnings'],
-            'stale' => $result['stale'],
-        ], $result['error'] ? 502 : 200);
+            'ok' => true,
+            'items' => $items,
+            'count' => count($items),
+            'error' => null,
+            'warnings' => [],
+            'stale' => $this->isBranchCacheStale($branch),
+        ]);
     }
 
     private function resolveBranch(Request $request): ?Branch
@@ -124,147 +119,6 @@ class KonsumenProgressController extends Controller
         }
 
         return $branchId ? Branch::find($branchId) : null;
-    }
-
-    private function fetchStage(Branch $branch, string $stageKey): array
-    {
-        $warnings = [];
-        $stale = $this->isBranchCacheStale($branch);
-        $konsumenRows = $this->sheetRows($branch, 'data_konsumen');
-        $stageRows = $this->sheetRows($branch, $stageKey);
-
-        if (empty($konsumenRows)) {
-            return [
-                'items' => [],
-                'error' => 'Data lokal belum tersedia. Klik Sync Sekarang terlebih dahulu.',
-                'warnings' => [],
-                'stale' => $stale,
-            ];
-        }
-
-        $namaMap = [];
-        $phoneMap = [];
-        foreach ($konsumenRows as $row) {
-            $kav = trim($row['id_kavling'] ?? '');
-            if ($kav !== '') {
-                $namaMap[$kav] = $row['nama_konsumen'] ?? null;
-                $phoneMap[$kav] = $row['no_hp'] ?? null;
-            }
-        }
-
-        $laterKavlings = [];
-        foreach ($this->laterStages($stageKey) as $laterStage) {
-            foreach ($this->sheetRows($branch, $laterStage) as $row) {
-                $kavling = trim($row['id_kavling'] ?? '');
-                if ($kavling !== '') {
-                    $laterKavlings[$kavling] = true;
-                }
-            }
-        }
-
-        $items = [];
-        $seen = [];
-        foreach ($stageRows as $row) {
-            $kavling = trim($row['id_kavling'] ?? '');
-            if ($kavling === '' || isset($seen[$kavling]) || isset($laterKavlings[$kavling])) continue;
-
-            $nama = $namaMap[$kavling] ?? null;
-            if ($nama === null) continue;
-
-            $seen[$kavling] = true;
-            $items[] = [
-                'kavling' => $kavling,
-                'nama' => $nama,
-                'phone' => $phoneMap[$kavling] ?? null,
-            ];
-        }
-
-        return [
-            'items' => $items,
-            'error' => null,
-            'warnings' => $warnings,
-            'stale' => $stale,
-        ];
-    }
-
-    private function laterStages(string $stageKey): array
-    {
-        $ordered = array_keys($this->stages);
-        $index = array_search($stageKey, $ordered, true);
-
-        return $index === false ? [] : array_slice($ordered, $index + 1);
-    }
-
-    private function fetchPipeline(Branch $branch, array &$errors): array
-    {
-        $rowsBySheet = $this->allSheetRows($branch);
-        $konsumenRows = $rowsBySheet['data_konsumen'] ?? [];
-
-        if (empty($konsumenRows)) {
-            $errors[] = 'Data lokal belum tersedia. Klik Sync Sekarang terlebih dahulu.';
-        }
-
-        $namaMap = [];
-        $phoneMap = [];
-        foreach ($konsumenRows as $row) {
-            $kav = trim($row['id_kavling'] ?? '');
-            if ($kav !== '') {
-                $namaMap[$kav] = $row['nama_konsumen'] ?? null;
-                $phoneMap[$kav] = $row['no_hp'] ?? null;
-            }
-        }
-
-        $seen = [];
-        $pipeline = [];
-        foreach (array_reverse(array_keys($this->stages)) as $stageKey) {
-            $pipeline[$stageKey] = [];
-            foreach (($rowsBySheet[$stageKey] ?? []) as $row) {
-                $kavling = trim($row['id_kavling'] ?? '');
-                if ($kavling === '' || isset($seen[$kavling])) continue;
-
-                $nama = $namaMap[$kavling] ?? null;
-                if ($nama === null) continue;
-
-                $seen[$kavling] = true;
-                $pipeline[$stageKey][] = [
-                    'kavling' => $kavling,
-                    'nama' => $nama,
-                    'phone' => $phoneMap[$kavling] ?? null,
-                ];
-            }
-        }
-
-        foreach (array_keys($this->stages) as $stageKey) {
-            $pipeline[$stageKey] ??= [];
-        }
-
-        return $pipeline;
-    }
-
-    private function allSheetRows(Branch $branch): array
-    {
-        $rowsBySheet = [];
-        $rows = KonsumenProgressSheetRow::query()
-            ->where('branch_id', $branch->id)
-            ->orderBy('id')
-            ->get(['sheet_name', 'row_data']);
-
-        foreach ($rows as $row) {
-            $rowsBySheet[$row->sheet_name][] = $row->row_data;
-        }
-
-        return $rowsBySheet;
-    }
-
-    private function sheetRows(Branch $branch, string $sheetName): array
-    {
-        return KonsumenProgressSheetRow::query()
-            ->where('branch_id', $branch->id)
-            ->where('sheet_name', $sheetName)
-            ->orderBy('id')
-            ->get()
-            ->pluck('row_data')
-            ->all();
     }
 
     private function isBranchCacheStale(Branch $branch): bool

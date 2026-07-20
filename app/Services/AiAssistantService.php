@@ -8,6 +8,7 @@ use App\Models\DanaTalanganSyncStatus;
 use App\Models\DatabaseSheetSyncStatus;
 use App\Models\KonsumenProgressSyncStatus;
 use App\Models\User;
+use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
@@ -21,6 +22,45 @@ class AiAssistantService
 
     public function reply(User $user, string $message, ?AiChatConversation $conversation = null): array
     {
+        $context = $this->contextFromConversation($conversation);
+        if (config('ai.routing_mode', 'hybrid') === 'hybrid') {
+            $toolResults = $this->inferAndExecute($message, $user, $context);
+            if ($toolResults !== []) {
+                if (config('ai.synthesize_tool_results', false)) {
+                    try {
+                        $messages = $this->baseMessages($user, $conversation);
+                        $messages[] = ['role' => 'user', 'content' => $message];
+                        $messages[] = [
+                            'role' => 'system',
+                            'content' => 'Jawab ringkas memakai data tool ter-sanitasi berikut. Jangan menambah nilai yang tidak ada di data: '.json_encode($toolResults, JSON_UNESCAPED_UNICODE),
+                        ];
+                        $response = $this->provider->chat($messages);
+                        $content = trim((string) ($response['message']['content'] ?? ''));
+
+                        if ($content !== '') {
+                            return [
+                                'content' => $content,
+                                'provider' => $response['provider'] ?? 'provider',
+                                'model' => $response['model'] ?? null,
+                                'tool_results' => $toolResults,
+                                'actions' => $this->resolveSyncActions($toolResults, $user),
+                            ];
+                        }
+                    } catch (AiProviderException) {
+                        // Keep deterministic local result if optional synthesis is unavailable.
+                    }
+                }
+
+                return [
+                    'content' => $this->localAnswer($message, $toolResults, $user),
+                    'provider' => 'local',
+                    'model' => 'tools',
+                    'tool_results' => $toolResults,
+                    'actions' => $this->resolveSyncActions($toolResults, $user),
+                ];
+            }
+        }
+
         try {
             $messages = $this->baseMessages($user, $conversation);
             $messages[] = ['role' => 'user', 'content' => $message];
@@ -73,7 +113,6 @@ class AiAssistantService
                 ];
             }
         } catch (AiProviderException) {
-            $context = $this->contextFromConversation($conversation);
             $toolResults = $this->inferAndExecute($message, $user, $context);
 
             if ($toolResults !== []) {
@@ -98,8 +137,29 @@ class AiAssistantService
 
     private function executeProviderToolCalls(array $message, User $user): array
     {
+        $allowed = $this->tools->allowedToolNames();
+        $seen = [];
+
         return collect($message['tool_calls'] ?? [])
             ->filter(fn ($call) => ($call['type'] ?? null) === 'function')
+            ->take(max(0, (int) config('ai.max_tool_calls', 3)))
+            ->filter(function (array $call) use ($allowed, &$seen) {
+                $name = (string) ($call['function']['name'] ?? '');
+                if (! in_array($name, $allowed, true)) {
+                    return false;
+                }
+
+                $decoded = json_decode((string) ($call['function']['arguments'] ?? '{}'), true);
+                $arguments = is_array($decoded) ? array_filter($decoded, fn ($value) => filled($value)) : [];
+                $key = $name.'|'.json_encode($arguments, JSON_UNESCAPED_UNICODE);
+                if (isset($seen[$key])) {
+                    return false;
+                }
+
+                $seen[$key] = true;
+
+                return true;
+            })
             ->map(function (array $call) use ($user) {
                 $name = (string) ($call['function']['name'] ?? '');
                 $arguments = json_decode((string) ($call['function']['arguments'] ?? '{}'), true);
@@ -247,7 +307,7 @@ class AiAssistantService
 
         $history = collect($conversation?->messages ?? [])
             ->whereIn('role', ['user', 'assistant'])
-            ->take(-1 * (int) config('ai.max_messages', 12));
+            ->take(-1 * (int) config('ai.max_context_messages', 12));
 
         foreach ($history as $message) {
             $messages[] = [
@@ -319,10 +379,13 @@ class AiAssistantService
 
         $tool = $toolResults[0];
         $result = $tool['result'] ?? [];
+        if (isset($result['error'])) {
+            return (string) $result['error'];
+        }
         $branch = $result['branch'] ?? ($user?->branch?->name ?? 'cabangmu');
 
-        return match ($tool['name']) {
-            'count_by_stage' => 'Ada '.($result['count'] ?? 0).' data '.($result['stage'] ?? 'pipeline').' untuk '.$branch.'.',
+        $answer = match ($tool['name']) {
+            'count_by_stage' => 'Ada '.($result['count'] ?? 0).' data '.($result['stage_label'] ?? $result['stage'] ?? 'pipeline').' untuk '.$branch.'.',
             'get_content_schedule' => $this->localContentAnswer($result),
             'get_dana_talangan_summary' => $this->localDanaTalanganAnswer($result),
             'search_customer' => 'Ditemukan '.count($result['results'] ?? []).' hasil terkait "'.($result['query'] ?? $message).'" di '.$branch.'.',
@@ -331,6 +394,14 @@ class AiAssistantService
             'ask_clarification' => $result['message'] ?? 'Sebutkan cabang dan data yang ingin dicek.',
             default => 'Saya menemukan ringkasan data untuk '.$branch.'. Work Planner hari ini: '.($result['work_planner']['count'] ?? 0).' item; Dana Talangan: '.($result['dana_talangan']['count'] ?? 0).' data; Pipeline: '.($result['pipeline']['count'] ?? 0).' data.',
         };
+
+        if (($result['is_stale'] ?? false) && filled($result['last_synced_at'] ?? null)) {
+            $answer .= ' Data berdasarkan sync terakhir '.Carbon::parse($result['last_synced_at'])->format('d M Y H:i').', bukan real-time.';
+        } elseif (($result['sync_status'] ?? null) === 'never_synced') {
+            $answer .= ' Data belum pernah sync; klik Sync Sekarang untuk memperbarui cache.';
+        }
+
+        return $answer;
     }
 
     private function unsupportedAnswer(): string

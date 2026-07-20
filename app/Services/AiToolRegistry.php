@@ -5,15 +5,25 @@ namespace App\Services;
 use App\Models\Branch;
 use App\Models\ContentItem;
 use App\Models\DanaTalangan;
+use App\Models\DanaTalanganSyncStatus;
 use App\Models\DatabaseSheetRecord;
-use App\Models\KonsumenProgressSheetRow;
+use App\Models\DatabaseSheetSyncStatus;
+use App\Models\KonsumenProgressSyncStatus;
 use App\Models\User;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 
 class AiToolRegistry
 {
+    public function __construct(private readonly KonsumenPipelineService $pipelineService) {}
+
+    public function allowedToolNames(): array
+    {
+        return ['count_by_stage', 'get_content_schedule', 'get_dana_talangan_summary', 'search_customer', 'get_today_summary', 'get_branch_info', 'get_supported_capabilities', 'ask_clarification'];
+    }
+
     public function definitions(): array
     {
         return [
@@ -221,24 +231,37 @@ class AiToolRegistry
     private function countByStage(array $arguments, User $user): array
     {
         $branchId = $this->allowedBranchId($arguments, $user);
-        $stage = trim((string) ($arguments['stage'] ?? ''));
+        if (! $branchId) {
+            return ['error' => 'Sebutkan cabang untuk menghitung Konsumen Progress.', 'source_module' => 'Konsumen Progress'];
+        }
+
+        $branch = Branch::find($branchId);
+        if (! $branch) {
+            return ['error' => 'Cabang tidak ditemukan.', 'source_module' => 'Konsumen Progress'];
+        }
+
+        $stageInput = trim((string) ($arguments['stage'] ?? ''));
+        $stage = $this->pipelineService->canonicalStage($stageInput);
+        if ($stageInput !== '' && ! $stage) {
+            return ['error' => 'Stage tidak valid.', 'stage' => $stageInput, 'valid_stages' => array_keys($this->pipelineService->stages()), 'source_module' => 'Konsumen Progress'];
+        }
+
         $dateFrom = $this->dateOrNull($arguments['date_from'] ?? null);
         $dateTo = $this->dateOrNull($arguments['date_to'] ?? null);
+        $counts = $this->pipelineService->countByStage($branch, $stage, $dateFrom, $dateTo);
 
-        $query = KonsumenProgressSheetRow::query()
-            ->when($branchId, fn (Builder $query) => $query->where('branch_id', $branchId))
-            ->when($stage !== '', fn (Builder $query) => $query->where('sheet_name', 'like', '%'.$stage.'%'));
-
-        $rows = ($dateFrom || $dateTo) ? $query->get()->filter(fn ($row) => $this->rowHasDateBetween($row->row_data ?? [], $dateFrom, $dateTo)) : $query->get();
+        $sync = $this->syncMeta('konsumen_progress', $branchId);
 
         return [
-            'branch' => $this->branchName($branchId),
+            'source_module' => 'Konsumen Progress',
+            'branch' => $branch->name,
             'stage' => $stage ?: 'semua stage',
+            'stage_label' => $stage ? $this->pipelineService->stages()[$stage] : 'Semua stage',
             'date_from' => $dateFrom?->toDateString(),
             'date_to' => $dateTo?->toDateString(),
-            'count' => $rows->count(),
-            'by_stage' => $rows->groupBy('sheet_name')->map->count()->all(),
-        ];
+            'count' => $counts['count'],
+            'by_stage' => $counts['by_stage'],
+        ] + $sync;
     }
 
     private function contentSchedule(array $arguments, User $user): array
@@ -261,6 +284,7 @@ class AiToolRegistry
             ->get();
 
         return [
+            'source_module' => 'Work Planner',
             'branch' => $this->branchName($branchId ?: ($user->canViewAllBranches() ? null : $user->branch_id)),
             'date_from' => $start->toDateString(),
             'date_to' => $end->toDateString(),
@@ -298,8 +322,10 @@ class AiToolRegistry
             ->when($dateTo, fn (Builder $query) => $query->whereDate('tanggal', '<=', $dateTo));
 
         $records = (clone $query)->latest('tanggal')->limit(10)->get();
+        $sync = $this->syncMeta('dana_talangan', null);
 
         return [
+            'source_module' => 'Dana Talangan',
             'branch' => $this->branchName($branchId),
             'count' => (clone $query)->count(),
             'needs_confirmation' => (clone $query)->where('konfirmasi_keuangan', false)->count(),
@@ -314,7 +340,7 @@ class AiToolRegistry
                 'konfirmasi_keuangan' => $row->konfirmasi_keuangan,
                 'branch' => $row->branch?->name,
             ])->all(),
-        ];
+        ] + $sync;
     }
 
     private function searchCustomer(array $arguments, User $user): array
@@ -326,36 +352,61 @@ class AiToolRegistry
             return ['error' => 'Kata kunci pencarian kosong.'];
         }
 
-        $pipeline = KonsumenProgressSheetRow::query()
-            ->when($branchId, fn (Builder $query) => $query->where('branch_id', $branchId))
-            ->limit(300)
-            ->get()
-            ->filter(fn ($row) => Str::contains(Str::lower(json_encode($row->row_data ?? [])), $term))
+        $branches = Branch::query()
+            ->when($branchId, fn (Builder $query) => $query->whereKey($branchId))
+            ->when(! $branchId && ! $user->canViewAllBranches(), fn (Builder $query) => $query->whereKey($user->branch_id))
+            ->where('is_active', true)
+            ->get(['id', 'name']);
+
+        $pipeline = $branches
+            ->flatMap(fn (Branch $branch) => $this->pipelineService->search($branch, $term, 10))
             ->take(10)
-            ->map(fn ($row) => ['source' => 'Konsumen Progress', 'stage' => $row->sheet_name, 'data' => array_slice($row->row_data ?? [], 0, 6, true)])
+            ->map(fn (array $row) => [
+                'source_module' => 'Konsumen Progress',
+                'nama_konsumen' => $row['nama_konsumen'],
+                'id_kavling' => $row['id_kavling'],
+                'project_name' => $row['project_name'],
+                'branch' => $row['branch'],
+                'current_stage' => $row['current_stage'],
+                'source_sheet' => $row['source_sheet'],
+            ])
             ->values();
 
         $database = DatabaseSheetRecord::query()
             ->when($branchId, fn (Builder $query) => $query->where('branch_id', $branchId))
             ->whereNull('oasis_deleted_at')
-            ->limit(300)
-            ->get()
-            ->filter(fn ($row) => Str::contains(Str::lower(json_encode($row->row_data ?? [])), $term))
+            ->whereRaw('LOWER(row_data) LIKE ?', ['%'.$term.'%'])
             ->take(10)
-            ->map(fn ($row) => ['source' => 'Database', 'sheet' => $row->sheet_name, 'data' => array_slice($row->row_data ?? [], 0, 6, true)])
+            ->get()
+            ->map(fn (DatabaseSheetRecord $row) => $this->serializeDatabaseRecord($row))
             ->values();
 
         $dana = DanaTalangan::query()
             ->when($branchId, fn (Builder $query) => $query->where('branch_id', $branchId))
             ->where('nama_konsumen', 'like', '%'.$term.'%')
             ->limit(10)
-            ->get(['nama_konsumen', 'kav', 'project_name', 'status', 'tanggal'])
-            ->map(fn ($row) => ['source' => 'Dana Talangan', 'data' => $row->toArray()]);
+            ->with('branch:id,name')
+            ->get(['id', 'branch_id', 'nama_konsumen', 'kav', 'project_name', 'status', 'tanggal'])
+            ->map(fn (DanaTalangan $row) => [
+                'source_module' => 'Dana Talangan',
+                'nama_konsumen' => $row->nama_konsumen,
+                'id_kavling' => $row->kav,
+                'project_name' => $row->project_name,
+                'branch' => $row->branch?->name,
+                'status' => $row->status,
+                'tanggal' => $row->tanggal?->toDateString(),
+            ]);
 
         return [
+            'source_module' => 'Customer Search',
             'branch' => $this->branchName($branchId),
             'query' => $term,
-            'results' => $pipeline->concat($database)->concat($dana)->values()->all(),
+            'results' => $pipeline->concat($database)->concat($dana)->take(20)->values()->all(),
+            'freshness' => [
+                'database' => $this->syncMeta('database', $branchId),
+                'konsumen_progress' => $this->syncMeta('konsumen_progress', $branchId ?: $user->branch_id),
+                'dana_talangan' => $this->syncMeta('dana_talangan', null),
+            ],
         ];
     }
 
@@ -416,24 +467,57 @@ class AiToolRegistry
         }
     }
 
-    private function rowHasDateBetween(array $rowData, ?Carbon $from, ?Carbon $to): bool
+    private function serializeDatabaseRecord(DatabaseSheetRecord $row): array
     {
-        foreach ($rowData as $value) {
-            if (blank($value) || ! is_scalar($value)) {
-                continue;
-            }
+        $data = $row->row_data ?? [];
 
-            try {
-                $date = Carbon::parse((string) $value)->startOfDay();
-            } catch (\Throwable) {
-                continue;
-            }
+        return [
+            'source_module' => 'Database',
+            'source_sheet' => $row->sheet_name,
+            'nama_konsumen' => $this->firstValue($data, ['nama_konsumen', 'nama konsumen', 'nama', 'customer']),
+            'id_kavling' => $this->firstValue($data, ['id_kavling', 'id kavling', 'kavling', 'kav']),
+            'project_name' => $this->firstValue($data, ['project_name', 'proyek', 'project']),
+            'branch' => $row->branch?->name,
+            'last_synced_at' => $row->last_synced_at?->toIso8601String(),
+        ];
+    }
 
-            if ((! $from || $date->gte($from)) && (! $to || $date->lte($to))) {
-                return true;
+    private function firstValue(array $data, array $keys): ?string
+    {
+        $normalized = [];
+        foreach ($data as $key => $value) {
+            if (is_scalar($value)) {
+                $normalized[Str::lower(trim((string) $key))] = trim((string) $value);
             }
         }
 
-        return false;
+        foreach ($keys as $key) {
+            $value = $normalized[Str::lower($key)] ?? null;
+            if (filled($value)) {
+                return $value;
+            }
+        }
+
+        return null;
+    }
+
+    private function syncMeta(string $module, ?int $branchId): array
+    {
+        $staleAfter = (int) config('ai.sync_stale_minutes', 5);
+        $status = match ($module) {
+            'database' => $branchId && Schema::hasTable('database_sheet_sync_statuses') ? DatabaseSheetSyncStatus::where('branch_id', $branchId)->latest('finished_at')->first() : null,
+            'konsumen_progress' => $branchId && Schema::hasTable('konsumen_progress_sync_statuses') ? KonsumenProgressSyncStatus::where('branch_id', $branchId)->latest('finished_at')->first() : null,
+            'dana_talangan' => Schema::hasTable('dana_talangan_sync_statuses') ? DanaTalanganSyncStatus::latest('finished_at')->first() : null,
+            default => null,
+        };
+
+        $lastSyncedAt = $status?->finished_at;
+
+        return [
+            'sync_status' => $status?->status ?? 'never_synced',
+            'last_synced_at' => $lastSyncedAt?->toIso8601String(),
+            'is_stale' => ! $lastSyncedAt || $status?->status !== 'success' || $lastSyncedAt->lt(now()->subMinutes($staleAfter)),
+            'stale_after_minutes' => $staleAfter,
+        ];
     }
 }

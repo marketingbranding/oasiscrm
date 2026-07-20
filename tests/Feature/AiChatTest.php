@@ -6,6 +6,7 @@ use App\Models\AiChatConversation;
 use App\Models\Branch;
 use App\Models\ContentItem;
 use App\Models\DanaTalangan;
+use App\Models\DatabaseSheetRecord;
 use App\Models\DatabaseSheetSyncStatus;
 use App\Models\KonsumenProgressSyncStatus;
 use App\Models\KonsumenProgressSheetRow;
@@ -90,20 +91,8 @@ class AiChatTest extends TestCase
         [$branch, $user] = $this->branchAndUser();
         config(['ai.primary.api_key' => 'test-key']);
         $otherBranch = Branch::create(['name' => 'Pati', 'code' => 'PTI', 'is_active' => true]);
-        KonsumenProgressSheetRow::create([
-            'branch_id' => $branch->id,
-            'sheet_id' => 'sheet-a',
-            'sheet_name' => 'Akad',
-            'row_hash' => 'a',
-            'row_data' => ['nama' => 'Budi'],
-        ]);
-        KonsumenProgressSheetRow::create([
-            'branch_id' => $otherBranch->id,
-            'sheet_id' => 'sheet-b',
-            'sheet_name' => 'Akad',
-            'row_hash' => 'b',
-            'row_data' => ['nama' => 'Sari'],
-        ]);
+        $this->pipelineCustomer($branch, 'A-01', 'Budi', 'akad');
+        $this->pipelineCustomer($otherBranch, 'B-01', 'Sari', 'akad');
 
         Http::fakeSequence()
             ->push([
@@ -131,11 +120,11 @@ class AiChatTest extends TestCase
 
         $response
             ->assertOk()
-            ->assertJsonPath('provider', 'openrouter')
-            ->assertJsonPath('message.content', 'Ada 1 data akad untuk Jepara.');
+            ->assertJsonPath('provider', 'local')
+            ->assertSeeText('Ada 1 data Akad untuk Jepara.');
 
         $conversation = AiChatConversation::firstOrFail();
-        $this->assertSame('Ada 1 data akad untuk Jepara.', $conversation->messages[1]['content']);
+        $this->assertStringContainsString('Ada 1 data Akad untuk Jepara.', $conversation->messages[1]['content']);
     }
 
     public function test_bast_question_resolves_branch_name_without_hallucinating(): void
@@ -143,20 +132,8 @@ class AiChatTest extends TestCase
         [, $user] = $this->superadminUser();
         $solo = Branch::create(['name' => 'Solo', 'code' => 'SLO', 'is_active' => true]);
         $malang = Branch::create(['name' => 'Malang', 'code' => 'MLG', 'is_active' => true]);
-        KonsumenProgressSheetRow::create([
-            'branch_id' => $solo->id,
-            'sheet_id' => 'sheet-solo',
-            'sheet_name' => 'BAST',
-            'row_hash' => 'solo-bast',
-            'row_data' => ['nama' => 'Budi'],
-        ]);
-        KonsumenProgressSheetRow::create([
-            'branch_id' => $malang->id,
-            'sheet_id' => 'sheet-malang',
-            'sheet_name' => 'BAST',
-            'row_hash' => 'malang-bast',
-            'row_data' => ['nama' => 'Sari'],
-        ]);
+        $this->pipelineCustomer($solo, 'S-01', 'Budi', 'bast');
+        $this->pipelineCustomer($malang, 'M-01', 'Sari', 'bast');
 
         $response = $this->actingAs($user)->postJson(route('ai-chat.chat'), [
             'message' => 'berapa bast untuk cabang solo?',
@@ -164,7 +141,7 @@ class AiChatTest extends TestCase
 
         $response
             ->assertOk()
-            ->assertJsonPath('message.content', 'Ada 1 data bast untuk Solo.');
+            ->assertSeeText('Ada 1 data BAST untuk Solo.');
     }
 
     public function test_follow_up_pipeline_question_reuses_branch_and_stage_context(): void
@@ -174,23 +151,11 @@ class AiChatTest extends TestCase
         $malang = Branch::create(['name' => 'Malang', 'code' => 'MLG', 'is_active' => true]);
 
         foreach (range(1, 7) as $number) {
-            KonsumenProgressSheetRow::create([
-                'branch_id' => $solo->id,
-                'sheet_id' => 'solo-sheet',
-                'sheet_name' => 'BAST',
-                'row_hash' => 'solo-bast-'.$number,
-                'row_data' => ['nama' => 'Solo '.$number],
-            ]);
+            $this->pipelineCustomer($solo, 'S-'.$number, 'Solo '.$number, 'bast');
         }
 
         foreach (range(1, 3) as $number) {
-            KonsumenProgressSheetRow::create([
-                'branch_id' => $malang->id,
-                'sheet_id' => 'malang-sheet',
-                'sheet_name' => 'BAST',
-                'row_hash' => 'malang-bast-'.$number,
-                'row_data' => ['nama' => 'Malang '.$number],
-            ]);
+            $this->pipelineCustomer($malang, 'M-'.$number, 'Malang '.$number, 'bast');
         }
 
         $first = $this->actingAs($user)->postJson(route('ai-chat.chat'), [
@@ -199,19 +164,19 @@ class AiChatTest extends TestCase
 
         $first
             ->assertOk()
-            ->assertJsonPath('message.content', 'Ada 7 data bast untuk Solo.');
+            ->assertSeeText('Ada 7 data BAST untuk Solo.');
 
         $conversationId = $first->json('conversation_id');
 
         $this->actingAs($user)->postJson(route('ai-chat.chat'), [
             'conversation_id' => $conversationId,
             'message' => 'jumlah konsumennya ada berapa?',
-        ])->assertOk()->assertJsonPath('message.content', 'Ada 7 data bast untuk Solo.');
+        ])->assertOk()->assertSeeText('Ada 7 data BAST untuk Solo.');
 
         $this->actingAs($user)->postJson(route('ai-chat.chat'), [
             'conversation_id' => $conversationId,
             'message' => 'bukan semua cabang tapi untuk cabang solo saja',
-        ])->assertOk()->assertJsonPath('message.content', 'Ada 7 data bast untuk Solo.');
+        ])->assertOk()->assertSeeText('Ada 7 data BAST untuk Solo.');
     }
 
     public function test_superadmin_pipeline_follow_up_without_context_asks_for_branch(): void
@@ -232,7 +197,7 @@ class AiChatTest extends TestCase
 
         $this->actingAs($user)->postJson(route('ai-chat.chat'), [
             'message' => 'Jumlah bast untuk cabang solo ada berapa?',
-        ])->assertOk()->assertJsonPath('message.content', 'Ada 0 data bast untuk Solo.');
+        ])->assertOk()->assertSeeText('Ada 0 data BAST untuk Solo.');
 
         Http::assertNothingSent();
     }
@@ -291,6 +256,133 @@ class AiChatTest extends TestCase
             ->assertOk()
             ->assertJsonFragment(['key' => 'database'])
             ->assertJsonFragment(['route' => route('database.sync')]);
+    }
+
+    public function test_pipeline_count_uses_current_stage_projection_and_deduplicates_id_kavling(): void
+    {
+        [$branch, $user] = $this->branchAndUser();
+        config(['ai.enabled' => false]);
+        $this->pipelineCustomer($branch, 'A-01', 'Budi', 'akad');
+        KonsumenProgressSheetRow::create([
+            'branch_id' => $branch->id,
+            'sheet_id' => 'sheet-'.$branch->id,
+            'sheet_name' => 'bast',
+            'row_hash' => 'bast-'.$branch->id.'-A-01',
+            'row_data' => ['id_kavling' => 'A-01'],
+        ]);
+        KonsumenProgressSheetRow::create([
+            'branch_id' => $branch->id,
+            'sheet_id' => 'sheet-'.$branch->id,
+            'sheet_name' => 'bast',
+            'row_hash' => 'bast-duplicate-'.$branch->id.'-A-01',
+            'row_data' => ['id_kavling' => 'A-01'],
+        ]);
+
+        $this->actingAs($user)->postJson(route('ai-chat.chat'), [
+            'message' => 'jumlah akad ada berapa?',
+        ])->assertOk()->assertSeeText('Ada 0 data Akad untuk Jepara.');
+
+        $this->actingAs($user)->postJson(route('ai-chat.chat'), [
+            'message' => 'jumlah bast ada berapa?',
+        ])->assertOk()->assertSeeText('Ada 1 data BAST untuk Jepara.');
+    }
+
+    public function test_pipeline_date_filter_only_uses_explicit_stage_date_fields(): void
+    {
+        [$branch, $user] = $this->branchAndUser();
+        config(['ai.enabled' => false]);
+        KonsumenProgressSheetRow::create([
+            'branch_id' => $branch->id,
+            'sheet_id' => 'sheet-'.$branch->id,
+            'sheet_name' => 'data_konsumen',
+            'row_hash' => 'konsumen-date-test',
+            'row_data' => ['id_kavling' => 'A-99', 'nama_konsumen' => 'Tanggal Palsu'],
+        ]);
+        KonsumenProgressSheetRow::create([
+            'branch_id' => $branch->id,
+            'sheet_id' => 'sheet-'.$branch->id,
+            'sheet_name' => 'akad',
+            'row_hash' => 'akad-date-test',
+            'row_data' => ['id_kavling' => 'A-99', 'nomor_urut' => today()->toDateString(), 'progress' => '2026'],
+        ]);
+
+        $this->actingAs($user)->postJson(route('ai-chat.chat'), [
+            'message' => 'jumlah akad hari ini ada berapa?',
+        ])->assertOk()->assertSeeText('Ada 0 data Akad untuk Jepara.');
+    }
+
+    public function test_customer_search_finds_database_record_after_300_and_does_not_store_sensitive_fields(): void
+    {
+        [$branch, $user] = $this->branchAndUser();
+        config(['ai.enabled' => false]);
+        foreach (range(1, 305) as $number) {
+            DatabaseSheetRecord::create([
+                'branch_id' => $branch->id,
+                'sheet_id' => 'sheet-'.$branch->id,
+                'sheet_name' => 'Leads',
+                'row_number' => $number,
+                'oasis_sync_id' => 'row-'.$number,
+                'headers' => ['nama_konsumen'],
+                'row_data' => ['nama_konsumen' => 'Customer '.$number],
+                'sync_status' => 'synced',
+                'last_synced_at' => now(),
+            ]);
+        }
+        DatabaseSheetRecord::create([
+            'branch_id' => $branch->id,
+            'sheet_id' => 'sheet-'.$branch->id,
+            'sheet_name' => 'Leads',
+            'row_number' => 306,
+            'oasis_sync_id' => 'target-row',
+            'headers' => ['nama_konsumen', 'NIK', 'alamat'],
+            'row_data' => ['nama_konsumen' => 'Indra Maulana Adi Yudanto', 'NIK' => '3374123456789999', 'alamat' => 'Alamat Rahasia'],
+            'sync_status' => 'synced',
+            'last_synced_at' => now(),
+        ]);
+
+        $this->actingAs($user)->postJson(route('ai-chat.chat'), [
+            'message' => 'cari konsumen bernama Indra Maulana Adi Yudanto',
+        ])->assertOk()->assertSeeText('Ditemukan 1 hasil');
+
+        $conversationJson = json_encode(AiChatConversation::firstOrFail()->messages);
+        $this->assertStringContainsString('Indra Maulana Adi Yudanto', $conversationJson);
+        $this->assertStringNotContainsString('3374123456789999', $conversationJson);
+        $this->assertStringNotContainsString('Alamat Rahasia', $conversationJson);
+    }
+
+    public function test_provider_tool_calls_are_allowlisted_limited_deduplicated_and_sanitized(): void
+    {
+        [$branch, $user] = $this->branchAndUser();
+        config(['ai.routing_mode' => 'provider', 'ai.primary.api_key' => 'test-key', 'ai.max_tool_calls' => 3]);
+        DatabaseSheetRecord::create([
+            'branch_id' => $branch->id,
+            'sheet_id' => 'sheet-'.$branch->id,
+            'sheet_name' => 'Leads',
+            'row_number' => 1,
+            'oasis_sync_id' => 'provider-target',
+            'headers' => ['nama_konsumen', 'NPWP'],
+            'row_data' => ['nama_konsumen' => 'Budi Provider', 'NPWP' => '99.999.999.9-999.999'],
+            'sync_status' => 'synced',
+            'last_synced_at' => now(),
+        ]);
+        Http::fakeSequence()
+            ->push(['choices' => [['message' => ['role' => 'assistant', 'content' => null, 'tool_calls' => [
+                ['id' => '1', 'type' => 'function', 'function' => ['name' => 'dangerous_sql', 'arguments' => '{}']],
+                ['id' => '2', 'type' => 'function', 'function' => ['name' => 'search_customer', 'arguments' => json_encode(['query' => 'Budi Provider', 'branch_id' => $branch->id])]],
+                ['id' => '3', 'type' => 'function', 'function' => ['name' => 'search_customer', 'arguments' => json_encode(['query' => 'Budi Provider', 'branch_id' => $branch->id])]],
+                ['id' => '4', 'type' => 'function', 'function' => ['name' => 'get_branch_info', 'arguments' => '{}']],
+            ]]]]])
+            ->push(['choices' => [['message' => ['role' => 'assistant', 'content' => 'Ditemukan Budi Provider.']]]]);
+
+        $this->actingAs($user)->postJson(route('ai-chat.chat'), [
+            'message' => 'tolong bantu cari data budi provider',
+        ])->assertOk()->assertSeeText('Ditemukan Budi Provider.');
+
+        $messages = AiChatConversation::firstOrFail()->messages;
+        $toolResults = $messages[1]['tool_results'];
+        $this->assertCount(1, $toolResults);
+        $this->assertSame('search_customer', $toolResults[0]['name']);
+        $this->assertStringNotContainsString('99.999.999.9-999.999', json_encode($messages));
     }
 
     public function test_dana_talangan_answer_includes_grounded_record_detail(): void
@@ -395,5 +487,23 @@ class AiChatTest extends TestCase
         ]);
 
         return [$role, $user];
+    }
+
+    private function pipelineCustomer(Branch $branch, string $idKavling, string $name, string $stage): void
+    {
+        KonsumenProgressSheetRow::create([
+            'branch_id' => $branch->id,
+            'sheet_id' => 'sheet-'.$branch->id,
+            'sheet_name' => 'data_konsumen',
+            'row_hash' => 'konsumen-'.$branch->id.'-'.$idKavling,
+            'row_data' => ['id_kavling' => $idKavling, 'nama_konsumen' => $name, 'project_name' => 'Oasis '.$branch->name],
+        ]);
+        KonsumenProgressSheetRow::create([
+            'branch_id' => $branch->id,
+            'sheet_id' => 'sheet-'.$branch->id,
+            'sheet_name' => $stage,
+            'row_hash' => $stage.'-'.$branch->id.'-'.$idKavling,
+            'row_data' => ['id_kavling' => $idKavling],
+        ]);
     }
 }

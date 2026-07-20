@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Exceptions\AiProviderException;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 use Throwable;
 
 class AiProviderService
@@ -25,6 +26,7 @@ class AiProviderService
                 return $this->send($provider, $messages, $tools);
             } catch (Throwable $e) {
                 $lastError = $e;
+                $this->logProviderFailure($provider, $e);
             }
         }
 
@@ -63,8 +65,8 @@ class AiProviderService
         }
 
         $response = Http::withHeaders($headers)
-            ->timeout(min((int) config('ai.timeout', 30), 8))
-            ->connectTimeout(5)
+            ->timeout($this->bounded((int) config('ai.timeout', 15), 3, 60))
+            ->connectTimeout($this->bounded((int) config('ai.connect_timeout', 5), 1, 15))
             ->post(rtrim($provider['base_url'], '/').'/chat/completions', $payload);
 
         if (! $response->successful()) {
@@ -83,5 +85,20 @@ class AiProviderService
             'provider' => $provider['provider'] ?? 'custom',
             'model' => $provider['model'],
         ];
+    }
+
+    private function bounded(int $value, int $min, int $max): int
+    {
+        return max($min, min($max, $value));
+    }
+
+    private function logProviderFailure(array $provider, Throwable $e): void
+    {
+        Log::warning('AI provider fallback used', [
+            'provider' => $provider['provider'] ?? 'custom',
+            'model' => $provider['model'] ?? null,
+            'exception' => $e::class,
+            'category' => str_contains(strtolower($e->getMessage()), 'api key') ? 'configuration' : 'provider_error',
+        ]);
     }
 }

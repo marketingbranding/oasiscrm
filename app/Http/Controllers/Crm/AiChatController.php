@@ -82,9 +82,10 @@ class AiChatController extends Controller
             'role' => 'assistant',
             'content' => $reply['content'],
             'actions' => $reply['actions'] ?? [],
-            'tool_results' => $reply['tool_results'] ?? [],
+            'tool_results' => $this->sanitizeToolResults($reply['tool_results'] ?? []),
             'at' => now()->toIso8601String(),
         ];
+        $messages = array_slice($messages, -1 * (int) config('ai.max_stored_messages', 50));
 
         $payload = [
             'user_id' => $request->user()->id,
@@ -128,5 +129,14 @@ class AiChatController extends Controller
             'role' => $request->user()->role?->name,
             'can_view_all_branches' => $request->user()->canViewAllBranches(),
         ];
+    }
+
+    private function sanitizeToolResults(array $toolResults): array
+    {
+        return collect($toolResults)->map(fn (array $toolResult) => [
+            'name' => $toolResult['name'] ?? null,
+            'arguments' => $toolResult['arguments'] ?? [],
+            'result' => $toolResult['result'] ?? [],
+        ])->values()->all();
     }
 }

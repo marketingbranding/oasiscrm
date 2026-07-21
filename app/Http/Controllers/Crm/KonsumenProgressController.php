@@ -5,17 +5,20 @@ namespace App\Http\Controllers\Crm;
 use App\Http\Controllers\Controller;
 use App\Models\Branch;
 use App\Models\KonsumenProgressSyncStatus;
+use App\Services\CollaborationNotificationService;
 use App\Services\KonsumenPipelineService;
 use App\Services\KonsumenProgressSyncService;
 use App\Services\WorkspaceAccessService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Throwable;
 
 class KonsumenProgressController extends Controller
 {
     public function __construct(
         private readonly KonsumenPipelineService $pipelineService,
         private readonly WorkspaceAccessService $workspaceAccess,
+        private readonly CollaborationNotificationService $notifications,
     ) {}
 
     public function index(Request $request)
@@ -49,7 +52,7 @@ class KonsumenProgressController extends Controller
         return view('crm.konsumen-progress.index', compact('branches', 'selectedBranch', 'selectedBranchId', 'pipeline', 'errors', 'syncStatus', 'isStale'));
     }
 
-    public function sync(Request $request, KonsumenProgressSyncService $syncService)
+    public function sync(Request $request)
     {
         $branch = $this->resolveBranch($request);
         if ($request->filled('branch_id') && ! $branch) {
@@ -64,7 +67,20 @@ class KonsumenProgressController extends Controller
         }
         abort_unless($this->workspaceAccess->canSyncBranch(Auth::user(), $branch), 403);
 
-        $result = $syncService->syncBranch($branch);
+        try {
+            $result = app(KonsumenProgressSyncService::class)->syncBranch($branch);
+        } catch (Throwable $exception) {
+            report($exception);
+            $result = ['ok' => false, 'message' => 'Layanan sinkronisasi tidak dapat dijalankan.', 'summary' => []];
+        }
+        $this->notifications->syncResult(
+            Auth::user(),
+            'Konsumen Progress',
+            $branch->name,
+            $result,
+            route('konsumen-progress.index', ['branch_id' => $branch->id]),
+            array_sum($result['summary'] ?? []),
+        );
         if (! $result['ok']) {
             if ($request->expectsJson()) {
                 return response()->json(['ok' => false, 'message' => 'Sync gagal: '.$result['message'], 'summary' => $result['summary'] ?? []], 422);

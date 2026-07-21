@@ -2,7 +2,7 @@
 
 ## Prerequisites
 
-- Hostinger shared hosting or VPS plan (PHP 8.1+ recommended)
+- Hostinger shared hosting or VPS plan with PHP 8.3+
 - MySQL database (created via Hostinger hPanel)
 - Domain pointed to Hostinger nameservers
 - SSH access (for VPS) or FTP/SFTP access (for shared hosting)
@@ -13,7 +13,7 @@
 
 ### Build Frontend Assets
 ```bash
-npm install
+npm ci
 npm run build
 ```
 
@@ -66,7 +66,7 @@ cd /var/www/oasis-crm
 
 # Install dependencies
 composer install --no-dev --optimize-autoloader
-npm install && npm run build
+npm ci && npm run build
 
 # Configure environment
 cp .env.example .env
@@ -104,7 +104,7 @@ sudo chmod -R 775 storage bootstrap/cache
 ```bash
 # Via SSH (VPS):
 php artisan migrate --force
-php artisan db:seed --force
+# Run production-safe seeders only when explicitly required.
 
 # Via hPanel → PHPMyAdmin:
 # Run SQL files from database/migrations manually (not recommended)
@@ -115,7 +115,7 @@ php artisan db:seed --force
 ## 5. Hostinger-Specific Notes
 
 ### PHP Version
-Set PHP to **8.1 or higher** in hPanel → **PHP Configuration**.
+Set PHP to **8.3 or higher** in hPanel -> **PHP Configuration**.
 
 ### Public Folder
 Hostinger's `public_html` is the document root.
@@ -138,6 +138,13 @@ In hPanel → **Cron Jobs**, add:
 ```
 * * * * * /usr/bin/php /home/uXXXXX/oasis-crm/artisan schedule:run >> /dev/null 2>&1
 ```
+
+Verify registration after every deployment:
+```bash
+php artisan schedule:list
+```
+
+The schedule includes `oasis:presence-cleanup` hourly. Live presence still filters rows older than 60 seconds even if cleanup is delayed. Notifications currently have no pruning schedule; they are retained until a retention policy is approved.
 
 ### Queue Worker (if needed)
 For production queues, add to cron:
@@ -171,7 +178,7 @@ cd /var/www/oasis-crm
 
 git pull origin main
 composer install --no-dev --optimize-autoloader
-npm install && npm run build
+npm ci && npm run build
 php artisan migrate --force
 php artisan optimize
 php artisan view:cache

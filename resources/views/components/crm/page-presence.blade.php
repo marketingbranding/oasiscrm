@@ -14,8 +14,7 @@
         'mode' => $mode,
     ]))" x-show="others.length" x-cloak
      class="mb-4 border-2 border-black bg-[#eef1ff] px-3 py-2 text-xs font-[Helvetica]" :title="fullNames">
-    <span class="font-bold" x-text="mode === 'editing' ? 'Sedang mengedit data ini:' : 'Sedang di halaman ini:'"></span>
-    <span x-text="summary"></span>
+    <span class="font-bold" x-text="summary"></span>
     <span x-show="mode === 'editing'" class="block mt-1 text-[#8a4b08]">Perubahan terakhir akan diperiksa saat Anda menyimpan.</span>
 </div>
 @endif

@@ -14,7 +14,9 @@ use App\Imports\ContentItemImport;
 use App\Models\ContentItem;
 use App\Models\LeadMaster;
 use App\Models\User;
+use App\Services\CollaborationNotificationService;
 use App\Services\OptimisticLockService;
+use App\Services\PresenceService;
 use App\Services\WorkspaceAccessService;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Builder;
@@ -22,6 +24,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Validation\ValidationException;
+use Symfony\Component\HttpFoundation\Response;
 
 class ContentCalendarController extends Controller
 {
@@ -46,6 +49,8 @@ class ContentCalendarController extends Controller
     public function __construct(
         private readonly WorkspaceAccessService $workspaceAccess,
         private readonly OptimisticLockService $optimisticLock,
+        private readonly CollaborationNotificationService $notifications,
+        private readonly PresenceService $presence,
     ) {}
 
     public function index(Request $request)
@@ -181,9 +186,7 @@ class ContentCalendarController extends Controller
     {
         $this->authorize('update', $contentItem);
         $data = $request->validated();
-        if (! $this->optimisticLock->matches($contentItem, $data['expected_updated_at'] ?? null)) {
-            return $this->optimisticLock->conflict($request, $contentItem, $data['expected_updated_at'] ?? null);
-        }
+        $expected = $data['expected_updated_at'] ?? null;
         unset($data['expected_updated_at']);
         $assigneeIds = Arr::pull($data, 'assigned_user_ids', []);
         if (($data['item_type'] ?? null) === 'content') {
@@ -193,9 +196,21 @@ class ContentCalendarController extends Controller
         abort_unless($branch && $this->workspaceAccess->canEditBranch(Auth::user(), $branch), 403);
         $data['branch_id'] = $branch->id;
         $this->validateAssignees($assigneeIds, (int) $data['branch_id']);
-        $contentItem->update($this->normalizePlannerData($data, $contentItem));
-        $contentItem->assignees()->sync($assigneeIds);
-        $contentItem->touch();
+        $data['updated_by'] = Auth::id();
+        $result = $this->optimisticLock->execute($request, $contentItem, $expected, function (ContentItem $current) use ($data, $assigneeIds) {
+            $this->authorize('update', $current);
+            $current->update($this->normalizePlannerData($data, $current));
+            $current->assignees()->sync($assigneeIds);
+            $current->touch();
+
+            return $current->fresh();
+        });
+        if ($result instanceof Response) {
+            return $result;
+        }
+        $contentItem = $result;
+        $this->presence->clearEditing(Auth::user(), $contentItem, $request->input('presence_session_key'));
+        $this->notifications->recordUpdated($contentItem, Auth::user(), route('content-calendar.edit', $contentItem));
 
         return redirect()->route('content-calendar.index', ['view' => $this->returnView($request)])
             ->with('success', 'Item Work Planner berhasil diperbarui.');
@@ -228,23 +243,30 @@ class ContentCalendarController extends Controller
 
         $status = (string) $request->input('status');
         $request->validate(['expected_updated_at' => ['required', 'string', 'max:40']]);
-        if (! $this->optimisticLock->matches($contentItem, $request->input('expected_updated_at'))) {
-            return $this->optimisticLock->conflict($request, $contentItem, $request->input('expected_updated_at'));
-        }
-        if (! in_array($status, ContentItem::STATUSES[$contentItem->item_type] ?? [], true)) {
-            return response()->json([
-                'message' => 'Status tidak valid untuk tipe item ini.',
-                'errors' => ['status' => ['Status tidak valid untuk tipe item ini.']],
-            ], 422);
-        }
+        $result = $this->optimisticLock->execute($request, $contentItem, $request->input('expected_updated_at'), function (ContentItem $current) use ($status) {
+            $this->authorize('update', $current);
+            if (! in_array($status, ContentItem::STATUSES[$current->item_type] ?? [], true)) {
+                return response()->json([
+                    'message' => 'Status tidak valid untuk tipe item ini.',
+                    'errors' => ['status' => ['Status tidak valid untuk tipe item ini.']],
+                ], 422);
+            }
+            $current->update($this->normalizeCompletion(['status' => $status, 'updated_by' => Auth::id()], $current));
 
-        $contentItem->update($this->normalizeCompletion(['status' => $status], $contentItem));
+            return $current->fresh();
+        });
+        if ($result instanceof Response) {
+            return $result;
+        }
+        $contentItem = $result;
+        $this->presence->clearEditing(Auth::user(), $contentItem, $request->input('presence_session_key'));
+        $this->notifications->recordUpdated($contentItem, Auth::user(), route('content-calendar.edit', $contentItem));
 
         return response()->json([
             'success' => true,
             'status' => $contentItem->status,
             'completed_at' => $contentItem->completed_at?->toIso8601String(),
-            'updated_at' => $this->optimisticLock->token($contentItem->fresh()),
+            'updated_at' => $this->optimisticLock->token($contentItem),
         ]);
     }
 

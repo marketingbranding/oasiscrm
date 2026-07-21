@@ -59,21 +59,38 @@
             <a href="{{ route('dashboard') }}" class="hover:text-gray-300">OASIS CRM</a>
         </div>
         @auth
-        <div class="relative flex items-center gap-2" @click.outside="bellOpen = false">
+        <div class="relative flex items-center gap-2"
+             x-data="crmNotifications(@js([
+                 'indexUrl' => route('notifications.index'),
+                 'readUrl' => route('notifications.read', ['notification' => '__ID__']),
+                 'readAllUrl' => route('notifications.read-all'),
+             ]))" @click.outside="open = false">
             <span class="text-xs">{{ Auth::user()->name }}</span>
-            <button @click="bellOpen = !bellOpen"
+            <button @click="open = !open; if (open) refresh()"
                     class="relative flex items-center justify-center w-8 h-8 hover:bg-white/10 rounded-none">
                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5">
                     <path stroke-linecap="round" stroke-linejoin="round" d="M14.857 17.082a23.848 23.848 0 0 0 5.454-1.31A8.967 8.967 0 0 1 18 9.75V9A6 6 0 0 0 6 9v.75a8.967 8.967 0 0 1-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 0 1-5.714 0m5.714 0a3 3 0 1 1-5.714 0"/>
                 </svg>
-                @if($totalCount > 0)
-                <span class="absolute -top-1 -right-1 bg-[#c0392b] text-white text-[10px] font-[Helvetica] font-bold min-w-[16px] h-4 flex items-center justify-center border border-white rounded-none px-1">{{ $totalCount > 9 ? '9+' : $totalCount }}</span>
-                @endif
+                <span x-show="unreadCount > 0" x-cloak class="absolute -top-1 -right-1 bg-[#c0392b] text-white text-[10px] font-[Helvetica] font-bold min-w-[16px] h-4 flex items-center justify-center border border-white rounded-none px-1" x-text="unreadCount > 9 ? '9+' : unreadCount"></span>
             </button>
-            <div x-show="bellOpen" x-cloak
+            <div x-show="open" x-cloak
                  x-transition.opacity.duration.150ms
-                 class="absolute right-0 top-full mt-2 bg-white border-2 border-black text-black min-w-[280px] max-h-80 overflow-y-auto z-50 shadow-xl">
-                <div class="bg-black text-white px-3 py-2 font-[Helvetica] font-bold text-xs uppercase sticky top-0">Perhatian</div>
+                 class="absolute right-0 top-full mt-2 bg-white border-2 border-black text-black w-[340px] max-w-[90vw] max-h-[70vh] overflow-y-auto z-50 shadow-xl">
+                <div class="bg-black text-white px-3 py-2 font-[Helvetica] font-bold text-xs uppercase sticky top-0 flex items-center justify-between z-10">
+                    <span>Notifikasi</span>
+                    <button type="button" x-show="unreadCount > 0" @click="markAllRead()" class="underline normal-case">Tandai semua dibaca</button>
+                </div>
+                <div x-show="loading && notifications.length === 0" class="px-3 py-4 text-center text-xs">Memuat notifikasi...</div>
+                <template x-for="notification in notifications" :key="notification.id">
+                    <button type="button" @click="markRead(notification, true)" class="block w-full text-left border-b border-black px-3 py-2 hover:bg-[#eef1ff]" :class="notification.read_at ? 'bg-white' : 'bg-[#fff3b0]'">
+                        <span class="block font-[Helvetica] font-bold text-xs" x-text="notification.title"></span>
+                        <span class="block text-xs font-['Times_New_Roman']" x-text="notification.message"></span>
+                        <span class="block text-[10px] text-gray-500 mt-1" x-text="notification.created_label"></span>
+                    </button>
+                </template>
+                <div x-show="!loading && notifications.length === 0" class="px-3 py-4 text-center text-xs">Belum ada notifikasi kolaborasi.</div>
+
+                <div class="bg-gray-100 border-y-2 border-black text-black px-3 py-2 font-[Helvetica] font-bold text-xs uppercase">Pengingat</div>
                 @php $hasAny = $overdueItems->count() > 0 || $todayItems->count() > 0 || $tomorrowItems->count() > 0 || $needsConfirmation->count() > 0; @endphp
                 @if($hasAny)
                 <x-crm.notif-section :items="$overdueItems" color="#c0392b" label="Terlewat" text-color="text-white">
@@ -242,6 +259,7 @@
             </div>
         </div>
     </div>
+<x-conflict-dialog :initial="session('conflict_data')" />
 @include('crm.ai-chat._widget')
 <div x-data="{
     open: false,

@@ -7,6 +7,7 @@ use App\Models\ActivityLog;
 use App\Models\Branch;
 use App\Models\Role;
 use App\Models\User;
+use App\Services\CollaborationNotificationService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -15,6 +16,8 @@ use Illuminate\Validation\Rule;
 
 class AdminUserController extends Controller
 {
+    public function __construct(private readonly CollaborationNotificationService $notifications) {}
+
     public function index()
     {
         $users = User::with(['role', 'branch', 'branches'])
@@ -108,6 +111,7 @@ class AdminUserController extends Controller
             $user->branches()->sync($this->membershipPayload($branchIds, $permissions));
             $this->logMembershipChange($user, 'membership_updated', $oldBranchIds, $branchIds);
         });
+        $this->notifications->membershipChanged($user, 'Akses cabang Anda diperbarui oleh '.Auth::user()->name.'.');
 
         return redirect()->route('admin-users.index')->with('success', 'User berhasil diperbarui.');
     }

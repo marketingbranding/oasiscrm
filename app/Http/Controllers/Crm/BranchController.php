@@ -6,11 +6,14 @@ use App\Http\Controllers\Controller;
 use App\Models\ActivityLog;
 use App\Models\Branch;
 use App\Models\User;
+use App\Services\CollaborationNotificationService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 
 class BranchController extends Controller
 {
+    public function __construct(private readonly CollaborationNotificationService $notifications) {}
+
     public function index()
     {
         $this->ensureSuperadmin();
@@ -53,6 +56,7 @@ class BranchController extends Controller
             $user->update(['branch_id' => $branch->id]);
         }
         $this->logMembership($user, $branch, 'membership_added');
+        $this->notifications->membershipChanged($user, 'Akses cabang '.$branch->name.' Anda diperbarui.');
 
         return redirect()->route('branches.assign', $branch)->with('success', 'Anggota cabang berhasil ditambahkan.');
     }
@@ -72,6 +76,7 @@ class BranchController extends Controller
         $branch = Branch::find($branchId);
         if ($branch) {
             $this->logMembership($user, $branch, 'membership_removed');
+            $this->notifications->membershipChanged($user, 'Akses cabang '.$branch->name.' Anda dihapus.');
         }
 
         return back()->with('success', 'Akses cabang berhasil dihapus tanpa menghapus akun user.');

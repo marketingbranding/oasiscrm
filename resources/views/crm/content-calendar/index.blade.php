@@ -233,7 +233,11 @@ function plannerPage(ids, config) {
                 });
                 if (response.status === 409) {
                     const conflict = await response.json();
-                    throw new Error(conflict.message + ' Muat ulang halaman sebelum mencoba lagi.');
+                    const reference = event.from.children[event.oldIndex] || null;
+                    event.from.insertBefore(event.item, reference);
+                    this.refreshBoardCounts();
+                    window.dispatchEvent(new CustomEvent('oasis-conflict', { detail: { response: conflict, context: {} } }));
+                    return;
                 }
                 if (!response.ok) throw new Error(await response.text());
                 const data = await response.json();
@@ -242,7 +246,7 @@ function plannerPage(ids, config) {
                 const reference = event.from.children[event.oldIndex] || null;
                 event.from.insertBefore(event.item, reference);
                 this.refreshBoardCounts();
-                alert('Status gagal diperbarui. Silakan coba lagi.');
+                alert('Status belum dapat diperbarui. Periksa koneksi lalu coba kembali.');
             }
         },
         refreshBoardCounts() {

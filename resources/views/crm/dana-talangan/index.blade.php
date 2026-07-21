@@ -419,12 +419,13 @@
         <template x-if="editingRecord">
         <div @click.away="editingRecord = null" class="w-full max-w-4xl border-2 border-black bg-white p-5 shadow-[8px_8px_0_0_#000] max-h-[90vh] overflow-y-auto">
             <div class="flex items-center justify-between mb-4"><h2 class="font-[Helvetica] font-bold text-sm uppercase">Edit Dana Talangan</h2><button type="button" @click="editingRecord = null" class="text-lg font-bold">&times;</button></div>
-            <form method="POST" :action="updateBaseUrl + '/' + editingRecord.id" class="space-y-4">
+            <form method="POST" :action="updateBaseUrl + '/' + editingRecord.id" class="space-y-4" data-conflict-form
+                  @submit.prevent="$dispatch('oasis-submit-conflict', { form: $el })">
                 @csrf @method('PUT')
                 <input type="hidden" name="form_mode" value="edit">
                 <input type="hidden" name="record_id" :value="editingRecord.id">
                 <input type="hidden" name="expected_updated_at" :value="editingRecord.updated_at">
-                <div x-data="crmPresence(@js(['enabled' => config('presence.enabled', true), 'heartbeatUrl' => route('presence.heartbeat'), 'indexUrl' => route('presence.index'), 'destroyUrl' => route('presence.destroy'), 'heartbeatSeconds' => config('presence.heartbeat_seconds', 25), 'pageKey' => 'dana-talangan', 'branchId' => null, 'recordType' => 'dana_talangan', 'recordId' => null, 'mode' => 'editing']))" x-init="updateContext({ branchId: editingRecord.branch_id, recordType: 'dana_talangan', recordId: editingRecord.id, mode: 'editing' })" x-show="others.length" class="border-2 border-black bg-[#eef1ff] px-3 py-2 text-xs"><span class="font-bold" x-text="summary + ' sedang mengedit data ini.'"></span><span class="block text-[#8a4b08]">Perubahan terakhir akan diperiksa saat menyimpan.</span></div>
+                <div x-data="crmPresence(@js(['enabled' => config('presence.enabled', true), 'heartbeatUrl' => route('presence.heartbeat'), 'indexUrl' => route('presence.index'), 'destroyUrl' => route('presence.destroy'), 'heartbeatSeconds' => config('presence.heartbeat_seconds', 25), 'pageKey' => 'dana-talangan', 'branchId' => null, 'recordType' => 'dana_talangan', 'recordId' => null, 'mode' => 'editing']))" x-init="updateContext({ branchId: editingRecord.branch_id, recordType: 'dana_talangan', recordId: editingRecord.id, mode: 'editing' })" x-show="others.length" :title="fullNames" class="border-2 border-black bg-[#eef1ff] px-3 py-2 text-xs"><span class="font-bold" x-text="summary"></span><span class="block text-[#8a4b08]">Perubahan terakhir akan diperiksa saat menyimpan.</span></div>
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div><label class="font-[Helvetica] font-bold text-xs uppercase block mb-1">Tanggal</label><div class="date-wrapper" data-accent="#f1c40f" style="position:relative"><div class="date-display w-full border-2 border-black px-3 py-2 text-sm font-['Times_New_Roman'] bg-white cursor-pointer select-none flex items-center justify-between" tabindex="0"><span class="date-text">— Pilih Tanggal —</span><span class="date-arrow">▼</span></div><input type="date" name="tanggal" x-model="editingRecord.tanggal" required style="position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0"></div></div>
                     <div><label class="font-[Helvetica] font-bold text-xs uppercase block mb-1">Nama Konsumen</label><input name="nama_konsumen" x-model="editingRecord.nama_konsumen" required class="w-full border-2 border-black px-3 py-2 text-sm font-['Times_New_Roman']"></div>
@@ -445,7 +446,6 @@
                 @if($errors->any() && old('form_mode') === 'edit')
                 <div class="border-2 border-black bg-[#d77a7a] px-3 py-2 text-sm font-['Times_New_Roman']">{{ $errors->first() }}</div>
                 @endif
-                @if(session('conflict'))<div class="border-2 border-black bg-[#fcc20f] px-3 py-2 text-sm font-bold">{{ session('conflict') }} Muat ulang halaman sebelum menyimpan lagi.</div>@endif
                 <div class="flex gap-2"><button class="bg-black text-white border-2 border-black px-6 py-2 text-sm font-[Helvetica] font-bold">Simpan</button><button type="button" @click="editingRecord = null" class="bg-white border-2 border-black px-6 py-2 text-sm font-[Helvetica] font-bold">Batal</button></div>
             </form>
         </div>

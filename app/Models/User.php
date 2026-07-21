@@ -125,4 +125,9 @@ class User extends Authenticatable
     {
         return $this->hasMany(ContentItem::class, 'created_by');
     }
+
+    public function collaborationNotifications(): HasMany
+    {
+        return $this->hasMany(UserNotification::class);
+    }
 }

@@ -5,17 +5,16 @@
 @section('content')
     <x-crm.page-header color="#f1c40f" title="Edit Dana Talangan" />
     <x-crm.page-presence page-key="dana-talangan" :branch-id="$record->branch_id" record-type="dana_talangan" :record-id="$record->id" mode="editing" />
-    @if(session('conflict'))<div class="mb-4 border-2 border-black bg-[#fcc20f] px-4 py-3 text-sm font-bold">{{ session('conflict') }} <a href="{{ route('dana-talangan.edit', $record) }}" class="underline">Muat Ulang Data</a></div>@endif
 
     <div class="border-2 border-black bg-white">
         <div class="bg-black text-white px-4 py-2 font-[Helvetica] font-bold text-xs uppercase">
             Form Dana Talangan
         </div>
         <div class="p-4 sm:p-6">
-            <form method="POST" action="{{ route('dana-talangan.update', ['dana_talangan' => $record->id]) }}" class="space-y-4">
+            <form method="POST" action="{{ route('dana-talangan.update', ['dana_talangan' => $record->id]) }}" class="space-y-4" data-conflict-form>
                 @csrf
                 @method('PUT')
-                <input type="hidden" name="expected_updated_at" value="{{ $record->updated_at?->copy()->utc()->format('Y-m-d H:i:s') }}">
+                <input type="hidden" name="expected_updated_at" value="{{ old('expected_updated_at', $record->updated_at?->copy()->utc()->format('Y-m-d H:i:s')) }}">
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
                         <label class="font-[Helvetica] font-bold text-xs uppercase block mb-1">Tanggal</label>

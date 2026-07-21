@@ -5,10 +5,14 @@ import './crm-monthpicker';
 import './crm-select';
 import './crm-bulk';
 import registerPresence from './presence';
+import registerConflict from './conflict';
+import registerNotifications from './notifications';
 
 window.Alpine = Alpine;
 window.Sortable = Sortable;
 
 registerPresence(Alpine);
+registerConflict(Alpine);
+registerNotifications(Alpine);
 
 Alpine.start();

@@ -141,6 +141,7 @@ class DanaTalanganGoogleService
                         $record->restoreQuietly();
                     }
                     $record->fill($data + [
+                        'updated_by' => null,
                         'oasis_sync_id' => $syncId,
                         'sheet_name' => $sheetName,
                         'sheet_row_number' => $rowNumber,

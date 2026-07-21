@@ -34,6 +34,7 @@ class DanaTalangan extends Model
         'branch_id',
         'status',
         'created_by',
+        'updated_by',
     ];
 
     protected function casts(): array
@@ -56,6 +57,11 @@ class DanaTalangan extends Model
     public function creator(): BelongsTo
     {
         return $this->belongsTo(User::class, 'created_by');
+    }
+
+    public function updatedBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'updated_by');
     }
 
     protected function activityLabel(): string

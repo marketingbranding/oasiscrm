@@ -252,12 +252,12 @@
                     <h2 class="font-[Helvetica] font-bold text-sm uppercase" x-text="'Edit — ' + tab"></h2>
                     <button @click="editing = null" class="text-black font-bold text-lg leading-none">&times;</button>
                 </div>
-                <form method="POST" :action="editBaseUrl + '/' + editing.id">
+                <form method="POST" :action="editBaseUrl + '/' + editing.id" data-conflict-form
+                      @submit.prevent="$dispatch('oasis-submit-conflict', { form: $el })">
                     @csrf @method('PUT')
                     <input type="hidden" name="expected_updated_at" :value="editing.updated_at">
                     <input type="hidden" name="expected_sync_id" :value="editing.oasis_sync_id">
-                    <template x-if="editing"><div x-data="crmPresence(@js(['enabled' => config('presence.enabled', true), 'heartbeatUrl' => route('presence.heartbeat'), 'indexUrl' => route('presence.index'), 'destroyUrl' => route('presence.destroy'), 'heartbeatSeconds' => config('presence.heartbeat_seconds', 25), 'pageKey' => 'database', 'branchId' => null, 'recordType' => 'database_sheet_record', 'recordId' => null, 'mode' => 'editing']))" x-init="updateContext({ branchId: branchId, recordType: 'database_sheet_record', recordId: editing.id, mode: 'editing' })" x-show="others.length" class="mb-3 border-2 border-black bg-[#eef1ff] px-3 py-2 text-xs"><span class="font-bold" x-text="summary + ' sedang mengedit data ini.'"></span><span class="block text-[#8a4b08]">Perubahan terakhir akan diperiksa saat menyimpan.</span></div></template>
-                    @if(session('conflict'))<div class="mb-3 border-2 border-black bg-[#fcc20f] px-3 py-2 text-sm font-bold">{{ session('conflict') }} Muat ulang halaman sebelum menyimpan lagi.</div>@endif
+                    <template x-if="editing"><div x-data="crmPresence(@js(['enabled' => config('presence.enabled', true), 'heartbeatUrl' => route('presence.heartbeat'), 'indexUrl' => route('presence.index'), 'destroyUrl' => route('presence.destroy'), 'heartbeatSeconds' => config('presence.heartbeat_seconds', 25), 'pageKey' => 'database', 'branchId' => null, 'recordType' => 'database_sheet_record', 'recordId' => null, 'mode' => 'editing']))" x-init="updateContext({ branchId: branchId, recordType: 'database_sheet_record', recordId: editing.id, mode: 'editing' })" x-show="others.length" :title="fullNames" class="mb-3 border-2 border-black bg-[#eef1ff] px-3 py-2 text-xs"><span class="font-bold" x-text="summary"></span><span class="block text-[#8a4b08]">Perubahan terakhir akan diperiksa saat menyimpan.</span></div></template>
                     <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         <template x-for="h in editableHeaders()" :key="h">
                             <div>

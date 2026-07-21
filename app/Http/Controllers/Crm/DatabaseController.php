@@ -6,14 +6,17 @@ use App\Http\Controllers\Controller;
 use App\Models\Branch;
 use App\Models\DatabaseSheetRecord;
 use App\Models\DatabaseSheetSyncStatus;
+use App\Services\CollaborationNotificationService;
 use App\Services\DatabaseSheetSyncService;
 use App\Services\DatabaseSheetWriteService;
 use App\Services\GoogleSheetsApiService;
 use App\Services\OptimisticLockService;
+use App\Services\PresenceService;
 use App\Services\WorkspaceAccessService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Validation\ValidationException;
+use Symfony\Component\HttpFoundation\Response;
 use Throwable;
 
 class DatabaseController extends Controller
@@ -21,6 +24,8 @@ class DatabaseController extends Controller
     public function __construct(
         private readonly WorkspaceAccessService $workspaceAccess,
         private readonly OptimisticLockService $optimisticLock,
+        private readonly CollaborationNotificationService $notifications,
+        private readonly PresenceService $presence,
     ) {}
 
     public function index(Request $request, GoogleSheetsApiService $googleSheets)
@@ -131,7 +136,7 @@ class DatabaseController extends Controller
         ]);
     }
 
-    public function sync(Request $request, DatabaseSheetSyncService $syncService)
+    public function sync(Request $request)
     {
         $user = Auth::user();
         $branch = $this->workspaceAccess->resolveRequestedBranch($user, $request->input('branch_id'));
@@ -149,7 +154,20 @@ class DatabaseController extends Controller
         }
         abort_unless($this->workspaceAccess->canSyncBranch($user, $branch), 403);
 
-        $result = $syncService->syncBranch($branch);
+        try {
+            $result = app(DatabaseSheetSyncService::class)->syncBranch($branch);
+        } catch (Throwable $exception) {
+            report($exception);
+            $result = ['ok' => false, 'message' => 'Layanan sinkronisasi tidak dapat dijalankan.', 'summary' => []];
+        }
+        $this->notifications->syncResult(
+            $user,
+            'Database',
+            $branch->name,
+            $result,
+            route('database.index', ['branch_id' => $branch->id]),
+            array_sum($result['summary'] ?? []),
+        );
         if (! $result['ok']) {
             if ($request->expectsJson()) {
                 return response()->json(['ok' => false, 'message' => 'Sync gagal: '.$result['message'], 'summary' => $result['summary'] ?? []], 422);
@@ -199,8 +217,17 @@ class DatabaseController extends Controller
         return back()->with('success', 'Data berhasil ditambahkan.');
     }
 
-    public function update(Request $request, DatabaseSheetRecord $record, DatabaseSheetWriteService $writeService)
+    public function update(Request $request, $record, DatabaseSheetWriteService $writeService)
     {
+        $routeRecordId = (int) $record;
+        $record = DatabaseSheetRecord::find($routeRecordId);
+        $recordWasReplaced = false;
+        if (! $record && $request->filled('expected_sync_id')) {
+            $record = DatabaseSheetRecord::where('oasis_sync_id', $request->input('expected_sync_id'))->first();
+            $recordWasReplaced = (bool) $record;
+        }
+        abort_unless($record, 404);
+
         $branch = $record->branch;
         if (! $branch) {
             return back()->with('error', 'Branch tidak ditemukan.');
@@ -208,23 +235,55 @@ class DatabaseController extends Controller
 
         $user = Auth::user();
         abort_unless($this->workspaceAccess->canEditBranch($user, $branch), 403);
+        if ($recordWasReplaced) {
+            return $this->optimisticLock->conflict($request, $record, $request->input('expected_updated_at'));
+        }
 
         $request->validate([
             'expected_updated_at' => ['required', 'string', 'max:40'],
             'expected_sync_id' => ['nullable', 'string', 'max:255'],
         ]);
-        $identityMatches = blank($record->oasis_sync_id)
-            || hash_equals((string) $record->oasis_sync_id, (string) $request->input('expected_sync_id'));
-        if (! $identityMatches
-            || ! $this->optimisticLock->matches($record, $request->input('expected_updated_at'))) {
-            return $this->optimisticLock->conflict($request, $record, $request->input('expected_updated_at'));
+        $input = $request->except(['_token', '_method', 'expected_updated_at', 'expected_sync_id', 'presence_session_key']);
+        $result = $this->optimisticLock->execute($request, $record, $request->input('expected_updated_at'), function (DatabaseSheetRecord $current) use ($request, $writeService, $input, $user) {
+            abort_unless($current->branch && $this->workspaceAccess->canEditBranch($user, $current->branch), 403);
+            $identityMatches = blank($current->oasis_sync_id)
+                || hash_equals((string) $current->oasis_sync_id, (string) $request->input('expected_sync_id'));
+            if (! $identityMatches) {
+                return $this->optimisticLock->conflict($request, $current, $request->input('expected_updated_at'));
+            }
+            $this->validateTypedInput($input, $current->column_metadata ?? [], $current->row_data ?? []);
+
+            return ['record' => $current, 'pushed' => $writeService->updateRecord($current, $input)];
+        });
+        if ($result instanceof Response) {
+            return $result;
+        }
+        $record = $result['record']->fresh();
+        $reloadUrl = route('database.index', ['branch_id' => $branch->id, 'sheet' => $record->sheet_name]);
+        $this->notifications->recordUpdated($record, $user, $reloadUrl);
+        if (! $result['pushed']) {
+            if ($request->expectsJson()) {
+                return response()->json([
+                    'ok' => false,
+                    'local_saved' => true,
+                    'message' => 'Perubahan lokal tersimpan, tetapi gagal dikirim ke Google Sheets.',
+                    'updated_at' => $this->optimisticLock->token($record),
+                    'reload_url' => $reloadUrl,
+                ], 422);
+            }
+
+            return back()->with('error', 'Gagal update. Perubahan tersimpan di database lokal, tapi gagal push ke Google Sheets: '.$record->last_sync_error);
         }
 
-        $input = $request->except(['_token', '_method', 'expected_updated_at', 'expected_sync_id']);
-        $this->validateTypedInput($input, $record->column_metadata ?? [], $record->row_data ?? []);
+        $this->presence->clearEditing($user, $record, $request->input('presence_session_key'));
 
-        if (! $writeService->updateRecord($record, $input)) {
-            return back()->with('error', 'Gagal update. Perubahan tersimpan di database lokal, tapi gagal push ke Google Sheets: '.$record->last_sync_error);
+        if ($request->expectsJson()) {
+            return response()->json([
+                'ok' => true,
+                'message' => 'Data berhasil diperbarui dan disinkronkan.',
+                'reload_url' => $reloadUrl,
+                'updated_at' => $this->optimisticLock->token($record->fresh()),
+            ]);
         }
 
         return back()->with('success', 'Data berhasil diupdate dan tersinkron ke Google Sheets.');

@@ -17,13 +17,17 @@ use App\Models\DanaTalangan;
 use App\Models\DanaTalanganSyncStatus;
 use App\Models\Kavling;
 use App\Models\LeadMaster;
+use App\Services\CollaborationNotificationService;
 use App\Services\DanaTalanganGoogleService;
 use App\Services\DanaTalanganOptionService;
 use App\Services\OptimisticLockService;
+use App\Services\PresenceService;
 use App\Services\WorkspaceAccessService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Symfony\Component\HttpFoundation\Response;
+use Throwable;
 
 class DanaTalanganController extends Controller
 {
@@ -64,6 +68,8 @@ class DanaTalanganController extends Controller
     public function __construct(
         private readonly WorkspaceAccessService $workspaceAccess,
         private readonly OptimisticLockService $optimisticLock,
+        private readonly CollaborationNotificationService $notifications,
+        private readonly PresenceService $presence,
     ) {}
 
     public function index(Request $request)
@@ -230,11 +236,42 @@ class DanaTalanganController extends Controller
 
         $data['pinjam_nama'] = $request->boolean('pinjam_nama');
         $data['konfirmasi_keuangan'] = $request->boolean('konfirmasi_keuangan');
+        $data['updated_by'] = $user->id;
 
-        $danaTalangan->update($data);
+        $result = $this->optimisticLock->execute($request, $danaTalangan, $request->input('expected_updated_at'), function (DanaTalangan $current) use ($data) {
+            $current->update($data);
+
+            return $current->fresh();
+        });
+        if ($result instanceof Response) {
+            return $result;
+        }
+        $danaTalangan = $result;
+        $this->notifications->recordUpdated($danaTalangan, $user, route('dana-talangan.edit', $danaTalangan));
         if (! $googleService->push($danaTalangan, $user->id)) {
+            if ($request->expectsJson()) {
+                return response()->json([
+                    'ok' => false,
+                    'local_saved' => true,
+                    'message' => 'Data lokal diperbarui, tetapi gagal dikirim ke Google Sheets.',
+                    'updated_at' => $this->optimisticLock->token($danaTalangan->fresh()),
+                    'reload_url' => route('dana-talangan.edit', $danaTalangan),
+                ], 422);
+            }
+
             return redirect()->route('dana-talangan.index')
                 ->with('error', 'Data lokal diperbarui, tetapi gagal dikirim ke Google Sheets: '.$danaTalangan->last_sync_error);
+        }
+
+        $this->presence->clearEditing($user, $danaTalangan, $request->input('presence_session_key'));
+
+        if ($request->expectsJson()) {
+            return response()->json([
+                'ok' => true,
+                'message' => 'Data dana talangan berhasil diperbarui.',
+                'reload_url' => route('dana-talangan.index'),
+                'updated_at' => $this->optimisticLock->token($danaTalangan->fresh()),
+            ]);
         }
 
         return redirect()->route('dana-talangan.index')
@@ -291,12 +328,18 @@ class DanaTalanganController extends Controller
             ->with('success', 'Data dana talangan berhasil dihapus.');
     }
 
-    public function sync(Request $request, DanaTalanganGoogleService $googleService)
+    public function sync(Request $request)
     {
         $user = Auth::user();
         $primary = $this->workspaceAccess->primaryBranch($user);
         abort_unless($user->isSuperadmin() || $user->hasRole('pusat') || ($primary && $this->workspaceAccess->canSyncBranch($user, $primary)), 403);
-        $result = $googleService->sync(Auth::id());
+        try {
+            $result = app(DanaTalanganGoogleService::class)->sync(Auth::id());
+        } catch (Throwable $exception) {
+            report($exception);
+            $result = ['ok' => false, 'message' => 'Layanan sinkronisasi global tidak dapat dijalankan.', 'summary' => []];
+        }
+        $this->notifications->syncResult($user, 'Dana Talangan', 'Global', $result, route('dana-talangan.index'));
         if (! $result['ok']) {
             if ($request->expectsJson()) {
                 return response()->json(['ok' => false, 'message' => 'Sync Dana Talangan gagal: '.$result['message'], 'summary' => $result['summary'] ?? []], 422);
@@ -401,7 +444,7 @@ class DanaTalanganController extends Controller
                 $start = $dateFrom ? Carbon::createFromFormat('!Y-m-d', $dateFrom)->toDateString() : null;
                 $end = $dateTo ? Carbon::createFromFormat('!Y-m-d', $dateTo)->toDateString() : null;
             }
-        } catch (\Throwable) {
+        } catch (Throwable) {
             $start = null;
             $end = null;
         }

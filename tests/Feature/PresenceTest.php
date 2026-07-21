@@ -3,10 +3,12 @@
 namespace Tests\Feature;
 
 use App\Models\Branch;
+use App\Models\ContentItem;
 use App\Models\DanaTalangan;
 use App\Models\Role;
 use App\Models\User;
 use App\Models\UserPresence;
+use App\Services\OptimisticLockService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -116,6 +118,42 @@ class PresenceTest extends TestCase
         $this->assertSame(1, UserPresence::count());
     }
 
+    public function test_idle_heartbeat_replaces_editing_mode(): void
+    {
+        [$branch, $user] = $this->branchAndUser();
+        $record = DanaTalangan::create([
+            'branch_id' => $branch->id, 'created_by' => $user->id, 'tanggal' => today(),
+            'nama_konsumen' => 'Idle Record', 'status' => 'sanggup',
+        ]);
+        $payload = array_merge($this->payload($branch), [
+            'record_type' => 'dana_talangan', 'record_id' => $record->id, 'mode' => 'editing',
+        ]);
+        $this->actingAs($user)->postJson(route('presence.heartbeat'), $payload)->assertOk();
+        $this->actingAs($user)->postJson(route('presence.heartbeat'), array_merge($payload, ['mode' => 'idle']))->assertOk();
+
+        $this->assertDatabaseHas('user_presences', ['user_id' => $user->id, 'record_id' => $record->id, 'mode' => 'idle']);
+    }
+
+    public function test_validation_error_retains_editing_presence(): void
+    {
+        [$branch, $user] = $this->branchAndUser();
+        $item = ContentItem::create([
+            'branch_id' => $branch->id, 'item_type' => 'task', 'visibility' => 'team', 'title' => 'Validasi',
+            'deadline_date' => today(), 'scheduled_date' => today(), 'priority' => 'medium', 'status' => 'todo', 'created_by' => $user->id,
+        ]);
+        UserPresence::create([
+            'user_id' => $user->id, 'branch_id' => $branch->id, 'page_key' => 'content-calendar',
+            'record_type' => 'content_item', 'record_id' => $item->id, 'context_key' => 'content_item:'.$item->id,
+            'mode' => 'editing', 'session_key' => 'validation-tab', 'last_seen_at' => now(),
+        ]);
+
+        $this->actingAs($user)->put(route('content-calendar.update', $item), [
+            'expected_updated_at' => app(OptimisticLockService::class)->token($item),
+        ])->assertSessionHasErrors();
+
+        $this->assertDatabaseHas('user_presences', ['user_id' => $user->id, 'record_id' => $item->id, 'mode' => 'editing']);
+    }
+
     public function test_initial_modules_render_presence_component_without_sensitive_fields(): void
     {
         [$branch, $user] = $this->branchAndUser();
@@ -129,6 +167,11 @@ class PresenceTest extends TestCase
             $response = $this->actingAs($user)->get($url)->assertOk()->assertSee('crmPresence', false);
             $response->assertDontSee($user->email)->assertDontSee('session_key', false);
         }
+        $source = file_get_contents(resource_path('js/presence.js'));
+        $this->assertStringContainsString('sedang membuka halaman ini', $source);
+        $this->assertStringContainsString('sedang melihat data ini', $source);
+        $this->assertStringContainsString('sedang mengedit data ini', $source);
+        $this->assertStringContainsString('60000', $source);
     }
 
     private function branchAndUser(): array

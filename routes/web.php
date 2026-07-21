@@ -14,6 +14,7 @@ use App\Http\Controllers\Crm\FeedbackReportController;
 use App\Http\Controllers\Crm\KavlingController;
 use App\Http\Controllers\Crm\KonsumenProgressController;
 use App\Http\Controllers\Crm\LeadSourceController;
+use App\Http\Controllers\Crm\NotificationController;
 use App\Http\Controllers\Crm\PresenceController;
 use App\Http\Controllers\Crm\ProjectController;
 use App\Http\Controllers\ProfileController;
@@ -40,6 +41,10 @@ Route::middleware(['auth', 'verified', 'password.changed'])->group(function () {
     Route::post('/presence/heartbeat', [PresenceController::class, 'heartbeat'])->middleware('throttle:180,1')->name('presence.heartbeat');
     Route::get('/presence', [PresenceController::class, 'index'])->middleware('throttle:240,1')->name('presence.index');
     Route::delete('/presence', [PresenceController::class, 'destroy'])->middleware('throttle:180,1')->name('presence.destroy');
+
+    Route::get('/notifications', [NotificationController::class, 'index'])->middleware('throttle:120,1')->name('notifications.index');
+    Route::patch('/notifications/{notification}/read', [NotificationController::class, 'read'])->name('notifications.read');
+    Route::post('/notifications/read-all', [NotificationController::class, 'readAll'])->name('notifications.read-all');
 
     Route::get('/ai-chat', [AiChatController::class, 'index'])->name('ai-chat.index');
     Route::get('/ai-chat/{conversation}', [AiChatController::class, 'show'])->name('ai-chat.show');

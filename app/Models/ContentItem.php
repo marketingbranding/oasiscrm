@@ -45,6 +45,7 @@ class ContentItem extends Model
         'completed_at',
         'notes',
         'created_by',
+        'updated_by',
     ];
 
     protected function casts(): array
@@ -66,6 +67,11 @@ class ContentItem extends Model
     public function creator(): BelongsTo
     {
         return $this->belongsTo(User::class, 'created_by');
+    }
+
+    public function updatedBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'updated_by');
     }
 
     public function assignees(): BelongsToMany

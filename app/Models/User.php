@@ -11,6 +11,8 @@ use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 #[Fillable([
     'name',
@@ -27,6 +29,26 @@ class User extends Authenticatable
 {
     /** @use HasFactory<UserFactory> */
     use HasFactory, Notifiable;
+
+    protected static function booted(): void
+    {
+        static::saved(function (User $user) {
+            if (! $user->branch_id || ! ($user->wasRecentlyCreated || $user->wasChanged('branch_id')) || ! Schema::hasTable('branch_user')) {
+                return;
+            }
+
+            DB::table('branch_user')->insertOrIgnore([
+                'user_id' => $user->id,
+                'branch_id' => $user->branch_id,
+                'can_view' => true,
+                'can_edit' => true,
+                'can_sync' => true,
+                'can_manage_members' => false,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+        });
+    }
 
     protected function casts(): array
     {
@@ -55,6 +77,7 @@ class User extends Authenticatable
 
     public function roles(): BelongsToMany
     {
+        // Supplemental/legacy roles; role_id remains the primary application role.
         return $this->belongsToMany(Role::class)
             ->withTimestamps();
     }
@@ -62,6 +85,7 @@ class User extends Authenticatable
     public function branches(): BelongsToMany
     {
         return $this->belongsToMany(Branch::class)
+            ->withPivot(['membership_role', 'can_view', 'can_edit', 'can_sync', 'can_manage_members'])
             ->withTimestamps();
     }
 

@@ -52,7 +52,7 @@
                     </div>
                 </div>
 
-                @if(Auth::user()->canViewAllBranches() && isset($branches) && $branches->count() > 0)
+                @if(isset($branches) && $branches->count() > 1)
                 @php $cabangError = $errors->has('branch_id') ? 'border-[#e91d2a]' : 'border-black'; @endphp
                 <div>
                     <label class="font-[Helvetica] font-bold text-xs uppercase block mb-1">Cabang</label>

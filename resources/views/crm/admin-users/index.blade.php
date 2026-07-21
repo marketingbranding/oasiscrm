@@ -31,6 +31,7 @@
                                 <span class="text-gray-600">— {{ $user->branch->name }} ({{ $user->branch->code }})</span>
                             @endif
                         </div>
+                        <div class="text-[10px] text-gray-600 mt-1">Akses: {{ $user->branches->pluck('name')->join(', ') ?: ($user->branch?->name ?? 'Belum ada') }}</div>
                     </div>
                 </div>
                 <div class="flex items-center gap-2">

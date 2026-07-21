@@ -3,68 +3,96 @@
 namespace App\Http\Controllers\Crm;
 
 use App\Http\Controllers\Controller;
+use App\Models\ActivityLog;
 use App\Models\Branch;
-use App\Models\Role;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\Hash;
 
 class BranchController extends Controller
 {
     public function index()
     {
         $this->ensureSuperadmin();
-        $branches = Branch::withCount(['contentItems', 'primaryUsers as admins_count'])->where('is_active', true)->forDropdown()->get();
+        $branches = Branch::withCount(['contentItems', 'users as members_count'])->where('is_active', true)->forDropdown()->get();
+
         return view('crm.branches.index', compact('branches'));
     }
 
     public function assignForm(Branch $branch)
     {
         $this->ensureSuperadmin();
-        $admins = User::where('branch_id', $branch->id)->get();
-        $role = Role::where('slug', 'admin')->first();
-        $availableUsers = User::whereNull('branch_id')->orWhere('branch_id', '!=', $branch->id)->get();
-        return view('crm.branches.assign', compact('branch', 'admins', 'availableUsers', 'role'));
+        abort_unless($branch->is_active, 404);
+        $members = $branch->users()->with('role')->orderBy('name')->get();
+        $availableUsers = User::where('is_active', true)
+            ->orderBy('name')
+            ->get();
+
+        return view('crm.branches.assign', compact('branch', 'members', 'availableUsers'));
     }
 
     public function assignStore(Request $request, Branch $branch)
     {
         $this->ensureSuperadmin();
+        abort_unless($branch->is_active, 404);
         $data = $request->validate([
-            'name' => 'required|string|max:255',
-            'email' => 'required|email|unique:users,email',
-            'password' => 'required|string|min:8',
+            'user_id' => ['required', 'integer', 'exists:users,id'],
+            'can_edit' => ['nullable', 'boolean'],
+            'can_sync' => ['nullable', 'boolean'],
+            'can_manage_members' => ['nullable', 'boolean'],
         ]);
 
-        $role = Role::where('slug', 'admin')->first();
+        $user = User::where('is_active', true)->findOrFail($data['user_id']);
+        $user->branches()->syncWithoutDetaching([$branch->id => [
+            'can_view' => true,
+            'can_edit' => (bool) ($data['can_edit'] ?? false),
+            'can_sync' => (bool) ($data['can_sync'] ?? false),
+            'can_manage_members' => (bool) ($data['can_manage_members'] ?? false),
+        ]]);
+        if (! $user->branch_id) {
+            $user->update(['branch_id' => $branch->id]);
+        }
+        $this->logMembership($user, $branch, 'membership_added');
 
-        User::create([
-            'name' => $data['name'],
-            'email' => $data['email'],
-            'password' => Hash::make($data['password']),
-            'role_id' => $role->id,
-            'branch_id' => $branch->id,
-            'is_active' => true,
-        ]);
-
-        return redirect()->route('branches.assign', $branch)->with('success', 'Admin cabang berhasil ditambahkan.');
+        return redirect()->route('branches.assign', $branch)->with('success', 'Anggota cabang berhasil ditambahkan.');
     }
 
-    public function removeAdmin(User $user)
+    public function removeAdmin(Request $request, User $user)
     {
         $this->ensureSuperadmin();
+        $branchId = (int) $request->validate(['branch_id' => ['required', 'integer', 'exists:branches,id']])['branch_id'];
         if ($user->isSuperadmin()) {
             return back()->with('error', 'Tidak dapat menghapus Super Admin.');
         }
-        $user->update(['branch_id' => null]);
-        return back()->with('success', 'Admin cabang berhasil dihapus.');
+        if ((int) $user->branch_id === $branchId) {
+            return back()->with('error', 'Pindahkan cabang utama user terlebih dahulu sebelum menghapus membership ini.');
+        }
+
+        $user->branches()->detach($branchId);
+        $branch = Branch::find($branchId);
+        if ($branch) {
+            $this->logMembership($user, $branch, 'membership_removed');
+        }
+
+        return back()->with('success', 'Akses cabang berhasil dihapus tanpa menghapus akun user.');
     }
 
     private function ensureSuperadmin(): void
     {
-        if (!Auth::user()->isSuperadmin()) {
+        if (! Auth::user()->isSuperadmin()) {
             abort(403);
         }
+    }
+
+    private function logMembership(User $user, Branch $branch, string $event): void
+    {
+        ActivityLog::create([
+            'causer_id' => Auth::id(),
+            'subject_type' => User::class,
+            'subject_id' => $user->id,
+            'event' => $event,
+            'description' => 'Membership cabang '.$branch->name.' diperbarui',
+            'properties' => ['branch_id' => $branch->id],
+        ]);
     }
 }

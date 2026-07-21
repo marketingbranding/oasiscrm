@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Crm\Traits;
 
+use App\Services\WorkspaceAccessService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 
@@ -17,9 +18,14 @@ trait Importable
         $request->validate(['file' => 'required|file|mimes:xlsx']);
 
         $user = Auth::user();
-        $branchId = $user->canViewAllBranches()
-            ? $request->get('branch_id')
-            : $user->branch_id;
+        $requestedBranchId = $request->get('branch_id');
+        $branch = ! $requestedBranchId && $user->canViewAllBranches()
+            ? null
+            : app(WorkspaceAccessService::class)->resolveRequestedBranch($user, $requestedBranchId);
+        if ($requestedBranchId && ! $branch) {
+            abort(403);
+        }
+        $branchId = $branch?->id;
 
         $result = ($this->importClass)::import(
             $request->file('file')->getPathname(),
@@ -27,8 +33,8 @@ trait Importable
             $request->only($this->importPreservedParams)
         );
 
-        $message = $result['imported'] . ' data berhasil diimport.';
-        if (!empty($result['errors'])) {
+        $message = $result['imported'].' data berhasil diimport.';
+        if (! empty($result['errors'])) {
             return redirect()->route($this->importErrorRoute)
                 ->with('success', $message)
                 ->with('import_errors', $result['errors']);

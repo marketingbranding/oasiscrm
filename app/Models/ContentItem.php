@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Models\Traits\LogsActivity;
+use App\Services\WorkspaceAccessService;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -78,7 +79,9 @@ class ContentItem extends Model
             return $query;
         }
 
-        return $query->where('branch_id', $user->branch_id)
+        $branchIds = app(WorkspaceAccessService::class)->accessibleBranchIds($user);
+
+        return $query->whereIn('branch_id', $branchIds)
             ->where(function (Builder $query) use ($user) {
                 $query->where('visibility', 'team')
                     ->orWhere('created_by', $user->id)

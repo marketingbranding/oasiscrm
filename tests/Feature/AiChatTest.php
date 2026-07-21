@@ -8,12 +8,13 @@ use App\Models\ContentItem;
 use App\Models\DanaTalangan;
 use App\Models\DatabaseSheetRecord;
 use App\Models\DatabaseSheetSyncStatus;
-use App\Models\KonsumenProgressSyncStatus;
 use App\Models\KonsumenProgressSheetRow;
+use App\Models\KonsumenProgressSyncStatus;
 use App\Models\Role;
 use App\Models\User;
 use App\Services\AiToolRegistry;
 use App\Services\KonsumenProgressSyncService;
+use App\Services\WorkspaceAccessService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
 use Mockery;
@@ -137,6 +138,8 @@ class AiChatTest extends TestCase
         $malang = Branch::create(['name' => 'Malang', 'code' => 'MLG', 'is_active' => true]);
         $this->pipelineCustomer($solo, 'S-01', 'Budi', 'bast');
         $this->pipelineCustomer($malang, 'M-01', 'Sari', 'bast');
+        $this->assertTrue($user->canViewAllBranches());
+        $this->assertTrue(app(WorkspaceAccessService::class)->canViewBranch($user, $solo));
 
         $response = $this->actingAs($user)->postJson(route('ai-chat.chat'), [
             'message' => 'berapa bast untuk cabang solo?',
@@ -425,21 +428,16 @@ class AiChatTest extends TestCase
         ])->assertOk()->assertJsonPath('message.actions', []);
     }
 
-    public function test_branch_user_sync_json_ignores_manipulated_branch_and_returns_summary(): void
+    public function test_branch_user_sync_json_rejects_manipulated_branch(): void
     {
         [$branch, $user] = $this->branchAndUser();
         $other = Branch::create(['name' => 'Magelang', 'code' => 'MGL', 'is_active' => true]);
         $sync = Mockery::mock(KonsumenProgressSyncService::class);
-        $sync->shouldReceive('syncBranch')->once()
-            ->with(Mockery::on(fn (Branch $selected) => $selected->is($branch)))
-            ->andReturn(['ok' => true, 'message' => 'OK', 'summary' => ['akad' => 2]]);
+        $sync->shouldNotReceive('syncBranch');
         $this->app->instance(KonsumenProgressSyncService::class, $sync);
 
         $this->actingAs($user)->postJson(route('konsumen-progress.sync'), ['branch_id' => $other->id])
-            ->assertOk()
-            ->assertJsonPath('ok', true)
-            ->assertJsonPath('summary.akad', 2)
-            ->assertJsonStructure(['message', 'finished_at']);
+            ->assertForbidden();
     }
 
     public function test_failed_sync_json_returns_useful_error(): void
@@ -821,7 +819,7 @@ class AiChatTest extends TestCase
         $response = $this->actingAs($user)->postJson(route('ai-chat.chat'), [
             'conversation_id' => $first->json('conversation_id'),
             'message' => 'coba cari di Magelang',
-        ])->assertOk()->assertSeeText('Pencarian tetap dibatasi ke cabang Solo sesuai akses akun Anda.');
+        ])->assertOk()->assertSeeText('Anda tidak memiliki akses ke cabang Magelang.');
 
         $conversation = AiChatConversation::findOrFail($first->json('conversation_id'));
         $tool = collect($conversation->messages)->last()['tool_results'][0];

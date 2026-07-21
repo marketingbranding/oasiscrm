@@ -61,7 +61,7 @@
                 </div>
 
                 <div>
-                    <label class="font-[Helvetica] font-bold text-xs uppercase block mb-1">Cabang</label>
+                    <label class="font-[Helvetica] font-bold text-xs uppercase block mb-1">Cabang Utama</label>
                     <select name="branch_id" class="w-full border-2 border-black px-3 py-2 text-sm font-['Times_New_Roman'] bg-white rounded-none @error('branch_id') border-[#e91d2a] @enderror">
                         <option value="">— Tidak Ada —</option>
                         @foreach($branches as $branch)
@@ -72,6 +72,8 @@
                         <p class="text-[#e91d2a] text-xs mt-1 font-[Helvetica] font-bold">{{ $message }}</p>
                     @enderror
                 </div>
+
+                @include('crm.admin-users._memberships', ['user' => $user])
 
                 <div>
                     <label class="font-[Helvetica] font-bold text-xs uppercase block mb-1">Telepon</label>

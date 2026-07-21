@@ -22,7 +22,7 @@
         'status' => old('status', 'sanggup'),
     ] : null;
     $activeFilters = [];
-    if ($selectedBranchId && Auth::user()->canViewAllBranches()) {
+    if ($selectedBranchId && isset($branches) && $branches->count() > 1) {
         $activeFilters[] = 'Cabang: '.($branches->firstWhere('id', $selectedBranchId)?->name ?? $selectedBranchId);
     }
     if ($selectedProject) $activeFilters[] = 'Proyek: '.$selectedProject;
@@ -167,7 +167,7 @@
                     @if($value !== null && $value !== '')<input type="hidden" name="{{ $key }}" value="{{ $value }}">@endif
                 @endforeach
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    @if(Auth::user()->canViewAllBranches() && isset($branches) && $branches->count() > 0)
+                    @if(isset($branches) && $branches->count() > 1)
                     <div><label class="font-[Helvetica] font-bold text-xs uppercase block mb-1">Cabang</label><select name="branch_id" class="w-full border-2 border-black px-3 py-2 text-sm font-['Times_New_Roman'] bg-white"><option value="">— Semua Cabang —</option>@foreach($branches as $b)<option value="{{ $b->id }}" {{ (string)$selectedBranchId === (string)$b->id ? 'selected' : '' }} @if(str_contains(mb_strtolower($b->name), 'pusat')) style="color:#b8860b;font-weight:700;background:#fff3b0" @endif>{{ $b->name }}</option>@endforeach</select></div>
                     @endif
                     <div><label class="font-[Helvetica] font-bold text-xs uppercase block mb-1">Proyek</label><select name="project_name" class="w-full border-2 border-black px-3 py-2 text-sm font-['Times_New_Roman'] bg-white"><option value="">— Semua Proyek —</option>@foreach($projectOptions as $projectName)<option value="{{ $projectName }}" {{ $selectedProject === $projectName ? 'selected' : '' }}>{{ $projectName }}</option>@endforeach</select></div>
@@ -337,7 +337,7 @@
                         <label class="font-[Helvetica] font-bold text-xs uppercase block mb-1">Nama Konsumen</label>
                         <input name="nama_konsumen" value="{{ old('nama_konsumen') }}" required class="w-full border-2 border-black px-3 py-2 text-sm font-['Times_New_Roman']">
                     </div>
-                    @if(Auth::user()->canViewAllBranches())
+                    @if($branches->count() > 1)
                     <div>
                         <label class="font-[Helvetica] font-bold text-xs uppercase block mb-1">Cabang</label>
                         <select name="branch_id" x-model="addForm.branch_id" @change="changeAddBranch()" required class="w-full border-2 border-black px-3 py-2 text-sm font-['Times_New_Roman'] bg-white">
@@ -423,7 +423,7 @@
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div><label class="font-[Helvetica] font-bold text-xs uppercase block mb-1">Tanggal</label><div class="date-wrapper" data-accent="#f1c40f" style="position:relative"><div class="date-display w-full border-2 border-black px-3 py-2 text-sm font-['Times_New_Roman'] bg-white cursor-pointer select-none flex items-center justify-between" tabindex="0"><span class="date-text">— Pilih Tanggal —</span><span class="date-arrow">▼</span></div><input type="date" name="tanggal" x-model="editingRecord.tanggal" required style="position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0"></div></div>
                     <div><label class="font-[Helvetica] font-bold text-xs uppercase block mb-1">Nama Konsumen</label><input name="nama_konsumen" x-model="editingRecord.nama_konsumen" required class="w-full border-2 border-black px-3 py-2 text-sm font-['Times_New_Roman']"></div>
-                    @if(Auth::user()->canViewAllBranches())
+                    @if($branches->count() > 1)
                     <div><label class="font-[Helvetica] font-bold text-xs uppercase block mb-1">Cabang</label><select name="branch_id" x-model="editingRecord.branch_id" @change="changeEditBranch()" required class="w-full border-2 border-black px-3 py-2 text-sm font-['Times_New_Roman'] bg-white">@foreach($branches as $branch)<option value="{{ $branch->id }}" @if(str_contains(mb_strtolower($branch->name), 'pusat')) style="color:#b8860b;font-weight:700;background:#fff3b0" @endif>{{ $branch->name }}</option>@endforeach</select></div>
                     @endif
                     <div><label class="font-[Helvetica] font-bold text-xs uppercase block mb-1">Proyek</label><select name="project_name" x-model="editingRecord.project_name" @change="changeEditProject()" required class="w-full border-2 border-black px-3 py-2 text-sm font-['Times_New_Roman'] bg-white"><template x-for="project in projectsFor(editingRecord.branch_id, editingRecord.project_name)" :key="project.id || project.name"><option :value="project.name" x-text="project.name"></option></template></select></div>

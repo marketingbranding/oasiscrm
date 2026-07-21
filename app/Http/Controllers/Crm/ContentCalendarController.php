@@ -14,6 +14,7 @@ use App\Imports\ContentItemImport;
 use App\Models\ContentItem;
 use App\Models\LeadMaster;
 use App\Models\User;
+use App\Services\WorkspaceAccessService;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
@@ -40,6 +41,8 @@ class ContentCalendarController extends Controller
     protected string $importErrorRoute = 'content-calendar.import';
 
     protected string $importSuccessRoute = 'content-calendar.index';
+
+    public function __construct(private readonly WorkspaceAccessService $workspaceAccess) {}
 
     public function index(Request $request)
     {
@@ -76,7 +79,7 @@ class ContentCalendarController extends Controller
         $projects = $this->resolveBranchProjects($selectedBranchId);
         $filterProjects = LeadMaster::where('is_active', true)
             ->whereNotNull('branch_id')
-            ->when(! $user->canViewAllBranches(), fn ($query) => $query->where('branch_id', $user->branch_id))
+            ->whereIn('branch_id', $this->workspaceAccess->accessibleBranchIds($user))
             ->orderBy('project_name')
             ->get(['project_name', 'branch_id']);
         if ($selectedProject && ! $filterProjects->contains('project_name', $selectedProject)) {
@@ -84,7 +87,7 @@ class ContentCalendarController extends Controller
         }
         $baseQuery = ContentItem::with(['branch', 'creator', 'assignees'])
             ->visibleTo($user);
-        if ($selectedBranchId && $user->canViewAllBranches()) {
+        if ($selectedBranchId) {
             $baseQuery->where('branch_id', $selectedBranchId);
         }
         $this->applyFilters($baseQuery, $selectedProject, $selectedType, $selectedStatus, $selectedPriority, $selectedPic, $search);
@@ -149,9 +152,9 @@ class ContentCalendarController extends Controller
         if (($data['item_type'] ?? null) === 'content') {
             $assigneeIds = [];
         }
-        if (! $user->canViewAllBranches()) {
-            $data['branch_id'] = $user->branch_id;
-        }
+        $branch = $this->workspaceAccess->resolveRequestedBranch($user, $data['branch_id'] ?? null);
+        abort_unless($branch && $this->workspaceAccess->canEditBranch($user, $branch), 403);
+        $data['branch_id'] = $branch->id;
         $this->validateAssignees($assigneeIds, (int) $data['branch_id']);
         $data = $this->normalizePlannerData($data);
         $data['created_by'] = $user->id;
@@ -178,9 +181,9 @@ class ContentCalendarController extends Controller
         if (($data['item_type'] ?? null) === 'content') {
             $assigneeIds = [];
         }
-        if (! Auth::user()->canViewAllBranches()) {
-            $data['branch_id'] = Auth::user()->branch_id;
-        }
+        $branch = $this->workspaceAccess->resolveRequestedBranch(Auth::user(), $data['branch_id'] ?? $contentItem->branch_id);
+        abort_unless($branch && $this->workspaceAccess->canEditBranch(Auth::user(), $branch), 403);
+        $data['branch_id'] = $branch->id;
         $this->validateAssignees($assigneeIds, (int) $data['branch_id']);
         $contentItem->update($this->normalizePlannerData($data, $contentItem));
         $contentItem->assignees()->sync($assigneeIds);
@@ -192,8 +195,10 @@ class ContentCalendarController extends Controller
     public function export(Request $request)
     {
         $query = ContentItem::with(['branch', 'creator', 'assignees'])->visibleTo(Auth::user());
-        if ($request->filled('branch_id') && Auth::user()->canViewAllBranches()) {
-            $query->where('branch_id', $request->branch_id);
+        if ($request->filled('branch_id')) {
+            $branch = $this->workspaceAccess->resolveRequestedBranch(Auth::user(), $request->branch_id);
+            abort_unless($branch, 403);
+            $query->where('branch_id', $branch->id);
         }
         $this->applyFilters($query, $request->project_name, $request->item_type, $request->status, $request->priority, (string) $request->pic, (string) $request->search);
         $records = $query->orderBy('scheduled_date')->get();
@@ -287,11 +292,16 @@ class ContentCalendarController extends Controller
         $defaultType = in_array($defaultType, ContentItem::TYPES, true) ? $defaultType : 'task';
         $user = Auth::user();
         $branches = $this->resolveBranches();
+        $accessibleBranchIds = $this->workspaceAccess->accessibleBranchIds($user);
         $projects = LeadMaster::where('is_active', true)
-            ->when(! $user->canViewAllBranches(), fn ($query) => $query->where('branch_id', $user->branch_id))
+            ->whereIn('branch_id', $accessibleBranchIds)
             ->orderBy('project_name')->get();
         $users = User::where('is_active', true)
-            ->when(! $user->canViewAllBranches(), fn ($query) => $query->where('branch_id', $user->branch_id))
+            ->where(function ($query) use ($accessibleBranchIds) {
+                $query->whereIn('branch_id', $accessibleBranchIds)
+                    ->orWhereHas('branches', fn ($branches) => $branches->whereIn('branches.id', $accessibleBranchIds)->where('branch_user.can_view', true));
+            })
+            ->with('branches:id')
             ->orderBy('name')->get(['id', 'name', 'branch_id']);
         $item?->load('assignees');
 
@@ -357,7 +367,12 @@ class ContentCalendarController extends Controller
         if (empty($ids)) {
             return;
         }
-        $validCount = User::whereIn('id', $ids)->where('is_active', true)->where('branch_id', $branchId)->count();
+        $validCount = User::whereIn('id', $ids)
+            ->where('is_active', true)
+            ->where(function ($query) use ($branchId) {
+                $query->where('branch_id', $branchId)
+                    ->orWhereHas('branches', fn ($branches) => $branches->where('branches.id', $branchId)->where('branch_user.can_view', true));
+            })->count();
         if ($validCount !== count(array_unique($ids))) {
             throw ValidationException::withMessages(['assigned_user_ids' => 'PIC akun harus aktif dan berasal dari cabang item.']);
         }

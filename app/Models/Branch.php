@@ -2,8 +2,8 @@
 
 namespace App\Models;
 
-use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
@@ -29,13 +29,14 @@ class Branch extends Model
     public function scopeForDropdown(Builder $query): Builder
     {
         return $query
-            ->orderByRaw("CASE WHEN LOWER(name) = ? THEN 0 WHEN LOWER(name) LIKE ? THEN 1 ELSE 2 END", ['kantor pusat', '%pusat%'])
+            ->orderByRaw('CASE WHEN LOWER(name) = ? THEN 0 WHEN LOWER(name) LIKE ? THEN 1 ELSE 2 END', ['kantor pusat', '%pusat%'])
             ->orderBy('name');
     }
 
     public function users(): BelongsToMany
     {
         return $this->belongsToMany(User::class)
+            ->withPivot(['membership_role', 'can_view', 'can_edit', 'can_sync', 'can_manage_members'])
             ->withTimestamps();
     }
 

@@ -19,6 +19,7 @@ use App\Models\Kavling;
 use App\Models\LeadMaster;
 use App\Services\DanaTalanganGoogleService;
 use App\Services\DanaTalanganOptionService;
+use App\Services\WorkspaceAccessService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -59,6 +60,8 @@ class DanaTalanganController extends Controller
 
     protected array $bulkRedirectParams = ['branch_id', 'project_name', 'status', 'search', 'filter_mode', 'date_from', 'date_to', 'month_from', 'month_to'];
 
+    public function __construct(private readonly WorkspaceAccessService $workspaceAccess) {}
+
     public function index(Request $request)
     {
         $user = Auth::user();
@@ -71,7 +74,7 @@ class DanaTalanganController extends Controller
         $projects = $this->resolveBranchProjects($selectedBranchId);
         $formProjects = LeadMaster::where('is_active', true)
             ->whereNotNull('branch_id')
-            ->when(! $user->canViewAllBranches(), fn ($query) => $query->where('branch_id', $user->branch_id))
+            ->whereIn('branch_id', $this->workspaceAccess->accessibleBranchIds($user))
             ->orderBy('project_name')
             ->get(['id', 'project_name', 'branch_id']);
         $syncedProjectNames = $this->applyBranchScope(DanaTalangan::query(), $selectedBranchId)
@@ -143,14 +146,9 @@ class DanaTalanganController extends Controller
         $user = Auth::user();
         $branches = $this->resolveBranches();
 
-        if ($user->canViewAllBranches()) {
-            $projects = LeadMaster::where('is_active', true)->orderBy('project_name')->get();
-        } else {
-            $projects = LeadMaster::where('is_active', true)
-                ->where('branch_id', $user->branch_id)
-                ->orderBy('project_name')
-                ->get();
-        }
+        $projects = LeadMaster::where('is_active', true)
+            ->whereIn('branch_id', $this->workspaceAccess->accessibleBranchIds($user))
+            ->orderBy('project_name')->get();
 
         $kavlings = Kavling::with('project')->orderBy('kavling_code')->get();
 
@@ -161,10 +159,7 @@ class DanaTalanganController extends Controller
     {
         $user = Auth::user();
         $data = $request->validated();
-
-        if (! $user->canViewAllBranches()) {
-            $data['branch_id'] = $user->branch_id;
-        }
+        $data['branch_id'] ??= $this->workspaceAccess->resolveRequestedBranch($user, null)?->id;
 
         $projectBranchId = $googleService->branchIdForProject($data['project_name']);
         if (! $projectBranchId || (int) $data['branch_id'] !== $projectBranchId) {
@@ -172,6 +167,7 @@ class DanaTalanganController extends Controller
         }
         $data['branch_id'] = $projectBranchId;
         $branch = Branch::findOrFail($projectBranchId);
+        abort_unless($this->workspaceAccess->canEditBranch($user, $branch), 403);
         if (! $optionService->isValidKavling($branch, $data['project_name'], $data['kav'] ?? null)) {
             return back()->withInput()->withErrors(['kav' => 'Kav tidak terdaftar pada Proyek yang dipilih.']);
         }
@@ -193,19 +189,12 @@ class DanaTalanganController extends Controller
     public function edit(DanaTalangan $danaTalangan)
     {
         $user = Auth::user();
-        if (! $user->canViewAllBranches() && $danaTalangan->branch_id !== $user->branch_id) {
-            abort(403);
-        }
+        abort_unless($this->workspaceAccess->canEditBranch($user, $danaTalangan->branch_id), 403);
 
         $branches = $this->resolveBranches();
-        if ($user->canViewAllBranches()) {
-            $projects = LeadMaster::where('is_active', true)->orderBy('project_name')->get();
-        } else {
-            $projects = LeadMaster::where('is_active', true)
-                ->where('branch_id', $user->branch_id)
-                ->orderBy('project_name')
-                ->get();
-        }
+        $projects = LeadMaster::where('is_active', true)
+            ->whereIn('branch_id', $this->workspaceAccess->accessibleBranchIds($user))
+            ->orderBy('project_name')->get();
 
         $record = $danaTalangan;
         $kavlings = Kavling::with('project')->orderBy('kavling_code')->get();
@@ -217,10 +206,7 @@ class DanaTalanganController extends Controller
     {
         $user = Auth::user();
         $data = $request->validated();
-
-        if (! $user->canViewAllBranches()) {
-            $data['branch_id'] = $user->branch_id;
-        }
+        $data['branch_id'] ??= $danaTalangan->branch_id;
 
         $projectBranchId = $googleService->branchIdForProject($data['project_name']);
         if (! $projectBranchId || (int) $data['branch_id'] !== $projectBranchId) {
@@ -228,6 +214,7 @@ class DanaTalanganController extends Controller
         }
         $data['branch_id'] = $projectBranchId;
         $branch = Branch::findOrFail($projectBranchId);
+        abort_unless($this->workspaceAccess->canEditBranch($user, $branch), 403);
         $kavChanged = $this->normalizeKav($data['kav'] ?? null) !== $this->normalizeKav($danaTalangan->kav);
         if ($kavChanged && ! $optionService->isValidKavling($branch, $data['project_name'], $data['kav'] ?? null)) {
             return back()->withInput()->withErrors(['kav' => 'Kav tidak terdaftar pada Proyek yang dipilih.']);
@@ -249,13 +236,8 @@ class DanaTalanganController extends Controller
     public function export(Request $request)
     {
         $user = Auth::user();
-        $query = DanaTalangan::with(['branch', 'creator']);
-
-        if (! $user->canViewAllBranches()) {
-            $query->where('branch_id', $user->branch_id);
-        } elseif ($request->filled('branch_id')) {
-            $query->where('branch_id', $request->branch_id);
-        }
+        $selectedBranchId = $this->resolveSelectedBranchId($request->integer('branch_id') ?: null);
+        $query = $this->applyBranchScope(DanaTalangan::with(['branch', 'creator']), $selectedBranchId);
 
         $query->when($request->get('project_name'), fn ($q, $v) => $q->where('project_name', $v));
         $query->when($request->get('status'), fn ($q, $v) => $q->where('status', $v));
@@ -281,9 +263,7 @@ class DanaTalanganController extends Controller
     public function detail(DanaTalangan $danaTalangan)
     {
         $user = Auth::user();
-        if (! $user->canViewAllBranches() && $danaTalangan->branch_id !== $user->branch_id) {
-            abort(403);
-        }
+        abort_unless($this->workspaceAccess->canViewBranch($user, $danaTalangan->branch_id), 403);
 
         $danaTalangan->load('creator');
 
@@ -293,9 +273,7 @@ class DanaTalanganController extends Controller
     public function destroy(DanaTalangan $danaTalangan, DanaTalanganGoogleService $googleService)
     {
         $user = Auth::user();
-        if (! $user->canViewAllBranches() && $danaTalangan->branch_id !== $user->branch_id) {
-            abort(403);
-        }
+        abort_unless($this->workspaceAccess->canEditBranch($user, $danaTalangan->branch_id), 403);
 
         if (! $googleService->delete($danaTalangan, $user->id)) {
             return back()->with('error', 'Gagal menghapus data dari Google Sheets: '.$danaTalangan->last_sync_error);
@@ -307,6 +285,9 @@ class DanaTalanganController extends Controller
 
     public function sync(Request $request, DanaTalanganGoogleService $googleService)
     {
+        $user = Auth::user();
+        $primary = $this->workspaceAccess->primaryBranch($user);
+        abort_unless($user->isSuperadmin() || $user->hasRole('pusat') || ($primary && $this->workspaceAccess->canSyncBranch($user, $primary)), 403);
         $result = $googleService->sync(Auth::id());
         if (! $result['ok']) {
             if ($request->expectsJson()) {
@@ -338,9 +319,7 @@ class DanaTalanganController extends Controller
         ]);
         $user = Auth::user();
         $branch = Branch::where('is_active', true)->findOrFail($validated['branch_id']);
-        if (! $user->canViewAllBranches() && $branch->id !== $user->branch_id) {
-            abort(403);
-        }
+        abort_unless($this->workspaceAccess->canViewBranch($user, $branch), 403);
         if ($googleService->branchIdForProject($validated['project_name']) !== $branch->id) {
             abort(422, 'Proyek tidak terdaftar pada cabang yang dipilih.');
         }

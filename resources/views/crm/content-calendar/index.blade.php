@@ -15,7 +15,7 @@
         default => null,
     };
     $activeFilters = [];
-    if ($selectedBranchId && Auth::user()->canViewAllBranches()) $activeFilters[] = 'Cabang: '.($branches->firstWhere('id', $selectedBranchId)?->name ?? $selectedBranchId);
+    if ($selectedBranchId && $branches->count() > 1) $activeFilters[] = 'Cabang: '.($branches->firstWhere('id', $selectedBranchId)?->name ?? $selectedBranchId);
     if ($selectedProject) $activeFilters[] = 'Proyek: '.$selectedProject;
     if ($selectedType && !$fixedType) $activeFilters[] = 'Tipe: '.ucfirst($selectedType);
     if ($selectedStatus) $activeFilters[] = 'Status: '.($statusLabels[$selectedStatus] ?? $selectedStatus);
@@ -77,7 +77,7 @@
             <form method="GET" action="{{ route('content-calendar.index') }}" class="space-y-4">
                 <input type="hidden" name="view" value="{{ $viewMode }}"><input type="hidden" name="month" value="{{ $month }}"><input type="hidden" name="year" value="{{ $year }}">@if($search)<input type="hidden" name="search" value="{{ $search }}">@endif
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    @if(Auth::user()->canViewAllBranches())<div><label class="block text-xs font-bold uppercase mb-1">Cabang</label><select name="branch_id" x-model="filterBranch" @change="filterProject=''" class="w-full border-2 border-black px-3 py-2 bg-white"><option value="">Semua Cabang</option>@foreach($branches as $branch)<option value="{{ $branch->id }}" @if(str_contains(mb_strtolower($branch->name), 'pusat')) style="color:#b8860b;font-weight:700;background:#fff3b0" @endif>{{ $branch->name }}</option>@endforeach</select></div>@endif
+                    @if($branches->count() > 1)<div><label class="block text-xs font-bold uppercase mb-1">Cabang</label><select name="branch_id" x-model="filterBranch" @change="filterProject=''" class="w-full border-2 border-black px-3 py-2 bg-white"><option value="">Cabang Utama</option>@foreach($branches as $branch)<option value="{{ $branch->id }}" @if(str_contains(mb_strtolower($branch->name), 'pusat')) style="color:#b8860b;font-weight:700;background:#fff3b0" @endif>{{ $branch->name }}</option>@endforeach</select></div>@endif
                     <div><label class="block text-xs font-bold uppercase mb-1">Proyek</label><select name="project_name" x-model="filterProject" class="w-full border-2 border-black px-3 py-2 bg-white"><option value="">Semua Proyek</option><template x-for="project in filterProjectOptions"><option :value="project.name" x-text="project.name"></option></template></select></div>
                     <div><label class="block text-xs font-bold uppercase mb-1">Tipe</label>@if($fixedType)<div class="border-2 border-black bg-gray-100 px-3 py-2">{{ ucfirst($fixedType) }} <span class="text-xs font-normal">(konteks tab)</span></div>@else<select name="item_type" x-model="filterType" @change="syncFilterStatus()" class="w-full border-2 border-black px-3 py-2 bg-white"><option value="">Semua Tipe</option><option value="task">Task</option><option value="agenda">Agenda</option><option value="content">Konten</option></select>@endif</div>
                     <div><label class="block text-xs font-bold uppercase mb-1">Status</label><select name="status" x-model="filterStatus" class="w-full border-2 border-black px-3 py-2 bg-white"><option value="">Semua Status</option><template x-for="option in filterStatusOptions"><option :value="option.value" x-text="option.label"></option></template></select></div>

@@ -16,7 +16,7 @@
         platform: @js(old('platform', $item?->platform ?? 'Sosial Media')),
         contentFormat: @js(old('content_format', $item?->content_format ?? 'Video')),
         projects: @js($projects->map(fn($project) => ['name' => $project->project_name, 'branch_id' => (string) $project->branch_id])->values()),
-        users: @js($users->map(fn($user) => ['id' => $user->id, 'name' => $user->name, 'branch_id' => (string) $user->branch_id])->values()),
+        users: @js($users->map(fn($user) => ['id' => $user->id, 'name' => $user->name, 'branch_ids' => collect([$user->branch_id])->merge($user->branches->pluck('id'))->filter()->map(fn($id) => (string) $id)->unique()->values()])->values()),
         externalPics: @js($externalPics),
     })" class="space-y-5">
     @csrf
@@ -48,7 +48,7 @@
             <textarea name="task_detail" rows="3" :disabled="type === 'content'" class="w-full border-2 border-black px-3 py-2 text-sm font-['Times_New_Roman']">{{ old('task_detail', $item?->task_detail) }}</textarea>
         </div>
 
-        @if(Auth::user()->canViewAllBranches())
+        @if($branches->count() > 1)
         <div>
             <label class="font-[Helvetica] font-bold text-xs uppercase block mb-1">Cabang</label>
             <select name="branch_id" x-model="branchId" @change="projectName = ''" required class="w-full border-2 border-black px-3 py-2 text-sm bg-white">
@@ -171,7 +171,7 @@ function plannerForm(config) {
             content: [{value:'idea',label:'Ide'},{value:'content_in_progress',label:'Dalam Proses'},{value:'done_editing',label:'Selesai Edit'},{value:'uploaded',label:'Di Upload'}],
         },
         get filteredProjects() { return this.projects.filter(project => String(project.branch_id) === String(this.branchId)); },
-        get filteredUsers() { return this.users.filter(user => String(user.branch_id) === String(this.branchId)); },
+        get filteredUsers() { return this.users.filter(user => (user.branch_ids || []).includes(String(this.branchId))); },
         changeType(type) { this.type = type; this.status = this.statusOptions[type][0].value; },
         addExternalPic() { const value = this.draftPic.trim(); if (value && !this.externalPics.includes(value)) this.externalPics.push(value); this.draftPic = ''; },
     };

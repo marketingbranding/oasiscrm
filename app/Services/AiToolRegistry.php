@@ -18,7 +18,10 @@ use Illuminate\Support\Str;
 
 class AiToolRegistry
 {
-    public function __construct(private readonly KonsumenPipelineService $pipelineService) {}
+    public function __construct(
+        private readonly KonsumenPipelineService $pipelineService,
+        private readonly WorkspaceAccessService $workspaceAccess,
+    ) {}
 
     public function allowedToolNames(): array
     {
@@ -63,6 +66,10 @@ class AiToolRegistry
 
     public function execute(string $name, array $arguments, User $user): array
     {
+        if ($error = $this->branchAccessError($arguments, $user)) {
+            return ['error' => $error];
+        }
+
         return match ($name) {
             'count_by_stage' => $this->countByStage($arguments, $user),
             'get_content_schedule' => $this->contentSchedule($arguments, $user),
@@ -81,14 +88,23 @@ class AiToolRegistry
         $lower = Str::lower($message);
         $today = today();
         $explicitBranchId = $this->resolveBranchIdFromText($message, $user);
-        $branchId = $user->canViewAllBranches()
-            ? ($explicitBranchId ?? ($context['branch_id'] ?? null))
-            : $user->branch_id;
+        $contextBranchId = filled($context['branch_id'] ?? null)
+            && $this->workspaceAccess->canViewBranch($user, (int) $context['branch_id'])
+                ? (int) $context['branch_id']
+                : null;
+        $branchId = $explicitBranchId ?? $contextBranchId ?? ($user->canViewAllBranches() ? null : $user->branch_id);
         $explicitStage = $this->pipelineService->stageFromText($message);
         $mentionedBranch = $this->resolveMentionedBranch($message);
         $previousSearchQuery = trim((string) ($context['search_query'] ?? ''));
         $newSearchQuery = $this->extractCustomerSearchQuery($message);
         $searchCommand = preg_match('/\b(?:coba\s+cari|cari|search|cek\s+konsumen|ada\s+konsumen)\b/iu', $message) === 1;
+
+        if ($mentionedBranch && ! $this->workspaceAccess->canViewBranch($user, $mentionedBranch)) {
+            return [[
+                'name' => 'ask_clarification',
+                'arguments' => ['message' => 'Anda tidak memiliki akses ke cabang '.$mentionedBranch->name.'.'],
+            ]];
+        }
 
         if (Str::contains($lower, ['data apa', 'bisa cari', 'bisa kamu cari', 'bisa kamu baca', 'kemampuan', 'capability'])) {
             return [['name' => 'get_supported_capabilities', 'arguments' => []]];
@@ -223,11 +239,15 @@ class AiToolRegistry
 
     private function allowedBranchId(array $arguments, User $user): ?int
     {
-        if ($user->canViewAllBranches()) {
-            return filled($arguments['branch_id'] ?? null) ? (int) $arguments['branch_id'] : null;
+        if (filled($arguments['branch_id'] ?? null)) {
+            return $this->workspaceAccess->resolveRequestedBranch($user, $arguments['branch_id'])?->id;
         }
 
-        return $user->branch_id;
+        if ($user->isSuperadmin()) {
+            return null;
+        }
+
+        return $this->workspaceAccess->resolveRequestedBranch($user, null)?->id;
     }
 
     private function branchName(?int $branchId): string
@@ -247,7 +267,7 @@ class AiToolRegistry
             return null;
         }
 
-        return $user->canViewAllBranches() ? $branch->id : $user->branch_id;
+        return $this->workspaceAccess->canViewBranch($user, $branch) ? $branch->id : null;
     }
 
     public function extractCustomerSearchQuery(string $message): ?string
@@ -285,7 +305,7 @@ class AiToolRegistry
         $match = null;
         $lastPosition = -1;
 
-        foreach (Branch::where('is_active', true)->get(['id', 'name', 'code']) as $branch) {
+        foreach (Branch::where('is_active', true)->get(['id', 'name', 'code', 'is_active']) as $branch) {
             foreach ([$branch->name, $branch->code] as $needle) {
                 $position = mb_strripos($lower, Str::lower((string) $needle));
                 if ($position !== false && $position >= $lastPosition) {
@@ -431,11 +451,9 @@ class AiToolRegistry
             return ['error' => 'Kata kunci pencarian kosong.'];
         }
 
-        $branches = Branch::query()
-            ->when($branchId, fn (Builder $query) => $query->whereKey($branchId))
-            ->when(! $branchId && ! $user->canViewAllBranches(), fn (Builder $query) => $query->whereKey($user->branch_id))
-            ->where('is_active', true)
-            ->get(['id', 'name']);
+        $branches = $branchId
+            ? Branch::whereKey($branchId)->get(['id', 'name'])
+            : $this->workspaceAccess->accessibleBranches($user);
 
         $pipeline = $branches
             ->flatMap(fn (Branch $branch) => $this->pipelineService->search($branch, $term, 10))
@@ -507,12 +525,10 @@ class AiToolRegistry
     private function branchInfo(array $arguments, User $user): array
     {
         $branchId = $this->allowedBranchId($arguments, $user);
-        $branches = Branch::query()
-            ->when($branchId, fn (Builder $query) => $query->where('id', $branchId))
-            ->when(! $branchId && ! $user->canViewAllBranches(), fn (Builder $query) => $query->where('id', $user->branch_id))
-            ->get(['id', 'name', 'code', 'phone', 'email', 'is_active']);
+        $branches = ($branchId ? Branch::whereKey($branchId)->get() : $this->workspaceAccess->accessibleBranches($user))
+            ->map->only(['id', 'name', 'code', 'phone', 'email', 'is_active']);
 
-        return ['branches' => $branches->toArray()];
+        return ['branches' => $branches->values()->all()];
     }
 
     private function supportedCapabilities(): array
@@ -632,5 +648,19 @@ class AiToolRegistry
             'route_source' => $routeSource,
             'synthesis_enabled' => (bool) config('ai.synthesize_tool_results', false),
         ]);
+    }
+
+    private function branchAccessError(array $arguments, User $user): ?string
+    {
+        if (! filled($arguments['branch_id'] ?? null)) {
+            return null;
+        }
+
+        $branch = Branch::find((int) $arguments['branch_id']);
+        if (! $branch || ! $this->workspaceAccess->canViewBranch($user, $branch)) {
+            return 'Anda tidak memiliki akses ke cabang '.($branch?->name ?? 'tersebut').'.';
+        }
+
+        return null;
     }
 }

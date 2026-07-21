@@ -101,7 +101,12 @@ class ContentItemImport
             $status = in_array($statusRaw, ContentItem::STATUSES[$type], true) ? $statusRaw : ContentItem::STATUSES[$type][0];
             $picNamesArray = $picNames !== '' ? array_map('trim', explode(',', $picNames)) : [];
 
-            $resolvedBranchId = $branchFromFile ?? $branchId ?? $user->branch_id ?? 1;
+            $resolvedBranchId = $branchId ?? $branchFromFile ?? $user->branch_id;
+            if (! $resolvedBranchId) {
+                $errors[] = "Baris {$rowNum}: Cabang tidak dapat ditentukan.";
+
+                continue;
+            }
 
             $data = [
                 'branch_id' => $resolvedBranchId,

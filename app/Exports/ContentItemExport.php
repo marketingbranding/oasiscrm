@@ -72,7 +72,7 @@ class ContentItemExport
         return self::downloadXlsx($writer, $filename);
     }
 
-    public static function generateTemplate(): BinaryFileResponse
+    public static function generateTemplate(array $branchIds = []): BinaryFileResponse
     {
         $spreadsheet = new Spreadsheet;
         $sheet = $spreadsheet->getActiveSheet();
@@ -83,7 +83,7 @@ class ContentItemExport
         $maxRow = 101;
 
         // --- A:Cabang dropdown ---
-        $branches = Branch::where('is_active', true)->forDropdown()->pluck('name')->toArray();
+        $branches = Branch::where('is_active', true)->whereIn('id', $branchIds)->forDropdown()->pluck('name')->toArray();
         self::branchDropdown($sheet, 'A', $maxRow, $branches);
 
         $sheet->setDataValidation('B2:B'.$maxRow, self::listValidation(['task', 'agenda', 'content']));
@@ -94,7 +94,7 @@ class ContentItemExport
         $sheet->setDataValidation('F2:F'.$maxRow, self::listValidation($platforms));
 
         // --- E:Proyek dropdown ---
-        $projects = LeadMaster::where('is_active', true)->orderBy('project_name')->pluck('project_name')->toArray();
+        $projects = LeadMaster::where('is_active', true)->whereIn('branch_id', $branchIds)->orderBy('project_name')->pluck('project_name')->toArray();
         if (! empty($projects)) {
             $sheet->setDataValidation('G2:G'.$maxRow, self::listValidation($projects));
         }

@@ -18,13 +18,13 @@
                 <h3 class="font-['Arial_Black'] font-black text-base mb-1">{{ $branch->name }}</h3>
                 <div class="text-xs font-['Times_New_Roman'] space-y-0.5">
                     <div>Task: <strong>{{ $branch->content_items_count ?? 0 }}</strong></div>
-                    <div>Admin: <strong>{{ $branch->admins_count ?? 0 }}</strong></div>
+                    <div>Anggota: <strong>{{ $branch->members_count ?? 0 }}</strong></div>
                 </div>
             </div>
             <div class="border-t-2 border-black bg-white px-3 py-2">
                 <a href="{{ route('branches.assign', $branch->id) }}"
                    class="text-[#0000ee] underline text-xs font-[Helvetica] font-bold">
-                    Atur Admin →
+                     Atur Anggota →
                 </a>
             </div>
         </div>

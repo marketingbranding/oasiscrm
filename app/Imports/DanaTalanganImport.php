@@ -3,9 +3,7 @@
 namespace App\Imports;
 
 use App\Imports\Concerns\ParsesImport;
-use App\Models\Branch;
 use App\Models\DanaTalangan;
-use PhpOffice\PhpSpreadsheet\IOFactory;
 use Illuminate\Support\Facades\Auth;
 
 class DanaTalanganImport
@@ -26,9 +24,11 @@ class DanaTalanganImport
 
         foreach ($rows as $cells) {
             $rowNum++;
-            if ($rowNum === 1) continue;
+            if ($rowNum === 1) {
+                continue;
+            }
 
-            if (!is_array($cells) || count($cells) < 2) {
+            if (! is_array($cells) || count($cells) < 2) {
                 continue;
             }
 
@@ -68,19 +68,26 @@ class DanaTalanganImport
 
             if (empty($namaKonsumen)) {
                 $errors[] = "Baris {$rowNum}: Nama konsumen kosong.";
+
                 continue;
             }
 
             $tanggal = self::parseDate((string) $tanggalRaw);
             if (empty($tanggal)) {
                 $errors[] = "Baris {$rowNum}: Tanggal tidak valid ('{$tanggalRaw}').";
+
                 continue;
             }
 
             $umur = is_numeric($umurRaw) ? (int) $umurRaw : null;
             $status = in_array(strtolower($statusRaw), ['lunas', 'sanggup', 'tidak_sanggup']) ? strtolower(str_replace(' ', '_', $statusRaw)) : 'sanggup';
 
-            $resolvedBranchId = $branchFromFile ?? $branchId ?? $user->branch_id ?? 1;
+            $resolvedBranchId = $branchId ?? $branchFromFile ?? $user->branch_id;
+            if (! $resolvedBranchId) {
+                $errors[] = "Baris {$rowNum}: Cabang tidak dapat ditentukan.";
+
+                continue;
+            }
 
             $data = [
                 'branch_id' => $resolvedBranchId,

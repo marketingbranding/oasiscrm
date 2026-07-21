@@ -19,6 +19,7 @@ class AiAssistantService
     public function __construct(
         private readonly AiProviderService $provider,
         private readonly AiToolRegistry $tools,
+        private readonly WorkspaceAccessService $workspaceAccess,
     ) {}
 
     public function reply(User $user, string $message, ?AiChatConversation $conversation = null): array
@@ -214,7 +215,7 @@ class AiAssistantService
             };
 
             foreach ($modules as $module) {
-                $action = $this->syncActionForModule($module, $branchId);
+                $action = $this->syncActionForModule($module, $branchId, $user);
                 if ($action && ! collect($actions)->contains(fn ($existing) => ($existing['key'] ?? null) === $action['key'])) {
                     $actions[] = $action;
                 }
@@ -226,17 +227,28 @@ class AiAssistantService
 
     private function syncBranchId(array $toolResult, User $user): ?int
     {
-        if (! $user->canViewAllBranches()) {
-            return $user->branch_id;
+        $branchId = $toolResult['arguments']['branch_id'] ?? $toolResult['result']['branch_id'] ?? null;
+        if (filled($branchId) && $this->workspaceAccess->canViewBranch($user, (int) $branchId)) {
+            return (int) $branchId;
         }
 
-        $branchId = $toolResult['arguments']['branch_id'] ?? $toolResult['result']['branch_id'] ?? null;
-
-        return filled($branchId) ? (int) $branchId : null;
+        return $this->workspaceAccess->primaryBranch($user)?->id;
     }
 
-    private function syncActionForModule(string $module, ?int $branchId): ?array
+    private function syncActionForModule(string $module, ?int $branchId, User $user): ?array
     {
+        if (in_array($module, ['database', 'konsumen_progress'], true)
+            && (! $branchId || ! $this->workspaceAccess->canSyncBranch($user, $branchId))) {
+            return null;
+        }
+
+        if ($module === 'dana_talangan' && ! $user->isSuperadmin() && ! $user->hasRole('pusat')) {
+            $primary = $this->workspaceAccess->primaryBranch($user);
+            if (! $primary || ! $this->workspaceAccess->canSyncBranch($user, $primary)) {
+                return null;
+            }
+        }
+
         $status = match ($module) {
             'database' => $branchId ? $this->latestBranchSync(DatabaseSheetSyncStatus::class, 'database_sheet_sync_statuses', $branchId) : null,
             'konsumen_progress' => $branchId ? $this->latestBranchSync(KonsumenProgressSyncStatus::class, 'konsumen_progress_sync_statuses', $branchId) : null,

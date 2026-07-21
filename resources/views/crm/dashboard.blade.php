@@ -38,7 +38,7 @@
     </div>
 
     {{-- Filter Bar --}}
-    @if(Auth::user()->canViewAllBranches())
+    @if(isset($branches) && $branches->count() > 1)
     <div class="bg-white border-2 border-black p-3 mb-6">
         <form method="GET" action="{{ route('dashboard') }}" class="flex items-center gap-3 flex-wrap filter-bar">
             @if(isset($branches) && $branches->count() > 0)

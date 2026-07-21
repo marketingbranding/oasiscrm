@@ -2,8 +2,8 @@
 
 namespace App\Http\Controllers\Crm\Traits;
 
-use App\Models\Branch;
 use App\Models\LeadMaster;
+use App\Services\WorkspaceAccessService;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Auth;
@@ -12,10 +12,7 @@ trait FilterableBranch
 {
     protected function resolveBranches(): Collection
     {
-        if (Auth::user()->canViewAllBranches()) {
-            return Branch::where('is_active', true)->forDropdown()->get();
-        }
-        return collect();
+        return app(WorkspaceAccessService::class)->accessibleBranches(Auth::user());
     }
 
     protected function resolveBranchProjects(?int $branchId = null): Collection
@@ -23,10 +20,12 @@ trait FilterableBranch
         $user = Auth::user();
         $query = LeadMaster::where('is_active', true);
 
-        if (!$user->canViewAllBranches()) {
-            $query->where('branch_id', $user->branch_id);
-        } elseif ($branchId) {
-            $query->where('branch_id', $branchId);
+        $branch = app(WorkspaceAccessService::class)->resolveRequestedBranch($user, $branchId);
+        if ($branchId && ! $branch) {
+            abort(403);
+        }
+        if ($branch) {
+            $query->where('branch_id', $branch->id);
         }
 
         return $query->orderBy('project_name')->get();
@@ -36,37 +35,37 @@ trait FilterableBranch
     {
         $user = Auth::user();
 
-        if (!$user->canViewAllBranches()) {
-            return $user->branch_id;
-        }
-
         if ($selectedBranchId) {
-            return $selectedBranchId;
+            $branch = app(WorkspaceAccessService::class)->resolveRequestedBranch($user, $selectedBranchId);
+            abort_unless($branch, 403);
+
+            return $branch->id;
         }
 
-        if ($user->hasRole('pusat') && $user->branch_id) {
-            return $user->branch_id;
+        if ($user->isSuperadmin()) {
+            return null;
         }
 
-        return null;
+        return app(WorkspaceAccessService::class)->resolveRequestedBranch($user, null)?->id;
     }
 
     protected function applyBranchScope(Builder $query, ?int $branchId = null, string $field = 'branch_id'): Builder
     {
         $user = Auth::user();
 
-        if (!$user->canViewAllBranches()) {
-            return $query->where($field, $user->branch_id);
-        }
-
         if ($branchId) {
-            return $query->where($field, $branchId);
+            $branch = app(WorkspaceAccessService::class)->resolveRequestedBranch($user, $branchId);
+            abort_unless($branch, 403);
+
+            return $query->where($field, $branch->id);
         }
 
-        if ($user->hasRole('pusat') && $user->branch_id) {
-            return $query->where($field, $user->branch_id);
+        if ($user->isSuperadmin()) {
+            return $query;
         }
 
-        return $query;
+        $branch = app(WorkspaceAccessService::class)->resolveRequestedBranch($user, null);
+
+        return $branch ? $query->where($field, $branch->id) : $query->whereRaw('1 = 0');
     }
 }

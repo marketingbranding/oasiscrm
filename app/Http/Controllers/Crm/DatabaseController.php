@@ -9,6 +9,7 @@ use App\Models\DatabaseSheetSyncStatus;
 use App\Services\DatabaseSheetSyncService;
 use App\Services\DatabaseSheetWriteService;
 use App\Services\GoogleSheetsApiService;
+use App\Services\WorkspaceAccessService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Validation\ValidationException;
@@ -16,22 +17,20 @@ use Throwable;
 
 class DatabaseController extends Controller
 {
+    public function __construct(private readonly WorkspaceAccessService $workspaceAccess) {}
+
     public function index(Request $request, GoogleSheetsApiService $googleSheets)
     {
         $user = Auth::user();
         $selectedBranchId = $request->get('branch_id');
 
-        if ($user->isSuperadmin()) {
-            $branches = Branch::where('is_active', true)->forDropdown()->get();
-            if (! $selectedBranchId && $branches->isNotEmpty()) {
-                $selectedBranchId = $branches->first()->id;
-            }
-        } else {
-            $branches = collect();
-            $selectedBranchId = $user->branch_id;
+        $branches = $this->workspaceAccess->accessibleBranches($user);
+        $selectedBranch = $this->workspaceAccess->resolveRequestedBranch($user, $selectedBranchId);
+        if ($selectedBranchId && ! $selectedBranch) {
+            abort(403);
         }
-
-        $selectedBranch = $selectedBranchId ? Branch::find($selectedBranchId) : null;
+        $selectedBranch ??= $branches->first();
+        $selectedBranchId = $selectedBranch?->id;
         $sheetNames = [];
         $records = [];
         $syncStatus = null;
@@ -98,9 +97,7 @@ class DatabaseController extends Controller
         $branch = Branch::findOrFail($branchId);
 
         $user = Auth::user();
-        if (! $user->isSuperadmin() && $user->branch_id !== $branch->id) {
-            abort(403);
-        }
+        abort_unless($this->workspaceAccess->canViewBranch($user, $branch), 403);
 
         $rows = DatabaseSheetRecord::where('branch_id', $branch->id)
             ->where('sheet_name', $sheetName)
@@ -131,8 +128,11 @@ class DatabaseController extends Controller
     public function sync(Request $request, DatabaseSheetSyncService $syncService)
     {
         $user = Auth::user();
-        $branchId = $user->canViewAllBranches() ? $request->input('branch_id') : $user->branch_id;
-        $branch = $branchId ? Branch::find($branchId) : null;
+        $branch = $this->workspaceAccess->resolveRequestedBranch($user, $request->input('branch_id'));
+
+        if ($request->filled('branch_id') && ! $branch) {
+            abort(403);
+        }
 
         if (! $branch) {
             if ($request->expectsJson()) {
@@ -141,6 +141,7 @@ class DatabaseController extends Controller
 
             return back()->with('error', 'Branch tidak ditemukan.');
         }
+        abort_unless($this->workspaceAccess->canSyncBranch($user, $branch), 403);
 
         $result = $syncService->syncBranch($branch);
         if (! $result['ok']) {
@@ -176,9 +177,7 @@ class DatabaseController extends Controller
         $sheetName = $request->input('sheet_name');
 
         $user = Auth::user();
-        if (! $user->isSuperadmin() && $user->branch_id !== $branch->id) {
-            abort(403);
-        }
+        abort_unless($this->workspaceAccess->canEditBranch($user, $branch), 403);
 
         $input = $request->except(['_token', 'sheet_name', 'branch_id']);
         $template = DatabaseSheetRecord::where('branch_id', $branch->id)
@@ -202,9 +201,7 @@ class DatabaseController extends Controller
         }
 
         $user = Auth::user();
-        if (! $user->isSuperadmin() && $user->branch_id !== $branch->id) {
-            abort(403);
-        }
+        abort_unless($this->workspaceAccess->canEditBranch($user, $branch), 403);
 
         $input = $request->except(['_token', '_method']);
         $this->validateTypedInput($input, $record->column_metadata ?? [], $record->row_data ?? []);
@@ -224,9 +221,7 @@ class DatabaseController extends Controller
         }
 
         $user = Auth::user();
-        if (! $user->isSuperadmin() && $user->branch_id !== $branch->id) {
-            abort(403);
-        }
+        abort_unless($this->workspaceAccess->canEditBranch($user, $branch), 403);
 
         if (! $writeService->softDelete($record, $user->id)) {
             return back()->with('error', 'Gagal menghapus. Data tetap dihapus di database lokal, tapi gagal sync ke Google Sheets: '.$record->last_sync_error);

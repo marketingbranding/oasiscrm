@@ -7,10 +7,11 @@ use App\Models\Branch;
 use App\Models\Kavling;
 use App\Models\LeadMaster;
 use Illuminate\Support\Collection;
-use PhpOffice\PhpSpreadsheet\Spreadsheet;
-use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
 use PhpOffice\PhpSpreadsheet\Cell\Coordinate;
 use PhpOffice\PhpSpreadsheet\Cell\DataValidation;
+use PhpOffice\PhpSpreadsheet\Spreadsheet;
+use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
+use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
 
 class DanaTalanganExport
@@ -51,7 +52,7 @@ class DanaTalanganExport
 
     public static function toBrowser(Collection $records, string $filename): BinaryFileResponse
     {
-        $spreadsheet = new Spreadsheet();
+        $spreadsheet = new Spreadsheet;
         $sheet = $spreadsheet->getActiveSheet();
         $sheet->setTitle('Dana Talangan');
 
@@ -81,12 +82,13 @@ class DanaTalanganExport
         self::addAutoFilter($sheet, $headers, $rowCount);
 
         $writer = new Xlsx($spreadsheet);
+
         return self::downloadXlsx($writer, $filename);
     }
 
-    public static function generateTemplate(): BinaryFileResponse
+    public static function generateTemplate(array $branchIds = []): BinaryFileResponse
     {
-        $spreadsheet = new Spreadsheet();
+        $spreadsheet = new Spreadsheet;
         $sheet = $spreadsheet->getActiveSheet();
 
         $headers = self::templateHeaders();
@@ -97,9 +99,9 @@ class DanaTalanganExport
         // --- Hidden helper sheet for cascading Kav dropdown ---
         $helperSheet = $spreadsheet->createSheet();
         $helperSheet->setTitle('KavLists');
-        $helperSheet->setSheetState(\PhpOffice\PhpSpreadsheet\Worksheet\Worksheet::SHEETSTATE_VERYHIDDEN);
+        $helperSheet->setSheetState(Worksheet::SHEETSTATE_VERYHIDDEN);
 
-        $projects = LeadMaster::where('is_active', true)->orderBy('project_name')->get();
+        $projects = LeadMaster::where('is_active', true)->whereIn('branch_id', $branchIds)->orderBy('project_name')->get();
         $kavlingsByProject = Kavling::with('project')
             ->orderBy('kavling_code')
             ->get()
@@ -108,7 +110,7 @@ class DanaTalanganExport
         $projCol = 1;
         foreach ($projects as $p) {
             $colLetter = Coordinate::stringFromColumnIndex($projCol);
-            $helperSheet->setCellValue($colLetter . '1', $p->project_name);
+            $helperSheet->setCellValue($colLetter.'1', $p->project_name);
 
             $kavs = $kavlingsByProject->get($p->id, collect())
                 ->pluck('kavling_code')
@@ -117,51 +119,52 @@ class DanaTalanganExport
                 ->toArray();
 
             foreach ($kavs as $k => $code) {
-                $helperSheet->setCellValue($colLetter . ($k + 2), $code);
+                $helperSheet->setCellValue($colLetter.($k + 2), $code);
             }
 
             $projCol++;
         }
 
         // --- C:Tanggal date format ---
-        self::dateColumnStyle($sheet, 'C2:C' . $maxRow, date('Y-m-d'));
+        self::dateColumnStyle($sheet, 'C2:C'.$maxRow, date('Y-m-d'));
 
         // --- A:Cabang dropdown ---
-        $branches = Branch::where('is_active', true)->forDropdown()->pluck('name')->toArray();
+        $branches = Branch::where('is_active', true)->whereIn('id', $branchIds)->forDropdown()->pluck('name')->toArray();
         self::branchDropdown($sheet, 'A', $maxRow, $branches);
 
         // --- F:Proyek dropdown (from helper sheet row 1) ---
         if ($projects->count() > 0) {
             $lastProjCol = Coordinate::stringFromColumnIndex($projects->count());
             $sheet->setDataValidation(
-                'F2:F' . $maxRow,
-                self::listValidation("'KavLists'!\$A\$1:\$" . $lastProjCol . "\$1")
+                'F2:F'.$maxRow,
+                self::listValidation("'KavLists'!\$A\$1:\$".$lastProjCol.'$1')
             );
         }
 
         // --- E:Kav interdependent dropdown via OFFSET+MATCH ---
         if ($projects->count() > 0) {
-            $kavValidation = new DataValidation();
+            $kavValidation = new DataValidation;
             $kavValidation->setType(DataValidation::TYPE_LIST);
             $kavValidation->setErrorStyle(DataValidation::STYLE_STOP);
             $kavValidation->setAllowBlank(true);
             $kavValidation->setShowDropDown(false);
             $kavValidation->setFormula1('=OFFSET(KavLists!$A$1,1,MATCH(F2,KavLists!$1:$1,0)-1,500,1)');
-            $sheet->setDataValidation('E2:E' . $maxRow, $kavValidation);
+            $sheet->setDataValidation('E2:E'.$maxRow, $kavValidation);
         }
 
         // --- G:Pinjam Nama dropdown ---
-        $sheet->setDataValidation('G2:G' . $maxRow, self::listValidation(['YA', 'TIDAK']));
+        $sheet->setDataValidation('G2:G'.$maxRow, self::listValidation(['YA', 'TIDAK']));
 
         // --- N:Konfirmasi dropdown ---
-        $sheet->setDataValidation('N2:N' . $maxRow, self::listValidation(['YA', 'TIDAK']));
+        $sheet->setDataValidation('N2:N'.$maxRow, self::listValidation(['YA', 'TIDAK']));
 
         // --- O:Status dropdown ---
-        $sheet->setDataValidation('O2:O' . $maxRow, self::listValidation(['sanggup', 'tidak_sanggup', 'lunas']));
+        $sheet->setDataValidation('O2:O'.$maxRow, self::listValidation(['sanggup', 'tidak_sanggup', 'lunas']));
 
         self::applyStyles($spreadsheet, $headers, $maxRow, self::templateWidths());
 
         $writer = new Xlsx($spreadsheet);
+
         return self::downloadXlsx($writer, 'template-dana-talangan.xlsx');
     }
 }

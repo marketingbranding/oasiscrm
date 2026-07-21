@@ -7,7 +7,7 @@
         <h1 class="font-['Arial_Black'] font-black text-xl uppercase">Konsumen Progress</h1>
     </div>
 
-    @if(Auth::user()->canViewAllBranches() && isset($branches) && $branches->count() > 0)
+    @if(isset($branches) && $branches->count() > 1)
     <div class="bg-white border-2 border-black p-3 mb-6">
         <form method="GET" action="{{ route('konsumen-progress.index') }}" class="flex items-center gap-3 flex-wrap filter-bar">
             <div class="flex items-center gap-3 flex-wrap">

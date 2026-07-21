@@ -6,6 +6,7 @@
     <div class="bg-[#d77a7a] border-2 border-black px-4 py-2 mb-6">
         <h1 class="font-['Arial_Black'] font-black text-xl uppercase">Database</h1>
     </div>
+    <x-crm.page-presence page-key="database" :branch-id="$selectedBranchId" />
 
     @if(isset($branches) && $branches->count() > 1)
     <div class="bg-white border-2 border-black p-3 mb-6">
@@ -81,6 +82,8 @@
         $initialRecordsJson = json_encode(array_map(fn($r) => [
             'id' => $r->id,
             'row_number' => $r->row_number,
+            'oasis_sync_id' => $r->oasis_sync_id,
+            'updated_at' => $r->updated_at?->copy()->utc()->format('Y-m-d H:i:s'),
             'row_data' => $r->row_data,
         ], $initialRows));
         $initialHeadersJson = json_encode($initialHeaders);
@@ -251,6 +254,10 @@
                 </div>
                 <form method="POST" :action="editBaseUrl + '/' + editing.id">
                     @csrf @method('PUT')
+                    <input type="hidden" name="expected_updated_at" :value="editing.updated_at">
+                    <input type="hidden" name="expected_sync_id" :value="editing.oasis_sync_id">
+                    <template x-if="editing"><div x-data="crmPresence(@js(['enabled' => config('presence.enabled', true), 'heartbeatUrl' => route('presence.heartbeat'), 'indexUrl' => route('presence.index'), 'destroyUrl' => route('presence.destroy'), 'heartbeatSeconds' => config('presence.heartbeat_seconds', 25), 'pageKey' => 'database', 'branchId' => null, 'recordType' => 'database_sheet_record', 'recordId' => null, 'mode' => 'editing']))" x-init="updateContext({ branchId: branchId, recordType: 'database_sheet_record', recordId: editing.id, mode: 'editing' })" x-show="others.length" class="mb-3 border-2 border-black bg-[#eef1ff] px-3 py-2 text-xs"><span class="font-bold" x-text="summary + ' sedang mengedit data ini.'"></span><span class="block text-[#8a4b08]">Perubahan terakhir akan diperiksa saat menyimpan.</span></div></template>
+                    @if(session('conflict'))<div class="mb-3 border-2 border-black bg-[#fcc20f] px-3 py-2 text-sm font-bold">{{ session('conflict') }} Muat ulang halaman sebelum menyimpan lagi.</div>@endif
                     <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         <template x-for="h in editableHeaders()" :key="h">
                             <div>

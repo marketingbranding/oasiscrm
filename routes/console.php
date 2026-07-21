@@ -10,3 +10,4 @@ Artisan::command('inspire', function () {
 
 Schedule::command('konsumen-progress:sync')->everyTenMinutes()->withoutOverlapping();
 Schedule::command('dana-talangan:sync')->everyTenMinutes()->withoutOverlapping();
+Schedule::command('oasis:presence-cleanup')->hourly()->withoutOverlapping();

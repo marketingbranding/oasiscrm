@@ -32,6 +32,7 @@
     projects: @js($filterProjects->map(fn($project) => ['name' => $project->project_name, 'branch_id' => (string) $project->branch_id])->values()),
 })">
     <x-crm.page-header color="#b3bd95" title="Work Planner" />
+    <x-crm.page-presence page-key="work-planner" :branch-id="$selectedBranchId" />
 
     <nav class="flex overflow-x-auto border-b-2 border-black mb-4">
         @foreach($tabs as $key => $label)
@@ -228,9 +229,15 @@ function plannerPage(ids, config) {
                         'Accept': 'application/json',
                         'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.content || '',
                     },
-                    body: JSON.stringify({ status: newStatus }),
+                    body: JSON.stringify({ status: newStatus, expected_updated_at: event.item.dataset.updatedAt }),
                 });
+                if (response.status === 409) {
+                    const conflict = await response.json();
+                    throw new Error(conflict.message + ' Muat ulang halaman sebelum mencoba lagi.');
+                }
                 if (!response.ok) throw new Error(await response.text());
+                const data = await response.json();
+                event.item.dataset.updatedAt = data.updated_at;
             } catch (error) {
                 const reference = event.from.children[event.oldIndex] || null;
                 event.from.insertBefore(event.item, reference);

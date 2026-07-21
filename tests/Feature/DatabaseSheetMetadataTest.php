@@ -133,6 +133,7 @@ class DatabaseSheetMetadataTest extends TestCase
 
         $response = $this->actingAs($user)->put(route('database.records.update', $record), [
             'status' => 'Pilihan Tidak Sah',
+            'expected_updated_at' => $record->updated_at->copy()->utc()->format('Y-m-d H:i:s'),
         ]);
 
         $response->assertSessionHasErrors('status');

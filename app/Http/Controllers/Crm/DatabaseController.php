@@ -9,6 +9,7 @@ use App\Models\DatabaseSheetSyncStatus;
 use App\Services\DatabaseSheetSyncService;
 use App\Services\DatabaseSheetWriteService;
 use App\Services\GoogleSheetsApiService;
+use App\Services\OptimisticLockService;
 use App\Services\WorkspaceAccessService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -17,7 +18,10 @@ use Throwable;
 
 class DatabaseController extends Controller
 {
-    public function __construct(private readonly WorkspaceAccessService $workspaceAccess) {}
+    public function __construct(
+        private readonly WorkspaceAccessService $workspaceAccess,
+        private readonly OptimisticLockService $optimisticLock,
+    ) {}
 
     public function index(Request $request, GoogleSheetsApiService $googleSheets)
     {
@@ -103,7 +107,7 @@ class DatabaseController extends Controller
             ->where('sheet_name', $sheetName)
             ->whereNull('oasis_deleted_at')
             ->orderBy('row_number')
-            ->get(['id', 'row_number', 'row_data', 'headers', 'formula_columns', 'column_metadata']);
+            ->get(['id', 'row_number', 'oasis_sync_id', 'row_data', 'headers', 'formula_columns', 'column_metadata', 'updated_at']);
 
         $sample = $rows->first();
         $headers = $sample ? $sample->headers : [];
@@ -113,6 +117,8 @@ class DatabaseController extends Controller
         $records = $rows->map(fn ($r) => [
             'id' => $r->id,
             'row_number' => $r->row_number,
+            'oasis_sync_id' => $r->oasis_sync_id,
+            'updated_at' => $this->optimisticLock->token($r),
             'row_data' => $r->row_data,
         ]);
 
@@ -203,7 +209,18 @@ class DatabaseController extends Controller
         $user = Auth::user();
         abort_unless($this->workspaceAccess->canEditBranch($user, $branch), 403);
 
-        $input = $request->except(['_token', '_method']);
+        $request->validate([
+            'expected_updated_at' => ['required', 'string', 'max:40'],
+            'expected_sync_id' => ['nullable', 'string', 'max:255'],
+        ]);
+        $identityMatches = blank($record->oasis_sync_id)
+            || hash_equals((string) $record->oasis_sync_id, (string) $request->input('expected_sync_id'));
+        if (! $identityMatches
+            || ! $this->optimisticLock->matches($record, $request->input('expected_updated_at'))) {
+            return $this->optimisticLock->conflict($request, $record, $request->input('expected_updated_at'));
+        }
+
+        $input = $request->except(['_token', '_method', 'expected_updated_at', 'expected_sync_id']);
         $this->validateTypedInput($input, $record->column_metadata ?? [], $record->row_data ?? []);
 
         if (! $writeService->updateRecord($record, $input)) {

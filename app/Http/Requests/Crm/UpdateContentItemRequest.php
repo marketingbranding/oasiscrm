@@ -3,6 +3,7 @@
 namespace App\Http\Requests\Crm;
 
 use App\Models\ContentItem;
+use App\Services\WorkspaceAccessService;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Validation\Rule;
@@ -13,11 +14,8 @@ class UpdateContentItemRequest extends FormRequest
     {
         $user = Auth::user();
         $contentItem = $this->route('content_calendar');
-        if (! $user->canViewAllBranches() && $contentItem->branch_id !== $user->branch_id) {
-            return false;
-        }
 
-        return true;
+        return app(WorkspaceAccessService::class)->canEditBranch($user, $contentItem->branch_id);
     }
 
     public function rules(): array
@@ -27,6 +25,7 @@ class UpdateContentItemRequest extends FormRequest
 
         return [
             'item_type' => ['required', Rule::in(ContentItem::TYPES)],
+            'expected_updated_at' => 'required|string|max:40',
             'visibility' => ['required', Rule::in(['personal', 'team'])],
             'title' => 'required|string|max:255',
             'task_detail' => 'nullable|string',

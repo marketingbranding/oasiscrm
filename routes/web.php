@@ -1,8 +1,8 @@
 <?php
 
 use App\Http\Controllers\Auth\PasswordChangeController;
-use App\Http\Controllers\Crm\AiChatController;
 use App\Http\Controllers\Crm\AdminUserController;
+use App\Http\Controllers\Crm\AiChatController;
 use App\Http\Controllers\Crm\BranchController;
 use App\Http\Controllers\Crm\BugReportController;
 use App\Http\Controllers\Crm\ChangelogController;
@@ -14,6 +14,7 @@ use App\Http\Controllers\Crm\FeedbackReportController;
 use App\Http\Controllers\Crm\KavlingController;
 use App\Http\Controllers\Crm\KonsumenProgressController;
 use App\Http\Controllers\Crm\LeadSourceController;
+use App\Http\Controllers\Crm\PresenceController;
 use App\Http\Controllers\Crm\ProjectController;
 use App\Http\Controllers\ProfileController;
 use App\Models\ContentItem;
@@ -35,6 +36,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
 Route::middleware(['auth', 'verified', 'password.changed'])->group(function () {
     Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
+
+    Route::post('/presence/heartbeat', [PresenceController::class, 'heartbeat'])->middleware('throttle:180,1')->name('presence.heartbeat');
+    Route::get('/presence', [PresenceController::class, 'index'])->middleware('throttle:240,1')->name('presence.index');
+    Route::delete('/presence', [PresenceController::class, 'destroy'])->middleware('throttle:180,1')->name('presence.destroy');
 
     Route::get('/ai-chat', [AiChatController::class, 'index'])->name('ai-chat.index');
     Route::get('/ai-chat/{conversation}', [AiChatController::class, 'show'])->name('ai-chat.show');

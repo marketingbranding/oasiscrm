@@ -14,6 +14,7 @@ use App\Imports\ContentItemImport;
 use App\Models\ContentItem;
 use App\Models\LeadMaster;
 use App\Models\User;
+use App\Services\OptimisticLockService;
 use App\Services\WorkspaceAccessService;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Builder;
@@ -42,7 +43,10 @@ class ContentCalendarController extends Controller
 
     protected string $importSuccessRoute = 'content-calendar.index';
 
-    public function __construct(private readonly WorkspaceAccessService $workspaceAccess) {}
+    public function __construct(
+        private readonly WorkspaceAccessService $workspaceAccess,
+        private readonly OptimisticLockService $optimisticLock,
+    ) {}
 
     public function index(Request $request)
     {
@@ -177,6 +181,10 @@ class ContentCalendarController extends Controller
     {
         $this->authorize('update', $contentItem);
         $data = $request->validated();
+        if (! $this->optimisticLock->matches($contentItem, $data['expected_updated_at'] ?? null)) {
+            return $this->optimisticLock->conflict($request, $contentItem, $data['expected_updated_at'] ?? null);
+        }
+        unset($data['expected_updated_at']);
         $assigneeIds = Arr::pull($data, 'assigned_user_ids', []);
         if (($data['item_type'] ?? null) === 'content') {
             $assigneeIds = [];
@@ -187,6 +195,7 @@ class ContentCalendarController extends Controller
         $this->validateAssignees($assigneeIds, (int) $data['branch_id']);
         $contentItem->update($this->normalizePlannerData($data, $contentItem));
         $contentItem->assignees()->sync($assigneeIds);
+        $contentItem->touch();
 
         return redirect()->route('content-calendar.index', ['view' => $this->returnView($request)])
             ->with('success', 'Item Work Planner berhasil diperbarui.');
@@ -218,6 +227,10 @@ class ContentCalendarController extends Controller
         $this->authorize('update', $contentItem);
 
         $status = (string) $request->input('status');
+        $request->validate(['expected_updated_at' => ['required', 'string', 'max:40']]);
+        if (! $this->optimisticLock->matches($contentItem, $request->input('expected_updated_at'))) {
+            return $this->optimisticLock->conflict($request, $contentItem, $request->input('expected_updated_at'));
+        }
         if (! in_array($status, ContentItem::STATUSES[$contentItem->item_type] ?? [], true)) {
             return response()->json([
                 'message' => 'Status tidak valid untuk tipe item ini.',
@@ -231,6 +244,7 @@ class ContentCalendarController extends Controller
             'success' => true,
             'status' => $contentItem->status,
             'completed_at' => $contentItem->completed_at?->toIso8601String(),
+            'updated_at' => $this->optimisticLock->token($contentItem->fresh()),
         ]);
     }
 

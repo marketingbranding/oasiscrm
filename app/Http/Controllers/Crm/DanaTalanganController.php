@@ -19,6 +19,7 @@ use App\Models\Kavling;
 use App\Models\LeadMaster;
 use App\Services\DanaTalanganGoogleService;
 use App\Services\DanaTalanganOptionService;
+use App\Services\OptimisticLockService;
 use App\Services\WorkspaceAccessService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
@@ -60,7 +61,10 @@ class DanaTalanganController extends Controller
 
     protected array $bulkRedirectParams = ['branch_id', 'project_name', 'status', 'search', 'filter_mode', 'date_from', 'date_to', 'month_from', 'month_to'];
 
-    public function __construct(private readonly WorkspaceAccessService $workspaceAccess) {}
+    public function __construct(
+        private readonly WorkspaceAccessService $workspaceAccess,
+        private readonly OptimisticLockService $optimisticLock,
+    ) {}
 
     public function index(Request $request)
     {
@@ -206,6 +210,10 @@ class DanaTalanganController extends Controller
     {
         $user = Auth::user();
         $data = $request->validated();
+        if (! $this->optimisticLock->matches($danaTalangan, $data['expected_updated_at'] ?? null)) {
+            return $this->optimisticLock->conflict($request, $danaTalangan, $data['expected_updated_at'] ?? null);
+        }
+        unset($data['expected_updated_at']);
         $data['branch_id'] ??= $danaTalangan->branch_id;
 
         $projectBranchId = $googleService->branchIdForProject($data['project_name']);

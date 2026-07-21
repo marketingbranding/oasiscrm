@@ -21,6 +21,7 @@
     })" class="space-y-5">
     @csrf
     @if($editing) @method('PUT') @endif
+    @if($editing)<input type="hidden" name="expected_updated_at" value="{{ $item->updated_at?->copy()->utc()->format('Y-m-d H:i:s') }}">@endif
     <input type="hidden" name="return_view" value="{{ request('view', 'today') }}">
 
     <div>
@@ -139,6 +140,7 @@
 
     <div><label class="font-[Helvetica] font-bold text-xs uppercase block mb-1" x-text="type === 'content' ? 'Catatan' : 'Catatan / Progress'"></label><textarea name="notes" rows="4" class="w-full border-2 border-black px-3 py-2 text-sm font-['Times_New_Roman']">{{ old('notes', $item?->notes) }}</textarea></div>
 
+    @if(session('conflict'))<div class="border-2 border-black bg-[#fcc20f] px-3 py-2 text-sm font-bold">{{ session('conflict') }} <a href="{{ route('content-calendar.edit', $item) }}" class="underline">Muat Ulang Data</a></div>@endif
     @if($errors->any())<div class="border-2 border-black bg-[#d77a7a] px-3 py-2 text-sm">{{ $errors->first() }}</div>@endif
     <div class="flex gap-3"><button class="bg-black text-white border-2 border-black px-6 py-2 text-sm font-bold">{{ $editing ? 'Simpan Perubahan' : 'Simpan Item' }}</button><a href="{{ route('content-calendar.index', ['view' => request('view', 'today')]) }}" class="bg-white border-2 border-black px-6 py-2 text-sm font-bold">Batal</a></div>
 </form>

@@ -86,6 +86,8 @@
     </div>
     @endif
 
+    <x-crm.page-presence page-key="dashboard" :branch-id="$selectedBranchId" />
+
     {{-- === LEADS KPI === --}}
     @if(isset($leadStats))
     <div class="mb-4">

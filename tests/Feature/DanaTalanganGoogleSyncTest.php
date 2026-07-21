@@ -203,6 +203,7 @@ class DanaTalanganGoogleSyncTest extends TestCase
             'status' => 'sanggup',
             'pinjam_nama' => '0',
             'konfirmasi_keuangan' => '0',
+            'expected_updated_at' => $record->updated_at->copy()->utc()->format('Y-m-d H:i:s'),
         ])->assertRedirect(route('dana-talangan.index'));
 
         $this->assertDatabaseHas('dana_talangans', ['id' => $record->id, 'nama_konsumen' => 'Konsumen Diperbarui']);

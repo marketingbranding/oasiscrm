@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests\Crm;
 
+use App\Services\WorkspaceAccessService;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Support\Facades\Auth;
 
@@ -11,11 +12,8 @@ class UpdateDanaTalanganRequest extends FormRequest
     {
         $user = Auth::user();
         $danaTalangan = $this->route('dana_talangan');
-        if (! $user->canViewAllBranches() && $danaTalangan->branch_id !== $user->branch_id) {
-            return false;
-        }
 
-        return true;
+        return app(WorkspaceAccessService::class)->canEditBranch($user, $danaTalangan->branch_id);
     }
 
     public function rules(): array
@@ -26,7 +24,8 @@ class UpdateDanaTalanganRequest extends FormRequest
             'tanggal' => 'required|date',
             'nama_konsumen' => 'required|string|max:255',
             'kav' => 'nullable|string|max:100',
-            'branch_id' => $user->canViewAllBranches() ? 'required|exists:branches,id' : 'exclude',
+            'branch_id' => 'nullable|exists:branches,id',
+            'expected_updated_at' => 'required|string|max:40',
             'project_name' => 'required|string|max:255',
             'pinjam_nama' => 'nullable|boolean',
             'pekerjaan' => 'nullable|string|max:255',

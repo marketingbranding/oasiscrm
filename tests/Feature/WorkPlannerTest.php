@@ -244,6 +244,7 @@ class WorkPlannerTest extends TestCase
 
         $this->actingAs($user)->patchJson(route('content-calendar.update-status', $item), [
             'status' => 'completed',
+            'expected_updated_at' => $item->updated_at->copy()->utc()->format('Y-m-d H:i:s'),
         ])->assertOk()->assertJsonPath('status', 'completed');
 
         $item->refresh();
@@ -258,6 +259,7 @@ class WorkPlannerTest extends TestCase
 
         $this->actingAs($user)->patchJson(route('content-calendar.update-status', $item), [
             'status' => 'uploaded',
+            'expected_updated_at' => $item->updated_at->copy()->utc()->format('Y-m-d H:i:s'),
         ])->assertUnprocessable();
     }
 

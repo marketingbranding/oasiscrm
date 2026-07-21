@@ -6,6 +6,7 @@
     <div class="bg-[#5d8e8e] border-2 border-black px-4 py-2 mb-6">
         <h1 class="font-['Arial_Black'] font-black text-xl uppercase">Konsumen Progress</h1>
     </div>
+    <x-crm.page-presence page-key="konsumen-progress" :branch-id="$selectedBranchId" />
 
     @if(isset($branches) && $branches->count() > 1)
     <div class="bg-white border-2 border-black p-3 mb-6">

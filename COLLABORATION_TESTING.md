@@ -105,4 +105,4 @@ Screenshot or evidence reference:
 Notes:
 Optimistic locking berhasil pada pengujian dua user.
 Reviewer/sign-off:
-[nama penanggung jawab]
+Faizal

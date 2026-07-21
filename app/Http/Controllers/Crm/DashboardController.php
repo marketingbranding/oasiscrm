@@ -52,9 +52,11 @@ class DashboardController extends Controller
         $danaStats = $this->getDanaTalanganStats($selectedBranchId, $selectedProject);
         $actionQueue = $this->getActionQueue($user, $selectedBranchId, $selectedProject);
         $syncHealth = $this->getSyncHealth($selectedBranchId);
+        $dashboardSyncStatus = $selectedBranchId ? DatabaseSheetSyncStatus::where('branch_id', $selectedBranchId)->first() : null;
+        $canSyncDatabase = $branch && $this->workspaceAccess->canSyncBranch($user, $branch);
         $konsumenProgress = $this->getKonsumenProgress($selectedBranchId);
 
-        return view('crm.dashboard', compact('branches', 'branch', 'selectedBranchId', 'projects', 'selectedProject', 'recentActivity', 'leadStats', 'danaStats', 'actionQueue', 'syncHealth', 'konsumenProgress'));
+        return view('crm.dashboard', compact('branches', 'branch', 'selectedBranchId', 'projects', 'selectedProject', 'recentActivity', 'leadStats', 'danaStats', 'actionQueue', 'syncHealth', 'konsumenProgress', 'dashboardSyncStatus', 'canSyncDatabase'));
     }
 
     private function getRecentActivity($user, $branchId = null, $projectName = null)
@@ -252,9 +254,8 @@ class DashboardController extends Controller
             return ['status' => 'never', 'message' => 'Belum pernah sync', 'isStale' => true];
         }
 
-        $isStale = $syncStatus->finished_at
-            ? $syncStatus->finished_at->lt(now()->subMinutes(30))
-            : true;
+        $isStale = $syncStatus->status !== 'success' || ! $syncStatus->finished_at
+            || $syncStatus->finished_at->lt(now()->subMinutes((int) config('services.google_sheets.cache_stale_minutes', 30)));
 
         return [
             'status' => $syncStatus->status,

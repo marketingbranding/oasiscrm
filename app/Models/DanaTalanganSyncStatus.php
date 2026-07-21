@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class DanaTalanganSyncStatus extends Model
 {
@@ -13,6 +14,9 @@ class DanaTalanganSyncStatus extends Model
         'summary',
         'started_at',
         'finished_at',
+        'initiated_by',
+        'last_successful_at',
+        'duration_ms',
     ];
 
     protected function casts(): array
@@ -21,6 +25,12 @@ class DanaTalanganSyncStatus extends Model
             'summary' => 'array',
             'started_at' => 'datetime',
             'finished_at' => 'datetime',
+            'last_successful_at' => 'datetime',
         ];
+    }
+
+    public function initiator(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'initiated_by');
     }
 }

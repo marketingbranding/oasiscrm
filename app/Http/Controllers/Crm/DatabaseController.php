@@ -12,6 +12,7 @@ use App\Services\DatabaseSheetWriteService;
 use App\Services\GoogleSheetsApiService;
 use App\Services\OptimisticLockService;
 use App\Services\PresenceService;
+use App\Services\SyncResponseService;
 use App\Services\WorkspaceAccessService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -26,6 +27,7 @@ class DatabaseController extends Controller
         private readonly OptimisticLockService $optimisticLock,
         private readonly CollaborationNotificationService $notifications,
         private readonly PresenceService $presence,
+        private readonly SyncResponseService $syncResponses,
     ) {}
 
     public function index(Request $request, GoogleSheetsApiService $googleSheets)
@@ -47,9 +49,8 @@ class DatabaseController extends Controller
 
         if ($selectedBranch && $selectedBranch->sheet_id) {
             $syncStatus = DatabaseSheetSyncStatus::where('branch_id', $selectedBranch->id)->first();
-            $isStale = $syncStatus?->finished_at
-                ? $syncStatus->finished_at->lt(now()->subMinutes((int) config('services.google_sheets.cache_stale_minutes', 30)))
-                : true;
+            $isStale = $syncStatus?->status !== 'success' || ! $syncStatus?->finished_at
+                || $syncStatus->finished_at->lt(now()->subMinutes((int) config('services.google_sheets.cache_stale_minutes', 30)));
 
             $recordRows = DatabaseSheetRecord::where('branch_id', $selectedBranch->id)
                 ->whereNull('oasis_deleted_at')
@@ -98,7 +99,9 @@ class DatabaseController extends Controller
         $requestSheet = $request->get('sheet');
         $requestAdd = $request->boolean('add');
 
-        return view('crm.database.index', compact('branches', 'selectedBranch', 'selectedBranchId', 'sheetNames', 'records', 'syncStatus', 'isStale', 'requestSheet', 'requestAdd'));
+        $canSync = $selectedBranch && $this->workspaceAccess->canSyncBranch($user, $selectedBranch);
+
+        return view('crm.database.index', compact('branches', 'selectedBranch', 'selectedBranchId', 'sheetNames', 'records', 'syncStatus', 'isStale', 'requestSheet', 'requestAdd', 'canSync'));
     }
 
     public function sheetData(Request $request, $branchId, $sheetName)
@@ -155,39 +158,35 @@ class DatabaseController extends Controller
         abort_unless($this->workspaceAccess->canSyncBranch($user, $branch), 403);
 
         try {
-            $result = app(DatabaseSheetSyncService::class)->syncBranch($branch);
+            $result = app(DatabaseSheetSyncService::class)->syncBranch($branch, $user->id);
         } catch (Throwable $exception) {
             report($exception);
             $result = ['ok' => false, 'message' => 'Layanan sinkronisasi tidak dapat dijalankan.', 'summary' => []];
         }
-        $this->notifications->syncResult(
-            $user,
-            'Database',
-            $branch->name,
-            $result,
-            route('database.index', ['branch_id' => $branch->id]),
-            array_sum($result['summary'] ?? []),
-        );
-        if (! $result['ok']) {
-            if ($request->expectsJson()) {
-                return response()->json(['ok' => false, 'message' => 'Sync gagal: '.$result['message'], 'summary' => $result['summary'] ?? []], 422);
-            }
-
-            return back()->with('error', 'Sync gagal: '.$result['message']);
+        $status = DatabaseSheetSyncStatus::with('initiator')->where('branch_id', $branch->id)->first();
+        $payload = $this->syncResponses->make('database', ['type' => 'branch', 'id' => $branch->id, 'name' => $branch->name], $status, $result);
+        $payload['status_url'] = route('database.sync-status', ['branch_id' => $branch->id]);
+        if (($result['code'] ?? null) !== 'sync_already_running') {
+            $this->notifications->syncResult($user, 'Database', $branch->name, $result, route('database.index', ['branch_id' => $branch->id]), array_sum($result['summary'] ?? []));
         }
-
-        $totalRows = array_sum($result['summary']);
 
         if ($request->expectsJson()) {
-            return response()->json([
-                'ok' => true,
-                'message' => 'Sync selesai: '.count($result['summary']).' sheets, '.$totalRows.' rows.',
-                'summary' => $result['summary'],
-                'finished_at' => now()->toIso8601String(),
-            ]);
+            return response()->json($payload, ($result['code'] ?? null) === 'sync_already_running' ? 409 : ($payload['status'] === 'failed' ? 422 : 200));
         }
 
-        return back()->with('success', 'Sync selesai: '.count($result['summary']).' sheets, '.$totalRows.' rows.');
+        return back()->with($payload['status'] === 'success' ? 'success' : 'error', $payload['message']);
+    }
+
+    public function syncStatus(Request $request)
+    {
+        $user = $request->user();
+        $branch = $this->workspaceAccess->resolveRequestedBranch($user, $request->query('branch_id'));
+        abort_unless($branch && $this->workspaceAccess->canSyncBranch($user, $branch), 403);
+        $status = DatabaseSheetSyncStatus::with('initiator')->where('branch_id', $branch->id)->first();
+        $payload = $this->syncResponses->make('database', ['type' => 'branch', 'id' => $branch->id, 'name' => $branch->name], $status);
+        $payload['status_url'] = route('database.sync-status', ['branch_id' => $branch->id]);
+
+        return response()->json($payload);
     }
 
     public function store(Request $request, DatabaseSheetWriteService $writeService)

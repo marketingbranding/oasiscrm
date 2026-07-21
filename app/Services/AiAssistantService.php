@@ -243,10 +243,7 @@ class AiAssistantService
         }
 
         if ($module === 'dana_talangan' && ! $user->isSuperadmin() && ! $user->hasRole('pusat')) {
-            $primary = $this->workspaceAccess->primaryBranch($user);
-            if (! $primary || ! $this->workspaceAccess->canSyncBranch($user, $primary)) {
-                return null;
-            }
+            return null;
         }
 
         $status = match ($module) {

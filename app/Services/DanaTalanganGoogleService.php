@@ -14,6 +14,8 @@ use Throwable;
 
 class DanaTalanganGoogleService
 {
+    private SyncLockService $locks;
+
     public const VISIBLE_HEADERS = [
         'No',
         'Tanggal',
@@ -33,20 +35,35 @@ class DanaTalanganGoogleService
 
     public const META_HEADERS = ['oasis_sync_id', 'oasis_deleted_at', 'oasis_deleted_by'];
 
-    public function __construct(private GoogleSheetsApiService $googleSheets) {}
+    public function __construct(private GoogleSheetsApiService $googleSheets, ?SyncLockService $locks = null)
+    {
+        $this->locks = $locks ?? app(SyncLockService::class);
+    }
 
     public function sync(?int $actorId = null, bool $dryRun = false): array
     {
+        $scope = config('services.google_sheets.dana_talangan_spreadsheet_id') ?: 'global';
+
+        return $this->locks->run('dana-talangan:'.$scope, fn () => $this->performSync($actorId, $dryRun));
+    }
+
+    private function performSync(?int $actorId, bool $dryRun): array
+    {
+        $started = now();
         $spreadsheetId = $this->spreadsheetId();
         $status = $dryRun ? null : DanaTalanganSyncStatus::updateOrCreate(
             ['spreadsheet_id' => $spreadsheetId],
-            ['status' => 'running', 'message' => null, 'started_at' => now(), 'finished_at' => null]
+            [
+                'status' => 'running', 'message' => null, 'summary' => null, 'started_at' => $started,
+                'finished_at' => null, 'duration_ms' => null, 'initiated_by' => $actorId,
+            ]
         );
         $summary = [
             'sheet' => $this->sheetName(),
             'matched' => 0,
             'imported' => 0,
             'updated' => 0,
+            'unchanged' => 0,
             'pushed' => 0,
             'push_failed' => 0,
             'deleted' => 0,
@@ -105,6 +122,9 @@ class DanaTalanganGoogleService
 
                 $resolved = $this->rowToData($cells, $historyProjects, $projectResolver, $actorId);
                 if (! $resolved) {
+                    if ($syncId !== '') {
+                        $activeIds[$syncId] = true;
+                    }
                     $summary['warnings'][] = "{$sheetName} baris {$rowNumber}: tanggal, Proyek, atau Cabang belum dapat dipetakan.";
 
                     continue;
@@ -171,6 +191,8 @@ class DanaTalanganGoogleService
                     if ($record->exists && filled($record->source_hash)
                         && hash_equals((string) $record->source_hash, $sourceHash)
                         && hash_equals((string) $localHash, $sourceHash)) {
+                        $summary['updated']--;
+                        $summary['unchanged']++;
                         DB::table('dana_talangans')->where('id', $record->id)->update($syncMetadata);
                         $record->refresh();
                     } else {
@@ -232,6 +254,8 @@ class DanaTalanganGoogleService
                     'message' => empty($summary['warnings']) ? null : implode("\n", $summary['warnings']),
                     'summary' => $summary,
                     'finished_at' => now(),
+                    'last_successful_at' => $ok ? now() : $status->last_successful_at,
+                    'duration_ms' => $started->diffInMilliseconds(now()),
                 ]);
             }
 
@@ -244,7 +268,10 @@ class DanaTalanganGoogleService
             ];
         } catch (Throwable $e) {
             if ($status) {
-                $status->update(['status' => 'failed', 'message' => $e->getMessage(), 'finished_at' => now()]);
+                $status->update([
+                    'status' => 'failed', 'message' => $e->getMessage(), 'finished_at' => now(),
+                    'duration_ms' => $started->diffInMilliseconds(now()),
+                ]);
             }
 
             return ['ok' => false, 'dry_run' => $dryRun, 'message' => $e->getMessage(), 'summary' => $summary];

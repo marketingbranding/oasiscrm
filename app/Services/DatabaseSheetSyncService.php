@@ -13,13 +13,27 @@ class DatabaseSheetSyncService
 {
     public const META_COLUMNS = ['oasis_sync_id', 'oasis_deleted_at', 'oasis_deleted_by'];
 
-    public function __construct(private GoogleSheetsApiService $googleSheets) {}
+    private SyncLockService $locks;
 
-    public function syncBranch(Branch $branch): array
+    public function __construct(private GoogleSheetsApiService $googleSheets, ?SyncLockService $locks = null)
     {
+        $this->locks = $locks ?? app(SyncLockService::class);
+    }
+
+    public function syncBranch(Branch $branch, ?int $initiatedBy = null): array
+    {
+        return $this->locks->run('database:branch:'.$branch->id, fn () => $this->performSync($branch, $initiatedBy));
+    }
+
+    private function performSync(Branch $branch, ?int $initiatedBy): array
+    {
+        $started = now();
         $status = DatabaseSheetSyncStatus::updateOrCreate(
             ['branch_id' => $branch->id],
-            ['status' => 'running', 'message' => null, 'started_at' => now()]
+            [
+                'status' => 'running', 'message' => null, 'summary' => null, 'started_at' => $started,
+                'finished_at' => null, 'duration_ms' => null, 'initiated_by' => $initiatedBy,
+            ]
         );
 
         if (! $branch->sheet_id) {
@@ -31,6 +45,11 @@ class DatabaseSheetSyncService
             $ranges = array_map(fn ($sheet) => $this->googleSheets->quoteSheetName($sheet).'!A:ZZ', $sheetNames);
             $valuesBySheet = $this->googleSheets->batchGetRaw($branch->sheet_id, $ranges, 'FORMATTED_VALUE');
             $formulasBySheet = $this->googleSheets->batchGetRaw($branch->sheet_id, $ranges, 'FORMULA');
+            foreach ($sheetNames as $sheetName) {
+                if (! array_key_exists($sheetName, $valuesBySheet) || ! array_key_exists($sheetName, $formulasBySheet)) {
+                    throw new \RuntimeException('Respons Google Sheets tidak lengkap. Cache lokal tidak diubah.');
+                }
+            }
             $metadataBySheet = $this->googleSheets->columnMetadata($branch->sheet_id, $sheetNames);
             $syncedAt = now();
             $summary = [];
@@ -66,6 +85,8 @@ class DatabaseSheetSyncService
                 'message' => null,
                 'summary' => $summary,
                 'finished_at' => $syncedAt,
+                'last_successful_at' => $syncedAt,
+                'duration_ms' => $started->diffInMilliseconds($syncedAt),
             ]);
 
             return ['ok' => true, 'branch' => $branch->name, 'message' => 'OK', 'summary' => $summary];
@@ -84,6 +105,7 @@ class DatabaseSheetSyncService
             'status' => 'failed',
             'message' => $truncated,
             'finished_at' => now(),
+            'duration_ms' => $status->started_at?->diffInMilliseconds(now()),
         ]);
 
         return ['ok' => false, 'branch' => $branch->name, 'message' => $truncated, 'summary' => []];

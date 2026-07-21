@@ -22,6 +22,7 @@ use App\Services\DanaTalanganGoogleService;
 use App\Services\DanaTalanganOptionService;
 use App\Services\OptimisticLockService;
 use App\Services\PresenceService;
+use App\Services\SyncResponseService;
 use App\Services\WorkspaceAccessService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
@@ -70,6 +71,7 @@ class DanaTalanganController extends Controller
         private readonly OptimisticLockService $optimisticLock,
         private readonly CollaborationNotificationService $notifications,
         private readonly PresenceService $presence,
+        private readonly SyncResponseService $syncResponses,
     ) {}
 
     public function index(Request $request)
@@ -147,8 +149,9 @@ class DanaTalanganController extends Controller
         }
 
         $syncStatus = DanaTalanganSyncStatus::where('spreadsheet_id', config('services.google_sheets.dana_talangan_spreadsheet_id'))->first();
+        $canSync = $user->isSuperadmin() || $user->hasRole('pusat');
 
-        return view('crm.dana-talangan.index', compact('records', 'branches', 'projects', 'formProjects', 'projectOptions', 'selectedBranchId', 'selectedProject', 'selectedStatus', 'sortField', 'sortDir', 'perPage', 'syncStatus', 'search', 'trackingSummary', 'filterMode', 'dateFrom', 'dateTo', 'monthFrom', 'monthTo'));
+        return view('crm.dana-talangan.index', compact('records', 'branches', 'projects', 'formProjects', 'projectOptions', 'selectedBranchId', 'selectedProject', 'selectedStatus', 'sortField', 'sortDir', 'perPage', 'syncStatus', 'search', 'trackingSummary', 'filterMode', 'dateFrom', 'dateTo', 'monthFrom', 'monthTo', 'canSync'));
     }
 
     public function create()
@@ -344,13 +347,21 @@ class DanaTalanganController extends Controller
             report($exception);
             $result = ['ok' => false, 'message' => 'Layanan sinkronisasi global tidak dapat dijalankan.', 'summary' => []];
         }
-        $this->notifications->syncResult($user, 'Dana Talangan', 'Global', $result, route('dana-talangan.index'));
+        $status = DanaTalanganSyncStatus::with('initiator')->where('spreadsheet_id', config('services.google_sheets.dana_talangan_spreadsheet_id'))->first();
+        $payload = $this->syncResponses->make('dana-talangan', ['type' => 'global', 'id' => null, 'name' => 'Global'], $status, $result);
+        $payload['status_url'] = route('dana-talangan.sync-status');
+        if (($result['code'] ?? null) !== 'sync_already_running') {
+            $this->notifications->syncResult($user, 'Dana Talangan', 'Global', $result, route('dana-talangan.index'));
+            if (! ($result['ok'] ?? false)) {
+                $this->notifications->criticalGlobalSyncFailure($user, 'Dana Talangan', route('dana-talangan.index'));
+            }
+        }
         if (! $result['ok']) {
             if ($request->expectsJson()) {
-                return response()->json(['ok' => false, 'message' => 'Sync Dana Talangan gagal: '.$result['message'], 'summary' => $result['summary'] ?? []], 422);
+                return response()->json($payload, ($result['code'] ?? null) === 'sync_already_running' ? 409 : 422);
             }
 
-            return back()->with('error', 'Sync Dana Talangan gagal: '.$result['message']);
+            return back()->with('error', $payload['message']);
         }
 
         $summary = $result['summary'];
@@ -358,15 +369,21 @@ class DanaTalanganController extends Controller
         $warningText = $warningCount > 0 ? " {$warningCount} peringatan perlu diperiksa." : '';
 
         if ($request->expectsJson()) {
-            return response()->json([
-                'ok' => true,
-                'message' => "Sync selesai: {$summary['updated']} diperbarui, {$summary['imported']} diimpor, {$summary['pushed']} dikirim.".$warningText,
-                'summary' => $summary,
-                'finished_at' => now()->toIso8601String(),
-            ]);
+            return response()->json($payload);
         }
 
         return back()->with($warningCount > 0 ? 'error' : 'success', "Sync selesai: {$summary['updated']} diperbarui, {$summary['imported']} diimpor, {$summary['pushed']} dikirim.".$warningText);
+    }
+
+    public function syncStatus(Request $request)
+    {
+        $user = $request->user();
+        abort_unless($user->isSuperadmin() || $user->hasRole('pusat'), 403);
+        $status = DanaTalanganSyncStatus::with('initiator')->where('spreadsheet_id', config('services.google_sheets.dana_talangan_spreadsheet_id'))->first();
+        $payload = $this->syncResponses->make('dana-talangan', ['type' => 'global', 'id' => null, 'name' => 'Global'], $status);
+        $payload['status_url'] = route('dana-talangan.sync-status');
+
+        return response()->json($payload);
     }
 
     public function kavlingOptions(Request $request, DanaTalanganGoogleService $googleService, DanaTalanganOptionService $optionService)

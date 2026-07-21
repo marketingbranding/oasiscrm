@@ -20,27 +20,18 @@
             </select>
             <div class="h-6 w-px bg-black mx-1 hidden sm:block"></div>
             <div class="flex items-center gap-2 ml-auto">
-                <button type="submit" form="database-sync-form" class="bg-white text-black px-3 py-1.5 text-sm font-[Helvetica] font-bold border-2 border-black rounded-none hover:bg-gray-100">
-                    Sync Sekarang
-                </button>
+                <x-crm.sync-control module-key="database" module-name="Sinkronisasi Database" :scope-name="$selectedBranch?->name ?? ''" :sync-url="route('database.sync')" :status-url="route('database.sync-status', ['branch_id' => $selectedBranchId])" :status="$syncStatus" :branch-id="$selectedBranchId" :can-sync="$canSync" />
             </div>
         </form>
     </div>
     @elseif($selectedBranch)
     <div class="bg-[#fcc20f] border-2 border-black px-4 py-2 mb-4 flex items-center gap-3">
         <span class="font-['Arial_Black'] font-black text-lg uppercase">Cabang: {{ $selectedBranch->code }}</span>
-        <button type="submit" form="database-sync-form" class="bg-white text-black px-3 py-1 text-xs font-[Helvetica] font-bold border-2 border-black rounded-none hover:bg-gray-100 ml-auto">
-            Sync Sekarang
-        </button>
+        <div class="ml-auto"><x-crm.sync-control module-key="database" module-name="Sinkronisasi Database" :scope-name="$selectedBranch->name" :sync-url="route('database.sync')" :status-url="route('database.sync-status', ['branch_id' => $selectedBranchId])" :status="$syncStatus" :branch-id="$selectedBranchId" :can-sync="$canSync" button-class="bg-white text-black px-3 py-1 text-xs font-[Helvetica] font-bold border-2 border-black" /></div>
     </div>
     @endif
 
     @if($selectedBranch)
-    <form id="database-sync-form" method="POST" action="{{ route('database.sync') }}" class="hidden">
-        @csrf
-        <input type="hidden" name="branch_id" value="{{ $selectedBranchId }}">
-    </form>
-
     <div class="border-2 border-black bg-white px-4 py-3 mb-4 font-['Times_New_Roman'] text-sm flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4">
         <div>
             <strong class="font-bold">Status Sync:</strong>
@@ -165,8 +156,13 @@
                     </template>
                 </div>
 
-                <div x-show="!isLoaded(name)" class="border-2 border-black bg-white px-4 py-8 text-center">
-                    <p class="text-sm font-['Times_New_Roman'] italic" style="color:#6b7280;" x-text="loading ? 'Memuat data...' : 'Klik tab untuk memuat data.'"></p>
+                <div x-show="!isLoaded(name) && !loadErrors[name]" class="border-2 border-black bg-white px-4 py-8 text-center" aria-live="polite">
+                    <p class="text-sm font-['Times_New_Roman'] italic" style="color:#6b7280;" x-text="inFlight[name] ? 'Memuat data Database...' : 'Klik tab untuk memuat data.'"></p>
+                    <div x-show="inFlight[name]" class="mt-3 space-y-2" aria-hidden="true"><div class="h-3 bg-gray-200 animate-pulse motion-reduce:animate-none"></div><div class="h-3 bg-gray-200 animate-pulse motion-reduce:animate-none"></div><div class="h-3 bg-gray-200 animate-pulse motion-reduce:animate-none"></div></div>
+                </div>
+                <div x-show="loadErrors[name]" class="border-2 border-black bg-[#d77a7a] px-4 py-6 text-center" aria-live="polite">
+                    <p class="font-bold">Data gagal dimuat.</p><p class="text-sm">Tabel tidak dianggap kosong karena request belum berhasil.</p>
+                    <div class="mt-3 flex justify-center gap-2"><button type="button" @click="switchTab(name, true)" class="border-2 border-black bg-white px-3 py-1 font-bold">Coba Lagi</button><button type="button" @click="window.dispatchEvent(new CustomEvent('open-feedback'))" class="border-2 border-black bg-white px-3 py-1 font-bold">Laporkan Masalah</button></div>
                 </div>
 
                 <template x-if="isLoaded(name) && currentData(name).records.length > 0">
@@ -405,6 +401,8 @@ document.addEventListener('alpine:init', () => {
         adding: null,
         cache: {},
         loaded: {},
+        loadErrors: {},
+        inFlight: {},
         sortColumn: null,
         sortDirection: 'asc',
         filterText: '',
@@ -456,19 +454,24 @@ document.addEventListener('alpine:init', () => {
             return s ? (s.records ? s.records.length : 0) : 0;
         },
 
-        async switchTab(name) {
+        async switchTab(name, force = false) {
             this.tab = name;
-            if (this.loaded[name]) return;
+            if (this.loaded[name] && !force) return;
+            if (this.inFlight[name]) return;
+            this.loadErrors[name] = false;
+            this.inFlight[name] = true;
             this.loading = true;
             try {
-                const res = await fetch(`{{ url('database/sheet') }}/${this.branchId}/${encodeURIComponent(name)}`);
+                const res = await fetch(`{{ url('database/sheet') }}/${this.branchId}/${encodeURIComponent(name)}`, { headers: { Accept: 'application/json' } });
+                if (!res.ok) throw new Error('Data gagal dimuat');
                 const data = await res.json();
                 this.cache[name] = data;
                 this.loaded[name] = true;
             } catch (e) {
-                this.cache[name] = { headers: [], formula_columns: [], column_metadata: {}, records: [] };
-                this.loaded[name] = true;
+                this.loadErrors[name] = true;
+                this.loaded[name] = false;
             } finally {
+                this.inFlight[name] = false;
                 this.loading = false;
             }
         },

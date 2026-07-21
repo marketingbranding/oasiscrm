@@ -29,9 +29,11 @@ class GoogleSheetsApiService
         $client->setAuthConfig($credentialsPath);
         $client->setScopes([Sheets::SPREADSHEETS]);
 
-        if (! config('services.google_sheets.verify_ssl')) {
-            $client->setHttpClient(new GuzzleClient(['verify' => false]));
-        }
+        $client->setHttpClient(new GuzzleClient([
+            'verify' => (bool) config('services.google_sheets.verify_ssl', true),
+            'connect_timeout' => (float) config('services.google_sheets.connect_timeout', 10),
+            'timeout' => (float) config('services.google_sheets.request_timeout', 60),
+        ]));
 
         $this->sheets = new Sheets($client);
     }

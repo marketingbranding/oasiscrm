@@ -24,27 +24,18 @@
             <div class="h-6 w-px bg-black mx-1 hidden sm:block"></div>
 
             <div class="flex items-center gap-2 ml-auto">
-                <button type="submit" form="konsumen-progress-sync-form" class="bg-white text-black px-3 py-1.5 text-sm font-[Helvetica] font-bold border-2 border-black rounded-none hover:bg-gray-100">
-                    Sync Sekarang
-                </button>
+                <x-crm.sync-control module-key="konsumen-progress" module-name="Sinkronisasi Konsumen Progress" :scope-name="$selectedBranch?->name ?? ''" :sync-url="route('konsumen-progress.sync')" :status-url="route('konsumen-progress.sync-status', ['branch_id' => $selectedBranchId])" :status="$syncStatus" :branch-id="$selectedBranchId" :can-sync="$canSync" />
             </div>
         </form>
     </div>
     @elseif($selectedBranch)
     <div class="bg-[#fcc20f] border-2 border-black px-4 py-2 mb-4 flex items-center gap-3">
         <span class="font-['Arial_Black'] font-black text-lg uppercase">Cabang: {{ $selectedBranch->code }}</span>
-        <button type="submit" form="konsumen-progress-sync-form" class="bg-white text-black px-3 py-1 text-xs font-[Helvetica] font-bold border-2 border-black rounded-none hover:bg-gray-100 ml-auto">
-            Sync Sekarang
-        </button>
+        <div class="ml-auto"><x-crm.sync-control module-key="konsumen-progress" module-name="Sinkronisasi Konsumen Progress" :scope-name="$selectedBranch->name" :sync-url="route('konsumen-progress.sync')" :status-url="route('konsumen-progress.sync-status', ['branch_id' => $selectedBranchId])" :status="$syncStatus" :branch-id="$selectedBranchId" :can-sync="$canSync" button-class="bg-white text-black px-3 py-1 text-xs font-[Helvetica] font-bold border-2 border-black" /></div>
     </div>
     @endif
 
     @if($selectedBranch)
-    <form id="konsumen-progress-sync-form" method="POST" action="{{ route('konsumen-progress.sync') }}" class="hidden">
-        @csrf
-        <input type="hidden" name="branch_id" value="{{ $selectedBranchId }}">
-    </form>
-
     <div class="border-2 border-black bg-white px-4 py-3 mb-4 font-['Times_New_Roman'] text-sm flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4">
         <div>
             <strong class="font-bold">Status Sync:</strong>

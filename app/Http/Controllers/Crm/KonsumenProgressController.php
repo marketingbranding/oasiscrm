@@ -8,6 +8,7 @@ use App\Models\KonsumenProgressSyncStatus;
 use App\Services\CollaborationNotificationService;
 use App\Services\KonsumenPipelineService;
 use App\Services\KonsumenProgressSyncService;
+use App\Services\SyncResponseService;
 use App\Services\WorkspaceAccessService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -19,6 +20,7 @@ class KonsumenProgressController extends Controller
         private readonly KonsumenPipelineService $pipelineService,
         private readonly WorkspaceAccessService $workspaceAccess,
         private readonly CollaborationNotificationService $notifications,
+        private readonly SyncResponseService $syncResponses,
     ) {}
 
     public function index(Request $request)
@@ -38,9 +40,8 @@ class KonsumenProgressController extends Controller
         $syncStatus = $selectedBranch
             ? KonsumenProgressSyncStatus::where('branch_id', $selectedBranch->id)->first()
             : null;
-        $isStale = $syncStatus?->finished_at
-            ? $syncStatus->finished_at->lt(now()->subMinutes((int) config('services.google_sheets.cache_stale_minutes', 30)))
-            : true;
+        $isStale = $syncStatus?->status !== 'success' || ! $syncStatus?->finished_at
+            || $syncStatus->finished_at->lt(now()->subMinutes((int) config('services.google_sheets.cache_stale_minutes', 30)));
 
         if ($selectedBranch && $selectedBranch->sheet_id) {
             $pipeline = $this->pipelineService->buildPipeline($selectedBranch);
@@ -49,7 +50,9 @@ class KonsumenProgressController extends Controller
             }
         }
 
-        return view('crm.konsumen-progress.index', compact('branches', 'selectedBranch', 'selectedBranchId', 'pipeline', 'errors', 'syncStatus', 'isStale'));
+        $canSync = $selectedBranch && $this->workspaceAccess->canSyncBranch($user, $selectedBranch);
+
+        return view('crm.konsumen-progress.index', compact('branches', 'selectedBranch', 'selectedBranchId', 'pipeline', 'errors', 'syncStatus', 'isStale', 'canSync'));
     }
 
     public function sync(Request $request)
@@ -68,37 +71,34 @@ class KonsumenProgressController extends Controller
         abort_unless($this->workspaceAccess->canSyncBranch(Auth::user(), $branch), 403);
 
         try {
-            $result = app(KonsumenProgressSyncService::class)->syncBranch($branch);
+            $result = app(KonsumenProgressSyncService::class)->syncBranch($branch, Auth::id());
         } catch (Throwable $exception) {
             report($exception);
             $result = ['ok' => false, 'message' => 'Layanan sinkronisasi tidak dapat dijalankan.', 'summary' => []];
         }
-        $this->notifications->syncResult(
-            Auth::user(),
-            'Konsumen Progress',
-            $branch->name,
-            $result,
-            route('konsumen-progress.index', ['branch_id' => $branch->id]),
-            array_sum($result['summary'] ?? []),
-        );
-        if (! $result['ok']) {
-            if ($request->expectsJson()) {
-                return response()->json(['ok' => false, 'message' => 'Sync gagal: '.$result['message'], 'summary' => $result['summary'] ?? []], 422);
-            }
-
-            return back()->with('error', 'Sync gagal: '.$result['message']);
+        $status = KonsumenProgressSyncStatus::with('initiator')->where('branch_id', $branch->id)->first();
+        $payload = $this->syncResponses->make('konsumen-progress', ['type' => 'branch', 'id' => $branch->id, 'name' => $branch->name], $status, $result);
+        $payload['status_url'] = route('konsumen-progress.sync-status', ['branch_id' => $branch->id]);
+        if (($result['code'] ?? null) !== 'sync_already_running') {
+            $this->notifications->syncResult(Auth::user(), 'Konsumen Progress', $branch->name, $result, route('konsumen-progress.index', ['branch_id' => $branch->id]), array_sum($result['summary'] ?? []));
         }
 
         if ($request->expectsJson()) {
-            return response()->json([
-                'ok' => true,
-                'message' => 'Sync selesai: '.array_sum($result['summary']).' rows diperbarui.',
-                'summary' => $result['summary'],
-                'finished_at' => now()->toIso8601String(),
-            ]);
+            return response()->json($payload, ($result['code'] ?? null) === 'sync_already_running' ? 409 : ($payload['status'] === 'failed' ? 422 : 200));
         }
 
-        return back()->with('success', 'Sync selesai: '.array_sum($result['summary']).' rows diperbarui.');
+        return back()->with($payload['status'] === 'success' ? 'success' : 'error', $payload['message']);
+    }
+
+    public function syncStatus(Request $request)
+    {
+        $branch = $this->resolveBranch($request);
+        abort_unless($branch && $this->workspaceAccess->canSyncBranch($request->user(), $branch), 403);
+        $status = KonsumenProgressSyncStatus::with('initiator')->where('branch_id', $branch->id)->first();
+        $payload = $this->syncResponses->make('konsumen-progress', ['type' => 'branch', 'id' => $branch->id, 'name' => $branch->name], $status);
+        $payload['status_url'] = route('konsumen-progress.sync-status', ['branch_id' => $branch->id]);
+
+        return response()->json($payload);
     }
 
     public function stage(Request $request)

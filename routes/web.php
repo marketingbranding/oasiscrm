@@ -65,6 +65,7 @@ Route::middleware(['auth', 'active', 'verified', 'password.changed'])->group(fun
     Route::get('/database', [DatabaseController::class, 'index'])->name('database.index');
     Route::get('/database/sheet/{branchId}/{sheetName}', [DatabaseController::class, 'sheetData'])->name('database.sheet');
     Route::post('/database/sync', [DatabaseController::class, 'sync'])->name('database.sync');
+    Route::get('/database/sync/status', [DatabaseController::class, 'syncStatus'])->name('database.sync-status');
     Route::post('/database/records', [DatabaseController::class, 'store'])->name('database.records.store');
     Route::put('/database/records/{record}', [DatabaseController::class, 'update'])->name('database.records.update');
     Route::delete('/database/records/{record}', [DatabaseController::class, 'destroy'])->name('database.records.destroy');
@@ -72,6 +73,7 @@ Route::middleware(['auth', 'active', 'verified', 'password.changed'])->group(fun
     Route::get('/konsumen-progress', [KonsumenProgressController::class, 'index'])->name('konsumen-progress.index');
     Route::get('/konsumen-progress/stage', [KonsumenProgressController::class, 'stage'])->name('konsumen-progress.stage');
     Route::post('/konsumen-progress/sync', [KonsumenProgressController::class, 'sync'])->name('konsumen-progress.sync');
+    Route::get('/konsumen-progress/sync/status', [KonsumenProgressController::class, 'syncStatus'])->name('konsumen-progress.sync-status');
 
     Route::get('changelogs', [ChangelogController::class, 'index'])->name('changelogs.index');
 
@@ -82,6 +84,7 @@ Route::middleware(['auth', 'active', 'verified', 'password.changed'])->group(fun
     Route::bind('dana_talangan', fn ($v) => DanaTalangan::findOrFail($v));
     Route::get('dana-talangan/kavling-options', [DanaTalanganController::class, 'kavlingOptions'])->name('dana-talangan.kavling-options');
     Route::post('dana-talangan/sync', [DanaTalanganController::class, 'sync'])->name('dana-talangan.sync');
+    Route::get('dana-talangan/sync/status', [DanaTalanganController::class, 'syncStatus'])->name('dana-talangan.sync-status');
     Route::get('dana-talangan/export', [DanaTalanganController::class, 'export'])->name('dana-talangan.export');
     Route::get('dana-talangan/export-template', [DanaTalanganController::class, 'exportTemplate'])->name('dana-talangan.export-template');
     Route::get('dana-talangan/import', [DanaTalanganController::class, 'import'])->name('dana-talangan.import');

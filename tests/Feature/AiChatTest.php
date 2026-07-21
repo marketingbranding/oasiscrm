@@ -445,14 +445,15 @@ class AiChatTest extends TestCase
         [$branch, $user] = $this->branchAndUser();
         $sync = Mockery::mock(KonsumenProgressSyncService::class);
         $sync->shouldReceive('syncBranch')->once()
-            ->with(Mockery::on(fn (Branch $selected) => $selected->is($branch)))
+            ->with(Mockery::on(fn (Branch $selected) => $selected->is($branch)), $user->id)
             ->andReturn(['ok' => false, 'message' => 'Google API unavailable', 'summary' => []]);
         $this->app->instance(KonsumenProgressSyncService::class, $sync);
 
         $this->actingAs($user)->postJson(route('konsumen-progress.sync'), ['branch_id' => $branch->id])
             ->assertUnprocessable()
             ->assertJsonPath('ok', false)
-            ->assertJsonPath('message', 'Sync gagal: Google API unavailable');
+            ->assertJsonPath('message', 'Sinkronisasi gagal sebelum seluruh data dapat diperbarui.')
+            ->assertJsonPath('error_code', 'google_connection_failed');
     }
 
     public function test_ai_widget_contains_csrf_json_sync_and_visible_states(): void

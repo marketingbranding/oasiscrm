@@ -54,7 +54,7 @@
         const os = ua.includes('Windows') ? 'Windows' : ua.includes('Android') ? 'Android' : ua.includes('iPhone') || ua.includes('iPad') ? 'iOS' : ua.includes('Mac OS') ? 'macOS' : ua.includes('Linux') ? 'Linux' : 'OS lain';
         return `${browser} / ${os}`;
     },
-}" class="fixed bottom-4 right-4 z-50" x-cloak>
+}" @open-feedback.window="open = true; tab = 'create'; sent = false" class="fixed bottom-4 right-4 z-50" x-cloak>
     <div x-show="open" @click.outside="open = false" class="absolute bottom-16 right-0 bg-white border-2 border-black shadow-xl w-[380px] max-w-[92vw] max-h-[82vh] flex flex-col font-['Times_New_Roman']">
         <div class="bg-[#c0392b] text-white px-3 py-2 flex items-center justify-between font-[Helvetica] font-bold text-sm">
             <span>Laporan / Masukan</span>

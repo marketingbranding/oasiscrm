@@ -155,6 +155,22 @@ class CollaborationNotificationService
         ));
     }
 
+    public function criticalGlobalSyncFailure(User $actor, string $module, string $actionUrl): void
+    {
+        $this->attempt(function () use ($actor, $module, $actionUrl) {
+            User::where('is_active', true)
+                ->where('id', '!=', $actor->id)
+                ->whereHas('role', fn ($query) => $query->where('is_superadmin', true)->orWhere('slug', 'pusat'))
+                ->each(fn (User $user) => $this->create(
+                    $user,
+                    'sync_failed',
+                    'Sinkronisasi global gagal',
+                    "Sinkronisasi {$module} Global gagal dan perlu diperiksa.",
+                    $actionUrl,
+                ));
+        });
+    }
+
     public function recordType(Model $record): string
     {
         return match (true) {

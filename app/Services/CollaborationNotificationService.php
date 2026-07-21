@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\ContentItem;
 use App\Models\DanaTalangan;
 use App\Models\DatabaseSheetRecord;
+use App\Models\FeedbackReport;
 use App\Models\User;
 use App\Models\UserNotification;
 use App\Models\UserPresence;
@@ -79,6 +80,58 @@ class CollaborationNotificationService
     public function membershipChanged(User $user, string $message, ?string $actionUrl = null): void
     {
         $this->attempt(fn () => $this->create($user, 'membership_changed', 'Akses cabang diperbarui', $message, $actionUrl, $user));
+    }
+
+    public function feedbackSubmitted(FeedbackReport $report): void
+    {
+        $this->attempt(function () use ($report) {
+            User::where('is_active', true)
+                ->whereHas('role', fn ($query) => $query->where('is_superadmin', true)->orWhere('slug', 'pusat'))
+                ->get()
+                ->filter(fn (User $user) => $user->isSuperadmin() || $this->workspaceAccess->canViewBranch($user, (int) $report->branch_id))
+                ->each(fn (User $user) => $this->create(
+                    $user,
+                    'feedback_submitted',
+                    'Laporan baru',
+                    $report->creator?->name.' mengirim '.$report->typeLabel().' untuk modul '.$report->module.'.',
+                    route('feedback-reports.show', $report),
+                    $report,
+                ));
+        });
+    }
+
+    public function feedbackStatusChanged(FeedbackReport $report): void
+    {
+        if (! $report->creator) {
+            return;
+        }
+        $message = 'Status laporan "'.$report->title.'" menjadi '.$report->statusLabel().'.';
+        if ($report->status === 'rejected' && filled($report->admin_note)) {
+            $message .= ' Catatan: '.str($report->admin_note)->limit(300);
+        }
+        $this->attempt(fn () => $this->create(
+            $report->creator,
+            'feedback_status_changed',
+            'Status laporan diperbarui',
+            $message,
+            route('dashboard'),
+            $report,
+        ));
+    }
+
+    public function feedbackAssigned(FeedbackReport $report): void
+    {
+        if (! $report->assignee) {
+            return;
+        }
+        $this->attempt(fn () => $this->create(
+            $report->assignee,
+            'feedback_assigned',
+            'Laporan ditugaskan kepada Anda',
+            'Anda ditugaskan menangani laporan "'.$report->title.'".',
+            route('feedback-reports.show', $report),
+            $report,
+        ));
     }
 
     public function syncResult(User $user, string $module, ?string $scope, array $result, string $actionUrl, int $rowCount = 0): void

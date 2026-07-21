@@ -4,7 +4,6 @@ use App\Http\Controllers\Auth\PasswordChangeController;
 use App\Http\Controllers\Crm\AdminUserController;
 use App\Http\Controllers\Crm\AiChatController;
 use App\Http\Controllers\Crm\BranchController;
-use App\Http\Controllers\Crm\BugReportController;
 use App\Http\Controllers\Crm\ChangelogController;
 use App\Http\Controllers\Crm\ContentCalendarController;
 use App\Http\Controllers\Crm\DanaTalanganController;
@@ -92,13 +91,12 @@ Route::middleware(['auth', 'active', 'verified', 'password.changed'])->group(fun
     Route::get('dana-talangan/{dana_talangan}/detail', [DanaTalanganController::class, 'detail'])->name('dana-talangan.detail');
     Route::resource('dana-talangan', DanaTalanganController::class);
 
-    Route::post('feedback-reports', [FeedbackReportController::class, 'store'])->name('feedback-reports.store');
-    Route::get('feedback-reports/fetch-recent', [FeedbackReportController::class, 'fetchRecent'])->name('feedback-reports.fetch-recent');
-    Route::get('feedback-reports/fetch-history', [FeedbackReportController::class, 'fetchHistory'])->name('feedback-reports.fetch-history');
-    Route::post('feedback-reports/{feedbackReport}/approve', [FeedbackReportController::class, 'approve'])->name('feedback-reports.approve');
-    Route::post('feedback-reports/{feedbackReport}/reject', [FeedbackReportController::class, 'reject'])->name('feedback-reports.reject');
-    Route::post('feedback-reports/{feedbackReport}/implement', [FeedbackReportController::class, 'markImplemented'])->name('feedback-reports.implement');
-    Route::post('feedback-reports/{feedbackReport}/fix', [FeedbackReportController::class, 'markFixed'])->name('feedback-reports.fix');
+    Route::post('feedback-reports', [FeedbackReportController::class, 'store'])->middleware('throttle:10,1')->name('feedback-reports.store');
+    Route::get('feedback-reports/history', [FeedbackReportController::class, 'history'])->name('feedback-reports.history');
+    Route::get('feedback-reports/{feedbackReport}/screenshot', [FeedbackReportController::class, 'screenshot'])->name('feedback-reports.screenshot');
+    Route::get('feedback-reports', [FeedbackReportController::class, 'index'])->name('feedback-reports.index');
+    Route::get('feedback-reports/{feedbackReport}', [FeedbackReportController::class, 'show'])->name('feedback-reports.show');
+    Route::patch('feedback-reports/{feedbackReport}', [FeedbackReportController::class, 'review'])->name('feedback-reports.review');
 
     Route::middleware('role:superadmin')->group(function () {
         Route::get('/admin/system-health', SystemHealthController::class)->name('admin.system-health');
@@ -123,8 +121,6 @@ Route::middleware(['auth', 'active', 'verified', 'password.changed'])->group(fun
 });
 
 Route::middleware(['auth', 'active'])->group(function () {
-    Route::post('/bug-report', [BugReportController::class, 'store'])->name('bug-report.store');
-
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
     Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');

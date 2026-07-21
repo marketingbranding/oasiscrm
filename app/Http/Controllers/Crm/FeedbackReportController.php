@@ -3,174 +3,231 @@
 namespace App\Http\Controllers\Crm;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Crm\ReviewFeedbackReportRequest;
 use App\Http\Requests\Crm\StoreFeedbackReportRequest;
 use App\Models\FeedbackReport;
+use App\Models\User;
+use App\Services\CollaborationNotificationService;
+use App\Services\FeedbackDiscordService;
+use App\Services\WorkspaceAccessService;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class FeedbackReportController extends Controller
 {
+    public function __construct(
+        private readonly WorkspaceAccessService $workspaceAccess,
+        private readonly CollaborationNotificationService $notifications,
+        private readonly FeedbackDiscordService $discord,
+    ) {}
+
     public function store(StoreFeedbackReportRequest $request)
     {
-        $user = Auth::user();
-        $data = $request->validated();
+        $user = $request->user();
+        $branch = $this->workspaceAccess->resolveRequestedBranch($user, $request->integer('branch_id'));
+        abort_unless($branch && $this->workspaceAccess->canViewBranch($user, $branch), 403);
 
-        $data['description'] = trim($data['description'] ?? '');
+        $data = $request->safe()->except('screenshot');
         $data['user_id'] = $user->id;
+        $data['branch_id'] = $branch->id;
+        $data['active_branch_id'] = $branch->id;
+        $data['status'] = 'pending';
+        $data['priority'] = 'medium';
+        $data['page_url'] = $this->safePageUrl($request->input('page_url'));
+        $data['app_version'] = config('app.version');
 
-        if (!$user->isSuperadmin()) {
-            $data['branch_id'] = $user->branch_id;
+        if ($request->hasFile('screenshot')) {
+            $data += $this->storeScreenshot($request->file('screenshot'));
         }
 
-        if (empty($data['branch_id'])) {
-            return $request->expectsJson()
-                ? response()->json(['ok' => false, 'error' => 'Pilih cabang terlebih dahulu.'], 422)
-                : response()->json(['ok' => false, 'error' => 'Pilih cabang terlebih dahulu.'], 422);
+        try {
+            $report = FeedbackReport::create($data)->load(['creator', 'branch']);
+        } catch (\Throwable $exception) {
+            if (filled($data['screenshot_path'] ?? null)) {
+                Storage::disk('local')->delete($data['screenshot_path']);
+            }
+            throw $exception;
         }
 
-        FeedbackReport::create($data);
-
-        return response()->json(['ok' => true, 'message' => 'Laporan berhasil dikirim.']);
-    }
-
-    public function fetchRecent(Request $request)
-    {
-        $user = Auth::user();
-        $isSuper = $user->isSuperadmin();
-
-        $query = FeedbackReport::with(['creator', 'branch']);
-
-        if ($isSuper) {
-            $query->where('status', 'pending');
-        } else {
-            $query->where('user_id', $user->id);
-        }
-
-        $reports = $query->orderBy('created_at', 'desc')->take(10)->get()->map(function ($r) {
-            return [
-                'id' => $r->id,
-                'type' => $r->type,
-                'title' => $r->title,
-                'description' => $r->description,
-                'status' => $r->status,
-                'creator_name' => $r->creator->name ?? '—',
-                'branch_name' => $r->branch->name ?? '—',
-                'admin_note' => $r->admin_note,
-                'created_at' => $r->created_at->format('d M Y H:i'),
-            ];
-        });
-
-        $pendingCount = FeedbackReport::where('status', 'pending')
-            ->when(!$isSuper, fn($q) => $q->where('user_id', $user->id))
-            ->count();
+        $this->notifications->feedbackSubmitted($report);
+        $this->discord->send($report);
 
         return response()->json([
             'ok' => true,
-            'reports' => $reports,
-            'pending_count' => $pendingCount,
-            'is_superadmin' => $isSuper,
+            'message' => 'Laporan berhasil disimpan.',
+            'report' => $this->resource($report),
+        ], 201);
+    }
+
+    public function history(Request $request)
+    {
+        $reports = FeedbackReport::with(['branch'])
+            ->where('user_id', $request->user()->id)
+            ->latest()
+            ->limit(50)
+            ->get()
+            ->map(fn (FeedbackReport $report) => $this->resource($report));
+
+        return response()->json(['ok' => true, 'reports' => $reports]);
+    }
+
+    public function index(Request $request)
+    {
+        $this->ensureReviewer($request->user());
+        $query = FeedbackReport::with(['creator', 'branch', 'assignee'])->latest();
+        if (! $request->user()->isSuperadmin()) {
+            $query->whereIn('branch_id', $this->workspaceAccess->accessibleBranchIds($request->user()));
+        }
+        $query->when($request->type, fn ($builder, $value) => $builder->where('type', $value));
+        $query->when($request->status, fn ($builder, $value) => $builder->where('status', $value));
+        $query->when($request->branch_id, fn ($builder, $value) => $builder->where('branch_id', $value));
+        $query->when($request->module, fn ($builder, $value) => $builder->where('module', $value));
+        $query->when($request->search, fn ($builder, $value) => $builder->where(function ($nested) use ($value) {
+            $nested->where('title', 'like', "%{$value}%")->orWhere('description', 'like', "%{$value}%");
+        }));
+
+        return view('crm.feedback-reports.index', [
+            'reports' => $query->paginate(20)->withQueryString(),
+            'branches' => $this->workspaceAccess->accessibleBranches($request->user()),
+            'modules' => FeedbackReport::whereNotNull('module')->distinct()->orderBy('module')->pluck('module'),
         ]);
     }
 
-    public function fetchHistory(Request $request)
+    public function show(Request $request, FeedbackReport $feedbackReport)
     {
-        $user = Auth::user();
-        $isSuper = $user->isSuperadmin();
+        $this->authorize('review', $feedbackReport);
+        $feedbackReport->load(['creator', 'branch', 'reviewer', 'assignee']);
 
-        $query = FeedbackReport::with(['creator', 'branch', 'reviewer']);
-
-        if (!$isSuper) {
-            $query->where('user_id', $user->id);
-        }
-
-        $perPage = min((int) $request->get('per_page', 20), 50);
-        $reports = $query->orderBy('created_at', 'desc')->paginate($perPage)->through(function ($r) {
-            return [
-                'id' => $r->id,
-                'type' => $r->type,
-                'title' => $r->title,
-                'description' => $r->description,
-                'status' => $r->status,
-                'creator_name' => $r->creator->name ?? '—',
-                'branch_name' => $r->branch->name ?? '—',
-                'admin_note' => $r->admin_note,
-                'created_at' => $r->created_at->format('d M Y H:i'),
-                'reviewed_at' => $r->reviewed_at ? $r->reviewed_at->format('d M Y H:i') : null,
-                'reviewer_name' => $r->reviewer->name ?? null,
-            ];
-        });
-
-        return response()->json([
-            'ok' => true,
-            'reports' => $reports->items(),
-            'next_page_url' => $reports->nextPageUrl(),
-            'has_more' => $reports->hasMorePages(),
+        return view('crm.feedback-reports.show', [
+            'report' => $feedbackReport,
+            'assignees' => User::where('is_active', true)->orderBy('name')->get(['id', 'name', 'branch_id']),
         ]);
     }
 
-    public function approve(Request $request, FeedbackReport $feedbackReport)
+    public function review(ReviewFeedbackReportRequest $request, FeedbackReport $feedbackReport)
     {
-        $user = Auth::user();
-        if (!$user->isSuperadmin()) {
-            return response()->json(['ok' => false, 'error' => 'Unauthorized'], 403);
+        $this->authorize('review', $feedbackReport);
+        $data = $request->validated();
+        $allowedTransitions = [
+            'pending' => ['pending', 'reviewing', 'approved', 'rejected', 'in_progress'],
+            'reviewing' => ['reviewing', 'approved', 'rejected', 'in_progress'],
+            'approved' => ['approved', 'in_progress', 'implemented', 'fixed', 'closed'],
+            'in_progress' => ['in_progress', 'implemented', 'fixed', 'closed'],
+            'rejected' => ['rejected', 'closed'],
+            'implemented' => ['implemented', 'closed'],
+            'fixed' => ['fixed', 'closed'],
+            'closed' => ['closed'],
+        ];
+        abort_unless(in_array($data['status'], $allowedTransitions[$feedbackReport->status] ?? [], true), 409);
+        abort_if($data['status'] === 'implemented' && $feedbackReport->type === 'bug', 422, 'Bug harus ditandai Sudah Diperbaiki.');
+        abort_if($data['status'] === 'fixed' && $feedbackReport->type !== 'bug', 422, 'Masukan atau fitur harus ditandai Sudah Diterapkan.');
+        if (filled($data['assigned_to'] ?? null)) {
+            $assignee = User::where('is_active', true)->findOrFail($data['assigned_to']);
+            abort_unless($this->workspaceAccess->canViewBranch($assignee, (int) $feedbackReport->branch_id), 422);
         }
 
-        $feedbackReport->update([
-            'status' => 'approved',
-            'admin_note' => trim($request->input('admin_note', $feedbackReport->admin_note ?? '')),
-            'reviewed_by' => $user->id,
-            'reviewed_at' => now(),
+        $statusChanged = $feedbackReport->status !== $data['status'];
+        $assignmentChanged = (int) $feedbackReport->assigned_to !== (int) ($data['assigned_to'] ?? 0);
+        $terminal = in_array($data['status'], ['rejected', 'implemented', 'fixed', 'closed'], true);
+        $feedbackReport->update($data + [
+            'reviewed_by' => $feedbackReport->reviewed_by ?: $request->user()->id,
+            'reviewed_at' => $feedbackReport->reviewed_at ?: now(),
+            'resolved_at' => $terminal ? ($feedbackReport->resolved_at ?: now()) : null,
         ]);
+        $feedbackReport->load(['creator', 'assignee']);
 
-        return response()->json(['ok' => true, 'message' => 'Laporan disetujui.']);
+        if ($statusChanged) {
+            $this->notifications->feedbackStatusChanged($feedbackReport);
+        }
+        if ($assignmentChanged && $feedbackReport->assigned_to) {
+            $this->notifications->feedbackAssigned($feedbackReport);
+        }
+
+        return redirect()->route('feedback-reports.show', $feedbackReport)->with('success', 'Laporan berhasil diperbarui.');
     }
 
-    public function reject(Request $request, FeedbackReport $feedbackReport)
+    public function screenshot(Request $request, FeedbackReport $feedbackReport): StreamedResponse
     {
-        $user = Auth::user();
-        if (!$user->isSuperadmin()) {
-            return response()->json(['ok' => false, 'error' => 'Unauthorized'], 403);
-        }
+        $this->authorize('view', $feedbackReport);
+        abort_unless($feedbackReport->screenshot_path && Storage::disk('local')->exists($feedbackReport->screenshot_path), 404);
 
-        $feedbackReport->update([
-            'status' => 'rejected',
-            'admin_note' => trim($request->input('admin_note', $feedbackReport->admin_note ?? '')),
-            'reviewed_by' => $user->id,
-            'reviewed_at' => now(),
-        ]);
-
-        return response()->json(['ok' => true, 'message' => 'Laporan ditolak.']);
+        return Storage::disk('local')->download(
+            $feedbackReport->screenshot_path,
+            $feedbackReport->screenshot_name ?: 'screenshot.'.$this->extensionForMime($feedbackReport->screenshot_mime),
+            ['Content-Type' => $feedbackReport->screenshot_mime],
+        );
     }
 
-    public function markImplemented(Request $request, FeedbackReport $feedbackReport)
+    private function storeScreenshot($file): array
     {
-        $user = Auth::user();
-        if (!$user->isSuperadmin()) {
-            return response()->json(['ok' => false, 'error' => 'Unauthorized'], 403);
+        $mime = (string) $file->getMimeType();
+        $extension = $this->extensionForMime($mime);
+        $path = 'feedback-screenshots/'.Str::uuid().'.'.$extension;
+        $contents = file_get_contents($file->getRealPath());
+        if (function_exists('imagecreatefromstring') && $image = @imagecreatefromstring($contents)) {
+            ob_start();
+            match ($extension) {
+                'png' => imagepng($image),
+                'webp' => imagewebp($image, null, 88),
+                default => imagejpeg($image, null, 88),
+            };
+            $contents = (string) ob_get_clean();
+            imagedestroy($image);
         }
+        Storage::disk('local')->put($path, $contents);
 
-        $feedbackReport->update([
-            'status' => 'implemented',
-            'reviewed_by' => $user->id,
-            'reviewed_at' => now(),
-        ]);
-
-        return response()->json(['ok' => true, 'message' => 'Ditandai sebagai implementasi.']);
+        return [
+            'screenshot_path' => $path,
+            'screenshot_name' => Str::limit(pathinfo($file->getClientOriginalName(), PATHINFO_FILENAME), 100).'.'.$extension,
+            'screenshot_mime' => $mime,
+            'screenshot_size' => strlen($contents),
+        ];
     }
 
-    public function markFixed(Request $request, FeedbackReport $feedbackReport)
+    private function extensionForMime(?string $mime): string
     {
-        $user = Auth::user();
-        if (!$user->isSuperadmin()) {
-            return response()->json(['ok' => false, 'error' => 'Unauthorized'], 403);
+        return match ($mime) {
+            'image/png' => 'png',
+            'image/webp' => 'webp',
+            default => 'jpg',
+        };
+    }
+
+    private function safePageUrl(?string $url): ?string
+    {
+        if (blank($url)) {
+            return null;
+        }
+        $parts = parse_url($url);
+        if (! $parts || ($parts['host'] ?? null) !== parse_url(config('app.url'), PHP_URL_HOST)) {
+            return null;
         }
 
-        $feedbackReport->update([
-            'status' => 'fixed',
-            'reviewed_by' => $user->id,
-            'reviewed_at' => now(),
-        ]);
+        return ($parts['scheme'] ?? 'https').'://'.$parts['host'].($parts['path'] ?? '/');
+    }
 
-        return response()->json(['ok' => true, 'message' => 'Ditandai sebagai fixed.']);
+    private function resource(FeedbackReport $report): array
+    {
+        return [
+            'id' => $report->id,
+            'type' => $report->type,
+            'type_label' => $report->typeLabel(),
+            'title' => $report->title,
+            'module' => $report->module,
+            'status' => $report->status,
+            'status_label' => $report->statusLabel(),
+            'admin_note' => $report->admin_note,
+            'branch_name' => $report->branch?->name,
+            'created_at' => $report->created_at?->locale('id')->translatedFormat('d M Y, H:i'),
+            'resolved_at' => $report->resolved_at?->locale('id')->translatedFormat('d M Y, H:i'),
+            'has_screenshot' => filled($report->screenshot_path),
+        ];
+    }
+
+    private function ensureReviewer(User $user): void
+    {
+        abort_unless($user->isSuperadmin() || $user->hasRole('pusat'), 403);
     }
 }

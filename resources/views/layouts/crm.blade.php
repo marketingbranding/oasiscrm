@@ -188,6 +188,11 @@
                 <a href="{{ route('dana-talangan.index') }}" class="flex items-center px-3 py-2 gap-2 text-sm font-[Helvetica] font-bold text-black hover:bg-[#f1c40f] hover:text-black border border-black mb-1 rounded-none {{ request()->routeIs('dana-talangan.*') ? 'bg-[#f1c40f]' : 'bg-white' }}">
                     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" :class="sidebarPinned ? 'text-[#f1c40f]' : 'text-black group-hover:text-[#f1c40f]'" class="inline-block w-4 h-4 shrink-0"><path stroke-linecap="round" stroke-linejoin="round" d="M2.25 18.75a60.07 60.07 0 0 1 15.797 2.101c.727.198 1.453-.342 1.453-1.096V18.75M3.75 4.5v.75A.75.75 0 0 1 3 6h-.75m0 0v-.375c0-.621.504-1.125 1.125-1.125H20.25M2.25 6v9m18-10.5v.75c0 .414.336.75.75.75h.75m-1.5-1.5h.375c.621 0 1.125.504 1.125 1.125v9.75c0 .621-.504 1.125-1.125 1.125h-.375m1.5-1.5H21a.75.75 0 0 0-.75.75v.75m0 0H3.75m0 0h-.375a1.125 1.125 0 0 1-1.125-1.125V15m1.5 1.5v-.75A.75.75 0 0 0 3 15h-.75M15 10.5a3 3 0 1 1-6 0 3 3 0 0 1 6 0Zm3 0h.008v.008H18V10.5Zm-12 0h.008v.008H6V10.5Z"/></svg> <span :class="sidebarPinned ? '' : 'sm:w-0 sm:overflow-hidden sm:whitespace-nowrap'" class="group-hover:sm:w-auto transition-all duration-200 delay-150">Dana Talangan</span>
                 </a>
+                @if(Auth::user() && (Auth::user()->isSuperadmin() || Auth::user()->hasRole('pusat')))
+                <a href="{{ route('feedback-reports.index') }}" class="flex items-center px-3 py-2 gap-2 text-sm font-[Helvetica] font-bold text-black hover:bg-[#d77a7a] hover:text-black border border-black mb-1 rounded-none {{ request()->routeIs('feedback-reports.index', 'feedback-reports.show') ? 'bg-[#d77a7a]' : 'bg-white' }}">
+                    <span class="inline-block w-4 h-4 shrink-0 text-center">!</span><span :class="sidebarPinned ? '' : 'sm:w-0 sm:overflow-hidden sm:whitespace-nowrap'" class="group-hover:sm:w-auto transition-all duration-200 delay-150">Review Laporan</span>
+                </a>
+                @endif
                 @if(Auth::user() && Auth::user()->isSuperadmin())
                 <div class="border-t border-dashed border-gray-400 mx-2 my-2"></div>
                 <div class="px-2 mb-0.5 text-[9px] font-[Helvetica] font-bold text-gray-400 uppercase tracking-[0.15em]">
@@ -271,6 +276,7 @@
     </div>
 <x-conflict-dialog :initial="session('conflict_data')" />
 @include('crm.ai-chat._widget')
+@if(false)
 <div x-data="{
     open: false,
     tab: 'notifikasi',
@@ -632,6 +638,8 @@
               x-text="pendingCount > 9 ? '9+' : pendingCount"></span>
     </button>
 </div>
+@endif
+<x-crm.feedback-bubble />
 <script>
 document.addEventListener('alpine:init', function () {
     Alpine.data('crmDetailModal', function (fetchBase, editBase, statusColors) {

@@ -41,4 +41,11 @@ return [
         ],
     ],
 
+    'feedback_discord' => [
+        'enabled' => env('FEEDBACK_DISCORD_ENABLED', false),
+        'webhook_url' => env('FEEDBACK_DISCORD_WEBHOOK_URL'),
+        'include_user_email' => env('FEEDBACK_DISCORD_INCLUDE_USER_EMAIL', false),
+        'include_ip' => env('FEEDBACK_DISCORD_INCLUDE_IP', false),
+    ],
+
 ];

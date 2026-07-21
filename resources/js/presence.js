@@ -6,6 +6,7 @@ export default function registerPresence(Alpine) {
         recordId: config.recordId || null, mode: config.mode || 'viewing', baseMode: config.mode || 'viewing', presences: [], timer: null,
         sessionKey: null, csrf: document.querySelector('meta[name="csrf-token"]')?.content || '',
         visibilityHandler: null, unloadHandler: null, savedHandler: null, hiddenTimer: null,
+        pulseInFlight: false, lastSuccessfulRefresh: 0, offlineMs: Math.max(30, Number(config.offlineSeconds || 60)) * 1000,
 
         init() {
             if (!this.enabled) return;
@@ -65,24 +66,32 @@ export default function registerPresence(Alpine) {
             this.mode = this.baseMode;
             this.startPolling();
         },
-        async pulse() { await this.heartbeat(); await this.refresh(); },
+        async pulse() {
+            if (this.pulseInFlight) return;
+            this.pulseInFlight = true;
+            try { await this.heartbeat(); await this.refresh(); } finally { this.pulseInFlight = false; }
+        },
         async heartbeat() {
             try {
-                await fetch(this.heartbeatUrl, {
+                const response = await fetch(this.heartbeatUrl, {
                     method: 'POST',
                     headers: { Accept: 'application/json', 'Content-Type': 'application/json', 'X-CSRF-TOKEN': this.csrf },
                     body: JSON.stringify(this.payload(true)),
                 });
+                if (!response.ok) throw new Error('Presence heartbeat failed');
             } catch (_) { /* Presence is advisory. */ }
         },
         async refresh() {
             try {
                 const query = new URLSearchParams(Object.entries(this.payload(false)).filter(([, value]) => value !== null && value !== ''));
                 const response = await fetch(`${this.indexUrl}?${query}`, { headers: { Accept: 'application/json' } });
-                if (!response.ok) return;
+                if (!response.ok) throw new Error('Presence refresh failed');
                 const data = await response.json();
                 this.presences = data.presences || [];
-            } catch (_) { /* Keep the previous advisory list. */ }
+                this.lastSuccessfulRefresh = Date.now();
+            } catch (_) {
+                if (!this.lastSuccessfulRefresh || Date.now() - this.lastSuccessfulRefresh > this.offlineMs) this.presences = [];
+            }
         },
         cleanup(keepalive = false) {
             if (!this.enabled || !this.sessionKey) return;

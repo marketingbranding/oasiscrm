@@ -10,17 +10,18 @@ class DanaTalanganImport
 {
     use ParsesImport;
 
-    public static function import(string $filePath, ?int $branchId = null, ?array $preservedParams = []): array
+    public static function import(string $filePath, ?int $branchId = null, ?array $preservedParams = [], array $allowedBranchIds = []): array
     {
         $imported = 0;
         $errors = [];
         $rowNum = 0;
         $user = Auth::user();
+        $allowedBranchIds = $allowedBranchIds ?: array_values(array_filter([$branchId]));
 
         [$spreadsheet, $sheet, $rows] = self::spreadsheetLoad($filePath);
 
-        [$hasCabang, $branchNames] = self::detectHasCabang($rows);
-        $branchNameToId = self::branchNameToIdMap();
+        [$hasCabang, $branchNames] = self::detectHasCabang($rows, $allowedBranchIds);
+        $branchNameToId = self::branchNameToIdMap($allowedBranchIds);
 
         foreach ($rows as $cells) {
             $rowNum++;
@@ -50,6 +51,11 @@ class DanaTalanganImport
             if ($hasCabang) {
                 $cabangName = trim((string) ($cells[0] ?? ''));
                 $branchFromFile = self::resolveBranchFromFile($cabangName, $branchNameToId, $branchNames);
+                if (! $branchFromFile || ($branchId && (int) $branchId !== (int) $branchFromFile)) {
+                    $errors[] = "Baris {$rowNum}: Cabang tidak dikenal atau tidak sesuai izin import.";
+
+                    continue;
+                }
             }
 
             $tanggalRaw = $cells[1 + $offset] ?? '';
@@ -82,9 +88,14 @@ class DanaTalanganImport
             $umur = is_numeric($umurRaw) ? (int) $umurRaw : null;
             $status = in_array(strtolower($statusRaw), ['lunas', 'sanggup', 'tidak_sanggup']) ? strtolower(str_replace(' ', '_', $statusRaw)) : 'sanggup';
 
-            $resolvedBranchId = $branchId ?? $branchFromFile ?? $user->branch_id;
+            $resolvedBranchId = $hasCabang ? $branchFromFile : ($branchId ?? $user->branch_id);
             if (! $resolvedBranchId) {
                 $errors[] = "Baris {$rowNum}: Cabang tidak dapat ditentukan.";
+
+                continue;
+            }
+            if (! in_array((int) $resolvedBranchId, $allowedBranchIds, true)) {
+                $errors[] = "Baris {$rowNum}: Anda tidak memiliki izin edit untuk cabang tersebut.";
 
                 continue;
             }

@@ -244,7 +244,7 @@ class DatabaseController extends Controller
             'expected_sync_id' => ['nullable', 'string', 'max:255'],
         ]);
         $input = $request->except(['_token', '_method', 'expected_updated_at', 'expected_sync_id', 'presence_session_key']);
-        $result = $this->optimisticLock->execute($request, $record, $request->input('expected_updated_at'), function (DatabaseSheetRecord $current) use ($request, $writeService, $input, $user) {
+        $result = $this->optimisticLock->execute($request, $record, $request->input('expected_updated_at'), function (DatabaseSheetRecord $current) use ($request, $input, $user) {
             abort_unless($current->branch && $this->workspaceAccess->canEditBranch($user, $current->branch), 403);
             $identityMatches = blank($current->oasis_sync_id)
                 || hash_equals((string) $current->oasis_sync_id, (string) $request->input('expected_sync_id'));
@@ -252,29 +252,32 @@ class DatabaseController extends Controller
                 return $this->optimisticLock->conflict($request, $current, $request->input('expected_updated_at'));
             }
             $this->validateTypedInput($input, $current->column_metadata ?? [], $current->row_data ?? []);
+            $current->update(['sync_status' => 'pending', 'last_sync_error' => null]);
 
-            return ['record' => $current, 'pushed' => $writeService->updateRecord($current, $input)];
+            return $current->fresh();
         });
         if ($result instanceof Response) {
             return $result;
         }
-        $record = $result['record']->fresh();
+        $record = $result;
         $reloadUrl = route('database.index', ['branch_id' => $branch->id, 'sheet' => $record->sheet_name]);
-        $this->notifications->recordUpdated($record, $user, $reloadUrl);
-        if (! $result['pushed']) {
+        if (! $writeService->updateRecord($record, $input)) {
+            $record->refresh();
             if ($request->expectsJson()) {
                 return response()->json([
                     'ok' => false,
-                    'local_saved' => true,
-                    'message' => 'Perubahan lokal tersimpan, tetapi gagal dikirim ke Google Sheets.',
+                    'local_saved' => false,
+                    'message' => 'Perubahan belum tersimpan karena Google Sheets tidak dapat diperbarui. Nilai lokal lama tetap dipertahankan.',
                     'updated_at' => $this->optimisticLock->token($record),
                     'reload_url' => $reloadUrl,
                 ], 422);
             }
 
-            return back()->with('error', 'Gagal update. Perubahan tersimpan di database lokal, tapi gagal push ke Google Sheets: '.$record->last_sync_error);
+            return back()->withInput()->with('error', 'Perubahan belum tersimpan karena Google Sheets gagal diperbarui. Nilai lokal lama tetap dipertahankan.');
         }
 
+        $record->refresh();
+        $this->notifications->recordUpdated($record, $user, $reloadUrl);
         $this->presence->clearEditing($user, $record, $request->input('presence_session_key'));
 
         if ($request->expectsJson()) {
@@ -300,7 +303,7 @@ class DatabaseController extends Controller
         abort_unless($this->workspaceAccess->canEditBranch($user, $branch), 403);
 
         if (! $writeService->softDelete($record, $user->id)) {
-            return back()->with('error', 'Gagal menghapus. Data tetap dihapus di database lokal, tapi gagal sync ke Google Sheets: '.$record->last_sync_error);
+            return back()->with('error', 'Data belum dihapus karena metadata penghapusan gagal dikirim ke Google Sheets.');
         }
 
         return back()->with('success', 'Data berhasil dihapus.');

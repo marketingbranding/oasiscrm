@@ -289,6 +289,10 @@ class ContentCalendarController extends Controller
             'pic_names.*' => ['nullable', 'string', 'max:255'],
         ]);
         $items = ContentItem::visibleTo(Auth::user())->whereIn('id', $data['ids'])->get();
+        abort_unless($items->count() === count(array_unique($data['ids'])), 403);
+        foreach ($items as $item) {
+            $this->authorize('update', $item);
+        }
         if (! empty($data['status'])) {
             $types = $items->pluck('item_type')->unique();
             if ($types->count() !== 1 || ! in_array($data['status'], ContentItem::STATUSES[$types->first()] ?? [], true)) {
@@ -315,6 +319,7 @@ class ContentCalendarController extends Controller
     {
         $ids = $request->validate(['ids' => ['required', 'array', 'min:1'], 'ids.*' => ['integer']])['ids'];
         $items = ContentItem::visibleTo(Auth::user())->whereIn('id', $ids)->get();
+        abort_unless($items->count() === count(array_unique($ids)), 403);
         foreach ($items as $item) {
             $this->authorize('delete', $item);
             $item->delete();

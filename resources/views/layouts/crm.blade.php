@@ -8,7 +8,11 @@
     <link rel="preconnect" href="https://fonts.bunny.net">
     <link href="https://fonts.bunny.net/css?family=figtree:400,500,600&display=swap" rel="stylesheet" />
     <link rel="icon" type="image/svg+xml" href="{{ asset('favicon.svg') }}">
-    @vite(['resources/css/app.css', 'resources/js/app.js'])
+    @if(is_file(public_path('build/manifest.json')))
+        @vite(['resources/css/app.css', 'resources/js/app.js'])
+    @else
+        <style>body{font-family:Arial,sans-serif;margin:0}.asset-warning{padding:8px;background:#fcc20f;border:2px solid #000}</style>
+    @endif
     <script>!function(){if(localStorage.getItem('sidebarPinned')==='true'){var s=document.createElement('style');s.id='crm-pinned-style';s.textContent='#crm-sidebar{width:14rem!important}#crm-main{margin-left:14rem!important}';document.head.appendChild(s)}}()</script>
     <style>
         [x-cloak] { display: none !important; }
@@ -64,6 +68,7 @@
                  'indexUrl' => route('notifications.index'),
                  'readUrl' => route('notifications.read', ['notification' => '__ID__']),
                  'readAllUrl' => route('notifications.read-all'),
+                 'enabled' => config('notifications.polling_enabled', true),
              ]))" @click.outside="open = false">
             <span class="text-xs">{{ Auth::user()->name }}</span>
             <button @click="open = !open; if (open) refresh()"
@@ -81,6 +86,7 @@
                     <button type="button" x-show="unreadCount > 0" @click="markAllRead()" class="underline normal-case">Tandai semua dibaca</button>
                 </div>
                 <div x-show="loading && notifications.length === 0" class="px-3 py-4 text-center text-xs">Memuat notifikasi...</div>
+                <div x-show="unavailable" class="border-b border-black bg-[#fff3b0] px-3 py-2 text-xs">Notifikasi sementara tidak tersedia. CRM tetap dapat digunakan.</div>
                 <template x-for="notification in notifications" :key="notification.id">
                     <button type="button" @click="markRead(notification, true)" class="block w-full text-left border-b border-black px-3 py-2 hover:bg-[#eef1ff]" :class="notification.read_at ? 'bg-white' : 'bg-[#fff3b0]'">
                         <span class="block font-[Helvetica] font-bold text-xs" x-text="notification.title"></span>
@@ -195,6 +201,10 @@
                 </a>
                 <a href="{{ route('admin-users.index') }}" class="flex items-center px-3 py-2 gap-2 text-sm font-[Helvetica] font-bold text-black hover:bg-[#8c9ae0] hover:text-black border border-black mb-1 rounded-none {{ request()->routeIs('admin-users.*') ? 'bg-[#8c9ae0]' : 'bg-white' }}">
                     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" :class="sidebarPinned ? 'text-[#8c9ae0]' : 'text-black group-hover:text-[#8c9ae0]'" class="inline-block w-4 h-4 shrink-0"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 6a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0ZM4.501 20.118a7.5 7.5 0 0 1 14.998 0A17.933 17.933 0 0 1 12 21.75c-2.676 0-5.216-.584-7.499-1.632Z"/></svg> <span :class="sidebarPinned ? '' : 'sm:w-0 sm:overflow-hidden sm:whitespace-nowrap'" class="group-hover:sm:w-auto transition-all duration-200 delay-150">User</span>
+                </a>
+                <a href="{{ route('admin.system-health') }}" class="flex items-center px-3 py-2 gap-2 text-sm font-[Helvetica] font-bold text-black hover:bg-[#fcc20f] hover:text-black border border-black mb-1 rounded-none {{ request()->routeIs('admin.system-health') ? 'bg-[#fcc20f]' : 'bg-white' }}">
+                    <span class="inline-block w-4 h-4 shrink-0 text-center">+</span>
+                    <span :class="sidebarPinned ? '' : 'sm:w-0 sm:overflow-hidden sm:whitespace-nowrap'" class="group-hover:sm:w-auto transition-all duration-200 delay-150">System Health</span>
                 </a>
                 @endif
                 <div class="border-t border-dashed border-gray-400 mx-2 my-2"></div>

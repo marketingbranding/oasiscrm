@@ -13,6 +13,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 
 class OptimisticLockService
 {
@@ -57,6 +58,13 @@ class OptimisticLockService
     public function conflict(Request $request, Model $model, mixed $expected): JsonResponse|RedirectResponse
     {
         $metadata = $this->metadata($model, $expected);
+        Log::info('Optimistic lock conflict', [
+            'operation' => 'optimistic_lock_conflict',
+            'user_id' => $request->user()?->id,
+            'branch_id' => $model->getAttribute('branch_id'),
+            'record_type' => $metadata['record_type'],
+            'record_id' => $model->getKey(),
+        ]);
         if ($request->user()) {
             rescue(fn () => $this->notifications->conflict($request->user(), $model, $metadata['reload_url']), report: false);
         }

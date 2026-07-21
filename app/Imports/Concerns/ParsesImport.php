@@ -3,6 +3,7 @@
 namespace App\Imports\Concerns;
 
 use App\Models\Branch;
+use Carbon\Carbon;
 use PhpOffice\PhpSpreadsheet\IOFactory;
 
 trait ParsesImport
@@ -10,21 +11,26 @@ trait ParsesImport
     protected static function parseDate(string $value): ?string
     {
         $value = trim($value);
-        if (empty($value)) return null;
+        if (empty($value)) {
+            return null;
+        }
 
         if (is_numeric($value)) {
             $unix = ($value - 25569) * 86400;
+
             return date('Y-m-d', (int) $unix);
         }
 
         $formats = ['d M Y', 'd/m/Y', 'Y-m-d', 'd-m-Y', 'd/m/y', 'd F Y'];
         foreach ($formats as $fmt) {
             $dt = \DateTime::createFromFormat($fmt, $value);
-            if ($dt) return $dt->format('Y-m-d');
+            if ($dt) {
+                return $dt->format('Y-m-d');
+            }
         }
 
         try {
-            return (new \Carbon\Carbon($value))->format('Y-m-d');
+            return (new Carbon($value))->format('Y-m-d');
         } catch (\Exception $e) {
             return null;
         }
@@ -33,7 +39,9 @@ trait ParsesImport
     protected static function parseNumeric(string $value, bool $stripCurrency = false): ?float
     {
         $value = trim($value);
-        if (empty($value)) return null;
+        if (empty($value)) {
+            return null;
+        }
 
         if ($stripCurrency) {
             $value = str_replace(['Rp', '.', ','], ['', '', '.'], $value);
@@ -47,6 +55,7 @@ trait ParsesImport
     protected static function parseBool(string $value): bool
     {
         $v = strtoupper(trim($value));
+
         return in_array($v, ['YA', 'TRUE', '1', '✓', 'YES']);
     }
 
@@ -66,18 +75,17 @@ trait ParsesImport
         $spreadsheet->disconnectWorksheets();
     }
 
-    protected static function detectHasCabang(array $rows): array
+    protected static function detectHasCabang(array $rows, array $allowedBranchIds = []): array
     {
         $hasCabang = false;
         $branchNames = [];
 
-        if (isset($rows[1]) && is_array($rows[1])) {
-            $firstDataRow = array_values($rows[1]);
-            $firstVal = trim((string) ($firstDataRow[0] ?? ''));
-            if (!empty($firstVal) && !is_numeric($firstVal)) {
-                $branchNames = Branch::where('is_active', true)->forDropdown()->pluck('name')->toArray();
-                $hasCabang = in_array($firstVal, $branchNames);
-            }
+        $headers = array_map(fn ($value) => mb_strtolower(trim((string) $value)), array_values($rows[0] ?? []));
+        $hasCabang = in_array('cabang', $headers, true);
+        if ($hasCabang) {
+            $branchNames = Branch::where('is_active', true)
+                ->when($allowedBranchIds, fn ($query) => $query->whereIn('id', $allowedBranchIds))
+                ->forDropdown()->pluck('name')->toArray();
         }
 
         return [$hasCabang, $branchNames];
@@ -85,17 +93,20 @@ trait ParsesImport
 
     protected static function resolveBranchFromFile(string $cabangName, array $branchNameToId, array $branchNames): ?int
     {
-        if (!empty($cabangName) && !empty($branchNames)) {
+        if (! empty($cabangName) && ! empty($branchNames)) {
             $branchIdx = array_search($cabangName, $branchNames);
             if ($branchIdx !== false) {
                 return $branchNameToId[$branchNames[$branchIdx]] ?? null;
             }
         }
+
         return null;
     }
 
-    protected static function branchNameToIdMap(): array
+    protected static function branchNameToIdMap(array $allowedBranchIds = []): array
     {
-        return Branch::where('is_active', true)->forDropdown()->pluck('id', 'name')->toArray();
+        return Branch::where('is_active', true)
+            ->when($allowedBranchIds, fn ($query) => $query->whereIn('id', $allowedBranchIds))
+            ->forDropdown()->pluck('id', 'name')->toArray();
     }
 }

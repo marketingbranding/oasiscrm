@@ -5,6 +5,7 @@ namespace App\Services;
 use Google\Client as GoogleClient;
 use Google\Service\Sheets;
 use Google\Service\Sheets\BatchUpdateSpreadsheetRequest;
+use Google\Service\Sheets\BatchUpdateValuesRequest;
 use Google\Service\Sheets\CopyPasteRequest;
 use Google\Service\Sheets\GridRange;
 use Google\Service\Sheets\Request;
@@ -168,6 +169,22 @@ class GoogleSheetsApiService
         $this->sheets->spreadsheets_values->update($spreadsheetId, $range, $body, [
             'valueInputOption' => 'USER_ENTERED',
         ]);
+    }
+
+    public function batchUpdateRanges(string $spreadsheetId, array $ranges): void
+    {
+        if (empty($ranges)) {
+            return;
+        }
+
+        $data = collect($ranges)->map(fn (array $item) => new ValueRange([
+            'range' => $item['range'],
+            'values' => $item['values'],
+        ]))->all();
+        $this->sheets->spreadsheets_values->batchUpdate($spreadsheetId, new BatchUpdateValuesRequest([
+            'valueInputOption' => 'USER_ENTERED',
+            'data' => $data,
+        ]));
     }
 
     public function appendRange(string $spreadsheetId, string $range, array $values): void

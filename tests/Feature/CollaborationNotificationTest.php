@@ -32,7 +32,7 @@ class CollaborationNotificationTest extends TestCase
         $this->actingAs($user)->getJson(route('notifications.index'))
             ->assertOk()->assertJsonPath('unread_count', 1)->assertJsonCount(1, 'notifications')
             ->assertJsonPath('notifications.0.title', 'Milik Saya');
-        $this->actingAs($user)->patchJson(route('notifications.read', $foreign))->assertForbidden();
+        $this->actingAs($user)->patchJson(route('notifications.read', $foreign))->assertNotFound();
         $this->assertNull($foreign->fresh()->read_at);
         $this->actingAs($user)->patchJson(route('notifications.read', $own))->assertOk();
         $this->assertNotNull($own->fresh()->read_at);
@@ -137,6 +137,9 @@ class CollaborationNotificationTest extends TestCase
         $this->app->instance(KonsumenProgressSyncService::class, $progress);
         $this->actingAs($user)->postJson(route('konsumen-progress.sync'), ['branch_id' => $branch->id])->assertUnprocessable();
 
+        $pusatRole = Role::create(['name' => 'Pusat', 'slug' => 'pusat', 'is_superadmin' => false]);
+        $user->update(['role_id' => $pusatRole->id]);
+        $user->setRelation('role', $pusatRole);
         $dana = Mockery::mock(DanaTalanganGoogleService::class);
         $dana->shouldReceive('sync')->once()->with($user->id)->andReturn([
             'ok' => true, 'summary' => ['updated' => 1, 'imported' => 2, 'pushed' => 3],

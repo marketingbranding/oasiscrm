@@ -8,6 +8,7 @@ use App\Models\DanaTalanganSyncStatus;
 use App\Models\LeadMaster;
 use App\Models\User;
 use Carbon\Carbon;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Throwable;
 
@@ -47,6 +48,7 @@ class DanaTalanganGoogleService
             'imported' => 0,
             'updated' => 0,
             'pushed' => 0,
+            'push_failed' => 0,
             'deleted' => 0,
             'inferred_projects' => 0,
             'repaired_metadata' => 0,
@@ -140,16 +142,40 @@ class DanaTalanganGoogleService
                     if ($record->trashed()) {
                         $record->restoreQuietly();
                     }
-                    $record->fill($data + [
-                        'updated_by' => null,
+                    $sourceHash = $this->dataHash($data);
+                    $syncMetadata = [
                         'oasis_sync_id' => $syncId,
                         'sheet_name' => $sheetName,
                         'sheet_row_number' => $rowNumber,
                         'sync_status' => 'synced',
                         'last_sync_error' => null,
-                        'source_hash' => $this->dataHash($data),
+                        'source_hash' => $sourceHash,
                         'last_synced_at' => now(),
-                    ])->saveQuietly();
+                    ];
+                    $localHash = $record->exists ? $this->dataHash([
+                        'tanggal' => $record->tanggal?->format('Y-m-d'),
+                        'nama_konsumen' => $record->nama_konsumen,
+                        'kav' => $record->kav,
+                        'project_name' => $record->project_name,
+                        'pinjam_nama' => (bool) $record->pinjam_nama,
+                        'pekerjaan' => $record->pekerjaan,
+                        'status_perkawinan' => $record->status_perkawinan,
+                        'umur' => $record->umur,
+                        'nama_marketing' => $record->nama_marketing,
+                        'tgl_komitmen' => $record->tgl_komitmen?->format('Y-m-d'),
+                        'penyelesaian' => $record->penyelesaian,
+                        'konfirmasi_keuangan' => (bool) $record->konfirmasi_keuangan,
+                        'status' => $record->status,
+                        'branch_id' => $record->branch_id,
+                    ]) : null;
+                    if ($record->exists && filled($record->source_hash)
+                        && hash_equals((string) $record->source_hash, $sourceHash)
+                        && hash_equals((string) $localHash, $sourceHash)) {
+                        DB::table('dana_talangans')->where('id', $record->id)->update($syncMetadata);
+                        $record->refresh();
+                    } else {
+                        $record->fill($data + ['updated_by' => null] + $syncMetadata)->saveQuietly();
+                    }
 
                     if ($metadataStale || ($cells[14] ?? '') === '') {
                         $this->googleSheets->updateRange(
@@ -191,22 +217,31 @@ class DanaTalanganGoogleService
                     continue;
                 }
 
-                $summary['pushed']++;
-                if (! $dryRun) {
-                    $this->push($record, $actorId);
+                if ($dryRun || $this->push($record, $actorId)) {
+                    $summary['pushed']++;
+                } else {
+                    $summary['push_failed']++;
+                    $summary['warnings'][] = 'Satu data lokal gagal dikirim ke Google Sheets.';
                 }
             }
 
+            $ok = $summary['push_failed'] === 0;
             if ($status) {
                 $status->update([
-                    'status' => empty($summary['warnings']) ? 'success' : 'warning',
+                    'status' => $ok ? (empty($summary['warnings']) ? 'success' : 'warning') : 'failed',
                     'message' => empty($summary['warnings']) ? null : implode("\n", $summary['warnings']),
                     'summary' => $summary,
                     'finished_at' => now(),
                 ]);
             }
 
-            return ['ok' => true, 'dry_run' => $dryRun, 'summary' => $summary];
+            return [
+                'ok' => $ok,
+                'outcome' => $ok ? (empty($summary['warnings']) ? 'success' : 'warning') : 'failed',
+                'dry_run' => $dryRun,
+                'message' => $ok ? null : "{$summary['push_failed']} data gagal dikirim ke Google Sheets.",
+                'summary' => $summary,
+            ];
         } catch (Throwable $e) {
             if ($status) {
                 $status->update(['status' => 'failed', 'message' => $e->getMessage(), 'finished_at' => now()]);

@@ -17,6 +17,7 @@ use App\Http\Controllers\Crm\LeadSourceController;
 use App\Http\Controllers\Crm\NotificationController;
 use App\Http\Controllers\Crm\PresenceController;
 use App\Http\Controllers\Crm\ProjectController;
+use App\Http\Controllers\Crm\SystemHealthController;
 use App\Http\Controllers\ProfileController;
 use App\Models\ContentItem;
 use App\Models\DanaTalangan;
@@ -30,12 +31,12 @@ Route::get('/', function () {
         : redirect()->route('login');
 });
 
-Route::middleware(['auth', 'verified'])->group(function () {
+Route::middleware(['auth', 'active', 'verified'])->group(function () {
     Route::get('/password/change', [PasswordChangeController::class, 'show'])->name('password.change');
     Route::put('/password/change', [PasswordChangeController::class, 'update'])->name('password.change.update');
 });
 
-Route::middleware(['auth', 'verified', 'password.changed'])->group(function () {
+Route::middleware(['auth', 'active', 'verified', 'password.changed'])->group(function () {
     Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
 
     Route::post('/presence/heartbeat', [PresenceController::class, 'heartbeat'])->middleware('throttle:180,1')->name('presence.heartbeat');
@@ -100,6 +101,7 @@ Route::middleware(['auth', 'verified', 'password.changed'])->group(function () {
     Route::post('feedback-reports/{feedbackReport}/fix', [FeedbackReportController::class, 'markFixed'])->name('feedback-reports.fix');
 
     Route::middleware('role:superadmin')->group(function () {
+        Route::get('/admin/system-health', SystemHealthController::class)->name('admin.system-health');
         Route::resource('changelogs', ChangelogController::class)->except('index');
 
         Route::get('/branches', [BranchController::class, 'index'])->name('branches.index');
@@ -120,7 +122,7 @@ Route::middleware(['auth', 'verified', 'password.changed'])->group(function () {
     });
 });
 
-Route::middleware('auth')->group(function () {
+Route::middleware(['auth', 'active'])->group(function () {
     Route::post('/bug-report', [BugReportController::class, 'store'])->name('bug-report.store');
 
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');

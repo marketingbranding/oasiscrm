@@ -160,7 +160,10 @@ class DanaTalanganController extends Controller
             ->whereIn('branch_id', $this->workspaceAccess->accessibleBranchIds($user))
             ->orderBy('project_name')->get();
 
-        $kavlings = Kavling::with('project')->orderBy('kavling_code')->get();
+        $accessibleBranchIds = $this->workspaceAccess->accessibleBranchIds($user);
+        $kavlings = Kavling::with('project')
+            ->whereHas('project', fn ($query) => $query->whereIn('branch_id', $accessibleBranchIds))
+            ->orderBy('kavling_code')->get();
 
         return view('crm.dana-talangan.create', compact('branches', 'projects', 'kavlings'));
     }
@@ -207,7 +210,10 @@ class DanaTalanganController extends Controller
             ->orderBy('project_name')->get();
 
         $record = $danaTalangan;
-        $kavlings = Kavling::with('project')->orderBy('kavling_code')->get();
+        $accessibleBranchIds = $this->workspaceAccess->accessibleBranchIds($user);
+        $kavlings = Kavling::with('project')
+            ->whereHas('project', fn ($query) => $query->whereIn('branch_id', $accessibleBranchIds))
+            ->orderBy('kavling_code')->get();
 
         return view('crm.dana-talangan.edit', compact('record', 'branches', 'projects', 'kavlings'));
     }
@@ -331,8 +337,7 @@ class DanaTalanganController extends Controller
     public function sync(Request $request)
     {
         $user = Auth::user();
-        $primary = $this->workspaceAccess->primaryBranch($user);
-        abort_unless($user->isSuperadmin() || $user->hasRole('pusat') || ($primary && $this->workspaceAccess->canSyncBranch($user, $primary)), 403);
+        abort_unless($user->isSuperadmin() || $user->hasRole('pusat'), 403);
         try {
             $result = app(DanaTalanganGoogleService::class)->sync(Auth::id());
         } catch (Throwable $exception) {
@@ -349,17 +354,19 @@ class DanaTalanganController extends Controller
         }
 
         $summary = $result['summary'];
+        $warningCount = count($summary['warnings'] ?? []);
+        $warningText = $warningCount > 0 ? " {$warningCount} peringatan perlu diperiksa." : '';
 
         if ($request->expectsJson()) {
             return response()->json([
                 'ok' => true,
-                'message' => "Sync selesai: {$summary['updated']} diperbarui, {$summary['imported']} diimpor, {$summary['pushed']} dikirim.",
+                'message' => "Sync selesai: {$summary['updated']} diperbarui, {$summary['imported']} diimpor, {$summary['pushed']} dikirim.".$warningText,
                 'summary' => $summary,
                 'finished_at' => now()->toIso8601String(),
             ]);
         }
 
-        return back()->with('success', "Sync selesai: {$summary['updated']} diperbarui, {$summary['imported']} diimpor, {$summary['pushed']} dikirim.");
+        return back()->with($warningCount > 0 ? 'error' : 'success', "Sync selesai: {$summary['updated']} diperbarui, {$summary['imported']} diimpor, {$summary['pushed']} dikirim.".$warningText);
     }
 
     public function kavlingOptions(Request $request, DanaTalanganGoogleService $googleService, DanaTalanganOptionService $optionService)
@@ -383,7 +390,9 @@ class DanaTalanganController extends Controller
     public function importStore(Request $request, DanaTalanganGoogleService $googleService)
     {
         $response = $this->traitImportStore($request);
-        $googleService->sync(Auth::id());
+        if ((Auth::user()->isSuperadmin() || Auth::user()->hasRole('pusat')) && ! session()->has('import_errors')) {
+            $googleService->sync(Auth::id());
+        }
 
         return $response;
     }
@@ -422,7 +431,14 @@ class DanaTalanganController extends Controller
             return collect();
         }
 
-        return $this->applyBranchScope(DanaTalangan::whereIn('id', $ids), null)->get();
+        $ids = array_values(array_unique(array_map('intval', $ids)));
+        $records = DanaTalangan::whereIn('id', $ids)->get();
+        abort_unless($records->count() === count($ids), 403);
+        foreach ($records as $record) {
+            abort_unless($this->workspaceAccess->canEditBranch(Auth::user(), (int) $record->branch_id), 403);
+        }
+
+        return $records;
     }
 
     private function resolveDateRange(Request $request): array

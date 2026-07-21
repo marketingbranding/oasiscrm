@@ -19,18 +19,27 @@ trait Importable
 
         $user = Auth::user();
         $requestedBranchId = $request->get('branch_id');
-        $branch = ! $requestedBranchId && $user->canViewAllBranches()
-            ? null
-            : app(WorkspaceAccessService::class)->resolveRequestedBranch($user, $requestedBranchId);
+        $workspaceAccess = app(WorkspaceAccessService::class);
+        $editableBranchIds = $workspaceAccess->accessibleBranches($user)
+            ->filter(fn ($candidate) => $workspaceAccess->canEditBranch($user, $candidate))
+            ->pluck('id')->map(fn ($id) => (int) $id)->values()->all();
+        $branch = $requestedBranchId
+            ? $workspaceAccess->resolveRequestedBranch($user, $requestedBranchId)
+            : null;
         if ($requestedBranchId && ! $branch) {
             abort(403);
         }
+        if ($branch && ! $workspaceAccess->canEditBranch($user, $branch)) {
+            abort(403);
+        }
+        abort_if(empty($editableBranchIds), 403);
         $branchId = $branch?->id;
 
         $result = ($this->importClass)::import(
             $request->file('file')->getPathname(),
             $branchId,
-            $request->only($this->importPreservedParams)
+            $request->only($this->importPreservedParams),
+            $editableBranchIds,
         );
 
         $message = $result['imported'].' data berhasil diimport.';

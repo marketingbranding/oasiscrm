@@ -11,6 +11,8 @@
 
 ## 1. Prepare Your Application
 
+Before deployment, complete the backup and release-record requirements in `docs/PRODUCTION_ACCEPTANCE.md`. Record the current commit SHA, migration status, cron configuration, database backup, `.env` backup, persistent storage backup, and reproducible Vite assets.
+
 ### Build Frontend Assets
 ```bash
 npm ci
@@ -144,7 +146,9 @@ Verify registration after every deployment:
 php artisan schedule:list
 ```
 
-The schedule includes `oasis:presence-cleanup` hourly. Live presence still filters rows older than 60 seconds even if cleanup is delayed. Notifications currently have no pruning schedule; they are retained until a retention policy is approved.
+Verify actual execution through the superadmin `/admin/system-health` page. `schedule:list` proves registration only; it does not prove the hosting cron is running.
+
+The schedule includes `oasis:presence-cleanup` hourly and `oasis:notifications-cleanup` weekly. Read notifications older than `NOTIFICATION_READ_RETENTION_DAYS` are eligible for cleanup; unread notifications are retained. Live presence still filters rows older than 60 seconds even if cleanup is delayed.
 
 ### Queue Worker (if needed)
 For production queues, add to cron:

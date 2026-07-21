@@ -47,21 +47,21 @@ class DashboardController extends Controller
             ->orderBy('project_name')
             ->get();
 
-        $recentActivity = $this->getRecentActivity($selectedBranchId, $selectedProject);
+        $recentActivity = $this->getRecentActivity($user, $selectedBranchId, $selectedProject);
         $leadStats = $this->getLeadStats($selectedBranchId, $selectedProject);
         $danaStats = $this->getDanaTalanganStats($selectedBranchId, $selectedProject);
-        $actionQueue = $this->getActionQueue($selectedBranchId, $selectedProject);
+        $actionQueue = $this->getActionQueue($user, $selectedBranchId, $selectedProject);
         $syncHealth = $this->getSyncHealth($selectedBranchId);
         $konsumenProgress = $this->getKonsumenProgress($selectedBranchId);
 
         return view('crm.dashboard', compact('branches', 'branch', 'selectedBranchId', 'projects', 'selectedProject', 'recentActivity', 'leadStats', 'danaStats', 'actionQueue', 'syncHealth', 'konsumenProgress'));
     }
 
-    private function getRecentActivity($branchId = null, $projectName = null)
+    private function getRecentActivity($user, $branchId = null, $projectName = null)
     {
         $activity = collect();
 
-        ContentItem::with('creator')
+        ContentItem::with('creator')->visibleTo($user)
             ->when($branchId, fn ($q) => $q->where('branch_id', $branchId))
             ->when($projectName, fn ($q) => $q->where('project_name', $projectName))
             ->latest()->take(5)->get()
@@ -158,7 +158,7 @@ class DashboardController extends Controller
         return compact('tidakSanggup', 'belumKonfirmasi', 'hariIni', 'overdue');
     }
 
-    private function getActionQueue($branchId = null, $projectName = null)
+    private function getActionQueue($user, $branchId = null, $projectName = null)
     {
         $queue = collect();
 
@@ -192,7 +192,7 @@ class DashboardController extends Controller
                 'time' => $d->created_at,
             ]));
 
-        ContentItem::whereDate('deadline_date', '<', today())
+        ContentItem::visibleTo($user)->whereDate('deadline_date', '<', today())
             ->where('status', '!=', 'completed')
             ->when($branchId, fn ($q) => $q->where('branch_id', $branchId))
             ->when($projectName, fn ($q) => $q->where('project_name', $projectName))
@@ -207,7 +207,7 @@ class DashboardController extends Controller
                 'time' => $t->deadline_date,
             ]));
 
-        ContentItem::whereDate('scheduled_date', today())
+        ContentItem::visibleTo($user)->whereDate('scheduled_date', today())
             ->where('status', '!=', 'completed')
             ->when($branchId, fn ($q) => $q->where('branch_id', $branchId))
             ->when($projectName, fn ($q) => $q->where('project_name', $projectName))

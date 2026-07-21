@@ -54,3 +54,24 @@ Install one cron entry:
 ```
 
 The repository registers cleanup, but deployment operators must verify the cron actually runs in the hosting environment.
+
+## Execution Record Template
+
+Copy this section for each actual two-user execution. An empty template is not proof of browser verification.
+
+- Tester names:
+- Date and time:
+- Environment and URL:
+- Commit SHA:
+- Browser profiles and versions:
+- Accounts used, by display name only:
+- Branch tested:
+- Record IDs tested:
+- Scenario:
+- Expected result:
+- Actual result:
+- Result: PASS / FAIL / BLOCKED
+- Screenshot or evidence reference:
+- Defect reference:
+- Notes:
+- Reviewer/sign-off:

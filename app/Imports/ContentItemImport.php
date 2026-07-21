@@ -10,17 +10,18 @@ class ContentItemImport
 {
     use ParsesImport;
 
-    public static function import(string $filePath, ?int $branchId = null, ?array $preservedParams = []): array
+    public static function import(string $filePath, ?int $branchId = null, ?array $preservedParams = [], array $allowedBranchIds = []): array
     {
         $imported = 0;
         $errors = [];
         $rowNum = 0;
         $user = Auth::user();
+        $allowedBranchIds = $allowedBranchIds ?: array_values(array_filter([$branchId]));
 
         [$spreadsheet, $sheet, $rows] = self::spreadsheetLoad($filePath);
 
-        [$hasCabang, $branchNames] = self::detectHasCabang($rows);
-        $branchNameToId = self::branchNameToIdMap();
+        [$hasCabang, $branchNames] = self::detectHasCabang($rows, $allowedBranchIds);
+        $branchNameToId = self::branchNameToIdMap($allowedBranchIds);
         $header = array_map(fn ($value) => mb_strtolower(trim((string) $value)), array_values($rows[0] ?? []));
         $newFormat = in_array('tipe', $header, true);
 
@@ -42,6 +43,11 @@ class ContentItemImport
             if ($hasCabang) {
                 $cabangName = trim((string) ($cells[0] ?? ''));
                 $branchFromFile = self::resolveBranchFromFile($cabangName, $branchNameToId, $branchNames);
+                if (! $branchFromFile || ($branchId && (int) $branchId !== (int) $branchFromFile)) {
+                    $errors[] = "Baris {$rowNum}: Cabang tidak dikenal atau tidak sesuai izin import.";
+
+                    continue;
+                }
             }
 
             if ($newFormat) {
@@ -101,9 +107,14 @@ class ContentItemImport
             $status = in_array($statusRaw, ContentItem::STATUSES[$type], true) ? $statusRaw : ContentItem::STATUSES[$type][0];
             $picNamesArray = $picNames !== '' ? array_map('trim', explode(',', $picNames)) : [];
 
-            $resolvedBranchId = $branchId ?? $branchFromFile ?? $user->branch_id;
+            $resolvedBranchId = $hasCabang ? $branchFromFile : ($branchId ?? $user->branch_id);
             if (! $resolvedBranchId) {
                 $errors[] = "Baris {$rowNum}: Cabang tidak dapat ditentukan.";
+
+                continue;
+            }
+            if (! in_array((int) $resolvedBranchId, $allowedBranchIds, true)) {
+                $errors[] = "Baris {$rowNum}: Anda tidak memiliki izin edit untuk cabang tersebut.";
 
                 continue;
             }

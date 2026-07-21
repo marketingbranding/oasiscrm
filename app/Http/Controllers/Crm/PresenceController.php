@@ -11,6 +11,7 @@ use App\Services\WorkspaceAccessService;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Gate;
 use Illuminate\Validation\Rule;
 
 class PresenceController extends Controller
@@ -138,6 +139,9 @@ class PresenceController extends Controller
             $record = $model::findOrFail($data['record_id']);
             $recordBranchId = $this->recordBranchId($record);
             abort_unless($recordBranchId && $this->workspaceAccess->canViewBranch($user, $recordBranchId), 403);
+            if ($record instanceof ContentItem) {
+                Gate::forUser($user)->authorize(($data['mode'] ?? 'viewing') === 'editing' ? 'update' : 'view', $record);
+            }
             if ($branch && $recordBranchId !== $branch->id) {
                 abort(403);
             }

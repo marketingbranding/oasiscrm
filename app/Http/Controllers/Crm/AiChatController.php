@@ -9,6 +9,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
+use Illuminate\Validation\Rule;
 
 class AiChatController extends Controller
 {
@@ -67,7 +68,11 @@ class AiChatController extends Controller
 
         $data = $request->validate([
             'message' => ['required', 'string', 'max:'.config('ai.max_input_length', 1000)],
-            'conversation_id' => ['nullable', 'integer', 'exists:ai_chat_conversations,id'],
+            'conversation_id' => [
+                'nullable',
+                'integer',
+                Rule::exists('ai_chat_conversations', 'id')->where('user_id', $request->user()->id),
+            ],
         ]);
 
         $conversation = null;

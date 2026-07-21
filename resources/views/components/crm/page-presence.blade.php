@@ -7,6 +7,7 @@
         'indexUrl' => route('presence.index'),
         'destroyUrl' => route('presence.destroy'),
         'heartbeatSeconds' => config('presence.heartbeat_seconds', 25),
+        'offlineSeconds' => config('presence.offline_seconds', 60),
         'pageKey' => $pageKey,
         'branchId' => $branchId,
         'recordType' => $recordType,

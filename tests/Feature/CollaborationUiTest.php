@@ -42,6 +42,7 @@ class CollaborationUiTest extends TestCase
         $this->assertStringContainsString("new CustomEvent('oasis-conflict'", $planner);
         $this->assertStringContainsString('preserveUnsavedValues', $conflict);
         $this->assertStringContainsString('copyUnsavedValues', $conflict);
+        $this->assertStringContainsString('Browser tidak mengizinkan penyalinan otomatis', $conflict);
         $this->assertStringNotContainsString("alert('Status gagal diperbarui", $planner);
     }
 }

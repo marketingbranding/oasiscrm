@@ -4,10 +4,12 @@ export default function registerNotifications(Alpine) {
         notifications: [],
         unreadCount: 0,
         loading: false,
+        unavailable: false,
         timer: null,
         csrf: document.querySelector('meta[name="csrf-token"]')?.content || '',
 
         init() {
+            if (!config.enabled) return;
             this.refresh();
             document.addEventListener('visibilitychange', () => document.hidden ? this.stop() : this.start());
             this.start();
@@ -24,6 +26,7 @@ export default function registerNotifications(Alpine) {
         },
 
         async refresh() {
+            if (this.loading) return;
             this.loading = true;
             try {
                 const response = await fetch(config.indexUrl, { headers: { Accept: 'application/json' } });
@@ -31,7 +34,8 @@ export default function registerNotifications(Alpine) {
                 const data = await response.json();
                 this.notifications = data.notifications || [];
                 this.unreadCount = Number(data.unread_count || 0);
-            } catch (_) { /* Notifications must not interrupt CRM use. */ }
+                this.unavailable = false;
+            } catch (_) { this.unavailable = true; }
             finally { this.loading = false; }
         },
 

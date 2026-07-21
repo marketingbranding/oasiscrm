@@ -10,6 +10,7 @@ use App\Models\UserNotification;
 use App\Models\UserPresence;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\Facades\Log;
 use Throwable;
 
 class CollaborationNotificationService
@@ -87,6 +88,10 @@ class CollaborationNotificationService
         $message = $ok
             ? "Sinkronisasi {$module}{$scopeLabel} selesai pada ".now()->format('d M Y, H:i').($rowCount > 0 ? ": {$rowCount} baris diperbarui." : '.')
             : "Sinkronisasi {$module}{$scopeLabel} gagal pada ".now()->format('d M Y, H:i').'. '.str((string) ($result['message'] ?? 'Kesalahan tidak diketahui.'))->limit(300);
+        $warningCount = count($result['summary']['warnings'] ?? []);
+        if ($ok && $warningCount > 0) {
+            $message .= " {$warningCount} peringatan memerlukan pemeriksaan.";
+        }
 
         $this->attempt(fn () => $this->create(
             $user,
@@ -136,7 +141,10 @@ class CollaborationNotificationService
         try {
             $callback();
         } catch (Throwable $exception) {
-            report($exception);
+            Log::warning('Collaboration notification failed', [
+                'operation' => 'notification_create',
+                'error_class' => $exception::class,
+            ]);
         }
     }
 }

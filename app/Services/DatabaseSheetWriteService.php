@@ -34,9 +34,11 @@ class DatabaseSheetWriteService
         }
 
         try {
-            foreach ($changed as $header => $value) {
-                $this->updateCell($record->branch, $record->sheet_name, $record->row_number, $headers, $header, $value);
-            }
+            $ranges = collect($changed)->map(fn ($value, $header) => [
+                'range' => $this->cellRange($record->sheet_name, $record->row_number, $headers, $header),
+                'values' => [[$value]],
+            ])->filter(fn ($item) => filled($item['range']))->values()->all();
+            $this->googleSheets->batchUpdateRanges($record->branch->sheet_id, $ranges);
 
             $record->update([
                 'oasis_sync_id' => $record->oasis_sync_id ?: $rowData['oasis_sync_id'],
@@ -49,9 +51,8 @@ class DatabaseSheetWriteService
             return true;
         } catch (Throwable $e) {
             $record->update([
-                'row_data' => $rowData,
                 'sync_status' => 'failed',
-                'last_sync_error' => $e->getMessage(),
+                'last_sync_error' => str($e->getMessage())->limit(1000),
             ]);
 
             return false;
@@ -91,9 +92,11 @@ class DatabaseSheetWriteService
                 $this->googleSheets->copyRowFormulas($branch->sheet_id, $sheetIds[$sheetName], $template->row_number, $rowNumber);
             }
 
-            foreach ($this->editableHeaders($headers, $formulaColumns) as $header) {
-                $this->updateCell($branch, $sheetName, $rowNumber, $headers, $header, $rowData[$header] ?? '');
-            }
+            $ranges = collect($this->editableHeaders($headers, $formulaColumns))->map(fn ($header) => [
+                'range' => $this->cellRange($sheetName, $rowNumber, $headers, $header),
+                'values' => [[$rowData[$header] ?? '']],
+            ])->filter(fn ($item) => filled($item['range']))->values()->all();
+            $this->googleSheets->batchUpdateRanges($branch->sheet_id, $ranges);
 
             DatabaseSheetRecord::create([
                 'branch_id' => $branch->id,
@@ -123,6 +126,17 @@ class DatabaseSheetWriteService
         $rowData['oasis_deleted_by'] = (string) $userId;
 
         try {
+            $ranges = collect([
+                'oasis_deleted_at' => $deletedAt,
+                'oasis_deleted_by' => (string) $userId,
+            ])->map(fn ($value, $header) => [
+                'range' => $this->cellRange($record->sheet_name, $record->row_number, $record->headers, $header),
+                'values' => [[$value]],
+            ])->filter(fn ($item) => filled($item['range']))->values()->all();
+            if (count($ranges) !== 2) {
+                throw new \RuntimeException('Kolom metadata penghapusan belum tersedia. Jalankan cleanup metadata dan sync ulang.');
+            }
+            $this->googleSheets->batchUpdateRanges($record->branch->sheet_id, $ranges);
             $record->update([
                 'row_data' => $rowData,
                 'oasis_deleted_at' => $deletedAt,
@@ -146,15 +160,15 @@ class DatabaseSheetWriteService
             && ! in_array($header, ['oasis_sync_id', 'oasis_deleted_at', 'oasis_deleted_by'], true)));
     }
 
-    private function updateCell(Branch $branch, string $sheetName, int $rowNumber, array $headers, string $header, string $value): void
+    private function cellRange(string $sheetName, int $rowNumber, array $headers, string $header): ?string
     {
         $index = array_search($header, $headers, true);
         if ($index === false) {
-            return;
+            return null;
         }
 
         $column = $this->syncService->columnLetter($index + 1);
-        $range = $this->googleSheets->quoteSheetName($sheetName).'!'.$column.$rowNumber;
-        $this->googleSheets->updateRange($branch->sheet_id, $range, [[$value]]);
+
+        return $this->googleSheets->quoteSheetName($sheetName).'!'.$column.$rowNumber;
     }
 }

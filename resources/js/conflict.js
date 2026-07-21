@@ -8,6 +8,7 @@ export default function registerConflict(Alpine) {
         open: Boolean(config.initial?.code),
         conflict: config.initial || null,
         copied: false,
+        copyError: '',
         validationMessage: '',
         savedValues: null,
         storagePrefix: 'oasis_conflict_unsaved',
@@ -40,13 +41,20 @@ export default function registerConflict(Alpine) {
             const values = this.savedValues || this.readSavedValues();
             if (!values || !Object.keys(values).length) return;
             const text = Object.entries(values).map(([field, value]) => `${field}: ${Array.isArray(value) ? value.join(', ') : value}`).join('\n');
+            this.copyError = '';
+            let copied = false;
             try {
                 await navigator.clipboard.writeText(text);
+                copied = true;
             } catch (_) {
-                const textarea = document.createElement('textarea');
-                textarea.value = text; document.body.appendChild(textarea); textarea.select(); document.execCommand('copy'); textarea.remove();
+                try {
+                    const textarea = document.createElement('textarea');
+                    textarea.value = text; document.body.appendChild(textarea); textarea.select();
+                    copied = document.execCommand('copy'); textarea.remove();
+                } catch (_) { copied = false; }
             }
-            this.copied = true;
+            this.copied = copied;
+            if (!copied) this.copyError = 'Browser tidak mengizinkan penyalinan otomatis. Pilih dan salin nilai form secara manual sebelum memuat ulang.';
         },
 
         preserveUnsavedValues(form, originalValues = null) {

@@ -165,8 +165,8 @@ class DatabaseSheetMetadataTest extends TestCase
         $googleSheets->shouldReceive('copyRowFormat')->once()->with('spreadsheet-id', 123, 2, 3);
         $googleSheets->shouldReceive('copyRowFormulas')->once()->with('spreadsheet-id', 123, 2, 3);
         $googleSheets->shouldReceive('quoteSheetName')->once()->with('Leads')->andReturn("'Leads'");
-        $googleSheets->shouldReceive('updateRange')->once()
-            ->with('spreadsheet-id', "'Leads'!A3", [['Tidak Aktif']]);
+        $googleSheets->shouldReceive('batchUpdateRanges')->once()
+            ->with('spreadsheet-id', [['range' => "'Leads'!A3", 'values' => [['Tidak Aktif']]]]);
         $syncService = Mockery::mock(DatabaseSheetSyncService::class);
         $syncService->shouldReceive('columnLetter')->once()->with(1)->andReturn('A');
 

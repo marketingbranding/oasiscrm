@@ -29,9 +29,9 @@ class NotificationController extends Controller
         ]);
     }
 
-    public function read(Request $request, UserNotification $notification): JsonResponse
+    public function read(Request $request, $notification): JsonResponse
     {
-        abort_unless($notification->user_id === $request->user()->id, 403);
+        $notification = UserNotification::where('user_id', $request->user()->id)->findOrFail($notification);
         $notification->update(['read_at' => $notification->read_at ?? now()]);
 
         return response()->json(['ok' => true]);

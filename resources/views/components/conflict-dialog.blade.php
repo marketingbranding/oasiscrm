@@ -27,6 +27,7 @@
                     <button type="button" @click="discardSavedValues()" class="border-2 border-black bg-white px-4 py-2 font-[Helvetica] font-bold text-xs text-[#c0392b]">Buang Salinan</button>
                 </div>
                 <p x-show="copied" class="text-[#176b32] font-bold">Perubahan Anda telah disalin.</p>
+                <p x-show="copyError" class="border-2 border-black bg-[#d77a7a] px-3 py-2 font-bold" x-text="copyError"></p>
             </div>
         </div>
     </div>

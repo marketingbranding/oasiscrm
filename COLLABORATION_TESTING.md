@@ -75,3 +75,34 @@ Copy this section for each actual two-user execution. An empty template is not p
 - Defect reference:
 - Notes:
 - Reviewer/sign-off:
+
+## Execution Record
+
+Tester names: Andre dan Faizal
+Date and time: 21 Juli 2026
+Environment and URL: Production internal
+Commit SHA: 84b2e836ce1faace078d0dcd956feca3427616a5
+Browser profiles and versions: Chrome dan Edge
+Accounts used: Andre, Faizal
+Branch tested: Kantir Pusat
+Record IDs tested: Konten
+
+Scenario:
+Dua user mengedit record yang sama. User pertama menyimpan perubahan, lalu user kedua menyimpan form lama.
+
+Expected result:
+Sistem menolak overwrite dan menampilkan conflict dialog.
+
+Actual result:
+Conflict dialog muncul dan data terbaru tidak tertimpa.
+
+Result:
+PASS
+
+Screenshot or evidence reference:
+[nama screenshot bila ada]
+
+Notes:
+Optimistic locking berhasil pada pengujian dua user.
+Reviewer/sign-off:
+[nama penanggung jawab]

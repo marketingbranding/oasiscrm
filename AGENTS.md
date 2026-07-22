@@ -21,6 +21,18 @@ After editing any controller:
 3. Run affected tests
 4. Verify in browser (superadmin + branch-admin views, with and without branch/project filter)
 
+## Changelog — mandatory for application changes
+
+- Every completed change that affects application behavior, UI, workflow, data, authorization, integration, configuration, bug handling, or other user-visible results **must include an Oasis Changelog entry in the same change set**.
+- Changelog entries must be deployed through an idempotent data migration under `database/migrations/`. Never rely only on `php artisan tinker`, a local database insert, or a seeder that production may not run.
+- Insert with `DB::table('changelogs')->updateOrInsert(...)` using a stable identity such as `version` + `title`, so local runs and deployments cannot create duplicates. Set `created_by` to `null` for system-authored release entries and include timestamps.
+- Write `title` and `description` in clear Indonesian for Oasis users. Describe the visible outcome and workflow benefit; avoid commit hashes, implementation internals, test details, and developer-only terminology.
+- Use the existing categories only: `added` for new capabilities, `fixed` for bug fixes, `changed` for behavior changes, and `removed` for removed capabilities. Group closely related work into one concise entry instead of creating one row per edited file.
+- `version` is optional. Use the release version when it is explicitly known; do not invent or increment a version without release context.
+- The migration `down()` method must remove only the exact entry introduced by that migration.
+- Pure test changes, documentation changes, formatting, refactors with no runtime behavior change, and edits to agent instructions do not require an application changelog entry.
+- Before finishing, run the migration, verify exactly one matching row exists, and confirm the entry renders on the Oasis Changelog page. Include the changelog migration in the same commit as the application change.
+
 ## Architecture
 
 - **Two sync systems with independent routes and tables:** `database.sync` (DatabaseController) syncs leads/general sheets to `database_sheet_records`; `konsumen-progress.sync` (KonsumenProgressController) syncs pipeline stage sheets to `konsumen_progress_sheet_rows`. Dashboard Sync button calls `database.sync`, not the progress sync.

@@ -32,23 +32,7 @@
     @endif
 
     @if($selectedBranch)
-    <div class="border-2 border-black bg-white px-4 py-3 mb-4 font-['Times_New_Roman'] text-sm flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4">
-        <div>
-            <strong class="font-bold">Status Sync:</strong>
-            @if($syncStatus?->status === 'success')
-                <span>Terakhir sync {{ $syncStatus->finished_at?->format('d M Y H:i') }}</span>
-            @elseif($syncStatus?->status === 'failed')
-                <span class="text-[#c0392b]">Sync terakhir gagal: {{ $syncStatus->message }}</span>
-            @elseif($syncStatus?->status === 'running')
-                <span>Sedang sync...</span>
-            @else
-                <span>Belum pernah sync. Klik Sync Sekarang.</span>
-            @endif
-        </div>
-        @if($isStale)
-            <span class="inline-block bg-[#fcc20f] border-2 border-black px-2 py-1 font-[Helvetica] text-[10px] font-bold uppercase">Data perlu diperbarui</span>
-        @endif
-    </div>
+    <x-crm.sync-status-panel module-key="database" :scope-name="$selectedBranch->name" :branch-id="$selectedBranchId" :status="$syncStatus" :is-stale="$isStale" />
     @endif
 
     @if($errors->any())
@@ -84,6 +68,7 @@
     <div x-data="databaseTabs({
         branchId: '{{ $selectedBranch->id }}',
         editBaseUrl: '{{ url('database/records') }}',
+        sheetDataBaseUrl: '{{ url('database/sheet') }}',
         firstSheet: '{{ $firstSheet }}',
         initialHeaders: {{ $initialHeadersJson }},
         initialFormulaCols: {{ $initialFormulaJson }},
@@ -91,7 +76,7 @@
         initialRecords: {{ $initialRecordsJson }},
         requestSheet: '{{ $requestSheet ?? '' }}',
         requestAdd: {{ ($requestAdd ?? false) ? 'true' : 'false' }}
-    })">
+    })" @oasis-sync-updated.window="handleSyncUpdated($event.detail)">
         <style>
             [x-cloak] { display: none !important; }
             .tab-wrap { overflow-x:auto; overflow-y:hidden; white-space:nowrap; max-width:100%; border-bottom:2px solid #000; margin-bottom:12px; scroll-behavior:smooth; }
@@ -136,6 +121,11 @@
             @endforeach
         </div>
 
+        <div x-show="syncRefreshError" x-cloak class="mb-3 border-2 border-black bg-[#fcc20f] px-3 py-2 text-sm" aria-live="polite">
+            <span x-text="syncRefreshError"></span>
+            <button type="button" @click="refreshActiveSheet(tab)" class="ml-2 border-2 border-black bg-white px-2 py-1 text-xs font-bold">Coba Muat Ulang Data</button>
+        </div>
+
         {{-- Tab content -- rendered per sheet name --}}
         <template x-for="name in sheetNameList" :key="name">
             <div x-show="tab === name" x-cloak x-transition:enter="transition ease-out duration-200" x-transition:enter-start="opacity-0" x-transition:enter-end="opacity-100">
@@ -166,7 +156,7 @@
                 </div>
 
                 <template x-if="isLoaded(name) && currentData(name).records.length > 0">
-                    <div class="crm-table-scroll">
+                    <div class="crm-table-scroll" :data-sheet-scroll="name">
                         <table class="crm-data-table db-table" :class="{ frozen: frozen }">
                             <thead>
                                 <tr>
@@ -247,6 +237,14 @@
                 <div class="flex items-center justify-between mb-4">
                     <h2 class="font-[Helvetica] font-bold text-sm uppercase" x-text="'Edit — ' + tab"></h2>
                     <button @click="editing = null" class="text-black font-bold text-lg leading-none">&times;</button>
+                </div>
+                <div x-show="newerDataAvailable" x-cloak class="mb-3 border-2 border-black bg-[#fcc20f] px-3 py-2 text-sm" aria-live="polite">
+                    <p class="font-bold">Data terbaru tersedia setelah sinkronisasi.</p>
+                    <p>Draf edit Anda tetap dipertahankan. Muat ulang hanya jika Anda siap meninggalkan draf ini.</p>
+                    <div class="mt-2 flex flex-wrap gap-2">
+                        <button type="button" @click="reloadNewerData()" class="border-2 border-black bg-black px-2 py-1 text-xs font-bold text-white">Muat Ulang Data</button>
+                        <button type="button" @click="newerDataAvailable = false" class="border-2 border-black bg-white px-2 py-1 text-xs font-bold">Pertahankan Draf</button>
+                    </div>
                 </div>
                 <form method="POST" :action="editBaseUrl + '/' + editing.id" data-conflict-form
                       @submit.prevent="$dispatch('oasis-submit-conflict', { form: $el })">
@@ -403,6 +401,9 @@ document.addEventListener('alpine:init', () => {
         loaded: {},
         loadErrors: {},
         inFlight: {},
+        syncRefreshError: null,
+        newerDataAvailable: false,
+        pendingRefreshSheet: null,
         sortColumn: null,
         sortDirection: 'asc',
         filterText: '',
@@ -474,6 +475,57 @@ document.addEventListener('alpine:init', () => {
                 this.inFlight[name] = false;
                 this.loading = false;
             }
+        },
+
+        async handleSyncUpdated(detail) {
+            if (detail.module_key !== 'database' || detail.status !== 'success') return;
+            if (String(detail.scope?.id ?? '') !== String(this.branchId)) return;
+            const sheet = this.tab;
+            if (!sheet) return;
+            if (this.editing) {
+                this.pendingRefreshSheet = sheet;
+                this.newerDataAvailable = true;
+                return;
+            }
+            await this.refreshActiveSheet(sheet);
+        },
+
+        async refreshActiveSheet(sheet = this.tab) {
+            if (!sheet || !this.sheetNameList.includes(sheet)) return;
+            const branchId = String(this.branchId);
+            const scrollContainer = this.$root.querySelector(`[data-sheet-scroll="${CSS.escape(sheet)}"]`);
+            const tableScrollLeft = scrollContainer?.scrollLeft || 0;
+            const tableScrollTop = scrollContainer?.scrollTop || 0;
+            const pageScrollY = window.scrollY;
+            this.syncRefreshError = null;
+            try {
+                const response = await fetch(`${config.sheetDataBaseUrl}/${encodeURIComponent(branchId)}/${encodeURIComponent(sheet)}`, { headers: { Accept: 'application/json' } });
+                if (!response.ok) throw new Error('Active sheet refresh failed');
+                const data = await response.json();
+                if (String(this.branchId) !== branchId || data.sheet_name !== sheet) throw new Error('Sync scope changed');
+                this.cache[sheet] = data;
+                this.loaded[sheet] = true;
+                this.loadErrors[sheet] = false;
+                this.$nextTick(() => {
+                    if (this.tab !== sheet) return;
+                    const refreshedScroll = this.$root.querySelector(`[data-sheet-scroll="${CSS.escape(sheet)}"]`);
+                    if (refreshedScroll) {
+                        refreshedScroll.scrollLeft = tableScrollLeft;
+                        refreshedScroll.scrollTop = tableScrollTop;
+                    }
+                    window.scrollTo({ top: pageScrollY, behavior: 'auto' });
+                });
+            } catch (_) {
+                this.syncRefreshError = 'Sinkronisasi berhasil, tetapi tabel belum dapat dimuat ulang.';
+            }
+        },
+
+        reloadNewerData() {
+            const sheet = this.pendingRefreshSheet || this.tab;
+            this.editing = null;
+            this.newerDataAvailable = false;
+            this.pendingRefreshSheet = null;
+            this.refreshActiveSheet(sheet);
         },
 
         editRecord(rec) {

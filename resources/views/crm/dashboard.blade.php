@@ -181,20 +181,9 @@
 
     {{-- === COMPACT SYNC HEALTH === --}}
     @if(isset($syncHealth))
-    <div class="border-2 border-black px-2 py-1 mb-4 flex items-center gap-2 text-xs font-['Times_New_Roman']">
-        <span class="text-[10px] font-[Helvetica] font-bold uppercase">🔄 Sync</span>
-        @if($syncHealth['isStale'])
-            <span class="text-[#e91d2a] font-bold">⚠️ Stale</span>
-            <span class="text-gray-500">{{ ($syncHealth['finished_at'] ?? null) ? 'Sync terakhir ' . $syncHealth['finished_at']->diffForHumans() : 'Belum pernah sync' }}</span>
-        @else
-            <span class="text-[#b3bd95] font-bold">✅ Synced</span>
-            <span class="text-gray-500">{{ ($syncHealth['finished_at'] ?? null)?->diffForHumans() }}</span>
-        @endif
-        @if($syncHealth['message'] ?? null)
-            <span class="text-gray-400">· {{ $syncHealth['message'] }}</span>
-        @endif
-        <div class="ml-auto"><x-crm.sync-control module-key="database" module-name="Sinkronisasi Database" :scope-name="$branch?->name ?? ''" :sync-url="route('database.sync')" :status-url="route('database.sync-status', ['branch_id' => $selectedBranchId])" :status="$dashboardSyncStatus" :branch-id="$selectedBranchId" :can-sync="$canSyncDatabase" button-class="bg-white text-black px-2 py-0.5 text-[10px] font-[Helvetica] font-bold border border-black" /></div>
-    </div>
+    <x-crm.sync-status-panel module-key="database" :scope-name="$branch?->name ?? ''" :branch-id="$selectedBranchId" :status="$dashboardSyncStatus" :is-stale="$syncHealth['isStale']" class="px-2 py-1 mb-4">
+        <x-crm.sync-control module-key="database" module-name="Sinkronisasi Database" :scope-name="$branch?->name ?? ''" :sync-url="route('database.sync')" :status-url="route('database.sync-status', ['branch_id' => $selectedBranchId])" :status="$dashboardSyncStatus" :branch-id="$selectedBranchId" :can-sync="$canSyncDatabase" button-class="bg-white text-black px-2 py-0.5 text-[10px] font-[Helvetica] font-bold border border-black" />
+    </x-crm.sync-status-panel>
     @endif
 
     {{-- === ACTIVITY FEED (full width, bottom) === --}}

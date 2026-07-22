@@ -32,23 +32,7 @@
     @endif
 
     @if($selectedBranch)
-    <div class="border-2 border-black bg-white px-4 py-3 mb-4 font-['Times_New_Roman'] text-sm flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4">
-        <div>
-            <strong class="font-bold">Status Sync:</strong>
-            @if($syncStatus?->status === 'success')
-                <span>Terakhir sync {{ $syncStatus->finished_at?->format('d M Y H:i') }}</span>
-            @elseif($syncStatus?->status === 'failed')
-                <span class="text-[#c0392b]">Sync terakhir gagal: {{ $syncStatus->message }}</span>
-            @elseif($syncStatus?->status === 'running')
-                <span>Sedang sync...</span>
-            @else
-                <span>Belum pernah sync. Klik Sync Sekarang.</span>
-            @endif
-        </div>
-        @if($isStale)
-            <span class="inline-block bg-[#fcc20f] border-2 border-black px-2 py-1 font-[Helvetica] text-[10px] font-bold uppercase">Data perlu diperbarui</span>
-        @endif
-    </div>
+    <x-crm.sync-status-panel module-key="konsumen-progress" :scope-name="$selectedBranch->name" :branch-id="$selectedBranchId" :status="$syncStatus" :is-stale="$isStale" />
     @endif
 
     @if(!empty($errors))

@@ -106,27 +106,13 @@
     <x-crm.page-header color="#f1c40f" title="Dana Talangan" />
     <x-crm.page-presence page-key="dana-talangan" :branch-id="$selectedBranchId" />
 
-    <div class="border-2 border-black bg-white px-4 py-3 mb-4 flex flex-wrap items-center justify-between gap-3">
-        <div class="font-['Times_New_Roman'] text-sm">
-            <strong>Status Sync:</strong>
-            @if($syncStatus?->status === 'running')
-                Sedang sinkronisasi sejak {{ $syncStatus->started_at?->format('d M Y H:i') }}
-            @elseif($syncStatus?->finished_at)
-                {{ ucfirst($syncStatus->status) }} · {{ $syncStatus->finished_at->format('d M Y H:i') }}
-            @else
-                Belum pernah sync
-            @endif
-        </div>
+    <x-crm.sync-status-panel module-key="dana-talangan" scope-name="Global" :status="$syncStatus">
         <div class="flex items-center gap-2">
             <a href="https://docs.google.com/spreadsheets/d/{{ config('services.google_sheets.dana_talangan_spreadsheet_id') }}" target="_blank"
                class="border-2 border-black bg-white px-3 py-1.5 text-xs font-[Helvetica] font-bold hover:bg-gray-100">Buka Sheet</a>
             <x-crm.sync-control module-key="dana-talangan" module-name="Sinkronisasi Dana Talangan" scope-name="Global" :sync-url="route('dana-talangan.sync')" :status-url="route('dana-talangan.sync-status')" :status="$syncStatus" :can-sync="$canSync" button-class="border-2 border-black bg-[#5d8e8e] text-white px-3 py-1.5 text-xs font-[Helvetica] font-bold" />
         </div>
-    </div>
-
-    @if($syncStatus?->message)
-    <div class="border-2 border-black bg-[#fef3cd] px-4 py-3 mb-4 text-sm font-['Times_New_Roman'] whitespace-pre-line">{{ $syncStatus->message }}</div>
-    @endif
+    </x-crm.sync-status-panel>
 
     <div class="bg-white border-2 border-black p-3 mb-3">
         <div class="flex items-center gap-2 flex-wrap">

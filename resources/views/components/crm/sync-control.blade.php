@@ -8,12 +8,11 @@
 @endphp
 
 @if($canSync)
-<div x-data="crmSync(@js(['key' => $moduleKey.':'.($branchId ?: 'global'), 'statusUrl' => $statusUrl, 'initial' => $initial]))" class="inline-block">
+<div x-data="crmSync(@js(['key' => $moduleKey.':'.($branchId ?: 'global'), 'moduleKey' => $moduleKey, 'scope' => $scope, 'statusUrl' => $statusUrl, 'initial' => $initial]))" class="inline-block">
     <form x-ref="form" method="POST" action="{{ $syncUrl }}" @submit.prevent="submit($el)" class="inline">@csrf
         @if($branchId)<input type="hidden" name="branch_id" value="{{ $branchId }}">@endif
         <button x-ref="button" type="submit" @pointerdown="captureActivation($event)" :disabled="active || state === 'syncing'" :aria-busy="active || state === 'syncing'" class="{{ $buttonClass }} disabled:opacity-50 disabled:cursor-wait" x-text="active || state === 'syncing' ? 'Sedang Sinkronisasi...' : 'Sync Sekarang'"></button>
     </form>
-    <span x-show="completedAt" x-cloak aria-live="polite" class="ml-1 whitespace-nowrap font-[Helvetica] text-[10px]" x-text="'Terakhir sync ' + formatTime(completedAt)"></span>
 
     <div x-ref="card" x-show="open" x-cloak role="status" :aria-live="state === 'failed' ? 'assertive' : 'polite'"
          :class="interactive ? 'pointer-events-auto' : 'pointer-events-none'"

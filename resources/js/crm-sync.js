@@ -18,7 +18,6 @@ export default function registerSync(Alpine) {
             open: false,
             active: false,
             detailsOpen: false,
-            completedAt: null,
             elapsed: 0,
             startedAt: null,
             timer: null,
@@ -117,6 +116,7 @@ export default function registerSync(Alpine) {
                 this.state = 'syncing';
                 this.startedAt ||= Date.now();
                 this.startTimer();
+                this.dispatchStatusUpdate();
                 this.$nextTick(() => {
                     this.placeInitialCard();
                     if (activationMode === 'pointer') this.startCursorTracking();
@@ -136,12 +136,11 @@ export default function registerSync(Alpine) {
                 this.stopTimer();
                 this.clearPoll();
                 if (this.state !== 'timed_out') this.unlockBrowser();
+                this.dispatchStatusUpdate();
                 this.$nextTick(() => this.freezeCardInViewport());
 
                 if (this.state === 'success') {
-                    this.completedAt = this.result.finished_at || new Date().toISOString();
                     this.scheduleDismiss(2500);
-                    window.dispatchEvent(new CustomEvent('crm-sync-completed', { detail: { key: config.key, result: this.result } }));
                 } else if (this.state === 'partial_success') {
                     this.scheduleDismiss(5000);
                 }
@@ -278,6 +277,22 @@ export default function registerSync(Alpine) {
                 if (this.$refs.card) this.$refs.card.style.transform = `translate3d(${cardLeft}px, ${cardTop}px, 0)`;
             },
 
+            dispatchStatusUpdate() {
+                window.dispatchEvent(new CustomEvent('oasis-sync-updated', {
+                    detail: {
+                        module_key: config.moduleKey,
+                        scope: this.result.scope || config.scope,
+                        status: this.state,
+                        message: this.result.message || null,
+                        started_at: this.result.started_at || null,
+                        finished_at: this.result.finished_at || null,
+                        last_successful_sync_at: this.result.last_successful_sync_at || null,
+                        initiated_by: this.result.initiated_by || null,
+                        summary: this.result.summary || {},
+                    },
+                }));
+            },
+
             scheduleDismiss(milliseconds) {
                 this.clearDismiss();
                 dismissTimer = window.setTimeout(() => this.dismiss(), milliseconds);
@@ -354,4 +369,92 @@ export default function registerSync(Alpine) {
             },
         };
     });
+
+    Alpine.data('crmSyncStatus', (config) => ({
+        state: config.initial.status,
+        message: config.initial.message,
+        startedAt: config.initial.started_at,
+        finishedAt: config.initial.finished_at,
+        lastSuccessfulAt: config.initial.last_successful_sync_at,
+        initiatedBy: config.initial.initiated_by,
+        stale: Boolean(config.initialStale),
+        staleTimer: null,
+
+        init() {
+            this.scheduleStaleTransition();
+        },
+
+        destroy() {
+            if (this.staleTimer) window.clearTimeout(this.staleTimer);
+        },
+
+        applyEvent(detail) {
+            if (!this.matchesScope(detail)) return;
+            this.state = detail.status;
+            this.message = detail.message;
+            this.startedAt = detail.started_at;
+            this.finishedAt = detail.finished_at;
+            this.lastSuccessfulAt = detail.last_successful_sync_at;
+            this.initiatedBy = detail.initiated_by;
+            this.stale = false;
+            this.scheduleStaleTransition();
+        },
+
+        matchesScope(detail) {
+            if (detail.module_key !== config.moduleKey) return false;
+            const eventScope = detail.scope?.id == null ? 'global' : String(detail.scope.id);
+            const panelScope = config.scope.id == null ? 'global' : String(config.scope.id);
+            return eventScope === panelScope;
+        },
+
+        scheduleStaleTransition() {
+            if (this.staleTimer) window.clearTimeout(this.staleTimer);
+            this.staleTimer = null;
+            if (this.state !== 'success') return;
+            const successfulAt = Date.parse(this.lastSuccessfulAt || this.finishedAt);
+            if (!Number.isFinite(successfulAt)) return;
+            const remaining = successfulAt + Number(config.staleMinutes) * 60000 - Date.now();
+            if (remaining <= 0) {
+                this.stale = true;
+                return;
+            }
+            this.staleTimer = window.setTimeout(() => { this.stale = true; }, remaining);
+        },
+
+        formatDate(value) {
+            if (!value) return '';
+            const date = new Date(value);
+            if (Number.isNaN(date.getTime())) return '';
+            const months = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
+            return `${String(date.getDate()).padStart(2, '0')} ${months[date.getMonth()]} ${date.getFullYear()} ${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
+        },
+
+        get statusText() {
+            if (this.state === 'syncing') return 'Sinkronisasi sedang berjalan...';
+            if (this.state === 'success') {
+                const completed = this.formatDate(this.finishedAt || this.lastSuccessfulAt);
+                return completed ? `Terakhir sync ${completed}` : 'Sinkronisasi berhasil';
+            }
+            if (this.state === 'partial_success') return this.message || 'Sinkronisasi selesai dengan catatan.';
+            if (this.state === 'failed') return `Sync terakhir gagal: ${this.message || 'Sinkronisasi tidak dapat diselesaikan.'}`;
+            if (this.state === 'timed_out') return 'Proses lebih lama dari biasanya. Status akhir belum diketahui.';
+            return 'Belum pernah sync. Klik Sync Sekarang.';
+        },
+
+        get badgeText() {
+            if (this.state === 'syncing') return 'SEDANG SINKRONISASI';
+            if (this.state === 'failed') return 'SYNC GAGAL';
+            if (this.state === 'partial_success') return 'PERLU DIPERIKSA';
+            if (this.state === 'timed_out') return 'STATUS BELUM PASTI';
+            if (this.state === 'success' && !this.stale) return 'DATA TERBARU';
+            return 'DATA PERLU DIPERBARUI';
+        },
+
+        get badgeClass() {
+            if (this.state === 'syncing') return 'bg-[#5b7db9] text-white';
+            if (this.state === 'failed') return 'bg-[#d77a7a] text-black';
+            if (this.state === 'success' && !this.stale) return 'bg-[#b3bd95] text-black';
+            return 'bg-[#fcc20f] text-black';
+        },
+    }));
 }

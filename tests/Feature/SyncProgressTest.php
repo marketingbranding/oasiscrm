@@ -141,19 +141,83 @@ class SyncProgressTest extends TestCase
         $this->actingAs($user)->getJson(route('database.sync-status', ['branch_id' => $branch->id]))->assertForbidden();
     }
 
-    public function test_loading_component_contains_truthful_states_and_manual_retry_contract(): void
+    public function test_sync_card_is_compact_non_blocking_and_uses_oasis_utility_styling(): void
+    {
+        $component = file_get_contents(resource_path('views/components/crm/sync-control.blade.php'));
+
+        $this->assertStringContainsString('w-[240px] min-w-[210px] max-w-[280px]', $component);
+        $this->assertStringContainsString('border-2 border-black', $component);
+        $this->assertStringContainsString('shadow-[4px_4px_0_#000]', $component);
+        $this->assertStringContainsString('bg-[#172554]', $component);
+        $this->assertStringContainsString("interactive ? 'pointer-events-auto' : 'pointer-events-none'", $component);
+        $this->assertStringContainsString("state === 'failed' ? 'assertive' : 'polite'", $component);
+        $this->assertStringContainsString('motion-reduce:animate-none', $component);
+        $this->assertStringNotContainsString('fixed inset-0', $component);
+        $this->assertStringNotContainsString('bg-black/70', $component);
+    }
+
+    public function test_running_card_tracks_pointer_through_animation_frame_and_viewport_collisions(): void
+    {
+        $js = file_get_contents(resource_path('js/crm-sync.js'));
+
+        $this->assertStringContainsString("window.addEventListener('pointermove', pointerHandler, { passive: true })", $js);
+        $this->assertStringContainsString('window.requestAnimationFrame', $js);
+        $this->assertStringContainsString('if (pointerFrame !== null) return', $js);
+        $this->assertStringContainsString('pointerX = event.clientX', $js);
+        $this->assertStringContainsString('pointerY = event.clientY', $js);
+        $this->assertStringContainsString('let left = pointerX + 16', $js);
+        $this->assertStringContainsString('let top = pointerY - height - 20', $js);
+        $this->assertStringContainsString('left = pointerX - width - 16', $js);
+        $this->assertStringContainsString('top = pointerY + 20', $js);
+        $this->assertStringContainsString('window.innerWidth - width - margin', $js);
+        $this->assertStringContainsString('window.innerHeight - height - margin', $js);
+        $this->assertStringContainsString('style.transform = `translate3d(', $js);
+    }
+
+    public function test_terminal_sync_states_stop_tracking_and_apply_expected_dismissal_contracts(): void
     {
         $js = file_get_contents(resource_path('js/crm-sync.js'));
         $component = file_get_contents(resource_path('views/components/crm/sync-control.blade.php'));
+
+        $this->assertStringContainsString('this.stopCursorTracking()', $js);
+        $this->assertStringContainsString('this.scheduleDismiss(2500)', $js);
+        $this->assertStringContainsString('this.scheduleDismiss(5000)', $js);
+        $this->assertStringContainsString("['partial_success', 'failed', 'timed_out'].includes(this.state)", $js);
+        $this->assertStringContainsString("['partial_success', 'failed', 'timed_out'].includes(state)", $component);
+        $this->assertStringContainsString('Coba Lagi', $component);
+        $this->assertStringContainsString('Lihat Detail', $component);
+        $this->assertStringContainsString('Laporkan Masalah', $component);
+        $this->assertStringContainsString('Periksa Status', $component);
+        $this->assertStringContainsString('Tetap Tunggu', $component);
+        $this->assertStringNotContainsString("state === 'success'\" type=\"button\" @click=\"dismiss()", $component);
+        $this->assertStringContainsString("if (this.state !== 'timed_out') this.unlockBrowser()", $js);
+    }
+
+    public function test_pointer_tracking_has_keyboard_touch_and_listener_cleanup_fallbacks(): void
+    {
+        $js = file_get_contents(resource_path('js/crm-sync.js'));
+
+        $this->assertStringContainsString("activationMode = 'keyboard'", $js);
+        $this->assertStringContainsString('this.placeKeyboardCard()', $js);
+        $this->assertStringContainsString("event.pointerType === 'touch' ? 'touch' : 'pointer'", $js);
+        $this->assertStringContainsString('this.placeTouchCard()', $js);
+        $this->assertStringContainsString("if (event.pointerType === 'touch') return", $js);
+        $this->assertStringContainsString("window.removeEventListener('pointermove', pointerHandler)", $js);
+        $this->assertStringContainsString('window.cancelAnimationFrame(pointerFrame)', $js);
+        $this->assertStringContainsString('destroy()', $js);
+        $this->assertStringContainsString('dismiss()', $js);
+    }
+
+    public function test_sync_component_preserves_truthful_states_duplicate_guard_and_database_loading_contract(): void
+    {
+        $js = file_get_contents(resource_path('js/crm-sync.js'));
         $database = file_get_contents(resource_path('views/crm/database/index.blade.php'));
 
         foreach (['idle', 'loading', 'syncing', 'success', 'partial_success', 'failed', 'timed_out', 'empty'] as $state) {
             $this->assertStringContainsString($state, $js);
         }
-        $this->assertStringContainsString('aria-live', $component);
-        $this->assertStringContainsString('Berjalan', $component);
-        $this->assertStringContainsString('Coba Lagi', $component);
-        $this->assertStringContainsString('Periksa Status', $component);
+        $this->assertStringContainsString('this.active || this.browserLocked()', $js);
+        $this->assertStringContainsString('sync_already_running', file_get_contents(app_path('Services/SyncLockService.php')));
         $this->assertStringNotContainsString('setInterval(() => this.submit', $js);
         $this->assertStringContainsString('!isLoaded(name) && !loadErrors[name]', $database);
         $this->assertStringContainsString('Data gagal dimuat.', $database);

@@ -9,7 +9,7 @@
     <x-crm.page-presence page-key="database" :branch-id="$selectedBranchId" />
 
     @if(isset($branches) && $branches->count() > 1)
-    <div class="bg-white border-2 border-black p-3 mb-6">
+    <div class="bg-white border-2 border-black p-3 mb-6 flex items-center gap-3 flex-wrap">
         <form method="GET" action="{{ route('database.index') }}" class="flex items-center gap-3 flex-wrap">
             <label class="font-[Helvetica] font-bold text-xs uppercase">Pilih Cabang:</label>
             <select name="branch_id" onchange="this.form.submit()" class="border-2 border-black px-3 py-1.5 text-sm font-['Times_New_Roman'] bg-white rounded-none">
@@ -18,11 +18,11 @@
                     <option value="{{ $b->id }}" {{ (string)$selectedBranchId === (string)$b->id ? 'selected' : '' }} @if(str_contains(mb_strtolower($b->name), 'pusat')) style="color:#b8860b;font-weight:700;background:#fff3b0" @endif>{{ $b->name }} ({{ $b->code }})</option>
                 @endforeach
             </select>
-            <div class="h-6 w-px bg-black mx-1 hidden sm:block"></div>
-            <div class="flex items-center gap-2 ml-auto">
-                <x-crm.sync-control module-key="database" module-name="Sinkronisasi Database" :scope-name="$selectedBranch?->name ?? ''" :sync-url="route('database.sync')" :status-url="route('database.sync-status', ['branch_id' => $selectedBranchId])" :status="$syncStatus" :branch-id="$selectedBranchId" :can-sync="$canSync" />
-            </div>
         </form>
+        <div class="h-6 w-px bg-black mx-1 hidden sm:block"></div>
+        <div class="flex items-center gap-2 ml-auto">
+            <x-crm.sync-control module-key="database" module-name="Sinkronisasi Database" :scope-name="$selectedBranch?->name ?? ''" :sync-url="route('database.sync')" :status-url="route('database.sync-status', ['branch_id' => $selectedBranchId])" :status="$syncStatus" :branch-id="$selectedBranchId" :can-sync="$canSync" />
+        </div>
     </div>
     @elseif($selectedBranch)
     <div class="bg-[#fcc20f] border-2 border-black px-4 py-2 mb-4 flex items-center gap-3">

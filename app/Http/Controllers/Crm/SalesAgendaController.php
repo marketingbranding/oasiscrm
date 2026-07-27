@@ -133,7 +133,7 @@ class SalesAgendaController extends Controller
         $owner = User::query()->whereKey($ownerId)->where('is_active', true)
             ->whereHas('role', fn ($query) => $query->where('slug', 'sales'))->first();
         abort_unless($owner, 403);
-        if ($actor->hasRole('sales')) {
+        if ($actor->isSales()) {
             abort_unless($actor->is($owner), 403);
         }
 
@@ -141,7 +141,7 @@ class SalesAgendaController extends Controller
             ->whereHas('assignedUsers', fn ($query) => $query->whereKey($owner->id))->first();
         abort_unless($project, 403);
         abort_unless($this->workspaceAccess->canViewBranch($owner, $project->branch_id), 403);
-        if (! $actor->hasRole('sales') && ! $actor->canViewAllBranches()) {
+        if (! $actor->isSales() && ! $actor->canViewAllBranches()) {
             abort_unless($this->workspaceAccess->canEditBranch($actor, $project->branch_id), 403);
         }
 
@@ -152,8 +152,8 @@ class SalesAgendaController extends Controller
     {
         abort_unless($agenda->item_type === 'agenda' && $agenda->agenda_type === ContentItem::SALES_AGENDA_TYPE, 404);
         $user = $request->user();
-        abort_unless($user->isSuperadmin() || $user->hasRole(['sales', 'manager', 'admin', 'pusat']), 403);
-        if ($user->hasRole('sales')) {
+        abort_unless($user->isSuperadmin() || $user->hasPrimaryRole(['sales', 'manager', 'admin', 'pusat']), 403);
+        if ($user->isSales()) {
             abort_unless((int) $agenda->owner_user_id === (int) $user->id, 403);
         } elseif (! $user->canViewAllBranches()) {
             abort_unless($this->workspaceAccess->canEditBranch($user, $agenda->branch_id), 403);

@@ -23,7 +23,7 @@ class SalesLeadPolicy
             return true;
         }
 
-        if ($user->hasRole('sales')) {
+        if ($user->isSales()) {
             return (int) $lead->sales_user_id === (int) $user->id
                 && app(WorkspaceAccessService::class)->canViewBranch($user, $lead->branch_id);
         }
@@ -33,7 +33,7 @@ class SalesLeadPolicy
 
     public function create(User $user): bool
     {
-        return $user->isSuperadmin() || $user->hasRole(['sales', 'pusat']);
+        return $user->isSuperadmin() || $user->hasPrimaryRole(['sales', 'pusat']);
     }
 
     public function update(User $user, SalesLead $lead): bool
@@ -43,7 +43,7 @@ class SalesLeadPolicy
         }
 
         return $user->canViewAllBranches()
-            || ($user->hasRole('sales') && (int) $lead->sales_user_id === (int) $user->id)
+            || ($user->isSales() && (int) $lead->sales_user_id === (int) $user->id)
             || app(WorkspaceAccessService::class)->canEditBranch($user, $lead->branch_id);
     }
 
@@ -54,11 +54,11 @@ class SalesLeadPolicy
 
     public function reverseStage(User $user, SalesLead $lead): bool
     {
-        return ! $user->hasRole('sales') && $this->update($user, $lead);
+        return ! $user->isSales() && $this->update($user, $lead);
     }
 
     private function hasModuleRole(User $user): bool
     {
-        return $user->isSuperadmin() || $user->hasRole(['sales', 'manager', 'admin', 'pusat']);
+        return $user->isSuperadmin() || $user->hasPrimaryRole(['sales', 'manager', 'admin', 'pusat']);
     }
 }

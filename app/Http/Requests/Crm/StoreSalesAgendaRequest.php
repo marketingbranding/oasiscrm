@@ -24,7 +24,7 @@ class StoreSalesAgendaRequest extends FormRequest
     {
         $user = $this->user();
 
-        return $user->isSuperadmin() || $user->hasRole(['sales', 'manager', 'admin', 'pusat']);
+        return $user->isSuperadmin() || $user->hasPrimaryRole(['sales', 'manager', 'admin', 'pusat']);
     }
 
     public function rules(): array
@@ -59,18 +59,18 @@ class StoreSalesAgendaRequest extends FormRequest
                 $validator->errors()->add('end_time', 'Jam selesai harus setelah jam mulai.');
             }
 
-            if (! $owner || ! $owner->is_active || ! $owner->hasRole('sales')) {
+            if (! $owner || ! $owner->is_active || ! $owner->isSales()) {
                 $validator->errors()->add('owner_user_id', 'Pemilik agenda harus sales aktif.');
 
                 return;
             }
-            if ($actor->hasRole('sales') && ! $actor->is($owner)) {
+            if ($actor->isSales() && ! $actor->is($owner)) {
                 $validator->errors()->add('owner_user_id', 'Sales hanya dapat membuat agenda untuk dirinya sendiri.');
             }
             if (! $project || ! $project->is_active || (int) $project->branch_id !== $this->integer('branch_id') || ! $access->canViewBranch($owner, $project->branch_id)
                 || ! $owner->assignedProjects()->whereKey($project?->id)->exists()) {
                 $validator->errors()->add('project_id', 'Pilih proyek aktif yang ditugaskan kepada sales dan sesuai cabang.');
-            } elseif (! $actor->hasRole('sales') && ! $actor->canViewAllBranches() && ! $access->canEditBranch($actor, $project->branch_id)) {
+            } elseif (! $actor->isSales() && ! $actor->canViewAllBranches() && ! $access->canEditBranch($actor, $project->branch_id)) {
                 $validator->errors()->add('project_id', 'Proyek berada di luar cabang yang dapat Anda kelola.');
             }
         }];

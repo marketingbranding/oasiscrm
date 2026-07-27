@@ -52,13 +52,13 @@ abstract class SalesLeadRequest extends FormRequest
             if (! $project || ! $project->is_active || (int) $project->branch_id !== $branchId || ! $access->canAccessProject($user, $project)) {
                 $validator->errors()->add('project_id', 'Proyek aktif harus berada di cabang yang dipilih dan dapat diakses.');
             }
-            if (! $owner || ! $owner->is_active || ! $owner->hasRole('sales') || ! $access->canViewBranch($owner, $branchId)) {
+            if (! $owner || ! $owner->is_active || ! $owner->isSales() || ! $access->canViewBranch($owner, $branchId)) {
                 $validator->errors()->add('sales_user_id', 'Sales aktif harus berada di cabang yang dipilih.');
             } elseif (! $owner->assignedProjects()->whereKey($this->integer('project_id'))->exists()) {
                 $validator->errors()->add('sales_user_id', 'Sales belum ditugaskan ke proyek yang dipilih.');
             }
 
-            if ($user->hasRole('sales') && (int) $owner?->id !== (int) $user->id) {
+            if ($user->isSales() && (int) $owner?->id !== (int) $user->id) {
                 $validator->errors()->add('sales_user_id', 'Sales hanya dapat memilih dirinya sendiri.');
             }
         }];

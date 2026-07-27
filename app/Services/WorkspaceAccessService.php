@@ -47,7 +47,7 @@ class WorkspaceAccessService
             $query->where('is_active', true);
         }
 
-        if ($user->hasRole('sales')) {
+        if ($user->isSales()) {
             return $query
                 ->whereIn('branch_id', $this->accessibleBranchIds($user))
                 ->whereHas('assignedUsers', fn (Builder $assigned) => $assigned->whereKey($user->id));
@@ -85,7 +85,7 @@ class WorkspaceAccessService
             return $this->accessibleProjectsQuery($user)->whereKey((int) $requestedProjectId)->first();
         }
 
-        if ($user->hasRole('sales')) {
+        if ($user->isSales()) {
             return $user->primaryAssignedProject()
                 ->where('lead_master.is_active', true)
                 ->first() ?? $this->accessibleProjectsQuery($user)->orderBy('project_name')->first();

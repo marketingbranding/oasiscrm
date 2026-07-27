@@ -48,6 +48,9 @@
         }
     </style>
 </head>
+@php
+    $isSalesNavigation = Auth::user()?->isSales() ?? false;
+@endphp
 <body class="font-['Times_New_Roman'] antialiased bg-white min-h-screen flex flex-col"
       x-data="{ sidebarOpen: localStorage.getItem('sidebarOpen') !== 'false', sidebarPinned: localStorage.getItem('sidebarPinned') === 'true', bellOpen: false }"
       x-init="document.getElementById('crm-pinned-style')&&document.getElementById('crm-pinned-style').remove()">
@@ -60,7 +63,7 @@
                 <span x-show="!sidebarOpen">▶</span>
             </button>
             <span class="text-[#fcc20f] text-lg">◆</span>
-            <a href="{{ route('dashboard') }}" class="hover:text-gray-300">OASIS CRM</a>
+            <a href="{{ route($isSalesNavigation ? 'sales-pocketbook.index' : 'dashboard') }}" class="hover:text-gray-300">OASIS CRM</a>
         </div>
         @auth
         <div class="relative flex items-center gap-2"
@@ -169,17 +172,20 @@
                 <div class="px-2 mb-0.5 text-[9px] font-[Helvetica] font-bold text-gray-400 uppercase tracking-[0.15em]">
                     <span :class="sidebarPinned ? '' : 'sm:w-0 sm:overflow-hidden sm:whitespace-nowrap'" class="group-hover:sm:w-auto transition-all duration-200 delay-150">General</span>
                 </div>
+                @unless($isSalesNavigation)
                 <a href="{{ route('dashboard') }}" class="flex items-center px-3 py-2 gap-2 text-sm font-[Helvetica] font-bold text-black hover:bg-[#9ab6c8] hover:text-black border border-black mb-1 rounded-none {{ request()->routeIs('dashboard') ? 'bg-[#9ab6c8]' : 'bg-white' }}">
                     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" :class="sidebarPinned ? 'text-[#9ab6c8]' : 'text-black group-hover:text-[#9ab6c8]'" class="inline-block w-4 h-4 shrink-0"><path stroke-linecap="round" stroke-linejoin="round" d="m2.25 12 8.954-8.955c.44-.439 1.152-.439 1.591 0L21.75 12M4.5 9.75v10.125c0 .621.504 1.125 1.125 1.125H9.75v-4.875c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21h4.125c.621 0 1.125-.504 1.125-1.125V9.75M8.25 21h8.25"/></svg> <span :class="sidebarPinned ? '' : 'sm:w-0 sm:overflow-hidden sm:whitespace-nowrap'" class="group-hover:sm:w-auto transition-all duration-200 delay-150">Dashboard</span>
                 </a>
+                @endunless
                 <a href="{{ route('content-calendar.index') }}" class="flex items-center px-3 py-2 gap-2 text-sm font-[Helvetica] font-bold text-black hover:bg-[#b3bd95] hover:text-black border border-black mb-1 rounded-none {{ request()->routeIs('content-calendar.*') ? 'bg-[#b3bd95]' : 'bg-white' }}">
                     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" :class="sidebarPinned ? 'text-[#b3bd95]' : 'text-black group-hover:text-[#b3bd95]'" class="inline-block w-4 h-4 shrink-0"><path stroke-linecap="round" stroke-linejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 0 1 2.25-2.25h13.5A2.25 2.25 0 0 1 21 7.5v11.25m-18 0A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75m-18 0v-7.5A2.25 2.25 0 0 1 5.25 9h13.5A2.25 2.25 0 0 1 21 11.25v7.5"/></svg> <span :class="sidebarPinned ? '' : 'sm:w-0 sm:overflow-hidden sm:whitespace-nowrap'" class="group-hover:sm:w-auto transition-all duration-200 delay-150">Work Planner</span>
                 </a>
-                @if(Auth::user() && (Auth::user()->isSuperadmin() || Auth::user()->hasRole(['sales', 'manager', 'admin', 'pusat'])))
+                @if(Auth::user() && (Auth::user()->isSuperadmin() || Auth::user()->hasPrimaryRole(['sales', 'manager', 'admin', 'pusat'])))
                 <a href="{{ route('sales-pocketbook.index') }}" class="flex items-center px-3 py-2 gap-2 text-sm font-[Helvetica] font-bold text-black hover:bg-[#fcc20f] hover:text-black border border-black mb-1 rounded-none {{ request()->routeIs('sales-pocketbook.*', 'sales-leads.*') ? 'bg-[#fcc20f]' : 'bg-white' }}">
                     <span class="inline-block w-4 h-4 shrink-0 text-center">#</span><span :class="sidebarPinned ? '' : 'sm:w-0 sm:overflow-hidden sm:whitespace-nowrap'" class="group-hover:sm:w-auto transition-all duration-200 delay-150">Buku Saku Sales</span>
                 </a>
                 @endif
+                @unless($isSalesNavigation)
                 <a href="{{ route('database.index') }}" class="flex items-center px-3 py-2 gap-2 text-sm font-[Helvetica] font-bold text-black hover:bg-[#d77a7a] hover:text-black border border-black mb-1 rounded-none {{ request()->routeIs('database.*') ? 'bg-[#d77a7a]' : 'bg-white' }}">
                     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" :class="sidebarPinned ? 'text-[#d77a7a]' : 'text-black group-hover:text-[#d77a7a]'" class="inline-block w-4 h-4 shrink-0"><path stroke-linecap="round" stroke-linejoin="round" d="M20.25 6.375c0 2.278-3.694 4.125-8.25 4.125S3.75 8.653 3.75 6.375m16.5 0c0-2.278-3.694-4.125-8.25-4.125S3.75 4.097 3.75 6.375m16.5 0v11.25c0 2.278-3.694 4.125-8.25 4.125s-8.25-1.847-8.25-4.125V6.375m16.5 0v3.75m-16.5-3.75v3.75m16.5 0v3.75C20.25 16.153 16.556 18 12 18s-8.25-1.847-8.25-4.125v-3.75m16.5 0c0 2.278-3.694 4.125-8.25 4.125s-8.25-1.847-8.25-4.125"/></svg> <span :class="sidebarPinned ? '' : 'sm:w-0 sm:overflow-hidden sm:whitespace-nowrap'" class="group-hover:sm:w-auto transition-all duration-200 delay-150">Database</span>
                 </a>
@@ -193,7 +199,8 @@
                 <a href="{{ route('dana-talangan.index') }}" class="flex items-center px-3 py-2 gap-2 text-sm font-[Helvetica] font-bold text-black hover:bg-[#f1c40f] hover:text-black border border-black mb-1 rounded-none {{ request()->routeIs('dana-talangan.*') ? 'bg-[#f1c40f]' : 'bg-white' }}">
                     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" :class="sidebarPinned ? 'text-[#f1c40f]' : 'text-black group-hover:text-[#f1c40f]'" class="inline-block w-4 h-4 shrink-0"><path stroke-linecap="round" stroke-linejoin="round" d="M2.25 18.75a60.07 60.07 0 0 1 15.797 2.101c.727.198 1.453-.342 1.453-1.096V18.75M3.75 4.5v.75A.75.75 0 0 1 3 6h-.75m0 0v-.375c0-.621.504-1.125 1.125-1.125H20.25M2.25 6v9m18-10.5v.75c0 .414.336.75.75.75h.75m-1.5-1.5h.375c.621 0 1.125.504 1.125 1.125v9.75c0 .621-.504 1.125-1.125 1.125h-.375m1.5-1.5H21a.75.75 0 0 0-.75.75v.75m0 0H3.75m0 0h-.375a1.125 1.125 0 0 1-1.125-1.125V15m1.5 1.5v-.75A.75.75 0 0 0 3 15h-.75M15 10.5a3 3 0 1 1-6 0 3 3 0 0 1 6 0Zm3 0h.008v.008H18V10.5Zm-12 0h.008v.008H6V10.5Z"/></svg> <span :class="sidebarPinned ? '' : 'sm:w-0 sm:overflow-hidden sm:whitespace-nowrap'" class="group-hover:sm:w-auto transition-all duration-200 delay-150">Dana Talangan</span>
                 </a>
-                @if(Auth::user() && (Auth::user()->isSuperadmin() || Auth::user()->hasRole('pusat')))
+                @endunless
+                @if(!$isSalesNavigation && Auth::user() && (Auth::user()->isSuperadmin() || Auth::user()->hasPrimaryRole('pusat')))
                 <a href="{{ route('feedback-reports.index') }}" class="flex items-center px-3 py-2 gap-2 text-sm font-[Helvetica] font-bold text-black hover:bg-[#d77a7a] hover:text-black border border-black mb-1 rounded-none {{ request()->routeIs('feedback-reports.index', 'feedback-reports.show') ? 'bg-[#d77a7a]' : 'bg-white' }}">
                     <span class="inline-block w-4 h-4 shrink-0 text-center">!</span><span :class="sidebarPinned ? '' : 'sm:w-0 sm:overflow-hidden sm:whitespace-nowrap'" class="group-hover:sm:w-auto transition-all duration-200 delay-150">Review Laporan</span>
                 </a>
@@ -217,19 +224,28 @@
                     <span :class="sidebarPinned ? '' : 'sm:w-0 sm:overflow-hidden sm:whitespace-nowrap'" class="group-hover:sm:w-auto transition-all duration-200 delay-150">System Health</span>
                 </a>
                 @endif
+                @unless($isSalesNavigation)
                 <div class="border-t border-dashed border-gray-400 mx-2 my-2"></div>
                 <a href="{{ route('changelogs.index') }}" class="flex items-center px-3 py-2 gap-2 text-sm font-[Helvetica] font-bold text-gray-500 hover:text-black hover:bg-gray-100 border border-gray-300 hover:border-black mb-1 mx-2 rounded-none {{ request()->routeIs('changelogs.*') ? 'bg-gray-100 text-black border-black' : 'bg-white' }}">
                     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="inline-block w-4 h-4 shrink-0"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z"/></svg>
                     <span :class="sidebarPinned ? '' : 'sm:w-0 sm:overflow-hidden sm:whitespace-nowrap'" class="group-hover:sm:w-auto transition-all duration-200 delay-150">Changelog</span>
                 </a>
+                @endunless
             </nav>
             @auth
             <div class="border-t-2 border-black p-2 flex-shrink-0 flex-grow bg-[#c0392b]">
                 <div class="flex items-center justify-between gap-2 px-2 py-1">
+                    @if($isSalesNavigation)
+                    <a href="{{ route('profile.edit') }}" :class="sidebarPinned ? '' : 'sm:w-0 sm:overflow-hidden sm:whitespace-nowrap'"
+                       class="text-xs font-[Helvetica] font-bold text-[#fcc20f] underline group-hover:sm:w-auto transition-all duration-200 delay-150">
+                        Akun
+                    </a>
+                    @else
                     <span :class="sidebarPinned ? '' : 'sm:w-0 sm:overflow-hidden sm:whitespace-nowrap'"
                           class="text-xs font-[Helvetica] font-bold text-[#fcc20f] group-hover:sm:w-auto transition-all duration-200 delay-150">
                         {{ Auth::user()->name }}
                     </span>
+                    @endif
                     <form method="POST" action="{{ route('logout') }}" onsubmit="return confirm('Apakah Anda yakin ingin logout?')">
                         @csrf
                         <button type="submit" class="flex items-center justify-center w-7 h-7 text-sm bg-[#c0392b] hover:bg-[#a93226] text-white border-2 border-white shadow-[inset_0_-2px_0_0_rgba(0,0,0,0.3)] rounded-none shrink-0"
@@ -279,7 +295,9 @@
         </div>
     </div>
 <x-conflict-dialog :initial="session('conflict_data')" />
+@unless($isSalesNavigation)
 @include('crm.ai-chat._widget')
+@endunless
 @if(false)
 <div x-data="{
     open: false,

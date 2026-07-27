@@ -22,6 +22,12 @@ class ContentItemPolicy
 
     public function update(User $user, ContentItem $item): bool
     {
+        if ($user->isSales()) {
+            return app(WorkspaceAccessService::class)->canEditBranch($user, $item->branch_id)
+                && ($item->created_by === $user->id
+                    || $item->assignees()->where('users.id', $user->id)->exists());
+        }
+
         return $this->view($user, $item)
             && app(WorkspaceAccessService::class)->canEditBranch($user, $item->branch_id);
     }

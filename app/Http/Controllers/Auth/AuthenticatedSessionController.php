@@ -28,6 +28,10 @@ class AuthenticatedSessionController extends Controller
 
         $request->session()->regenerate();
 
+        if ($request->user()->isSales()) {
+            return redirect()->route($request->user()->landingRouteName());
+        }
+
         return redirect()->intended(route('dashboard', absolute: false));
     }
 

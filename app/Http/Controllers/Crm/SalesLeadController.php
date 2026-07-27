@@ -70,7 +70,7 @@ class SalesLeadController extends Controller
             'salesUsers' => User::query()->where('is_active', true)
                 ->whereHas('role', fn (Builder $query) => $query->where('slug', 'sales'))
                 ->whereHas('assignedProjects', fn (Builder $query) => $query->whereIn('branch_id', $branchIds))
-                ->when($user->hasRole('sales'), fn (Builder $query) => $query->whereKey($user->id))
+                ->when($user->isSales(), fn (Builder $query) => $query->whereKey($user->id))
                 ->with('assignedProjects:id,branch_id')->orderBy('name')->get(['id', 'name', 'branch_id']),
             'leadSources' => LeadSource::query()->where('is_active', true)
                 ->when($salesLead->lead_source_id, fn (Builder $query) => $query->orWhere('id', $salesLead->lead_source_id))

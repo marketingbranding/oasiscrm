@@ -27,6 +27,6 @@ class PasswordChangeController extends Controller
             'password_changed_at' => now(),
         ]);
 
-        return redirect()->route('dashboard')->with('success', 'Password berhasil diubah.');
+        return redirect()->route($request->user()->landingRouteName())->with('success', 'Password berhasil diubah.');
     }
 }

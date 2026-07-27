@@ -126,6 +126,10 @@ class PresenceController extends Controller
     private function authorizeContext(Request $request, array $data): array
     {
         $user = $request->user();
+        if ($user->isSales()) {
+            abort_unless(in_array($data['page_key'], ['sales-pocketbook', 'work-planner'], true), 403);
+            abort_unless(! isset($data['record_type']) || in_array($data['record_type'], ['sales_lead', 'content_item'], true), 403);
+        }
         $branch = null;
         if (filled($data['branch_id'] ?? null)) {
             $branch = $this->workspaceAccess->resolveRequestedBranch($user, $data['branch_id']);

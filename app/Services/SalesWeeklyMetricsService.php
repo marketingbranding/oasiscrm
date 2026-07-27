@@ -136,8 +136,8 @@ class SalesWeeklyMetricsService
         return ContentItem::query()
             ->where('item_type', 'agenda')
             ->where('agenda_type', ContentItem::SALES_AGENDA_TYPE)
-            ->when($viewer->hasRole('sales'), fn (Builder $query) => $query->where('owner_user_id', $viewer->id))
-            ->when(! $viewer->canViewAllBranches() && ! $viewer->hasRole('sales'), fn (Builder $query) => $query->whereIn('branch_id', $this->workspaceAccess->accessibleBranchIds($viewer)))
+            ->when($viewer->isSales(), fn (Builder $query) => $query->where('owner_user_id', $viewer->id))
+            ->when(! $viewer->canViewAllBranches() && ! $viewer->isSales(), fn (Builder $query) => $query->whereIn('branch_id', $this->workspaceAccess->accessibleBranchIds($viewer)))
             ->when(! empty($filters['branch_id']), fn (Builder $query) => $query->where('branch_id', $filters['branch_id']))
             ->when(! empty($filters['project_id']), fn (Builder $query) => $query->where('sales_project_id', $filters['project_id']))
             ->when(! empty($filters['sales_user_id']), fn (Builder $query) => $query->where('owner_user_id', $filters['sales_user_id']));

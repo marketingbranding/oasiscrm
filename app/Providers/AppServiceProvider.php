@@ -32,12 +32,14 @@ class AppServiceProvider extends ServiceProvider
             $todayItems = $plannerReminders['today'];
             $tomorrowItems = $plannerReminders['tomorrow'];
 
-            $needsConfirmation = DanaTalangan::where('status', '!=', 'lunas')
-                ->where('konfirmasi_keuangan', false)
-                ->tap($branchScope)
-                ->orderBy('tanggal')
-                ->take(10)
-                ->get();
+            $needsConfirmation = $user->isSales()
+                ? collect()
+                : DanaTalangan::where('status', '!=', 'lunas')
+                    ->where('konfirmasi_keuangan', false)
+                    ->tap($branchScope)
+                    ->orderBy('tanggal')
+                    ->take(10)
+                    ->get();
 
             $overdueEvents = collect();
 

@@ -46,7 +46,7 @@ class DashboardController extends Controller
             }
         }
 
-        $projects = $user->hasRole('sales')
+        $projects = $user->isSales()
             ? $this->workspaceAccess->accessibleProjects($user)->when(
                 $selectedBranchId,
                 fn ($projects) => $projects->where('branch_id', $selectedBranchId)->values(),
@@ -66,7 +66,7 @@ class DashboardController extends Controller
         $konsumenProgress = $this->getKonsumenProgress($selectedBranchId);
         $salesWeekly = null;
         $salesReminders = null;
-        if ($user->hasRole('sales')) {
+        if ($user->isSales()) {
             $salesProjectId = $selectedProject ? $projects->firstWhere('project_name', $selectedProject)?->id : null;
             $salesFilters = array_filter(['branch_id' => $selectedBranchId, 'project_id' => $salesProjectId, 'sales_user_id' => $user->id]);
             $salesWeekly = $this->weeklyMetrics->metrics($user, $this->weeklyMetrics->period(), $salesFilters);

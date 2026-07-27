@@ -85,7 +85,7 @@ class SalesLead extends Model
             return $query;
         }
 
-        if ($user->hasRole('sales')) {
+        if ($user->isSales()) {
             return $query->where('sales_user_id', $user->id)
                 ->whereIn('branch_id', app(WorkspaceAccessService::class)->accessibleBranchIds($user));
         }

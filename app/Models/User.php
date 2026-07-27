@@ -129,6 +129,21 @@ class User extends Authenticatable
         return $this->role && $this->role->is_superadmin;
     }
 
+    public function isSales(): bool
+    {
+        return $this->hasPrimaryRole('sales');
+    }
+
+    public function hasPrimaryRole(string|array $roles): bool
+    {
+        return in_array($this->role?->slug, (array) $roles, true);
+    }
+
+    public function landingRouteName(): string
+    {
+        return $this->isSales() ? 'sales-pocketbook.index' : 'dashboard';
+    }
+
     public function canViewAllBranches(): bool
     {
         return $this->isSuperadmin() || $this->hasRole('pusat');

@@ -115,7 +115,7 @@ class CollaborationNotificationService
             'feedback_status_changed',
             'Status laporan diperbarui',
             $message,
-            route('dashboard'),
+            route($report->creator->landingRouteName()),
             $report,
         ));
     }

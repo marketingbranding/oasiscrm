@@ -3,7 +3,7 @@
 @section('title', 'Dashboard - Oasis CRM')
 
 @section('content')
-    @if(Auth::user()->hasRole('sales'))
+    @if(Auth::user()->isSales())
     <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
         <a href="{{ route('sales-pocketbook.index', ['input' => 1]) }}" class="border-2 border-black bg-[#fcc20f] px-5 py-4 text-center font-['Arial_Black'] text-lg uppercase shadow-[3px_3px_0_#000]">+ Input Lead Hari Ini</a>
         <a href="{{ route('sales-pocketbook.index', ['tab' => 'agenda']) }}" class="border-2 border-black bg-white px-5 py-4 text-center font-['Arial_Black'] text-lg uppercase shadow-[3px_3px_0_#000]">+ Isi Agenda / Hasil</a>
@@ -100,7 +100,7 @@
 
     <x-crm.page-presence page-key="dashboard" :branch-id="$selectedBranchId" />
 
-    @if(Auth::user()->hasRole('sales') && isset($salesWeekly))
+    @if(Auth::user()->isSales() && isset($salesWeekly))
     <div class="mb-4">
         <div class="text-[10px] font-[Helvetica] font-bold uppercase tracking-wider mb-1 text-gray-600">Buku Saku Minggu Ini</div>
         <div class="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-1.5">

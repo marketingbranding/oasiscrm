@@ -30,7 +30,7 @@ use Illuminate\Support\Facades\Route;
 
 Route::get('/', function () {
     return auth()->check()
-        ? redirect()->route('dashboard')
+        ? redirect()->route(auth()->user()->landingRouteName())
         : redirect()->route('login');
 });
 
@@ -39,7 +39,7 @@ Route::middleware(['auth', 'active', 'verified'])->group(function () {
     Route::put('/password/change', [PasswordChangeController::class, 'update'])->name('password.change.update');
 });
 
-Route::middleware(['auth', 'active', 'verified', 'password.changed'])->group(function () {
+Route::middleware(['auth', 'active', 'verified', 'password.changed', 'sales.access'])->group(function () {
     Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
 
     Route::get('/buku-saku-sales', [SalesPocketbookController::class, 'index'])->name('sales-pocketbook.index');

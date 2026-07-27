@@ -10,6 +10,7 @@ import registerConflict from './conflict';
 import registerNotifications from './notifications';
 import registerSync from './crm-sync';
 import registerToasts from './toast';
+import registerSalesDailyReminder from './sales-daily-reminder';
 
 window.Alpine = Alpine;
 window.Sortable = Sortable;
@@ -19,5 +20,6 @@ registerConflict(Alpine);
 registerNotifications(Alpine);
 registerSync(Alpine);
 registerToasts(Alpine);
+registerSalesDailyReminder(Alpine);
 
 Alpine.start();

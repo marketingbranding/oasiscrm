@@ -9,6 +9,9 @@
         <a href="{{ route('sales-pocketbook.export', array_merge(request()->except(['page', 'agenda_page', 'sort', 'direction', 'week', 'date_from', 'date_to', 'period_type']), $periodType === 'custom' ? ['period_type' => 'custom', 'date_from' => $reportPeriod['start']->toDateString(), 'date_to' => $reportPeriod['end']->toDateString()] : ['period_type' => 'week', 'week' => request('week', $reportPeriod['start']->toDateString())])) }}" class="sales-button bg-[#b7d7a8]">Export XLSX</a>
     </div>
     <x-crm.page-presence page-key="sales-pocketbook" :branch-id="$selectedBranchId" />
+    @if(Auth::user()->isSales())
+        @include('crm.sales-pocketbook._daily-reminder')
+    @endif
 
     @if($errors->any())<div class="border-2 border-[#c0392b] bg-red-50 px-4 py-2 text-sm"><strong>Data belum tersimpan.</strong> {{ $errors->first() }}</div>@endif
     @if(session('duplicate_warning'))
@@ -19,7 +22,7 @@
 
     @if($branches->isEmpty())
         <div class="border-2 border-black bg-[#d77a7a] px-4 py-3 font-['Times_New_Roman'] text-sm">Anda belum memiliki akses cabang.</div>
-    @elseif(Auth::user()->hasRole('sales') && $projects->isEmpty())
+    @elseif(Auth::user()->isSales() && $projects->isEmpty())
         <div class="border-2 border-black bg-[#fcc20f] px-4 py-3 font-['Times_New_Roman'] text-sm">Anda belum ditugaskan ke proyek. Hubungi admin pusat.</div>
     @endif
 
@@ -35,12 +38,12 @@
     @php
         $agendaProjectId = old('project_id', request('project_id', $defaultProject?->id));
         $agendaProject = $projects->firstWhere('id', (int) $agendaProjectId);
-        $agendaOwnerId = old('owner_user_id', Auth::user()->hasRole('sales')
+        $agendaOwnerId = old('owner_user_id', Auth::user()->isSales()
             ? Auth::id()
             : $agendaProject?->assignedUsers->first(fn ($assigned) => $salesUsers->contains('id', $assigned->id))?->id);
     @endphp
     @if($projects->isNotEmpty() && $salesUsers->isNotEmpty())
-    <section class="border-2 border-black bg-white">
+    <section id="quick-agenda-input" class="border-2 border-black bg-white">
         <div class="bg-black text-[#fcc20f] px-4 py-2 font-[Helvetica] font-bold text-xs uppercase">+ Isi Agenda / Hasil</div>
         <form method="POST" action="{{ route('sales-agendas.store') }}" x-data="salesCascade(@js($cascadeProjects), @js($cascadeSales), @js(['branch' => old('branch_id', $defaultProject?->branch_id), 'project' => $agendaProjectId, 'sales' => $agendaOwnerId]))" class="p-4 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
             @csrf
@@ -72,6 +75,9 @@
         <div class="bg-black text-white px-4 py-2 font-[Helvetica] font-bold text-xs uppercase">{{ $monitoring ? 'Monitoring Agenda' : 'Agenda Saya' }}</div>
         <div class="grid grid-cols-1 lg:grid-cols-2 gap-3 p-3">
             @forelse($agendas as $agenda)
+            @php
+                $needsMissingResult = $agenda->status === 'done' && blank(trim((string) $agenda->activity_result));
+            @endphp
             <article class="border-2 border-black bg-[#fffdf2] p-3 shadow-[2px_2px_0_#000]">
                 <div class="flex flex-wrap justify-between gap-2"><strong class="font-[Helvetica]">{{ $agenda->title }}</strong><span class="border border-black bg-[#fcc20f] px-2 py-0.5 text-[10px] font-bold uppercase">{{ $agenda->status === 'rescheduled' ? 'Dijadwalkan Ulang' : $agenda->status }}</span></div>
                 <div class="mt-1 text-sm">{{ $agenda->scheduled_date->format('d/m/Y') }} · {{ substr($agenda->start_time, 0, 5) }}@if($agenda->end_time) - {{ substr($agenda->end_time, 0, 5) }}@endif · {{ $agenda->duration_minutes }} menit</div>
@@ -79,10 +85,12 @@
                 @if($monitoring)<div class="text-xs">{{ $agenda->branch?->name }} / {{ $agenda->owner?->name }}</div>@endif
                 @if($agenda->notes)<p class="mt-2 text-sm italic">{{ $agenda->notes }}</p>@endif
                 @if($agenda->activity_result)<div class="mt-2 border-2 border-black bg-green-50 p-2"><strong class="sales-label">Hasil Aktivitas</strong><p class="text-sm whitespace-pre-line">{{ $agenda->activity_result }}</p></div>@endif
-                @if(!in_array($agenda->status, ['done', 'cancelled', 'rescheduled'], true))
+                @if(!in_array($agenda->status, ['done', 'cancelled', 'rescheduled'], true) || $needsMissingResult)
                 <div class="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <form method="POST" action="{{ route('sales-agendas.update', $agenda) }}" class="border border-black bg-white p-2">@csrf @method('PATCH')<input type="hidden" name="expected_updated_at" value="{{ app(\App\Services\OptimisticLockService::class)->token($agenda) }}"><label class="sales-label">Hasil Aktivitas</label><textarea class="sales-input" name="activity_result" rows="2" required></textarea><button class="sales-button bg-[#b7d7a8] mt-2">Tandai Selesai</button></form>
+                    @unless($needsMissingResult)
                     <form method="POST" action="{{ route('sales-agendas.reschedule', $agenda) }}" class="border border-black bg-white p-2">@csrf<input type="hidden" name="expected_updated_at" value="{{ app(\App\Services\OptimisticLockService::class)->token($agenda) }}"><label class="sales-label">Jadwal Baru</label><x-crm.date-field name="scheduled_date" required /><div class="grid grid-cols-2 gap-2 mt-2"><x-crm.time-field name="start_time" required /><x-crm.time-field name="end_time" required /></div><button class="sales-button bg-white mt-2">Jadwalkan Ulang</button></form>
+                    @endunless
                 </div>
                 @endif
             </article>
@@ -95,9 +103,9 @@
     @php
         $quickProjectId = old('project_id', request('project_id', $defaultProject?->id));
         $quickBranchId = old('branch_id', $defaultProject?->branch_id ?? Auth::user()->branch_id);
-        $quickSalesId = old('sales_user_id', Auth::user()->hasRole('sales') ? Auth::id() : null);
+        $quickSalesId = old('sales_user_id', Auth::user()->isSales() ? Auth::id() : null);
     @endphp
-    <section class="border-2 border-black bg-white">
+    <section id="quick-lead-input" class="border-2 border-black bg-white">
         <div class="bg-black text-[#fcc20f] px-4 py-2 font-[Helvetica] font-bold text-xs uppercase">+ Input Lead Hari Ini</div>
         <form method="POST" action="{{ route('sales-leads.store') }}" x-data="salesCascade(@js($cascadeProjects), @js($cascadeSales), @js(['branch' => $quickBranchId ?? null, 'project' => $quickProjectId ?? null, 'sales' => $quickSalesId ?? null]))" class="p-4 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3">
             @csrf
@@ -156,7 +164,7 @@
                 <div><label class="sales-label">Sumber Lead</label><select class="sales-input" name="lead_source_id" x-model="edit.lead_source_id" required><template x-if="!edit.source_active"><option :value="edit.lead_source_id" x-text="`${edit.source_name} (nonaktif)`"></option></template>@foreach($leadSources as $source)<option value="{{ $source->id }}">{{ $source->name }}</option>@endforeach</select></div>
                 <div><label class="sales-label">Cabang</label><select class="sales-input" name="branch_id" x-model="edit.branch_id" @change="editBranchChanged()" required>@foreach($branches as $branch)<option value="{{ $branch->id }}">{{ $branch->name }}</option>@endforeach</select></div>
                 <div><label class="sales-label">Proyek</label><select class="sales-input" name="project_id" x-model="edit.project_id" @change="editProjectChanged()" required>@foreach($projects as $project)<option value="{{ $project->id }}" x-show="editProjectVisible('{{ $project->id }}')" :disabled="!editProjectVisible('{{ $project->id }}')">{{ $project->project_name }}</option>@endforeach</select></div>
-                <div><label class="sales-label">Sales</label><select class="sales-input" name="sales_user_id" x-model="edit.sales_user_id" required @disabled(Auth::user()->hasRole('sales'))>@foreach($salesUsers as $sales)<option value="{{ $sales->id }}" x-show="editSalesVisible('{{ $sales->id }}')" :disabled="!editSalesVisible('{{ $sales->id }}')">{{ $sales->name }}</option>@endforeach</select></div>
+                <div><label class="sales-label">Sales</label><select class="sales-input" name="sales_user_id" x-model="edit.sales_user_id" required @disabled(Auth::user()->isSales())>@foreach($salesUsers as $sales)<option value="{{ $sales->id }}" x-show="editSalesVisible('{{ $sales->id }}')" :disabled="!editSalesVisible('{{ $sales->id }}')">{{ $sales->name }}</option>@endforeach</select></div>
                 <div><label class="sales-label">Referensi Konsumen Tertaut</label><input class="sales-input" name="linked_consumer_reference" x-model="edit.linked_consumer_reference"></div>
                 <div class="md:col-span-2"><label class="sales-label">Catatan</label><textarea class="sales-input" name="notes" rows="3" x-model="edit.notes"></textarea></div>
                 <div class="flex flex-wrap gap-2 md:col-span-2"><button class="sales-button bg-[#fcc20f]" :disabled="leadSaving" x-text="leadSaving ? 'Menyimpan...' : 'Simpan Perubahan'"></button><button type="button" class="sales-button bg-white" @click="closeLeadModal()">Batal</button><a :href="edit.fallback_url" class="sales-button bg-white">Buka Halaman Edit</a></div>

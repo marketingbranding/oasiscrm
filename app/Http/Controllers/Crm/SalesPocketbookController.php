@@ -8,6 +8,7 @@ use App\Models\ContentItem;
 use App\Models\LeadSource;
 use App\Models\SalesLead;
 use App\Models\User;
+use App\Services\SalesDailyReminderService;
 use App\Services\SalesWeeklyMetricsService;
 use App\Services\WorkspaceAccessService;
 use Illuminate\Database\Eloquent\Builder;
@@ -20,18 +21,30 @@ class SalesPocketbookController extends Controller
     public function __construct(
         private readonly WorkspaceAccessService $workspaceAccess,
         private readonly SalesWeeklyMetricsService $weeklyMetrics,
+        private readonly SalesDailyReminderService $dailyReminder,
     ) {}
 
     public function index(Request $request)
     {
         $this->authorize('viewAny', SalesLead::class);
         $user = $request->user();
+        $reminderAction = $request->query('reminder_action');
+        if ($user->isSales() && in_array($reminderAction, ['lead', 'agenda', 'result'], true)) {
+            session()->flash('suppress_sales_reminder_once', true);
+            $anchor = match ($reminderAction) {
+                'lead' => '#quick-lead-input',
+                'agenda' => '#quick-agenda-input',
+                default => '',
+            };
+
+            return redirect()->to(route('sales-pocketbook.index', $request->except('reminder_action')).$anchor);
+        }
         $request->validate(array_merge($this->filterRules(), [
             'sort' => ['nullable', 'in:sales,branch,project,lead_new,contacted,met,surveyed,utj,documents_completed,akad,agenda_completed,last_input'],
             'direction' => ['nullable', 'in:asc,desc'],
         ]));
         $tab = in_array($request->query('tab'), ['leads', 'agenda', 'report'], true) ? $request->query('tab') : 'leads';
-        $monitoring = ! $user->hasRole('sales');
+        $monitoring = ! $user->isSales();
         $branches = $this->workspaceAccess->accessibleBranches($user);
         $projects = $this->workspaceAccess->accessibleProjects($user);
         $projects->load('assignedUsers:id');
@@ -50,12 +63,12 @@ class SalesPocketbookController extends Controller
                 $branchIds = $this->workspaceAccess->accessibleBranchIds($user);
                 $query->whereHas('assignedProjects', fn (Builder $projects) => $projects->whereIn('branch_id', $branchIds));
             })
-            ->when($user->hasRole('sales'), fn (Builder $query) => $query->whereKey($user->id))
+            ->when($user->isSales(), fn (Builder $query) => $query->whereKey($user->id))
             ->with(['assignedProjects.branch'])->orderBy('name')->get(['id', 'name', 'branch_id']);
         if ($monitoring && $request->filled('sales_user_id') && ! $salesUsers->contains('id', $request->integer('sales_user_id'))) {
             abort(403);
         }
-        $selectedSalesId = $monitoring && $request->filled('sales_user_id') ? $request->integer('sales_user_id') : ($user->hasRole('sales') ? $user->id : null);
+        $selectedSalesId = $monitoring && $request->filled('sales_user_id') ? $request->integer('sales_user_id') : ($user->isSales() ? $user->id : null);
         $this->validateFilterScope($selectedBranchId, $selectedProjectId, $selectedSalesId, $projects, $salesUsers);
 
         $periodType = $request->query('period_type', 'week');
@@ -90,25 +103,27 @@ class SalesPocketbookController extends Controller
         $agendaDateFrom = $reportPeriod['start']->toDateString();
         $agendaDateTo = $reportPeriod['end']->toDateString();
         $completedAgendaDrilldown = $request->boolean('report_agenda_completed');
+        $missingAgendaResultDrilldown = $request->boolean('report_agenda_missing_result');
         $agendas = ContentItem::query()
             ->where('item_type', 'agenda')
             ->where('agenda_type', ContentItem::SALES_AGENDA_TYPE)
             ->with(['branch:id,name', 'owner:id,name', 'rescheduledFrom:id,scheduled_date'])
-            ->when($user->hasRole('sales'), fn (Builder $query) => $query->where('owner_user_id', $user->id))
-            ->when(! $user->canViewAllBranches() && ! $user->hasRole('sales'), fn (Builder $query) => $query->whereIn('branch_id', $this->workspaceAccess->accessibleBranchIds($user)))
+            ->when($user->isSales(), fn (Builder $query) => $query->where('owner_user_id', $user->id))
+            ->when(! $user->canViewAllBranches() && ! $user->isSales(), fn (Builder $query) => $query->whereIn('branch_id', $this->workspaceAccess->accessibleBranchIds($user)))
             ->when($selectedBranchId, fn (Builder $query) => $query->where('branch_id', $selectedBranchId))
             ->when($selectedProjectId, fn (Builder $query) => $query->where('sales_project_id', $selectedProjectId))
             ->when($monitoring && $request->filled('sales_user_id'), fn (Builder $query) => $query->where('owner_user_id', $request->integer('sales_user_id')))
             ->when($completedAgendaDrilldown, fn (Builder $query) => $query->where('status', 'done'))
-            ->when($agendaDateFrom, fn (Builder $query) => $query->whereDate($completedAgendaDrilldown ? 'completed_at' : 'scheduled_date', '>=', $agendaDateFrom))
-            ->when($agendaDateTo, fn (Builder $query) => $query->whereDate($completedAgendaDrilldown ? 'completed_at' : 'scheduled_date', '<=', $agendaDateTo))
+            ->when($missingAgendaResultDrilldown, fn (Builder $query) => $query->where('status', 'done')->whereRaw("TRIM(COALESCE(activity_result, '')) = ''"))
+            ->when($agendaDateFrom && ! $missingAgendaResultDrilldown, fn (Builder $query) => $query->whereDate($completedAgendaDrilldown ? 'completed_at' : 'scheduled_date', '>=', $agendaDateFrom))
+            ->when($agendaDateTo && ! $missingAgendaResultDrilldown, fn (Builder $query) => $query->whereDate($completedAgendaDrilldown ? 'completed_at' : 'scheduled_date', '<=', $agendaDateTo))
             ->orderBy('scheduled_date')->orderBy('start_time')->paginate(20, ['*'], 'agenda_page')->withQueryString();
 
         $defaultProject = $this->workspaceAccess->resolveRequestedProject($user, $request->query('project_id'));
         $reportFilters = array_filter([
             'branch_id' => $selectedBranchId,
             'project_id' => $selectedProjectId,
-            'sales_user_id' => $monitoring && $request->filled('sales_user_id') ? $request->integer('sales_user_id') : ($user->hasRole('sales') ? $user->id : null),
+            'sales_user_id' => $monitoring && $request->filled('sales_user_id') ? $request->integer('sales_user_id') : ($user->isSales() ? $user->id : null),
         ]);
         $reportSummary = $this->weeklyMetrics->metrics($user, $reportPeriod, $reportFilters);
         $reportRows = collect();
@@ -137,6 +152,20 @@ class SalesPocketbookController extends Controller
             'id' => (string) $sales->id,
             'project_ids' => $sales->assignedProjects->pluck('id')->map(fn ($id) => (string) $id)->values()->all(),
         ])->values();
+        $dailyReminder = $this->dailyReminder->state($user);
+        if ($user->isSales() && (session('suppress_sales_reminder_once') || session('conflict_data'))) {
+            $dailyReminder['shouldShow'] = false;
+        }
+        $dailyReminder['leadInputUrl'] = route('sales-pocketbook.index', ['input' => 1, 'reminder_action' => 'lead']).'#quick-lead-input';
+        $dailyReminder['agendaInputUrl'] = $dailyReminder['hasAssignedProject']
+            ? route('sales-pocketbook.index', ['tab' => 'agenda', 'reminder_action' => 'agenda']).'#quick-agenda-input'
+            : route('content-calendar.create', ['type' => 'agenda']);
+        $dailyReminder['missingResultUrl'] = route('sales-pocketbook.index', [
+            'tab' => 'agenda',
+            'report_agenda_missing_result' => 1,
+            'reminder_action' => 'result',
+        ]);
+        $dailyReminder['dismissUrl'] = route('sales-reminders.dismiss');
 
         return view('crm.sales-pocketbook.index', [
             'tab' => $tab,
@@ -159,6 +188,7 @@ class SalesPocketbookController extends Controller
             'periodType' => $periodType,
             'cascadeProjects' => $cascadeProjects,
             'cascadeSales' => $cascadeSales,
+            'dailyReminder' => $dailyReminder,
         ]);
     }
 
@@ -188,7 +218,7 @@ class SalesPocketbookController extends Controller
                 $branchIds = $this->workspaceAccess->accessibleBranchIds($user);
                 $query->whereHas('assignedProjects', fn (Builder $projects) => $projects->whereIn('branch_id', $branchIds));
             })
-            ->when($user->hasRole('sales'), fn (Builder $query) => $query->whereKey($user->id))
+            ->when($user->isSales(), fn (Builder $query) => $query->whereKey($user->id))
             ->with(['assignedProjects.branch'])
             ->orderBy('name')
             ->get(['id', 'name', 'branch_id']);
@@ -197,7 +227,7 @@ class SalesPocketbookController extends Controller
         if ($requestedSalesId && ! $salesUsers->contains('id', $requestedSalesId)) {
             abort(403);
         }
-        $salesId = $user->hasRole('sales') ? $user->id : $requestedSalesId;
+        $salesId = $user->isSales() ? $user->id : $requestedSalesId;
         $this->validateFilterScope($branchId, $projectId, $salesId, $projects, $salesUsers);
 
         $periodType = $request->query('period_type', 'week');
@@ -214,6 +244,7 @@ class SalesPocketbookController extends Controller
         $reportMetric = $request->query('report_metric');
         $leadDateColumn = $reportMetric ? SalesWeeklyMetricsService::METRIC_COLUMNS[$reportMetric] : 'lead_date';
         $completedAgendaDrilldown = $request->boolean('report_agenda_completed');
+        $missingAgendaResultDrilldown = $request->boolean('report_agenda_missing_result');
 
         $leads = $this->weeklyMetrics->leadQuery($user, $filters)
             ->with(['branch:id,name', 'project:id,project_name', 'sales:id,name'])
@@ -235,8 +266,10 @@ class SalesPocketbookController extends Controller
         $agendas = $this->weeklyMetrics->agendaQuery($user, $filters)
             ->with(['branch:id,name', 'owner:id,name', 'salesProject:id,project_name', 'rescheduledFrom:id,scheduled_date'])
             ->when($completedAgendaDrilldown, fn (Builder $query) => $query->where('status', 'done'))
-            ->whereDate($completedAgendaDrilldown ? 'completed_at' : 'scheduled_date', '>=', $period['start']->toDateString())
-            ->whereDate($completedAgendaDrilldown ? 'completed_at' : 'scheduled_date', '<=', $period['end']->toDateString())
+            ->when($missingAgendaResultDrilldown, fn (Builder $query) => $query->where('status', 'done')->whereRaw("TRIM(COALESCE(activity_result, '')) = ''"))
+            ->when(! $missingAgendaResultDrilldown, fn (Builder $query) => $query
+                ->whereDate($completedAgendaDrilldown ? 'completed_at' : 'scheduled_date', '>=', $period['start']->toDateString())
+                ->whereDate($completedAgendaDrilldown ? 'completed_at' : 'scheduled_date', '<=', $period['end']->toDateString()))
             ->orderBy('scheduled_date')
             ->orderBy('start_time')
             ->get();
@@ -274,6 +307,7 @@ class SalesPocketbookController extends Controller
             'date_to' => ['nullable', 'date', 'required_if:period_type,custom', 'prohibited_if:period_type,week', 'after_or_equal:date_from'],
             'report_metric' => ['nullable', Rule::in(array_keys(SalesWeeklyMetricsService::METRIC_COLUMNS))],
             'report_agenda_completed' => ['nullable', 'boolean'],
+            'report_agenda_missing_result' => ['nullable', 'boolean'],
         ];
     }
 

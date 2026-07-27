@@ -25,6 +25,10 @@ class AppServiceProvider extends ServiceProvider
                 return;
             }
 
+            if ($user->isSales() && request()->boolean('reminder_dismiss_failed')) {
+                session()->flash('warning', 'Pengingat belum dapat disembunyikan untuk hari ini. Pengingat mungkin muncul kembali.');
+            }
+
             $branchScope = fn ($q) => $q->when(! $user->canViewAllBranches() && $user->branch_id, fn ($q2) => $q2->where('branch_id', $user->branch_id));
 
             $plannerReminders = app(WorkPlannerReminderService::class)->forUser($user);

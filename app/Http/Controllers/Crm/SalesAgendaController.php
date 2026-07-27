@@ -66,7 +66,7 @@ class SalesAgendaController extends Controller
             $current->update([
                 'activity_result' => $data['activity_result'],
                 'status' => 'done',
-                'completed_at' => now(),
+                'completed_at' => $current->completed_at ?? now(),
                 'updated_by' => $request->user()->id,
             ]);
             $current->logActivity('agenda_result_recorded', ['status' => 'done']);

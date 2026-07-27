@@ -54,6 +54,9 @@
 <body class="font-['Times_New_Roman'] antialiased bg-white min-h-screen flex flex-col"
       x-data="{ sidebarOpen: localStorage.getItem('sidebarOpen') !== 'false', sidebarPinned: localStorage.getItem('sidebarPinned') === 'true', bellOpen: false }"
       x-init="document.getElementById('crm-pinned-style')&&document.getElementById('crm-pinned-style').remove()">
+    @if(request()->boolean('reminder_dismiss_failed'))
+        <script>history.replaceState(null, '', new URL(location.href).pathname + new URL(location.href).search.replace(/([?&])reminder_dismiss_failed=1(&|$)/, '$1').replace(/[?&]$/, '') + location.hash)</script>
+    @endif
     {{-- Header --}}
     <div class="fixed top-0 left-0 right-0 z-50 flex-shrink-0 bg-black text-white font-[Helvetica] font-bold text-sm sm:text-base px-4 py-3 flex items-center justify-between">
         <div class="flex items-center gap-2">

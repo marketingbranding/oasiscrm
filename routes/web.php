@@ -17,6 +17,7 @@ use App\Http\Controllers\Crm\NotificationController;
 use App\Http\Controllers\Crm\PresenceController;
 use App\Http\Controllers\Crm\ProjectController;
 use App\Http\Controllers\Crm\SalesAgendaController;
+use App\Http\Controllers\Crm\SalesDailyReminderController;
 use App\Http\Controllers\Crm\SalesLeadController;
 use App\Http\Controllers\Crm\SalesLeadStageController;
 use App\Http\Controllers\Crm\SalesPocketbookController;
@@ -53,6 +54,7 @@ Route::middleware(['auth', 'active', 'verified', 'password.changed', 'sales.acce
     Route::get('/buku-saku-sales/leads/{sales_lead}/edit', [SalesLeadController::class, 'edit'])->name('sales-leads.edit');
     Route::put('/buku-saku-sales/leads/{sales_lead}', [SalesLeadController::class, 'update'])->name('sales-leads.update');
     Route::patch('/buku-saku-sales/leads/{sales_lead}/stage', [SalesLeadStageController::class, 'update'])->name('sales-leads.stage.update');
+    Route::post('/sales-reminders/dismiss', [SalesDailyReminderController::class, 'dismiss'])->name('sales-reminders.dismiss');
 
     Route::post('/presence/heartbeat', [PresenceController::class, 'heartbeat'])->middleware('throttle:180,1')->name('presence.heartbeat');
     Route::get('/presence', [PresenceController::class, 'index'])->middleware('throttle:240,1')->name('presence.index');

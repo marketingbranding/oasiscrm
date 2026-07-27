@@ -164,6 +164,11 @@ class User extends Authenticatable
         return $this->hasMany(UserNotification::class);
     }
 
+    public function dailyReminderDismissals(): HasMany
+    {
+        return $this->hasMany(UserDailyReminderDismissal::class);
+    }
+
     public function salesLeads(): HasMany
     {
         return $this->hasMany(SalesLead::class, 'sales_user_id');

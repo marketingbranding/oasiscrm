@@ -29,7 +29,7 @@
     </div>
 
     @if($tab === 'report')
-        <div class="border-2 border-black bg-white p-8 text-center font-['Times_New_Roman']">Laporan akan dilengkapi pada tahap berikutnya.</div>
+        @include('crm.sales-pocketbook._report')
     @elseif($tab === 'agenda')
     @php
         $agendaOwnerId = old('owner_user_id', Auth::user()->hasRole('sales') ? Auth::id() : $salesUsers->first()?->id);

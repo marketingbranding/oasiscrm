@@ -11,13 +11,17 @@ use App\Models\DatabaseSheetSyncStatus;
 use App\Models\KonsumenProgressSheetRow;
 use App\Models\LeadMaster;
 use App\Services\KonsumenProgressSyncService;
+use App\Services\SalesWeeklyMetricsService;
 use App\Services\WorkspaceAccessService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 
 class DashboardController extends Controller
 {
-    public function __construct(private readonly WorkspaceAccessService $workspaceAccess) {}
+    public function __construct(
+        private readonly WorkspaceAccessService $workspaceAccess,
+        private readonly SalesWeeklyMetricsService $weeklyMetrics,
+    ) {}
 
     public function index(Request $request)
     {
@@ -42,10 +46,15 @@ class DashboardController extends Controller
             }
         }
 
-        $projects = LeadMaster::where('is_active', true)
-            ->when($selectedBranchId, fn ($query) => $query->where('branch_id', $selectedBranchId))
-            ->orderBy('project_name')
-            ->get();
+        $projects = $user->hasRole('sales')
+            ? $this->workspaceAccess->accessibleProjects($user)->when(
+                $selectedBranchId,
+                fn ($projects) => $projects->where('branch_id', $selectedBranchId)->values(),
+            )
+            : LeadMaster::where('is_active', true)
+                ->when($selectedBranchId, fn ($query) => $query->where('branch_id', $selectedBranchId))
+                ->orderBy('project_name')
+                ->get();
 
         $recentActivity = $this->getRecentActivity($user, $selectedBranchId, $selectedProject);
         $leadStats = $this->getLeadStats($selectedBranchId, $selectedProject);
@@ -55,8 +64,16 @@ class DashboardController extends Controller
         $dashboardSyncStatus = $selectedBranchId ? DatabaseSheetSyncStatus::where('branch_id', $selectedBranchId)->first() : null;
         $canSyncDatabase = $branch && $this->workspaceAccess->canSyncBranch($user, $branch);
         $konsumenProgress = $this->getKonsumenProgress($selectedBranchId);
+        $salesWeekly = null;
+        $salesReminders = null;
+        if ($user->hasRole('sales')) {
+            $salesProjectId = $selectedProject ? $projects->firstWhere('project_name', $selectedProject)?->id : null;
+            $salesFilters = array_filter(['branch_id' => $selectedBranchId, 'project_id' => $salesProjectId, 'sales_user_id' => $user->id]);
+            $salesWeekly = $this->weeklyMetrics->metrics($user, $this->weeklyMetrics->period(), $salesFilters);
+            $salesReminders = $this->weeklyMetrics->reminders($user, $salesFilters);
+        }
 
-        return view('crm.dashboard', compact('branches', 'branch', 'selectedBranchId', 'projects', 'selectedProject', 'recentActivity', 'leadStats', 'danaStats', 'actionQueue', 'syncHealth', 'konsumenProgress', 'dashboardSyncStatus', 'canSyncDatabase'));
+        return view('crm.dashboard', compact('branches', 'branch', 'selectedBranchId', 'projects', 'selectedProject', 'recentActivity', 'leadStats', 'danaStats', 'actionQueue', 'syncHealth', 'konsumenProgress', 'dashboardSyncStatus', 'canSyncDatabase', 'salesWeekly', 'salesReminders'));
     }
 
     private function getRecentActivity($user, $branchId = null, $projectName = null)
@@ -68,7 +85,9 @@ class DashboardController extends Controller
             ->when($projectName, fn ($q) => $q->where('project_name', $projectName))
             ->latest()->take(5)->get()
             ->each(fn ($i) => $activity->push([
-                'type' => 'Task', 'color' => '#b3bd95',
+                'type' => match ($i->item_type) {
+                    'agenda' => 'Agenda', 'content' => 'Konten', default => 'Task'
+                }, 'color' => '#b3bd95',
                 'text' => $i->title, 'time' => $i->created_at, 'user' => $i->creator?->name ?? '-',
             ]));
 
@@ -195,31 +214,31 @@ class DashboardController extends Controller
             ]));
 
         ContentItem::visibleTo($user)->whereDate('deadline_date', '<', today())
-            ->where('status', '!=', 'completed')
+            ->whereNotIn('status', ['completed', 'done', 'cancelled', 'rescheduled', 'uploaded'])
             ->when($branchId, fn ($q) => $q->where('branch_id', $branchId))
             ->when($projectName, fn ($q) => $q->where('project_name', $projectName))
             ->orderBy('deadline_date')
             ->take(5)
             ->get()
             ->each(fn ($t) => $queue->push([
-                'text' => 'Task overdue: '.$t->title,
+                'text' => ($t->item_type === 'agenda' ? 'Agenda' : 'Task').' overdue: '.$t->title,
                 'urgency' => 3,
-                'type' => 'task_overdue',
+                'type' => $t->item_type === 'agenda' ? 'agenda_overdue' : 'task_overdue',
                 'link' => route('content-calendar.index'),
                 'time' => $t->deadline_date,
             ]));
 
         ContentItem::visibleTo($user)->whereDate('scheduled_date', today())
-            ->where('status', '!=', 'completed')
+            ->whereNotIn('status', ['completed', 'done', 'cancelled', 'rescheduled', 'uploaded'])
             ->when($branchId, fn ($q) => $q->where('branch_id', $branchId))
             ->when($projectName, fn ($q) => $q->where('project_name', $projectName))
             ->orderBy('scheduled_date')
             ->take(5)
             ->get()
             ->each(fn ($t) => $queue->push([
-                'text' => 'Task hari ini: '.$t->title,
+                'text' => ($t->item_type === 'agenda' ? 'Agenda' : 'Task').' hari ini: '.$t->title,
                 'urgency' => 4,
-                'type' => 'task_today',
+                'type' => $t->item_type === 'agenda' ? 'agenda_today' : 'task_today',
                 'link' => route('content-calendar.index'),
                 'time' => $t->scheduled_date,
             ]));

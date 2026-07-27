@@ -121,7 +121,7 @@ class SalesLead extends Model
     {
         $dates = collect(self::STAGE_ORDER)->map(fn (string $stage) => $this->{$stage})->filter();
 
-        return $dates->sortDesc()->first() ?? $this->created_at;
+        return $dates->sortDesc()->first() ?? $this->lead_date?->startOfDay();
     }
 
     public function getLastActivityAtAttribute()

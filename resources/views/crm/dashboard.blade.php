@@ -3,6 +3,17 @@
 @section('title', 'Dashboard - Oasis CRM')
 
 @section('content')
+    @if(Auth::user()->hasRole('sales'))
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
+        <a href="{{ route('sales-pocketbook.index', ['input' => 1]) }}" class="border-2 border-black bg-[#fcc20f] px-5 py-4 text-center font-['Arial_Black'] text-lg uppercase shadow-[3px_3px_0_#000]">+ Input Lead Hari Ini</a>
+        <a href="{{ route('sales-pocketbook.index', ['tab' => 'agenda']) }}" class="border-2 border-black bg-white px-5 py-4 text-center font-['Arial_Black'] text-lg uppercase shadow-[3px_3px_0_#000]">+ Isi Agenda / Hasil</a>
+    </div>
+    @elseif(Auth::user()->canViewAllBranches())
+    @php
+        $monitoringParams = array_filter(['tab' => 'report', 'branch_id' => $selectedBranchId ?? null, 'project_id' => isset($selectedProject) ? optional($projects->firstWhere('project_name', $selectedProject))->id : null]);
+    @endphp
+    <a href="{{ route('sales-pocketbook.index', $monitoringParams) }}" class="mb-4 inline-block border-2 border-black bg-[#fcc20f] px-4 py-2 font-[Helvetica] text-sm font-bold uppercase shadow-[2px_2px_0_#000]">Monitoring Buku Saku</a>
+    @else
     {{-- Quick-Action Dropdown --}}
     <div x-data="{ quickOpen: false }" class="relative mb-4" @click.outside="quickOpen = false">
         <button @click="quickOpen = !quickOpen"
@@ -36,6 +47,7 @@
             @endif
         </div>
     </div>
+    @endif
 
     {{-- Filter Bar --}}
     @if(isset($branches) && $branches->count() > 1)
@@ -87,6 +99,31 @@
     @endif
 
     <x-crm.page-presence page-key="dashboard" :branch-id="$selectedBranchId" />
+
+    @if(Auth::user()->hasRole('sales') && isset($salesWeekly))
+    <div class="mb-4">
+        <div class="text-[10px] font-[Helvetica] font-bold uppercase tracking-wider mb-1 text-gray-600">Buku Saku Minggu Ini</div>
+        <div class="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-1.5">
+            @foreach(['lead_new' => 'Lead Baru', 'contacted' => 'Dihubungi', 'met' => 'Tatap Muka', 'surveyed' => 'Survey', 'utj' => 'UTJ', 'documents_completed' => 'Berkas', 'akad' => 'Akad', 'agenda_completed' => 'Agenda Selesai'] as $key => $label)
+            <div class="border-2 border-black {{ $key === 'agenda_completed' ? 'bg-[#fff3b0]' : 'bg-white' }} px-2 py-2"><div class="font-[Helvetica] font-bold text-[9px] uppercase text-gray-600">{{ $label }}</div><div class="font-['Arial_Black'] text-2xl">{{ $salesWeekly[$key] }}</div></div>
+            @endforeach
+        </div>
+    </div>
+    <div class="border-2 border-black mb-4">
+        <div class="bg-black text-white px-3 py-2 font-[Helvetica] font-bold text-xs uppercase">Pengingat Operasional</div>
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5">
+            @foreach([
+                ['show' => $salesReminders['no_agenda_today'], 'count' => null, 'label' => 'Belum ada agenda hari ini', 'tab' => 'agenda'],
+                ['show' => $salesReminders['done_without_result'] > 0, 'count' => $salesReminders['done_without_result'], 'label' => 'Agenda selesai tanpa hasil', 'tab' => 'agenda'],
+                ['show' => $salesReminders['never_contacted'] > 0, 'count' => $salesReminders['never_contacted'], 'label' => 'Lead belum dihubungi', 'tab' => 'leads'],
+                ['show' => $salesReminders['stale_progress'] > 0, 'count' => $salesReminders['stale_progress'], 'label' => 'Lead tanpa progres ≥3 hari', 'tab' => 'leads'],
+                ['show' => $salesReminders['duplicate_phone_groups'] > 0, 'count' => $salesReminders['duplicate_phone_groups'], 'label' => 'Nomor telepon duplikat', 'tab' => 'leads'],
+            ] as $reminder)
+            <a href="{{ route('sales-pocketbook.index', ['tab' => $reminder['tab']]) }}" class="border-t sm:border-r border-black p-3 {{ $reminder['show'] ? 'bg-[#fff3b0]' : 'bg-white text-gray-500' }}"><strong class="font-[Helvetica] text-lg">{{ $reminder['count'] ?? ($reminder['show'] ? '!' : '0') }}</strong><div class="text-xs">{{ $reminder['label'] }}</div></a>
+            @endforeach
+        </div>
+    </div>
+    @endif
 
     {{-- === LEADS KPI === --}}
     @if(isset($leadStats))
@@ -146,7 +183,7 @@
     @if(isset($actionQueue) && $actionQueue->count() > 0)
     <div class="border-2 border-black mb-4">
         <div class="bg-black text-white px-2 py-1 font-[Helvetica] font-bold text-[10px] uppercase">🔔 Action Queue</div>
-        @php $typeLabels = ['dana_overdue' => 'Dana', 'dana_confirm' => 'Dana', 'task_overdue' => 'Task', 'task_today' => 'Task', 'lead_today' => 'Lead']; @endphp
+        @php $typeLabels = ['dana_overdue' => 'Dana', 'dana_confirm' => 'Dana', 'task_overdue' => 'Task', 'task_today' => 'Task', 'agenda_overdue' => 'Agenda', 'agenda_today' => 'Agenda', 'lead_today' => 'Lead']; @endphp
         @foreach($actionQueue as $aq)
         <div class="px-2 py-1 text-xs font-['Times_New_Roman'] border-t border-black flex items-center gap-1.5 hover:bg-gray-50">
             <span class="text-[10px] font-[Helvetica] font-bold uppercase {{ $aq['urgency'] <= 2 ? 'text-[#e91d2a]' : 'text-gray-500' }}">{{ $typeLabels[$aq['type']] ?? $aq['type'] }}</span>

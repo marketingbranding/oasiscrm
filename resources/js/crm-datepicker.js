@@ -73,6 +73,9 @@ function syncDateDisplay(wrapper) {
         const m = parseInt(parts[1], 10) - 1;
         const y = parseInt(parts[0], 10);
         textEl.textContent = d + ' ' + monthsId[m] + ' ' + y;
+        wrapper.__calState = { year: y, month: m };
+    } else if (textEl) {
+        textEl.textContent = 'Pilih Tanggal';
     }
 }
 
@@ -123,6 +126,11 @@ function initDatePickers() {
 
         if (!display || !cal) return;
         syncDateDisplay(wrapper);
+        const dateInput = wrapper.querySelector('input[type="date"]');
+        if (dateInput) {
+            dateInput.addEventListener('input', () => syncDateDisplay(wrapper));
+            dateInput.addEventListener('change', () => syncDateDisplay(wrapper));
+        }
 
         display.addEventListener('click', function(e) {
             e.stopPropagation();

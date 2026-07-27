@@ -26,7 +26,7 @@ class SalesAgendaController extends Controller
     {
         $data = $request->validated();
         [$owner, $project] = $this->resolveOwnerAndProject($request, (int) $data['owner_user_id'], (int) $data['project_id']);
-        $duration = $this->duration($data['start_time'], $data['end_time'] ?? null, $data['duration_minutes'] ?? null);
+        $duration = $this->duration($data['start_time'], $data['end_time']);
 
         $agenda = ContentItem::create([
             'branch_id' => $project->branch_id,
@@ -42,7 +42,7 @@ class SalesAgendaController extends Controller
             'scheduled_date' => $data['scheduled_date'],
             'deadline_date' => $data['scheduled_date'],
             'start_time' => $data['start_time'],
-            'end_time' => $data['end_time'] ?? null,
+            'end_time' => $data['end_time'],
             'duration_minutes' => $duration,
             'status' => 'planned',
             'priority' => 'medium',
@@ -63,10 +63,8 @@ class SalesAgendaController extends Controller
         $result = $this->optimisticLock->execute($request, $agenda, $data['expected_updated_at'], function (ContentItem $current) use ($request, $data) {
             $this->authorizeAgenda($request, $current);
             abort_if(in_array($current->status, ['cancelled', 'rescheduled'], true), 422, 'Agenda ini tidak dapat diselesaikan.');
-            $duration = $this->duration($current->start_time, $current->end_time, $data['duration_minutes'] ?? $current->duration_minutes);
             $current->update([
                 'activity_result' => $data['activity_result'],
-                'duration_minutes' => $duration,
                 'status' => 'done',
                 'completed_at' => now(),
                 'updated_by' => $request->user()->id,
@@ -91,7 +89,7 @@ class SalesAgendaController extends Controller
         $result = $this->optimisticLock->execute($request, $agenda, $data['expected_updated_at'], function (ContentItem $current) use ($request, $data) {
             $this->authorizeAgenda($request, $current);
             abort_if($current->isFinished(), 422, 'Agenda yang sudah selesai tidak dapat dijadwalkan ulang.');
-            $duration = $this->duration($data['start_time'], $data['end_time'] ?? null, $data['duration_minutes'] ?? null);
+            $duration = $this->duration($data['start_time'], $data['end_time']);
             $current->update([
                 'status' => 'rescheduled',
                 'completed_at' => now(),
@@ -106,7 +104,7 @@ class SalesAgendaController extends Controller
                 'scheduled_date' => $data['scheduled_date'],
                 'deadline_date' => $data['scheduled_date'],
                 'start_time' => $data['start_time'],
-                'end_time' => $data['end_time'] ?? null,
+                'end_time' => $data['end_time'],
                 'duration_minutes' => $duration,
                 'status' => 'planned',
                 'completed_at' => null,
@@ -162,15 +160,8 @@ class SalesAgendaController extends Controller
         }
     }
 
-    private function duration(string $start, ?string $end, mixed $explicit): int
+    private function duration(string $start, string $end): int
     {
-        if ($end) {
-            $minutes = Carbon::parse($start)->diffInMinutes(Carbon::parse($end), false);
-            abort_if($minutes <= 0, 422, 'Jam selesai harus setelah jam mulai.');
-
-            return $minutes;
-        }
-
-        return (int) $explicit;
+        return Carbon::parse($start)->diffInMinutes(Carbon::parse($end), false);
     }
 }

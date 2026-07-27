@@ -26,7 +26,9 @@ class SalesLeadService
     {
         $changedFields = array_keys(array_filter($data, fn ($value, $key) => $lead->{$key} != $value, ARRAY_FILTER_USE_BOTH));
         $data['normalized_phone'] = $this->phones->normalize($data['phone'] ?? null);
-        $data['source_name_snapshot'] = isset($data['lead_source_id']) ? LeadSource::find($data['lead_source_id'])?->name : null;
+        if (isset($data['lead_source_id']) && (int) $data['lead_source_id'] !== (int) $lead->lead_source_id) {
+            $data['source_name_snapshot'] = LeadSource::find($data['lead_source_id'])?->name;
+        }
         $data['updated_by'] = $actor->id;
         $lead->update($data);
         $lead->logSalesActivity('updated', $this->activityContext($lead) + ['changed_fields' => $changedFields]);

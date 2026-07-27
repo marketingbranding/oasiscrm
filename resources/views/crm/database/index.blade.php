@@ -232,7 +232,7 @@
         {{-- Edit Modal --}}
         <div x-cloak x-show="editing" class="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4"
              @keydown.escape.window="editing = null">
-            <div @click.away="editing = null"
+            <div x-ref="editPanel" @click.away="editing = null"
                  class="w-full max-w-2xl border-2 border-black bg-white p-5 shadow-[8px_8px_0_0_#000] max-h-[80vh] overflow-y-auto">
                 <div class="flex items-center justify-between mb-4">
                     <h2 class="font-[Helvetica] font-bold text-sm uppercase" x-text="'Edit — ' + tab"></h2>
@@ -285,7 +285,13 @@
                                                style="position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0">
                                     </div>
                                  </template>
-                                 <template x-if="!['checkbox', 'select', 'date'].includes(fieldType(tab, h, editForm[h]))">
+                                 <template x-if="fieldType(tab, h, editForm[h]) === 'time'">
+                                    <div class="time-wrapper" data-accent="#d77a7a">
+                                        <div class="time-display w-full border-2 border-black px-2 py-1 text-sm font-['Times_New_Roman'] bg-white cursor-pointer select-none flex items-center justify-between" tabindex="0" role="button" aria-haspopup="dialog"><span class="time-text">Pilih Jam</span><span class="time-arrow">▼</span></div>
+                                        <input type="time" :name="h" x-model="editForm[h]" style="position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0">
+                                    </div>
+                                 </template>
+                                 <template x-if="!['checkbox', 'select', 'date', 'time'].includes(fieldType(tab, h, editForm[h]))">
                                     <input :type="fieldType(tab, h, editForm[h])" :name="h" x-model="editForm[h]"
                                            class="w-full border-2 border-black px-2 py-1 text-sm font-['Times_New_Roman'] rounded-none">
                                  </template>
@@ -347,7 +353,13 @@
                                                    style="position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0">
                                         </div>
                                      </template>
-                                     <template x-if="!['checkbox', 'select', 'date'].includes(fieldType(name, h))">
+                                     <template x-if="fieldType(name, h) === 'time'">
+                                        <div class="time-wrapper" data-accent="#d77a7a">
+                                            <div class="time-display w-full border-2 border-black px-2 py-1 text-sm font-['Times_New_Roman'] bg-white cursor-pointer select-none flex items-center justify-between" tabindex="0" role="button" aria-haspopup="dialog"><span class="time-text">Pilih Jam</span><span class="time-arrow">▼</span></div>
+                                            <input type="time" :name="h" value="" style="position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0">
+                                        </div>
+                                     </template>
+                                     <template x-if="!['checkbox', 'select', 'date', 'time'].includes(fieldType(name, h))">
                                         <input :type="fieldType(name, h)" :name="h" value=""
                                                class="w-full border-2 border-black px-2 py-1 text-sm font-['Times_New_Roman'] rounded-none">
                                      </template>
@@ -534,6 +546,7 @@ document.addEventListener('alpine:init', () => {
             for (const header of this.editableHeaders()) {
                 this.editForm[header] = this.normalizeInputValue(this.tab, header, this.editForm[header]);
             }
+            this.$nextTick(() => this.$refs.editPanel?.querySelectorAll('input[type="date"], input[type="time"]').forEach(input => input.dispatchEvent(new Event('input', { bubbles: true }))));
         },
 
         editableHeaders() {

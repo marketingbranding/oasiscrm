@@ -15,7 +15,6 @@ class CompleteSalesAgendaRequest extends FormRequest
     {
         return [
             'activity_result' => ['required', 'string'],
-            'duration_minutes' => ['nullable', 'integer', 'min:1', 'max:1440'],
             'expected_updated_at' => ['required', 'string', 'max:40'],
         ];
     }

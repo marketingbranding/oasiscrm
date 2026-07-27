@@ -12,6 +12,6 @@
         </div>
         <div class="cal-grid" style="display:grid;grid-template-columns:repeat(7,1fr);font-family:'Times New Roman';font-size:13px"></div>
     </div>
-    <input type="date" name="{{ $name }}" value="{{ $value }}" @required($required)
+    <input type="date" name="{{ $name }}" value="{{ $value }}" @required($required) {{ $attributes->except(['name', 'value', 'required', 'accent', 'class']) }}
            style="position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0">
 </div>

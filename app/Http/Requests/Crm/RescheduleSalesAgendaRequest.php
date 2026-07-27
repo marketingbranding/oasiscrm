@@ -2,7 +2,9 @@
 
 namespace App\Http\Requests\Crm;
 
+use Carbon\Carbon;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Validator;
 
 class RescheduleSalesAgendaRequest extends FormRequest
 {
@@ -16,9 +18,20 @@ class RescheduleSalesAgendaRequest extends FormRequest
         return [
             'scheduled_date' => ['required', 'date'],
             'start_time' => ['required', 'date_format:H:i'],
-            'end_time' => ['nullable', 'required_without:duration_minutes', 'date_format:H:i'],
-            'duration_minutes' => ['nullable', 'required_without:end_time', 'integer', 'min:1', 'max:1440'],
+            'end_time' => ['required', 'date_format:H:i'],
             'expected_updated_at' => ['required', 'string', 'max:40'],
         ];
+    }
+
+    public function after(): array
+    {
+        return [function (Validator $validator) {
+            if ($validator->errors()->hasAny(['start_time', 'end_time'])) {
+                return;
+            }
+            if (Carbon::createFromFormat('H:i', $this->input('end_time'))->lte(Carbon::createFromFormat('H:i', $this->input('start_time')))) {
+                $validator->errors()->add('end_time', 'Jam selesai harus setelah jam mulai.');
+            }
+        }];
     }
 }

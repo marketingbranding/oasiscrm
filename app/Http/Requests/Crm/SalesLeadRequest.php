@@ -18,7 +18,12 @@ abstract class SalesLeadRequest extends FormRequest
             'branch_id' => ['required', 'integer', 'exists:branches,id'],
             'project_id' => ['required', 'integer', 'exists:lead_master,id'],
             'sales_user_id' => ['required', 'integer', 'exists:users,id'],
-            'lead_source_id' => ['required', 'integer', Rule::exists('lead_sources', 'id')->where('is_active', true)],
+            'lead_source_id' => ['required', 'integer', Rule::exists('lead_sources', 'id')->where(function ($query) {
+                $query->where('is_active', true);
+                if ($this->lead()?->lead_source_id) {
+                    $query->orWhere('id', $this->lead()->lead_source_id);
+                }
+            })],
             'lead_date' => ['required', 'date'],
             'customer_name' => ['required', 'string', 'max:255'],
             'phone' => ['nullable', 'string', 'max:50'],

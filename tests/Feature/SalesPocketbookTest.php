@@ -14,6 +14,7 @@ use App\Services\OptimisticLockService;
 use App\Services\PhoneNormalizationService;
 use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Tests\TestCase;
 
@@ -46,6 +47,61 @@ class SalesPocketbookTest extends TestCase
             'documents_completed_at' => 'BERKAS AWAL LENGKAP',
             'akad_at' => 'AKAD',
         ], SalesLead::STAGES);
+    }
+
+    public function test_lead_sources_have_exact_canonical_active_taxonomy(): void
+    {
+        $this->assertSame([
+            'Canvasing', 'Event', 'Freelance', 'Iklan Pusat', 'Online', 'Pameran', 'Refferal',
+        ], LeadSource::where('is_active', true)->orderBy('name')->pluck('name')->all());
+        $this->assertTrue(LeadSource::where('name', 'Referensi')->where('is_active', false)->exists());
+    }
+
+    public function test_lead_source_standardization_deactivates_custom_sources_without_rewriting_creation_time(): void
+    {
+        $migration = require database_path('migrations/2026_07_27_000005_standardize_lead_sources.php');
+        $migration->down();
+
+        $canonical = LeadSource::where('name', 'Online')->firstOrFail();
+        $createdAt = $canonical->created_at;
+        $custom = LeadSource::create(['name' => 'Sumber Custom', 'is_active' => true]);
+        $inactiveCustom = LeadSource::create(['name' => 'Sumber Nonaktif', 'is_active' => false]);
+
+        $migration->up();
+
+        $this->assertSame(0, $custom->fresh()->is_active);
+        $this->assertTrue($canonical->fresh()->created_at->equalTo($createdAt));
+        $this->assertSame(7, LeadSource::where('is_active', true)->count());
+
+        $stableTimestamp = '2020-01-01 00:00:00';
+        DB::table('lead_sources')->whereIn('id', [$canonical->id, $custom->id])->update(['updated_at' => $stableTimestamp]);
+        $migration->up();
+        $this->assertSame($stableTimestamp, $canonical->fresh()->updated_at->format('Y-m-d H:i:s'));
+        $this->assertSame($stableTimestamp, $custom->fresh()->updated_at->format('Y-m-d H:i:s'));
+
+        $migration->down();
+        $this->assertSame(1, $custom->fresh()->is_active);
+        $this->assertSame(0, $inactiveCustom->fresh()->is_active);
+    }
+
+    public function test_historical_inactive_source_can_be_retained_but_not_selected_for_another_lead(): void
+    {
+        [, $project, $sales] = $this->salesContext();
+        $legacy = LeadSource::where('name', 'Referensi')->firstOrFail();
+        $otherLegacy = LeadSource::where('name', 'Website')->firstOrFail();
+        $lead = $this->lead($sales, $project);
+        $lead->update(['lead_source_id' => $legacy->id, 'source_name_snapshot' => 'Referensi Historis']);
+
+        $this->actingAs($sales)->put(route('sales-leads.update', $lead), $this->payload($sales, $project, [
+            'lead_source_id' => $legacy->id,
+            'expected_updated_at' => app(OptimisticLockService::class)->token($lead),
+        ]))->assertRedirect();
+        $this->assertSame('Referensi Historis', $lead->fresh()->source_name_snapshot);
+
+        $this->actingAs($sales)->put(route('sales-leads.update', $lead->fresh()), $this->payload($sales, $project, [
+            'lead_source_id' => $otherLegacy->id,
+            'expected_updated_at' => app(OptimisticLockService::class)->token($lead->fresh()),
+        ]))->assertSessionHasErrors('lead_source_id');
     }
 
     public function test_sales_scope_only_exposes_own_records_even_in_same_branch(): void
@@ -177,7 +233,9 @@ class SalesPocketbookTest extends TestCase
             'customer_name' => 'After',
             'phone' => '0813-0000-0000',
             'expected_updated_at' => app(OptimisticLockService::class)->token($lead),
-        ]))->assertOk()->assertJsonPath('ok', true);
+        ]))->assertOk()
+            ->assertJsonPath('ok', true)
+            ->assertJsonPath('lead.source_active', true);
 
         $lead->refresh();
         $this->assertSame('After', $lead->customer_name);
@@ -307,9 +365,69 @@ class SalesPocketbookTest extends TestCase
 
         $this->assertStringContainsString('data.stages[stageButton.dataset.stage]', $view);
         $this->assertStringContainsString('group.dataset.token = data.updated_at', $view);
-        $this->assertStringContainsString('finally {', $view);
-        $this->assertStringContainsString('button.disabled = false', $view);
+        $this->assertStringContainsString('stageModalOpen', $view);
+        $this->assertStringContainsString('finally { this.stageSaving = false }', $view);
+        $this->assertStringNotContainsString('prompt(', $view);
+        $this->assertStringNotContainsString('toISOString', $view);
         $this->assertStringNotContainsString('window.location.reload()', $view);
+    }
+
+    public function test_monitoring_filters_render_branch_project_sales_order_and_reject_inconsistent_scope(): void
+    {
+        [$branch, $project, $sales] = $this->salesContext();
+        $otherProject = $this->project($branch, 'Other Project');
+        $otherSales = $this->sales($branch, $otherProject, 'Other Sales');
+        $manager = $this->user('manager', $branch);
+
+        $response = $this->actingAs($manager)->get(route('sales-pocketbook.index'));
+        $response->assertOk()->assertSeeInOrder(['name="branch_id"', 'name="project_id"', 'name="sales_user_id"'], false)
+            ->assertSee('salesCascade', false)->assertSee('sales_ids', false);
+
+        $this->actingAs($manager)->get(route('sales-pocketbook.index', [
+            'branch_id' => $branch->id, 'project_id' => $project->id, 'sales_user_id' => $otherSales->id,
+        ]))->assertSessionHasErrors('sales_user_id');
+        $this->assertNotSame($sales->id, $otherSales->id);
+    }
+
+    public function test_period_modes_are_exclusive_and_render_compact_picker(): void
+    {
+        [, , $sales] = $this->salesContext();
+        $this->actingAs($sales)->get(route('sales-pocketbook.index', ['week' => '2026-07-20']))
+            ->assertSessionHasErrors('period_type');
+        $this->actingAs($sales)->get(route('sales-pocketbook.index', [
+            'period_type' => 'week', 'week' => '2026-07-20', 'date_from' => '2026-07-20',
+        ]))->assertSessionHasErrors('date_from');
+        $this->actingAs($sales)->get(route('sales-pocketbook.index', [
+            'period_type' => 'custom', 'date_from' => '2026-07-20', 'date_to' => '2026-07-26', 'week' => '2026-07-20',
+        ]))->assertSessionHasErrors('week');
+        $this->actingAs($sales)->get(route('sales-pocketbook.index', ['tab' => 'agenda']))
+            ->assertOk()
+            ->assertSee('Pilih Periode')
+            ->assertSee('name="period_type"', false)
+            ->assertSee('aria-label="Tutup pilihan periode"', false)
+            ->assertSee('@keydown.escape.window="open = false"', false)
+            ->assertSee('<template x-if="open">', false)
+            ->assertDontSee('periodPicker(', false);
+    }
+
+    public function test_time_picker_contract_is_shared_by_sales_work_planner_and_database(): void
+    {
+        $salesView = file_get_contents(resource_path('views/crm/sales-pocketbook/index.blade.php'));
+        $plannerView = file_get_contents(resource_path('views/crm/content-calendar/_form.blade.php'));
+        $databaseView = file_get_contents(resource_path('views/crm/database/index.blade.php'));
+        $picker = file_get_contents(resource_path('js/crm-timepicker.js'));
+
+        $this->assertStringContainsString('x-crm.time-field', $salesView);
+        $this->assertStringContainsString('x-crm.time-field', $plannerView);
+        $this->assertStringContainsString('time-wrapper', $databaseView);
+        foreach (['Sekarang', 'time-hours', 'time-minutes', 'MutationObserver', 'oasis:picker-open', 'Escape'] as $contract) {
+            $this->assertStringContainsString($contract, $picker);
+        }
+        $this->assertStringContainsString("input.value || '00:00'", $picker);
+        $this->assertStringContainsString('focus({ preventScroll: true })', $picker);
+        $this->assertStringNotContainsString('input.value || currentTime()', $picker);
+        $this->assertStringContainsString('if (nearest) markWheelSelection(wheel, nearest.dataset.value)', $picker);
+        $this->assertStringNotContainsString('if (nearest) selectWheel(wheel, nearest.dataset.value)', $picker);
     }
 
     public function test_quick_agenda_uses_content_item_with_sales_owner_project_and_branch(): void
@@ -348,6 +466,16 @@ class SalesPocketbookTest extends TestCase
         $this->assertDatabaseCount('content_items', 0);
     }
 
+    public function test_sales_agenda_rejects_end_time_not_after_start_time(): void
+    {
+        [, $project, $sales] = $this->salesContext();
+
+        $this->actingAs($sales)->post(route('sales-agendas.store'), $this->agendaPayload($sales, $project, [
+            'start_time' => '10:00', 'end_time' => '09:59',
+        ]))->assertSessionHasErrors('end_time');
+        $this->assertDatabaseCount('content_items', 0);
+    }
+
     public function test_sales_agenda_scope_blocks_other_sales_and_limits_manager_to_branch(): void
     {
         [$branch, $project, $sales] = $this->salesContext();
@@ -360,7 +488,7 @@ class SalesPocketbookTest extends TestCase
 
         $this->actingAs($other)->patch(route('sales-agendas.update', $agenda), $payload)->assertForbidden();
         $this->actingAs($outsider)->patch(route('sales-agendas.update', $agenda), $payload)->assertForbidden();
-        $this->actingAs($manager)->get(route('sales-pocketbook.index', ['tab' => 'agenda', 'date_from' => '2026-07-01', 'date_to' => '2026-07-31']))
+        $this->actingAs($manager)->get(route('sales-pocketbook.index', ['tab' => 'agenda', 'period_type' => 'custom', 'date_from' => '2026-07-01', 'date_to' => '2026-07-31']))
             ->assertOk()->assertSee($agenda->title);
     }
 
@@ -392,7 +520,7 @@ class SalesPocketbookTest extends TestCase
         $this->actingAs($sales)->post(route('sales-agendas.reschedule', $agenda), [
             'scheduled_date' => '2026-07-12',
             'start_time' => '13:00',
-            'duration_minutes' => 45,
+            'end_time' => '13:45',
             'expected_updated_at' => app(OptimisticLockService::class)->token($agenda),
         ])->assertRedirect();
 
@@ -417,6 +545,31 @@ class SalesPocketbookTest extends TestCase
             'activity_result' => 'Tidak boleh tersimpan', 'expected_updated_at' => $stale,
         ])->assertConflict()->assertJsonPath('code', 'record_modified');
         $this->assertNull($agenda->fresh()->activity_result);
+    }
+
+    public function test_reschedule_rejects_invalid_time_and_stale_lock_without_creating_replacement(): void
+    {
+        [, $project, $sales] = $this->salesContext();
+        $agenda = $this->agenda($sales, $project);
+        $token = app(OptimisticLockService::class)->token($agenda);
+
+        $this->actingAs($sales)->post(route('sales-agendas.reschedule', $agenda), [
+            'scheduled_date' => '2026-07-12',
+            'start_time' => '13:00',
+            'end_time' => '12:59',
+            'expected_updated_at' => $token,
+        ])->assertSessionHasErrors('end_time');
+
+        $stale = Carbon::parse($agenda->updated_at)->subSecond()->utc()->format('Y-m-d H:i:s');
+        $this->actingAs($sales)->postJson(route('sales-agendas.reschedule', $agenda), [
+            'scheduled_date' => '2026-07-12',
+            'start_time' => '13:00',
+            'end_time' => '13:45',
+            'expected_updated_at' => $stale,
+        ])->assertConflict()->assertJsonPath('code', 'record_modified');
+
+        $this->assertSame('planned', $agenda->fresh()->status);
+        $this->assertFalse(ContentItem::where('rescheduled_from_id', $agenda->id)->exists());
     }
 
     private function salesContext(): array

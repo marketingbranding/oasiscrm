@@ -13,6 +13,7 @@ use App\Services\WorkspaceAccessService;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 
 class SalesPocketbookController extends Controller
 {
@@ -28,7 +29,6 @@ class SalesPocketbookController extends Controller
         $request->validate(array_merge($this->filterRules(), [
             'sort' => ['nullable', 'in:sales,branch,project,lead_new,contacted,met,surveyed,utj,documents_completed,akad,agenda_completed,last_input'],
             'direction' => ['nullable', 'in:asc,desc'],
-            'report_metric' => ['nullable', 'in:'.implode(',', array_keys(SalesWeeklyMetricsService::METRIC_COLUMNS))],
         ]));
         $tab = in_array($request->query('tab'), ['leads', 'agenda', 'report'], true) ? $request->query('tab') : 'leads';
         $monitoring = ! $user->hasRole('sales');
@@ -55,16 +55,27 @@ class SalesPocketbookController extends Controller
         if ($monitoring && $request->filled('sales_user_id') && ! $salesUsers->contains('id', $request->integer('sales_user_id'))) {
             abort(403);
         }
+        $selectedSalesId = $monitoring && $request->filled('sales_user_id') ? $request->integer('sales_user_id') : ($user->hasRole('sales') ? $user->id : null);
+        $this->validateFilterScope($selectedBranchId, $selectedProjectId, $selectedSalesId, $projects, $salesUsers);
+
+        $periodType = $request->query('period_type', 'week');
+        $reportPeriod = $this->weeklyMetrics->period(
+            $periodType === 'week' ? $request->query('week') : null,
+            $periodType === 'custom' ? $request->query('date_from') : null,
+            $periodType === 'custom' ? $request->query('date_to') : null,
+        );
 
         $reportMetric = $request->query('report_metric');
+        $filterLeadPeriod = $reportMetric || $request->filled('period_type') || $request->filled('week') || ($request->filled('date_from') && $request->filled('date_to'));
         $leads = SalesLead::query()->visibleTo($user)
-            ->with(['branch:id,name', 'project:id,project_name', 'sales:id,name', 'leadSource:id,name'])
+            ->with(['branch:id,name', 'project:id,project_name', 'sales:id,name', 'leadSource:id,name,is_active'])
             ->when($selectedBranchId, fn (Builder $query) => $query->where('branch_id', $selectedBranchId))
             ->when($selectedProjectId, fn (Builder $query) => $query->where('project_id', $selectedProjectId))
             ->when($monitoring && $request->filled('sales_user_id'), fn (Builder $query) => $query->where('sales_user_id', $request->integer('sales_user_id')))
             ->when($request->filled('lead_source_id'), fn (Builder $query) => $query->where('lead_source_id', $request->integer('lead_source_id')))
-            ->when($request->filled('date_from'), fn (Builder $query) => $query->whereDate($reportMetric ? SalesWeeklyMetricsService::METRIC_COLUMNS[$reportMetric] : 'lead_date', '>=', $request->query('date_from')))
-            ->when($request->filled('date_to'), fn (Builder $query) => $query->whereDate($reportMetric ? SalesWeeklyMetricsService::METRIC_COLUMNS[$reportMetric] : 'lead_date', '<=', $request->query('date_to')))
+            ->when($filterLeadPeriod, fn (Builder $query) => $query
+                ->whereDate($reportMetric ? SalesWeeklyMetricsService::METRIC_COLUMNS[$reportMetric] : 'lead_date', '>=', $reportPeriod['start']->toDateString())
+                ->whereDate($reportMetric ? SalesWeeklyMetricsService::METRIC_COLUMNS[$reportMetric] : 'lead_date', '<=', $reportPeriod['end']->toDateString()))
             ->when($request->filled('stage'), function (Builder $query) use ($request) {
                 $stage = (string) $request->query('stage');
                 abort_unless(array_key_exists($stage, SalesLead::STAGES), 422);
@@ -76,8 +87,8 @@ class SalesPocketbookController extends Controller
             })
             ->latest('lead_date')->latest('id')->paginate(20)->withQueryString();
 
-        $agendaDateFrom = $request->query('date_from', now()->startOfMonth()->toDateString());
-        $agendaDateTo = $request->query('date_to', now()->endOfMonth()->toDateString());
+        $agendaDateFrom = $reportPeriod['start']->toDateString();
+        $agendaDateTo = $reportPeriod['end']->toDateString();
         $completedAgendaDrilldown = $request->boolean('report_agenda_completed');
         $agendas = ContentItem::query()
             ->where('item_type', 'agenda')
@@ -94,7 +105,6 @@ class SalesPocketbookController extends Controller
             ->orderBy('scheduled_date')->orderBy('start_time')->paginate(20, ['*'], 'agenda_page')->withQueryString();
 
         $defaultProject = $this->workspaceAccess->resolveRequestedProject($user, $request->query('project_id'));
-        $reportPeriod = $this->weeklyMetrics->period($request->query('week'), $request->query('date_from'), $request->query('date_to'));
         $reportFilters = array_filter([
             'branch_id' => $selectedBranchId,
             'project_id' => $selectedProjectId,
@@ -118,6 +128,16 @@ class SalesPocketbookController extends Controller
             }, SORT_REGULAR, $direction === 'desc')->values();
         }
 
+        $cascadeProjects = $projects->map(fn ($project) => [
+            'id' => (string) $project->id,
+            'branch_id' => (string) $project->branch_id,
+            'sales_ids' => $project->assignedUsers->pluck('id')->map(fn ($id) => (string) $id)->values()->all(),
+        ])->values();
+        $cascadeSales = $salesUsers->map(fn ($sales) => [
+            'id' => (string) $sales->id,
+            'project_ids' => $sales->assignedProjects->pluck('id')->map(fn ($id) => (string) $id)->values()->all(),
+        ])->values();
+
         return view('crm.sales-pocketbook.index', [
             'tab' => $tab,
             'monitoring' => $monitoring,
@@ -136,6 +156,9 @@ class SalesPocketbookController extends Controller
             'reportPeriod' => $reportPeriod,
             'reportSummary' => $reportSummary,
             'reportRows' => $reportRows,
+            'periodType' => $periodType,
+            'cascadeProjects' => $cascadeProjects,
+            'cascadeSales' => $cascadeSales,
         ]);
     }
 
@@ -175,22 +198,27 @@ class SalesPocketbookController extends Controller
             abort(403);
         }
         $salesId = $user->hasRole('sales') ? $user->id : $requestedSalesId;
+        $this->validateFilterScope($branchId, $projectId, $salesId, $projects, $salesUsers);
 
+        $periodType = $request->query('period_type', 'week');
         $period = $this->weeklyMetrics->period(
-            $request->query('week'),
-            $request->query('date_from'),
-            $request->query('date_to'),
+            $periodType === 'week' ? $request->query('week') : null,
+            $periodType === 'custom' ? $request->query('date_from') : null,
+            $periodType === 'custom' ? $request->query('date_to') : null,
         );
         $filters = array_filter([
             'branch_id' => $branchId,
             'project_id' => $projectId,
             'sales_user_id' => $salesId,
         ]);
+        $reportMetric = $request->query('report_metric');
+        $leadDateColumn = $reportMetric ? SalesWeeklyMetricsService::METRIC_COLUMNS[$reportMetric] : 'lead_date';
+        $completedAgendaDrilldown = $request->boolean('report_agenda_completed');
 
         $leads = $this->weeklyMetrics->leadQuery($user, $filters)
             ->with(['branch:id,name', 'project:id,project_name', 'sales:id,name'])
-            ->whereDate('lead_date', '>=', $period['start']->toDateString())
-            ->whereDate('lead_date', '<=', $period['end']->toDateString())
+            ->whereDate($leadDateColumn, '>=', $period['start']->toDateString())
+            ->whereDate($leadDateColumn, '<=', $period['end']->toDateString())
             ->when($request->filled('lead_source_id'), fn (Builder $query) => $query->where('lead_source_id', $request->integer('lead_source_id')))
             ->when($request->filled('stage'), function (Builder $query) use ($request) {
                 $stage = (string) $request->query('stage');
@@ -206,8 +234,9 @@ class SalesPocketbookController extends Controller
 
         $agendas = $this->weeklyMetrics->agendaQuery($user, $filters)
             ->with(['branch:id,name', 'owner:id,name', 'salesProject:id,project_name', 'rescheduledFrom:id,scheduled_date'])
-            ->whereDate('scheduled_date', '>=', $period['start']->toDateString())
-            ->whereDate('scheduled_date', '<=', $period['end']->toDateString())
+            ->when($completedAgendaDrilldown, fn (Builder $query) => $query->where('status', 'done'))
+            ->whereDate($completedAgendaDrilldown ? 'completed_at' : 'scheduled_date', '>=', $period['start']->toDateString())
+            ->whereDate($completedAgendaDrilldown ? 'completed_at' : 'scheduled_date', '<=', $period['end']->toDateString())
             ->orderBy('scheduled_date')
             ->orderBy('start_time')
             ->get();
@@ -239,9 +268,28 @@ class SalesPocketbookController extends Controller
             'sales_user_id' => ['nullable', 'integer'],
             'lead_source_id' => ['nullable', 'integer', Rule::exists('lead_sources', 'id')->where('is_active', true)],
             'stage' => ['nullable', Rule::in(array_keys(SalesLead::STAGES))],
-            'week' => ['nullable', 'date'],
-            'date_from' => ['nullable', 'date', 'required_with:date_to'],
-            'date_to' => ['nullable', 'date', 'required_with:date_from', 'after_or_equal:date_from'],
+            'period_type' => ['nullable', 'required_with:week,date_from,date_to', Rule::in(['week', 'custom'])],
+            'week' => ['nullable', 'date', 'required_if:period_type,week', 'prohibited_if:period_type,custom'],
+            'date_from' => ['nullable', 'date', 'required_if:period_type,custom', 'prohibited_if:period_type,week'],
+            'date_to' => ['nullable', 'date', 'required_if:period_type,custom', 'prohibited_if:period_type,week', 'after_or_equal:date_from'],
+            'report_metric' => ['nullable', Rule::in(array_keys(SalesWeeklyMetricsService::METRIC_COLUMNS))],
+            'report_agenda_completed' => ['nullable', 'boolean'],
         ];
+    }
+
+    private function validateFilterScope(?int $branchId, ?int $projectId, ?int $salesId, $projects, $salesUsers): void
+    {
+        $project = $projectId ? $projects->firstWhere('id', $projectId) : null;
+        $sales = $salesId ? $salesUsers->firstWhere('id', $salesId) : null;
+
+        if ($project && $branchId && (int) $project->branch_id !== $branchId) {
+            throw ValidationException::withMessages(['project_id' => 'Proyek harus berada di cabang yang dipilih.']);
+        }
+        if ($project && $sales && ! $project->assignedUsers->contains('id', $sales->id)) {
+            throw ValidationException::withMessages(['sales_user_id' => 'Sales harus ditugaskan ke proyek yang dipilih.']);
+        }
+        if ($branchId && $sales && ! $sales->assignedProjects->contains(fn ($assigned) => (int) $assigned->branch_id === $branchId)) {
+            throw ValidationException::withMessages(['sales_user_id' => 'Sales harus ditugaskan ke proyek pada cabang yang dipilih.']);
+        }
     }
 }

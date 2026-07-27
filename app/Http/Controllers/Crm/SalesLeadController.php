@@ -66,13 +66,15 @@ class SalesLeadController extends Controller
         return view('crm.sales-pocketbook.edit', [
             'lead' => $salesLead->load(['branch', 'project', 'sales', 'leadSource']),
             'branches' => $this->workspaceAccess->accessibleBranches($user),
-            'projects' => $this->workspaceAccess->accessibleProjects($user),
+            'projects' => $this->workspaceAccess->accessibleProjects($user)->load('assignedUsers:id'),
             'salesUsers' => User::query()->where('is_active', true)
-                ->whereIn('branch_id', $branchIds)
                 ->whereHas('role', fn (Builder $query) => $query->where('slug', 'sales'))
+                ->whereHas('assignedProjects', fn (Builder $query) => $query->whereIn('branch_id', $branchIds))
                 ->when($user->hasRole('sales'), fn (Builder $query) => $query->whereKey($user->id))
-                ->orderBy('name')->get(['id', 'name', 'branch_id']),
-            'leadSources' => LeadSource::where('is_active', true)->orderBy('name')->get(),
+                ->with('assignedProjects:id,branch_id')->orderBy('name')->get(['id', 'name', 'branch_id']),
+            'leadSources' => LeadSource::query()->where('is_active', true)
+                ->when($salesLead->lead_source_id, fn (Builder $query) => $query->orWhere('id', $salesLead->lead_source_id))
+                ->orderBy('name')->get(),
             'optimisticToken' => $this->optimisticLock->token($salesLead),
         ]);
     }
@@ -93,7 +95,23 @@ class SalesLeadController extends Controller
         $this->notifications->recordUpdated($result, $request->user(), route('sales-pocketbook.index'));
 
         if ($request->expectsJson()) {
-            return response()->json(['ok' => true, 'lead' => $result, 'updated_at' => $this->optimisticLock->token($result)]);
+            $result->load(['branch:id,name', 'project:id,project_name', 'sales:id,name', 'leadSource:id,name,is_active']);
+
+            return response()->json([
+                'ok' => true,
+                'lead' => [
+                    'id' => $result->id,
+                    'lead_date' => $result->lead_date->toDateString(),
+                    'customer_name' => $result->customer_name,
+                    'phone' => $result->phone,
+                    'branch' => $result->branch?->name,
+                    'project' => $result->project?->project_name,
+                    'sales' => $result->sales?->name,
+                    'source' => $result->source_name_snapshot ?: $result->leadSource?->name,
+                    'source_active' => (bool) $result->leadSource?->is_active,
+                ],
+                'updated_at' => $this->optimisticLock->token($result),
+            ]);
         }
 
         return redirect()->route('sales-pocketbook.index')->with('success', 'Lead berhasil diperbarui.');

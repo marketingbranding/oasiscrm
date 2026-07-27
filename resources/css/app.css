@@ -5,9 +5,20 @@
 /* --- Date Calendar + Custom Select Widgets --- */
 .date-wrapper,
 .month-wrapper,
+.time-wrapper,
 .select-wrapper {
     position: relative;
 }
+
+.time-picker-popup { position: fixed; z-index: 9999; width: 280px; border: 2px solid #000; background: #fff; box-shadow: 3px 3px 0 #000; }
+.time-picker-title { border-bottom: 2px solid #000; background: #000; color: #fff; padding: 6px 10px; font: 700 11px Helvetica, sans-serif; }
+.time-wheels { display: grid; grid-template-columns: 1fr 20px 1fr; align-items: center; padding: 8px; text-align: center; }
+.time-wheel { height: 132px; overflow-y: auto; border: 2px solid #000; padding-block: 48px; scroll-snap-type: y mandatory; scrollbar-width: thin; }
+.time-wheel button { display: block; width: 100%; height: 32px; scroll-snap-align: center; border: 0; border-bottom: 1px solid #ddd; background: #fff; font: 16px 'Times New Roman', serif; }
+.time-wheel button:hover, .time-wheel button.is-selected { background: var(--accent, #fcc20f); font-weight: 700; }
+.time-picker-actions { display: flex; justify-content: space-between; gap: 8px; border-top: 2px solid #000; padding: 7px; background: #f5f5f5; }
+.time-picker-actions button { border: 2px solid #000; background: #fff; padding: 4px 12px; font: 700 10px Helvetica, sans-serif; text-transform: uppercase; }
+.time-picker-actions .time-confirm { background: var(--accent, #fcc20f); }
 
 .month-picker-header {
     display: flex;

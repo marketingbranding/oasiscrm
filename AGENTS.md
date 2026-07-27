@@ -50,6 +50,7 @@ After editing any controller:
 - For date fields rendered dynamically by Alpine, keep the same markup and hidden native input so the global date-picker initializer can attach behavior. Extend `crm-datepicker.js` if dynamic initialization needs adjustment; do not duplicate calendar logic inside a Blade view.
 - Preserve the shared date-picker behavior: it closes after selection, provides a `Hari Ini` action, closes on Escape/outside click, and positions itself above or below based on viewport space without expanding modal scroll areas.
 - Month fields must use the Oasis month picker (`.month-wrapper` / `.month-display` / `.month-text` / `.month-arrow`) backed by a visually hidden `<input type="month">`. Behavior lives in `resources/js/crm-monthpicker.js`: year navigation, a 12-month grid, `Bulan Ini`, close-on-selection, and the same viewport-aware popup positioning as the date picker.
+- Time fields must use the Oasis time picker (`x-crm.time-field` with `.time-wrapper` / `.time-display` / `.time-text` / `.time-arrow`) backed by a visually hidden `<input type="time">`; never show a native time input. Behavior lives in `resources/js/crm-timepicker.js`: 24-hour and minute wheels, exact one-minute selection, keyboard operation, `Sekarang`, explicit confirmation, dynamic initialization, and viewport-aware positioning shared with the date and month pickers.
 - **CRM data tables must use the shared `.crm-table-scroll` and `.crm-data-table` classes** from `resources/css/app.css`; the Database module is the canonical reference. Do not recreate grid, sticky-header, stripe, hover, typography, or scrolling styles inline in individual Blade views.
 - Wide tables must keep important columns available through horizontal scrolling instead of hiding them on mobile. Use frozen identity columns where needed, keep actions in the final column, truncate long text with a full-value `title`, and render booleans with `.crm-boolean-box`. Domain/status colors belong in badges or specific cells, not as a replacement for the base zebra/hover row styling.
 - Sortable CRM table headers should sort by direct header click and show `▼`/`▲` on the active column, matching the Database module. Do not introduce a dropdown sort menu unless the product explicitly requires one.
@@ -63,7 +64,7 @@ After editing any controller:
 - All CRM routes behind `auth` + `verified` + `password.changed` middleware
 - Superadmin-only routes nested under `role:superadmin` middleware
 - `canViewAllBranches()` = `isSuperadmin()` || `hasRole('pusat')`
-- Roles: `superadmin`, `admin`, `manager`, `staff`, `pusat`
+- Roles: `superadmin`, `admin`, `manager`, `staff`, `sales`, `pusat`
 
 ## Dashboard gotchas
 

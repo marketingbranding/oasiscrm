@@ -38,6 +38,7 @@ class SalesPocketbookExportTest extends TestCase
             'branch_id' => $branch->id,
             'project_id' => $project->id,
             'sales_user_id' => $sales->id,
+            'period_type' => 'week',
             'week' => '2026-07-20',
             'lead_source_id' => $source->id,
             'stage' => 'contacted_at',
@@ -91,21 +92,50 @@ class SalesPocketbookExportTest extends TestCase
         [$otherBranch, $otherProject, $outsideSales] = $this->salesContext('Pati', 'Sales Pati');
 
         $this->actingAs($sales)->get(route('sales-pocketbook.export', [
-            'week' => '2026-07-20', 'sales_user_id' => $otherSales->id,
+            'period_type' => 'week', 'week' => '2026-07-20', 'sales_user_id' => $otherSales->id,
         ]))->assertForbidden();
         $this->actingAs($sales)->get(route('sales-pocketbook.export', [
-            'week' => '2026-07-20', 'branch_id' => $otherBranch->id,
+            'period_type' => 'week', 'week' => '2026-07-20', 'branch_id' => $otherBranch->id,
         ]))->assertForbidden();
         $this->actingAs($sales)->get(route('sales-pocketbook.export', [
-            'week' => '2026-07-20', 'project_id' => $otherProject->id,
+            'period_type' => 'week', 'week' => '2026-07-20', 'project_id' => $otherProject->id,
         ]))->assertForbidden();
 
-        $response = $this->actingAs($sales)->get(route('sales-pocketbook.export', ['week' => '2026-07-20']))->assertOk();
+        $response = $this->actingAs($sales)->get(route('sales-pocketbook.export', ['period_type' => 'week', 'week' => '2026-07-20']))->assertOk();
         $workbook = IOFactory::load($response->baseResponse->getFile()->getPathname());
         $leadValues = collect($workbook->getSheetByName('LEAD HARIAN')->toArray())->flatten()->implode('|');
         $this->assertStringContainsString('Lead Saya', $leadValues);
         $this->assertStringNotContainsString('PII Rahasia', $leadValues);
         $this->assertStringNotContainsString($outsideSales->name, $leadValues);
+        $workbook->disconnectWorksheets();
+    }
+
+    public function test_export_uses_the_same_dates_as_metric_and_completed_agenda_drilldowns(): void
+    {
+        [$branch, $project, $sales] = $this->salesContext('Solo', 'Solo Sales');
+        $manager = $this->user('manager', $branch);
+        $this->lead($sales, $project, 'Dihubungi Minggu Ini', [
+            'lead_date' => '2026-07-01',
+            'contacted_at' => '2026-07-21 09:00:00',
+        ]);
+        $agenda = $this->agenda($sales, $project);
+        $agenda->update([
+            'scheduled_date' => '2026-07-01',
+            'start_date' => '2026-07-01',
+            'deadline_date' => '2026-07-01',
+            'completed_at' => '2026-07-22 10:00:00',
+        ]);
+
+        $response = $this->actingAs($manager)->get(route('sales-pocketbook.export', [
+            'period_type' => 'week',
+            'week' => '2026-07-20',
+            'report_metric' => 'contacted',
+            'report_agenda_completed' => 1,
+        ]))->assertOk();
+
+        $workbook = IOFactory::load($response->baseResponse->getFile()->getPathname());
+        $this->assertSame('Dihubungi Minggu Ini', $workbook->getSheetByName('LEAD HARIAN')->getCell('E2')->getValue());
+        $this->assertSame('Follow-up Konsumen', $workbook->getSheetByName('AGENDA HARIAN')->getCell('I2')->getValue());
         $workbook->disconnectWorksheets();
     }
 
@@ -118,7 +148,7 @@ class SalesPocketbookExportTest extends TestCase
 
         $this->actingAs($sales)
             ->from(route('sales-pocketbook.index'))
-            ->get(route('sales-pocketbook.export', ['week' => '2026-07-20']))
+            ->get(route('sales-pocketbook.export', ['period_type' => 'week', 'week' => '2026-07-20']))
             ->assertRedirect(route('sales-pocketbook.index'))
             ->assertSessionHas('warning', 'Tidak ada data Buku Saku Sales pada filter dan periode yang dipilih.');
     }
@@ -135,6 +165,17 @@ class SalesPocketbookExportTest extends TestCase
             ->assertOk()
             ->assertSee('Buku Saku Sales Terpadu')
             ->assertSee('penugasan sales per proyek');
+    }
+
+    public function test_sales_workflow_correction_changelog_is_idempotent_and_rendered(): void
+    {
+        $entry = Changelog::whereNull('version')->where('title', 'Penyempurnaan Alur Buku Saku Sales')->sole();
+        $this->assertSame('changed', $entry->category);
+        $this->assertNull($entry->created_by);
+        $this->assertSame(1, Changelog::whereNull('version')->where('title', $entry->title)->count());
+
+        $this->actingAs($this->user('sales'))->get(route('changelogs.index'))
+            ->assertOk()->assertSee($entry->title)->assertSee('Durasi agenda dihitung otomatis');
     }
 
     private function salesContext(string $branchName, string $salesName): array

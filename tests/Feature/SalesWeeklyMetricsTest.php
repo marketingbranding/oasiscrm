@@ -71,7 +71,7 @@ class SalesWeeklyMetricsTest extends TestCase
         $period = app(SalesWeeklyMetricsService::class)->period('2026-07-23');
 
         $this->assertNull(app(SalesWeeklyMetricsService::class)->metrics($sales, $period)['conversions']['documents_akad']);
-        $this->actingAs($sales)->get(route('sales-pocketbook.index', ['tab' => 'report', 'week' => '2026-07-23']))
+        $this->actingAs($sales)->get(route('sales-pocketbook.index', ['tab' => 'report', 'period_type' => 'week', 'week' => '2026-07-23']))
             ->assertOk()->assertSee('Konversi: —');
     }
 
@@ -115,7 +115,7 @@ class SalesWeeklyMetricsTest extends TestCase
         $this->agenda($sales, $project, ['status' => 'done', 'completed_at' => '2026-07-23 12:00:00', 'activity_result' => 'Selesai']);
         $manager = $this->user('manager', $branch);
 
-        $response = $this->actingAs($manager)->get(route('sales-pocketbook.index', ['tab' => 'report', 'week' => '2026-07-22', 'sort' => 'sales', 'direction' => 'desc']));
+        $response = $this->actingAs($manager)->get(route('sales-pocketbook.index', ['tab' => 'report', 'period_type' => 'week', 'week' => '2026-07-22', 'sort' => 'sales', 'direction' => 'desc']));
         $response->assertOk()->assertViewHas('reportRows', fn ($rows) => $rows->pluck('sales.name')->values()->all() === ['Zulu Sales', 'Alpha Sales']
             && $rows->first()['utj'] === 1
             && $rows->first()['agenda_completed'] === 1);
@@ -123,11 +123,11 @@ class SalesWeeklyMetricsTest extends TestCase
         $this->actingAs($manager)->get(route('sales-pocketbook.index', ['tab' => 'report', 'sort' => 'customer_name']))->assertSessionHasErrors('sort');
 
         $this->actingAs($manager)->get(route('sales-pocketbook.index', [
-            'tab' => 'leads', 'report_metric' => 'utj', 'date_from' => '2026-07-20', 'date_to' => '2026-07-26',
+            'tab' => 'leads', 'report_metric' => 'utj', 'period_type' => 'custom', 'date_from' => '2026-07-20', 'date_to' => '2026-07-26',
             'branch_id' => $branch->id, 'project_id' => $project->id, 'sales_user_id' => $sales->id,
         ]))->assertOk()->assertSee($lead->customer_name);
         $this->actingAs($manager)->get(route('sales-pocketbook.index', [
-            'tab' => 'agenda', 'report_agenda_completed' => 1, 'date_from' => '2026-07-20', 'date_to' => '2026-07-26',
+            'tab' => 'agenda', 'report_agenda_completed' => 1, 'period_type' => 'custom', 'date_from' => '2026-07-20', 'date_to' => '2026-07-26',
             'branch_id' => $branch->id, 'project_id' => $project->id, 'sales_user_id' => $sales->id,
         ]))->assertOk()->assertSee('Agenda Test');
     }

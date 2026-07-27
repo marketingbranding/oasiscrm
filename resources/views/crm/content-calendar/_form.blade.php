@@ -99,8 +99,8 @@
         </div>
         <template x-if="type === 'agenda'">
             <div class="contents">
-                <div><label class="font-[Helvetica] font-bold text-xs uppercase block mb-1">Jam Mulai</label><input type="time" name="start_time" value="{{ old('start_time', $item?->start_time) }}" required class="w-full border-2 border-black px-3 py-2 text-sm bg-white"></div>
-                <div><label class="font-[Helvetica] font-bold text-xs uppercase block mb-1">Jam Selesai</label><input type="time" name="end_time" value="{{ old('end_time', $item?->end_time) }}" class="w-full border-2 border-black px-3 py-2 text-sm bg-white"></div>
+                <div><label class="font-[Helvetica] font-bold text-xs uppercase block mb-1">Jam Mulai</label><x-crm.time-field name="start_time" :value="old('start_time', $item?->start_time)" required accent="#b3bd95" /></div>
+                <div><label class="font-[Helvetica] font-bold text-xs uppercase block mb-1">Jam Selesai</label><x-crm.time-field name="end_time" :value="old('end_time', $item?->end_time)" accent="#b3bd95" /></div>
             </div>
         </template>
     </div>

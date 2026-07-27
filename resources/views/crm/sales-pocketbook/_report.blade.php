@@ -7,7 +7,7 @@
         'contacted' => 'lead_contacted', 'met' => 'contacted_met', 'surveyed' => 'met_survey',
         'utj' => 'survey_utj', 'documents_completed' => 'utj_documents', 'akad' => 'documents_akad',
     ];
-    $periodParams = ['date_from' => $reportPeriod['start']->toDateString(), 'date_to' => $reportPeriod['end']->toDateString()];
+    $periodParams = ['period_type' => 'custom', 'date_from' => $reportPeriod['start']->toDateString(), 'date_to' => $reportPeriod['end']->toDateString()];
     $sortUrl = function (string $column) {
         return route('sales-pocketbook.index', array_merge(request()->query(), [
             'tab' => 'report',
@@ -17,16 +17,14 @@
     };
 @endphp
 
-<form method="GET" action="{{ route('sales-pocketbook.index') }}" class="border-2 border-black bg-[#f5f5f5] p-3 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7 gap-2">
+<form method="GET" action="{{ route('sales-pocketbook.index') }}" x-data="salesCascade(@js($cascadeProjects), @js($cascadeSales), @js(['branch' => request('branch_id'), 'project' => request('project_id'), 'sales' => request('sales_user_id')]))" class="border-2 border-black bg-[#f5f5f5] p-3 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
     <input type="hidden" name="tab" value="report">
     @if($monitoring)
-        <select class="sales-input" name="branch_id"><option value="">Semua cabang</option>@foreach($branches as $branch)<option value="{{ $branch->id }}" @selected(request('branch_id') == $branch->id)>{{ $branch->name }}</option>@endforeach</select>
-        <select class="sales-input" name="sales_user_id"><option value="">Semua sales</option>@foreach($salesUsers as $sales)<option value="{{ $sales->id }}" @selected(request('sales_user_id') == $sales->id)>{{ $sales->name }}</option>@endforeach</select>
+        <select class="sales-input" name="branch_id" x-model="branch" @change="branchChanged()"><option value="">Semua cabang</option>@foreach($branches as $branch)<option value="{{ $branch->id }}">{{ $branch->name }}</option>@endforeach</select>
     @endif
-    <select class="sales-input" name="project_id"><option value="">Semua proyek</option>@foreach($projects as $project)<option value="{{ $project->id }}" @selected(request('project_id') == $project->id)>{{ $project->project_name }}</option>@endforeach</select>
-    <div><label class="sales-label">Pilih Minggu</label><x-crm.date-field name="week" :value="request('week', $reportPeriod['start']->toDateString())" /></div>
-    <div><label class="sales-label">Dari (opsional)</label><x-crm.date-field name="date_from" :value="request('date_from')" /></div>
-    <div><label class="sales-label">Sampai (opsional)</label><x-crm.date-field name="date_to" :value="request('date_to')" /></div>
+    <select class="sales-input" name="project_id" x-model="project" @change="projectChanged()"><option value="">Semua proyek</option>@foreach($projects as $project)<option value="{{ $project->id }}" x-show="projectVisible('{{ $project->id }}')" :disabled="!projectVisible('{{ $project->id }}')">{{ $project->project_name }}</option>@endforeach</select>
+    @if($monitoring)<select class="sales-input" name="sales_user_id" x-model="sales"><option value="">Semua sales</option>@foreach($salesUsers as $sales)<option value="{{ $sales->id }}" x-show="salesVisible('{{ $sales->id }}')" :disabled="!salesVisible('{{ $sales->id }}')">{{ $sales->name }}</option>@endforeach</select>@endif
+    @include('crm.sales-pocketbook._period-picker')
     <button class="sales-button bg-black text-white self-end">Tampilkan</button>
 </form>
 

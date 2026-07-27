@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Crm;
 
 use App\Http\Controllers\Controller;
+use App\Models\ContentItem;
 use App\Models\LeadSource;
 use App\Models\SalesLead;
 use App\Models\User;
@@ -22,6 +23,7 @@ class SalesPocketbookController extends Controller
         $monitoring = ! $user->hasRole('sales');
         $branches = $this->workspaceAccess->accessibleBranches($user);
         $projects = $this->workspaceAccess->accessibleProjects($user);
+        $projects->load('assignedUsers:id');
         $selectedBranchId = $request->filled('branch_id') ? $request->integer('branch_id') : null;
         if ($selectedBranchId && ! $branches->contains('id', $selectedBranchId)) {
             abort(403);
@@ -59,6 +61,21 @@ class SalesPocketbookController extends Controller
             })
             ->latest('lead_date')->latest('id')->paginate(20)->withQueryString();
 
+        $agendaDateFrom = $request->query('date_from', now()->startOfMonth()->toDateString());
+        $agendaDateTo = $request->query('date_to', now()->endOfMonth()->toDateString());
+        $agendas = ContentItem::query()
+            ->where('item_type', 'agenda')
+            ->where('agenda_type', ContentItem::SALES_AGENDA_TYPE)
+            ->with(['branch:id,name', 'owner:id,name', 'rescheduledFrom:id,scheduled_date'])
+            ->when($user->hasRole('sales'), fn (Builder $query) => $query->where('owner_user_id', $user->id))
+            ->when(! $user->canViewAllBranches() && ! $user->hasRole('sales'), fn (Builder $query) => $query->whereIn('branch_id', $this->workspaceAccess->accessibleBranchIds($user)))
+            ->when($selectedBranchId, fn (Builder $query) => $query->where('branch_id', $selectedBranchId))
+            ->when($selectedProjectId, fn (Builder $query) => $query->where('sales_project_id', $selectedProjectId))
+            ->when($monitoring && $request->filled('sales_user_id'), fn (Builder $query) => $query->where('owner_user_id', $request->integer('sales_user_id')))
+            ->when($agendaDateFrom, fn (Builder $query) => $query->whereDate('scheduled_date', '>=', $agendaDateFrom))
+            ->when($agendaDateTo, fn (Builder $query) => $query->whereDate('scheduled_date', '<=', $agendaDateTo))
+            ->orderBy('scheduled_date')->orderBy('start_time')->paginate(20, ['*'], 'agenda_page')->withQueryString();
+
         $defaultProject = $this->workspaceAccess->resolveRequestedProject($user, $request->query('project_id'));
 
         return view('crm.sales-pocketbook.index', [
@@ -69,6 +86,9 @@ class SalesPocketbookController extends Controller
             'salesUsers' => $salesUsers,
             'leadSources' => LeadSource::where('is_active', true)->orderBy('name')->get(),
             'leads' => $leads,
+            'agendas' => $agendas,
+            'agendaDateFrom' => $agendaDateFrom,
+            'agendaDateTo' => $agendaDateTo,
             'defaultProject' => $defaultProject,
             'selectedBranchId' => $selectedBranchId,
             'selectedProjectId' => $selectedProjectId,

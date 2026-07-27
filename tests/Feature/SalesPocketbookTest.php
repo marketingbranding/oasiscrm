@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\ActivityLog;
 use App\Models\Branch;
+use App\Models\ContentItem;
 use App\Models\LeadMaster;
 use App\Models\LeadSource;
 use App\Models\Role;
@@ -311,6 +312,113 @@ class SalesPocketbookTest extends TestCase
         $this->assertStringNotContainsString('window.location.reload()', $view);
     }
 
+    public function test_quick_agenda_uses_content_item_with_sales_owner_project_and_branch(): void
+    {
+        [$branch, $project, $sales] = $this->salesContext();
+
+        $this->actingAs($sales)->post(route('sales-agendas.store'), $this->agendaPayload($sales, $project))
+            ->assertRedirect(route('sales-pocketbook.index', ['tab' => 'agenda']));
+
+        $agenda = ContentItem::sole();
+        $this->assertSame('agenda', $agenda->item_type);
+        $this->assertSame(ContentItem::SALES_AGENDA_TYPE, $agenda->agenda_type);
+        $this->assertSame($sales->id, $agenda->owner_user_id);
+        $this->assertSame($project->id, $agenda->sales_project_id);
+        $this->assertSame($branch->id, $agenda->branch_id);
+        $this->assertSame($project->project_name, $agenda->project_name);
+        $this->assertSame('personal', $agenda->visibility);
+        $this->assertTrue($agenda->assignees->contains($sales));
+        $this->assertSame(90, $agenda->duration_minutes);
+        $this->assertFalse(Schema::hasTable('sales_agendas'));
+    }
+
+    public function test_sales_agenda_requires_an_assigned_active_project_and_own_owner(): void
+    {
+        [$branch, $project, $sales] = $this->salesContext();
+        $other = $this->sales($branch, $project, 'Other Sales');
+        $unassigned = $this->project($branch, 'Unassigned');
+
+        $this->actingAs($sales)->post(route('sales-agendas.store'), $this->agendaPayload($other, $project))
+            ->assertSessionHasErrors('owner_user_id');
+        $this->actingAs($sales)->post(route('sales-agendas.store'), $this->agendaPayload($sales, $unassigned))
+            ->assertSessionHasErrors('project_id');
+        $project->update(['is_active' => false]);
+        $this->actingAs($sales)->post(route('sales-agendas.store'), $this->agendaPayload($sales, $project))
+            ->assertSessionHasErrors('project_id');
+        $this->assertDatabaseCount('content_items', 0);
+    }
+
+    public function test_sales_agenda_scope_blocks_other_sales_and_limits_manager_to_branch(): void
+    {
+        [$branch, $project, $sales] = $this->salesContext();
+        $agenda = $this->agenda($sales, $project);
+        $other = $this->sales($branch, $project, 'Other Sales');
+        $manager = $this->user('manager', $branch);
+        $otherBranch = Branch::create(['name' => 'Pati', 'code' => 'PTI', 'is_active' => true]);
+        $outsider = $this->user('manager', $otherBranch);
+        $payload = ['activity_result' => 'Berhasil', 'expected_updated_at' => app(OptimisticLockService::class)->token($agenda)];
+
+        $this->actingAs($other)->patch(route('sales-agendas.update', $agenda), $payload)->assertForbidden();
+        $this->actingAs($outsider)->patch(route('sales-agendas.update', $agenda), $payload)->assertForbidden();
+        $this->actingAs($manager)->get(route('sales-pocketbook.index', ['tab' => 'agenda', 'date_from' => '2026-07-01', 'date_to' => '2026-07-31']))
+            ->assertOk()->assertSee($agenda->title);
+    }
+
+    public function test_agenda_result_is_required_and_completes_with_activity_log(): void
+    {
+        [, $project, $sales] = $this->salesContext();
+        $agenda = $this->agenda($sales, $project);
+        $token = app(OptimisticLockService::class)->token($agenda);
+
+        $this->actingAs($sales)->patch(route('sales-agendas.update', $agenda), [
+            'activity_result' => '', 'expected_updated_at' => $token,
+        ])->assertSessionHasErrors('activity_result');
+        $this->actingAs($sales)->patch(route('sales-agendas.update', $agenda), [
+            'activity_result' => 'Konsumen meminta follow-up besok.', 'expected_updated_at' => $token,
+        ])->assertRedirect();
+
+        $agenda->refresh();
+        $this->assertSame('done', $agenda->status);
+        $this->assertSame('Konsumen meminta follow-up besok.', $agenda->activity_result);
+        $this->assertNotNull($agenda->completed_at);
+        $this->assertDatabaseHas('activity_log', ['subject_type' => ContentItem::class, 'subject_id' => $agenda->id, 'event' => 'agenda_result_recorded']);
+    }
+
+    public function test_reschedule_preserves_original_and_creates_linked_planned_agenda(): void
+    {
+        [, $project, $sales] = $this->salesContext();
+        $agenda = $this->agenda($sales, $project);
+
+        $this->actingAs($sales)->post(route('sales-agendas.reschedule', $agenda), [
+            'scheduled_date' => '2026-07-12',
+            'start_time' => '13:00',
+            'duration_minutes' => 45,
+            'expected_updated_at' => app(OptimisticLockService::class)->token($agenda),
+        ])->assertRedirect();
+
+        $agenda->refresh();
+        $replacement = ContentItem::where('rescheduled_from_id', $agenda->id)->sole();
+        $this->assertSame('rescheduled', $agenda->status);
+        $this->assertNotNull($agenda->completed_at);
+        $this->assertSame('planned', $replacement->status);
+        $this->assertSame('2026-07-12', $replacement->scheduled_date->format('Y-m-d'));
+        $this->assertSame(45, $replacement->duration_minutes);
+        $this->assertTrue($replacement->assignees->contains($sales));
+        $this->assertDatabaseHas('activity_log', ['subject_type' => ContentItem::class, 'subject_id' => $agenda->id, 'event' => 'agenda_rescheduled']);
+    }
+
+    public function test_agenda_optimistic_conflict_does_not_store_result(): void
+    {
+        [, $project, $sales] = $this->salesContext();
+        $agenda = $this->agenda($sales, $project);
+        $stale = Carbon::parse($agenda->updated_at)->subSecond()->utc()->format('Y-m-d H:i:s');
+
+        $this->actingAs($sales)->patchJson(route('sales-agendas.update', $agenda), [
+            'activity_result' => 'Tidak boleh tersimpan', 'expected_updated_at' => $stale,
+        ])->assertConflict()->assertJsonPath('code', 'record_modified');
+        $this->assertNull($agenda->fresh()->activity_result);
+    }
+
     private function salesContext(): array
     {
         $branch = Branch::create(['name' => 'Solo', 'code' => 'SLO', 'is_active' => true]);
@@ -364,5 +472,45 @@ class SalesPocketbookTest extends TestCase
     private function stagePayload(SalesLead $lead, string $stage, string $timestamp): array
     {
         return ['stage' => $stage, 'action' => 'set', 'timestamp' => $timestamp, 'expected_updated_at' => app(OptimisticLockService::class)->token($lead)];
+    }
+
+    private function agenda(User $sales, LeadMaster $project): ContentItem
+    {
+        $agenda = ContentItem::create([
+            'branch_id' => $project->branch_id,
+            'project_name' => $project->project_name,
+            'item_type' => 'agenda',
+            'visibility' => 'personal',
+            'title' => 'Follow-up Konsumen',
+            'agenda_type' => ContentItem::SALES_AGENDA_TYPE,
+            'sales_activity_category' => 'Follow-up',
+            'start_date' => '2026-07-10',
+            'scheduled_date' => '2026-07-10',
+            'deadline_date' => '2026-07-10',
+            'start_time' => '09:00',
+            'end_time' => '10:00',
+            'duration_minutes' => 60,
+            'status' => 'planned',
+            'owner_user_id' => $sales->id,
+            'created_by' => $sales->id,
+        ]);
+        $agenda->assignees()->attach($sales);
+
+        return $agenda;
+    }
+
+    private function agendaPayload(User $sales, LeadMaster $project, array $overrides = []): array
+    {
+        return array_merge([
+            'owner_user_id' => $sales->id,
+            'project_id' => $project->id,
+            'scheduled_date' => '2026-07-10',
+            'start_time' => '09:00',
+            'end_time' => '10:30',
+            'sales_activity_category' => 'Follow-up',
+            'title' => 'Follow-up Konsumen',
+            'location' => 'Kantor pemasaran',
+            'notes' => 'Bawa brosur.',
+        ], $overrides);
     }
 }

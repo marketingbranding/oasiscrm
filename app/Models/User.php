@@ -139,6 +139,11 @@ class User extends Authenticatable
         return $this->hasMany(ContentItem::class, 'created_by');
     }
 
+    public function ownedPlannerItems(): HasMany
+    {
+        return $this->hasMany(ContentItem::class, 'owner_user_id');
+    }
+
     public function collaborationNotifications(): HasMany
     {
         return $this->hasMany(UserNotification::class);

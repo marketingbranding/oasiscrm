@@ -122,6 +122,7 @@ class OptimisticLockService
     {
         return match (true) {
             $model instanceof DanaTalangan => route('dana-talangan.edit', $model),
+            $model instanceof ContentItem && $model->agenda_type === ContentItem::SALES_AGENDA_TYPE => route('sales-pocketbook.index', ['tab' => 'agenda']),
             $model instanceof ContentItem => route('content-calendar.edit', $model),
             $model instanceof DatabaseSheetRecord => route('database.index', [
                 'branch_id' => $model->branch_id,

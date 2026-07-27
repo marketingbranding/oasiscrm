@@ -10,7 +10,7 @@ class WorkPlannerReminderService
     public function forUser(User $user): array
     {
         $base = ContentItem::with('assignees')->visibleTo($user);
-        $finished = ['completed', 'done', 'uploaded', 'cancelled'];
+        $finished = ['completed', 'done', 'uploaded', 'cancelled', 'rescheduled'];
 
         return [
             'overdue' => (clone $base)->whereDate('scheduled_date', '<', today())->whereNotIn('status', $finished)->orderBy('scheduled_date')->take(10)->get(),

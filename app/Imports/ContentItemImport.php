@@ -140,7 +140,7 @@ class ContentItemImport
                 'priority' => $priority,
                 'pic_names' => $type === 'content' ? null : ($picNamesArray ?: null),
                 'status' => $status,
-                'completed_at' => in_array($status, ['completed', 'done', 'uploaded', 'cancelled'], true) ? now() : null,
+                'completed_at' => in_array($status, ['completed', 'done', 'uploaded', 'cancelled', 'rescheduled'], true) ? now() : null,
                 'notes' => $catatan ?: null,
                 'created_by' => $user->id,
             ];

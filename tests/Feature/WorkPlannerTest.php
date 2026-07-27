@@ -263,6 +263,27 @@ class WorkPlannerTest extends TestCase
         ])->assertUnprocessable();
     }
 
+    public function test_rescheduled_agenda_is_terminal_and_remains_exportable(): void
+    {
+        [$branch, $user] = $this->branchAndUser();
+        $agenda = $this->makeItem($branch, $user, [
+            'item_type' => 'agenda',
+            'status' => 'rescheduled',
+            'agenda_type' => 'meeting',
+            'start_date' => today(),
+            'deadline_date' => today(),
+            'start_time' => '09:00',
+            'completed_at' => now(),
+        ]);
+
+        $this->assertTrue($agenda->isFinished());
+        $this->assertNotContains($agenda->id, app(WorkPlannerReminderService::class)->forUser($user)['today']->pluck('id'));
+        $this->actingAs($user)->get(route('content-calendar.index', ['view' => 'agenda']))
+            ->assertOk()->assertSee('Dijadwalkan Ulang');
+        $this->actingAs($user)->get(route('content-calendar.export', ['item_type' => 'agenda', 'status' => 'rescheduled']))
+            ->assertOk()->assertHeader('content-disposition');
+    }
+
     private function branchAndUser(): array
     {
         $branch = Branch::create(['name' => 'Cabang Test', 'code' => 'TEST', 'is_active' => true]);

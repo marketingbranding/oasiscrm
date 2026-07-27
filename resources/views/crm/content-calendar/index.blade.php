@@ -5,7 +5,7 @@
     $tabs = ['today' => 'Hari Ini', 'calendar' => 'Kalender', 'tasks' => 'Tugas', 'agenda' => 'Agenda', 'content' => 'Konten', 'all' => 'Semua'];
     $statusLabels = [
         'todo'=>'To Do','in_progress'=>'In Progress','completed'=>'Completed','lost_track'=>'Lost Track',
-        'planned'=>'Planned','confirmed'=>'Confirmed','done'=>'Done','cancelled'=>'Cancelled',
+        'planned'=>'Planned','confirmed'=>'Confirmed','done'=>'Done','cancelled'=>'Cancelled','rescheduled'=>'Dijadwalkan Ulang',
         'idea'=>'Ide','content_in_progress'=>'Dalam Proses','done_editing'=>'Selesai Edit','uploaded'=>'Di Upload',
     ];
     $fixedType = match ($viewMode) {
@@ -190,7 +190,7 @@ function plannerPage(ids, config) {
         init() { this.$nextTick(() => this.initSortable()); },
         filterStatuses: {
             task: [{value:'todo',label:'To Do'},{value:'in_progress',label:'In Progress'},{value:'completed',label:'Completed'},{value:'lost_track',label:'Lost Track'}],
-            agenda: [{value:'planned',label:'Planned'},{value:'confirmed',label:'Confirmed'},{value:'done',label:'Done'},{value:'cancelled',label:'Cancelled'}],
+            agenda: [{value:'planned',label:'Planned'},{value:'confirmed',label:'Confirmed'},{value:'done',label:'Done'},{value:'cancelled',label:'Cancelled'},{value:'rescheduled',label:'Dijadwalkan Ulang'}],
             content: [{value:'idea',label:'Ide'},{value:'content_in_progress',label:'Dalam Proses'},{value:'done_editing',label:'Selesai Edit'},{value:'uploaded',label:'Di Upload'}],
         },
         detailBaseUrl: @js(url('content-calendar')), editBaseUrl: @js(url('content-calendar')),

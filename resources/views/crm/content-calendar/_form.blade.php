@@ -169,7 +169,7 @@ function plannerForm(config) {
         ],
         statusOptions: {
             task: [{value:'todo',label:'To Do'},{value:'in_progress',label:'In Progress'},{value:'completed',label:'Completed'},{value:'lost_track',label:'Lost Track'}],
-            agenda: [{value:'planned',label:'Planned'},{value:'confirmed',label:'Confirmed'},{value:'done',label:'Done'},{value:'cancelled',label:'Cancelled'}],
+            agenda: [{value:'planned',label:'Planned'},{value:'confirmed',label:'Confirmed'},{value:'done',label:'Done'},{value:'cancelled',label:'Cancelled'},{value:'rescheduled',label:'Dijadwalkan Ulang'}],
             content: [{value:'idea',label:'Ide'},{value:'content_in_progress',label:'Dalam Proses'},{value:'done_editing',label:'Selesai Edit'},{value:'uploaded',label:'Di Upload'}],
         },
         get filteredProjects() { return this.projects.filter(project => String(project.branch_id) === String(this.branchId)); },

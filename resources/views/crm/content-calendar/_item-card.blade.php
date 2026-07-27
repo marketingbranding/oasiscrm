@@ -1,7 +1,7 @@
 @php
     $typeColors = ['task' => '#9ab6c8', 'agenda' => '#e6915d', 'content' => '#8c9ae0'];
     $typeLabels = ['task' => 'TASK', 'agenda' => 'AGENDA', 'content' => 'KONTEN'];
-    $statusLabels = ['idea' => 'Ide', 'content_in_progress' => 'Dalam Proses', 'done_editing' => 'Selesai Edit', 'uploaded' => 'Di Upload'];
+    $statusLabels = ['idea' => 'Ide', 'content_in_progress' => 'Dalam Proses', 'done_editing' => 'Selesai Edit', 'uploaded' => 'Di Upload', 'rescheduled' => 'Dijadwalkan Ulang'];
 @endphp
 <article class="planner-board-card border-2 border-black bg-white p-2 shadow-[2px_2px_0_#000] hover:bg-[#fef3c7]" data-item-id="{{ $plannerItem->id }}" data-item-type="{{ $plannerItem->item_type }}" data-updated-at="{{ $plannerItem->updated_at?->copy()->utc()->format('Y-m-d H:i:s') }}">
     <div class="flex items-start gap-2">

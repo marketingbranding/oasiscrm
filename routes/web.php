@@ -16,6 +16,7 @@ use App\Http\Controllers\Crm\LeadSourceController;
 use App\Http\Controllers\Crm\NotificationController;
 use App\Http\Controllers\Crm\PresenceController;
 use App\Http\Controllers\Crm\ProjectController;
+use App\Http\Controllers\Crm\SalesAgendaController;
 use App\Http\Controllers\Crm\SalesLeadController;
 use App\Http\Controllers\Crm\SalesLeadStageController;
 use App\Http\Controllers\Crm\SalesPocketbookController;
@@ -42,6 +43,9 @@ Route::middleware(['auth', 'active', 'verified', 'password.changed'])->group(fun
     Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
 
     Route::get('/buku-saku-sales', [SalesPocketbookController::class, 'index'])->name('sales-pocketbook.index');
+    Route::post('/buku-saku-sales/agendas', [SalesAgendaController::class, 'store'])->name('sales-agendas.store');
+    Route::patch('/buku-saku-sales/agendas/{agenda}', [SalesAgendaController::class, 'update'])->name('sales-agendas.update');
+    Route::post('/buku-saku-sales/agendas/{agenda}/reschedule', [SalesAgendaController::class, 'reschedule'])->name('sales-agendas.reschedule');
     Route::get('/buku-saku-sales/input', [SalesLeadController::class, 'create'])->name('sales-leads.create');
     Route::get('/buku-saku-sales/duplicate-phone', [SalesLeadController::class, 'duplicatePhone'])->name('sales-leads.duplicate-phone');
     Route::post('/buku-saku-sales/leads', [SalesLeadController::class, 'store'])->name('sales-leads.store');

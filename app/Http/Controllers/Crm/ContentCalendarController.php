@@ -394,7 +394,7 @@ class ContentCalendarController extends Controller
         $type = $data['item_type'] ?? $existing?->item_type ?? 'task';
         $status = $data['status'] ?? $existing?->status;
         $finished = in_array($status, match ($type) {
-            'agenda' => ['done', 'cancelled'],
+            'agenda' => ['done', 'cancelled', 'rescheduled'],
             'content' => ['uploaded'],
             default => ['completed'],
         }, true);

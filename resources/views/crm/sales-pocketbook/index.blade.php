@@ -8,6 +8,7 @@
     <x-crm.page-presence page-key="sales-pocketbook" :branch-id="$selectedBranchId" />
 
     @if(session('success'))<div class="border-2 border-black bg-green-100 px-4 py-2 font-[Helvetica] text-sm font-bold">{{ session('success') }}</div>@endif
+    @if(session('conflict'))<div class="border-2 border-[#c0392b] bg-red-50 px-4 py-2 text-sm font-bold">{{ session('conflict') }}</div>@endif
     @if($errors->any())<div class="border-2 border-[#c0392b] bg-red-50 px-4 py-2 text-sm"><strong>Data belum tersimpan.</strong> {{ $errors->first() }}</div>@endif
     @if(session('duplicate_warning'))
         <div class="border-2 border-[#b8860b] bg-yellow-50 p-3 text-sm"><strong>Nomor ini juga ditemukan pada lead lain yang dapat Anda akses:</strong>
@@ -27,8 +28,64 @@
         @endforeach
     </div>
 
-    @if($tab !== 'leads')
-        <div class="border-2 border-black bg-white p-8 text-center font-['Times_New_Roman']">{{ $tab === 'agenda' ? 'Agenda' : 'Laporan' }} akan dilengkapi pada tahap berikutnya.</div>
+    @if($tab === 'report')
+        <div class="border-2 border-black bg-white p-8 text-center font-['Times_New_Roman']">Laporan akan dilengkapi pada tahap berikutnya.</div>
+    @elseif($tab === 'agenda')
+    @php
+        $agendaOwnerId = old('owner_user_id', Auth::user()->hasRole('sales') ? Auth::id() : $salesUsers->first()?->id);
+        $agendaProjectId = old('project_id', request('project_id', $defaultProject?->id));
+    @endphp
+    @if($projects->isNotEmpty() && $salesUsers->isNotEmpty())
+    <section class="border-2 border-black bg-white">
+        <div class="bg-black text-[#fcc20f] px-4 py-2 font-[Helvetica] font-bold text-xs uppercase">+ Isi Agenda / Hasil</div>
+        <form method="POST" action="{{ route('sales-agendas.store') }}" class="p-4 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
+            @csrf
+            <div><label class="sales-label">Tanggal Agenda</label><x-crm.date-field name="scheduled_date" :value="old('scheduled_date', now()->toDateString())" required /></div>
+            <div><label class="sales-label">Jam Mulai</label><input type="time" class="sales-input" name="start_time" value="{{ old('start_time') }}" required></div>
+            <div><label class="sales-label">Jam Selesai</label><input type="time" class="sales-input" name="end_time" value="{{ old('end_time') }}"><small>Isi jam selesai atau durasi.</small></div>
+            <div><label class="sales-label">Durasi (menit)</label><input type="number" min="1" max="1440" class="sales-input" name="duration_minutes" value="{{ old('duration_minutes') }}"></div>
+            <div><label class="sales-label">Kategori Aktivitas</label><select class="sales-input" name="sales_activity_category" required><option value="">Pilih kategori</option>@foreach(\App\Models\ContentItem::SALES_ACTIVITY_CATEGORIES as $category)<option value="{{ $category }}" @selected(old('sales_activity_category') === $category)>{{ $category }}</option>@endforeach</select></div>
+            <div><label class="sales-label">Judul Agenda</label><input class="sales-input" name="title" value="{{ old('title') }}" required></div>
+            <div><label class="sales-label">Sales</label><select class="sales-input" name="owner_user_id" required onchange="filterAgendaProjects(this.value)" @disabled(!$monitoring)>@foreach($salesUsers as $sales)<option value="{{ $sales->id }}" @selected($agendaOwnerId == $sales->id)>{{ $sales->name }}</option>@endforeach</select>@unless($monitoring)<input type="hidden" name="owner_user_id" value="{{ Auth::id() }}">@endunless</div>
+            <div><label class="sales-label">Proyek</label><select class="sales-input" id="agenda-project" name="project_id" required><option value="">Pilih proyek</option>@foreach($projects as $project)<option value="{{ $project->id }}" data-owners="{{ $project->assignedUsers->pluck('id')->join(',') }}" @selected($agendaProjectId == $project->id)>{{ $project->project_name }}</option>@endforeach</select></div>
+            <div><label class="sales-label">Lokasi</label><input class="sales-input" name="location" value="{{ old('location') }}"></div>
+            <div class="sm:col-span-2 xl:col-span-3"><label class="sales-label">Catatan</label><textarea class="sales-input" name="notes" rows="2">{{ old('notes') }}</textarea></div>
+            <div class="xl:col-span-4"><button class="sales-button bg-[#fcc20f]">Simpan Agenda</button></div>
+        </form>
+    </section>
+    @endif
+
+    <form method="GET" action="{{ route('sales-pocketbook.index') }}" class="border-2 border-black bg-[#f5f5f5] p-3 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 xl:grid-cols-6 gap-2">
+        <input type="hidden" name="tab" value="agenda">
+        @if($monitoring)<select class="sales-input" name="branch_id"><option value="">Semua cabang</option>@foreach($branches as $branch)<option value="{{ $branch->id }}" @selected(request('branch_id') == $branch->id)>{{ $branch->name }}</option>@endforeach</select><select class="sales-input" name="sales_user_id"><option value="">Semua sales</option>@foreach($salesUsers as $sales)<option value="{{ $sales->id }}" @selected(request('sales_user_id') == $sales->id)>{{ $sales->name }}</option>@endforeach</select>@endif
+        <select class="sales-input" name="project_id"><option value="">Semua proyek</option>@foreach($projects as $project)<option value="{{ $project->id }}" @selected(request('project_id') == $project->id)>{{ $project->project_name }}</option>@endforeach</select>
+        <x-crm.date-field name="date_from" :value="$agendaDateFrom" />
+        <x-crm.date-field name="date_to" :value="$agendaDateTo" />
+        <button class="sales-button bg-black text-white">Filter</button>
+    </form>
+
+    <section class="border-2 border-black bg-white">
+        <div class="bg-black text-white px-4 py-2 font-[Helvetica] font-bold text-xs uppercase">{{ $monitoring ? 'Monitoring Agenda' : 'Agenda Saya' }}</div>
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-3 p-3">
+            @forelse($agendas as $agenda)
+            <article class="border-2 border-black bg-[#fffdf2] p-3 shadow-[2px_2px_0_#000]">
+                <div class="flex flex-wrap justify-between gap-2"><strong class="font-[Helvetica]">{{ $agenda->title }}</strong><span class="border border-black bg-[#fcc20f] px-2 py-0.5 text-[10px] font-bold uppercase">{{ $agenda->status === 'rescheduled' ? 'Dijadwalkan Ulang' : $agenda->status }}</span></div>
+                <div class="mt-1 text-sm">{{ $agenda->scheduled_date->format('d/m/Y') }} · {{ substr($agenda->start_time, 0, 5) }}@if($agenda->end_time) - {{ substr($agenda->end_time, 0, 5) }}@endif · {{ $agenda->duration_minutes }} menit</div>
+                <div class="text-sm"><strong>{{ $agenda->sales_activity_category }}</strong> · {{ $agenda->project_name }}@if($agenda->location) · {{ $agenda->location }}@endif</div>
+                @if($monitoring)<div class="text-xs">{{ $agenda->branch?->name }} / {{ $agenda->owner?->name }}</div>@endif
+                @if($agenda->notes)<p class="mt-2 text-sm italic">{{ $agenda->notes }}</p>@endif
+                @if($agenda->activity_result)<div class="mt-2 border-2 border-black bg-green-50 p-2"><strong class="sales-label">Hasil Aktivitas</strong><p class="text-sm whitespace-pre-line">{{ $agenda->activity_result }}</p></div>@endif
+                @if(!in_array($agenda->status, ['done', 'cancelled', 'rescheduled'], true))
+                <div class="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <form method="POST" action="{{ route('sales-agendas.update', $agenda) }}" class="border border-black bg-white p-2">@csrf @method('PATCH')<input type="hidden" name="expected_updated_at" value="{{ app(\App\Services\OptimisticLockService::class)->token($agenda) }}"><label class="sales-label">Hasil Aktivitas</label><textarea class="sales-input" name="activity_result" rows="2" required></textarea><label class="sales-label mt-2">Durasi Aktual (opsional)</label><input class="sales-input" type="number" min="1" max="1440" name="duration_minutes"><button class="sales-button bg-[#b7d7a8] mt-2">Tandai Selesai</button></form>
+                    <form method="POST" action="{{ route('sales-agendas.reschedule', $agenda) }}" class="border border-black bg-white p-2">@csrf<input type="hidden" name="expected_updated_at" value="{{ app(\App\Services\OptimisticLockService::class)->token($agenda) }}"><label class="sales-label">Jadwal Baru</label><x-crm.date-field name="scheduled_date" required /><div class="grid grid-cols-2 gap-2 mt-2"><input class="sales-input" type="time" name="start_time" required><input class="sales-input" type="time" name="end_time" title="Jam selesai"></div><label class="sales-label mt-2">Atau Durasi (menit)</label><input class="sales-input" type="number" min="1" max="1440" name="duration_minutes"><button class="sales-button bg-white mt-2">Jadwalkan Ulang</button></form>
+                </div>
+                @endif
+            </article>
+            @empty<div class="lg:col-span-2 p-8 text-center font-['Times_New_Roman']">Belum ada agenda pada periode ini.</div>@endforelse
+        </div>
+        {{ $agendas->links() }}
+    </section>
     @else
     @if($canCreate && $projects->isNotEmpty())
     <section class="border-2 border-black bg-white">
@@ -148,5 +205,17 @@ function salesPocketbook() {
         },
     }
 }
+function filterAgendaProjects(ownerId) {
+    const select = document.getElementById('agenda-project')
+    if (!select) return
+    Array.from(select.options).forEach(option => {
+        if (!option.value) return
+        const visible = (option.dataset.owners || '').split(',').includes(String(ownerId))
+        option.hidden = !visible
+        option.disabled = !visible
+        if (!visible && option.selected) select.value = ''
+    })
+}
+document.addEventListener('DOMContentLoaded', () => filterAgendaProjects(document.querySelector('[name="owner_user_id"]')?.value))
 </script>
 @endsection

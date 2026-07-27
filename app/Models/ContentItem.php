@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class ContentItem extends Model
 {
@@ -15,9 +16,25 @@ class ContentItem extends Model
 
     public const TYPES = ['task', 'agenda', 'content'];
 
+    public const SALES_AGENDA_TYPE = 'buku_saku_sales';
+
+    public const SALES_ACTIVITY_CATEGORIES = [
+        'Canvassing',
+        'Follow-up',
+        'Telepon/WhatsApp',
+        'Tatap Muka Konsumen',
+        'Survey Lokasi',
+        'TikTok Live',
+        'Pembuatan Konten',
+        'Event/Pameran',
+        'Administrasi',
+        'Rapat',
+        'Lainnya',
+    ];
+
     public const STATUSES = [
         'task' => ['todo', 'in_progress', 'completed', 'lost_track'],
-        'agenda' => ['planned', 'confirmed', 'done', 'cancelled'],
+        'agenda' => ['planned', 'confirmed', 'done', 'cancelled', 'rescheduled'],
         'content' => ['idea', 'content_in_progress', 'done_editing', 'uploaded'],
     ];
 
@@ -43,6 +60,12 @@ class ContentItem extends Model
         'scheduled_date',
         'status',
         'completed_at',
+        'activity_result',
+        'duration_minutes',
+        'sales_activity_category',
+        'owner_user_id',
+        'sales_project_id',
+        'rescheduled_from_id',
         'notes',
         'created_by',
         'updated_by',
@@ -56,6 +79,7 @@ class ContentItem extends Model
             'deadline_date' => 'date',
             'pic_names' => 'array',
             'completed_at' => 'datetime',
+            'duration_minutes' => 'integer',
         ];
     }
 
@@ -72,6 +96,26 @@ class ContentItem extends Model
     public function updatedBy(): BelongsTo
     {
         return $this->belongsTo(User::class, 'updated_by');
+    }
+
+    public function owner(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'owner_user_id');
+    }
+
+    public function salesProject(): BelongsTo
+    {
+        return $this->belongsTo(LeadMaster::class, 'sales_project_id');
+    }
+
+    public function rescheduledFrom(): BelongsTo
+    {
+        return $this->belongsTo(self::class, 'rescheduled_from_id');
+    }
+
+    public function rescheduledItems(): HasMany
+    {
+        return $this->hasMany(self::class, 'rescheduled_from_id');
     }
 
     public function assignees(): BelongsToMany
@@ -98,7 +142,7 @@ class ContentItem extends Model
     public function isFinished(): bool
     {
         return in_array($this->status, match ($this->item_type) {
-            'agenda' => ['done', 'cancelled'],
+            'agenda' => ['done', 'cancelled', 'rescheduled'],
             'content' => ['uploaded'],
             default => ['completed'],
         }, true);

@@ -6,6 +6,7 @@ use App\Models\ContentItem;
 use App\Models\DanaTalangan;
 use App\Models\DatabaseSheetRecord;
 use App\Models\FeedbackReport;
+use App\Models\SalesLead;
 use App\Models\User;
 use App\Models\UserNotification;
 use App\Models\UserPresence;
@@ -177,6 +178,7 @@ class CollaborationNotificationService
             $record instanceof DanaTalangan => 'dana_talangan',
             $record instanceof ContentItem => 'content_item',
             $record instanceof DatabaseSheetRecord => 'database_sheet_record',
+            $record instanceof SalesLead => 'sales_lead',
             $record instanceof User => 'user',
             default => class_basename($record),
         };
@@ -188,6 +190,7 @@ class CollaborationNotificationService
             $record instanceof DanaTalangan => 'Dana Talangan atas nama '.($record->nama_konsumen ?: 'tanpa nama'),
             $record instanceof ContentItem => 'Work Planner "'.($record->title ?: 'tanpa judul').'"',
             $record instanceof DatabaseSheetRecord => 'baris Database '.$record->sheet_name,
+            $record instanceof SalesLead => 'lead Buku Saku',
             default => 'data',
         };
     }
@@ -195,6 +198,10 @@ class CollaborationNotificationService
     private function canViewRecord(User $user, Model $record): bool
     {
         if ($record instanceof ContentItem) {
+            return Gate::forUser($user)->allows('view', $record);
+        }
+
+        if ($record instanceof SalesLead) {
             return Gate::forUser($user)->allows('view', $record);
         }
 

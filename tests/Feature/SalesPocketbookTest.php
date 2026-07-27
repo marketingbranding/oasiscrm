@@ -1,0 +1,368 @@
+<?php
+
+namespace Tests\Feature;
+
+use App\Models\ActivityLog;
+use App\Models\Branch;
+use App\Models\LeadMaster;
+use App\Models\LeadSource;
+use App\Models\Role;
+use App\Models\SalesLead;
+use App\Models\User;
+use App\Services\OptimisticLockService;
+use App\Services\PhoneNormalizationService;
+use Carbon\Carbon;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Schema;
+use Tests\TestCase;
+
+class SalesPocketbookTest extends TestCase
+{
+    use RefreshDatabase;
+
+    public function test_phone_normalization_handles_local_country_and_formatted_numbers(): void
+    {
+        $service = app(PhoneNormalizationService::class);
+
+        $this->assertSame('628123456789', $service->normalize('0812-3456-789'));
+        $this->assertSame('628123456789', $service->normalize('+62 812 3456 789'));
+        $this->assertSame('628123456789', $service->normalize('8123456789'));
+    }
+
+    public function test_schema_and_stage_contract_use_only_corrected_domain_names(): void
+    {
+        foreach (['sales_user_id', 'customer_name', 'contacted_at', 'met_at', 'surveyed_at', 'utj_at', 'documents_completed_at', 'akad_at'] as $column) {
+            $this->assertTrue(Schema::hasColumn('sales_leads', $column), "Missing {$column}");
+        }
+        foreach (['sales_id', 'name', 'follow_up_at', 'visit_at', 'booking_at'] as $column) {
+            $this->assertFalse(Schema::hasColumn('sales_leads', $column), "Unexpected {$column}");
+        }
+        $this->assertSame([
+            'contacted_at' => 'DIHUBUNGI',
+            'met_at' => 'TATAP MUKA',
+            'surveyed_at' => 'SURVEY',
+            'utj_at' => 'UTJ',
+            'documents_completed_at' => 'BERKAS AWAL LENGKAP',
+            'akad_at' => 'AKAD',
+        ], SalesLead::STAGES);
+    }
+
+    public function test_sales_scope_only_exposes_own_records_even_in_same_branch(): void
+    {
+        [$branch, $project, $sales] = $this->salesContext();
+        $other = $this->sales($branch, $project, 'Other Sales');
+        $own = $this->lead($sales, $project, 'Own');
+        $this->lead($other, $project, 'Other');
+
+        $this->assertEquals([$own->id], SalesLead::visibleTo($sales)->pluck('id')->all());
+        $response = $this->actingAs($sales)->get(route('sales-pocketbook.index'))->assertOk();
+        $response->assertSee('Own')->assertDontSee('Other');
+    }
+
+    public function test_branch_manager_sees_accessible_branch_and_global_user_sees_all(): void
+    {
+        [$branch, $project, $sales] = $this->salesContext();
+        $otherBranch = Branch::create(['name' => 'Pati', 'code' => 'PTI', 'is_active' => true]);
+        $otherProject = $this->project($otherBranch, 'Pati Project');
+        $otherSales = $this->sales($otherBranch, $otherProject, 'Pati Sales');
+        $this->lead($sales, $project, 'Solo Lead');
+        $this->lead($otherSales, $otherProject, 'Pati Lead');
+        $manager = $this->user('manager', $branch);
+        $pusat = $this->user('pusat');
+
+        $this->assertSame(1, SalesLead::visibleTo($manager)->count());
+        $this->assertSame(2, SalesLead::visibleTo($pusat)->count());
+        $this->actingAs($pusat)->get(route('sales-pocketbook.index'))
+            ->assertOk()->assertSee('Solo Lead')->assertSee('Pati Lead');
+    }
+
+    public function test_sales_can_create_for_self_on_assigned_active_project_and_activity_is_pii_safe(): void
+    {
+        [$branch, $project, $sales] = $this->salesContext();
+        $payload = $this->payload($sales, $project, ['phone' => '0812 9999 1111', 'customer_name' => 'Sensitive Name']);
+
+        $this->actingAs($sales)->post(route('sales-leads.store'), $payload)->assertRedirect(route('sales-pocketbook.index'));
+
+        $lead = SalesLead::firstOrFail();
+        $this->assertSame('6281299991111', $lead->normalized_phone);
+        $log = ActivityLog::where('subject_type', SalesLead::class)->where('subject_id', $lead->id)->firstOrFail();
+        $encoded = json_encode($log->properties);
+        $this->assertStringNotContainsString('Sensitive Name', $encoded);
+        $this->assertStringNotContainsString('0812', $encoded);
+    }
+
+    public function test_phone_is_nullable_source_snapshot_is_stored_and_add_another_preserves_context(): void
+    {
+        [$branch, $project, $sales] = $this->salesContext();
+        $source = LeadSource::where('is_active', true)->firstOrFail();
+        $payload = $this->payload($sales, $project, [
+            'phone' => null,
+            'lead_date' => '2026-07-21',
+            'lead_source_id' => $source->id,
+            'submit_action' => 'add_another',
+        ]);
+
+        $redirect = route('sales-pocketbook.index', ['input' => 1, 'lead_date' => '2026-07-21', 'project_id' => $project->id]);
+        $this->actingAs($sales)->post(route('sales-leads.store'), $payload)->assertRedirect($redirect);
+
+        $lead = SalesLead::firstOrFail();
+        $this->assertNull($lead->phone);
+        $this->assertNull($lead->normalized_phone);
+        $this->assertSame($source->name, $lead->source_name_snapshot);
+        $this->actingAs($sales)->get($redirect)->assertOk()
+            ->assertSee('name="lead_date" value="2026-07-21"', false)
+            ->assertSee('value="'.$project->id.'" data-branch="'.$branch->id.'" selected', false);
+    }
+
+    public function test_create_is_limited_to_sales_and_global_roles_and_quick_form_follows_policy(): void
+    {
+        [$branch, $project, $sales] = $this->salesContext();
+        $manager = $this->user('manager', $branch);
+        $admin = $this->user('admin', $branch);
+        $pusat = $this->user('pusat');
+
+        foreach ([$manager, $admin] as $monitor) {
+            $this->actingAs($monitor)->get(route('sales-pocketbook.index'))->assertOk()->assertDontSee('+ Input Lead Hari Ini');
+            $this->actingAs($monitor)->post(route('sales-leads.store'), $this->payload($sales, $project))->assertForbidden();
+        }
+        $this->actingAs($sales)->get(route('sales-pocketbook.index'))->assertOk()->assertSee('+ Input Lead Hari Ini');
+        $this->actingAs($pusat)->get(route('sales-pocketbook.index'))->assertOk()->assertSee('+ Input Lead Hari Ini');
+    }
+
+    public function test_sales_without_project_sees_assignment_empty_state(): void
+    {
+        $branch = Branch::create(['name' => 'Solo', 'code' => 'SLO', 'is_active' => true]);
+        $sales = $this->user('sales', $branch);
+
+        $this->actingAs($sales)->get(route('sales-pocketbook.index'))
+            ->assertOk()
+            ->assertSee('Anda belum ditugaskan ke proyek. Hubungi admin pusat.')
+            ->assertDontSee('+ Input Lead Hari Ini');
+    }
+
+    public function test_sales_cannot_select_another_owner_or_unassigned_or_inactive_project(): void
+    {
+        [$branch, $project, $sales] = $this->salesContext();
+        $other = $this->sales($branch, $project, 'Other');
+        $unassigned = $this->project($branch, 'Unassigned');
+
+        $this->actingAs($sales)->post(route('sales-leads.store'), $this->payload($other, $project))
+            ->assertSessionHasErrors('sales_user_id');
+        $this->actingAs($sales)->post(route('sales-leads.store'), $this->payload($sales, $unassigned))
+            ->assertSessionHasErrors('project_id');
+        $project->update(['is_active' => false]);
+        $this->actingAs($sales)->post(route('sales-leads.store'), $this->payload($sales, $project))
+            ->assertSessionHasErrors('project_id');
+    }
+
+    public function test_inaccessible_branch_record_returns_403_before_update_or_conflict_details(): void
+    {
+        [$branch, $project, $sales] = $this->salesContext();
+        $lead = $this->lead($sales, $project);
+        $otherBranch = Branch::create(['name' => 'Pati', 'code' => 'PTI', 'is_active' => true]);
+        $outsider = $this->user('admin', $otherBranch);
+
+        $this->actingAs($outsider)->putJson(route('sales-leads.update', $lead), $this->payload($sales, $project, [
+            'expected_updated_at' => '2000-01-01 00:00:00',
+        ]))->assertForbidden();
+    }
+
+    public function test_authorized_update_changes_data_and_tracks_modifier_without_logging_pii(): void
+    {
+        [$branch, $project, $sales] = $this->salesContext();
+        $lead = $this->lead($sales, $project, 'Before');
+
+        $this->actingAs($sales)->putJson(route('sales-leads.update', $lead), $this->payload($sales, $project, [
+            'customer_name' => 'After',
+            'phone' => '0813-0000-0000',
+            'expected_updated_at' => app(OptimisticLockService::class)->token($lead),
+        ]))->assertOk()->assertJsonPath('ok', true);
+
+        $lead->refresh();
+        $this->assertSame('After', $lead->customer_name);
+        $this->assertSame('6281300000000', $lead->normalized_phone);
+        $this->assertSame($sales->id, $lead->updated_by);
+        $log = ActivityLog::where('subject_type', SalesLead::class)->where('subject_id', $lead->id)->where('event', 'updated')->firstOrFail();
+        $this->assertStringNotContainsString('After', json_encode($log->properties));
+    }
+
+    public function test_edit_route_is_scoped_by_policy_and_renders_date_picker_and_optimistic_token(): void
+    {
+        [$branch, $project, $sales] = $this->salesContext();
+        $lead = $this->lead($sales, $project, 'Editable');
+        $otherSales = $this->sales($branch, $project, 'Other Sales');
+        $manager = $this->user('manager', $branch);
+        $global = $this->user('pusat');
+        $otherBranch = Branch::create(['name' => 'Pati', 'code' => 'PTI', 'is_active' => true]);
+        $outsider = $this->user('manager', $otherBranch);
+
+        $this->actingAs($sales)->get(route('sales-leads.edit', $lead))->assertOk()
+            ->assertSee('Editable')->assertSee('date-wrapper', false)
+            ->assertSee('name="expected_updated_at" value="'.app(OptimisticLockService::class)->token($lead).'"', false);
+        $this->actingAs($manager)->get(route('sales-leads.edit', $lead))->assertOk();
+        $this->actingAs($global)->get(route('sales-leads.edit', $lead))->assertOk();
+        $this->actingAs($otherSales)->get(route('sales-leads.edit', $lead))->assertForbidden();
+        $this->actingAs($outsider)->get(route('sales-leads.edit', $lead))->assertForbidden();
+    }
+
+    public function test_updating_source_refreshes_snapshot(): void
+    {
+        [$branch, $project, $sales] = $this->salesContext();
+        $lead = $this->lead($sales, $project);
+        $source = LeadSource::create(['name' => 'Partner Baru', 'is_active' => true]);
+
+        $this->actingAs($sales)->put(route('sales-leads.update', $lead), $this->payload($sales, $project, [
+            'lead_source_id' => $source->id,
+            'expected_updated_at' => app(OptimisticLockService::class)->token($lead),
+        ]))->assertRedirect(route('sales-pocketbook.index'));
+
+        $this->assertSame('Partner Baru', $lead->fresh()->source_name_snapshot);
+    }
+
+    public function test_duplicate_warning_never_reveals_an_unauthorized_branch(): void
+    {
+        [$branch, $project, $sales] = $this->salesContext();
+        $this->lead($sales, $project, 'Visible', '08123456789');
+        $otherBranch = Branch::create(['name' => 'Secret Branch', 'code' => 'SEC', 'is_active' => true]);
+        $otherProject = $this->project($otherBranch, 'Secret Project');
+        $secretSales = $this->sales($otherBranch, $otherProject, 'Secret Sales');
+        $this->lead($secretSales, $otherProject, 'Secret', '+62 812 345 6789');
+
+        $response = $this->actingAs($sales)->getJson(route('sales-leads.duplicate-phone', ['phone' => '0812-3456-789']))
+            ->assertOk()->assertJsonCount(1, 'matches')->assertJsonPath('matches.0.sales', $sales->name);
+        $response->assertJsonMissing(['branch' => 'Secret Branch'])->assertJsonMissing(['sales' => 'Secret Sales']);
+    }
+
+    public function test_stage_date_and_order_are_validated_while_earlier_stage_can_be_added(): void
+    {
+        [$branch, $project, $sales] = $this->salesContext();
+        $lead = $this->lead($sales, $project);
+        $lead->update(['utj_at' => Carbon::parse('2026-07-10 10:00:00')]);
+
+        $this->actingAs($sales)->patchJson(route('sales-leads.stage.update', $lead), $this->stagePayload($lead, 'met_at', '2026-07-09 10:00:00'))
+            ->assertOk()->assertJsonPath('stages.met_at', Carbon::parse('2026-07-09 10:00:00')->toIso8601String());
+        $lead->refresh();
+        $response = $this->actingAs($sales)->patchJson(route('sales-leads.stage.update', $lead), $this->stagePayload($lead, 'surveyed_at', '2026-07-11 10:00:00'));
+        $this->assertSame(422, $response->getStatusCode(), $response->getContent());
+        $this->assertSame('Waktu progres harus berurutan sebelum tahap berikutnya.', $response->json('errors.timestamp.0'));
+        $response = $this->actingAs($sales)->patchJson(route('sales-leads.stage.update', $lead), $this->stagePayload($lead, 'contacted_at', '2025-01-01 10:00:00'));
+        $this->assertSame(422, $response->getStatusCode(), $response->getContent());
+        $this->assertSame('Waktu progres tidak boleh sebelum tanggal lead.', $response->json('errors.timestamp.0'));
+    }
+
+    public function test_sales_cannot_reverse_but_manager_can_with_confirmation_and_clears_later_stages(): void
+    {
+        [$branch, $project, $sales] = $this->salesContext();
+        $lead = $this->lead($sales, $project);
+        $lead->update(['met_at' => now(), 'surveyed_at' => now()->addHour(), 'utj_at' => now()->addHours(2)]);
+        $payload = ['stage' => 'surveyed_at', 'action' => 'reverse', 'reversal_confirmed' => 1, 'expected_updated_at' => app(OptimisticLockService::class)->token($lead)];
+
+        $this->actingAs($sales)->patchJson(route('sales-leads.stage.update', $lead), $payload)->assertForbidden();
+        $manager = $this->user('manager', $branch);
+        $this->actingAs($manager)->patchJson(route('sales-leads.stage.update', $lead), array_diff_key($payload, ['reversal_confirmed' => true]))
+            ->assertUnprocessable()->assertJsonStructure(['errors' => ['reversal_confirmed']]);
+        $this->actingAs($manager)->patchJson(route('sales-leads.stage.update', $lead), $payload)->assertOk();
+        $lead->refresh();
+        $this->assertNotNull($lead->met_at);
+        $this->assertNull($lead->surveyed_at);
+        $this->assertNull($lead->utj_at);
+        $this->assertDatabaseHas('activity_log', ['subject_type' => SalesLead::class, 'subject_id' => $lead->id, 'event' => 'stage_reversed']);
+    }
+
+    public function test_optimistic_conflict_does_not_overwrite_stage_or_lead(): void
+    {
+        [$branch, $project, $sales] = $this->salesContext();
+        $lead = $this->lead($sales, $project, 'Current');
+        $stale = Carbon::parse($lead->updated_at)->subSecond()->utc()->format('Y-m-d H:i:s');
+
+        $this->actingAs($sales)->patchJson(route('sales-leads.stage.update', $lead), [
+            'stage' => 'contacted_at', 'action' => 'set', 'timestamp' => now(), 'expected_updated_at' => $stale,
+        ])->assertConflict()->assertJsonPath('code', 'record_modified')->assertJsonPath('record_type', 'sales_lead');
+        $this->assertNull($lead->fresh()->contacted_at);
+
+        $this->actingAs($sales)->putJson(route('sales-leads.update', $lead), $this->payload($sales, $project, [
+            'customer_name' => 'Stale Name', 'expected_updated_at' => $stale,
+        ]))->assertConflict();
+        $this->assertSame('Current', $lead->fresh()->customer_name);
+    }
+
+    public function test_monitoring_filters_project_and_branch_and_menu_visibility_is_role_limited(): void
+    {
+        [$branch, $project, $sales] = $this->salesContext();
+        $this->lead($sales, $project, 'Selected Lead');
+        $manager = $this->user('manager', $branch);
+        $viewer = $this->user('staff', $branch);
+
+        $this->actingAs($manager)->get(route('sales-pocketbook.index', ['branch_id' => $branch->id, 'project_id' => $project->id]))
+            ->assertOk()->assertSee('Selected Lead')->assertSee('Buku Saku Sales');
+        $this->assertSame(0, SalesLead::visibleTo($viewer)->count());
+        $this->actingAs($viewer)->get(route('dashboard'))->assertOk()->assertDontSee('Buku Saku Sales');
+        $this->actingAs($viewer)->get(route('sales-pocketbook.index'))->assertForbidden();
+    }
+
+    public function test_stage_ui_updates_from_response_without_reload_and_restores_button_on_errors(): void
+    {
+        $view = file_get_contents(resource_path('views/crm/sales-pocketbook/index.blade.php'));
+
+        $this->assertStringContainsString('data.stages[stageButton.dataset.stage]', $view);
+        $this->assertStringContainsString('group.dataset.token = data.updated_at', $view);
+        $this->assertStringContainsString('finally {', $view);
+        $this->assertStringContainsString('button.disabled = false', $view);
+        $this->assertStringNotContainsString('window.location.reload()', $view);
+    }
+
+    private function salesContext(): array
+    {
+        $branch = Branch::create(['name' => 'Solo', 'code' => 'SLO', 'is_active' => true]);
+        $project = $this->project($branch, 'Solo Project');
+        $sales = $this->sales($branch, $project, 'Solo Sales');
+
+        return [$branch, $project, $sales];
+    }
+
+    private function project(Branch $branch, string $name): LeadMaster
+    {
+        return LeadMaster::create(['branch_id' => $branch->id, 'project_name' => $name, 'is_active' => true]);
+    }
+
+    private function sales(Branch $branch, LeadMaster $project, string $name): User
+    {
+        $sales = $this->user('sales', $branch, $name);
+        $sales->assignedProjects()->attach($project->id, ['is_primary' => true]);
+
+        return $sales;
+    }
+
+    private function user(string $roleSlug, ?Branch $branch = null, ?string $name = null): User
+    {
+        $role = Role::firstOrCreate(['slug' => $roleSlug], ['name' => ucfirst($roleSlug), 'is_superadmin' => $roleSlug === 'superadmin']);
+
+        return User::factory()->create(['name' => $name ?? ucfirst($roleSlug), 'role_id' => $role->id, 'branch_id' => $branch?->id, 'password_changed_at' => now()]);
+    }
+
+    private function lead(User $sales, LeadMaster $project, string $name = 'Lead', string $phone = '08123456789'): SalesLead
+    {
+        return SalesLead::create($this->payload($sales, $project, [
+            'customer_name' => $name, 'phone' => $phone, 'normalized_phone' => app(PhoneNormalizationService::class)->normalize($phone),
+            'created_by' => $sales->id, 'updated_by' => $sales->id,
+        ]));
+    }
+
+    private function payload(User $sales, LeadMaster $project, array $overrides = []): array
+    {
+        return array_merge([
+            'branch_id' => $project->branch_id,
+            'project_id' => $project->id,
+            'sales_user_id' => $sales->id,
+            'lead_source_id' => LeadSource::where('is_active', true)->firstOrFail()->id,
+            'lead_date' => '2026-07-01',
+            'customer_name' => 'Prospect',
+            'phone' => '08123456789',
+        ], $overrides);
+    }
+
+    private function stagePayload(SalesLead $lead, string $stage, string $timestamp): array
+    {
+        return ['stage' => $stage, 'action' => 'set', 'timestamp' => $timestamp, 'expected_updated_at' => app(OptimisticLockService::class)->token($lead)];
+    }
+}

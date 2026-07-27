@@ -16,6 +16,9 @@ use App\Http\Controllers\Crm\LeadSourceController;
 use App\Http\Controllers\Crm\NotificationController;
 use App\Http\Controllers\Crm\PresenceController;
 use App\Http\Controllers\Crm\ProjectController;
+use App\Http\Controllers\Crm\SalesLeadController;
+use App\Http\Controllers\Crm\SalesLeadStageController;
+use App\Http\Controllers\Crm\SalesPocketbookController;
 use App\Http\Controllers\Crm\SystemHealthController;
 use App\Http\Controllers\ProfileController;
 use App\Models\ContentItem;
@@ -37,6 +40,14 @@ Route::middleware(['auth', 'active', 'verified'])->group(function () {
 
 Route::middleware(['auth', 'active', 'verified', 'password.changed'])->group(function () {
     Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
+
+    Route::get('/buku-saku-sales', [SalesPocketbookController::class, 'index'])->name('sales-pocketbook.index');
+    Route::get('/buku-saku-sales/input', [SalesLeadController::class, 'create'])->name('sales-leads.create');
+    Route::get('/buku-saku-sales/duplicate-phone', [SalesLeadController::class, 'duplicatePhone'])->name('sales-leads.duplicate-phone');
+    Route::post('/buku-saku-sales/leads', [SalesLeadController::class, 'store'])->name('sales-leads.store');
+    Route::get('/buku-saku-sales/leads/{sales_lead}/edit', [SalesLeadController::class, 'edit'])->name('sales-leads.edit');
+    Route::put('/buku-saku-sales/leads/{sales_lead}', [SalesLeadController::class, 'update'])->name('sales-leads.update');
+    Route::patch('/buku-saku-sales/leads/{sales_lead}/stage', [SalesLeadStageController::class, 'update'])->name('sales-leads.stage.update');
 
     Route::post('/presence/heartbeat', [PresenceController::class, 'heartbeat'])->middleware('throttle:180,1')->name('presence.heartbeat');
     Route::get('/presence', [PresenceController::class, 'index'])->middleware('throttle:240,1')->name('presence.index');

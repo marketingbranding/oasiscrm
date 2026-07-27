@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\ContentItem;
 use App\Models\DanaTalangan;
 use App\Models\DatabaseSheetRecord;
+use App\Models\SalesLead;
 use App\Models\User;
 use Carbon\Carbon;
 use Closure;
@@ -112,6 +113,7 @@ class OptimisticLockService
             $model instanceof DanaTalangan => 'dana_talangan',
             $model instanceof ContentItem => 'content_item',
             $model instanceof DatabaseSheetRecord => 'database_sheet_record',
+            $model instanceof SalesLead => 'sales_lead',
             default => class_basename($model),
         };
     }
@@ -125,6 +127,7 @@ class OptimisticLockService
                 'branch_id' => $model->branch_id,
                 'sheet' => $model->sheet_name,
             ]),
+            $model instanceof SalesLead => route('sales-pocketbook.index'),
             default => null,
         };
     }

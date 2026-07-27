@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\ContentItem;
 use App\Models\DanaTalangan;
 use App\Models\DatabaseSheetRecord;
+use App\Models\SalesLead;
 use App\Models\User;
 use App\Models\UserPresence;
 use Illuminate\Database\Eloquent\Model;
@@ -30,6 +31,7 @@ class PresenceService
             $record instanceof DanaTalangan => 'dana_talangan',
             $record instanceof ContentItem => 'content_item',
             $record instanceof DatabaseSheetRecord => 'database_sheet_record',
+            $record instanceof SalesLead => 'sales_lead',
             default => class_basename($record),
         };
     }

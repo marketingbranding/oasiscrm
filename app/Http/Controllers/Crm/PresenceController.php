@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\ContentItem;
 use App\Models\DanaTalangan;
 use App\Models\DatabaseSheetRecord;
+use App\Models\SalesLead;
 use App\Models\UserPresence;
 use App\Services\WorkspaceAccessService;
 use Illuminate\Database\Eloquent\Model;
@@ -20,6 +21,7 @@ class PresenceController extends Controller
         'dana_talangan' => DanaTalangan::class,
         'content_item' => ContentItem::class,
         'database_sheet_record' => DatabaseSheetRecord::class,
+        'sales_lead' => SalesLead::class,
     ];
 
     public function __construct(private readonly WorkspaceAccessService $workspaceAccess) {}
@@ -140,6 +142,9 @@ class PresenceController extends Controller
             $recordBranchId = $this->recordBranchId($record);
             abort_unless($recordBranchId && $this->workspaceAccess->canViewBranch($user, $recordBranchId), 403);
             if ($record instanceof ContentItem) {
+                Gate::forUser($user)->authorize(($data['mode'] ?? 'viewing') === 'editing' ? 'update' : 'view', $record);
+            }
+            if ($record instanceof SalesLead) {
                 Gate::forUser($user)->authorize(($data['mode'] ?? 'viewing') === 'editing' ? 'update' : 'view', $record);
             }
             if ($branch && $recordBranchId !== $branch->id) {

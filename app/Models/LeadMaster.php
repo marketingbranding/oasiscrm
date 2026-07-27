@@ -36,4 +36,9 @@ class LeadMaster extends Model
             ->withPivot('is_primary')
             ->withTimestamps();
     }
+
+    public function salesLeads(): HasMany
+    {
+        return $this->hasMany(SalesLead::class, 'project_id');
+    }
 }

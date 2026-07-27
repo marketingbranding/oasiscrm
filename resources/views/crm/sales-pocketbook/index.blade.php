@@ -5,9 +5,13 @@
 @section('content')
 <div class="space-y-4" x-data="salesPocketbook()">
     <x-crm.page-header color="#fcc20f" title="Buku Saku Sales" />
+    <div class="flex justify-end">
+        <a href="{{ route('sales-pocketbook.export', request()->except(['page', 'agenda_page', 'sort', 'direction'])) }}" class="sales-button bg-[#b7d7a8]">Export XLSX</a>
+    </div>
     <x-crm.page-presence page-key="sales-pocketbook" :branch-id="$selectedBranchId" />
 
     @if(session('success'))<div class="border-2 border-black bg-green-100 px-4 py-2 font-[Helvetica] text-sm font-bold">{{ session('success') }}</div>@endif
+    @if(session('warning'))<div class="border-2 border-black bg-yellow-100 px-4 py-2 font-[Helvetica] text-sm font-bold">{{ session('warning') }}</div>@endif
     @if(session('conflict'))<div class="border-2 border-[#c0392b] bg-red-50 px-4 py-2 text-sm font-bold">{{ session('conflict') }}</div>@endif
     @if($errors->any())<div class="border-2 border-[#c0392b] bg-red-50 px-4 py-2 text-sm"><strong>Data belum tersimpan.</strong> {{ $errors->first() }}</div>@endif
     @if(session('duplicate_warning'))

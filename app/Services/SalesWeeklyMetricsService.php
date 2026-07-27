@@ -77,6 +77,10 @@ class SalesWeeklyMetricsService
         $rows = collect();
 
         foreach ($salesUsers as $sales) {
+            if (! empty($filters['sales_user_id']) && (int) $sales->id !== (int) $filters['sales_user_id']) {
+                continue;
+            }
+
             foreach ($sales->assignedProjects as $project) {
                 if (! $projectsById->has($project->id)
                     || (! empty($filters['branch_id']) && (int) $project->branch_id !== (int) $filters['branch_id'])

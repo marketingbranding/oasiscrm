@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Crm;
 
+use App\Exports\SalesPocketbookExport;
 use App\Http\Controllers\Controller;
 use App\Models\ContentItem;
 use App\Models\LeadSource;
@@ -11,6 +12,7 @@ use App\Services\SalesWeeklyMetricsService;
 use App\Services\WorkspaceAccessService;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
 
 class SalesPocketbookController extends Controller
 {
@@ -23,14 +25,11 @@ class SalesPocketbookController extends Controller
     {
         $this->authorize('viewAny', SalesLead::class);
         $user = $request->user();
-        $request->validate([
-            'week' => ['nullable', 'date'],
-            'date_from' => ['nullable', 'date', 'required_with:date_to'],
-            'date_to' => ['nullable', 'date', 'required_with:date_from', 'after_or_equal:date_from'],
+        $request->validate(array_merge($this->filterRules(), [
             'sort' => ['nullable', 'in:sales,branch,project,lead_new,contacted,met,surveyed,utj,documents_completed,akad,agenda_completed,last_input'],
             'direction' => ['nullable', 'in:asc,desc'],
             'report_metric' => ['nullable', 'in:'.implode(',', array_keys(SalesWeeklyMetricsService::METRIC_COLUMNS))],
-        ]);
+        ]));
         $tab = in_array($request->query('tab'), ['leads', 'agenda', 'report'], true) ? $request->query('tab') : 'leads';
         $monitoring = ! $user->hasRole('sales');
         $branches = $this->workspaceAccess->accessibleBranches($user);
@@ -138,5 +137,111 @@ class SalesPocketbookController extends Controller
             'reportSummary' => $reportSummary,
             'reportRows' => $reportRows,
         ]);
+    }
+
+    public function export(Request $request)
+    {
+        $this->authorize('viewAny', SalesLead::class);
+        $request->validate($this->filterRules());
+        $user = $request->user();
+        $branches = $this->workspaceAccess->accessibleBranches($user);
+        $projects = $this->workspaceAccess->accessibleProjects($user);
+        $projects->load(['branch', 'assignedUsers:id']);
+
+        $branchId = $request->filled('branch_id') ? $request->integer('branch_id') : null;
+        if ($branchId && ! $branches->contains('id', $branchId)) {
+            abort(403);
+        }
+
+        $projectId = $request->filled('project_id') ? $request->integer('project_id') : null;
+        if ($projectId && ! $projects->contains('id', $projectId)) {
+            abort(403);
+        }
+
+        $salesUsers = User::query()
+            ->where('is_active', true)
+            ->whereHas('role', fn (Builder $query) => $query->where('slug', 'sales'))
+            ->when(! $user->canViewAllBranches(), function (Builder $query) use ($user) {
+                $branchIds = $this->workspaceAccess->accessibleBranchIds($user);
+                $query->whereHas('assignedProjects', fn (Builder $projects) => $projects->whereIn('branch_id', $branchIds));
+            })
+            ->when($user->hasRole('sales'), fn (Builder $query) => $query->whereKey($user->id))
+            ->with(['assignedProjects.branch'])
+            ->orderBy('name')
+            ->get(['id', 'name', 'branch_id']);
+
+        $requestedSalesId = $request->filled('sales_user_id') ? $request->integer('sales_user_id') : null;
+        if ($requestedSalesId && ! $salesUsers->contains('id', $requestedSalesId)) {
+            abort(403);
+        }
+        $salesId = $user->hasRole('sales') ? $user->id : $requestedSalesId;
+
+        $period = $this->weeklyMetrics->period(
+            $request->query('week'),
+            $request->query('date_from'),
+            $request->query('date_to'),
+        );
+        $filters = array_filter([
+            'branch_id' => $branchId,
+            'project_id' => $projectId,
+            'sales_user_id' => $salesId,
+        ]);
+
+        $leads = $this->weeklyMetrics->leadQuery($user, $filters)
+            ->with(['branch:id,name', 'project:id,project_name', 'sales:id,name'])
+            ->whereDate('lead_date', '>=', $period['start']->toDateString())
+            ->whereDate('lead_date', '<=', $period['end']->toDateString())
+            ->when($request->filled('lead_source_id'), fn (Builder $query) => $query->where('lead_source_id', $request->integer('lead_source_id')))
+            ->when($request->filled('stage'), function (Builder $query) use ($request) {
+                $stage = (string) $request->query('stage');
+                $query->whereNotNull($stage);
+                $laterStages = array_slice(SalesLead::STAGE_ORDER, array_search($stage, SalesLead::STAGE_ORDER, true) + 1);
+                foreach ($laterStages as $laterStage) {
+                    $query->whereNull($laterStage);
+                }
+            })
+            ->orderBy('lead_date')
+            ->orderBy('id')
+            ->get();
+
+        $agendas = $this->weeklyMetrics->agendaQuery($user, $filters)
+            ->with(['branch:id,name', 'owner:id,name', 'salesProject:id,project_name', 'rescheduledFrom:id,scheduled_date'])
+            ->whereDate('scheduled_date', '>=', $period['start']->toDateString())
+            ->whereDate('scheduled_date', '<=', $period['end']->toDateString())
+            ->orderBy('scheduled_date')
+            ->orderBy('start_time')
+            ->get();
+
+        $weeklyRows = $this->weeklyMetrics->monitoringRows($user, $period, $salesUsers, $projects, $filters);
+        if ($leads->isEmpty() && $agendas->isEmpty()) {
+            return back()->with('warning', 'Tidak ada data Buku Saku Sales pada filter dan periode yang dipilih.');
+        }
+
+        $branchName = $branchId ? $branches->firstWhere('id', $branchId)?->name : 'semua-cabang';
+        $selectedSales = $salesId ? $salesUsers->firstWhere('id', $salesId) : null;
+        $salesName = $selectedSales?->name ?? 'semua-sales';
+        $filename = sprintf(
+            'buku-saku-sales_%s_%s_%s_%s.xlsx',
+            str($branchName)->slug()->value() ?: 'cabang',
+            str($salesName)->slug()->value() ?: 'sales',
+            $period['start']->toDateString(),
+            $period['end']->toDateString(),
+        );
+
+        return SalesPocketbookExport::toBrowser($weeklyRows, $leads, $agendas, $period, $filename);
+    }
+
+    private function filterRules(): array
+    {
+        return [
+            'branch_id' => ['nullable', 'integer'],
+            'project_id' => ['nullable', 'integer'],
+            'sales_user_id' => ['nullable', 'integer'],
+            'lead_source_id' => ['nullable', 'integer', Rule::exists('lead_sources', 'id')->where('is_active', true)],
+            'stage' => ['nullable', Rule::in(array_keys(SalesLead::STAGES))],
+            'week' => ['nullable', 'date'],
+            'date_from' => ['nullable', 'date', 'required_with:date_to'],
+            'date_to' => ['nullable', 'date', 'required_with:date_from', 'after_or_equal:date_from'],
+        ];
     }
 }

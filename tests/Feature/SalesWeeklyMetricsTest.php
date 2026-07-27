@@ -132,7 +132,7 @@ class SalesWeeklyMetricsTest extends TestCase
         ]))->assertOk()->assertSee('Agenda Test');
     }
 
-    public function test_sales_dashboard_shows_direct_actions_metrics_and_operational_reminders(): void
+    public function test_sales_dashboard_is_replaced_by_pocketbook_landing(): void
     {
         Carbon::setTestNow(Carbon::parse('2026-07-22 12:00:00', config('app.timezone')));
         [, $project, $sales] = $this->context();
@@ -140,15 +140,11 @@ class SalesWeeklyMetricsTest extends TestCase
         $this->lead($sales, $project, ['lead_date' => '2026-07-21', 'normalized_phone' => '62812345']);
         $this->lead($sales, $project, ['lead_date' => '2026-07-20', 'normalized_phone' => '62812345']);
 
-        $this->actingAs($sales)->get(route('dashboard'))->assertOk()
-            ->assertSee('+ Input Lead Hari Ini')->assertSee('+ Isi Agenda / Hasil')
-            ->assertSee('Buku Saku Minggu Ini')->assertSee('Belum ada agenda hari ini')
-            ->assertSee('Lead belum dihubungi')->assertSee('Lead tanpa progres ≥3 hari')->assertSee('Nomor telepon duplikat')
-            ->assertViewHas('salesWeekly', fn ($metrics) => $metrics['lead_new'] === 2)
-            ->assertViewHas('salesReminders', fn ($reminders) => $reminders['no_agenda_today']
-                && $reminders['never_contacted'] === 3
-                && $reminders['stale_progress'] === 1
-                && $reminders['duplicate_phone_groups'] === 1);
+        $this->actingAs($sales)->get(route('dashboard'))->assertForbidden();
+        $this->actingAs($sales)->get('/')->assertRedirect(route('sales-pocketbook.index'));
+        $this->actingAs($sales)->get(route('sales-pocketbook.index'))->assertOk()
+            ->assertSee('+ Input Lead Hari Ini')
+            ->assertSee('Pengingat Hari Ini');
     }
 
     public function test_non_sales_dashboard_keeps_existing_actions_and_global_roles_get_monitoring_only(): void

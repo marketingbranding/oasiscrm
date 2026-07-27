@@ -139,6 +139,29 @@ class SalesPocketbookExportTest extends TestCase
         $workbook->disconnectWorksheets();
     }
 
+    public function test_export_matches_all_time_missing_agenda_result_drilldown(): void
+    {
+        [, $project, $sales] = $this->salesContext('Solo', 'Solo Sales');
+        $agenda = $this->agenda($sales, $project);
+        $agenda->update([
+            'title' => 'Hasil Lama Belum Lengkap',
+            'scheduled_date' => '2026-06-01',
+            'start_date' => '2026-06-01',
+            'deadline_date' => '2026-06-01',
+            'completed_at' => '2026-06-01 10:00:00',
+            'activity_result' => null,
+        ]);
+
+        $response = $this->actingAs($sales)->get(route('sales-pocketbook.export', [
+            'period_type' => 'week',
+            'week' => '2026-07-20',
+            'report_agenda_missing_result' => 1,
+        ]))->assertOk();
+        $workbook = IOFactory::load($response->baseResponse->getFile()->getPathname());
+        $this->assertSame('Hasil Lama Belum Lengkap', $workbook->getSheetByName('AGENDA HARIAN')->getCell('I2')->getValue());
+        $workbook->disconnectWorksheets();
+    }
+
     public function test_empty_export_redirects_with_a_clear_warning(): void
     {
         $branch = Branch::create(['name' => 'Solo', 'code' => 'SLO', 'is_active' => true]);
@@ -165,7 +188,7 @@ class SalesPocketbookExportTest extends TestCase
         $this->assertNull($entry->created_by);
         $this->assertSame(1, Changelog::whereNull('version')->where('title', 'Buku Saku Sales Terpadu')->count());
 
-        $user = $this->user('sales');
+        $user = $this->user('manager');
         $this->actingAs($user)->get(route('changelogs.index'))
             ->assertOk()
             ->assertSee('Buku Saku Sales Terpadu')
@@ -179,8 +202,19 @@ class SalesPocketbookExportTest extends TestCase
         $this->assertNull($entry->created_by);
         $this->assertSame(1, Changelog::whereNull('version')->where('title', $entry->title)->count());
 
-        $this->actingAs($this->user('sales'))->get(route('changelogs.index'))
+        $this->actingAs($this->user('manager'))->get(route('changelogs.index'))
             ->assertOk()->assertSee($entry->title)->assertSee('Durasi agenda dihitung otomatis')->assertSee('notifikasi toast');
+    }
+
+    public function test_sales_access_and_daily_reminder_changelogs_are_deployed_once(): void
+    {
+        foreach (['Akses Sales Lebih Terarah', 'Pengingat Harian Buku Saku Sales'] as $title) {
+            $this->assertSame(1, Changelog::whereNull('version')->where('title', $title)->count());
+        }
+
+        $this->actingAs($this->user('manager'))->get(route('changelogs.index'))->assertOk()
+            ->assertSee('Akses Sales Lebih Terarah')
+            ->assertSee('Pengingat Harian Buku Saku Sales');
     }
 
     private function salesContext(string $branchName, string $salesName): array

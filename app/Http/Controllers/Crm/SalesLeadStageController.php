@@ -43,6 +43,7 @@ class SalesLeadStageController extends Controller
 
         return response()->json([
             'ok' => true,
+            'message' => $data['action'] === 'reverse' ? 'Tahap lead berhasil dibatalkan.' : 'Tahap lead berhasil diperbarui.',
             'current_stage' => $result->currentStage(),
             'current_stage_label' => $result->currentStageLabel(),
             'updated_at' => $this->optimisticLock->token($result),

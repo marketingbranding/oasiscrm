@@ -2,12 +2,13 @@
 
 <div x-data="crmConflict({ initial: @js($initial) })"
      @oasis-conflict.window="handleConflict($event.detail.response, $event.detail.context || {})"
-     @oasis-submit-conflict.window="submitForm($event.detail.form, $event.detail.context || {})">
-    <div x-show="open" x-cloak class="fixed inset-0 z-[1000] flex items-center justify-center bg-black/70 px-4">
-        <div class="w-full max-w-lg border-2 border-black bg-white shadow-[8px_8px_0_0_#000]" role="dialog" aria-modal="true" aria-label="Konflik perubahan data">
+     @oasis-submit-conflict.window="submitForm($event.detail.form, $event.detail.context || {})"
+     @keydown.escape.window="if (open) { $event.preventDefault(); closeConflict() }">
+    <div id="oasis-conflict-dialog" x-show="open" x-cloak class="fixed inset-0 z-[1000] flex items-center justify-center bg-black/70 px-4">
+        <div x-ref="dialog" @keydown.tab="trapFocus($event)" class="w-full max-w-lg border-2 border-black bg-white shadow-[8px_8px_0_0_#000]" role="dialog" aria-modal="true" aria-label="Konflik perubahan data">
             <div class="flex items-center justify-between bg-[#fcc20f] border-b-2 border-black px-4 py-2">
                 <strong class="font-[Helvetica] text-sm uppercase">Data Sudah Berubah</strong>
-                <button type="button" @click="open = false" class="font-bold text-xl leading-none" aria-label="Tutup">&times;</button>
+                <button type="button" @click="closeConflict()" class="font-bold text-xl leading-none" aria-label="Tutup">&times;</button>
             </div>
             <div class="p-4 space-y-3 font-['Times_New_Roman'] text-sm">
                 <p class="font-bold" x-text="conflict?.message"></p>
@@ -23,7 +24,7 @@
                 <div class="flex flex-wrap gap-2 pt-1">
                     <button type="button" @click="reloadConflictRecord()" class="border-2 border-black bg-black text-white px-4 py-2 font-[Helvetica] font-bold text-xs">Muat Ulang Data</button>
                     <button type="button" @click="copyUnsavedValues()" class="border-2 border-black bg-white px-4 py-2 font-[Helvetica] font-bold text-xs">Salin Perubahan Saya</button>
-                    <button type="button" @click="open = false" class="border-2 border-black bg-white px-4 py-2 font-[Helvetica] font-bold text-xs">Kembali ke Form</button>
+                    <button type="button" @click="closeConflict()" class="border-2 border-black bg-white px-4 py-2 font-[Helvetica] font-bold text-xs">Kembali ke Form</button>
                     <button type="button" @click="discardSavedValues()" class="border-2 border-black bg-white px-4 py-2 font-[Helvetica] font-bold text-xs text-[#c0392b]">Buang Salinan</button>
                 </div>
                 <p x-show="copied" class="text-[#176b32] font-bold">Perubahan Anda telah disalin.</p>

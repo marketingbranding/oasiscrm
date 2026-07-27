@@ -243,31 +243,30 @@
         </div>
 
         {{-- Floating toast notifications --}}
-        <div class="fixed top-16 right-4 z-[999] flex flex-col gap-2 max-w-sm pointer-events-none">
-            @if(session('success'))
-            <div x-data="{ show: true }"
-                 x-init="setTimeout(() => show = false, 4000)"
-                 x-show="show"
-                 x-transition:leave="transition ease-out duration-500"
-                 x-transition:leave-start="opacity-100 translate-x-0"
-                 x-transition:leave-end="opacity-0 translate-x-4"
-                 class="bg-[#b3bd95] border-2 border-black px-3 py-2 font-['Times_New_Roman'] text-xs shadow-xl flex items-start justify-between gap-3 min-w-[250px] pointer-events-auto">
-                <span>{{ session('success') }}</span>
-                <button @click="show = false" class="text-black/60 hover:text-black font-bold text-lg leading-none shrink-0">&times;</button>
-            </div>
-            @endif
-            @if(session('error'))
-            <div x-data="{ show: true }"
-                 x-init="setTimeout(() => show = false, 4000)"
-                 x-show="show"
-                 x-transition:leave="transition ease-out duration-500"
-                 x-transition:leave-start="opacity-100 translate-x-0"
-                 x-transition:leave-end="opacity-0 translate-x-4"
-                 class="bg-[#d77a7a] border-2 border-black px-3 py-2 font-['Times_New_Roman'] text-xs shadow-xl flex items-start justify-between gap-3 min-w-[250px] pointer-events-auto">
-                <span>{{ session('error') }}</span>
-                <button @click="show = false" class="text-black/60 hover:text-black font-bold text-lg leading-none shrink-0">&times;</button>
-            </div>
-            @endif
+        <div x-data="crmToasts(@js([
+                 ['type' => 'success', 'message' => session('success')],
+                 ['type' => 'error', 'message' => session('error')],
+                 ['type' => 'warning', 'message' => session('warning')],
+             ]))"
+             @oasis:toast.window="push($event.detail)"
+             class="fixed top-16 right-4 z-[999] flex max-w-sm flex-col gap-2 pointer-events-none"
+             aria-live="polite" aria-atomic="false">
+            <template x-for="toast in toasts" :key="toast.id">
+                <div x-show="toast.show"
+                     x-transition:leave="transition ease-out duration-500"
+                     x-transition:leave-start="opacity-100 translate-x-0"
+                     x-transition:leave-end="opacity-0 translate-x-4"
+                     :class="{
+                         'bg-[#b3bd95]': toast.type === 'success',
+                         'bg-[#d77a7a]': toast.type === 'error',
+                         'bg-[#fcc20f]': toast.type === 'warning',
+                     }"
+                     :role="toast.type === 'error' ? 'alert' : 'status'"
+                     class="flex min-w-[250px] items-start justify-between gap-3 border-2 border-black px-3 py-2 font-['Times_New_Roman'] text-xs shadow-xl pointer-events-auto">
+                    <span x-text="toast.message"></span>
+                    <button type="button" @click="dismiss(toast.id)" class="shrink-0 text-lg font-bold leading-none text-black/60 hover:text-black" aria-label="Tutup notifikasi">&times;</button>
+                </div>
+            </template>
         </div>
 
         <div id="crm-main" :class="sidebarPinned ? 'sm:ml-56' : 'sm:ml-16'"

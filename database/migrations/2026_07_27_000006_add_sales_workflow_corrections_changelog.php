@@ -13,7 +13,7 @@ return new class extends Migration
             ['version' => null, 'title' => self::TITLE],
             [
                 'category' => 'changed',
-                'description' => 'Sumber lead kini seragam, filter monitoring mengikuti urutan cabang, proyek, dan sales, serta pilihan periode hanya tampil ketika panelnya dibuka. Pengisian progres dan agenda memakai pemilih tanggal dan jam Oasis yang konsisten, dengan roda pemilih jam yang tetap stabil saat dibuka dan digulir. Durasi agenda dihitung otomatis dari jam mulai dan selesai.',
+                'description' => 'Sumber lead kini seragam, filter monitoring mengikuti urutan cabang, proyek, dan sales, serta pilihan periode hanya tampil ketika panelnya dibuka. Pengisian progres dan agenda memakai pemilih tanggal dan jam Oasis yang konsisten, dengan roda pemilih jam yang tetap stabil saat dibuka dan digulir. Durasi agenda dihitung otomatis dari jam mulai dan selesai, sedangkan hasil penyimpanan dan peringatan kini tampil melalui notifikasi toast yang konsisten.',
                 'created_by' => null,
                 'created_at' => now(),
                 'updated_at' => now(),

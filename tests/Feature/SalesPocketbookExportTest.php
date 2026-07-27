@@ -151,6 +151,11 @@ class SalesPocketbookExportTest extends TestCase
             ->get(route('sales-pocketbook.export', ['period_type' => 'week', 'week' => '2026-07-20']))
             ->assertRedirect(route('sales-pocketbook.index'))
             ->assertSessionHas('warning', 'Tidak ada data Buku Saku Sales pada filter dan periode yang dipilih.');
+
+        $this->get(route('sales-pocketbook.index'))
+            ->assertOk()
+            ->assertSee('Tidak ada data Buku Saku Sales pada filter dan periode yang dipilih.')
+            ->assertSee('crmToasts', false);
     }
 
     public function test_grouped_changelog_contains_one_system_authored_sales_pocketbook_entry(): void
@@ -175,7 +180,7 @@ class SalesPocketbookExportTest extends TestCase
         $this->assertSame(1, Changelog::whereNull('version')->where('title', $entry->title)->count());
 
         $this->actingAs($this->user('sales'))->get(route('changelogs.index'))
-            ->assertOk()->assertSee($entry->title)->assertSee('Durasi agenda dihitung otomatis');
+            ->assertOk()->assertSee($entry->title)->assertSee('Durasi agenda dihitung otomatis')->assertSee('notifikasi toast');
     }
 
     private function salesContext(string $branchName, string $salesName): array

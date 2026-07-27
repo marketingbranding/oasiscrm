@@ -11,10 +11,17 @@ export default function registerConflict(Alpine) {
         copyError: '',
         validationMessage: '',
         savedValues: null,
+        trigger: null,
         storagePrefix: 'oasis_conflict_unsaved',
 
         init() {
-            if (this.open) queueMicrotask(() => this.preserveUnsavedValues(document.querySelector('[data-conflict-form]')));
+            if (this.open) {
+                document.documentElement.dataset.oasisConflictOpen = '1';
+                queueMicrotask(() => {
+                    this.preserveUnsavedValues(document.querySelector('[data-conflict-form]'));
+                    this.focusDialog();
+                });
+            }
         },
 
         async handleConflict(response, context = {}) {
@@ -24,10 +31,33 @@ export default function registerConflict(Alpine) {
         },
 
         showConflict(message, metadata = {}) {
+            this.trigger = document.activeElement;
             this.conflict = { ...metadata, message: message || 'Data ini telah diperbarui oleh pengguna lain.' };
             this.validationMessage = '';
             this.copied = false;
             this.open = true;
+            document.documentElement.dataset.oasisConflictOpen = '1';
+            this.focusDialog();
+        },
+
+        focusDialog() {
+            this.$nextTick(() => this.$refs.dialog?.querySelector('button')?.focus({ preventScroll: true }));
+        },
+
+        closeConflict() {
+            this.open = false;
+            window.setTimeout(() => { delete document.documentElement.dataset.oasisConflictOpen; }, 0);
+            this.$nextTick(() => this.trigger?.focus({ preventScroll: true }));
+        },
+
+        trapFocus(event) {
+            const focusable = [...this.$refs.dialog.querySelectorAll('button:not([disabled]), [href], input:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])')]
+                .filter(element => element.offsetParent !== null);
+            if (!focusable.length) return;
+            const first = focusable[0];
+            const last = focusable[focusable.length - 1];
+            if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
+            else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
         },
 
         reloadConflictRecord() {
@@ -91,7 +121,7 @@ export default function registerConflict(Alpine) {
 
         discardSavedValues() {
             this.clearSavedValues();
-            this.open = false;
+            this.closeConflict();
         },
 
         async submitForm(form, context = {}) {

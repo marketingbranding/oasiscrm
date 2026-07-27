@@ -10,9 +10,6 @@
     </div>
     <x-crm.page-presence page-key="sales-pocketbook" :branch-id="$selectedBranchId" />
 
-    @if(session('success'))<div class="border-2 border-black bg-green-100 px-4 py-2 font-[Helvetica] text-sm font-bold">{{ session('success') }}</div>@endif
-    @if(session('warning'))<div class="border-2 border-black bg-yellow-100 px-4 py-2 font-[Helvetica] text-sm font-bold">{{ session('warning') }}</div>@endif
-    @if(session('conflict'))<div class="border-2 border-[#c0392b] bg-red-50 px-4 py-2 text-sm font-bold">{{ session('conflict') }}</div>@endif
     @if($errors->any())<div class="border-2 border-[#c0392b] bg-red-50 px-4 py-2 text-sm"><strong>Data belum tersimpan.</strong> {{ $errors->first() }}</div>@endif
     @if(session('duplicate_warning'))
         <div class="border-2 border-[#b8860b] bg-yellow-50 p-3 text-sm"><strong>Nomor ini juga ditemukan pada lead lain yang dapat Anda akses:</strong>
@@ -146,11 +143,11 @@
     </section>
     @endif
 
-    <div x-show="leadModalOpen" x-cloak class="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4" @keydown.escape.window="closeLeadModal()">
-        <div x-ref="leadDialog" role="dialog" aria-modal="true" aria-labelledby="lead-dialog-title" class="max-h-[90vh] w-full max-w-3xl overflow-y-auto border-2 border-black bg-white p-4 shadow-[7px_7px_0_#000]" @click.outside="closeLeadModal()" @keydown.tab="trapFocus($event, $refs.leadDialog)">
+    <div x-show="leadModalOpen" x-cloak class="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4" @keydown.escape.window="if (!conflictDialogOpen()) closeLeadModal()">
+        <div x-ref="leadDialog" role="dialog" aria-modal="true" aria-labelledby="lead-dialog-title" class="max-h-[90vh] w-full max-w-3xl overflow-y-auto border-2 border-black bg-white p-4 shadow-[7px_7px_0_#000]" @click.outside="if (!conflictDialogOpen()) closeLeadModal()" @keydown.tab="trapFocus($event, $refs.leadDialog)">
             <div class="mb-3 flex items-center justify-between border-b-2 border-black pb-2"><h2 id="lead-dialog-title" class="font-[Helvetica] text-sm font-bold uppercase">Edit Lead</h2><button type="button" class="text-xl font-bold" aria-label="Tutup dialog edit lead" @click="closeLeadModal()">&times;</button></div>
             <template x-if="leadModalOpen"><div x-data="crmPresence(@js(['enabled' => config('presence.enabled', true), 'heartbeatUrl' => route('presence.heartbeat'), 'indexUrl' => route('presence.index'), 'destroyUrl' => route('presence.destroy'), 'heartbeatSeconds' => config('presence.heartbeat_seconds', 25), 'pageKey' => 'sales-pocketbook', 'recordType' => 'sales_lead', 'mode' => 'editing']))" x-init="updateContext({ branchId: edit.branch_id, recordType: 'sales_lead', recordId: edit.id, mode: 'editing' })" x-show="others.length" class="mb-3 border-2 border-black bg-[#eef1ff] p-2 text-xs"><strong x-text="summary"></strong></div></template>
-            <div x-show="leadEditError" x-text="leadEditError" class="mb-3 border-2 border-[#c0392b] bg-red-50 p-2 text-sm font-bold"></div>
+            <div x-show="leadValidationError" x-text="leadValidationError" class="mb-3 border-2 border-[#c0392b] bg-red-50 p-2 text-sm font-bold" role="alert"></div>
             <form data-conflict-form @submit.prevent="saveLeadEdit($event)" class="grid grid-cols-1 gap-3 md:grid-cols-2">
                 <input type="hidden" name="expected_updated_at" x-model="edit.token"><input type="hidden" name="presence_session_key">
                 <div><label class="sales-label">Tanggal Lead</label><x-crm.date-field name="lead_date" x-ref="leadEditDate" x-model="edit.lead_date" required /></div>
@@ -167,14 +164,16 @@
         </div>
     </div>
 
-    <div x-show="stageModalOpen" x-cloak class="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4" @keydown.escape.window="closeStageModal()">
-        <div x-ref="stageDialog" role="dialog" aria-modal="true" aria-labelledby="stage-dialog-title" class="w-full max-w-sm border-2 border-black bg-white p-4 shadow-[6px_6px_0_#000]" @click.outside="closeStageModal()" @keydown.tab="trapFocus($event, $refs.stageDialog)">
+    <div x-show="stageModalOpen" x-cloak class="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4" @keydown.escape.window="if (!conflictDialogOpen()) closeStageModal()">
+        <div x-ref="stageDialog" role="dialog" aria-modal="true" aria-labelledby="stage-dialog-title" class="w-full max-w-sm border-2 border-black bg-white p-4 shadow-[6px_6px_0_#000]" @click.outside="if (!conflictDialogOpen()) closeStageModal()" @keydown.tab="trapFocus($event, $refs.stageDialog)">
             <div class="mb-3 flex justify-between border-b-2 border-black pb-2"><h2 id="stage-dialog-title" class="font-[Helvetica] text-sm font-bold uppercase" x-text="stageEdit.reverse ? 'Batalkan Tahap' : 'Catat Tahap'"></h2><button type="button" class="text-xl font-bold" aria-label="Tutup dialog tahapan lead" @click="closeStageModal()">&times;</button></div>
-            <p class="mb-3 text-sm"><strong x-text="stageEdit.label"></strong><span x-show="stageEdit.current" class="block text-xs" x-text="`Nilai saat ini: ${stageEdit.currentLabel}`"></span></p>
-            <template x-if="!stageEdit.reverse"><div class="space-y-3"><div><label class="sales-label">Tanggal</label><x-crm.date-field name="stage_date" x-ref="stageDate" x-model="stageEdit.date" required /></div><div><label class="sales-label">Jam</label><x-crm.time-field name="stage_time" x-ref="stageTime" x-model="stageEdit.time" required /></div><label x-show="stageEdit.current" class="flex items-start gap-2 border-2 border-black bg-yellow-50 p-2 text-xs"><input type="checkbox" x-model="stageEdit.confirmed"> Timpa waktu tahap yang sudah tersimpan.</label></div></template>
-            <template x-if="stageEdit.reverse"><label class="flex items-start gap-2 border-2 border-[#c0392b] bg-red-50 p-2 text-xs"><input type="checkbox" x-model="stageEdit.confirmed"> Batalkan tahap ini dan seluruh tahap setelahnya.</label></template>
-            <div x-show="stageError" x-text="stageError" class="mt-3 border-2 border-[#c0392b] bg-red-50 p-2 text-xs font-bold"></div>
-            <div class="mt-4 flex gap-2"><button type="button" class="sales-button bg-[#fcc20f]" :disabled="stageSaving || ((stageEdit.current || stageEdit.reverse) && !stageEdit.confirmed)" @click="saveStage()">Simpan</button><button type="button" class="sales-button bg-white" @click="closeStageModal()">Batal</button></div>
+            <div x-show="stageValidationError" x-text="stageValidationError" class="mb-3 border-2 border-[#c0392b] bg-red-50 p-2 text-sm font-bold" role="alert"></div>
+            <form x-ref="stageForm" data-conflict-form @submit.prevent="saveStage()">
+                <p class="mb-3 text-sm"><strong x-text="stageEdit.label"></strong><span x-show="stageEdit.current" class="block text-xs" x-text="`Nilai saat ini: ${stageEdit.currentLabel}`"></span></p>
+                <template x-if="!stageEdit.reverse"><div class="space-y-3"><div><label class="sales-label">Tanggal</label><x-crm.date-field name="stage_date" x-ref="stageDate" x-model="stageEdit.date" required /></div><div><label class="sales-label">Jam</label><x-crm.time-field name="stage_time" x-ref="stageTime" x-model="stageEdit.time" required /></div><label x-show="stageEdit.current" class="flex items-start gap-2 border-2 border-black bg-yellow-50 p-2 text-xs"><input type="checkbox" x-model="stageEdit.confirmed"> Timpa waktu tahap yang sudah tersimpan.</label></div></template>
+                <template x-if="stageEdit.reverse"><label class="flex items-start gap-2 border-2 border-[#c0392b] bg-red-50 p-2 text-xs"><input type="checkbox" x-model="stageEdit.confirmed"> Batalkan tahap ini dan seluruh tahap setelahnya.</label></template>
+                <div class="mt-4 flex gap-2"><button class="sales-button bg-[#fcc20f]" :disabled="stageSaving || ((stageEdit.current || stageEdit.reverse) && !stageEdit.confirmed)">Simpan</button><button type="button" class="sales-button bg-white" @click="closeStageModal()">Batal</button></div>
+            </form>
         </div>
     </div>
 </div>
@@ -218,20 +217,26 @@ function salesPocketbook() {
     }
     return {
         duplicates: [],
-        leadModalOpen: false, leadSaving: false, leadEditError: '', leadTrigger: null, edit: {}, leadCache: {}, leadTokens: {},
-        stageModalOpen: false, stageSaving: false, stageError: '', stageTrigger: null, stageEdit: {},
+        leadModalOpen: false, leadSaving: false, leadValidationError: '', leadTrigger: null, edit: {}, leadCache: {}, leadTokens: {},
+        stageModalOpen: false, stageSaving: false, stageValidationError: '', stageTrigger: null, stageEdit: {},
         async checkPhone(phone) {
             if (!phone) { this.duplicates = []; return }
-            const url = new URL(@json(route('sales-leads.duplicate-phone')), window.location.origin)
-            url.searchParams.set('phone', phone)
-            const response = await fetch(url, { headers: { Accept: 'application/json' } })
-            if (response.ok) this.duplicates = (await response.json()).matches
+            try {
+                const url = new URL(@json(route('sales-leads.duplicate-phone')), window.location.origin)
+                url.searchParams.set('phone', phone)
+                const response = await fetch(url, { headers: { Accept: 'application/json' } })
+                if (!response.ok) throw new Error()
+                this.duplicates = (await response.json()).matches
+            } catch (_) {
+                this.duplicates = []
+                window.oasisToast('Pemeriksaan nomor duplikat belum tersedia. Data tetap dapat disimpan.', 'warning')
+            }
         },
         openLeadEdit(lead) {
             this.leadTrigger = document.activeElement
             this.edit = structuredClone(this.leadCache[lead.id] || lead)
             this.edit.token = this.leadTokens[lead.id] || this.edit.token
-            this.leadEditError = ''
+            this.leadValidationError = ''
             this.leadModalOpen = true
             this.$nextTick(() => {
                 this.$refs.leadEditDate?.dispatchEvent(new Event('input', { bubbles: true }))
@@ -257,13 +262,14 @@ function salesPocketbook() {
             if (selected) this.edit.branch_id = selected.branch_id
             if (!this.editSalesVisible(this.edit.sales_user_id)) this.edit.sales_user_id = ''
         },
+        conflictDialogOpen() { return document.documentElement.dataset.oasisConflictOpen === '1' },
         async responseData(response) {
             const text = await response.text()
             try { return text ? JSON.parse(text) : {} } catch (_) { return { message: response.ok ? '' : `Server mengembalikan respons tidak valid (${response.status}).` } }
         },
         async saveLeadEdit(event) {
             this.leadSaving = true
-            this.leadEditError = ''
+            this.leadValidationError = ''
             try {
                 const response = await fetch(this.edit.url, {
                     method: 'PUT',
@@ -276,8 +282,14 @@ function salesPocketbook() {
                     }),
                 })
                 const data = await this.responseData(response)
+                if (response.status === 409) {
+                    window.dispatchEvent(new CustomEvent('oasis-conflict', { detail: { response: data, context: { form: event.currentTarget } } }))
+                    return
+                }
                 if (!response.ok) {
-                    this.leadEditError = data.message || Object.values(data.errors || {})[0]?.[0] || 'Perubahan gagal disimpan.'
+                    const message = Object.values(data.errors || {})[0]?.[0] || data.message || 'Perubahan gagal disimpan.'
+                    if (response.status === 422) this.leadValidationError = message
+                    else window.oasisToast(message, 'error')
                     return
                 }
                 this.edit.token = data.updated_at
@@ -292,8 +304,9 @@ function salesPocketbook() {
                 })
                 document.dispatchEvent(new CustomEvent('oasis-presence-saved'))
                 this.closeLeadModal()
+                window.oasisToast(data.message || 'Lead berhasil diperbarui.')
             } catch (_) {
-                this.leadEditError = 'Perubahan gagal. Draf tetap tersimpan; periksa koneksi lalu coba lagi.'
+                window.oasisToast('Perubahan gagal. Draf tetap tersimpan; periksa koneksi lalu coba lagi.', 'error')
             } finally { this.leadSaving = false }
         },
         stage(event) {
@@ -304,7 +317,7 @@ function salesPocketbook() {
             const current = button.dataset.current || ''
             const parts = localParts(current)
             this.stageEdit = { button, controls, reverse, current, currentLabel: current ? new Date(current.replace(' ', 'T')).toLocaleString('id-ID') : '', label: button.dataset.label, date: parts.date, time: parts.time, confirmed: false }
-            this.stageError = ''
+            this.stageValidationError = ''
             this.stageModalOpen = true
             this.$nextTick(() => {
                 this.$refs.stageDate?.dispatchEvent(new Event('input', { bubbles: true }))
@@ -329,7 +342,7 @@ function salesPocketbook() {
         async saveStage() {
             const { button, controls, reverse } = this.stageEdit
             this.stageSaving = true
-            this.stageError = ''
+            this.stageValidationError = ''
             try {
                 const response = await fetch(button.dataset.url, {
                     method: 'PATCH',
@@ -337,8 +350,14 @@ function salesPocketbook() {
                     body: JSON.stringify({ stage: button.dataset.stage, action: reverse ? 'reverse' : 'set', timestamp: reverse ? null : `${this.stageEdit.date} ${this.stageEdit.time}`, reversal_confirmed: reverse ? 1 : null, expected_updated_at: controls.dataset.token }),
                 })
                 const data = await this.responseData(response)
+                if (response.status === 409) {
+                    window.dispatchEvent(new CustomEvent('oasis-conflict', { detail: { response: data, context: { form: this.$refs.stageForm } } }))
+                    return
+                }
                 if (!response.ok) {
-                    this.stageError = data.message || Object.values(data.errors || {})[0]?.[0] || 'Perubahan gagal.'
+                    const message = Object.values(data.errors || {})[0]?.[0] || data.message || 'Perubahan gagal.'
+                    if (response.status === 422) this.stageValidationError = message
+                    else window.oasisToast(message, 'error')
                     return
                 }
 
@@ -359,8 +378,9 @@ function salesPocketbook() {
                 this.leadTokens[controls.dataset.leadId] = data.updated_at
                 if (this.leadCache[controls.dataset.leadId]) this.leadCache[controls.dataset.leadId].token = data.updated_at
                 this.closeStageModal()
+                window.oasisToast(data.message || (reverse ? 'Tahap lead berhasil dibatalkan.' : 'Tahap lead berhasil diperbarui.'))
             } catch (_) {
-                this.stageError = 'Perubahan gagal. Periksa koneksi lalu coba lagi.'
+                window.oasisToast('Perubahan gagal. Periksa koneksi lalu coba lagi.', 'error')
             } finally { this.stageSaving = false }
         },
     }

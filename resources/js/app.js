@@ -9,6 +9,7 @@ import registerPresence from './presence';
 import registerConflict from './conflict';
 import registerNotifications from './notifications';
 import registerSync from './crm-sync';
+import registerToasts from './toast';
 
 window.Alpine = Alpine;
 window.Sortable = Sortable;
@@ -17,5 +18,6 @@ registerPresence(Alpine);
 registerConflict(Alpine);
 registerNotifications(Alpine);
 registerSync(Alpine);
+registerToasts(Alpine);
 
 Alpine.start();

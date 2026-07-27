@@ -138,7 +138,9 @@ class SalesPocketbookTest extends TestCase
         [$branch, $project, $sales] = $this->salesContext();
         $payload = $this->payload($sales, $project, ['phone' => '0812 9999 1111', 'customer_name' => 'Sensitive Name']);
 
-        $this->actingAs($sales)->post(route('sales-leads.store'), $payload)->assertRedirect(route('sales-pocketbook.index'));
+        $this->actingAs($sales)->post(route('sales-leads.store'), $payload)
+            ->assertRedirect(route('sales-pocketbook.index'))
+            ->assertSessionHas('success', 'Lead berhasil disimpan.');
 
         $lead = SalesLead::firstOrFail();
         $this->assertSame('6281299991111', $lead->normalized_phone);
@@ -235,6 +237,7 @@ class SalesPocketbookTest extends TestCase
             'expected_updated_at' => app(OptimisticLockService::class)->token($lead),
         ]))->assertOk()
             ->assertJsonPath('ok', true)
+            ->assertJsonPath('message', 'Lead berhasil diperbarui.')
             ->assertJsonPath('lead.source_active', true);
 
         $lead->refresh();
@@ -299,7 +302,9 @@ class SalesPocketbookTest extends TestCase
         $lead->update(['utj_at' => Carbon::parse('2026-07-10 10:00:00')]);
 
         $this->actingAs($sales)->patchJson(route('sales-leads.stage.update', $lead), $this->stagePayload($lead, 'met_at', '2026-07-09 10:00:00'))
-            ->assertOk()->assertJsonPath('stages.met_at', Carbon::parse('2026-07-09 10:00:00')->toIso8601String());
+            ->assertOk()
+            ->assertJsonPath('message', 'Tahap lead berhasil diperbarui.')
+            ->assertJsonPath('stages.met_at', Carbon::parse('2026-07-09 10:00:00')->toIso8601String());
         $lead->refresh();
         $response = $this->actingAs($sales)->patchJson(route('sales-leads.stage.update', $lead), $this->stagePayload($lead, 'surveyed_at', '2026-07-11 10:00:00'));
         $this->assertSame(422, $response->getStatusCode(), $response->getContent());
@@ -320,7 +325,8 @@ class SalesPocketbookTest extends TestCase
         $manager = $this->user('manager', $branch);
         $this->actingAs($manager)->patchJson(route('sales-leads.stage.update', $lead), array_diff_key($payload, ['reversal_confirmed' => true]))
             ->assertUnprocessable()->assertJsonStructure(['errors' => ['reversal_confirmed']]);
-        $this->actingAs($manager)->patchJson(route('sales-leads.stage.update', $lead), $payload)->assertOk();
+        $this->actingAs($manager)->patchJson(route('sales-leads.stage.update', $lead), $payload)
+            ->assertOk()->assertJsonPath('message', 'Tahap lead berhasil dibatalkan.');
         $lead->refresh();
         $this->assertNotNull($lead->met_at);
         $this->assertNull($lead->surveyed_at);
@@ -367,6 +373,19 @@ class SalesPocketbookTest extends TestCase
         $this->assertStringContainsString('group.dataset.token = data.updated_at', $view);
         $this->assertStringContainsString('stageModalOpen', $view);
         $this->assertStringContainsString('finally { this.stageSaving = false }', $view);
+        $this->assertStringContainsString('window.oasisToast', $view);
+        $this->assertStringContainsString('response.status === 409', $view);
+        $this->assertStringContainsString("new CustomEvent('oasis-conflict'", $view);
+        $this->assertStringNotContainsString("session('success')", $view);
+        $this->assertStringNotContainsString("session('warning')", $view);
+        $this->assertStringNotContainsString("session('conflict')", $view);
+        $this->assertStringNotContainsString('leadEditError', $view);
+        $this->assertStringNotContainsString('stageError', $view);
+        $this->assertStringContainsString('leadValidationError', $view);
+        $this->assertStringContainsString('stageValidationError', $view);
+        $this->assertStringContainsString('response.status === 422', $view);
+        $this->assertStringContainsString('conflictDialogOpen()', $view);
+        $this->assertSame(4, substr_count($view, 'if (!conflictDialogOpen())'));
         $this->assertStringNotContainsString('prompt(', $view);
         $this->assertStringNotContainsString('toISOString', $view);
         $this->assertStringNotContainsString('window.location.reload()', $view);
@@ -435,7 +454,8 @@ class SalesPocketbookTest extends TestCase
         [$branch, $project, $sales] = $this->salesContext();
 
         $this->actingAs($sales)->post(route('sales-agendas.store'), $this->agendaPayload($sales, $project))
-            ->assertRedirect(route('sales-pocketbook.index', ['tab' => 'agenda']));
+            ->assertRedirect(route('sales-pocketbook.index', ['tab' => 'agenda']))
+            ->assertSessionHas('success', 'Agenda sales berhasil ditambahkan.');
 
         $agenda = ContentItem::sole();
         $this->assertSame('agenda', $agenda->item_type);
@@ -503,7 +523,7 @@ class SalesPocketbookTest extends TestCase
         ])->assertSessionHasErrors('activity_result');
         $this->actingAs($sales)->patch(route('sales-agendas.update', $agenda), [
             'activity_result' => 'Konsumen meminta follow-up besok.', 'expected_updated_at' => $token,
-        ])->assertRedirect();
+        ])->assertRedirect()->assertSessionHas('success', 'Hasil agenda berhasil disimpan.');
 
         $agenda->refresh();
         $this->assertSame('done', $agenda->status);
@@ -522,7 +542,7 @@ class SalesPocketbookTest extends TestCase
             'start_time' => '13:00',
             'end_time' => '13:45',
             'expected_updated_at' => app(OptimisticLockService::class)->token($agenda),
-        ])->assertRedirect();
+        ])->assertRedirect()->assertSessionHas('success', 'Agenda berhasil dijadwalkan ulang.');
 
         $agenda->refresh();
         $replacement = ContentItem::where('rescheduled_from_id', $agenda->id)->sole();

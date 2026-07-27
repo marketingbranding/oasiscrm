@@ -99,6 +99,7 @@ class SalesLeadController extends Controller
 
             return response()->json([
                 'ok' => true,
+                'message' => 'Lead berhasil diperbarui.',
                 'lead' => [
                     'id' => $result->id,
                     'lead_date' => $result->lead_date->toDateString(),

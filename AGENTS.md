@@ -46,6 +46,8 @@ After editing any controller:
 
 ## UI conventions
 
+- **Transient operation feedback must use the shared Oasis toast stack in `layouts.crm`.** Server redirects should flash `success`, `error`, or `warning`; AJAX flows should dispatch `window.oasisToast(message, type)` (or the equivalent `oasis:toast` event). Do not recreate page-level or modal-level success/error/warning banners for CRUD outcomes.
+- Keep field validation, detailed duplicate warnings, empty states, access/assignment guidance, confirmations, and presence information inline because users need that context to remain visible. Optimistic-lock HTTP 409 responses must use the shared `oasis-conflict` dialog, not a toast. Toast messages must be plain text and must not expose secrets or unnecessary personal data.
 - **Date fields must use the existing Oasis date picker**, not a visible native `<input type="date">` or a new calendar library. Use the `.date-wrapper` / `.date-display` / `.date-text` / `.date-arrow` structure backed by a visually hidden `<input type="date">`; behavior is implemented globally in `resources/js/crm-datepicker.js`. See `resources/views/crm/dana-talangan/create.blade.php` for the canonical markup.
 - For date fields rendered dynamically by Alpine, keep the same markup and hidden native input so the global date-picker initializer can attach behavior. Extend `crm-datepicker.js` if dynamic initialization needs adjustment; do not duplicate calendar logic inside a Blade view.
 - Preserve the shared date-picker behavior: it closes after selection, provides a `Hari Ini` action, closes on Escape/outside click, and positions itself above or below based on viewport space without expanding modal scroll areas.

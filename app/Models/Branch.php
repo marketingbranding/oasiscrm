@@ -49,4 +49,9 @@ class Branch extends Model
     {
         return $this->hasMany(ContentItem::class);
     }
+
+    public function projects(): HasMany
+    {
+        return $this->hasMany(LeadMaster::class);
+    }
 }

@@ -3,7 +3,9 @@
 namespace App\Services;
 
 use App\Models\Branch;
+use App\Models\LeadMaster;
 use App\Models\User;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
 
 class WorkspaceAccessService
@@ -35,6 +37,61 @@ class WorkspaceAccessService
     public function accessibleBranchIds(User $user): array
     {
         return $this->accessibleBranches($user)->pluck('id')->map(fn ($id) => (int) $id)->all();
+    }
+
+    public function accessibleProjectsQuery(User $user, bool $activeOnly = true): Builder
+    {
+        $query = LeadMaster::query();
+
+        if ($activeOnly) {
+            $query->where('is_active', true);
+        }
+
+        if ($user->hasRole('sales')) {
+            return $query
+                ->whereIn('branch_id', $this->accessibleBranchIds($user))
+                ->whereHas('assignedUsers', fn (Builder $assigned) => $assigned->whereKey($user->id));
+        }
+
+        return $query->whereIn('branch_id', $this->accessibleBranchIds($user));
+    }
+
+    public function accessibleProjects(User $user, bool $activeOnly = true): Collection
+    {
+        return $this->accessibleProjectsQuery($user, $activeOnly)
+            ->with('branch')
+            ->orderBy('project_name')
+            ->get();
+    }
+
+    public function accessibleProjectIds(User $user, bool $activeOnly = true): array
+    {
+        return $this->accessibleProjectsQuery($user, $activeOnly)
+            ->pluck('id')
+            ->map(fn ($id) => (int) $id)
+            ->all();
+    }
+
+    public function canAccessProject(User $user, int|LeadMaster $project): bool
+    {
+        $projectId = $project instanceof LeadMaster ? $project->id : (int) $project;
+
+        return $this->accessibleProjectsQuery($user)->whereKey($projectId)->exists();
+    }
+
+    public function resolveRequestedProject(User $user, mixed $requestedProjectId): ?LeadMaster
+    {
+        if (filled($requestedProjectId)) {
+            return $this->accessibleProjectsQuery($user)->whereKey((int) $requestedProjectId)->first();
+        }
+
+        if ($user->hasRole('sales')) {
+            return $user->primaryAssignedProject()
+                ->where('lead_master.is_active', true)
+                ->first() ?? $this->accessibleProjectsQuery($user)->orderBy('project_name')->first();
+        }
+
+        return $this->accessibleProjectsQuery($user)->orderBy('project_name')->first();
     }
 
     public function canAccessBranch(User $user, int|Branch $branch): bool

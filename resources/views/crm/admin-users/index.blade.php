@@ -32,6 +32,9 @@
                             @endif
                         </div>
                         <div class="text-[10px] text-gray-600 mt-1">Akses: {{ $user->branches->pluck('name')->join(', ') ?: ($user->branch?->name ?? 'Belum ada') }}</div>
+                        @if($user->hasRole('sales'))
+                            <div class="text-[10px] text-gray-600 mt-0.5">Proyek: {{ $user->assignedProjects->pluck('project_name')->join(', ') ?: 'Belum ada' }}</div>
+                        @endif
                     </div>
                 </div>
                 <div class="flex items-center gap-2">

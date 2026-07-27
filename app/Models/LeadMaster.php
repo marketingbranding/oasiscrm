@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class LeadMaster extends Model
@@ -26,5 +27,13 @@ class LeadMaster extends Model
     public function kavlings(): HasMany
     {
         return $this->hasMany(Kavling::class, 'project_id');
+    }
+
+    public function assignedUsers(): BelongsToMany
+    {
+        return $this->belongsToMany(User::class, 'project_user', 'project_id', 'user_id')
+            ->using(ProjectUser::class)
+            ->withPivot('is_primary')
+            ->withTimestamps();
     }
 }

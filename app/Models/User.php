@@ -75,6 +75,19 @@ class User extends Authenticatable
         return $this->belongsToMany(ContentItem::class)->withTimestamps();
     }
 
+    public function assignedProjects(): BelongsToMany
+    {
+        return $this->belongsToMany(LeadMaster::class, 'project_user', 'user_id', 'project_id')
+            ->using(ProjectUser::class)
+            ->withPivot('is_primary')
+            ->withTimestamps();
+    }
+
+    public function primaryAssignedProject(): BelongsToMany
+    {
+        return $this->assignedProjects()->wherePivot('is_primary', true);
+    }
+
     public function roles(): BelongsToMany
     {
         // Supplemental/legacy roles; role_id remains the primary application role.

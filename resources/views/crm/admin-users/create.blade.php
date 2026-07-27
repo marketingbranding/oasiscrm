@@ -10,7 +10,8 @@
             Form Tambah User
         </div>
         <div class="p-4">
-            <form method="POST" action="{{ route('admin-users.store') }}" class="space-y-4 max-w-xl">
+            <form method="POST" action="{{ route('admin-users.store') }}" class="space-y-4 max-w-xl"
+                x-data="{ role: @js($roles->firstWhere('id', old('role_id'))?->slug ?? '') }">
                 @csrf
 
                 <div>
@@ -48,10 +49,10 @@
 
                 <div>
                     <label class="font-[Helvetica] font-bold text-xs uppercase block mb-1">Role</label>
-                    <select name="role_id" required class="w-full border-2 border-black px-3 py-2 text-sm font-['Times_New_Roman'] bg-white rounded-none @error('role_id') border-[#e91d2a] @enderror">
+                    <select name="role_id" required @change="role = $event.target.selectedOptions[0]?.dataset.slug || ''" class="w-full border-2 border-black px-3 py-2 text-sm font-['Times_New_Roman'] bg-white rounded-none @error('role_id') border-[#e91d2a] @enderror">
                         <option value="">— Pilih Role —</option>
                         @foreach($roles as $role)
-                            <option value="{{ $role->id }}" {{ old('role_id') == $role->id ? 'selected' : '' }}>{{ $role->name }}</option>
+                            <option value="{{ $role->id }}" data-slug="{{ $role->slug }}" {{ old('role_id') == $role->id ? 'selected' : '' }}>{{ $role->name }}</option>
                         @endforeach
                     </select>
                     @error('role_id')
@@ -73,6 +74,8 @@
                 </div>
 
                 @include('crm.admin-users._memberships')
+
+                @include('crm.admin-users._project-assignments')
 
                 <div>
                     <label class="font-[Helvetica] font-bold text-xs uppercase block mb-1">Telepon</label>

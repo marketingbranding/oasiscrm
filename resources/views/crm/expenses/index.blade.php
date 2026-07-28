@@ -72,10 +72,6 @@
 }">
 <div class="mb-4 flex flex-wrap items-center justify-between gap-2 border-2 border-black bg-[#b3bd95] px-4 py-3">
     <h1 class="font-['Arial_Black'] text-xl font-black uppercase">Pengeluaran</h1>
-    <div class="flex flex-wrap gap-2">
-        <a href="{{ route('expenses.export', request()->query()) }}" class="border-2 border-black bg-[#fef3cd] px-4 py-2 font-bold shadow-[2px_2px_0_#000]">Ekspor XLSX</a>
-        <a href="{{ route('expenses.create') }}" class="border-2 border-black bg-white px-4 py-2 font-bold shadow-[2px_2px_0_#000]">+ Tambah Pengeluaran</a>
-    </div>
 </div>
 
 <div class="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-5">
@@ -100,6 +96,10 @@
             Filter
             @if(count($activeFilters) > 0)<span class="inline-flex h-5 min-w-5 items-center justify-center bg-[#c0392b] px-1 text-[10px] text-white">{{ count($activeFilters) }}</span>@endif
         </button>
+        <div class="ml-auto flex flex-wrap items-center gap-2">
+            <a href="{{ route('expenses.export', request()->query()) }}" class="border-2 border-black bg-white px-4 py-1.5 font-[Helvetica] text-sm font-bold hover:bg-gray-100">Ekspor XLSX</a>
+            <a href="{{ route('expenses.create') }}" class="border-2 border-black bg-[#b3bd95] px-4 py-1.5 font-[Helvetica] text-sm font-bold hover:bg-[#9fac7d]">+ Tambah Pengeluaran</a>
+        </div>
     </div>
 </div>
 

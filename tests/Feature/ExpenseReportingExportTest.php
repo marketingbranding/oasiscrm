@@ -209,7 +209,15 @@ class ExpenseReportingExportTest extends TestCase
         ]))->assertOk();
 
         $html = $response->getContent();
-        $this->assertLessThan(strpos($html, 'id="expense-filter-title"'), strpos($html, 'aria-label="Cari pengeluaran"'));
+        $searchPosition = strpos($html, 'aria-label="Cari pengeluaran"');
+        $filterPosition = strpos($html, 'x-ref="filterButton"');
+        $exportPosition = strpos($html, '>Ekspor XLSX</a>');
+        $createPosition = strpos($html, '>+ Tambah Pengeluaran</a>');
+        $modalPosition = strpos($html, 'id="expense-filter-title"');
+        $this->assertLessThan($filterPosition, $searchPosition);
+        $this->assertLessThan($exportPosition, $filterPosition);
+        $this->assertLessThan($createPosition, $exportPosition);
+        $this->assertLessThan($modalPosition, $createPosition);
         $this->assertGreaterThanOrEqual(2, substr_count($html, 'name="search"'));
         $this->assertStringNotContainsString('[tabindex="-1"]', $html);
         $response->assertSee('Filter aktif:')
@@ -374,7 +382,7 @@ class ExpenseReportingExportTest extends TestCase
         $this->actingAs($this->expenseUser('pusat'))->get(route('changelogs.index'))
             ->assertOk()
             ->assertSee($title)
-            ->assertSee('satu tombol');
+            ->assertSee('satu toolbar');
     }
 
     public function test_existing_operational_pages_render_without_invoking_external_operations(): void

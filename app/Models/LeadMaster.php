@@ -41,4 +41,9 @@ class LeadMaster extends Model
     {
         return $this->hasMany(SalesLead::class, 'project_id');
     }
+
+    public function expenses(): HasMany
+    {
+        return $this->hasMany(Expense::class, 'project_id');
+    }
 }

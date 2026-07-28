@@ -9,6 +9,7 @@ use App\Http\Controllers\Crm\ContentCalendarController;
 use App\Http\Controllers\Crm\DanaTalanganController;
 use App\Http\Controllers\Crm\DashboardController;
 use App\Http\Controllers\Crm\DatabaseController;
+use App\Http\Controllers\Crm\ExpenseCategoryController;
 use App\Http\Controllers\Crm\FeedbackReportController;
 use App\Http\Controllers\Crm\KavlingController;
 use App\Http\Controllers\Crm\KonsumenProgressController;
@@ -120,6 +121,11 @@ Route::middleware(['auth', 'active', 'verified', 'password.changed', 'sales.acce
     Route::patch('feedback-reports/{feedbackReport}', [FeedbackReportController::class, 'review'])->name('feedback-reports.review');
 
     Route::middleware('role:superadmin')->group(function () {
+        Route::get('pengeluaran/kategori', [ExpenseCategoryController::class, 'index'])->name('expense-categories.index');
+        Route::post('pengeluaran/kategori', [ExpenseCategoryController::class, 'store'])->name('expense-categories.store');
+        Route::put('pengeluaran/kategori/{expenseCategory}', [ExpenseCategoryController::class, 'update'])->name('expense-categories.update');
+        Route::patch('pengeluaran/kategori/{expenseCategory}/toggle', [ExpenseCategoryController::class, 'toggle'])->name('expense-categories.toggle');
+
         Route::get('/admin/system-health', SystemHealthController::class)->name('admin.system-health');
         Route::resource('changelogs', ChangelogController::class)->except('index');
 

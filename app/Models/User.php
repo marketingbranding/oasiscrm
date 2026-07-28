@@ -173,4 +173,29 @@ class User extends Authenticatable
     {
         return $this->hasMany(SalesLead::class, 'sales_user_id');
     }
+
+    public function createdExpenses(): HasMany
+    {
+        return $this->hasMany(Expense::class, 'created_by');
+    }
+
+    public function updatedExpenses(): HasMany
+    {
+        return $this->hasMany(Expense::class, 'updated_by');
+    }
+
+    public function cancelledExpenses(): HasMany
+    {
+        return $this->hasMany(Expense::class, 'cancelled_by');
+    }
+
+    public function createdExpenseCategories(): HasMany
+    {
+        return $this->hasMany(ExpenseCategory::class, 'created_by');
+    }
+
+    public function updatedExpenseCategories(): HasMany
+    {
+        return $this->hasMany(ExpenseCategory::class, 'updated_by');
+    }
 }

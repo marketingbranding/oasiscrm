@@ -45,17 +45,41 @@ class AccountAuditService
 
     public function logUserImportBatch(string $event, UserImportBatch $batch, ?User $actor, array $counts): ActivityLog
     {
-        $safeCounts = collect($counts)->only(['total_rows', 'valid_rows', 'warning_rows', 'error_rows'])->all();
+        $safeCounts = collect($counts)->only([
+            'total_rows', 'valid_rows', 'warning_rows', 'error_rows', 'created_rows',
+            'invitation_sent_rows', 'invitation_failed_rows', 'skipped_rows',
+        ])->all();
 
         return ActivityLog::create([
             'causer_id' => $actor?->id,
             'subject_type' => UserImportBatch::class,
             'subject_id' => $batch->id,
             'event' => $event,
-            'description' => $event === 'user_import_uploaded'
-                ? "File impor pengguna batch {$batch->id} diunggah"
-                : "Preview impor pengguna batch {$batch->id} dibuat",
+            'description' => match ($event) {
+                'user_import_uploaded' => "File impor pengguna batch {$batch->id} diunggah",
+                'user_import_preview_generated' => "Preview impor pengguna batch {$batch->id} dibuat",
+                'user_import_confirmed' => "Impor pengguna batch {$batch->id} dikonfirmasi",
+                'user_import_completed' => "Impor pengguna batch {$batch->id} selesai",
+                default => "Peristiwa impor pengguna batch {$batch->id}: {$event}",
+            },
             'properties' => ['batch_id' => $batch->id, ...$safeCounts],
+        ]);
+    }
+
+    public function logBulkUser(string $event, User $target, User $actor, UserImportBatch $batch, int $rowId): ActivityLog
+    {
+        return ActivityLog::create([
+            'causer_id' => $actor->id,
+            'subject_type' => User::class,
+            'subject_id' => $target->id,
+            'event' => $event,
+            'description' => "Peristiwa onboarding pengguna batch {$batch->id}: {$event}",
+            'properties' => [
+                'actor_user_id' => $actor->id,
+                'target_user_id' => $target->id,
+                'batch_id' => $batch->id,
+                'row_id' => $rowId,
+            ],
         ]);
     }
 

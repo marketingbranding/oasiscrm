@@ -170,8 +170,10 @@ Route::middleware(['auth', 'active', 'verified', 'password.changed', 'sales.acce
         Route::middleware('permissions.all:users.create,users.invite,users.assign_roles,users.assign_branches,users.assign_projects,users.assign_supervisor')->group(function () {
             Route::get('/import', [AdminUserImportController::class, 'create'])->name('import');
             Route::post('/import/preview', [AdminUserImportController::class, 'preview'])->name('import-preview');
+            Route::post('/import/confirm', [AdminUserImportController::class, 'confirm'])->name('import-confirm');
             Route::get('/import/template', [AdminUserImportController::class, 'template'])->name('import-template');
             Route::get('/import/history', [AdminUserImportController::class, 'history'])->name('import-history');
+            Route::get('/import/batches/{user_import_batch}/result', [AdminUserImportController::class, 'result'])->name('import-result');
             Route::get('/import/batches/{user_import_batch}', [AdminUserImportController::class, 'show'])->name('import-batches.show');
         });
         Route::get('/', [AdminUserController::class, 'index'])->middleware('permission:users.view')->name('index');

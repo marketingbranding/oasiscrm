@@ -10,6 +10,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 #[Fillable([
     'original_filename', 'uploaded_by', 'status', 'total_rows', 'valid_rows', 'warning_rows',
     'error_rows', 'send_invitations', 'confirmed_at', 'completed_at', 'expires_at',
+    'created_rows', 'invitation_sent_rows', 'invitation_failed_rows', 'skipped_rows',
 ])]
 class UserImportBatch extends Model
 {
@@ -23,6 +24,8 @@ class UserImportBatch extends Model
 
     public const STATUS_VALIDATION_FAILED = 'validation_failed';
 
+    public const STATUS_CONFIRMED = 'confirmed';
+
     public const STATUS_PROCESSING = 'processing';
 
     public const STATUS_COMPLETED = 'completed';
@@ -31,7 +34,7 @@ class UserImportBatch extends Model
 
     public const STATUSES = [
         self::STATUS_DRAFT, self::STATUS_VALIDATING, self::STATUS_READY,
-        self::STATUS_PREVIEW_READY, self::STATUS_VALIDATION_FAILED,
+        self::STATUS_PREVIEW_READY, self::STATUS_VALIDATION_FAILED, self::STATUS_CONFIRMED,
         self::STATUS_PROCESSING, self::STATUS_COMPLETED, self::STATUS_FAILED,
     ];
 

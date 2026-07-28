@@ -3,6 +3,8 @@
 namespace App\Services;
 
 use App\Models\User;
+use App\Models\UserImportBatch;
+use App\Models\UserImportRow;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
@@ -62,6 +64,35 @@ class ReportingHierarchyService
         $this->assertNoCycle($user, $supervisor);
 
         return $this->persist($user, $supervisor, $actor);
+    }
+
+    public function assignOnboardingSupervisor(User $user, User $supervisor, UserImportBatch $batch, User $actor, int $rowId): User
+    {
+        $sameBatchUserIds = UserImportRow::query()->where('batch_id', $batch->id)
+            ->whereNotNull('created_user_id')->pluck('created_user_id')->map(fn ($id) => (int) $id)->all();
+        if (! in_array((int) $user->id, $sameBatchUserIds, true) || ! in_array((int) $supervisor->id, $sameBatchUserIds, true)) {
+            throw ValidationException::withMessages(['supervisor_user_id' => 'Atasan onboarding harus berasal dari batch yang sama.']);
+        }
+        if (! in_array($supervisor->account_status->value, ['pending_invitation', 'invited'], true)) {
+            throw ValidationException::withMessages(['supervisor_user_id' => 'Atasan onboarding tidak lagi memenuhi status yang diizinkan.']);
+        }
+        if ($supervisor->is($user)) {
+            throw ValidationException::withMessages(['supervisor_user_id' => 'Pengguna tidak dapat menjadi atasan dirinya sendiri.']);
+        }
+        if ($this->roleRank($supervisor) < $this->roleRank($user)) {
+            throw ValidationException::withMessages(['supervisor_user_id' => 'Atasan harus memiliki tingkat kewenangan yang setara atau lebih tinggi.']);
+        }
+        $isGlobalSupervisor = $supervisor->isSuperadmin()
+            || ($supervisor->hasPrimaryRole('pusat') && $supervisor->canViewAllBranches());
+        if (! $isGlobalSupervisor && ! $this->sharesAuthorization($user, $supervisor)) {
+            throw ValidationException::withMessages(['supervisor_user_id' => 'Atasan harus berbagi cabang atau proyek yang berwenang dengan pengguna.']);
+        }
+        $this->assertNoCycle($user, $supervisor);
+
+        $user->forceFill(['supervisor_user_id' => $supervisor->id])->save();
+        $this->audit->logBulkUser('user_supervisor_linked_bulk', $user, $actor, $batch, $rowId);
+
+        return $user->refresh();
     }
 
     /** @return array<int> */

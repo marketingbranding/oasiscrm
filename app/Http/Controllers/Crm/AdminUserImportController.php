@@ -2,8 +2,10 @@
 
 namespace App\Http\Controllers\Crm;
 
+use App\Exports\UserImportResultExport;
 use App\Exports\UserImportTemplateExport;
 use App\Http\Controllers\Controller;
+use App\Http\Requests\AdminUserImportConfirmRequest;
 use App\Http\Requests\AdminUserImportPreviewRequest;
 use App\Models\Branch;
 use App\Models\LeadMaster;
@@ -12,6 +14,7 @@ use App\Models\User;
 use App\Models\UserImportBatch;
 use App\Services\AccountAuditService;
 use App\Services\OrganizationScopeService;
+use App\Services\UserImportExecutionService;
 use App\Services\UserImportParser;
 use App\Services\UserImportValidationService;
 use Illuminate\Http\RedirectResponse;
@@ -25,6 +28,7 @@ class AdminUserImportController extends Controller
     public function __construct(
         private readonly UserImportParser $parser,
         private readonly UserImportValidationService $validator,
+        private readonly UserImportExecutionService $execution,
         private readonly AccountAuditService $audit,
     ) {}
 
@@ -107,7 +111,37 @@ class AdminUserImportController extends Controller
     {
         $this->authorize('view', $user_import_batch);
 
-        return view('crm.admin-users.import-batch-show', ['batch' => $user_import_batch->load(['uploader', 'rows'])]);
+        $batch = $user_import_batch->load(['uploader', 'rows.createdUser']);
+        $canConfirm = $batch->status === UserImportBatch::STATUS_PREVIEW_READY
+            && $batch->error_rows === 0
+            && $batch->confirmed_at === null
+            && $batch->expires_at?->isFuture();
+        $invitedRows = $batch->rows->filter(fn ($row) => ($row->normalized_data['status'] ?? null) === 'invited')->count();
+
+        return view('crm.admin-users.import-batch-show', compact('batch', 'canConfirm', 'invitedRows'));
+    }
+
+    public function confirm(AdminUserImportConfirmRequest $request): RedirectResponse
+    {
+        $data = $request->validated();
+        $batch = UserImportBatch::findOrFail($data['batch_id']);
+        $this->authorize('view', $batch);
+        $this->execution->execute(
+            $batch->id,
+            $request->user(),
+            $request->boolean('send_invitations'),
+            $data['expected_updated_at'],
+        );
+
+        return redirect()->route('admin-users.import-batches.show', $batch)->with('success', 'Import pengguna selesai diproses.');
+    }
+
+    public function result(UserImportBatch $user_import_batch): BinaryFileResponse
+    {
+        $this->authorize('view', $user_import_batch);
+        abort_unless(in_array($user_import_batch->status, [UserImportBatch::STATUS_COMPLETED, UserImportBatch::STATUS_FAILED], true), 404);
+
+        return UserImportResultExport::download($user_import_batch);
     }
 
     private function branchIds(User $actor): array

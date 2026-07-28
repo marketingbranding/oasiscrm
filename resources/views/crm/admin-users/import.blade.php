@@ -27,7 +27,7 @@
         <label class="mt-4 flex items-start gap-2 text-sm">
             <input type="hidden" name="send_invitations" value="0">
             <input type="checkbox" name="send_invitations" value="1" @checked(old('send_invitations')) class="mt-0.5 h-4 w-4 border-2 border-black">
-            <span><strong>Kirim undangan saat import dikonfirmasi.</strong><br><span class="text-xs">Pada tahap konfirmasi berikutnya, pilihan ini hanya berlaku untuk baris berstatus invited.</span></span>
+            <span><strong>Kirim undangan untuk semua akun saat import dikonfirmasi.</strong><br><span class="text-xs">Jika dipilih, baris pending_invitation ikut dikirim undangannya. Jika tidak, hanya baris berstatus invited yang dikirim.</span></span>
         </label>
     </form>
 </div>

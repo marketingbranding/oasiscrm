@@ -12,7 +12,13 @@
     @php
         $monitoringParams = array_filter(['tab' => 'report', 'branch_id' => $selectedBranchId ?? null, 'project_id' => isset($selectedProject) ? optional($projects->firstWhere('project_name', $selectedProject))->id : null]);
     @endphp
-    <a href="{{ route('sales-pocketbook.index', $monitoringParams) }}" class="mb-4 inline-block border-2 border-black bg-[#fcc20f] px-4 py-2 font-[Helvetica] text-sm font-bold uppercase shadow-[2px_2px_0_#000]">Monitoring Buku Saku</a>
+    <div class="mb-4 flex flex-wrap gap-2">
+        <a href="{{ route('sales-pocketbook.index', $monitoringParams) }}" class="inline-block border-2 border-black bg-[#fcc20f] px-4 py-2 font-[Helvetica] text-sm font-bold uppercase shadow-[2px_2px_0_#000]">Monitoring Buku Saku</a>
+        @if(Auth::user()->isSuperadmin() || Auth::user()->hasRole('pusat'))
+        <a href="{{ route('expenses.create') }}" class="inline-block border-2 border-black bg-[#b3bd95] px-4 py-2 font-[Helvetica] text-sm font-bold uppercase shadow-[2px_2px_0_#000]">+ Tambah Pengeluaran</a>
+        <a href="{{ route('expenses.index', ['date_from' => now()->startOfMonth()->toDateString(), 'date_to' => now()->endOfMonth()->toDateString()]) }}" class="inline-block border-2 border-black bg-white px-4 py-2 font-[Helvetica] text-sm font-bold uppercase shadow-[2px_2px_0_#000]">Lihat Pengeluaran Bulan Ini</a>
+        @endif
+    </div>
     @else
     {{-- Quick-Action Dropdown --}}
     <div x-data="{ quickOpen: false }" class="relative mb-4" @click.outside="quickOpen = false">

@@ -10,6 +10,7 @@ use App\Http\Controllers\Crm\DanaTalanganController;
 use App\Http\Controllers\Crm\DashboardController;
 use App\Http\Controllers\Crm\DatabaseController;
 use App\Http\Controllers\Crm\ExpenseCategoryController;
+use App\Http\Controllers\Crm\ExpenseController;
 use App\Http\Controllers\Crm\FeedbackReportController;
 use App\Http\Controllers\Crm\KavlingController;
 use App\Http\Controllers\Crm\KonsumenProgressController;
@@ -125,7 +126,20 @@ Route::middleware(['auth', 'active', 'verified', 'password.changed', 'sales.acce
         Route::post('pengeluaran/kategori', [ExpenseCategoryController::class, 'store'])->name('expense-categories.store');
         Route::put('pengeluaran/kategori/{expenseCategory}', [ExpenseCategoryController::class, 'update'])->name('expense-categories.update');
         Route::patch('pengeluaran/kategori/{expenseCategory}/toggle', [ExpenseCategoryController::class, 'toggle'])->name('expense-categories.toggle');
+    });
 
+    Route::middleware('role:superadmin,pusat')->group(function () {
+        Route::get('pengeluaran', [ExpenseController::class, 'index'])->name('expenses.index');
+        Route::get('pengeluaran/create', [ExpenseController::class, 'create'])->name('expenses.create');
+        Route::post('pengeluaran', [ExpenseController::class, 'store'])->name('expenses.store');
+        Route::get('pengeluaran/projects', [ExpenseController::class, 'projects'])->name('expenses.projects');
+        Route::get('pengeluaran/{expense}', [ExpenseController::class, 'show'])->name('expenses.show');
+        Route::get('pengeluaran/{expense}/edit', [ExpenseController::class, 'edit'])->name('expenses.edit');
+        Route::put('pengeluaran/{expense}', [ExpenseController::class, 'update'])->name('expenses.update');
+        Route::patch('pengeluaran/{expense}/cancel', [ExpenseController::class, 'cancel'])->name('expenses.cancel');
+    });
+
+    Route::middleware('role:superadmin')->group(function () {
         Route::get('/admin/system-health', SystemHealthController::class)->name('admin.system-health');
         Route::resource('changelogs', ChangelogController::class)->except('index');
 

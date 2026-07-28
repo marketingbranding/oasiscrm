@@ -11,6 +11,19 @@ class Expense extends Model
 {
     use LogsActivity, SoftDeletes;
 
+    public const PAYMENT_METHODS = [
+        'transfer' => 'Transfer',
+        'tunai' => 'Tunai',
+        'kartu' => 'Kartu',
+        'e_wallet' => 'E-wallet',
+        'potong_saldo' => 'Potong Saldo',
+        'lainnya' => 'Lainnya',
+    ];
+
+    public const STATUS_ACTIVE = 'active';
+
+    public const STATUS_CANCELLED = 'cancelled';
+
     protected $fillable = [
         'expense_date',
         'branch_id',
@@ -67,6 +80,13 @@ class Expense extends Model
     public function cancelledBy(): BelongsTo
     {
         return $this->belongsTo(User::class, 'cancelled_by');
+    }
+
+    public function formattedAmount(): string
+    {
+        $amount = (float) $this->amount;
+
+        return 'Rp'.number_format($amount, fmod($amount, 1.0) === 0.0 ? 0 : 2, ',', '.');
     }
 
     protected function activityLabel(): string

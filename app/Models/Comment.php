@@ -56,4 +56,14 @@ class Comment extends Model
             ->using(CommentMention::class)
             ->withTimestamps();
     }
+
+    public function revisions(): HasMany
+    {
+        return $this->hasMany(CommentRevision::class)->latest('created_at');
+    }
+
+    public function moderations(): HasMany
+    {
+        return $this->hasMany(CommentModeration::class)->latest('created_at');
+    }
 }

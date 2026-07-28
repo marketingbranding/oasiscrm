@@ -6,6 +6,8 @@ use App\Http\Controllers\Crm\AdminUserImportController;
 use App\Http\Controllers\Crm\AiChatController;
 use App\Http\Controllers\Crm\BranchController;
 use App\Http\Controllers\Crm\ChangelogController;
+use App\Http\Controllers\Crm\CommentController;
+use App\Http\Controllers\Crm\CommentModerationController;
 use App\Http\Controllers\Crm\ContentCalendarController;
 use App\Http\Controllers\Crm\DanaTalanganController;
 use App\Http\Controllers\Crm\DashboardController;
@@ -26,6 +28,7 @@ use App\Http\Controllers\Crm\SalesLeadStageController;
 use App\Http\Controllers\Crm\SalesPocketbookController;
 use App\Http\Controllers\Crm\SystemHealthController;
 use App\Http\Controllers\ProfileController;
+use App\Models\Comment;
 use App\Models\ContentItem;
 use App\Models\DanaTalangan;
 use App\Models\LeadMaster;
@@ -43,7 +46,18 @@ Route::middleware(['auth', 'active', 'verified'])->group(function () {
 });
 
 Route::middleware(['auth', 'active', 'verified', 'password.changed', 'sales.access'])->group(function () {
+    Route::bind('comment', fn ($value) => Comment::withTrashed()->findOrFail($value));
     Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
+
+    Route::bind('comment', fn ($value) => Comment::withTrashed()->findOrFail($value));
+    Route::get('/comments', [CommentController::class, 'index'])->middleware(['permission:comments.view', 'throttle:120,1'])->name('comments.index');
+    Route::post('/comments', [CommentController::class, 'store'])->middleware(['permission:comments.view', 'throttle:30,1'])->name('comments.store');
+    // Keep future static mention routes above the dynamic comment routes below.
+    Route::patch('/comments/{comment}', [CommentController::class, 'update'])->middleware(['permission:comments.view', 'throttle:60,1'])->name('comments.update');
+    Route::delete('/comments/{comment}', [CommentController::class, 'destroy'])->middleware(['permission:comments.view', 'throttle:60,1'])->name('comments.destroy');
+    Route::post('/comments/{comment}/restore', [CommentController::class, 'restore'])->middleware(['permission:comments.moderate', 'throttle:60,1'])->name('comments.restore');
+    Route::get('/comments/{comment}/history', [CommentController::class, 'history'])->middleware(['permission:comments.view', 'throttle:120,1'])->name('comments.history');
+    Route::post('/comments/{comment}/moderate', [CommentModerationController::class, 'store'])->middleware(['permission:comments.moderate', 'throttle:60,1'])->name('comments.moderate');
 
     Route::get('/buku-saku-sales', [SalesPocketbookController::class, 'index'])->name('sales-pocketbook.index');
     Route::get('/buku-saku-sales/export', [SalesPocketbookController::class, 'export'])->middleware('permission:sales_pocketbook.export')->name('sales-pocketbook.export');

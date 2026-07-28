@@ -17,6 +17,7 @@ class RestrictSalesModuleAccess
         'content-calendar.*',
         'presence.*',
         'notifications.*',
+        'comments.*',
         'feedback-reports.store',
         'feedback-reports.history',
         'feedback-reports.screenshot',

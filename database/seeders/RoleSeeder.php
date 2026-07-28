@@ -9,44 +9,26 @@ class RoleSeeder extends Seeder
 {
     public function run(): void
     {
-        Role::firstOrCreate([
-            'slug' => 'superadmin',
-        ], [
-            'name' => 'Super Admin',
-            'description' => 'Full access to all system features',
-            'is_superadmin' => true,
-        ]);
+        $roles = [
+            ['slug' => 'sales', 'name' => 'Sales', 'description' => 'Tim penjualan dengan akses ke data sendiri.'],
+            ['slug' => 'sales_coordinator', 'name' => 'Koordinator Sales', 'description' => 'Koordinator penjualan dengan akses ke data tim.'],
+            ['slug' => 'supervisor', 'name' => 'Supervisor', 'description' => 'Supervisor dengan akses tim dan penugasan operasional.'],
+            ['slug' => 'manager', 'name' => 'Manager', 'description' => 'Manager dengan akses pemantauan berdasarkan penugasan.'],
+            ['slug' => 'branch_manager', 'name' => 'Branch Manager', 'description' => 'Pimpinan cabang dengan akses operasional tingkat cabang.'],
+            ['slug' => 'pusat', 'name' => 'Tim Pusat', 'description' => 'Tim pusat dengan akses operasional lintas cabang.'],
+            ['slug' => 'superadmin', 'name' => 'Super Admin', 'description' => 'Administrator sistem dengan seluruh izin.'],
+            ['slug' => 'admin', 'name' => 'Admin', 'description' => 'Peran lama untuk administrasi operasional cabang.'],
+            ['slug' => 'staff', 'name' => 'Staff', 'description' => 'Peran lama untuk pelaksana operasional cabang.'],
+        ];
 
-        Role::firstOrCreate([
-            'slug' => 'admin',
-        ], [
-            'name' => 'Admin',
-            'description' => 'Administrative access with limited system configuration',
-            'is_superadmin' => false,
-        ]);
+        foreach ($roles as $role) {
+            Role::query()->updateOrCreate(['slug' => $role['slug']], [
+                ...$role,
+                'is_superadmin' => $role['slug'] === 'superadmin',
+                'is_active' => true,
+            ]);
+        }
 
-        Role::firstOrCreate([
-            'slug' => 'manager',
-        ], [
-            'name' => 'Manager',
-            'description' => 'Branch-level management access',
-            'is_superadmin' => false,
-        ]);
-
-        Role::firstOrCreate([
-            'slug' => 'staff',
-        ], [
-            'name' => 'Staff',
-            'description' => 'Regular staff with basic CRM access',
-            'is_superadmin' => false,
-        ]);
-
-        Role::firstOrCreate([
-            'slug' => 'pusat',
-        ], [
-            'name' => 'Pusat',
-            'description' => 'Head office staff with cross-branch content access',
-            'is_superadmin' => false,
-        ]);
+        Role::query()->where('slug', '!=', 'superadmin')->update(['is_superadmin' => false]);
     }
 }

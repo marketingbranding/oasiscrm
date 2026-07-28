@@ -3,8 +3,11 @@
 namespace App\Providers;
 
 use App\Models\DanaTalangan;
+use App\Models\Permission;
+use App\Models\User;
 use App\Services\WorkPlannerReminderService;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\View;
 use Illuminate\Support\ServiceProvider;
 
@@ -17,6 +20,10 @@ class AppServiceProvider extends ServiceProvider
 
     public function boot(): void
     {
+        Gate::before(function (User $user, string $ability): ?bool {
+            return Permission::isRegistered($ability) ? $user->hasPermission($ability) : null;
+        });
+
         View::composer('layouts.crm', function ($view) {
             $user = Auth::user();
             if (! $user) {

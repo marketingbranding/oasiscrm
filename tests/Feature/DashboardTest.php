@@ -14,9 +14,10 @@ class DashboardTest extends TestCase
 
     public function test_branch_admin_dashboard_renders_with_effective_branch_id(): void
     {
-        $role = Role::create([
-            'name' => 'Admin',
+        $role = Role::firstOrCreate([
             'slug' => 'admin',
+        ], [
+            'name' => 'Admin',
             'is_superadmin' => false,
         ]);
         $branch = Branch::create([

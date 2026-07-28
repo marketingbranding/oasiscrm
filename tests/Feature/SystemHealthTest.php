@@ -15,8 +15,8 @@ class SystemHealthTest extends TestCase
 
     public function test_only_superadmin_can_view_health_page_and_no_secrets_are_exposed(): void
     {
-        $adminRole = Role::create(['name' => 'Admin', 'slug' => 'admin', 'is_superadmin' => false]);
-        $superRole = Role::create(['name' => 'Superadmin', 'slug' => 'superadmin', 'is_superadmin' => true]);
+        $adminRole = Role::firstOrCreate(['slug' => 'admin'], ['name' => 'Admin', 'is_superadmin' => false]);
+        $superRole = Role::firstOrCreate(['slug' => 'superadmin'], ['name' => 'Superadmin', 'is_superadmin' => true]);
         $admin = User::factory()->create(['role_id' => $adminRole->id, 'password_changed_at' => now()]);
         $superadmin = User::factory()->create(['role_id' => $superRole->id, 'password_changed_at' => now()]);
 
@@ -30,7 +30,7 @@ class SystemHealthTest extends TestCase
 
     public function test_health_page_warns_when_presence_cleanup_is_stale(): void
     {
-        $role = Role::create(['name' => 'Superadmin', 'slug' => 'superadmin', 'is_superadmin' => true]);
+        $role = Role::firstOrCreate(['slug' => 'superadmin'], ['name' => 'Superadmin', 'is_superadmin' => true]);
         $user = User::factory()->create(['role_id' => $role->id, 'password_changed_at' => now()]);
         SystemTaskRun::create([
             'task_key' => 'oasis:presence-cleanup', 'started_at' => now()->subHours(4),

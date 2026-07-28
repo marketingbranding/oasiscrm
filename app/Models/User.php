@@ -201,6 +201,30 @@ class User extends Authenticatable implements MustVerifyEmail
         return in_array($this->role?->slug, (array) $roles, true);
     }
 
+    public function hasPermission(string $permission): bool
+    {
+        if (! Permission::isRegistered($permission)) {
+            return false;
+        }
+
+        if ($this->isSuperadmin()) {
+            return true;
+        }
+
+        // V1 intentionally has no per-user overrides or supplemental-role grants.
+        return $this->role?->permissions->contains('slug', $permission) ?? false;
+    }
+
+    public function hasAnyPermission(array $permissions): bool
+    {
+        return collect($permissions)->contains(fn (string $permission) => $this->hasPermission($permission));
+    }
+
+    public function hasAllPermissions(array $permissions): bool
+    {
+        return collect($permissions)->every(fn (string $permission) => $this->hasPermission($permission));
+    }
+
     public function landingRouteName(): string
     {
         return $this->isSales() ? 'sales-pocketbook.index' : 'dashboard';

@@ -54,7 +54,7 @@ class DatabaseBranchSelectorTest extends TestCase
 
     public function test_inaccessible_database_branch_returns_403(): void
     {
-        $role = Role::create(['name' => 'Admin', 'slug' => 'admin', 'is_superadmin' => false]);
+        $role = Role::firstOrCreate(['slug' => 'admin'], ['name' => 'Admin', 'is_superadmin' => false]);
         $primary = Branch::create(['name' => 'Kantor Pusat', 'code' => 'PST', 'is_active' => true]);
         $inaccessible = Branch::create(['name' => 'Magelang', 'code' => 'MGL', 'is_active' => true]);
         $user = User::factory()->create([
@@ -107,7 +107,7 @@ class DatabaseBranchSelectorTest extends TestCase
 
     private function pusatUser(): array
     {
-        $role = Role::create(['name' => 'Pusat', 'slug' => 'pusat', 'is_superadmin' => false]);
+        $role = Role::firstOrCreate(['slug' => 'pusat'], ['name' => 'Pusat', 'is_superadmin' => false]);
         $primary = Branch::create(['name' => 'Kantor Pusat', 'code' => 'PST', 'is_active' => true]);
         $selected = Branch::create(['name' => 'Magelang', 'code' => 'MGL', 'is_active' => true]);
         $user = User::factory()->create([

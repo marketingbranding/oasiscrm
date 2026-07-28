@@ -12,12 +12,14 @@ class Role extends Model
         'slug',
         'description',
         'is_superadmin',
+        'is_active',
     ];
 
     protected function casts(): array
     {
         return [
             'is_superadmin' => 'boolean',
+            'is_active' => 'boolean',
         ];
     }
 
@@ -25,5 +27,10 @@ class Role extends Model
     {
         return $this->belongsToMany(User::class)
             ->withTimestamps();
+    }
+
+    public function permissions(): BelongsToMany
+    {
+        return $this->belongsToMany(Permission::class, 'role_permission')->withTimestamps();
     }
 }

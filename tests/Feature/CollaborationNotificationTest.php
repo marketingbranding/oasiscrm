@@ -137,7 +137,7 @@ class CollaborationNotificationTest extends TestCase
         $this->app->instance(KonsumenProgressSyncService::class, $progress);
         $this->actingAs($user)->postJson(route('konsumen-progress.sync'), ['branch_id' => $branch->id])->assertUnprocessable();
 
-        $pusatRole = Role::create(['name' => 'Pusat', 'slug' => 'pusat', 'is_superadmin' => false]);
+        $pusatRole = Role::firstOrCreate(['slug' => 'pusat'], ['name' => 'Pusat', 'is_superadmin' => false]);
         $user->update(['role_id' => $pusatRole->id]);
         $user->setRelation('role', $pusatRole);
         $dana = Mockery::mock(DanaTalanganGoogleService::class);
@@ -155,8 +155,8 @@ class CollaborationNotificationTest extends TestCase
 
     public function test_membership_change_keeps_audit_log_and_creates_private_user_notification(): void
     {
-        $superRole = Role::create(['name' => 'Superadmin', 'slug' => 'superadmin', 'is_superadmin' => true]);
-        $adminRole = Role::create(['name' => 'Admin', 'slug' => 'admin', 'is_superadmin' => false]);
+        $superRole = Role::firstOrCreate(['slug' => 'superadmin'], ['name' => 'Superadmin', 'is_superadmin' => true]);
+        $adminRole = Role::firstOrCreate(['slug' => 'admin'], ['name' => 'Admin', 'is_superadmin' => false]);
         $branch = Branch::create(['name' => 'Pati', 'code' => 'PTI', 'is_active' => true]);
         $actor = User::factory()->create(['role_id' => $superRole->id, 'password_changed_at' => now()]);
         $target = User::factory()->create(['role_id' => $adminRole->id, 'branch_id' => null, 'password_changed_at' => now()]);

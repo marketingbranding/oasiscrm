@@ -320,7 +320,7 @@ class DanaTalanganGoogleSyncTest extends TestCase
             'project_name' => 'Proyek Lain',
         ]))->assertForbidden();
 
-        $pusatRole = Role::create(['name' => 'Pusat', 'slug' => 'pusat', 'is_superadmin' => false]);
+        $pusatRole = Role::firstOrCreate(['slug' => 'pusat'], ['name' => 'Pusat', 'is_superadmin' => false]);
         $pusat = User::factory()->create(['role_id' => $pusatRole->id, 'password_changed_at' => now()]);
         $this->actingAs($pusat)->getJson(route('dana-talangan.kavling-options', [
             'branch_id' => $otherBranch->id,

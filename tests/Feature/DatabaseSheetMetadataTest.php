@@ -56,9 +56,10 @@ class DatabaseSheetMetadataTest extends TestCase
 
     public function test_sheet_endpoint_returns_column_metadata(): void
     {
-        $role = Role::create([
-            'name' => 'Admin',
+        $role = Role::firstOrCreate([
             'slug' => 'admin',
+        ], [
+            'name' => 'Admin',
             'is_superadmin' => false,
         ]);
         $branch = Branch::create([
@@ -98,9 +99,10 @@ class DatabaseSheetMetadataTest extends TestCase
 
     public function test_update_rejects_value_outside_strict_dropdown_options(): void
     {
-        $role = Role::create([
-            'name' => 'Admin',
+        $role = Role::firstOrCreate([
             'slug' => 'admin',
+        ], [
+            'name' => 'Admin',
             'is_superadmin' => false,
         ]);
         $branch = Branch::create([

@@ -4,6 +4,7 @@ use App\Http\Middleware\CheckBranch;
 use App\Http\Middleware\CheckRole;
 use App\Http\Middleware\EnsurePasswordChanged;
 use App\Http\Middleware\EnsureUserIsActive;
+use App\Http\Middleware\PermissionMiddleware;
 use App\Http\Middleware\RestrictSalesModuleAccess;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
@@ -23,6 +24,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'branch' => CheckBranch::class,
             'password.changed' => EnsurePasswordChanged::class,
             'active' => EnsureUserIsActive::class,
+            'permission' => PermissionMiddleware::class,
             'sales.access' => RestrictSalesModuleAccess::class,
         ]);
     })

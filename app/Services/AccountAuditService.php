@@ -3,10 +3,28 @@
 namespace App\Services;
 
 use App\Models\ActivityLog;
+use App\Models\Role;
 use App\Models\User;
 
 class AccountAuditService
 {
+    public function logRolePermissionsChanged(Role $role, ?User $actor, array $oldSlugs, array $newSlugs): ActivityLog
+    {
+        return ActivityLog::create([
+            'causer_id' => $actor?->id,
+            'subject_type' => Role::class,
+            'subject_id' => $role->id,
+            'event' => 'role_permissions_changed',
+            'description' => "Izin peran {$role->name} diperbarui",
+            'properties' => [
+                'actor_user_id' => $actor?->id,
+                'role_id' => $role->id,
+                'old' => ['permissions' => array_values($oldSlugs)],
+                'new' => ['permissions' => array_values($newSlugs)],
+            ],
+        ]);
+    }
+
     public function log(string $event, User $target, ?User $actor = null, array $old = [], array $new = []): ActivityLog
     {
         return ActivityLog::create([

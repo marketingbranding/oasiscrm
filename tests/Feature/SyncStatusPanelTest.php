@@ -123,7 +123,7 @@ class SyncStatusPanelTest extends TestCase
 
     private function branchAndUser(): array
     {
-        $role = Role::create(['name' => 'Pusat', 'slug' => 'pusat', 'is_superadmin' => false]);
+        $role = Role::firstOrCreate(['slug' => 'pusat'], ['name' => 'Pusat', 'is_superadmin' => false]);
         $branch = Branch::create(['name' => 'Magelang', 'code' => 'MGL', 'sheet_id' => 'sheet-id', 'is_active' => true]);
         $user = User::factory()->create([
             'role_id' => $role->id,

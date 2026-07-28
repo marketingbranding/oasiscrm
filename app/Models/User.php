@@ -2,7 +2,9 @@
 
 namespace App\Models;
 
+use App\Enums\AccountStatus;
 use Database\Factories\UserFactory;
+use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -22,16 +24,40 @@ use Illuminate\Support\Facades\Schema;
     'branch_id',
     'phone',
     'is_active',
+    'account_status',
+    'supervisor_user_id',
+    'invited_at',
+    'activated_at',
+    'suspended_at',
+    'deactivated_at',
+    'last_login_at',
+    'last_login_ip',
+    'last_login_user_agent',
+    'created_by',
+    'updated_by',
     'password_changed_at',
 ])]
 #[Hidden(['password', 'remember_token'])]
-class User extends Authenticatable
+class User extends Authenticatable implements MustVerifyEmail
 {
     /** @use HasFactory<UserFactory> */
     use HasFactory, Notifiable;
 
     protected static function booted(): void
     {
+        static::saving(function (User $user) {
+            if ($user->isDirty('account_status')) {
+                $status = $user->account_status instanceof AccountStatus
+                    ? $user->account_status
+                    : AccountStatus::from($user->account_status);
+                $user->is_active = $status === AccountStatus::Active;
+            } elseif ($user->isDirty('is_active')) {
+                $user->account_status = $user->is_active
+                    ? AccountStatus::Active
+                    : AccountStatus::Inactive;
+            }
+        });
+
         static::saved(function (User $user) {
             if (! $user->branch_id || ! ($user->wasRecentlyCreated || $user->wasChanged('branch_id')) || ! Schema::hasTable('branch_user')) {
                 return;
@@ -55,6 +81,12 @@ class User extends Authenticatable
         return [
             'email_verified_at' => 'datetime',
             'password_changed_at' => 'datetime',
+            'account_status' => AccountStatus::class,
+            'invited_at' => 'datetime',
+            'activated_at' => 'datetime',
+            'suspended_at' => 'datetime',
+            'deactivated_at' => 'datetime',
+            'last_login_at' => 'datetime',
             'password' => 'hashed',
             'is_active' => 'boolean',
         ];
@@ -68,6 +100,36 @@ class User extends Authenticatable
     public function branch(): BelongsTo
     {
         return $this->belongsTo(Branch::class);
+    }
+
+    public function supervisor(): BelongsTo
+    {
+        return $this->belongsTo(self::class, 'supervisor_user_id');
+    }
+
+    public function directReports(): HasMany
+    {
+        return $this->hasMany(self::class, 'supervisor_user_id');
+    }
+
+    public function invitations(): HasMany
+    {
+        return $this->hasMany(UserInvitation::class);
+    }
+
+    public function createdBy(): BelongsTo
+    {
+        return $this->belongsTo(self::class, 'created_by');
+    }
+
+    public function updatedBy(): BelongsTo
+    {
+        return $this->belongsTo(self::class, 'updated_by');
+    }
+
+    public function isAccountActive(): bool
+    {
+        return $this->account_status === AccountStatus::Active;
     }
 
     public function assignedPlannerItems(): BelongsToMany

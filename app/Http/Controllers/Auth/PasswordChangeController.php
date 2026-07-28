@@ -3,9 +3,9 @@
 namespace App\Http\Controllers\Auth;
 
 use App\Http\Controllers\Controller;
+use App\Services\UserAccountService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\Rules\Password;
 
 class PasswordChangeController extends Controller
@@ -15,17 +15,19 @@ class PasswordChangeController extends Controller
         return view('auth.force-password-change');
     }
 
-    public function update(Request $request): RedirectResponse
+    public function update(Request $request, UserAccountService $accounts): RedirectResponse
     {
         $request->validate([
             'current_password' => ['required', 'current_password'],
             'password' => ['required', Password::defaults(), 'confirmed'],
         ]);
 
-        $request->user()->update([
-            'password' => Hash::make($request->password),
-            'password_changed_at' => now(),
-        ]);
+        $accounts->changePassword(
+            $request->user(),
+            $request->string('password')->toString(),
+            $request->session()->getId(),
+            'password_changed',
+        );
 
         return redirect()->route($request->user()->landingRouteName())->with('success', 'Password berhasil diubah.');
     }

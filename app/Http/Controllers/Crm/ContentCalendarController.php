@@ -55,6 +55,7 @@ class ContentCalendarController extends Controller
 
     public function index(Request $request)
     {
+        $this->authorize('viewAny', ContentItem::class);
         $user = Auth::user();
         $viewMode = in_array($request->get('view'), ['today', 'calendar', 'tasks', 'agenda', 'content', 'all'], true)
             ? $request->get('view') : 'today';
@@ -150,17 +151,21 @@ class ContentCalendarController extends Controller
 
     public function create(Request $request)
     {
+        abort_unless($request->user()->hasPermission('work_planner.create'), 403);
+
         return view('crm.content-calendar.create', $this->formData(null, $request->get('type', 'task')));
     }
 
     public function store(StoreContentItemRequest $request)
     {
         $user = Auth::user();
+        abort_unless($user->hasPermission('work_planner.create'), 403);
         $data = $request->validated();
         $assigneeIds = Arr::pull($data, 'assigned_user_ids', []);
         if (($data['item_type'] ?? null) === 'content') {
             $assigneeIds = [];
         }
+        $this->authorizeAssignment($user, $assigneeIds);
         $branch = $this->workspaceAccess->resolveRequestedBranch($user, $data['branch_id'] ?? null);
         abort_unless($branch && $this->workspaceAccess->canEditBranch($user, $branch), 403);
         $data['branch_id'] = $branch->id;
@@ -192,6 +197,11 @@ class ContentCalendarController extends Controller
         if (($data['item_type'] ?? null) === 'content') {
             $assigneeIds = [];
         }
+        $existingAssigneeIds = $contentItem->assignees()->pluck('users.id')->map(fn ($id) => (int) $id)->sort()->values()->all();
+        $requestedAssigneeIds = collect($assigneeIds)->map(fn ($id) => (int) $id)->unique()->sort()->values()->all();
+        if ($existingAssigneeIds !== $requestedAssigneeIds) {
+            abort_unless(Auth::user()->hasPermission('work_planner.assign'), 403);
+        }
         $branch = $this->workspaceAccess->resolveRequestedBranch(Auth::user(), $data['branch_id'] ?? $contentItem->branch_id);
         abort_unless($branch && $this->workspaceAccess->canEditBranch(Auth::user(), $branch), 403);
         $data['branch_id'] = $branch->id;
@@ -218,6 +228,7 @@ class ContentCalendarController extends Controller
 
     public function export(Request $request)
     {
+        abort_unless($request->user()->hasPermission('work_planner.export'), 403);
         $query = ContentItem::with(['branch', 'creator', 'assignees'])->visibleTo(Auth::user());
         if ($request->filled('branch_id')) {
             $branch = $this->workspaceAccess->resolveRequestedBranch(Auth::user(), $request->branch_id);
@@ -280,6 +291,7 @@ class ContentCalendarController extends Controller
 
     public function bulkUpdate(Request $request)
     {
+        abort_unless($request->user()->hasPermission('work_planner.update'), 403);
         $data = $request->validate([
             'ids' => ['required', 'array', 'min:1'],
             'ids.*' => ['integer'],
@@ -317,6 +329,7 @@ class ContentCalendarController extends Controller
 
     public function bulkDelete(Request $request)
     {
+        abort_unless($request->user()->hasPermission('work_planner.update'), 403);
         $ids = $request->validate(['ids' => ['required', 'array', 'min:1'], 'ids.*' => ['integer']])['ids'];
         $items = ContentItem::visibleTo(Auth::user())->whereIn('id', $ids)->get();
         abort_unless($items->count() === count(array_unique($ids)), 403);
@@ -417,6 +430,12 @@ class ContentCalendarController extends Controller
         if ($validCount !== count(array_unique($ids))) {
             throw ValidationException::withMessages(['assigned_user_ids' => 'PIC akun harus aktif dan berasal dari cabang item.']);
         }
+    }
+
+    private function authorizeAssignment(User $user, array $assigneeIds): void
+    {
+        $otherAssignees = collect($assigneeIds)->map(fn ($id) => (int) $id)->reject(fn (int $id) => $id === (int) $user->id);
+        abort_if($otherAssignees->isNotEmpty() && ! $user->hasPermission('work_planner.assign'), 403);
     }
 
     private function applyFilters(Builder $query, $project, $type, $status, $priority, string $pic, string $search): void

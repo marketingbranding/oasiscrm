@@ -134,6 +134,7 @@ class ExpenseFilterService
     private function baseQuery(array $filters): Builder
     {
         return Expense::query()
+            ->when(array_key_exists('scope_branch_ids', $filters), fn (Builder $query) => $query->whereIn('expenses.branch_id', $filters['scope_branch_ids']))
             ->when($filters['branch_id'], fn (Builder $query, int $id) => $query->where('expenses.branch_id', $id))
             ->when($filters['project_id'], fn (Builder $query, int $id) => $query->where('expenses.project_id', $id))
             ->when($filters['expense_category_id'], fn (Builder $query, int $id) => $query->where('expenses.expense_category_id', $id))

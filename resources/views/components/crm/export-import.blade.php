@@ -1,4 +1,4 @@
-@props(['exportRoute' => '', 'importRoute' => '', 'params' => []])
+@props(['exportRoute' => '', 'importRoute' => '', 'params' => [], 'canExport' => true, 'canImport' => true])
 <div class="relative" x-data="{ exportOpen: false }" @click.outside="exportOpen = false">
     <button type="button" @click="exportOpen = !exportOpen"
             class="bg-white text-black px-4 py-1.5 text-sm font-[Helvetica] font-bold border-2 border-black rounded-none hover:bg-gray-100 flex items-center gap-1">
@@ -9,13 +9,17 @@
     </button>
     <div x-show="exportOpen" x-cloak
          class="absolute right-0 top-full mt-1 bg-white border-2 border-black z-50 min-w-[160px] shadow-xl">
+        @if($canExport)
         <a href="{{ route($exportRoute, $params) }}"
            class="block px-4 py-2 text-sm font-['Times_New_Roman'] hover:bg-gray-100 border-b-2 border-black whitespace-nowrap">
             ↓ Export XLSX
         </a>
+        @endif
+        @if($canImport)
         <a href="{{ route($importRoute) }}"
            class="block px-4 py-2 text-sm font-['Times_New_Roman'] hover:bg-gray-100 whitespace-nowrap">
             ↑ Import XLSX
         </a>
+        @endif
     </div>
 </div>

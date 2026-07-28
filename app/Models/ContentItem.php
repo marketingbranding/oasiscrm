@@ -3,7 +3,7 @@
 namespace App\Models;
 
 use App\Models\Traits\LogsActivity;
-use App\Services\WorkspaceAccessService;
+use App\Services\OrganizationScopeService;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -125,11 +125,11 @@ class ContentItem extends Model
 
     public function scopeVisibleTo(Builder $query, User $user): Builder
     {
-        if ($user->canViewAllBranches()) {
+        if ($user->hasPermission('work_planner.view_all')) {
             return $query;
         }
 
-        $branchIds = app(WorkspaceAccessService::class)->accessibleBranchIds($user);
+        $branchIds = app(OrganizationScopeService::class)->branchIds($user, 'work_planner');
 
         return $query->whereIn('branch_id', $branchIds)
             ->where(function (Builder $query) use ($user) {

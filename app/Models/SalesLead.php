@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Services\OrganizationScopeService;
 use App\Services\WorkspaceAccessService;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
@@ -81,7 +82,7 @@ class SalesLead extends Model
 
     public function scopeVisibleTo(Builder $query, User $user): Builder
     {
-        if ($user->canViewAllBranches()) {
+        if ($user->hasPermission('sales_pocketbook.view_all')) {
             return $query;
         }
 
@@ -90,11 +91,10 @@ class SalesLead extends Model
                 ->whereIn('branch_id', app(WorkspaceAccessService::class)->accessibleBranchIds($user));
         }
 
-        if (! $user->hasRole(['manager', 'admin'])) {
-            return $query->whereRaw('1 = 0');
-        }
+        $scope = app(OrganizationScopeService::class);
 
-        return $query->whereIn('branch_id', app(WorkspaceAccessService::class)->accessibleBranchIds($user));
+        return $query->whereIn('branch_id', $scope->branchIds($user, 'sales_pocketbook'))
+            ->whereIn('project_id', $scope->projectIds($user, 'sales_pocketbook'));
     }
 
     public function currentStage(): ?string

@@ -45,7 +45,7 @@ Route::middleware(['auth', 'active', 'verified', 'password.changed', 'sales.acce
     Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
 
     Route::get('/buku-saku-sales', [SalesPocketbookController::class, 'index'])->name('sales-pocketbook.index');
-    Route::get('/buku-saku-sales/export', [SalesPocketbookController::class, 'export'])->name('sales-pocketbook.export');
+    Route::get('/buku-saku-sales/export', [SalesPocketbookController::class, 'export'])->middleware('permission:sales_pocketbook.export')->name('sales-pocketbook.export');
     Route::post('/buku-saku-sales/agendas', [SalesAgendaController::class, 'store'])->name('sales-agendas.store');
     Route::patch('/buku-saku-sales/agendas/{agenda}', [SalesAgendaController::class, 'update'])->name('sales-agendas.update');
     Route::post('/buku-saku-sales/agendas/{agenda}/reschedule', [SalesAgendaController::class, 'reschedule'])->name('sales-agendas.reschedule');
@@ -71,28 +71,34 @@ Route::middleware(['auth', 'active', 'verified', 'password.changed', 'sales.acce
     Route::delete('/ai-chat/{conversation}', [AiChatController::class, 'destroy'])->name('ai-chat.destroy');
 
     Route::bind('content_calendar', fn ($value) => ContentItem::findOrFail($value));
-    Route::get('content-calendar/export', [ContentCalendarController::class, 'export'])->name('content-calendar.export');
-    Route::get('content-calendar/export-template', [ContentCalendarController::class, 'exportTemplate'])->name('content-calendar.export-template');
-    Route::get('content-calendar/import', [ContentCalendarController::class, 'import'])->name('content-calendar.import');
-    Route::post('content-calendar/import', [ContentCalendarController::class, 'importStore'])->name('content-calendar.import-store');
+    Route::get('content-calendar/export', [ContentCalendarController::class, 'export'])->middleware('permission:work_planner.export')->name('content-calendar.export');
+    Route::get('content-calendar/export-template', [ContentCalendarController::class, 'exportTemplate'])->middleware('permission:work_planner.export')->name('content-calendar.export-template');
+    Route::get('content-calendar/import', [ContentCalendarController::class, 'import'])->middleware('permission:work_planner.create')->name('content-calendar.import');
+    Route::post('content-calendar/import', [ContentCalendarController::class, 'importStore'])->middleware('permission:work_planner.create')->name('content-calendar.import-store');
     Route::get('content-calendar/{content_calendar}/detail', [ContentCalendarController::class, 'detail'])->name('content-calendar.detail');
-    Route::patch('content-calendar/{content_calendar}/status', [ContentCalendarController::class, 'updateStatus'])->name('content-calendar.update-status');
-    Route::post('content-calendar/bulk-update', [ContentCalendarController::class, 'bulkUpdate'])->name('content-calendar.bulk-update');
-    Route::post('content-calendar/bulk-delete', [ContentCalendarController::class, 'bulkDelete'])->name('content-calendar.bulk-delete');
-    Route::resource('content-calendar', ContentCalendarController::class);
+    Route::patch('content-calendar/{content_calendar}/status', [ContentCalendarController::class, 'updateStatus'])->middleware('permission:work_planner.update')->name('content-calendar.update-status');
+    Route::post('content-calendar/bulk-update', [ContentCalendarController::class, 'bulkUpdate'])->middleware('permission:work_planner.update')->name('content-calendar.bulk-update');
+    Route::post('content-calendar/bulk-delete', [ContentCalendarController::class, 'bulkDelete'])->middleware('permission:work_planner.update')->name('content-calendar.bulk-delete');
+    Route::get('content-calendar', [ContentCalendarController::class, 'index'])->name('content-calendar.index');
+    Route::get('content-calendar/create', [ContentCalendarController::class, 'create'])->middleware('permission:work_planner.create')->name('content-calendar.create');
+    Route::post('content-calendar', [ContentCalendarController::class, 'store'])->middleware('permission:work_planner.create')->name('content-calendar.store');
+    Route::get('content-calendar/{content_calendar}', [ContentCalendarController::class, 'show'])->name('content-calendar.show');
+    Route::get('content-calendar/{content_calendar}/edit', [ContentCalendarController::class, 'edit'])->middleware('permission:work_planner.update')->name('content-calendar.edit');
+    Route::match(['put', 'patch'], 'content-calendar/{content_calendar}', [ContentCalendarController::class, 'update'])->middleware('permission:work_planner.update')->name('content-calendar.update');
+    Route::delete('content-calendar/{content_calendar}', [ContentCalendarController::class, 'destroy'])->middleware('permission:work_planner.update')->name('content-calendar.destroy');
 
-    Route::get('/database', [DatabaseController::class, 'index'])->name('database.index');
-    Route::get('/database/sheet/{branchId}/{sheetName}', [DatabaseController::class, 'sheetData'])->name('database.sheet');
-    Route::post('/database/sync', [DatabaseController::class, 'sync'])->name('database.sync');
-    Route::get('/database/sync/status', [DatabaseController::class, 'syncStatus'])->name('database.sync-status');
-    Route::post('/database/records', [DatabaseController::class, 'store'])->name('database.records.store');
-    Route::put('/database/records/{record}', [DatabaseController::class, 'update'])->name('database.records.update');
-    Route::delete('/database/records/{record}', [DatabaseController::class, 'destroy'])->name('database.records.destroy');
+    Route::get('/database', [DatabaseController::class, 'index'])->middleware('permission:database.view')->name('database.index');
+    Route::get('/database/sheet/{branchId}/{sheetName}', [DatabaseController::class, 'sheetData'])->middleware('permission:database.view')->name('database.sheet');
+    Route::post('/database/sync', [DatabaseController::class, 'sync'])->middleware('permission:database.sync')->name('database.sync');
+    Route::get('/database/sync/status', [DatabaseController::class, 'syncStatus'])->middleware('permission:database.sync')->name('database.sync-status');
+    Route::post('/database/records', [DatabaseController::class, 'store'])->middleware('permission:database.edit')->name('database.records.store');
+    Route::put('/database/records/{record}', [DatabaseController::class, 'update'])->middleware('permission:database.edit')->name('database.records.update');
+    Route::delete('/database/records/{record}', [DatabaseController::class, 'destroy'])->middleware('permission:database.edit')->name('database.records.destroy');
 
-    Route::get('/konsumen-progress', [KonsumenProgressController::class, 'index'])->name('konsumen-progress.index');
-    Route::get('/konsumen-progress/stage', [KonsumenProgressController::class, 'stage'])->name('konsumen-progress.stage');
-    Route::post('/konsumen-progress/sync', [KonsumenProgressController::class, 'sync'])->name('konsumen-progress.sync');
-    Route::get('/konsumen-progress/sync/status', [KonsumenProgressController::class, 'syncStatus'])->name('konsumen-progress.sync-status');
+    Route::get('/konsumen-progress', [KonsumenProgressController::class, 'index'])->middleware('permission:consumer_progress.view')->name('konsumen-progress.index');
+    Route::get('/konsumen-progress/stage', [KonsumenProgressController::class, 'stage'])->middleware('permission:consumer_progress.view')->name('konsumen-progress.stage');
+    Route::post('/konsumen-progress/sync', [KonsumenProgressController::class, 'sync'])->middleware('permission:consumer_progress.sync')->name('konsumen-progress.sync');
+    Route::get('/konsumen-progress/sync/status', [KonsumenProgressController::class, 'syncStatus'])->middleware('permission:consumer_progress.sync')->name('konsumen-progress.sync-status');
 
     Route::get('changelogs', [ChangelogController::class, 'index'])->name('changelogs.index');
 
@@ -101,17 +107,17 @@ Route::middleware(['auth', 'active', 'verified', 'password.changed', 'sales.acce
     Route::resource('lead-sources', LeadSourceController::class);
 
     Route::bind('dana_talangan', fn ($v) => DanaTalangan::findOrFail($v));
-    Route::get('dana-talangan/kavling-options', [DanaTalanganController::class, 'kavlingOptions'])->name('dana-talangan.kavling-options');
-    Route::post('dana-talangan/sync', [DanaTalanganController::class, 'sync'])->name('dana-talangan.sync');
-    Route::get('dana-talangan/sync/status', [DanaTalanganController::class, 'syncStatus'])->name('dana-talangan.sync-status');
-    Route::get('dana-talangan/export', [DanaTalanganController::class, 'export'])->name('dana-talangan.export');
-    Route::get('dana-talangan/export-template', [DanaTalanganController::class, 'exportTemplate'])->name('dana-talangan.export-template');
-    Route::get('dana-talangan/import', [DanaTalanganController::class, 'import'])->name('dana-talangan.import');
-    Route::post('dana-talangan/import', [DanaTalanganController::class, 'importStore'])->name('dana-talangan.import-store');
-    Route::post('dana-talangan/bulk-delete', [DanaTalanganController::class, 'bulkDestroy'])->name('dana-talangan.bulk-destroy');
-    Route::post('dana-talangan/bulk-update', [DanaTalanganController::class, 'bulkUpdate'])->name('dana-talangan.bulk-update');
-    Route::get('dana-talangan/{dana_talangan}/detail', [DanaTalanganController::class, 'detail'])->name('dana-talangan.detail');
-    Route::resource('dana-talangan', DanaTalanganController::class);
+    Route::get('dana-talangan/kavling-options', [DanaTalanganController::class, 'kavlingOptions'])->middleware('permission:bridge_fund.view')->name('dana-talangan.kavling-options');
+    Route::post('dana-talangan/sync', [DanaTalanganController::class, 'sync'])->middleware('permission:bridge_fund.manage')->name('dana-talangan.sync');
+    Route::get('dana-talangan/sync/status', [DanaTalanganController::class, 'syncStatus'])->middleware('permission:bridge_fund.manage')->name('dana-talangan.sync-status');
+    Route::get('dana-talangan/export', [DanaTalanganController::class, 'export'])->middleware('permission:bridge_fund.export')->name('dana-talangan.export');
+    Route::get('dana-talangan/export-template', [DanaTalanganController::class, 'exportTemplate'])->middleware('permission:bridge_fund.export')->name('dana-talangan.export-template');
+    Route::get('dana-talangan/import', [DanaTalanganController::class, 'import'])->middleware('permission:bridge_fund.manage')->name('dana-talangan.import');
+    Route::post('dana-talangan/import', [DanaTalanganController::class, 'importStore'])->middleware('permission:bridge_fund.manage')->name('dana-talangan.import-store');
+    Route::post('dana-talangan/bulk-delete', [DanaTalanganController::class, 'bulkDestroy'])->middleware('permission:bridge_fund.manage')->name('dana-talangan.bulk-destroy');
+    Route::post('dana-talangan/bulk-update', [DanaTalanganController::class, 'bulkUpdate'])->middleware('permission:bridge_fund.manage')->name('dana-talangan.bulk-update');
+    Route::get('dana-talangan/{dana_talangan}/detail', [DanaTalanganController::class, 'detail'])->middleware('permission:bridge_fund.view')->name('dana-talangan.detail');
+    Route::resource('dana-talangan', DanaTalanganController::class)->middlewareFor(['index', 'show'], 'permission:bridge_fund.view')->middlewareFor(['create', 'store', 'edit', 'update', 'destroy'], 'permission:bridge_fund.manage');
 
     Route::post('feedback-reports', [FeedbackReportController::class, 'store'])->middleware('throttle:10,1')->name('feedback-reports.store');
     Route::get('feedback-reports/history', [FeedbackReportController::class, 'history'])->name('feedback-reports.history');
@@ -120,34 +126,36 @@ Route::middleware(['auth', 'active', 'verified', 'password.changed', 'sales.acce
     Route::get('feedback-reports/{feedbackReport}', [FeedbackReportController::class, 'show'])->name('feedback-reports.show');
     Route::patch('feedback-reports/{feedbackReport}', [FeedbackReportController::class, 'review'])->name('feedback-reports.review');
 
-    Route::middleware('role:superadmin')->group(function () {
+    Route::middleware('permission:expenses.manage_categories')->group(function () {
         Route::get('pengeluaran/kategori', [ExpenseCategoryController::class, 'index'])->name('expense-categories.index');
         Route::post('pengeluaran/kategori', [ExpenseCategoryController::class, 'store'])->name('expense-categories.store');
         Route::put('pengeluaran/kategori/{expenseCategory}', [ExpenseCategoryController::class, 'update'])->name('expense-categories.update');
         Route::patch('pengeluaran/kategori/{expenseCategory}/toggle', [ExpenseCategoryController::class, 'toggle'])->name('expense-categories.toggle');
     });
 
-    Route::middleware('role:superadmin,pusat')->group(function () {
-        Route::get('pengeluaran', [ExpenseController::class, 'index'])->name('expenses.index');
-        Route::get('pengeluaran/create', [ExpenseController::class, 'create'])->name('expenses.create');
-        Route::post('pengeluaran', [ExpenseController::class, 'store'])->name('expenses.store');
-        Route::get('pengeluaran/projects', [ExpenseController::class, 'projects'])->name('expenses.projects');
-        Route::get('pengeluaran/export', [ExpenseController::class, 'export'])->name('expenses.export');
-        Route::get('pengeluaran/{expense}', [ExpenseController::class, 'show'])->name('expenses.show');
-        Route::get('pengeluaran/{expense}/edit', [ExpenseController::class, 'edit'])->name('expenses.edit');
-        Route::put('pengeluaran/{expense}', [ExpenseController::class, 'update'])->name('expenses.update');
-        Route::patch('pengeluaran/{expense}/cancel', [ExpenseController::class, 'cancel'])->name('expenses.cancel');
-    });
+    Route::get('pengeluaran', [ExpenseController::class, 'index'])->middleware('permission:expenses.view')->name('expenses.index');
+    Route::get('pengeluaran/create', [ExpenseController::class, 'create'])->middleware('permission:expenses.create')->name('expenses.create');
+    Route::post('pengeluaran', [ExpenseController::class, 'store'])->middleware('permission:expenses.create')->name('expenses.store');
+    Route::get('pengeluaran/projects', [ExpenseController::class, 'projects'])->middleware('permission:expenses.view')->name('expenses.projects');
+    Route::get('pengeluaran/export', [ExpenseController::class, 'export'])->middleware('permission:expenses.export')->name('expenses.export');
+    Route::get('pengeluaran/{expense}', [ExpenseController::class, 'show'])->middleware('permission:expenses.view')->name('expenses.show');
+    Route::get('pengeluaran/{expense}/edit', [ExpenseController::class, 'edit'])->middleware('permission:expenses.update')->name('expenses.edit');
+    Route::put('pengeluaran/{expense}', [ExpenseController::class, 'update'])->middleware('permission:expenses.update')->name('expenses.update');
+    Route::patch('pengeluaran/{expense}/cancel', [ExpenseController::class, 'cancel'])->middleware('permission:expenses.cancel')->name('expenses.cancel');
 
     Route::middleware('role:superadmin')->group(function () {
-        Route::get('/admin/system-health', SystemHealthController::class)->name('admin.system-health');
         Route::resource('changelogs', ChangelogController::class)->except('index');
+    });
 
+    Route::get('/admin/system-health', SystemHealthController::class)->middleware('permission:system_health.view')->name('admin.system-health');
+    Route::middleware('permission:branches.manage')->group(function () {
         Route::get('/branches', [BranchController::class, 'index'])->name('branches.index');
         Route::get('/branches/{branch}/assign', [BranchController::class, 'assignForm'])->name('branches.assign');
         Route::post('/branches/{branch}/assign', [BranchController::class, 'assignStore'])->name('branches.assign-store');
         Route::delete('/branches/{user}/remove-admin', [BranchController::class, 'removeAdmin'])->name('branches.remove-admin');
 
+    });
+    Route::middleware('permission:projects.manage')->group(function () {
         Route::bind('project', fn ($v) => LeadMaster::findOrFail($v));
         Route::resource('projects', ProjectController::class);
         Route::get('/projects/{project}/kavlings', [KavlingController::class, 'index'])->name('kavlings.index');

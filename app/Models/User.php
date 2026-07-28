@@ -237,6 +237,13 @@ class User extends Authenticatable implements MustVerifyEmail
         return collect($permissions)->every(fn (string $permission) => $this->hasPermission($permission));
     }
 
+    public function hasScopedPermission(string $module, string $action = 'view'): bool
+    {
+        return $this->hasAnyPermission(collect(['own', 'team', 'assigned', 'branch', 'all'])
+            ->map(fn (string $scope) => "{$module}.{$action}_{$scope}")
+            ->all());
+    }
+
     public function landingRouteName(): string
     {
         return $this->isSales() ? 'sales-pocketbook.index' : 'dashboard';

@@ -24,6 +24,7 @@ class SalesAgendaController extends Controller
 
     public function store(StoreSalesAgendaRequest $request)
     {
+        abort_unless($request->user()->hasScopedPermission('sales_pocketbook', 'manage'), 403);
         $data = $request->validated();
         [$owner, $project] = $this->resolveOwnerAndProject($request, (int) $data['owner_user_id'], (int) $data['project_id']);
         $duration = $this->duration($data['start_time'], $data['end_time']);
@@ -152,7 +153,7 @@ class SalesAgendaController extends Controller
     {
         abort_unless($agenda->item_type === 'agenda' && $agenda->agenda_type === ContentItem::SALES_AGENDA_TYPE, 404);
         $user = $request->user();
-        abort_unless($user->isSuperadmin() || $user->hasPrimaryRole(['sales', 'manager', 'admin', 'pusat']), 403);
+        abort_unless($user->hasScopedPermission('sales_pocketbook', 'manage'), 403);
         if ($user->isSales()) {
             abort_unless((int) $agenda->owner_user_id === (int) $user->id, 403);
         } elseif (! $user->canViewAllBranches()) {

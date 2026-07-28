@@ -8,9 +8,18 @@ use App\Services\WorkspaceAccessService;
 
 class ContentItemPolicy
 {
+    public function viewAny(User $user): bool
+    {
+        return $user->hasScopedPermission('work_planner');
+    }
+
     public function view(User $user, ContentItem $item): bool
     {
-        if ($user->canViewAllBranches()) {
+        if (! $this->viewAny($user)) {
+            return false;
+        }
+
+        if ($user->hasPermission('work_planner.view_all')) {
             return true;
         }
 
@@ -22,6 +31,10 @@ class ContentItemPolicy
 
     public function update(User $user, ContentItem $item): bool
     {
+        if (! $user->hasPermission('work_planner.update')) {
+            return false;
+        }
+
         if ($user->isSales()) {
             return app(WorkspaceAccessService::class)->canEditBranch($user, $item->branch_id)
                 && ($item->created_by === $user->id

@@ -34,7 +34,11 @@ class WorkPlannerTest extends TestCase
     public function test_agenda_store_sets_calendar_date_and_account_assignment(): void
     {
         [$branch, $user] = $this->branchAndUser();
-        $assignee = User::factory()->create(['branch_id' => $branch->id, 'password_changed_at' => now()]);
+        $assignee = User::factory()->create([
+            'role_id' => Role::query()->where('slug', 'staff')->value('id'),
+            'branch_id' => $branch->id,
+            'password_changed_at' => now(),
+        ]);
         LeadMaster::create(['branch_id' => $branch->id, 'project_name' => 'Proyek Test', 'is_active' => true]);
 
         $response = $this->actingAs($user)->post(route('content-calendar.store'), [
@@ -92,8 +96,9 @@ class WorkPlannerTest extends TestCase
     public function test_personal_items_are_hidden_from_colleagues_but_visible_to_assignees_and_pusat(): void
     {
         [$branch, $creator] = $this->branchAndUser();
-        $colleague = User::factory()->create(['branch_id' => $branch->id, 'password_changed_at' => now()]);
-        $assignee = User::factory()->create(['branch_id' => $branch->id, 'password_changed_at' => now()]);
+        $staffRoleId = Role::query()->where('slug', 'staff')->value('id');
+        $colleague = User::factory()->create(['role_id' => $staffRoleId, 'branch_id' => $branch->id, 'password_changed_at' => now()]);
+        $assignee = User::factory()->create(['role_id' => $staffRoleId, 'branch_id' => $branch->id, 'password_changed_at' => now()]);
         $item = $this->makeItem($branch, $creator, ['visibility' => 'personal']);
         $item->assignees()->attach($assignee);
 
@@ -287,7 +292,11 @@ class WorkPlannerTest extends TestCase
     private function branchAndUser(): array
     {
         $branch = Branch::create(['name' => 'Cabang Test', 'code' => 'TEST', 'is_active' => true]);
-        $user = User::factory()->create(['branch_id' => $branch->id, 'password_changed_at' => now()]);
+        $user = User::factory()->create([
+            'role_id' => Role::query()->where('slug', 'admin')->value('id'),
+            'branch_id' => $branch->id,
+            'password_changed_at' => now(),
+        ]);
 
         return [$branch, $user];
     }

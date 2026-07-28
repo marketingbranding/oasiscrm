@@ -13,9 +13,13 @@
         $monitoringParams = array_filter(['tab' => 'report', 'branch_id' => $selectedBranchId ?? null, 'project_id' => isset($selectedProject) ? optional($projects->firstWhere('project_name', $selectedProject))->id : null]);
     @endphp
     <div class="mb-4 flex flex-wrap gap-2">
+        @if(Auth::user()->hasScopedPermission('sales_pocketbook'))
         <a href="{{ route('sales-pocketbook.index', $monitoringParams) }}" class="inline-block border-2 border-black bg-[#fcc20f] px-4 py-2 font-[Helvetica] text-sm font-bold uppercase shadow-[2px_2px_0_#000]">Monitoring Buku Saku</a>
-        @if(Auth::user()->isSuperadmin() || Auth::user()->hasRole('pusat'))
+        @endif
+        @if(Auth::user()->hasPermission('expenses.view'))
+        @if(Auth::user()->hasPermission('expenses.create'))
         <a href="{{ route('expenses.create') }}" class="inline-block border-2 border-black bg-[#b3bd95] px-4 py-2 font-[Helvetica] text-sm font-bold uppercase shadow-[2px_2px_0_#000]">+ Tambah Pengeluaran</a>
+        @endif
         <a href="{{ route('expenses.index', ['date_from' => now()->startOfMonth()->toDateString(), 'date_to' => now()->endOfMonth()->toDateString()]) }}" class="inline-block border-2 border-black bg-white px-4 py-2 font-[Helvetica] text-sm font-bold uppercase shadow-[2px_2px_0_#000]">Lihat Pengeluaran Bulan Ini</a>
         @endif
     </div>
@@ -31,9 +35,12 @@
         <div x-show="quickOpen"
              x-transition.opacity.duration.150ms
              class="absolute left-0 top-full mt-1 bg-white border-2 border-black shadow-xl min-w-[200px] z-50">
+            @if(Auth::user()->hasPermission('database.edit'))
             <a href="{{ route('database.index', ['sheet' => 'lead', 'add' => 1]) }}" class="flex items-center gap-3 px-3 py-2 text-sm font-[Helvetica] font-bold border-l-4 border-[#e6915d] hover:bg-gray-50">
                 <span>+ Lead Baru</span>
             </a>
+            @endif
+            @if(Auth::user()->hasPermission('work_planner.create'))
             <a href="{{ route('content-calendar.create', ['type' => 'task']) }}" class="flex items-center gap-3 px-3 py-2 text-sm font-[Helvetica] font-bold border-l-4 border-[#9ab6c8] hover:bg-gray-50">
                 <span>+ Task Baru</span>
             </a>
@@ -43,10 +50,13 @@
             <a href="{{ route('content-calendar.create', ['type' => 'content']) }}" class="flex items-center gap-3 px-3 py-2 text-sm font-[Helvetica] font-bold border-l-4 border-[#8c9ae0] hover:bg-gray-50">
                 <span>+ Konten Baru</span>
             </a>
+            @endif
+            @if(Auth::user()->hasPermission('bridge_fund.manage'))
             <a href="{{ route('dana-talangan.create') }}" class="flex items-center gap-3 px-3 py-2 text-sm font-[Helvetica] font-bold border-l-4 border-[#f1c40f] hover:bg-gray-50">
                 <span>+ Dana Talangan</span>
             </a>
-            @if(Auth::user()->isSuperadmin())
+            @endif
+            @if(Auth::user()->hasPermission('projects.manage'))
                 <a href="{{ route('projects.create') }}" class="flex items-center gap-3 px-3 py-2 text-sm font-[Helvetica] font-bold border-l-4 border-[#5d8e8e] hover:bg-gray-50">
                     <span>+ Proyek Baru</span>
                 </a>

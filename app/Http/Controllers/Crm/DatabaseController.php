@@ -11,6 +11,7 @@ use App\Services\DatabaseSheetSyncService;
 use App\Services\DatabaseSheetWriteService;
 use App\Services\GoogleSheetsApiService;
 use App\Services\OptimisticLockService;
+use App\Services\OrganizationScopeService;
 use App\Services\PresenceService;
 use App\Services\SyncResponseService;
 use App\Services\WorkspaceAccessService;
@@ -28,6 +29,7 @@ class DatabaseController extends Controller
         private readonly CollaborationNotificationService $notifications,
         private readonly PresenceService $presence,
         private readonly SyncResponseService $syncResponses,
+        private readonly OrganizationScopeService $organizationScope,
     ) {}
 
     public function index(Request $request, GoogleSheetsApiService $googleSheets)
@@ -35,9 +37,10 @@ class DatabaseController extends Controller
         $user = Auth::user();
         $selectedBranchId = $request->get('branch_id');
 
-        $branches = $this->workspaceAccess->accessibleBranches($user);
+        $allowedBranchIds = $this->organizationScope->branchIds($user, 'database');
+        $branches = $this->workspaceAccess->accessibleBranches($user)->whereIn('id', $allowedBranchIds)->values();
         $selectedBranch = $this->workspaceAccess->resolveRequestedBranch($user, $selectedBranchId);
-        if ($selectedBranchId && ! $selectedBranch) {
+        if ($selectedBranchId && (! $selectedBranch || ! in_array((int) $selectedBranch->id, $allowedBranchIds, true))) {
             abort(403);
         }
         $selectedBranch ??= $branches->first();
@@ -99,7 +102,7 @@ class DatabaseController extends Controller
         $requestSheet = $request->get('sheet');
         $requestAdd = $request->boolean('add');
 
-        $canSync = $selectedBranch && $this->workspaceAccess->canSyncBranch($user, $selectedBranch);
+        $canSync = $user->hasPermission('database.sync') && $selectedBranch && $this->workspaceAccess->canSyncBranch($user, $selectedBranch);
 
         return view('crm.database.index', compact('branches', 'selectedBranch', 'selectedBranchId', 'sheetNames', 'records', 'syncStatus', 'isStale', 'requestSheet', 'requestAdd', 'canSync'));
     }
@@ -109,6 +112,8 @@ class DatabaseController extends Controller
         $branch = Branch::findOrFail($branchId);
 
         $user = Auth::user();
+        abort_unless($user->hasPermission('database.view'), 403);
+        abort_unless(in_array((int) $branch->id, $this->organizationScope->branchIds($user, 'database'), true), 403);
         abort_unless($this->workspaceAccess->canViewBranch($user, $branch), 403);
 
         $rows = DatabaseSheetRecord::where('branch_id', $branch->id)
@@ -142,6 +147,7 @@ class DatabaseController extends Controller
     public function sync(Request $request)
     {
         $user = Auth::user();
+        abort_unless($user->hasPermission('database.sync'), 403);
         $branch = $this->workspaceAccess->resolveRequestedBranch($user, $request->input('branch_id'));
 
         if ($request->filled('branch_id') && ! $branch) {
@@ -155,6 +161,7 @@ class DatabaseController extends Controller
 
             return back()->with('error', 'Branch tidak ditemukan.');
         }
+        abort_unless(in_array((int) $branch->id, $this->organizationScope->branchIds($user, 'database', 'sync'), true), 403);
         abort_unless($this->workspaceAccess->canSyncBranch($user, $branch), 403);
 
         try {
@@ -180,8 +187,10 @@ class DatabaseController extends Controller
     public function syncStatus(Request $request)
     {
         $user = $request->user();
+        abort_unless($user->hasPermission('database.sync'), 403);
         $branch = $this->workspaceAccess->resolveRequestedBranch($user, $request->query('branch_id'));
         abort_unless($branch && $this->workspaceAccess->canSyncBranch($user, $branch), 403);
+        abort_unless(in_array((int) $branch->id, $this->organizationScope->branchIds($user, 'database', 'sync'), true), 403);
         $status = DatabaseSheetSyncStatus::with('initiator')->where('branch_id', $branch->id)->first();
         $payload = $this->syncResponses->make('database', ['type' => 'branch', 'id' => $branch->id, 'name' => $branch->name], $status);
         $payload['status_url'] = route('database.sync-status', ['branch_id' => $branch->id]);
@@ -200,6 +209,8 @@ class DatabaseController extends Controller
         $sheetName = $request->input('sheet_name');
 
         $user = Auth::user();
+        abort_unless($user->hasPermission('database.edit'), 403);
+        abort_unless(in_array((int) $branch->id, $this->organizationScope->branchIds($user, 'database', 'manage'), true), 403);
         abort_unless($this->workspaceAccess->canEditBranch($user, $branch), 403);
 
         $input = $request->except(['_token', 'sheet_name', 'branch_id']);
@@ -233,6 +244,8 @@ class DatabaseController extends Controller
         }
 
         $user = Auth::user();
+        abort_unless($user->hasPermission('database.edit'), 403);
+        abort_unless(in_array((int) $branch->id, $this->organizationScope->branchIds($user, 'database', 'manage'), true), 403);
         abort_unless($this->workspaceAccess->canEditBranch($user, $branch), 403);
         if ($recordWasReplaced) {
             return $this->optimisticLock->conflict($request, $record, $request->input('expected_updated_at'));
@@ -299,6 +312,8 @@ class DatabaseController extends Controller
         }
 
         $user = Auth::user();
+        abort_unless($user->hasPermission('database.edit'), 403);
+        abort_unless(in_array((int) $branch->id, $this->organizationScope->branchIds($user, 'database', 'manage'), true), 403);
         abort_unless($this->workspaceAccess->canEditBranch($user, $branch), 403);
 
         if (! $writeService->softDelete($record, $user->id)) {

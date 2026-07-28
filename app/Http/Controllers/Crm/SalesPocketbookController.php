@@ -8,6 +8,7 @@ use App\Models\ContentItem;
 use App\Models\LeadSource;
 use App\Models\SalesLead;
 use App\Models\User;
+use App\Services\OrganizationScopeService;
 use App\Services\SalesDailyReminderService;
 use App\Services\SalesWeeklyMetricsService;
 use App\Services\WorkspaceAccessService;
@@ -22,6 +23,7 @@ class SalesPocketbookController extends Controller
         private readonly WorkspaceAccessService $workspaceAccess,
         private readonly SalesWeeklyMetricsService $weeklyMetrics,
         private readonly SalesDailyReminderService $dailyReminder,
+        private readonly OrganizationScopeService $organizationScope,
     ) {}
 
     public function index(Request $request)
@@ -45,8 +47,12 @@ class SalesPocketbookController extends Controller
         ]));
         $tab = in_array($request->query('tab'), ['leads', 'agenda', 'report'], true) ? $request->query('tab') : 'leads';
         $monitoring = ! $user->isSales();
-        $branches = $this->workspaceAccess->accessibleBranches($user);
-        $projects = $this->workspaceAccess->accessibleProjects($user);
+        $allowedBranchIds = $this->organizationScope->branchIds($user, 'sales_pocketbook');
+        $allowedProjectIds = $this->organizationScope->projectIds($user, 'sales_pocketbook');
+        $visibleSalesIds = $this->organizationScope->visibleUserIds($user, 'sales_pocketbook');
+        $branches = $this->workspaceAccess->accessibleBranches($user)->whereIn('id', $allowedBranchIds)->values();
+        $projects = $this->workspaceAccess->accessibleProjects($user)->whereIn('id', $allowedProjectIds)->values();
+        $allowedProjectNames = $projects->pluck('project_name')->all();
         $projects->load('assignedUsers:id');
         $selectedBranchId = $request->filled('branch_id') ? $request->integer('branch_id') : null;
         if ($selectedBranchId && ! $branches->contains('id', $selectedBranchId)) {
@@ -58,6 +64,7 @@ class SalesPocketbookController extends Controller
         }
 
         $salesUsers = User::query()->where('is_active', true)
+            ->whereIn('id', $visibleSalesIds)
             ->whereHas('role', fn (Builder $query) => $query->where('slug', 'sales'))
             ->when(! $user->canViewAllBranches(), function (Builder $query) use ($user) {
                 $branchIds = $this->workspaceAccess->accessibleBranchIds($user);
@@ -108,6 +115,9 @@ class SalesPocketbookController extends Controller
             ->where('item_type', 'agenda')
             ->where('agenda_type', ContentItem::SALES_AGENDA_TYPE)
             ->with(['branch:id,name', 'owner:id,name', 'rescheduledFrom:id,scheduled_date'])
+            ->where(fn (Builder $query) => $query->whereIn('sales_project_id', $allowedProjectIds)
+                ->orWhere(fn (Builder $legacy) => $legacy->whereNull('sales_project_id')->whereIn('project_name', $allowedProjectNames)))
+            ->whereIn('owner_user_id', $visibleSalesIds)
             ->when($user->isSales(), fn (Builder $query) => $query->where('owner_user_id', $user->id))
             ->when(! $user->canViewAllBranches() && ! $user->isSales(), fn (Builder $query) => $query->whereIn('branch_id', $this->workspaceAccess->accessibleBranchIds($user)))
             ->when($selectedBranchId, fn (Builder $query) => $query->where('branch_id', $selectedBranchId))
@@ -194,11 +204,15 @@ class SalesPocketbookController extends Controller
 
     public function export(Request $request)
     {
+        abort_unless($request->user()->hasPermission('sales_pocketbook.export'), 403);
         $this->authorize('viewAny', SalesLead::class);
         $request->validate($this->filterRules());
         $user = $request->user();
-        $branches = $this->workspaceAccess->accessibleBranches($user);
-        $projects = $this->workspaceAccess->accessibleProjects($user);
+        $allowedBranchIds = $this->organizationScope->branchIds($user, 'sales_pocketbook', 'export');
+        $allowedProjectIds = $this->organizationScope->projectIds($user, 'sales_pocketbook', 'export');
+        $visibleSalesIds = $this->organizationScope->visibleUserIds($user, 'sales_pocketbook', 'export');
+        $branches = $this->workspaceAccess->accessibleBranches($user)->whereIn('id', $allowedBranchIds)->values();
+        $projects = $this->workspaceAccess->accessibleProjects($user)->whereIn('id', $allowedProjectIds)->values();
         $projects->load(['branch', 'assignedUsers:id']);
 
         $branchId = $request->filled('branch_id') ? $request->integer('branch_id') : null;
@@ -213,6 +227,7 @@ class SalesPocketbookController extends Controller
 
         $salesUsers = User::query()
             ->where('is_active', true)
+            ->whereIn('id', $visibleSalesIds)
             ->whereHas('role', fn (Builder $query) => $query->where('slug', 'sales'))
             ->when(! $user->canViewAllBranches(), function (Builder $query) use ($user) {
                 $branchIds = $this->workspaceAccess->accessibleBranchIds($user);

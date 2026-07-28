@@ -109,10 +109,12 @@ class PermissionCatalog
 
         return [
             'sales' => [
-                'sales_pocketbook.view_own', 'work_planner.view_own', 'work_planner.create', 'work_planner.update',
+                'sales_pocketbook.view_own', 'sales_pocketbook.manage_own', 'sales_pocketbook.export_own', 'work_planner.view_own',
+                'sales_pocketbook.export', 'work_planner.create', 'work_planner.update',
             ],
             'sales_coordinator' => [
-                'sales_pocketbook.view_own', 'sales_pocketbook.view_team', 'work_planner.view_own',
+                'sales_pocketbook.view_own', 'sales_pocketbook.view_team', 'sales_pocketbook.manage_own',
+                'sales_pocketbook.manage_team', 'work_planner.view_own',
                 'work_planner.view_team', 'work_planner.create', 'work_planner.update', 'work_planner.assign',
             ],
             'supervisor' => [
@@ -120,12 +122,16 @@ class PermissionCatalog
                 ...$scoped($operations, ['assigned'], ['view', 'manage', 'export']),
                 ...$scoped(['database', 'consumer_progress', 'bridge_fund'], ['assigned'], ['sync']),
                 'work_planner.create', 'work_planner.update', 'work_planner.assign', 'work_planner.export',
-                'sales_pocketbook.export', 'database.view', 'consumer_progress.view', 'bridge_fund.view',
+                'sales_pocketbook.export', 'database.view', 'database.edit', 'database.sync',
+                'consumer_progress.view', 'consumer_progress.sync',
+                'bridge_fund.view', 'bridge_fund.manage', 'bridge_fund.export',
+                'expenses.view', 'expenses.create', 'expenses.update', 'expenses.cancel', 'expenses.export',
             ],
             'manager' => [
                 ...$scoped($allModules, ['assigned', 'branch'], ['view', 'export']),
+                ...$scoped(['sales_pocketbook'], ['assigned', 'branch'], ['manage']),
                 'sales_pocketbook.export', 'work_planner.create', 'work_planner.update', 'work_planner.assign',
-                'work_planner.export', 'database.view', 'consumer_progress.view', 'bridge_fund.view',
+                'work_planner.export', 'database.view', 'consumer_progress.view', 'bridge_fund.view', 'bridge_fund.export',
             ],
             'branch_manager' => [
                 'users.view', 'users.create', 'users.invite', 'users.update', 'users.reset_password', 'users.export',
@@ -133,6 +139,7 @@ class PermissionCatalog
                 'sales_pocketbook.export', 'work_planner.create', 'work_planner.update', 'work_planner.assign',
                 'work_planner.export', 'database.view', 'database.edit', 'database.sync',
                 'consumer_progress.view', 'consumer_progress.sync', 'bridge_fund.view', 'bridge_fund.manage', 'bridge_fund.export',
+                'expenses.view', 'expenses.create', 'expenses.update', 'expenses.cancel', 'expenses.export',
                 ...$scoped($allModules, ['branch'], ['view', 'manage', 'export']),
                 ...$scoped(['database', 'consumer_progress', 'bridge_fund'], ['branch'], ['sync']),
             ],
@@ -150,15 +157,16 @@ class PermissionCatalog
             'admin' => [
                 'users.view', 'users.create', 'users.invite', 'users.update', 'users.reset_password',
                 'users.assign_branches', 'users.assign_projects', 'users.assign_supervisor',
-                'work_planner.create', 'work_planner.update', 'work_planner.assign',
+                'sales_pocketbook.export', 'work_planner.create', 'work_planner.update', 'work_planner.assign', 'work_planner.export',
                 'database.view', 'database.edit', 'database.sync', 'consumer_progress.view',
                 'consumer_progress.sync', 'bridge_fund.view', 'bridge_fund.manage', 'bridge_fund.export',
                 ...$scoped($allModules, ['branch'], ['view', 'manage', 'export']),
                 ...$scoped(['database', 'consumer_progress', 'bridge_fund'], ['branch'], ['sync']),
             ],
             'staff' => [
-                'work_planner.create', 'work_planner.update', 'database.view',
-                ...$scoped($salesModules, ['own'], ['view', 'manage']),
+                'work_planner.create', 'work_planner.update', 'database.view', 'database.edit',
+                'consumer_progress.view', 'bridge_fund.view', 'bridge_fund.manage',
+                ...$scoped(['work_planner'], ['own'], ['view', 'manage']),
                 ...$scoped($operations, ['assigned'], ['view', 'manage']),
             ],
         ];

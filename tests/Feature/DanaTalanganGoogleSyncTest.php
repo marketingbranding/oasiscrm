@@ -331,7 +331,11 @@ class DanaTalanganGoogleSyncTest extends TestCase
     private function makeBranchAndUser(): array
     {
         $branch = Branch::create(['name' => 'Cabang Test', 'code' => 'TEST', 'is_active' => true]);
-        $user = User::factory()->create(['branch_id' => $branch->id, 'password_changed_at' => now()]);
+        $user = User::factory()->create([
+            'role_id' => Role::query()->where('slug', 'admin')->value('id'),
+            'branch_id' => $branch->id,
+            'password_changed_at' => now(),
+        ]);
 
         return [$branch, $user];
     }

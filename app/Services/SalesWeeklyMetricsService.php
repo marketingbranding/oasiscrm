@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\ContentItem;
+use App\Models\LeadMaster;
 use App\Models\SalesLead;
 use App\Models\User;
 use Carbon\CarbonImmutable;
@@ -21,7 +22,9 @@ class SalesWeeklyMetricsService
         'akad' => 'akad_at',
     ];
 
-    public function __construct(private readonly WorkspaceAccessService $workspaceAccess) {}
+    public function __construct(
+        private readonly OrganizationScopeService $organizationScope,
+    ) {}
 
     public function period(?string $week = null, ?string $dateFrom = null, ?string $dateTo = null): array
     {
@@ -133,11 +136,16 @@ class SalesWeeklyMetricsService
 
     public function agendaQuery(User $viewer, array $filters = []): Builder
     {
+        $projectIds = $this->organizationScope->projectIds($viewer, 'sales_pocketbook');
+        $projectNames = LeadMaster::query()->whereIn('id', $projectIds)->pluck('project_name')->all();
+
         return ContentItem::query()
             ->where('item_type', 'agenda')
             ->where('agenda_type', ContentItem::SALES_AGENDA_TYPE)
-            ->when($viewer->isSales(), fn (Builder $query) => $query->where('owner_user_id', $viewer->id))
-            ->when(! $viewer->canViewAllBranches() && ! $viewer->isSales(), fn (Builder $query) => $query->whereIn('branch_id', $this->workspaceAccess->accessibleBranchIds($viewer)))
+            ->whereIn('branch_id', $this->organizationScope->branchIds($viewer, 'sales_pocketbook'))
+            ->where(fn (Builder $query) => $query->whereIn('sales_project_id', $projectIds)
+                ->orWhere(fn (Builder $legacy) => $legacy->whereNull('sales_project_id')->whereIn('project_name', $projectNames)))
+            ->whereIn('owner_user_id', $this->organizationScope->visibleUserIds($viewer, 'sales_pocketbook'))
             ->when(! empty($filters['branch_id']), fn (Builder $query) => $query->where('branch_id', $filters['branch_id']))
             ->when(! empty($filters['project_id']), fn (Builder $query) => $query->where('sales_project_id', $filters['project_id']))
             ->when(! empty($filters['sales_user_id']), fn (Builder $query) => $query->where('owner_user_id', $filters['sales_user_id']));

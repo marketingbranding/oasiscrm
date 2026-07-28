@@ -14,6 +14,7 @@ use App\Models\LeadMaster;
 use App\Models\User;
 use App\Services\ExpenseFilterService;
 use App\Services\OptimisticLockService;
+use App\Services\OrganizationScopeService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -29,20 +30,23 @@ class ExpenseController extends Controller
     public function __construct(
         private readonly OptimisticLockService $optimisticLock,
         private readonly ExpenseFilterService $expenseFilters,
+        private readonly OrganizationScopeService $organizationScope,
     ) {}
 
     public function index(Request $request)
     {
         $this->authorize('viewAny', Expense::class);
         $filters = $this->expenseFilters->normalize($request->query());
+        $filters = $this->scopeFilters($request, $filters);
         $expenses = $this->expenseFilters->query($filters)
             ->with(['branch:id,name', 'project:id,project_name', 'category:id,name', 'creator:id,name'])
             ->paginate($filters['per_page'])->withQueryString();
         $summary = $this->expenseFilters->summary($filters);
-        $branches = Branch::where('is_active', true)->forDropdown()->get(['id', 'name', 'code', 'is_active']);
+        $branches = Branch::where('is_active', true)->whereIn('id', $filters['scope_branch_ids'])->forDropdown()->get(['id', 'name', 'code', 'is_active']);
         $projects = LeadMaster::query()
             ->where('is_active', true)
             ->whereNotNull('branch_id')
+            ->whereIn('branch_id', $filters['scope_branch_ids'])
             ->with('branch:id,name')
             ->orderBy('project_name')
             ->get(['id', 'branch_id', 'project_name']);
@@ -58,6 +62,7 @@ class ExpenseController extends Controller
     {
         $this->authorize('export', Expense::class);
         $filters = $this->expenseFilters->normalize($request->query());
+        $filters = $this->scopeFilters($request, $filters, 'export');
         $expenses = $this->expenseFilters->query($filters)
             ->with(['branch:id,name', 'project:id,project_name', 'category:id,name', 'creator:id,name', 'updatedBy:id,name'])
             ->get();
@@ -91,7 +96,7 @@ class ExpenseController extends Controller
     public function create()
     {
         $this->authorize('create', Expense::class);
-        $defaultBranch = request()->user()->hasRole('pusat')
+        $defaultBranch = request()->user()->hasPermission('expenses.view_all')
             ? Branch::where('is_active', true)->whereRaw('UPPER(code) = ?', ['PST'])->first()
             : null;
 
@@ -102,6 +107,7 @@ class ExpenseController extends Controller
     {
         $this->authorize('create', Expense::class);
         $data = Arr::except($request->validated(), 'submit_action');
+        abort_unless(in_array((int) $data['branch_id'], $this->organizationScope->branchIds($request->user(), 'expenses', 'manage'), true), 403);
         $data += [
             'status' => Expense::STATUS_ACTIVE,
             'created_by' => $request->user()->id,
@@ -139,6 +145,8 @@ class ExpenseController extends Controller
     {
         $this->authorize('update', $expense);
         $data = Arr::except($request->validated(), 'expected_updated_at');
+        abort_unless($request->user()->hasPermission('expenses.manage_all')
+            || in_array((int) $data['branch_id'], $this->organizationScope->branchIds($request->user(), 'expenses', 'manage'), true), 403);
         $result = $this->optimisticLock->execute($request, $expense, $request->input('expected_updated_at'), function (Expense $current) use ($data, $request) {
             $this->authorize('update', $current);
             abort_if($current->status === Expense::STATUS_CANCELLED, 422, 'Pengeluaran yang sudah dibatalkan tidak dapat diubah.');
@@ -194,6 +202,7 @@ class ExpenseController extends Controller
             ], 422);
         }
         $data = $validator->validated();
+        abort_unless(in_array((int) $data['branch_id'], $this->organizationScope->branchIds($request->user(), 'expenses'), true), 403);
 
         try {
             $projects = LeadMaster::where('branch_id', $data['branch_id'])->where('is_active', true)
@@ -213,7 +222,8 @@ class ExpenseController extends Controller
 
     private function formData(?Expense $expense, mixed $branchId): array
     {
-        $branches = Branch::where('is_active', true)->forDropdown()->get(['id', 'name', 'code']);
+        $branchIds = $this->organizationScope->branchIds(request()->user(), 'expenses', 'manage');
+        $branches = Branch::where('is_active', true)->whereIn('id', $branchIds)->forDropdown()->get(['id', 'name', 'code']);
         if ($expense && ! $branches->contains('id', $expense->branch_id)) {
             $branches->push($expense->branch);
         }
@@ -233,5 +243,15 @@ class ExpenseController extends Controller
             'optimisticToken' => $expense ? $this->optimisticLock->token($expense) : null,
             'initialBranchId' => (string) ($branchId ?? ''),
         ];
+    }
+
+    private function scopeFilters(Request $request, array $filters, string $action = 'view'): array
+    {
+        $filters['scope_branch_ids'] = $request->user()->hasPermission("expenses.{$action}_all")
+            ? Branch::query()->pluck('id')->map(fn ($id) => (int) $id)->all()
+            : $this->organizationScope->branchIds($request->user(), 'expenses', $action);
+        abort_if($filters['branch_id'] > 0 && ! in_array((int) $filters['branch_id'], $filters['scope_branch_ids'], true), 403);
+
+        return $filters;
     }
 }

@@ -62,7 +62,7 @@ class DashboardController extends Controller
         $actionQueue = $this->getActionQueue($user, $selectedBranchId, $selectedProject);
         $syncHealth = $this->getSyncHealth($selectedBranchId);
         $dashboardSyncStatus = $selectedBranchId ? DatabaseSheetSyncStatus::where('branch_id', $selectedBranchId)->first() : null;
-        $canSyncDatabase = $branch && $this->workspaceAccess->canSyncBranch($user, $branch);
+        $canSyncDatabase = $user->hasPermission('database.sync') && $branch && $this->workspaceAccess->canSyncBranch($user, $branch);
         $konsumenProgress = $this->getKonsumenProgress($selectedBranchId);
         $salesWeekly = null;
         $salesReminders = null;

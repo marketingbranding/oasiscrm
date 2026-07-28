@@ -129,8 +129,12 @@
                 @if(count($activeFilters) > 0)<span class="inline-flex min-w-5 h-5 items-center justify-center bg-[#c0392b] text-white px-1 text-[10px]">{{ count($activeFilters) }}</span>@endif
             </button>
             <div class="ml-auto flex items-center gap-2">
-                <x-crm.export-import export-route="dana-talangan.export" import-route="dana-talangan.import" :params="request()->only(['branch_id', 'project_name', 'status', 'search', 'filter_mode', 'date_from', 'date_to', 'month_from', 'month_to'])" />
+                @if($canExport || $canManage)
+                <x-crm.export-import export-route="dana-talangan.export" import-route="dana-talangan.import" :params="request()->only(['branch_id', 'project_name', 'status', 'search', 'filter_mode', 'date_from', 'date_to', 'month_from', 'month_to'])" :can-export="$canExport" :can-import="$canManage" />
+                @endif
+                @if($canManage)
                 <button type="button" @click="adding = true" class="bg-[#f1c40f] text-black px-4 py-1.5 text-sm font-[Helvetica] font-bold border-2 border-black rounded-none hover:bg-[#d4ac0d]">+ Dana Talangan Baru</button>
+                @endif
             </div>
         </div>
     </div>
@@ -207,7 +211,7 @@
         <table class="crm-data-table dana-table" :class="{ frozen: tableFrozen }">
             <thead>
                 <tr>
-                    <th class="crm-select-col"><input type="checkbox" id="select-all" class="cursor-pointer"></th>
+                    <th class="crm-select-col">@if($canManage)<input type="checkbox" id="select-all" class="cursor-pointer">@endif</th>
                     <th class="crm-row-num">No</th>
                     <th class="name-col" style="{{ $sortField === 'nama_konsumen' ? 'background:#5b7db9;' : '' }}">
                         <div class="flex items-center justify-between gap-2">
@@ -235,7 +239,7 @@
             <tbody>
                 @forelse($records as $i => $r)
                 <tr>
-                    <td class="crm-select-col"><input type="checkbox" class="row-checkbox cursor-pointer" value="{{ $r->id }}"></td>
+                    <td class="crm-select-col">@if($canManage)<input type="checkbox" class="row-checkbox cursor-pointer" value="{{ $r->id }}">@endif</td>
                     <td class="crm-row-num">{{ method_exists($records, 'firstItem') ? $records->firstItem() + $i : $i + 1 }}</td>
                     <td class="name-col font-bold cursor-pointer hover:underline" title="{{ $r->nama_konsumen }}" @click.prevent="openDetail({{ $r->id }})">{{ $r->nama_konsumen }}</td>
                     <td title="{{ $r->tanggal->format('d M Y') }}">{{ $r->tanggal->format('d M Y') }}</td>
@@ -257,6 +261,7 @@
                         </span>
                     </td>
                     <td class="crm-actions">
+                        @if($canManage)
                         <div class="flex items-center justify-center gap-1">
                             <button type="button" @click="openEdit(@js([
                                 "id" => $r->id,
@@ -286,6 +291,9 @@
                                 <button type="submit" class="font-[Helvetica] font-bold underline" style="font-size:11px;color:#c0392b;">Hapus</button>
                             </form>
                         </div>
+                        @else
+                        —
+                        @endif
                     </td>
                 </tr>
                 @empty
@@ -437,6 +445,7 @@
         </template>
     </div>
 
+    @if($canManage)
     <x-crm.bulk-bar
         destroy-route="{{ route('dana-talangan.bulk-destroy') }}"
         update-route="{{ route('dana-talangan.bulk-update') }}"
@@ -444,6 +453,7 @@
         status-label="Status Cicilan"
         accent-color="#f1c40f"
         :params="request()->only(['branch_id', 'project_name', 'status', 'search', 'filter_mode', 'date_from', 'date_to', 'month_from', 'month_to'])" />
+    @endif
 
 <x-crm.detail-modal
     title-key="nama_konsumen"

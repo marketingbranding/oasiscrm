@@ -9,17 +9,17 @@ class ExpenseCategoryPolicy
 {
     public function viewAny(User $user): bool
     {
-        return $user->isSuperadmin();
+        return $user->hasPermission('expenses.manage_categories');
     }
 
     public function create(User $user): bool
     {
-        return $user->isSuperadmin();
+        return $user->hasPermission('expenses.manage_categories');
     }
 
     public function update(User $user, ExpenseCategory $expenseCategory): bool
     {
-        return $user->isSuperadmin();
+        return $user->hasPermission('expenses.manage_categories');
     }
 
     public function delete(User $user, ExpenseCategory $expenseCategory): bool

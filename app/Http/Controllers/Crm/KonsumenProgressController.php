@@ -8,6 +8,7 @@ use App\Models\KonsumenProgressSyncStatus;
 use App\Services\CollaborationNotificationService;
 use App\Services\KonsumenPipelineService;
 use App\Services\KonsumenProgressSyncService;
+use App\Services\OrganizationScopeService;
 use App\Services\SyncResponseService;
 use App\Services\WorkspaceAccessService;
 use Illuminate\Http\Request;
@@ -21,6 +22,7 @@ class KonsumenProgressController extends Controller
         private readonly WorkspaceAccessService $workspaceAccess,
         private readonly CollaborationNotificationService $notifications,
         private readonly SyncResponseService $syncResponses,
+        private readonly OrganizationScopeService $organizationScope,
     ) {}
 
     public function index(Request $request)
@@ -28,9 +30,10 @@ class KonsumenProgressController extends Controller
         $user = Auth::user();
         $selectedBranchId = $request->get('branch_id');
 
-        $branches = $this->workspaceAccess->accessibleBranches($user);
+        $allowedBranchIds = $this->organizationScope->branchIds($user, 'consumer_progress');
+        $branches = $this->workspaceAccess->accessibleBranches($user)->whereIn('id', $allowedBranchIds)->values();
         $selectedBranch = $this->workspaceAccess->resolveRequestedBranch($user, $selectedBranchId);
-        if ($selectedBranchId && ! $selectedBranch) {
+        if ($selectedBranchId && (! $selectedBranch || ! in_array((int) $selectedBranch->id, $allowedBranchIds, true))) {
             abort(403);
         }
         $selectedBranch ??= $branches->first();
@@ -50,13 +53,14 @@ class KonsumenProgressController extends Controller
             }
         }
 
-        $canSync = $selectedBranch && $this->workspaceAccess->canSyncBranch($user, $selectedBranch);
+        $canSync = $user->hasPermission('consumer_progress.sync') && $selectedBranch && $this->workspaceAccess->canSyncBranch($user, $selectedBranch);
 
         return view('crm.konsumen-progress.index', compact('branches', 'selectedBranch', 'selectedBranchId', 'pipeline', 'errors', 'syncStatus', 'isStale', 'canSync'));
     }
 
     public function sync(Request $request)
     {
+        abort_unless($request->user()->hasPermission('consumer_progress.sync'), 403);
         $branch = $this->resolveBranch($request);
         if ($request->filled('branch_id') && ! $branch) {
             abort(403);
@@ -68,6 +72,7 @@ class KonsumenProgressController extends Controller
 
             return back()->with('error', 'Branch tidak ditemukan.');
         }
+        abort_unless(in_array((int) $branch->id, $this->organizationScope->branchIds($request->user(), 'consumer_progress', 'sync'), true), 403);
         abort_unless($this->workspaceAccess->canSyncBranch(Auth::user(), $branch), 403);
 
         try {
@@ -92,8 +97,10 @@ class KonsumenProgressController extends Controller
 
     public function syncStatus(Request $request)
     {
+        abort_unless($request->user()->hasPermission('consumer_progress.sync'), 403);
         $branch = $this->resolveBranch($request);
         abort_unless($branch && $this->workspaceAccess->canSyncBranch($request->user(), $branch), 403);
+        abort_unless(in_array((int) $branch->id, $this->organizationScope->branchIds($request->user(), 'consumer_progress', 'sync'), true), 403);
         $status = KonsumenProgressSyncStatus::with('initiator')->where('branch_id', $branch->id)->first();
         $payload = $this->syncResponses->make('konsumen-progress', ['type' => 'branch', 'id' => $branch->id, 'name' => $branch->name], $status);
         $payload['status_url'] = route('konsumen-progress.sync-status', ['branch_id' => $branch->id]);
@@ -103,12 +110,14 @@ class KonsumenProgressController extends Controller
 
     public function stage(Request $request)
     {
+        abort_unless($request->user()->hasPermission('consumer_progress.view'), 403);
         $stageKey = $request->query('stage', 'bast');
         if (! array_key_exists($stageKey, $this->pipelineService->stages())) {
             abort(404);
         }
 
         $branch = $this->resolveBranch($request);
+        abort_unless(! $branch || in_array((int) $branch->id, $this->organizationScope->branchIds($request->user(), 'consumer_progress'), true), 403);
         if (! $branch || ! $branch->sheet_id) {
             return response()->json([
                 'ok' => false,

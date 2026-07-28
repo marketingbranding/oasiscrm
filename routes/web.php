@@ -133,6 +133,7 @@ Route::middleware(['auth', 'active', 'verified', 'password.changed', 'sales.acce
         Route::get('pengeluaran/create', [ExpenseController::class, 'create'])->name('expenses.create');
         Route::post('pengeluaran', [ExpenseController::class, 'store'])->name('expenses.store');
         Route::get('pengeluaran/projects', [ExpenseController::class, 'projects'])->name('expenses.projects');
+        Route::get('pengeluaran/export', [ExpenseController::class, 'export'])->name('expenses.export');
         Route::get('pengeluaran/{expense}', [ExpenseController::class, 'show'])->name('expenses.show');
         Route::get('pengeluaran/{expense}/edit', [ExpenseController::class, 'edit'])->name('expenses.edit');
         Route::put('pengeluaran/{expense}', [ExpenseController::class, 'update'])->name('expenses.update');

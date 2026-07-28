@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Crm;
 
+use App\Exports\ExpenseReportExport;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Crm\CancelExpenseRequest;
 use App\Http\Requests\Crm\StoreExpenseRequest;
@@ -10,6 +11,8 @@ use App\Models\Branch;
 use App\Models\Expense;
 use App\Models\ExpenseCategory;
 use App\Models\LeadMaster;
+use App\Models\User;
+use App\Services\ExpenseFilterService;
 use App\Services\OptimisticLockService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -22,15 +25,61 @@ use Throwable;
 
 class ExpenseController extends Controller
 {
-    public function __construct(private readonly OptimisticLockService $optimisticLock) {}
+    public function __construct(
+        private readonly OptimisticLockService $optimisticLock,
+        private readonly ExpenseFilterService $expenseFilters,
+    ) {}
 
-    public function index()
+    public function index(Request $request)
     {
         $this->authorize('viewAny', Expense::class);
-        $expenses = Expense::with(['branch', 'project', 'category', 'creator'])
-            ->orderByDesc('expense_date')->orderByDesc('id')->paginate(20);
+        $filters = $this->expenseFilters->normalize($request->query());
+        $expenses = $this->expenseFilters->query($filters)
+            ->with(['branch:id,name', 'project:id,project_name', 'category:id,name', 'creator:id,name'])
+            ->paginate($filters['per_page'])->withQueryString();
+        $summary = $this->expenseFilters->summary($filters);
+        $branches = Branch::where('is_active', true)->forDropdown()->get(['id', 'name', 'code']);
+        $projects = LeadMaster::where('is_active', true)->orderBy('project_name')->get(['id', 'branch_id', 'project_name']);
+        $categories = ExpenseCategory::orderBy('sort_order')->orderBy('name')->get(['id', 'name', 'is_active']);
+        $creators = User::whereHas('createdExpenses')->orderBy('name')->get(['id', 'name', 'is_active']);
 
-        return view('crm.expenses.index', compact('expenses'));
+        return view('crm.expenses.index', compact(
+            'expenses', 'filters', 'summary', 'branches', 'projects', 'categories', 'creators',
+        ) + ['paymentMethods' => Expense::PAYMENT_METHODS]);
+    }
+
+    public function export(Request $request)
+    {
+        $this->authorize('export', Expense::class);
+        $filters = $this->expenseFilters->normalize($request->query());
+        $expenses = $this->expenseFilters->query($filters)
+            ->with(['branch:id,name', 'project:id,project_name', 'category:id,name', 'creator:id,name', 'updatedBy:id,name'])
+            ->get();
+        if ($expenses->isEmpty()) {
+            return back()->with('warning', 'Tidak ada data pengeluaran pada filter dan periode yang dipilih.');
+        }
+
+        $summary = $this->expenseFilters->summary($filters);
+        $recaps = $this->expenseFilters->recapQuery($filters)->get();
+        $branchName = $filters['branch_id']
+            ? Branch::find($filters['branch_id'])?->name
+            : 'semua-cabang';
+        $periodPart = $filters['period_type'] === 'month'
+            ? $filters['period_month']
+            : $filters['period_start']->toDateString().'_'.$filters['period_end']->toDateString();
+        $filename = sprintf(
+            'pengeluaran_%s_%s.xlsx',
+            $periodPart,
+            str($branchName)->slug()->value() ?: 'cabang',
+        );
+
+        return ExpenseReportExport::toBrowser(
+            $expenses,
+            $recaps,
+            $summary,
+            $this->expenseFilters->periodLabel($filters),
+            $filename,
+        );
     }
 
     public function create()

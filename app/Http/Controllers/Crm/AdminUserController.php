@@ -147,6 +147,10 @@ class AdminUserController extends Controller
             }
         }
 
+        if ($user->createdExpenses()->exists()) {
+            return back()->with('warning', 'User tidak dapat dihapus karena memiliki riwayat pengeluaran. Nonaktifkan akun agar riwayat tetap terjaga.');
+        }
+
         $user->delete();
 
         return redirect()->route('admin-users.index')->with('success', 'User berhasil dihapus.');

@@ -19,8 +19,15 @@ class UpdateExpenseRequest extends StoreExpenseRequest
                 $query->where('is_active', true)->orWhere('id', $expense->expense_category_id);
             });
         });
+        $branchRule = Rule::exists('branches', 'id')->where(fn ($query) => $query
+            ->where('is_active', true)->orWhere('id', $expense->branch_id));
+        $projectRule = Rule::exists('lead_master', 'id')->where(fn ($query) => $query
+            ->where('branch_id', $this->input('branch_id'))
+            ->where(fn ($query) => $query->where('is_active', true)->orWhere('id', $expense->project_id)));
 
         return array_replace($this->expenseRules(), [
+            'branch_id' => ['required', $branchRule],
+            'project_id' => ['nullable', $projectRule],
             'expense_category_id' => ['required', $categoryRule],
             'expected_updated_at' => ['required', 'string', 'max:40'],
         ]);

@@ -4,7 +4,7 @@
 
 @section('content')
 @php
-    $currency = fn (float|int $value) => 'Rp'.number_format($value, 0, ',', '.');
+    $currency = fn (float|int $value) => 'Rp'.number_format($value, fmod((float) $value, 1.0) === 0.0 ? 0 : 2, ',', '.');
 @endphp
 <div class="mb-4 flex flex-wrap items-center justify-between gap-2 border-2 border-black bg-[#b3bd95] px-4 py-3">
     <h1 class="font-['Arial_Black'] text-xl font-black uppercase">Pengeluaran</h1>

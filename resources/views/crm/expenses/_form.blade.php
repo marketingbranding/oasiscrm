@@ -6,7 +6,7 @@
 <form method="POST" action="{{ $action }}" x-data="expenseForm(@js([
     'branchId' => (string) old('branch_id', $initialBranchId),
     'projectId' => $selectedProject,
-    'projects' => $projects->map(fn ($project) => ['id' => (string) $project->id, 'name' => $project->project_name])->values(),
+    'projects' => $projects->map(fn ($project) => ['id' => (string) $project->id, 'name' => $project->project_name.($project->is_active ? '' : ' (Tidak Aktif)')])->values(),
     'projectsUrl' => route('expenses.projects'),
 ]))" @submit="if (submitting) { $event.preventDefault() } else { submitting = true }" class="border-2 border-black bg-white">
     @csrf
@@ -25,13 +25,13 @@
             <label class="mb-1 block font-[Helvetica] text-xs font-bold uppercase">Cabang</label>
             <select name="branch_id" x-model="branchId" @change="loadProjects(true)" required class="{{ $field }}">
                 <option value="">— Pilih Cabang —</option>
-                @foreach($branches as $branch)<option value="{{ $branch->id }}">{{ $branch->name }}</option>@endforeach
+                @foreach($branches as $branch)<option value="{{ $branch->id }}">{{ $branch->name }}{{ $branch->is_active ? '' : ' (Tidak Aktif)' }}</option>@endforeach
             </select>
             @error('branch_id')<p class="mt-1 text-xs font-bold text-[#c0392b]">{{ $message }}</p>@enderror
         </div>
         <div>
             <label class="mb-1 block font-[Helvetica] text-xs font-bold uppercase">Proyek</label>
-            <select name="project_id" x-model="projectId" :disabled="loadingProjects || !branchId" class="{{ $field }}">
+            <select name="project_id" x-model="projectId" :disabled="loadingProjects || !branchId || projectError" class="{{ $field }}">
                 <option value="" x-text="loadingProjects ? 'Memuat proyek...' : '— Tanpa Proyek —'"></option>
                 <template x-for="project in projects" :key="project.id"><option :value="project.id" x-text="project.name"></option></template>
             </select>
@@ -66,13 +66,13 @@
             <input type="text" name="description" maxlength="255" value="{{ old('description', $expense?->description) }}" required class="{{ $field }}">
             @error('description')<p class="mt-1 text-xs font-bold text-[#c0392b]">{{ $message }}</p>@enderror
         </div>
-        <div><label class="mb-1 block font-[Helvetica] text-xs font-bold uppercase">Nama Vendor</label><input type="text" name="vendor_name" maxlength="255" value="{{ old('vendor_name', $expense?->vendor_name) }}" class="{{ $field }}">@error('vendor_name')<p class="mt-1 text-xs font-bold text-[#c0392b]">{{ $message }}</p>@enderror</div>
+        <div><label class="mb-1 block font-[Helvetica] text-xs font-bold uppercase">Vendor / Penerima</label><input type="text" name="vendor_name" maxlength="255" value="{{ old('vendor_name', $expense?->vendor_name) }}" class="{{ $field }}">@error('vendor_name')<p class="mt-1 text-xs font-bold text-[#c0392b]">{{ $message }}</p>@enderror</div>
         <div><label class="mb-1 block font-[Helvetica] text-xs font-bold uppercase">Nomor Referensi</label><input type="text" name="reference_number" maxlength="255" value="{{ old('reference_number', $expense?->reference_number) }}" class="{{ $field }}">@error('reference_number')<p class="mt-1 text-xs font-bold text-[#c0392b]">{{ $message }}</p>@enderror</div>
         <div class="md:col-span-2"><label class="mb-1 block font-[Helvetica] text-xs font-bold uppercase">Catatan</label><textarea name="notes" maxlength="2000" rows="4" class="{{ $field }}">{{ old('notes', $expense?->notes) }}</textarea>@error('notes')<p class="mt-1 text-xs font-bold text-[#c0392b]">{{ $message }}</p>@enderror</div>
     </div>
     <div class="flex flex-wrap gap-2 border-t-2 border-black bg-gray-100 p-4">
-        <button type="submit" @unless($editing) @click="$refs.submitAction.value = 'save'" @endunless :disabled="submitting || {{ $categories->isEmpty() ? 'true' : 'false' }}" class="border-2 border-black bg-[#b3bd95] px-4 py-2 font-bold disabled:opacity-50">{{ $editing ? 'Simpan Perubahan' : 'Simpan' }}</button>
-        @unless($editing)<button type="submit" @click="$refs.submitAction.value = 'add_another'" :disabled="submitting || {{ $categories->isEmpty() ? 'true' : 'false' }}" class="border-2 border-black bg-white px-4 py-2 font-bold disabled:opacity-50">Simpan &amp; Tambah Lagi</button>@endunless
+        <button type="submit" @unless($editing) @click="$refs.submitAction.value = 'save'" @endunless :disabled="submitting || projectError || {{ $categories->isEmpty() ? 'true' : 'false' }}" class="border-2 border-black bg-[#b3bd95] px-4 py-2 font-bold disabled:opacity-50">{{ $editing ? 'Simpan Perubahan' : 'Simpan' }}</button>
+        @unless($editing)<button type="submit" @click="$refs.submitAction.value = 'add_another'" :disabled="submitting || projectError || {{ $categories->isEmpty() ? 'true' : 'false' }}" class="border-2 border-black bg-white px-4 py-2 font-bold disabled:opacity-50">Simpan &amp; Tambah Lagi</button>@endunless
         <a href="{{ $editing ? route('expenses.show', $expense) : route('expenses.index') }}" class="border-2 border-black bg-white px-4 py-2 font-bold">Batal</a>
     </div>
 </form>
@@ -88,21 +88,26 @@ document.addEventListener('alpine:init', () => {
         loadingProjects: false,
         projectError: '',
         submitting: false,
+        projectRequest: 0,
         async loadProjects(clearSelection) {
             if (clearSelection) this.projectId = '';
             this.projects = [];
             this.projectError = '';
+            const requestId = ++this.projectRequest;
             if (!this.branchId) return;
             this.loadingProjects = true;
             try {
                 const response = await fetch(`${this.projectsUrl}?branch_id=${encodeURIComponent(this.branchId)}`, { headers: { Accept: 'application/json' } });
                 const data = await response.json();
                 if (!response.ok) throw new Error(data.message || 'Pilihan proyek gagal dimuat. Silakan coba lagi.');
+                if (requestId !== this.projectRequest) return;
                 this.projects = data.projects;
             } catch (error) {
+                if (requestId !== this.projectRequest) return;
                 this.projectError = error.message || 'Pilihan proyek gagal dimuat. Silakan coba lagi.';
+                window.oasisToast?.(this.projectError, 'warning');
             } finally {
-                this.loadingProjects = false;
+                if (requestId === this.projectRequest) this.loadingProjects = false;
             }
         },
     }));

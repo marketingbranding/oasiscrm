@@ -25,7 +25,9 @@ class OptimisticLockService
 
     public function token(Model $model): string
     {
-        return $model->updated_at?->copy()->utc()->format('Y-m-d H:i:s') ?? '';
+        $timestamp = $model->updated_at?->copy()->utc()->format('Y-m-d H:i:s') ?? '';
+
+        return $model instanceof Expense ? $timestamp.'|'.($model->lock_version ?? 0) : $timestamp;
     }
 
     public function matches(Model $model, mixed $expected): bool
@@ -34,15 +36,25 @@ class OptimisticLockService
             return false;
         }
 
+        $expectedValue = trim($expected);
+        if ($model instanceof Expense) {
+            [$expectedValue, $expectedVersion] = array_pad(explode('|', $expectedValue, 2), 2, null);
+            if (! ctype_digit((string) $expectedVersion) || (int) $expectedVersion !== $model->lock_version) {
+                return false;
+            }
+        }
+
         try {
-            $expectedAt = preg_match('/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/', trim($expected))
-                ? Carbon::createFromFormat('Y-m-d H:i:s', trim($expected), 'UTC')->format('Y-m-d H:i:s')
-                : Carbon::parse($expected)->utc()->format('Y-m-d H:i:s');
+            $expectedAt = preg_match('/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/', $expectedValue)
+                ? Carbon::createFromFormat('Y-m-d H:i:s', $expectedValue, 'UTC')->format('Y-m-d H:i:s')
+                : Carbon::parse($expectedValue)->utc()->format('Y-m-d H:i:s');
         } catch (\Throwable) {
             return false;
         }
 
-        return hash_equals($this->token($model), $expectedAt);
+        $currentAt = $model->updated_at?->copy()->utc()->format('Y-m-d H:i:s') ?? '';
+
+        return hash_equals($currentAt, $expectedAt);
     }
 
     public function execute(Request $request, Model $model, mixed $expected, Closure $callback): mixed

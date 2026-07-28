@@ -37,9 +37,9 @@ class ExpenseFilterService
         if ($dateFrom && $dateTo && $dateFrom->gt($dateTo)) {
             [$dateFrom, $dateTo] = [$dateTo, $dateFrom];
         }
-        $customPeriod = $dateFrom && $dateTo;
-        $periodStart = $customPeriod ? $dateFrom : CarbonImmutable::create($year, $month, 1)->startOfDay();
-        $periodEnd = $customPeriod ? $dateTo : CarbonImmutable::create($year, $month, 1)->endOfMonth()->startOfDay();
+        $customPeriod = $dateFrom || $dateTo;
+        $periodStart = $dateFrom ?? ($dateTo?->startOfMonth() ?? CarbonImmutable::create($year, $month, 1)->startOfDay());
+        $periodEnd = $dateTo ?? ($dateFrom?->endOfMonth()->startOfDay() ?? CarbonImmutable::create($year, $month, 1)->endOfMonth()->startOfDay());
 
         $branchId = $this->activeId(Branch::query(), $input['branch_id'] ?? null);
         $projectId = $this->activeId(
@@ -60,8 +60,8 @@ class ExpenseFilterService
             'period_month' => sprintf('%04d-%02d', $year, $month),
             'month' => $month,
             'year' => $year,
-            'date_from' => $customPeriod ? $dateFrom->toDateString() : null,
-            'date_to' => $customPeriod ? $dateTo->toDateString() : null,
+            'date_from' => $dateFrom?->toDateString(),
+            'date_to' => $dateTo?->toDateString(),
             'period_start' => $periodStart,
             'period_end' => $periodEnd,
             'period_type' => $customPeriod ? 'custom' : 'month',
@@ -120,7 +120,7 @@ class ExpenseFilterService
             ->leftJoin('lead_master', 'lead_master.id', '=', 'expenses.project_id')
             ->leftJoin('expense_categories', 'expense_categories.id', '=', 'expenses.expense_category_id')
             ->selectRaw("COALESCE(branches.name, '-') as branch_name, COALESCE(lead_master.project_name, '-') as project_name, COALESCE(expense_categories.name, '-') as category_name, COUNT(*) as transaction_count, SUM(expenses.amount) as total")
-            ->groupBy('branches.name', 'lead_master.project_name', 'expense_categories.name')
+            ->groupBy('branches.id', 'branches.name', 'lead_master.id', 'lead_master.project_name', 'expense_categories.id', 'expense_categories.name')
             ->orderBy('branches.name')->orderBy('lead_master.project_name')->orderBy('expense_categories.name');
     }
 
@@ -132,18 +132,18 @@ class ExpenseFilterService
     private function baseQuery(array $filters): Builder
     {
         return Expense::query()
-            ->when($filters['branch_id'], fn (Builder $query, int $id) => $query->where('branch_id', $id))
-            ->when($filters['project_id'], fn (Builder $query, int $id) => $query->where('project_id', $id))
-            ->when($filters['expense_category_id'], fn (Builder $query, int $id) => $query->where('expense_category_id', $id))
-            ->when($filters['payment_method'], fn (Builder $query, string $method) => $query->where('payment_method', $method))
-            ->when($filters['created_by'], fn (Builder $query, int $id) => $query->where('created_by', $id))
+            ->when($filters['branch_id'], fn (Builder $query, int $id) => $query->where('expenses.branch_id', $id))
+            ->when($filters['project_id'], fn (Builder $query, int $id) => $query->where('expenses.project_id', $id))
+            ->when($filters['expense_category_id'], fn (Builder $query, int $id) => $query->where('expenses.expense_category_id', $id))
+            ->when($filters['payment_method'], fn (Builder $query, string $method) => $query->where('expenses.payment_method', $method))
+            ->when($filters['created_by'], fn (Builder $query, int $id) => $query->where('expenses.created_by', $id))
             ->when($filters['search'] !== '', function (Builder $query) use ($filters) {
                 $search = '%'.$filters['search'].'%';
                 $query->where(fn (Builder $searchQuery) => $searchQuery
-                    ->where('description', 'like', $search)
-                    ->orWhere('vendor_name', 'like', $search)
-                    ->orWhere('reference_number', 'like', $search)
-                    ->orWhere('notes', 'like', $search));
+                    ->where('expenses.description', 'like', $search)
+                    ->orWhere('expenses.vendor_name', 'like', $search)
+                    ->orWhere('expenses.reference_number', 'like', $search)
+                    ->orWhere('expenses.notes', 'like', $search));
             });
     }
 
@@ -219,8 +219,11 @@ class ExpenseFilterService
 
     private function existingId(Builder $query, mixed $value): ?int
     {
+        if ($value === null || $value === '') {
+            return null;
+        }
         $id = filter_var($value, FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]);
 
-        return $id && $query->whereKey($id)->exists() ? (int) $id : null;
+        return $id && $query->whereKey($id)->exists() ? (int) $id : -1;
     }
 }

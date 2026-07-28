@@ -19,6 +19,7 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\Rule;
 use Symfony\Component\HttpFoundation\Response;
 use Throwable;
@@ -38,7 +39,7 @@ class ExpenseController extends Controller
             ->with(['branch:id,name', 'project:id,project_name', 'category:id,name', 'creator:id,name'])
             ->paginate($filters['per_page'])->withQueryString();
         $summary = $this->expenseFilters->summary($filters);
-        $branches = Branch::where('is_active', true)->forDropdown()->get(['id', 'name', 'code']);
+        $branches = Branch::where('is_active', true)->forDropdown()->get(['id', 'name', 'code', 'is_active']);
         $projects = LeadMaster::where('is_active', true)->orderBy('project_name')->get(['id', 'branch_id', 'project_name']);
         $categories = ExpenseCategory::orderBy('sort_order')->orderBy('name')->get(['id', 'name', 'is_active']);
         $creators = User::whereHas('createdExpenses')->orderBy('name')->get(['id', 'name', 'is_active']);
@@ -136,7 +137,10 @@ class ExpenseController extends Controller
         $result = $this->optimisticLock->execute($request, $expense, $request->input('expected_updated_at'), function (Expense $current) use ($data, $request) {
             $this->authorize('update', $current);
             abort_if($current->status === Expense::STATUS_CANCELLED, 422, 'Pengeluaran yang sudah dibatalkan tidak dapat diubah.');
-            $current->update($data + ['updated_by' => $request->user()->id]);
+            $current->update($data + [
+                'updated_by' => $request->user()->id,
+                'lock_version' => $current->lock_version + 1,
+            ]);
 
             return $current;
         });
@@ -159,6 +163,7 @@ class ExpenseController extends Controller
                 'cancelled_at' => now(),
                 'cancelled_by' => $request->user()->id,
                 'updated_by' => $request->user()->id,
+                'lock_version' => $current->lock_version + 1,
             ]);
             $current->logActivity('cancelled', ['reason' => $request->validated('cancellation_reason')]);
 
@@ -174,9 +179,16 @@ class ExpenseController extends Controller
     public function projects(Request $request): JsonResponse
     {
         $this->authorize('viewAny', Expense::class);
-        $data = $request->validate([
+        $validator = Validator::make($request->query(), [
             'branch_id' => ['required', Rule::exists('branches', 'id')->where('is_active', true)],
         ]);
+        if ($validator->fails()) {
+            return response()->json([
+                'message' => 'Cabang tidak valid atau sudah tidak aktif.',
+                'errors' => $validator->errors(),
+            ], 422);
+        }
+        $data = $validator->validated();
 
         try {
             $projects = LeadMaster::where('branch_id', $data['branch_id'])->where('is_active', true)
@@ -197,13 +209,19 @@ class ExpenseController extends Controller
     private function formData(?Expense $expense, mixed $branchId): array
     {
         $branches = Branch::where('is_active', true)->forDropdown()->get(['id', 'name', 'code']);
+        if ($expense && ! $branches->contains('id', $expense->branch_id)) {
+            $branches->push($expense->branch);
+        }
         $categories = ExpenseCategory::where('is_active', true)->orderBy('sort_order')->orderBy('name')->get();
         if ($expense && ! $categories->contains('id', $expense->expense_category_id)) {
             $categories->push($expense->category);
         }
         $projects = filled($branchId)
-            ? LeadMaster::where('branch_id', $branchId)->where('is_active', true)->orderBy('project_name')->get(['id', 'project_name'])
+            ? LeadMaster::where('branch_id', $branchId)->where('is_active', true)->orderBy('project_name')->get(['id', 'project_name', 'is_active'])
             : collect();
+        if ($expense && (int) $branchId === $expense->branch_id && $expense->project && ! $projects->contains('id', $expense->project_id)) {
+            $projects->push($expense->project);
+        }
 
         return compact('expense', 'branches', 'categories', 'projects') + [
             'paymentMethods' => Expense::PAYMENT_METHODS,

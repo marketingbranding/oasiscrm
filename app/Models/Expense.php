@@ -41,6 +41,7 @@ class Expense extends Model
         'cancelled_by',
         'created_by',
         'updated_by',
+        'lock_version',
     ];
 
     protected function casts(): array
@@ -49,6 +50,7 @@ class Expense extends Model
             'expense_date' => 'date',
             'amount' => 'decimal:2',
             'cancelled_at' => 'datetime',
+            'lock_version' => 'integer',
         ];
     }
 

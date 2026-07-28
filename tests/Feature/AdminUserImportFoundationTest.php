@@ -98,17 +98,24 @@ class AdminUserImportFoundationTest extends TestCase
         $import = $workbook->getSheetByName('IMPORT USER');
         $reference = $workbook->getSheetByName('REFERENSI');
         $this->assertSame(UserImportTemplateExport::HEADERS, $import->rangeToArray('A1:I1')[0]);
-        $this->assertSame(UserImportTemplateExport::EXAMPLE_MARKER, $import->getCell('A2')->getValue());
-        $this->assertSame(DataType::TYPE_STRING, $import->getCell('A2')->getDataType());
+        $this->assertSame([
+            UserImportTemplateExport::EXAMPLE_MARKER, 'contoh@oasis.test', 'sales', 'Cabang Contoh',
+            'Cabang A; Cabang B', 'Proyek Contoh', 'Proyek A; Proyek B',
+            'atasan@oasis.test', 'pending_invitation',
+        ], $import->rangeToArray('A2:I2')[0]);
+        foreach (range('A', 'I') as $column) {
+            $this->assertSame(DataType::TYPE_STRING, $import->getCell($column.'2')->getDataType());
+        }
         $this->assertSame(UserImportTemplateExport::ROLE_SLUGS, array_column($reference->rangeToArray('A3:A8'), 0));
         $this->assertNotContains('superadmin', array_column($reference->rangeToArray('A3:A8'), 0));
+        $this->assertSame(['pending_invitation', 'invited', 'active'], array_column($reference->rangeToArray('D3:D5'), 0));
         $this->assertSame('Solo', $reference->getCell('G3')->getValue());
         $this->assertSame('SLO', $reference->getCell('H3')->getValue());
         $this->assertSame('Solo', $reference->getCell('J3')->getValue());
         $this->assertSame('Oasis Solo', $reference->getCell('K3')->getValue());
         $this->assertStringContainsString('BELUM DIDUKUNG', $reference->getCell('E5')->getValue());
 
-        foreach (['C2' => '$A$3:$A$8', 'D501' => '$G$3:$G$3', 'I501' => '$D$3:$D$5'] as $cell => $expectedRange) {
+        foreach (['C2' => '$A$3:$A$8', 'C501' => '$A$3:$A$8', 'D2' => '$G$3:$G$3', 'D501' => '$G$3:$G$3', 'I2' => '$D$3:$D$5', 'I501' => '$D$3:$D$5'] as $cell => $expectedRange) {
             $validation = $import->getCell($cell)->getDataValidation();
             $this->assertSame(DataValidation::TYPE_LIST, $validation->getType());
             $this->assertStringContainsString($expectedRange, $validation->getFormula1());

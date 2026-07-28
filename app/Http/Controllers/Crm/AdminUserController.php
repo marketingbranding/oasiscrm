@@ -22,6 +22,7 @@ use App\Services\UserAccountService;
 use App\Services\UserAdministrationService;
 use App\Services\UserInvitationService;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Password;
@@ -127,7 +128,7 @@ class AdminUserController extends Controller
         return view('crm.admin-users.edit', array_merge($this->options(request()->user()), ['user' => $admin_user, 'lockToken' => $this->locks->token($admin_user)]));
     }
 
-    public function update(AdminUserUpdateRequest $request, User $admin_user): RedirectResponse
+    public function update(AdminUserUpdateRequest $request, User $admin_user): RedirectResponse|JsonResponse
     {
         $actor = $request->user();
         $data = $request->validated();

@@ -43,7 +43,9 @@ class ExpenseFilterService
 
         $branchId = $this->activeId(Branch::query(), $input['branch_id'] ?? null);
         $projectId = $this->activeId(
-            LeadMaster::query()->when($branchId, fn (Builder $query) => $query->where('branch_id', $branchId)),
+            LeadMaster::query()
+                ->whereNotNull('branch_id')
+                ->when($branchId, fn (Builder $query) => $query->where('branch_id', $branchId)),
             $input['project_id'] ?? null,
         );
 

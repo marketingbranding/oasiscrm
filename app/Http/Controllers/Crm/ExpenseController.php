@@ -40,7 +40,12 @@ class ExpenseController extends Controller
             ->paginate($filters['per_page'])->withQueryString();
         $summary = $this->expenseFilters->summary($filters);
         $branches = Branch::where('is_active', true)->forDropdown()->get(['id', 'name', 'code', 'is_active']);
-        $projects = LeadMaster::where('is_active', true)->orderBy('project_name')->get(['id', 'branch_id', 'project_name']);
+        $projects = LeadMaster::query()
+            ->where('is_active', true)
+            ->whereNotNull('branch_id')
+            ->with('branch:id,name')
+            ->orderBy('project_name')
+            ->get(['id', 'branch_id', 'project_name']);
         $categories = ExpenseCategory::orderBy('sort_order')->orderBy('name')->get(['id', 'name', 'is_active']);
         $creators = User::whereHas('createdExpenses')->orderBy('name')->get(['id', 'name', 'is_active']);
 

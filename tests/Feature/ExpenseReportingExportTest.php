@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\Changelog;
 use App\Models\Expense;
+use App\Models\LeadMaster;
 use App\Services\ExpenseFilterService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use PhpOffice\PhpSpreadsheet\Cell\DataType;
@@ -187,6 +188,63 @@ class ExpenseReportingExportTest extends TestCase
         $this->assertSame($expectedQuery, $nextPageQuery);
     }
 
+    public function test_search_toolbar_and_filter_modal_preserve_each_others_query_parameters(): void
+    {
+        $branch = $this->expenseBranch('Cabang Toolbar');
+        $project = $this->expenseProject($branch, 'Proyek Toolbar');
+        $category = $this->expenseCategory('Kategori Toolbar');
+        $creator = $this->expenseUser('pusat', $branch, 'Pembuat Toolbar');
+        $this->expense(compact('branch', 'project', 'category', 'creator') + ['description' => 'Needle toolbar']);
+
+        $response = $this->actingAs($creator)->get(route('expenses.index', [
+            'period_month' => '2026-07',
+            'branch_id' => $branch->id,
+            'project_id' => $project->id,
+            'expense_category_id' => $category->id,
+            'payment_method' => 'transfer',
+            'status' => 'active',
+            'search' => 'Needle',
+            'sort' => 'amount',
+            'dir' => 'asc',
+        ]))->assertOk();
+
+        $html = $response->getContent();
+        $this->assertLessThan(strpos($html, 'id="expense-filter-title"'), strpos($html, 'aria-label="Cari pengeluaran"'));
+        $this->assertGreaterThanOrEqual(2, substr_count($html, 'name="search"'));
+        $this->assertStringNotContainsString('[tabindex="-1"]', $html);
+        $response->assertSee('Filter aktif:')
+            ->assertSee('Cabang: Cabang Toolbar')
+            ->assertSee('Proyek: Proyek Toolbar - Cabang Toolbar')
+            ->assertSee('Kategori: Kategori Toolbar')
+            ->assertSee('Hapus semua filter')
+            ->assertSee(route('expenses.index', ['search' => 'Needle']), false);
+        $response->assertSee('name="branch_id" value="'.$branch->id.'"', false)
+            ->assertSee('name="project_id" value="'.$project->id.'"', false)
+            ->assertSee('name="sort" value="amount"', false)
+            ->assertSee('name="dir" value="asc"', false);
+    }
+
+    public function test_all_branch_project_options_have_branch_context_and_exclude_branchless_legacy_rows(): void
+    {
+        $branchA = $this->expenseBranch('Cabang A');
+        $branchB = $this->expenseBranch('Cabang B');
+        $projectA = $this->expenseProject($branchA, 'Proyek Kembar');
+        $projectB = $this->expenseProject($branchB, 'Proyek Kembar');
+        $branchless = LeadMaster::create([
+            'branch_id' => null,
+            'project_name' => 'Proyek Kembar',
+            'is_active' => true,
+        ]);
+        $user = $this->expenseUser('pusat', $branchA);
+
+        $response = $this->actingAs($user)->get(route('expenses.index', ['period_month' => '2026-07']))->assertOk();
+        $projects = $response->viewData('projects');
+
+        $this->assertEqualsCanonicalizing([$projectA->id, $projectB->id], $projects->pluck('id')->all());
+        $response->assertSee('Proyek Kembar - Cabang A')->assertSee('Proyek Kembar - Cabang B');
+        $this->assertSame(-1, app(ExpenseFilterService::class)->normalize(['project_id' => $branchless->id])['project_id']);
+    }
+
     public function test_xlsx_has_exact_sheets_headers_filtered_data_native_types_and_safe_text(): void
     {
         $branch = $this->expenseBranch('Ekspor Branch');
@@ -304,6 +362,19 @@ class ExpenseReportingExportTest extends TestCase
             ->assertOk()
             ->assertSee($title)
             ->assertSee('lebih aman dari perubahan bersamaan');
+    }
+
+    public function test_expense_filter_toolbar_changelog_is_deployed_once_and_rendered(): void
+    {
+        $title = 'Filter Pengeluaran Lebih Ringkas';
+        $entry = Changelog::whereNull('version')->where('title', $title)->sole();
+        $this->assertSame('changed', $entry->category);
+        $this->assertSame(1, Changelog::whereNull('version')->where('title', $title)->count());
+
+        $this->actingAs($this->expenseUser('pusat'))->get(route('changelogs.index'))
+            ->assertOk()
+            ->assertSee($title)
+            ->assertSee('satu tombol');
     }
 
     public function test_existing_operational_pages_render_without_invoking_external_operations(): void

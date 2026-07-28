@@ -33,7 +33,7 @@ class LeadMaster extends Model
     {
         return $this->belongsToMany(User::class, 'project_user', 'project_id', 'user_id')
             ->using(ProjectUser::class)
-            ->withPivot('is_primary')
+            ->withPivot(['is_primary', 'assignment_start_date', 'assignment_end_date', 'is_active'])
             ->withTimestamps();
     }
 

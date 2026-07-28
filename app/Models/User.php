@@ -141,7 +141,7 @@ class User extends Authenticatable implements MustVerifyEmail
     {
         return $this->belongsToMany(LeadMaster::class, 'project_user', 'user_id', 'project_id')
             ->using(ProjectUser::class)
-            ->withPivot('is_primary')
+            ->withPivot(['is_primary', 'assignment_start_date', 'assignment_end_date', 'is_active'])
             ->withTimestamps();
     }
 
@@ -232,7 +232,15 @@ class User extends Authenticatable implements MustVerifyEmail
 
     public function canViewAllBranches(): bool
     {
-        return $this->isSuperadmin() || $this->hasRole('pusat');
+        if ($this->isSuperadmin()) {
+            return true;
+        }
+
+        $allScopePermissions = collect([
+            'sales_pocketbook', 'work_planner', 'database', 'consumer_progress', 'bridge_fund', 'expenses',
+        ])->map(fn (string $module) => "{$module}.view_all")->all();
+
+        return $this->role !== null && $this->hasAnyPermission($allScopePermissions);
     }
 
     public function contentItems(): HasMany

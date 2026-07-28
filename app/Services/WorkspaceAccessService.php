@@ -7,6 +7,7 @@ use App\Models\LeadMaster;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 
 class WorkspaceAccessService
 {
@@ -48,9 +49,20 @@ class WorkspaceAccessService
         }
 
         if ($user->isSales()) {
+            $today = today()->toDateString();
+
             return $query
                 ->whereIn('branch_id', $this->accessibleBranchIds($user))
-                ->whereHas('assignedUsers', fn (Builder $assigned) => $assigned->whereKey($user->id));
+                ->whereIn('id', DB::table('project_user')
+                    ->select('project_id')
+                    ->where('user_id', $user->id)
+                    ->where('is_active', true)
+                    ->where(fn ($window) => $window
+                        ->whereNull('assignment_start_date')
+                        ->orWhereDate('assignment_start_date', '<=', $today))
+                    ->where(fn ($window) => $window
+                        ->whereNull('assignment_end_date')
+                        ->orWhereDate('assignment_end_date', '>=', $today)));
         }
 
         return $query->whereIn('branch_id', $this->accessibleBranchIds($user));
@@ -88,6 +100,13 @@ class WorkspaceAccessService
         if ($user->isSales()) {
             return $user->primaryAssignedProject()
                 ->where('lead_master.is_active', true)
+                ->wherePivot('is_active', true)
+                ->where(fn (Builder $query) => $query
+                    ->whereNull('project_user.assignment_start_date')
+                    ->orWhereDate('project_user.assignment_start_date', '<=', today()->toDateString()))
+                ->where(fn (Builder $query) => $query
+                    ->whereNull('project_user.assignment_end_date')
+                    ->orWhereDate('project_user.assignment_end_date', '>=', today()->toDateString()))
                 ->first() ?? $this->accessibleProjectsQuery($user)->orderBy('project_name')->first();
         }
 

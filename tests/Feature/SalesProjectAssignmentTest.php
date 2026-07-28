@@ -19,7 +19,7 @@ class SalesProjectAssignmentTest extends TestCase
         $this->assertDatabaseHas('roles', [
             'slug' => 'sales',
             'name' => 'Sales',
-            'description' => 'Sales user with access to personal Buku Saku and assigned projects.',
+            'description' => 'Tim penjualan dengan akses ke data sendiri.',
             'is_superadmin' => false,
         ]);
     }

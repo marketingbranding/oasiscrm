@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Middleware\AllPermissionsMiddleware;
 use App\Http\Middleware\CheckBranch;
 use App\Http\Middleware\CheckRole;
 use App\Http\Middleware\EnsurePasswordChanged;
@@ -25,6 +26,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'password.changed' => EnsurePasswordChanged::class,
             'active' => EnsureUserIsActive::class,
             'permission' => PermissionMiddleware::class,
+            'permissions.all' => AllPermissionsMiddleware::class,
             'sales.access' => RestrictSalesModuleAccess::class,
         ]);
     })

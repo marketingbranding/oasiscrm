@@ -119,6 +119,11 @@ class User extends Authenticatable implements MustVerifyEmail
         return $this->hasMany(UserInvitation::class);
     }
 
+    public function userImportBatches(): HasMany
+    {
+        return $this->hasMany(UserImportBatch::class, 'uploaded_by');
+    }
+
     public function latestInvitation(): HasOne
     {
         return $this->hasOne(UserInvitation::class)->latestOfMany();

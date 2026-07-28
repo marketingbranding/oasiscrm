@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Auth\PasswordChangeController;
 use App\Http\Controllers\Crm\AdminUserController;
+use App\Http\Controllers\Crm\AdminUserImportController;
 use App\Http\Controllers\Crm\AiChatController;
 use App\Http\Controllers\Crm\BranchController;
 use App\Http\Controllers\Crm\ChangelogController;
@@ -166,6 +167,12 @@ Route::middleware(['auth', 'active', 'verified', 'password.changed', 'sales.acce
     });
 
     Route::prefix('admin-users')->name('admin-users.')->group(function () {
+        Route::middleware('permissions.all:users.create,users.invite,users.assign_roles,users.assign_branches,users.assign_projects,users.assign_supervisor')->group(function () {
+            Route::get('/import', [AdminUserImportController::class, 'create'])->name('import');
+            Route::get('/import/template', [AdminUserImportController::class, 'template'])->name('import-template');
+            Route::get('/import/history', [AdminUserImportController::class, 'history'])->name('import-history');
+            Route::get('/import/batches/{user_import_batch}', [AdminUserImportController::class, 'show'])->name('import-batches.show');
+        });
         Route::get('/', [AdminUserController::class, 'index'])->middleware('permission:users.view')->name('index');
         Route::get('/create', [AdminUserController::class, 'create'])->middleware('permission:users.create')->name('create');
         Route::post('/', [AdminUserController::class, 'store'])->middleware('permission:users.create')->name('store');

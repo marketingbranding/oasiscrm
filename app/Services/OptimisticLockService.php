@@ -128,6 +128,7 @@ class OptimisticLockService
             $model instanceof DatabaseSheetRecord => 'database_sheet_record',
             $model instanceof SalesLead => 'sales_lead',
             $model instanceof Expense => 'expense',
+            $model instanceof User => 'user',
             default => class_basename($model),
         };
     }
@@ -144,6 +145,7 @@ class OptimisticLockService
             ]),
             $model instanceof SalesLead => route('sales-pocketbook.index'),
             $model instanceof Expense => route('expenses.edit', $model),
+            $model instanceof User => route('admin-users.edit', $model),
             default => null,
         };
     }

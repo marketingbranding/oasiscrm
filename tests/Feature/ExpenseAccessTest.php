@@ -145,17 +145,15 @@ class ExpenseAccessTest extends TestCase
         $this->assertDatabaseHas('expenses', ['id' => $expense->id, 'deleted_at' => null]);
     }
 
-    public function test_user_with_expense_history_cannot_be_deleted(): void
+    public function test_user_management_has_no_permanent_delete_route(): void
     {
         $branch = $this->expenseBranch();
         $superadmin = $this->expenseUser('superadmin', $branch);
         $creator = $this->expenseUser('pusat', $branch);
         $this->expense(['branch' => $branch, 'creator' => $creator]);
 
-        $this->actingAs($superadmin)->from(route('admin-users.index'))
-            ->delete(route('admin-users.destroy', $creator))
-            ->assertRedirect(route('admin-users.index'))
-            ->assertSessionHas('warning');
+        $this->assertFalse(Route::has('admin-users.destroy'));
+        $this->actingAs($superadmin)->delete('/admin-users/'.$creator->id)->assertStatus(405);
 
         $this->assertDatabaseHas('users', ['id' => $creator->id]);
     }

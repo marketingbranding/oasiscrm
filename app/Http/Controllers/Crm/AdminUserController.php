@@ -2,269 +2,285 @@
 
 namespace App\Http\Controllers\Crm;
 
+use App\Enums\AccountStatus;
 use App\Http\Controllers\Controller;
-use App\Models\ActivityLog;
+use App\Http\Requests\AdminUserFilterRequest;
+use App\Http\Requests\AdminUserStatusRequest;
+use App\Http\Requests\AdminUserStoreRequest;
+use App\Http\Requests\AdminUserUpdateRequest;
 use App\Models\Branch;
 use App\Models\LeadMaster;
 use App\Models\Role;
 use App\Models\User;
-use App\Services\CollaborationNotificationService;
-use Illuminate\Http\Request;
-use Illuminate\Support\Collection;
-use Illuminate\Support\Facades\Auth;
+use App\Services\AccountAuditService;
+use App\Services\BranchAssignmentService;
+use App\Services\OptimisticLockService;
+use App\Services\OrganizationScopeService;
+use App\Services\ProjectAssignmentService;
+use App\Services\ReportingHierarchyService;
+use App\Services\UserAccountService;
+use App\Services\UserAdministrationService;
+use App\Services\UserInvitationService;
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Hash;
-use Illuminate\Validation\Rule;
-use Illuminate\Validation\ValidationException;
+use Illuminate\Support\Facades\Password;
+use Illuminate\View\View;
+use Throwable;
 
 class AdminUserController extends Controller
 {
-    public function __construct(private readonly CollaborationNotificationService $notifications) {}
+    public function __construct(
+        private readonly UserAdministrationService $administration,
+        private readonly BranchAssignmentService $branches,
+        private readonly ProjectAssignmentService $projects,
+        private readonly ReportingHierarchyService $hierarchy,
+        private readonly UserInvitationService $invitations,
+        private readonly UserAccountService $accounts,
+        private readonly OptimisticLockService $locks,
+        private readonly AccountAuditService $audit,
+    ) {}
 
-    public function index()
+    public function index(AdminUserFilterRequest $request): View
     {
-        $users = User::with(['role', 'branch', 'branches', 'assignedProjects'])
-            ->get();
+        $filters = $request->validated();
+        $users = $this->administration->visibleQuery($request->user())
+            ->with(['role', 'roles', 'branch', 'branches', 'assignedProjects.branch', 'supervisor', 'latestInvitation'])
+            ->when($filters['search'] ?? null, fn (Builder $q, string $search) => $q->where(fn (Builder $inner) => $inner
+                ->where('name', 'like', "%{$search}%")->orWhere('email', 'like', "%{$search}%")))
+            ->when($filters['account_status'] ?? null, fn (Builder $q, string $status) => $q->where('account_status', $status))
+            ->when($filters['role_id'] ?? null, fn (Builder $q, $id) => $q->where('role_id', $id))
+            ->when($filters['branch_id'] ?? null, fn (Builder $q, $id) => $q->where(fn (Builder $inner) => $inner->where('branch_id', $id)->orWhereHas('branches', fn (Builder $b) => $b->whereKey($id))))
+            ->when($filters['project_id'] ?? null, fn (Builder $q, $id) => $q->whereHas('assignedProjects', fn (Builder $p) => $p->whereKey($id)))
+            ->when($filters['supervisor_user_id'] ?? null, fn (Builder $q, $id) => $q->where('supervisor_user_id', $id))
+            ->when($filters['invitation_status'] ?? null, function (Builder $q, string $status) {
+                match ($status) {
+                    'draft' => $q->where('account_status', AccountStatus::PendingInvitation->value),
+                    'usable' => $q->whereHas('latestInvitation', fn (Builder $i) => $i->whereNull('accepted_at')->whereNull('revoked_at')->where('expires_at', '>', now())),
+                    'expired' => $q->whereHas('latestInvitation', fn (Builder $i) => $i->whereNull('accepted_at')->whereNull('revoked_at')->where('expires_at', '<=', now())),
+                    'accepted' => $q->whereHas('latestInvitation', fn (Builder $i) => $i->whereNotNull('accepted_at')),
+                    'revoked' => $q->whereHas('latestInvitation', fn (Builder $i) => $i->whereNotNull('revoked_at')),
+                };
+            })
+            ->orderBy($filters['sort'] ?? 'name', $filters['direction'] ?? 'asc')
+            ->paginate(20)->withQueryString();
 
-        return view('crm.admin-users.index', compact('users'));
+        return view('crm.admin-users.index', array_merge($this->options($request->user()), compact('users', 'filters')));
     }
 
-    public function create()
+    public function create(): View
     {
-        $roles = Role::all();
-        $branches = Branch::where('is_active', true)->forDropdown()->get();
-        $projectsByBranch = $this->projectsByBranch();
+        $this->authorize('create', User::class);
 
-        return view('crm.admin-users.create', compact('roles', 'branches', 'projectsByBranch'));
+        return view('crm.admin-users.create', $this->options(request()->user()));
     }
 
-    public function store(Request $request)
+    public function store(AdminUserStoreRequest $request): RedirectResponse
     {
-        $data = $request->validate([
-            'name' => 'required|string|max:255',
-            'email' => 'required|email|unique:users,email',
-            'password' => 'required|string|min:8|confirmed',
-            'role_id' => 'required|exists:roles,id',
-            'branch_id' => ['nullable', Rule::exists('branches', 'id')->where('is_active', true)],
-            'branch_ids' => ['nullable', 'array'],
-            'branch_ids.*' => ['integer', 'distinct', Rule::exists('branches', 'id')->where('is_active', true)],
-            'membership_permissions' => ['nullable', 'array'],
-            'membership_permissions.*.can_edit' => ['nullable', 'boolean'],
-            'membership_permissions.*.can_sync' => ['nullable', 'boolean'],
-            'membership_permissions.*.can_manage_members' => ['nullable', 'boolean'],
-            'assigned_project_ids' => ['nullable', 'array'],
-            'assigned_project_ids.*' => ['integer', 'distinct', Rule::exists('lead_master', 'id')->where('is_active', true)],
-            'primary_project_id' => ['nullable', 'integer', Rule::exists('lead_master', 'id')->where('is_active', true)],
-            'phone' => 'nullable|string|max:20',
-        ]);
-
-        $data['password'] = Hash::make($data['password']);
-        $data['is_active'] = true;
-        $data['email_verified_at'] = now();
-
-        $branchIds = $this->membershipBranchIds($data);
-        $permissions = $data['membership_permissions'] ?? [];
-        [$projectIds, $primaryProjectId] = $this->validateProjectAssignments($data, $branchIds);
-        unset($data['branch_ids'], $data['membership_permissions'], $data['assigned_project_ids'], $data['primary_project_id']);
-
-        DB::transaction(function () use ($data, $branchIds, $permissions, $projectIds, $primaryProjectId) {
-            $user = User::create($data);
-            $user->branches()->sync($this->membershipPayload($branchIds, $permissions));
-            $user->assignedProjects()->sync($this->projectAssignmentPayload($projectIds, $primaryProjectId));
-            $this->logMembershipChange($user, 'user_created', [], $branchIds, [], $projectIds, null, $primaryProjectId);
-        });
-
-        return redirect()->route('admin-users.index')->with('success', 'User berhasil ditambahkan.');
-    }
-
-    public function edit(User $user)
-    {
-        $user->load(['branches', 'assignedProjects']);
-        $roles = Role::all();
-        $branches = Branch::where('is_active', true)->forDropdown()->get();
-        $projectsByBranch = $this->projectsByBranch();
-
-        return view('crm.admin-users.edit', compact('user', 'roles', 'branches', 'projectsByBranch'));
-    }
-
-    public function update(Request $request, User $user)
-    {
-        $data = $request->validate([
-            'name' => 'required|string|max:255',
-            'email' => 'required|email|unique:users,email,'.$user->id,
-            'password' => 'nullable|string|min:8|confirmed',
-            'role_id' => 'required|exists:roles,id',
-            'branch_id' => ['nullable', Rule::exists('branches', 'id')->where('is_active', true)],
-            'branch_ids' => ['nullable', 'array'],
-            'branch_ids.*' => ['integer', 'distinct', Rule::exists('branches', 'id')->where('is_active', true)],
-            'membership_permissions' => ['nullable', 'array'],
-            'membership_permissions.*.can_edit' => ['nullable', 'boolean'],
-            'membership_permissions.*.can_sync' => ['nullable', 'boolean'],
-            'membership_permissions.*.can_manage_members' => ['nullable', 'boolean'],
-            'assigned_project_ids' => ['nullable', 'array'],
-            'assigned_project_ids.*' => ['integer', 'distinct', Rule::exists('lead_master', 'id')->where('is_active', true)],
-            'primary_project_id' => ['nullable', 'integer', Rule::exists('lead_master', 'id')->where('is_active', true)],
-            'phone' => 'nullable|string|max:20',
-            'is_active' => 'required|boolean',
-        ]);
-
-        if (! empty($data['password'])) {
-            $data['password'] = Hash::make($data['password']);
-        } else {
-            unset($data['password']);
-        }
-
-        $branchIds = $this->membershipBranchIds($data);
-        $permissions = $data['membership_permissions'] ?? [];
-        [$projectIds, $primaryProjectId] = $this->validateProjectAssignments($data, $branchIds);
-        unset($data['branch_ids'], $data['membership_permissions'], $data['assigned_project_ids'], $data['primary_project_id']);
-
-        $oldBranchIds = $user->branches()->pluck('branches.id')->map(fn ($id) => (int) $id)->all();
-        $oldProjects = $user->assignedProjects()->get();
-        $oldProjectIds = $oldProjects->pluck('id')->map(fn ($id) => (int) $id)->all();
-        $oldPrimaryProjectId = $oldProjects->first(fn (LeadMaster $project) => (bool) $project->pivot->is_primary)?->id;
-        DB::transaction(function () use ($user, $data, $branchIds, $permissions, $oldBranchIds, $projectIds, $primaryProjectId, $oldProjectIds, $oldPrimaryProjectId) {
-            $user->update($data);
-            $user->branches()->sync($this->membershipPayload($branchIds, $permissions));
-            $user->assignedProjects()->sync($this->projectAssignmentPayload($projectIds, $primaryProjectId));
-            $this->logMembershipChange($user, 'membership_updated', $oldBranchIds, $branchIds, $oldProjectIds, $projectIds, $oldPrimaryProjectId, $primaryProjectId);
-        });
-        $this->notifications->membershipChanged($user, 'Akses cabang Anda diperbarui oleh '.Auth::user()->name.'.');
-
-        return redirect()->route('admin-users.index')->with('success', 'User berhasil diperbarui.');
-    }
-
-    public function destroy(User $user)
-    {
-        if ($user->id === Auth::id()) {
-            return back()->with('error', 'Tidak dapat menghapus akun sendiri.');
-        }
-
-        if ($user->isSuperadmin()) {
-            $superadminCount = User::where('role_id', $user->role_id)->count();
-            if ($superadminCount <= 1) {
-                return back()->with('error', 'Tidak dapat menghapus Super Admin terakhir.');
-            }
-        }
-
-        if ($user->createdExpenses()->exists()) {
-            return back()->with('warning', 'User tidak dapat dihapus karena memiliki riwayat pengeluaran. Nonaktifkan akun agar riwayat tetap terjaga.');
-        }
-
-        $user->delete();
-
-        return redirect()->route('admin-users.index')->with('success', 'User berhasil dihapus.');
-    }
-
-    private function membershipBranchIds(array $data): array
-    {
-        $branchIds = array_map('intval', $data['branch_ids'] ?? []);
-        if (filled($data['branch_id'] ?? null)) {
-            $branchIds[] = (int) $data['branch_id'];
-        }
-
-        return array_values(array_unique($branchIds));
-    }
-
-    private function membershipPayload(array $branchIds, array $permissions): array
-    {
-        return collect($branchIds)->mapWithKeys(function (int $branchId) use ($permissions) {
-            $branchPermissions = $permissions[$branchId] ?? [];
-
-            return [$branchId => [
-                'can_view' => true,
-                'can_edit' => (bool) ($branchPermissions['can_edit'] ?? false),
-                'can_sync' => (bool) ($branchPermissions['can_sync'] ?? false),
-                'can_manage_members' => (bool) ($branchPermissions['can_manage_members'] ?? false),
-            ]];
-        })->all();
-    }
-
-    private function validateProjectAssignments(array $data, array $branchIds): array
-    {
+        $actor = $request->user();
+        $data = $request->validated();
         $role = Role::findOrFail($data['role_id']);
-        $projectIds = array_values(array_unique(array_map('intval', $data['assigned_project_ids'] ?? [])));
-        $primaryProjectId = filled($data['primary_project_id'] ?? null) ? (int) $data['primary_project_id'] : null;
+        $branchIds = $this->branchIds($data);
+        $projectIds = $this->projectIds($data);
+        $this->administration->assertCanAssignRole($actor, $role);
+        $this->assertAssignmentPermissions($actor, $branchIds, $projectIds, $data['supervisor_user_id'] ?? null);
 
-        if ($role->slug !== 'sales') {
-            if ($projectIds !== [] || $primaryProjectId !== null) {
-                throw ValidationException::withMessages([
-                    'assigned_project_ids' => 'Penugasan proyek hanya dapat diberikan kepada user Sales.',
-                ]);
+        $user = DB::transaction(function () use ($actor, $data, $branchIds, $projectIds) {
+            $user = $this->invitations->createDraft([
+                'name' => $data['name'], 'email' => $data['email'], 'phone' => $data['phone'] ?? null,
+                'role_id' => $data['role_id'],
+            ], $actor);
+            $this->branches->assign($user, $branchIds, (int) $data['branch_id'], $actor);
+            $this->projects->assign($user, $projectIds, $this->nullableInt($data['primary_project_id'] ?? null), $actor);
+            $this->hierarchy->assignSupervisor($user, $this->nullableInt($data['supervisor_user_id'] ?? null), $actor);
+            $this->audit->log('user_created', $user, $actor);
+
+            return $user;
+        });
+
+        if (($data['submit_action'] ?? 'draft') === 'send' || ($data['send_immediately'] ?? false)) {
+            try {
+                $this->invitations->send($user, $actor);
+            } catch (Throwable $exception) {
+                return redirect()->route('admin-users.show', $user)->with('warning', $exception->getMessage());
             }
 
-            return [[], null];
+            return redirect()->route('admin-users.show', $user)->with('success', 'Akun dibuat dan undangan berhasil dikirim.');
         }
 
-        if ($projectIds === []) {
-            throw ValidationException::withMessages([
-                'assigned_project_ids' => 'User Sales harus memiliki minimal satu proyek aktif.',
-            ]);
-        }
-
-        if ($primaryProjectId !== null && ! in_array($primaryProjectId, $projectIds, true)) {
-            throw ValidationException::withMessages([
-                'primary_project_id' => 'Proyek utama harus termasuk dalam proyek yang ditugaskan.',
-            ]);
-        }
-
-        $accessibleProjectCount = LeadMaster::query()
-            ->whereIn('id', $projectIds)
-            ->where('is_active', true)
-            ->whereIn('branch_id', $branchIds)
-            ->count();
-
-        if ($accessibleProjectCount !== count($projectIds)) {
-            throw ValidationException::withMessages([
-                'assigned_project_ids' => 'Semua proyek harus aktif dan berada pada cabang yang dapat diakses user.',
-            ]);
-        }
-
-        return [$projectIds, $primaryProjectId];
+        return redirect()->route('admin-users.show', $user)->with('success', 'Draft akun berhasil disimpan.');
     }
 
-    private function projectAssignmentPayload(array $projectIds, ?int $primaryProjectId): array
+    public function show(User $admin_user): View
     {
-        return collect($projectIds)->mapWithKeys(fn (int $projectId) => [
-            $projectId => ['is_primary' => $projectId === $primaryProjectId],
-        ])->all();
+        $this->authorize('view', $admin_user);
+        $admin_user->load(['role', 'roles', 'branch', 'branches', 'assignedProjects.branch', 'supervisor', 'invitations.inviter', 'activityLogs.causer']);
+
+        return view('crm.admin-users.show', ['user' => $admin_user]);
     }
 
-    private function projectsByBranch(): Collection
+    public function edit(User $admin_user): View
     {
-        return LeadMaster::query()
-            ->with('branch')
-            ->where('is_active', true)
-            ->whereHas('branch', fn ($query) => $query->where('is_active', true))
-            ->orderBy('project_name')
-            ->get()
-            ->groupBy('branch_id');
+        $this->authorize('update', $admin_user);
+        $admin_user->load(['branches', 'assignedProjects', 'supervisor']);
+
+        return view('crm.admin-users.edit', array_merge($this->options(request()->user()), ['user' => $admin_user, 'lockToken' => $this->locks->token($admin_user)]));
     }
 
-    private function logMembershipChange(
-        User $user,
-        string $event,
-        array $oldBranchIds,
-        array $newBranchIds,
-        array $oldProjectIds,
-        array $newProjectIds,
-        ?int $oldPrimaryProjectId,
-        ?int $newPrimaryProjectId,
-    ): void {
-        ActivityLog::create([
-            'causer_id' => Auth::id(),
-            'subject_type' => User::class,
-            'subject_id' => $user->id,
-            'event' => $event,
-            'description' => 'Akses cabang dan proyek user diperbarui',
-            'properties' => [
-                'old_branch_ids' => $oldBranchIds,
-                'new_branch_ids' => $newBranchIds,
-                'old_project_ids' => $oldProjectIds,
-                'new_project_ids' => $newProjectIds,
-                'old_primary_project_id' => $oldPrimaryProjectId,
-                'new_primary_project_id' => $newPrimaryProjectId,
-            ],
-        ]);
+    public function update(AdminUserUpdateRequest $request, User $admin_user): RedirectResponse
+    {
+        $actor = $request->user();
+        $data = $request->validated();
+        $role = Role::findOrFail($data['role_id']);
+        $branchIds = $this->branchIds($data);
+        $projectIds = $this->projectIds($data);
+        $this->administration->assertCanManage($actor, $admin_user, 'users.update');
+        if ($admin_user->role_id !== $role->id) {
+            $this->administration->assertCanAssignRole($actor, $role, $admin_user);
+            if ($admin_user->isSuperadmin() && ! $role->is_superadmin) {
+                $this->administration->assertNotLastActiveSuperadmin($admin_user);
+            }
+        }
+        $this->assertAssignmentPermissions($actor, $branchIds, $projectIds, $data['supervisor_user_id'] ?? null, $admin_user);
+
+        return $this->locks->execute($request, $admin_user, $data['expected_updated_at'], function (User $user) use ($actor, $data, $branchIds, $projectIds) {
+            $old = $user->only(['name', 'email', 'phone', 'role_id']);
+            $user->fill(['name' => $data['name'], 'email' => $data['email'], 'phone' => $data['phone'] ?? null, 'role_id' => $data['role_id'], 'updated_by' => $actor->id]);
+            if ($user->isDirty('email')) {
+                $user->email_verified_at = null;
+            }
+            $user->save();
+            $this->branches->assign($user, $branchIds, (int) $data['branch_id'], $actor);
+            $this->projects->assign($user, $projectIds, $this->nullableInt($data['primary_project_id'] ?? null), $actor);
+            $this->hierarchy->assignSupervisor($user, $this->nullableInt($data['supervisor_user_id'] ?? null), $actor);
+            $this->audit->log('user_updated', $user, $actor, $old, $user->only(['name', 'email', 'phone', 'role_id']));
+
+            return redirect()->route('admin-users.show', $user)->with('success', 'Data pengguna berhasil diperbarui.');
+        });
+    }
+
+    public function sendInvitation(User $admin_user): RedirectResponse
+    {
+        return $this->issueInvitation($admin_user, false);
+    }
+
+    public function resendInvitation(User $admin_user): RedirectResponse
+    {
+        return $this->issueInvitation($admin_user, true);
+    }
+
+    public function revokeInvitation(User $admin_user): RedirectResponse
+    {
+        $this->administration->assertCanManage(request()->user(), $admin_user, 'users.invite');
+        $invitation = $admin_user->invitations()->whereNull('accepted_at')->whereNull('revoked_at')->where('expires_at', '>', now())->latest()->firstOrFail();
+        $this->invitations->revoke($invitation, request()->user());
+
+        return back()->with('success', 'Undangan berhasil dicabut.');
+    }
+
+    public function suspend(AdminUserStatusRequest $request, User $admin_user): RedirectResponse
+    {
+        return $this->changeStatus($request, $admin_user, 'suspend');
+    }
+
+    public function deactivate(AdminUserStatusRequest $request, User $admin_user): RedirectResponse
+    {
+        return $this->changeStatus($request, $admin_user, 'deactivate');
+    }
+
+    public function reactivate(AdminUserStatusRequest $request, User $admin_user): RedirectResponse
+    {
+        return $this->changeStatus($request, $admin_user, 'reactivate');
+    }
+
+    public function resetAccess(User $admin_user): RedirectResponse
+    {
+        $actor = request()->user();
+        $this->administration->assertCanManage($actor, $admin_user, 'users.reset_password');
+        if (in_array($admin_user->account_status, [AccountStatus::PendingInvitation, AccountStatus::Invited], true)) {
+            return $this->issueInvitation($admin_user, true);
+        }
+        $status = Password::sendResetLink(['email' => $admin_user->email]);
+        $this->audit->log('password_reset_requested', $admin_user, $actor);
+
+        return back()->with($status === Password::RESET_LINK_SENT ? 'success' : 'warning', __($status));
+    }
+
+    private function issueInvitation(User $user, bool $resend): RedirectResponse
+    {
+        $actor = request()->user();
+        $this->administration->assertCanManage($actor, $user, 'users.invite');
+        try {
+            $resend ? $this->invitations->resend($user, $actor) : $this->invitations->send($user, $actor);
+        } catch (Throwable $exception) {
+            return back()->with('warning', $exception->getMessage());
+        }
+
+        return back()->with('success', $resend ? 'Undangan berhasil dikirim ulang.' : 'Undangan berhasil dikirim.');
+    }
+
+    private function changeStatus(AdminUserStatusRequest $request, User $user, string $action): RedirectResponse
+    {
+        $permission = "users.{$action}";
+        $this->administration->assertCanManage($request->user(), $user, $permission);
+        if ($action !== 'reactivate') {
+            $this->administration->assertNotLastActiveSuperadmin($user);
+        }
+        $allowed = match ($action) {
+            'suspend' => $user->account_status === AccountStatus::Active,
+            'reactivate' => in_array($user->account_status, [AccountStatus::Suspended, AccountStatus::Inactive], true),
+            'deactivate' => $user->account_status !== AccountStatus::Inactive,
+        };
+        if (! $allowed) {
+            return back()->with('warning', 'Perubahan status tersebut tidak berlaku untuk kondisi akun saat ini.');
+        }
+        $this->accounts->{$action}($user, $request->user());
+        $this->audit->log("account_{$action}_reason", $user, $request->user(), [], ['reason' => $request->validated('reason')]);
+
+        return back()->with('success', 'Status akun berhasil diperbarui.');
+    }
+
+    private function options(User $actor): array
+    {
+        $all = $actor->isSuperadmin() || $actor->hasPrimaryRole('pusat');
+        $branchIds = $all ? Branch::where('is_active', true)->pluck('id')->all() : app(OrganizationScopeService::class)->branchIds($actor);
+        $branches = Branch::where('is_active', true)->whereIn('id', $branchIds)->forDropdown()->get();
+        $projects = LeadMaster::with('branch')->where('is_active', true)->whereIn('branch_id', $branchIds)->orderBy('project_name')->get();
+        $supervisors = $this->administration->visibleQuery($actor)->where('account_status', AccountStatus::Active->value)->with('role')->orderBy('name')->get();
+
+        return ['roles' => $this->administration->availableRoles($actor), 'branches' => $branches, 'projects' => $projects, 'projectsByBranch' => $projects->groupBy('branch_id'), 'supervisors' => $supervisors];
+    }
+
+    private function branchIds(array $data): array
+    {
+        return collect([...(array) ($data['branch_ids'] ?? []), $data['branch_id']])->filter()->map(fn ($id) => (int) $id)->unique()->values()->all();
+    }
+
+    private function projectIds(array $data): array
+    {
+        return collect([...(array) ($data['assigned_project_ids'] ?? []), $data['primary_project_id'] ?? null])->filter()->map(fn ($id) => (int) $id)->unique()->values()->all();
+    }
+
+    private function nullableInt(mixed $value): ?int
+    {
+        return filled($value) ? (int) $value : null;
+    }
+
+    private function assertAssignmentPermissions(User $actor, array $branchIds, array $projectIds, mixed $supervisorId, ?User $target = null): void
+    {
+        if ($target) {
+            $this->administration->assertCanManage($actor, $target, 'users.update');
+            $currentBranches = $target->branches()->pluck('branches.id')->map(fn ($id) => (int) $id)->push((int) $target->branch_id)->filter()->unique()->sort()->values()->all();
+            $currentProjects = $target->assignedProjects()->pluck('lead_master.id')->map(fn ($id) => (int) $id)->sort()->values()->all();
+            $currentPrimary = $target->primaryAssignedProject()->value('lead_master.id');
+            abort_if($currentBranches !== collect($branchIds)->sort()->values()->all() && ! $actor->hasPermission('users.assign_branches'), 403);
+            abort_if(($currentProjects !== collect($projectIds)->sort()->values()->all() || (int) $currentPrimary !== (int) request('primary_project_id')) && ! $actor->hasPermission('users.assign_projects'), 403);
+            abort_if((int) $target->supervisor_user_id !== (int) $supervisorId && ! $actor->hasPermission('users.assign_supervisor'), 403);
+        } else {
+            abort_unless($actor->hasPermission('users.assign_branches'), 403);
+            abort_if($projectIds !== [] && ! $actor->hasPermission('users.assign_projects'), 403);
+            abort_if(filled($supervisorId) && ! $actor->hasPermission('users.assign_supervisor'), 403);
+        }
+        $this->administration->assertAssignmentsInScope($actor, $branchIds, $projectIds);
     }
 }

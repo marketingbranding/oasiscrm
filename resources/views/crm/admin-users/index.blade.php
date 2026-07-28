@@ -1,64 +1,29 @@
 @extends('layouts.crm')
-
-@section('title', 'Manajemen User - Oasis CRM')
-
+@section('title', 'Manajemen Pengguna - Oasis CRM')
 @section('content')
-    <div class="bg-[#8c9ae0] border-2 border-black px-4 py-2 mb-6 flex items-center justify-between">
-        <h1 class="font-['Arial_Black'] font-black text-xl uppercase">Manajemen User</h1>
-        <a href="{{ route('admin-users.create') }}" class="bg-[#8c9ae0] text-black px-4 py-1.5 text-sm font-[Helvetica] font-bold border-2 border-black rounded-none hover:bg-[#7a8ad4]">
-            + Tambah User
-        </a>
-    </div>
+<div x-data="{ filters: false }">
+<x-crm.page-header color="#8c9ae0" title="Manajemen Pengguna" />
+<div class="border-2 border-black bg-white p-3 mb-4 flex flex-wrap items-center gap-2">
+    <form method="GET" class="flex min-w-64 flex-1"><input name="search" value="{{ request('search') }}" placeholder="Cari nama atau email" class="w-full border-2 border-black px-3 py-2 text-sm"><input type="hidden" name="account_status" value="{{ request('account_status') }}"><input type="hidden" name="role_id" value="{{ request('role_id') }}"><input type="hidden" name="branch_id" value="{{ request('branch_id') }}"><input type="hidden" name="project_id" value="{{ request('project_id') }}"><input type="hidden" name="supervisor_user_id" value="{{ request('supervisor_user_id') }}"><input type="hidden" name="invitation_status" value="{{ request('invitation_status') }}"><button class="bg-black text-white border-2 border-black px-4 text-xs font-bold">CARI</button></form>
+    @php($activeFilters = collect(['account_status','role_id','branch_id','project_id','supervisor_user_id','invitation_status'])->filter(fn($key) => filled(request($key))))
+    <button @click="filters=true" class="border-2 border-black bg-white px-4 py-2 text-xs font-bold">FILTER{{ $activeFilters->isNotEmpty() ? ' ('.$activeFilters->count().')' : '' }}</button>
+    @can('users.create')<a href="{{ route('admin-users.create') }}" class="border-2 border-black bg-[#8c9ae0] px-4 py-2 text-xs font-bold">+ TAMBAH</a>@endcan
+</div>
+@if($activeFilters->isNotEmpty())<div class="mb-4 flex flex-wrap gap-2 text-xs font-[Helvetica]">@foreach($activeFilters as $key)<span class="border-2 border-black bg-[#fff3b0] px-2 py-1">{{ str_replace('_', ' ', strtoupper($key)) }}: {{ request($key) }}</span>@endforeach<a href="{{ route('admin-users.index', ['search' => request('search')]) }}" class="font-bold underline px-2 py-1">Hapus semua filter</a></div>@endif
 
-    <div class="border-2 border-black">
-        <div class="bg-black text-white px-3 py-2 font-[Helvetica] font-bold text-xs uppercase">
-            Daftar User
-        </div>
-        @if($users->count() > 0)
-        <div class="divide-y-2 divide-black">
-            @foreach($users as $user)
-            <div class="px-3 py-3 flex items-center justify-between">
-                <div class="flex items-center gap-4">
-                    <div class="w-10 h-10 border-2 border-black flex items-center justify-center font-[Helvetica] font-bold text-sm {{ $user->isSuperadmin() ? 'bg-[#fcc20f]' : 'bg-[#9ab6c8]' }}">
-                        {{ strtoupper(substr($user->name, 0, 2)) }}
-                    </div>
-                    <div class="text-sm font-['Times_New_Roman']">
-                        <div class="font-bold">{{ $user->name }}</div>
-                        <div class="text-xs">{{ $user->email }}</div>
-                        <div class="text-xs mt-0.5">
-                            <span class="font-bold">{{ $user->role->name ?? '-' }}</span>
-                            @if($user->branch)
-                                <span class="text-gray-600">— {{ $user->branch->name }} ({{ $user->branch->code }})</span>
-                            @endif
-                        </div>
-                        <div class="text-[10px] text-gray-600 mt-1">Akses: {{ $user->branches->pluck('name')->join(', ') ?: ($user->branch?->name ?? 'Belum ada') }}</div>
-                        @if($user->hasRole('sales'))
-                            <div class="text-[10px] text-gray-600 mt-0.5">Proyek: {{ $user->assignedProjects->pluck('project_name')->join(', ') ?: 'Belum ada' }}</div>
-                        @endif
-                    </div>
-                </div>
-                <div class="flex items-center gap-2">
-                    @if(!$user->is_active)
-                        <span class="bg-[#d77a7a] text-white px-2 py-0.5 text-xs font-[Helvetica] font-bold border border-black">Nonaktif</span>
-                    @endif
-                    <a href="{{ route('admin-users.edit', $user) }}" class="bg-white text-black px-3 py-1 text-xs font-[Helvetica] font-bold border-2 border-black rounded-none hover:bg-gray-100">
-                        Edit
-                    </a>
-                    <form method="POST" action="{{ route('admin-users.destroy', $user) }}" onsubmit="return confirm('Yakin ingin menghapus user ini?')">
-                        @csrf
-                        @method('DELETE')
-                        <button type="submit" class="bg-white text-[#e91d2a] px-3 py-1 text-xs font-[Helvetica] font-bold border-2 border-[#e91d2a] rounded-none hover:bg-red-50">
-                            Hapus
-                        </button>
-                    </form>
-                </div>
-            </div>
-            @endforeach
-        </div>
-        @else
-        <div class="px-4 py-8 text-center text-sm font-['Times_New_Roman']">
-            Belum ada user.
-        </div>
-        @endif
-    </div>
+<div class="crm-table-scroll"><table class="crm-data-table"><thead><tr>
+@foreach(['name'=>'Name','email'=>'Email'] as $key=>$label)<th><a href="{{ request()->fullUrlWithQuery(['sort'=>$key,'direction'=>request('sort')===$key && request('direction')==='asc'?'desc':'asc','page'=>null]) }}">{{ $label }} @if(request('sort')===$key){{ request('direction')==='desc'?'▼':'▲' }}@endif</a></th>@endforeach
+<th>Role</th><th>Primary Branch</th><th>Projects</th><th>Supervisor</th><th><a href="{{ request()->fullUrlWithQuery(['sort'=>'account_status','direction'=>request('sort')==='account_status' && request('direction')==='asc'?'desc':'asc','page'=>null]) }}">Account Status</a></th><th><a href="{{ request()->fullUrlWithQuery(['sort'=>'last_login_at','direction'=>request('sort')==='last_login_at' && request('direction')==='asc'?'desc':'asc','page'=>null]) }}">Last Login</a></th><th>Actions</th></tr></thead>
+<tbody>@forelse($users as $user)<tr><td class="font-bold"><a class="text-[#0000ee] underline" href="{{ route('admin-users.show',$user) }}">{{ $user->name }}</a></td><td>{{ $user->email }}</td><td>{{ $user->role?->name ?? '-' }}</td><td>{{ $user->branch?->name ?? '-' }}</td><td title="{{ $user->assignedProjects->pluck('project_name')->join(', ') }}">{{ $user->assignedProjects->pluck('project_name')->join(', ') ?: '-' }}</td><td>{{ $user->supervisor?->name ?? '-' }}</td><td><span class="border border-black px-2 py-0.5 font-bold">{{ str_replace('_',' ',strtoupper($user->account_status->value)) }}</span></td><td>{{ $user->last_login_at?->format('d/m/Y H:i') ?? '-' }}</td><td class="whitespace-nowrap"><a class="text-[#0000ee] font-bold underline" href="{{ route('admin-users.show',$user) }}">View</a> @can('update',$user) <a class="text-[#0000ee] font-bold underline ml-2" href="{{ route('admin-users.edit',$user) }}">Edit</a>@endcan</td></tr>@empty<tr><td colspan="9" class="text-center">Tidak ada pengguna.</td></tr>@endforelse</tbody></table></div>
+<div class="mt-4">{{ $users->links() }}</div>
+
+<div x-cloak x-show="filters" @keydown.escape.window="filters=false" class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"><div @click.outside="filters=false" class="bg-white border-2 border-black w-full max-w-2xl max-h-[90vh] overflow-y-auto"><div class="bg-black text-white p-3 flex justify-between font-bold"><span>FILTER PENGGUNA</span><button @click="filters=false" type="button">X</button></div><form method="GET" class="p-4 grid gap-4 sm:grid-cols-2"><input type="hidden" name="search" value="{{ request('search') }}">
+<label class="text-xs font-bold">STATUS AKUN<select name="account_status" class="mt-1 w-full border-2 border-black p-2 bg-white"><option value="">Semua</option>@foreach(\App\Enums\AccountStatus::cases() as $status)<option value="{{ $status->value }}" @selected(request('account_status')===$status->value)>{{ str_replace('_',' ',ucwords($status->value)) }}</option>@endforeach</select></label>
+<label class="text-xs font-bold">PERAN<select name="role_id" class="mt-1 w-full border-2 border-black p-2 bg-white"><option value="">Semua</option>@foreach($roles as $role)<option value="{{ $role->id }}" @selected(request('role_id')==$role->id)>{{ $role->name }}</option>@endforeach</select></label>
+<label class="text-xs font-bold">CABANG<select name="branch_id" class="mt-1 w-full border-2 border-black p-2 bg-white"><option value="">Semua</option>@foreach($branches as $branch)<option value="{{ $branch->id }}" @selected(request('branch_id')==$branch->id)>{{ $branch->name }}</option>@endforeach</select></label>
+<label class="text-xs font-bold">PROYEK<select name="project_id" class="mt-1 w-full border-2 border-black p-2 bg-white"><option value="">Semua</option>@foreach($projects as $project)<option value="{{ $project->id }}" @selected(request('project_id')==$project->id)>{{ $project->project_name }} - {{ $project->branch?->name }}</option>@endforeach</select></label>
+<label class="text-xs font-bold">ATASAN<select name="supervisor_user_id" class="mt-1 w-full border-2 border-black p-2 bg-white"><option value="">Semua</option>@foreach($supervisors as $supervisor)<option value="{{ $supervisor->id }}" @selected(request('supervisor_user_id')==$supervisor->id)>{{ $supervisor->name }}</option>@endforeach</select></label>
+<label class="text-xs font-bold">STATUS UNDANGAN<select name="invitation_status" class="mt-1 w-full border-2 border-black p-2 bg-white"><option value="">Semua</option>@foreach(['draft'=>'Draft','usable'=>'Dapat digunakan','expired'=>'Kedaluwarsa','accepted'=>'Diterima','revoked'=>'Dicabut'] as $value=>$label)<option value="{{ $value }}" @selected(request('invitation_status')===$value)>{{ $label }}</option>@endforeach</select></label>
+<div class="sm:col-span-2 flex gap-2"><button class="bg-[#8c9ae0] border-2 border-black px-4 py-2 text-xs font-bold">TERAPKAN FILTER</button><a href="{{ route('admin-users.index',['search'=>request('search')]) }}" class="bg-white border-2 border-black px-4 py-2 text-xs font-bold">RESET FILTER</a></div></form></div></div>
+</div>
 @endsection

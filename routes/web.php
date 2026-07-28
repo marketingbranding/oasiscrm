@@ -28,7 +28,6 @@ use App\Http\Controllers\ProfileController;
 use App\Models\ContentItem;
 use App\Models\DanaTalangan;
 use App\Models\LeadMaster;
-use App\Models\User;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', function () {
@@ -149,9 +148,6 @@ Route::middleware(['auth', 'active', 'verified', 'password.changed', 'sales.acce
         Route::post('/branches/{branch}/assign', [BranchController::class, 'assignStore'])->name('branches.assign-store');
         Route::delete('/branches/{user}/remove-admin', [BranchController::class, 'removeAdmin'])->name('branches.remove-admin');
 
-        Route::bind('admin_user', fn ($value) => User::findOrFail($value));
-        Route::resource('admin-users', AdminUserController::class)->except(['show']);
-
         Route::bind('project', fn ($v) => LeadMaster::findOrFail($v));
         Route::resource('projects', ProjectController::class);
         Route::get('/projects/{project}/kavlings', [KavlingController::class, 'index'])->name('kavlings.index');
@@ -160,12 +156,27 @@ Route::middleware(['auth', 'active', 'verified', 'password.changed', 'sales.acce
         Route::delete('/kavlings/{kavling}', [KavlingController::class, 'destroy'])->name('kavlings.destroy');
         Route::post('kavlings/bulk-delete', [KavlingController::class, 'bulkDestroy'])->name('kavlings.bulk-destroy');
     });
+
+    Route::prefix('admin-users')->name('admin-users.')->group(function () {
+        Route::get('/', [AdminUserController::class, 'index'])->middleware('permission:users.view')->name('index');
+        Route::get('/create', [AdminUserController::class, 'create'])->middleware('permission:users.create')->name('create');
+        Route::post('/', [AdminUserController::class, 'store'])->middleware('permission:users.create')->name('store');
+        Route::get('/{admin_user}', [AdminUserController::class, 'show'])->middleware('permission:users.view')->name('show');
+        Route::get('/{admin_user}/edit', [AdminUserController::class, 'edit'])->middleware('permission:users.update')->name('edit');
+        Route::put('/{admin_user}', [AdminUserController::class, 'update'])->middleware('permission:users.update')->name('update');
+        Route::post('/{admin_user}/invitation', [AdminUserController::class, 'sendInvitation'])->middleware('permission:users.invite')->name('invitation.send');
+        Route::post('/{admin_user}/invitation/resend', [AdminUserController::class, 'resendInvitation'])->middleware('permission:users.invite')->name('invitation.resend');
+        Route::patch('/{admin_user}/invitation/revoke', [AdminUserController::class, 'revokeInvitation'])->middleware('permission:users.invite')->name('invitation.revoke');
+        Route::patch('/{admin_user}/suspend', [AdminUserController::class, 'suspend'])->middleware('permission:users.suspend')->name('suspend');
+        Route::patch('/{admin_user}/reactivate', [AdminUserController::class, 'reactivate'])->middleware('permission:users.reactivate')->name('reactivate');
+        Route::patch('/{admin_user}/deactivate', [AdminUserController::class, 'deactivate'])->middleware('permission:users.deactivate')->name('deactivate');
+        Route::post('/{admin_user}/reset-access', [AdminUserController::class, 'resetAccess'])->middleware('permission:users.reset_password')->name('reset-access');
+    });
 });
 
 Route::middleware(['auth', 'active'])->group(function () {
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
-    Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
 });
 
 require __DIR__.'/auth.php';

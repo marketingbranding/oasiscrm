@@ -24,6 +24,23 @@
         </div>
 
         <div>
+            <x-input-label for="phone" value="Nomor Telepon" />
+            <x-text-input id="phone" name="phone" type="text" class="mt-1 block w-full" :value="old('phone', $user->phone)" autocomplete="tel" />
+            <x-input-error class="mt-2" :messages="$errors->get('phone')" />
+        </div>
+
+        <div class="border-2 border-black p-4 space-y-2 text-sm">
+            <h3 class="font-bold uppercase">Akses Organisasi</h3>
+            <p><strong>Peran:</strong> {{ $user->role?->name ?? '-' }}</p>
+            <p><strong>Cabang utama:</strong> {{ $user->branch?->name ?? '-' }}</p>
+            <p><strong>Cabang tambahan:</strong> {{ $user->branches->where('id', '!=', $user->branch_id)->pluck('name')->join(', ') ?: '-' }}</p>
+            <p><strong>Proyek:</strong> {{ $user->assignedProjects->pluck('project_name')->join(', ') ?: '-' }}</p>
+            <p><strong>Atasan langsung:</strong> {{ $user->supervisor?->name ?? '-' }}</p>
+            <p><strong>Status akun:</strong> {{ str_replace('_', ' ', strtoupper($user->account_status->value)) }}</p>
+            <p class="text-xs text-gray-600">Data organisasi dan status akun hanya dapat diubah oleh pengelola pengguna yang berwenang.</p>
+        </div>
+
+        <div>
             <x-input-label for="email" :value="__('Email')" />
             <x-text-input id="email" name="email" type="email" class="mt-1 block w-full" :value="old('email', $user->email)" required autocomplete="username" />
             <x-input-error class="mt-2" :messages="$errors->get('email')" />

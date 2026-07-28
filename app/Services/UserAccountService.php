@@ -63,6 +63,18 @@ class UserAccountService
         $this->audit->log('account_deactivated', $user, $actor, ['account_status' => $old], ['account_status' => AccountStatus::Inactive->value]);
     }
 
+    public function reactivate(User $user, User $actor): void
+    {
+        $old = $user->account_status->value;
+        $user->update([
+            'account_status' => AccountStatus::Active,
+            'suspended_at' => null,
+            'deactivated_at' => null,
+            'updated_by' => $actor->id,
+        ]);
+        $this->audit->log('account_reactivated', $user, $actor, ['account_status' => $old], ['account_status' => AccountStatus::Active->value]);
+    }
+
     public function deleteOtherSessions(User $user, ?string $exceptSessionId = null): void
     {
         if (! Schema::hasTable('sessions')) {

@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\Branch;
 use App\Models\Role;
 use App\Models\User;
+use App\Services\OptimisticLockService;
 use App\Services\WorkspaceAccessService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
@@ -77,8 +78,6 @@ class WorkspaceAccessTest extends TestCase
         $this->actingAs($admin)->post(route('admin-users.store'), [
             'name' => 'Robby',
             'email' => 'robby@example.com',
-            'password' => 'password123',
-            'password_confirmation' => 'password123',
             'role_id' => $role->id,
             'branch_id' => $pusat->id,
             'branch_ids' => [$magelang->id],
@@ -86,12 +85,13 @@ class WorkspaceAccessTest extends TestCase
                 $pusat->id => ['can_edit' => 1, 'can_sync' => 1],
                 $magelang->id => ['can_sync' => 1],
             ],
-        ])->assertRedirect(route('admin-users.index'));
+            'submit_action' => 'draft',
+        ])->assertRedirect();
 
         $robby = User::where('email', 'robby@example.com')->firstOrFail();
         $this->assertSame($pusat->id, $robby->branch_id);
         $this->assertEqualsCanonicalizing([$pusat->id, $magelang->id], $robby->branches->pluck('id')->all());
-        $this->assertTrue((bool) $robby->branches->firstWhere('id', $magelang->id)->pivot->can_sync);
+        $this->assertTrue((bool) $robby->branches->firstWhere('id', $magelang->id)->pivot->can_view);
     }
 
     public function test_admin_update_can_explicitly_change_memberships_without_deleting_user(): void
@@ -109,7 +109,8 @@ class WorkspaceAccessTest extends TestCase
             'branch_ids' => [$primary->id, $third->id],
             'membership_permissions' => [$third->id => ['can_edit' => 1]],
             'is_active' => 1,
-        ])->assertRedirect(route('admin-users.index'));
+            'expected_updated_at' => app(OptimisticLockService::class)->token($user),
+        ])->assertRedirect();
 
         $this->assertDatabaseHas('users', ['id' => $user->id]);
         $this->assertEqualsCanonicalizing([$primary->id, $third->id], $user->fresh()->branches->pluck('id')->all());
@@ -125,11 +126,10 @@ class WorkspaceAccessTest extends TestCase
         $this->actingAs($admin)->from(route('admin-users.create'))->post(route('admin-users.store'), [
             'name' => 'Invalid User',
             'email' => 'invalid@example.com',
-            'password' => 'password123',
-            'password_confirmation' => 'password123',
             'role_id' => $role->id,
             'branch_id' => $inactive->id,
             'branch_ids' => [$inactive->id],
+            'submit_action' => 'draft',
         ])->assertSessionHasErrors(['branch_id', 'branch_ids.0']);
 
         $this->assertDatabaseMissing('users', ['email' => 'invalid@example.com']);

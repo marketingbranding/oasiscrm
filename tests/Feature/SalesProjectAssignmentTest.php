@@ -32,7 +32,7 @@ class SalesProjectAssignmentTest extends TestCase
         $this->actingAs($admin)->post(route('admin-users.store'), $this->salesPayload($salesRole, $branch, [
             $project->id,
             $secondary->id,
-        ], $secondary->id))->assertRedirect(route('admin-users.index'));
+        ], $secondary->id))->assertRedirect();
 
         $sales = User::where('email', 'sales@example.com')->firstOrFail();
         $this->assertEqualsCanonicalizing([$project->id, $secondary->id], $sales->assignedProjects->pluck('id')->all());
@@ -102,16 +102,17 @@ class SalesProjectAssignmentTest extends TestCase
             ->assertSessionHasErrors('assigned_project_ids');
     }
 
-    public function test_non_sales_user_cannot_receive_project_assignments(): void
+    public function test_non_sales_user_can_receive_project_assignments(): void
     {
         [$admin, , $branch, $project] = $this->assignmentContext();
         $adminRole = Role::firstOrCreate(['slug' => 'admin'], ['name' => 'Admin', 'is_superadmin' => false]);
         $payload = $this->salesPayload($adminRole, $branch, [$project->id]);
 
         $this->actingAs($admin)->post(route('admin-users.store'), $payload)
-            ->assertSessionHasErrors('assigned_project_ids');
+            ->assertRedirect();
 
-        $this->assertDatabaseMissing('users', ['email' => 'sales@example.com']);
+        $user = User::where('email', 'sales@example.com')->firstOrFail();
+        $this->assertTrue($user->assignedProjects->contains($project));
     }
 
     public function test_superadmin_create_and_edit_ui_show_sales_projects_grouped_by_branch(): void
@@ -126,7 +127,7 @@ class SalesProjectAssignmentTest extends TestCase
 
         $this->actingAs($admin)->get(route('admin-users.create'))
             ->assertOk()
-            ->assertSee('Proyek Sales')
+            ->assertSee('Proyek Tambahan')
             ->assertSee($branch->name)
             ->assertSee($project->project_name);
 
@@ -167,13 +168,12 @@ class SalesProjectAssignmentTest extends TestCase
         return [
             'name' => 'Sales User',
             'email' => 'sales@example.com',
-            'password' => 'password123',
-            'password_confirmation' => 'password123',
             'role_id' => $role->id,
             'branch_id' => $branch->id,
             'branch_ids' => [$branch->id],
             'assigned_project_ids' => $projectIds,
             'primary_project_id' => $primaryProjectId,
+            'submit_action' => 'draft',
         ];
     }
 }

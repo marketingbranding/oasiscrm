@@ -64,6 +64,14 @@ class PermissionCatalog
             ['name' => 'Membatalkan Pengeluaran', 'slug' => 'expenses.cancel', 'description' => 'Membatalkan pengeluaran dengan alasan.', 'group_name' => 'Pengeluaran'],
             ['name' => 'Mengekspor Pengeluaran', 'slug' => 'expenses.export', 'description' => 'Mengekspor laporan Pengeluaran.', 'group_name' => 'Pengeluaran'],
             ['name' => 'Mengelola kategori Pengeluaran', 'slug' => 'expenses.manage_categories', 'description' => 'Mengelola kategori Pengeluaran.', 'group_name' => 'Pengeluaran'],
+            ['name' => 'Melihat komentar', 'slug' => 'comments.view', 'description' => 'Melihat komentar pada data yang dapat diakses.', 'group_name' => 'Komentar'],
+            ['name' => 'Membuat komentar', 'slug' => 'comments.create', 'description' => 'Menambahkan komentar pada data yang dapat diakses.', 'group_name' => 'Komentar'],
+            ['name' => 'Membalas komentar', 'slug' => 'comments.reply', 'description' => 'Membalas komentar pada data yang dapat diakses.', 'group_name' => 'Komentar'],
+            ['name' => 'Memperbarui komentar sendiri', 'slug' => 'comments.update_own', 'description' => 'Memperbarui komentar milik sendiri.', 'group_name' => 'Komentar'],
+            ['name' => 'Menghapus komentar sendiri', 'slug' => 'comments.delete_own', 'description' => 'Menghapus komentar milik sendiri.', 'group_name' => 'Komentar'],
+            ['name' => 'Memoderasi komentar', 'slug' => 'comments.moderate', 'description' => 'Memoderasi komentar sesuai kewenangan.', 'group_name' => 'Komentar'],
+            ['name' => 'Melihat riwayat komentar', 'slug' => 'comments.view_history', 'description' => 'Melihat riwayat perubahan komentar.', 'group_name' => 'Komentar'],
+            ['name' => 'Menyebut pengguna dalam komentar', 'slug' => 'comments.mention', 'description' => 'Menyebut pengguna yang dapat diakses dalam komentar.', 'group_name' => 'Komentar'],
         ];
 
         foreach (self::MODULES as $module => [$label, $scopes, $hasSync]) {
@@ -106,16 +114,19 @@ class PermissionCatalog
         $salesModules = ['sales_pocketbook', 'work_planner'];
         $operations = ['database', 'consumer_progress', 'bridge_fund', 'expenses'];
         $allModules = [...$salesModules, ...$operations];
+        $comments = ['comments.view', 'comments.create', 'comments.reply', 'comments.update_own', 'comments.delete_own', 'comments.mention'];
 
         return [
             'sales' => [
                 'sales_pocketbook.view_own', 'sales_pocketbook.manage_own', 'sales_pocketbook.export_own', 'work_planner.view_own',
                 'sales_pocketbook.export', 'work_planner.create', 'work_planner.update',
+                ...$comments,
             ],
             'sales_coordinator' => [
                 'sales_pocketbook.view_own', 'sales_pocketbook.view_team', 'sales_pocketbook.manage_own',
                 'sales_pocketbook.manage_team', 'work_planner.view_own',
                 'work_planner.view_team', 'work_planner.create', 'work_planner.update', 'work_planner.assign',
+                ...$comments,
             ],
             'supervisor' => [
                 ...$scoped($salesModules, ['own', 'team', 'assigned'], ['view', 'manage', 'export']),
@@ -126,12 +137,14 @@ class PermissionCatalog
                 'consumer_progress.view', 'consumer_progress.sync',
                 'bridge_fund.view', 'bridge_fund.manage', 'bridge_fund.export',
                 'expenses.view', 'expenses.create', 'expenses.update', 'expenses.cancel', 'expenses.export',
+                ...$comments,
             ],
             'manager' => [
                 ...$scoped($allModules, ['assigned', 'branch'], ['view', 'export']),
                 ...$scoped(['sales_pocketbook'], ['assigned', 'branch'], ['manage']),
                 'sales_pocketbook.export', 'work_planner.create', 'work_planner.update', 'work_planner.assign',
                 'work_planner.export', 'database.view', 'consumer_progress.view', 'bridge_fund.view', 'bridge_fund.export',
+                ...$comments,
             ],
             'branch_manager' => [
                 'users.view', 'users.create', 'users.invite', 'users.update', 'users.reset_password', 'users.export',
@@ -142,6 +155,7 @@ class PermissionCatalog
                 'expenses.view', 'expenses.create', 'expenses.update', 'expenses.cancel', 'expenses.export',
                 ...$scoped($allModules, ['branch'], ['view', 'manage', 'export']),
                 ...$scoped(['database', 'consumer_progress', 'bridge_fund'], ['branch'], ['sync']),
+                ...$comments,
             ],
             'pusat' => [
                 'users.view', 'users.create', 'users.invite', 'users.update', 'users.suspend', 'users.deactivate',
@@ -153,6 +167,7 @@ class PermissionCatalog
                 'bridge_fund.export', 'expenses.view', 'expenses.create', 'expenses.update', 'expenses.cancel', 'expenses.export',
                 ...$scoped($allModules, ['all'], ['view', 'manage', 'export']),
                 ...$scoped(['database', 'consumer_progress', 'bridge_fund'], ['all'], ['sync']),
+                ...$comments, 'comments.view_history',
             ],
             'admin' => [
                 'users.view', 'users.create', 'users.invite', 'users.update', 'users.reset_password',
@@ -162,12 +177,14 @@ class PermissionCatalog
                 'consumer_progress.sync', 'bridge_fund.view', 'bridge_fund.manage', 'bridge_fund.export',
                 ...$scoped($allModules, ['branch'], ['view', 'manage', 'export']),
                 ...$scoped(['database', 'consumer_progress', 'bridge_fund'], ['branch'], ['sync']),
+                ...$comments,
             ],
             'staff' => [
                 'work_planner.create', 'work_planner.update', 'database.view', 'database.edit',
                 'consumer_progress.view', 'bridge_fund.view', 'bridge_fund.manage',
                 ...$scoped(['work_planner'], ['own'], ['view', 'manage']),
                 ...$scoped($operations, ['assigned'], ['view', 'manage']),
+                ...$comments,
             ],
         ];
     }

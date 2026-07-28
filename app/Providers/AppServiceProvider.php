@@ -2,9 +2,12 @@
 
 namespace App\Providers;
 
+use App\Models\Comment;
 use App\Models\DanaTalangan;
 use App\Models\Permission;
 use App\Models\User;
+use App\Policies\CommentPolicy;
+use App\Policies\DanaTalanganPolicy;
 use App\Policies\UserPolicy;
 use App\Services\WorkPlannerReminderService;
 use Illuminate\Support\Facades\Auth;
@@ -22,6 +25,8 @@ class AppServiceProvider extends ServiceProvider
     public function boot(): void
     {
         Gate::policy(User::class, UserPolicy::class);
+        Gate::policy(Comment::class, CommentPolicy::class);
+        Gate::policy(DanaTalangan::class, DanaTalanganPolicy::class);
         Gate::before(function (User $user, string $ability): ?bool {
             return Permission::isRegistered($ability) ? $user->hasPermission($ability) : null;
         });

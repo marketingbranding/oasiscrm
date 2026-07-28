@@ -169,6 +169,7 @@ Route::middleware(['auth', 'active', 'verified', 'password.changed', 'sales.acce
     Route::prefix('admin-users')->name('admin-users.')->group(function () {
         Route::middleware('permissions.all:users.create,users.invite,users.assign_roles,users.assign_branches,users.assign_projects,users.assign_supervisor')->group(function () {
             Route::get('/import', [AdminUserImportController::class, 'create'])->name('import');
+            Route::post('/import/preview', [AdminUserImportController::class, 'preview'])->name('import-preview');
             Route::get('/import/template', [AdminUserImportController::class, 'template'])->name('import-template');
             Route::get('/import/history', [AdminUserImportController::class, 'history'])->name('import-history');
             Route::get('/import/batches/{user_import_batch}', [AdminUserImportController::class, 'show'])->name('import-batches.show');

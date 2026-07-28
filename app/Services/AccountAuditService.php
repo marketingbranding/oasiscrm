@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\ActivityLog;
 use App\Models\Role;
 use App\Models\User;
+use App\Models\UserImportBatch;
 
 class AccountAuditService
 {
@@ -39,6 +40,22 @@ class AccountAuditService
                 'old' => $this->safeValues($old),
                 'new' => $this->safeValues($new),
             ], fn ($value) => $value !== null && $value !== []),
+        ]);
+    }
+
+    public function logUserImportBatch(string $event, UserImportBatch $batch, ?User $actor, array $counts): ActivityLog
+    {
+        $safeCounts = collect($counts)->only(['total_rows', 'valid_rows', 'warning_rows', 'error_rows'])->all();
+
+        return ActivityLog::create([
+            'causer_id' => $actor?->id,
+            'subject_type' => UserImportBatch::class,
+            'subject_id' => $batch->id,
+            'event' => $event,
+            'description' => $event === 'user_import_uploaded'
+                ? "File impor pengguna batch {$batch->id} diunggah"
+                : "Preview impor pengguna batch {$batch->id} dibuat",
+            'properties' => ['batch_id' => $batch->id, ...$safeCounts],
         ]);
     }
 

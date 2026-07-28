@@ -124,12 +124,13 @@ class AdminUserImportFoundationTest extends TestCase
         $dynamicIndex = $routes->search(fn ($route) => $route->uri() === 'admin-users/{admin_user}' && in_array('GET', $route->methods(), true));
         $requiredMiddleware = 'permissions.all:'.implode(',', UserImportBatchPolicy::REQUIRED_PERMISSIONS);
 
-        foreach (['admin-users.import', 'admin-users.import-template', 'admin-users.import-history', 'admin-users.import-batches.show'] as $name) {
+        foreach (['admin-users.import', 'admin-users.import-preview', 'admin-users.import-template', 'admin-users.import-history', 'admin-users.import-batches.show'] as $name) {
             $route = Route::getRoutes()->getByName($name);
             $this->assertNotNull($route);
             $this->assertLessThan($dynamicIndex, $routes->search(fn ($candidate) => $candidate === $route));
             $this->assertContains($requiredMiddleware, $route->gatherMiddleware());
         }
+        $this->assertContains('POST', Route::getRoutes()->getByName('admin-users.import-preview')->methods());
     }
 
     public function test_bulk_import_changelog_is_idempotent_and_visible(): void

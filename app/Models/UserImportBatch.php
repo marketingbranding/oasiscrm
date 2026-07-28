@@ -19,6 +19,10 @@ class UserImportBatch extends Model
 
     public const STATUS_READY = 'ready';
 
+    public const STATUS_PREVIEW_READY = 'preview_ready';
+
+    public const STATUS_VALIDATION_FAILED = 'validation_failed';
+
     public const STATUS_PROCESSING = 'processing';
 
     public const STATUS_COMPLETED = 'completed';
@@ -27,6 +31,7 @@ class UserImportBatch extends Model
 
     public const STATUSES = [
         self::STATUS_DRAFT, self::STATUS_VALIDATING, self::STATUS_READY,
+        self::STATUS_PREVIEW_READY, self::STATUS_VALIDATION_FAILED,
         self::STATUS_PROCESSING, self::STATUS_COMPLETED, self::STATUS_FAILED,
     ];
 

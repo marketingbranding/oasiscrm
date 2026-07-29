@@ -103,8 +103,12 @@ class DatabaseController extends Controller
         $requestAdd = $request->boolean('add');
 
         $canSync = $user->hasPermission('database.sync') && $selectedBranch && $this->workspaceAccess->canSyncBranch($user, $selectedBranch);
+        $canEdit = $user->hasPermission('database.edit')
+            && $selectedBranch
+            && in_array((int) $selectedBranch->id, $this->organizationScope->branchIds($user, 'database', 'manage'), true)
+            && $this->workspaceAccess->canEditBranch($user, $selectedBranch);
 
-        return view('crm.database.index', compact('branches', 'selectedBranch', 'selectedBranchId', 'sheetNames', 'records', 'syncStatus', 'isStale', 'requestSheet', 'requestAdd', 'canSync'));
+        return view('crm.database.index', compact('branches', 'selectedBranch', 'selectedBranchId', 'sheetNames', 'records', 'syncStatus', 'isStale', 'requestSheet', 'requestAdd', 'canSync', 'canEdit'));
     }
 
     public function sheetData(Request $request, $branchId, $sheetName)

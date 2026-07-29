@@ -329,6 +329,16 @@
 .crm-page-header { margin-bottom: var(--oasis-space-6); }
 .crm-page-header-title { font: 900 var(--oasis-type-page-title-size)/1.15 var(--oasis-font-display); text-transform: uppercase; }
 
+.database-page-header {
+    border-left: var(--oasis-border-width-emphasis) solid var(--oasis-accent-database);
+    padding-left: var(--oasis-space-4);
+}
+
+.database-scope-toolbar { margin-bottom: var(--oasis-space-4); }
+.database-branch-form { display: flex; flex-wrap: wrap; align-items: center; gap: var(--oasis-space-2); }
+.database-branch-select { min-width: min(20rem, 100%); }
+.database-scope-summary { display: grid; gap: var(--oasis-space-1); font-family: var(--oasis-font-controls); }
+
 .crm-status-badge {
     display: inline-flex;
     min-height: 1.5rem;

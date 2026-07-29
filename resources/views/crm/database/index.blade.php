@@ -3,47 +3,68 @@
 @section('title', 'Database - Oasis CRM')
 
 @section('content')
-    <div class="bg-[#d77a7a] border-2 border-black px-4 py-2 mb-6">
-        <h1 class="font-['Arial_Black'] font-black text-xl uppercase">Database</h1>
-    </div>
+    <x-crm.page-header
+        variant="canonical"
+        eyebrow="Sales / Database"
+        title="Database"
+        description="Temukan dan kelola data konsumen dari cache Google Sheet pada ruang kerja yang sedang aktif."
+        class="database-page-header"
+    >
+        <x-slot:actions>
+            @if($selectedBranch)
+                <x-crm.status-badge variant="info">Cabang: {{ $selectedBranch->name }}</x-crm.status-badge>
+                <x-crm.status-badge variant="neutral">{{ count($sheetNames) }} sheet</x-crm.status-badge>
+            @else
+                <x-crm.status-badge variant="warning">Cabang belum dipilih</x-crm.status-badge>
+            @endif
+        </x-slot:actions>
+    </x-crm.page-header>
+
     <x-crm.page-presence page-key="database" :branch-id="$selectedBranchId" />
 
-    @if(isset($branches) && $branches->count() > 1)
-    <div class="bg-white border-2 border-black p-3 mb-6 flex items-center gap-3 flex-wrap">
-        <form method="GET" action="{{ route('database.index') }}" class="flex items-center gap-3 flex-wrap">
-            <label class="font-[Helvetica] font-bold text-xs uppercase">Pilih Cabang:</label>
-            <select name="branch_id" onchange="this.form.submit()" class="border-2 border-black px-3 py-1.5 text-sm font-['Times_New_Roman'] bg-white rounded-none">
-                <option value="">— Pilih Cabang —</option>
-                @foreach($branches as $b)
-                    <option value="{{ $b->id }}" {{ (string)$selectedBranchId === (string)$b->id ? 'selected' : '' }} @if(str_contains(mb_strtolower($b->name), 'pusat')) style="color:#b8860b;font-weight:700;background:#fff3b0" @endif>{{ $b->name }} ({{ $b->code }})</option>
-                @endforeach
-            </select>
-        </form>
-        <div class="h-6 w-px bg-black mx-1 hidden sm:block"></div>
-        <div class="flex items-center gap-2 ml-auto">
-            <x-crm.sync-control module-key="database" module-name="Sinkronisasi Database" :scope-name="$selectedBranch?->name ?? ''" :sync-url="route('database.sync')" :status-url="route('database.sync-status', ['branch_id' => $selectedBranchId])" :status="$syncStatus" :branch-id="$selectedBranchId" :can-sync="$canSync" />
-        </div>
-    </div>
-    @elseif($selectedBranch)
-    <div class="bg-[#fcc20f] border-2 border-black px-4 py-2 mb-4 flex items-center gap-3">
-        <span class="font-['Arial_Black'] font-black text-lg uppercase">Cabang: {{ $selectedBranch->code }}</span>
-        <div class="ml-auto"><x-crm.sync-control module-key="database" module-name="Sinkronisasi Database" :scope-name="$selectedBranch->name" :sync-url="route('database.sync')" :status-url="route('database.sync-status', ['branch_id' => $selectedBranchId])" :status="$syncStatus" :branch-id="$selectedBranchId" :can-sync="$canSync" button-class="bg-white text-black px-3 py-1 text-xs font-[Helvetica] font-bold border-2 border-black" /></div>
-    </div>
-    @endif
+    <x-crm.toolbar label="Ruang kerja Database" class="database-scope-toolbar">
+        @if(isset($branches) && $branches->count() > 1)
+            <form method="GET" action="{{ route('database.index') }}" class="database-branch-form">
+                <label for="database-branch" class="crm-type-label">Pilih Cabang</label>
+                <select id="database-branch" name="branch_id" onchange="this.form.submit()" class="crm-control database-branch-select">
+                    <option value="">— Pilih Cabang —</option>
+                    @foreach($branches as $b)
+                        <option value="{{ $b->id }}" {{ (string)$selectedBranchId === (string)$b->id ? 'selected' : '' }}>{{ $b->name }} ({{ $b->code }})</option>
+                    @endforeach
+                </select>
+                <noscript><x-crm.button type="submit" size="sm">Terapkan</x-crm.button></noscript>
+            </form>
+        @elseif($selectedBranch)
+            <div class="database-scope-summary">
+                <span class="crm-type-label">Ruang kerja aktif</span>
+                <strong>Cabang: {{ $selectedBranch->name }} ({{ $selectedBranch->code }})</strong>
+            </div>
+        @else
+            <div class="database-scope-summary">
+                <span class="crm-type-label">Ruang kerja aktif</span>
+                <strong>Cabang belum tersedia</strong>
+            </div>
+        @endif
+
+        @if($selectedBranch)
+            <x-slot:actions>
+                <x-crm.sync-control module-key="database" module-name="Sinkronisasi Database" :scope-name="$selectedBranch->name" :sync-url="route('database.sync')" :status-url="route('database.sync-status', ['branch_id' => $selectedBranchId])" :status="$syncStatus" :branch-id="$selectedBranchId" :can-sync="$canSync" />
+            </x-slot:actions>
+        @endif
+    </x-crm.toolbar>
 
     @if($selectedBranch)
     <x-crm.sync-status-panel module-key="database" :scope-name="$selectedBranch->name" :branch-id="$selectedBranchId" :status="$syncStatus" :is-stale="$isStale" />
     @endif
 
     @if($errors->any())
-    <div class="bg-[#d77a7a] border-2 border-black px-4 py-3 mb-4 font-['Times_New_Roman'] text-sm">
-        <strong class="font-bold">Data belum dapat disimpan:</strong>
+    <x-crm.alert variant="error" title="Data belum dapat disimpan" class="mb-4">
         <ul class="list-disc pl-5 mt-1">
             @foreach($errors->all() as $error)
             <li>{{ $error }}</li>
             @endforeach
         </ul>
-    </div>
+    </x-crm.alert>
     @endif
 
     @if($selectedBranch && !empty($sheetNames))
@@ -75,7 +96,8 @@
         initialColumnMetadata: {{ $initialColumnMetadataJson }},
         initialRecords: {{ $initialRecordsJson }},
         requestSheet: '{{ $requestSheet ?? '' }}',
-        requestAdd: {{ ($requestAdd ?? false) ? 'true' : 'false' }}
+        requestAdd: {{ ($requestAdd ?? false) ? 'true' : 'false' }},
+        canEdit: {{ $canEdit ? 'true' : 'false' }}
     })" @oasis-sync-updated.window="handleSyncUpdated($event.detail)">
         <style>
             [x-cloak] { display: none !important; }
@@ -177,7 +199,7 @@
                                             </template>
                                         </th>
                                     </template>
-                                    <th style="width:100px;">Aksi</th>
+                                    @if($canEdit)<th style="width:100px;">Aksi</th>@endif
                                 </tr>
                             </thead>
                             <tbody>
@@ -200,14 +222,14 @@
                                                 </template>
                                             </td>
                                         </template>
-                                        <td style="white-space:nowrap;">
+                                        @if($canEdit)<td style="white-space:nowrap;">
                                             <button @click="editRecord(rec)"
                                                     class="font-[Helvetica] font-bold underline" style="font-size:11px;color:#0000ee;margin-right:8px;">Edit</button>
                                             <form method="POST" :action="editBaseUrl + '/' + rec.id" style="display:inline;" @submit.prevent="confirm('Hapus data ini?') && $el.submit()">
                                                 @csrf @method('DELETE')
                                                 <button type="submit" class="font-[Helvetica] font-bold underline" style="font-size:11px;color:#c0392b;">Hapus</button>
                                             </form>
-                                        </td>
+                                        </td>@endif
                                     </tr>
                                 </template>
                             </tbody>
@@ -451,7 +473,7 @@ document.addEventListener('alpine:init', () => {
 
         canAdd(name) {
             const data = this.cache[name];
-            return !!(data && data.records && data.records.length > 0);
+            return config.canEdit && !!(data && data.records && data.records.length > 0);
         },
 
         currentData(name) {

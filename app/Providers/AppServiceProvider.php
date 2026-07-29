@@ -45,6 +45,14 @@ class AppServiceProvider extends ServiceProvider
                 session()->flash('warning', 'Pengingat belum dapat disembunyikan untuk hari ini. Pengingat mungkin muncul kembali.');
             }
 
+            if (request()->routeIs('admin.design-system')) {
+                $view->with('navigation', app(NavigationService::class)->forUser($user))
+                    ->with('overdueItems', collect())->with('todayItems', collect())->with('tomorrowItems', collect())
+                    ->with('needsConfirmation', collect())->with('totalCount', 0);
+
+                return;
+            }
+
             $branchScope = fn ($q) => $q->when(! $user->canViewAllBranches() && $user->branch_id, fn ($q2) => $q2->where('branch_id', $user->branch_id));
 
             $plannerReminders = app(WorkPlannerReminderService::class)->forUser($user);

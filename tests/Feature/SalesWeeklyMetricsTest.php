@@ -153,7 +153,7 @@ class SalesWeeklyMetricsTest extends TestCase
         $admin = $this->user('admin', $branch);
         $pusat = $this->user('pusat');
 
-        $this->actingAs($admin)->get(route('dashboard'))->assertOk()->assertSee('Buat Baru')->assertDontSee('Buku Saku Minggu Ini');
+        $this->actingAs($admin)->get(route('dashboard'))->assertOk()->assertSee('Aksi Cepat')->assertDontSee('Buku Saku Minggu Ini');
         $this->actingAs($pusat)->get(route('dashboard'))->assertOk()->assertSee('Monitoring Buku Saku')->assertDontSee('+ Input Lead Hari Ini')->assertDontSee('+ Isi Agenda / Hasil');
     }
 

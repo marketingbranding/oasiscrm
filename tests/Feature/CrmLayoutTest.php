@@ -59,6 +59,7 @@ class CrmLayoutTest extends TestCase
         $layout = file_get_contents(resource_path('views/layouts/crm.blade.php'));
         $topbar = file_get_contents(resource_path('views/components/crm/topbar.blade.php'));
         $shell = file_get_contents(resource_path('js/crm-shell.js'));
+        $bodyLock = file_get_contents(resource_path('js/body-scroll-lock.js'));
 
         $this->assertStringContainsString('aria-label="Navigasi utama"', $layout);
         $this->assertStringContainsString(':aria-modal=', $layout);
@@ -71,7 +72,8 @@ class CrmLayoutTest extends TestCase
         $this->assertStringContainsString('aria-controls="crm-sidebar"', $topbar);
         $this->assertStringContainsString("'oasis.sidebar.collapsed'", $shell);
         $this->assertStringContainsString("'oasis.sidebar.groups'", $shell);
-        $this->assertStringContainsString("document.body.style.overflow = 'hidden'", $shell);
+        $this->assertStringContainsString('lockBodyScroll(this.bodyLockOwner)', $shell);
+        $this->assertStringContainsString("document.body.style.overflow = 'hidden'", $bodyLock);
         $this->assertStringContainsString("event.key === 'Escape'", $shell);
         $this->assertStringContainsString("event.key !== 'Tab'", $shell);
         $this->assertStringContainsString('this.navigationTrigger?.focus()', $shell);

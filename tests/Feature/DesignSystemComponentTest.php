@@ -13,6 +13,7 @@ class DesignSystemComponentTest extends TestCase
         $link = Blade::render('<x-crm.button href="/contoh" variant="secondary">Buka</x-crm.button>');
         $disabled = Blade::render('<x-crm.button disabled>Nonaktif</x-crm.button>');
         $loading = Blade::render('<x-crm.button loading>Memproses</x-crm.button>');
+        $disabledLink = Blade::render('<x-crm.button href="/contoh" disabled @click="run()">Terkunci</x-crm.button>');
 
         $this->assertStringContainsString('crm-button--primary', $primary);
         $this->assertStringNotContainsString('<span>Simpan</span>', $primary);
@@ -22,6 +23,9 @@ class DesignSystemComponentTest extends TestCase
         $this->assertStringContainsString('disabled', $disabled);
         $this->assertStringContainsString('aria-busy="true"', $loading);
         $this->assertStringContainsString('crm-button-spinner', $loading);
+        $this->assertStringContainsString('aria-disabled="true"', $disabledLink);
+        $this->assertStringNotContainsString('@click', $disabledLink);
+        $this->assertStringNotContainsString('run()', $disabledLink);
     }
 
     public function test_icon_button_requires_an_accessible_name(): void
@@ -111,7 +115,8 @@ class DesignSystemComponentTest extends TestCase
         $this->assertStringContainsString('aria-label="Tutup dialog"', $html);
         $this->assertStringContainsString("event.key === 'Escape'", $source);
         $this->assertStringContainsString("event.key !== 'Tab'", $source);
-        $this->assertStringContainsString("document.body.style.overflow = 'hidden'", $source);
+        $this->assertStringContainsString('lockBodyScroll(this.lockOwner)', $source);
+        $this->assertStringContainsString('if (this.open)', $source);
         $this->assertStringContainsString('this.trigger?.focus()', $source);
     }
 }

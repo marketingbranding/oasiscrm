@@ -197,6 +197,7 @@
 .crm-icon-button[disabled],
 .crm-icon-button[aria-disabled='true'] {
     cursor: not-allowed;
+    pointer-events: none;
     border-color: var(--oasis-border);
     background: var(--oasis-surface-disabled);
     color: var(--oasis-text-disabled);
@@ -360,6 +361,11 @@
     .crm-page-header-actions {
         width: 100%;
     }
+}
+
+@media (max-width: 767px) {
+    .crm-filter-chip { min-height: var(--oasis-control-height); }
+    .crm-filter-chip-remove { width: var(--oasis-control-height); height: var(--oasis-control-height); }
 }
 
 @media (prefers-reduced-motion: reduce) {

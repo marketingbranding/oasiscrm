@@ -14,6 +14,9 @@
     $accent = in_array($accent, ['dashboard', 'planner', 'sales', 'database', 'consumer-progress', 'bridge-fund', 'expenses', 'reports', 'administration'], true) ? $accent : null;
     $isDisabled = (bool) $disabled || (bool) $loading;
     $classes = "crm-button crm-button--{$variant} crm-button--{$size}";
+    $componentAttributes = $isDisabled
+        ? $attributes->except(['@click', 'x-on:click', 'onclick'])
+        : $attributes;
 @endphp
 
 @if($href)
@@ -21,7 +24,7 @@
        @if($isDisabled) aria-disabled="true" tabindex="-1" @endif
        @if($loading) aria-busy="true" @endif
        @if($accent) data-accent="{{ $accent }}" @endif
-       {{ $attributes->class([$classes]) }}>
+       {{ $componentAttributes->class([$classes]) }}>
         @if($loading)<span class="crm-button-spinner" aria-hidden="true"></span>@endif
         {{ $slot }}
     </a>
@@ -29,7 +32,7 @@
     <button type="{{ $type }}" @disabled($isDisabled)
             @if($loading) aria-busy="true" @endif
             @if($accent) data-accent="{{ $accent }}" @endif
-            {{ $attributes->class([$classes]) }}>
+            {{ $componentAttributes->class([$classes]) }}>
         @if($loading)<span class="crm-button-spinner" aria-hidden="true"></span>@endif
         {{ $slot }}
     </button>

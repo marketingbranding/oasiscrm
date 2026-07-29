@@ -1,3 +1,5 @@
+import { lockBodyScroll, unlockBodyScroll } from './body-scroll-lock';
+
 const COLLAPSED_KEY = 'oasis.sidebar.collapsed';
 const GROUPS_KEY = 'oasis.sidebar.groups';
 
@@ -40,7 +42,7 @@ export default function registerCrmShell(Alpine) {
             expandedGroups,
             mobileViewport: window.matchMedia('(max-width: 767px)').matches,
             navigationTrigger: null,
-            previousBodyOverflow: '',
+            bodyLockOwner: 'crm-shell-mobile-navigation',
             mediaQuery: null,
             mediaListener: null,
 
@@ -58,15 +60,14 @@ export default function registerCrmShell(Alpine) {
             },
 
             destroy() {
-                this.unlockBodyScroll();
+                unlockBodyScroll(this.bodyLockOwner);
                 this.mediaQuery?.removeEventListener('change', this.mediaListener);
             },
 
             openMobileNavigation() {
                 this.navigationTrigger = document.activeElement;
                 this.sidebarOpen = true;
-                this.previousBodyOverflow = document.body.style.overflow;
-                document.body.style.overflow = 'hidden';
+                lockBodyScroll(this.bodyLockOwner);
                 this.$nextTick(() => this.$refs.drawerClose?.focus());
             },
 
@@ -76,7 +77,7 @@ export default function registerCrmShell(Alpine) {
                 }
 
                 this.sidebarOpen = false;
-                this.unlockBodyScroll();
+                unlockBodyScroll(this.bodyLockOwner);
 
                 if (restoreFocus) {
                     this.$nextTick(() => this.navigationTrigger?.focus());
@@ -145,10 +146,6 @@ export default function registerCrmShell(Alpine) {
 
             syncSidebarClass() {
                 document.documentElement.classList.toggle('oasis-sidebar-collapsed', this.sidebarCollapsed);
-            },
-
-            unlockBodyScroll() {
-                document.body.style.overflow = this.previousBodyOverflow;
             },
         };
     });

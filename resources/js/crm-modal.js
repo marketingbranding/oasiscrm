@@ -1,9 +1,11 @@
+import { lockBodyScroll, unlockBodyScroll } from './body-scroll-lock';
+
 export default function registerCrmModal(Alpine) {
     Alpine.data('crmModal', (name, initiallyOpen = false) => ({
         name,
         open: false,
         trigger: null,
-        previousBodyOverflow: '',
+        lockOwner: `crm-modal:${name}`,
 
         init() {
             if (initiallyOpen) {
@@ -13,7 +15,7 @@ export default function registerCrmModal(Alpine) {
 
         destroy() {
             if (this.open) {
-                this.unlockBody();
+                unlockBodyScroll(this.lockOwner);
             }
         },
 
@@ -22,10 +24,13 @@ export default function registerCrmModal(Alpine) {
                 return;
             }
 
+            if (this.open) {
+                return;
+            }
+
             this.trigger = event?.detail?.trigger || document.activeElement;
             this.open = true;
-            this.previousBodyOverflow = document.body.style.overflow;
-            document.body.style.overflow = 'hidden';
+            lockBodyScroll(this.lockOwner);
             this.$nextTick(() => {
                 const initial = this.$refs.panel.querySelector('[data-autofocus]') || this.$refs.close || this.$refs.panel;
                 initial.focus();
@@ -38,7 +43,7 @@ export default function registerCrmModal(Alpine) {
             }
 
             this.open = false;
-            this.unlockBody();
+            unlockBodyScroll(this.lockOwner);
             if (restoreFocus) {
                 this.$nextTick(() => this.trigger?.focus());
             }
@@ -80,10 +85,6 @@ export default function registerCrmModal(Alpine) {
                 event.preventDefault();
                 first.focus();
             }
-        },
-
-        unlockBody() {
-            document.body.style.overflow = this.previousBodyOverflow;
         },
     }));
 }

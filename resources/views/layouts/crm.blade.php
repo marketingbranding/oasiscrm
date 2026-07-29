@@ -40,17 +40,30 @@
 
     <x-crm.topbar :$navigation :$overdueItems :$todayItems :$tomorrowItems :$needsConfirmation />
 
-    <div x-show="sidebarOpen" @click="sidebarOpen = false" class="fixed inset-0 z-30 bg-black/40 md:hidden" x-cloak></div>
+    <div x-show="sidebarOpen" @click="closeMobileNavigation()" class="fixed inset-0 z-[55] bg-black/40 md:hidden" x-cloak></div>
 
     <div class="crm-shell-frame flex min-h-screen flex-col md:flex-row">
-        <aside id="crm-sidebar" :class="sidebarOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'"
-               class="crm-sidebar fixed bottom-0 left-0 z-40 flex flex-col border-r-2 border-black shadow-xl transition-transform duration-150 md:shadow-none"
-               aria-label="Navigasi utama">
+        <aside id="crm-sidebar" x-ref="drawer" :class="sidebarOpen ? 'is-open' : ''"
+               class="crm-sidebar fixed bottom-0 left-0 z-[60] flex flex-col border-r-2 border-black shadow-xl md:z-40 md:shadow-none"
+               aria-label="Navigasi utama" aria-labelledby="crm-drawer-title"
+               :role="mobileViewport ? 'dialog' : null" :aria-modal="mobileViewport && sidebarOpen ? 'true' : null"
+               :aria-hidden="mobileViewport && !sidebarOpen ? 'true' : null" @keydown="handleDrawerKeydown($event)">
+            <div class="flex min-h-[var(--oasis-topbar-height)] items-center justify-between border-b-2 border-black bg-black px-4 text-white md:hidden">
+                <div>
+                    <div id="crm-drawer-title" class="font-[Helvetica] text-sm font-bold tracking-wide">OASIS CRM</div>
+                    <div class="font-[Helvetica] text-[10px] font-normal uppercase tracking-[0.16em] text-gray-300">Area kerja</div>
+                </div>
+                <button type="button" x-ref="drawerClose" @click="closeMobileNavigation()"
+                        class="flex size-11 items-center justify-center hover:bg-white/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--oasis-yellow)]"
+                        aria-label="Tutup navigasi utama">
+                    <svg class="size-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18" /></svg>
+                </button>
+            </div>
             <nav class="min-h-0 flex-1 overflow-x-hidden overflow-y-auto py-3" aria-label="Area kerja OASIS">
                 @foreach($navigation as $group)
                     @if($group['direct'])
                         @php($child = $group['children'][0])
-                        <a href="{{ route($child['route']) }}" class="crm-nav-item {{ $child['active'] ? 'is-active' : '' }}"
+                        <a href="{{ route($child['route']) }}" @click="closeMobileNavigation(false)" class="crm-nav-item {{ $child['active'] ? 'is-active' : '' }}"
                            style="--nav-accent: var(--oasis-accent-{{ $child['accent'] }})" title="{{ $child['label'] }}"
                            @if($child['active']) aria-current="page" @endif>
                             <x-crm.nav-icon :name="$child['icon']" />
@@ -68,7 +81,7 @@
                             </button>
                             <div id="crm-nav-children-{{ $group['key'] }}" class="crm-nav-children" x-show="isGroupOpen('{{ $group['key'] }}')" x-cloak>
                                 @foreach($group['children'] as $child)
-                                    <a href="{{ route($child['route']) }}" class="crm-nav-item {{ $child['active'] ? 'is-active' : '' }}"
+                                    <a href="{{ route($child['route']) }}" @click="closeMobileNavigation(false)" class="crm-nav-item {{ $child['active'] ? 'is-active' : '' }}"
                                        style="--nav-accent: var(--oasis-accent-{{ $child['accent'] }})" title="{{ $child['label'] }}"
                                        @if($child['active']) aria-current="page" @endif>
                                         <x-crm.nav-icon :name="$child['icon']" class="size-[18px]" />

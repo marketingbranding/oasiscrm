@@ -2,10 +2,12 @@
 
 namespace Tests\Feature;
 
+use App\Models\Changelog;
 use App\Models\Role;
 use App\Models\User;
 use App\Services\NavigationService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Route;
 use Tests\TestCase;
@@ -37,6 +39,20 @@ class DesignSystemAccessTest extends TestCase
             ->assertSee('id="crm-main"', false)
             ->assertDontSee('service-account')
             ->assertDontSee('APP_KEY');
+    }
+
+    public function test_showcase_does_not_query_operational_reminder_tables(): void
+    {
+        $queries = [];
+        DB::listen(function ($query) use (&$queries): void {
+            $queries[] = $query->sql;
+        });
+
+        $this->actingAs($this->user('superadmin'))->get(route('admin.design-system'))->assertOk();
+
+        $sql = implode(' ', $queries);
+        $this->assertStringNotContainsString('content_items', $sql);
+        $this->assertStringNotContainsString('dana_talangans', $sql);
     }
 
     public function test_non_superadmin_roles_and_primary_sales_are_denied(): void
@@ -71,6 +87,19 @@ class DesignSystemAccessTest extends TestCase
 
         $forced = $this->user('superadmin', ['password_changed_at' => null]);
         $this->actingAs($forced)->get(route('admin.design-system'))->assertRedirect(route('password.change'));
+    }
+
+    public function test_design_system_changelog_is_idempotent_and_visible(): void
+    {
+        $title = 'Fondasi antarmuka OASIS diperbarui';
+        $superadmin = $this->user('superadmin');
+
+        $migration = require database_path('migrations/2026_07_29_000004_add_design_system_foundation_changelog.php');
+        $migration->up();
+        $migration->up();
+
+        $this->assertSame(1, Changelog::query()->whereNull('version')->where('title', $title)->count());
+        $this->actingAs($superadmin)->get(route('changelogs.index'))->assertOk()->assertSee($title);
     }
 
     private function user(string $role, array $overrides = []): User

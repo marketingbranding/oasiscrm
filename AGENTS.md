@@ -168,6 +168,7 @@ Do not pass multiple slugs to `permission:`. Use `permissions.all:` only for exp
 - Branch, project, Kavling, and lead-source administration
 - Feedback reports
 - System health and Changelog
+- Internal Design System showcase for primary Super Admin
 - Local notifications, presence, comments, and mentions
 - AI Chat conversations and scoped read tools
 
@@ -550,21 +551,9 @@ Current module accents include:
 | User Administration | `#8c9ae0` |
 | Danger | `#c0392b` |
 
-**Target direction:** Move repeated colors into CSS variables or finite shared class maps. Module accents identify modules; they are not full-page backgrounds and never override semantic error/warning/success meaning.
+The foundational token layer now exists in `resources/css/app.css`. It defines page and surface hierarchy, primary/muted/disabled text, border levels, OASIS yellow, semantic states, focus, a 4px spacing scale, typography roles, restrained radius/shadow/motion, shell dimensions, and finite module accents.
 
-Target token strategy should define shared values for:
-
-- page background;
-- base and elevated surfaces;
-- primary and muted text;
-- subtle and strong borders;
-- OASIS yellow;
-- danger, warning, success, and information;
-- focus ring;
-- sidebar and topbar backgrounds;
-- finite module accents.
-
-Do not claim this token layer already exists. Current code still repeats many arbitrary colors in Blade. Introduce tokens incrementally when a UI task is in scope rather than performing an unrelated global rewrite.
+Adoption remains incremental. Many operational Blade views still repeat arbitrary colors and legacy utility combinations; do not claim those modules are already migrated. Module accents identify modules and never override semantic error/warning/success meaning. Use `docs/DESIGN_SYSTEM.md` for implemented APIs and `docs/DESIGN_SYSTEM_AUDIT.md` for the migration map.
 
 ## 11. Navigation Architecture
 
@@ -706,12 +695,22 @@ Dashboard invariants:
 CRM anonymous components under `resources/views/components/crm/`:
 
 - `add-button`
+- `alert`
 - `bulk-bar`
+- `button`
+- `card`
 - `click-sort-th`
 - `date-field`
 - `detail-modal`
+- `empty-state`
 - `export-import`
+- `field`
 - `feedback-bubble`
+- `filter-chip`
+- `icon-button`
+- `input-error`
+- `loading-state`
+- `modal`
 - `notif-section`
 - `page-header`
 - `page-presence`
@@ -720,9 +719,12 @@ CRM anonymous components under `resources/views/components/crm/`:
 - `nav-icon`
 - `notification-menu`
 - `sortable-th`
+- `section`
+- `status-badge`
 - `sync-control`
 - `sync-status-panel`
 - `time-field`
+- `toolbar`
 - `topbar`
 
 Other shared components:
@@ -730,6 +732,7 @@ Other shared components:
 - `resources/views/components/comments/panel.blade.php`
 - `resources/views/components/conflict-dialog.blade.php`
 - Breeze/generic components under `resources/views/components/` for auth/non-CRM layouts.
+- Dashboard-specific KPI, section, quick-action, and timeline components under `resources/views/components/dashboard/`; these are not generic CRM primitives.
 
 Current JavaScript modules registered in `resources/js/app.js` include pickers, custom select, bulk actions, presence, conflict, notifications, sync, toast, sales reminder, and comments.
 
@@ -743,15 +746,11 @@ Rules:
 
 ### Target reusable primitives
 
-The repository does not yet have canonical components for every pattern. Future standard candidates include:
+The repository does not yet have canonical components for every pattern. Remaining future standard candidates include:
 
 - navigation group/item;
-- list toolbar;
 - advanced-filter modal;
-- filter chips/reset;
-- accessible generic CRM dialog;
 - month field;
-- status badge;
 - KPI block;
 - canonical action cell.
 
@@ -943,7 +942,7 @@ Every new modal dialog/drawer must provide:
 
 Current caveat: some legacy/filter/detail dialogs and picker controls do not yet meet this complete standard. Improve them when in scope; do not claim they already do.
 
-Until a canonical CRM dialog component exists, follow the verified focus-management patterns in the Sales and Comments dialogs. Do not copy an inaccessible legacy modal. Native `confirm()` may remain in untouched legacy workflows, but new multi-step or sensitive workflows should use an accessible local dialog and be extracted when the pattern repeats.
+Use `x-crm.modal` for new generic CRM dialogs. Existing Sales, Comments, and conflict dialogs retain their verified specialized behavior until migrated deliberately; do not copy an inaccessible legacy modal. Native `confirm()` may remain in untouched legacy workflows, but new multi-step or sensitive workflows should use the canonical modal or a justified specialized dialog.
 
 ### Responsive requirements
 

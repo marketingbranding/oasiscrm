@@ -36,6 +36,10 @@ class DatabaseUiTest extends TestCase
         $this->assertStringContainsString('aria-label="Ruang kerja Database"', $html);
         $this->assertStringContainsString('Cabang: Magelang', $html);
         $this->assertStringContainsString('canEdit: true', $html);
+        $this->assertStringContainsString('id="database-sync-state-title"', $html);
+        $this->assertStringContainsString('Data yang sudah tersedia tetap dapat digunakan ketika pembaruan gagal.', $html);
+        $this->assertSame(1, substr_count($html, 'x-data="crmSyncStatus('));
+        $this->assertStringContainsString('Tabel belum diperbarui', $html);
         $this->assertStringContainsString('aria-label="Pencarian dan tindakan sheet"', $html);
         $this->assertStringContainsString('Cari konsumen', $html);
         $this->assertStringContainsString('Nama, kontak, kavling, atau data lain...', $html);

@@ -338,6 +338,7 @@
 .database-branch-form { display: flex; flex-wrap: wrap; align-items: center; gap: var(--oasis-space-2); }
 .database-branch-select { min-width: min(20rem, 100%); }
 .database-scope-summary { display: grid; gap: var(--oasis-space-1); font-family: var(--oasis-font-controls); }
+.database-sync-section { margin: var(--oasis-space-4) 0 var(--oasis-space-5); }
 
 .database-sheet-toolbar { margin-bottom: var(--oasis-space-2); }
 .database-search-group { display: grid; min-width: min(28rem, 100%); gap: var(--oasis-space-1); }

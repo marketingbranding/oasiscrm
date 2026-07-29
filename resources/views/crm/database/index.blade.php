@@ -54,7 +54,14 @@
     </x-crm.toolbar>
 
     @if($selectedBranch)
-    <x-crm.sync-status-panel module-key="database" :scope-name="$selectedBranch->name" :branch-id="$selectedBranchId" :status="$syncStatus" :is-stale="$isStale" />
+    <x-crm.section
+        id="database-sync-state"
+        title="Status Sinkronisasi"
+        description="Status cache Database untuk cabang {{ $selectedBranch->name }}. Data yang sudah tersedia tetap dapat digunakan ketika pembaruan gagal."
+        class="database-sync-section"
+    >
+        <x-crm.sync-status-panel module-key="database" :scope-name="$selectedBranch->name" :branch-id="$selectedBranchId" :status="$syncStatus" :is-stale="$isStale" />
+    </x-crm.section>
     @endif
 
     @if($errors->any())
@@ -120,10 +127,10 @@
             @endforeach
         </div>
 
-        <div x-show="syncRefreshError" x-cloak class="mb-3 border-2 border-black bg-[#fcc20f] px-3 py-2 text-sm" aria-live="polite">
-            <span x-text="syncRefreshError"></span>
-            <button type="button" @click="refreshActiveSheet(tab)" class="ml-2 border-2 border-black bg-white px-2 py-1 text-xs font-bold">Coba Muat Ulang Data</button>
-        </div>
+        <x-crm.alert x-show="syncRefreshError" x-cloak variant="warning" title="Tabel belum diperbarui" aria-live="polite" class="mb-3">
+            <p x-text="syncRefreshError"></p>
+            <div class="crm-alert-actions"><x-crm.button type="button" size="sm" @click="refreshActiveSheet(tab)">Coba Muat Ulang Data</x-crm.button></div>
+        </x-crm.alert>
 
         {{-- Tab content -- rendered per sheet name --}}
         <template x-for="name in sheetNameList" :key="name">
@@ -180,7 +187,7 @@
                     <x-crm.loading-state label="Memuat data Database..." />
                     <div x-show="inFlight[name]" class="mt-3 space-y-2" aria-hidden="true"><div class="h-3 bg-gray-200 animate-pulse motion-reduce:animate-none"></div><div class="h-3 bg-gray-200 animate-pulse motion-reduce:animate-none"></div><div class="h-3 bg-gray-200 animate-pulse motion-reduce:animate-none"></div></div>
                 </div>
-                <x-crm.alert x-show="loadErrors[name]" x-cloak variant="error" title="Data gagal dimuat" aria-live="polite">
+                <x-crm.alert x-show="loadErrors[name]" x-cloak variant="error" title="Data gagal dimuat." aria-live="polite">
                     <p>Tabel tidak dianggap kosong karena permintaan data belum berhasil.</p>
                     <div class="crm-alert-actions"><x-crm.button type="button" size="sm" @click="switchTab(name, true)">Coba Lagi</x-crm.button><x-crm.button type="button" size="sm" @click="window.dispatchEvent(new CustomEvent('open-feedback'))">Laporkan Masalah</x-crm.button></div>
                 </x-crm.alert>

@@ -121,8 +121,41 @@
             </template>
         </div>
 
-        <main id="crm-main" class="crm-main flex-1 overflow-x-hidden p-4 sm:p-6">
-            @yield('content')
+        <main id="crm-main" class="crm-main flex-1 overflow-x-hidden">
+            <div class="crm-page-shell">
+                @hasSection('breadcrumbs')
+                    <nav class="crm-page-breadcrumbs" aria-label="Breadcrumb">
+                        @yield('breadcrumbs')
+                    </nav>
+                @endif
+
+                @php($hasPageHeader = app('view')->hasSection('page-title') || app('view')->hasSection('page-description') || app('view')->hasSection('page-actions'))
+                @if($hasPageHeader)
+                    <header class="crm-page-heading">
+                        <div class="min-w-0">
+                            @hasSection('page-title')
+                                <h1 class="crm-page-title">@yield('page-title')</h1>
+                            @endif
+                            @hasSection('page-description')
+                                <div class="crm-page-description">@yield('page-description')</div>
+                            @endif
+                        </div>
+                        @hasSection('page-actions')
+                            <div class="crm-page-actions">@yield('page-actions')</div>
+                        @endif
+                    </header>
+                @endif
+
+                @hasSection('page-tabs')
+                    <div class="crm-page-tabs">@yield('page-tabs')</div>
+                @endif
+
+                @hasSection('toolbar')
+                    <div class="crm-page-toolbar">@yield('toolbar')</div>
+                @endif
+
+                <div class="crm-page-body">@yield('content')</div>
+            </div>
             <footer class="mt-6 border-t-2 border-black bg-white px-4 py-3 text-center text-xs">&copy; {{ date('Y') }} Oasis CRM</footer>
         </main>
     </div>

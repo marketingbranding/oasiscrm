@@ -570,7 +570,9 @@ Do not claim this token layer already exists. Current code still repeats many ar
 
 ### Current
 
-The sidebar is rendered directly in `layouts.crm` using permission/role checks and route-aware anchors. Current headings are General, Laporan, and Pengaturan; Changelog is a standalone link. Desktop supports collapsed, hover-expanded, and pinned states. Mobile uses a drawer and backdrop.
+`NavigationService` builds server-rendered, permission-aware groups for Dashboard, Aktivitas, Sales, Operasional, Keuangan, Laporan, and Administrasi. Empty groups are omitted. `layouts.crm` renders this definition through shared navigation icons and shell components.
+
+Desktop supports explicit expanded and collapsed states; navigation never depends on hover expansion. Mobile uses a labelled modal drawer. Shell preferences use `oasis.sidebar.collapsed` for the desktop width state and `oasis.sidebar.groups` for expanded group state. These keys are local-only UI preferences and must remain backward-compatible when shell behavior changes.
 
 Do not describe the following grouping as already implemented.
 
@@ -714,10 +716,14 @@ CRM anonymous components under `resources/views/components/crm/`:
 - `page-header`
 - `page-presence`
 - `pagination`
+- `account-menu`
+- `nav-icon`
+- `notification-menu`
 - `sortable-th`
 - `sync-control`
 - `sync-status-panel`
 - `time-field`
+- `topbar`
 
 Other shared components:
 

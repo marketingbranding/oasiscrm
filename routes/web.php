@@ -165,6 +165,7 @@ Route::middleware(['auth', 'active', 'verified', 'password.changed', 'sales.acce
     });
 
     Route::get('/admin/system-health', SystemHealthController::class)->middleware('permission:system_health.view')->name('admin.system-health');
+    Route::view('/admin/design-system', 'crm.design-system.index')->middleware('can:viewDesignSystem')->name('admin.design-system');
     Route::middleware('permission:branches.manage')->group(function () {
         Route::get('/branches', [BranchController::class, 'index'])->name('branches.index');
         Route::get('/branches/{branch}/assign', [BranchController::class, 'assignForm'])->name('branches.assign');

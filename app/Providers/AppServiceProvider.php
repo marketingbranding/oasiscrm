@@ -28,6 +28,7 @@ class AppServiceProvider extends ServiceProvider
         Gate::policy(User::class, UserPolicy::class);
         Gate::policy(Comment::class, CommentPolicy::class);
         Gate::policy(DanaTalangan::class, DanaTalanganPolicy::class);
+        Gate::define('viewDesignSystem', fn (User $user): bool => $user->isSuperadmin());
         Gate::before(function (User $user, string $ability): ?bool {
             return Permission::isRegistered($ability) ? $user->hasPermission($ability) : null;
         });

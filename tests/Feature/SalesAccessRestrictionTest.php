@@ -46,6 +46,7 @@ class SalesAccessRestrictionTest extends TestCase
             'projects.index',
             'admin-users.index',
             'admin.system-health',
+            'admin.design-system',
         ];
 
         foreach ($blocked as $routeName) {

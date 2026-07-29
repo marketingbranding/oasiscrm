@@ -52,6 +52,7 @@ class NavigationServiceTest extends TestCase
         $this->assertContains('Cabang', $this->labels($navigation));
         $this->assertContains('Proyek', $this->labels($navigation));
         $this->assertContains('System Health', $this->labels($navigation));
+        $this->assertContains('Design System', $this->labels($navigation));
         $this->assertNotContains('Lead Source', $this->labels($navigation));
         $this->assertNotContains([], array_column($navigation, 'children'));
     }
@@ -76,6 +77,17 @@ class NavigationServiceTest extends TestCase
         $this->assertTrue($administration['active']);
         $this->assertTrue($project['active']);
         $this->assertContains('kavlings.*', $project['active_patterns']);
+    }
+
+    public function test_design_system_marks_administration_and_destination_active(): void
+    {
+        $navigation = $this->navigationFor('superadmin', 'admin.design-system');
+        $administration = collect($navigation)->firstWhere('key', 'administration');
+        $designSystem = collect($administration['children'])->firstWhere('label', 'Design System');
+
+        $this->assertTrue($administration['active']);
+        $this->assertTrue($designSystem['active']);
+        $this->assertSame('admin.design-system', $designSystem['route']);
     }
 
     private function navigationFor(string $role, ?string $routeName = null): array

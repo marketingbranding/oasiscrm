@@ -65,6 +65,9 @@ class NavigationService
                 ! $isSales && $user->hasPermission('system_health.view')
                     ? $this->item('System Health', 'admin.system-health', 'health', 'administration', ['admin.system-health'], $routeName)
                     : null,
+                ! $isSales && $user->can('viewDesignSystem')
+                    ? $this->item('Design System', 'admin.design-system', 'administration', 'administration', ['admin.design-system'], $routeName)
+                    : null,
                 ! $isSales
                     ? $this->item('Changelog', 'changelogs.index', 'changelog', 'administration', ['changelogs.*'], $routeName)
                     : null,

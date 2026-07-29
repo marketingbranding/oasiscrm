@@ -151,6 +151,229 @@
     outline-offset: var(--oasis-focus-offset);
 }
 
+/* --- Canonical CRM primitives --- */
+.crm-button,
+.crm-icon-button {
+    display: inline-flex;
+    min-height: var(--oasis-control-height);
+    align-items: center;
+    justify-content: center;
+    border-radius: var(--oasis-radius-sm);
+    font-family: var(--oasis-font-controls);
+    font-size: var(--oasis-type-button-size);
+    font-weight: 700;
+    line-height: 1.2;
+    text-align: center;
+    text-transform: uppercase;
+    transition:
+        background-color var(--oasis-duration-standard) var(--oasis-ease-standard),
+        border-color var(--oasis-duration-standard) var(--oasis-ease-standard),
+        color var(--oasis-duration-standard) var(--oasis-ease-standard);
+}
+
+.crm-button {
+    gap: var(--oasis-space-2);
+    padding-inline: var(--oasis-space-4);
+}
+
+.crm-button:hover,
+.crm-icon-button:hover {
+    filter: brightness(0.96);
+}
+
+.crm-button:active,
+.crm-icon-button:active {
+    transform: translateY(1px);
+}
+
+.crm-button:focus-visible,
+.crm-icon-button:focus-visible {
+    outline: var(--oasis-focus-width) solid var(--oasis-focus);
+    outline-offset: var(--oasis-focus-offset);
+}
+
+.crm-button[disabled],
+.crm-button[aria-disabled='true'],
+.crm-icon-button[disabled],
+.crm-icon-button[aria-disabled='true'] {
+    cursor: not-allowed;
+    border-color: var(--oasis-border);
+    background: var(--oasis-surface-disabled);
+    color: var(--oasis-text-disabled);
+    filter: none;
+    transform: none;
+}
+
+.crm-button--primary {
+    border: var(--oasis-border-width-strong) solid var(--oasis-border-strong);
+    background: var(--oasis-yellow);
+    color: var(--oasis-text);
+}
+
+.crm-button--primary[data-accent='dashboard'] { background: var(--oasis-accent-dashboard); }
+.crm-button--primary[data-accent='planner'] { background: var(--oasis-accent-planner); }
+.crm-button--primary[data-accent='sales'] { background: var(--oasis-accent-sales); }
+.crm-button--primary[data-accent='database'] { background: var(--oasis-accent-database); }
+.crm-button--primary[data-accent='consumer-progress'] { background: var(--oasis-accent-consumer-progress); }
+.crm-button--primary[data-accent='bridge-fund'] { background: var(--oasis-accent-bridge-fund); }
+.crm-button--primary[data-accent='expenses'] { background: var(--oasis-accent-expenses); }
+.crm-button--primary[data-accent='reports'] { background: var(--oasis-accent-reports); }
+.crm-button--primary[data-accent='administration'] { background: var(--oasis-accent-administration); }
+
+.crm-button--secondary,
+.crm-icon-button--secondary {
+    border: var(--oasis-border-width-standard) solid var(--oasis-border-strong);
+    background: var(--oasis-surface-flat);
+    color: var(--oasis-text);
+}
+
+.crm-button--ghost,
+.crm-icon-button--ghost {
+    border: var(--oasis-border-width-standard) solid transparent;
+    background: transparent;
+    color: var(--oasis-text);
+}
+
+.crm-button--ghost:hover,
+.crm-icon-button--ghost:hover {
+    background: var(--oasis-surface-muted);
+}
+
+.crm-button--text {
+    min-height: auto;
+    border: 0;
+    background: transparent;
+    color: var(--oasis-info);
+    padding: var(--oasis-space-1);
+    text-decoration: underline;
+    text-underline-offset: 2px;
+}
+
+.crm-button--danger,
+.crm-icon-button--danger {
+    border: var(--oasis-border-width-strong) solid var(--oasis-danger);
+    background: var(--oasis-danger);
+    color: #fff;
+}
+
+.crm-button--sm { padding-inline: var(--oasis-space-3); }
+.crm-button--lg { min-height: 3rem; padding-inline: var(--oasis-space-5); }
+
+.crm-icon-button {
+    width: var(--oasis-control-height);
+    flex: 0 0 var(--oasis-control-height);
+    padding: 0;
+}
+
+.crm-button-spinner {
+    width: 0.875rem;
+    height: 0.875rem;
+    flex: 0 0 auto;
+    border: 2px solid currentColor;
+    border-right-color: transparent;
+    border-radius: 50%;
+    animation: crm-spin 700ms linear infinite;
+}
+
+@keyframes crm-spin {
+    to { transform: rotate(360deg); }
+}
+
+.crm-card {
+    min-width: 0;
+    border: var(--oasis-border-width-standard) solid var(--oasis-border);
+    border-radius: var(--oasis-radius-sm);
+    background: var(--oasis-surface-flat);
+    color: var(--oasis-text);
+}
+
+.crm-card--muted { background: var(--oasis-surface-muted); }
+.crm-card--raised { background: var(--oasis-surface-raised); box-shadow: var(--oasis-shadow-subtle); }
+.crm-card--emphasis { border-width: var(--oasis-border-width-strong); border-color: var(--oasis-border-strong); }
+.crm-card--padding-sm > .crm-card-body { padding: var(--oasis-space-3); }
+.crm-card--padding-md > .crm-card-body { padding: var(--oasis-space-4); }
+.crm-card--padding-lg > .crm-card-body { padding: var(--oasis-space-5); }
+.crm-card--padding-none > .crm-card-body { padding: 0; }
+
+.crm-card-header,
+.crm-card-footer {
+    padding: var(--oasis-space-3) var(--oasis-space-4);
+    font-family: var(--oasis-font-controls);
+    font-size: var(--oasis-type-card-title-size);
+    font-weight: 700;
+}
+
+.crm-card-header { border-bottom: var(--oasis-border-width-subtle) solid var(--oasis-border-subtle); }
+.crm-card-footer { border-top: var(--oasis-border-width-subtle) solid var(--oasis-border-subtle); }
+
+.crm-section + .crm-section { margin-top: var(--oasis-space-8); }
+
+.crm-section-header,
+.crm-page-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: var(--oasis-space-4);
+}
+
+.crm-section-header { margin-bottom: var(--oasis-space-4); }
+.crm-section-title { font: 900 var(--oasis-type-section-title-size)/1.25 var(--oasis-font-display); text-transform: uppercase; }
+.crm-section-eyebrow,
+.crm-page-header-eyebrow { color: var(--oasis-text-muted); font: 700 var(--oasis-type-caption-size)/1.3 var(--oasis-font-controls); letter-spacing: 0.12em; text-transform: uppercase; }
+.crm-section-description,
+.crm-page-header-description { max-width: 48rem; margin-top: var(--oasis-space-1); color: var(--oasis-text-muted); font: var(--oasis-type-compact-size)/1.5 var(--oasis-font-controls); }
+.crm-section-actions,
+.crm-page-header-actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--oasis-space-2); }
+
+.crm-page-header { margin-bottom: var(--oasis-space-6); }
+.crm-page-header-title { font: 900 var(--oasis-type-page-title-size)/1.15 var(--oasis-font-display); text-transform: uppercase; }
+
+.crm-status-badge {
+    display: inline-flex;
+    min-height: 1.5rem;
+    align-items: center;
+    border: var(--oasis-border-width-standard) solid currentColor;
+    border-radius: var(--oasis-radius-sm);
+    padding: var(--oasis-space-1) var(--oasis-space-2);
+    font: 700 var(--oasis-type-badge-size)/1.2 var(--oasis-font-controls);
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+}
+
+.crm-status-badge--neutral { color: var(--oasis-neutral); background: var(--oasis-surface-muted); }
+.crm-status-badge--info { color: var(--oasis-info); background: color-mix(in srgb, var(--oasis-info) 12%, white); }
+.crm-status-badge--pending { color: #7a5a00; background: color-mix(in srgb, var(--oasis-warning) 20%, white); }
+.crm-status-badge--processing { color: var(--oasis-info); background: color-mix(in srgb, var(--oasis-info) 16%, white); }
+.crm-status-badge--success { color: var(--oasis-success); background: color-mix(in srgb, var(--oasis-success) 14%, white); }
+.crm-status-badge--warning { color: #7a5a00; background: color-mix(in srgb, var(--oasis-warning) 20%, white); }
+.crm-status-badge--danger { color: var(--oasis-danger); background: color-mix(in srgb, var(--oasis-danger) 12%, white); }
+.crm-status-badge--inactive { color: var(--oasis-text-disabled); background: var(--oasis-surface-disabled); }
+.crm-status-badge--archived { color: var(--oasis-neutral); background: transparent; border-style: dashed; }
+
+@media (max-width: 639px) {
+    .crm-section-header,
+    .crm-page-header {
+        flex-direction: column;
+    }
+
+    .crm-section-actions,
+    .crm-page-header-actions {
+        width: 100%;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .crm-button,
+    .crm-icon-button {
+        transition-duration: 0.01ms !important;
+    }
+
+    .crm-button-spinner {
+        animation-duration: 1ms;
+        animation-iteration-count: 1;
+    }
+}
+
 .crm-shell-frame {
     padding-top: var(--oasis-topbar-height);
 }

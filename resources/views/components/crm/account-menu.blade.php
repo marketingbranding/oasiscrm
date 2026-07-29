@@ -1,7 +1,7 @@
 @props(['user'])
 
-<div class="relative" x-data="{ open: false }" @click.outside="open = false" @keydown.escape.window="open = false">
-    <button type="button" @click="open = !open"
+<div class="relative" x-data="{ open: false }" @click.outside="open = false" @keydown.escape.window="if (open) { open = false; $refs.trigger.focus() }">
+    <button type="button" x-ref="trigger" @click="open = !open"
             class="flex min-h-11 max-w-48 items-center gap-2 px-2 text-left hover:bg-white/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-[var(--oasis-yellow)]"
             aria-label="Buka menu akun" :aria-expanded="open" aria-controls="oasis-account-menu">
         <span class="flex size-7 shrink-0 items-center justify-center border border-white bg-[var(--oasis-yellow)] text-xs font-black text-black" aria-hidden="true">{{ Str::upper(Str::substr($user->name, 0, 1)) }}</span>

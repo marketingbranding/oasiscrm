@@ -13,7 +13,7 @@
     @else
         <style>body{font-family:Arial,sans-serif;margin:0}.asset-warning{padding:8px;background:#fcc20f;border:2px solid #000}</style>
     @endif
-    <script>!function(){if(localStorage.getItem('oasis.sidebar.collapsed')==='true'){document.documentElement.classList.add('oasis-sidebar-collapsed')}}()</script>
+    <script>!function(){try{if(localStorage.getItem('oasis.sidebar.collapsed')==='true'){document.documentElement.classList.add('oasis-sidebar-collapsed')}}catch(e){}}()</script>
     <style>
         [x-cloak] { display: none !important; }
         @media (max-width: 767px) {
@@ -47,7 +47,8 @@
                class="crm-sidebar fixed bottom-0 left-0 z-[60] flex flex-col border-r-2 border-black shadow-xl md:z-40 md:shadow-none"
                aria-label="Navigasi utama" aria-labelledby="crm-drawer-title"
                :role="mobileViewport ? 'dialog' : null" :aria-modal="mobileViewport && sidebarOpen ? 'true' : null"
-               :aria-hidden="mobileViewport && !sidebarOpen ? 'true' : null" @keydown="handleDrawerKeydown($event)">
+               :aria-hidden="mobileViewport && !sidebarOpen ? 'true' : null" :inert="mobileViewport && !sidebarOpen"
+               @keydown="handleDrawerKeydown($event)">
             <div class="flex min-h-[var(--oasis-topbar-height)] items-center justify-between border-b-2 border-black bg-black px-4 text-white md:hidden">
                 <div>
                     <div id="crm-drawer-title" class="font-[Helvetica] text-sm font-bold tracking-wide">OASIS CRM</div>
@@ -94,7 +95,7 @@
                 @endforeach
             </nav>
             <div class="border-t-2 border-black p-2">
-                <button type="button" @click="toggleDesktopSidebar()"
+                <button type="button" x-ref="desktopSidebarToggle" @click="toggleDesktopSidebar()"
                         class="crm-sidebar-toggle hidden min-h-11 w-full items-center justify-center gap-3 px-2 font-[Helvetica] text-xs font-bold hover:bg-[var(--oasis-surface-muted)] md:flex"
                         :title="sidebarCollapsed ? 'Perluas sidebar' : 'Ringkas sidebar'"
                         :aria-label="sidebarCollapsed ? 'Perluas sidebar' : 'Ringkas sidebar'">

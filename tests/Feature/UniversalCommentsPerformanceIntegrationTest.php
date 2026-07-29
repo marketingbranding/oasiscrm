@@ -107,9 +107,9 @@ class UniversalCommentsPerformanceIntegrationTest extends TestCase
             $this->assertTrue(Route::has($route), $route);
         }
 
-        $layout = file_get_contents(resource_path('views/layouts/crm.blade.php'));
+        $notificationMenu = file_get_contents(resource_path('views/components/crm/notification-menu.blade.php'));
         $notifications = file_get_contents(resource_path('js/notifications.js'));
-        $this->assertStringContainsString("route('notifications.index')", $layout);
+        $this->assertStringContainsString("route('notifications.index')", $notificationMenu);
         $this->assertStringContainsString('setInterval', $notifications);
         $this->assertStringContainsString('60000', $notifications);
     }

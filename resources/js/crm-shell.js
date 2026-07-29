@@ -1,9 +1,25 @@
 const COLLAPSED_KEY = 'oasis.sidebar.collapsed';
 const GROUPS_KEY = 'oasis.sidebar.groups';
 
+function readStorage(key, fallback = null) {
+    try {
+        return localStorage.getItem(key) ?? fallback;
+    } catch {
+        return fallback;
+    }
+}
+
+function writeStorage(key, value) {
+    try {
+        localStorage.setItem(key, value);
+    } catch {
+        // Shell preferences remain optional when browser storage is unavailable.
+    }
+}
+
 function storedGroups() {
     try {
-        return JSON.parse(localStorage.getItem(GROUPS_KEY) || '{}');
+        return JSON.parse(readStorage(GROUPS_KEY, '{}'));
     } catch {
         return {};
     }
@@ -20,7 +36,7 @@ export default function registerCrmShell(Alpine) {
 
         return {
             sidebarOpen: false,
-            sidebarCollapsed: localStorage.getItem(COLLAPSED_KEY) === 'true',
+            sidebarCollapsed: readStorage(COLLAPSED_KEY) === 'true',
             expandedGroups,
             mobileViewport: window.matchMedia('(max-width: 767px)').matches,
             navigationTrigger: null,
@@ -35,6 +51,7 @@ export default function registerCrmShell(Alpine) {
                     this.mobileViewport = event.matches;
                     if (!event.matches && this.sidebarOpen) {
                         this.closeMobileNavigation(false);
+                        this.$nextTick(() => this.$refs.desktopSidebarToggle?.focus());
                     }
                 };
                 this.mediaQuery.addEventListener('change', this.mediaListener);
@@ -104,19 +121,22 @@ export default function registerCrmShell(Alpine) {
 
             toggleDesktopSidebar() {
                 this.sidebarCollapsed = !this.sidebarCollapsed;
-                localStorage.setItem(COLLAPSED_KEY, String(this.sidebarCollapsed));
+                writeStorage(COLLAPSED_KEY, String(this.sidebarCollapsed));
                 this.syncSidebarClass();
             },
 
             toggleGroup(key) {
                 if (!this.mobileViewport && this.sidebarCollapsed) {
                     this.sidebarCollapsed = false;
-                    localStorage.setItem(COLLAPSED_KEY, 'false');
+                    writeStorage(COLLAPSED_KEY, 'false');
                     this.syncSidebarClass();
+                    this.expandedGroups[key] = true;
+                    writeStorage(GROUPS_KEY, JSON.stringify(this.expandedGroups));
+                    return;
                 }
 
                 this.expandedGroups[key] = !this.expandedGroups[key];
-                localStorage.setItem(GROUPS_KEY, JSON.stringify(this.expandedGroups));
+                writeStorage(GROUPS_KEY, JSON.stringify(this.expandedGroups));
             },
 
             isGroupOpen(key) {

@@ -8,8 +8,8 @@
          'enabled' => config('notifications.polling_enabled', true),
      ]))"
      @click.outside="open = false"
-     @keydown.escape.window="open = false">
-    <button type="button" @click="open = !open; if (open) refresh()"
+     @keydown.escape.window="if (open) { open = false; $refs.trigger.focus() }">
+    <button type="button" x-ref="trigger" @click="open = !open; if (open) refresh()"
             class="relative flex size-11 items-center justify-center hover:bg-white/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-[var(--oasis-yellow)]"
             aria-label="Buka notifikasi" :aria-expanded="open" aria-controls="oasis-notification-menu">
         <svg fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-5" aria-hidden="true">

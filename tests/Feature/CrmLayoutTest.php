@@ -62,6 +62,7 @@ class CrmLayoutTest extends TestCase
 
         $this->assertStringContainsString('aria-label="Navigasi utama"', $layout);
         $this->assertStringContainsString(':aria-modal=', $layout);
+        $this->assertStringContainsString(':inert="mobileViewport && !sidebarOpen"', $layout);
         $this->assertStringContainsString('aria-labelledby="crm-drawer-title"', $layout);
         $this->assertStringContainsString('x-ref="drawerClose"', $layout);
         $this->assertStringContainsString('@keydown="handleDrawerKeydown($event)"', $layout);
@@ -74,6 +75,8 @@ class CrmLayoutTest extends TestCase
         $this->assertStringContainsString("event.key === 'Escape'", $shell);
         $this->assertStringContainsString("event.key !== 'Tab'", $shell);
         $this->assertStringContainsString('this.navigationTrigger?.focus()', $shell);
+        $this->assertStringContainsString('this.$refs.desktopSidebarToggle?.focus()', $shell);
+        $this->assertStringContainsString('function readStorage', $shell);
     }
 
     public function test_existing_page_without_named_shell_sections_still_renders(): void

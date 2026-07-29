@@ -85,6 +85,9 @@
                 @if($monitoring)<div class="text-xs">{{ $agenda->branch?->name }} / {{ $agenda->owner?->name }}</div>@endif
                 @if($agenda->notes)<p class="mt-2 text-sm italic">{{ $agenda->notes }}</p>@endif
                 @if($agenda->activity_result)<div class="mt-2 border-2 border-black bg-green-50 p-2"><strong class="sales-label">Hasil Aktivitas</strong><p class="text-sm whitespace-pre-line">{{ $agenda->activity_result }}</p></div>@endif
+                @if(auth()->user()->hasPermission('comments.view'))
+                <a href="{{ route('comments.thread', ['alias' => 'sales-agenda', 'id' => $agenda->id]) }}" class="mt-2 inline-block text-xs font-bold text-[#0000ee] underline">Komentar ({{ $agenda->comments_count }})</a>
+                @endif
                 @if(!in_array($agenda->status, ['done', 'cancelled', 'rescheduled'], true) || $needsMissingResult)
                 <div class="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <form method="POST" action="{{ route('sales-agendas.update', $agenda) }}" class="border border-black bg-white p-2">@csrf @method('PATCH')<input type="hidden" name="expected_updated_at" value="{{ app(\App\Services\OptimisticLockService::class)->token($agenda) }}"><label class="sales-label">Hasil Aktivitas</label><textarea class="sales-input" name="activity_result" rows="2" required></textarea><button class="sales-button bg-[#b7d7a8] mt-2">Tandai Selesai</button></form>

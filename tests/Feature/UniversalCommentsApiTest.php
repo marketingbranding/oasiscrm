@@ -118,7 +118,7 @@ class UniversalCommentsApiTest extends TestCase
             'body' => 'Moderator tidak boleh menulis ulang', 'expected_lock_version' => 1,
         ])->assertForbidden();
         $this->actingAs($moderator)->postJson(route('comments.moderate', $commentId), [
-            'action' => 'hide', 'reason' => 'Melanggar pedoman internal',
+            'action' => 'hide', 'reason' => 'Melanggar pedoman internal', 'expected_lock_version' => 1,
         ])->assertOk()->assertJsonPath('data.is_deleted', true)
             ->assertJsonPath('data.body', CommentService::DELETED_PLACEHOLDER);
         $this->assertDatabaseHas('comment_moderations', [
@@ -126,7 +126,7 @@ class UniversalCommentsApiTest extends TestCase
             'action' => 'hide', 'reason' => 'Melanggar pedoman internal',
         ]);
 
-        $this->postJson(route('comments.restore', $commentId))->assertOk()
+        $this->postJson(route('comments.restore', $commentId), ['expected_lock_version' => 2])->assertOk()
             ->assertJsonPath('data.body', 'Versi baru')->assertJsonPath('data.lock_version', 3);
         $this->assertDatabaseHas('activity_log', ['subject_type' => Comment::class, 'subject_id' => $commentId, 'event' => 'comment_moderated']);
         $this->assertDatabaseHas('activity_log', ['subject_type' => Comment::class, 'subject_id' => $commentId, 'event' => 'comment_restored']);

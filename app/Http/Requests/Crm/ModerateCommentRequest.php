@@ -17,6 +17,7 @@ class ModerateCommentRequest extends FormRequest
         return [
             'action' => ['sometimes', Rule::in(['hide'])],
             'reason' => ['required', 'string', 'max:1000', 'regex:/\S/u'],
+            'expected_lock_version' => ['required', 'integer', 'min:0'],
         ];
     }
 }

@@ -22,7 +22,7 @@
                 </div>
                 <p x-show="validationMessage" class="border-2 border-black bg-[#d77a7a] px-3 py-2" x-text="validationMessage"></p>
                 <div class="flex flex-wrap gap-2 pt-1">
-                    <button type="button" @click="reloadConflictRecord()" class="border-2 border-black bg-black text-white px-4 py-2 font-[Helvetica] font-bold text-xs">Muat Ulang Data</button>
+                    <button type="button" @click="reloadConflictRecord()" class="border-2 border-black bg-black text-white px-4 py-2 font-[Helvetica] font-bold text-xs" x-text="conflictContext.reloadLabel || 'Muat Ulang Data'"></button>
                     <button type="button" @click="copyUnsavedValues()" class="border-2 border-black bg-white px-4 py-2 font-[Helvetica] font-bold text-xs">Salin Perubahan Saya</button>
                     <button type="button" @click="closeConflict()" class="border-2 border-black bg-white px-4 py-2 font-[Helvetica] font-bold text-xs">Kembali ke Form</button>
                     <button type="button" @click="discardSavedValues()" class="border-2 border-black bg-white px-4 py-2 font-[Helvetica] font-bold text-xs text-[#c0392b]">Buang Salinan</button>

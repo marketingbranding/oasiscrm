@@ -26,6 +26,10 @@
     </form>
 </div>
 
+@if(auth()->user()->hasPermission('comments.view'))
+<a href="{{ route('comments.thread', ['alias' => 'sales-lead', 'id' => $lead->id]) }}" class="mt-4 inline-block border-2 border-black bg-white px-4 py-2 font-[Helvetica] text-xs font-bold uppercase">Komentar ({{ $lead->comments_count }})</a>
+@endif
+
 <style>
     .sales-label{display:block;margin-bottom:4px;font:700 11px Helvetica;text-transform:uppercase}.sales-input{width:100%;border:2px solid #000;border-radius:0;background:#fff;padding:8px 10px;font:14px 'Times New Roman'}.sales-button{display:inline-block;border:2px solid #000;padding:8px 14px;font:700 11px Helvetica;text-transform:uppercase;box-shadow:2px 2px 0 #000}.sales-error{margin-top:4px;color:#c0392b;font:700 11px Helvetica}
 </style>

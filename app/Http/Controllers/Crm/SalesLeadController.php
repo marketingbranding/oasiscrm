@@ -62,6 +62,7 @@ class SalesLeadController extends Controller
         $this->authorize('update', $salesLead);
         $user = request()->user();
         $branchIds = $this->workspaceAccess->accessibleBranchIds($user);
+        $salesLead->loadCount('comments');
 
         return view('crm.sales-pocketbook.edit', [
             'lead' => $salesLead->load(['branch', 'project', 'sales', 'leadSource']),

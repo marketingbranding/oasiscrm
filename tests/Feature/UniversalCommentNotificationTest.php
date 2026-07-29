@@ -118,7 +118,7 @@ class UniversalCommentNotificationTest extends TestCase
 
         $this->actingAs($other)->get(route('notifications.open', $notification))->assertNotFound();
         $this->actingAs($recipient)->get(route('notifications.open', $notification))
-            ->assertRedirect(route('content-calendar.index', ['item_id' => $target->id]).'#comment-'.$comment->id);
+            ->assertRedirect(route('comments.thread', ['alias' => 'planner-item', 'id' => $target->id]).'#comment-'.$comment->id);
         $readAt = $notification->fresh()->read_at;
         $this->assertNotNull($readAt);
         $this->actingAs($recipient)->get(route('notifications.open', $notification))->assertRedirect();

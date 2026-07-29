@@ -12,6 +12,7 @@ export default function registerConflict(Alpine) {
         validationMessage: '',
         savedValues: null,
         trigger: null,
+        conflictContext: {},
         storagePrefix: 'oasis_conflict_unsaved',
 
         init() {
@@ -27,6 +28,7 @@ export default function registerConflict(Alpine) {
         async handleConflict(response, context = {}) {
             const data = response instanceof Response ? await response.json() : response;
             this.showConflict(data?.message, data);
+            this.conflictContext = context;
             this.preserveUnsavedValues(context.form || document.querySelector('[data-conflict-form]'), context.originalValues);
         },
 
@@ -64,6 +66,11 @@ export default function registerConflict(Alpine) {
             const warning = 'Muat ulang data akan mengganti nilai pada form saat ini. Pastikan Anda sudah menyalin perubahan yang masih diperlukan.';
             if (!window.confirm(warning)) return;
             this.clearSavedValues();
+            if (typeof this.conflictContext.reload === 'function') {
+                this.closeConflict();
+                this.conflictContext.reload();
+                return;
+            }
             window.location.href = this.conflict?.reload_url || window.location.href;
         },
 

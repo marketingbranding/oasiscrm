@@ -96,6 +96,7 @@ class ContentCalendarController extends Controller
             $filterProjects->push((object) ['project_name' => $selectedProject, 'branch_id' => $selectedBranchId ?: $user->branch_id]);
         }
         $baseQuery = ContentItem::with(['branch', 'creator', 'assignees'])
+            ->withCount('comments')
             ->visibleTo($user);
         if ($selectedBranchId) {
             $baseQuery->where('branch_id', $selectedBranchId);
@@ -245,7 +246,7 @@ class ContentCalendarController extends Controller
     {
         $this->authorize('view', $contentItem);
 
-        return response()->json($contentItem->load(['creator', 'assignees', 'branch']));
+        return response()->json($contentItem->load(['creator', 'assignees', 'branch'])->loadCount('comments'));
     }
 
     public function updateStatus(Request $request, ContentItem $contentItem)

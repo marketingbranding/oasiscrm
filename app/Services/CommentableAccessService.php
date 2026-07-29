@@ -13,6 +13,7 @@ use Illuminate\Support\Facades\Gate;
 
 class CommentableAccessService
 {
+    // Konsumen Progress is sheet-row data without a stable local target ID, so it is intentionally excluded.
     private const ALIASES = [
         'sales-lead' => SalesLead::class,
         'planner-item' => ContentItem::class,
@@ -82,12 +83,20 @@ class CommentableAccessService
     /** @return array{name: string, parameters: array<string, mixed>}|null */
     public function targetRoute(Model $model): ?array
     {
+        $alias = $this->aliasFor($model);
+
+        return $alias ? ['name' => 'comments.thread', 'parameters' => ['alias' => $alias, 'id' => $model->getKey()]] : null;
+    }
+
+    /** @return array{name: string, parameters: array<string, mixed>}|null */
+    public function sourceRoute(Model $model): ?array
+    {
         return match ($this->aliasFor($model)) {
-            'sales-lead' => ['name' => 'sales-pocketbook.index', 'parameters' => ['lead_id' => $model->getKey()]],
-            'sales-agenda' => ['name' => 'sales-pocketbook.index', 'parameters' => ['tab' => 'agenda', 'agenda_id' => $model->getKey()]],
-            'planner-item' => ['name' => 'content-calendar.index', 'parameters' => ['item_id' => $model->getKey()]],
+            'sales-lead' => ['name' => 'sales-pocketbook.index', 'parameters' => []],
+            'sales-agenda' => ['name' => 'sales-pocketbook.index', 'parameters' => ['tab' => 'agenda']],
+            'planner-item' => ['name' => 'content-calendar.index', 'parameters' => []],
             'expense' => ['name' => 'expenses.show', 'parameters' => ['expense' => $model]],
-            'bridge-fund' => ['name' => 'dana-talangan.index', 'parameters' => ['record_id' => $model->getKey()]],
+            'bridge-fund' => ['name' => 'dana-talangan.index', 'parameters' => []],
             default => null,
         };
     }
@@ -155,6 +164,9 @@ class CommentableAccessService
         }
 
         return $agenda->project_name !== null
-            && LeadMaster::query()->whereIn('id', $projectIds)->where('project_name', $agenda->project_name)->exists();
+            && LeadMaster::query()->whereIn('id', $projectIds)
+                ->where('branch_id', $agenda->branch_id)
+                ->where('project_name', $agenda->project_name)
+                ->exists();
     }
 }

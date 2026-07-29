@@ -14,7 +14,12 @@ class CommentModerationController extends Controller
 
     public function store(ModerateCommentRequest $request, Comment $comment): JsonResponse
     {
-        $comment = $this->comments->moderate($comment, $request->user(), $request->validated('reason'));
+        $comment = $this->comments->moderate(
+            $comment,
+            $request->user(),
+            $request->validated('reason'),
+            (int) $request->validated('expected_lock_version'),
+        );
         $comment->load(['user:id,name', 'mentions:id,name']);
 
         return response()->json(['data' => $this->comments->serialize($comment, $request->user())]);

@@ -11,6 +11,7 @@ import registerNotifications from './notifications';
 import registerSync from './crm-sync';
 import registerToasts from './toast';
 import registerSalesDailyReminder from './sales-daily-reminder';
+import registerComments from './comments';
 
 window.Alpine = Alpine;
 window.Sortable = Sortable;
@@ -21,5 +22,6 @@ registerNotifications(Alpine);
 registerSync(Alpine);
 registerToasts(Alpine);
 registerSalesDailyReminder(Alpine);
+registerComments(Alpine);
 
 Alpine.start();

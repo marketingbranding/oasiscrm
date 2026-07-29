@@ -14,6 +14,10 @@ use Illuminate\Http\Request;
 
 class NotificationController extends Controller
 {
+    private array $commentAccessCache = [];
+
+    public function __construct(private readonly CommentableAccessService $commentAccess) {}
+
     public function index(Request $request): JsonResponse
     {
         $query = $this->queryFor($request->user());
@@ -21,17 +25,23 @@ class NotificationController extends Controller
         return response()->json([
             'ok' => true,
             'unread_count' => (clone $query)->whereNull('read_at')->count(),
-            'notifications' => $query->with('comment')->latest()->limit(10)->get()->map(fn (UserNotification $notification) => [
-                'id' => $notification->id,
-                'type' => $notification->type,
-                'title' => $notification->title,
-                'message' => $this->hasDeletedComment($notification) ? CommentService::DELETED_PLACEHOLDER : $notification->message,
-                'data' => $this->dataFor($notification),
-                'action_url' => $this->actionUrlFor($request->user(), $notification),
-                'read_at' => $notification->read_at?->toIso8601String(),
-                'created_at' => $notification->created_at?->toIso8601String(),
-                'created_label' => $notification->created_at?->diffForHumans(),
-            ])->values(),
+            'notifications' => $query->with('comment.commentable')->latest()->limit(10)->get()->map(function (UserNotification $notification) use ($request) {
+                $canAccessComment = $this->canAccessCommentNotification($request->user(), $notification);
+
+                return [
+                    'id' => $notification->id,
+                    'type' => $notification->type,
+                    'title' => $canAccessComment ? $notification->title : 'Notifikasi komentar',
+                    'message' => ! $canAccessComment
+                        ? 'Data tidak tersedia atau Anda tidak memiliki akses.'
+                        : ($this->hasDeletedComment($notification) ? CommentService::DELETED_PLACEHOLDER : $notification->message),
+                    'data' => $canAccessComment ? $this->dataFor($notification) : null,
+                    'action_url' => $this->actionUrlFor($request->user(), $notification),
+                    'read_at' => $notification->read_at?->toIso8601String(),
+                    'created_at' => $notification->created_at?->toIso8601String(),
+                    'created_label' => $notification->created_at?->diffForHumans(),
+                ];
+            })->values(),
         ]);
     }
 
@@ -50,7 +60,7 @@ class NotificationController extends Controller
         return response()->json(['ok' => true]);
     }
 
-    public function open(Request $request, $notification, CommentableAccessService $access): RedirectResponse
+    public function open(Request $request, $notification): RedirectResponse
     {
         $notification = UserNotification::query()
             ->where('user_id', $request->user()->id)
@@ -62,12 +72,12 @@ class NotificationController extends Controller
         $target = $comment?->commentable;
         if (! $comment || ! $target
             || ! $request->user()->hasPermission('comments.view')
-            || ! $access->canView($request->user(), $target)) {
+            || ! $this->commentAccess->canView($request->user(), $target)) {
             return redirect()->route($request->user()->landingRouteName())
                 ->with('warning', 'Data tidak tersedia atau Anda tidak memiliki akses.');
         }
 
-        $url = $access->targetUrl($target, 'comment-'.$comment->id);
+        $url = $this->commentAccess->targetUrl($target, 'comment-'.$comment->id);
         if (! $url) {
             return redirect()->route($request->user()->landingRouteName())
                 ->with('warning', 'Data tidak tersedia atau Anda tidak memiliki akses.');
@@ -116,5 +126,19 @@ class NotificationController extends Controller
     private function isCommentNotification(UserNotification $notification): bool
     {
         return in_array($notification->type, ['comment_mentioned', 'comment_replied'], true);
+    }
+
+    private function canAccessCommentNotification(User $user, UserNotification $notification): bool
+    {
+        if (! $this->isCommentNotification($notification)) {
+            return true;
+        }
+
+        $target = $notification->comment?->commentable;
+        $cacheKey = $target ? $target::class.':'.$target->getKey() : 'missing';
+
+        return $this->commentAccessCache[$cacheKey] ??= $target !== null
+            && $user->hasPermission('comments.view')
+            && $this->commentAccess->canView($user, $target);
     }
 }

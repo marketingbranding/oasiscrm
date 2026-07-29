@@ -78,7 +78,7 @@ class UniversalCommentsFoundationTest extends TestCase
         $this->assertNull($access->resolve('sales-lead', 999999));
         $this->assertSame('sales-agenda', $access->canonicalExternalAlias($agenda));
         $this->assertSame('planner-item', $access->canonicalExternalAlias($planner));
-        $this->assertStringEndsWith('?tab=agenda&agenda_id='.$agenda->id.'#comments', $access->targetUrl($agenda, '#comments'));
+        $this->assertSame(route('comments.thread', ['alias' => 'sales-agenda', 'id' => $agenda->id]).'#comments', $access->targetUrl($agenda, '#comments'));
     }
 
     public function test_comment_policy_requires_both_comment_permission_and_target_access(): void

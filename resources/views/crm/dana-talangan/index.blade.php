@@ -261,6 +261,9 @@
                         </span>
                     </td>
                     <td class="crm-actions">
+                        @if(auth()->user()->hasPermission('comments.view'))
+                        <a href="{{ route('comments.thread', ['alias' => 'bridge-fund', 'id' => $r->id]) }}" class="font-[Helvetica] font-bold underline" style="font-size:11px;color:#0000ee;">Komentar ({{ $r->comments_count }})</a>
+                        @endif
                         @if($canManage)
                         <div class="flex items-center justify-center gap-1">
                             <button type="button" @click="openEdit(@js([
@@ -456,6 +459,7 @@
     @endif
 
 <x-crm.detail-modal
+    commentable-type="bridge-fund"
     title-key="nama_konsumen"
     notes-key="penyelesaian"
     creator-key="creator.name"

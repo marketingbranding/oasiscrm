@@ -24,4 +24,7 @@
             @endif
         </button>
     </div>
+    @if(auth()->user()->hasPermission('comments.view'))
+    <a href="{{ route('comments.thread', ['alias' => 'planner-item', 'id' => $plannerItem->id]) }}" class="ml-6 mt-1 inline-block font-[Helvetica] text-[10px] font-bold text-[#0000ee] underline">Komentar ({{ $plannerItem->comments_count }})</a>
+    @endif
 </article>

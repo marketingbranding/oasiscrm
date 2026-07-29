@@ -13,6 +13,7 @@ use App\Services\CommentService;
 use Illuminate\Http\Exceptions\HttpResponseException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\Rule;
 
@@ -36,7 +37,7 @@ class CommentController extends Controller
         $this->authorize('viewAny', Comment::class);
         abort_unless($this->access->canView($request->user(), $target), 403);
 
-        $paginator = $this->comments->paginate($target, (int) ($data['page'] ?? 1));
+        $paginator = $this->comments->paginate($target, $request->user(), (int) ($data['page'] ?? 1));
         $items = $paginator->getCollection()->reverse()->values()
             ->map(fn (Comment $comment) => $this->comments->serialize($comment, $request->user(), $target));
 
@@ -46,9 +47,13 @@ class CommentController extends Controller
                 'current_page' => $paginator->currentPage(),
                 'last_page' => $paginator->lastPage(),
                 'per_page' => $paginator->perPage(),
-                'total' => $paginator->total(),
+                'total' => $this->comments->count($target),
+                'top_level_total' => $paginator->total(),
                 'from' => $paginator->firstItem(),
                 'to' => $paginator->lastItem(),
+                'can_create' => Gate::forUser($request->user())->allows('create', [Comment::class, $target]),
+                'can_mention' => $request->user()->hasPermission('comments.mention'),
+                'target' => ['alias' => $data['alias'], 'id' => (int) $data['id']],
             ],
         ]);
     }
@@ -132,7 +137,8 @@ class CommentController extends Controller
     public function restore(Request $request, Comment $comment): JsonResponse
     {
         $this->authorize('restore', $comment);
-        $comment = $this->comments->restore($comment, $request->user());
+        $data = $request->validate(['expected_lock_version' => ['required', 'integer', 'min:0']]);
+        $comment = $this->comments->restore($comment, $request->user(), (int) $data['expected_lock_version']);
         $comment->load(['user:id,name', 'mentions:id,name']);
 
         return response()->json(['data' => $this->comments->serialize($comment, $request->user())]);

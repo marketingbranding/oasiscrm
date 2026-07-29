@@ -65,7 +65,7 @@ class CommentNotificationService
         $excerpt = $this->plainExcerpt($comment->body_plain ?? $comment->body);
         $label = $this->plain($this->access->label($target) ?: 'data');
         $actorName = $this->plain($actor->name);
-        $notification = UserNotification::query()->firstOrCreate(
+        $notification = UserNotification::query()->updateOrCreate(
             [
                 'user_id' => $recipient->id,
                 'type' => $type,
@@ -91,6 +91,7 @@ class CommentNotificationService
                     'project_id' => (string) ($this->access->projectId($target) ?? ''),
                     'created_at' => ($comment->created_at ?? now())->toIso8601String(),
                 ],
+                'read_at' => null,
             ],
         );
 

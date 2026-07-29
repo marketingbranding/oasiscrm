@@ -101,6 +101,7 @@ class DanaTalanganController extends Controller
             ->pluck('project_name');
         $projectOptions = $projects->pluck('project_name')->merge($syncedProjectNames)->filter()->unique()->sort()->values();
         $query = DanaTalangan::with(['branch', 'creator'])->whereIn('branch_id', $allowedBranchIds)
+            ->withCount('comments')
             ->when($selectedBranchId, fn ($query) => $query->where('branch_id', $selectedBranchId));
 
         if ($rangeStart) {
@@ -340,7 +341,7 @@ class DanaTalanganController extends Controller
         abort_unless(in_array((int) $danaTalangan->branch_id, $this->organizationScope->branchIds($user, 'bridge_fund'), true), 403);
         abort_unless($this->workspaceAccess->canViewBranch($user, $danaTalangan->branch_id), 403);
 
-        $danaTalangan->load('creator');
+        $danaTalangan->load('creator')->loadCount('comments');
 
         return response()->json($danaTalangan);
     }

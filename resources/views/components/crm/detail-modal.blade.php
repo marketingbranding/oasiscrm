@@ -4,6 +4,7 @@
     'statusColors' => '{}',
     'notesKey' => null,
     'creatorKey' => null,
+    'commentableType' => null,
     'fields' => [],
 ])
 
@@ -62,6 +63,7 @@
                 <div class="px-5 py-3 flex items-center justify-between text-[10px] text-gray-500 font-mono">
                     <span x-text="'Dibuat oleh: ' + ({{ $creatorKey ? 'task.' . $creatorKey : "'—'" }} || '—')"></span>
                     <div class="flex gap-2">
+                        @if($commentableType && auth()->user()->hasPermission('comments.view'))<a :href="@js(url('/comments/thread/'.$commentableType)) + '/' + task.id" class="bg-white text-[#0000ee] px-3 py-1 text-xs font-mono font-bold border border-black underline">Komentar (<span x-text="task.comments_count || 0"></span>)</a>@endif
                         <button @click="close()" class="bg-white text-black px-3 py-1 text-xs font-mono font-bold border border-black hover:bg-gray-100">Tutup</button>
                         <a :href="editUrl" class="bg-[#b3bd95] text-black px-3 py-1 text-xs font-mono font-bold border border-black hover:bg-[#9eaa7a]">Edit</a>
                     </div>

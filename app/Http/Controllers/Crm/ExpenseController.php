@@ -40,6 +40,7 @@ class ExpenseController extends Controller
         $filters = $this->scopeFilters($request, $filters);
         $expenses = $this->expenseFilters->query($filters)
             ->with(['branch:id,name', 'project:id,project_name', 'category:id,name', 'creator:id,name'])
+            ->withCount('comments')
             ->paginate($filters['per_page'])->withQueryString();
         $summary = $this->expenseFilters->summary($filters);
         $branches = Branch::where('is_active', true)->whereIn('id', $filters['scope_branch_ids'])->forDropdown()->get(['id', 'name', 'code', 'is_active']);
@@ -128,6 +129,7 @@ class ExpenseController extends Controller
     {
         $this->authorize('view', $expense);
         $expense->load(['branch', 'project', 'category', 'creator', 'updatedBy', 'cancelledBy', 'activities.causer']);
+        $expense->loadCount('comments');
 
         return view('crm.expenses.show', compact('expense'));
     }

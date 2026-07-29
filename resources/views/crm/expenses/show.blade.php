@@ -32,6 +32,10 @@
         </section>
     </div>
 
+    @if(auth()->user()->hasPermission('comments.view'))
+        <div class="mt-4"><x-comments.panel commentable-type="expense" :commentable-id="$expense->id" :initial-count="$expense->comments_count" /></div>
+    @endif
+
     <div x-show="cancelOpen" x-cloak x-trap.noscroll="cancelOpen" role="dialog" aria-modal="true" aria-labelledby="cancel-expense-title" class="fixed inset-0 z-[900] flex items-center justify-center bg-black/70 px-4" @keydown.escape.window="cancelOpen=false">
         <form method="POST" action="{{ route('expenses.cancel', $expense) }}" class="w-full max-w-lg border-2 border-black bg-white" @click.outside="cancelOpen=false" @submit="if (cancelling) { $event.preventDefault() } else { cancelling = true }">
             @csrf @method('PATCH')

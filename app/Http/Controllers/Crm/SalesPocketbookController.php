@@ -89,6 +89,7 @@ class SalesPocketbookController extends Controller
         $filterLeadPeriod = $reportMetric || $request->filled('period_type') || $request->filled('week') || ($request->filled('date_from') && $request->filled('date_to'));
         $leads = SalesLead::query()->visibleTo($user)
             ->with(['branch:id,name', 'project:id,project_name', 'sales:id,name', 'leadSource:id,name,is_active'])
+            ->withCount('comments')
             ->when($selectedBranchId, fn (Builder $query) => $query->where('branch_id', $selectedBranchId))
             ->when($selectedProjectId, fn (Builder $query) => $query->where('project_id', $selectedProjectId))
             ->when($monitoring && $request->filled('sales_user_id'), fn (Builder $query) => $query->where('sales_user_id', $request->integer('sales_user_id')))
@@ -115,6 +116,7 @@ class SalesPocketbookController extends Controller
             ->where('item_type', 'agenda')
             ->where('agenda_type', ContentItem::SALES_AGENDA_TYPE)
             ->with(['branch:id,name', 'owner:id,name', 'rescheduledFrom:id,scheduled_date'])
+            ->withCount('comments')
             ->where(fn (Builder $query) => $query->whereIn('sales_project_id', $allowedProjectIds)
                 ->orWhere(fn (Builder $legacy) => $legacy->whereNull('sales_project_id')->whereIn('project_name', $allowedProjectNames)))
             ->whereIn('owner_user_id', $visibleSalesIds)

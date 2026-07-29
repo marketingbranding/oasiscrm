@@ -9,6 +9,8 @@ use Illuminate\Database\Eloquent\Model;
 
 class CommentPolicy
 {
+    public const OWNER_ACTION_WINDOW_MINUTES = 30;
+
     public function __construct(private CommentableAccessService $access) {}
 
     public function viewAny(User $user): bool
@@ -82,6 +84,7 @@ class CommentPolicy
 
     private function withinOwnerWindow(Comment $comment): bool
     {
-        return $comment->created_at !== null && now()->lte($comment->created_at->copy()->addMinutes(30));
+        return $comment->created_at !== null
+            && now()->lte($comment->created_at->copy()->addMinutes(self::OWNER_ACTION_WINDOW_MINUTES));
     }
 }

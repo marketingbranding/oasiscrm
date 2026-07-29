@@ -7,6 +7,7 @@ use App\Models\Comment;
 use App\Models\CommentModeration;
 use App\Models\CommentRevision;
 use App\Models\User;
+use App\Policies\CommentPolicy;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\Exceptions\HttpResponseException;
@@ -131,11 +132,12 @@ class CommentService
         });
     }
 
-    public function restore(Comment $comment, User $actor): Comment
+    public function restore(Comment $comment, User $actor, int $expectedVersion): Comment
     {
-        return DB::transaction(function () use ($comment, $actor): Comment {
+        return DB::transaction(function () use ($comment, $actor, $expectedVersion): Comment {
             $current = Comment::withTrashed()->lockForUpdate()->findOrFail($comment->id);
             Gate::forUser($actor)->authorize('restore', $current);
+            $this->assertVersion($current, $expectedVersion);
             if (! $current->trashed()) {
                 throw $this->validationError('comment', 'Komentar ini tidak sedang dihapus.');
             }
@@ -149,11 +151,12 @@ class CommentService
         });
     }
 
-    public function moderate(Comment $comment, User $actor, string $reason): Comment
+    public function moderate(Comment $comment, User $actor, string $reason, int $expectedVersion): Comment
     {
-        return DB::transaction(function () use ($comment, $actor, $reason): Comment {
+        return DB::transaction(function () use ($comment, $actor, $reason, $expectedVersion): Comment {
             $current = Comment::withTrashed()->lockForUpdate()->findOrFail($comment->id);
             Gate::forUser($actor)->authorize('moderate', $current);
+            $this->assertVersion($current, $expectedVersion);
             if ($current->trashed()) {
                 throw $this->validationError('comment', 'Komentar ini sudah dihapus.');
             }
@@ -173,15 +176,20 @@ class CommentService
         });
     }
 
-    public function paginate(Model $target, int $page = 1): LengthAwarePaginator
+    public function paginate(Model $target, User $viewer, int $page = 1): LengthAwarePaginator
     {
-        return Comment::query()
+        $query = Comment::query()
             ->withTrashed()
             ->where('commentable_type', $target->getMorphClass())
             ->where('commentable_id', $target->getKey())
-            ->whereNull('parent_id')
-            ->where(fn ($query) => $query->whereNull('deleted_at')
-                ->orWhereHas('replies', fn ($replies) => $replies->withTrashed()))
+            ->whereNull('parent_id');
+
+        if (! $viewer->hasPermission('comments.moderate')) {
+            $query->where(fn ($query) => $query->whereNull('deleted_at')
+                ->orWhereHas('replies', fn ($replies) => $replies->withTrashed()));
+        }
+
+        return $query
             ->with([
                 'user:id,name',
                 'mentions:id,name',
@@ -194,6 +202,14 @@ class CommentService
             ->paginate(20, ['*'], 'page', $page);
     }
 
+    public function count(Model $target): int
+    {
+        return Comment::query()
+            ->where('commentable_type', $target->getMorphClass())
+            ->where('commentable_id', $target->getKey())
+            ->count();
+    }
+
     public function serialize(Comment $comment, User $viewer, ?Model $target = null): array
     {
         if ($target) {
@@ -203,6 +219,10 @@ class CommentService
         $replies = $comment->relationLoaded('replies')
             ? $comment->replies->map(fn (Comment $reply) => $this->serialize($reply, $viewer, $target))->values()->all()
             : [];
+
+        $withinOwnerWindow = $comment->created_at?->gte(now()->subMinutes(CommentPolicy::OWNER_ACTION_WINDOW_MINUTES)) ?? false;
+        $isOwner = (int) $comment->user_id === (int) $viewer->id;
+        $canModerate = $viewer->hasPermission('comments.moderate');
 
         return [
             'id' => $comment->id,
@@ -218,12 +238,12 @@ class CommentService
             'mentions' => $deleted ? [] : $comment->mentions->map(fn (User $user) => ['id' => $user->id, 'name' => $user->name])->values()->all(),
             'reply_count' => $comment->replies_count ?? count($replies),
             'replies' => $replies,
-            'can_reply' => Gate::forUser($viewer)->allows('reply', $comment),
-            'can_update' => Gate::forUser($viewer)->allows('update', $comment),
-            'can_delete' => Gate::forUser($viewer)->allows('delete', $comment),
-            'can_restore' => Gate::forUser($viewer)->allows('restore', $comment),
-            'can_moderate' => Gate::forUser($viewer)->allows('moderate', $comment),
-            'can_view_history' => Gate::forUser($viewer)->allows('viewHistory', $comment),
+            'can_reply' => ! $deleted && $viewer->hasPermission('comments.reply'),
+            'can_update' => ! $deleted && $isOwner && $withinOwnerWindow && $viewer->hasPermission('comments.update_own'),
+            'can_delete' => ! $deleted && $isOwner && $withinOwnerWindow && $viewer->hasPermission('comments.delete_own'),
+            'can_restore' => $deleted && $canModerate,
+            'can_moderate' => ! $deleted && $canModerate,
+            'can_view_history' => ($isOwner || $viewer->hasPermission('comments.view_history')) && $comment->edited_at !== null,
         ];
     }
 

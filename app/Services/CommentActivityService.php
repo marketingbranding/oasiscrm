@@ -31,4 +31,23 @@ class CommentActivityService
             ], static fn (mixed $value): bool => $value !== null),
         ]);
     }
+
+    public function logMention(string $event, Comment $comment, User $actor, Model $target, int $mentionedUserId): ActivityLog
+    {
+        return ActivityLog::create([
+            'causer_id' => $actor->id,
+            'subject_type' => Comment::class,
+            'subject_id' => $comment->id,
+            'event' => $event,
+            'description' => "Aktivitas komentar #{$comment->id}: {$event}",
+            'properties' => array_filter([
+                'comment_id' => $comment->id,
+                'target_id' => $target->getKey(),
+                'target_alias' => $this->access->aliasFor($target),
+                'branch_id' => $this->access->branchId($target),
+                'project_id' => $this->access->projectId($target),
+                'mentioned_user_id' => $mentionedUserId,
+            ], static fn (mixed $value): bool => $value !== null),
+        ]);
+    }
 }

@@ -8,10 +8,12 @@ use App\Http\Requests\Crm\StoreCommentRequest;
 use App\Http\Requests\Crm\UpdateCommentRequest;
 use App\Models\Comment;
 use App\Services\CommentableAccessService;
+use App\Services\CommentMentionService;
 use App\Services\CommentService;
 use Illuminate\Http\Exceptions\HttpResponseException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\Rule;
 
 class CommentController extends Controller
@@ -19,6 +21,7 @@ class CommentController extends Controller
     public function __construct(
         private readonly CommentService $comments,
         private readonly CommentableAccessService $access,
+        private readonly CommentMentionService $mentions,
     ) {}
 
     public function index(Request $request): JsonResponse
@@ -50,6 +53,29 @@ class CommentController extends Controller
         ]);
     }
 
+    public function mentionableUsers(Request $request): JsonResponse
+    {
+        $validator = Validator::make($request->all(), [
+            'alias' => ['required', 'string', Rule::in(['sales-lead', 'planner-item', 'sales-agenda', 'expense', 'bridge-fund'])],
+            'id' => ['required', 'integer', 'min:1'],
+            'query' => ['nullable', 'string', 'max:100'],
+        ]);
+        if ($validator->fails()) {
+            throw new HttpResponseException(response()->json([
+                'message' => $validator->errors()->first(),
+                'errors' => $validator->errors()->toArray(),
+            ], 422));
+        }
+        $data = $validator->validated();
+        $target = $this->access->resolve($data['alias'], $data['id']);
+        abort_unless($target, 404);
+        $this->authorize('viewAny', Comment::class);
+        abort_unless($request->user()->hasPermission('comments.mention'), 403);
+        abort_unless($this->access->canView($request->user(), $target), 403);
+
+        return response()->json(['data' => $this->mentions->search($request->user(), $target, $data['query'] ?? null)]);
+    }
+
     public function store(StoreCommentRequest $request): JsonResponse
     {
         $data = $request->validated();
@@ -76,7 +102,9 @@ class CommentController extends Controller
             $this->authorize('create', [Comment::class, $target]);
         }
 
-        $comment = $this->comments->create($request->user(), $target, $data['body'], $data['parent_id'] ?? null);
+        $comment = $this->comments->create(
+            $request->user(), $target, $data['body'], $data['parent_id'] ?? null, $data['mentioned_user_ids'] ?? []
+        );
         $comment->load(['user:id,name', 'mentions:id,name']);
 
         return response()->json(['data' => $this->comments->serialize($comment, $request->user(), $target)], 201);
@@ -85,7 +113,9 @@ class CommentController extends Controller
     public function update(UpdateCommentRequest $request, Comment $comment): JsonResponse
     {
         $data = $request->validated();
-        $comment = $this->comments->update($comment, $request->user(), $data['body'], (int) $data['expected_lock_version']);
+        $comment = $this->comments->update(
+            $comment, $request->user(), $data['body'], (int) $data['expected_lock_version'], $data['mentioned_user_ids'] ?? []
+        );
         $comment->load(['user:id,name', 'mentions:id,name']);
 
         return response()->json(['data' => $this->comments->serialize($comment, $request->user())]);

@@ -19,11 +19,12 @@ class CommentService
 
     public function __construct(
         private readonly CommentActivityService $activity,
+        private readonly CommentMentionService $mentionService,
     ) {}
 
-    public function create(User $actor, Model $target, string $body, ?int $parentId = null): Comment
+    public function create(User $actor, Model $target, string $body, ?int $parentId = null, array $mentionedUserIds = []): Comment
     {
-        return DB::transaction(function () use ($actor, $target, $body, $parentId): Comment {
+        return DB::transaction(function () use ($actor, $target, $body, $parentId, $mentionedUserIds): Comment {
             $parent = null;
             if ($parentId !== null) {
                 $parent = Comment::withTrashed()->lockForUpdate()->find($parentId);
@@ -51,25 +52,36 @@ class CommentService
                 'lock_version' => 0,
             ]);
             $comment->setRelation('commentable', $target);
+            $mentions = $this->mentionService->validate($actor, $target, $mentionedUserIds);
+            $comment->mentions()->sync($mentions->pluck('id')->all());
+            $comment->setRelation('newMentionUsers', $mentions);
+            $comment->setRelation('unchangedMentionUsers', collect());
+            $comment->setRelation('removedMentionUsers', collect());
+            foreach ($mentions as $mention) {
+                $this->activity->logMention('mention_added', $comment, $actor, $target, (int) $mention->id);
+            }
             $this->activity->log($parent ? 'reply_created' : 'comment_created', $comment, $actor, $target, $body);
 
             return $comment;
         });
     }
 
-    public function update(Comment $comment, User $actor, string $body, int $expectedVersion): Comment
+    public function update(Comment $comment, User $actor, string $body, int $expectedVersion, array $mentionedUserIds = []): Comment
     {
-        return DB::transaction(function () use ($comment, $actor, $body, $expectedVersion): Comment {
+        return DB::transaction(function () use ($comment, $actor, $body, $expectedVersion, $mentionedUserIds): Comment {
             $current = Comment::withTrashed()->lockForUpdate()->findOrFail($comment->id);
             Gate::forUser($actor)->authorize('update', $current);
             $this->assertVersion($current, $expectedVersion);
 
+            $previousIds = $current->mentionRecords()
+                ->whereNotNull('mentioned_user_id')->pluck('mentioned_user_id')->map(fn ($id) => (int) $id)->all();
+            $mentions = $this->mentionService->validate($actor, $current->commentable, $mentionedUserIds);
+            $nextIds = $mentions->pluck('id')->map(fn ($id) => (int) $id)->all();
             CommentRevision::create([
                 'comment_id' => $current->id,
                 'edited_by' => $actor->id,
                 'previous_body' => $current->body,
-                'previous_mentioned_user_ids' => $current->mentionRecords()
-                    ->whereNotNull('mentioned_user_id')->pluck('mentioned_user_id')->map(fn ($id) => (int) $id)->all(),
+                'previous_mentioned_user_ids' => $previousIds,
             ]);
 
             $current->forceFill([
@@ -79,6 +91,22 @@ class CommentService
                 'lock_version' => $current->lock_version + 1,
             ])->save();
             $target = $current->commentable;
+            $current->mentions()->sync($nextIds);
+            $newIds = array_values(array_diff($nextIds, $previousIds));
+            $unchangedIds = array_values(array_intersect($nextIds, $previousIds));
+            $removedIds = array_values(array_diff($previousIds, $nextIds));
+            $current->setRelation('newMentionUsers', $mentions->whereIn('id', $newIds)->values());
+            $current->setRelation('unchangedMentionUsers', $mentions->whereIn('id', $unchangedIds)->values());
+            $removedUsers = $removedIds === []
+                ? collect()
+                : User::query()->whereIntegerInRaw('id', $removedIds)->get();
+            $current->setRelation('removedMentionUsers', $removedUsers);
+            foreach ($newIds as $userId) {
+                $this->activity->logMention('mention_added', $current, $actor, $target, $userId);
+            }
+            foreach ($removedIds as $userId) {
+                $this->activity->logMention('mention_removed', $current, $actor, $target, $userId);
+            }
             $this->activity->log('comment_edited', $current, $actor, $target, $body);
 
             return $current;

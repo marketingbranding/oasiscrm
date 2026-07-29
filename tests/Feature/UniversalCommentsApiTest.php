@@ -29,7 +29,7 @@ class UniversalCommentsApiTest extends TestCase
             'mentioned_user_ids' => [$owner->id],
         ])->assertCreated()->assertJsonPath('data.body', $body)->assertJsonPath('data.lock_version', 0);
         $commentId = $created->json('data.id');
-        $this->assertDatabaseCount('comment_mentions', 0);
+        $this->assertDatabaseHas('comment_mentions', ['comment_id' => $commentId, 'mentioned_user_id' => $owner->id]);
 
         $this->patchJson(route('comments.update', $commentId), [
             'body' => '<b>tetap teks biasa</b>', 'expected_lock_version' => 0,
@@ -39,7 +39,7 @@ class UniversalCommentsApiTest extends TestCase
 
         $revision = CommentRevision::firstOrFail();
         $this->assertSame($body, $revision->previous_body);
-        $this->assertSame([], $revision->previous_mentioned_user_ids);
+        $this->assertSame([$owner->id], $revision->previous_mentioned_user_ids);
 
         $conflict = $this->patchJson(route('comments.update', $commentId), [
             'body' => 'perubahan basi', 'expected_lock_version' => 0,

@@ -72,7 +72,7 @@ export default function registerComments(Alpine) {
         },
 
         async saveEdit(event, comment) {
-            if (this.sending || !this.editing?.body.trim()) return;
+            if (!comment || this.sending || !this.editing?.body.trim()) return;
             this.sending = true;
             try {
                 const data = await this.mutate(config.updateUrl.replace('__COMMENT__', comment.id), 'PATCH', {
@@ -164,7 +164,7 @@ export default function registerComments(Alpine) {
         clearEdit() { this.editing = { id: null, body: '', mentions: [], lock_version: 0 }; },
 
         mentionInput(event, draft) {
-            if (!this.canMention) return;
+            if (event.isComposing || !this.canMention) return;
             this.activeDraft = draft;
             this.mentionTextarea = event.target;
             const match = event.target.value.slice(0, event.target.selectionStart).match(/(?:^|\s)@([^\s@]*)$/u);
@@ -186,7 +186,7 @@ export default function registerComments(Alpine) {
         },
 
         mentionKey(event) {
-            if (!this.mentionOpen) return;
+            if (event.isComposing || !this.mentionOpen) return;
             if (event.key === 'ArrowDown') { event.preventDefault(); this.mentionIndex = (this.mentionIndex + 1) % this.suggestions.length; }
             if (event.key === 'ArrowUp') { event.preventDefault(); this.mentionIndex = (this.mentionIndex - 1 + this.suggestions.length) % this.suggestions.length; }
             if (event.key === 'Enter') { event.preventDefault(); this.selectMention(this.suggestions[this.mentionIndex]); }

@@ -5,8 +5,11 @@ namespace App\Http\Controllers\Crm;
 use App\Http\Controllers\Controller;
 use App\Models\User;
 use App\Models\UserNotification;
+use App\Services\CommentableAccessService;
+use App\Services\CommentService;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 
 class NotificationController extends Controller
@@ -18,11 +21,12 @@ class NotificationController extends Controller
         return response()->json([
             'ok' => true,
             'unread_count' => (clone $query)->whereNull('read_at')->count(),
-            'notifications' => $query->latest()->limit(10)->get()->map(fn (UserNotification $notification) => [
+            'notifications' => $query->with('comment')->latest()->limit(10)->get()->map(fn (UserNotification $notification) => [
                 'id' => $notification->id,
                 'type' => $notification->type,
                 'title' => $notification->title,
-                'message' => $notification->message,
+                'message' => $this->hasDeletedComment($notification) ? CommentService::DELETED_PLACEHOLDER : $notification->message,
+                'data' => $this->dataFor($notification),
                 'action_url' => $this->actionUrlFor($request->user(), $notification),
                 'read_at' => $notification->read_at?->toIso8601String(),
                 'created_at' => $notification->created_at?->toIso8601String(),
@@ -46,6 +50,32 @@ class NotificationController extends Controller
         return response()->json(['ok' => true]);
     }
 
+    public function open(Request $request, $notification, CommentableAccessService $access): RedirectResponse
+    {
+        $notification = UserNotification::query()
+            ->where('user_id', $request->user()->id)
+            ->with('comment')
+            ->findOrFail($notification);
+        $notification->update(['read_at' => $notification->read_at ?? now()]);
+
+        $comment = $notification->comment;
+        $target = $comment?->commentable;
+        if (! $comment || ! $target
+            || ! $request->user()->hasPermission('comments.view')
+            || ! $access->canView($request->user(), $target)) {
+            return redirect()->route($request->user()->landingRouteName())
+                ->with('warning', 'Data tidak tersedia atau Anda tidak memiliki akses.');
+        }
+
+        $url = $access->targetUrl($target, 'comment-'.$comment->id);
+        if (! $url) {
+            return redirect()->route($request->user()->landingRouteName())
+                ->with('warning', 'Data tidak tersedia atau Anda tidak memiliki akses.');
+        }
+
+        return redirect()->to($url);
+    }
+
     private function queryFor(User $user): Builder
     {
         return UserNotification::query()->where('user_id', $user->id)
@@ -57,7 +87,7 @@ class NotificationController extends Controller
 
     private function actionUrlFor(User $user, UserNotification $notification): ?string
     {
-        if (! $user->isSales()) {
+        if (! $user->isSales() || $this->isCommentNotification($notification)) {
             return $notification->action_url;
         }
 
@@ -65,5 +95,26 @@ class NotificationController extends Controller
             $notification->related_type === 'content_item' => route('content-calendar.index'),
             default => route('sales-pocketbook.index'),
         };
+    }
+
+    private function dataFor(UserNotification $notification): ?array
+    {
+        $data = $notification->data;
+        if ($this->hasDeletedComment($notification) && is_array($data)) {
+            $data['excerpt'] = CommentService::DELETED_PLACEHOLDER;
+        }
+
+        return $data;
+    }
+
+    private function hasDeletedComment(UserNotification $notification): bool
+    {
+        return $this->isCommentNotification($notification)
+            && ($notification->comment === null || $notification->comment->trashed());
+    }
+
+    private function isCommentNotification(UserNotification $notification): bool
+    {
+        return in_array($notification->type, ['comment_mentioned', 'comment_replied'], true);
     }
 }

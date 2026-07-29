@@ -77,6 +77,7 @@ Route::middleware(['auth', 'active', 'verified', 'password.changed', 'sales.acce
     Route::delete('/presence', [PresenceController::class, 'destroy'])->middleware('throttle:180,1')->name('presence.destroy');
 
     Route::get('/notifications', [NotificationController::class, 'index'])->middleware('throttle:120,1')->name('notifications.index');
+    Route::get('/notifications/{notification}/open', [NotificationController::class, 'open'])->name('notifications.open');
     Route::patch('/notifications/{notification}/read', [NotificationController::class, 'read'])->name('notifications.read');
     Route::post('/notifications/read-all', [NotificationController::class, 'readAll'])->name('notifications.read-all');
 

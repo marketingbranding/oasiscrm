@@ -83,11 +83,11 @@ class CommentableAccessService
     public function targetRoute(Model $model): ?array
     {
         return match ($this->aliasFor($model)) {
-            'sales-lead' => ['name' => 'sales-pocketbook.index', 'parameters' => []],
-            'sales-agenda' => ['name' => 'sales-pocketbook.index', 'parameters' => ['tab' => 'agenda']],
-            'planner-item' => ['name' => 'content-calendar.show', 'parameters' => ['content_calendar' => $model]],
+            'sales-lead' => ['name' => 'sales-pocketbook.index', 'parameters' => ['lead_id' => $model->getKey()]],
+            'sales-agenda' => ['name' => 'sales-pocketbook.index', 'parameters' => ['tab' => 'agenda', 'agenda_id' => $model->getKey()]],
+            'planner-item' => ['name' => 'content-calendar.index', 'parameters' => ['item_id' => $model->getKey()]],
             'expense' => ['name' => 'expenses.show', 'parameters' => ['expense' => $model]],
-            'bridge-fund' => ['name' => 'dana-talangan.show', 'parameters' => ['dana_talangan' => $model]],
+            'bridge-fund' => ['name' => 'dana-talangan.index', 'parameters' => ['record_id' => $model->getKey()]],
             default => null,
         };
     }

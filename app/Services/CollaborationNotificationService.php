@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\ContentItem;
 use App\Models\DanaTalangan;
 use App\Models\DatabaseSheetRecord;
+use App\Models\Expense;
 use App\Models\FeedbackReport;
 use App\Models\SalesLead;
 use App\Models\User;
@@ -179,6 +180,7 @@ class CollaborationNotificationService
             $record instanceof ContentItem => 'content_item',
             $record instanceof DatabaseSheetRecord => 'database_sheet_record',
             $record instanceof SalesLead => 'sales_lead',
+            $record instanceof Expense => 'expense',
             $record instanceof User => 'user',
             default => class_basename($record),
         };

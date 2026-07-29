@@ -20,6 +20,7 @@ class CommentService
     public function __construct(
         private readonly CommentActivityService $activity,
         private readonly CommentMentionService $mentionService,
+        private readonly CommentNotificationService $notifications,
     ) {}
 
     public function create(User $actor, Model $target, string $body, ?int $parentId = null, array $mentionedUserIds = []): Comment
@@ -61,6 +62,7 @@ class CommentService
                 $this->activity->logMention('mention_added', $comment, $actor, $target, (int) $mention->id);
             }
             $this->activity->log($parent ? 'reply_created' : 'comment_created', $comment, $actor, $target, $body);
+            $this->notifications->created($comment, $actor, $target, $mentions, $parent);
 
             return $comment;
         });
@@ -108,6 +110,7 @@ class CommentService
                 $this->activity->logMention('mention_removed', $current, $actor, $target, $userId);
             }
             $this->activity->log('comment_edited', $current, $actor, $target, $body);
+            $this->notifications->updated($current, $actor, $target, $current->getRelation('newMentionUsers'));
 
             return $current;
         });

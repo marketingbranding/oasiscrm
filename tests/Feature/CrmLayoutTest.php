@@ -79,13 +79,14 @@ class CrmLayoutTest extends TestCase
         $this->assertStringContainsString('function readStorage', $shell);
     }
 
-    public function test_existing_page_without_named_shell_sections_still_renders(): void
+    public function test_dashboard_uses_named_shell_sections_and_existing_pages_remain_compatible(): void
     {
         $response = $this->actingAs($this->user('manager'))->get(route('dashboard'))->assertOk();
 
         $response->assertSee('id="crm-main"', false)
-            ->assertSee('Dashboard')
-            ->assertDontSee('class="crm-page-heading"', false);
+            ->assertSee('class="crm-page-heading"', false)
+            ->assertSee('class="crm-page-title"', false)
+            ->assertSee('Selamat');
 
         $layout = file_get_contents(resource_path('views/layouts/crm.blade.php'));
         foreach (['breadcrumbs', 'page-title', 'page-description', 'page-actions', 'page-tabs', 'toolbar', 'content'] as $section) {

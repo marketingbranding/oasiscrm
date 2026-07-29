@@ -3,14 +3,21 @@
 @tailwind utilities;
 
 :root {
+    /* Color and surface foundations */
     --oasis-page-bg: #f4f3ee;
     --oasis-surface: #ffffff;
     --oasis-surface-muted: #ecebe5;
+    --oasis-surface-raised: #ffffff;
+    --oasis-surface-selected: #fff3b0;
+    --oasis-surface-disabled: #e4e2dc;
     --oasis-text: #171717;
     --oasis-text-muted: #66645f;
+    --oasis-text-disabled: #8a8882;
+    --oasis-border-subtle: #dedcd4;
     --oasis-border: #cfcdc4;
     --oasis-border-strong: #111111;
     --oasis-yellow: #fcc20f;
+    --oasis-neutral: #77746d;
     --oasis-topbar-bg: #111111;
     --oasis-sidebar-bg: #f8f7f2;
     --oasis-sidebar-active: #fff3b0;
@@ -19,9 +26,69 @@
     --oasis-warning: #d6a500;
     --oasis-success: #39734c;
     --oasis-info: #41698c;
+
+    /* Surface hierarchy aliases */
+    --oasis-surface-page: var(--oasis-page-bg);
+    --oasis-surface-flat: var(--oasis-surface);
+    --oasis-surface-emphasis: var(--oasis-sidebar-active);
+
+    /* 4px spacing rhythm */
+    --oasis-space-1: 0.25rem;
+    --oasis-space-2: 0.5rem;
+    --oasis-space-3: 0.75rem;
+    --oasis-space-4: 1rem;
+    --oasis-space-5: 1.25rem;
+    --oasis-space-6: 1.5rem;
+    --oasis-space-8: 2rem;
+    --oasis-space-10: 2.5rem;
+    --oasis-space-12: 3rem;
+    --oasis-space-16: 4rem;
+
+    /* Typography roles */
+    --oasis-font-controls: Helvetica, Arial, sans-serif;
+    --oasis-font-data: 'Times New Roman', Times, serif;
+    --oasis-font-display: 'Arial Black', Helvetica, Arial, sans-serif;
+    --oasis-font-system: 'Courier New', Courier, monospace;
+    --oasis-type-display-size: clamp(1.5rem, 3vw, 2rem);
+    --oasis-type-page-title-size: clamp(1.25rem, 2vw, 1.75rem);
+    --oasis-type-section-title-size: 0.95rem;
+    --oasis-type-card-title-size: 0.8125rem;
+    --oasis-type-body-size: 0.875rem;
+    --oasis-type-compact-size: 0.75rem;
+    --oasis-type-label-size: 0.6875rem;
+    --oasis-type-caption-size: 0.625rem;
+    --oasis-type-button-size: 0.75rem;
+    --oasis-type-table-header-size: 0.625rem;
+    --oasis-type-table-data-size: 0.75rem;
+    --oasis-type-badge-size: 0.625rem;
+
+    /* Borders, radius, shadow and focus */
+    --oasis-border-width-subtle: 1px;
+    --oasis-border-width-standard: 1px;
+    --oasis-border-width-strong: 2px;
+    --oasis-border-width-emphasis: 3px;
+    --oasis-radius-none: 0;
+    --oasis-radius-sm: 2px;
+    --oasis-radius-md: 4px;
+    --oasis-shadow-none: none;
+    --oasis-shadow-subtle: 2px 2px 0 rgb(0 0 0 / 12%);
+    --oasis-shadow-elevated: 4px 4px 0 rgb(0 0 0 / 20%);
+    --oasis-focus-width: 3px;
+    --oasis-focus-offset: 2px;
+    --oasis-control-height: 2.75rem;
+
+    /* Operational motion */
+    --oasis-duration-fast: 100ms;
+    --oasis-duration-standard: 150ms;
+    --oasis-duration-slow: 200ms;
+    --oasis-ease-standard: cubic-bezier(0.2, 0, 0, 1);
+
+    /* Shell dimensions */
     --oasis-topbar-height: 3.75rem;
     --oasis-sidebar-collapsed-width: 4.5rem;
     --oasis-sidebar-expanded-width: 14.5rem;
+
+    /* Finite module accents */
     --oasis-accent-dashboard: #8c9ae0;
     --oasis-accent-planner: #b3bd95;
     --oasis-accent-sales: #fcc20f;
@@ -31,6 +98,57 @@
     --oasis-accent-expenses: #b3bd95;
     --oasis-accent-reports: #d77a7a;
     --oasis-accent-administration: #8c9ae0;
+}
+
+.crm-type-display,
+.crm-type-page-title,
+.crm-type-section-title,
+.crm-type-card-title {
+    color: var(--oasis-text);
+    font-family: var(--oasis-font-display);
+    font-weight: 900;
+}
+
+.crm-type-display { font-size: var(--oasis-type-display-size); }
+.crm-type-page-title { font-size: var(--oasis-type-page-title-size); }
+.crm-type-section-title { font-size: var(--oasis-type-section-title-size); }
+.crm-type-card-title { font-size: var(--oasis-type-card-title-size); }
+
+.crm-type-body,
+.crm-type-compact,
+.crm-type-table-data {
+    color: var(--oasis-text);
+    font-family: var(--oasis-font-data);
+}
+
+.crm-type-body { font-size: var(--oasis-type-body-size); }
+.crm-type-compact { font-size: var(--oasis-type-compact-size); }
+.crm-type-table-data { font-size: var(--oasis-type-table-data-size); }
+
+.crm-type-label,
+.crm-type-caption,
+.crm-type-button,
+.crm-type-table-header,
+.crm-type-badge {
+    font-family: var(--oasis-font-controls);
+    font-weight: 700;
+}
+
+.crm-type-label { font-size: var(--oasis-type-label-size); }
+.crm-type-caption { font-size: var(--oasis-type-caption-size); }
+.crm-type-button { font-size: var(--oasis-type-button-size); }
+.crm-type-table-header { font-size: var(--oasis-type-table-header-size); }
+.crm-type-badge { font-size: var(--oasis-type-badge-size); }
+
+.crm-type-system {
+    font-family: var(--oasis-font-system);
+    font-size: var(--oasis-type-caption-size);
+    letter-spacing: 0.04em;
+}
+
+.crm-focus-ring:focus-visible {
+    outline: var(--oasis-focus-width) solid var(--oasis-focus);
+    outline-offset: var(--oasis-focus-offset);
 }
 
 .crm-shell-frame {

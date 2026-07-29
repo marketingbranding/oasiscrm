@@ -34,10 +34,11 @@ export default function registerCrmModal(Alpine) {
             this.$nextTick(() => {
                 const initial = this.$refs.panel.querySelector('[data-autofocus]') || this.$refs.close || this.$refs.panel;
                 initial.focus();
+                window.dispatchEvent(new CustomEvent('oasis:modal-opened', { detail: { name: this.name } }));
             });
         },
 
-        hide(restoreFocus = true) {
+        hide(restoreFocus = true, reason = 'programmatic') {
             if (!this.open) {
                 return;
             }
@@ -47,18 +48,27 @@ export default function registerCrmModal(Alpine) {
             if (restoreFocus) {
                 this.$nextTick(() => this.trigger?.focus());
             }
+            window.dispatchEvent(new CustomEvent('oasis:modal-closed', { detail: { name: this.name, reason } }));
         },
 
         closeFromEvent(event) {
             if (!event.detail?.name || event.detail.name === this.name) {
-                this.hide();
+                this.hide(true, event.detail?.reason || 'event');
             }
+        },
+
+        hasOpenPicker() {
+            return Array.from(this.$refs.panel.querySelectorAll('.date-calendar, .month-picker-popup, .time-picker-popup'))
+                .some((picker) => picker.style.display !== 'none');
         },
 
         handleKeydown(event) {
             if (event.key === 'Escape') {
+                if (this.hasOpenPicker()) {
+                    return;
+                }
                 event.preventDefault();
-                this.hide();
+                this.hide(true, 'escape');
                 return;
             }
 

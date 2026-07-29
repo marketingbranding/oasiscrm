@@ -52,6 +52,12 @@ class DatabaseUiTest extends TestCase
         $this->assertStringContainsString('Bekukan kolom ID Kavling', $html, 'Missing named freeze control.');
         $this->assertStringContainsString('<caption class="sr-only"', $html, 'Missing table caption.');
         $this->assertStringContainsString('crm-row-num', $html, 'Missing canonical row-number column.');
+        $this->assertStringContainsString('id="crm-modal-database-edit-title"', $html);
+        $this->assertStringContainsString('id="crm-modal-database-add-title"', $html);
+        $this->assertStringContainsString('data-database-edit-form', $html);
+        $this->assertStringContainsString('fieldLabelId(', $html);
+        $this->assertStringContainsString('@oasis:modal-closed.window', $html);
+        $this->assertStringContainsString('@oasis-form-error.window', $html);
         $this->assertMatchesRegularExpression('/<th[^>]*>Aksi<\/th>/', $html);
         $this->assertStringContainsString('editRecord(rec, $el)', $html);
         $this->assertStringContainsString('database/records/'.$record->id, route('database.records.update', $record));

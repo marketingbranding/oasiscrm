@@ -147,6 +147,7 @@ export default function registerConflict(Alpine) {
                 if (!response.ok) {
                     this.validationMessage = data.message || Object.values(data.errors || {})[0]?.[0] || 'Data belum dapat disimpan. Periksa kembali isian form.';
                     if (data.updated_at) form.querySelector('[name="expected_updated_at"]')?.setAttribute('value', data.updated_at);
+                    window.dispatchEvent(new CustomEvent('oasis-form-error', { detail: { form, message: this.validationMessage } }));
                     return;
                 }
                 this.clearSavedValues();
@@ -154,6 +155,7 @@ export default function registerConflict(Alpine) {
                 window.location.href = data.reload_url || context.successUrl || window.location.href;
             } catch (_) {
                 this.validationMessage = 'Koneksi bermasalah. Form tetap terbuka dan perubahan Anda belum dihapus.';
+                window.dispatchEvent(new CustomEvent('oasis-form-error', { detail: { form, message: this.validationMessage } }));
             }
         },
     }));

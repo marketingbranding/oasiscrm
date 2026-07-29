@@ -16,7 +16,7 @@
      @oasis:modal-close.window="closeFromEvent($event)"
      x-show="open" x-cloak
      class="crm-modal-backdrop"
-     @click.self="hide()"
+     @click.self="hide(true, 'backdrop')"
      @keydown="handleKeydown($event)">
     <section x-ref="panel" role="dialog" aria-modal="true" tabindex="-1"
              aria-labelledby="{{ $dialogId }}-title"
@@ -27,7 +27,7 @@
                 <h2 id="{{ $dialogId }}-title" class="crm-modal-title">{{ $title }}</h2>
                 @if($description)<p id="{{ $dialogId }}-description" class="crm-modal-description">{{ $description }}</p>@endif
             </div>
-            <x-crm.icon-button label="Tutup dialog" variant="ghost" x-ref="close" @click="hide()">
+            <x-crm.icon-button label="Tutup dialog" variant="ghost" x-ref="close" @click="hide(true, 'close-button')">
                 <svg viewBox="0 0 24 24" class="size-5" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18" /></svg>
             </x-crm.icon-button>
         </header>

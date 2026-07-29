@@ -105,7 +105,10 @@
         requestSheet: '{{ $requestSheet ?? '' }}',
         requestAdd: {{ ($requestAdd ?? false) ? 'true' : 'false' }},
         canEdit: {{ $canEdit ? 'true' : 'false' }}
-    })" @oasis-sync-updated.window="handleSyncUpdated($event.detail)">
+    })"
+         @oasis-sync-updated.window="handleSyncUpdated($event.detail)"
+         @oasis:modal-closed.window="handleModalClosed($event.detail)"
+         @oasis-form-error.window="handleFormError($event.detail)">
         <div class="database-tabs" role="tablist" aria-label="Sheet Database">
             @foreach($sheetNames as $name)
             <button type="button"
@@ -272,151 +275,86 @@
             </section>
         </template>
 
-        {{-- Edit Modal --}}
-        <div x-cloak x-show="editing" class="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4"
-             @keydown.escape.window="editing = null">
-            <div x-ref="editPanel" @click.away="editing = null"
-                 class="w-full max-w-2xl border-2 border-black bg-white p-5 shadow-[8px_8px_0_0_#000] max-h-[80vh] overflow-y-auto">
-                <div class="flex items-center justify-between mb-4">
-                    <h2 class="font-[Helvetica] font-bold text-sm uppercase" x-text="'Edit — ' + tab"></h2>
-                    <button @click="editing = null" class="text-black font-bold text-lg leading-none">&times;</button>
-                </div>
-                <div x-show="newerDataAvailable" x-cloak class="mb-3 border-2 border-black bg-[#fcc20f] px-3 py-2 text-sm" aria-live="polite">
-                    <p class="font-bold">Data terbaru tersedia setelah sinkronisasi.</p>
+        <x-crm.modal name="database-edit" title="Edit data Database" description="Perubahan disimpan ke Google Sheet lalu diperbarui pada cache Database." size="xl">
+            <div x-ref="editPanel" x-show="editing" x-cloak>
+                <p class="database-modal-scope">Sheet: <strong x-text="tab"></strong></p>
+                <x-crm.alert x-show="newerDataAvailable" x-cloak variant="warning" title="Data terbaru tersedia setelah sinkronisasi" aria-live="polite">
                     <p>Draf edit Anda tetap dipertahankan. Muat ulang hanya jika Anda siap meninggalkan draf ini.</p>
-                    <div class="mt-2 flex flex-wrap gap-2">
-                        <button type="button" @click="reloadNewerData()" class="border-2 border-black bg-black px-2 py-1 text-xs font-bold text-white">Muat Ulang Data</button>
-                        <button type="button" @click="newerDataAvailable = false" class="border-2 border-black bg-white px-2 py-1 text-xs font-bold">Pertahankan Draf</button>
-                    </div>
-                </div>
-                <form method="POST" :action="editBaseUrl + '/' + editing.id" data-conflict-form
-                      @submit.prevent="$dispatch('oasis-submit-conflict', { form: $el })">
+                    <div class="crm-alert-actions"><x-crm.button type="button" size="sm" accent="database" variant="primary" @click="reloadNewerData()">Muat Ulang Data</x-crm.button><x-crm.button type="button" size="sm" @click="newerDataAvailable = false">Pertahankan Draf</x-crm.button></div>
+                </x-crm.alert>
+                <x-crm.alert x-show="editError" x-cloak x-ref="editError" variant="error" title="Perubahan belum disimpan" role="alert" tabindex="-1">
+                    <p x-text="editError"></p>
+                </x-crm.alert>
+                <form id="database-edit-form" method="POST" :action="editing ? editBaseUrl + '/' + editing.id : editBaseUrl" data-conflict-form data-database-edit-form
+                      @submit.prevent="editError = ''; $dispatch('oasis-submit-conflict', { form: $el })">
                     @csrf @method('PUT')
-                    <input type="hidden" name="expected_updated_at" :value="editing.updated_at">
-                    <input type="hidden" name="expected_sync_id" :value="editing.oasis_sync_id">
-                    <template x-if="editing"><div x-data="crmPresence(@js(['enabled' => config('presence.enabled', true), 'heartbeatUrl' => route('presence.heartbeat'), 'indexUrl' => route('presence.index'), 'destroyUrl' => route('presence.destroy'), 'heartbeatSeconds' => config('presence.heartbeat_seconds', 25), 'pageKey' => 'database', 'branchId' => null, 'recordType' => 'database_sheet_record', 'recordId' => null, 'mode' => 'editing']))" x-init="updateContext({ branchId: branchId, recordType: 'database_sheet_record', recordId: editing.id, mode: 'editing' })" x-show="others.length" :title="fullNames" class="mb-3 border-2 border-black bg-[#eef1ff] px-3 py-2 text-xs"><span class="font-bold" x-text="summary"></span><span class="block text-[#8a4b08]">Perubahan terakhir akan diperiksa saat menyimpan.</span></div></template>
-                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <input type="hidden" name="expected_updated_at" :value="editing?.updated_at || ''">
+                    <input type="hidden" name="expected_sync_id" :value="editing?.oasis_sync_id || ''">
+                    <template x-if="editing"><div x-data="crmPresence(@js(['enabled' => config('presence.enabled', true), 'heartbeatUrl' => route('presence.heartbeat'), 'indexUrl' => route('presence.index'), 'destroyUrl' => route('presence.destroy'), 'heartbeatSeconds' => config('presence.heartbeat_seconds', 25), 'pageKey' => 'database', 'branchId' => null, 'recordType' => 'database_sheet_record', 'recordId' => null, 'mode' => 'editing']))" x-init="updateContext({ branchId: branchId, recordType: 'database_sheet_record', recordId: editing.id, mode: 'editing' })" x-show="others.length" :title="fullNames" class="database-editing-presence"><span class="font-bold" x-text="summary"></span><span>Perubahan terakhir akan diperiksa saat menyimpan.</span></div></template>
+                    <div class="database-dynamic-fields">
                         <template x-for="h in editableHeaders()" :key="h">
-                            <div>
-                                <label class="font-[Helvetica] font-bold text-[10px] uppercase block mb-0.5" x-text="h"></label>
-                                 <template x-if="fieldType(tab, h, editForm[h]) === 'checkbox'">
-                                      <label class="flex items-center gap-2 cursor-pointer">
-                                          <input type="hidden" :name="h" :value="editForm[h]">
-                                          <input type="checkbox"
-                                                 :checked="isChecked(tab, h, editForm[h])"
-                                                 @change="editForm[h] = $event.target.checked ? checkedValue(tab, h) : uncheckedValue(tab, h)"
-                                                 class="w-5 h-5 accent-[#5d8e8e] border-2 border-black cursor-pointer rounded-none">
-                                          <span class="text-xs font-['Times_New_Roman']" x-text="isChecked(tab, h, editForm[h]) ? 'Aktif' : 'Tidak'"></span>
-                                      </label>
-                                 </template>
-                                 <template x-if="fieldType(tab, h, editForm[h]) === 'select'">
-                                    <select :name="h" x-model="editForm[h]"
-                                            class="w-full border-2 border-black px-2 py-1 text-sm font-['Times_New_Roman'] bg-white rounded-none">
-                                        <option value="">— Pilih —</option>
-                                        <template x-for="option in fieldOptions(tab, h, editForm[h])" :key="option">
-                                            <option :value="option" x-text="option"></option>
-                                        </template>
-                                     </select>
-                                 </template>
-                                 <template x-if="fieldType(tab, h, editForm[h]) === 'date'">
-                                    <div class="date-wrapper" data-accent="#d77a7a" style="position:relative">
-                                        <div class="date-display w-full border-2 border-black px-2 py-1 text-sm font-['Times_New_Roman'] bg-white cursor-pointer select-none flex items-center justify-between" tabindex="0">
-                                            <span class="date-text">— Pilih Tanggal —</span>
-                                            <span class="date-arrow">▼</span>
-                                        </div>
-                                        <input type="date" :name="h" x-model="editForm[h]"
-                                               style="position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0">
-                                    </div>
-                                 </template>
-                                 <template x-if="fieldType(tab, h, editForm[h]) === 'time'">
-                                    <div class="time-wrapper" data-accent="#d77a7a">
-                                        <div class="time-display w-full border-2 border-black px-2 py-1 text-sm font-['Times_New_Roman'] bg-white cursor-pointer select-none flex items-center justify-between" tabindex="0" role="button" aria-haspopup="dialog"><span class="time-text">Pilih Jam</span><span class="time-arrow">▼</span></div>
-                                        <input type="time" :name="h" x-model="editForm[h]" style="position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0">
-                                    </div>
-                                 </template>
-                                 <template x-if="!['checkbox', 'select', 'date', 'time'].includes(fieldType(tab, h, editForm[h]))">
-                                    <input :type="fieldType(tab, h, editForm[h])" :name="h" x-model="editForm[h]"
-                                           class="w-full border-2 border-black px-2 py-1 text-sm font-['Times_New_Roman'] rounded-none">
-                                 </template>
+                            <div class="crm-field">
+                                <label :id="fieldLabelId('edit', tab, h)" :for="fieldId('edit', tab, h)" class="crm-field-label" x-text="h"></label>
+                                <template x-if="fieldType(tab, h, editForm[h]) === 'checkbox'">
+                                    <label class="database-checkbox-control">
+                                        <input type="hidden" :name="h" :value="editForm[h]">
+                                        <input type="checkbox" :id="fieldId('edit', tab, h)" :checked="isChecked(tab, h, editForm[h])" @change="editForm[h] = $event.target.checked ? checkedValue(tab, h) : uncheckedValue(tab, h)" class="database-checkbox">
+                                        <span x-text="isChecked(tab, h, editForm[h]) ? 'Aktif' : 'Tidak'"></span>
+                                    </label>
+                                </template>
+                                <template x-if="fieldType(tab, h, editForm[h]) === 'select'">
+                                    <select :id="fieldId('edit', tab, h)" :name="h" x-model="editForm[h]" class="crm-control"><option value="">— Pilih —</option><template x-for="option in fieldOptions(tab, h, editForm[h])" :key="option"><option :value="option" x-text="option"></option></template></select>
+                                </template>
+                                <template x-if="fieldType(tab, h, editForm[h]) === 'date'">
+                                    <div class="date-wrapper" data-accent="#d77a7a"><button type="button" class="date-display crm-control" :aria-labelledby="fieldLabelId('edit', tab, h)"><span class="date-text">— Pilih Tanggal —</span><span class="date-arrow">▼</span></button><input type="date" :id="fieldId('edit', tab, h)" :name="h" x-model="editForm[h]" class="sr-only"></div>
+                                </template>
+                                <template x-if="fieldType(tab, h, editForm[h]) === 'time'">
+                                    <div class="time-wrapper" data-accent="#d77a7a"><div class="time-display crm-control" tabindex="0" role="button" aria-haspopup="dialog" aria-expanded="false" :aria-labelledby="fieldLabelId('edit', tab, h)"><span class="time-text">Pilih Jam</span><span class="time-arrow">▼</span></div><input type="time" :id="fieldId('edit', tab, h)" :name="h" x-model="editForm[h]" class="sr-only"></div>
+                                </template>
+                                <template x-if="!['checkbox', 'select', 'date', 'time'].includes(fieldType(tab, h, editForm[h]))">
+                                    <input :type="fieldType(tab, h, editForm[h])" :id="fieldId('edit', tab, h)" :name="h" x-model="editForm[h]" class="crm-control">
+                                </template>
                             </div>
                         </template>
                     </div>
-                    <div class="flex items-center gap-2 mt-4">
-                        <button type="submit" class="bg-black text-white px-6 py-1.5 text-sm font-[Helvetica] font-bold border-2 border-black rounded-none hover:bg-gray-800">Simpan</button>
-                        <button type="button" @click="editing = null" class="bg-white text-black px-6 py-1.5 text-sm font-[Helvetica] font-bold border-2 border-black rounded-none hover:bg-gray-100">Batal</button>
+                </form>
+            </div>
+            <x-slot:footer><x-crm.button type="button" @click="closeEdit()">Batal</x-crm.button><x-crm.button type="submit" form="database-edit-form" accent="database" variant="primary" data-autofocus>Simpan</x-crm.button></x-slot:footer>
+        </x-crm.modal>
+
+        <x-crm.modal name="database-add" title="Tambah data Database" description="Kolom mengikuti struktur sheet aktif dan kolom formula tidak dapat diubah." size="xl">
+            <div x-show="adding" x-cloak>
+                <p class="database-modal-scope">Sheet: <strong x-text="adding"></strong></p>
+                <form id="database-add-form" method="POST" action="{{ route('database.records.store') }}">
+                    @csrf
+                    <input type="hidden" name="sheet_name" :value="adding || ''">
+                    <input type="hidden" name="branch_id" value="{{ $selectedBranchId }}">
+                    <div class="database-dynamic-fields">
+                        <template x-for="h in addHeaders(adding)" :key="h">
+                            <div class="crm-field">
+                                <label :id="fieldLabelId('add', adding, h)" :for="fieldId('add', adding, h)" class="crm-field-label" x-text="h"></label>
+                                <template x-if="fieldType(adding, h) === 'checkbox'">
+                                    <label class="database-checkbox-control"><input type="hidden" :name="h" :value="uncheckedValue(adding, h)"><input type="checkbox" :id="fieldId('add', adding, h)" :name="h" :value="checkedValue(adding, h)" @change="$event.target.nextElementSibling.textContent = $event.target.checked ? 'Aktif' : 'Tidak'" class="database-checkbox"><span>Tidak</span></label>
+                                </template>
+                                <template x-if="fieldType(adding, h) === 'select'">
+                                    <select :id="fieldId('add', adding, h)" :name="h" class="crm-control"><option value="">— Pilih —</option><template x-for="option in fieldOptions(adding, h)" :key="option"><option :value="option" x-text="option"></option></template></select>
+                                </template>
+                                <template x-if="fieldType(adding, h) === 'date'">
+                                    <div class="date-wrapper" data-accent="#d77a7a"><button type="button" class="date-display crm-control" :aria-labelledby="fieldLabelId('add', adding, h)"><span class="date-text">— Pilih Tanggal —</span><span class="date-arrow">▼</span></button><input type="date" :id="fieldId('add', adding, h)" :name="h" class="sr-only"></div>
+                                </template>
+                                <template x-if="fieldType(adding, h) === 'time'">
+                                    <div class="time-wrapper" data-accent="#d77a7a"><div class="time-display crm-control" tabindex="0" role="button" aria-haspopup="dialog" aria-expanded="false" :aria-labelledby="fieldLabelId('add', adding, h)"><span class="time-text">Pilih Jam</span><span class="time-arrow">▼</span></div><input type="time" :id="fieldId('add', adding, h)" :name="h" class="sr-only"></div>
+                                </template>
+                                <template x-if="!['checkbox', 'select', 'date', 'time'].includes(fieldType(adding, h))">
+                                    <input :type="fieldType(adding, h)" :id="fieldId('add', adding, h)" :name="h" class="crm-control">
+                                </template>
+                            </div>
+                        </template>
                     </div>
                 </form>
             </div>
-        </div>
-
-        {{-- Add Modal --}}
-        <div x-cloak x-show="adding" class="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4"
-             @keydown.escape.window="adding = null">
-            <template x-for="name in sheetNameList" :key="name">
-                <div x-show="adding === name" x-cloak
-                     @click.away="adding = null"
-                     class="w-full max-w-2xl border-2 border-black bg-white p-5 shadow-[8px_8px_0_0_#000] max-h-[80vh] overflow-y-auto">
-                    <div class="flex items-center justify-between mb-4">
-                        <h2 class="font-[Helvetica] font-bold text-sm uppercase" x-text="'Tambah Data — ' + name"></h2>
-                        <button @click="adding = null" class="text-black font-bold text-lg leading-none">&times;</button>
-                    </div>
-                    <form method="POST" :action="'{{ url('database/records') }}'">
-                        @csrf
-                        <input type="hidden" name="sheet_name" :value="name">
-                        <input type="hidden" name="branch_id" value="{{ $selectedBranchId }}">
-                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                            <template x-for="h in addHeaders(name)" :key="h">
-                                <div>
-                                    <label class="font-[Helvetica] font-bold text-[10px] uppercase block mb-0.5" x-text="h"></label>
-                                     <template x-if="fieldType(name, h) === 'checkbox'">
-                                         <label class="flex items-center gap-2 cursor-pointer">
-                                             <input type="hidden" :name="h" :value="uncheckedValue(name, h)">
-                                             <input type="checkbox" :name="h" :value="checkedValue(name, h)"
-                                                    @change="$event.target.nextElementSibling.textContent = $event.target.checked ? 'Aktif' : 'Tidak'"
-                                                    class="w-5 h-5 accent-[#5d8e8e] border-2 border-black cursor-pointer rounded-none">
-                                             <span class="text-xs font-['Times_New_Roman']">Tidak</span>
-                                         </label>
-                                     </template>
-                                     <template x-if="fieldType(name, h) === 'select'">
-                                        <select :name="h"
-                                                class="w-full border-2 border-black px-2 py-1 text-sm font-['Times_New_Roman'] bg-white rounded-none">
-                                            <option value="">— Pilih —</option>
-                                            <template x-for="option in fieldOptions(name, h)" :key="option">
-                                                <option :value="option" x-text="option"></option>
-                                            </template>
-                                         </select>
-                                     </template>
-                                     <template x-if="fieldType(name, h) === 'date'">
-                                        <div class="date-wrapper" data-accent="#d77a7a" style="position:relative">
-                                            <div class="date-display w-full border-2 border-black px-2 py-1 text-sm font-['Times_New_Roman'] bg-white cursor-pointer select-none flex items-center justify-between" tabindex="0">
-                                                <span class="date-text">— Pilih Tanggal —</span>
-                                                <span class="date-arrow">▼</span>
-                                            </div>
-                                            <input type="date" :name="h" value=""
-                                                   style="position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0">
-                                        </div>
-                                     </template>
-                                     <template x-if="fieldType(name, h) === 'time'">
-                                        <div class="time-wrapper" data-accent="#d77a7a">
-                                            <div class="time-display w-full border-2 border-black px-2 py-1 text-sm font-['Times_New_Roman'] bg-white cursor-pointer select-none flex items-center justify-between" tabindex="0" role="button" aria-haspopup="dialog"><span class="time-text">Pilih Jam</span><span class="time-arrow">▼</span></div>
-                                            <input type="time" :name="h" value="" style="position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0">
-                                        </div>
-                                     </template>
-                                     <template x-if="!['checkbox', 'select', 'date', 'time'].includes(fieldType(name, h))">
-                                        <input :type="fieldType(name, h)" :name="h" value=""
-                                               class="w-full border-2 border-black px-2 py-1 text-sm font-['Times_New_Roman'] rounded-none">
-                                     </template>
-                                </div>
-                            </template>
-                        </div>
-                        <div class="flex items-center gap-2 mt-4">
-                            <button type="submit" class="bg-black text-white px-6 py-1.5 text-sm font-[Helvetica] font-bold border-2 border-black rounded-none hover:bg-gray-800">Simpan</button>
-                            <button type="button" @click="adding = null" class="bg-white text-black px-6 py-1.5 text-sm font-[Helvetica] font-bold border-2 border-black rounded-none hover:bg-gray-100">Batal</button>
-                        </div>
-                    </form>
-                </div>
-            </template>
-        </div>
+            <x-slot:footer><x-crm.button type="button" @click="closeAdd()">Batal</x-crm.button><x-crm.button type="submit" form="database-add-form" accent="database" variant="primary" data-autofocus>Simpan</x-crm.button></x-slot:footer>
+        </x-crm.modal>
     </div>
     @elseif($selectedBranch)
     <div class="border-2 border-black bg-white px-6 py-8 text-center">
@@ -451,7 +389,10 @@ document.addEventListener('alpine:init', () => {
         loading: false,
         editing: null,
         editForm: {},
+        editError: '',
+        editTrigger: null,
         adding: null,
+        addTrigger: null,
         cache: {},
         loaded: {},
         loadErrors: {},
@@ -481,7 +422,7 @@ document.addEventListener('alpine:init', () => {
                     if (match !== config.firstSheet) {
                         this.$nextTick(() => this.switchTabWithAdd(match, config.requestAdd));
                     } else if (config.requestAdd && this.canAdd(this.tab)) {
-                        this.$nextTick(() => { this.adding = this.tab; });
+                        this.$nextTick(() => this.openAdd(this.tab));
                     }
                 }
             }
@@ -489,7 +430,7 @@ document.addEventListener('alpine:init', () => {
 
         async switchTabWithAdd(name, doAdd) {
             await this.switchTab(name);
-            if (doAdd && this.canAdd(name)) this.adding = name;
+            if (doAdd && this.canAdd(name)) this.openAdd(name);
         },
 
         canAdd(name) {
@@ -500,6 +441,33 @@ document.addEventListener('alpine:init', () => {
         openAdd(name, trigger = null) {
             this.adding = name;
             this.addTrigger = trigger;
+            this.$nextTick(() => this.$dispatch('oasis:modal-open', { name: 'database-add', trigger }));
+        },
+
+        closeAdd() {
+            this.$dispatch('oasis:modal-close', { name: 'database-add', reason: 'cancel' });
+        },
+
+        closeEdit() {
+            this.$dispatch('oasis:modal-close', { name: 'database-edit', reason: 'cancel' });
+        },
+
+        handleModalClosed(detail) {
+            if (detail?.name === 'database-edit') {
+                this.editing = null;
+                this.editError = '';
+                this.editTrigger = null;
+            }
+            if (detail?.name === 'database-add') {
+                this.adding = null;
+                this.addTrigger = null;
+            }
+        },
+
+        handleFormError(detail) {
+            if (!detail?.form?.matches?.('[data-database-edit-form]') || !this.$root.contains(detail.form)) return;
+            this.editError = detail.message || 'Data belum dapat disimpan. Periksa kembali isian form.';
+            this.$nextTick(() => this.$refs.editError?.focus?.());
         },
 
         clearSearch() {
@@ -590,20 +558,36 @@ document.addEventListener('alpine:init', () => {
 
         reloadNewerData() {
             const sheet = this.pendingRefreshSheet || this.tab;
-            this.editing = null;
             this.newerDataAvailable = false;
             this.pendingRefreshSheet = null;
+            this.$dispatch('oasis:modal-close', { name: 'database-edit', reason: 'reload' });
             this.refreshActiveSheet(sheet);
         },
 
         editRecord(rec, trigger = null) {
             this.editing = rec;
             this.editTrigger = trigger;
+            this.editError = '';
             this.editForm = JSON.parse(JSON.stringify(rec.row_data));
             for (const header of this.editableHeaders()) {
                 this.editForm[header] = this.normalizeInputValue(this.tab, header, this.editForm[header]);
             }
-            this.$nextTick(() => this.$refs.editPanel?.querySelectorAll('input[type="date"], input[type="time"]').forEach(input => input.dispatchEvent(new Event('input', { bubbles: true }))));
+            this.$nextTick(() => {
+                this.$refs.editPanel?.querySelectorAll('input[type="date"], input[type="time"]').forEach(input => input.dispatchEvent(new Event('input', { bubbles: true })));
+                this.$dispatch('oasis:modal-open', { name: 'database-edit', trigger });
+            });
+        },
+
+        fieldKey(sheetName, header) {
+            return `${String(sheetName || 'sheet')}-${String(header || 'field')}`.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+        },
+
+        fieldId(mode, sheetName, header) {
+            return `database-${mode}-${this.fieldKey(sheetName, header)}`;
+        },
+
+        fieldLabelId(mode, sheetName, header) {
+            return `${this.fieldId(mode, sheetName, header)}-label`;
         },
 
         editableHeaders() {

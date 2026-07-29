@@ -411,6 +411,16 @@
 .crm-table-action--edit { color: #0000ee; }
 .crm-table-action--danger { color: var(--oasis-danger); }
 
+.database-modal-scope { margin-bottom: var(--oasis-space-3); color: var(--oasis-text-muted); font: var(--oasis-type-compact-size)/1.4 var(--oasis-font-controls); }
+.database-dynamic-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--oasis-space-3); }
+.database-checkbox-control { display: flex; min-height: var(--oasis-control-height); align-items: center; gap: var(--oasis-space-2); font-family: var(--oasis-font-data); }
+.database-checkbox { width: 20px; height: 20px; border: var(--oasis-border-width-strong) solid var(--oasis-border-strong); accent-color: var(--oasis-accent-database); }
+.database-editing-presence { display: grid; gap: var(--oasis-space-1); margin-bottom: var(--oasis-space-3); border: var(--oasis-border-width-standard) solid var(--oasis-info); background: var(--oasis-surface-muted); padding: var(--oasis-space-2) var(--oasis-space-3); font: var(--oasis-type-caption-size)/1.4 var(--oasis-font-controls); }
+
+@media (max-width: 639px) {
+    .database-dynamic-fields { grid-template-columns: minmax(0, 1fr); }
+}
+
 .crm-status-badge {
     display: inline-flex;
     min-height: 1.5rem;

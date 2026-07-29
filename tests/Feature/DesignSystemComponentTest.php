@@ -131,5 +131,8 @@ class DesignSystemComponentTest extends TestCase
         $this->assertStringContainsString('lockBodyScroll(this.lockOwner)', $source);
         $this->assertStringContainsString('if (this.open)', $source);
         $this->assertStringContainsString('this.trigger?.focus()', $source);
+        $this->assertStringContainsString("'oasis:modal-opened'", $source);
+        $this->assertStringContainsString("'oasis:modal-closed'", $source);
+        $this->assertStringContainsString('hasOpenPicker()', $source);
     }
 }

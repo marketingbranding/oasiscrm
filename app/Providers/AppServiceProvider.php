@@ -9,6 +9,7 @@ use App\Models\User;
 use App\Policies\CommentPolicy;
 use App\Policies\DanaTalanganPolicy;
 use App\Policies\UserPolicy;
+use App\Services\NavigationService;
 use App\Services\WorkPlannerReminderService;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Gate;
@@ -34,7 +35,7 @@ class AppServiceProvider extends ServiceProvider
         View::composer('layouts.crm', function ($view) {
             $user = Auth::user();
             if (! $user) {
-                $view->with('overdueItems', collect())->with('todayItems', collect())->with('tomorrowItems', collect())->with('needsConfirmation', collect())->with('totalCount', 0);
+                $view->with('navigation', [])->with('overdueItems', collect())->with('todayItems', collect())->with('tomorrowItems', collect())->with('needsConfirmation', collect())->with('totalCount', 0);
 
                 return;
             }
@@ -62,8 +63,9 @@ class AppServiceProvider extends ServiceProvider
             $overdueEvents = collect();
 
             $totalCount = $overdueItems->count() + $todayItems->count() + $tomorrowItems->count() + $needsConfirmation->count();
+            $navigation = app(NavigationService::class)->forUser($user);
 
-            $view->with(compact('overdueItems', 'todayItems', 'tomorrowItems', 'needsConfirmation', 'totalCount'));
+            $view->with(compact('navigation', 'overdueItems', 'todayItems', 'tomorrowItems', 'needsConfirmation', 'totalCount'));
         });
     }
 }

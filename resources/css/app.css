@@ -2,6 +2,167 @@
 @tailwind components;
 @tailwind utilities;
 
+:root {
+    --oasis-page-bg: #f4f3ee;
+    --oasis-surface: #ffffff;
+    --oasis-surface-muted: #ecebe5;
+    --oasis-text: #171717;
+    --oasis-text-muted: #66645f;
+    --oasis-border: #cfcdc4;
+    --oasis-border-strong: #111111;
+    --oasis-yellow: #fcc20f;
+    --oasis-topbar-bg: #111111;
+    --oasis-sidebar-bg: #f8f7f2;
+    --oasis-sidebar-active: #fff3b0;
+    --oasis-focus: #2f5db7;
+    --oasis-danger: #c0392b;
+    --oasis-warning: #d6a500;
+    --oasis-success: #39734c;
+    --oasis-info: #41698c;
+    --oasis-topbar-height: 3.75rem;
+    --oasis-sidebar-collapsed-width: 4.5rem;
+    --oasis-sidebar-expanded-width: 14.5rem;
+    --oasis-accent-dashboard: #8c9ae0;
+    --oasis-accent-planner: #b3bd95;
+    --oasis-accent-sales: #fcc20f;
+    --oasis-accent-database: #d77a7a;
+    --oasis-accent-consumer-progress: #78a3a3;
+    --oasis-accent-bridge-fund: #f1c40f;
+    --oasis-accent-expenses: #b3bd95;
+    --oasis-accent-reports: #d77a7a;
+    --oasis-accent-administration: #8c9ae0;
+}
+
+.crm-shell-frame {
+    padding-top: var(--oasis-topbar-height);
+}
+
+.crm-sidebar {
+    top: var(--oasis-topbar-height);
+    width: min(20rem, calc(100vw - 2.5rem));
+    background: var(--oasis-sidebar-bg);
+}
+
+.crm-sidebar-label,
+.crm-sidebar-chevron {
+    transition: opacity 150ms ease;
+}
+
+.crm-nav-item,
+.crm-nav-group-toggle {
+    position: relative;
+    display: flex;
+    min-height: 2.75rem;
+    width: 100%;
+    align-items: center;
+    gap: 0.75rem;
+    color: var(--oasis-text);
+    font-family: Helvetica, Arial, sans-serif;
+    font-size: 0.8125rem;
+    font-weight: 700;
+    text-align: left;
+}
+
+.crm-nav-item {
+    padding: 0.625rem 0.75rem;
+    border-left: 4px solid transparent;
+}
+
+.crm-nav-group-toggle {
+    padding: 0.625rem 0.75rem 0.625rem 1rem;
+    border: 0;
+    background: transparent;
+}
+
+.crm-nav-item:hover,
+.crm-nav-group-toggle:hover {
+    background: color-mix(in srgb, var(--nav-accent, var(--oasis-yellow)) 24%, var(--oasis-surface));
+}
+
+.crm-nav-item.is-active {
+    border-left-color: var(--nav-accent, var(--oasis-yellow));
+    background: color-mix(in srgb, var(--nav-accent, var(--oasis-yellow)) 38%, var(--oasis-surface));
+    color: #000;
+}
+
+.crm-nav-group-toggle.is-active {
+    color: #000;
+}
+
+.crm-nav-group-toggle.is-active::before {
+    position: absolute;
+    left: 0;
+    width: 4px;
+    height: 1.5rem;
+    background: var(--oasis-yellow);
+    content: '';
+}
+
+.crm-nav-children {
+    margin: 0 0.5rem 0.375rem 1.35rem;
+    border-left: 1px solid var(--oasis-border);
+}
+
+.crm-nav-children .crm-nav-item {
+    min-height: 2.5rem;
+    padding-block: 0.5rem;
+    font-size: 0.75rem;
+}
+
+.crm-nav-item:focus-visible,
+.crm-nav-group-toggle:focus-visible,
+.crm-sidebar-toggle:focus-visible {
+    z-index: 1;
+    outline: 3px solid var(--oasis-focus);
+    outline-offset: -3px;
+}
+
+.crm-main {
+    min-width: 0;
+    max-width: 100%;
+}
+
+@media (min-width: 768px) {
+    .crm-sidebar {
+        width: var(--oasis-sidebar-expanded-width);
+        transition: width 150ms ease;
+    }
+
+    .crm-main {
+        margin-left: var(--oasis-sidebar-expanded-width);
+        transition: margin-left 150ms ease;
+    }
+
+    .oasis-sidebar-collapsed .crm-sidebar {
+        width: var(--oasis-sidebar-collapsed-width);
+    }
+
+    .oasis-sidebar-collapsed .crm-main {
+        margin-left: var(--oasis-sidebar-collapsed-width);
+    }
+
+    .oasis-sidebar-collapsed .crm-sidebar-label,
+    .oasis-sidebar-collapsed .crm-sidebar-chevron,
+    .oasis-sidebar-collapsed .crm-nav-children {
+        display: none !important;
+    }
+
+    .oasis-sidebar-collapsed .crm-nav-item,
+    .oasis-sidebar-collapsed .crm-nav-group-toggle {
+        justify-content: center;
+        padding-inline: 0.75rem;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .crm-sidebar,
+    .crm-main,
+    .crm-sidebar-label,
+    .crm-sidebar-chevron {
+        transition-duration: 0.01ms !important;
+    }
+}
+
 /* --- Date Calendar + Custom Select Widgets --- */
 .date-wrapper,
 .month-wrapper,

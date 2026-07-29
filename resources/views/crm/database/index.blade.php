@@ -99,46 +99,23 @@
         requestAdd: {{ ($requestAdd ?? false) ? 'true' : 'false' }},
         canEdit: {{ $canEdit ? 'true' : 'false' }}
     })" @oasis-sync-updated.window="handleSyncUpdated($event.detail)">
-        <style>
-            [x-cloak] { display: none !important; }
-            .tab-wrap { overflow-x:auto; overflow-y:hidden; white-space:nowrap; max-width:100%; border-bottom:2px solid #000; margin-bottom:12px; scroll-behavior:smooth; }
-            .tab-wrap::-webkit-scrollbar { height:4px; }
-            .tab-wrap::-webkit-scrollbar-thumb { background:#d77a7a; border-radius:2px; }
-            .tab-btn { display:inline-block; padding:6px 14px; border:2px solid #000; border-bottom:none;
-                        font-family:Helvetica,sans-serif; font-weight:700; font-size:11px;
-                        text-transform:uppercase; cursor:pointer; background:#fff; color:#000;
-                        white-space:nowrap; margin:0; }
-            .tab-btn + .tab-btn { border-left:none; }
-            .tab-btn.active { background:#d77a7a; color:#fff; position:relative; }
-            .tab-btn.active::after { content:''; position:absolute; bottom:-2px; left:0; right:0; height:2px; background:#d77a7a; z-index:11; }
-            .tab-btn:hover:not(.active) { background:#f5f5f5; }
-            .tab-btn.loading { opacity:0.6; cursor:wait; }
-            .db-table th.row-num, .db-table td.row-num {
-                width:44px; min-width:44px; max-width:44px;
-            }
-            .db-table.frozen th.row-num, .db-table.frozen td.row-num {
-                position:sticky; left:0; z-index:10;
-            }
-            .db-table.frozen thead th.row-num { z-index:13; }
-            .db-table.frozen tbody td.row-num { z-index:10; background:#fff !important; }
-            .db-table.frozen tbody tr:nth-child(even) td.row-num { background:#f9fafb !important; }
-            .db-table.frozen tbody tr:hover td.row-num { background:#fef3c7 !important; }
-
-            .db-table.frozen th.col-id_kavling, .db-table.frozen td.col-id_kavling {
-                position:sticky; left:44px; z-index:9;
-                box-shadow:3px 0 0 0 #000;
-            }
-            .db-table.frozen thead th.col-id_kavling { z-index:12; }
-
-
-        </style>
-
-        <div class="tab-wrap" x-on:wheel="if ($event.currentTarget.scrollWidth > $event.currentTarget.clientWidth) { (function(e){e._sd=(e._sd||0)+$event.deltaY;if(!e._st){e._st=true;requestAnimationFrame(function(){var d=e._sd;e._sd=0;e._st=false;e.scrollLeft+=Math.sign(d)*Math.min(Math.abs(d)*1.5,160)})}}($event.currentTarget)); $event.preventDefault(); }">
+        <div class="database-tabs" role="tablist" aria-label="Sheet Database">
             @foreach($sheetNames as $name)
-            <button @click="switchTab('{{ $name }}')"
-                    :class="{ 'active': tab === '{{ $name }}', 'loading': loading && tab === '{{ $name }}' }"
-                    class="tab-btn">
-                {{ $name }} <span :class="tab === '{{ $name }}' ? 'text-white/70' : 'text-gray-500'" style="font-size:9px;font-weight:400;">(<span x-text="sheetCount('{{ $name }}')">0</span>)</span>
+            <button type="button"
+                    role="tab"
+                    data-database-tab
+                    @click="switchTab(@js($name))"
+                    @keydown.right.prevent="focusAdjacentTab(@js($name), 1)"
+                    @keydown.left.prevent="focusAdjacentTab(@js($name), -1)"
+                    @keydown.home.prevent="focusTabAt(0)"
+                    @keydown.end.prevent="focusTabAt(sheetNameList.length - 1)"
+                    :id="tabButtonId(@js($name))"
+                    :aria-controls="tabPanelId(@js($name))"
+                    :aria-selected="tab === @js($name)"
+                    :tabindex="tab === @js($name) ? 0 : -1"
+                    :class="{ 'active': tab === @js($name), 'loading': loading && tab === @js($name) }"
+                    class="database-tab">
+                {{ $name }} <span :class="tab === @js($name) ? 'text-black/60' : 'text-gray-500'" class="database-tab-count">(<span x-text="sheetCount(@js($name))">0</span>)</span>
             </button>
             @endforeach
         </div>
@@ -150,7 +127,13 @@
 
         {{-- Tab content -- rendered per sheet name --}}
         <template x-for="name in sheetNameList" :key="name">
-            <div x-show="tab === name" x-cloak x-transition:enter="transition ease-out duration-200" x-transition:enter-start="opacity-0" x-transition:enter-end="opacity-100">
+            <section x-show="tab === name"
+                     x-cloak
+                     role="tabpanel"
+                     :id="tabPanelId(name)"
+                     :aria-labelledby="tabButtonId(name)"
+                     :aria-busy="inFlight[name] ? 'true' : 'false'"
+                     class="database-sheet-panel">
                 <x-crm.toolbar label="Pencarian dan tindakan sheet" class="database-sheet-toolbar">
                     <template x-if="isLoaded(name)">
                         <div class="database-search-group">
@@ -193,66 +176,72 @@
                     </x-crm.filter-chip>
                 </div>
 
-                <div x-show="!isLoaded(name) && !loadErrors[name]" class="border-2 border-black bg-white px-4 py-8 text-center" aria-live="polite">
-                    <p class="text-sm font-['Times_New_Roman'] italic" style="color:#6b7280;" x-text="inFlight[name] ? 'Memuat data Database...' : 'Klik tab untuk memuat data.'"></p>
+                <div x-show="!isLoaded(name) && !loadErrors[name]" class="database-table-state" aria-live="polite">
+                    <x-crm.loading-state label="Memuat data Database..." />
                     <div x-show="inFlight[name]" class="mt-3 space-y-2" aria-hidden="true"><div class="h-3 bg-gray-200 animate-pulse motion-reduce:animate-none"></div><div class="h-3 bg-gray-200 animate-pulse motion-reduce:animate-none"></div><div class="h-3 bg-gray-200 animate-pulse motion-reduce:animate-none"></div></div>
                 </div>
-                <div x-show="loadErrors[name]" class="border-2 border-black bg-[#d77a7a] px-4 py-6 text-center" aria-live="polite">
-                    <p class="font-bold">Data gagal dimuat.</p><p class="text-sm">Tabel tidak dianggap kosong karena request belum berhasil.</p>
-                    <div class="mt-3 flex justify-center gap-2"><button type="button" @click="switchTab(name, true)" class="border-2 border-black bg-white px-3 py-1 font-bold">Coba Lagi</button><button type="button" @click="window.dispatchEvent(new CustomEvent('open-feedback'))" class="border-2 border-black bg-white px-3 py-1 font-bold">Laporkan Masalah</button></div>
-                </div>
+                <x-crm.alert x-show="loadErrors[name]" x-cloak variant="error" title="Data gagal dimuat" aria-live="polite">
+                    <p>Tabel tidak dianggap kosong karena permintaan data belum berhasil.</p>
+                    <div class="crm-alert-actions"><x-crm.button type="button" size="sm" @click="switchTab(name, true)">Coba Lagi</x-crm.button><x-crm.button type="button" size="sm" @click="window.dispatchEvent(new CustomEvent('open-feedback'))">Laporkan Masalah</x-crm.button></div>
+                </x-crm.alert>
 
                 <template x-if="isLoaded(name) && currentData(name).records.length > 0">
                     <div class="crm-table-scroll" :data-sheet-scroll="name">
                         <table class="crm-data-table db-table" :class="{ frozen: frozen }">
+                            <caption class="sr-only" x-text="'Data konsumen pada sheet ' + name + ', cabang ' + @js($selectedBranch->name)"></caption>
                             <thead>
                                 <tr>
-                                    <th :class="{ 'row-num': frozen }" style="width:44px;text-align:center;">#</th>
+                                    <th scope="col" class="crm-row-num" :class="{ 'row-num': frozen }">Baris</th>
                                     <template x-for="h in currentData(name).headers" :key="h">
-                                        <th x-show="!['oasis_sync_id','oasis_deleted_at','oasis_deleted_by'].includes(h)"
+                                        <th scope="col"
+                                            x-show="!['oasis_sync_id','oasis_deleted_at','oasis_deleted_by'].includes(h)"
                                             :class="(currentData(name).formula_columns.includes(h) ? 'formula-col ' : '') + (isIdKavlingColumn(h) ? 'col-id_kavling' : '')"
-                                            @click="sortBy(h)"
-                                            :style="'min-width:120px;cursor:pointer;user-select:none;' + (sortColumn === h ? 'background:#5b7db9;' : '')">
-                                            <span x-text="h + sortIcon(h)"></span>
-                                            <span x-show="isIdKavlingColumn(h)"
-                                                  @click.stop="frozen = !frozen"
-                                                  style="cursor:pointer;margin-left:4px;font-size:10px;font-weight:400;"
-                                                  x-text="frozen ? '🔒' : '🔓'">
-                                            </span>
+                                            :aria-sort="sortAria(h)">
+                                            <button type="button" class="database-sort-button" @click="sortBy(h)" :aria-label="sortLabel(h)">
+                                                <span x-text="h"></span><span class="database-sort-indicator" aria-hidden="true" x-text="sortIcon(h)"></span>
+                                            </button>
+                                            <button type="button"
+                                                    x-show="isIdKavlingColumn(h)"
+                                                    @click.stop="frozen = !frozen"
+                                                    class="database-freeze-toggle"
+                                                    :aria-pressed="frozen"
+                                                    :aria-label="frozen ? 'Lepaskan kolom ID Kavling' : 'Bekukan kolom ID Kavling'"
+                                                    :title="frozen ? 'Lepaskan kolom ID Kavling' : 'Bekukan kolom ID Kavling'">
+                                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="5" y="10" width="14" height="10" /><path :d="frozen ? 'M8 10V7a4 4 0 0 1 8 0v3' : 'M8 10V7a4 4 0 0 1 7.5-2'" /></svg>
+                                            </button>
                                             <template x-if="currentData(name).formula_columns.includes(h)">
-                                                <span style="font-size:9px;font-weight:400;color:#fcc20f;">[f]</span>
+                                                <span class="database-formula-label">Formula</span>
                                             </template>
                                         </th>
                                     </template>
-                                    @if($canEdit)<th style="width:100px;">Aksi</th>@endif
+                                    @if($canEdit)<th scope="col" class="crm-actions">Aksi</th>@endif
                                 </tr>
                             </thead>
                             <tbody>
                                 <template x-for="rec in sortedRecords(name)" :key="rec.id">
                                     <tr>
-                                        <td :class="{ 'row-num': frozen }" style="text-align:center;color:#6b7280;" x-text="rec.row_number"></td>
+                                        <td class="crm-row-num" :class="{ 'row-num': frozen }" x-text="rec.row_number"></td>
                                         <template x-for="h in currentData(name).headers" :key="h">
                                             <td x-show="!['oasis_sync_id','oasis_deleted_at','oasis_deleted_by'].includes(h)"
-                                                :class="isIdKavlingColumn(h) ? 'col-id_kavling' : ''"
-                                                :style="'background:' + (currentData(name).formula_columns.includes(h) ? '#b6d7a8' : (isIdKavlingColumn(h) && frozen ? '#fff' : 'transparent')) + ';color:#000;font-style:' + (currentData(name).formula_columns.includes(h) ? 'italic' : 'normal') + ';font-style:' + (currentData(name).formula_columns.includes(h) ? 'italic' : 'normal') + ';max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;'"
+                                                :class="(isIdKavlingColumn(h) ? 'col-id_kavling ' : '') + (currentData(name).formula_columns.includes(h) ? 'database-formula-cell' : '')"
                                                 :title="rec.row_data[h] || ''">
-                                                 <template x-if="['true', 'false'].includes((rec.row_data[h] || '').toLowerCase())">
-                                                      <span class="crm-boolean-box"
-                                                            :class="(rec.row_data[h] || '').toLowerCase() === 'true' ? 'is-checked' : ''"
-                                                            x-text="(rec.row_data[h] || '').toLowerCase() === 'true' ? '✓' : ''">
-                                                      </span>
-                                                  </template>
-                                                  <template x-if="!['true', 'false'].includes((rec.row_data[h] || '').toLowerCase())">
+                                                  <template x-if="isBooleanValue(rec.row_data[h])">
+                                                       <span class="crm-boolean-box"
+                                                             :class="cellValue(rec.row_data[h]).toLowerCase() === 'true' ? 'is-checked' : ''"
+                                                             :aria-label="cellValue(rec.row_data[h]).toLowerCase() === 'true' ? 'Ya' : 'Tidak'"
+                                                             x-text="cellValue(rec.row_data[h]).toLowerCase() === 'true' ? '✓' : ''">
+                                                       </span>
+                                                   </template>
+                                                   <template x-if="!isBooleanValue(rec.row_data[h])">
                                                     <span x-text="rec.row_data[h] || ''"></span>
                                                 </template>
                                             </td>
                                         </template>
-                                        @if($canEdit)<td style="white-space:nowrap;">
-                                            <button @click="editRecord(rec)"
-                                                    class="font-[Helvetica] font-bold underline" style="font-size:11px;color:#0000ee;margin-right:8px;">Edit</button>
+                                        @if($canEdit)<td class="crm-actions">
+                                            <button type="button" @click="editRecord(rec, $el)" class="crm-table-action crm-table-action--edit">Edit</button>
                                             <form method="POST" :action="editBaseUrl + '/' + rec.id" style="display:inline;" @submit.prevent="confirm('Hapus data ini?') && $el.submit()">
                                                 @csrf @method('DELETE')
-                                                <button type="submit" class="font-[Helvetica] font-bold underline" style="font-size:11px;color:#c0392b;">Hapus</button>
+                                                <button type="submit" class="crm-table-action crm-table-action--danger">Hapus</button>
                                             </form>
                                         </td>@endif
                                     </tr>
@@ -263,9 +252,7 @@
                 </template>
 
                 <template x-if="isLoaded(name) && currentData(name).records.length === 0">
-                    <div class="border-2 border-black bg-white px-4 py-8 text-center">
-                        <p class="text-sm font-['Times_New_Roman'] italic" style="color:#9ca3af;">Sheet kosong. Tambahkan minimal satu baris contoh di Google Sheet, lalu Sync agar form tambah data bisa dibuat.</p>
-                    </div>
+                    <x-crm.empty-state title="Sheet belum memiliki data" description="Tambahkan minimal satu baris contoh di Google Sheet, lalu sinkronkan agar form tambah data dapat dibuat." />
                 </template>
 
                 <template x-if="isLoaded(name) && currentData(name).records.length > 0 && sortedRecords(name).length === 0">
@@ -275,7 +262,7 @@
                         </x-slot:actions>
                     </x-crm.empty-state>
                 </template>
-            </div>
+            </section>
         </template>
 
         {{-- Edit Modal --}}
@@ -602,8 +589,9 @@ document.addEventListener('alpine:init', () => {
             this.refreshActiveSheet(sheet);
         },
 
-        editRecord(rec) {
+        editRecord(rec, trigger = null) {
             this.editing = rec;
+            this.editTrigger = trigger;
             this.editForm = JSON.parse(JSON.stringify(rec.row_data));
             for (const header of this.editableHeaders()) {
                 this.editForm[header] = this.normalizeInputValue(this.tab, header, this.editForm[header]);
@@ -684,6 +672,51 @@ document.addEventListener('alpine:init', () => {
         sortIcon(header) {
             if (this.sortColumn !== header) return '';
             return this.sortDirection === 'asc' ? ' ▼' : ' ▲';
+        },
+
+        sortAria(header) {
+            if (this.sortColumn !== header) return 'none';
+            return this.sortDirection === 'asc' ? 'ascending' : 'descending';
+        },
+
+        sortLabel(header) {
+            if (this.sortColumn !== header) return `Urutkan berdasarkan ${header}, menaik`;
+            if (this.sortDirection === 'asc') return `Urutkan berdasarkan ${header}, menurun`;
+            return `Hapus urutan ${header}`;
+        },
+
+        tabKey(name) {
+            const index = this.sheetNameList.indexOf(name);
+            return `${String(name).toLowerCase().replace(/[^a-z0-9]+/g, '-')}-${index}`;
+        },
+
+        tabButtonId(name) {
+            return `database-tab-${this.tabKey(name)}`;
+        },
+
+        tabPanelId(name) {
+            return `database-panel-${this.tabKey(name)}`;
+        },
+
+        focusAdjacentTab(name, offset) {
+            const index = this.sheetNameList.indexOf(name);
+            const next = (index + offset + this.sheetNameList.length) % this.sheetNameList.length;
+            this.focusTabAt(next);
+        },
+
+        focusTabAt(index) {
+            const next = this.sheetNameList[index];
+            if (!next) return;
+            this.switchTab(next);
+            this.$nextTick(() => document.getElementById(this.tabButtonId(next))?.focus());
+        },
+
+        cellValue(value) {
+            return String(value || '');
+        },
+
+        isBooleanValue(value) {
+            return ['true', 'false'].includes(this.cellValue(value).toLowerCase());
         },
 
         isBooleanColumn(sheetName, header) {

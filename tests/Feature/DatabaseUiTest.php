@@ -41,8 +41,15 @@ class DatabaseUiTest extends TestCase
         $this->assertStringContainsString('Nama, kontak, kavling, atau data lain...', $html);
         $this->assertStringContainsString('Pencarian: ', $html);
         $this->assertStringContainsString('Tidak ada konsumen yang cocok', $html);
+        $this->assertStringContainsString('role="tablist"', $html, 'Missing tab list semantics.');
+        $this->assertStringContainsString('role="tabpanel"', $html, 'Missing tab panel semantics.');
+        $this->assertStringContainsString(':aria-sort="sortAria(h)"', $html, 'Missing active sort semantics.');
+        $this->assertStringContainsString('class="database-sort-button"', $html, 'Missing keyboard sort control.');
+        $this->assertStringContainsString('Bekukan kolom ID Kavling', $html, 'Missing named freeze control.');
+        $this->assertStringContainsString('<caption class="sr-only"', $html, 'Missing table caption.');
+        $this->assertStringContainsString('crm-row-num', $html, 'Missing canonical row-number column.');
         $this->assertMatchesRegularExpression('/<th[^>]*>Aksi<\/th>/', $html);
-        $this->assertStringContainsString('editRecord(rec)', $html);
+        $this->assertStringContainsString('editRecord(rec, $el)', $html);
         $this->assertStringContainsString('database/records/'.$record->id, route('database.records.update', $record));
     }
 

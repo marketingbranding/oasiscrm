@@ -38,79 +38,7 @@
         <script>history.replaceState(null, '', new URL(location.href).pathname + new URL(location.href).search.replace(/([?&])reminder_dismiss_failed=1(&|$)/, '$1').replace(/[?&]$/, '') + location.hash)</script>
     @endif
 
-    <header class="fixed inset-x-0 top-0 z-50 flex h-[var(--oasis-topbar-height)] items-center justify-between bg-[var(--oasis-topbar-bg)] px-3 font-[Helvetica] text-sm font-bold text-white sm:px-4">
-        <div class="flex min-w-0 items-center gap-2">
-            <button type="button" @click="sidebarOpen = !sidebarOpen"
-                    class="flex size-11 shrink-0 items-center justify-center hover:bg-white/10 md:hidden"
-                    title="Buka navigasi">
-                <svg class="size-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16" /></svg>
-            </button>
-            <span class="text-lg text-[var(--oasis-yellow)]" aria-hidden="true">◆</span>
-            <a href="{{ route(Auth::user()->landingRouteName()) }}" class="truncate hover:text-gray-300">OASIS CRM</a>
-        </div>
-
-        @auth
-        <div class="relative flex items-center gap-2"
-             x-data="crmNotifications(@js([
-                 'indexUrl' => route('notifications.index'),
-                 'readUrl' => route('notifications.read', ['notification' => '__ID__']),
-                 'readAllUrl' => route('notifications.read-all'),
-                 'enabled' => config('notifications.polling_enabled', true),
-             ]))" @click.outside="open = false">
-            <span class="hidden max-w-40 truncate text-xs sm:block">{{ Auth::user()->name }}</span>
-            <button type="button" @click="open = !open; if (open) refresh()"
-                    class="relative flex size-11 items-center justify-center hover:bg-white/10">
-                <svg fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-5" aria-hidden="true">
-                    <path stroke-linecap="round" stroke-linejoin="round" d="M14.857 17.082a23.848 23.848 0 0 0 5.454-1.31A8.967 8.967 0 0 1 18 9.75V9A6 6 0 0 0 6 9v.75a8.967 8.967 0 0 1-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 0 1-5.714 0m5.714 0a3 3 0 1 1-5.714 0" />
-                </svg>
-                <span x-show="unreadCount > 0" x-cloak class="absolute right-1 top-1 flex h-4 min-w-4 items-center justify-center border border-white bg-[var(--oasis-danger)] px-1 text-[10px] text-white" x-text="unreadCount > 9 ? '9+' : unreadCount"></span>
-            </button>
-            <div x-show="open" x-cloak x-transition.opacity.duration.150ms
-                 class="absolute right-0 top-full z-50 mt-2 max-h-[70vh] w-[340px] max-w-[calc(100vw-1rem)] overflow-y-auto border-2 border-black bg-white text-black shadow-xl">
-                <div class="sticky top-0 z-10 flex items-center justify-between bg-black px-3 py-2 text-xs font-bold uppercase text-white">
-                    <span>Notifikasi</span>
-                    <button type="button" x-show="unreadCount > 0" @click="markAllRead()" class="underline normal-case">Tandai semua dibaca</button>
-                </div>
-                <div x-show="loading && notifications.length === 0" class="px-3 py-4 text-center text-xs">Memuat notifikasi...</div>
-                <div x-show="unavailable" class="border-b border-black bg-[#fff3b0] px-3 py-2 text-xs">Notifikasi sementara tidak tersedia. CRM tetap dapat digunakan.</div>
-                <template x-for="notification in notifications" :key="notification.id">
-                    <button type="button" @click="markRead(notification, true)" class="block w-full border-b border-black px-3 py-2 text-left hover:bg-[#eef1ff]" :class="notification.read_at ? 'bg-white' : 'bg-[#fff3b0]'">
-                        <span class="block text-xs font-bold" x-text="notification.title"></span>
-                        <span class="block font-['Times_New_Roman'] text-xs" x-text="notification.message"></span>
-                        <span class="mt-1 block text-[10px] text-gray-500" x-text="notification.created_label"></span>
-                    </button>
-                </template>
-                <div x-show="!loading && notifications.length === 0" class="px-3 py-4 text-center text-xs">Belum ada notifikasi kolaborasi.</div>
-                <div class="border-y-2 border-black bg-gray-100 px-3 py-2 text-xs font-bold uppercase">Pengingat</div>
-                @php($hasAny = $overdueItems->isNotEmpty() || $todayItems->isNotEmpty() || $tomorrowItems->isNotEmpty() || $needsConfirmation->isNotEmpty())
-                @if($hasAny)
-                    <x-crm.notif-section :items="$overdueItems" color="#c0392b" label="Terlewat" text-color="text-white">
-                        @foreach($overdueItems as $item)
-                            <div class="px-3 py-2 text-sm"><div class="font-bold">[{{ strtoupper($item->item_type) }}] {{ $item->title }}</div><div class="text-xs text-red-700">Terlewat {{ $item->scheduled_date->diffForHumans() }} - {{ $item->scheduled_date->format('d M Y') }}</div></div>
-                        @endforeach
-                    </x-crm.notif-section>
-                    <x-crm.notif-section :items="$todayItems" color="#f1c40f" label="Hari Ini" text-color="text-black">
-                        @foreach($todayItems as $item)
-                            <div class="px-3 py-2 text-sm"><div class="font-bold">[{{ strtoupper($item->item_type) }}] {{ $item->title }}</div><div class="text-xs text-gray-600">Jadwal: {{ $item->scheduled_date->format('d M Y') }}</div></div>
-                        @endforeach
-                    </x-crm.notif-section>
-                    <x-crm.notif-section :items="$tomorrowItems" color="#9ab6c8" label="Besok / H-1" text-color="text-black">
-                        @foreach($tomorrowItems as $item)
-                            <div class="px-3 py-2 text-sm"><div class="font-bold">[{{ strtoupper($item->item_type) }}] {{ $item->title }}</div><div class="text-xs text-gray-600">Besok - {{ $item->scheduled_date->format('d M Y') }}</div></div>
-                        @endforeach
-                    </x-crm.notif-section>
-                    <x-crm.notif-section :items="$needsConfirmation" color="#e6915d" label="Perlu Konfirmasi" text-color="text-black">
-                        @foreach($needsConfirmation as $item)
-                            <div class="px-3 py-2 text-sm"><div class="font-bold">[Dana] {{ $item->nama_konsumen }} - {{ $item->kav }}</div><div class="text-xs text-orange-700">Butuh konfirmasi keuangan - {{ $item->tanggal->format('d M Y') }}</div></div>
-                        @endforeach
-                    </x-crm.notif-section>
-                @else
-                    <div class="px-4 py-6 text-center text-sm">Semua terkendali.</div>
-                @endif
-            </div>
-        </div>
-        @endauth
-    </header>
+    <x-crm.topbar :$navigation :$overdueItems :$todayItems :$tomorrowItems :$needsConfirmation />
 
     <div x-show="sidebarOpen" @click="sidebarOpen = false" class="fixed inset-0 z-30 bg-black/40 md:hidden" x-cloak></div>
 
@@ -153,10 +81,6 @@
                 @endforeach
             </nav>
             <div class="border-t-2 border-black p-2">
-                <div class="flex items-center justify-between gap-2 md:hidden">
-                    <a href="{{ route('profile.edit') }}" class="px-3 font-[Helvetica] text-xs font-bold underline">Akun</a>
-                    <form method="POST" action="{{ route('logout') }}">@csrf<button type="submit" class="min-h-11 px-3 font-[Helvetica] text-xs font-bold text-[var(--oasis-danger)]">Logout</button></form>
-                </div>
                 <button type="button" @click="toggleDesktopSidebar()"
                         class="crm-sidebar-toggle hidden min-h-11 w-full items-center justify-center gap-3 px-2 font-[Helvetica] text-xs font-bold hover:bg-[var(--oasis-surface-muted)] md:flex"
                         :title="sidebarCollapsed ? 'Perluas sidebar' : 'Ringkas sidebar'"

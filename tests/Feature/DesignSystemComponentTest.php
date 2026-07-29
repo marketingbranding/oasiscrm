@@ -103,6 +103,19 @@ class DesignSystemComponentTest extends TestCase
         $this->assertStringContainsString('role="alert"', $field);
     }
 
+    public function test_filter_chip_accepts_dynamic_content_and_remove_control_slots(): void
+    {
+        $html = Blade::render(<<<'BLADE'
+            <x-crm.filter-chip>
+                <span x-text="filterLabel"></span>
+                <x-slot:remove><button type="button" class="crm-filter-chip-remove">Hapus</button></x-slot:remove>
+            </x-crm.filter-chip>
+        BLADE);
+
+        $this->assertStringContainsString('x-text="filterLabel"', $html);
+        $this->assertStringContainsString('<button type="button" class="crm-filter-chip-remove">Hapus</button>', $html);
+    }
+
     public function test_modal_has_accessible_dialog_and_focus_management_contract(): void
     {
         $html = Blade::render('<x-crm.modal name="demo" title="Contoh Dialog" description="Dialog aman."><button data-autofocus>Simpan</button></x-crm.modal>');

@@ -36,6 +36,11 @@ class DatabaseUiTest extends TestCase
         $this->assertStringContainsString('aria-label="Ruang kerja Database"', $html);
         $this->assertStringContainsString('Cabang: Magelang', $html);
         $this->assertStringContainsString('canEdit: true', $html);
+        $this->assertStringContainsString('aria-label="Pencarian dan tindakan sheet"', $html);
+        $this->assertStringContainsString('Cari konsumen', $html);
+        $this->assertStringContainsString('Nama, kontak, kavling, atau data lain...', $html);
+        $this->assertStringContainsString('Pencarian: ', $html);
+        $this->assertStringContainsString('Tidak ada konsumen yang cocok', $html);
         $this->assertMatchesRegularExpression('/<th[^>]*>Aksi<\/th>/', $html);
         $this->assertStringContainsString('editRecord(rec)', $html);
         $this->assertStringContainsString('database/records/'.$record->id, route('database.records.update', $record));

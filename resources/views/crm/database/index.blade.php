@@ -151,21 +151,46 @@
         {{-- Tab content -- rendered per sheet name --}}
         <template x-for="name in sheetNameList" :key="name">
             <div x-show="tab === name" x-cloak x-transition:enter="transition ease-out duration-200" x-transition:enter-start="opacity-0" x-transition:enter-end="opacity-100">
-                <div class="mb-3 flex items-center gap-2 flex-wrap" style="min-height:32px;">
-                    <template x-if="canAdd(name)">
-                        <button @click="adding = name"
-                                class="bg-black text-white px-3 py-1 text-xs font-[Helvetica] font-bold border-2 border-black hover:bg-gray-800" style="border-radius:0;">
-                            + Tambah Data
-                        </button>
-                    </template>
-                    <a href="https://docs.google.com/spreadsheets/d/{{ $selectedBranch->sheet_id }}" target="_blank"
-                       class="bg-white text-black px-3 py-1 text-xs font-[Helvetica] font-bold border-2 border-black hover:bg-gray-100" style="border-radius:0;">
-                        Buka Google Sheet
-                    </a>
+                <x-crm.toolbar label="Pencarian dan tindakan sheet" class="database-sheet-toolbar">
                     <template x-if="isLoaded(name)">
-                        <input type="text" x-model="filterText" placeholder="Cari..."
-                               class="border-2 border-black px-2 py-1 text-xs font-['Times_New_Roman'] rounded-none w-32 sm:w-48 ml-auto">
+                        <div class="database-search-group">
+                            <label :for="searchInputId(name)" class="crm-type-label">Cari konsumen</label>
+                            <div class="database-search-control">
+                                <input type="search"
+                                       :id="searchInputId(name)"
+                                       x-model="filterText"
+                                       @keydown.escape="clearSearch()"
+                                       placeholder="Nama, kontak, kavling, atau data lain..."
+                                       class="crm-control database-search-input">
+                                <x-crm.button x-show="filterText" x-cloak size="sm" variant="text" @click="clearSearch()" aria-label="Hapus pencarian">Hapus</x-crm.button>
+                            </div>
+                            <p class="database-result-count" aria-live="polite">
+                                <span x-text="'Menampilkan ' + sortedRecords(name).length + ' dari ' + currentData(name).records.length + ' data'"></span>
+                            </p>
+                        </div>
                     </template>
+
+                    <x-slot:actions>
+                        <template x-if="canAdd(name)">
+                            <x-crm.button accent="database" variant="primary" size="sm" @click="openAdd(name, $el)">Tambah Data</x-crm.button>
+                        </template>
+                        <x-crm.button
+                            variant="secondary"
+                            size="sm"
+                            href="https://docs.google.com/spreadsheets/d/{{ $selectedBranch->sheet_id }}"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                        >Buka Google Sheet</x-crm.button>
+                    </x-slot:actions>
+                </x-crm.toolbar>
+
+                <div x-show="filterText && isLoaded(name)" x-cloak class="database-active-filters" aria-label="Pencarian aktif">
+                    <x-crm.filter-chip>
+                        <span x-text="'Pencarian: ' + filterText"></span>
+                        <x-slot:remove>
+                            <button type="button" class="crm-filter-chip-remove" @click="clearSearch()" aria-label="Hapus pencarian">&times;</button>
+                        </x-slot:remove>
+                    </x-crm.filter-chip>
                 </div>
 
                 <div x-show="!isLoaded(name) && !loadErrors[name]" class="border-2 border-black bg-white px-4 py-8 text-center" aria-live="polite">
@@ -244,9 +269,11 @@
                 </template>
 
                 <template x-if="isLoaded(name) && currentData(name).records.length > 0 && sortedRecords(name).length === 0">
-                    <div class="border-2 border-black bg-white px-4 py-8 text-center">
-                        <p class="text-sm font-['Times_New_Roman'] italic" style="color:#9ca3af;">Tidak ada hasil yang cocok.</p>
-                    </div>
+                    <x-crm.empty-state title="Tidak ada konsumen yang cocok" description="Tidak ada konsumen yang sesuai dengan pencarian ini.">
+                        <x-slot:actions>
+                            <x-crm.button size="sm" @click="clearSearch()">Hapus pencarian</x-crm.button>
+                        </x-slot:actions>
+                    </x-crm.empty-state>
                 </template>
             </div>
         </template>
@@ -474,6 +501,19 @@ document.addEventListener('alpine:init', () => {
         canAdd(name) {
             const data = this.cache[name];
             return config.canEdit && !!(data && data.records && data.records.length > 0);
+        },
+
+        openAdd(name, trigger = null) {
+            this.adding = name;
+            this.addTrigger = trigger;
+        },
+
+        clearSearch() {
+            this.filterText = '';
+        },
+
+        searchInputId(name) {
+            return `database-search-${String(name).toLowerCase().replace(/[^a-z0-9]+/g, '-')}`;
         },
 
         currentData(name) {

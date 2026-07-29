@@ -23,7 +23,7 @@
        @if($accent) data-accent="{{ $accent }}" @endif
        {{ $attributes->class([$classes]) }}>
         @if($loading)<span class="crm-button-spinner" aria-hidden="true"></span>@endif
-        <span>{{ $slot }}</span>
+        {{ $slot }}
     </a>
 @else
     <button type="{{ $type }}" @disabled($isDisabled)
@@ -31,6 +31,6 @@
             @if($accent) data-accent="{{ $accent }}" @endif
             {{ $attributes->class([$classes]) }}>
         @if($loading)<span class="crm-button-spinner" aria-hidden="true"></span>@endif
-        <span>{{ $slot }}</span>
+        {{ $slot }}
     </button>
 @endif

@@ -163,7 +163,7 @@
 
     @if($hasInvalidProjectScope)
         <x-dashboard.section id="dashboard-scope-warning" eyebrow="Area kerja tidak valid" title="Pilih ulang proyek Dashboard" description="Filter proyek tidak dapat diterapkan dengan aman pada cabang ini. Data operasional disembunyikan sampai area kerja direset.">
-            <a href="{{ route('dashboard', array_filter(['branch_id' => $selectedBranchId ?? null])) }}" class="dashboard-attention-link">Reset filter proyek</a>
+            <x-crm.button variant="text" :href="route('dashboard', array_filter(['branch_id' => $selectedBranchId ?? null]))">Reset filter proyek</x-crm.button>
         </x-dashboard.section>
     @else
     @if($canViewDatabase || $canViewBridgeFund)
@@ -192,10 +192,10 @@
     <div class="dashboard-grid dashboard-grid-two mb-4">
         <x-dashboard.section id="dashboard-attention" eyebrow="Prioritas tertinggi" title="Attention Center" description="Pekerjaan lewat waktu dan konfirmasi yang perlu segera ditangani.">
             <x-slot:actions>
-                <span class="dashboard-status-value" data-state="{{ $attentionItems->isEmpty() ? 'pass' : 'warning' }}">{{ $attentionItems->count() }} item</span>
+                <x-crm.status-badge :variant="$attentionItems->isEmpty() ? 'success' : 'warning'">{{ $attentionItems->count() }} item</x-crm.status-badge>
             </x-slot:actions>
             @if($attentionItems->isEmpty())
-                <x-dashboard.empty-state title="Semua pekerjaan sudah terkendali" description="Tidak ada pekerjaan mendesak pada area kerja saat ini." />
+                <x-crm.empty-state title="Semua pekerjaan sudah terkendali" description="Tidak ada pekerjaan mendesak pada area kerja saat ini." />
             @else
                 <div class="dashboard-attention-list">
                     @foreach($attentionItems as $item)
@@ -214,7 +214,7 @@
 
         <x-dashboard.section id="dashboard-today" eyebrow="Apa yang harus dilakukan" title="Pekerjaan Hari Ini" description="Agenda, task, dan lead baru yang sudah masuk antrean hari ini.">
             @if($todayItems->isEmpty())
-                <x-dashboard.empty-state title="Tidak ada pekerjaan terjadwal" description="Gunakan aksi cepat untuk menambahkan agenda atau task berikutnya." />
+                <x-crm.empty-state title="Tidak ada pekerjaan terjadwal" description="Gunakan aksi cepat untuk menambahkan agenda atau task berikutnya." />
             @else
                 <div class="dashboard-work-list">
                     @foreach($todayItems as $item)
@@ -266,6 +266,7 @@
                 ? 'warning'
                 : ($syncHealth['status'] === 'success' && !$syncHealth['isStale'] ? 'pass' : ($syncHealth['status'] === 'failed' ? 'fail' : 'warning'));
             $databaseStateLabel = match ($databaseState) { 'pass' => 'PASS', 'fail' => 'FAIL', default => 'WARNING' };
+            $databaseBadgeVariant = match ($databaseState) { 'pass' => 'success', 'fail' => 'danger', default => 'warning' };
         @endphp
         <x-dashboard.section id="dashboard-system-status" eyebrow="Kesiapan area kerja" title="Status Data & Sistem" description="Status yang tersedia dari integrasi dan pemeriksaan sistem OASIS saat ini.">
             @if($canViewDatabase && isset($syncHealth))
@@ -274,7 +275,7 @@
                         <div class="dashboard-status-label">Google Database Sync</div>
                         <div class="mt-1 text-xs text-[var(--oasis-text-muted)]">{{ $syncHealth['message'] ?? 'Status sinkronisasi belum tersedia.' }}</div>
                     </div>
-                    <span class="dashboard-status-value" data-state="{{ $databaseState }}">{{ $databaseStateLabel }}</span>
+                    <x-crm.status-badge :variant="$databaseBadgeVariant">{{ $databaseStateLabel }}</x-crm.status-badge>
                 </div>
                 <div class="mt-3" data-testid="dashboard-database-sync">
                     <x-crm.sync-status-panel module-key="database" :scope-name="$branch?->name ?? ''" :branch-id="$selectedBranchId" :status="$dashboardSyncStatus" :is-stale="$syncHealth['isStale']">
@@ -288,7 +289,7 @@
                         <div class="dashboard-status-label">System Health</div>
                         <div class="mt-1 text-xs text-[var(--oasis-text-muted)]">Scheduler, notifications, presence, storage, dan layanan aplikasi.</div>
                     </div>
-                    <a href="{{ route('admin.system-health') }}" class="dashboard-attention-link">Buka laporan</a>
+                    <x-crm.button variant="text" :href="route('admin.system-health')">Buka laporan</x-crm.button>
                 </div>
             @endif
         </x-dashboard.section>

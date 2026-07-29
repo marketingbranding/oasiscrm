@@ -1,7 +1,7 @@
 @props(['items'])
 
 @if($items->isEmpty())
-    <x-dashboard.empty-state title="Belum ada aktivitas operasional" description="Aktivitas baru pada area kerja ini akan muncul di sini." />
+    <x-crm.empty-state title="Belum ada aktivitas operasional" description="Aktivitas baru pada area kerja ini akan muncul di sini." />
 @else
     <ol class="dashboard-timeline" aria-label="Aktivitas operasional terbaru">
         @foreach($items as $item)

@@ -15,6 +15,7 @@ class DesignSystemComponentTest extends TestCase
         $loading = Blade::render('<x-crm.button loading>Memproses</x-crm.button>');
 
         $this->assertStringContainsString('crm-button--primary', $primary);
+        $this->assertStringNotContainsString('<span>Simpan</span>', $primary);
         $this->assertStringContainsString('data-accent="sales"', $primary);
         $this->assertStringContainsString('/contoh', $link);
         $this->assertStringContainsString('<a ', $link);

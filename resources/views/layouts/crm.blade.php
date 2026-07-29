@@ -113,9 +113,9 @@
              class="fixed right-4 top-16 z-[999] flex max-w-sm flex-col gap-2 pointer-events-none" aria-live="polite" aria-atomic="false">
             <template x-for="toast in toasts" :key="toast.id">
                 <div x-show="toast.show" x-transition:leave="transition ease-out duration-500" x-transition:leave-start="opacity-100 translate-x-0" x-transition:leave-end="opacity-0 translate-x-4"
-                     :class="{ 'bg-[#b3bd95]': toast.type === 'success', 'bg-[#d77a7a]': toast.type === 'error', 'bg-[#fcc20f]': toast.type === 'warning' }"
+                     :class="{ 'crm-toast--success': toast.type === 'success', 'crm-toast--error': toast.type === 'error', 'crm-toast--warning': toast.type === 'warning' }"
                      :role="toast.type === 'error' ? 'alert' : 'status'"
-                     class="flex min-w-[250px] items-start justify-between gap-3 border-2 border-black px-3 py-2 text-xs shadow-xl pointer-events-auto">
+                     class="crm-toast pointer-events-auto">
                     <span x-text="toast.message"></span>
                     <button type="button" @click="dismiss(toast.id)" class="shrink-0 text-lg font-bold leading-none text-black/60 hover:text-black" aria-label="Tutup notifikasi">&times;</button>
                 </div>

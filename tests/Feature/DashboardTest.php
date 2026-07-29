@@ -54,6 +54,7 @@ class DashboardTest extends TestCase
             ->assertSee('Aksi Cepat')
             ->assertSee('aria-controls="dashboard-quick-actions-menu"', false)
             ->assertSee('role="menu"', false)
+            ->assertSee('crm-status-badge', false)
             ->assertSeeInOrder([
                 'Ringkasan Area Kerja',
                 'Attention Center',

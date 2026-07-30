@@ -1,5 +1,24 @@
-@props(['collection' => null, 'perPage' => '15'])
-<div class="flex items-center justify-between px-4 py-3 border-t-2 border-black bg-white">
+@props([
+    'collection' => null,
+    'perPage' => '15',
+    'showPerPage' => true,
+    'stripQueryKey' => null,
+])
+@php
+    $linksCollection = $collection;
+    if ($stripQueryKey && $collection instanceof \Illuminate\Pagination\LengthAwarePaginator) {
+        $options = $collection->getOptions();
+        $options['query'] = request()->except([$stripQueryKey, $collection->getPageName()]);
+        $linksCollection = new \Illuminate\Pagination\LengthAwarePaginator(
+            $collection->getCollection(),
+            $collection->total(),
+            $collection->perPage(),
+            $collection->currentPage(),
+            $options,
+        );
+    }
+@endphp
+<div class="crm-pagination flex items-center justify-between gap-3 px-4 py-3 border-t-2 border-black bg-white">
     <div class="text-xs font-['Times_New_Roman']">
         @if(method_exists($collection, 'total'))
             {{ $collection->firstItem() }}–{{ $collection->lastItem() }} dari {{ $collection->total() }}
@@ -7,6 +26,7 @@
             Semua {{ $collection->count() }} data
         @endif
     </div>
+    @if($showPerPage)
     <div class="flex items-center gap-2">
         <span class="text-xs font-['Times_New_Roman']">Tampilkan</span>
         <select onchange="window.location.href=this.value"
@@ -18,9 +38,10 @@
             <option value="{{ request()->fullUrlWithQuery(['per_page' => 'all']) }}" {{ ($perPage ?? '15') == 'all' ? 'selected' : '' }}>Semua</option>
         </select>
     </div>
-    <div class="flex items-center gap-1">
+    @endif
+    <div class="crm-pagination-links flex items-center gap-1">
         @if(method_exists($collection, 'links'))
-            {{ $collection->links() }}
+            {{ $linksCollection->links() }}
         @endif
     </div>
 </div>

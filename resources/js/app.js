@@ -14,6 +14,7 @@ import registerSalesDailyReminder from './sales-daily-reminder';
 import registerComments from './comments';
 import registerCrmShell from './crm-shell';
 import registerCrmModal from './crm-modal';
+import registerSalesPocketbook from './sales-pocketbook';
 
 window.Alpine = Alpine;
 window.Sortable = Sortable;
@@ -27,5 +28,6 @@ registerSalesDailyReminder(Alpine);
 registerComments(Alpine);
 registerCrmShell(Alpine);
 registerCrmModal(Alpine);
+registerSalesPocketbook(Alpine);
 
 Alpine.start();

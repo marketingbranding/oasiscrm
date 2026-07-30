@@ -50,7 +50,7 @@
             <x-crm.field label="Cabang" for="report-filter-branch"><select id="report-filter-branch" class="sales-input" name="branch_id" x-model="branch" @change="branchChanged()"><option value="">Semua cabang</option>@foreach($branches as $branch)<option value="{{ $branch->id }}">{{ $branch->name }}</option>@endforeach</select></x-crm.field>
             <x-crm.field label="Proyek" for="report-filter-project"><select id="report-filter-project" class="sales-input" name="project_id" x-model="project" @change="projectChanged()"><option value="">Semua proyek</option>@foreach($projects as $project)<option value="{{ $project->id }}" x-show="projectVisible('{{ $project->id }}')" :disabled="!projectVisible('{{ $project->id }}')">{{ $project->project_name }}</option>@endforeach</select></x-crm.field>
             <x-crm.field label="Sales" for="report-filter-sales"><select id="report-filter-sales" class="sales-input" name="sales_user_id" x-model="sales"><option value="">Semua sales</option>@foreach($salesUsers as $sales)<option value="{{ $sales->id }}" x-show="salesVisible('{{ $sales->id }}')" :disabled="!salesVisible('{{ $sales->id }}')">{{ $sales->name }}</option>@endforeach</select></x-crm.field>
-            <div class="crm-field"><span class="crm-field-label">Periode</span><div class="crm-field-control">@include('crm.sales-pocketbook._period-picker')</div></div>
+            <div class="crm-field"><span class="crm-field-label" id="report-monitoring-period-label">Periode</span><div class="crm-field-control">@include('crm.sales-pocketbook._period-picker', ['periodPickerId' => 'report-monitoring-period'])</div></div>
             <div class="sales-report-filter-actions">
                 <x-crm.button type="submit" variant="primary" accent="sales">Terapkan Filter</x-crm.button>
                 <x-crm.button variant="secondary" :href="$reportResetUrl">Hapus semua filter</x-crm.button>
@@ -61,7 +61,7 @@
     <form method="GET" action="{{ route('sales-pocketbook.index') }}" x-data="salesCascade(@js($cascadeProjects), @js($cascadeSales), @js(['branch' => request('branch_id'), 'project' => request('project_id'), 'sales' => request('sales_user_id')]))" class="sales-report-personal-filters">
         <input type="hidden" name="tab" value="report">
         <x-crm.field label="Proyek" for="report-filter-project"><select id="report-filter-project" class="sales-input" name="project_id" x-model="project" @change="projectChanged()"><option value="">Semua proyek</option>@foreach($projects as $project)<option value="{{ $project->id }}" x-show="projectVisible('{{ $project->id }}')" :disabled="!projectVisible('{{ $project->id }}')">{{ $project->project_name }}</option>@endforeach</select></x-crm.field>
-        <div class="crm-field"><span class="crm-field-label">Periode</span><div class="crm-field-control">@include('crm.sales-pocketbook._period-picker')</div></div>
+        <div class="crm-field"><span class="crm-field-label" id="report-personal-period-label">Periode</span><div class="crm-field-control">@include('crm.sales-pocketbook._period-picker', ['periodPickerId' => 'report-personal-period'])</div></div>
         <div class="sales-report-filter-actions"><x-crm.button type="submit" variant="primary" accent="sales">Terapkan Filter</x-crm.button></div>
     </form>
 @endif

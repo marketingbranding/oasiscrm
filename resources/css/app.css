@@ -405,6 +405,29 @@
 .sales-pocketbook-duplicate-status { min-height: 1.25rem; margin-top: var(--oasis-space-1); font: var(--oasis-type-caption-size)/1.4 var(--oasis-font-controls); }
 .sales-pocketbook-duplicate-result { border: var(--oasis-border-width-standard) solid #b8860b; background: #fffbeb; padding: var(--oasis-space-2); }
 .sales-pocketbook-duplicate-result strong { display: block; margin-bottom: var(--oasis-space-1); }
+.sales-pocketbook-edit-form { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--oasis-space-4); padding: var(--oasis-space-4); }
+.sales-pocketbook-edit-comments { display: flex; justify-content: flex-end; margin-top: var(--oasis-space-4); }
+.sales-period-picker { position: relative; min-width: 0; }
+.sales-period-picker > .sales-button { display: flex; align-items: center; justify-content: space-between; gap: var(--oasis-space-2); }
+.sales-period-picker-summary { color: var(--oasis-text-muted); font-size: 9px; }
+.sales-period-picker-panel { position: absolute; top: 100%; right: 0; z-index: 100; width: min(280px, calc(100vw - 2rem)); margin-top: var(--oasis-space-1); border: var(--oasis-border-width-strong) solid var(--oasis-border-strong); background: var(--oasis-surface-flat); padding: var(--oasis-space-3); box-shadow: var(--oasis-shadow-elevated); }
+.sales-period-picker-close { display: grid; width: 36px; height: 36px; place-items: center; font: 700 1.25rem/1 var(--oasis-font-controls); }
+.sales-pocketbook-dialog-backdrop { position: fixed; inset: 0; z-index: 50; display: flex; align-items: center; justify-content: center; overflow-y: auto; background: rgb(0 0 0 / .7); padding: var(--oasis-space-4); }
+.sales-pocketbook-dialog { width: 100%; max-height: calc(100dvh - 2rem); overflow-y: auto; border: var(--oasis-border-width-strong) solid var(--oasis-border-strong); background: var(--oasis-surface-flat); padding: var(--oasis-space-4); box-shadow: var(--oasis-shadow-elevated); }
+.sales-pocketbook-dialog--lead { max-width: 48rem; }
+.sales-pocketbook-dialog--stage { max-width: 24rem; }
+.sales-pocketbook-dialog-header { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--oasis-space-3); border-bottom: var(--oasis-border-width-standard) solid var(--oasis-border-strong); padding-bottom: var(--oasis-space-2); margin-bottom: var(--oasis-space-3); }
+.sales-pocketbook-dialog-header h2 { font: 900 var(--oasis-type-section-title-size)/1.2 var(--oasis-font-display); text-transform: uppercase; }
+.sales-pocketbook-dialog-header p { margin-top: var(--oasis-space-1); color: var(--oasis-text-muted); font: var(--oasis-type-caption-size)/1.4 var(--oasis-font-controls); }
+.sales-pocketbook-dialog-close { display: grid; width: 44px; height: 44px; flex: 0 0 auto; place-items: center; border: var(--oasis-border-width-subtle) solid var(--oasis-border-strong); font: 700 1.5rem/1 var(--oasis-font-controls); }
+.sales-pocketbook-dialog-error { margin-bottom: var(--oasis-space-3); border: var(--oasis-border-width-standard) solid var(--oasis-danger); background: #fef2f2; padding: var(--oasis-space-2); font: 700 var(--oasis-type-compact-size)/1.4 var(--oasis-font-controls); }
+.sales-pocketbook-dialog-form { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--oasis-space-3); }
+.sales-pocketbook-dialog-actions { display: flex; flex-wrap: wrap; gap: var(--oasis-space-2); margin-top: var(--oasis-space-4); }
+.sales-pocketbook-dialog-confirm { display: flex; min-height: 44px; cursor: pointer; align-items: flex-start; gap: var(--oasis-space-2); border: var(--oasis-border-width-standard) solid var(--oasis-border-strong); background: #fffbeb; padding: var(--oasis-space-2); font: var(--oasis-type-caption-size)/1.4 var(--oasis-font-controls); }
+.sales-pocketbook-dialog-confirm--danger { border-color: var(--oasis-danger); background: #fef2f2; }
+.sales-pocketbook-dialog-confirm input { width: 20px; height: 20px; flex: 0 0 auto; accent-color: var(--oasis-accent-sales); }
+.crm-pagination { max-width: 100%; }
+.crm-pagination-links { min-width: 0; max-width: 100%; overflow-x: auto; }
 
 .sales-report-toolbar { overflow: visible; }
 .sales-report-filter-summary { display: grid; min-width: min(15rem, 100%); gap: var(--oasis-space-1); font-family: var(--oasis-font-controls); }
@@ -439,6 +462,24 @@
 }
 
 @media (max-width: 639px) {
+    .sales-pocketbook-edit-form,
+    .sales-pocketbook-dialog-form { grid-template-columns: minmax(0, 1fr); }
+    .sales-pocketbook-edit-form { padding: var(--oasis-space-3); }
+    .sales-pocketbook-edit-form :is(input, select, textarea, button, .date-display),
+    .sales-pocketbook-edit-comments .crm-button,
+    .sales-pocketbook-dialog :is(input, select, textarea, button, .date-display, .time-display),
+    .sales-period-picker :is(button, .date-display) { min-height: 44px; }
+    .sales-period-picker label { min-height: 44px; align-items: center; justify-content: center; }
+    .crm-pagination { align-items: stretch; flex-direction: column; }
+    .crm-pagination select,
+    .crm-pagination-links :is(a, span[aria-current]) { min-height: 44px; }
+    .sales-pocketbook-edit-comments,
+    .sales-pocketbook-dialog-actions { display: grid; }
+    .sales-pocketbook-edit-comments .crm-button,
+    .sales-pocketbook-dialog-actions .crm-button { width: 100%; }
+    .sales-pocketbook-dialog-backdrop { align-items: flex-start; padding: var(--oasis-space-2); }
+    .sales-pocketbook-dialog { max-height: calc(100dvh - 1rem); padding: var(--oasis-space-3); }
+    .sales-period-picker-panel { right: auto; left: 0; }
     .sales-report-personal-filters,
     .sales-report-filter-form,
     .sales-report-metrics { grid-template-columns: minmax(0, 1fr); }

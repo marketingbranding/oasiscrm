@@ -424,7 +424,7 @@ class SalesPocketbookTest extends TestCase
             ->assertSee('Pilih Periode')
             ->assertSee('name="period_type"', false)
             ->assertSee('aria-label="Tutup pilihan periode"', false)
-            ->assertSee('@keydown.escape.window="open = false"', false)
+            ->assertSee('@keydown.escape.window="if (open) { open = false; $nextTick(() => $refs.periodTrigger?.focus()) }"', false)
             ->assertSee('<template x-if="open">', false)
             ->assertDontSee('periodPicker(', false);
     }

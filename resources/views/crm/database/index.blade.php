@@ -82,30 +82,29 @@
         $initialHeaders = $initialSample ? $initialSample->headers : [];
         $initialFormulaCols = $initialSample ? ($initialSample->formula_columns ?? []) : [];
         $initialColumnMetadata = $initialSample ? ($initialSample->column_metadata ?? []) : [];
-        $initialRecordsJson = json_encode(array_map(fn($r) => [
+        $initialRecords = array_map(fn($r) => [
             'id' => $r->id,
             'row_number' => $r->row_number,
             'oasis_sync_id' => $r->oasis_sync_id,
             'updated_at' => $r->updated_at?->copy()->utc()->format('Y-m-d H:i:s'),
             'row_data' => $r->row_data,
-        ], $initialRows));
-        $initialHeadersJson = json_encode($initialHeaders);
-        $initialFormulaJson = json_encode($initialFormulaCols);
-        $initialColumnMetadataJson = json_encode($initialColumnMetadata);
+        ], $initialRows);
+        $databaseTabsConfig = [
+            'branchId' => (string) $selectedBranch->id,
+            'editBaseUrl' => url('database/records'),
+            'sheetDataBaseUrl' => url('database/sheet'),
+            'sheetNames' => $sheetNames,
+            'firstSheet' => $firstSheet,
+            'initialHeaders' => $initialHeaders,
+            'initialFormulaCols' => $initialFormulaCols,
+            'initialColumnMetadata' => $initialColumnMetadata,
+            'initialRecords' => $initialRecords,
+            'requestSheet' => $requestSheet ?? '',
+            'requestAdd' => (bool) ($requestAdd ?? false),
+            'canEdit' => (bool) $canEdit,
+        ];
     @endphp
-    <div x-data="databaseTabs({
-        branchId: '{{ $selectedBranch->id }}',
-        editBaseUrl: '{{ url('database/records') }}',
-        sheetDataBaseUrl: '{{ url('database/sheet') }}',
-        firstSheet: '{{ $firstSheet }}',
-        initialHeaders: {{ $initialHeadersJson }},
-        initialFormulaCols: {{ $initialFormulaJson }},
-        initialColumnMetadata: {{ $initialColumnMetadataJson }},
-        initialRecords: {{ $initialRecordsJson }},
-        requestSheet: '{{ $requestSheet ?? '' }}',
-        requestAdd: {{ ($requestAdd ?? false) ? 'true' : 'false' }},
-        canEdit: {{ $canEdit ? 'true' : 'false' }}
-    })"
+    <div x-data="databaseTabs(@js($databaseTabsConfig))"
          @oasis-sync-updated.window="handleSyncUpdated($event.detail)"
          @oasis:modal-closed.window="handleModalClosed($event.detail)"
          @oasis-form-error.window="handleFormError($event.detail)">
@@ -405,7 +404,7 @@ document.addEventListener('alpine:init', () => {
                 records: config.initialRecords,
             };
             this.loaded[config.firstSheet] = true;
-            this.sheetNameList = @json($sheetNames);
+            this.sheetNameList = config.sheetNames;
 
             if (config.requestSheet) {
                 const lowerRequest = config.requestSheet.toLowerCase();
@@ -467,7 +466,8 @@ document.addEventListener('alpine:init', () => {
         },
 
         searchInputId(name) {
-            return `database-search-${String(name).toLowerCase().replace(/[^a-z0-9]+/g, '-')}`;
+            const index = this.sheetNameList.indexOf(name);
+            return `database-search-${String(name).toLowerCase().replace(/[^a-z0-9]+/g, '-')}-${index}`;
         },
 
         currentData(name) {
@@ -571,7 +571,10 @@ document.addEventListener('alpine:init', () => {
         },
 
         fieldKey(sheetName, header) {
-            return `${String(sheetName || 'sheet')}-${String(header || 'field')}`.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+            const sheetIndex = this.sheetNameList.indexOf(sheetName);
+            const headerIndex = this.cache[sheetName]?.headers?.indexOf(header) ?? -1;
+            const key = `${String(sheetName || 'sheet')}-${String(header || 'field')}`.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+            return `${key}-${sheetIndex}-${headerIndex}`;
         },
 
         fieldId(mode, sheetName, header) {

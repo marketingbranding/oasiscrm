@@ -78,7 +78,7 @@ There is no Database project filter, export, import, pagination, bulk endpoint, 
 - Full sync reads wide ranges and duplicates row metadata by design.
 - Live sheet-title lookup occurs on each configured page request.
 
-Database 2.0 will not add queries, payload fields, synchronization volume, client record duplication, or cosmetic pagination.
+Database 2.0 does not change record-fetch queries, payload fields, synchronization volume, client record duplication, or pagination. The index performs one additional existing-service manage-scope resolution, plus the existing branch edit-right check, solely to keep add/edit/delete controls consistent with backend authorization.
 
 ## Existing Backend Risks Outside This Phase
 

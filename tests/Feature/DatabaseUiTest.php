@@ -36,7 +36,6 @@ class DatabaseUiTest extends TestCase
         $this->assertStringContainsString('database-page-header', $html);
         $this->assertStringContainsString('aria-label="Ruang kerja Database"', $html);
         $this->assertStringContainsString('Cabang: Magelang', $html);
-        $this->assertStringContainsString('canEdit: true', $html);
         $this->assertStringContainsString('id="database-sync-state-title"', $html);
         $this->assertStringContainsString('Data yang sudah tersedia tetap dapat digunakan ketika pembaruan gagal.', $html);
         $this->assertSame(1, substr_count($html, 'x-data="crmSyncStatus('));
@@ -88,10 +87,46 @@ class DatabaseUiTest extends TestCase
             ->assertViewHas('canEdit', false);
 
         $html = $response->getContent();
-        $this->assertStringContainsString('canEdit: false', $html);
         $this->assertDoesNotMatchRegularExpression('/<th[^>]*>Aksi<\/th>/', $html);
         $this->assertStringNotContainsString('>Edit</button>', $html);
         $this->assertStringNotContainsString('>Hapus</button>', $html);
+    }
+
+    public function test_database_write_actions_require_manage_scope_and_branch_edit_right(): void
+    {
+        [$branch] = $this->databaseRecord();
+        $viewerRole = $this->roleWithPermissions('database_scoped_viewer', [
+            'database.view', 'database.edit', 'database.view_branch',
+        ]);
+        $viewer = User::factory()->create([
+            'role_id' => $viewerRole->id,
+            'branch_id' => $branch->id,
+            'password_changed_at' => now(),
+        ]);
+        $viewer->branches()->syncWithoutDetaching([$branch->id => ['can_view' => true, 'can_edit' => true]]);
+
+        $operatorRole = $this->roleWithPermissions('database_scoped_operator', [
+            'database.view', 'database.edit', 'database.view_branch', 'database.manage_branch',
+        ]);
+        $operator = User::factory()->create([
+            'role_id' => $operatorRole->id,
+            'branch_id' => $branch->id,
+            'password_changed_at' => now(),
+        ]);
+        $operator->branches()->syncWithoutDetaching([$branch->id => ['can_view' => true, 'can_edit' => false]]);
+
+        $google = Mockery::mock(GoogleSheetsApiService::class);
+        $google->shouldReceive('sheetTitles')->times(3)->with($branch->sheet_id)->andReturn(['Leads']);
+        $this->app->instance(GoogleSheetsApiService::class, $google);
+
+        $this->actingAs($viewer)->get(route('database.index', ['branch_id' => $branch->id]))
+            ->assertOk()->assertViewHas('canEdit', false);
+        $this->actingAs($operator)->get(route('database.index', ['branch_id' => $branch->id]))
+            ->assertOk()->assertViewHas('canEdit', false);
+
+        $operator->branches()->updateExistingPivot($branch->id, ['can_edit' => true]);
+        $this->actingAs($operator)->get(route('database.index', ['branch_id' => $branch->id]))
+            ->assertOk()->assertViewHas('canEdit', true);
     }
 
     public function test_database_preserves_existing_sheet_and_add_deep_link_contract(): void
@@ -104,14 +139,16 @@ class DatabaseUiTest extends TestCase
         ]);
         $this->mockSheetTitles($branch);
 
-        $html = $this->actingAs($user)->get(route('database.index', [
+        $response = $this->actingAs($user)->get(route('database.index', [
             'branch_id' => $branch->id,
             'sheet' => 'LEADS',
             'add' => 1,
-        ]))->assertOk()->getContent();
+        ]))->assertOk()
+            ->assertViewHas('requestSheet', 'LEADS')
+            ->assertViewHas('requestAdd', true);
+        $html = $response->getContent();
 
-        $this->assertStringContainsString('requestSheet: \'LEADS\'', $html);
-        $this->assertStringContainsString('requestAdd: true', $html);
+        $this->assertStringContainsString('databaseTabs(', $html);
         $this->assertStringContainsString('switchTabWithAdd(match, config.requestAdd)', $html);
         $this->assertStringContainsString('this.openAdd(this.tab)', $html);
     }
@@ -174,5 +211,18 @@ class DatabaseUiTest extends TestCase
         $google = Mockery::mock(GoogleSheetsApiService::class);
         $google->shouldReceive('sheetTitles')->once()->with($branch->sheet_id)->andReturn(['Leads']);
         $this->app->instance(GoogleSheetsApiService::class, $google);
+    }
+
+    private function roleWithPermissions(string $slug, array $permissionSlugs): Role
+    {
+        $role = Role::query()->create([
+            'name' => str($slug)->replace('_', ' ')->title()->toString(),
+            'slug' => $slug,
+            'is_superadmin' => false,
+            'is_active' => true,
+        ]);
+        $role->permissions()->sync(Permission::query()->whereIn('slug', $permissionSlugs)->pluck('id'));
+
+        return $role;
     }
 }

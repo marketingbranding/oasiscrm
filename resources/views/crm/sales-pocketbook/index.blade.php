@@ -59,17 +59,24 @@
         @include('crm.sales-pocketbook._daily-reminder')
     @endif
 
-    @if($errors->any())<div class="border-2 border-[#c0392b] bg-red-50 px-4 py-2 text-sm"><strong>Data belum tersimpan.</strong> {{ $errors->first() }}</div>@endif
+    @if($errors->any())
+        <x-crm.alert variant="error" title="Data belum tersimpan." id="sales-pocketbook-validation-alert">
+            Periksa kembali bidang yang ditandai. {{ $errors->first() }}
+        </x-crm.alert>
+    @endif
     @if(session('duplicate_warning'))
-        <div class="border-2 border-[#b8860b] bg-yellow-50 p-3 text-sm"><strong>Nomor ini juga ditemukan pada lead lain yang dapat Anda akses:</strong>
-            @foreach(session('duplicate_warning') as $match)<div>{{ $match['sales'] }} / {{ $match['branch'] }} / {{ $match['project'] }} / {{ $match['date'] }}</div>@endforeach
-        </div>
+        <x-crm.alert variant="warning" title="Nomor ini juga ditemukan pada lead lain yang dapat Anda akses:" id="sales-pocketbook-duplicate-alert">
+            <div class="sales-pocketbook-alert-list">
+                @foreach(session('duplicate_warning') as $match)<div>{{ $match['sales'] }} / {{ $match['branch'] }} / {{ $match['project'] }} / {{ $match['date'] }}</div>@endforeach
+            </div>
+            <p class="sales-pocketbook-alert-note">Peringatan ini bersifat informatif. Lead tetap dapat disimpan.</p>
+        </x-crm.alert>
     @endif
 
     @if($branches->isEmpty())
-        <div class="border-2 border-black bg-[#d77a7a] px-4 py-3 font-['Times_New_Roman'] text-sm">Anda belum memiliki akses cabang.</div>
+        <x-crm.alert variant="error" title="Akses cabang belum tersedia" id="sales-pocketbook-assignment-alert">Anda belum memiliki akses cabang.</x-crm.alert>
     @elseif(Auth::user()->isSales() && $projects->isEmpty())
-        <div class="border-2 border-black bg-[#fcc20f] px-4 py-3 font-['Times_New_Roman'] text-sm">Anda belum ditugaskan ke proyek. Hubungi admin pusat.</div>
+        <x-crm.alert variant="warning" title="Penugasan proyek diperlukan" id="sales-pocketbook-assignment-alert">Anda belum ditugaskan ke proyek. Hubungi admin pusat.</x-crm.alert>
     @endif
 
     <nav class="sales-pocketbook-tabs" aria-label="Tampilan Buku Saku Sales">
@@ -93,19 +100,20 @@
     @if($projects->isNotEmpty() && $salesUsers->isNotEmpty())
     <section id="quick-agenda-input" class="border-2 border-black bg-white">
         <div class="bg-black text-[#fcc20f] px-4 py-2 font-[Helvetica] font-bold text-xs uppercase">+ Isi Agenda / Hasil</div>
-        <form method="POST" action="{{ route('sales-agendas.store') }}" x-data="salesCascade(@js($cascadeProjects), @js($cascadeSales), @js(['branch' => old('branch_id', $defaultProject?->branch_id), 'project' => $agendaProjectId, 'sales' => $agendaOwnerId]))" class="p-4 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
+        <form method="POST" action="{{ route('sales-agendas.store') }}" x-data="salesCascade(@js($cascadeProjects), @js($cascadeSales), @js(['branch' => old('branch_id', $defaultProject?->branch_id), 'project' => $agendaProjectId, 'sales' => $agendaOwnerId]))" @submit="setSubmitting()" class="sales-pocketbook-quick-form p-4 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3" aria-describedby="quick-agenda-required-note">
             @csrf
-            <div><label class="sales-label">Tanggal Agenda</label><x-crm.date-field name="scheduled_date" :value="old('scheduled_date', now()->toDateString())" required /></div>
-            <div><label class="sales-label">Jam Mulai</label><x-crm.time-field name="start_time" :value="old('start_time')" required /></div>
-            <div><label class="sales-label">Jam Selesai</label><x-crm.time-field name="end_time" :value="old('end_time')" required /></div>
-            <div><label class="sales-label">Kategori Aktivitas</label><select class="sales-input" name="sales_activity_category" required><option value="">Pilih kategori</option>@foreach(\App\Models\ContentItem::SALES_ACTIVITY_CATEGORIES as $category)<option value="{{ $category }}" @selected(old('sales_activity_category') === $category)>{{ $category }}</option>@endforeach</select></div>
-            <div><label class="sales-label">Judul Agenda</label><input class="sales-input" name="title" value="{{ old('title') }}" required></div>
-            <div><label class="sales-label">Cabang</label><select class="sales-input" name="branch_id" x-model="branch" @change="branchChanged()" required>@foreach($branches as $branch)<option value="{{ $branch->id }}">{{ $branch->name }}</option>@endforeach</select></div>
-            <div><label class="sales-label">Proyek</label><select class="sales-input" name="project_id" x-model="project" @change="projectChanged()" required><option value="">Pilih proyek</option>@foreach($projects as $project)<option value="{{ $project->id }}" x-show="projectVisible('{{ $project->id }}')" :disabled="!projectVisible('{{ $project->id }}')">{{ $project->project_name }}</option>@endforeach</select></div>
-            <div><label class="sales-label">Sales</label><select class="sales-input" name="owner_user_id" x-model="sales" required @disabled(!$monitoring)>@foreach($salesUsers as $sales)<option value="{{ $sales->id }}" x-show="salesVisible('{{ $sales->id }}')" :disabled="!salesVisible('{{ $sales->id }}')">{{ $sales->name }}</option>@endforeach</select>@unless($monitoring)<input type="hidden" name="owner_user_id" value="{{ Auth::id() }}">@endunless</div>
-            <div><label class="sales-label">Lokasi</label><input class="sales-input" name="location" value="{{ old('location') }}"></div>
-            <div class="sm:col-span-2 xl:col-span-3"><label class="sales-label">Catatan</label><textarea class="sales-input" name="notes" rows="2">{{ old('notes') }}</textarea></div>
-            <div class="xl:col-span-4"><button class="sales-button bg-[#fcc20f]">Simpan Agenda</button></div>
+            <p id="quick-agenda-required-note" class="sales-pocketbook-required-note sm:col-span-2 xl:col-span-4"><span aria-hidden="true">*</span> Wajib diisi</p>
+            <x-crm.field label="Tanggal Agenda" for="quick-agenda-scheduled-date" required :error="$errors->first('scheduled_date')"><x-crm.date-field id="quick-agenda-scheduled-date" name="scheduled_date" :value="old('scheduled_date', now()->toDateString())" required :aria-invalid="$errors->has('scheduled_date') ? 'true' : 'false'" :aria-describedby="$errors->has('scheduled_date') ? 'quick-agenda-scheduled-date-error' : null" /></x-crm.field>
+            <x-crm.field label="Jam Mulai" for="quick-agenda-start-time" required :error="$errors->first('start_time')"><x-crm.time-field id="quick-agenda-start-time" name="start_time" :value="old('start_time')" required :aria-invalid="$errors->has('start_time') ? 'true' : 'false'" :aria-describedby="$errors->has('start_time') ? 'quick-agenda-start-time-error' : null" /></x-crm.field>
+            <x-crm.field label="Jam Selesai" for="quick-agenda-end-time" required :error="$errors->first('end_time')"><x-crm.time-field id="quick-agenda-end-time" name="end_time" :value="old('end_time')" required :aria-invalid="$errors->has('end_time') ? 'true' : 'false'" :aria-describedby="$errors->has('end_time') ? 'quick-agenda-end-time-error' : null" /></x-crm.field>
+            <x-crm.field label="Kategori Aktivitas" for="quick-agenda-category" required :error="$errors->first('sales_activity_category')"><select id="quick-agenda-category" class="sales-input" name="sales_activity_category" required aria-invalid="{{ $errors->has('sales_activity_category') ? 'true' : 'false' }}" @if($errors->has('sales_activity_category')) aria-describedby="quick-agenda-category-error" @endif><option value="">Pilih kategori</option>@foreach(\App\Models\ContentItem::SALES_ACTIVITY_CATEGORIES as $category)<option value="{{ $category }}" @selected(old('sales_activity_category') === $category)>{{ $category }}</option>@endforeach</select></x-crm.field>
+            <x-crm.field label="Judul Agenda" for="quick-agenda-title" required :error="$errors->first('title')"><input id="quick-agenda-title" class="sales-input" name="title" value="{{ old('title') }}" required aria-invalid="{{ $errors->has('title') ? 'true' : 'false' }}" @if($errors->has('title')) aria-describedby="quick-agenda-title-error" @endif></x-crm.field>
+            <x-crm.field label="Cabang" for="quick-agenda-branch" required :error="$errors->first('branch_id')"><select id="quick-agenda-branch" class="sales-input" name="branch_id" x-model="branch" @change="branchChanged()" required aria-invalid="{{ $errors->has('branch_id') ? 'true' : 'false' }}" @if($errors->has('branch_id')) aria-describedby="quick-agenda-branch-error" @endif>@foreach($branches as $branch)<option value="{{ $branch->id }}">{{ $branch->name }}</option>@endforeach</select></x-crm.field>
+            <x-crm.field label="Proyek" for="quick-agenda-project" required :error="$errors->first('project_id')"><select id="quick-agenda-project" class="sales-input" name="project_id" x-model="project" @change="projectChanged()" required aria-invalid="{{ $errors->has('project_id') ? 'true' : 'false' }}" @if($errors->has('project_id')) aria-describedby="quick-agenda-project-error" @endif><option value="">Pilih proyek</option>@foreach($projects as $project)<option value="{{ $project->id }}" x-show="projectVisible('{{ $project->id }}')" :disabled="!projectVisible('{{ $project->id }}')">{{ $project->project_name }}</option>@endforeach</select></x-crm.field>
+            <x-crm.field label="Sales" for="quick-agenda-owner" required :error="$errors->first('owner_user_id')"><select id="quick-agenda-owner" class="sales-input" name="owner_user_id" x-model="sales" required @disabled(!$monitoring) aria-invalid="{{ $errors->has('owner_user_id') ? 'true' : 'false' }}" @if($errors->has('owner_user_id')) aria-describedby="quick-agenda-owner-error" @endif>@foreach($salesUsers as $sales)<option value="{{ $sales->id }}" x-show="salesVisible('{{ $sales->id }}')" :disabled="!salesVisible('{{ $sales->id }}')">{{ $sales->name }}</option>@endforeach</select>@unless($monitoring)<input type="hidden" name="owner_user_id" value="{{ Auth::id() }}">@endunless</x-crm.field>
+            <x-crm.field label="Lokasi" for="quick-agenda-location" :error="$errors->first('location')"><input id="quick-agenda-location" class="sales-input" name="location" value="{{ old('location') }}" aria-invalid="{{ $errors->has('location') ? 'true' : 'false' }}" @if($errors->has('location')) aria-describedby="quick-agenda-location-error" @endif></x-crm.field>
+            <x-crm.field label="Catatan" for="quick-agenda-notes" :error="$errors->first('notes')" class="sm:col-span-2 xl:col-span-3"><textarea id="quick-agenda-notes" class="sales-input" name="notes" rows="2" aria-invalid="{{ $errors->has('notes') ? 'true' : 'false' }}" @if($errors->has('notes')) aria-describedby="quick-agenda-notes-error" @endif>{{ old('notes') }}</textarea></x-crm.field>
+            <div class="sales-pocketbook-form-actions xl:col-span-4"><x-crm.button type="submit" variant="primary" accent="sales" x-bind:disabled="submitting" x-bind:aria-busy="submitting"><span x-show="!submitting">Simpan Agenda</span><span x-show="submitting" x-cloak>Menyimpan agenda...</span></x-crm.button><span class="sr-only" aria-live="polite" x-text="submitting ? 'Agenda sedang disimpan.' : ''"></span></div>
         </form>
     </section>
     @endif
@@ -158,22 +166,27 @@
     @endphp
     <section id="quick-lead-input" class="border-2 border-black bg-white">
         <div class="bg-black text-[#fcc20f] px-4 py-2 font-[Helvetica] font-bold text-xs uppercase">+ Input Lead Hari Ini</div>
-        <form method="POST" action="{{ route('sales-leads.store') }}" x-data="salesCascade(@js($cascadeProjects), @js($cascadeSales), @js(['branch' => $quickBranchId ?? null, 'project' => $quickProjectId ?? null, 'sales' => $quickSalesId ?? null]))" class="p-4 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3">
+        <form method="POST" action="{{ route('sales-leads.store') }}" x-data="salesCascade(@js($cascadeProjects), @js($cascadeSales), @js(['branch' => $quickBranchId ?? null, 'project' => $quickProjectId ?? null, 'sales' => $quickSalesId ?? null]))" @submit="setSubmitting()" class="sales-pocketbook-quick-form p-4 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3" aria-describedby="quick-lead-required-note">
             @csrf
-            <div><label class="sales-label">Tanggal Lead</label><x-crm.date-field name="lead_date" :value="old('lead_date', request('lead_date', now()->toDateString()))" required /></div>
-            <div><label class="sales-label">Nama Calon Konsumen</label><input class="sales-input" name="customer_name" value="{{ old('customer_name') }}" required></div>
-            <div>
-                <label class="sales-label">No. WhatsApp / Telepon</label><input class="sales-input" name="phone" value="{{ old('phone') }}" @blur="checkPhone($event.target.value)">
-                <div x-show="duplicates.length" x-cloak class="mt-1 border border-[#b8860b] bg-yellow-50 p-2 text-xs"><strong>Peringatan duplikat, tetap dapat disimpan.</strong><template x-for="item in duplicates"><div x-text="`${item.sales} / ${item.branch} / ${item.project} / ${item.date}`"></div></template></div>
-            </div>
-            <div><label class="sales-label">Sumber Lead</label><select class="sales-input" name="lead_source_id" required><option value="">Pilih sumber</option>@foreach($leadSources as $source)<option value="{{ $source->id }}" @selected(old('lead_source_id') == $source->id)>{{ $source->name }}</option>@endforeach</select></div>
-            <div><label class="sales-label">Cabang</label><select class="sales-input" name="branch_id" x-model="branch" required @change="branchChanged()">@foreach($branches as $branch)<option value="{{ $branch->id }}">{{ $branch->name }}</option>@endforeach</select></div>
-            <div><label class="sales-label">Proyek</label><select class="sales-input" name="project_id" x-model="project" required @change="projectChanged()"><option value="">Pilih proyek</option>@foreach($projects as $project)<option value="{{ $project->id }}" data-branch="{{ $project->branch_id }}" @selected($quickProjectId == $project->id) x-show="projectVisible('{{ $project->id }}')" :disabled="!projectVisible('{{ $project->id }}')">{{ $project->project_name }}</option>@endforeach</select></div>
-            <div><label class="sales-label">Sales</label><select class="sales-input" name="sales_user_id" x-model="sales" required @disabled(!$monitoring)>@foreach($salesUsers as $sales)<option value="{{ $sales->id }}" x-show="salesVisible('{{ $sales->id }}')" :disabled="!salesVisible('{{ $sales->id }}')">{{ $sales->name }}</option>@endforeach</select>@unless($monitoring)<input type="hidden" name="sales_user_id" value="{{ Auth::id() }}">@endunless</div>
-            <div><label class="sales-label">Catatan</label><input class="sales-input" name="notes" value="{{ old('notes') }}"></div>
-            <div class="xl:col-span-4 flex flex-wrap gap-2 pt-1">
-                <button class="sales-button bg-[#fcc20f]" name="submit_action" value="save">Simpan</button>
-                <button class="sales-button bg-white" name="submit_action" value="add_another">Simpan & Tambah Lagi</button>
+            <p id="quick-lead-required-note" class="sales-pocketbook-required-note md:col-span-2 xl:col-span-4"><span aria-hidden="true">*</span> Wajib diisi</p>
+            <x-crm.field label="Tanggal Lead" for="quick-lead-date" required :error="$errors->first('lead_date')"><x-crm.date-field id="quick-lead-date" name="lead_date" :value="old('lead_date', request('lead_date', now()->toDateString()))" required :aria-invalid="$errors->has('lead_date') ? 'true' : 'false'" :aria-describedby="$errors->has('lead_date') ? 'quick-lead-date-error' : null" /></x-crm.field>
+            <x-crm.field label="Nama Calon Konsumen" for="quick-lead-customer-name" required :error="$errors->first('customer_name')"><input id="quick-lead-customer-name" class="sales-input" name="customer_name" value="{{ old('customer_name') }}" required aria-invalid="{{ $errors->has('customer_name') ? 'true' : 'false' }}" @if($errors->has('customer_name')) aria-describedby="quick-lead-customer-name-error" @endif></x-crm.field>
+            <x-crm.field label="No. WhatsApp / Telepon" for="quick-lead-phone" hint="Pemeriksaan duplikat hanya berupa peringatan dan tidak mencegah penyimpanan." :error="$errors->first('phone')">
+                <input id="quick-lead-phone" class="sales-input" name="phone" value="{{ old('phone') }}" @blur="checkPhone($event.target.value)" x-bind:aria-busy="duplicatePending" aria-invalid="{{ $errors->has('phone') ? 'true' : 'false' }}" aria-describedby="quick-lead-phone-hint{{ $errors->has('phone') ? ' quick-lead-phone-error' : '' }} quick-lead-duplicate-status">
+                <div id="quick-lead-duplicate-status" class="sales-pocketbook-duplicate-status" aria-live="polite" aria-atomic="true">
+                    <p x-show="duplicatePending" x-cloak>Memeriksa nomor duplikat...</p>
+                    <div x-show="!duplicatePending && duplicates.length" x-cloak class="sales-pocketbook-duplicate-result"><strong>Peringatan duplikat, lead tetap dapat disimpan.</strong><template x-for="item in duplicates" :key="`${item.sales}-${item.branch}-${item.project}-${item.date}`"><div x-text="`${item.sales} / ${item.branch} / ${item.project} / ${item.date}`"></div></template></div>
+                </div>
+            </x-crm.field>
+            <x-crm.field label="Sumber Lead" for="quick-lead-source" required :error="$errors->first('lead_source_id')"><select id="quick-lead-source" class="sales-input" name="lead_source_id" required aria-invalid="{{ $errors->has('lead_source_id') ? 'true' : 'false' }}" @if($errors->has('lead_source_id')) aria-describedby="quick-lead-source-error" @endif><option value="">Pilih sumber</option>@foreach($leadSources as $source)<option value="{{ $source->id }}" @selected(old('lead_source_id') == $source->id)>{{ $source->name }}</option>@endforeach</select></x-crm.field>
+            <x-crm.field label="Cabang" for="quick-lead-branch" required :error="$errors->first('branch_id')"><select id="quick-lead-branch" class="sales-input" name="branch_id" x-model="branch" required @change="branchChanged()" aria-invalid="{{ $errors->has('branch_id') ? 'true' : 'false' }}" @if($errors->has('branch_id')) aria-describedby="quick-lead-branch-error" @endif>@foreach($branches as $branch)<option value="{{ $branch->id }}">{{ $branch->name }}</option>@endforeach</select></x-crm.field>
+            <x-crm.field label="Proyek" for="quick-lead-project" required :error="$errors->first('project_id')"><select id="quick-lead-project" class="sales-input" name="project_id" x-model="project" required @change="projectChanged()" aria-invalid="{{ $errors->has('project_id') ? 'true' : 'false' }}" @if($errors->has('project_id')) aria-describedby="quick-lead-project-error" @endif><option value="">Pilih proyek</option>@foreach($projects as $project)<option value="{{ $project->id }}" data-branch="{{ $project->branch_id }}" @selected($quickProjectId == $project->id) x-show="projectVisible('{{ $project->id }}')" :disabled="!projectVisible('{{ $project->id }}')">{{ $project->project_name }}</option>@endforeach</select></x-crm.field>
+            <x-crm.field label="Sales" for="quick-lead-sales" required :error="$errors->first('sales_user_id')"><select id="quick-lead-sales" class="sales-input" name="sales_user_id" x-model="sales" required @disabled(!$monitoring) aria-invalid="{{ $errors->has('sales_user_id') ? 'true' : 'false' }}" @if($errors->has('sales_user_id')) aria-describedby="quick-lead-sales-error" @endif>@foreach($salesUsers as $sales)<option value="{{ $sales->id }}" x-show="salesVisible('{{ $sales->id }}')" :disabled="!salesVisible('{{ $sales->id }}')">{{ $sales->name }}</option>@endforeach</select>@unless($monitoring)<input type="hidden" name="sales_user_id" value="{{ Auth::id() }}">@endunless</x-crm.field>
+            <x-crm.field label="Catatan" for="quick-lead-notes" :error="$errors->first('notes')"><input id="quick-lead-notes" class="sales-input" name="notes" value="{{ old('notes') }}" aria-invalid="{{ $errors->has('notes') ? 'true' : 'false' }}" @if($errors->has('notes')) aria-describedby="quick-lead-notes-error" @endif></x-crm.field>
+            <div class="sales-pocketbook-form-actions xl:col-span-4">
+                <x-crm.button type="submit" variant="primary" accent="sales" name="submit_action" value="save" x-bind:disabled="submitting" x-bind:aria-busy="submitting"><span x-show="!submitting">Simpan</span><span x-show="submitting" x-cloak>Menyimpan...</span></x-crm.button>
+                <x-crm.button type="submit" variant="secondary" name="submit_action" value="add_another" x-bind:disabled="submitting" x-bind:aria-busy="submitting">Simpan &amp; Tambah Lagi</x-crm.button>
+                <span class="sr-only" aria-live="polite" x-text="submitting ? 'Lead sedang disimpan.' : ''"></span>
             </div>
         </form>
     </section>
@@ -237,13 +250,11 @@
     </div>
 </div>
 
-<style>
-    [x-cloak]{display:none!important}.sales-label{display:block;margin-bottom:4px;font:700 11px Helvetica;text-transform:uppercase}.sales-input{width:100%;border:2px solid #000;border-radius:0;background:#fff;padding:8px 10px;font:14px 'Times New Roman'}.sales-button{border:2px solid #000;padding:8px 14px;font:700 11px Helvetica;text-transform:uppercase;box-shadow:2px 2px 0 #000}.stage-button{border:1px solid #000;background:#fff;padding:3px 5px;font:700 9px Helvetica;white-space:nowrap}.stage-button.done{background:#b7d7a8}
-</style>
 <script>
 function salesCascade(projects, salesUsers, initial = {}) {
     return {
         projects, salesUsers,
+        submitting: false,
         branch: String(initial.branch || ''), project: String(initial.project || ''), sales: String(initial.sales || ''),
         projectVisible(id) { return !this.branch || this.projects.find(item => item.id === String(id))?.branch_id === this.branch },
         salesVisible(id) {
@@ -262,6 +273,7 @@ function salesCascade(projects, salesUsers, initial = {}) {
             if (selected) this.branch = selected.branch_id
             if (this.sales && !this.salesVisible(this.sales)) this.sales = ''
         },
+        setSubmitting() { window.setTimeout(() => { this.submitting = true }, 0) },
     }
 }
 function salesPocketbook() {
@@ -275,20 +287,32 @@ function salesPocketbook() {
         }
     }
     return {
-        duplicates: [],
+        duplicates: [], duplicatePending: false, phoneController: null, phoneRequestId: 0,
         leadModalOpen: false, leadSaving: false, leadValidationError: '', leadTrigger: null, edit: {}, leadCache: {}, leadTokens: {},
         stageModalOpen: false, stageSaving: false, stageValidationError: '', stageTrigger: null, stageEdit: {},
         async checkPhone(phone) {
-            if (!phone) { this.duplicates = []; return }
+            this.phoneController?.abort()
+            const requestId = ++this.phoneRequestId
+            if (!phone) { this.duplicates = []; this.duplicatePending = false; return }
+            const controller = new AbortController()
+            this.phoneController = controller
+            this.duplicatePending = true
             try {
                 const url = new URL(@json(route('sales-leads.duplicate-phone')), window.location.origin)
                 url.searchParams.set('phone', phone)
-                const response = await fetch(url, { headers: { Accept: 'application/json' } })
+                const response = await fetch(url, { signal: controller.signal, headers: { Accept: 'application/json' } })
                 if (!response.ok) throw new Error()
-                this.duplicates = (await response.json()).matches
-            } catch (_) {
+                const matches = (await response.json()).matches
+                if (requestId === this.phoneRequestId) this.duplicates = matches
+            } catch (error) {
+                if (error.name === 'AbortError' || requestId !== this.phoneRequestId) return
                 this.duplicates = []
                 window.oasisToast('Pemeriksaan nomor duplikat belum tersedia. Data tetap dapat disimpan.', 'warning')
+            } finally {
+                if (requestId === this.phoneRequestId) {
+                    this.duplicatePending = false
+                    this.phoneController = null
+                }
             }
         },
         openLeadEdit(lead) {

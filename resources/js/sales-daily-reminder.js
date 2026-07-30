@@ -6,13 +6,22 @@ export default function registerSalesDailyReminder(Alpine) {
         dismissPromise: null,
         actionPending: false,
         trigger: null,
+        previousBodyOverflow: null,
 
         init() {
             if (!this.open) return;
             this.trigger = document.activeElement === document.body
                 ? document.querySelector('a[href*="/buku-saku-sales"]')
                 : document.activeElement;
+            this.previousBodyOverflow = document.body.style.overflow;
+            document.body.style.overflow = 'hidden';
             this.$nextTick(() => this.$refs.dialog?.querySelector('a, button, input')?.focus({ preventScroll: true }));
+        },
+
+        restoreBodyScroll() {
+            if (this.previousBodyOverflow === null) return;
+            document.body.style.overflow = this.previousBodyOverflow;
+            this.previousBodyOverflow = null;
         },
 
         async persistDismissal() {
@@ -49,6 +58,7 @@ export default function registerSalesDailyReminder(Alpine) {
             if (this.actionPending) return;
             this.actionPending = true;
             this.open = false;
+            this.restoreBodyScroll();
             this.$nextTick(() => this.trigger?.focus?.({ preventScroll: true }));
             await this.persistDismissal();
             this.actionPending = false;
@@ -58,6 +68,7 @@ export default function registerSalesDailyReminder(Alpine) {
             if (this.actionPending) return;
             this.actionPending = true;
             this.open = false;
+            this.restoreBodyScroll();
             const persisted = await this.persistDismissal();
             const destination = new URL(url, window.location.origin);
             if (this.hideToday && persisted === false) destination.searchParams.set('reminder_dismiss_failed', '1');

@@ -52,9 +52,10 @@
         request()->except(array_merge($remove, ['agenda_page'])),
         ['tab' => 'agenda'],
     ));
-    $hasExplicitAgendaPeriod = request()->filled('period_type') || request()->filled('week') || request()->filled('date_from') || request()->filled('date_to');
     $completedAgendaDrilldown = request()->boolean('report_agenda_completed');
     $missingAgendaResultDrilldown = request()->boolean('report_agenda_missing_result');
+    $hasExplicitAgendaPeriod = ! $missingAgendaResultDrilldown
+        && (request()->filled('period_type') || request()->filled('week') || request()->filled('date_from') || request()->filled('date_to'));
     $hasAgendaFilters = collect(['branch_id', 'project_id', 'sales_user_id', 'report_agenda_completed', 'report_agenda_missing_result'])
         ->contains(fn (string $key) => request()->filled($key)) || $hasExplicitAgendaPeriod;
     $activeAgendaFilterCount = collect(['branch_id', 'project_id', 'sales_user_id', 'report_agenda_completed', 'report_agenda_missing_result'])
@@ -183,7 +184,11 @@
         @if($monitoring)<x-crm.field label="Cabang" for="agenda-filter-branch"><select id="agenda-filter-branch" class="sales-input" name="branch_id" x-model="branch" @change="branchChanged()"><option value="">Semua cabang</option>@foreach($branches as $branch)<option value="{{ $branch->id }}">{{ $branch->name }}</option>@endforeach</select></x-crm.field>@endif
         <x-crm.field label="Proyek" for="agenda-filter-project"><select id="agenda-filter-project" class="sales-input" name="project_id" x-model="project" @change="projectChanged()"><option value="">Semua proyek</option>@foreach($projects as $project)<option value="{{ $project->id }}" x-show="projectVisible('{{ $project->id }}')" :disabled="!projectVisible('{{ $project->id }}')">{{ $project->project_name }}</option>@endforeach</select></x-crm.field>
         @if($monitoring)<x-crm.field label="Sales" for="agenda-filter-sales"><select id="agenda-filter-sales" class="sales-input" name="sales_user_id" x-model="sales"><option value="">Semua sales</option>@foreach($salesUsers as $sales)<option value="{{ $sales->id }}" x-show="salesVisible('{{ $sales->id }}')" :disabled="!salesVisible('{{ $sales->id }}')">{{ $sales->name }}</option>@endforeach</select></x-crm.field>@endif
-        <div class="crm-field"><span class="crm-field-label" id="agenda-period-label">Periode</span><div class="crm-field-control">@include('crm.sales-pocketbook._period-picker', ['periodPickerId' => 'agenda-period'])</div></div>
+        @if($missingAgendaResultDrilldown)
+            <x-crm.alert variant="info" title="Antrean seluruh periode">Filter periode tidak diterapkan agar semua agenda selesai yang belum memiliki hasil tetap terlihat.</x-crm.alert>
+        @else
+            <div class="crm-field"><span class="crm-field-label" id="agenda-period-label">Periode</span><div class="crm-field-control">@include('crm.sales-pocketbook._period-picker', ['periodPickerId' => 'agenda-period'])</div></div>
+        @endif
         <div class="sales-agenda-filter-actions"><x-crm.button type="submit" variant="primary" accent="sales">Terapkan Filter</x-crm.button>@if($hasAgendaFilters)<x-crm.button variant="secondary" :href="$agendaResetUrl">Hapus semua filter</x-crm.button>@endif</div>
     </form>
 
@@ -264,7 +269,7 @@
                 <input id="quick-lead-phone" class="sales-input" name="phone" value="{{ old('phone') }}" @blur="checkPhone($event.target.value)" x-bind:aria-busy="duplicatePending" aria-invalid="{{ $errors->has('phone') ? 'true' : 'false' }}" aria-describedby="quick-lead-phone-hint{{ $errors->has('phone') ? ' quick-lead-phone-error' : '' }} quick-lead-duplicate-status">
                 <div id="quick-lead-duplicate-status" class="sales-pocketbook-duplicate-status" aria-live="polite" aria-atomic="true">
                     <p x-show="duplicatePending" x-cloak>Memeriksa nomor duplikat...</p>
-                    <div x-show="!duplicatePending && duplicates.length" x-cloak class="sales-pocketbook-duplicate-result"><strong>Peringatan duplikat, lead tetap dapat disimpan.</strong><template x-for="item in duplicates" :key="`${item.sales}-${item.branch}-${item.project}-${item.date}`"><div x-text="`${item.sales} / ${item.branch} / ${item.project} / ${item.date}`"></div></template></div>
+                    <div x-show="!duplicatePending && duplicates.length" x-cloak class="sales-pocketbook-duplicate-result"><strong>Peringatan duplikat, lead tetap dapat disimpan.</strong><template x-for="item in duplicates" :key="item.id"><div x-text="`${item.sales} / ${item.branch} / ${item.project} / ${item.date}`"></div></template></div>
                 </div>
             </x-crm.field>
             <x-crm.field label="Sumber Lead" for="quick-lead-source" required :error="$errors->first('lead_source_id')"><select id="quick-lead-source" class="sales-input" name="lead_source_id" required aria-invalid="{{ $errors->has('lead_source_id') ? 'true' : 'false' }}" @if($errors->has('lead_source_id')) aria-describedby="quick-lead-source-error" @endif><option value="">Pilih sumber</option>@foreach($leadSources as $source)<option value="{{ $source->id }}" @selected(old('lead_source_id') == $source->id)>{{ $source->name }}</option>@endforeach</select></x-crm.field>
@@ -303,6 +308,7 @@
     <x-crm.modal name="sales-lead-filters" title="Filter Monitoring Lead" description="Batasi daftar berdasarkan organisasi, sumber, tahap, dan periode." size="lg">
         <form method="GET" action="{{ route('sales-pocketbook.index') }}" x-data="salesCascade(@js($cascadeProjects), @js($cascadeSales), @js(['branch' => request('branch_id'), 'project' => request('project_id'), 'sales' => request('sales_user_id')]))" class="sales-lead-filter-form">
             <input type="hidden" name="tab" value="leads">
+            @if(request()->filled('report_metric'))<input type="hidden" name="report_metric" value="{{ request('report_metric') }}">@endif
             <x-crm.field label="Cabang" for="lead-filter-branch"><select id="lead-filter-branch" class="sales-input" name="branch_id" x-model="branch" @change="branchChanged()"><option value="">Semua cabang</option>@foreach($branches as $branch)<option value="{{ $branch->id }}">{{ $branch->name }}</option>@endforeach</select></x-crm.field>
             <x-crm.field label="Proyek" for="lead-filter-project"><select id="lead-filter-project" class="sales-input" name="project_id" x-model="project" @change="projectChanged()"><option value="">Semua proyek</option>@foreach($projects as $project)<option value="{{ $project->id }}" x-show="projectVisible('{{ $project->id }}')" :disabled="!projectVisible('{{ $project->id }}')">{{ $project->project_name }}</option>@endforeach</select></x-crm.field>
             <x-crm.field label="Sales" for="lead-filter-sales"><select id="lead-filter-sales" class="sales-input" name="sales_user_id" x-model="sales"><option value="">Semua sales</option>@foreach($salesUsers as $sales)<option value="{{ $sales->id }}" x-show="salesVisible('{{ $sales->id }}')" :disabled="!salesVisible('{{ $sales->id }}')">{{ $sales->name }}</option>@endforeach</select></x-crm.field>
@@ -364,21 +370,21 @@
 
     <div x-show="leadModalOpen" x-cloak class="sales-pocketbook-dialog-backdrop" @keydown.escape.window="if (!conflictDialogOpen()) closeLeadModal()">
         <div x-ref="leadDialog" role="dialog" aria-modal="true" aria-labelledby="lead-dialog-title" aria-describedby="lead-dialog-description" class="sales-pocketbook-dialog sales-pocketbook-dialog--lead" :aria-busy="leadSaving" @click.outside="if (!conflictDialogOpen()) closeLeadModal()" @keydown.tab="trapFocus($event, $refs.leadDialog)">
-            <div class="sales-pocketbook-dialog-header"><div><h2 id="lead-dialog-title">Edit Lead</h2><p id="lead-dialog-description">Perbarui data lead. Progres yang sudah tercatat tidak berubah.</p></div><button type="button" class="sales-pocketbook-dialog-close" aria-label="Tutup dialog edit lead" @click="closeLeadModal()">&times;</button></div>
+            <div class="sales-pocketbook-dialog-header"><div><h2 id="lead-dialog-title">Edit Lead</h2><p id="lead-dialog-description">Perbarui data lead. Progres yang sudah tercatat tidak berubah.</p></div><button type="button" class="sales-pocketbook-dialog-close" aria-label="Tutup dialog edit lead" :disabled="leadSaving" @click="closeLeadModal()">&times;</button></div>
             <template x-if="leadModalOpen"><div x-data="crmPresence(@js(['enabled' => config('presence.enabled', true), 'heartbeatUrl' => route('presence.heartbeat'), 'indexUrl' => route('presence.index'), 'destroyUrl' => route('presence.destroy'), 'heartbeatSeconds' => config('presence.heartbeat_seconds', 25), 'pageKey' => 'sales-pocketbook', 'recordType' => 'sales_lead', 'mode' => 'editing']))" x-init="updateContext({ branchId: edit.branch_id, recordType: 'sales_lead', recordId: edit.id, mode: 'editing' })" x-show="others.length" class="mb-3 border-2 border-black bg-[#eef1ff] p-2 text-xs"><strong x-text="summary"></strong></div></template>
             <div x-ref="leadValidationAlert" x-show="leadValidationError" x-text="leadValidationError" class="sales-pocketbook-dialog-error" role="alert" aria-live="assertive" tabindex="-1"></div>
             <form data-conflict-form @submit.prevent="saveLeadEdit($event)" class="sales-pocketbook-dialog-form" :aria-busy="leadSaving">
                 <input type="hidden" name="expected_updated_at" x-model="edit.token"><input type="hidden" name="presence_session_key">
                 <x-crm.field label="Tanggal Lead" for="modal-lead-date" required><x-crm.date-field id="modal-lead-date" name="lead_date" x-ref="leadEditDate" x-model="edit.lead_date" required /></x-crm.field>
                 <x-crm.field label="Nama Calon Konsumen" for="modal-lead-name" required><input id="modal-lead-name" x-ref="leadEditName" class="sales-input" name="customer_name" x-model="edit.customer_name" required></x-crm.field>
-                <x-crm.field label="No. WhatsApp / Telepon" for="modal-lead-phone" hint="Peringatan duplikat tidak mencegah penyimpanan."><input id="modal-lead-phone" class="sales-input" name="phone" x-model="edit.phone" @blur="checkPhone($event.target.value, edit.id)" x-bind:aria-busy="duplicatePending" aria-describedby="modal-lead-phone-hint modal-lead-duplicate-status"><div id="modal-lead-duplicate-status" class="sales-pocketbook-duplicate-status" aria-live="polite" aria-atomic="true"><p x-show="duplicatePending" x-cloak>Memeriksa nomor duplikat...</p><div x-show="!duplicatePending && duplicates.length" x-cloak class="sales-pocketbook-duplicate-result"><strong>Peringatan duplikat, lead tetap dapat disimpan.</strong><template x-for="item in duplicates" :key="`${item.sales}-${item.branch}-${item.project}-${item.date}`"><div x-text="`${item.sales} / ${item.branch} / ${item.project} / ${item.date}`"></div></template></div></div></x-crm.field>
+                <x-crm.field label="No. WhatsApp / Telepon" for="modal-lead-phone" hint="Peringatan duplikat tidak mencegah penyimpanan."><input id="modal-lead-phone" class="sales-input" name="phone" x-model="edit.phone" @blur="checkPhone($event.target.value, edit.id)" x-bind:aria-busy="duplicatePending" aria-describedby="modal-lead-phone-hint modal-lead-duplicate-status"><div id="modal-lead-duplicate-status" class="sales-pocketbook-duplicate-status" aria-live="polite" aria-atomic="true"><p x-show="duplicatePending" x-cloak>Memeriksa nomor duplikat...</p><div x-show="!duplicatePending && duplicates.length" x-cloak class="sales-pocketbook-duplicate-result"><strong>Peringatan duplikat, lead tetap dapat disimpan.</strong><template x-for="item in duplicates" :key="item.id"><div x-text="`${item.sales} / ${item.branch} / ${item.project} / ${item.date}`"></div></template></div></div></x-crm.field>
                 <x-crm.field label="Sumber Lead" for="modal-lead-source" required><select id="modal-lead-source" class="sales-input" name="lead_source_id" x-model="edit.lead_source_id" required><template x-if="!edit.source_active"><option :value="edit.lead_source_id" x-text="`${edit.source_name} (nonaktif)`"></option></template>@foreach($leadSources as $source)<option value="{{ $source->id }}">{{ $source->name }}</option>@endforeach</select></x-crm.field>
                 <x-crm.field label="Cabang" for="modal-lead-branch" required><select id="modal-lead-branch" class="sales-input" name="branch_id" x-model="edit.branch_id" @change="editBranchChanged()" required>@foreach($branches as $branch)<option value="{{ $branch->id }}">{{ $branch->name }}</option>@endforeach</select></x-crm.field>
                 <x-crm.field label="Proyek" for="modal-lead-project" required><select id="modal-lead-project" class="sales-input" name="project_id" x-model="edit.project_id" @change="editProjectChanged()" required>@foreach($projects as $project)<option value="{{ $project->id }}" x-show="editProjectVisible('{{ $project->id }}')" :disabled="!editProjectVisible('{{ $project->id }}')">{{ $project->project_name }}</option>@endforeach</select></x-crm.field>
                 <x-crm.field label="Sales" for="modal-lead-sales" required><select id="modal-lead-sales" class="sales-input" name="sales_user_id" x-model="edit.sales_user_id" required @disabled(Auth::user()->isSales())>@foreach($salesUsers as $sales)<option value="{{ $sales->id }}" x-show="editSalesVisible('{{ $sales->id }}')" :disabled="!editSalesVisible('{{ $sales->id }}')">{{ $sales->name }}</option>@endforeach</select></x-crm.field>
                 <x-crm.field label="Referensi Konsumen Tertaut" for="modal-lead-reference"><input id="modal-lead-reference" class="sales-input" name="linked_consumer_reference" x-model="edit.linked_consumer_reference"></x-crm.field>
                 <x-crm.field label="Catatan" for="modal-lead-notes" class="md:col-span-2"><textarea id="modal-lead-notes" class="sales-input" name="notes" rows="3" x-model="edit.notes"></textarea></x-crm.field>
-                <div class="sales-pocketbook-dialog-actions md:col-span-2"><x-crm.button type="submit" variant="primary" accent="sales" x-bind:disabled="leadSaving" x-bind:aria-busy="leadSaving"><span x-text="leadSaving ? 'Menyimpan...' : 'Simpan Perubahan'"></span></x-crm.button><x-crm.button type="button" variant="secondary" @click="closeLeadModal()">Batal</x-crm.button><a :href="edit.fallback_url" class="crm-button crm-button--secondary crm-button--md">Buka Halaman Edit</a><span class="sr-only" aria-live="polite" x-text="leadSaving ? 'Perubahan lead sedang disimpan.' : ''"></span></div>
+                <div class="sales-pocketbook-dialog-actions md:col-span-2"><x-crm.button type="submit" variant="primary" accent="sales" x-bind:disabled="leadSaving" x-bind:aria-busy="leadSaving"><span x-text="leadSaving ? 'Menyimpan...' : 'Simpan Perubahan'"></span></x-crm.button><x-crm.button type="button" variant="secondary" x-bind:disabled="leadSaving" @click="closeLeadModal()">Batal</x-crm.button><a :href="edit.fallback_url" :aria-disabled="leadSaving" :tabindex="leadSaving ? -1 : 0" @click="if (leadSaving) $event.preventDefault()" class="crm-button crm-button--secondary crm-button--md">Buka Halaman Edit</a><span class="sr-only" aria-live="polite" x-text="leadSaving ? 'Perubahan lead sedang disimpan.' : ''"></span></div>
             </form>
         </div>
     </div>
@@ -441,7 +447,11 @@ function salesPocketbook() {
             }
         },
         openLeadEdit(lead) {
+            if (this.leadSaving) return
             this.leadTrigger = document.activeElement
+            this.phoneController?.abort()
+            this.phoneRequestId++
+            this.duplicatePending = false
             this.edit = structuredClone(this.leadCache[lead.id] || lead)
             this.edit.token = this.leadTokens[lead.id] || this.edit.token
             this.leadValidationError = ''
@@ -453,8 +463,8 @@ function salesPocketbook() {
                 this.$refs.leadEditName?.focus()
             })
         },
-        closeLeadModal() {
-            if (!this.leadModalOpen) return
+        closeLeadModal(force = false) {
+            if (!this.leadModalOpen || (this.leadSaving && !force)) return
             this.leadModalOpen = false
             this.phoneController?.abort()
             this.duplicatePending = false
@@ -525,7 +535,7 @@ function salesPocketbook() {
                     activityTime.textContent = activityTime.dataset.leadBaseline
                 }
                 document.dispatchEvent(new CustomEvent('oasis-presence-saved'))
-                this.closeLeadModal()
+                this.closeLeadModal(true)
                 window.oasisToast(data.message || 'Lead berhasil diperbarui.')
             } catch (_) {
                 window.oasisToast('Perubahan gagal. Draf tetap tersimpan; periksa koneksi lalu coba lagi.', 'error')

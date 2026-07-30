@@ -452,6 +452,7 @@
 .sales-report-zero-state { margin: 0 var(--oasis-space-3) var(--oasis-space-3); }
 .sales-report-table-scroll { max-height: none; overflow-x: auto; overflow-y: visible; border: 0; }
 .sales-report-table th { min-width: 7rem; }
+.sales-report-table th > a { display: flex; min-height: 44px; align-items: center; }
 .sales-report-table td { height: 2.75rem; }
 .sales-report-table .sales-report-number { text-align: right; }
 .sales-report-conversion { display: block; color: var(--oasis-text-muted); font: 9px/1.2 var(--oasis-font-controls); }

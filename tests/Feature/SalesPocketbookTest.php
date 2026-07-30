@@ -424,8 +424,8 @@ class SalesPocketbookTest extends TestCase
             ->assertSee('Pilih Periode')
             ->assertSee('name="period_type"', false)
             ->assertSee('aria-label="Tutup pilihan periode"', false)
-            ->assertSee('@keydown.escape.window="if (open) { open = false; $nextTick(() => $refs.periodTrigger?.focus()) }"', false)
-            ->assertSee('<template x-if="open">', false)
+            ->assertSee('@keydown.escape="if (open) { $event.stopPropagation(); open = false; $nextTick(() => $refs.periodTrigger?.focus()) }"', false)
+            ->assertSee('x-show="open" x-cloak', false)
             ->assertDontSee('periodPicker(', false);
     }
 
@@ -865,6 +865,25 @@ class SalesPocketbookTest extends TestCase
         foreach (['overflow-x: auto', '@media (max-width: 639px)', 'min-height: 44px', 'grid-template-columns: minmax(0, 1fr)'] as $contract) {
             $this->assertTrue(str_contains($css, $contract), 'Missing mobile CSS contract: '.$contract);
         }
+    }
+
+    public function test_sales_pocketbook_two_changelog_is_idempotent_and_rendered(): void
+    {
+        $migrationPath = database_path('migrations/2026_07_30_000004_add_sales_pocketbook_2_accessibility_changelog.php');
+        $migration = require $migrationPath;
+        $migration->up();
+        $migration->up();
+
+        $title = 'Buku Saku Sales menjadi ruang kerja harian';
+        $entry = DB::table('changelogs')->whereNull('version')->where('title', $title)->sole();
+        $this->assertSame('changed', $entry->category);
+        $this->assertSame(1, DB::table('changelogs')->whereNull('version')->where('title', $title)->count());
+        $this->assertStringContainsString("DB::table('changelogs')->updateOrInsert", file_get_contents($migrationPath));
+
+        [$branch] = $this->salesContext();
+        $this->actingAs($this->user('manager', $branch))->get(route('changelogs.index'))->assertOk()
+            ->assertSee($title)
+            ->assertSee('Lead, agenda, laporan, pengingat, dan input harian kini lebih terarah');
     }
 
     private function salesContext(): array

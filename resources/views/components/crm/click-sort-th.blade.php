@@ -25,6 +25,10 @@
 @endphp
 <th scope="col" class="{{ $alignClass }}" aria-sort="{{ $isActive ? ($currentDir === 'asc' ? 'ascending' : 'descending') : 'none' }}" style="cursor:pointer;user-select:none;{{ $isActive ? 'background:#5b7db9;' : '' }}">
     <a href="{{ route($route, $params) }}" class="block" aria-label="Urutkan berdasarkan {{ $label }}, {{ $nextDir === 'asc' ? 'menaik' : 'menurun' }}">
-        {{ $label }}<span aria-hidden="true">{{ $icon }}</span>
+        @if($currentIndicator)
+            {{ $label }}<span aria-hidden="true">{{ $icon }}</span>
+        @else
+            {{ $label }}{{ $icon }}
+        @endif
     </a>
 </th>

@@ -1,3 +1,5 @@
+import { lockBodyScroll, unlockBodyScroll } from './body-scroll-lock';
+
 export default function registerSalesDailyReminder(Alpine) {
     Alpine.data('salesDailyReminder', config => ({
         open: Boolean(config.shouldShow),
@@ -6,22 +8,23 @@ export default function registerSalesDailyReminder(Alpine) {
         dismissPromise: null,
         actionPending: false,
         trigger: null,
-        previousBodyOverflow: null,
+        bodyLockOwner: 'sales-daily-reminder',
 
         init() {
             if (!this.open) return;
             this.trigger = document.activeElement === document.body
                 ? document.querySelector('a[href*="/buku-saku-sales"]')
                 : document.activeElement;
-            this.previousBodyOverflow = document.body.style.overflow;
-            document.body.style.overflow = 'hidden';
+            lockBodyScroll(this.bodyLockOwner);
             this.$nextTick(() => this.$refs.dialog?.querySelector('a, button, input')?.focus({ preventScroll: true }));
         },
 
         restoreBodyScroll() {
-            if (this.previousBodyOverflow === null) return;
-            document.body.style.overflow = this.previousBodyOverflow;
-            this.previousBodyOverflow = null;
+            unlockBodyScroll(this.bodyLockOwner);
+        },
+
+        destroy() {
+            this.restoreBodyScroll();
         },
 
         async persistDismissal() {

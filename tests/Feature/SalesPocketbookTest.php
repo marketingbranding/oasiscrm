@@ -592,6 +592,281 @@ class SalesPocketbookTest extends TestCase
         $this->assertFalse(ContentItem::where('rescheduled_from_id', $agenda->id)->exists());
     }
 
+    public function test_migrated_page_uses_canonical_header_and_role_aware_personal_and_monitoring_contexts(): void
+    {
+        [$branch, $project, $sales] = $this->salesContext();
+        $manager = $this->user('manager', $branch);
+
+        $this->actingAs($sales)->get(route('sales-pocketbook.index'))->assertOk()
+            ->assertSee('sales-pocketbook-page-header', false)
+            ->assertSee('Workspace Pribadi')
+            ->assertSee('Catat lead, jalankan agenda, dan lengkapi hasil aktivitas harian Anda.')
+            ->assertSee('Mode')->assertSee('Pribadi')->assertSee('Lead Saya')
+            ->assertSee('Input Lead')->assertSee('Export XLSX')
+            ->assertDontSee('Filter monitoring')->assertDontSee('Filter lanjutan')
+            ->assertDontSee('name="search"', false)->assertDontSee('type="search"', false);
+
+        $this->actingAs($manager)->get(route('sales-pocketbook.index', [
+            'branch_id' => $branch->id,
+            'project_id' => $project->id,
+            'sales_user_id' => $sales->id,
+        ]))->assertOk()
+            ->assertSee('Workspace Monitoring')
+            ->assertSee('Pantau aktivitas, funnel, dan kedisiplinan input Sales dalam scope organisasi Anda.')
+            ->assertSee('Mode')->assertSee('Monitoring')->assertSee('Monitoring Lead')
+            ->assertSee('Filter monitoring')->assertSee('Filter lanjutan (3)')
+            ->assertSee('Cabang: '.$branch->name)->assertSee('Proyek: '.$project->project_name)->assertSee('Sales: '.$sales->name)
+            ->assertDontSee('id="quick-lead-input"', false);
+    }
+
+    public function test_tabs_are_accessible_urls_and_keep_only_compatible_scope_and_period_state(): void
+    {
+        [$branch, $project, $sales] = $this->salesContext();
+        $manager = $this->user('manager', $branch);
+        $query = [
+            'tab' => 'agenda',
+            'branch_id' => $branch->id,
+            'project_id' => $project->id,
+            'sales_user_id' => $sales->id,
+            'period_type' => 'custom',
+            'date_from' => '2026-07-01',
+            'date_to' => '2026-07-31',
+            'lead_source_id' => LeadSource::where('is_active', true)->firstOrFail()->id,
+            'stage' => 'contacted_at',
+        ];
+
+        $response = $this->actingAs($manager)->get(route('sales-pocketbook.index', $query))->assertOk()
+            ->assertSee('aria-label="Tampilan Buku Saku Sales"', false)
+            ->assertSee('aria-current="page"', false);
+
+        $scope = ['branch_id' => $branch->id, 'project_id' => $project->id, 'sales_user_id' => $sales->id];
+        $period = ['period_type' => 'custom', 'date_from' => '2026-07-01', 'date_to' => '2026-07-31'];
+        $response->assertSee(route('sales-pocketbook.index', ['tab' => 'leads', ...$scope]))
+            ->assertSee(route('sales-pocketbook.index', ['tab' => 'agenda', ...$scope, ...$period]))
+            ->assertSee(route('sales-pocketbook.index', ['tab' => 'report', ...$scope, ...$period]));
+
+        $content = $response->getContent();
+        $this->assertStringNotContainsString('tab=report&amp;lead_source_id=', $content);
+        $this->assertStringNotContainsString('tab=report&amp;stage=', $content);
+    }
+
+    public function test_each_lead_renders_one_record_and_one_edit_payload_with_canonical_states_and_comment_count(): void
+    {
+        [, $project, $sales] = $this->salesContext();
+        $newLead = $this->lead($sales, $project, 'Lead Baru Tunggal');
+        $progressLead = $this->lead($sales, $project, 'Lead Dihubungi Tunggal', '08123456780');
+        $progressLead->update(['contacted_at' => '2026-07-02 09:00:00']);
+        $progressLead->comments()->create(['user_id' => $sales->id, 'body' => 'Satu', 'body_plain' => 'Satu']);
+
+        $response = $this->actingAs($sales)->get(route('sales-pocketbook.index'))->assertOk()
+            ->assertSee('LEAD BARU')->assertSee('DIHUBUNGI')->assertSee('Komentar (1)');
+        $content = $response->getContent();
+
+        foreach ([$newLead, $progressLead] as $lead) {
+            $this->assertSame(1, substr_count($content, 'data-lead-row="'.$lead->id.'"'));
+        }
+        $this->assertSame(2, substr_count($content, 'class="sales-lead-item"'));
+        $this->assertSame(2, substr_count($content, '@click="openLeadEdit('));
+    }
+
+    public function test_agenda_and_report_render_canonical_operational_and_empty_states_with_comment_counts(): void
+    {
+        [, $project, $sales] = $this->salesContext();
+        $planned = $this->agenda($sales, $project, ['title' => 'Agenda Terjadwal']);
+        $done = $this->agenda($sales, $project, [
+            'title' => 'Agenda Hasil Lengkap', 'status' => 'done', 'activity_result' => 'Selesai', 'completed_at' => '2026-07-10 10:00:00',
+        ]);
+        $missing = $this->agenda($sales, $project, [
+            'title' => 'Agenda Hasil Kosong', 'status' => 'done', 'activity_result' => null, 'completed_at' => '2026-07-10 10:00:00',
+        ]);
+        $done->comments()->create(['user_id' => $sales->id, 'body' => 'Satu', 'body_plain' => 'Satu']);
+        $done->comments()->create(['user_id' => $sales->id, 'body' => 'Dua', 'body_plain' => 'Dua']);
+
+        $period = ['period_type' => 'custom', 'date_from' => '2026-07-01', 'date_to' => '2026-07-31'];
+        $this->actingAs($sales)->get(route('sales-pocketbook.index', ['tab' => 'agenda', ...$period]))->assertOk()
+            ->assertSee($planned->title)->assertSee($done->title)->assertSee($missing->title)
+            ->assertSee('Terjadwal / Terlewat')->assertSee('Selesai')->assertSee('Selesai / Hasil belum lengkap')
+            ->assertSee('Komentar (2)');
+
+        $this->actingAs($sales)->get(route('sales-pocketbook.index', [
+            'tab' => 'report', 'period_type' => 'custom', 'date_from' => '2026-08-01', 'date_to' => '2026-08-31',
+        ]))->assertOk()
+            ->assertSee('Ringkasan periode')->assertSee('Aktivitas saya')->assertSee('Agenda Selesai')
+            ->assertSee('Belum ada aktivitas pada periode ini.');
+    }
+
+    public function test_lead_and_agenda_lists_paginate_independently_at_twenty_and_preserve_relevant_filters(): void
+    {
+        [$branch, $project, $sales] = $this->salesContext();
+        $manager = $this->user('manager', $branch);
+        $source = LeadSource::where('is_active', true)->firstOrFail();
+        foreach (range(1, 25) as $index) {
+            $this->lead($sales, $project, sprintf('Lead Page %02d', $index), '08123'.str_pad((string) $index, 6, '0', STR_PAD_LEFT));
+            $this->agenda($sales, $project, ['title' => sprintf('Agenda Page %02d', $index)]);
+        }
+        $period = ['period_type' => 'custom', 'date_from' => '2026-07-01', 'date_to' => '2026-07-31'];
+
+        $leadResponse = $this->actingAs($manager)->get(route('sales-pocketbook.index', [
+            'tab' => 'leads', 'page' => 2, 'agenda_page' => 2, 'lead_source_id' => $source->id, ...$period,
+        ]))->assertOk()
+            ->assertViewHas('leads', fn ($leads) => $leads->perPage() === 20 && $leads->currentPage() === 2 && $leads->total() === 25)
+            ->assertViewHas('agendas', fn ($agendas) => $agendas->perPage() === 20 && $agendas->currentPage() === 2 && $agendas->total() === 25);
+        $leadContent = $leadResponse->getContent();
+        $this->assertStringContainsString('lead_source_id='.$source->id, $leadContent);
+        $this->assertStringNotContainsString('agenda_page=', $this->paginationSection($leadContent, 'sales-lead-monitor'));
+
+        $agendaResponse = $this->actingAs($manager)->get(route('sales-pocketbook.index', [
+            'tab' => 'agenda', 'page' => 2, 'agenda_page' => 2, 'project_id' => $project->id, ...$period,
+        ]))->assertOk()
+            ->assertViewHas('leads', fn ($leads) => $leads->perPage() === 20 && $leads->currentPage() === 2 && $leads->total() === 25)
+            ->assertViewHas('agendas', fn ($agendas) => $agendas->perPage() === 20 && $agendas->currentPage() === 2 && $agendas->total() === 25);
+        $agendaContent = $agendaResponse->getContent();
+        $this->assertStringContainsString('project_id='.$project->id, $agendaContent);
+        $this->assertDoesNotMatchRegularExpression('/(?:\?|&amp;)page=/', $this->paginationSection($agendaContent, 'sales-agenda-monitor'));
+    }
+
+    public function test_true_empty_and_filtered_empty_states_are_distinct(): void
+    {
+        [$branch, $project, $sales] = $this->salesContext();
+        $manager = $this->user('manager', $branch);
+
+        $this->actingAs($sales)->get(route('sales-pocketbook.index'))->assertOk()
+            ->assertSee('Belum ada lead.')
+            ->assertDontSee('Tidak ada lead yang cocok dengan filter.');
+        $this->actingAs($manager)->get(route('sales-pocketbook.index', [
+            'branch_id' => $branch->id, 'project_id' => $project->id, 'sales_user_id' => $sales->id,
+        ]))->assertOk()
+            ->assertSee('Tidak ada lead yang cocok dengan filter.')
+            ->assertSee('Hapus semua filter');
+        $this->actingAs($sales)->get(route('sales-pocketbook.index', ['tab' => 'agenda']))->assertOk()
+            ->assertSee('Belum ada agenda minggu ini.');
+        $this->actingAs($sales)->get(route('sales-pocketbook.index', [
+            'tab' => 'agenda', 'period_type' => 'custom', 'date_from' => '2020-01-01', 'date_to' => '2020-01-31',
+        ]))->assertOk()->assertSee('Tidak ada agenda yang cocok dengan filter.');
+    }
+
+    public function test_export_and_agenda_create_visibility_follow_role_permissions_and_supported_actions(): void
+    {
+        [$branch, $project, $sales] = $this->salesContext();
+        $sales->forceFill(['supervisor_user_id' => null])->save();
+        $coordinator = $this->user('sales_coordinator', $branch, 'Koordinator');
+        $sales->forceFill(['supervisor_user_id' => $coordinator->id])->save();
+        $supervisor = $this->user('supervisor', $branch, 'Supervisor');
+        $branchManager = $this->user('branch_manager', $branch, 'Branch Manager');
+        $pusat = $this->user('pusat', null, 'Pusat');
+
+        $expectations = [
+            [$sales, true, true],
+            [$coordinator, false, false],
+            [$supervisor, true, false],
+            [$branchManager, true, false],
+            [$pusat, true, true],
+        ];
+        foreach ($expectations as [$actor, $exportVisible, $agendaCreateVisible]) {
+            $response = $this->actingAs($actor)->get(route('sales-pocketbook.index', ['tab' => 'agenda']))->assertOk();
+            $exportVisible ? $response->assertSee('Export XLSX') : $response->assertDontSee('Export XLSX');
+            $agendaCreateVisible ? $response->assertSee('id="quick-agenda-input"', false) : $response->assertDontSee('id="quick-agenda-input"', false);
+        }
+
+        $this->assertTrue($project->is_active);
+    }
+
+    public function test_primary_sales_index_ignores_another_sales_filter_and_rejects_tampered_branch_or_project(): void
+    {
+        [$branch, $project, $sales] = $this->salesContext();
+        $other = $this->sales($branch, $project, 'Other Sales');
+        $otherBranch = Branch::create(['name' => 'Pati', 'code' => 'PTI', 'is_active' => true]);
+        $otherProject = $this->project($otherBranch, 'Pati Project');
+
+        $this->actingAs($sales)->get(route('sales-pocketbook.index', ['sales_user_id' => $other->id]))->assertOk()
+            ->assertViewHas('leads', fn ($leads) => $leads->getCollection()->every(fn ($lead) => $lead->sales_user_id === $sales->id));
+        $this->actingAs($sales)->get(route('sales-pocketbook.index', ['branch_id' => $otherBranch->id]))->assertForbidden();
+        $this->actingAs($sales)->get(route('sales-pocketbook.index', ['project_id' => $otherProject->id]))->assertForbidden();
+    }
+
+    public function test_team_project_branch_global_and_supplemental_roles_keep_their_existing_scope_boundaries(): void
+    {
+        [$branch, $project, $sales] = $this->salesContext();
+        $peer = $this->sales($branch, $project, 'Peer Sales');
+        $teamLead = $this->lead($sales, $project, 'Team Visible');
+        $peerLead = $this->lead($peer, $project, 'Peer In Descendant Project', '08123456781');
+        $coordinator = $this->user('sales_coordinator', $branch, 'Coordinator');
+        $sales->forceFill(['supervisor_user_id' => $coordinator->id])->save();
+        $supervisor = $this->user('supervisor', $branch, 'Supervisor');
+        $coordinator->forceFill(['supervisor_user_id' => $supervisor->id])->save();
+
+        foreach ([$coordinator, $supervisor] as $teamActor) {
+            $response = $this->actingAs($teamActor)->get(route('sales-pocketbook.index'))->assertOk();
+            $names = $response->viewData('leads')->pluck('customer_name');
+            $this->assertContains($teamLead->customer_name, $names, $teamActor->role->slug.' should see descendants.');
+            $this->assertContains($peerLead->customer_name, $names, $teamActor->role->slug.' scope currently includes records in a descendant project.');
+        }
+        foreach (['branch_manager', 'manager'] as $role) {
+            $response = $this->actingAs($this->user($role, $branch))->get(route('sales-pocketbook.index'))->assertOk();
+            $names = $response->viewData('leads')->pluck('customer_name');
+            $this->assertContains($teamLead->customer_name, $names, $role.' should see branch leads.');
+            $this->assertContains($peerLead->customer_name, $names, $role.' should see branch peers.');
+        }
+        $globalResponse = $this->actingAs($this->user('pusat'))->get(route('sales-pocketbook.index'))->assertOk();
+        $globalNames = $globalResponse->viewData('leads')->pluck('customer_name');
+        $this->assertContains($teamLead->customer_name, $globalNames);
+        $this->assertContains($peerLead->customer_name, $globalNames);
+
+        $staff = $this->user('staff', $branch);
+        $staff->roles()->attach(Role::where('slug', 'pusat')->firstOrFail());
+        $this->actingAs($staff)->get(route('sales-pocketbook.index'))->assertForbidden();
+    }
+
+    public function test_report_sort_links_use_direction_preserve_filters_and_clear_both_paginator_keys(): void
+    {
+        [$branch, $project, $sales] = $this->salesContext();
+        $manager = $this->user('manager', $branch);
+        $response = $this->actingAs($manager)->get(route('sales-pocketbook.index', [
+            'tab' => 'report', 'branch_id' => $branch->id, 'project_id' => $project->id,
+            'period_type' => 'week', 'week' => '2026-07-20', 'sort' => 'sales', 'direction' => 'asc',
+            'page' => 4, 'agenda_page' => 3,
+        ]))->assertOk()->assertSee('aria-sort="ascending"', false);
+
+        $content = $response->getContent();
+        preg_match('/href="([^"]*sort=sales[^"]*)"[^>]*aria-label="Urutkan berdasarkan Sales/', $content, $match);
+        $this->assertNotEmpty($match);
+        $sortUrl = html_entity_decode($match[1]);
+        $this->assertStringContainsString('direction=desc', $sortUrl);
+        $this->assertStringContainsString('branch_id='.$branch->id, $sortUrl);
+        $this->assertStringContainsString('project_id='.$project->id, $sortUrl);
+        $this->assertStringNotContainsString('page=', $sortUrl);
+        $this->assertStringNotContainsString('agenda_page=', $sortUrl);
+        $this->assertStringNotContainsString('dir=', $sortUrl);
+    }
+
+    public function test_standalone_edit_duplicate_exclusion_and_mobile_source_contracts_remain_canonical(): void
+    {
+        [, $project, $sales] = $this->salesContext();
+        $lead = $this->lead($sales, $project, 'Edit Canonical');
+
+        $edit = $this->actingAs($sales)->get(route('sales-leads.edit', $lead))->assertOk()->getContent();
+        foreach (['sales-pocketbook-page-header', 'Edit Lead', 'Data Lead', 'Tanggal Lead', 'Nama Calon Konsumen',
+            'No. WhatsApp / Telepon', 'Sumber Lead', 'Referensi Konsumen Tertaut', 'Simpan Perubahan', 'Batal'] as $contract) {
+            $this->assertTrue(str_contains($edit, $contract), 'Missing edit contract: '.$contract);
+        }
+        $this->actingAs($sales)->getJson(route('sales-leads.duplicate-phone', [
+            'phone' => $lead->phone, 'except_id' => $lead->id,
+        ]))->assertOk()->assertJsonCount(0, 'matches');
+
+        $view = file_get_contents(resource_path('views/crm/sales-pocketbook/index.blade.php'))
+            .file_get_contents(resource_path('views/crm/sales-pocketbook/_report.blade.php'));
+        $reminder = file_get_contents(resource_path('views/crm/sales-pocketbook/_daily-reminder.blade.php'));
+        $css = file_get_contents(resource_path('css/app.css'));
+        foreach (['sales-pocketbook-tabs', 'sales-lead-item', 'sales-agenda-item', 'crm-table-scroll sales-report-table-scroll'] as $class) {
+            $this->assertTrue(str_contains($view, $class), 'Missing view contract: '.$class);
+        }
+        $this->assertTrue(str_contains($view, "@include('crm.sales-pocketbook._daily-reminder')"), 'Missing reminder include.');
+        $this->assertTrue(str_contains($reminder, 'salesDailyReminder('), 'Missing reminder Alpine contract.');
+        foreach (['overflow-x: auto', '@media (max-width: 639px)', 'min-height: 44px', 'grid-template-columns: minmax(0, 1fr)'] as $contract) {
+            $this->assertTrue(str_contains($css, $contract), 'Missing mobile CSS contract: '.$contract);
+        }
+    }
+
     private function salesContext(): array
     {
         $branch = Branch::create(['name' => 'Solo', 'code' => 'SLO', 'is_active' => true]);
@@ -647,9 +922,9 @@ class SalesPocketbookTest extends TestCase
         return ['stage' => $stage, 'action' => 'set', 'timestamp' => $timestamp, 'expected_updated_at' => app(OptimisticLockService::class)->token($lead)];
     }
 
-    private function agenda(User $sales, LeadMaster $project): ContentItem
+    private function agenda(User $sales, LeadMaster $project, array $overrides = []): ContentItem
     {
-        $agenda = ContentItem::create([
+        $agenda = ContentItem::create(array_merge([
             'branch_id' => $project->branch_id,
             'project_name' => $project->project_name,
             'item_type' => 'agenda',
@@ -665,11 +940,22 @@ class SalesPocketbookTest extends TestCase
             'duration_minutes' => 60,
             'status' => 'planned',
             'owner_user_id' => $sales->id,
+            'sales_project_id' => $project->id,
             'created_by' => $sales->id,
-        ]);
+        ], $overrides));
         $agenda->assignees()->attach($sales);
 
         return $agenda;
+    }
+
+    private function paginationSection(string $content, string $sectionClass): string
+    {
+        $start = strpos($content, '<section class="'.$sectionClass.'">');
+        $this->assertNotFalse($start);
+        $end = strpos($content, '</section>', $start);
+        $this->assertNotFalse($end);
+
+        return substr($content, $start, $end - $start);
     }
 
     private function agendaPayload(User $sales, LeadMaster $project, array $overrides = []): array

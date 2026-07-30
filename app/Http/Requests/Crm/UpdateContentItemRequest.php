@@ -4,6 +4,7 @@ namespace App\Http\Requests\Crm;
 
 use App\Models\ContentItem;
 use App\Services\WorkspaceAccessService;
+use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Validation\Rule;
@@ -15,7 +16,12 @@ class UpdateContentItemRequest extends FormRequest
         $user = Auth::user();
         $contentItem = $this->route('content_calendar');
 
-        return app(WorkspaceAccessService::class)->canEditBranch($user, $contentItem->branch_id);
+        return app(WorkspaceAccessService::class)->canManageBranch($user, $contentItem->branch_id, 'work_planner');
+    }
+
+    protected function failedAuthorization(): void
+    {
+        throw new AuthorizationException('Cabang item ini tidak dapat diedit oleh akun Anda.');
     }
 
     public function rules(): array

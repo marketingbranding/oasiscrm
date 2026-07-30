@@ -128,6 +128,44 @@ class WorkspaceAccessService
         return $this->hasPermission($user, $branch, 'can_edit');
     }
 
+    public function canManageBranch(User $user, int|Branch $branch, string $module): bool
+    {
+        $branchId = $branch instanceof Branch ? $branch->id : (int) $branch;
+        $active = $branch instanceof Branch
+            ? $branch->is_active
+            : Branch::whereKey($branchId)->where('is_active', true)->exists();
+
+        return $active && ($user->hasPermission("{$module}.manage_all")
+            || $this->hasPermission($user, $branch, 'can_edit', true, false));
+    }
+
+    public function editableBranches(User $user, string $module): Collection
+    {
+        if ($user->hasPermission("{$module}.manage_all")) {
+            return Branch::where('is_active', true)->forDropdown()->get();
+        }
+
+        return $this->accessibleBranches($user)
+            ->filter(fn (Branch $branch) => $this->canManageBranch($user, $branch, $module))
+            ->values();
+    }
+
+    public function resolveRequestedEditableBranch(User $user, mixed $requestedBranchId, string $module): ?Branch
+    {
+        if (filled($requestedBranchId)) {
+            $branch = Branch::whereKey((int) $requestedBranchId)->where('is_active', true)->first();
+
+            return $branch && $this->canManageBranch($user, $branch, $module) ? $branch : null;
+        }
+
+        $primary = $this->primaryBranch($user);
+        if ($primary?->is_active && $this->canManageBranch($user, $primary, $module)) {
+            return $primary;
+        }
+
+        return $this->editableBranches($user, $module)->first();
+    }
+
     public function canSyncBranch(User $user, int|Branch $branch): bool
     {
         return $this->hasPermission($user, $branch, 'can_sync');
@@ -159,15 +197,20 @@ class WorkspaceAccessService
         return $this->accessibleBranches($user)->first();
     }
 
-    private function hasPermission(User $user, int|Branch $branch, string $permission, bool $primaryFallback = true): bool
-    {
+    private function hasPermission(
+        User $user,
+        int|Branch $branch,
+        string $permission,
+        bool $primaryFallback = true,
+        bool $globalCompatibility = true,
+    ): bool {
         $branchId = $branch instanceof Branch ? $branch->id : (int) $branch;
         $active = $branch instanceof Branch ? $branch->is_active : Branch::whereKey($branchId)->where('is_active', true)->exists();
         if (! $active) {
             return false;
         }
 
-        if ($this->hasGlobalCompatibilityAccess($user)) {
+        if ($globalCompatibility && $this->hasGlobalCompatibilityAccess($user)) {
             return true;
         }
 

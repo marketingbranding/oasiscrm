@@ -36,13 +36,13 @@ class ContentItemPolicy
         }
 
         if ($user->isSales()) {
-            return app(WorkspaceAccessService::class)->canEditBranch($user, $item->branch_id)
+            return app(WorkspaceAccessService::class)->canManageBranch($user, $item->branch_id, 'work_planner')
                 && ($item->created_by === $user->id
                     || $item->assignees()->where('users.id', $user->id)->exists());
         }
 
         return $this->view($user, $item)
-            && app(WorkspaceAccessService::class)->canEditBranch($user, $item->branch_id);
+            && app(WorkspaceAccessService::class)->canManageBranch($user, $item->branch_id, 'work_planner');
     }
 
     public function delete(User $user, ContentItem $item): bool

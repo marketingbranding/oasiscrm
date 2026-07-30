@@ -428,6 +428,8 @@ Konsumen Progress required tabs are case-sensitive:
 
 Visibility is permission- and organization-scope-based, then constrained by creator/assignee/team/branch rules. Do not restore old raw `superadmin/pusat` visibility shortcuts.
 
+Work Planner writes use module-aware branch management through `WorkspaceAccessService`: `work_planner.manage_all` permits management in every active branch, while narrower roles still require the applicable active branch and `branch_user.can_edit` or the verified legacy primary-branch fallback. Supplemental roles never grant this permission.
+
 ### Pengeluaran
 
 - Expenses are operational records, not an accounting ledger.

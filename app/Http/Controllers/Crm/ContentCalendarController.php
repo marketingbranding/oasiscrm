@@ -152,7 +152,7 @@ class ContentCalendarController extends Controller
 
     public function create(Request $request)
     {
-        abort_unless($request->user()->hasPermission('work_planner.create'), 403);
+        abort_unless($request->user()->hasPermission('work_planner.create'), 403, 'Akun ini tidak memiliki izin membuat item Work Planner.');
 
         return view('crm.content-calendar.create', $this->formData(null, $request->get('type', 'task')));
     }
@@ -160,15 +160,17 @@ class ContentCalendarController extends Controller
     public function store(StoreContentItemRequest $request)
     {
         $user = Auth::user();
-        abort_unless($user->hasPermission('work_planner.create'), 403);
+        abort_unless($user->hasPermission('work_planner.create'), 403, 'Akun ini tidak memiliki izin membuat item Work Planner.');
         $data = $request->validated();
         $assigneeIds = Arr::pull($data, 'assigned_user_ids', []);
         if (($data['item_type'] ?? null) === 'content') {
             $assigneeIds = [];
         }
         $this->authorizeAssignment($user, $assigneeIds);
-        $branch = $this->workspaceAccess->resolveRequestedBranch($user, $data['branch_id'] ?? null);
-        abort_unless($branch && $this->workspaceAccess->canEditBranch($user, $branch), 403);
+        $branch = $this->workspaceAccess->resolveRequestedEditableBranch($user, $data['branch_id'] ?? null, 'work_planner');
+        if (! $branch) {
+            throw ValidationException::withMessages(['branch_id' => 'Cabang yang dipilih tidak dapat diedit oleh akun ini.']);
+        }
         $data['branch_id'] = $branch->id;
         $this->validateAssignees($assigneeIds, (int) $data['branch_id']);
         $data = $this->normalizePlannerData($data);
@@ -201,10 +203,14 @@ class ContentCalendarController extends Controller
         $existingAssigneeIds = $contentItem->assignees()->pluck('users.id')->map(fn ($id) => (int) $id)->sort()->values()->all();
         $requestedAssigneeIds = collect($assigneeIds)->map(fn ($id) => (int) $id)->unique()->sort()->values()->all();
         if ($existingAssigneeIds !== $requestedAssigneeIds) {
-            abort_unless(Auth::user()->hasPermission('work_planner.assign'), 403);
+            if (! Auth::user()->hasPermission('work_planner.assign')) {
+                throw ValidationException::withMessages(['assigned_user_ids' => 'Anda tidak memiliki izin menugaskan task kepada pengguna lain.']);
+            }
         }
-        $branch = $this->workspaceAccess->resolveRequestedBranch(Auth::user(), $data['branch_id'] ?? $contentItem->branch_id);
-        abort_unless($branch && $this->workspaceAccess->canEditBranch(Auth::user(), $branch), 403);
+        $branch = $this->workspaceAccess->resolveRequestedEditableBranch(Auth::user(), $data['branch_id'] ?? $contentItem->branch_id, 'work_planner');
+        if (! $branch) {
+            throw ValidationException::withMessages(['branch_id' => 'Cabang yang dipilih tidak dapat diedit oleh akun ini.']);
+        }
         $data['branch_id'] = $branch->id;
         $this->validateAssignees($assigneeIds, (int) $data['branch_id']);
         $data['updated_by'] = Auth::id();
@@ -346,8 +352,8 @@ class ContentCalendarController extends Controller
     {
         $defaultType = in_array($defaultType, ContentItem::TYPES, true) ? $defaultType : 'task';
         $user = Auth::user();
-        $branches = $this->resolveBranches();
-        $accessibleBranchIds = $this->workspaceAccess->accessibleBranchIds($user);
+        $branches = $this->workspaceAccess->editableBranches($user, 'work_planner');
+        $accessibleBranchIds = $branches->pluck('id')->map(fn ($id) => (int) $id)->all();
         $projects = LeadMaster::where('is_active', true)
             ->whereIn('branch_id', $accessibleBranchIds)
             ->orderBy('project_name')->get();
@@ -436,7 +442,9 @@ class ContentCalendarController extends Controller
     private function authorizeAssignment(User $user, array $assigneeIds): void
     {
         $otherAssignees = collect($assigneeIds)->map(fn ($id) => (int) $id)->reject(fn (int $id) => $id === (int) $user->id);
-        abort_if($otherAssignees->isNotEmpty() && ! $user->hasPermission('work_planner.assign'), 403);
+        if ($otherAssignees->isNotEmpty() && ! $user->hasPermission('work_planner.assign')) {
+            throw ValidationException::withMessages(['assigned_user_ids' => 'Anda tidak memiliki izin menugaskan task kepada pengguna lain.']);
+        }
     }
 
     private function applyFilters(Builder $query, $project, $type, $status, $priority, string $pic, string $search): void

@@ -564,6 +564,8 @@ Buku Saku Sales 2.0 is the second completed operational migration. It uses canon
 
 Work Planner 2.0 is the third completed operational migration. It uses canonical page, toolbar, field, action, status, state, presence, and table primitives while retaining URL-backed Hari Ini/Kalender/Tugas/Agenda/Konten/Semua views, Today grouping, server-built calendar grid, task/agenda/content status workspaces, routed create/edit/import pages, detail JSON, Sortable status updates, comments, mentions, presence, optimistic conflicts, bulk endpoints, and XLSX import/export mappings. It adds no new item type, status, assignment rule, project relationship, calendar dependency, route, permission, or import/export architecture.
 
+Work Planner 2.1 adds only focused local improvements: compact Calendar density, a read-only URL-backed Gantt tracking view, and reactive Sortable empty-state/count synchronization. It does not add routes, permissions, statuses, date mutation, Gantt editing, dependencies, or new business calculations.
+
 Adoption remains incremental elsewhere. Many operational Blade views still repeat arbitrary colors and legacy utility combinations; do not claim those modules are already migrated. Module accents identify modules and never override semantic error/warning/success meaning. Use `docs/DESIGN_SYSTEM.md` for implemented APIs and `docs/DESIGN_SYSTEM_AUDIT.md` for the migration map.
 
 ## 11. Navigation Architecture

@@ -57,7 +57,7 @@ class ContentCalendarController extends Controller
     {
         $this->authorize('viewAny', ContentItem::class);
         $user = Auth::user();
-        $viewMode = in_array($request->get('view'), ['today', 'calendar', 'tasks', 'agenda', 'content', 'all'], true)
+        $viewMode = in_array($request->get('view'), ['today', 'calendar', 'gantt', 'tasks', 'agenda', 'content', 'all'], true)
             ? $request->get('view') : 'today';
         $month = (int) $request->get('month', now()->month);
         $year = (int) $request->get('year', now()->year);
@@ -125,6 +125,31 @@ class ContentCalendarController extends Controller
             $items = (clone $baseQuery)->whereYear('scheduled_date', $year)->whereMonth('scheduled_date', $month)->orderBy('scheduled_date')->get();
             $data += [
                 'calendar' => $this->calendarGrid($items, $currentMonth),
+                'currentMonth' => $currentMonth,
+                'prevMonth' => $currentMonth->copy()->subMonth(),
+                'nextMonth' => $currentMonth->copy()->addMonth(),
+                'calendarDensity' => $request->get('density') === 'comfortable' ? 'comfortable' : 'compact',
+                'allItemIds' => $items->pluck('id')->all(),
+            ];
+        } elseif ($viewMode === 'gantt') {
+            $currentMonth = Carbon::create($year, $month, 1);
+            $rangeStart = $currentMonth->copy()->startOfMonth();
+            $rangeEnd = $currentMonth->copy()->endOfMonth();
+            $items = (clone $baseQuery)
+                ->where(function (Builder $query) use ($rangeStart, $rangeEnd) {
+                    $query->whereBetween('scheduled_date', [$rangeStart->toDateString(), $rangeEnd->toDateString()])
+                        ->orWhere(function (Builder $query) use ($rangeStart, $rangeEnd) {
+                            $query->whereNotNull('start_date')
+                                ->whereNotNull('deadline_date')
+                                ->whereDate('start_date', '<=', $rangeEnd->toDateString())
+                                ->whereDate('deadline_date', '>=', $rangeStart->toDateString());
+                        });
+                })
+                ->orderBy('scheduled_date')
+                ->get();
+            $data += [
+                'ganttGroups' => $this->ganttGroups($items, $rangeStart, $rangeEnd),
+                'ganttDays' => collect(range(1, $currentMonth->daysInMonth))->map(fn (int $day) => $currentMonth->copy()->day($day)),
                 'currentMonth' => $currentMonth,
                 'prevMonth' => $currentMonth->copy()->subMonth(),
                 'nextMonth' => $currentMonth->copy()->addMonth(),
@@ -492,6 +517,59 @@ class ContentCalendarController extends Controller
     {
         $view = $request->input('return_view', 'today');
 
-        return in_array($view, ['today', 'calendar', 'tasks', 'agenda', 'content', 'all'], true) ? $view : 'today';
+        return in_array($view, ['today', 'calendar', 'gantt', 'tasks', 'agenda', 'content', 'all'], true) ? $view : 'today';
+    }
+
+    private function ganttGroups($items, Carbon $rangeStart, Carbon $rangeEnd): array
+    {
+        $labels = ['task' => 'Tugas', 'agenda' => 'Agenda', 'content' => 'Konten'];
+
+        return collect(ContentItem::TYPES)->mapWithKeys(function (string $type) use ($items, $labels, $rangeStart, $rangeEnd) {
+            return [$type => [
+                'label' => $labels[$type] ?? ucfirst($type),
+                'items' => $items->where('item_type', $type)->values()->map(fn (ContentItem $item) => $this->ganttItem($item, $rangeStart, $rangeEnd))->filter()->values(),
+            ]];
+        })->all();
+    }
+
+    private function ganttItem(ContentItem $item, Carbon $rangeStart, Carbon $rangeEnd): ?array
+    {
+        $start = $item->start_date?->copy();
+        $end = $item->deadline_date?->copy();
+        $milestone = $item->scheduled_date?->copy();
+        $isInterval = false;
+
+        if ($item->item_type === 'task' && $start && $end && $start->lte($end)) {
+            $isInterval = true;
+        } elseif ($item->item_type === 'agenda' && $start && $end && $start->lte($end) && ($start->ne($end) || filled($item->end_time))) {
+            $isInterval = true;
+        }
+
+        if ($isInterval) {
+            $visibleStart = $start->greaterThan($rangeStart) ? $start : $rangeStart;
+            $visibleEnd = $end->lessThan($rangeEnd) ? $end : $rangeEnd;
+
+            return [
+                'item' => $item,
+                'kind' => 'interval',
+                'start' => $start,
+                'end' => $end,
+                'gridStart' => $visibleStart->day,
+                'gridSpan' => (int) max(1, $visibleStart->diffInDays($visibleEnd) + 1),
+            ];
+        }
+
+        if (! $milestone || $milestone->lt($rangeStart) || $milestone->gt($rangeEnd)) {
+            return null;
+        }
+
+        return [
+            'item' => $item,
+            'kind' => 'milestone',
+            'start' => $milestone,
+            'end' => null,
+            'gridStart' => $milestone->day,
+            'gridSpan' => 1,
+        ];
     }
 }

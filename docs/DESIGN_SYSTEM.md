@@ -357,6 +357,8 @@ See `docs/BUKU_SAKU_2_AUDIT.md` for role/scope, reminder, report, query-state, p
 
 Work Planner 2.0 is the third completed operational migration. It consumes the canonical page, toolbar, button, card, field, alert, status, state, modal, presence, and table foundations while retaining its URL-backed Hari Ini/Kalender/Tugas/Agenda/Konten/Semua views, ContentItem model, route names, policies, module-aware branch authorization, item type/status semantics, assignment behavior, import/export routes, comments, presence, and optimistic conflict handling.
 
+Work Planner 2.1 adds focused local scheduling improvements: a compact URL-backed Calendar density, a read-only URL-backed Gantt tracking view, and reactive board empty-state synchronization after Sortable moves. These remain Work-Planner-specific layouts, not shared calendar/Gantt components.
+
 Work-Planner-specific contracts remain local:
 
 - Today grouping for overdue, today's tasks, today's agenda, today's content, and tomorrow preview;

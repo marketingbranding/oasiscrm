@@ -121,7 +121,7 @@ class WorkPlannerTest extends TestCase
         $this->actingAs($user)->get(route('content-calendar.index'))->assertOk()
             ->assertSee('Agenda Hari Ini')->assertSee('Task Hari Ini')->assertSee('Konten Hari Ini')
             ->assertSee('Filter Work Planner')->assertSee('+ Tambah');
-        foreach (['calendar', 'tasks', 'agenda', 'content', 'all'] as $view) {
+        foreach (['calendar', 'gantt', 'tasks', 'agenda', 'content', 'all'] as $view) {
             $this->actingAs($user)->get(route('content-calendar.index', ['view' => $view]))->assertOk();
         }
     }
@@ -170,6 +170,15 @@ class WorkPlannerTest extends TestCase
     public function test_work_planner_2_changelog_is_deployed_once_and_rendered(): void
     {
         $title = 'Work Planner menjadi ruang kerja operasional';
+        [$branch, $user] = $this->branchAndUser();
+
+        $this->assertSame(1, Changelog::query()->whereNull('version')->where('title', $title)->count());
+        $this->actingAs($user)->get(route('changelogs.index'))->assertOk()->assertSee($title);
+    }
+
+    public function test_work_planner_2_1_changelog_is_deployed_once_and_rendered(): void
+    {
+        $title = 'Work Planner menambahkan Kalender ringkas dan Gantt';
         [$branch, $user] = $this->branchAndUser();
 
         $this->assertSame(1, Changelog::query()->whereNull('version')->where('title', $title)->count());
@@ -251,7 +260,7 @@ class WorkPlannerTest extends TestCase
         $this->assertNull($contentResponse->viewData('selectedPriority'));
     }
 
-    public function test_calendar_keeps_fixed_cells_and_collapses_extra_day_items_into_modal(): void
+    public function test_calendar_is_compact_url_backed_and_collapses_extra_day_items_into_modal(): void
     {
         [$branch, $user] = $this->branchAndUser();
         foreach (range(1, 5) as $number) {
@@ -266,10 +275,89 @@ class WorkPlannerTest extends TestCase
 
         $response
             ->assertOk()
-            ->assertSee('aspect-square', false)
+            ->assertSee('planner-calendar-grid--compact', false)
+            ->assertSee('data-calendar-density="compact"', false)
+            ->assertSee('data-calendar-day="'.today()->day.'"', false)
             ->assertSee('+2 lainnya')
             ->assertSee('openDay(', false)
             ->assertSee('Aktivitas 5');
+
+        $this->actingAs($user)->get(route('content-calendar.index', [
+            'view' => 'calendar',
+            'month' => today()->month,
+            'year' => today()->year,
+            'density' => 'comfortable',
+        ]))->assertOk()->assertSee('planner-calendar-grid--comfortable', false);
+    }
+
+    public function test_gantt_view_uses_verified_dates_and_existing_filters(): void
+    {
+        [$branch, $user] = $this->branchAndUser();
+        $this->makeItem($branch, $user, [
+            'title' => 'Task Rentang',
+            'start_date' => today()->startOfMonth()->addDays(1),
+            'deadline_date' => today()->startOfMonth()->addDays(4),
+            'scheduled_date' => today()->startOfMonth()->addDays(4),
+        ]);
+        $this->makeItem($branch, $user, [
+            'title' => 'Task Milestone',
+            'start_date' => null,
+            'deadline_date' => today()->startOfMonth()->addDays(6),
+            'scheduled_date' => today()->startOfMonth()->addDays(6),
+        ]);
+        $this->makeItem($branch, $user, [
+            'item_type' => 'agenda',
+            'title' => 'Agenda Rentang',
+            'status' => 'planned',
+            'agenda_type' => 'meeting',
+            'start_date' => today()->startOfMonth()->addDays(7),
+            'deadline_date' => today()->startOfMonth()->addDays(8),
+            'scheduled_date' => today()->startOfMonth()->addDays(7),
+            'start_time' => '09:00',
+            'end_time' => '10:00',
+        ]);
+        $this->makeItem($branch, $user, [
+            'item_type' => 'content',
+            'title' => 'Konten Milestone',
+            'status' => 'idea',
+            'start_date' => today()->startOfMonth()->addDays(9),
+            'scheduled_date' => today()->startOfMonth()->addDays(9),
+            'deadline_date' => null,
+        ]);
+
+        $response = $this->actingAs($user)->get(route('content-calendar.index', [
+            'view' => 'gantt',
+            'month' => today()->month,
+            'year' => today()->year,
+            'search' => 'Task',
+        ]));
+
+        $response->assertOk();
+        $response->assertSee('Gantt ·');
+        $response->assertSee('data-gantt-range="'.today()->format('Y-m').'"', false);
+        $response->assertSee('Task Rentang');
+        $response->assertSee('data-gantt-kind="interval"', false);
+        $response->assertSee('Task Milestone');
+        $response->assertSee('data-gantt-kind="milestone"', false);
+        $this->assertSame(['Task Rentang', 'Task Milestone'], $response->viewData('ganttGroups')['task']['items']->pluck('item.title')->all());
+        $this->assertCount(0, $response->viewData('ganttGroups')['agenda']['items']);
+        $this->assertCount(0, $response->viewData('ganttGroups')['content']['items']);
+    }
+
+    public function test_board_empty_state_synchronization_source_contract_exists(): void
+    {
+        [$branch, $user] = $this->branchAndUser();
+        $this->makeItem($branch, $user, ['title' => 'Satu Task', 'status' => 'todo']);
+
+        $response = $this->actingAs($user)->get(route('content-calendar.index', ['view' => 'tasks']));
+
+        $response->assertOk()
+            ->assertSee('data-planner-empty-state', false)
+            ->assertSee('refreshStatusColumnState(column)', false)
+            ->assertSee('syncPlannerBoardState()', false)
+            ->assertSee('onAdd: (event) => this.refreshStatusColumnState(event.to)', false)
+            ->assertSee('onRemove: (event) => this.refreshStatusColumnState(event.from)', false)
+            ->assertSee('boardAnnouncement');
     }
 
     public function test_agenda_tab_renders_status_board(): void

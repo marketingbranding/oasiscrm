@@ -123,6 +123,29 @@ Exact empty-state defect cause:
 6. Add focused tests for calendar compact contracts, Gantt date semantics/range/filters/authorization, and drag state source contracts.
 7. Add one Changelog entry, update completion notes, build assets, and run validation.
 
+### Work Planner 2.1 Completion Notes
+
+Implemented 2.1 behavior:
+
+- Calendar keeps the existing server month query and six-week grid, but day cells are no longer square; row sizing is viewport-aware with bounded compact/comfortable density classes.
+- Calendar density is URL-backed through `density=compact|comfortable`; default is Ringkas and it does not alter queries or data.
+- Mobile Calendar keeps one calendar DOM and local horizontal scrolling rather than duplicating records into a separate list.
+- `gantt` is a new stable URL-backed view value on `content-calendar.index`; no new route, middleware, permission, or policy was added.
+- Gantt uses the selected month only, with previous/next month navigation and the existing filters/search/scope applied before range filtering.
+- Gantt groups by item type because every item has a verified `item_type`; PIC can be empty or cleared for content.
+- Task intervals render only when both `start_date` and `deadline_date` exist and are ordered; deadline-only tasks render milestones.
+- Agenda intervals render when verified start/deadline values form an interval or when same-day time range exists; otherwise agendas render scheduled-date markers.
+- Content renders milestones only because normal content data has one genuine scheduled/publication date and no end date.
+- Gantt is read-only tracking: no drag-to-reschedule, resizing, dependencies, progress percentages, critical path, or baseline comparison.
+- Board columns now keep a reusable `[data-planner-empty-state]` node and synchronize counts/empty state from actual direct `.planner-board-card` children through `refreshStatusColumnState()` and `syncPlannerBoardState()`.
+- Sortable `onAdd`, `onRemove`, `onEnd`, success, conflict rollback, and failure rollback all refresh board state. An `aria-live` status message announces moves.
+
+Remaining gaps:
+
+- Browser verification was not available and is not claimed.
+- Sortable drag/drop still does not provide a full keyboard drag equivalent; non-drag status update remains the existing server endpoint and edit/status workflows.
+- Shared date/month picker keyboard limitations remain system-level gaps.
+
 ## Migration Boundary
 
 Work Planner 2.0 is a controlled UI/UX migration. It may reorganize the index, six stable views, filters, cards/boards/table, create/edit/import pages, detail overlays, status controls, bulk presentation, loading/empty/error/conflict states, and Work-Planner-specific presentation fragments.

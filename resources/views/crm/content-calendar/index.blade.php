@@ -2,7 +2,7 @@
 @section('title', 'Work Planner - Oasis CRM')
 @section('content')
 @php
-    $tabs = ['today' => 'Hari Ini', 'calendar' => 'Kalender', 'tasks' => 'Tugas', 'agenda' => 'Agenda', 'content' => 'Konten', 'all' => 'Semua'];
+    $tabs = ['today' => 'Hari Ini', 'calendar' => 'Kalender', 'gantt' => 'Gantt', 'tasks' => 'Tugas', 'agenda' => 'Agenda', 'content' => 'Konten', 'all' => 'Semua'];
     $statusLabels = [
         'todo'=>'To Do','in_progress'=>'In Progress','completed'=>'Completed','lost_track'=>'Lost Track',
         'planned'=>'Planned','confirmed'=>'Confirmed','done'=>'Done','cancelled'=>'Cancelled','rescheduled'=>'Dijadwalkan Ulang',
@@ -120,9 +120,9 @@
     @if($tomorrowItems->isNotEmpty())<section class="border-2 border-black bg-white mt-4"><h2 class="bg-black text-white px-3 py-2 text-xs font-bold uppercase">Besok / H-1 · {{ $tomorrowItems->count() }}</h2><div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 p-3">@foreach($tomorrowItems as $plannerItem) @include('crm.content-calendar._item-card') @endforeach</div></section>@endif
 
     @elseif($viewMode === 'calendar')
-    <div class="flex items-center gap-3 mb-3"><a href="{{ route('content-calendar.index', array_merge(request()->query(), ['view'=>'calendar','month'=>$prevMonth->month,'year'=>$prevMonth->year])) }}" class="border-2 border-black bg-black text-white px-3 py-1 text-xs font-bold">←</a><strong>{{ $currentMonth->translatedFormat('F Y') }}</strong><a href="{{ route('content-calendar.index', array_merge(request()->query(), ['view'=>'calendar','month'=>$nextMonth->month,'year'=>$nextMonth->year])) }}" class="border-2 border-black bg-black text-white px-3 py-1 text-xs font-bold">→</a></div>
-    <div class="overflow-x-auto border-2 border-black bg-white">
-        <div class="min-w-[840px] grid grid-cols-7">
+    <div class="flex flex-wrap items-center gap-3 mb-3"><a href="{{ route('content-calendar.index', array_merge(request()->query(), ['view'=>'calendar','month'=>$prevMonth->month,'year'=>$prevMonth->year])) }}" class="border-2 border-black bg-black text-white px-3 py-2 text-xs font-bold" aria-label="Bulan sebelumnya">←</a><strong>{{ $currentMonth->translatedFormat('F Y') }}</strong><a href="{{ route('content-calendar.index', array_merge(request()->query(), ['view'=>'calendar','month'=>$nextMonth->month,'year'=>$nextMonth->year])) }}" class="border-2 border-black bg-black text-white px-3 py-2 text-xs font-bold" aria-label="Bulan berikutnya">→</a><span class="ml-auto text-[10px] font-bold uppercase">Densitas</span><a href="{{ route('content-calendar.index', array_merge(request()->query(), ['view'=>'calendar','density'=>'compact'])) }}" class="border-2 border-black px-3 py-2 text-xs font-bold {{ $calendarDensity === 'compact' ? 'bg-[#b3bd95]' : 'bg-white' }}">Ringkas</a><a href="{{ route('content-calendar.index', array_merge(request()->query(), ['view'=>'calendar','density'=>'comfortable'])) }}" class="border-2 border-black px-3 py-2 text-xs font-bold {{ $calendarDensity === 'comfortable' ? 'bg-[#b3bd95]' : 'bg-white' }}">Nyaman</a></div>
+    <div class="planner-calendar-shell overflow-x-auto border-2 border-black bg-white" data-calendar-density="{{ $calendarDensity }}">
+        <div class="planner-calendar-grid min-w-[760px] grid grid-cols-7 {{ $calendarDensity === 'comfortable' ? 'planner-calendar-grid--comfortable' : 'planner-calendar-grid--compact' }}">
             @foreach(['Sen','Sel','Rab','Kam','Jum','Sab','Min'] as $day)
             <div class="bg-black text-white border-r-2 last:border-r-0 border-black p-2 text-center text-xs font-bold uppercase">{{ $day }}</div>
             @endforeach
@@ -139,13 +139,13 @@
                     ])->values();
                     $dayLabel = $cell['day'] ? $currentMonth->copy()->day($cell['day'])->translatedFormat('l, d F Y') : '';
                 @endphp
-                <div class="aspect-square min-h-0 overflow-hidden {{ $loop->last ? 'border-r-0' : 'border-r-2' }} border-t-2 border-black p-1.5 bg-white {{ $cell['isToday']?'ring-2 ring-inset ring-[#c0392b]':'' }}">
+                <div class="planner-calendar-cell overflow-hidden {{ $loop->last ? 'border-r-0' : 'border-r-2' }} border-t-2 border-black bg-white {{ $cell['isToday']?'ring-2 ring-inset ring-[#c0392b]':'' }}" data-calendar-day="{{ $cell['day'] ?: '' }}">
                     @if($cell['day'])
-                    <button type="button" @click="openDay(@js($dayLabel), @js($dayPayload))" class="font-[Helvetica] font-bold text-xs {{ $cell['isToday']?'bg-[#c0392b] text-white px-1':'' }}">{{ $cell['day'] }}</button>
-                    <div class="space-y-1 mt-1">
+                    <button type="button" @click="openDay(@js($dayLabel), @js($dayPayload))" class="font-[Helvetica] font-bold text-xs {{ $cell['isToday']?'bg-[#c0392b] text-white px-1':'' }}" aria-label="Buka aktivitas {{ $dayLabel }}">{{ $cell['day'] }}</button>
+                    <div class="planner-calendar-items space-y-1 mt-1">
                         @foreach($cell['items']->take(3) as $plannerItem)
                         @php $chipColor = ['task'=>'#9ab6c8','agenda'=>'#e6915d','content'=>'#8c9ae0'][$plannerItem->item_type] ?? '#ccc'; @endphp
-                        <button type="button" @click="openDetail({{ $plannerItem->id }})" title="{{ $plannerItem->title }}" class="block w-full truncate border border-black border-l-4 bg-white px-1 py-0.5 text-left text-[9px] leading-tight" style="border-left-color:{{ $chipColor }}">
+                        <button type="button" @click="openDetail({{ $plannerItem->id }})" title="{{ $plannerItem->title }}" class="planner-calendar-pill block w-full truncate border border-black border-l-4 bg-white px-1 py-0.5 text-left text-[9px] leading-tight" style="border-left-color:{{ $chipColor }}">
                             @if($plannerItem->start_time)<span class="font-bold">{{ substr($plannerItem->start_time, 0, 5) }}</span> @endif{{ $plannerItem->title }}
                         </button>
                         @endforeach
@@ -160,10 +160,56 @@
         </div>
     </div>
 
+    @elseif($viewMode === 'gantt')
+    <div class="flex flex-wrap items-center gap-3 mb-3"><a href="{{ route('content-calendar.index', array_merge(request()->query(), ['view'=>'gantt','month'=>$prevMonth->month,'year'=>$prevMonth->year])) }}" class="border-2 border-black bg-black text-white px-3 py-2 text-xs font-bold" aria-label="Rentang sebelumnya">←</a><strong>Gantt · {{ $currentMonth->translatedFormat('F Y') }}</strong><a href="{{ route('content-calendar.index', array_merge(request()->query(), ['view'=>'gantt','month'=>$nextMonth->month,'year'=>$nextMonth->year])) }}" class="border-2 border-black bg-black text-white px-3 py-2 text-xs font-bold" aria-label="Rentang berikutnya">→</a><span class="text-xs font-['Times_New_Roman'] text-gray-600">Tracking jadwal. Tidak mengubah status atau tanggal.</span></div>
+    <div class="planner-gantt" data-gantt-range="{{ $currentMonth->format('Y-m') }}">
+        <div class="planner-gantt-scroll">
+            <div class="planner-gantt-grid" style="--planner-gantt-days: {{ $ganttDays->count() }};">
+                <div class="planner-gantt-info planner-gantt-header">Item</div>
+                <div class="planner-gantt-scale planner-gantt-header">
+                    @foreach($ganttDays as $day)
+                        <div class="planner-gantt-day {{ $day->isWeekend() ? 'is-weekend' : '' }} {{ $day->isToday() ? 'is-today' : '' }}" title="{{ $day->translatedFormat('l, d F Y') }}">
+                            <span>{{ $day->format('d') }}</span>
+                            <small>{{ $day->translatedFormat('D') }}</small>
+                        </div>
+                    @endforeach
+                </div>
+                @forelse($ganttGroups as $type => $group)
+                    <div class="planner-gantt-group" style="grid-column: 1 / -1;">{{ $group['label'] }} · {{ $group['items']->count() }}</div>
+                    @forelse($group['items'] as $entry)
+                        @php
+                            $plannerItem = $entry['item'];
+                            $typeLabel = ['task' => 'TASK', 'agenda' => 'AGENDA', 'content' => 'KONTEN'][$plannerItem->item_type] ?? strtoupper($plannerItem->item_type);
+                            $dateLabel = $entry['kind'] === 'interval'
+                                ? $entry['start']->format('d M').' - '.$entry['end']->format('d M')
+                                : $entry['start']->format('d M');
+                        @endphp
+                        <div class="planner-gantt-info">
+                            <button type="button" @click="openDetail({{ $plannerItem->id }})" class="font-bold underline text-left">{{ $plannerItem->title }}</button>
+                            <div class="text-[10px] text-gray-600">{{ $typeLabel }} · {{ $statusLabels[$plannerItem->status] ?? $plannerItem->status }} · {{ $dateLabel }}</div>
+                            <div class="text-[10px] text-gray-600">PIC: {{ $plannerItem->assignees->pluck('name')->merge($plannerItem->pic_names ?? [])->join(', ') ?: '—' }}</div>
+                        </div>
+                        <div class="planner-gantt-lane" aria-label="{{ $plannerItem->title }} {{ $entry['kind'] === 'interval' ? 'rentang' : 'milestone' }} {{ $dateLabel }}">
+                            @foreach($ganttDays as $day)<span class="planner-gantt-track-day {{ $day->isWeekend() ? 'is-weekend' : '' }} {{ $day->isToday() ? 'is-today' : '' }}"></span>@endforeach
+                            <button type="button" @click="openDetail({{ $plannerItem->id }})" class="planner-gantt-item planner-gantt-item--{{ $plannerItem->item_type }} planner-gantt-item--{{ $entry['kind'] }}" style="grid-column: {{ $entry['gridStart'] }} / span {{ $entry['gridSpan'] }};" data-gantt-kind="{{ $entry['kind'] }}">
+                                <span>{{ $entry['kind'] === 'interval' ? $plannerItem->title : '◆ '.$plannerItem->title }}</span>
+                            </button>
+                        </div>
+                    @empty
+                        <div class="planner-gantt-empty" style="grid-column: 1 / -1;"><x-crm.empty-state title="Tidak ada {{ strtolower($group['label']) }}" description="Tidak ada item pada tipe ini dalam rentang bulan yang dipilih." /></div>
+                    @endforelse
+                @empty
+                    <div class="planner-gantt-empty" style="grid-column: 1 / -1;"><x-crm.empty-state title="Tidak ada jadwal Gantt" description="Tidak ada item Work Planner yang cocok dengan rentang dan filter saat ini." /></div>
+                @endforelse
+            </div>
+        </div>
+    </div>
+
     @elseif(in_array($viewMode, ['tasks','agenda','content']))
+    <div class="sr-only" aria-live="polite" x-text="boardAnnouncement"></div>
     <div class="flex gap-3 overflow-x-auto pb-3">
         @foreach($boardColumns as $status => $columnItems)
-        <section class="w-72 shrink-0 border-2 border-black bg-gray-100"><h2 class="bg-black text-white px-3 py-2 text-xs font-bold uppercase"><span>{{ $statusLabels[$status] ?? $status }}</span> · <span class="board-count">{{ $columnItems->count() }}</span></h2><div class="{{ $canUpdatePlanner ? 'sortable-column' : '' }} p-2 space-y-2 min-h-40" data-status="{{ $status }}">@forelse($columnItems as $plannerItem) @include('crm.content-calendar._item-card') @empty <x-crm.empty-state title="Tidak ada item" description="Belum ada item pada status ini." /> @endforelse</div></section>
+        <section class="w-72 shrink-0 border-2 border-black bg-gray-100"><h2 class="bg-black text-white px-3 py-2 text-xs font-bold uppercase"><span>{{ $statusLabels[$status] ?? $status }}</span> · <span class="board-count">{{ $columnItems->count() }}</span></h2><div class="{{ $canUpdatePlanner ? 'sortable-column' : '' }} p-2 space-y-2 min-h-40" data-status="{{ $status }}" data-status-label="{{ $statusLabels[$status] ?? $status }}">@foreach($columnItems as $plannerItem) @include('crm.content-calendar._item-card') @endforeach<div data-planner-empty-state @class(['planner-board-empty-state', 'hidden' => $columnItems->isNotEmpty()])><x-crm.empty-state title="Tidak ada item" description="Belum ada item pada status ini." /></div></div></section>
         @endforeach
     </div>
 
@@ -205,14 +251,14 @@
 <script>
 function plannerPage(ids, config) {
     return {
-        allItemIds: ids || [], selectedIds: [], detailOpen: false, detail: null, detailLoading: false, detailError: '',
+        allItemIds: ids || [], selectedIds: [], detailOpen: false, detail: null, detailLoading: false, detailError: '', boardAnnouncement: '',
         dayOpen: false, dayLabel: '', dayItems: [],
         filterOpen: false, addOpen: false,
         filterBranch: config.branchId || '', filterProject: config.projectName || '',
         filterType: config.type || '', filterStatus: config.status || '', fixedType: config.fixedType,
         returnView: config.returnView || 'today',
         filterProjects: config.projects || [],
-        init() { this.$nextTick(() => this.initSortable()); },
+        init() { this.$nextTick(() => { this.initSortable(); this.syncPlannerBoardState(); }); },
         filterStatuses: {
             task: [{value:'todo',label:'To Do'},{value:'in_progress',label:'In Progress'},{value:'completed',label:'Completed'},{value:'lost_track',label:'Lost Track'}],
             agenda: [{value:'planned',label:'Planned'},{value:'confirmed',label:'Confirmed'},{value:'done',label:'Done'},{value:'cancelled',label:'Cancelled'},{value:'rescheduled',label:'Dijadwalkan Ulang'}],
@@ -236,6 +282,8 @@ function plannerPage(ids, config) {
                     draggable: '.planner-board-card',
                     animation: 150,
                     ghostClass: 'opacity-50',
+                    onAdd: (event) => this.refreshStatusColumnState(event.to),
+                    onRemove: (event) => this.refreshStatusColumnState(event.from),
                     onEnd: (event) => this.updateDraggedStatus(event),
                 });
             });
@@ -245,7 +293,8 @@ function plannerPage(ids, config) {
             const newStatus = event.to?.dataset?.status;
             const oldStatus = event.from?.dataset?.status;
             if (!itemId || !newStatus || newStatus === oldStatus) return;
-            this.refreshBoardCounts();
+            this.syncPlannerBoardState();
+            this.announceBoardMove(event.item, event.to);
             try {
                 const response = await fetch(`${this.detailBaseUrl}/${itemId}/status`, {
                     method: 'PATCH',
@@ -260,25 +309,38 @@ function plannerPage(ids, config) {
                     const conflict = await response.json();
                     const reference = event.from.children[event.oldIndex] || null;
                     event.from.insertBefore(event.item, reference);
-                    this.refreshBoardCounts();
+                    this.syncPlannerBoardState();
                     window.dispatchEvent(new CustomEvent('oasis-conflict', { detail: { response: conflict, context: {} } }));
                     return;
                 }
                 if (!response.ok) throw new Error(await response.text());
                 const data = await response.json();
                 event.item.dataset.updatedAt = data.updated_at;
+                this.syncPlannerBoardState();
             } catch (error) {
                 const reference = event.from.children[event.oldIndex] || null;
                 event.from.insertBefore(event.item, reference);
-                this.refreshBoardCounts();
+                this.syncPlannerBoardState();
                 window.oasisToast?.('Status belum dapat diperbarui. Periksa koneksi lalu coba kembali.', 'error');
             }
         },
-        refreshBoardCounts() {
+        syncPlannerBoardState() {
             document.querySelectorAll('.sortable-column').forEach(column => {
-                const count = column.closest('section')?.querySelector('.board-count');
-                if (count) count.textContent = column.querySelectorAll('.planner-board-card').length;
+                this.refreshStatusColumnState(column);
             });
+        },
+        refreshStatusColumnState(column) {
+            if (!column) return;
+            const countValue = column.querySelectorAll(':scope > .planner-board-card').length;
+            const count = column.closest('section')?.querySelector('.board-count');
+            if (count) count.textContent = countValue;
+            const emptyState = column.querySelector(':scope > [data-planner-empty-state]');
+            if (emptyState) emptyState.classList.toggle('hidden', countValue > 0);
+        },
+        announceBoardMove(card, column) {
+            const title = card?.querySelector('strong')?.textContent?.trim() || 'Item';
+            const status = column?.dataset?.statusLabel || column?.dataset?.status || 'status baru';
+            this.boardAnnouncement = `${title} dipindahkan ke ${status}.`;
         },
         isSelected(id) { return this.selectedIds.includes(id); },
         toggle(id) { this.isSelected(id) ? this.selectedIds.splice(this.selectedIds.indexOf(id),1) : this.selectedIds.push(id); },

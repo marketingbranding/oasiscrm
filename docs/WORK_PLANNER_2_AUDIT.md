@@ -28,6 +28,101 @@ Implemented changes:
 
 Browser verification remains unavailable and is not claimed.
 
+## Work Planner 2.1 Focused Audit
+
+Scope: compact Calendar view, URL-backed Gantt tracking view, and reactive drag/drop empty states only. This section was recorded before implementation on top of Work Planner 2.0.
+
+Focused baseline before edits:
+
+- `php artisan test tests/Feature/WorkPlannerTest.php tests/Feature/WorkPlannerAuthorizationTest.php tests/Feature/OptimisticLockTest.php tests/Feature/CollaborationUiTest.php`: 38 tests, 228 assertions.
+- `php artisan route:list --name=content-calendar -v`: 15 existing Work Planner routes; all remain under the protected CRM middleware stack.
+
+### Calendar Sizing Audit
+
+The current Calendar uses the server-built six-week grid from `ContentCalendarController::calendarGrid()`. The query loads visible items for the selected `month` and `year`, groups by `scheduled_date`, and renders exactly those cells. The Blade layout uses a seven-column grid with `min-w-[840px]`, `aspect-square` cells, compact item chips, and `+N lainnya` after three visible chips. This preserves data but makes the calendar tall because each day cell grows from width rather than viewport height.
+
+2.1 direction:
+
+- keep the same month/year query, previous/next URLs, calendar-grid calculation, and day/detail actions;
+- replace square cells with viewport-aware compact row sizing using bounded min/max heights;
+- keep weekday headings visible and today marked;
+- preserve busy-day overflow through the existing `+N lainnya` day dialog;
+- keep horizontal overflow local to the calendar wrapper only;
+- do not duplicate the whole calendar collection for mobile.
+
+Density control audit: a two-mode Ringkas/Nyaman control is useful because the existing grid has dense operational data. It can be URL-backed through a harmless `density` query parameter, defaulting to `compact`/Ringkas. It changes only CSS classes and does not alter queries or business data.
+
+### Item Date-Field Matrix
+
+| Type | Genuine start date | Genuine end/deadline | Single scheduled date | Gantt rule |
+|---|---|---|---|---|
+| `task` | `start_date` is optional and accepted by normal form paths | `deadline_date` is required by normal form paths and drives `scheduled_date` | deadline-only tasks exist | render interval only when both `start_date` and `deadline_date` exist and are ordered; otherwise render deadline milestone |
+| `agenda` | `start_date` is required and drives `scheduled_date` | `deadline_date` is required; `end_time` is optional time only | agenda can be represented by scheduled date when interval is unclear | render interval when start and deadline dates differ or both date/time range is meaningful; otherwise render scheduled-date marker with time metadata |
+| `content` | `start_date` is required and copied to `scheduled_date` | `deadline_date` and `end_time` are cleared by normalization | content has one publication/scheduled date | render milestone only |
+
+Do not use `created_at` as a Gantt start, do not infer duration from status, and do not invent progress or dependencies.
+
+### Proposed Gantt Semantics
+
+`gantt` is a new stable URL-backed `view` value on the existing `content-calendar.index` route. It does not require a new route or middleware. It does require controller allowlist, tab list, return-view allowlist, and a new view branch inside `ContentCalendarController::index()`.
+
+Range plan:
+
+- use the selected current month as the primary range;
+- include previous/current/next month navigation through the existing `month` and `year` query parameters;
+- query only visible items whose relevant scheduled/start/deadline dates intersect the selected month;
+- preserve all existing filters by applying `applyFilters()` before range filtering;
+- group presentation by item type because every record has `item_type`, while PIC may be empty or cleared for content.
+
+Presentation plan:
+
+- fixed item-information column plus locally scrollable date timeline;
+- daily scale for the selected month only;
+- today marker when inside range;
+- weekends marked with both visual treatment and text/labels;
+- bars for genuine intervals, milestones for single-date records;
+- direct detail action and edit link where already authorized;
+- no drag, resize, dependencies, progress percentages, baseline comparison, or date mutation.
+
+### Drag-And-Drop Lifecycle Audit
+
+Drag/drop is implemented with SortableJS exposed as `window.Sortable` in `resources/js/app.js`, initialized from the inline Alpine `plannerPage()` function in `resources/views/crm/content-calendar/index.blade.php`. The lifecycle currently uses only Sortable `onEnd` and calls `updateDraggedStatus(event)`.
+
+Current behavior:
+
+- `onEnd` reads the moved card ID, destination status, source status, and card `data-updated-at`;
+- it calls `refreshBoardCounts()`, which counts `.planner-board-card` children and updates `.board-count`;
+- it sends `PATCH content-calendar/{item}/status` with `expected_updated_at`;
+- 409 rollback reinserts the card into the source column at `oldIndex`, refreshes counts, and dispatches `oasis-conflict`;
+- other failures reinsert the card, refresh counts, and show shared toast feedback;
+- success updates the card's optimistic token.
+
+Exact empty-state defect cause:
+
+- empty states are server-rendered `x-crm.empty-state` elements inside `.sortable-column` when a status group has no cards;
+- `refreshBoardCounts()` counts card children but never hides/removes the empty-state element;
+- when the first card enters an empty column, the empty-state DOM remains visible alongside the card;
+- when the last card leaves a column, no empty-state DOM is created if that column did not initially render empty.
+
+2.1 direction:
+
+- mark each status column with a reusable empty-state node;
+- implement `refreshStatusColumnState(column)` and `syncPlannerBoardState()` based on direct `.planner-board-card` children;
+- hide/show existing empty state immediately on `onAdd`, `onRemove`, `onEnd`, success, and rollback;
+- update counts from actual cards;
+- add an `aria-live` board status message for move feedback;
+- avoid timeouts and page reloads.
+
+### Implementation Plan
+
+1. Commit this 2.1 audit section.
+2. Compact Calendar markup and add URL-backed density presentation without changing calendar queries.
+3. Add `gantt` to the index view allowlist, tab list, return-view allowlist, and controller data branch.
+4. Render Gantt with month range navigation, type grouping, interval/milestone semantics, local horizontal scroll, and existing detail/edit actions.
+5. Centralize board state refresh and call it from Sortable lifecycle and rollback paths.
+6. Add focused tests for calendar compact contracts, Gantt date semantics/range/filters/authorization, and drag state source contracts.
+7. Add one Changelog entry, update completion notes, build assets, and run validation.
+
 ## Migration Boundary
 
 Work Planner 2.0 is a controlled UI/UX migration. It may reorganize the index, six stable views, filters, cards/boards/table, create/edit/import pages, detail overlays, status controls, bulk presentation, loading/empty/error/conflict states, and Work-Planner-specific presentation fragments.

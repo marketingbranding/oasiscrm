@@ -133,3 +133,7 @@ No Phase 1 primitive changes route names, query parameters, authorization, data 
 ### Buku Saku Sales 2.0 completion
 
 Buku Saku Sales is the second completed operational migration. It consumes canonical page, toolbar, field, action, status, state, modal, pagination, presence, and table primitives while retaining its role-aware Leads/Agenda/Laporan navigation, Sales cascade, daily reminder, lead stage controls, Sales Agenda actions, report metrics, and period picker as local domain contracts. It adds no search, chart, stage, metric, route, permission, or frontend dependency. See `docs/BUKU_SAKU_2_AUDIT.md` and `docs/DESIGN_SYSTEM.md`.
+
+### Work Planner 2.0 completion
+
+Work Planner is the third completed operational migration. It consumes canonical page, toolbar, field, button, card, status, alert, empty/loading state, presence, and table primitives while retaining its existing ContentItem routes, policies, URL-backed six-view navigation, Today groups, calendar grid calculations, status boards, routed forms, detail JSON endpoint, bulk endpoints, import/export mappings, comments, mentions, presence, and optimistic conflict behavior. It adds no status, field, route, permission, dependency, calendar library, project relationship, or import/export architecture. See `docs/WORK_PLANNER_2_AUDIT.md` and `docs/DESIGN_SYSTEM.md`.

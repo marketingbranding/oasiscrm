@@ -11,6 +11,23 @@ This document records the executable Work Planner behavior before its controlled
 - Route audit command confirmed 15 `content-calendar.*` routes.
 - Browser verification is unavailable and is not claimed.
 
+## Completion Status
+
+Work Planner 2.0 is implemented as a controlled presentation migration. It consumes canonical page header, toolbar, buttons, status badges, alert, empty/loading states, field composition, cards, modal, table classes, page presence, comments links, and shared conflict/toast systems while preserving the executable contracts in this document.
+
+Implemented changes:
+
+- canonical page header, active view/scope/overdue summary, URL-backed view navigation, toolbar, filter modal, and active filter chips;
+- permission-aware create, export/import, selection, drag, edit, delete, and bulk affordances at the coarse route-permission level while backend policies remain authoritative;
+- Today hierarchy prioritizes overdue, then today's tasks, agenda, content, and tomorrow preview;
+- item cards use semantic status badges, accessible selection labels, and textual overdue indicators;
+- board columns and All view use canonical empty states and table source contracts;
+- routed create/edit/import pages use canonical header/card/field/alert/button composition;
+- detail/day overlays include dialog roles, labelled headings, accessible close buttons, loading/error feedback, and shared toast feedback for failed status updates;
+- existing Sortable, date/time picker, comments, presence, notification, and conflict systems remain unchanged.
+
+Browser verification remains unavailable and is not claimed.
+
 ## Migration Boundary
 
 Work Planner 2.0 is a controlled UI/UX migration. It may reorganize the index, six stable views, filters, cards/boards/table, create/edit/import pages, detail overlays, status controls, bulk presentation, loading/empty/error/conflict states, and Work-Planner-specific presentation fragments.

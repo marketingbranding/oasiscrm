@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\Branch;
+use App\Models\Changelog;
 use App\Models\ContentItem;
 use App\Models\LeadMaster;
 use App\Models\Role;
@@ -164,6 +165,15 @@ class WorkPlannerTest extends TestCase
             ->assertSee('crm-page-header', false)
             ->assertSee('Pilih File XLSX')
             ->assertSee('Download Template XLSX');
+    }
+
+    public function test_work_planner_2_changelog_is_deployed_once_and_rendered(): void
+    {
+        $title = 'Work Planner menjadi ruang kerja operasional';
+        [$branch, $user] = $this->branchAndUser();
+
+        $this->assertSame(1, Changelog::query()->whereNull('version')->where('title', $title)->count());
+        $this->actingAs($user)->get(route('changelogs.index'))->assertOk()->assertSee($title);
     }
 
     public function test_reminders_include_today_tomorrow_and_overdue_visible_items(): void

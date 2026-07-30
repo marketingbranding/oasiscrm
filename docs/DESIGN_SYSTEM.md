@@ -353,7 +353,30 @@ Responsive and accessibility decisions:
 
 See `docs/BUKU_SAKU_2_AUDIT.md` for role/scope, reminder, report, query-state, performance, and remaining-gap contracts.
 
-## 21. Responsive Behavior
+## 21. Work Planner Operational Workspace
+
+Work Planner 2.0 is the third completed operational migration. It consumes the canonical page, toolbar, button, card, field, alert, status, state, modal, presence, and table foundations while retaining its URL-backed Hari Ini/Kalender/Tugas/Agenda/Konten/Semua views, ContentItem model, route names, policies, module-aware branch authorization, item type/status semantics, assignment behavior, import/export routes, comments, presence, and optimistic conflict handling.
+
+Work-Planner-specific contracts remain local:
+
+- Today grouping for overdue, today's tasks, today's agenda, today's content, and tomorrow preview;
+- server-built month calendar grid and day/detail overlays;
+- task, agenda, and content status workspaces with existing Sortable status update behavior;
+- mixed All view table with the existing 20-row paginator;
+- dynamic task/agenda/content routed form behavior;
+- legacy synchronous XLSX import/export mapping.
+
+Responsive and accessibility decisions:
+
+- the six views remain URL-backed links with current-page semantics;
+- board and calendar horizontal overflow stays local to the workspace region;
+- selection controls have accessible names and bulk affordances are permission-aware;
+- detail/day overlays now expose dialog roles and labelled close controls, but they are not full `x-crm.modal` consumers because they are driven by existing item/day JSON state;
+- Sortable drag/drop still has no complete keyboard equivalent, and shared date/month picker keyboard gaps remain system-level limitations.
+
+See `docs/WORK_PLANNER_2_AUDIT.md` for route, authorization, query-state, import/export, performance, and remaining-gap contracts.
+
+## 22. Responsive Behavior
 
 - mobile touch targets: at least 44px;
 - toolbars wrap; forms remain completable;
@@ -365,7 +388,7 @@ See `docs/BUKU_SAKU_2_AUDIT.md` for role/scope, reminder, report, query-state, p
 
 Source contracts are not browser verification. Manually check approximately 360, 390, 430, 768, 1024, 1366, and 1440px when a browser is available.
 
-## 22. Accessibility
+## 23. Accessibility
 
 - semantic link/button/form behavior;
 - correctly associated visible labels;
@@ -379,7 +402,7 @@ Source contracts are not browser verification. Manually check approximately 360,
 
 Known gaps remain in legacy dialogs, date/month keyboard behavior, some dropdown menu navigation, and the broad legacy mobile control override.
 
-## 23. Correct Usage
+## 24. Correct Usage
 
 - use a primary button for the one dominant action;
 - use secondary/ghost/text for supporting actions;
@@ -390,7 +413,7 @@ Known gaps remain in legacy dialogs, date/month keyboard behavior, some dropdown
 - keep business filters and query preservation in the module;
 - use static synthetic data in the internal showcase.
 
-## 24. Anti-Patterns
+## 25. Anti-Patterns
 
 - parallel component namespaces;
 - arbitrary status-to-color inference inside a visual component;
@@ -404,7 +427,7 @@ Known gaps remain in legacy dialogs, date/month keyboard behavior, some dropdown
 - new UI, picker, icon, chart, or notification dependencies;
 - claiming a future primitive is already canonical.
 
-## 25. Migration Guide
+## 26. Migration Guide
 
 1. Audit the module route, permissions, policies, scopes, query parameters, and tests.
 2. Identify visual-only duplication; do not change backend behavior during migration.
@@ -418,7 +441,7 @@ Known gaps remain in legacy dialogs, date/month keyboard behavior, some dropdown
 
 See `docs/DESIGN_SYSTEM_AUDIT.md` for the module migration map and deferred patterns.
 
-## 26. Future Component Checklist
+## 27. Future Component Checklist
 
 - Is the pattern repeated or imminently reused?
 - Does an existing `x-crm.*` component already match?

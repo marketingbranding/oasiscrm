@@ -8,6 +8,10 @@ Full maintenance temporarily blocks the complete protected OASIS CRM for ordinar
 
 The feature must preserve sessions. A normal user who remains signed in receives the maintenance response on the next protected request and can continue normally when maintenance is disabled.
 
+## Implemented State
+
+The architecture in this document is implemented. The current application includes the singleton storage, registered permissions, transactional service, centralized middleware, standalone HTML/JSON 503 responses, administration routes and UI, navigation entry, activity logging, focused tests, and an idempotent user-facing Changelog entry.
+
 ## Difference From Laravel Native Maintenance
 
 OASIS full maintenance is database-backed and evaluated after authentication. It can therefore:
@@ -277,15 +281,15 @@ Operational maintenance is HTTP-only. It does not stop or modify:
 
 Use `php artisan down` for deeper infrastructure maintenance and `php artisan up` for native emergency recovery.
 
-## Implementation Plan
+## Implementation Sequence
 
-1. Commit this audited architecture and route contract.
-2. Add registered permissions, additive Pusat bypass mapping, singleton storage, model, and centralized service.
-3. Add the centralized middleware and exact route-group placement.
-4. Add management FormRequests, controller, routes, canonical administration page, and permission-aware navigation.
-5. Add the standalone OASIS HTML response and stable JSON response.
-6. Add focused permission, concurrency, blocking, lifecycle, response, audit, navigation, fail-safe, and regression tests.
-7. Update verified architecture documentation, add one idempotent Changelog entry, run migrations, full tests, and production build.
+1. Audit and document the architecture and route contract.
+2. Deploy registered permissions, the Pusat bypass mapping, singleton storage, model, and centralized service.
+3. Enforce maintenance through centralized middleware and exact route-group placement.
+4. Provide management FormRequests, controller, routes, canonical administration page, and permission-aware navigation.
+5. Return standalone OASIS HTML and stable JSON responses.
+6. Cover permission, concurrency, blocking, lifecycle, response, audit, navigation, fail-safe, and regression behavior.
+7. Deploy the user-facing Changelog entry and verify migrations, tests, formatting, routes, Blade, and frontend assets.
 
 ## Manual Acceptance Checklist
 

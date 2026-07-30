@@ -36,6 +36,6 @@ return new class extends Migration
 
     public function down(): void
     {
-        // Additive permissions and custom role grants are intentionally preserved.
+        DB::table('permissions')->whereIn('slug', self::SLUGS)->delete();
     }
 };

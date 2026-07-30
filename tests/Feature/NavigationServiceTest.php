@@ -52,6 +52,7 @@ class NavigationServiceTest extends TestCase
         $this->assertContains('Cabang', $this->labels($navigation));
         $this->assertContains('Proyek', $this->labels($navigation));
         $this->assertContains('System Health', $this->labels($navigation));
+        $this->assertContains('Maintenance', $this->labels($navigation));
         $this->assertContains('Design System', $this->labels($navigation));
         $this->assertNotContains('Lead Source', $this->labels($navigation));
         $this->assertNotContains([], array_column($navigation, 'children'));
@@ -66,6 +67,7 @@ class NavigationServiceTest extends TestCase
 
         $this->assertSame(['activities', 'sales'], array_column($navigation, 'key'));
         $this->assertNotContains('Administrasi', array_column($navigation, 'label'));
+        $this->assertNotContains('Maintenance', $this->labels($navigation));
     }
 
     public function test_current_route_marks_child_and_parent_active(): void

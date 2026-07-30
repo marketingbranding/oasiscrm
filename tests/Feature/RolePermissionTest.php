@@ -79,6 +79,8 @@ class RolePermissionTest extends TestCase
             $this->assertFalse($user->hasPermission($slug), $slug);
         }
         $this->assertTrue($user->hasAllPermissions(['users.invite', 'expenses.view', 'expenses.view_all', 'activity_logs.view']));
+        $this->assertTrue($user->hasPermission('system.maintenance_bypass'));
+        $this->assertFalse($user->hasPermission('system.maintenance_manage'));
     }
 
     public function test_permission_middleware_allows_and_denies_by_primary_role(): void
@@ -100,6 +102,7 @@ class RolePermissionTest extends TestCase
         $this->assertTrue($user->hasRole('pusat'));
         $this->assertFalse($user->hasPermission('users.view'));
         $this->assertFalse(Gate::forUser($user)->allows('users.view'));
+        $this->assertFalse($user->hasPermission('system.maintenance_bypass'));
     }
 
     public function test_permission_changelog_is_deployed_once_and_rendered(): void

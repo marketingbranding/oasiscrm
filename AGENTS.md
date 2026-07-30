@@ -151,6 +151,7 @@ Middleware aliases are registered in `bootstrap/app.php`:
 | `permission` | Exactly one registered permission |
 | `permissions.all` | Every listed permission is required |
 | `sales.access` | Primary Sales route allowlist |
+| `operational.maintenance` | Full protected-CRM maintenance blocking with permission-based bypass |
 
 Do not pass multiple slugs to `permission:`. Use `permissions.all:` only for explicit AND semantics. For dynamic OR behavior, prefer a policy or a clearly named centralized ability rather than ambiguous middleware arguments.
 
@@ -168,6 +169,7 @@ Do not pass multiple slugs to `permission:`. Use `permissions.all:` only for exp
 - Branch, project, Kavling, and lead-source administration
 - Feedback reports
 - System health and Changelog
+- Full operational maintenance administration
 - Internal Design System showcase for primary Super Admin
 - Local notifications, presence, comments, and mentions
 - AI Chat conversations and scoped read tools
@@ -185,6 +187,7 @@ AI Chat exists as a separate feature. Do not mix it into unrelated work.
 | Google caches | `DatabaseSheetRecord`, `DatabaseSheetSyncStatus`, `KonsumenProgressSheetRow`, `KonsumenProgressSyncStatus` |
 | Collaboration | `ActivityLog` (`activity_log`), `UserNotification`, `UserPresence`, `Comment`, `CommentMention`, `CommentRevision`, `CommentModeration` |
 | Administration/system | `LeadSource`, `Kavling`, `SystemTaskRun`, `AiChatConversation`, `Changelog` |
+| Operational maintenance | `OperationalMaintenanceSetting` |
 
 Cast gotchas:
 

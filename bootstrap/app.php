@@ -3,6 +3,7 @@
 use App\Http\Middleware\AllPermissionsMiddleware;
 use App\Http\Middleware\CheckBranch;
 use App\Http\Middleware\CheckRole;
+use App\Http\Middleware\EnforceOperationalMaintenance;
 use App\Http\Middleware\EnsurePasswordChanged;
 use App\Http\Middleware\EnsureUserIsActive;
 use App\Http\Middleware\PermissionMiddleware;
@@ -25,6 +26,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'branch' => CheckBranch::class,
             'password.changed' => EnsurePasswordChanged::class,
             'active' => EnsureUserIsActive::class,
+            'operational.maintenance' => EnforceOperationalMaintenance::class,
             'permission' => PermissionMiddleware::class,
             'permissions.all' => AllPermissionsMiddleware::class,
             'sales.access' => RestrictSalesModuleAccess::class,

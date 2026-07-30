@@ -20,6 +20,7 @@ use App\Http\Controllers\Crm\KavlingController;
 use App\Http\Controllers\Crm\KonsumenProgressController;
 use App\Http\Controllers\Crm\LeadSourceController;
 use App\Http\Controllers\Crm\NotificationController;
+use App\Http\Controllers\Crm\OperationalMaintenanceController;
 use App\Http\Controllers\Crm\PresenceController;
 use App\Http\Controllers\Crm\ProjectController;
 use App\Http\Controllers\Crm\SalesAgendaController;
@@ -46,7 +47,7 @@ Route::middleware(['auth', 'active', 'verified'])->group(function () {
     Route::put('/password/change', [PasswordChangeController::class, 'update'])->name('password.change.update');
 });
 
-Route::middleware(['auth', 'active', 'verified', 'password.changed', 'sales.access'])->group(function () {
+Route::middleware(['auth', 'active', 'verified', 'password.changed', 'operational.maintenance', 'sales.access'])->group(function () {
     Route::bind('comment', fn ($value) => Comment::withTrashed()->findOrFail($value));
     Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
 
@@ -165,6 +166,11 @@ Route::middleware(['auth', 'active', 'verified', 'password.changed', 'sales.acce
     });
 
     Route::get('/admin/system-health', SystemHealthController::class)->middleware('permission:system_health.view')->name('admin.system-health');
+    Route::middleware('permission:system.maintenance_manage')->prefix('/admin/maintenance')->name('admin.maintenance.')->group(function () {
+        Route::get('/', [OperationalMaintenanceController::class, 'index'])->name('index');
+        Route::put('/enable', [OperationalMaintenanceController::class, 'enable'])->name('enable');
+        Route::put('/disable', [OperationalMaintenanceController::class, 'disable'])->name('disable');
+    });
     Route::view('/admin/design-system', 'crm.design-system.index')->middleware('can:viewDesignSystem')->name('admin.design-system');
     Route::middleware('permission:branches.manage')->group(function () {
         Route::get('/branches', [BranchController::class, 'index'])->name('branches.index');
@@ -209,7 +215,7 @@ Route::middleware(['auth', 'active', 'verified', 'password.changed', 'sales.acce
     });
 });
 
-Route::middleware(['auth', 'active'])->group(function () {
+Route::middleware(['auth', 'active', 'operational.maintenance'])->group(function () {
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
 });

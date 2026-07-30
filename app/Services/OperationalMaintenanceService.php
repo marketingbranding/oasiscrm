@@ -32,7 +32,7 @@ class OperationalMaintenanceService
 
     public function currentConfiguration(): OperationalMaintenanceSetting
     {
-        return $this->settingOrFail();
+        return $this->settingOrFail()->loadMissing(['enabledBy:id,name', 'disabledBy:id,name']);
     }
 
     public function isActive(): bool
@@ -82,10 +82,10 @@ class OperationalMaintenanceService
             });
     }
 
-    public function publicData(): array
+    public function publicData(?OperationalMaintenanceSetting $setting = null): array
     {
         try {
-            $setting = $this->settingOrFail();
+            $setting ??= $this->settingOrFail();
 
             return [
                 'enabled' => $setting->enabled,
@@ -114,8 +114,9 @@ class OperationalMaintenanceService
 
         return DB::transaction(function () use ($actor, $values, $expectedLockVersion) {
             $setting = $this->lockedSetting();
+            $this->lockActorAuthorizationState($actor);
             $this->assertAuthorizedActor($actor);
-            $this->assertBypassRemainsAvailable();
+            $this->lockAndAssertBypassRemainsAvailable();
             $this->assertExpectedVersion($setting, $expectedLockVersion);
 
             if ($setting->enabled) {
@@ -161,6 +162,7 @@ class OperationalMaintenanceService
     {
         return DB::transaction(function () use ($actor, $expectedLockVersion) {
             $setting = $this->lockedSetting();
+            $this->lockActorAuthorizationState($actor);
             $this->assertAuthorizedActor($actor);
             $this->assertExpectedVersion($setting, $expectedLockVersion);
 
@@ -240,8 +242,54 @@ class OperationalMaintenanceService
         }
     }
 
-    private function assertBypassRemainsAvailable(): void
+    private function lockActorAuthorizationState(User $actor): void
     {
+        $permissionIds = DB::table('permissions')
+            ->whereIn('slug', [self::BYPASS_PERMISSION, self::MANAGE_PERMISSION])
+            ->orderBy('id')
+            ->lockForUpdate()
+            ->pluck('id');
+        $roleId = User::query()->whereKey($actor->id)->lockForUpdate()->value('role_id');
+
+        if (! $roleId) {
+            return;
+        }
+
+        DB::table('roles')->where('id', $roleId)->lockForUpdate()->get();
+        DB::table('role_permission')
+            ->where('role_id', $roleId)
+            ->whereIn('permission_id', $permissionIds)
+            ->orderBy('permission_id')
+            ->lockForUpdate()
+            ->get();
+    }
+
+    private function lockAndAssertBypassRemainsAvailable(): void
+    {
+        $eligibleUsers = $this->lifecycleEligibleBypassQuery()
+            ->orderBy('users.id')
+            ->lockForUpdate()
+            ->get(['users.id', 'users.role_id']);
+
+        if ($eligibleUsers->isEmpty()) {
+            throw ValidationException::withMessages([
+                'enabled' => 'Pemeliharaan tidak dapat diubah karena tidak ada akun bypass yang memenuhi syarat.',
+            ]);
+        }
+
+        $roleIds = $eligibleUsers->pluck('role_id')->filter()->unique()->sort()->values();
+        $permissionId = DB::table('permissions')->where('slug', self::BYPASS_PERMISSION)->value('id');
+
+        DB::table('roles')->whereIn('id', $roleIds)->orderBy('id')->lockForUpdate()->get();
+        if ($permissionId) {
+            DB::table('role_permission')
+                ->whereIn('role_id', $roleIds)
+                ->where('permission_id', $permissionId)
+                ->orderBy('role_id')
+                ->lockForUpdate()
+                ->get();
+        }
+
         if (! $this->lifecycleEligibleBypassQuery()->exists()) {
             throw ValidationException::withMessages([
                 'enabled' => 'Pemeliharaan tidak dapat diubah karena tidak ada akun bypass yang memenuhi syarat.',

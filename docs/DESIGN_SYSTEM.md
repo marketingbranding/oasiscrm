@@ -29,6 +29,7 @@ The identity uses OASIS yellow, black structural accents, compact information de
 ### Current specialized systems
 
 - Dashboard KPI and timeline components remain under `x-dashboard.*`;
+- Database 2.0 is the first full operational module migration and retains its dynamic table, tabs, fields, and sync-refresh orchestration locally;
 - conflict handling remains `x-conflict-dialog`;
 - comments remain `x-comments.panel`;
 - sync remains `x-crm.sync-control` and `x-crm.sync-status-panel`;
@@ -280,7 +281,44 @@ Prefer the named sections in `layouts.crm`: `breadcrumbs`, `page-title`, `page-d
 
 These systems have distinct lifecycles and must not be merged.
 
-## 19. Responsive Behavior
+## 19. Database Operational Workspace
+
+Database 2.0 is the first full operational consumer of the canonical CRM foundation.
+
+Consumed components:
+
+- `x-crm.page-header`, `x-crm.toolbar`, buttons, status badges, alerts, empty/loading states, sections, filter chips, and modal;
+- existing `x-crm.sync-control`, `x-crm.sync-status-panel`, and `x-crm.page-presence`;
+- canonical `.crm-table-scroll`, `.crm-data-table`, `.crm-control`, and table action conventions.
+
+Backward-compatible extensions:
+
+- `x-crm.filter-chip` accepts caller-owned dynamic content and a remove-control slot;
+- `x-crm.modal` emits opened/closed lifecycle events with a close reason and lets an open date/month/time picker consume Escape before the containing modal closes;
+- the shared conflict submission system emits a non-conflict form-error event so the Database edit modal can retain and display the draft after HTTP 422 or network failure.
+
+Database-specific contracts remain local:
+
+- lazy Google sheet tabs and counts;
+- dynamic columns and metadata-driven add/edit fields;
+- client-side substring search and three-state sorting;
+- frozen row number and normalized `id_kavling` column;
+- formula-column presentation and edit exclusion;
+- table skeleton, active-sheet refresh, scroll restoration, and sync-draft warning;
+- template-row requirement for adding records.
+
+Table and responsive decisions:
+
+- the wide table remains complete and scrolls only inside its table wrapper;
+- separated borders, sticky headers, and frozen identity cells remain required;
+- sorting is a keyboard-operable button and communicates `aria-sort`;
+- sheet tabs support arrow, Home, and End keys;
+- mobile keeps the full table workflow, stacks dynamic form fields, wraps toolbars, and uses the canonical viewport-safe modal;
+- no desktop/mobile record duplication is rendered.
+
+Database 2.0 does not add project filters, domain filters, pagination, export/import, bulk actions, a detail route, or comments. Date/month calendar-grid keyboard behavior and the global legacy mobile control override remain system-level gaps.
+
+## 20. Responsive Behavior
 
 - mobile touch targets: at least 44px;
 - toolbars wrap; forms remain completable;
@@ -292,7 +330,7 @@ These systems have distinct lifecycles and must not be merged.
 
 Source contracts are not browser verification. Manually check approximately 360, 390, 430, 768, 1024, 1366, and 1440px when a browser is available.
 
-## 20. Accessibility
+## 21. Accessibility
 
 - semantic link/button/form behavior;
 - correctly associated visible labels;
@@ -306,7 +344,7 @@ Source contracts are not browser verification. Manually check approximately 360,
 
 Known gaps remain in legacy dialogs, date/month keyboard behavior, some dropdown menu navigation, and the broad legacy mobile control override.
 
-## 21. Correct Usage
+## 22. Correct Usage
 
 - use a primary button for the one dominant action;
 - use secondary/ghost/text for supporting actions;
@@ -317,7 +355,7 @@ Known gaps remain in legacy dialogs, date/month keyboard behavior, some dropdown
 - keep business filters and query preservation in the module;
 - use static synthetic data in the internal showcase.
 
-## 22. Anti-Patterns
+## 23. Anti-Patterns
 
 - parallel component namespaces;
 - arbitrary status-to-color inference inside a visual component;
@@ -331,7 +369,7 @@ Known gaps remain in legacy dialogs, date/month keyboard behavior, some dropdown
 - new UI, picker, icon, chart, or notification dependencies;
 - claiming a future primitive is already canonical.
 
-## 23. Migration Guide
+## 24. Migration Guide
 
 1. Audit the module route, permissions, policies, scopes, query parameters, and tests.
 2. Identify visual-only duplication; do not change backend behavior during migration.
@@ -345,7 +383,7 @@ Known gaps remain in legacy dialogs, date/month keyboard behavior, some dropdown
 
 See `docs/DESIGN_SYSTEM_AUDIT.md` for the module migration map and deferred patterns.
 
-## 24. Future Component Checklist
+## 25. Future Component Checklist
 
 - Is the pattern repeated or imminently reused?
 - Does an existing `x-crm.*` component already match?

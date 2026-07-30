@@ -9,6 +9,10 @@ This document records the executable Database module state before its Design Sys
 - Focused Database/access/sync/conflict baseline: 149 tests, 1,101 assertions.
 - No browser automation or screenshots are available.
 
+## Completion Status
+
+Implemented as a controlled visual migration. Route, data-source, organization-scope, Google synchronization, client search/sort, conflict, presence, and deep-link contracts remain unchanged. Database now uses canonical page, toolbar, state, status, button, control, and modal primitives while its dynamic table machinery remains local.
+
 ## Route and Permission Map
 
 All routes inherit `auth`, `active`, `verified`, `password.changed`, and `sales.access`.

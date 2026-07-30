@@ -117,7 +117,6 @@ The internal showcase will use a named `viewDesignSystem` Gate backed by primary
 
 ### Later phases
 
-- Database dynamic tabs, fields, and dialogs;
 - Dana Talangan filters, inline forms, and routed form convergence;
 - Pengeluaran filter/form migration;
 - Buku Saku Sales workflows and local dialogs;
@@ -125,5 +124,9 @@ The internal showcase will use a named `viewDesignSystem` Gate backed by primary
 - Konsumen Progress stage presentation;
 - picker accessibility and month-field extraction;
 - pagination, bulk-action, and legacy table convergence.
+
+### Database 2.0 completion
+
+Database is the first completed operational migration. It consumes the Phase 1 page, toolbar, state, button, status, control, and modal primitives while retaining its dynamic tabs, metadata fields, wide table, skeleton, and sync-refresh behavior as Database-specific contracts. See `docs/DATABASE_2_AUDIT.md` and `docs/DESIGN_SYSTEM.md`.
 
 No Phase 1 primitive changes route names, query parameters, authorization, data scope, table columns, exports, sync behavior, or operational business rules.

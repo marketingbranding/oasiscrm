@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\Branch;
+use App\Models\Changelog;
 use App\Models\DatabaseSheetRecord;
 use App\Models\Permission;
 use App\Models\Role;
@@ -129,6 +130,21 @@ class DatabaseUiTest extends TestCase
         $this->assertStringContainsString('@media (max-width: 767px)', $css);
         $this->assertStringContainsString('.database-sheet-toolbar .crm-toolbar-actions', $css);
         $this->assertStringContainsString('.crm-table-scroll { max-width: 100%; max-height: 60dvh; }', $css);
+    }
+
+    public function test_database_2_changelog_is_idempotent_and_visible(): void
+    {
+        $title = 'Ruang kerja Database diperbarui';
+        $migration = require database_path('migrations/2026_07_30_000001_add_database_2_changelog.php');
+        $migration->up();
+        $migration->up();
+        $superadmin = User::factory()->create([
+            'role_id' => Role::query()->where('slug', 'superadmin')->firstOrFail()->id,
+            'password_changed_at' => now(),
+        ]);
+
+        $this->assertSame(1, Changelog::query()->whereNull('version')->where('title', $title)->count());
+        $this->actingAs($superadmin)->get(route('changelogs.index'))->assertOk()->assertSee($title);
     }
 
     private function databaseRecord(): array

@@ -553,7 +553,9 @@ Current module accents include:
 
 The foundational token layer now exists in `resources/css/app.css`. It defines page and surface hierarchy, primary/muted/disabled text, border levels, OASIS yellow, semantic states, focus, a 4px spacing scale, typography roles, restrained radius/shadow/motion, shell dimensions, and finite module accents.
 
-Adoption remains incremental. Many operational Blade views still repeat arbitrary colors and legacy utility combinations; do not claim those modules are already migrated. Module accents identify modules and never override semantic error/warning/success meaning. Use `docs/DESIGN_SYSTEM.md` for implemented APIs and `docs/DESIGN_SYSTEM_AUDIT.md` for the migration map.
+Database 2.0 is the first completed operational Design System migration. It uses canonical page, toolbar, state, status, button, control, sync, presence, and modal primitives while retaining its lazy sheet tabs, dynamic metadata fields, wide table, frozen identity columns, skeleton, and sync-refresh orchestration as Database-specific behavior. It still has no project filter, domain filter, pagination, export/import, bulk action, detail route, or comments integration.
+
+Adoption remains incremental elsewhere. Many operational Blade views still repeat arbitrary colors and legacy utility combinations; do not claim those modules are already migrated. Module accents identify modules and never override semantic error/warning/success meaning. Use `docs/DESIGN_SYSTEM.md` for implemented APIs and `docs/DESIGN_SYSTEM_AUDIT.md` for the migration map.
 
 ## 11. Navigation Architecture
 

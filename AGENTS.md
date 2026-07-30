@@ -557,6 +557,8 @@ The foundational token layer now exists in `resources/css/app.css`. It defines p
 
 Database 2.0 is the first completed operational Design System migration. It uses canonical page, toolbar, state, status, button, control, sync, presence, and modal primitives while retaining its lazy sheet tabs, dynamic metadata fields, wide table, frozen identity columns, skeleton, and sync-refresh orchestration as Database-specific behavior. It still has no project filter, domain filter, pagination, export/import, bulk action, detail route, or comments integration.
 
+Buku Saku Sales 2.0 is the second completed operational migration. It uses canonical page, toolbar, field, action, status, state, modal, pagination, presence, and table primitives while retaining URL-backed Leads/Agenda/Laporan views, primary-Sales versus monitoring hierarchy, daily reminder behavior, lead stages, Sales Agenda subtype/actions, weekly/custom metrics, drilldowns, and exports. Leads use one responsive record DOM; there is no backend search, chart, Kanban, new stage, or client-side report calculation.
+
 Adoption remains incremental elsewhere. Many operational Blade views still repeat arbitrary colors and legacy utility combinations; do not claim those modules are already migrated. Module accents identify modules and never override semantic error/warning/success meaning. Use `docs/DESIGN_SYSTEM.md` for implemented APIs and `docs/DESIGN_SYSTEM_AUDIT.md` for the migration map.
 
 ## 11. Navigation Architecture

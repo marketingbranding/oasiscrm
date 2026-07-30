@@ -11,6 +11,20 @@ This document records the executable Buku Saku Sales behavior before its Design 
 - No browser automation or screenshots are available.
 - There is no backend lead or agenda search parameter.
 
+## Completion Status
+
+Buku Saku Sales 2.0 is implemented as a controlled visual migration. It now consumes the canonical page, toolbar, field, button, status, alert, empty-state, modal, pagination, presence, and table foundations while preserving the contracts in this document.
+
+Implemented role-aware hierarchy:
+
+- primary Sales receives a personal daily workspace with reminder, quick lead, quick agenda, actionable lead progress, agenda results, and personal report context;
+- monitoring users receive authorized organization scope, advanced filters, funnel summary, sortable monitoring rows, drilldowns, and permission-aware export visibility;
+- URL-backed Leads, Agenda, and Laporan views preserve compatible scope/period state without carrying unrelated hidden filters;
+- leads render once and rearrange responsively rather than duplicating the complete collection for desktop and mobile;
+- Agenda and Report keep their current server pagination, query, metric, and drilldown contracts.
+
+Focused post-migration acceptance: 91 tests and 659 assertions. Browser verification remains unavailable and is not claimed.
+
 ## Migration Boundary
 
 Buku Saku 2.0 is a controlled presentation migration. It may reorganize the index, its three tabs, quick inputs, filters, lists, report presentation, reminder presentation, and directly related lead forms.
@@ -216,21 +230,24 @@ Classification:
 | Backend search | E | No current query contract; do not add misleading UI |
 | Charts, Kanban, lead scoring, probabilities | E | Outside product and phase scope |
 
-## Current UX and Accessibility Gaps
+## Resolved UI and Accessibility Gaps
 
-- Legacy page header and detached export action.
-- Tabs lack explicit current-page semantics and horizontal overflow treatment.
-- Most form and filter labels are not associated with stable input IDs.
-- Index validation reports only the first error at page level.
-- Lead and stage dialogs duplicate modal lifecycle and do not lock body scroll.
-- Duplicate-phone feedback has no pending/live state or stale-request protection.
-- Stage and mobile action targets are smaller than 44px.
-- Agenda statuses use one accent rather than semantic state variants.
-- True-empty and filtered-empty states use the same generic message.
-- Lead rows and complete edit payloads are duplicated for desktop and mobile.
-- Tables need explicit column scope/caption treatment.
-- Raw paginator links lack local range context.
-- Source-contract tests cannot replace browser verification.
+- The page header and authorized export action use canonical hierarchy.
+- URL-backed tabs expose current-page semantics, visible focus, and horizontal overflow treatment.
+- Quick input, filter, edit, result, and reschedule fields have stable visible labels and inline errors where server context identifies the field.
+- Specialized lead/stage dialogs retain conflict behavior while adding body lock, initial focus, focus trap, restoration, validation announcements, and viewport-safe scrolling.
+- Duplicate-phone feedback has pending/live state, request cancellation, stale-response protection, and edit exclusion.
+- Standalone mobile controls meet the 44px source contract.
+- Agenda statuses combine Indonesian text with explicit semantic variants.
+- True-empty, filtered-empty, default-week, missing-result-complete, and zero-report states are distinct.
+- Each lead and its edit payload render once across responsive layouts.
+- Report sorting exposes `aria-sort`; paginator presentation reports the current range and strips the unrelated named paginator key.
+
+Remaining system-level accessibility gaps:
+
+- date calendar-grid keyboard behavior remains incomplete in the shared picker;
+- specialized Sales dialogs are not generic `x-crm.modal` consumers because they retain dynamic conflict and record-reconciliation behavior;
+- source contracts do not replace browser verification.
 
 ## Existing Performance Risks
 
@@ -242,11 +259,19 @@ These risks are documented but are not service-architecture work for this visual
 - Report rows are unpaginated and sorted in memory.
 - XLSX leads and agendas are fully materialized in memory.
 - Cascade project/Sales relationship payloads can grow for large organizations.
-- The current desktop/mobile lead markup doubles record and edit-payload HTML.
+- The pre-migration desktop/mobile lead markup doubled record and edit-payload HTML; Buku Saku 2.0 removes this duplication.
 - Timestamp drilldowns use `whereDate()`, which can weaken index use on MySQL.
 - Legacy agenda project-name fallback adds an unindexed OR path and can be ambiguous.
 
 The migration must add no decorative query, must preserve pagination, and must reduce rather than increase duplicate HTML payload.
+
+Implemented query and payload impact:
+
+- no operational query, relation, metric, export query, or paginator size changed;
+- no lead or agenda collection is loaded into JavaScript;
+- the lead HTML/edit payload is emitted once per record instead of once per breakpoint;
+- one small Alpine module now owns the existing Sales cascade, duplicate-phone, and specialized dialog body-lock helpers;
+- CSS growth is limited to Buku-Saku-specific responsive presentation and backward-compatible canonical component options.
 
 ## Existing Backend Gaps Outside This Phase
 
@@ -283,6 +308,29 @@ These are production risks requiring separate authorization/data-integrity decis
 - Preserve current picker behavior and viewport-safe modal scrolling.
 - Target at least 44px for standalone touch controls.
 
+## Components Consumed and Extended
+
+Consumed without domain logic:
+
+- `x-crm.page-header`, `x-crm.toolbar`, `x-crm.button`, `x-crm.card`, and `x-crm.section`;
+- `x-crm.status-badge`, `x-crm.alert`, `x-crm.empty-state`, and `x-crm.filter-chip`;
+- `x-crm.field`, `x-crm.input-error`, `x-crm.modal`, `x-crm.pagination`, and `x-crm.page-presence`;
+- existing date/time pickers, toast, conflict dialog, comments, mentions, and presence.
+
+Backward-compatible extensions:
+
+- `x-crm.click-sort-th` supports a caller-owned direction parameter, named paginator reset list, and current-direction indicator while preserving its legacy defaults;
+- `x-crm.pagination` can hide an unsupported page-size selector and remove the other named paginator key without changing server page size.
+
+Buku-Saku-specific presentation remains local:
+
+- role/scope summary and URL-backed tabs;
+- Sales cascade and period popover;
+- daily reminder content and state presentation;
+- lead operational list and stage controls;
+- agenda status/actions and reschedule linkage;
+- report metric blocks and monitoring table columns.
+
 ## Validation Plan
 
 - exact route/middleware map before and after;
@@ -298,3 +346,19 @@ These are production risks requiring separate authorization/data-integrity decis
 - focused tests, full Artisan suite, `composer test`, Blade cache, Vite build, changed-file Pint, and whitespace validation.
 
 Browser verification will be reported only if it is actually performed at approximately 360, 390, 430, 768, 1024, and 1366px.
+
+## Final Validation
+
+- focused Buku Saku suites: 91 tests, 659 assertions;
+- full `php artisan test`: 499 tests, 3,583 assertions;
+- full `composer test`: 499 tests, 3,583 assertions;
+- complete route list: 172 routes; Buku Saku retains its 12-route map and middleware;
+- `vendor/bin/pint --dirty --test`: passed;
+- `php artisan view:cache`: passed;
+- `npm run build`: passed with 22 transformed modules;
+- final bundle: CSS 137.93 kB (23.27 kB gzip), JavaScript 141.46 kB (43.93 kB gzip);
+- baseline bundle before this migration: CSS 112.96 kB (20.32 kB gzip), JavaScript 139.46 kB (43.42 kB gzip);
+- CSS delta: +24.97 kB raw / +2.95 kB gzip; JavaScript delta: +2.00 kB raw / +0.51 kB gzip;
+- local Changelog verification: exactly one current entry and no obsolete draft-title entry;
+- `git diff --check`: passed;
+- browser verification: not performed because no browser automation or browser session was available.

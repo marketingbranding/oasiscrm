@@ -318,7 +318,42 @@ Table and responsive decisions:
 
 Database 2.0 does not add project filters, domain filters, pagination, export/import, bulk actions, a detail route, or comments. Date/month calendar-grid keyboard behavior and the global legacy mobile control override remain system-level gaps.
 
-## 20. Responsive Behavior
+## 20. Buku Saku Sales Operational Workspace
+
+Buku Saku Sales 2.0 is the second full operational consumer of the canonical CRM foundation.
+
+Consumed components:
+
+- `x-crm.page-header`, toolbar, buttons, cards, sections, status badges, alerts, empty states, fields, filter chips, modal, pagination, and page presence;
+- existing date/time pickers, toast, optimistic conflict, comments, mentions, and presence systems;
+- canonical table classes and direct-click sorting for the monitoring report.
+
+Backward-compatible extensions:
+
+- `x-crm.click-sort-th` accepts the caller's direction parameter and named paginator keys to reset while retaining legacy defaults;
+- `x-crm.pagination` can hide the page-size selector when the backend has no `per_page` contract and can strip an unrelated named paginator key.
+
+Buku-Saku-specific contracts remain local:
+
+- URL-backed Leads, Agenda, and Laporan views with compatible query-state transitions;
+- primary-Sales personal hierarchy versus organization monitoring hierarchy;
+- branch/project/Sales cascade and weekly/custom period popover;
+- authoritative daily reminder presentation and dismissal/navigation lifecycle;
+- responsive lead operational records, exact stage controls, and duplicate-phone advisory flow;
+- Sales Agenda statuses, result/reschedule actions, and linkage context;
+- event-based metric blocks, monitoring columns, drilldowns, and export scope.
+
+Responsive and accessibility decisions:
+
+- each lead and its edit payload render once; CSS rearranges the same record for desktop and mobile;
+- tabs scroll horizontally, forms collapse to one column, standalone controls target 44px, and report tables scroll only inside their wrapper;
+- specialized lead/stage dialogs retain their verified conflict lifecycle while adding body lock, focus containment/restoration, validation announcement, and viewport-safe scrolling;
+- no fake search is shown because there is no backend search over paginated leads;
+- no chart, Kanban, stage, probability, metric, route, permission, query, or frontend dependency was added.
+
+See `docs/BUKU_SAKU_2_AUDIT.md` for role/scope, reminder, report, query-state, performance, and remaining-gap contracts.
+
+## 21. Responsive Behavior
 
 - mobile touch targets: at least 44px;
 - toolbars wrap; forms remain completable;
@@ -330,7 +365,7 @@ Database 2.0 does not add project filters, domain filters, pagination, export/im
 
 Source contracts are not browser verification. Manually check approximately 360, 390, 430, 768, 1024, 1366, and 1440px when a browser is available.
 
-## 21. Accessibility
+## 22. Accessibility
 
 - semantic link/button/form behavior;
 - correctly associated visible labels;
@@ -344,7 +379,7 @@ Source contracts are not browser verification. Manually check approximately 360,
 
 Known gaps remain in legacy dialogs, date/month keyboard behavior, some dropdown menu navigation, and the broad legacy mobile control override.
 
-## 22. Correct Usage
+## 23. Correct Usage
 
 - use a primary button for the one dominant action;
 - use secondary/ghost/text for supporting actions;
@@ -355,7 +390,7 @@ Known gaps remain in legacy dialogs, date/month keyboard behavior, some dropdown
 - keep business filters and query preservation in the module;
 - use static synthetic data in the internal showcase.
 
-## 23. Anti-Patterns
+## 24. Anti-Patterns
 
 - parallel component namespaces;
 - arbitrary status-to-color inference inside a visual component;
@@ -369,7 +404,7 @@ Known gaps remain in legacy dialogs, date/month keyboard behavior, some dropdown
 - new UI, picker, icon, chart, or notification dependencies;
 - claiming a future primitive is already canonical.
 
-## 24. Migration Guide
+## 25. Migration Guide
 
 1. Audit the module route, permissions, policies, scopes, query parameters, and tests.
 2. Identify visual-only duplication; do not change backend behavior during migration.
@@ -383,7 +418,7 @@ Known gaps remain in legacy dialogs, date/month keyboard behavior, some dropdown
 
 See `docs/DESIGN_SYSTEM_AUDIT.md` for the module migration map and deferred patterns.
 
-## 25. Future Component Checklist
+## 26. Future Component Checklist
 
 - Is the pattern repeated or imminently reused?
 - Does an existing `x-crm.*` component already match?

@@ -119,7 +119,6 @@ The internal showcase will use a named `viewDesignSystem` Gate backed by primary
 
 - Dana Talangan filters, inline forms, and routed form convergence;
 - Pengeluaran filter/form migration;
-- Buku Saku Sales workflows and local dialogs;
 - Work Planner calendar, board, detail, and bulk interactions;
 - Konsumen Progress stage presentation;
 - picker accessibility and month-field extraction;
@@ -130,3 +129,7 @@ The internal showcase will use a named `viewDesignSystem` Gate backed by primary
 Database is the first completed operational migration. It consumes the Phase 1 page, toolbar, state, button, status, control, and modal primitives while retaining its dynamic tabs, metadata fields, wide table, skeleton, and sync-refresh behavior as Database-specific contracts. See `docs/DATABASE_2_AUDIT.md` and `docs/DESIGN_SYSTEM.md`.
 
 No Phase 1 primitive changes route names, query parameters, authorization, data scope, table columns, exports, sync behavior, or operational business rules.
+
+### Buku Saku Sales 2.0 completion
+
+Buku Saku Sales is the second completed operational migration. It consumes canonical page, toolbar, field, action, status, state, modal, pagination, presence, and table primitives while retaining its role-aware Leads/Agenda/Laporan navigation, Sales cascade, daily reminder, lead stage controls, Sales Agenda actions, report metrics, and period picker as local domain contracts. It adds no search, chart, stage, metric, route, permission, or frontend dependency. See `docs/BUKU_SAKU_2_AUDIT.md` and `docs/DESIGN_SYSTEM.md`.

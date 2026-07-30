@@ -16,7 +16,9 @@
 @endphp
 <article class="planner-board-card border-2 border-black bg-white p-3 shadow-[2px_2px_0_#000] hover:bg-[#fef3c7]" data-item-id="{{ $plannerItem->id }}" data-item-type="{{ $plannerItem->item_type }}" data-updated-at="{{ $plannerItem->updated_at?->copy()->utc()->format('Y-m-d H:i:s') }}">
     <div class="flex items-start gap-2">
+        @if($canUpdatePlanner ?? auth()->user()->hasPermission('work_planner.update'))
         <input type="checkbox" class="mt-1 shrink-0" aria-label="Pilih {{ $plannerItem->title }}" :checked="isSelected({{ $plannerItem->id }})" @click.stop="toggle({{ $plannerItem->id }})">
+        @endif
         <button type="button" @click="openDetail({{ $plannerItem->id }})" class="min-w-0 grow text-left">
             <div class="flex items-center justify-between gap-2">
                 <span class="border border-black px-1.5 py-0.5 text-[9px] font-[Helvetica] font-bold" style="background:{{ $typeColors[$plannerItem->item_type] ?? '#ccc' }}">{{ $typeLabels[$plannerItem->item_type] ?? strtoupper($plannerItem->item_type) }}</span>

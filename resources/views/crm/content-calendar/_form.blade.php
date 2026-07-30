@@ -141,8 +141,15 @@
 
     <div><label class="font-[Helvetica] font-bold text-xs uppercase block mb-1" x-text="type === 'content' ? 'Catatan' : 'Catatan / Progress'"></label><textarea name="notes" rows="4" class="w-full border-2 border-black px-3 py-2 text-sm font-['Times_New_Roman']">{{ old('notes', $item?->notes) }}</textarea></div>
 
-    @if($errors->any())<div class="border-2 border-black bg-[#d77a7a] px-3 py-2 text-sm">{{ $errors->first() }}</div>@endif
-    <div class="flex gap-3"><button class="bg-black text-white border-2 border-black px-6 py-2 text-sm font-bold">{{ $editing ? 'Simpan Perubahan' : 'Simpan Item' }}</button><a href="{{ route('content-calendar.index', ['view' => request('view', 'today')]) }}" class="bg-white border-2 border-black px-6 py-2 text-sm font-bold">Batal</a></div>
+    @if($errors->any())
+        <x-crm.alert variant="error" title="Data belum tersimpan">
+            Periksa kembali bidang yang ditandai. {{ $errors->first() }}
+        </x-crm.alert>
+    @endif
+    <div class="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+        <x-crm.button variant="secondary" :href="route('content-calendar.index', ['view' => request('view', 'today')])">Batal</x-crm.button>
+        <x-crm.button type="submit" variant="primary" accent="planner">{{ $editing ? 'Simpan Perubahan' : 'Simpan Item' }}</x-crm.button>
+    </div>
 </form>
 
 @push('scripts')

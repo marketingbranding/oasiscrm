@@ -21,8 +21,14 @@
     if ($selectedStatus) $activeFilters[] = 'Status: '.($statusLabels[$selectedStatus] ?? $selectedStatus);
     if ($selectedPriority) $activeFilters[] = 'Prioritas: '.ucfirst($selectedPriority);
     if ($selectedPic) $activeFilters[] = 'PIC: '.$selectedPic;
+    $selectedBranch = $selectedBranchId ? $branches->firstWhere('id', $selectedBranchId) : null;
+    $canCreatePlanner = auth()->user()->hasPermission('work_planner.create');
+    $canExportPlanner = auth()->user()->hasPermission('work_planner.export');
+    $canUpdatePlanner = auth()->user()->hasPermission('work_planner.update');
+    $activeViewLabel = $tabs[$viewMode] ?? 'Hari Ini';
+    $attentionCount = ($overdueTasks ?? collect())->count();
 @endphp
-<div x-data="plannerPage(@js($allItemIds), {
+<div class="space-y-4" x-data="plannerPage(@js($allItemIds), {
     branchId: @js((string) $selectedBranchId),
     projectName: @js($selectedProject ?: ''),
     type: @js($fixedType ?: ($selectedType ?: '')),
@@ -31,50 +37,65 @@
     returnView: @js($viewMode),
     projects: @js($filterProjects->map(fn($project) => ['name' => $project->project_name, 'branch_id' => (string) $project->branch_id])->values()),
 })">
-    <x-crm.page-header color="#b3bd95" title="Work Planner" />
+    <x-crm.page-header
+        variant="canonical"
+        eyebrow="Aktivitas / {{ $activeViewLabel }}"
+        title="Work Planner"
+        description="Ruang kerja operasional untuk task, agenda, dan konten berdasarkan cabang serta proyek yang dapat Anda akses."
+    >
+        @if($canCreatePlanner)
+            <x-slot:actions>
+                <div class="relative" @click.outside="addOpen=false">
+                    <x-crm.button type="button" variant="primary" accent="planner" @click="addOpen=!addOpen" aria-haspopup="true" x-bind:aria-expanded="addOpen.toString()">
+                        + Tambah Item
+                    </x-crm.button>
+                    <div x-show="addOpen" x-cloak class="absolute right-0 top-full mt-2 z-40 w-48 border-2 border-black bg-white shadow-[4px_4px_0_#000]">
+                        <a href="{{ route('content-calendar.create', ['type'=>'task','view'=>$viewMode]) }}" class="block border-l-4 border-[#9ab6c8] px-3 py-3 text-sm font-bold hover:bg-gray-100 focus:bg-gray-100">Task</a>
+                        <a href="{{ route('content-calendar.create', ['type'=>'agenda','view'=>$viewMode]) }}" class="block border-l-4 border-[#e6915d] px-3 py-3 text-sm font-bold hover:bg-gray-100 focus:bg-gray-100">Agenda</a>
+                        <a href="{{ route('content-calendar.create', ['type'=>'content','view'=>$viewMode]) }}" class="block border-l-4 border-[#8c9ae0] px-3 py-3 text-sm font-bold hover:bg-gray-100 focus:bg-gray-100">Konten</a>
+                    </div>
+                </div>
+            </x-slot:actions>
+        @endif
+    </x-crm.page-header>
     <x-crm.page-presence page-key="work-planner" :branch-id="$selectedBranchId" />
 
-    <nav class="flex overflow-x-auto border-b-2 border-black mb-4">
+    <div class="grid gap-3 sm:grid-cols-3" aria-label="Konteks Work Planner aktif">
+        <x-crm.status-badge variant="info">View: {{ $activeViewLabel }}</x-crm.status-badge>
+        <x-crm.status-badge variant="neutral">Cabang: {{ $selectedBranch?->name ?? 'Semua dalam akses' }}</x-crm.status-badge>
+        <x-crm.status-badge :variant="$attentionCount > 0 ? 'danger' : 'success'">Overdue: {{ $attentionCount }}</x-crm.status-badge>
+    </div>
+
+    <nav class="flex overflow-x-auto border-b-2 border-black" aria-label="Tampilan Work Planner">
         @foreach($tabs as $key => $label)
-        <a href="{{ route('content-calendar.index', ['view'=>$key]) }}" class="shrink-0 border-2 border-b-0 border-black px-4 py-2 text-xs font-[Helvetica] font-bold uppercase {{ $viewMode === $key ? 'bg-[#b3bd95]' : 'bg-white' }}">{{ $label }}</a>
+        <a href="{{ route('content-calendar.index', ['view'=>$key]) }}" @if($viewMode === $key) aria-current="page" @endif class="shrink-0 border-2 border-b-0 border-black px-4 py-3 text-xs font-[Helvetica] font-bold uppercase focus:outline focus:outline-4 focus:outline-[#0000ee] {{ $viewMode === $key ? 'bg-[#b3bd95]' : 'bg-white hover:bg-gray-100' }}">{{ $label }}</a>
         @endforeach
     </nav>
 
-    <div class="border-2 border-black bg-white p-3 mb-3">
-        <div class="flex items-center gap-2 flex-wrap">
+    <x-crm.toolbar label="Filter dan aksi Work Planner">
             <form method="GET" action="{{ route('content-calendar.index') }}" class="flex grow min-w-[240px] max-w-xl">
                 @foreach(request()->except(['search','page','view','item_type','status']) as $key => $value) @if(is_scalar($value) && $value !== '')<input type="hidden" name="{{ $key }}" value="{{ $value }}">@endif @endforeach
                 <input type="hidden" name="view" value="{{ $viewMode }}">
                 @if($selectedType)<input type="hidden" name="item_type" value="{{ $selectedType }}">@endif
                 @if($selectedStatus)<input type="hidden" name="status" value="{{ $selectedStatus }}">@endif
-                <input name="search" value="{{ $search }}" aria-label="Cari Work Planner" placeholder="Cari judul atau detail..." class="min-w-0 grow border-2 border-r-0 border-black px-3 py-1.5 text-sm">
-                <button class="border-2 border-black bg-black text-white px-4 py-1.5 text-sm font-bold">Cari</button>
+                <label for="planner-search" class="sr-only">Cari judul atau detail task</label>
+                <input id="planner-search" name="search" value="{{ $search }}" placeholder="Cari judul atau detail task..." class="crm-control min-w-0 grow border-r-0">
+                <x-crm.button type="submit" variant="secondary" class="rounded-none">Cari</x-crm.button>
             </form>
-            <button type="button" @click="filterOpen=true" class="inline-flex items-center gap-2 border-2 border-black bg-white px-4 py-1.5 text-sm font-bold hover:bg-gray-100">
+        <x-slot:actions>
+            <x-crm.button type="button" variant="secondary" @click="$dispatch('oasis:modal-open', { name: 'planner-filters', trigger: $el })">
                 <svg viewBox="0 0 20 20" fill="currentColor" class="w-4 h-4"><path d="M2.75 3.5a.75.75 0 0 1 .75-.75h13a.75.75 0 0 1 .53 1.28l-5.28 5.28v4.94a.75.75 0 0 1-.36.64l-3 1.8A.75.75 0 0 1 7.25 16V9.31L1.97 4.03a.75.75 0 0 1 .78-1.23v.7Zm2.56.75 3.22 3.22a.75.75 0 0 1 .22.53v6.68l1.5-.9V8a.75.75 0 0 1 .22-.53l3.22-3.22H5.31Z"/></svg>
                 Filter @if(count($activeFilters))<span class="bg-[#c0392b] text-white min-w-5 h-5 px-1 inline-flex items-center justify-center text-[10px]">{{ count($activeFilters) }}</span>@endif
-            </button>
-            <div class="ml-auto flex gap-2 items-center">
-                <x-crm.export-import export-route="content-calendar.export" import-route="content-calendar.import" :params="request()->query()" />
-                <div class="relative" @click.outside="addOpen=false">
-                    <button type="button" @click="addOpen=!addOpen" class="border-2 border-black bg-[#b3bd95] px-4 py-1.5 text-sm font-bold">+ Tambah ▼</button>
-                    <div x-show="addOpen" x-cloak class="absolute right-0 top-full mt-1 z-40 w-44 border-2 border-black bg-white shadow-[4px_4px_0_#000]">
-                        <a href="{{ route('content-calendar.create', ['type'=>'task','view'=>$viewMode]) }}" class="block border-l-4 border-[#9ab6c8] px-3 py-2 text-sm font-bold hover:bg-gray-100">Task</a>
-                        <a href="{{ route('content-calendar.create', ['type'=>'agenda','view'=>$viewMode]) }}" class="block border-l-4 border-[#e6915d] px-3 py-2 text-sm font-bold hover:bg-gray-100">Agenda</a>
-                        <a href="{{ route('content-calendar.create', ['type'=>'content','view'=>$viewMode]) }}" class="block border-l-4 border-[#8c9ae0] px-3 py-2 text-sm font-bold hover:bg-gray-100">Konten</a>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
+            </x-crm.button>
+            <x-crm.export-import export-route="content-calendar.export" import-route="content-calendar.import" :params="request()->query()" :can-export="$canExportPlanner" :can-import="$canCreatePlanner" />
+        </x-slot:actions>
+    </x-crm.toolbar>
 
     @if(count($activeFilters))
-    <div class="flex flex-wrap gap-2 items-center mb-4"><span class="text-[10px] font-bold uppercase">Filter aktif:</span>@foreach($activeFilters as $activeFilter)<span class="border-2 border-black bg-[#fef3cd] px-2 py-1 text-xs">{{ $activeFilter }}</span>@endforeach<a href="{{ route('content-calendar.index', array_filter(['view'=>$viewMode,'month'=>$month,'year'=>$year,'search'=>$search])) }}" class="text-xs text-[#c0392b] font-bold underline">Hapus semua filter</a></div>
+    <div class="flex flex-wrap gap-2 items-center"><span class="text-[10px] font-bold uppercase">Filter aktif:</span>@foreach($activeFilters as $activeFilter)<x-crm.filter-chip :label="$activeFilter" />@endforeach<a href="{{ route('content-calendar.index', array_filter(['view'=>$viewMode,'month'=>$month,'year'=>$year,'search'=>$search])) }}" class="text-xs text-[#c0392b] font-bold underline">Hapus semua filter</a></div>
     @endif
 
-    <div x-show="filterOpen" x-cloak class="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4" @keydown.escape.window="filterOpen=false">
-        <div @click.away="filterOpen=false" class="w-full max-w-2xl border-2 border-black bg-white p-5 shadow-[8px_8px_0_#000] max-h-[90vh] overflow-y-auto">
-            <div class="flex justify-between items-center mb-4"><h2 class="text-sm font-bold uppercase">Filter Work Planner</h2><button @click="filterOpen=false" type="button">×</button></div>
+    <x-crm.modal name="planner-filters" title="Filter Work Planner" description="Batasi daftar berdasarkan cabang, proyek, tipe, status, prioritas, atau PIC." size="lg">
             <form method="GET" action="{{ route('content-calendar.index') }}" class="space-y-4">
                 <input type="hidden" name="view" value="{{ $viewMode }}"><input type="hidden" name="month" value="{{ $month }}"><input type="hidden" name="year" value="{{ $year }}">@if($search)<input type="hidden" name="search" value="{{ $search }}">@endif
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -85,17 +106,16 @@
                     <div x-show="!filterType || filterType==='task'"><label class="block text-xs font-bold uppercase mb-1">Prioritas</label><select name="priority" class="w-full border-2 border-black px-3 py-2 bg-white"><option value="">Semua Prioritas</option>@foreach(['low','medium','high','urgent'] as $priority)<option value="{{ $priority }}" {{ $selectedPriority===$priority?'selected':'' }}>{{ ucfirst($priority) }}</option>@endforeach</select></div>
                     <div><label class="block text-xs font-bold uppercase mb-1">PIC</label><input name="pic" value="{{ $selectedPic }}" placeholder="Nama PIC" class="w-full border-2 border-black px-3 py-2"></div>
                 </div>
-                <div class="flex gap-2"><button class="bg-black text-white border-2 border-black px-6 py-2 text-sm font-bold">Terapkan Filter</button><a href="{{ route('content-calendar.index', array_filter(['view'=>$viewMode,'month'=>$month,'year'=>$year,'search'=>$search])) }}" class="border-2 border-black px-6 py-2 text-sm font-bold">Reset Filter</a></div>
+                <div class="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end"><x-crm.button :href="route('content-calendar.index', array_filter(['view'=>$viewMode,'month'=>$month,'year'=>$year,'search'=>$search]))" variant="secondary">Reset Filter</x-crm.button><x-crm.button type="submit" variant="primary" accent="planner">Terapkan Filter</x-crm.button></div>
             </form>
-        </div>
-    </div>
+    </x-crm.modal>
 
     @if($viewMode === 'today')
     <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <section class="border-2 border-black bg-[#fff8ed]"><h2 class="bg-[#e6915d] border-b-2 border-black px-3 py-2 text-xs font-bold uppercase">Agenda Hari Ini · {{ $agendaToday->count() }}</h2><div class="p-3 space-y-2">@forelse($agendaToday as $plannerItem) @include('crm.content-calendar._item-card') @empty <p class="text-sm italic">Tidak ada agenda hari ini.</p> @endforelse</div></section>
-        <section class="border-2 border-black bg-[#f4f8fb]"><h2 class="bg-[#9ab6c8] border-b-2 border-black px-3 py-2 text-xs font-bold uppercase">Task Hari Ini · {{ $tasksToday->count() }}</h2><div class="p-3 space-y-2">@forelse($tasksToday as $plannerItem) @include('crm.content-calendar._item-card') @empty <p class="text-sm italic">Tidak ada task jatuh tempo hari ini.</p> @endforelse</div></section>
-        <section class="border-2 border-black bg-[#fff1f1]"><h2 class="bg-[#d77a7a] border-b-2 border-black px-3 py-2 text-xs font-bold uppercase">Overdue · {{ $overdueTasks->count() }}</h2><div class="p-3 space-y-2">@forelse($overdueTasks as $plannerItem) @include('crm.content-calendar._item-card') @empty <p class="text-sm italic">Tidak ada task overdue.</p> @endforelse</div></section>
-        <section class="border-2 border-black bg-[#f4f3ff]"><h2 class="bg-[#8c9ae0] text-white border-b-2 border-black px-3 py-2 text-xs font-bold uppercase">Konten Hari Ini · {{ $contentToday->count() }}</h2><div class="p-3 space-y-2">@forelse($contentToday as $plannerItem) @include('crm.content-calendar._item-card') @empty <p class="text-sm italic">Tidak ada konten terbit hari ini.</p> @endforelse</div></section>
+        <section class="border-2 border-black bg-[#fff1f1]"><h2 class="bg-[#d77a7a] border-b-2 border-black px-3 py-2 text-xs font-bold uppercase">Overdue membutuhkan perhatian · {{ $overdueTasks->count() }}</h2><div class="p-3 space-y-2">@forelse($overdueTasks as $plannerItem) @include('crm.content-calendar._item-card') @empty <x-crm.empty-state title="Tidak ada task terlambat" description="Semua task aktif yang dapat Anda lihat masih dalam tenggat atau sudah selesai." /> @endforelse</div></section>
+        <section class="border-2 border-black bg-[#f4f8fb]"><h2 class="bg-[#9ab6c8] border-b-2 border-black px-3 py-2 text-xs font-bold uppercase">Task Hari Ini · {{ $tasksToday->count() }}</h2><div class="p-3 space-y-2">@forelse($tasksToday as $plannerItem) @include('crm.content-calendar._item-card') @empty <x-crm.empty-state title="Tidak ada task hari ini" description="Belum ada task dengan deadline hari ini pada scope yang sedang aktif." /> @endforelse</div></section>
+        <section class="border-2 border-black bg-[#fff8ed]"><h2 class="bg-[#e6915d] border-b-2 border-black px-3 py-2 text-xs font-bold uppercase">Agenda Hari Ini · {{ $agendaToday->count() }}</h2><div class="p-3 space-y-2">@forelse($agendaToday as $plannerItem) @include('crm.content-calendar._item-card') @empty <x-crm.empty-state title="Tidak ada agenda hari ini" description="Tidak ada agenda terjadwal hari ini pada cabang/proyek yang sedang dilihat." /> @endforelse</div></section>
+        <section class="border-2 border-black bg-[#f4f3ff]"><h2 class="bg-[#8c9ae0] text-white border-b-2 border-black px-3 py-2 text-xs font-bold uppercase">Konten Hari Ini · {{ $contentToday->count() }}</h2><div class="p-3 space-y-2">@forelse($contentToday as $plannerItem) @include('crm.content-calendar._item-card') @empty <x-crm.empty-state title="Tidak ada konten hari ini" description="Belum ada konten dengan jadwal publikasi hari ini." /> @endforelse</div></section>
     </div>
     @if($tomorrowItems->isNotEmpty())<section class="border-2 border-black bg-white mt-4"><h2 class="bg-black text-white px-3 py-2 text-xs font-bold uppercase">Besok / H-1 · {{ $tomorrowItems->count() }}</h2><div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 p-3">@foreach($tomorrowItems as $plannerItem) @include('crm.content-calendar._item-card') @endforeach</div></section>@endif
 
@@ -143,19 +163,19 @@
     @elseif(in_array($viewMode, ['tasks','agenda','content']))
     <div class="flex gap-3 overflow-x-auto pb-3">
         @foreach($boardColumns as $status => $columnItems)
-        <section class="w-72 shrink-0 border-2 border-black bg-gray-100"><h2 class="bg-black text-white px-3 py-2 text-xs font-bold uppercase"><span>{{ $statusLabels[$status] ?? $status }}</span> · <span class="board-count">{{ $columnItems->count() }}</span></h2><div class="sortable-column p-2 space-y-2 min-h-40" data-status="{{ $status }}">@foreach($columnItems as $plannerItem) @include('crm.content-calendar._item-card') @endforeach</div></section>
+        <section class="w-72 shrink-0 border-2 border-black bg-gray-100"><h2 class="bg-black text-white px-3 py-2 text-xs font-bold uppercase"><span>{{ $statusLabels[$status] ?? $status }}</span> · <span class="board-count">{{ $columnItems->count() }}</span></h2><div class="sortable-column p-2 space-y-2 min-h-40" data-status="{{ $status }}">@forelse($columnItems as $plannerItem) @include('crm.content-calendar._item-card') @empty <x-crm.empty-state title="Tidak ada item" description="Belum ada item pada status ini." /> @endforelse</div></section>
         @endforeach
     </div>
 
     @else
-    <div class="crm-table-scroll"><table class="crm-data-table"><thead><tr><th class="crm-select-col"><input type="checkbox" @change="selectAll()"></th><th>Tipe</th><th>Judul</th><th>Tanggal</th><th>Cabang</th><th>Proyek</th><th>Status</th><th>PIC</th><th class="crm-actions">Aksi</th></tr></thead><tbody>@forelse($items as $plannerItem)<tr><td class="crm-select-col"><input type="checkbox" :checked="isSelected({{ $plannerItem->id }})" @click="toggle({{ $plannerItem->id }})"></td><td>{{ strtoupper($plannerItem->item_type) }}</td><td title="{{ $plannerItem->title }}"><button @click="openDetail({{ $plannerItem->id }})" class="font-bold underline">{{ $plannerItem->title }}</button></td><td>{{ $plannerItem->scheduled_date?->format('d M Y') ?? '—' }}</td><td>{{ $plannerItem->branch?->name }}</td><td>{{ $plannerItem->project_name ?: '—' }}</td><td>{{ $statusLabels[$plannerItem->status] ?? $plannerItem->status }}</td><td>{{ $plannerItem->assignees->pluck('name')->merge($plannerItem->pic_names ?? [])->join(', ') ?: '—' }}</td><td class="crm-actions"><a href="{{ route('content-calendar.edit', ['content_calendar'=>$plannerItem->id, 'view'=>$viewMode]) }}" style="color:#0000ee;font-weight:bold;text-decoration:underline">Edit</a> <form method="POST" action="{{ route('content-calendar.destroy',$plannerItem) }}" class="inline" onsubmit="return confirm('Hapus item ini?')">@csrf @method('DELETE')<button style="color:#c0392b;font-weight:bold;text-decoration:underline">Hapus</button></form></td></tr>@empty<tr><td colspan="9" class="text-center py-8 italic">Tidak ada item.</td></tr>@endforelse</tbody></table></div><div class="mt-3">{{ $items->links() }}</div>
+    <div class="crm-table-scroll"><table class="crm-data-table"><thead><tr><th class="crm-select-col"><input type="checkbox" aria-label="Pilih semua item pada halaman ini" @change="selectAll()"></th><th>Tipe</th><th>Judul</th><th>Tanggal</th><th>Cabang</th><th>Proyek</th><th>Status</th><th>PIC</th><th class="crm-actions">Aksi</th></tr></thead><tbody>@forelse($items as $plannerItem)<tr><td class="crm-select-col"><input type="checkbox" aria-label="Pilih {{ $plannerItem->title }}" :checked="isSelected({{ $plannerItem->id }})" @click="toggle({{ $plannerItem->id }})"></td><td>{{ strtoupper($plannerItem->item_type) }}</td><td title="{{ $plannerItem->title }}"><button @click="openDetail({{ $plannerItem->id }})" class="font-bold underline">{{ $plannerItem->title }}</button></td><td>{{ $plannerItem->scheduled_date?->format('d M Y') ?? '—' }}</td><td>{{ $plannerItem->branch?->name }}</td><td>{{ $plannerItem->project_name ?: '—' }}</td><td>{{ $statusLabels[$plannerItem->status] ?? $plannerItem->status }}</td><td>{{ $plannerItem->assignees->pluck('name')->merge($plannerItem->pic_names ?? [])->join(', ') ?: '—' }}</td><td class="crm-actions"><a href="{{ route('content-calendar.edit', ['content_calendar'=>$plannerItem->id, 'view'=>$viewMode]) }}" style="color:#0000ee;font-weight:bold;text-decoration:underline">Edit</a> <form method="POST" action="{{ route('content-calendar.destroy',$plannerItem) }}" class="inline" onsubmit="return confirm('Hapus item ini?')">@csrf @method('DELETE')<button style="color:#c0392b;font-weight:bold;text-decoration:underline">Hapus</button></form></td></tr>@empty<tr><td colspan="9"><x-crm.empty-state title="Tidak ada item" description="Tidak ada Work Planner yang cocok dengan view dan filter saat ini." /></td></tr>@endforelse</tbody></table></div><div class="mt-3">{{ $items->links() }}</div>
     @endif
 
     <form method="POST" x-ref="bulkForm" x-show="selectedIds.length" x-cloak class="sticky bottom-0 z-30 bg-white border-2 border-black mt-4 p-3 flex gap-2 items-center flex-wrap">@csrf<template x-for="id in selectedIds"><input type="hidden" name="ids[]" :value="id"></template><strong class="text-xs" x-text="selectedIds.length + ' item dipilih'"></strong><input name="status" placeholder="Status" class="border-2 border-black px-2 py-1 text-xs"><select name="priority" class="border-2 border-black px-2 py-1 text-xs"><option value="">Prioritas</option><option>low</option><option>medium</option><option>high</option><option>urgent</option></select><button type="button" @click="submitBulkUpdate()" class="bg-black text-white border-2 border-black px-3 py-1 text-xs">Update</button><button type="button" @click="submitBulkDelete()" class="bg-[#d77a7a] border-2 border-black px-3 py-1 text-xs">Hapus</button></form>
 
     <div x-show="dayOpen" x-cloak class="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4" @keydown.escape.window="dayOpen=false">
-        <div @click.away="dayOpen=false" class="bg-[#f5f0eb] border-2 border-black max-w-xl w-full max-h-[85vh] overflow-y-auto shadow-[6px_6px_0_#000]">
-            <div class="sticky top-0 z-10 bg-black text-white px-4 py-2 flex items-center justify-between"><strong x-text="dayLabel"></strong><button type="button" @click="dayOpen=false">×</button></div>
+        <section @click.away="dayOpen=false" role="dialog" aria-modal="true" aria-labelledby="planner-day-title" tabindex="-1" class="bg-[#f5f0eb] border-2 border-black max-w-xl w-full max-h-[85vh] overflow-y-auto shadow-[6px_6px_0_#000]">
+            <div class="sticky top-0 z-10 bg-black text-white px-4 py-2 flex items-center justify-between"><strong id="planner-day-title" x-text="dayLabel"></strong><button type="button" aria-label="Tutup daftar hari" @click="dayOpen=false">×</button></div>
             <div class="p-3 space-y-2">
                 <template x-if="dayItems.length === 0"><p class="py-6 text-center italic">Tidak ada aktivitas.</p></template>
                 <template x-for="item in dayItems" :key="item.id">
@@ -169,10 +189,10 @@
                     </article>
                 </template>
             </div>
-        </div>
+        </section>
     </div>
 
-    <div x-show="detailOpen" x-cloak class="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4" @keydown.escape.window="detailOpen=false"><div @click.away="detailOpen=false" class="bg-[#f5f0eb] border-2 border-black max-w-lg w-full max-h-[85vh] overflow-y-auto shadow-[6px_6px_0_#000]"><div class="bg-black text-white px-4 py-2 flex justify-between"><strong x-text="detail?.title || 'Detail'"></strong><button @click="detailOpen=false">×</button></div><template x-if="detail"><div class="p-4 space-y-3 text-sm"><p x-show="detail.item_type !== 'content'" x-text="detail.task_detail || '—'" class="italic"></p><div class="grid grid-cols-2 gap-3"><div><b>Tipe</b><p x-text="detail.item_type"></p></div><div><b>Status</b><p x-text="statusLabel(detail.status)"></p></div><div x-show="detail.item_type !== 'content'"><b>Tanggal</b><p x-text="formatDate(detail.scheduled_date)"></p></div><div x-show="detail.item_type !== 'content'"><b>Visibilitas</b><p x-text="detail.visibility"></p></div><div x-show="detail.item_type !== 'content'"><b>Lokasi</b><p x-text="detail.location || '—'"></p></div><div><b>Platform</b><p x-text="detail.platform || '—'"></p></div><div x-show="detail.item_type === 'content'"><b>Tujuan Konten</b><p x-text="detail.tujuan_konten || '—'"></p></div><div x-show="detail.item_type === 'content'"><b>Format Konten</b><p x-text="detail.content_format || '—'"></p></div></div><div x-show="detail.item_type !== 'content'"><b>PIC</b><p x-text="[...(detail.assignees || []).map(u=>u.name), ...(detail.pic_names || [])].join(', ') || '—'"></p></div><div><b>Catatan</b><p x-text="detail.notes || '—'"></p></div><div class="flex justify-end"><a :href="editBaseUrl + '/' + detail.id + '/edit?view=' + returnView" class="border-2 border-black bg-[#b3bd95] px-3 py-1 font-bold">Edit</a></div></div></template></div></div>
+    <div x-show="detailOpen" x-cloak class="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4" @keydown.escape.window="detailOpen=false"><section @click.away="detailOpen=false" role="dialog" aria-modal="true" aria-labelledby="planner-detail-title" tabindex="-1" class="bg-[#f5f0eb] border-2 border-black max-w-lg w-full max-h-[85vh] overflow-y-auto shadow-[6px_6px_0_#000]"><div class="bg-black text-white px-4 py-2 flex justify-between"><strong id="planner-detail-title" x-text="detail?.title || 'Detail Work Planner'"></strong><button type="button" aria-label="Tutup detail" @click="detailOpen=false">×</button></div><div x-show="detailLoading" class="p-4"><x-crm.loading-state label="Memuat detail Work Planner" /></div><div x-show="detailError" class="p-4"><x-crm.alert variant="error" title="Detail belum dapat dimuat"><span x-text="detailError"></span></x-crm.alert></div><template x-if="detail"><div class="p-4 space-y-3 text-sm"><p x-show="detail.item_type !== 'content'" x-text="detail.task_detail || '—'" class="italic"></p><div class="grid grid-cols-2 gap-3"><div><b>Tipe</b><p x-text="detail.item_type"></p></div><div><b>Status</b><p x-text="statusLabel(detail.status)"></p></div><div x-show="detail.item_type !== 'content'"><b>Tanggal</b><p x-text="formatDate(detail.scheduled_date)"></p></div><div x-show="detail.item_type !== 'content'"><b>Visibilitas</b><p x-text="detail.visibility"></p></div><div x-show="detail.item_type !== 'content'"><b>Lokasi</b><p x-text="detail.location || '—'"></p></div><div><b>Platform</b><p x-text="detail.platform || '—'"></p></div><div x-show="detail.item_type === 'content'"><b>Tujuan Konten</b><p x-text="detail.tujuan_konten || '—'"></p></div><div x-show="detail.item_type === 'content'"><b>Format Konten</b><p x-text="detail.content_format || '—'"></p></div></div><div x-show="detail.item_type !== 'content'"><b>PIC</b><p x-text="[...(detail.assignees || []).map(u=>u.name), ...(detail.pic_names || [])].join(', ') || '—'"></p></div><div><b>Catatan</b><p x-text="detail.notes || '—'"></p></div><div class="flex justify-end"><a :href="editBaseUrl + '/' + detail.id + '/edit?view=' + returnView" class="border-2 border-black bg-[#b3bd95] px-3 py-2 font-bold">Edit</a></div></div></template></section></div>
     @if(auth()->user()->hasPermission('comments.view'))
     <a x-show="detailOpen && detail" x-cloak :href="@js(url('/comments/thread/planner-item')) + '/' + detail.id" class="fixed bottom-6 left-1/2 z-[60] -translate-x-1/2 border-2 border-black bg-white px-3 py-1 text-xs font-bold text-[#0000ee] underline shadow-[3px_3px_0_#000]">Komentar (<span x-text="detail?.comments_count || 0"></span>)</a>
     @endif
@@ -183,7 +203,7 @@
 <script>
 function plannerPage(ids, config) {
     return {
-        allItemIds: ids || [], selectedIds: [], detailOpen: false, detail: null,
+        allItemIds: ids || [], selectedIds: [], detailOpen: false, detail: null, detailLoading: false, detailError: '',
         dayOpen: false, dayLabel: '', dayItems: [],
         filterOpen: false, addOpen: false,
         filterBranch: config.branchId || '', filterProject: config.projectName || '',
@@ -249,7 +269,7 @@ function plannerPage(ids, config) {
                 const reference = event.from.children[event.oldIndex] || null;
                 event.from.insertBefore(event.item, reference);
                 this.refreshBoardCounts();
-                alert('Status belum dapat diperbarui. Periksa koneksi lalu coba kembali.');
+                window.oasisToast?.('Status belum dapat diperbarui. Periksa koneksi lalu coba kembali.', 'error');
             }
         },
         refreshBoardCounts() {
@@ -261,7 +281,20 @@ function plannerPage(ids, config) {
         isSelected(id) { return this.selectedIds.includes(id); },
         toggle(id) { this.isSelected(id) ? this.selectedIds.splice(this.selectedIds.indexOf(id),1) : this.selectedIds.push(id); },
         selectAll() { this.selectedIds = this.selectedIds.length === this.allItemIds.length ? [] : [...this.allItemIds]; },
-        openDetail(id) { this.detailOpen=true; fetch(this.detailBaseUrl+'/'+id+'/detail').then(r=>r.json()).then(data=>this.detail=data); },
+        openDetail(id) {
+            this.detailOpen = true;
+            this.detail = null;
+            this.detailError = '';
+            this.detailLoading = true;
+            fetch(this.detailBaseUrl+'/'+id+'/detail', { headers: { 'Accept': 'application/json' } })
+                .then(response => {
+                    if (!response.ok) throw new Error('Akses detail ditolak atau jaringan bermasalah.');
+                    return response.json();
+                })
+                .then(data => { this.detail = data; })
+                .catch(error => { this.detailError = error.message || 'Detail belum dapat dimuat.'; })
+                .finally(() => { this.detailLoading = false; });
+        },
         openDay(label, items) { this.dayLabel=label; this.dayItems=items || []; this.dayOpen=true; },
         typeColor(type) { return {task:'#9ab6c8',agenda:'#e6915d',content:'#8c9ae0'}[type] || '#ccc'; },
         formatDate(value) { return value ? new Date(value).toLocaleDateString('id-ID',{day:'numeric',month:'short',year:'numeric'}) : '—'; },

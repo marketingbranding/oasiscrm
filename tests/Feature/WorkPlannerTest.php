@@ -125,6 +125,47 @@ class WorkPlannerTest extends TestCase
         }
     }
 
+    public function test_work_planner_index_uses_canonical_shell_and_accessible_controls(): void
+    {
+        [$branch, $user] = $this->branchAndUser();
+        $this->makeItem($branch, $user, ['title' => 'Task Kontrak UI']);
+
+        $response = $this->actingAs($user)->get(route('content-calendar.index', ['view' => 'tasks']));
+
+        $response->assertOk()
+            ->assertSee('crm-page-header', false)
+            ->assertSee('Filter dan aksi Work Planner')
+            ->assertSee('aria-current="page"', false)
+            ->assertSee('planner-filters')
+            ->assertSee('aria-label="Pilih Task Kontrak UI"', false)
+            ->assertSee('role="dialog"', false)
+            ->assertSee('Komentar (0)');
+    }
+
+    public function test_work_planner_forms_use_canonical_page_and_feedback_components(): void
+    {
+        [$branch, $user] = $this->branchAndUser();
+        $item = $this->makeItem($branch, $user, ['title' => 'Task Form UI']);
+
+        $this->actingAs($user)->get(route('content-calendar.create', ['type' => 'agenda']))
+            ->assertOk()
+            ->assertSee('crm-page-header', false)
+            ->assertSee('crm-card', false)
+            ->assertSee('Tambah Item');
+
+        $this->actingAs($user)->get(route('content-calendar.edit', $item))
+            ->assertOk()
+            ->assertSee('data-conflict-form', false)
+            ->assertSee('work-planner')
+            ->assertSee('Simpan Perubahan');
+
+        $this->actingAs($user)->get(route('content-calendar.import'))
+            ->assertOk()
+            ->assertSee('crm-page-header', false)
+            ->assertSee('Pilih File XLSX')
+            ->assertSee('Download Template XLSX');
+    }
+
     public function test_reminders_include_today_tomorrow_and_overdue_visible_items(): void
     {
         [$branch, $user] = $this->branchAndUser();

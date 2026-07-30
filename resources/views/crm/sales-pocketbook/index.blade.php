@@ -25,6 +25,28 @@
             : ['period_type' => 'week', 'week' => request('week', $reportPeriod['start']->toDateString())],
     )) : null;
     $personalBranchName = $branches->firstWhere('id', Auth::user()->branch_id)?->name ?? 'Belum dipilih';
+    $leadResetUrl = route('sales-pocketbook.index', ['tab' => 'leads']);
+    $leadFilterUrl = fn (array $remove) => route('sales-pocketbook.index', array_merge(
+        request()->except(array_merge($remove, ['page'])),
+        ['tab' => 'leads'],
+    ));
+    $hasLeadPeriodFilter = request()->filled('period_type') || request()->filled('week') || request()->filled('date_from') || request()->filled('date_to');
+    $hasLeadFilters = collect(['branch_id', 'project_id', 'sales_user_id', 'lead_source_id', 'stage', 'report_metric'])
+        ->contains(fn (string $key) => request()->filled($key)) || $hasLeadPeriodFilter;
+    $activeLeadFilterCount = collect(['branch_id', 'project_id', 'sales_user_id', 'lead_source_id', 'stage', 'report_metric'])
+        ->filter(fn (string $key) => request()->filled($key))->count() + ($hasLeadPeriodFilter ? 1 : 0);
+    $selectedLeadSource = request()->filled('lead_source_id') ? $leadSources->firstWhere('id', request()->integer('lead_source_id')) : null;
+    $selectedLeadStage = request()->filled('stage') ? (\App\Models\SalesLead::STAGES[request('stage')] ?? null) : null;
+    $reportMetricLabels = [
+        'lead_new' => 'Lead Baru',
+        'contacted' => 'Dihubungi',
+        'met' => 'Tatap Muka',
+        'surveyed' => 'Survey',
+        'utj' => 'UTJ',
+        'documents_completed' => 'Berkas Lengkap',
+        'akad' => 'Akad',
+    ];
+    $selectedReportMetric = request()->filled('report_metric') ? ($reportMetricLabels[request('report_metric')] ?? null) : null;
 @endphp
 <div class="space-y-4" x-data="salesPocketbook()">
     <x-crm.page-header
@@ -193,24 +215,82 @@
     @endif
 
     @if($monitoring)
-    <form method="GET" action="{{ route('sales-pocketbook.index') }}" x-data="salesCascade(@js($cascadeProjects), @js($cascadeSales), @js(['branch' => request('branch_id'), 'project' => request('project_id'), 'sales' => request('sales_user_id')]))" class="border-2 border-black bg-[#f5f5f5] p-3 grid grid-cols-2 md:grid-cols-4 gap-2">
-        <select class="sales-input" name="branch_id" x-model="branch" @change="branchChanged()"><option value="">Semua cabang</option>@foreach($branches as $branch)<option value="{{ $branch->id }}">{{ $branch->name }}</option>@endforeach</select>
-        <select class="sales-input" name="project_id" x-model="project" @change="projectChanged()"><option value="">Semua proyek</option>@foreach($projects as $project)<option value="{{ $project->id }}" x-show="projectVisible('{{ $project->id }}')" :disabled="!projectVisible('{{ $project->id }}')">{{ $project->project_name }}</option>@endforeach</select>
-        <select class="sales-input" name="sales_user_id" x-model="sales"><option value="">Semua sales</option>@foreach($salesUsers as $sales)<option value="{{ $sales->id }}" x-show="salesVisible('{{ $sales->id }}')" :disabled="!salesVisible('{{ $sales->id }}')">{{ $sales->name }}</option>@endforeach</select>
-        <select class="sales-input" name="lead_source_id"><option value="">Semua sumber</option>@foreach($leadSources as $source)<option value="{{ $source->id }}" @selected(request('lead_source_id') == $source->id)>{{ $source->name }}</option>@endforeach</select>
-        <select class="sales-input" name="stage"><option value="">Semua tahap</option>@foreach(\App\Models\SalesLead::STAGES as $stage => $label)<option value="{{ $stage }}" @selected(request('stage') === $stage)>{{ $label }}</option>@endforeach</select>
-        @include('crm.sales-pocketbook._period-picker')
-        <button class="sales-button bg-black text-white">Filter</button>
-    </form>
+    <x-crm.toolbar label="Filter monitoring lead" class="sales-lead-toolbar">
+        <div class="sales-lead-filter-summary">
+            <strong>Filter monitoring</strong>
+            <span>{{ $activeLeadFilterCount ? $activeLeadFilterCount.' filter aktif' : 'Menampilkan seluruh lead dalam akses Anda' }}</span>
+        </div>
+        @if($selectedBranch)<x-crm.filter-chip label="Cabang: {{ $selectedBranch->name }}" :remove-href="$leadFilterUrl(['branch_id'])" remove-label="Hapus filter cabang" />@endif
+        @if($selectedProject)<x-crm.filter-chip label="Proyek: {{ $selectedProject->project_name }}" :remove-href="$leadFilterUrl(['project_id'])" remove-label="Hapus filter proyek" />@endif
+        @if($selectedSales)<x-crm.filter-chip label="Sales: {{ $selectedSales->name }}" :remove-href="$leadFilterUrl(['sales_user_id'])" remove-label="Hapus filter sales" />@endif
+        @if($selectedLeadSource)<x-crm.filter-chip label="Sumber: {{ $selectedLeadSource->name }}" :remove-href="$leadFilterUrl(['lead_source_id'])" remove-label="Hapus filter sumber lead" />@endif
+        @if($selectedLeadStage)<x-crm.filter-chip label="Tahap: {{ $selectedLeadStage }}" :remove-href="$leadFilterUrl(['stage'])" remove-label="Hapus filter tahap" />@endif
+        @if($selectedReportMetric)<x-crm.filter-chip label="Drilldown: {{ $selectedReportMetric }}" :remove-href="$leadFilterUrl(['report_metric'])" remove-label="Hapus drilldown laporan" />@endif
+        @if($hasLeadPeriodFilter)<x-crm.filter-chip label="Periode: {{ $reportPeriod['start']->format('d/m/Y') }} - {{ $reportPeriod['end']->format('d/m/Y') }}" :remove-href="$leadFilterUrl(['period_type', 'week', 'date_from', 'date_to'])" remove-label="Hapus filter periode" />@endif
+        <x-slot:actions>
+            @if($hasLeadFilters)<x-crm.button variant="text" :href="$leadResetUrl">Hapus semua filter</x-crm.button>@endif
+            <x-crm.button variant="secondary" @click="$dispatch('oasis:modal-open', { name: 'sales-lead-filters' })">Filter lanjutan{{ $activeLeadFilterCount ? ' ('.$activeLeadFilterCount.')' : '' }}</x-crm.button>
+        </x-slot:actions>
+    </x-crm.toolbar>
+
+    <x-crm.modal name="sales-lead-filters" title="Filter Monitoring Lead" description="Batasi daftar berdasarkan organisasi, sumber, tahap, dan periode." size="lg">
+        <form method="GET" action="{{ route('sales-pocketbook.index') }}" x-data="salesCascade(@js($cascadeProjects), @js($cascadeSales), @js(['branch' => request('branch_id'), 'project' => request('project_id'), 'sales' => request('sales_user_id')]))" class="sales-lead-filter-form">
+            <input type="hidden" name="tab" value="leads">
+            <x-crm.field label="Cabang" for="lead-filter-branch"><select id="lead-filter-branch" class="sales-input" name="branch_id" x-model="branch" @change="branchChanged()"><option value="">Semua cabang</option>@foreach($branches as $branch)<option value="{{ $branch->id }}">{{ $branch->name }}</option>@endforeach</select></x-crm.field>
+            <x-crm.field label="Proyek" for="lead-filter-project"><select id="lead-filter-project" class="sales-input" name="project_id" x-model="project" @change="projectChanged()"><option value="">Semua proyek</option>@foreach($projects as $project)<option value="{{ $project->id }}" x-show="projectVisible('{{ $project->id }}')" :disabled="!projectVisible('{{ $project->id }}')">{{ $project->project_name }}</option>@endforeach</select></x-crm.field>
+            <x-crm.field label="Sales" for="lead-filter-sales"><select id="lead-filter-sales" class="sales-input" name="sales_user_id" x-model="sales"><option value="">Semua sales</option>@foreach($salesUsers as $sales)<option value="{{ $sales->id }}" x-show="salesVisible('{{ $sales->id }}')" :disabled="!salesVisible('{{ $sales->id }}')">{{ $sales->name }}</option>@endforeach</select></x-crm.field>
+            <x-crm.field label="Sumber Lead" for="lead-filter-source"><select id="lead-filter-source" class="sales-input" name="lead_source_id"><option value="">Semua sumber</option>@foreach($leadSources as $source)<option value="{{ $source->id }}" @selected(request('lead_source_id') == $source->id)>{{ $source->name }}</option>@endforeach</select></x-crm.field>
+            <x-crm.field label="Tahap Saat Ini" for="lead-filter-stage"><select id="lead-filter-stage" class="sales-input" name="stage"><option value="">Semua tahap</option>@foreach(\App\Models\SalesLead::STAGES as $stage => $label)<option value="{{ $stage }}" @selected(request('stage') === $stage)>{{ $label }}</option>@endforeach</select></x-crm.field>
+            <div class="crm-field"><span class="crm-field-label">Periode</span><div class="crm-field-control">@include('crm.sales-pocketbook._period-picker')</div></div>
+            <div class="sales-lead-filter-actions">
+                <x-crm.button type="submit" variant="primary" accent="sales">Terapkan Filter</x-crm.button>
+                <x-crm.button variant="secondary" :href="$leadResetUrl">Hapus semua filter</x-crm.button>
+            </div>
+        </form>
+    </x-crm.modal>
     @endif
 
-    <section class="border-2 border-black bg-white">
-        <div class="bg-black text-white px-4 py-2 font-[Helvetica] font-bold text-xs uppercase">{{ $monitoring ? 'Monitoring Lead' : 'Lead Saya' }}</div>
-        <div class="hidden md:block crm-table-scroll"><table class="crm-data-table"><thead><tr><th>Tanggal</th><th>Nama</th><th>Telepon</th><th>Proyek</th>@if($monitoring)<th>Cabang / Sales</th>@endif<th>Sumber</th><th>Tahap</th><th>Progres Cepat</th><th>Aksi</th></tr></thead><tbody>
-            @forelse($leads as $lead)<tr data-lead-row="{{ $lead->id }}"><td data-lead-field="date">{{ $lead->lead_date->format('d/m/Y') }}</td><td data-lead-field="name" class="font-bold">{{ $lead->customer_name }}</td><td data-lead-field="phone">{{ $lead->phone ?: '—' }}</td><td data-lead-field="project">{{ $lead->project?->project_name }}</td>@if($monitoring)<td data-lead-field="assignment">{{ $lead->branch?->name }} / {{ $lead->sales?->name }}</td>@endif<td data-lead-field="source">{{ $lead->source_name_snapshot ?: $lead->leadSource?->name }}</td><td><span data-stage-label="{{ $lead->id }}" class="border border-black bg-[#fcc20f] px-2 py-1 text-[10px] font-bold">{{ $lead->currentStageLabel() }}</span></td><td>@can('updateStage', $lead)@include('crm.sales-pocketbook._stage-controls', ['lead' => $lead])@else — @endcan</td><td>@can('update', $lead)<button type="button" @click="openLeadEdit(@js(['id' => $lead->id, 'url' => route('sales-leads.update', $lead), 'fallback_url' => route('sales-leads.edit', $lead), 'token' => app(\App\Services\OptimisticLockService::class)->token($lead), 'branch_id' => (string) $lead->branch_id, 'project_id' => (string) $lead->project_id, 'sales_user_id' => (string) $lead->sales_user_id, 'lead_source_id' => (string) $lead->lead_source_id, 'source_name' => $lead->leadSource?->name ?? $lead->source_name_snapshot, 'source_active' => (bool) $lead->leadSource?->is_active, 'lead_date' => $lead->lead_date->toDateString(), 'customer_name' => $lead->customer_name, 'phone' => $lead->phone, 'notes' => $lead->notes, 'linked_consumer_reference' => $lead->linked_consumer_reference]))" class="font-bold text-[#0000ee] underline">Edit</button>@else — @endcan</td></tr>
-            @empty<tr><td colspan="9" class="text-center py-8">Belum ada lead pada periode ini.</td></tr>@endforelse
-        </tbody></table></div>
-        <div class="md:hidden divide-y-2 divide-black">@forelse($leads as $lead)<article class="p-3" data-lead-card="{{ $lead->id }}"><div class="flex justify-between gap-2"><strong data-lead-field="name">{{ $lead->customer_name }}</strong><span data-lead-field="date" class="text-xs">{{ $lead->lead_date->format('d/m/Y') }}</span></div><div class="text-sm"><span data-lead-field="phone">{{ $lead->phone ?: '—' }}</span> | <span data-lead-field="project">{{ $lead->project?->project_name }}</span></div>@if($monitoring)<div data-lead-field="assignment" class="text-xs">{{ $lead->branch?->name }} / {{ $lead->sales?->name }}</div>@endif<div data-lead-field="source" class="text-xs">{{ $lead->source_name_snapshot ?: $lead->leadSource?->name }}</div><div data-stage-label="{{ $lead->id }}" class="my-2 text-xs font-bold">{{ $lead->currentStageLabel() }}</div>@can('updateStage', $lead)@include('crm.sales-pocketbook._stage-controls', ['lead' => $lead])@endcan @can('update', $lead)<button type="button" @click="openLeadEdit(@js(['id' => $lead->id, 'url' => route('sales-leads.update', $lead), 'fallback_url' => route('sales-leads.edit', $lead), 'token' => app(\App\Services\OptimisticLockService::class)->token($lead), 'branch_id' => (string) $lead->branch_id, 'project_id' => (string) $lead->project_id, 'sales_user_id' => (string) $lead->sales_user_id, 'lead_source_id' => (string) $lead->lead_source_id, 'source_name' => $lead->leadSource?->name ?? $lead->source_name_snapshot, 'source_active' => (bool) $lead->leadSource?->is_active, 'lead_date' => $lead->lead_date->toDateString(), 'customer_name' => $lead->customer_name, 'phone' => $lead->phone, 'notes' => $lead->notes, 'linked_consumer_reference' => $lead->linked_consumer_reference]))" class="mt-2 inline-block font-bold text-[#0000ee] underline">Edit</button>@endcan</article>@empty<div class="p-8 text-center">Belum ada lead pada periode ini.</div>@endforelse</div>
+    <section class="sales-lead-monitor">
+        <header class="sales-lead-monitor-header"><h2>{{ $monitoring ? 'Monitoring Lead' : 'Lead Saya' }}</h2><span>{{ $leads->total() }} lead</span></header>
+        <div class="sales-lead-list">
+            @forelse($leads as $lead)
+            @php
+                $leadStage = $lead->currentStage();
+                $leadActivityAt = $lead->lastActivityAt();
+                $leadStageVariant = $leadStage === 'akad_at' ? 'success' : ($leadStage ? 'processing' : 'pending');
+                $leadEditPayload = ['id' => $lead->id, 'url' => route('sales-leads.update', $lead), 'fallback_url' => route('sales-leads.edit', $lead), 'token' => app(\App\Services\OptimisticLockService::class)->token($lead), 'branch_id' => (string) $lead->branch_id, 'project_id' => (string) $lead->project_id, 'sales_user_id' => (string) $lead->sales_user_id, 'lead_source_id' => (string) $lead->lead_source_id, 'source_name' => $lead->leadSource?->name ?? $lead->source_name_snapshot, 'source_active' => (bool) $lead->leadSource?->is_active, 'lead_date' => $lead->lead_date->toDateString(), 'customer_name' => $lead->customer_name, 'phone' => $lead->phone, 'notes' => $lead->notes, 'linked_consumer_reference' => $lead->linked_consumer_reference];
+            @endphp
+            <article class="sales-lead-item" data-lead-row="{{ $lead->id }}">
+                <div class="sales-lead-identity">
+                    <div><span class="sales-lead-kicker">Lead <span data-lead-field="date">{{ $lead->lead_date->format('d/m/Y') }}</span></span><h3 data-lead-field="name">{{ $lead->customer_name }}</h3></div>
+                    <x-crm.status-badge :variant="$leadStageVariant" data-stage-label="{{ $lead->id }}">{{ $lead->currentStageLabel() }}</x-crm.status-badge>
+                </div>
+                <dl class="sales-lead-facts">
+                    <div><dt>Telepon</dt><dd data-lead-field="phone">{{ $lead->phone ?: '—' }}</dd></div>
+                    <div><dt>Proyek</dt><dd data-lead-field="project">{{ $lead->project?->project_name ?: '—' }}</dd></div>
+                    <div><dt>Sumber</dt><dd data-lead-field="source">{{ $lead->source_name_snapshot ?: ($lead->leadSource?->name ?: '—') }}</dd></div>
+                    @if($monitoring)<div><dt>Cabang / Pemilik</dt><dd data-lead-field="assignment">{{ $lead->branch?->name }} / {{ $lead->sales?->name }}</dd></div>@endif
+                    <div class="sales-lead-activity"><dt>Aktivitas terbaru</dt><dd><strong data-lead-activity-label="{{ $lead->id }}">{{ $leadStage ? 'Tahap '.$lead->currentStageLabel() : 'Lead dicatat' }}</strong><span data-lead-activity-time="{{ $lead->id }}" data-activity-stage="{{ $leadStage }}" data-lead-baseline="{{ $lead->lead_date->format('d/m/Y') }} 00:00">{{ $leadActivityAt?->format('d/m/Y H:i') ?: '—' }}</span></dd></div>
+                </dl>
+                @can('updateStage', $lead)<div class="sales-lead-progress"><span class="sales-lead-section-label">Perbarui progres</span>@include('crm.sales-pocketbook._stage-controls', ['lead' => $lead])</div>@endcan
+                <footer class="sales-lead-actions">
+                    @if(auth()->user()->hasPermission('comments.view'))<x-crm.button variant="text" :href="route('comments.thread', ['alias' => 'sales-lead', 'id' => $lead->id])">Komentar ({{ $lead->comments_count }})</x-crm.button>@endif
+                    @can('update', $lead)<button type="button" class="crm-button crm-button--text crm-button--md" @click="openLeadEdit(@js($leadEditPayload))">Edit lead</button>@endcan
+                </footer>
+            </article>
+            @empty
+                <x-crm.empty-state
+                    :title="$hasLeadFilters ? 'Tidak ada lead yang cocok dengan filter.' : 'Belum ada lead.'"
+                    :description="$hasLeadFilters ? 'Ubah atau hapus filter untuk melihat lead lain dalam akses Anda.' : 'Lead yang dicatat akan muncul di daftar ini.'"
+                >
+                    @if($hasLeadFilters)
+                        <x-slot:actions>
+                            <x-crm.button variant="secondary" :href="$leadResetUrl">Hapus semua filter</x-crm.button>
+                        </x-slot:actions>
+                    @endif
+                </x-crm.empty-state>
+            @endforelse
+        </div>
         {{ $leads->links() }}
     </section>
     @endif
@@ -279,6 +359,8 @@ function salesCascade(projects, salesUsers, initial = {}) {
 function salesPocketbook() {
     const projects = @js($cascadeProjects)
     const salesUsers = @js($cascadeSales)
+    const leadStages = @js(array_keys(\App\Models\SalesLead::STAGES))
+    const leadStageLabels = @js(\App\Models\SalesLead::STAGES)
     const localParts = value => {
         const date = value ? new Date(value.replace(' ', 'T')) : new Date()
         return {
@@ -385,6 +467,11 @@ function salesPocketbook() {
                     const values = { name: data.lead.customer_name, phone: data.lead.phone || '—', project: data.lead.project, assignment: `${data.lead.branch} / ${data.lead.sales}`, source: data.lead.source, date: data.lead.lead_date.split('-').reverse().join('/') }
                     Object.entries(values).forEach(([field, value]) => container.querySelector(`[data-lead-field="${field}"]`)?.replaceChildren(document.createTextNode(value || '—')))
                 })
+                const activityTime = document.querySelector(`[data-lead-activity-time="${this.edit.id}"][data-activity-stage=""]`)
+                if (activityTime) {
+                    activityTime.dataset.leadBaseline = `${data.lead.lead_date.split('-').reverse().join('/')} 00:00`
+                    activityTime.textContent = activityTime.dataset.leadBaseline
+                }
                 document.dispatchEvent(new CustomEvent('oasis-presence-saved'))
                 this.closeLeadModal()
                 window.oasisToast(data.message || 'Lead berhasil diperbarui.')
@@ -444,14 +531,28 @@ function salesPocketbook() {
                     return
                 }
 
-                document.querySelectorAll(`[data-stage-label="${controls.dataset.leadId}"]`).forEach(el => el.textContent = data.current_stage_label)
+                const currentStage = [...leadStages].reverse().find(stage => data.stages[stage]) || ''
+                const currentActivity = currentStage ? new Date(data.stages[currentStage]) : null
+                document.querySelectorAll(`[data-stage-label="${controls.dataset.leadId}"]`).forEach(el => {
+                    el.textContent = data.current_stage_label
+                    el.classList.remove('crm-status-badge--pending', 'crm-status-badge--processing', 'crm-status-badge--success')
+                    el.classList.add(currentStage === 'akad_at' ? 'crm-status-badge--success' : (currentStage ? 'crm-status-badge--processing' : 'crm-status-badge--pending'))
+                })
+                document.querySelectorAll(`[data-lead-activity-label="${controls.dataset.leadId}"]`).forEach(el => { el.textContent = currentStage ? `Tahap ${leadStageLabels[currentStage]}` : 'Lead dicatat' })
+                document.querySelectorAll(`[data-lead-activity-time="${controls.dataset.leadId}"]`).forEach(el => {
+                    el.dataset.activityStage = currentStage
+                    el.textContent = currentActivity
+                        ? currentActivity.toLocaleString('id-ID', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }).replace(',', '')
+                        : el.dataset.leadBaseline
+                })
                 document.querySelectorAll(`[data-lead-id="${controls.dataset.leadId}"]`).forEach(group => {
                     group.dataset.token = data.updated_at
                     group.querySelectorAll('[data-stage-kind="value"]').forEach(stageButton => {
                         const completed = Boolean(data.stages[stageButton.dataset.stage])
                         stageButton.classList.toggle('done', completed)
-                        stageButton.title = completed ? new Date(data.stages[stageButton.dataset.stage]).toLocaleString('id-ID') : ''
                         stageButton.dataset.current = data.stages[stageButton.dataset.stage] || ''
+                        stageButton.querySelector('span').textContent = completed ? 'Tercatat' : 'Catat'
+                        stageButton.setAttribute('aria-label', `${completed ? 'Ubah waktu tahap' : 'Catat tahap'} ${stageButton.dataset.label}`)
                     })
                     group.querySelectorAll('[data-stage-kind="reverse"]').forEach(reverseButton => {
                         reverseButton.classList.toggle('hidden', !data.stages[reverseButton.dataset.stage])

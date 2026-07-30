@@ -406,6 +406,63 @@
 .sales-pocketbook-duplicate-result { border: var(--oasis-border-width-standard) solid #b8860b; background: #fffbeb; padding: var(--oasis-space-2); }
 .sales-pocketbook-duplicate-result strong { display: block; margin-bottom: var(--oasis-space-1); }
 
+.sales-lead-toolbar { overflow: visible; }
+.sales-lead-filter-summary { display: grid; min-width: min(14rem, 100%); gap: var(--oasis-space-1); font-family: var(--oasis-font-controls); }
+.sales-lead-filter-summary strong { font-size: var(--oasis-type-compact-size); text-transform: uppercase; }
+.sales-lead-filter-summary span { color: var(--oasis-text-muted); font-size: var(--oasis-type-caption-size); }
+.sales-lead-filter-form { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--oasis-space-4); }
+.sales-lead-filter-actions { display: flex; flex-wrap: wrap; gap: var(--oasis-space-2); grid-column: 1 / -1; padding-top: var(--oasis-space-2); }
+.sales-lead-monitor { max-width: 100%; overflow: clip; border: var(--oasis-border-width-strong) solid var(--oasis-border-strong); background: var(--oasis-surface-flat); }
+.sales-lead-monitor-header { display: flex; min-height: var(--oasis-control-height); align-items: center; justify-content: space-between; gap: var(--oasis-space-3); background: #000; padding: var(--oasis-space-2) var(--oasis-space-4); color: #fff; font-family: var(--oasis-font-controls); }
+.sales-lead-monitor-header h2 { font-size: var(--oasis-type-caption-size); font-weight: 700; text-transform: uppercase; }
+.sales-lead-monitor-header span { color: var(--oasis-accent-sales); font-size: var(--oasis-type-caption-size); font-weight: 700; }
+.sales-lead-list { display: grid; min-width: 0; }
+.sales-lead-item { display: grid; min-width: 0; grid-template-columns: minmax(12rem, .8fr) minmax(20rem, 1.6fr); gap: var(--oasis-space-3) var(--oasis-space-5); padding: var(--oasis-space-4); }
+.sales-lead-item + .sales-lead-item { border-top: var(--oasis-border-width-standard) solid var(--oasis-border-strong); }
+.sales-lead-item:nth-child(even) { background: var(--oasis-surface-muted); }
+.sales-lead-identity { display: flex; min-width: 0; align-items: flex-start; justify-content: space-between; gap: var(--oasis-space-3); }
+.sales-lead-kicker,
+.sales-lead-section-label { display: block; color: var(--oasis-text-muted); font: 700 var(--oasis-type-caption-size)/1.3 var(--oasis-font-controls); letter-spacing: .05em; text-transform: uppercase; }
+.sales-lead-identity h3 { overflow-wrap: anywhere; margin-top: var(--oasis-space-1); font: 700 1.05rem/1.25 var(--oasis-font-data); }
+.sales-lead-facts { display: grid; min-width: 0; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--oasis-space-3); }
+.sales-lead-facts > div { min-width: 0; }
+.sales-lead-facts dt { margin-bottom: var(--oasis-space-1); color: var(--oasis-text-muted); font: 700 var(--oasis-type-caption-size)/1.2 var(--oasis-font-controls); text-transform: uppercase; }
+.sales-lead-facts dd { overflow-wrap: anywhere; font: var(--oasis-type-compact-size)/1.4 var(--oasis-font-data); }
+.sales-lead-activity dd { display: grid; gap: var(--oasis-space-1); }
+.sales-lead-activity dd strong { font-family: var(--oasis-font-controls); font-size: var(--oasis-type-caption-size); }
+.sales-lead-activity dd span { color: var(--oasis-text-muted); }
+.sales-lead-progress { min-width: 0; grid-column: 1 / -1; border-top: var(--oasis-border-width-standard) solid var(--oasis-border-subtle); padding-top: var(--oasis-space-3); }
+.sales-lead-stage-controls { display: grid; min-width: 0; grid-template-columns: repeat(6, minmax(7rem, 1fr)); gap: var(--oasis-space-2); margin-top: var(--oasis-space-2); }
+.sales-lead-stage-step { display: grid; min-width: 0; align-content: start; gap: var(--oasis-space-1); }
+.sales-lead-stage-step .stage-button { display: grid; min-height: var(--oasis-control-height); width: 100%; align-content: center; gap: 2px; border: var(--oasis-border-width-standard) solid var(--oasis-border-strong); padding: var(--oasis-space-2); text-align: left; white-space: normal; }
+.sales-lead-stage-step .stage-button span { color: var(--oasis-text-muted); font-size: 9px; text-transform: uppercase; }
+.sales-lead-stage-step .stage-button strong { font-size: var(--oasis-type-caption-size); }
+.sales-lead-stage-step .stage-button.done { border-color: var(--oasis-success); background: color-mix(in srgb, var(--oasis-success) 14%, white); }
+.sales-lead-stage-reverse { min-height: 2rem; color: var(--oasis-danger); font: 700 9px/1.25 var(--oasis-font-controls); text-align: left; text-decoration: underline; text-underline-offset: 2px; }
+.sales-lead-actions { display: flex; min-width: 0; grid-column: 1 / -1; flex-wrap: wrap; justify-content: flex-end; gap: var(--oasis-space-2); }
+
+@media (max-width: 1199px) {
+    .sales-lead-item { grid-template-columns: minmax(0, 1fr); }
+    .sales-lead-facts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .sales-lead-stage-controls { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+
+@media (max-width: 639px) {
+    .sales-lead-filter-form,
+    .sales-lead-facts,
+    .sales-lead-stage-controls { grid-template-columns: minmax(0, 1fr); }
+    .sales-lead-filter-actions { display: grid; }
+    .sales-lead-filter-actions .crm-button,
+    .sales-lead-toolbar .crm-toolbar-actions .crm-button,
+    .sales-lead-actions .crm-button { width: 100%; min-height: 44px; }
+    .sales-lead-item { gap: var(--oasis-space-4); padding: var(--oasis-space-3); }
+    .sales-lead-identity { align-items: stretch; flex-direction: column; }
+    .sales-lead-identity .crm-status-badge { align-self: flex-start; }
+    .sales-lead-stage-step .stage-button,
+    .sales-lead-stage-reverse { min-height: 44px; }
+    .sales-lead-actions { display: grid; }
+}
+
 .sales-daily-reminder-dialog { max-height: calc(100dvh - 2rem); overflow-y: auto; }
 .sales-daily-reminder-header { display: flex; align-items: center; justify-content: space-between; gap: var(--oasis-space-3); border-bottom: 2px solid #000; background: #000; padding: var(--oasis-space-3) var(--oasis-space-4); color: #fff; }
 .sales-daily-reminder-header h2 { font: 900 var(--oasis-type-section-title-size)/1.2 var(--oasis-font-display); text-transform: uppercase; }

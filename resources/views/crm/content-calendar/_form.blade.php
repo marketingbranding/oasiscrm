@@ -25,11 +25,12 @@
     @if($editing)<input type="hidden" name="expected_updated_at" value="{{ old('expected_updated_at', $item->updated_at?->copy()->utc()->format('Y-m-d H:i:s')) }}">@endif
     <input type="hidden" name="return_view" value="{{ request('view', 'today') }}">
 
-    <div>
-        <label class="font-[Helvetica] font-bold text-xs uppercase block mb-2">Jenis Aktivitas</label>
+    <div role="group" aria-label="Jenis Aktivitas">
+        <div class="font-[Helvetica] font-bold text-xs uppercase block mb-2">Jenis Aktivitas</div>
         <div class="grid grid-cols-3 gap-2">
             <template x-for="option in typeOptions" :key="option.value">
                 <button type="button" @click="changeType(option.value)"
+                        :aria-pressed="(type === option.value).toString()"
                         class="border-2 border-black px-3 py-3 text-sm font-[Helvetica] font-bold"
                         :class="type === option.value ? option.active : 'bg-white hover:bg-gray-100'">
                     <span x-text="option.label"></span>
@@ -40,63 +41,56 @@
     </div>
 
     <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <div class="sm:col-span-2">
-            <label class="font-[Helvetica] font-bold text-xs uppercase block mb-1">Judul</label>
-            <input name="title" value="{{ old('title', $item?->title) }}" required class="w-full border-2 border-black px-3 py-2 text-sm font-['Times_New_Roman']">
-            @error('title')<p class="text-[#c0392b] text-xs mt-1 font-bold">{{ $message }}</p>@enderror
-        </div>
-        <div class="sm:col-span-2" x-show="type !== 'content'">
-            <label class="font-[Helvetica] font-bold text-xs uppercase block mb-1">Detail</label>
-            <textarea name="task_detail" rows="3" :disabled="type === 'content'" class="w-full border-2 border-black px-3 py-2 text-sm font-['Times_New_Roman']">{{ old('task_detail', $item?->task_detail) }}</textarea>
-        </div>
+        <x-crm.field class="sm:col-span-2" label="Judul" for="planner-title" required :error="$errors->first('title')">
+            <input id="planner-title" name="title" value="{{ old('title', $item?->title) }}" required class="crm-control font-['Times_New_Roman']">
+        </x-crm.field>
+        <x-crm.field class="sm:col-span-2" x-show="type !== 'content'" label="Detail" for="planner-task-detail" :error="$errors->first('task_detail')">
+            <textarea id="planner-task-detail" name="task_detail" rows="3" :disabled="type === 'content'" class="crm-control font-['Times_New_Roman']">{{ old('task_detail', $item?->task_detail) }}</textarea>
+        </x-crm.field>
 
         @if($branches->count() > 1)
-        <div>
-            <label class="font-[Helvetica] font-bold text-xs uppercase block mb-1">Cabang</label>
-            <select name="branch_id" x-model="branchId" @change="projectName = ''" required class="w-full border-2 border-black px-3 py-2 text-sm bg-white">
+        <x-crm.field label="Cabang" for="planner-branch" required :error="$errors->first('branch_id')">
+            <select id="planner-branch" name="branch_id" x-model="branchId" @change="projectName = ''" required class="crm-control bg-white">
                 <option value="">— Pilih Cabang —</option>
                 @foreach($branches as $branch)<option value="{{ $branch->id }}" @if(str_contains(mb_strtolower($branch->name), 'pusat')) style="color:#b8860b;font-weight:700;background:#fff3b0" @endif>{{ $branch->name }}</option>@endforeach
             </select>
-        </div>
+        </x-crm.field>
         @endif
-        <div x-show="type !== 'content'">
-            <label class="font-[Helvetica] font-bold text-xs uppercase block mb-1">Proyek</label>
-            <select name="project_name" x-model="projectName" :disabled="type === 'content' || !branchId" class="w-full border-2 border-black px-3 py-2 text-sm bg-white disabled:bg-gray-100">
+        <x-crm.field x-show="type !== 'content'" label="Proyek" for="planner-project" :error="$errors->first('project_name')">
+            <select id="planner-project" name="project_name" x-model="projectName" :disabled="type === 'content' || !branchId" class="crm-control bg-white disabled:bg-gray-100">
                 <option value="">— Tanpa Proyek —</option>
                 <template x-for="project in filteredProjects" :key="project.name"><option :value="project.name" x-text="project.name"></option></template>
             </select>
-        </div>
-        <div x-show="type !== 'content'">
-            <label class="font-[Helvetica] font-bold text-xs uppercase block mb-1">Visibilitas</label>
-            <select name="visibility" :disabled="type === 'content'" class="w-full border-2 border-black px-3 py-2 text-sm bg-white">
+        </x-crm.field>
+        <x-crm.field x-show="type !== 'content'" label="Visibilitas" for="planner-visibility" required :error="$errors->first('visibility')">
+            <select id="planner-visibility" name="visibility" :disabled="type === 'content'" class="crm-control bg-white">
                 <option value="team" {{ old('visibility', $item?->visibility ?? 'team') === 'team' ? 'selected' : '' }}>Tim Cabang</option>
                 <option value="personal" {{ old('visibility', $item?->visibility) === 'personal' ? 'selected' : '' }}>Personal + PIC</option>
             </select>
-        </div>
+        </x-crm.field>
         <template x-if="type === 'content'"><input type="hidden" name="visibility" value="team"></template>
-        <div>
-            <label class="font-[Helvetica] font-bold text-xs uppercase block mb-1">Status</label>
-            <select name="status" x-model="status" class="w-full border-2 border-black px-3 py-2 text-sm bg-white">
+        <x-crm.field label="Status" for="planner-status" required :error="$errors->first('status')">
+            <select id="planner-status" name="status" x-model="status" class="crm-control bg-white">
                 <template x-for="option in statusOptions[type]" :key="option.value"><option :value="option.value" x-text="option.label"></option></template>
             </select>
-        </div>
+        </x-crm.field>
     </div>
 
     <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <div>
-            <label class="font-[Helvetica] font-bold text-xs uppercase block mb-1" x-text="type === 'content' ? 'Tanggal Konten' : (type === 'agenda' ? 'Tanggal Mulai' : 'Tanggal Mulai')"></label>
+        <x-crm.field label="Tanggal" for="planner-start-date" :error="$errors->first('start_date')">
+            <div class="font-[Helvetica] font-bold text-xs uppercase mb-1" x-text="type === 'content' ? 'Tanggal Konten' : (type === 'agenda' ? 'Tanggal Mulai' : 'Tanggal Mulai')"></div>
             <div class="date-wrapper" data-accent="#b3bd95">
                 <div class="date-display w-full border-2 border-black px-3 py-2 text-sm font-['Times_New_Roman'] bg-white cursor-pointer flex justify-between" tabindex="0"><span class="date-text">— Pilih Tanggal —</span><span class="date-arrow">▼</span></div>
-                <input type="date" name="start_date" value="{{ old('start_date', $item?->start_date?->format('Y-m-d') ?? ($item?->item_type === 'content' ? $item?->scheduled_date?->format('Y-m-d') : null)) }}" :required="type === 'agenda' || type === 'content'" style="position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0">
+                <input id="planner-start-date" type="date" name="start_date" value="{{ old('start_date', $item?->start_date?->format('Y-m-d') ?? ($item?->item_type === 'content' ? $item?->scheduled_date?->format('Y-m-d') : null)) }}" :required="type === 'agenda' || type === 'content'" style="position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0">
             </div>
-        </div>
-        <div x-show="type !== 'content'">
-            <label class="font-[Helvetica] font-bold text-xs uppercase block mb-1" x-text="type === 'agenda' ? 'Tanggal Selesai' : (type === 'content' ? 'Jadwal Publikasi' : 'Deadline')"></label>
+        </x-crm.field>
+        <x-crm.field x-show="type !== 'content'" label="Deadline" for="planner-deadline-date" required :error="$errors->first('deadline_date')">
+            <div class="font-[Helvetica] font-bold text-xs uppercase mb-1" x-text="type === 'agenda' ? 'Tanggal Selesai' : (type === 'content' ? 'Jadwal Publikasi' : 'Deadline')"></div>
             <div class="date-wrapper" data-accent="#b3bd95">
                 <div class="date-display w-full border-2 border-black px-3 py-2 text-sm font-['Times_New_Roman'] bg-white cursor-pointer flex justify-between" tabindex="0"><span class="date-text">— Pilih Tanggal —</span><span class="date-arrow">▼</span></div>
-                <input type="date" name="deadline_date" value="{{ old('deadline_date', $item?->deadline_date?->format('Y-m-d')) }}" :required="type !== 'content'" :disabled="type === 'content'" style="position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0">
+                <input id="planner-deadline-date" type="date" name="deadline_date" value="{{ old('deadline_date', $item?->deadline_date?->format('Y-m-d')) }}" :required="type !== 'content'" :disabled="type === 'content'" style="position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0">
             </div>
-        </div>
+        </x-crm.field>
         <template x-if="type === 'agenda'">
             <div class="contents">
                 <div><label class="font-[Helvetica] font-bold text-xs uppercase block mb-1">Jam Mulai</label><x-crm.time-field name="start_time" :value="old('start_time', $item?->start_time)" required accent="#b3bd95" /></div>

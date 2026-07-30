@@ -93,6 +93,44 @@ class DatabaseUiTest extends TestCase
         $this->assertStringNotContainsString('>Hapus</button>', $html);
     }
 
+    public function test_database_preserves_existing_sheet_and_add_deep_link_contract(): void
+    {
+        [$branch] = $this->databaseRecord();
+        $user = User::factory()->create([
+            'role_id' => Role::query()->where('slug', 'pusat')->firstOrFail()->id,
+            'branch_id' => $branch->id,
+            'password_changed_at' => now(),
+        ]);
+        $this->mockSheetTitles($branch);
+
+        $html = $this->actingAs($user)->get(route('database.index', [
+            'branch_id' => $branch->id,
+            'sheet' => 'LEADS',
+            'add' => 1,
+        ]))->assertOk()->getContent();
+
+        $this->assertStringContainsString('requestSheet: \'LEADS\'', $html);
+        $this->assertStringContainsString('requestAdd: true', $html);
+        $this->assertStringContainsString('switchTabWithAdd(match, config.requestAdd)', $html);
+        $this->assertStringContainsString('this.openAdd(this.tab)', $html);
+    }
+
+    public function test_database_client_query_state_and_responsive_contract_remain_local(): void
+    {
+        $view = file_get_contents(resource_path('views/crm/database/index.blade.php'));
+        $css = file_get_contents(resource_path('css/app.css'));
+
+        $this->assertStringContainsString('filterText: \'\'', $view);
+        $this->assertStringContainsString('sortColumn: null', $view);
+        $this->assertStringContainsString('let records = [...data.records]', $view);
+        $this->assertStringContainsString('visibleHeaders.some', $view);
+        $this->assertStringContainsString('this.cache[sheet] = data', $view);
+        $this->assertStringNotContainsString('this.filterText = \'\';\n                this.cache[sheet]', $view);
+        $this->assertStringContainsString('@media (max-width: 767px)', $css);
+        $this->assertStringContainsString('.database-sheet-toolbar .crm-toolbar-actions', $css);
+        $this->assertStringContainsString('.crm-table-scroll { max-width: 100%; max-height: 60dvh; }', $css);
+    }
+
     private function databaseRecord(): array
     {
         $branch = Branch::query()->create([

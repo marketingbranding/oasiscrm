@@ -357,25 +357,17 @@
         </x-crm.modal>
     </div>
     @elseif($selectedBranch)
-    <div class="border-2 border-black bg-white px-6 py-8 text-center">
-        <p class="font-['Times_New_Roman'] text-sm">
-            @if(Auth::user()->isSuperadmin())
-                Belum ada data. Klik Sync Sekarang untuk memuat data.
-            @else
-                Database branch belum tersedia. Hubungi superadmin.
-            @endif
-        </p>
-    </div>
+        @if(Auth::user()->isSuperadmin())
+            <x-crm.empty-state title="Database belum memiliki data" description="Belum ada data. Klik Sync Sekarang untuk memuat data." />
+        @else
+            <x-crm.empty-state title="Database belum tersedia" description="Database branch belum tersedia. Hubungi superadmin." />
+        @endif
     @elseif(!$selectedBranch)
-    <div class="border-2 border-black bg-white px-6 py-8 text-center">
-        <p class="font-['Times_New_Roman'] text-sm">
-            @if(Auth::user()->isSuperadmin())
-                Silakan pilih cabang terlebih dahulu.
-            @else
-                Database branch belum tersedia. Hubungi superadmin.
-            @endif
-        </p>
-    </div>
+        @if(Auth::user()->isSuperadmin())
+            <x-crm.empty-state title="Cabang belum dipilih" description="Silakan pilih cabang terlebih dahulu." />
+        @else
+            <x-crm.empty-state title="Database belum tersedia" description="Database branch belum tersedia. Hubungi superadmin." />
+        @endif
     @endif
 @endsection
 

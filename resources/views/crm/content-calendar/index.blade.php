@@ -122,10 +122,12 @@
     @elseif($viewMode === 'calendar')
     <div class="flex flex-wrap items-center gap-3 mb-3"><a href="{{ route('content-calendar.index', array_merge(request()->query(), ['view'=>'calendar','month'=>$prevMonth->month,'year'=>$prevMonth->year])) }}" class="border-2 border-black bg-black text-white px-3 py-2 text-xs font-bold" aria-label="Bulan sebelumnya">←</a><strong>{{ $currentMonth->translatedFormat('F Y') }}</strong><a href="{{ route('content-calendar.index', array_merge(request()->query(), ['view'=>'calendar','month'=>$nextMonth->month,'year'=>$nextMonth->year])) }}" class="border-2 border-black bg-black text-white px-3 py-2 text-xs font-bold" aria-label="Bulan berikutnya">→</a><span class="ml-auto text-[10px] font-bold uppercase">Densitas</span><a href="{{ route('content-calendar.index', array_merge(request()->query(), ['view'=>'calendar','density'=>'compact'])) }}" class="border-2 border-black px-3 py-2 text-xs font-bold {{ $calendarDensity === 'compact' ? 'bg-[#b3bd95]' : 'bg-white' }}">Ringkas</a><a href="{{ route('content-calendar.index', array_merge(request()->query(), ['view'=>'calendar','density'=>'comfortable'])) }}" class="border-2 border-black px-3 py-2 text-xs font-bold {{ $calendarDensity === 'comfortable' ? 'bg-[#b3bd95]' : 'bg-white' }}">Nyaman</a></div>
     <div class="planner-calendar-shell overflow-x-auto border-2 border-black bg-white" data-calendar-density="{{ $calendarDensity }}">
-        <div class="planner-calendar-grid min-w-[760px] grid grid-cols-7 {{ $calendarDensity === 'comfortable' ? 'planner-calendar-grid--comfortable' : 'planner-calendar-grid--compact' }}">
+        <div class="planner-calendar-weekdays min-w-[760px] grid grid-cols-7" aria-label="Hari dalam minggu">
             @foreach(['Sen','Sel','Rab','Kam','Jum','Sab','Min'] as $day)
-            <div class="bg-black text-white border-r-2 last:border-r-0 border-black p-2 text-center text-xs font-bold uppercase">{{ $day }}</div>
+            <div class="planner-calendar-weekday bg-black text-white border-r-2 last:border-r-0 border-black text-center text-xs font-bold uppercase">{{ $day }}</div>
             @endforeach
+        </div>
+        <div class="planner-calendar-grid min-w-[760px] grid grid-cols-7 {{ $calendarDensity === 'comfortable' ? 'planner-calendar-grid--comfortable' : 'planner-calendar-grid--compact' }}">
             @foreach($calendar as $week)
                 @foreach($week as $cell)
                 @php
@@ -139,10 +141,12 @@
                     ])->values();
                     $dayLabel = $cell['day'] ? $currentMonth->copy()->day($cell['day'])->translatedFormat('l, d F Y') : '';
                 @endphp
-                <div class="planner-calendar-cell overflow-hidden {{ $loop->last ? 'border-r-0' : 'border-r-2' }} border-t-2 border-black bg-white {{ $cell['isToday']?'ring-2 ring-inset ring-[#c0392b]':'' }}" data-calendar-day="{{ $cell['day'] ?: '' }}">
+                <div class="planner-calendar-cell {{ $loop->last ? 'border-r-0' : 'border-r-2' }} border-t-2 border-black bg-white {{ $cell['isToday']?'ring-2 ring-inset ring-[#c0392b]':'' }}" data-calendar-day="{{ $cell['day'] ?: '' }}">
                     @if($cell['day'])
-                    <button type="button" @click="openDay(@js($dayLabel), @js($dayPayload))" class="font-[Helvetica] font-bold text-xs {{ $cell['isToday']?'bg-[#c0392b] text-white px-1':'' }}" aria-label="Buka aktivitas {{ $dayLabel }}">{{ $cell['day'] }}</button>
-                    <div class="planner-calendar-items space-y-1 mt-1">
+                    <div class="planner-calendar-date-row">
+                        <button type="button" @click="openDay(@js($dayLabel), @js($dayPayload))" class="font-[Helvetica] font-bold text-xs {{ $cell['isToday']?'bg-[#c0392b] text-white px-1':'' }}" aria-label="Buka aktivitas {{ $dayLabel }}">{{ $cell['day'] }}</button>
+                    </div>
+                    <div class="planner-calendar-items space-y-1" aria-label="Item tanggal {{ $dayLabel }}">
                         @foreach($cell['items']->take(3) as $plannerItem)
                         @php $chipColor = ['task'=>'#9ab6c8','agenda'=>'#e6915d','content'=>'#8c9ae0'][$plannerItem->item_type] ?? '#ccc'; @endphp
                         <button type="button" @click="openDetail({{ $plannerItem->id }})" title="{{ $plannerItem->title }}" class="planner-calendar-pill block w-full truncate border border-black border-l-4 bg-white px-1 py-0.5 text-left text-[9px] leading-tight" style="border-left-color:{{ $chipColor }}">

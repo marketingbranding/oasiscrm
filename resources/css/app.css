@@ -1593,10 +1593,13 @@
 
 /* Work Planner 2.1 local scheduling layouts. */
 .planner-calendar-shell { max-width: 100%; }
+.planner-calendar-weekday { display: flex; min-height: 36px; align-items: center; justify-content: center; padding: var(--oasis-space-1) var(--oasis-space-2); }
 .planner-calendar-grid { grid-auto-rows: minmax(72px, calc((100vh - 360px) / 6)); }
 .planner-calendar-grid--comfortable { grid-auto-rows: minmax(104px, calc((100vh - 320px) / 6)); }
-.planner-calendar-cell { padding: var(--oasis-space-1); }
-.planner-calendar-items { max-height: calc(100% - 20px); overflow: hidden; }
+.planner-calendar-cell { display: flex; min-width: 0; min-height: 0; flex-direction: column; padding: var(--oasis-space-1); overflow: hidden; }
+.planner-calendar-date-row { flex: 0 0 auto; min-height: 20px; }
+.planner-calendar-items { flex: 1 1 auto; min-height: 0; overflow-x: hidden; overflow-y: auto; padding-right: 2px; overscroll-behavior: contain; }
+.planner-calendar-items:focus-within { outline: 2px solid var(--oasis-focus); outline-offset: -2px; }
 .planner-calendar-pill { min-height: 20px; }
 
 .planner-gantt { border: 2px solid var(--oasis-border-strong); background: var(--oasis-surface); max-width: 100%; overflow: hidden; }
@@ -1623,6 +1626,7 @@
 .planner-gantt-empty { border-top: 1px solid var(--oasis-border); padding: var(--oasis-space-2); }
 
 @media (max-width: 640px) {
+    .planner-calendar-weekdays { min-width: 720px; }
     .planner-calendar-grid { min-width: 720px; grid-auto-rows: 76px; }
     .planner-calendar-grid--comfortable { grid-auto-rows: 96px; }
     .planner-gantt-grid { grid-template-columns: minmax(180px, 220px) minmax(calc(var(--planner-gantt-days) * 34px), 1fr); min-width: calc(220px + var(--planner-gantt-days) * 34px); }

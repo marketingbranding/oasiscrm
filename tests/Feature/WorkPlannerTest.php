@@ -275,9 +275,14 @@ class WorkPlannerTest extends TestCase
 
         $response
             ->assertOk()
+            ->assertSee('planner-calendar-weekdays', false)
+            ->assertSee('planner-calendar-weekday', false)
             ->assertSee('planner-calendar-grid--compact', false)
             ->assertSee('data-calendar-density="compact"', false)
             ->assertSee('data-calendar-day="'.today()->day.'"', false)
+            ->assertSee('planner-calendar-date-row', false)
+            ->assertSee('planner-calendar-items', false)
+            ->assertSee('aria-label="Item tanggal', false)
             ->assertSee('+2 lainnya')
             ->assertSee('openDay(', false)
             ->assertSee('Aktivitas 5');
@@ -288,6 +293,20 @@ class WorkPlannerTest extends TestCase
             'year' => today()->year,
             'density' => 'comfortable',
         ]))->assertOk()->assertSee('planner-calendar-grid--comfortable', false);
+    }
+
+    public function test_calendar_css_keeps_weekday_header_separate_and_busy_days_scrollable(): void
+    {
+        $css = file_get_contents(resource_path('css/app.css'));
+
+        $this->assertStringContainsString('.planner-calendar-weekday', $css);
+        $this->assertStringContainsString('min-height: 36px', $css);
+        $this->assertStringContainsString('.planner-calendar-cell { display: flex;', $css);
+        $this->assertStringContainsString('flex-direction: column', $css);
+        $this->assertStringContainsString('.planner-calendar-date-row { flex: 0 0 auto;', $css);
+        $this->assertStringContainsString('.planner-calendar-items { flex: 1 1 auto;', $css);
+        $this->assertStringContainsString('overflow-y: auto', $css);
+        $this->assertStringNotContainsString('.planner-calendar-items { max-height: calc(100% - 20px); overflow: hidden;', $css);
     }
 
     public function test_gantt_view_uses_verified_dates_and_existing_filters(): void

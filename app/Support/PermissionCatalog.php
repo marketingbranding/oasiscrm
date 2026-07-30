@@ -101,6 +101,8 @@ class PermissionCatalog
             ['name' => 'Mengelola izin', 'slug' => 'permissions.manage', 'description' => 'Mengelola pemetaan izin peran.', 'group_name' => 'Administrasi Sistem'],
             ['name' => 'Melihat kesehatan sistem', 'slug' => 'system_health.view', 'description' => 'Melihat status kesehatan dan layanan sistem.', 'group_name' => 'Administrasi Sistem'],
             ['name' => 'Melihat log aktivitas', 'slug' => 'activity_logs.view', 'description' => 'Melihat catatan aktivitas pengguna dan sistem.', 'group_name' => 'Administrasi Sistem'],
+            ['name' => 'Melewati pemeliharaan operasional', 'slug' => 'system.maintenance_bypass', 'description' => 'Tetap mengakses OASIS selama pemeliharaan operasional berlangsung.', 'group_name' => 'Administrasi Sistem'],
+            ['name' => 'Mengelola pemeliharaan operasional', 'slug' => 'system.maintenance_manage', 'description' => 'Mengaktifkan dan menonaktifkan pemeliharaan operasional OASIS.', 'group_name' => 'Administrasi Sistem'],
         ];
     }
 
@@ -161,6 +163,7 @@ class PermissionCatalog
                 'users.view', 'users.create', 'users.invite', 'users.update', 'users.suspend', 'users.deactivate',
                 'users.reactivate', 'users.reset_password', 'users.export', 'users.assign_roles',
                 'users.assign_branches', 'users.assign_projects', 'users.assign_supervisor', 'activity_logs.view',
+                'system.maintenance_bypass',
                 'sales_pocketbook.export', 'work_planner.create', 'work_planner.update', 'work_planner.assign',
                 'work_planner.export', 'database.view', 'database.edit', 'database.sync',
                 'consumer_progress.view', 'consumer_progress.sync', 'bridge_fund.view', 'bridge_fund.manage',

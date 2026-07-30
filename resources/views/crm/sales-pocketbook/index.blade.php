@@ -3,10 +3,56 @@
 @section('title', 'Buku Saku Sales - Oasis CRM')
 
 @section('content')
+@php
+    $scopeParams = array_filter(request()->only(['branch_id', 'project_id', 'sales_user_id']), fn ($value) => filled($value));
+    $periodParams = array_filter(request()->only(['period_type', 'week', 'date_from', 'date_to']), fn ($value) => filled($value));
+    $tabUrl = fn (string $target) => route('sales-pocketbook.index', array_merge(
+        ['tab' => $target],
+        $scopeParams,
+        in_array($target, ['agenda', 'report'], true) ? $periodParams : [],
+    ));
+    $selectedBranch = $selectedBranchId ? $branches->firstWhere('id', $selectedBranchId) : null;
+    $selectedProject = $selectedProjectId ? $projects->firstWhere('id', $selectedProjectId) : null;
+    $selectedSales = $monitoring && request()->filled('sales_user_id')
+        ? $salesUsers->firstWhere('id', request()->integer('sales_user_id'))
+        : null;
+    $canExport = Auth::user()->hasPermission('sales_pocketbook.export')
+        && Auth::user()->hasScopedPermission('sales_pocketbook', 'export');
+    $exportUrl = $canExport ? route('sales-pocketbook.export', array_merge(
+        request()->except(['page', 'agenda_page', 'sort', 'direction', 'week', 'date_from', 'date_to', 'period_type']),
+        $periodType === 'custom'
+            ? ['period_type' => 'custom', 'date_from' => $reportPeriod['start']->toDateString(), 'date_to' => $reportPeriod['end']->toDateString()]
+            : ['period_type' => 'week', 'week' => request('week', $reportPeriod['start']->toDateString())],
+    )) : null;
+    $personalBranchName = $branches->firstWhere('id', Auth::user()->branch_id)?->name ?? 'Belum dipilih';
+@endphp
 <div class="space-y-4" x-data="salesPocketbook()">
-    <x-crm.page-header color="#fcc20f" title="Buku Saku Sales" />
-    <div class="flex justify-end">
-        <a href="{{ route('sales-pocketbook.export', array_merge(request()->except(['page', 'agenda_page', 'sort', 'direction', 'week', 'date_from', 'date_to', 'period_type']), $periodType === 'custom' ? ['period_type' => 'custom', 'date_from' => $reportPeriod['start']->toDateString(), 'date_to' => $reportPeriod['end']->toDateString()] : ['period_type' => 'week', 'week' => request('week', $reportPeriod['start']->toDateString())])) }}" class="sales-button bg-[#b7d7a8]">Export XLSX</a>
+    <x-crm.page-header
+        variant="canonical"
+        class="sales-pocketbook-page-header"
+        eyebrow="{{ $monitoring ? 'Workspace Monitoring' : 'Workspace Pribadi' }}"
+        title="Buku Saku Sales"
+        description="{{ $monitoring ? 'Pantau aktivitas, funnel, dan kedisiplinan input Sales dalam scope organisasi Anda.' : 'Catat lead, jalankan agenda, dan lengkapi hasil aktivitas harian Anda.' }}"
+    >
+        @if(!$monitoring && $canCreate && $projects->isNotEmpty())
+            <x-slot:actions>
+                <x-crm.button variant="primary" accent="sales" :href="$tabUrl('leads').'#quick-lead-input'">Input Lead</x-crm.button>
+                @if($canExport)
+                    <x-crm.button variant="secondary" :href="$exportUrl">Export XLSX</x-crm.button>
+                @endif
+            </x-slot:actions>
+        @elseif($canExport)
+            <x-slot:actions>
+                <x-crm.button variant="secondary" :href="$exportUrl">Export XLSX</x-crm.button>
+            </x-slot:actions>
+        @endif
+    </x-crm.page-header>
+
+    <div class="sales-pocketbook-scope" aria-label="Konteks Buku Saku Sales aktif">
+        <div><span>Mode</span><strong>{{ $monitoring ? 'Monitoring' : 'Pribadi' }}</strong></div>
+        <div><span>Cabang</span><strong>{{ $selectedBranch?->name ?? ($monitoring ? 'Semua dalam akses' : $personalBranchName) }}</strong></div>
+        <div><span>Proyek</span><strong>{{ $selectedProject?->project_name ?? 'Semua dalam akses' }}</strong></div>
+        <div><span>Sales</span><strong>{{ $monitoring ? ($selectedSales?->name ?? 'Semua dalam akses') : Auth::user()->name }}</strong></div>
     </div>
     <x-crm.page-presence page-key="sales-pocketbook" :branch-id="$selectedBranchId" />
     @if(Auth::user()->isSales())
@@ -26,11 +72,13 @@
         <div class="border-2 border-black bg-[#fcc20f] px-4 py-3 font-['Times_New_Roman'] text-sm">Anda belum ditugaskan ke proyek. Hubungi admin pusat.</div>
     @endif
 
-    <div class="flex border-b-2 border-black gap-1">
+    <nav class="sales-pocketbook-tabs" aria-label="Tampilan Buku Saku Sales">
         @foreach(['leads' => 'Lead', 'agenda' => 'Agenda', 'report' => 'Laporan'] as $key => $label)
-            <a href="{{ route('sales-pocketbook.index', ['tab' => $key]) }}" class="border-2 border-b-0 border-black px-4 py-2 font-[Helvetica] text-xs font-bold uppercase {{ $tab === $key ? 'bg-[#fcc20f]' : 'bg-white' }}">{{ $label }}</a>
+            <a href="{{ $tabUrl($key) }}"
+               @if($tab === $key) aria-current="page" @endif
+               class="sales-pocketbook-tab {{ $tab === $key ? 'active' : '' }}">{{ $label }}</a>
         @endforeach
-    </div>
+    </nav>
 
     @if($tab === 'report')
         @include('crm.sales-pocketbook._report')

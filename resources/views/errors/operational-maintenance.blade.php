@@ -4,6 +4,8 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="robots" content="noindex, nofollow">
+    <meta name="theme-color" content="#000000">
+    <link rel="manifest" href="{{ asset('manifest.webmanifest') }}">
     <title>{{ $title }} | OASIS</title>
     <style>
         :root {

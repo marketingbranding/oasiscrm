@@ -16,6 +16,7 @@ import registerComments from './comments';
 import registerCrmShell from './crm-shell';
 import registerCrmModal from './crm-modal';
 import registerSalesPocketbook from './sales-pocketbook';
+import registerPwa from './pwa';
 
 window.Alpine = Alpine;
 window.Sortable = Sortable;
@@ -31,5 +32,6 @@ registerComments(Alpine);
 registerCrmShell(Alpine);
 registerCrmModal(Alpine);
 registerSalesPocketbook(Alpine);
+registerPwa(Alpine);
 
 Alpine.start();

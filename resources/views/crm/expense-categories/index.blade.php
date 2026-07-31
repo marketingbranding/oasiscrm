@@ -3,24 +3,31 @@
 @section('title', 'Kategori Pengeluaran - Oasis CRM')
 
 @section('content')
-    <div class="mb-6 border-2 border-black bg-[#5d8e8e] px-4 py-2">
-        <h1 class="font-['Arial_Black'] text-xl font-black uppercase">Kategori Pengeluaran</h1>
-    </div>
+    <x-crm.page-header
+        variant="canonical"
+        title="Kategori Pengeluaran"
+        eyebrow="Administrasi Keuangan"
+        description="Kelola nama, urutan, dan status kategori tanpa mengubah kode tetap untuk riwayat data."
+    >
+        <x-slot:actions>
+            <x-crm.button href="{{ route('expenses.index') }}" variant="secondary">Kembali ke Pengeluaran</x-crm.button>
+        </x-slot:actions>
+    </x-crm.page-header>
 
-    <form method="POST" action="{{ route('expense-categories.store') }}" class="mb-6 grid gap-3 border-2 border-black bg-white p-4 md:grid-cols-[1fr_10rem_auto] md:items-end">
+    <form method="POST" action="{{ route('expense-categories.store') }}" class="mb-4 grid gap-3 border-2 border-black bg-white p-4 md:grid-cols-[1fr_10rem_auto] md:items-end">
         @csrf
         <div>
             <label for="name" class="mb-1 block text-xs font-bold uppercase">Nama kategori</label>
-            <input id="name" name="name" value="{{ old('name') }}" required maxlength="255" class="w-full border-2 border-black px-3 py-2">
+            <input id="name" name="name" value="{{ old('name') }}" required maxlength="255" class="crm-control">
             @error('name') <p class="mt-1 text-sm text-red-700">{{ $message }}</p> @enderror
             @error('code') <p class="mt-1 text-sm text-red-700">Nama tersebut menghasilkan kode yang sudah digunakan.</p> @enderror
         </div>
         <div>
             <label for="sort_order" class="mb-1 block text-xs font-bold uppercase">Urutan</label>
-            <input id="sort_order" type="number" min="0" name="sort_order" value="{{ old('sort_order', 0) }}" required class="w-full border-2 border-black px-3 py-2">
+            <input id="sort_order" type="number" min="0" name="sort_order" value="{{ old('sort_order', 0) }}" required class="crm-control">
             @error('sort_order') <p class="mt-1 text-sm text-red-700">{{ $message }}</p> @enderror
         </div>
-        <button type="submit" class="border-2 border-black bg-[#b3bd95] px-4 py-2 font-bold hover:bg-[#9eaa7a]">Tambah</button>
+        <x-crm.button type="submit" variant="primary" accent="expenses">Tambah</x-crm.button>
     </form>
 
     <div class="crm-table-scroll">
@@ -44,8 +51,8 @@
                             <form method="POST" action="{{ route('expense-categories.toggle', $category) }}">
                                 @csrf
                                 @method('PATCH')
-                                <button type="submit" class="border border-black px-2 py-0.5 text-xs font-bold {{ $category->is_active ? 'bg-[#b3bd95]' : 'bg-gray-200' }}">
-                                    {{ $category->is_active ? 'AKTIF' : 'NONAKTIF' }}
+                                <button type="submit" class="text-left" aria-label="{{ $category->is_active ? 'Nonaktifkan' : 'Aktifkan' }} kategori {{ $category->name }}">
+                                    <x-crm.status-badge :variant="$category->is_active ? 'success' : 'inactive'">{{ $category->is_active ? 'AKTIF' : 'NONAKTIF' }}</x-crm.status-badge>
                                 </button>
                             </form>
                         </td>
@@ -58,7 +65,7 @@
                         </td>
                     </tr>
                 @empty
-                    <tr><td colspan="5" class="py-8 text-center">Belum ada kategori pengeluaran.</td></tr>
+                    <tr><td colspan="5"><x-crm.empty-state title="Belum ada kategori pengeluaran." description="Tambahkan kategori pertama agar pengeluaran dapat dicatat." /></td></tr>
                 @endforelse
             </tbody>
         </table>

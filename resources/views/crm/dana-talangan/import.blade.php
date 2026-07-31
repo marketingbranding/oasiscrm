@@ -3,7 +3,16 @@
 @section('title', 'Import Dana Talangan - Oasis CRM')
 
 @section('content')
-    <x-crm.page-header color="#f1c40f" title="Import Dana Talangan" />
+    <x-crm.page-header
+        variant="canonical"
+        title="Import Dana Talangan"
+        eyebrow="Operasional"
+        description="Impor data dana talangan dari template XLSX. Data lokal disimpan dan disinkronkan ke Google Sheets."
+    >
+        <x-slot:actions>
+            <x-crm.button href="{{ route('dana-talangan.index') }}" variant="secondary">Kembali</x-crm.button>
+        </x-slot:actions>
+    </x-crm.page-header>
 
     <div class="bg-white border-2 border-black p-4 mb-6">
         <div class="text-sm font-['Times_New_Roman'] mb-4 leading-relaxed">

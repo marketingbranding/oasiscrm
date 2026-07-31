@@ -3,15 +3,24 @@
 @section('title', 'Edit Dana Talangan - Oasis CRM')
 
 @section('content')
-    <x-crm.page-header color="#f1c40f" title="Edit Dana Talangan" />
+    <x-crm.page-header
+        variant="canonical"
+        title="Edit Dana Talangan"
+        eyebrow="Operasional"
+        description="Perbarui data komitmen dana talangan. Perubahan memeriksa konflik agar riwayat tidak tertimpa."
+    >
+        <x-slot:actions>
+            <x-crm.button href="{{ route('dana-talangan.index') }}" variant="secondary">Kembali</x-crm.button>
+        </x-slot:actions>
+    </x-crm.page-header>
     <x-crm.page-presence page-key="dana-talangan" :branch-id="$record->branch_id" record-type="dana_talangan" :record-id="$record->id" mode="editing" />
 
-    <div class="border-2 border-black bg-white">
+    <div class="crm-section bg-white">
         <div class="bg-black text-white px-4 py-2 font-[Helvetica] font-bold text-xs uppercase">
             Form Dana Talangan
         </div>
         <div class="p-4 sm:p-6">
-            <form method="POST" action="{{ route('dana-talangan.update', ['dana_talangan' => $record->id]) }}" class="space-y-4" data-conflict-form>
+            <form method="POST" action="{{ route('dana-talangan.update', ['dana_talangan' => $record->id]) }}" class="space-y-4" data-conflict-form x-data="{ submitting: false }" @submit="if (submitting) { $event.preventDefault() } else { submitting = true }">
                 @csrf
                 @method('PUT')
                 <input type="hidden" name="expected_updated_at" value="{{ old('expected_updated_at', $record->updated_at?->copy()->utc()->format('Y-m-d H:i:s')) }}">
@@ -225,7 +234,7 @@
 
                 <div class="flex items-center justify-between pt-2">
                     <div class="flex items-center gap-3">
-                        <button type="submit" class="bg-black text-white px-6 py-2 text-sm font-[Helvetica] font-bold border-2 border-black rounded-none hover:bg-gray-800">
+                        <button type="submit" :disabled="submitting" class="bg-black text-white px-6 py-2 text-sm font-[Helvetica] font-bold border-2 border-black rounded-none hover:bg-gray-800 disabled:opacity-50">
                             Update
                         </button>
                         <a href="{{ route('dana-talangan.index') }}" class="bg-white text-black px-6 py-2 text-sm font-[Helvetica] font-bold border-2 border-black rounded-none hover:bg-gray-100">

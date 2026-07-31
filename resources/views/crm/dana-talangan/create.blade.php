@@ -3,14 +3,23 @@
 @section('title', 'Buat Dana Talangan - Oasis CRM')
 
 @section('content')
-    <x-crm.page-header color="#f1c40f" title="Buat Dana Talangan" />
+    <x-crm.page-header
+        variant="canonical"
+        title="Buat Dana Talangan"
+        eyebrow="Operasional"
+        description="Catat komitmen dana talangan baru untuk konsumen dan proyek yang diizinkan."
+    >
+        <x-slot:actions>
+            <x-crm.button href="{{ route('dana-talangan.index') }}" variant="secondary">Kembali</x-crm.button>
+        </x-slot:actions>
+    </x-crm.page-header>
 
-    <div class="border-2 border-black bg-white">
+    <div class="crm-section bg-white">
         <div class="bg-black text-white px-4 py-2 font-[Helvetica] font-bold text-xs uppercase">
             Form Dana Talangan
         </div>
         <div class="p-4 sm:p-6">
-            <form method="POST" action="{{ route('dana-talangan.store') }}" class="space-y-4">
+            <form method="POST" action="{{ route('dana-talangan.store') }}" class="space-y-4" x-data="{ submitting: false }" @submit="if (submitting) { $event.preventDefault() } else { submitting = true }">
                 @csrf
 
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -213,7 +222,7 @@
                 </div>
 
                 <div class="flex items-center gap-3 pt-2">
-                    <button type="submit" class="bg-black text-white px-6 py-2 text-sm font-[Helvetica] font-bold border-2 border-black rounded-none hover:bg-gray-800">
+                    <button type="submit" :disabled="submitting" class="bg-black text-white px-6 py-2 text-sm font-[Helvetica] font-bold border-2 border-black rounded-none hover:bg-gray-800 disabled:opacity-50">
                         Simpan
                     </button>
                     <a href="{{ route('dana-talangan.index') }}" class="bg-white text-black px-6 py-2 text-sm font-[Helvetica] font-bold border-2 border-black rounded-none hover:bg-gray-100">

@@ -103,7 +103,18 @@
     changeEditBranch() { this.editingRecord.project_name = ''; this.editingRecord.kav = ''; this.editKavlings = []; },
     changeEditProject() { this.editingRecord.kav = ''; this.loadEditKavlings(); },
 }" x-init="if (addForm.project_name) loadAddKavlings(true)">
-    <x-crm.page-header color="#f1c40f" title="Dana Talangan" />
+    <x-crm.page-header
+        variant="canonical"
+        title="Dana Talangan"
+        eyebrow="Operasional"
+        description="Pencatatan komitmen dana talangan per konsumen, unit, cabang, dan proyek. Status dan penyelesaian hanya dari data yang tersinkronisasi."
+    >
+        <x-slot:actions>
+            @if($canManage)
+            <x-crm.button type="button" @click="adding = true" variant="primary" accent="bridge-fund">Tambah Dana Talangan</x-crm.button>
+            @endif
+        </x-slot:actions>
+    </x-crm.page-header>
     <x-crm.page-presence page-key="dana-talangan" :branch-id="$selectedBranchId" />
 
     <x-crm.sync-status-panel module-key="dana-talangan" scope-name="Global" :status="$syncStatus">
@@ -114,39 +125,41 @@
         </div>
     </x-crm.sync-status-panel>
 
-    <div class="bg-white border-2 border-black p-3 mb-3">
-        <div class="flex items-center gap-2 flex-wrap">
-            <form method="GET" action="{{ route('dana-talangan.index') }}" class="flex grow min-w-[240px] max-w-xl">
-                @foreach(request()->only(['branch_id', 'project_name', 'status', 'filter_mode', 'date_from', 'date_to', 'month_from', 'month_to', 'sort', 'dir', 'per_page']) as $key => $value)
-                    @if($value !== null && $value !== '')<input type="hidden" name="{{ $key }}" value="{{ $value }}">@endif
-                @endforeach
-                <input name="search" value="{{ $search }}" placeholder="Cari nama konsumen..." aria-label="Cari Nama Konsumen" class="min-w-0 grow border-2 border-r-0 border-black px-3 py-1.5 text-sm font-['Times_New_Roman'] bg-white rounded-none">
-                <button class="border-2 border-black bg-black text-white px-4 py-1.5 text-sm font-[Helvetica] font-bold">Cari</button>
-            </form>
-            <button type="button" @click="filterOpen = true" class="relative inline-flex items-center gap-2 border-2 border-black bg-white px-4 py-1.5 text-sm font-[Helvetica] font-bold hover:bg-gray-100">
-                <svg viewBox="0 0 20 20" fill="currentColor" class="w-4 h-4" aria-hidden="true"><path d="M2.75 3.5a.75.75 0 0 1 .75-.75h13a.75.75 0 0 1 .53 1.28l-5.28 5.28v4.94a.75.75 0 0 1-.36.64l-3 1.8A.75.75 0 0 1 7.25 16V9.31L1.97 4.03a.75.75 0 0 1 .78-1.23v.7Zm2.56.75 3.22 3.22a.75.75 0 0 1 .22.53v6.68l1.5-.9V8a.75.75 0 0 1 .22-.53l3.22-3.22H5.31Z"/></svg>
-                Filter
-                @if(count($activeFilters) > 0)<span class="inline-flex min-w-5 h-5 items-center justify-center bg-[#c0392b] text-white px-1 text-[10px]">{{ count($activeFilters) }}</span>@endif
-            </button>
-            <div class="ml-auto flex items-center gap-2">
-                @if($canExport || $canManage)
-                <x-crm.export-import export-route="dana-talangan.export" import-route="dana-talangan.import" :params="request()->only(['branch_id', 'project_name', 'status', 'search', 'filter_mode', 'date_from', 'date_to', 'month_from', 'month_to'])" :can-export="$canExport" :can-import="$canManage" />
-                @endif
-                @if($canManage)
-                <button type="button" @click="adding = true" class="bg-[#f1c40f] text-black px-4 py-1.5 text-sm font-[Helvetica] font-bold border-2 border-black rounded-none hover:bg-[#d4ac0d]">+ Dana Talangan Baru</button>
-                @endif
-            </div>
-        </div>
+    <div class="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <x-crm.card padding="sm">        <div class="font-[Helvetica] text-[10px] font-bold uppercase">Total Record Filter</div><div class="mt-1 text-xl font-bold">{{ number_format($summary['total']) }}</div></x-crm.card>
+        <x-crm.card padding="sm"><div class="font-[Helvetica] text-[10px] font-bold uppercase">Status Sanggup</div><div class="mt-1 text-xl font-bold">{{ number_format($summary['sanggup']) }}</div></x-crm.card>
+        <x-crm.card padding="sm"><div class="font-[Helvetica] text-[10px] font-bold uppercase">Status Tidak Sanggup</div><div class="mt-1 text-xl font-bold">{{ number_format($summary['tidak_sanggup']) }}</div></x-crm.card>
+        <x-crm.card padding="sm"><div class="font-[Helvetica] text-[10px] font-bold uppercase">Status Lunas</div><div class="mt-1 text-xl font-bold">{{ number_format($summary['lunas']) }}</div></x-crm.card>
     </div>
 
+    <x-crm.toolbar label="Filter dan aksi dana talangan" class="mb-3">
+        <form method="GET" action="{{ route('dana-talangan.index') }}" class="flex min-w-[240px] max-w-xl grow">
+            @foreach(request()->only(['branch_id', 'project_name', 'status', 'filter_mode', 'date_from', 'date_to', 'month_from', 'month_to', 'sort', 'dir', 'per_page']) as $key => $value)
+                @if($value !== null && $value !== '')<input type="hidden" name="{{ $key }}" value="{{ $value }}">@endif
+            @endforeach
+            <input name="search" value="{{ $search }}" placeholder="Cari nama konsumen..." aria-label="Cari Nama Konsumen" class="min-w-0 grow border-2 border-r-0 border-black px-3 py-1.5 text-sm font-['Times_New_Roman'] bg-white rounded-none">
+            <button class="border-2 border-black bg-black text-white px-4 py-1.5 text-sm font-[Helvetica] font-bold">Cari</button>
+        </form>
+        <button type="button" @click="filterOpen = true" class="relative inline-flex items-center gap-2 border-2 border-black bg-white px-4 py-1.5 text-sm font-[Helvetica] font-bold hover:bg-gray-100">
+            <svg viewBox="0 0 20 20" fill="currentColor" class="w-4 h-4" aria-hidden="true"><path d="M2.75 3.5a.75.75 0 0 1 .75-.75h13a.75.75 0 0 1 .53 1.28l-5.28 5.28v4.94a.75.75 0 0 1-.36.64l-3 1.8A.75.75 0 0 1 7.25 16V9.31L1.97 4.03a.75.75 0 0 1 .78-1.23v.7Zm2.56.75 3.22 3.22a.75.75 0 0 1 .22.53v6.68l1.5-.9V8a.75.75 0 0 1 .22-.53l3.22-3.22H5.31Z"/></svg>
+            Filter
+            @if(count($activeFilters) > 0)<span class="inline-flex min-w-5 h-5 items-center justify-center bg-[#c0392b] text-white px-1 text-[10px]">{{ count($activeFilters) }}</span>@endif
+        </button>
+        <x-slot:actions>
+            @if($canExport || $canManage)
+            <x-crm.export-import export-route="dana-talangan.export" import-route="dana-talangan.import" :params="request()->only(['branch_id', 'project_name', 'status', 'search', 'filter_mode', 'date_from', 'date_to', 'month_from', 'month_to'])" :can-export="$canExport" :can-import="$canManage" />
+            @endif
+        </x-slot:actions>
+    </x-crm.toolbar>
+
     @if(count($activeFilters) > 0)
-    <div class="flex flex-wrap items-center gap-2 mb-4">
-        <span class="font-[Helvetica] font-bold text-[10px] uppercase">Filter aktif:</span>
-        @foreach($activeFilters as $activeFilter)
-        <span class="border-2 border-black bg-[#fef3cd] px-2 py-1 text-xs font-['Times_New_Roman']">{{ $activeFilter }}</span>
-        @endforeach
-        <a href="{{ route('dana-talangan.index', array_filter(['search' => $search])) }}" class="text-xs font-[Helvetica] font-bold underline text-[#c0392b]">Hapus semua filter</a>
-    </div>
+        <div class="mb-4 flex flex-wrap items-center gap-2">
+            <span class="font-[Helvetica] text-[10px] font-bold uppercase">Filter aktif:</span>
+            @foreach($activeFilters as $activeFilter)
+                <x-crm.filter-chip :label="$activeFilter" />
+            @endforeach
+            <a href="{{ route('dana-talangan.index', array_filter(['search' => $search])) }}" class="text-xs font-[Helvetica] font-bold underline text-[#c0392b]">Hapus semua filter</a>
+        </div>
     @endif
 
     <div x-cloak x-show="filterOpen" class="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4" @keydown.escape.window="filterOpen = false">
@@ -256,9 +269,9 @@
                         <span class="crm-boolean-box {{ $r->konfirmasi_keuangan ? 'is-checked' : '' }}">{{ $r->konfirmasi_keuangan ? '✓' : '' }}</span>
                     </td>
                     <td class="text-center">
-                        <span class="inline-block px-2 py-0.5 text-xs font-[Helvetica] font-bold border border-black {{ $r->status === 'lunas' ? 'bg-white' : ($r->status === 'tidak_sanggup' ? 'bg-[#d77a7a] text-white' : 'bg-[#9ab6c8]') }}">
+                        <x-crm.status-badge :variant="$r->status === 'lunas' ? 'success' : ($r->status === 'tidak_sanggup' ? 'danger' : 'info')">
                             {{ $r->status === 'sanggup' ? 'SANGGUP' : ($r->status === 'tidak_sanggup' ? 'TIDAK SANGGUP' : 'LUNAS') }}
-                        </span>
+                        </x-crm.status-badge>
                     </td>
                     <td class="crm-actions">
                         @if(auth()->user()->hasPermission('comments.view'))
@@ -301,7 +314,7 @@
                 </tr>
                 @empty
                 <tr>
-                    <td colspan="16" class="px-4 py-8 text-center text-sm">Belum ada data dana talangan.</td>
+                    <td colspan="16"><x-crm.empty-state title="Belum ada data dana talangan." description="Ubah filter atau tambahkan data dana talangan baru melalui tombol utama." /></td>
                 </tr>
                 @endforelse
             </tbody>

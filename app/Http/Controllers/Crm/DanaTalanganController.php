@@ -116,6 +116,23 @@ class DanaTalanganController extends Controller
         $search = trim((string) $request->get('search'));
         $query->when($search !== '', fn ($q) => $q->whereRaw('LOWER(nama_konsumen) LIKE ?', ['%'.mb_strtolower($search).'%']));
 
+        $statusCounts = DanaTalangan::query()->whereIn('branch_id', $allowedBranchIds)
+            ->when($selectedBranchId, fn ($q) => $q->where('branch_id', $selectedBranchId))
+            ->when($rangeStart, fn ($q) => $q->whereDate('tanggal', '>=', $rangeStart))
+            ->when($rangeEnd, fn ($q) => $q->whereDate('tanggal', '<=', $rangeEnd))
+            ->when($selectedProject, fn ($q) => $q->where('project_name', $selectedProject))
+            ->when($selectedStatus, fn ($q) => $q->where('status', $selectedStatus))
+            ->when($search !== '', fn ($q) => $q->whereRaw('LOWER(nama_konsumen) LIKE ?', ['%'.mb_strtolower($search).'%']))
+            ->selectRaw('status, COUNT(*) as total')
+            ->groupBy('status')
+            ->pluck('total', 'status');
+        $summary = [
+            'total' => (int) $statusCounts->sum(),
+            'sanggup' => (int) ($statusCounts['sanggup'] ?? 0),
+            'tidak_sanggup' => (int) ($statusCounts['tidak_sanggup'] ?? 0),
+            'lunas' => (int) ($statusCounts['lunas'] ?? 0),
+        ];
+
         $trackingSummary = collect();
         if ($search !== '') {
             $trackingRecords = DanaTalangan::query()->whereIn('branch_id', $allowedBranchIds)
@@ -162,7 +179,7 @@ class DanaTalanganController extends Controller
         $canManage = $user->hasPermission('bridge_fund.manage');
         $canExport = $user->hasPermission('bridge_fund.export');
 
-        return view('crm.dana-talangan.index', compact('records', 'branches', 'projects', 'formProjects', 'projectOptions', 'selectedBranchId', 'selectedProject', 'selectedStatus', 'sortField', 'sortDir', 'perPage', 'syncStatus', 'search', 'trackingSummary', 'filterMode', 'dateFrom', 'dateTo', 'monthFrom', 'monthTo', 'canSync', 'canManage', 'canExport'));
+        return view('crm.dana-talangan.index', compact('records', 'branches', 'projects', 'formProjects', 'projectOptions', 'selectedBranchId', 'selectedProject', 'selectedStatus', 'sortField', 'sortDir', 'perPage', 'syncStatus', 'search', 'trackingSummary', 'filterMode', 'dateFrom', 'dateTo', 'monthFrom', 'monthTo', 'canSync', 'canManage', 'canExport', 'summary'));
     }
 
     public function create()

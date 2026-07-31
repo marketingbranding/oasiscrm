@@ -8,7 +8,7 @@
     'projectId' => $selectedProject,
     'projects' => $projects->map(fn ($project) => ['id' => (string) $project->id, 'name' => $project->project_name.($project->is_active ? '' : ' (Tidak Aktif)')])->values(),
     'projectsUrl' => route('expenses.projects'),
-]))" @submit="if (submitting) { $event.preventDefault() } else { submitting = true }" class="border-2 border-black bg-white">
+]))" @submit="if (submitting) { $event.preventDefault() } else { submitting = true }" class="crm-section bg-white">
     @csrf
     @if($method !== 'POST') @method($method) @endif
     @if($editing)<input type="hidden" name="expected_updated_at" value="{{ old('expected_updated_at', $optimisticToken) }}">@endif
@@ -17,12 +17,12 @@
     <div class="bg-black px-4 py-2 font-[Helvetica] text-xs font-bold uppercase text-white">Data Pengeluaran</div>
     <div class="grid grid-cols-1 gap-4 p-4 md:grid-cols-2">
         <div>
-            <label class="mb-1 block font-[Helvetica] text-xs font-bold uppercase">Tanggal Pengeluaran</label>
+            <label class="mb-1 block font-[Helvetica] text-xs font-bold uppercase">Tanggal Pengeluaran <span class="text-[#c0392b]">*</span></label>
             <x-crm.date-field name="expense_date" :value="old('expense_date', $expense?->expense_date?->toDateString() ?? now()->toDateString())" required accent="#b3bd95" />
             @error('expense_date')<p class="mt-1 text-xs font-bold text-[#c0392b]">{{ $message }}</p>@enderror
         </div>
         <div>
-            <label class="mb-1 block font-[Helvetica] text-xs font-bold uppercase">Cabang</label>
+            <label class="mb-1 block font-[Helvetica] text-xs font-bold uppercase">Cabang <span class="text-[#c0392b]">*</span></label>
             <select name="branch_id" x-model="branchId" @change="loadProjects(true)" required class="{{ $field }}">
                 <option value="">— Pilih Cabang —</option>
                 @foreach($branches as $branch)<option value="{{ $branch->id }}">{{ $branch->name }}{{ $branch->is_active ? '' : ' (Tidak Aktif)' }}</option>@endforeach
@@ -40,7 +40,7 @@
             @error('project_id')<p class="mt-1 text-xs font-bold text-[#c0392b]">{{ $message }}</p>@enderror
         </div>
         <div>
-            <label class="mb-1 block font-[Helvetica] text-xs font-bold uppercase">Kategori</label>
+            <label class="mb-1 block font-[Helvetica] text-xs font-bold uppercase">Kategori <span class="text-[#c0392b]">*</span></label>
             @if($categories->isEmpty())
                 <div class="border-2 border-black bg-[#fff3b0] px-3 py-2 text-sm">Belum ada kategori pengeluaran aktif.</div>
             @else
@@ -52,7 +52,7 @@
             @error('expense_category_id')<p class="mt-1 text-xs font-bold text-[#c0392b]">{{ $message }}</p>@enderror
         </div>
         <div>
-            <label class="mb-1 block font-[Helvetica] text-xs font-bold uppercase">Jumlah (Rp)</label>
+            <label class="mb-1 block font-[Helvetica] text-xs font-bold uppercase">Jumlah (Rp) <span class="text-[#c0392b]">*</span></label>
             <input type="number" name="amount" value="{{ old('amount', $expense?->amount) }}" min="0.01" max="9999999999999.99" step="0.01" inputmode="decimal" required class="{{ $field }}">
             @error('amount')<p class="mt-1 text-xs font-bold text-[#c0392b]">{{ $message }}</p>@enderror
         </div>
@@ -62,7 +62,7 @@
             @error('payment_method')<p class="mt-1 text-xs font-bold text-[#c0392b]">{{ $message }}</p>@enderror
         </div>
         <div class="md:col-span-2">
-            <label class="mb-1 block font-[Helvetica] text-xs font-bold uppercase">Deskripsi</label>
+            <label class="mb-1 block font-[Helvetica] text-xs font-bold uppercase">Deskripsi <span class="text-[#c0392b]">*</span></label>
             <input type="text" name="description" maxlength="255" value="{{ old('description', $expense?->description) }}" required class="{{ $field }}">
             @error('description')<p class="mt-1 text-xs font-bold text-[#c0392b]">{{ $message }}</p>@enderror
         </div>

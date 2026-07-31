@@ -70,20 +70,26 @@
         }
     },
 }">
-<div class="mb-4 flex flex-wrap items-center justify-between gap-2 border-2 border-black bg-[#b3bd95] px-4 py-3">
-    <h1 class="font-['Arial_Black'] text-xl font-black uppercase">Pengeluaran</h1>
-</div>
+<x-crm.page-header
+    variant="canonical"
+    title="Pengeluaran"
+    eyebrow="Keuangan"
+    description="Pencatatan pengeluaran operasional per cabang dan proyek. Pembatalan tetap disimpan sebagai riwayat."
+>
+    <x-slot:actions>
+        <x-crm.button href="{{ route('expenses.create') }}" variant="primary" accent="expenses">Tambah Pengeluaran</x-crm.button>
+    </x-slot:actions>
+</x-crm.page-header>
 
 <div class="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-5">
-    <div class="border-2 border-black bg-white p-3"><div class="font-[Helvetica] text-[10px] font-bold uppercase">Total Aktif Periode</div><div class="mt-1 text-xl font-bold">{{ $currency($summary['total']) }}</div></div>
-    <div class="border-2 border-black bg-white p-3"><div class="font-[Helvetica] text-[10px] font-bold uppercase">Transaksi Aktif</div><div class="mt-1 text-xl font-bold">{{ number_format($summary['count'], 0, ',', '.') }}</div><div class="text-xs">Rata-rata {{ $currency($summary['average']) }}</div></div>
-    <div class="border-2 border-black bg-white p-3"><div class="font-[Helvetica] text-[10px] font-bold uppercase">Kategori Terbesar</div><div class="mt-1 truncate font-bold" title="{{ $summary['top_category']['label'] ?? '-' }}">{{ $summary['top_category']['label'] ?? '-' }}</div><div class="text-xs">{{ $summary['top_category'] ? $currency($summary['top_category']['total']) : '-' }}</div></div>
-    <div class="border-2 border-black bg-white p-3"><div class="font-[Helvetica] text-[10px] font-bold uppercase">Cabang / Proyek Terbesar</div><div class="mt-1 truncate font-bold" title="{{ $summary['top_branch']['label'] ?? '-' }}">{{ $summary['top_branch']['label'] ?? '-' }} · {{ $summary['top_branch'] ? $currency($summary['top_branch']['total']) : '-' }}</div><div class="truncate text-xs" title="{{ $summary['top_project']['label'] ?? '-' }}">Proyek: {{ $summary['top_project']['label'] ?? '-' }} · {{ $summary['top_project'] ? $currency($summary['top_project']['total']) : '-' }}</div></div>
-    <div class="border-2 border-black bg-white p-3"><div class="font-[Helvetica] text-[10px] font-bold uppercase">Dibanding Periode Sebelumnya</div><div class="mt-1 text-xl font-bold">{{ $summary['comparison_percent'] === null ? '—' : (($summary['comparison_percent'] >= 0 ? '+' : '').number_format($summary['comparison_percent'], 1, ',', '.').'%') }}</div><div class="text-xs">Sebelumnya {{ $currency($summary['previous_total']) }}</div></div>
+    <x-crm.card padding="sm"><div class="font-[Helvetica] text-[10px] font-bold uppercase">Total Aktif Periode</div><div class="mt-1 text-xl font-bold">{{ $currency($summary['total']) }}</div></x-crm.card>
+    <x-crm.card padding="sm"><div class="font-[Helvetica] text-[10px] font-bold uppercase">Transaksi Aktif</div><div class="mt-1 text-xl font-bold">{{ number_format($summary['count'], 0, ',', '.') }}</div><div class="text-xs">Rata-rata {{ $currency($summary['average']) }}</div></x-crm.card>
+    <x-crm.card padding="sm"><div class="font-[Helvetica] text-[10px] font-bold uppercase">Kategori Terbesar</div><div class="mt-1 truncate font-bold" title="{{ $summary['top_category']['label'] ?? '-' }}">{{ $summary['top_category']['label'] ?? '-' }}</div><div class="text-xs">{{ $summary['top_category'] ? $currency($summary['top_category']['total']) : '-' }}</div></x-crm.card>
+    <x-crm.card padding="sm"><div class="font-[Helvetica] text-[10px] font-bold uppercase">Cabang / Proyek Terbesar</div><div class="mt-1 truncate font-bold" title="{{ $summary['top_branch']['label'] ?? '-' }}">{{ $summary['top_branch']['label'] ?? '-' }} · {{ $summary['top_branch'] ? $currency($summary['top_branch']['total']) : '-' }}</div><div class="truncate text-xs" title="{{ $summary['top_project']['label'] ?? '-' }}">Proyek: {{ $summary['top_project']['label'] ?? '-' }} · {{ $summary['top_project'] ? $currency($summary['top_project']['total']) : '-' }}</div></x-crm.card>
+    <x-crm.card padding="sm"><div class="font-[Helvetica] text-[10px] font-bold uppercase">Dibanding Periode Sebelumnya</div><div class="mt-1 text-xl font-bold">{{ $summary['comparison_percent'] === null ? '—' : (($summary['comparison_percent'] >= 0 ? '+' : '').number_format($summary['comparison_percent'], 1, ',', '.').'%') }}</div><div class="text-xs">Sebelumnya {{ $currency($summary['previous_total']) }}</div></x-crm.card>
 </div>
 
-<div class="mb-3 border-2 border-black bg-white p-3">
-    <div class="flex flex-wrap items-center gap-2">
+<x-crm.toolbar label="Filter dan aksi pengeluaran" class="mb-3">
         <form method="GET" action="{{ route('expenses.index') }}" class="flex min-w-[240px] max-w-xl grow">
             @foreach(request()->only([...$filterQueryKeys, 'sort', 'dir']) as $key => $value)
                 @if($value !== null && $value !== '')<input type="hidden" name="{{ $key }}" value="{{ $value }}">@endif
@@ -96,18 +102,17 @@
             Filter
             @if(count($activeFilters) > 0)<span class="inline-flex h-5 min-w-5 items-center justify-center bg-[#c0392b] px-1 text-[10px] text-white">{{ count($activeFilters) }}</span>@endif
         </button>
-        <div class="ml-auto flex flex-wrap items-center gap-2">
-            <a href="{{ route('expenses.export', request()->query()) }}" class="border-2 border-black bg-white px-4 py-1.5 font-[Helvetica] text-sm font-bold hover:bg-gray-100">Ekspor XLSX</a>
-            <a href="{{ route('expenses.create') }}" class="border-2 border-black bg-[#b3bd95] px-4 py-1.5 font-[Helvetica] text-sm font-bold hover:bg-[#9fac7d]">+ Tambah Pengeluaran</a>
-        </div>
-    </div>
-</div>
+    <x-slot:actions>
+        <a href="{{ route('expenses.export', request()->query()) }}" class="border-2 border-black bg-white px-4 py-1.5 font-[Helvetica] text-sm font-bold hover:bg-gray-100">Ekspor XLSX</a>
+        <a href="{{ route('expenses.create') }}" class="border-2 border-black bg-[#b3bd95] px-4 py-1.5 font-[Helvetica] text-sm font-bold hover:bg-[#9fac7d]">+ Tambah Pengeluaran</a>
+    </x-slot:actions>
+</x-crm.toolbar>
 
 @if(count($activeFilters) > 0)
 <div class="mb-4 flex flex-wrap items-center gap-2">
     <span class="font-[Helvetica] text-[10px] font-bold uppercase">Filter aktif:</span>
     @foreach($activeFilters as $activeFilter)
-    <span class="border-2 border-black bg-[#fef3cd] px-2 py-1 font-['Times_New_Roman'] text-xs">{{ $activeFilter }}</span>
+    <x-crm.filter-chip :label="$activeFilter" />
     @endforeach
     <a href="{{ route('expenses.index', array_filter(['search' => $filters['search']])) }}" class="text-xs font-bold text-[#c0392b] underline">Hapus semua filter</a>
 </div>
@@ -156,10 +161,10 @@
             <tr>
                 <td>{{ $expense->expense_date->format('d/m/Y') }}</td><td>{{ $expense->branch?->name ?? '—' }}</td><td title="{{ $expense->project?->project_name ?? '—' }}">{{ $expense->project?->project_name ?? '—' }}</td><td title="{{ $expense->category?->name ?? '—' }}">{{ $expense->category?->name ?? '—' }}</td>
                 <td title="{{ $expense->description }}" class="max-w-[18rem] truncate">{{ $expense->description }}</td><td title="{{ $expense->vendor_name ?? '—' }}">{{ $expense->vendor_name ?? '—' }}</td><td>{{ $paymentMethods[$expense->payment_method] ?? '—' }}</td><td class="text-right font-bold">{{ $expense->formattedAmount() }}</td><td title="{{ $expense->creator?->name ?? '—' }}">{{ $expense->creator?->name ?? '—' }}</td>
-                <td><span class="border border-black px-2 py-1 font-bold {{ $expense->status === \App\Models\Expense::STATUS_CANCELLED ? 'bg-[#d77a7a] text-white' : 'bg-[#b3bd95]' }}">{{ $expense->status === \App\Models\Expense::STATUS_CANCELLED ? 'Dibatalkan' : 'Aktif' }}</span></td>
+                <td><x-crm.status-badge :variant="$expense->status === \App\Models\Expense::STATUS_CANCELLED ? 'danger' : 'success'">{{ $expense->status === \App\Models\Expense::STATUS_CANCELLED ? 'Dibatalkan' : 'Aktif' }}</x-crm.status-badge></td>
                 <td class="crm-actions"><a href="{{ route('expenses.show', $expense) }}" class="font-bold underline">Lihat</a>@if(auth()->user()->hasPermission('comments.view')) <a href="{{ route('comments.thread', ['alias' => 'expense', 'id' => $expense->id]) }}" class="font-bold underline">Komentar ({{ $expense->comments_count }})</a>@endif @if($expense->status === \App\Models\Expense::STATUS_ACTIVE) <a href="{{ route('expenses.edit', $expense) }}" style="color:#0000ee;font-weight:bold;text-decoration:underline">Edit</a>@endif</td>
             </tr>
-        @empty<tr><td colspan="11" class="py-8 text-center italic">Belum ada pengeluaran pada periode ini.</td></tr>@endforelse
+        @empty<tr><td colspan="11"><x-crm.empty-state title="Belum ada pengeluaran pada periode ini." description="Ubah filter atau tambahkan pengeluaran baru jika transaksi sudah tersedia." /></td></tr>@endforelse
         </tbody>
     </table>
 </div>

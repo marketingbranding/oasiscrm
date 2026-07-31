@@ -150,7 +150,70 @@ References from other tables to `users`:
 
 ## Known Gaps (documented honestly)
 
-- Suspend/deactivate do not clear `remember_token` (only password change does). Password reset for suspended/inactive accounts is already blocked by `NewPasswordController`. `remember_token` is only honored by `Auth::loginUsingId`/session persistence; blocked status prevents login. Residual risk low; noted for future.
 - No protection against deactivating all pusat or the last maintenance-capable account simultaneously (only last-active-superadmin is guarded). Documented; recovery is a superadmin DB reactivation.
 - No per-user permission overrides; none added.
 - Emergency recovery procedure: connect to the production DB and `UPDATE users SET account_status='active' WHERE id=<superadmin>` via an authenticated operator; verify `is_active` syncs on next middleware pass.
+
+# IAM Session & Recovery Hardening (follow-up audit)
+
+## Token / Session Audit
+
+| Token type | Storage | Revoke on suspend | Revoke on deactivate | Revoke on anonymize | Class |
+|---|---|---|---|---|---|
+| Web sessions | `sessions` table (database driver), `user_id` | YES (delete target rows) | YES | YES | A/B/C |
+| `remember_token` | `users.remember_token` | YES (rotate) | YES (rotate) | YES (rotate) | A/B/C |
+| Password reset tokens | `password_reset_tokens` keyed by `email` | YES (delete by current email) | YES | YES (delete by old email before replacement) | A/B/C |
+| Invitation tokens | `user_invitations.token_hash` (SHA-256) | revoked if pending (defensive; active users normally have none) | same | YES (explicit revoke) | A/B/C |
+| Email verification links | none stored (Laravel signed URLs, stateless) | remains valid by design; account status blocks login | same | `email_verified_at` nulled | D |
+| Personal access tokens | `personal_access_tokens` table | guarded delete if table exists (not present in this app) | same | same | E not present |
+| API tokens | none | n/a | n/a | n/a | E not present |
+
+`reactivate` never recreates sessions and never restores remember tokens; the account returns to `active` and must log in normally.
+
+## Access Invalidation (centralized)
+
+`UserLifecycleService::revokeUserTokens(User)` deletes target sessions, deletes `password_reset_tokens` for the current email, revokes pending invitations, deletes personal-access tokens if present, and rotates `remember_token`. It is invoked inside the lifecycle transaction by `UserAccountService::suspend` / `::deactivate` and by `UserLifecycleService::anonymize` (which deletes reset tokens by the old email before replacing it). Other users' sessions and tokens are never touched.
+
+## Critical Capability Guards
+
+Effective primary-role permission resolution defines three critical capabilities:
+
+| Capability | Permission | Business feedback |
+|---|---|---|
+| Maintenance management | `system.maintenance_manage` | "…satu-satunya akun aktif yang dapat mengelola maintenance." |
+| Maintenance bypass | `system.maintenance_bypass` | "…satu-satunya akun aktif yang dapat melewati maintenance." |
+| IAM administration | `users.update` | "…satu-satunya akun aktif yang dapat mengelola pengguna." |
+
+A user is an eligible capability holder only when: `account_status = active`, `is_active = true`, `email_verified_at` set, `password_changed_at` set, and the primary role grants the permission (or the role is superadmin for the wildcard). Supplemental `role_user` roles never count.
+
+`UserLifecycleService::assertCriticalCapabilityContinuity(User $target)` runs inside each lifecycle transaction after `lockForUpdate()`. If the target holds any critical capability and no other eligible holder remains (count excludes the target), the action throws `DomainException` with the business-language message. The controller converts it to a warning flash. `activeCapabilityHolderCount()` uses the same eligibility query with `lockForUpdate()` on MySQL so concurrent transitions serialize.
+
+Today, with the current role matrix, every actor capable of suspend/deactivate/anonymize (pusat or superadmin) is itself an eligible holder, so the guard primarily acts as defense-in-depth and as a safety net if role mappings change. The last-active-superadmin protection (`assertNotLastActiveSuperadmin`) remains and covers the superadmin-only `system.maintenance_manage` case.
+
+## Concurrency
+
+Lifecycle transitions run in a database transaction with `lockForUpdate()` on the target and on the eligible-holder count query (MySQL). SQLite in tests has no real row locking; the guard logic is verified serially (transitioning the final two holders in sequence cannot remove both).
+
+## Recovery Procedure (safer, documented)
+
+1. **Preferred — another active Superadmin**: any other active, verified superadmin (or eligible `users.update`/`users.reactivate` holder) signs in and reactivates the locked account through the standard `admin-users` reactivate flow. This is the only path that preserves full audit history.
+2. **Maintenance bypass recovery**: if maintenance is enabled and blocks login, an active `system.maintenance_bypass` holder signs in normally (bypass holders are not blocked); do not toggle maintenance off until IAM access is restored.
+3. **Console / Tinker recovery**: if the application boots, run via `php artisan tinker`:
+   ```php
+   App\Models\User::where('email', 'operator@example.com')->first()
+       ->update(['account_status' => 'active', 'is_active' => true, 'email_verified_at' => now(), 'password_changed_at' => now()]);
+   ```
+   Keep the five fields synchronized: `account_status='active'`, `is_active=true`, `email_verified_at` set, `password_changed_at` set, `password` set. Reset the password immediately afterward (`changePassword`) so the operator logs in with a known credential.
+4. **Direct database recovery (last resort)**: `UPDATE users SET account_status='active', is_active=1, email_verified_at=CURRENT_TIMESTAMP, password_changed_at=CURRENT_TIMESTAMP WHERE id=<user>;` via an authenticated DB operator. Set a fresh `password` hash in the same transaction.
+5. **Required audit entry**: after any manual recovery, record an `ActivityLog` (subject = recovered user, causer = operator or system, event = `emergency_access_restored`, properties = reason and operator id). No tokens, passwords, or session IDs are logged.
+6. **Credential rotation**: force a password change and rotate `remember_token` after recovery; verify `is_active` syncs on the next middleware pass.
+
+No unauthenticated recovery route or public backdoor exists. Manual recovery requires authenticated operator access to the application or database.
+
+## Remaining Permission Drift (final review)
+
+After the insert-only catalog sync, deployed `role_permission` matches `PermissionCatalog::rolePermissions()` for all roles (verified by `PermissionDriftSyncTest::test_catalog_mapping_is_fully_synced_to_deployed_pivots`). Remaining items are non-security backlog only:
+
+- Scoped variants (`module.manage_assigned`/`export_*` for consumer_progress etc.) exist in pivots but have no module routes behind them — documentation-only.
+- No exposure drift exists; no role has a pivot the catalog does not define.
+- `system.maintenance_manage` has no non-superadmin pivot by design; only the superadmin wildcard grants it.

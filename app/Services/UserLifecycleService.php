@@ -4,12 +4,19 @@ namespace App\Services;
 
 use App\Enums\AccountStatus;
 use App\Models\User;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 
 class UserLifecycleService
 {
+    private const CRITICAL_CAPABILITIES = [
+        'system.maintenance_manage' => 'mengelola maintenance',
+        'system.maintenance_bypass' => 'melewati maintenance',
+        'users.update' => 'mengelola pengguna',
+    ];
+
     public function __construct(
         private readonly UserInvitationService $invitations,
         private readonly AccountAuditService $audit,
@@ -22,10 +29,15 @@ class UserLifecycleService
         }
 
         $oldStatus = $target->account_status->value;
+        $oldEmail = $target->email;
         $tombstone = $this->tombstoneEmail($target);
 
-        DB::transaction(function () use ($target, $actor, $tombstone) {
+        DB::transaction(function () use ($target, $actor, $tombstone, $oldEmail) {
+            $target = User::whereKey($target->id)->lockForUpdate()->firstOrFail();
+            $this->assertCriticalCapabilityContinuity($target);
             $this->revokeActiveInvitation($target, $actor);
+            $this->deleteSessions($target);
+            $this->deletePasswordResetTokens($oldEmail);
             $target->forceFill([
                 'name' => $this->anonymousName($target),
                 'email' => $tombstone,
@@ -38,13 +50,13 @@ class UserLifecycleService
                 'password_changed_at' => null,
                 'updated_by' => $actor->id,
             ])->save();
-            $this->deleteSessions($target);
         });
 
         $this->audit->log('user_anonymized', $target, $actor, ['account_status' => $oldStatus], [
             'reason' => $reason,
             'account_status' => AccountStatus::Anonymized->value,
             'email_released' => true,
+            'access_revoked' => ['sessions', 'remember_token', 'password_reset_tokens'],
         ]);
     }
 
@@ -60,6 +72,8 @@ class UserLifecycleService
         $tombstone = $this->tombstoneEmail($target);
 
         DB::transaction(function () use ($target, $actor, $tombstone) {
+            $target = User::whereKey($target->id)->lockForUpdate()->firstOrFail();
+            $this->assertCriticalCapabilityContinuity($target);
             $target->forceFill([
                 'email' => $tombstone,
                 'email_verified_at' => null,
@@ -71,6 +85,95 @@ class UserLifecycleService
             'reason' => $reason,
             'email_released' => true,
         ]);
+    }
+
+    public function revokeUserTokens(User $target): void
+    {
+        $this->deleteSessions($target);
+        $this->deletePasswordResetTokens($target->email);
+
+        DB::table('user_invitations')
+            ->where('user_id', $target->id)
+            ->whereNull('accepted_at')
+            ->whereNull('revoked_at')
+            ->update(['revoked_at' => now(), 'updated_at' => now()]);
+
+        if (Schema::hasTable('personal_access_tokens')) {
+            DB::table('personal_access_tokens')
+                ->where('tokenable_type', User::class)
+                ->where('tokenable_id', $target->id)
+                ->delete();
+        }
+
+        $target->forceFill(['remember_token' => Str::random(60)])->save();
+    }
+
+    public function assertCriticalCapabilityContinuity(User $target): void
+    {
+        if (! $this->isEligibleCapabilityHolder($target)) {
+            return;
+        }
+
+        foreach (self::CRITICAL_CAPABILITIES as $permission => $label) {
+            if (! $target->hasPermission($permission)) {
+                continue;
+            }
+            if ($this->activeCapabilityHolderCount($permission, $target->id) < 1) {
+                throw new \DomainException("Akun ini adalah satu-satunya akun aktif yang dapat {$label}.");
+            }
+        }
+    }
+
+    public function activeCapabilityHolderCount(string $permission, ?int $exceptId = null): int
+    {
+        return User::query()
+            ->where('account_status', AccountStatus::Active->value)
+            ->where('is_active', true)
+            ->whereNotNull('email_verified_at')
+            ->whereNotNull('password_changed_at')
+            ->where(fn (Builder $query) => $query
+                ->whereHas('role', fn (Builder $role) => $role->where('is_superadmin', true))
+                ->orWhereHas('role.permissions', fn (Builder $permissions) => $permissions->where('slug', $permission)))
+            ->when($exceptId, fn (Builder $query, int $id) => $query->whereKeyNot($id))
+            ->lockForUpdate()
+            ->count();
+    }
+
+    private function isEligibleCapabilityHolder(User $user): bool
+    {
+        return $user->account_status === AccountStatus::Active
+            && $user->is_active
+            && $user->email_verified_at !== null
+            && $user->password_changed_at !== null;
+    }
+
+    private function deletePasswordResetTokens(string $email): void
+    {
+        if (Schema::hasTable('password_reset_tokens')) {
+            DB::table('password_reset_tokens')->where('email', $email)->delete();
+        }
+    }
+
+    private function deleteSessions(User $user): void
+    {
+        if (Schema::hasTable('sessions')) {
+            DB::table('sessions')->where('user_id', $user->id)->delete();
+        }
+    }
+
+    public function permanentlyDeleteDraft(User $target, User $actor, string $reason): void
+    {
+        $blockers = $this->deletionBlockers($target);
+        if ($blockers !== []) {
+            throw new \DomainException('Akun tidak dapat dihapus permanen: '.implode('; ', $blockers).'. Gunakan anonimisasi bila akun memiliki riwayat.');
+        }
+
+        DB::transaction(function () use ($target, $actor, $reason) {
+            $target = User::whereKey($target->id)->lockForUpdate()->firstOrFail();
+            $this->assertCriticalCapabilityContinuity($target);
+            $this->audit->log('user_draft_deleted', $target, $actor, ['account_status' => $target->account_status->value], ['reason' => $reason]);
+            $target->delete();
+        });
     }
 
     /**
@@ -120,19 +223,6 @@ class UserLifecycleService
         return $blockers;
     }
 
-    public function permanentlyDeleteDraft(User $target, User $actor, string $reason): void
-    {
-        $blockers = $this->deletionBlockers($target);
-        if ($blockers !== []) {
-            throw new \DomainException('Akun tidak dapat dihapus permanen: '.implode('; ', $blockers).'. Gunakan anonimisasi bila akun memiliki riwayat.');
-        }
-
-        DB::transaction(function () use ($target, $actor, $reason) {
-            $this->audit->log('user_draft_deleted', $target, $actor, ['account_status' => $target->account_status->value], ['reason' => $reason]);
-            $target->delete();
-        });
-    }
-
     private function revokeActiveInvitation(User $target, User $actor): void
     {
         $invitation = $target->invitations()
@@ -143,13 +233,6 @@ class UserLifecycleService
 
         if ($invitation) {
             $this->invitations->revoke($invitation, $actor);
-        }
-    }
-
-    private function deleteSessions(User $user): void
-    {
-        if (Schema::hasTable('sessions')) {
-            DB::table('sessions')->where('user_id', $user->id)->delete();
         }
     }
 

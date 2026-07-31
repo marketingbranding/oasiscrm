@@ -283,7 +283,11 @@ class AdminUserController extends Controller
         if (! $allowed) {
             return back()->with('warning', 'Perubahan status tersebut tidak berlaku untuk kondisi akun saat ini.');
         }
-        $this->accounts->{$action}($user, $request->user());
+        try {
+            $this->accounts->{$action}($user, $request->user());
+        } catch (\DomainException $exception) {
+            return back()->with('warning', $exception->getMessage());
+        }
         $this->audit->log("account_{$action}_reason", $user, $request->user(), [], ['reason' => $request->validated('reason')]);
 
         return back()->with('success', 'Status akun berhasil diperbarui.');

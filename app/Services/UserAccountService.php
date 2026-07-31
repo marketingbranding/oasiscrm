@@ -12,7 +12,10 @@ use Illuminate\Support\Str;
 
 class UserAccountService
 {
-    public function __construct(private readonly AccountAuditService $audit) {}
+    public function __construct(
+        private readonly AccountAuditService $audit,
+        private readonly UserLifecycleService $lifecycle,
+    ) {}
 
     public function recordSuccessfulLogin(User $user, Request $request): void
     {
@@ -41,26 +44,34 @@ class UserAccountService
 
     public function suspend(User $user, User $actor): void
     {
-        $old = $user->account_status->value;
-        $user->update([
-            'account_status' => AccountStatus::Suspended,
-            'suspended_at' => now(),
-            'updated_by' => $actor->id,
-        ]);
-        $this->deleteOtherSessions($user);
-        $this->audit->log('account_suspended', $user, $actor, ['account_status' => $old], ['account_status' => AccountStatus::Suspended->value]);
+        DB::transaction(function () use ($user, $actor) {
+            $user = User::whereKey($user->id)->lockForUpdate()->firstOrFail();
+            $this->lifecycle->assertCriticalCapabilityContinuity($user);
+            $old = $user->account_status->value;
+            $user->update([
+                'account_status' => AccountStatus::Suspended,
+                'suspended_at' => now(),
+                'updated_by' => $actor->id,
+            ]);
+            $this->lifecycle->revokeUserTokens($user);
+            $this->audit->log('account_suspended', $user, $actor, ['account_status' => $old], ['account_status' => AccountStatus::Suspended->value]);
+        });
     }
 
     public function deactivate(User $user, User $actor): void
     {
-        $old = $user->account_status->value;
-        $user->update([
-            'account_status' => AccountStatus::Inactive,
-            'deactivated_at' => now(),
-            'updated_by' => $actor->id,
-        ]);
-        $this->deleteOtherSessions($user);
-        $this->audit->log('account_deactivated', $user, $actor, ['account_status' => $old], ['account_status' => AccountStatus::Inactive->value]);
+        DB::transaction(function () use ($user, $actor) {
+            $user = User::whereKey($user->id)->lockForUpdate()->firstOrFail();
+            $this->lifecycle->assertCriticalCapabilityContinuity($user);
+            $old = $user->account_status->value;
+            $user->update([
+                'account_status' => AccountStatus::Inactive,
+                'deactivated_at' => now(),
+                'updated_by' => $actor->id,
+            ]);
+            $this->lifecycle->revokeUserTokens($user);
+            $this->audit->log('account_deactivated', $user, $actor, ['account_status' => $old], ['account_status' => AccountStatus::Inactive->value]);
+        });
     }
 
     public function reactivate(User $user, User $actor): void

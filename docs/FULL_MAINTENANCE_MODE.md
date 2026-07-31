@@ -176,6 +176,16 @@ Activation is rejected unless:
 
 Primary Pusat remains inside OASIS during maintenance but cannot manage it by default. A custom role with manage but no bypass may inspect the disabled state but cannot activate maintenance.
 
+## Recovery Procedure
+
+If IAM access is locked out while maintenance is enabled:
+
+1. Sign in as any active `system.maintenance_bypass` holder — bypass holders are not blocked during maintenance.
+2. Use the standard `admin-users` reactivate flow to restore the locked account.
+3. Only if no bypass holder can sign in, use `php artisan tinker` or direct database recovery per `docs/IAM_USER_LIFECYCLE_2_AUDIT.md`; keep `account_status`, `is_active`, `email_verified_at`, `password_changed_at`, and `password` synchronized, then record an `emergency_access_restored` ActivityLog and rotate credentials.
+
+The critical-capability guard in `UserLifecycleService` prevents disabling the last eligible maintenance manager, bypass holder, or IAM administrator through the application.
+
 ## Centralized Service Contract
 
 `OperationalMaintenanceService` owns:

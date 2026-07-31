@@ -209,8 +209,17 @@ Current statuses:
 - `active`
 - `suspended`
 - `inactive`
+- `anonymized`
 
-`account_status` is authoritative. `is_active` remains synchronized for compatibility. Only active, verified users may access protected CRM routes. Suspend/deactivate preserves historical data and invalidates database sessions.
+`account_status` is authoritative. `is_active` remains synchronized for compatibility. Only active, verified users may access protected CRM routes. Suspend/deactivate preserves historical data and invalidates database sessions. Anonymized accounts cannot log in, cannot be edited or reset-access, and keep all operational references while personal fields become tombstones.
+
+Lifecycle hardening via `UserLifecycleService`:
+
+- `users.anonymize` and `users.release_email` are permission-gated (superadmin + pusat) actions; `users.delete_permanently` is superadmin-only.
+- Anonymization replaces `name`/`email`/`phone` with tombstones, revokes active invitations, clears sessions and `remember_token`, and records an audit event. Emails are released through a non-routable tombstone pattern `deleted+<id>+<random>@invalid.oasis.local`.
+- Email release is allowed only for deactivated (`inactive`) accounts and frees the address for reuse while preserving identity.
+- Permanent deletion is restricted to strictly safe drafts: `pending_invitation`, unverified email, never logged in, with no comments, notifications, invitations, import records, planner items, sales leads, expenses, dana talangan records, memberships, or reports. Any blocker denies deletion and suggests anonymization.
+- Last-active-superadmin, self-action, and rank-escalation protections remain enforced. Emergency recovery for a locked-out IAM administrator: an operator updates `users.account_status='active'` directly in the production database.
 
 Public self-registration is disabled. Internal onboarding uses `UserInvitationService`:
 

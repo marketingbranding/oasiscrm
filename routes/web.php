@@ -211,6 +211,9 @@ Route::middleware(['auth', 'active', 'verified', 'password.changed', 'operationa
         Route::patch('/{admin_user}/suspend', [AdminUserController::class, 'suspend'])->middleware('permission:users.suspend')->name('suspend');
         Route::patch('/{admin_user}/reactivate', [AdminUserController::class, 'reactivate'])->middleware('permission:users.reactivate')->name('reactivate');
         Route::patch('/{admin_user}/deactivate', [AdminUserController::class, 'deactivate'])->middleware('permission:users.deactivate')->name('deactivate');
+        Route::patch('/{admin_user}/anonymize', [AdminUserController::class, 'anonymize'])->middleware('permission:users.anonymize')->name('anonymize');
+        Route::patch('/{admin_user}/release-email', [AdminUserController::class, 'releaseEmail'])->middleware('permission:users.release_email')->name('release-email');
+        Route::delete('/{admin_user}', [AdminUserController::class, 'destroy'])->middleware('permission:users.delete_permanently')->name('destroy');
         Route::post('/{admin_user}/reset-access', [AdminUserController::class, 'resetAccess'])->middleware('permission:users.reset_password')->name('reset-access');
     });
 });

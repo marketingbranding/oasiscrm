@@ -21,6 +21,7 @@ use App\Services\ReportingHierarchyService;
 use App\Services\UserAccountService;
 use App\Services\UserAdministrationService;
 use App\Services\UserInvitationService;
+use App\Services\UserLifecycleService;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -38,6 +39,7 @@ class AdminUserController extends Controller
         private readonly ReportingHierarchyService $hierarchy,
         private readonly UserInvitationService $invitations,
         private readonly UserAccountService $accounts,
+        private readonly UserLifecycleService $lifecycle,
         private readonly OptimisticLockService $locks,
         private readonly AccountAuditService $audit,
     ) {}
@@ -116,8 +118,12 @@ class AdminUserController extends Controller
     {
         $this->authorize('view', $admin_user);
         $admin_user->load(['role', 'roles', 'branch', 'branches', 'assignedProjects.branch', 'supervisor', 'invitations.inviter', 'activityLogs.causer']);
+        $actor = request()->user();
+        $deletionBlockers = $actor->hasPermission('users.delete_permanently')
+            ? $this->lifecycle->deletionBlockers($admin_user)
+            : [];
 
-        return view('crm.admin-users.show', ['user' => $admin_user]);
+        return view('crm.admin-users.show', ['user' => $admin_user, 'deletionBlockers' => $deletionBlockers]);
     }
 
     public function edit(User $admin_user): View
@@ -131,6 +137,7 @@ class AdminUserController extends Controller
     public function update(AdminUserUpdateRequest $request, User $admin_user): RedirectResponse|JsonResponse
     {
         $actor = $request->user();
+        abort_if($admin_user->account_status === AccountStatus::Anonymized, 403, 'Akun anonim tidak dapat diedit.');
         $data = $request->validated();
         $role = Role::findOrFail($data['role_id']);
         $branchIds = $this->branchIds($data);
@@ -198,6 +205,7 @@ class AdminUserController extends Controller
     {
         $actor = request()->user();
         $this->administration->assertCanManage($actor, $admin_user, 'users.reset_password');
+        abort_if($admin_user->account_status === AccountStatus::Anonymized, 403, 'Akun anonim tidak dapat direset aksesnya.');
         if (in_array($admin_user->account_status, [AccountStatus::PendingInvitation, AccountStatus::Invited], true)) {
             return $this->issueInvitation($admin_user, true);
         }
@@ -205,6 +213,46 @@ class AdminUserController extends Controller
         $this->audit->log('password_reset_requested', $admin_user, $actor);
 
         return back()->with($status === Password::RESET_LINK_SENT ? 'success' : 'warning', __($status));
+    }
+
+    public function anonymize(AdminUserStatusRequest $request, User $admin_user): RedirectResponse
+    {
+        $actor = $request->user();
+        $this->administration->assertCanManage($actor, $admin_user, 'users.anonymize');
+        try {
+            $this->lifecycle->anonymize($admin_user, $actor, $request->validated('reason'));
+        } catch (\DomainException $exception) {
+            return back()->with('warning', $exception->getMessage());
+        }
+
+        return back()->with('success', 'Akun berhasil dianonimkan. Data pribadi dilepas dan email dapat dipakai ulang.');
+    }
+
+    public function releaseEmail(AdminUserStatusRequest $request, User $admin_user): RedirectResponse
+    {
+        $actor = $request->user();
+        $this->administration->assertCanManage($actor, $admin_user, 'users.release_email');
+        try {
+            $this->lifecycle->releaseEmail($admin_user, $actor, $request->validated('reason'));
+        } catch (\DomainException $exception) {
+            return back()->with('warning', $exception->getMessage());
+        }
+
+        return back()->with('success', 'Email akun berhasil dilepas untuk dipakai ulang.');
+    }
+
+    public function destroy(AdminUserStatusRequest $request, User $admin_user): RedirectResponse
+    {
+        $actor = $request->user();
+        $this->administration->assertCanManage($actor, $admin_user, 'users.delete_permanently');
+        $this->administration->assertNotLastActiveSuperadmin($admin_user);
+        try {
+            $this->lifecycle->permanentlyDeleteDraft($admin_user, $actor, $request->validated('reason'));
+        } catch (\DomainException $exception) {
+            return back()->with('warning', $exception->getMessage());
+        }
+
+        return back()->with('success', 'Draf akun aman dan berhasil dihapus permanen.');
     }
 
     private function issueInvitation(User $user, bool $resend): RedirectResponse
@@ -230,7 +278,7 @@ class AdminUserController extends Controller
         $allowed = match ($action) {
             'suspend' => $user->account_status === AccountStatus::Active,
             'reactivate' => in_array($user->account_status, [AccountStatus::Suspended, AccountStatus::Inactive], true),
-            'deactivate' => $user->account_status !== AccountStatus::Inactive,
+            'deactivate' => $user->account_status !== AccountStatus::Inactive && $user->account_status !== AccountStatus::Anonymized,
         };
         if (! $allowed) {
             return back()->with('warning', 'Perubahan status tersebut tidak berlaku untuk kondisi akun saat ini.');

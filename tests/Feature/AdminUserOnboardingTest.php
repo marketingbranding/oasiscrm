@@ -62,7 +62,7 @@ class AdminUserOnboardingTest extends TestCase
             ->assertOk()->assertSee($visible->email)->assertDontSee($hidden->email);
     }
 
-    public function test_suspend_revokes_sessions_and_reactivate_is_audited_without_delete_route(): void
+    public function test_suspend_revokes_sessions_and_reactivate_is_audited(): void
     {
         $actor = $this->user('superadmin');
         $target = $this->user('staff', $this->branch('SBY'));
@@ -70,7 +70,9 @@ class AdminUserOnboardingTest extends TestCase
         $this->actingAs($actor)->patch(route('admin-users.suspend', $target), ['reason' => 'Cuti panjang'])->assertRedirect();
         $this->assertSame(AccountStatus::Suspended, $target->fresh()->account_status);
         $this->assertDatabaseHas('activity_log', ['subject_id' => $target->id, 'event' => 'account_suspended']);
-        $this->assertFalse(Route::has('admin-users.destroy'));
+        $this->assertTrue(Route::has('admin-users.destroy'));
+        $this->assertTrue(Route::has('admin-users.anonymize'));
+        $this->assertTrue(Route::has('admin-users.release-email'));
     }
 
     public function test_changelog_entry_renders_once_for_superadmin(): void

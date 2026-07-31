@@ -147,6 +147,7 @@ Focus uses `--oasis-focus-width`, `--oasis-focus-offset`, and `--oasis-focus`. N
 - Shared CRM primitive: `x-crm.*`.
 - Complex domain owner: retain its domain namespace, for example `x-comments.panel`.
 - Authentication/Breeze components may remain separate.
+- PWA install/update UI: `x-pwa-control` (`oasisPwa` Alpine data) is the only shared install/update contract; it renders a restrained update banner and install pill and never uses native `confirm()`/`alert()`.
 - Never create `x-oasis`, `x-ui`, or `x-app` as a competing CRM system.
 
 Extract when a compatible pattern occurs approximately three times or has imminent, verified reuse. Do not extract one-off decorative markup.

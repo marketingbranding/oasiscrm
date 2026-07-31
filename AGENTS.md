@@ -55,6 +55,7 @@ Never invent routes, role slugs, permission slugs, tables, services, or componen
 | Styling | Tailwind CSS, PostCSS, shared CSS in `resources/css/app.css` |
 | Frontend build | Vite 8 through `laravel-vite-plugin` |
 | Browser behavior | Alpine.js modules registered in `resources/js/app.js`; SortableJS for Work Planner |
+| PWA | Online-first Android PWA: `public/manifest.webmanifest`, `public/service-worker.js`, `public/offline.html`, `resources/js/pwa.js` (`oasisPwa` Alpine data), `resources/views/components/pwa-control.blade.php` |
 | Production database | MySQL according to `.env.example` and deployment assumptions |
 | Development default | SQLite through `config/database.php`; `database/database.sqlite` exists |
 | Tests | SQLite `:memory:` through `phpunit.xml` |
@@ -76,6 +77,17 @@ Do not introduce Redis, Supervisor, Reverb, queues, or a new frontend framework 
 - PHPUnit overrides cache/session to `array`, queue to `sync`, mail to `array`, and database to SQLite in-memory.
 - Cache-lock behavior in tests is not identical to production database locks.
 - No current application job implements `ShouldQueue`; invitation and import mail delivery is synchronous even though the queue infrastructure exists.
+
+### PWA contract (verified)
+
+OASIS is an online-first Android PWA. `resources/js/pwa.js` registers `oasisPwa` (install prompt, update notice, standalone detection) and registers `public/service-worker.js`. The service worker:
+
+- caches only static public assets: precached `oasis-core-v1` (offline page, manifest, icons) and cache-first `oasis-build-v1` for hashed `/build/*` files (bounded FIFO, only `response.ok`);
+- never stores navigation responses (authenticated CRM HTML, login, maintenance 503), same-origin non-navigation GET (JSON/AJAX/exports/downloads/sync), or any non-GET request;
+- serves `public/offline.html` only on genuine network failure for navigations;
+- cleans obsolete `oasis-*` caches on activate and supports user-controlled updates (`SKIP_WAITING`, reload only after explicit user action).
+
+Do not broaden the cache policy to cache authenticated pages or data. The shared `x-pwa-control` component is the only install/update UI contract. `docs/PWA_1_INSTALLABLE_ANDROID.md` is the reference.
 
 ## 4. Commands
 

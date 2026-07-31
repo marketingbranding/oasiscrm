@@ -102,7 +102,104 @@
     },
     changeEditBranch() { this.editingRecord.project_name = ''; this.editingRecord.kav = ''; this.editKavlings = []; },
     changeEditProject() { this.editingRecord.kav = ''; this.loadEditKavlings(); },
-}" x-init="if (addForm.project_name) loadAddKavlings(true)">
+    modalTriggers: {},
+    modalScrollOwner: 'dana-talangan-modal',
+    modalFocusSelector: 'a[href], button:not([disabled]), input:not([type="hidden"]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+    lockModalScroll() {
+        window.oasisBodyScroll?.lock(this.modalScrollOwner);
+    },
+    unlockModalScroll() {
+        window.oasisBodyScroll?.unlock(this.modalScrollOwner);
+    },
+    firstFocusable(panel) {
+        if (!panel) return null;
+        return Array.from(panel.querySelectorAll(this.modalFocusSelector))
+            .find((element) => element.offsetParent !== null) || panel;
+    },
+    trapModalFocus(event, key) {
+        const panel = this.$refs[key];
+        if (!panel) return;
+        const focusable = Array.from(panel.querySelectorAll(this.modalFocusSelector))
+            .filter((element) => element.offsetParent !== null);
+        if (focusable.length === 0) {
+            event.preventDefault();
+            panel.focus();
+            return;
+        }
+        const first = focusable[0];
+        const last = focusable[focusable.length - 1];
+        if (event.shiftKey && document.activeElement === first) {
+            event.preventDefault();
+            last.focus();
+        } else if (!event.shiftKey && document.activeElement === last) {
+            event.preventDefault();
+            first.focus();
+        }
+    },
+    openModal(key, trigger, focusTarget = null) {
+        this.modalTriggers[key] = trigger;
+        this.lockModalScroll();
+        this.$nextTick(() => {
+            const panel = this.$refs[key];
+            const target = focusTarget || this.firstFocusable(panel);
+            target?.focus();
+        });
+    },
+    closeModal(key) {
+        const trigger = this.modalTriggers[key];
+        this.modalTriggers[key] = null;
+        this.unlockModalScroll();
+        this.$nextTick(() => trigger?.focus());
+    },
+    initModalState() {
+        if (this.adding) {
+            this.lockModalScroll();
+            this.$nextTick(() => this.firstFocusable(this.$refs.addModalPanel)?.focus());
+        }
+    },
+    openEdit(record, trigger) {
+        this.editingRecord = record;
+        this.editKavlings = [];
+        this.modalTriggers.editModalPanel = trigger;
+        this.lockModalScroll();
+        this.$nextTick(() => {
+            this.loadEditKavlings(true);
+            this.firstFocusable(this.$refs.editModalPanel)?.focus();
+        });
+    },
+    closeEditModal() {
+        this.editingRecord = null;
+        this.closeModal('editModalPanel');
+    },
+    async loadEditKavlings(preserve = false) {
+        if (!this.editingRecord) return;
+        const projectName = this.editingRecord.project_name;
+        const current = preserve ? this.editingRecord.kav : '';
+        this.editKavLoading = true;
+        this.editKavlings = await this.fetchKavlings(this.editingRecord.branch_id, projectName);
+        if (!this.editingRecord || projectName !== this.editingRecord.project_name) { this.editKavLoading = false; return; }
+        if (current && !this.editKavlings.some(code => this.normalizeKav(code) === this.normalizeKav(current))) this.editKavlings.push(current);
+        if (!preserve) this.editingRecord.kav = '';
+        this.editKavLoading = false;
+    },
+    changeEditBranch() { this.editingRecord.project_name = ''; this.editingRecord.kav = ''; this.editKavlings = []; },
+    changeEditProject() { this.editingRecord.kav = ''; this.loadEditKavlings(); },
+    closeFilterModal() {
+        if (!this.filterOpen) return;
+        this.filterOpen = false;
+        this.closeModal('filterModalPanel');
+    },
+    closeAddModal() {
+        if (!this.adding) return;
+        this.adding = false;
+        this.closeModal('addModalPanel');
+    },
+    closeEditModal() {
+        if (!this.editingRecord) return;
+        this.editingRecord = null;
+        this.closeModal('editModalPanel');
+    },
+}" x-init="initModalState(); if (addForm.project_name) loadAddKavlings(true)">
     <x-crm.page-header
         variant="canonical"
         title="Dana Talangan"
@@ -111,7 +208,7 @@
     >
         <x-slot:actions>
             @if($canManage)
-            <x-crm.button type="button" @click="adding = true" variant="primary" accent="bridge-fund">Tambah Dana Talangan</x-crm.button>
+            <x-crm.button type="button" x-ref="addTrigger" @click="adding = true; openModal('addModalPanel', $refs.addTrigger)" variant="primary" accent="bridge-fund">Tambah Dana Talangan</x-crm.button>
             @endif
         </x-slot:actions>
     </x-crm.page-header>
@@ -140,7 +237,7 @@
             <input name="search" value="{{ $search }}" placeholder="Cari nama konsumen..." aria-label="Cari Nama Konsumen" class="min-w-0 grow border-2 border-r-0 border-black px-3 py-1.5 text-sm font-['Times_New_Roman'] bg-white rounded-none">
             <button class="border-2 border-black bg-black text-white px-4 py-1.5 text-sm font-[Helvetica] font-bold">Cari</button>
         </form>
-        <button type="button" @click="filterOpen = true" class="relative inline-flex items-center gap-2 border-2 border-black bg-white px-4 py-1.5 text-sm font-[Helvetica] font-bold hover:bg-gray-100">
+        <button type="button" x-ref="filterTrigger" @click="filterOpen = true; openModal('filterModalPanel', $refs.filterTrigger)" class="relative inline-flex items-center gap-2 border-2 border-black bg-white px-4 py-1.5 text-sm font-[Helvetica] font-bold hover:bg-gray-100">
             <svg viewBox="0 0 20 20" fill="currentColor" class="w-4 h-4" aria-hidden="true"><path d="M2.75 3.5a.75.75 0 0 1 .75-.75h13a.75.75 0 0 1 .53 1.28l-5.28 5.28v4.94a.75.75 0 0 1-.36.64l-3 1.8A.75.75 0 0 1 7.25 16V9.31L1.97 4.03a.75.75 0 0 1 .78-1.23v.7Zm2.56.75 3.22 3.22a.75.75 0 0 1 .22.53v6.68l1.5-.9V8a.75.75 0 0 1 .22-.53l3.22-3.22H5.31Z"/></svg>
             Filter
             @if(count($activeFilters) > 0)<span class="inline-flex min-w-5 h-5 items-center justify-center bg-[#c0392b] text-white px-1 text-[10px]">{{ count($activeFilters) }}</span>@endif
@@ -162,9 +259,9 @@
         </div>
     @endif
 
-    <div x-cloak x-show="filterOpen" class="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4" @keydown.escape.window="filterOpen = false">
-        <div @click.away="filterOpen = false" class="w-full max-w-2xl border-2 border-black bg-white p-5 shadow-[8px_8px_0_0_#000] max-h-[90vh] overflow-y-auto">
-            <div class="flex items-center justify-between mb-4"><h2 class="font-[Helvetica] font-bold text-sm uppercase">Filter Dana Talangan</h2><button type="button" @click="filterOpen = false" class="text-lg font-bold">&times;</button></div>
+    <div x-cloak x-show="filterOpen" x-ref="filterModalPanel" class="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4" @keydown.escape.window="closeFilterModal()" @keydown.tab="trapModalFocus($event, 'filterModalPanel')">
+        <div @click.away="closeFilterModal()" class="w-full max-w-2xl border-2 border-black bg-white p-5 shadow-[8px_8px_0_0_#000] max-h-[90vh] overflow-y-auto">
+            <div class="flex items-center justify-between mb-4"><h2 class="font-[Helvetica] font-bold text-sm uppercase">Filter Dana Talangan</h2><button type="button" @click="closeFilterModal()" class="text-lg font-bold">&times;</button></div>
             <form method="GET" action="{{ route('dana-talangan.index') }}" class="space-y-4">
                 @if($search !== '')<input type="hidden" name="search" value="{{ $search }}">@endif
                 @foreach(request()->only(['sort', 'dir', 'per_page']) as $key => $value)
@@ -296,7 +393,7 @@
                                 "branch_id" => $r->branch_id,
                                 "status" => $r->status,
                                 "updated_at" => $r->updated_at?->copy()->utc()->format("Y-m-d H:i:s"),
-                            ]))" class="font-[Helvetica] font-bold underline" style="font-size:11px;color:#0000ee;margin-right:8px;">Edit</button>
+                            ]), $event.currentTarget)" class="font-[Helvetica] font-bold underline" style="font-size:11px;color:#0000ee;margin-right:8px;">Edit</button>
                             <form method="POST" action="{{ route('dana-talangan.destroy', ['dana_talangan' => $r->id]) }}"
                                   class="inline" @submit.prevent="confirm('Hapus data ini?') && $el.submit()">
                                 @csrf
@@ -324,12 +421,12 @@
     <x-crm.pagination :collection="$records" :per-page="$perPage" />
 
     {{-- Add Modal --}}
-    <div x-cloak x-show="adding" class="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4"
-         @keydown.escape.window="adding = false">
-        <div @click.away="adding = false" class="w-full max-w-4xl border-2 border-black bg-white p-5 shadow-[8px_8px_0_0_#000] max-h-[90vh] overflow-y-auto">
+    <div x-cloak x-show="adding" x-ref="addModalPanel" class="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4"
+         @keydown.escape.window="closeAddModal()" @keydown.tab="trapModalFocus($event, 'addModalPanel')">
+        <div @click.away="closeAddModal()" class="w-full max-w-4xl border-2 border-black bg-white p-5 shadow-[8px_8px_0_0_#000] max-h-[90vh] overflow-y-auto">
             <div class="flex items-center justify-between mb-4">
                 <h2 class="font-[Helvetica] font-bold text-sm uppercase">Tambah Dana Talangan</h2>
-                <button type="button" @click="adding = false" class="text-lg font-bold">&times;</button>
+                <button type="button" @click="closeAddModal()" class="text-lg font-bold">&times;</button>
             </div>
             <form method="POST" action="{{ route('dana-talangan.store') }}" class="space-y-4">
                 @csrf
@@ -418,16 +515,16 @@
                 @if($errors->any())
                 <div class="border-2 border-black bg-[#d77a7a] px-3 py-2 text-sm font-['Times_New_Roman']">{{ $errors->first() }}</div>
                 @endif
-                <div class="flex gap-2"><button class="bg-black text-white border-2 border-black px-6 py-2 text-sm font-[Helvetica] font-bold">Simpan</button><button type="button" @click="adding = false" class="bg-white border-2 border-black px-6 py-2 text-sm font-[Helvetica] font-bold">Batal</button></div>
+                <div class="flex gap-2"><button class="bg-black text-white border-2 border-black px-6 py-2 text-sm font-[Helvetica] font-bold">Simpan</button><button type="button" @click="closeAddModal()" class="bg-white border-2 border-black px-6 py-2 text-sm font-[Helvetica] font-bold">Batal</button></div>
             </form>
         </div>
     </div>
 
     {{-- Edit Modal --}}
-    <div x-cloak x-show="editingRecord" class="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4" @keydown.escape.window="editingRecord = null">
+    <div x-cloak x-show="editingRecord" x-ref="editModalPanel" class="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4" @keydown.escape.window="closeEditModal()" @keydown.tab="trapModalFocus($event, 'editModalPanel')">
         <template x-if="editingRecord">
-        <div @click.away="editingRecord = null" class="w-full max-w-4xl border-2 border-black bg-white p-5 shadow-[8px_8px_0_0_#000] max-h-[90vh] overflow-y-auto">
-            <div class="flex items-center justify-between mb-4"><h2 class="font-[Helvetica] font-bold text-sm uppercase">Edit Dana Talangan</h2><button type="button" @click="editingRecord = null" class="text-lg font-bold">&times;</button></div>
+        <div @click.away="closeEditModal()" class="w-full max-w-4xl border-2 border-black bg-white p-5 shadow-[8px_8px_0_0_#000] max-h-[90vh] overflow-y-auto">
+            <div class="flex items-center justify-between mb-4"><h2 class="font-[Helvetica] font-bold text-sm uppercase">Edit Dana Talangan</h2><button type="button" @click="closeEditModal()" class="text-lg font-bold">&times;</button></div>
             <form method="POST" :action="updateBaseUrl + '/' + editingRecord.id" class="space-y-4" data-conflict-form
                   @submit.prevent="$dispatch('oasis-submit-conflict', { form: $el })">
                 @csrf @method('PUT')
@@ -455,7 +552,7 @@
                 @if($errors->any() && old('form_mode') === 'edit')
                 <div class="border-2 border-black bg-[#d77a7a] px-3 py-2 text-sm font-['Times_New_Roman']">{{ $errors->first() }}</div>
                 @endif
-                <div class="flex gap-2"><button class="bg-black text-white border-2 border-black px-6 py-2 text-sm font-[Helvetica] font-bold">Simpan</button><button type="button" @click="editingRecord = null" class="bg-white border-2 border-black px-6 py-2 text-sm font-[Helvetica] font-bold">Batal</button></div>
+                <div class="flex gap-2"><button class="bg-black text-white border-2 border-black px-6 py-2 text-sm font-[Helvetica] font-bold">Simpan</button><button type="button" @click="closeEditModal()" class="bg-white border-2 border-black px-6 py-2 text-sm font-[Helvetica] font-bold">Batal</button></div>
             </form>
         </div>
         </template>

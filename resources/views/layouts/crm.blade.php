@@ -172,19 +172,46 @@
                 return {
                     open: false,
                     loading: false,
+                    error: false,
+                    taskId: null,
                     task: null,
                     sc: statusColors || {},
                     openDetail: function (id) {
                         this.open = true;
+                        this.taskId = id;
+                        this.loadDetail(id);
+                    },
+                    loadDetail: function (id) {
                         this.loading = true;
+                        this.error = false;
                         this.task = null;
                         var self = this;
                         fetch(fetchBase + '/' + id + '/detail')
-                            .then(function (response) { return response.json(); })
+                            .then(function (response) {
+                                if (!response.ok) {
+                                    throw new Error('http');
+                                }
+                                return response.json();
+                            })
                             .then(function (data) { self.task = data; self.loading = false; })
-                            .catch(function () { self.loading = false; alert('Gagal memuat detail.'); });
+                            .catch(function () {
+                                self.loading = false;
+                                self.error = true;
+                                window.oasisToast?.('Gagal memuat detail. Silakan coba lagi.', 'error');
+                            });
                     },
-                    close: function () { this.open = false; this.loading = false; this.task = null; },
+                    retry: function () {
+                        if (this.taskId) {
+                            this.loadDetail(this.taskId);
+                        }
+                    },
+                    close: function () {
+                        this.open = false;
+                        this.loading = false;
+                        this.error = false;
+                        this.taskId = null;
+                        this.task = null;
+                    },
                     get editUrl() { return this.task ? editBase + '/' + this.task.id + '/edit' : '#'; }
                 };
             });

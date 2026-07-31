@@ -50,7 +50,7 @@ Actual `role_permission` pivots:
 | manager | view, view_assigned, view_branch, export_assigned, export_branch | YES | NO | NO |
 | branch_manager | view, manage, export, view_branch, manage_branch, export_branch, sync_branch | YES | YES | YES |
 | admin | view, manage, export, view_branch, manage_branch, export_branch, sync_branch | YES | YES | YES |
-| staff | view_assigned, manage_assigned | NO | NO | NO |
+| staff | catalog: view, manage, view_assigned, manage_assigned | YES (catalog) | YES (catalog) | NO |
 | sales | none | NO | NO | NO |
 | sales_coordinator | none | NO | NO | NO |
 
@@ -64,11 +64,15 @@ Effective access (route middleware checks the exact slug):
 | manager | view-only (index, detail, kavling-options) |
 | branch_manager | full CRUD + export/import + sync in branch scope |
 | admin | full CRUD + export/import + sync in branch scope |
-| staff | DENIED (no exact `bridge_fund.view` despite scoped `view_assigned`) |
+| staff | per catalog: CRUD in assigned scope, no export/sync |
 | sales | DENIED |
 | sales_coordinator | DENIED |
 
 Supplemental roles never grant permissions; `hasPermission()` resolves from the primary role's `role_permission` pivots only.
+
+### Catalog Versus Deployed DB Drift For Staff
+
+`PermissionCatalog::rolePermissions()` currently grants `staff` the exact slugs `bridge_fund.view` and `bridge_fund.manage` (plus scoped `view_assigned`/`manage_assigned`). Fresh databases seeded by migration `2026_07_28_000012` therefore allow staff index + assigned-scope CRUD. The deployed development database predates this catalog update and still has only `bridge_fund.view_assigned`/`manage_assigned` for staff, which blocks index access (no exact `bridge_fund.view`). Executable catalog is the source of truth for new environments; the live DB must be re-seeded to match. This migration does not change either state.
 
 ### Drift Versus Intended Access
 

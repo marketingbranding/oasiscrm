@@ -21,7 +21,15 @@
             <button @click="close()" class="text-white/70 hover:text-white text-lg leading-none shrink-0">&times;</button>
         </div>
         <div x-show="loading" class="p-6 text-center text-sm font-['Times_New_Roman'] text-gray-500">Memuat...</div>
-        <template x-if="!loading && task">
+        <div x-show="error" x-cloak class="p-6 text-center text-sm font-['Times_New_Roman']">
+            <p class="font-bold text-[#c0392b]">Gagal memuat detail.</p>
+            <p class="mt-1 text-gray-500">Koneksi atau data sementara tidak tersedia.</p>
+            <div class="mt-4 flex items-center justify-center gap-2">
+                <button @click="retry()" class="bg-white text-black px-3 py-1 text-xs font-mono font-bold border border-black hover:bg-gray-100">Coba Lagi</button>
+                <button @click="close()" class="bg-white text-black px-3 py-1 text-xs font-mono font-bold border border-black hover:bg-gray-100">Tutup</button>
+            </div>
+        </div>
+        <template x-if="!loading && !error && task">
             <div class="text-sm font-['Times_New_Roman']">
                 <div class="px-5 py-4 grid grid-cols-2 gap-x-6 gap-y-3 text-sm border-b border-dashed border-[#d4c9b8]">
                     @foreach($fields as $field)

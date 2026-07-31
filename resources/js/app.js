@@ -5,6 +5,7 @@ import './crm-monthpicker';
 import './crm-timepicker';
 import './crm-select';
 import './crm-bulk';
+import { lockBodyScroll, unlockBodyScroll } from './body-scroll-lock';
 import registerPresence from './presence';
 import registerConflict from './conflict';
 import registerNotifications from './notifications';
@@ -18,6 +19,7 @@ import registerSalesPocketbook from './sales-pocketbook';
 
 window.Alpine = Alpine;
 window.Sortable = Sortable;
+window.oasisBodyScroll = { lock: lockBodyScroll, unlock: unlockBodyScroll };
 
 registerPresence(Alpine);
 registerConflict(Alpine);

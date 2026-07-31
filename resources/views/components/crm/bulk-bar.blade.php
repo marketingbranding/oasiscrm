@@ -48,3 +48,11 @@
     @endforeach
 </form>
 @endif
+
+<x-crm.modal name="bulk-confirm" title="Konfirmasi Tindakan" size="sm">
+    <p id="bulk-confirm-message" class="text-sm font-['Times_New_Roman']"></p>
+    <x-slot:footer>
+        <x-crm.button type="button" variant="secondary" data-autofocus onclick="window.CrmBulk.cancelConfirm()">Batal</x-crm.button>
+        <x-crm.button type="button" variant="danger" id="bulk-confirm-ok" onclick="window.CrmBulk.confirmPending()">Lanjutkan</x-crm.button>
+    </x-slot:footer>
+</x-crm.modal>

@@ -36,9 +36,6 @@
         }
     </style>
 </head>
-@php
-    $isSalesNavigation = Auth::user()?->isSales() ?? false;
-@endphp
 <body class="flex min-h-screen flex-col bg-[var(--oasis-page-bg)] font-['Times_New_Roman'] antialiased"
       x-data="crmShell(@js(['activeGroups' => collect($navigation)->where('active', true)->pluck('key')->values()]))">
     @if(request()->boolean('reminder_dismiss_failed'))
@@ -169,9 +166,6 @@
     </div>
 
     <x-conflict-dialog :initial="session('conflict_data')" />
-    @unless($isSalesNavigation)
-        @include('crm.ai-chat._widget')
-    @endunless
     <x-crm.feedback-bubble />
     <script>
         document.addEventListener('alpine:init', function () {

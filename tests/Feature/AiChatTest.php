@@ -456,18 +456,16 @@ class AiChatTest extends TestCase
             ->assertJsonPath('error_code', 'google_connection_failed');
     }
 
-    public function test_ai_widget_contains_csrf_json_sync_and_visible_states(): void
+    public function test_ai_widget_is_hidden_from_layout(): void
     {
         [, $user] = $this->branchAndUser();
 
         $this->actingAs($user)->get(route('content-calendar.index'))
             ->assertOk()
             ->assertSee('name="csrf-token"', false)
-            ->assertSee('Menyinkronkan...', false)
-            ->assertSee("'Content-Type': 'application/json'", false)
-            ->assertSee('JSON.stringify(action.payload || {})', false)
-            ->assertSee('Sync gagal:', false)
-            ->assertSee('action.success_message', false);
+            ->assertDontSee('x-ref="chatInput"', false)
+            ->assertDontSee('Menyinkronkan...', false)
+            ->assertDontSee('action.success_message', false);
     }
 
     public function test_pipeline_count_uses_current_stage_projection_and_deduplicates_id_kavling(): void
@@ -851,25 +849,20 @@ class AiChatTest extends TestCase
         $this->assertSame($magelang->id, $tool['arguments']['branch_id']);
     }
 
-    public function test_ai_widget_has_delete_timestamp_focus_and_shift_enter_contract(): void
+    public function test_ai_widget_is_not_rendered_in_layout(): void
     {
         [, $user] = $this->branchAndUser();
 
         $response = $this->actingAs($user)->get(route('content-calendar.index'));
         $response
             ->assertOk()
-            ->assertSee('x-ref="chatInput"', false)
-            ->assertSee('focusInput()', false)
-            ->assertSee('@keydown.enter="if (!$event.shiftKey) { $event.preventDefault(); send(); }"', false)
-            ->assertDontSee('@keydown.enter.prevent', false)
-            ->assertSee('@click.stop="deleteConversation(conversation, $event)"', false)
-            ->assertSee("method: 'DELETE'", false)
-            ->assertSee("headers: { Accept: 'application/json', 'X-CSRF-TOKEN': this.csrf }", false)
-            ->assertSee('this.conversations = this.conversations.filter', false)
-            ->assertSee('formatMessageTime(value)', false)
-            ->assertSee("if (!value) return '';", false)
-            ->assertSee('event?.stopPropagation()', false);
-        $this->assertMatchesRegularExpression('/this\.loading = false;\s*this\.scrollDown\(\);\s*this\.focusInput\(\);/', $response->getContent());
+            ->assertDontSee('x-ref="chatInput"', false)
+            ->assertDontSee('focusInput()', false)
+            ->assertDontSee('@keydown.enter="if (!$event.shiftKey) { $event.preventDefault(); send(); }"', false)
+            ->assertDontSee('@click.stop="deleteConversation(conversation, $event)"', false)
+            ->assertDontSee("method: 'DELETE'", false)
+            ->assertDontSee('formatMessageTime(value)', false);
+        $this->assertDoesNotMatchRegularExpression('/this\.loading = false;\s*this\.scrollDown\(\);\s*this\.focusInput\(\);/', $response->getContent());
     }
 
     private function branchAndUser(string $branchName = 'Jepara', string $branchCode = 'JPR'): array

@@ -38,7 +38,7 @@ class SalesLead extends Model
         'normalized_phone', 'source_name_snapshot', 'notes', 'linked_consumer_reference',
         'contacted_at', 'met_at', 'surveyed_at', 'utj_at', 'documents_completed_at',
         'akad_at', 'created_by', 'updated_by',
-        'external_lead_id', 'id_promo', 'source', 'platform', 'campaign_id', 'campaign_name',
+        'external_lead_id', 'external_sync_id', 'id_promo', 'source', 'platform', 'campaign_id', 'campaign_name',
         'current_status', 'current_status_changed_at', 'current_status_source', 'current_status_source_id',
         'consumer_converted_at', 'freelance_converted_at', 'consumer_external_id',
         'freelance_external_id', 'slik_external_id', 'akad_external_id',

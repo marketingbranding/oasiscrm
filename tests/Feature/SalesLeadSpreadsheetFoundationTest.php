@@ -1,0 +1,345 @@
+<?php
+
+namespace Tests\Feature;
+
+use App\Exceptions\SalesLeadSpreadsheetContractException;
+use App\Models\Branch;
+use App\Models\LeadMaster;
+use App\Models\SalesLead;
+use App\Models\User;
+use App\Services\GoogleSheetsApiService;
+use App\Services\SalesLeadSpreadsheetContract;
+use App\Services\SalesLeadSpreadsheetWriter;
+use App\ValueObjects\GoogleSheetsAppendResult;
+use App\ValueObjects\ResolvedSalesLeadSpreadsheetContract;
+use App\ValueObjects\SalesLeadSheetDefinition;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Str;
+use Mockery;
+use Mockery\MockInterface;
+use RuntimeException;
+use Tests\TestCase;
+
+class SalesLeadSpreadsheetFoundationTest extends TestCase
+{
+    use RefreshDatabase;
+
+    public function test_registry_contains_exact_target_sheets_and_read_alias(): void
+    {
+        $google = Mockery::mock(GoogleSheetsApiService::class);
+        $contracts = new SalesLeadSpreadsheetContract($google);
+
+        $this->assertSame(
+            ['lead', 'data_ceklok', 'data_sales', 'data_konsumen_nup', 'data_konsumen', 'bi_checking', 'akad'],
+            array_keys($contracts->definitions()),
+        );
+        $this->assertSame('Cek SLIK', $contracts->normalizeReadStatus(' Cek Silk '));
+    }
+
+    public function test_two_branches_resolve_only_their_own_spreadsheet_ids(): void
+    {
+        [$firstLead] = $this->leadContext('sheet-alpha');
+        [$secondLead] = $this->leadContext('sheet-beta');
+        $google = Mockery::mock(GoogleSheetsApiService::class);
+        $this->expectValidDataSalesResolution($google, 'sheet-alpha');
+        $this->expectValidDataSalesResolution($google, 'sheet-beta');
+        $contracts = new SalesLeadSpreadsheetContract($google);
+
+        $this->assertSame('sheet-alpha', $contracts->resolve($firstLead, 'data_sales')->spreadsheetId);
+        $this->assertSame('sheet-beta', $contracts->resolve($secondLead, 'data_sales')->spreadsheetId);
+    }
+
+    public function test_cross_branch_lead_resolution_uses_lead_branch_not_project_or_user_branch(): void
+    {
+        [$lead, $leadBranch] = $this->leadContext('sheet-lead');
+        $otherBranch = Branch::create(['name' => 'Other Branch', 'code' => 'OB'.Str::random(4), 'sheet_id' => 'sheet-other', 'is_active' => true]);
+        $lead->sales()->associate(User::factory()->create(['branch_id' => $otherBranch->id]));
+        $lead->save();
+        $this->assertSame($leadBranch->id, $lead->branch_id);
+
+        $google = Mockery::mock(GoogleSheetsApiService::class);
+        $this->expectValidDataSalesResolution($google, 'sheet-lead');
+
+        $resolved = (new SalesLeadSpreadsheetContract($google))->resolve($lead, 'data_sales');
+
+        $this->assertSame('sheet-lead', $resolved->spreadsheetId);
+    }
+
+    public function test_missing_or_inactive_branch_spreadsheet_fails_in_indonesian(): void
+    {
+        [$lead, $branch] = $this->leadContext(null);
+        $google = Mockery::mock(GoogleSheetsApiService::class);
+        $contracts = new SalesLeadSpreadsheetContract($google);
+
+        try {
+            $contracts->resolve($lead, 'data_sales');
+            $this->fail('Spreadsheet kosong diterima.');
+        } catch (SalesLeadSpreadsheetContractException $exception) {
+            $this->assertSame('Spreadsheet cabang belum dikonfigurasi.', $exception->getMessage());
+        }
+
+        $branch->update(['sheet_id' => 'sheet-disabled', 'is_active' => false]);
+        $this->expectExceptionMessage('Cabang lead tidak tersedia atau sudah tidak aktif.');
+        $contracts->resolve($lead, 'data_sales');
+    }
+
+    public function test_missing_sheet_is_reported_without_fallback(): void
+    {
+        [$lead] = $this->leadContext('sheet-no-tab');
+        $google = Mockery::mock(GoogleSheetsApiService::class);
+        $google->shouldReceive('sheetTitles')->once()->with('sheet-no-tab')->andReturn(['lead']);
+
+        $this->expectException(SalesLeadSpreadsheetContractException::class);
+        $this->expectExceptionMessage('Tab data_sales tidak ditemukan pada spreadsheet cabang.');
+        (new SalesLeadSpreadsheetContract($google))->resolve($lead, 'data_sales');
+    }
+
+    public function test_missing_header_is_reported_and_extra_branch_headers_are_accepted(): void
+    {
+        [$lead] = $this->leadContext('sheet-schema');
+        $missingGoogle = Mockery::mock(GoogleSheetsApiService::class);
+        $this->expectResolutionReads($missingGoogle, 'sheet-schema', ['nik_sales', 'nama_sales', 'nama_koordinator']);
+
+        try {
+            (new SalesLeadSpreadsheetContract($missingGoogle))->resolve($lead, 'data_sales');
+            $this->fail('Header wajib yang hilang diterima.');
+        } catch (SalesLeadSpreadsheetContractException $exception) {
+            $this->assertStringContainsString('nik_koordinator', $exception->getMessage());
+        }
+
+        $extraGoogle = Mockery::mock(GoogleSheetsApiService::class);
+        $this->expectResolutionReads($extraGoogle, 'sheet-schema', [
+            'nik_sales', 'nama_sales', 'nik_koordinator', 'nama_koordinator', 'kolom_cabang',
+        ], expectMetadata: true);
+
+        $resolved = (new SalesLeadSpreadsheetContract($extraGoogle))->resolve($lead, 'data_sales');
+        $this->assertSame(4, $resolved->headerMap['kolom_cabang']);
+    }
+
+    public function test_writer_appends_metadata_with_business_fields_and_excludes_unknown_fields(): void
+    {
+        [$lead] = $this->leadContext('sheet-write');
+        $syncId = (string) Str::uuid();
+        $headers = ['nik_sales', 'nama_sales', 'nik_koordinator', 'nama_koordinator'];
+        $allHeaders = [...$headers, ...SalesLeadSpreadsheetContract::META_HEADERS];
+        $google = Mockery::mock(GoogleSheetsApiService::class);
+        $this->expectResolutionReads($google, 'sheet-write', $headers, expectMetadata: true);
+        $google->shouldReceive('ensureTrailingMetadataColumns')->once()->andReturn($allHeaders);
+        $google->shouldReceive('findRowByHeaderValue')->once()->andReturnNull();
+        $google->shouldReceive('appendRows')->once()->withArgs(function ($spreadsheetId, $range, $rows) use ($syncId): bool {
+            return $spreadsheetId === 'sheet-write'
+                && str_contains($range, 'data_sales')
+                && $rows[0][1] === 'Sales Cabang'
+                && $rows[0][4] === $syncId
+                && ! in_array('ignored', $rows[0], true);
+        })->andReturn(new GoogleSheetsAppendResult("'data_sales'!A8:G8", 8));
+
+        $result = (new SalesLeadSpreadsheetWriter($google, new SalesLeadSpreadsheetContract($google)))
+            ->append($lead, 'data_sales', ['nama_sales' => 'Sales Cabang', 'unknown' => 'ignored'], $syncId);
+
+        $this->assertSame('sheet-write', $result->spreadsheetId);
+        $this->assertSame(8, $result->rowNumber);
+        $this->assertSame($syncId, $result->syncId);
+    }
+
+    public function test_idempotent_retry_returns_existing_row_without_append(): void
+    {
+        [$lead] = $this->leadContext('sheet-retry');
+        $syncId = (string) Str::uuid();
+        $google = $this->writerGoogle('sheet-retry');
+        $google->shouldReceive('findRowByHeaderValue')->once()->withArgs(fn (...$args) => end($args) === $syncId)->andReturn(12);
+        $google->shouldNotReceive('appendRows');
+
+        $result = (new SalesLeadSpreadsheetWriter($google, new SalesLeadSpreadsheetContract($google)))
+            ->append($lead, 'data_sales', [], $syncId);
+
+        $this->assertSame(12, $result->rowNumber);
+    }
+
+    public function test_writer_never_writes_formula_owned_fields_and_copies_verified_template(): void
+    {
+        [$lead] = $this->leadContext('sheet-formula');
+        $syncId = (string) Str::uuid();
+        $definition = new SalesLeadSheetDefinition('lead', ['id_lead', 'nama_konsumen'], ['id_lead']);
+        $resolved = new ResolvedSalesLeadSpreadsheetContract(
+            'sheet-formula',
+            $definition,
+            91,
+            ['id_lead', 'nama_konsumen'],
+            ['id_lead' => 0, 'nama_konsumen' => 1],
+            ['id_lead'],
+            2,
+        );
+        $contracts = Mockery::mock(SalesLeadSpreadsheetContract::class);
+        $contracts->shouldReceive('resolve')->once()->with($lead, 'lead')->andReturn($resolved);
+        $google = Mockery::mock(GoogleSheetsApiService::class);
+        $headers = ['id_lead', 'nama_konsumen', ...SalesLeadSpreadsheetContract::META_HEADERS];
+        $google->shouldReceive('ensureTrailingMetadataColumns')->once()->andReturn($headers);
+        $google->shouldReceive('findRowByHeaderValue')->once()->andReturnNull();
+        $google->shouldReceive('quoteSheetName')->once()->with('lead')->andReturn("'lead'");
+        $google->shouldReceive('appendRows')->once()->withArgs(function ($spreadsheetId, $range, $rows) use ($syncId): bool {
+            return $rows[0][0] === null
+                && $rows[0][1] === 'Nama Aman'
+                && $rows[0][2] === $syncId;
+        })->andReturn(new GoogleSheetsAppendResult("'lead'!A6:E6", 6));
+        $google->shouldReceive('copyRowFormat')->once()->with('sheet-formula', 91, 2, 6);
+        $google->shouldReceive('copyRowFormulas')->once()->with('sheet-formula', 91, 2, 6);
+
+        $result = (new SalesLeadSpreadsheetWriter($google, $contracts))->append(
+            $lead,
+            'lead',
+            ['id_lead' => 'tidak-boleh-ditulis', 'nama_konsumen' => 'Nama Aman'],
+            $syncId,
+        );
+
+        $this->assertSame(6, $result->rowNumber);
+    }
+
+    public function test_metadata_provision_hides_only_newly_verified_exact_trailing_columns(): void
+    {
+        $google = new class extends GoogleSheetsApiService
+        {
+            public array $updated = [];
+
+            public array $hidden = [];
+
+            public function __construct() {}
+
+            public function updateRange(string $spreadsheetId, string $range, array $values): void
+            {
+                $this->updated = [$spreadsheetId, $range, $values];
+            }
+
+            public function batchGetRaw(string $spreadsheetId, array $ranges, string $valueRenderOption = 'FORMATTED_VALUE'): array
+            {
+                return ['data_sales' => [[
+                    'nik_sales',
+                    'kolom_cabang_tersembunyi',
+                    ...SalesLeadSpreadsheetContract::META_HEADERS,
+                ]]];
+            }
+
+            public function hideColumns(string $spreadsheetId, int $sheetId, int $startIndex, int $endIndex): void
+            {
+                $this->hidden = [$spreadsheetId, $sheetId, $startIndex, $endIndex];
+            }
+        };
+
+        $headers = $google->ensureTrailingMetadataColumns(
+            'sheet-metadata',
+            'data_sales',
+            73,
+            ['nik_sales', 'kolom_cabang_tersembunyi'],
+            SalesLeadSpreadsheetContract::META_HEADERS,
+        );
+
+        $this->assertSame(['sheet-metadata', "'data_sales'!C1:E1", [SalesLeadSpreadsheetContract::META_HEADERS]], $google->updated);
+        $this->assertSame(['sheet-metadata', 73, 2, 5], $google->hidden);
+        $this->assertSame('kolom_cabang_tersembunyi', $headers[1]);
+    }
+
+    public function test_uncertain_append_success_is_reconciled_by_sync_id(): void
+    {
+        [$lead] = $this->leadContext('sheet-uncertain');
+        $syncId = (string) Str::uuid();
+        $google = $this->writerGoogle('sheet-uncertain');
+        $google->shouldReceive('findRowByHeaderValue')->twice()->andReturn(null, 19);
+        $google->shouldReceive('appendRows')->once()->andThrow(new RuntimeException('timeout'));
+
+        $result = (new SalesLeadSpreadsheetWriter($google, new SalesLeadSpreadsheetContract($google)))
+            ->append($lead, 'data_sales', [], $syncId);
+
+        $this->assertSame(19, $result->rowNumber);
+        $this->assertSame($syncId, $result->syncId);
+    }
+
+    public function test_writer_keeps_branch_spreadsheets_isolated(): void
+    {
+        [$firstLead] = $this->leadContext('sheet-one');
+        [$secondLead] = $this->leadContext('sheet-two');
+        $google = Mockery::mock(GoogleSheetsApiService::class);
+        foreach (['sheet-one' => 5, 'sheet-two' => 7] as $spreadsheetId => $row) {
+            $headers = ['nik_sales', 'nama_sales', 'nik_koordinator', 'nama_koordinator'];
+            $this->expectResolutionReads($google, $spreadsheetId, $headers, expectMetadata: true);
+            $google->shouldReceive('ensureTrailingMetadataColumns')->once()->with($spreadsheetId, Mockery::any(), Mockery::any(), Mockery::any(), Mockery::any())->andReturn([...$headers, ...SalesLeadSpreadsheetContract::META_HEADERS]);
+            $google->shouldReceive('findRowByHeaderValue')->once()->with($spreadsheetId, Mockery::any(), Mockery::any(), Mockery::any(), Mockery::any())->andReturnNull();
+            $google->shouldReceive('appendRows')->once()->with($spreadsheetId, Mockery::any(), Mockery::any())->andReturn(new GoogleSheetsAppendResult("'data_sales'!A{$row}:G{$row}", $row));
+        }
+        $writer = new SalesLeadSpreadsheetWriter($google, new SalesLeadSpreadsheetContract($google));
+
+        $first = $writer->append($firstLead, 'data_sales', [], (string) Str::uuid());
+        $second = $writer->append($secondLead, 'data_sales', [], (string) Str::uuid());
+
+        $this->assertSame(['sheet-one', 'sheet-two'], [$first->spreadsheetId, $second->spreadsheetId]);
+    }
+
+    public function test_application_source_contains_no_solo_or_reference_spreadsheet_fallback(): void
+    {
+        $files = new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator(app_path()));
+        foreach ($files as $file) {
+            if (! $file->isFile() || $file->getExtension() !== 'php') {
+                continue;
+            }
+
+            $contents = file_get_contents($file->getPathname());
+            $this->assertDoesNotMatchRegularExpression('/solo.{0,40}(sheet|spreadsheet)|spreadsheet.{0,40}solo/i', $contents, $file->getPathname());
+        }
+    }
+
+    private function writerGoogle(string $spreadsheetId): MockInterface
+    {
+        $headers = ['nik_sales', 'nama_sales', 'nik_koordinator', 'nama_koordinator'];
+        $google = Mockery::mock(GoogleSheetsApiService::class);
+        $this->expectResolutionReads($google, $spreadsheetId, $headers, expectMetadata: true);
+        $google->shouldReceive('ensureTrailingMetadataColumns')->once()->andReturn([...$headers, ...SalesLeadSpreadsheetContract::META_HEADERS]);
+
+        return $google;
+    }
+
+    private function expectValidDataSalesResolution(MockInterface $google, string $spreadsheetId): void
+    {
+        $this->expectResolutionReads(
+            $google,
+            $spreadsheetId,
+            ['nik_sales', 'nama_sales', 'nik_koordinator', 'nama_koordinator'],
+            expectMetadata: true,
+        );
+    }
+
+    private function expectResolutionReads(
+        MockInterface $google,
+        string $spreadsheetId,
+        array $headers,
+        bool $expectMetadata = false,
+    ): void {
+        $google->shouldReceive('sheetTitles')->once()->with($spreadsheetId)->andReturn(['data_sales']);
+        $google->shouldReceive('sheetIds')->once()->with($spreadsheetId)->andReturn(['data_sales' => 42]);
+        $google->shouldReceive('quoteSheetName')->with('data_sales')->andReturn("'data_sales'");
+        $google->shouldReceive('batchGetRaw')->once()->with($spreadsheetId, ["'data_sales'!1:2"], 'FORMATTED_VALUE')->andReturn(['data_sales' => [$headers, []]]);
+        $google->shouldReceive('batchGetRaw')->once()->with($spreadsheetId, ["'data_sales'!1:2"], 'FORMULA')->andReturn(['data_sales' => [$headers, []]]);
+        if ($expectMetadata) {
+            $google->shouldReceive('columnMetadata')->once()->with($spreadsheetId, ['data_sales'])->andReturn([]);
+        }
+    }
+
+    private function leadContext(?string $spreadsheetId): array
+    {
+        $branch = Branch::create([
+            'name' => 'Branch '.Str::random(8),
+            'code' => strtoupper(Str::random(6)),
+            'sheet_id' => $spreadsheetId,
+            'is_active' => true,
+        ]);
+        $project = LeadMaster::create(['branch_id' => $branch->id, 'project_name' => 'Project '.Str::random(8)]);
+        $user = User::factory()->create(['branch_id' => $branch->id]);
+        $lead = SalesLead::create([
+            'branch_id' => $branch->id,
+            'project_id' => $project->id,
+            'sales_user_id' => $user->id,
+            'lead_date' => '2026-08-03',
+            'customer_name' => 'Lead '.Str::random(8),
+        ]);
+
+        return [$lead, $branch];
+    }
+}

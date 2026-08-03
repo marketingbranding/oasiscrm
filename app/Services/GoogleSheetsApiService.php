@@ -2,6 +2,8 @@
 
 namespace App\Services;
 
+use App\Exceptions\SalesLeadSpreadsheetContractException;
+use App\ValueObjects\GoogleSheetsAppendResult;
 use Google\Client as GoogleClient;
 use Google\Service\Sheets;
 use Google\Service\Sheets\BatchUpdateSpreadsheetRequest;
@@ -198,6 +200,92 @@ class GoogleSheetsApiService
         ]);
     }
 
+    public function appendRows(string $spreadsheetId, string $range, array $values): GoogleSheetsAppendResult
+    {
+        $body = new ValueRange(['values' => $values]);
+        $response = $this->sheets->spreadsheets_values->append($spreadsheetId, $range, $body, [
+            'valueInputOption' => 'USER_ENTERED',
+            'insertDataOption' => 'INSERT_ROWS',
+            'includeValuesInResponse' => true,
+        ]);
+        $updatedRange = (string) $response->getUpdates()?->getUpdatedRange();
+        if (! preg_match('/![A-Z]+(\d+)(?::[A-Z]+\d+)?$/i', $updatedRange, $matches)) {
+            throw new RuntimeException('Google Sheets tidak mengembalikan baris hasil append.');
+        }
+
+        return new GoogleSheetsAppendResult($updatedRange, (int) $matches[1]);
+    }
+
+    /**
+     * @param  list<string>  $headers
+     * @param  list<string>  $metadataHeaders
+     * @return list<string>
+     */
+    public function ensureTrailingMetadataColumns(
+        string $spreadsheetId,
+        string $sheetName,
+        int $sheetId,
+        array $headers,
+        array $metadataHeaders,
+    ): array {
+        $present = array_values(array_intersect($headers, $metadataHeaders));
+        if ($present !== []) {
+            if ($present !== $metadataHeaders || array_slice($headers, -count($metadataHeaders)) !== $metadataHeaders) {
+                throw SalesLeadSpreadsheetContractException::metadataUnsafe($sheetName);
+            }
+
+            return $headers;
+        }
+
+        $startColumn = count($headers) + 1;
+        $endColumn = $startColumn + count($metadataHeaders) - 1;
+        $range = $this->quoteSheetName($sheetName).'!'.$this->columnLetter($startColumn).'1:'.$this->columnLetter($endColumn).'1';
+        $this->updateRange($spreadsheetId, $range, [$metadataHeaders]);
+
+        $verified = $this->batchGetRaw(
+            $spreadsheetId,
+            [$this->quoteSheetName($sheetName).'!1:1'],
+            'FORMATTED_VALUE',
+        )[$sheetName][0] ?? [];
+        $verified = array_map(fn ($header) => trim((string) $header), $verified);
+        if (array_slice($verified, -count($metadataHeaders)) !== $metadataHeaders) {
+            throw SalesLeadSpreadsheetContractException::metadataUnsafe($sheetName);
+        }
+
+        // Only columns created and re-read by this call are hidden.
+        $this->hideColumns($spreadsheetId, $sheetId, $startColumn - 1, $endColumn);
+
+        return $verified;
+    }
+
+    /** @param list<string> $headers */
+    public function findRowByHeaderValue(
+        string $spreadsheetId,
+        string $sheetName,
+        array $headers,
+        string $header,
+        string $value,
+    ): ?int {
+        $index = array_search($header, $headers, true);
+        if ($index === false) {
+            return null;
+        }
+
+        $column = $this->columnLetter($index + 1);
+        $rows = $this->batchGetRaw(
+            $spreadsheetId,
+            [$this->quoteSheetName($sheetName)."!{$column}2:{$column}"],
+            'FORMATTED_VALUE',
+        )[$sheetName] ?? [];
+        foreach ($rows as $offset => $row) {
+            if (hash_equals($value, trim((string) ($row[0] ?? '')))) {
+                return $offset + 2;
+            }
+        }
+
+        return null;
+    }
+
     public function hideColumns(string $spreadsheetId, int $sheetId, int $startIndex, int $endIndex): void
     {
         $request = new Request([
@@ -323,6 +411,18 @@ class GoogleSheetsApiService
         }
 
         return $result;
+    }
+
+    private function columnLetter(int $column): string
+    {
+        $letter = '';
+        while ($column > 0) {
+            $column--;
+            $letter = chr(65 + ($column % 26)).$letter;
+            $column = intdiv($column, 26);
+        }
+
+        return $letter;
     }
 
     private function cellMetadata($cell): ?array

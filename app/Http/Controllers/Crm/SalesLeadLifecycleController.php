@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Crm;
 
+use App\Exceptions\SalesLeadSpreadsheetContractException;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Crm\ConvertSalesLeadConsumerRequest;
 use App\Http\Requests\Crm\ConvertSalesLeadFreelanceRequest;
@@ -16,6 +17,7 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
 
 class SalesLeadLifecycleController extends Controller
 {
@@ -24,33 +26,30 @@ class SalesLeadLifecycleController extends Controller
     public function updateStatus(UpdateSalesLeadLifecycleStatusRequest $request, SalesLead $salesLead): RedirectResponse|Response
     {
         $operationUuid = $request->validated('operation_uuid') ?? (string) Str::uuid();
-        $lead = $this->lifecycle->setManualStatus(
-            $salesLead,
-            $request->validated('status'),
-            $request->user(),
-            operationUuid: $operationUuid,
-        );
+        $lead = $this->run(fn () => $this->lifecycle->setManualStatus(
+            $salesLead, $request->validated('status'), $request->user(), operationUuid: $operationUuid,
+        ));
 
         return $this->respond($request, 'Status lead berhasil diperbarui.', ['status' => $lead->current_status->value, 'operation_uuid' => $operationUuid]);
     }
 
     public function siteVisit(RecordSalesLeadSiteVisitRequest $request, SalesLead $salesLead): RedirectResponse|Response
     {
-        $visit = $this->lifecycle->recordSiteVisit($salesLead, $request->validated(), $request->user());
+        $visit = $this->run(fn () => $this->lifecycle->recordSiteVisit($salesLead, $request->validated(), $request->user()));
 
         return $this->respond($request, 'Cek lokasi berhasil dicatat.', ['site_visit_id' => $visit->id, 'completed' => $visit->is_completed, 'operation_uuid' => $visit->operation_uuid]);
     }
 
     public function consumer(ConvertSalesLeadConsumerRequest $request, SalesLead $salesLead): RedirectResponse|Response
     {
-        $link = $this->lifecycle->convertToConsumer($salesLead, $request->validated(), $request->user());
+        $link = $this->run(fn () => $this->lifecycle->convertToConsumer($salesLead, $request->validated(), $request->user()));
 
         return $this->respond($request, 'Lead berhasil dikonversi menjadi konsumen.', ['consumer_link_id' => $link->id, 'sheet_type' => $link->sheet_type, 'operation_uuid' => $link->operation_uuid]);
     }
 
     public function slik(SubmitSalesLeadSlikRequest $request, SalesLead $salesLead): RedirectResponse|Response
     {
-        $attempt = $this->lifecycle->submitToSlik($salesLead, $request->validated(), $request->user());
+        $attempt = $this->run(fn () => $this->lifecycle->submitToSlik($salesLead, $request->validated(), $request->user()));
 
         return $this->respond($request, 'Pengajuan SLIK berhasil dikirim.', ['slik_attempt_id' => $attempt->id, 'operation_uuid' => $attempt->operation_uuid]);
     }
@@ -59,14 +58,14 @@ class SalesLeadLifecycleController extends Controller
     {
         $data = $request->validated();
         $data['operation_uuid'] ??= (string) Str::uuid();
-        $attempt = $this->lifecycle->markSlikRejected($salesLead, $slikAttempt, $data, $request->user());
+        $attempt = $this->run(fn () => $this->lifecycle->markSlikRejected($salesLead, $slikAttempt, $data, $request->user()));
 
         return $this->respond($request, 'Hasil penolakan SLIK berhasil dicatat.', ['slik_attempt_id' => $attempt->id, 'status' => $attempt->status, 'operation_uuid' => $data['operation_uuid']]);
     }
 
     public function freelance(ConvertSalesLeadFreelanceRequest $request, SalesLead $salesLead): RedirectResponse|Response
     {
-        $link = $this->lifecycle->convertToFreelance($salesLead, $request->validated(), $request->user());
+        $link = $this->run(fn () => $this->lifecycle->convertToFreelance($salesLead, $request->validated(), $request->user()));
 
         return $this->respond($request, 'Lead berhasil dikonversi menjadi freelance.', ['freelance_link_id' => $link->id, 'operation_uuid' => $link->operation_uuid]);
     }
@@ -78,5 +77,16 @@ class SalesLeadLifecycleController extends Controller
         }
 
         return redirect()->route('sales-pocketbook.index')->with('success', $message);
+    }
+
+    private function run(callable $operation): mixed
+    {
+        try {
+            return $operation();
+        } catch (SalesLeadSpreadsheetContractException $exception) {
+            throw ValidationException::withMessages([
+                'spreadsheet' => $exception->getMessage().' Data lokal tidak diubah.',
+            ]);
+        }
     }
 }

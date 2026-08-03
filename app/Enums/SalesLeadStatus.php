@@ -49,6 +49,26 @@ enum SalesLeadStatus: string
         return in_array($this, self::MANUAL, true);
     }
 
+    public function label(): string
+    {
+        return match ($this) {
+            self::NoResponse => 'No Respon',
+            self::Discussion => 'Diskusi',
+            self::SiteVisit => 'Cek Lokasi',
+            self::Freelance => 'Jadi Freelance',
+            self::Utj => 'UTJ',
+            self::SlikCheck => 'Cek SLIK',
+            self::SlikRejected => 'Tidak Lolos BI Checking',
+            self::Akad => 'Akad',
+        };
+    }
+
+    public function spreadsheetValue(): string
+    {
+        // The legacy sheet validation still uses the historical "Cek Silk" spelling.
+        return $this === self::SlikCheck ? 'Cek Silk' : $this->label();
+    }
+
     public function precedence(): ?int
     {
         $position = array_search($this, self::PRIMARY_PRECEDENCE, true);

@@ -61,8 +61,8 @@ class SalesLeadLifecycleService
             ? $lead->current_status
             : SalesLeadStatus::fromInput($lead->current_status ?? SalesLeadStatus::NoResponse->value);
 
-        if ($source === 'manual' && ($target->precedence() ?? -1) < ($current->precedence() ?? -1)) {
-            throw new \DomainException('Status lead tidak dapat diturunkan secara manual.');
+        if ($source === 'manual' && ! $current->isManual()) {
+            throw new \DomainException('Status sistem tidak dapat diubah secara manual.');
         }
     }
 
@@ -127,7 +127,9 @@ class SalesLeadLifecycleService
             $changedAt ??= now();
 
             if ($locked->current_status !== $target) {
+                $this->syncLeadStatus($locked, $target);
                 $previousStatus = $locked->current_status->value;
+                $this->updateLeadSheetStatus($locked, $target);
                 $locked->update([
                     'current_status' => $target,
                     'current_status_changed_at' => $changedAt,
@@ -173,6 +175,13 @@ class SalesLeadLifecycleService
         $target = $status === SalesLeadStatus::Freelance
             ? $current
             : $this->resolvePrimaryStatus([$current, $status]);
+
+        $spreadsheetStatus = $status === SalesLeadStatus::Freelance && $current === SalesLeadStatus::NoResponse
+            ? SalesLeadStatus::Freelance
+            : $target;
+        $this->syncLeadStatus($lead, $spreadsheetStatus);
+
+        $this->updateLeadSheetStatus($lead, $status === SalesLeadStatus::Freelance ? SalesLeadStatus::Freelance : $target);
 
         if ($target !== $current) {
             $lead->update([
@@ -486,6 +495,17 @@ class SalesLeadLifecycleService
         return app(SalesLeadSpreadsheetWriter::class);
     }
 
+    private function updateLeadSheetStatus(SalesLead $lead, SalesLeadStatus $status): void
+    {
+        if (! $lead->external_sync_id) {
+            return;
+        }
+
+        $this->writer()->updateBySyncId($lead, 'lead', $lead->external_sync_id, [
+            'status_lead' => $status->spreadsheetValue(),
+        ]);
+    }
+
     private function lockLead(SalesLead $lead): SalesLead
     {
         $locked = SalesLead::query()->with(['project', 'sales.supervisor'])->lockForUpdate()->findOrFail($lead->id);
@@ -522,5 +542,16 @@ class SalesLeadLifecycleService
             'sore' => '16:00:00',
             'malam' => '19:00:00',
         };
+    }
+
+    private function syncLeadStatus(SalesLead $lead, SalesLeadStatus $status): void
+    {
+        if (blank($lead->external_sync_id)) {
+            return;
+        }
+
+        $this->writer()->updateBySyncId($lead, 'lead', $lead->external_sync_id, [
+            'status_lead' => $status->spreadsheetValue(),
+        ]);
     }
 }

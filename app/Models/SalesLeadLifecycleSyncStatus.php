@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class SalesLeadLifecycleSyncStatus extends Model
 {
@@ -16,5 +17,10 @@ class SalesLeadLifecycleSyncStatus extends Model
             'finished_at' => 'datetime',
             'last_successful_at' => 'datetime',
         ];
+    }
+
+    public function initiator(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'initiated_by');
     }
 }

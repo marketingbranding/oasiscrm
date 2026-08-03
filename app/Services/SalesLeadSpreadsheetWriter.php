@@ -52,7 +52,7 @@ class SalesLeadSpreadsheetWriter
         if ($existingRow !== null) {
             $this->copyTemplateWhenRequired($contract, $existingRow);
 
-            return new SalesLeadSpreadsheetWriteResult($contract->spreadsheetId, $sheetName, $existingRow, $operationUuid);
+            return $this->result($contract, $headers, $existingRow, $operationUuid);
         }
 
         $formulaHeaders = array_flip($contract->formulaOwnedHeaders);
@@ -74,12 +74,7 @@ class SalesLeadSpreadsheetWriter
             );
             $this->copyTemplateWhenRequired($contract, $append->rowNumber);
 
-            return new SalesLeadSpreadsheetWriteResult(
-                $contract->spreadsheetId,
-                $sheetName,
-                $append->rowNumber,
-                $operationUuid,
-            );
+            return $this->result($contract, $headers, $append->rowNumber, $operationUuid);
         } catch (Throwable) {
             try {
                 $rowNumber = $this->googleSheets->findRowByHeaderValue(
@@ -92,7 +87,7 @@ class SalesLeadSpreadsheetWriter
                 if ($rowNumber !== null) {
                     $this->copyTemplateWhenRequired($contract, $rowNumber);
 
-                    return new SalesLeadSpreadsheetWriteResult($contract->spreadsheetId, $sheetName, $rowNumber, $operationUuid);
+                    return $this->result($contract, $headers, $rowNumber, $operationUuid);
                 }
             } catch (Throwable) {
                 throw SalesLeadSpreadsheetContractException::writeFailed();
@@ -168,6 +163,30 @@ class SalesLeadSpreadsheetWriter
         } catch (Throwable) {
             throw SalesLeadSpreadsheetContractException::writeFailed();
         }
+    }
+
+    private function result(ResolvedSalesLeadSpreadsheetContract $contract, array $headers, int $rowNumber, string $syncId): SalesLeadSpreadsheetWriteResult
+    {
+        $rowValues = [];
+        if ($contract->definition->sheetName === 'lead') {
+            $range = $this->googleSheets->quoteSheetName('lead')."!{$rowNumber}:{$rowNumber}";
+            $cells = $this->googleSheets->batchGetRaw(
+                $contract->spreadsheetId,
+                [$range],
+                'FORMATTED_VALUE',
+            )['lead'][0] ?? [];
+            foreach ($headers as $index => $header) {
+                $rowValues[$header] = trim((string) ($cells[$index] ?? ''));
+            }
+        }
+
+        return new SalesLeadSpreadsheetWriteResult(
+            $contract->spreadsheetId,
+            $contract->definition->sheetName,
+            $rowNumber,
+            $syncId,
+            $rowValues,
+        );
     }
 
     private function columnLetter(int $column): string

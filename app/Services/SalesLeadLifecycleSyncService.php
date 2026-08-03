@@ -73,10 +73,16 @@ class SalesLeadLifecycleSyncService
                 ]);
 
                 return ['ok' => true, 'status' => 'success', 'branch' => $branch->name, 'message' => $status->message, 'summary' => $summary];
-            } catch (Throwable $exception) {
+            } catch (\DomainException $exception) {
                 $status->update(['status' => 'failed', 'message' => $exception->getMessage(), 'finished_at' => now()]);
 
                 return ['ok' => false, 'status' => 'failed', 'branch' => $branch->name, 'message' => $exception->getMessage(), 'summary' => []];
+            } catch (Throwable $exception) {
+                report($exception);
+                $message = 'Sinkronisasi siklus lead gagal. Periksa koneksi dan konfigurasi spreadsheet cabang.';
+                $status->update(['status' => 'failed', 'message' => $message, 'finished_at' => now()]);
+
+                return ['ok' => false, 'status' => 'failed', 'branch' => $branch->name, 'message' => $message, 'summary' => []];
             }
         });
 

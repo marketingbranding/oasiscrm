@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Enums\SalesLeadStatus;
 use App\Models\Branch;
 use App\Models\Changelog;
 use App\Models\ContentItem;
@@ -28,6 +29,12 @@ class SalesPocketbookExportTest extends TestCase
         $lead = $this->lead($sales, $project, '=Nama Aman', [
             'lead_date' => '2026-07-20',
             'source_name_snapshot' => $source->name,
+            'external_sync_id' => '11111111-1111-4111-8111-111111111111',
+            'source' => 'Online',
+            'platform' => 'Instagram',
+            'campaign_name' => 'Agustus',
+            'current_status' => SalesLeadStatus::Discussion,
+            'freelance_converted_at' => '2026-07-20 11:00:00',
             'contacted_at' => '2026-07-20 10:30:00',
         ]);
         $this->lead($sales, $project, 'Di Luar Periode', ['lead_date' => '2026-07-01']);
@@ -64,12 +71,18 @@ class SalesPocketbookExportTest extends TestCase
             'Dibuat', 'Diperbarui',
         ], $leads->rangeToArray('A1:P1')[0]);
         $this->assertSame([
+            'External Sync ID', 'Sumber (Sheet)', 'Platform', 'Campaign', 'Siklus Saat Ini', 'Freelance',
+        ], $leads->rangeToArray('Q1:V1')[0]);
+        $this->assertSame([
             'Tanggal', 'Sales', 'Cabang', 'Proyek', 'Jam Mulai', 'Jam Selesai', 'Durasi',
             'Kategori', 'Agenda', 'Lokasi', 'Hasil', 'Status',
         ], $agendas->rangeToArray('A1:L1')[0]);
 
         $this->assertSame($lead->customer_name, $leads->getCell('E2')->getValue());
         $this->assertSame(DataType::TYPE_STRING, $leads->getCell('E2')->getDataType());
+        $this->assertSame('11111111-1111-4111-8111-111111111111', $leads->getCell('Q2')->getValue());
+        $this->assertSame('Diskusi', $leads->getCell('U2')->getValue());
+        $this->assertSame('YA', $leads->getCell('V2')->getValue());
         $this->assertSame($lead->customer_name, $leads->getCell('E2')->getCalculatedValue());
         $this->assertSame(2, $leads->getHighestDataRow());
         $this->assertSame('Solo Sales', $weekly->getCell('C2')->getValue());

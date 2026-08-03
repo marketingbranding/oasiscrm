@@ -176,7 +176,7 @@ class SalesLeadSpreadsheetFoundationTest extends TestCase
         $headers = ['id_lead', 'nama_konsumen', ...SalesLeadSpreadsheetContract::META_HEADERS];
         $google->shouldReceive('ensureTrailingMetadataColumns')->once()->andReturn($headers);
         $google->shouldReceive('findRowByHeaderValue')->once()->andReturnNull();
-        $google->shouldReceive('quoteSheetName')->once()->with('lead')->andReturn("'lead'");
+        $google->shouldReceive('quoteSheetName')->twice()->with('lead')->andReturn("'lead'");
         $google->shouldReceive('appendRows')->once()->withArgs(function ($spreadsheetId, $range, $rows) use ($syncId): bool {
             return $rows[0][0] === null
                 && $rows[0][1] === 'Nama Aman'
@@ -184,6 +184,9 @@ class SalesLeadSpreadsheetFoundationTest extends TestCase
         })->andReturn(new GoogleSheetsAppendResult("'lead'!A6:E6", 6));
         $google->shouldReceive('copyRowFormat')->once()->with('sheet-formula', 91, 2, 6);
         $google->shouldReceive('copyRowFormulas')->once()->with('sheet-formula', 91, 2, 6);
+        $google->shouldReceive('batchGetRaw')->once()->with('sheet-formula', ["'lead'!6:6"], 'FORMATTED_VALUE')->andReturn([
+            'lead' => [['260803-ON-TI-01', 'Nama Aman', $syncId]],
+        ]);
 
         $result = (new SalesLeadSpreadsheetWriter($google, $contracts))->append(
             $lead,
@@ -193,6 +196,7 @@ class SalesLeadSpreadsheetFoundationTest extends TestCase
         );
 
         $this->assertSame(6, $result->rowNumber);
+        $this->assertSame('260803-ON-TI-01', $result->rowValues['id_lead']);
     }
 
     public function test_metadata_provision_hides_only_newly_verified_exact_trailing_columns(): void

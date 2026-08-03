@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests\Crm;
 
+use App\Enums\SalesLeadStatus;
 use App\Models\LeadMaster;
 use App\Models\SalesLead;
 use App\Models\User;
@@ -28,6 +29,12 @@ abstract class SalesLeadRequest extends FormRequest
             'customer_name' => ['required', 'string', 'max:255'],
             'phone' => ['nullable', 'string', 'max:50'],
             'notes' => ['nullable', 'string', 'max:5000'],
+            'id_promo' => ['nullable', 'string', 'max:255'],
+            'source' => ['nullable', 'string', 'max:255'],
+            'platform' => ['nullable', 'string', 'max:255'],
+            'campaign_id' => ['nullable', 'string', 'max:255'],
+            'campaign_name' => ['nullable', 'string', 'max:255'],
+            'current_status' => ['nullable', Rule::in(array_map(fn (SalesLeadStatus $status) => $status->value, SalesLeadStatus::MANUAL))],
             'linked_consumer_reference' => ['nullable', 'string', 'max:255'],
             'expected_updated_at' => ['sometimes', 'required', 'string', 'max:40'],
         ];
@@ -60,6 +67,18 @@ abstract class SalesLeadRequest extends FormRequest
 
             if ($user->isSales() && (int) $owner?->id !== (int) $user->id) {
                 $validator->errors()->add('sales_user_id', 'Sales hanya dapat memilih dirinya sendiri.');
+            }
+
+            if ($this->lead()?->external_sync_id && (int) $this->lead()->branch_id !== $branchId) {
+                $validator->errors()->add('branch_id', 'Lead yang sudah tersinkron tidak dapat dipindahkan ke spreadsheet cabang lain.');
+            }
+
+            if ($this->lead() && $this->filled('current_status')) {
+                $current = $this->lead()->current_status;
+                $target = SalesLeadStatus::fromInput($this->string('current_status')->toString());
+                if (! $current->isManual()) {
+                    $validator->errors()->add('current_status', 'Status sistem atau status yang lebih lanjut tidak dapat diubah melalui formulir lead.');
+                }
             }
         }];
     }

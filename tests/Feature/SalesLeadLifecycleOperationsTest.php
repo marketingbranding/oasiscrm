@@ -15,7 +15,6 @@ use App\Services\SalesLeadLifecycleService;
 use App\Services\SalesLeadSpreadsheetWriter;
 use App\ValueObjects\SalesLeadSpreadsheetWriteResult;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 use Mockery;
@@ -24,17 +23,6 @@ use Tests\TestCase;
 class SalesLeadLifecycleOperationsTest extends TestCase
 {
     use RefreshDatabase;
-
-    public function test_lifecycle_operations_changelog_is_idempotent_and_visible(): void
-    {
-        $title = 'Operasi siklus lead terhubung ke spreadsheet';
-        $this->assertSame(1, DB::table('changelogs')->whereNull('version')->where('title', $title)->count());
-
-        [$branch] = $this->context();
-        $this->actingAs($this->user('manager', $branch, 'Manager'))->get(route('changelogs.index'))
-            ->assertOk()
-            ->assertSee($title);
-    }
 
     public function test_manual_status_endpoint_accepts_only_three_manual_values_and_rejects_forged_organization_ids(): void
     {

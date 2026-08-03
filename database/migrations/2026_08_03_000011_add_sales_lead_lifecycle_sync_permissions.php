@@ -8,8 +8,6 @@ return new class extends Migration
 {
     private const SLUGS = ['sales_pocketbook.sync', 'sales_pocketbook.reconcile'];
 
-    private const CHANGELOG_TITLE = 'Sinkronisasi Siklus Lead Cabang Ditambahkan';
-
     public function up(): void
     {
         foreach (collect(PermissionCatalog::permissions())->whereIn('slug', self::SLUGS) as $permission) {
@@ -39,21 +37,10 @@ return new class extends Migration
             }
         }
 
-        DB::table('changelogs')->updateOrInsert(
-            ['version' => null, 'title' => self::CHANGELOG_TITLE],
-            [
-                'category' => 'added',
-                'description' => 'Buku Saku Sales kini dapat menarik siklus lead per cabang, mencatat masalah rekonsiliasi, dan mencerminkan Akad secara aman tanpa mencampur cache sinkronisasi modul lain.',
-                'created_by' => null,
-                'created_at' => now(),
-                'updated_at' => now(),
-            ],
-        );
     }
 
     public function down(): void
     {
-        DB::table('changelogs')->whereNull('version')->where('title', self::CHANGELOG_TITLE)->delete();
         DB::table('permissions')->whereIn('slug', self::SLUGS)->delete();
     }
 };

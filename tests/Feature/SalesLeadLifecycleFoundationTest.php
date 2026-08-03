@@ -56,11 +56,14 @@ class SalesLeadLifecycleFoundationTest extends TestCase
             'source' => 'manual',
         ]);
 
+        $updated = $service->setManualStatus($updated, 'no_response', $actor);
+        $this->assertSame(SalesLeadStatus::NoResponse, $updated->current_status);
+
         try {
             $service->setManualStatus($updated, 'akad', $actor);
             $this->fail('A forged system-owned status was accepted.');
         } catch (\DomainException) {
-            $this->assertSame(SalesLeadStatus::Discussion, $updated->fresh()->current_status);
+            $this->assertSame(SalesLeadStatus::NoResponse, $updated->fresh()->current_status);
         }
 
         $updated->update(['current_status' => SalesLeadStatus::Utj, 'current_status_source' => 'consumer']);

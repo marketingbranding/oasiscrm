@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers\Crm;
 
+use App\Enums\SalesLeadStatus;
+use App\Exceptions\SalesLeadSpreadsheetContractException;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Crm\StoreSalesLeadRequest;
 use App\Http\Requests\Crm\UpdateSalesLeadRequest;
@@ -16,6 +18,7 @@ use App\Services\SalesLeadService;
 use App\Services\WorkspaceAccessService;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
+use Illuminate\Validation\ValidationException;
 use Symfony\Component\HttpFoundation\Response;
 
 class SalesLeadController extends Controller
@@ -38,7 +41,11 @@ class SalesLeadController extends Controller
 
     public function store(StoreSalesLeadRequest $request)
     {
-        $lead = $this->leads->create($request->safe()->except('expected_updated_at'), $request->user());
+        try {
+            $lead = $this->leads->create($request->safe()->except('expected_updated_at'), $request->user());
+        } catch (SalesLeadSpreadsheetContractException $exception) {
+            throw ValidationException::withMessages(['spreadsheet' => $exception->getMessage().' Lead belum disimpan.']);
+        }
         $duplicates = $this->duplicates->matches($request->user(), $lead->phone, $lead->id);
 
         $redirect = $request->input('submit_action') === 'add_another'
@@ -47,7 +54,9 @@ class SalesLeadController extends Controller
                 'lead_date' => $lead->lead_date->toDateString(),
                 'project_id' => $lead->project_id,
             ])
-            : route('sales-pocketbook.index');
+            : route('sales-pocketbook.index', $lead->current_status === SalesLeadStatus::SiteVisit
+                ? ['lifecycle_action' => 'site_visit', 'lead' => $lead->id]
+                : []);
 
         $response = redirect($redirect)->with('success', 'Lead berhasil disimpan.');
         if ($duplicates->isNotEmpty()) {
@@ -86,7 +95,11 @@ class SalesLeadController extends Controller
         $result = $this->optimisticLock->execute($request, $salesLead, $request->input('expected_updated_at'), function (SalesLead $current) use ($request, $data) {
             $this->authorize('update', $current);
 
-            return $this->leads->update($current, $data, $request->user());
+            try {
+                return $this->leads->update($current, $data, $request->user());
+            } catch (SalesLeadSpreadsheetContractException $exception) {
+                throw ValidationException::withMessages(['spreadsheet' => $exception->getMessage().' Perubahan lokal dibatalkan.']);
+            }
         });
         if ($result instanceof Response) {
             return $result;
@@ -111,6 +124,12 @@ class SalesLeadController extends Controller
                     'sales' => $result->sales?->name,
                     'source' => $result->source_name_snapshot ?: $result->leadSource?->name,
                     'source_active' => (bool) $result->leadSource?->is_active,
+                    'source_detail' => $result->source,
+                    'platform' => $result->platform,
+                    'campaign_name' => $result->campaign_name,
+                    'id_promo' => $result->id_promo,
+                    'current_status' => $result->current_status->value,
+                    'current_status_label' => $result->current_status->label(),
                 ],
                 'updated_at' => $this->optimisticLock->token($result),
             ]);

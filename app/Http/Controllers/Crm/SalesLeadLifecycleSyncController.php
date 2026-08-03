@@ -8,6 +8,7 @@ use App\Models\SalesLeadLifecycleReconciliationItem;
 use App\Models\SalesLeadLifecycleSyncStatus;
 use App\Services\OrganizationScopeService;
 use App\Services\SalesLeadLifecycleSyncService;
+use App\Services\SyncResponseService;
 use App\Services\WorkspaceAccessService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -17,24 +18,26 @@ class SalesLeadLifecycleSyncController extends Controller
     public function __construct(
         private readonly OrganizationScopeService $organizationScope,
         private readonly WorkspaceAccessService $workspaceAccess,
+        private readonly SyncResponseService $responses,
     ) {}
 
     public function sync(Request $request, SalesLeadLifecycleSyncService $service): JsonResponse
     {
         $branch = $this->authorizedBranch($request, 'sales_pocketbook.sync');
         $result = $service->sync($branch, $request->user());
+        $status = SalesLeadLifecycleSyncStatus::query()->where('branch_id', $branch->id)->first();
+        $response = $this->responses->make('sales-lead-lifecycle', $this->scope($branch), $status, $result);
 
-        return response()->json($result, $result['ok'] ? 200 : ($result['status'] === 'syncing' ? 409 : 422));
+        return response()->json($response, $result['ok'] ? 200 : ($result['status'] === 'syncing' ? 409 : 422));
     }
 
     public function status(Request $request): JsonResponse
     {
         $branch = $this->authorizedBranch($request, 'sales_pocketbook.sync');
 
-        return response()->json([
-            'branch_id' => $branch->id,
-            'status' => SalesLeadLifecycleSyncStatus::query()->where('branch_id', $branch->id)->first(),
-        ]);
+        $status = SalesLeadLifecycleSyncStatus::query()->where('branch_id', $branch->id)->first();
+
+        return response()->json($this->responses->make('sales-lead-lifecycle', $this->scope($branch), $status));
     }
 
     public function reconciliations(Request $request): JsonResponse
@@ -62,5 +65,10 @@ class SalesLeadLifecycleSyncController extends Controller
         abort_unless($this->workspaceAccess->canSyncBranch($user, $branch), 403);
 
         return $branch;
+    }
+
+    private function scope(Branch $branch): array
+    {
+        return ['type' => 'branch', 'id' => $branch->id, 'name' => $branch->name];
     }
 }

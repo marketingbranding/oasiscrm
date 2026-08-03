@@ -7,6 +7,8 @@ use App\Http\Controllers\Controller;
 use App\Models\ContentItem;
 use App\Models\LeadSource;
 use App\Models\SalesLead;
+use App\Models\SalesLeadLifecycleReconciliationItem;
+use App\Models\SalesLeadLifecycleSyncStatus;
 use App\Models\User;
 use App\Services\OrganizationScopeService;
 use App\Services\SalesDailyReminderService;
@@ -88,7 +90,12 @@ class SalesPocketbookController extends Controller
         $reportMetric = $request->query('report_metric');
         $filterLeadPeriod = $reportMetric || $request->filled('period_type') || $request->filled('week') || ($request->filled('date_from') && $request->filled('date_to'));
         $leads = SalesLead::query()->visibleTo($user)
-            ->with(['branch:id,name', 'project:id,project_name', 'sales:id,name', 'leadSource:id,name,is_active'])
+            ->with([
+                'branch:id,name,sheet_id', 'project:id,project_name,is_nup_eligible', 'sales:id,name,supervisor_user_id',
+                'leadSource:id,name,is_active', 'siteVisits' => fn ($query) => $query->latest('id'),
+                'consumerLinks' => fn ($query) => $query->latest('id'), 'slikAttempts' => fn ($query) => $query->latest('id'),
+                'freelanceLinks' => fn ($query) => $query->latest('id'), 'akadLinks' => fn ($query) => $query->latest('id'),
+            ])
             ->withCount('comments')
             ->when($selectedBranchId, fn (Builder $query) => $query->where('branch_id', $selectedBranchId))
             ->when($selectedProjectId, fn (Builder $query) => $query->where('project_id', $selectedProjectId))
@@ -179,6 +186,33 @@ class SalesPocketbookController extends Controller
         ]);
         $dailyReminder['dismissUrl'] = route('sales-reminders.dismiss');
 
+        $syncBranch = ($selectedBranchId ? $branches->firstWhere('id', $selectedBranchId) : null)
+            ?? ($user->isSales() ? $branches->firstWhere('id', $defaultProject?->branch_id ?? $user->branch_id) : null);
+        $manageBranchIds = $this->organizationScope->branchIds($user, 'sales_pocketbook', 'manage');
+        $canLifecycleSync = $syncBranch !== null
+            && $user->hasPermission('sales_pocketbook.sync')
+            && in_array((int) $syncBranch->id, $manageBranchIds, true)
+            && $this->workspaceAccess->canSyncBranch($user, $syncBranch);
+        $canReconcile = $syncBranch !== null
+            && $user->hasPermission('sales_pocketbook.reconcile')
+            && in_array((int) $syncBranch->id, $manageBranchIds, true);
+        $lifecycleSyncStatus = $syncBranch
+            ? SalesLeadLifecycleSyncStatus::query()->where('branch_id', $syncBranch->id)->first()
+            : null;
+        $reconciliationCount = $canReconcile
+            ? SalesLeadLifecycleReconciliationItem::query()->where('branch_id', $syncBranch->id)->where('status', 'open')->count()
+            : 0;
+        $lifecycleCapabilitiesByBranch = SalesLeadLifecycleSyncStatus::query()
+            ->whereIn('branch_id', $branches->pluck('id'))
+            ->where('status', 'success')
+            ->get()
+            ->mapWithKeys(fn (SalesLeadLifecycleSyncStatus $status) => [
+                $status->branch_id => $status->summary['capabilities'] ?? [],
+            ]);
+        $coordinators = User::query()->where('is_active', true)->whereIn('id', $visibleSalesIds)
+            ->whereHas('role', fn (Builder $query) => $query->whereIn('slug', ['sales_coordinator', 'supervisor', 'manager', 'branch_manager']))
+            ->orderBy('name')->get(['id', 'name', 'branch_id']);
+
         return view('crm.sales-pocketbook.index', [
             'tab' => $tab,
             'monitoring' => $monitoring,
@@ -201,6 +235,13 @@ class SalesPocketbookController extends Controller
             'cascadeProjects' => $cascadeProjects,
             'cascadeSales' => $cascadeSales,
             'dailyReminder' => $dailyReminder,
+            'syncBranch' => $syncBranch,
+            'canLifecycleSync' => $canLifecycleSync,
+            'canReconcile' => $canReconcile,
+            'lifecycleSyncStatus' => $lifecycleSyncStatus,
+            'reconciliationCount' => $reconciliationCount,
+            'lifecycleCapabilitiesByBranch' => $lifecycleCapabilitiesByBranch,
+            'coordinators' => $coordinators,
         ]);
     }
 

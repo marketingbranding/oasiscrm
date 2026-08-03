@@ -26,7 +26,8 @@ class SalesPocketbookExport
     private const LEAD_HEADERS = [
         'Tanggal Lead', 'Sales', 'Cabang', 'Proyek', 'Nama Konsumen', 'Nomor HP', 'Sumber Lead',
         'Dihubungi', 'Tatap Muka', 'Survey', 'UTJ', 'Berkas Awal', 'Akad', 'Catatan',
-        'Dibuat', 'Diperbarui',
+        'Dibuat', 'Diperbarui', 'External Sync ID', 'Sumber (Sheet)', 'Platform', 'Campaign',
+        'Siklus Saat Ini', 'Freelance',
     ];
 
     private const AGENDA_HEADERS = [
@@ -130,6 +131,12 @@ class SalesPocketbookExport
                 $lead->notes,
                 $lead->created_at,
                 $lead->updated_at,
+                $lead->external_sync_id,
+                $lead->source,
+                $lead->platform,
+                $lead->campaign_name ?: $lead->campaign_id,
+                $lead->current_status?->label(),
+                $lead->is_freelance ? 'YA' : 'TIDAK',
             ], [1, 8, 9, 10, 11, 12, 13, 15, 16]);
         }
 
@@ -137,7 +144,8 @@ class SalesPocketbookExport
         self::styleSheet($spreadsheet, self::LEAD_HEADERS, $lastRow, [
             'A' => 14, 'B' => 22, 'C' => 18, 'D' => 24, 'E' => 26, 'F' => 20,
             'G' => 20, 'H' => 20, 'I' => 20, 'J' => 20, 'K' => 20, 'L' => 25,
-            'M' => 20, 'N' => 30, 'O' => 20, 'P' => 20,
+            'M' => 20, 'N' => 30, 'O' => 20, 'P' => 20, 'Q' => 38, 'R' => 20,
+            'S' => 18, 'T' => 24, 'U' => 22, 'V' => 14,
         ]);
         if ($lastRow > 1) {
             $sheet->getStyle("A2:A{$lastRow}")->getNumberFormat()->setFormatCode('DD/MM/YYYY');

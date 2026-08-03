@@ -9,5 +9,6 @@ final readonly class SalesLeadSpreadsheetWriteResult
         public string $sheetName,
         public int $rowNumber,
         public string $syncId,
+        public array $rowValues = [],
     ) {}
 }

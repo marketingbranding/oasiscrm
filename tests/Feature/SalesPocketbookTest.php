@@ -2,6 +2,8 @@
 
 namespace Tests\Feature;
 
+use App\Enums\SalesLeadStatus;
+use App\Exceptions\SalesLeadSpreadsheetContractException;
 use App\Models\ActivityLog;
 use App\Models\Branch;
 use App\Models\ContentItem;
@@ -9,13 +11,18 @@ use App\Models\LeadMaster;
 use App\Models\LeadSource;
 use App\Models\Role;
 use App\Models\SalesLead;
+use App\Models\SalesLeadLifecycleSyncStatus;
 use App\Models\User;
 use App\Services\OptimisticLockService;
 use App\Services\PhoneNormalizationService;
+use App\Services\SalesLeadSpreadsheetWriter;
+use App\ValueObjects\SalesLeadSpreadsheetWriteResult;
 use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Str;
+use Mockery;
 use Tests\TestCase;
 
 class SalesPocketbookTest extends TestCase
@@ -136,6 +143,7 @@ class SalesPocketbookTest extends TestCase
     public function test_sales_can_create_for_self_on_assigned_active_project_and_activity_is_pii_safe(): void
     {
         [$branch, $project, $sales] = $this->salesContext();
+        $this->mockLeadWriter();
         $payload = $this->payload($sales, $project, ['phone' => '0812 9999 1111', 'customer_name' => 'Sensitive Name']);
 
         $this->actingAs($sales)->post(route('sales-leads.store'), $payload)
@@ -153,6 +161,7 @@ class SalesPocketbookTest extends TestCase
     public function test_phone_is_nullable_source_snapshot_is_stored_and_add_another_preserves_context(): void
     {
         [$branch, $project, $sales] = $this->salesContext();
+        $this->mockLeadWriter();
         $source = LeadSource::where('is_active', true)->firstOrFail();
         $payload = $this->payload($sales, $project, [
             'phone' => null,
@@ -867,6 +876,79 @@ class SalesPocketbookTest extends TestCase
         }
     }
 
+    public function test_lead_create_writes_legacy_field_map_with_stable_uuid_and_site_visit_redirect(): void
+    {
+        [$branch, $project, $sales] = $this->salesContext();
+        $branch->update(['sheet_id' => 'branch-sheet']);
+        $captured = [];
+        $writer = Mockery::mock(SalesLeadSpreadsheetWriter::class);
+        $writer->shouldReceive('append')->once()->withArgs(function (SalesLead $lead, string $sheet, array $fields, string $uuid) use (&$captured): bool {
+            $captured = $fields;
+
+            return $sheet === 'lead' && $uuid === $lead->external_sync_id && Str::isUuid($uuid);
+        })->andReturnUsing(fn (SalesLead $lead, string $sheet, array $fields, string $uuid) => new SalesLeadSpreadsheetWriteResult('branch-sheet', $sheet, 4, $uuid));
+        $this->app->instance(SalesLeadSpreadsheetWriter::class, $writer);
+
+        $response = $this->actingAs($sales)->post(route('sales-leads.store'), $this->payload($sales, $project, [
+            'source' => 'Online', 'platform' => 'Instagram', 'campaign_name' => 'Agustus', 'id_promo' => null,
+            'current_status' => 'site_visit', 'notes' => 'Hubungi sore.',
+        ]));
+
+        $lead = SalesLead::sole();
+        $response->assertRedirect(route('sales-pocketbook.index', ['lifecycle_action' => 'site_visit', 'lead' => $lead->id]));
+        $this->assertNotNull($lead->external_sync_id);
+        $this->assertSame([
+            'tanggal_lead', 'sumber', 'platform', 'campaign', 'nama_konsumen', 'no_hp', 'proyek',
+            'sales_pic', 'status_lead', 'keterangan', 'id_promo',
+        ], array_keys($captured));
+        $this->assertSame('Cek Lokasi', $captured['status_lead']);
+        $this->assertSame('Instagram', $captured['platform']);
+    }
+
+    public function test_remote_create_failure_is_visible_and_does_not_claim_or_persist_success(): void
+    {
+        [, $project, $sales] = $this->salesContext();
+        $writer = Mockery::mock(SalesLeadSpreadsheetWriter::class);
+        $writer->shouldReceive('append')->once()->andThrow(SalesLeadSpreadsheetContractException::writeFailed());
+        $this->app->instance(SalesLeadSpreadsheetWriter::class, $writer);
+
+        $this->actingAs($sales)->from(route('sales-pocketbook.index'))->post(route('sales-leads.store'), $this->payload($sales, $project))
+            ->assertRedirect(route('sales-pocketbook.index'))->assertSessionHasErrors('spreadsheet')->assertSessionMissing('success');
+        $this->assertDatabaseCount('sales_leads', 0);
+    }
+
+    public function test_lifecycle_ui_exposes_authorized_modal_contracts_nup_warning_and_read_only_system_status(): void
+    {
+        [, $project, $sales] = $this->salesContext();
+        $project->update(['is_nup_eligible' => true]);
+        $lead = $this->lead($sales, $project, 'Lifecycle UI');
+        $lead->update(['current_status' => SalesLeadStatus::SlikCheck]);
+        SalesLeadLifecycleSyncStatus::query()->create([
+            'branch_id' => $lead->branch_id,
+            'status' => 'success',
+            'summary' => ['capabilities' => ['data_konsumen_nup' => true]],
+        ]);
+
+        $content = $this->actingAs($sales)->get(route('sales-pocketbook.index'))->assertOk()->getContent();
+        $this->assertStringContainsString('Cek SLIK', $content);
+        $this->assertStringContainsString('Status sistem bersifat baca-saja.', $content);
+        $this->assertStringContainsString('Proses Konsumen NUP', $content);
+        $this->assertStringContainsString('Isi Nanti', $content);
+        $this->assertStringContainsString("data.lead.current_status === 'site_visit'", $content);
+        $this->assertStringNotContainsString('alert(', $content);
+        $this->assertStringNotContainsString('confirm(', $content);
+        $this->assertSame(SalesLeadStatus::SlikCheck, $lead->fresh()->current_status);
+    }
+
+    public function test_lifecycle_ui_changelog_is_deployed_once_and_rendered(): void
+    {
+        $title = 'Siklus Lead Buku Saku Terhubung';
+        $this->assertSame(1, DB::table('changelogs')->whereNull('version')->where('title', $title)->count());
+
+        [$branch] = $this->salesContext();
+        $this->actingAs($this->user('manager', $branch))->get(route('changelogs.index'))->assertOk()->assertSee($title);
+    }
+
     public function test_sales_pocketbook_two_changelog_is_idempotent_and_rendered(): void
     {
         $migrationPath = database_path('migrations/2026_07_30_000004_add_sales_pocketbook_2_accessibility_changelog.php');
@@ -990,5 +1072,14 @@ class SalesPocketbookTest extends TestCase
             'location' => 'Kantor pemasaran',
             'notes' => 'Bawa brosur.',
         ], $overrides);
+    }
+
+    private function mockLeadWriter(): void
+    {
+        $writer = Mockery::mock(SalesLeadSpreadsheetWriter::class);
+        $writer->shouldReceive('append')->once()->andReturnUsing(
+            fn (SalesLead $lead, string $sheet, array $fields, string $uuid) => new SalesLeadSpreadsheetWriteResult('sheet-'.$lead->branch_id, $sheet, 3, $uuid),
+        );
+        $this->app->instance(SalesLeadSpreadsheetWriter::class, $writer);
     }
 }

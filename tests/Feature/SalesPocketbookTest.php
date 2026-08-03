@@ -858,6 +858,9 @@ class SalesPocketbookTest extends TestCase
             'No. WhatsApp / Telepon', 'Sumber Lead', 'Referensi Konsumen Tertaut', 'Simpan Perubahan', 'Batal'] as $contract) {
             $this->assertTrue(str_contains($edit, $contract), 'Missing edit contract: '.$contract);
         }
+        $this->assertStringNotContainsString('salesDuplicatePhone(@js(', $edit);
+        $this->assertStringContainsString('x-data="salesDuplicatePhone($el.dataset.duplicateUrl, Number($el.dataset.leadId))"', $edit);
+        $this->assertStringContainsString('data-duplicate-url="'.route('sales-leads.duplicate-phone').'"', $edit);
         $this->actingAs($sales)->getJson(route('sales-leads.duplicate-phone', [
             'phone' => $lead->phone, 'except_id' => $lead->id,
         ]))->assertOk()->assertJsonCount(0, 'matches');

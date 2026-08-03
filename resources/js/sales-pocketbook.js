@@ -1,6 +1,10 @@
 import { lockBodyScroll, unlockBodyScroll } from './body-scroll-lock';
 
 export default function registerSalesPocketbook(Alpine) {
+    if (typeof window.salesPocketbook === 'function') {
+        Alpine.data('salesPocketbook', window.salesPocketbook);
+    }
+
     Alpine.data('salesCascade', (projects, salesUsers, initial = {}) => ({
         projects,
         salesUsers,

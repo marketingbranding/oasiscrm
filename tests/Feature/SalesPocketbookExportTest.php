@@ -221,14 +221,15 @@ class SalesPocketbookExportTest extends TestCase
 
     public function test_sales_access_and_daily_reminder_changelogs_are_deployed_once(): void
     {
-        foreach (['Akses Sales Lebih Terarah', 'Pengingat Harian Buku Saku Sales', 'Tombol Pengingat Buku Saku Lebih Responsif'] as $title) {
+        foreach (['Akses Sales Lebih Terarah', 'Pengingat Harian Buku Saku Sales', 'Tombol Pengingat Buku Saku Lebih Responsif', 'Buku Saku Sales Kembali Interaktif'] as $title) {
             $this->assertSame(1, Changelog::whereNull('version')->where('title', $title)->count());
         }
 
         $this->actingAs($this->user('manager'))->get(route('changelogs.index'))->assertOk()
             ->assertSee('Akses Sales Lebih Terarah')
             ->assertSee('Pengingat Harian Buku Saku Sales')
-            ->assertSee('Tombol Pengingat Buku Saku Lebih Responsif');
+            ->assertSee('Tombol Pengingat Buku Saku Lebih Responsif')
+            ->assertSee('Buku Saku Sales Kembali Interaktif');
     }
 
     private function salesContext(string $branchName, string $salesName): array

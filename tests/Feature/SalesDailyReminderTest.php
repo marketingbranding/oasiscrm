@@ -14,6 +14,7 @@ use App\Services\SalesDailyReminderService;
 use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Route;
+use Symfony\Component\Process\Process;
 use Tests\TestCase;
 
 class SalesDailyReminderTest extends TestCase
@@ -259,6 +260,54 @@ class SalesDailyReminderTest extends TestCase
             strpos($script, 'window.location.assign(destination.toString())'),
             strpos($script, 'await this.hideForNavigation()'),
         );
+    }
+
+    public function test_rendered_reminder_uses_escaped_data_urls_without_literal_blade_directives(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-07-27 08:00:00', config('app.timezone')));
+        [, , $sales] = $this->salesContext();
+
+        $html = $this->actingAs($sales)->get(route('sales-pocketbook.index'))->assertOk()->getContent();
+
+        $this->assertStringNotContainsString('navigate(@js(', $html);
+        $this->assertStringContainsString('@click="navigate($el.dataset.leadInputUrl)"', $html);
+        $this->assertMatchesRegularExpression(
+            '/data-lead-input-url="[^"]*reminder_action=lead[^"]*#quick-lead-input"/',
+            $html,
+        );
+    }
+
+    public function test_rendered_sales_pocketbook_inline_script_passes_node_syntax_check(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-07-27 08:00:00', config('app.timezone')));
+        [, , $sales] = $this->salesContext();
+        $html = $this->actingAs($sales)->get(route('sales-pocketbook.index'))->assertOk()->getContent();
+        preg_match_all('/<script(?:\s[^>]*)?>(.*?)<\/script>/s', $html, $matches);
+        $script = collect($matches[1] ?? [])->first(fn (string $candidate) => str_contains($candidate, 'window.salesPocketbook ='));
+
+        $this->assertNotNull($script, 'Rendered salesPocketbook inline script was not found.');
+        $node = new Process(['node', '--version']);
+        $node->run();
+        if (! $node->isSuccessful()) {
+            $this->markTestSkipped('Node.js is unavailable for the rendered inline-script syntax guard.');
+        }
+
+        $temporaryPath = tempnam(sys_get_temp_dir(), 'oasis-sales-script-');
+        $path = $temporaryPath.'.js';
+        rename($temporaryPath, $path);
+        try {
+            file_put_contents($path, $script);
+            $syntax = new Process(['node', '--check', $path]);
+            $syntax->run();
+            $this->assertTrue($syntax->isSuccessful(), $syntax->getErrorOutput());
+        } finally {
+            @unlink($path);
+        }
+
+        $registration = file_get_contents(resource_path('js/sales-pocketbook.js'));
+        $app = file_get_contents(resource_path('js/app.js'));
+        $this->assertStringContainsString("Alpine.data('salesPocketbook', window.salesPocketbook)", $registration);
+        $this->assertLessThan(strpos($app, 'Alpine.start()'), strpos($app, 'registerSalesPocketbook(Alpine)'));
     }
 
     private function salesContext(): array

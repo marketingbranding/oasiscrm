@@ -426,11 +426,11 @@
 </div>
 
 <script>
-function salesPocketbook() {
-    const projects = @js($cascadeProjects)
-    const salesUsers = @js($cascadeSales)
-    const leadStages = @js(array_keys(\App\Models\SalesLead::STAGES))
-    const leadStageLabels = @js(\App\Models\SalesLead::STAGES)
+window.salesPocketbook = function salesPocketbook() {
+    const projects = @js($cascadeProjects);
+    const salesUsers = @js($cascadeSales);
+    const leadStages = @js(array_keys(\App\Models\SalesLead::STAGES));
+    const leadStageLabels = @js(\App\Models\SalesLead::STAGES);
     const localParts = value => {
         const date = value ? new Date(value.replace(' ', 'T')) : new Date()
         return {
@@ -666,6 +666,6 @@ function salesPocketbook() {
             } finally { this.stageSaving = false }
         },
     }
-}
+};
 </script>
 @endsection

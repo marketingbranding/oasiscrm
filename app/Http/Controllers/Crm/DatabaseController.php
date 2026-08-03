@@ -55,15 +55,12 @@ class DatabaseController extends Controller
             $isStale = $syncStatus?->status !== 'success' || ! $syncStatus?->finished_at
                 || $syncStatus->finished_at->lt(now()->subMinutes((int) config('services.google_sheets.cache_stale_minutes', 30)));
 
-            $recordRows = DatabaseSheetRecord::where('branch_id', $selectedBranch->id)
+            $cachedSheetNames = DatabaseSheetRecord::where('branch_id', $selectedBranch->id)
                 ->whereNull('oasis_deleted_at')
+                ->select('sheet_name')
+                ->distinct()
                 ->orderBy('sheet_name')
-                ->orderBy('row_number')
-                ->get();
-
-            foreach ($recordRows as $row) {
-                $records[$row->sheet_name][] = $row;
-            }
+                ->pluck('sheet_name');
 
             $orderedSheetNames = [];
             $sheetSeen = [];
@@ -81,7 +78,7 @@ class DatabaseController extends Controller
                 // API unavailable, show only sheets with records
             }
 
-            foreach ($records as $name => $rows) {
+            foreach ($cachedSheetNames as $name) {
                 if (! isset($sheetSeen[$name])) {
                     $orderedSheetNames[] = $name;
                     $sheetSeen[$name] = true;
@@ -90,12 +87,24 @@ class DatabaseController extends Controller
 
             $sheetNames = $orderedSheetNames;
 
-            // Only keep first sheet's records in memory; rest load via AJAX
             $firstSheet = $sheetNames[0] ?? null;
-            foreach (array_keys($records) as $name) {
-                if ($name !== $firstSheet) {
-                    unset($records[$name]);
-                }
+            if ($firstSheet) {
+                $records[$firstSheet] = DatabaseSheetRecord::where('branch_id', $selectedBranch->id)
+                    ->where('sheet_name', $firstSheet)
+                    ->whereNull('oasis_deleted_at')
+                    ->orderBy('row_number')
+                    ->get([
+                        'id',
+                        'sheet_name',
+                        'row_number',
+                        'oasis_sync_id',
+                        'headers',
+                        'row_data',
+                        'formula_columns',
+                        'column_metadata',
+                        'updated_at',
+                    ])
+                    ->all();
             }
         }
 

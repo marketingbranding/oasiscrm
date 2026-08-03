@@ -10,6 +10,7 @@ use App\Models\Role;
 use App\Models\User;
 use App\Services\GoogleSheetsApiService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Mockery;
 use Tests\TestCase;
 
@@ -153,6 +154,45 @@ class DatabaseUiTest extends TestCase
         $this->assertStringContainsString('this.openAdd(this.tab)', $html);
     }
 
+    public function test_database_index_only_hydrates_records_for_the_initial_sheet(): void
+    {
+        [$branch] = $this->databaseRecord();
+        DatabaseSheetRecord::query()->create([
+            'branch_id' => $branch->id,
+            'sheet_id' => $branch->sheet_id,
+            'sheet_name' => 'Archive',
+            'row_number' => 2,
+            'headers' => ['id_kavling'],
+            'row_data' => ['id_kavling' => 'OLD-01'],
+            'formula_columns' => [],
+            'column_metadata' => [],
+        ]);
+        $user = User::factory()->create([
+            'role_id' => Role::query()->where('slug', 'pusat')->firstOrFail()->id,
+            'branch_id' => $branch->id,
+            'password_changed_at' => now(),
+        ]);
+        $google = Mockery::mock(GoogleSheetsApiService::class);
+        $google->shouldReceive('sheetTitles')->once()->with($branch->sheet_id)->andReturn(['Leads', 'Archive']);
+        $this->app->instance(GoogleSheetsApiService::class, $google);
+
+        DB::flushQueryLog();
+        DB::enableQueryLog();
+        $response = $this->actingAs($user)->get(route('database.index', ['branch_id' => $branch->id]))
+            ->assertOk();
+
+        $recordQueries = collect(DB::getQueryLog())
+            ->pluck('query')
+            ->filter(fn (string $query) => str_contains($query, 'database_sheet_records'))
+            ->values();
+
+        $this->assertCount(2, $recordQueries);
+        $this->assertTrue($recordQueries->contains(fn (string $query) => str_contains($query, 'select distinct') && str_contains($query, 'sheet_name')));
+        $this->assertTrue($recordQueries->contains(fn (string $query) => str_contains($query, '"sheet_name" = ?')));
+        $this->assertCount(1, $response->viewData('records')['Leads']);
+        $this->assertSame([], $response->viewData('records')['Archive']);
+    }
+
     public function test_database_client_query_state_and_responsive_contract_remain_local(): void
     {
         $view = file_get_contents(resource_path('views/crm/database/index.blade.php'));
@@ -173,6 +213,21 @@ class DatabaseUiTest extends TestCase
     {
         $title = 'Ruang kerja Database diperbarui';
         $migration = require database_path('migrations/2026_07_30_000001_add_database_2_changelog.php');
+        $migration->up();
+        $migration->up();
+        $superadmin = User::factory()->create([
+            'role_id' => Role::query()->where('slug', 'superadmin')->firstOrFail()->id,
+            'password_changed_at' => now(),
+        ]);
+
+        $this->assertSame(1, Changelog::query()->whereNull('version')->where('title', $title)->count());
+        $this->actingAs($superadmin)->get(route('changelogs.index'))->assertOk()->assertSee($title);
+    }
+
+    public function test_database_memory_fix_changelog_is_idempotent_and_visible(): void
+    {
+        $title = 'Database Cabang Besar Lebih Stabil';
+        $migration = require database_path('migrations/2026_08_03_000003_add_database_memory_fix_changelog.php');
         $migration->up();
         $migration->up();
         $superadmin = User::factory()->create([

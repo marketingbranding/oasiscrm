@@ -2,11 +2,13 @@
 
 namespace App\Models;
 
+use App\Enums\SalesLeadStatus;
 use App\Services\OrganizationScopeService;
 use App\Services\WorkspaceAccessService;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\MorphMany;
 
 class SalesLead extends Model
@@ -36,6 +38,10 @@ class SalesLead extends Model
         'normalized_phone', 'source_name_snapshot', 'notes', 'linked_consumer_reference',
         'contacted_at', 'met_at', 'surveyed_at', 'utj_at', 'documents_completed_at',
         'akad_at', 'created_by', 'updated_by',
+        'external_lead_id', 'id_promo', 'source', 'platform', 'campaign_id', 'campaign_name',
+        'current_status', 'current_status_changed_at', 'current_status_source', 'current_status_source_id',
+        'consumer_converted_at', 'freelance_converted_at', 'consumer_external_id',
+        'freelance_external_id', 'slik_external_id', 'akad_external_id',
     ];
 
     protected function casts(): array
@@ -48,6 +54,10 @@ class SalesLead extends Model
             'utj_at' => 'datetime',
             'documents_completed_at' => 'datetime',
             'akad_at' => 'datetime',
+            'current_status' => SalesLeadStatus::class,
+            'current_status_changed_at' => 'datetime',
+            'consumer_converted_at' => 'datetime',
+            'freelance_converted_at' => 'datetime',
         ];
     }
 
@@ -84,6 +94,46 @@ class SalesLead extends Model
     public function comments(): MorphMany
     {
         return $this->morphMany(Comment::class, 'commentable');
+    }
+
+    public function statusHistories(): HasMany
+    {
+        return $this->hasMany(SalesLeadStatusHistory::class);
+    }
+
+    public function siteVisits(): HasMany
+    {
+        return $this->hasMany(SalesLeadSiteVisit::class);
+    }
+
+    public function consumerLinks(): HasMany
+    {
+        return $this->hasMany(SalesLeadConsumerLink::class);
+    }
+
+    public function slikAttempts(): HasMany
+    {
+        return $this->hasMany(SalesLeadSlikAttempt::class);
+    }
+
+    public function freelanceLinks(): HasMany
+    {
+        return $this->hasMany(SalesLeadFreelanceLink::class);
+    }
+
+    public function akadLinks(): HasMany
+    {
+        return $this->hasMany(SalesLeadAkadLink::class);
+    }
+
+    public function lifecycleReconciliationItems(): HasMany
+    {
+        return $this->hasMany(SalesLeadLifecycleReconciliationItem::class);
+    }
+
+    public function getIsFreelanceAttribute(): bool
+    {
+        return $this->freelance_converted_at !== null;
     }
 
     public function scopeVisibleTo(Builder $query, User $user): Builder

@@ -17,7 +17,16 @@ class LeadMaster extends Model
         'lead_source',
         'category',
         'is_active',
+        'is_nup_eligible',
     ];
+
+    protected function casts(): array
+    {
+        return [
+            'is_active' => 'boolean',
+            'is_nup_eligible' => 'boolean',
+        ];
+    }
 
     public function branch(): BelongsTo
     {

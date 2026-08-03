@@ -117,11 +117,7 @@
             return 'Menampilkan ' + this.totalResults + ' hasil untuk &quot;' + q + '&quot;';
         }
     }">
-        <style>
-            [x-cloak] { display: none !important; }
-            .tabs-scroll { scrollbar-width: none; -ms-overflow-style: none; }
-            .tabs-scroll::-webkit-scrollbar { display: none; }
-        </style>
+        <style>[x-cloak] { display: none !important; }</style>
 
         <div class="mb-4 flex flex-wrap items-center gap-2">
             <input type="text" x-model="searchQuery" placeholder="Cari nama atau kavling..." aria-label="Cari konsumen progress berdasarkan nama atau kavling"
@@ -132,7 +128,7 @@
         </div>
 
         <div x-show="!hasQuery">
-        <div role="group" aria-label="Tahap konsumen" class="tabs-scroll mb-2 flex flex-wrap overflow-x-auto border-b-2 border-black">
+        <div role="group" aria-label="Tahap konsumen" class="tabs-scroll crm-horizontal-tabs mb-2 flex flex-nowrap border-b-2 border-black" data-horizontal-tabs>
             @foreach($stages as $key => $cfg)
             @php $count = count($pipeline[$key] ?? []); @endphp
             <button type="button" @click="stage = '{{ $key }}'"

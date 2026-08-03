@@ -152,7 +152,7 @@
                 @endif
 
                 @hasSection('page-tabs')
-                    <div class="crm-page-tabs">@yield('page-tabs')</div>
+                    <div class="crm-page-tabs crm-horizontal-tabs" data-horizontal-tabs>@yield('page-tabs')</div>
                 @endif
 
                 @hasSection('toolbar')

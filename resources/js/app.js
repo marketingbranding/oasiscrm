@@ -18,6 +18,7 @@ import registerCrmModal from './crm-modal';
 import registerSalesPocketbook from './sales-pocketbook';
 import registerPwa from './pwa';
 import registerDanaTalangan from './dana-talangan';
+import registerHorizontalTabs from './horizontal-tabs';
 
 window.Alpine = Alpine;
 window.Sortable = Sortable;
@@ -35,5 +36,6 @@ registerCrmModal(Alpine);
 registerSalesPocketbook(Alpine);
 registerPwa(Alpine);
 registerDanaTalangan(Alpine);
+registerHorizontalTabs();
 
 Alpine.start();

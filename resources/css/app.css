@@ -372,7 +372,6 @@
     max-width: 100%;
     overflow-x: auto;
     border-bottom: var(--oasis-border-width-strong) solid var(--oasis-border-strong);
-    scrollbar-color: var(--oasis-accent-sales) transparent;
 }
 
 .sales-pocketbook-tab {
@@ -664,7 +663,6 @@
     margin-bottom: var(--oasis-space-3);
     overflow-x: auto;
     border-bottom: var(--oasis-border-width-strong) solid var(--oasis-border-strong);
-    scrollbar-color: var(--oasis-accent-database) transparent;
 }
 
 .database-tab {
@@ -1172,6 +1170,19 @@
 .crm-page-tabs {
     margin-bottom: 0.75rem;
     overflow-x: auto;
+}
+
+.crm-horizontal-tabs {
+    max-width: 100%;
+    overflow-x: auto;
+    overflow-y: hidden;
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+}
+
+.crm-horizontal-tabs::-webkit-scrollbar {
+    display: none;
 }
 
 .crm-page-toolbar {

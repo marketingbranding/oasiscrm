@@ -117,7 +117,7 @@
         <x-crm.alert variant="warning" title="Penugasan proyek diperlukan" id="sales-pocketbook-assignment-alert">Anda belum ditugaskan ke proyek. Hubungi admin pusat.</x-crm.alert>
     @endif
 
-    <nav class="sales-pocketbook-tabs" aria-label="Tampilan Buku Saku Sales">
+    <nav class="sales-pocketbook-tabs crm-horizontal-tabs" data-horizontal-tabs aria-label="Tampilan Buku Saku Sales">
         @foreach(['leads' => 'Lead', 'agenda' => 'Agenda', 'report' => 'Laporan'] as $key => $label)
             <a href="{{ $tabUrl($key) }}"
                @if($tab === $key) aria-current="page" @endif

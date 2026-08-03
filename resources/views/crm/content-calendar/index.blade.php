@@ -66,7 +66,7 @@
         <x-crm.status-badge :variant="$attentionCount > 0 ? 'danger' : 'success'">Overdue: {{ $attentionCount }}</x-crm.status-badge>
     </div>
 
-    <nav class="flex overflow-x-auto border-b-2 border-black" aria-label="Tampilan Work Planner">
+    <nav class="crm-horizontal-tabs flex border-b-2 border-black" data-horizontal-tabs aria-label="Tampilan Work Planner">
         @foreach($tabs as $key => $label)
         <a href="{{ route('content-calendar.index', ['view'=>$key]) }}" @if($viewMode === $key) aria-current="page" @endif class="shrink-0 border-2 border-b-0 border-black px-4 py-3 text-xs font-[Helvetica] font-bold uppercase focus:outline focus:outline-4 focus:outline-[#0000ee] {{ $viewMode === $key ? 'bg-[#b3bd95]' : 'bg-white hover:bg-gray-100' }}">{{ $label }}</a>
         @endforeach

@@ -261,6 +261,8 @@ Prefer the named sections in `layouts.crm`: `breadcrumbs`, `page-title`, `page-d
 
 `x-crm.page-header` now supports `variant="canonical"`, but its default `legacy` mode remains for compatibility. Do not bulk-switch 28 consumers without module-level review.
 
+Horizontally overflowing tab and tab-like navigation strips use `.crm-horizontal-tabs` with `data-horizontal-tabs`. The shared helper hides native scrollbar visuals, converts vertical mouse-wheel input only while horizontal movement remains available, preserves native trackpad/touch scrolling, and keeps the active item visible. Keep each module's existing link, button, ARIA, keyboard, route, and active-state semantics; do not add page-local wheel listeners.
+
 ## 17. Table Conventions
 
 - use `.crm-table-scroll` and `.crm-data-table`;

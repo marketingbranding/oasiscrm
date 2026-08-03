@@ -16,11 +16,11 @@
             <button type="button" @click="open=false" class="text-xl leading-none">×</button>
         </div>
 
-        <div class="border-b-2 border-black bg-white px-2 py-1 flex gap-1 overflow-x-auto">
+        <div class="crm-horizontal-tabs border-b-2 border-black bg-white px-2 py-1 flex gap-1" data-horizontal-tabs aria-label="Riwayat percakapan Oasis AI">
             <button type="button" @click="newChat()" class="shrink-0 border border-black bg-[#b3bd95] px-2 py-1 text-[11px] font-bold font-[Helvetica]">Chat Baru</button>
             <template x-for="conversation in conversations" :key="conversation.id">
                 <div class="shrink-0 flex border border-black bg-white">
-                    <button type="button" @click="loadConversation(conversation.id)" class="hover:bg-[#fcc20f] px-2 py-1 text-[11px] max-w-28 truncate" x-text="conversation.title"></button>
+                    <button type="button" @click="loadConversation(conversation.id)" :data-horizontal-tab-active="conversationId === conversation.id ? 'true' : null" class="hover:bg-[#fcc20f] px-2 py-1 text-[11px] max-w-28 truncate" x-text="conversation.title"></button>
                     <button type="button" @click.stop="deleteConversation(conversation, $event)" :disabled="deletingConversationId === conversation.id"
                             class="border-l border-black px-1.5 text-[11px] font-bold text-[#c0392b] hover:bg-red-50 disabled:opacity-40"
                             title="Hapus percakapan" aria-label="Hapus percakapan">×</button>

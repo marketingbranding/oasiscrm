@@ -108,7 +108,7 @@
          @oasis-sync-updated.window="handleSyncUpdated($event.detail)"
          @oasis:modal-closed.window="handleModalClosed($event.detail)"
          @oasis-form-error.window="handleFormError($event.detail)">
-        <div class="database-tabs" role="tablist" aria-label="Sheet Database">
+        <div class="database-tabs crm-horizontal-tabs" data-horizontal-tabs role="tablist" aria-label="Sheet Database">
             @foreach($sheetNames as $name)
             <button type="button"
                     role="tab"

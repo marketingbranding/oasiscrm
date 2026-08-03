@@ -122,6 +122,7 @@ After controller, route, provider, middleware, or Blade changes:
 
 - `php artisan konsumen-progress:sync --branch=ID`
 - `php artisan dana-talangan:sync --dry-run`
+- `php artisan sales-lead-lifecycle:sync --branch=ID`
 - `php artisan sheet:cleanup-meta --branch=ID --dry-run`
 - `php artisan oasis:presence-cleanup`
 - `php artisan oasis:presence-diagnostics`
@@ -194,7 +195,7 @@ AI Chat exists as a separate feature. Do not mix it into unrelated work.
 |---|---|
 | Identity | `User`, `Role`, `Permission`, `UserInvitation`, `UserImportBatch`, `UserImportRow` |
 | Organization | `Branch`, `LeadMaster`, `ProjectUser`; pivots `branch_user`, `project_user`, `role_user`, `role_permission` |
-| Sales | `SalesLead`, `ContentItem`, `UserDailyReminderDismissal` |
+| Sales | `SalesLead`, lifecycle link/history/sync/reconciliation models, `ContentItem`, `UserDailyReminderDismissal` |
 | Finance | `DanaTalangan`, `DanaTalanganSyncStatus`, `Expense`, `ExpenseCategory` |
 | Google caches | `DatabaseSheetRecord`, `DatabaseSheetSyncStatus`, `KonsumenProgressSheetRow`, `KonsumenProgressSyncStatus` |
 | Collaboration | `ActivityLog` (`activity_log`), `UserNotification`, `UserPresence`, `Comment`, `CommentMention`, `CommentRevision`, `CommentModeration` |
@@ -208,6 +209,7 @@ Cast gotchas:
 - `Comment.lock_version` and `Expense.lock_version` are integers.
 - `DatabaseSheetRecord` JSON fields and `KonsumenProgressSheetRow.row_data` are arrays.
 - `ContentItem.pic_names` is an array.
+- `SalesLead.current_status` is a `SalesLeadStatus` enum after hydration.
 - `DanaTalangan`, `Expense`, and `Comment` use soft deletes.
 
 ## 6. Identity and Authorization
@@ -394,6 +396,9 @@ Do not describe Google integration as a fixed count of service classes. Current 
 - `KonsumenPipelineService`
 - `DanaTalanganGoogleService`
 - `DanaTalanganOptionService`
+- `SalesLeadSpreadsheetContract`
+- `SalesLeadSpreadsheetWriter`
+- `SalesLeadLifecycleSyncService`
 - `GoogleScriptService`
 - `SyncLockService`
 - `SyncResponseService`
@@ -428,6 +433,20 @@ Konsumen Progress required tabs are case-sensitive:
 - `bast`
 
 `KonsumenProgressSheetRow` is a replaceable cache row. Its ID and `row_hash` are not stable collaboration identities. Do not attach comments or durable references to cache row IDs.
+
+### Buku Saku Sales lifecycle
+
+Buku Saku Sales 2.1 adds a canonical branch-scoped lifecycle beside the preserved six legacy stage timestamps. `SalesLead.current_status` follows `no_response`, `discussion`, `site_visit`, `utj`, `slik_check`, `slik_rejected`, and `akad` in monotonic primary precedence. `freelance` is an independent conversion flag/history. Only `no_response`, `discussion`, and `site_visit` are manually owned; a system-owned current status is read-only in lead forms.
+
+Lifecycle records use dedicated status-history, site-visit, consumer, SLIK, freelance, Akad, sync-status, and reconciliation tables. Identity is branch-scoped: prefer `external_sync_id`/`oasis_sync_id`; row numbers, names, phones, NIK, kavling, and generated business IDs are not durable write identities. A synchronized lead cannot move to another branch.
+
+`SalesLeadSpreadsheetContract` resolves only `sales_lead.branch_id -> branches.sheet_id` and validates the target tab contract. `SalesLeadSpreadsheetWriter` owns immediate append/update, exact trailing OASIS metadata, formula preservation, and UUID-idempotent retry. `SalesLeadLifecycleService` owns web operations; `SalesLeadLifecycleSyncService` owns pull/reconciliation. Keep these responsibilities separate from Database and Konsumen Progress sync.
+
+Implemented flows are lead create/update, site visit, normal consumer, NUP consumer, SLIK submission/rejection, freelance conversion, and pull-only Akad. `lead_master.is_nup_eligible` selects `data_konsumen_nup`; NUP never sets UTJ. A `data_ceklok` result of `utj` is only a site-visit outcome. Normal consumer conversion sets canonical `utj` but not legacy `utj_at`.
+
+Pull sync requires `sales_pocketbook.sync`; reconciliation listing requires `sales_pocketbook.reconcile`. Both also require `sales_pocketbook.manage` branch scope and workspace view/sync rights. Defaults map both permissions to primary `supervisor`, `manager`, `branch_manager`, `pusat`, and legacy `admin`; supplemental roles do not grant them. The reconciliation route is list-only JSON with no manual resolve/remap mutation.
+
+`sales-lead-lifecycle:sync --branch=ID` runs one branch or all active configured branches and is scheduled every ten minutes with overlap protection. Missing optional tabs become capability/reconciliation issues; a missing or invalid `lead` tab fails the branch. JPR currently lacks `data_ceklok`, so that capability and live site-visit writes remain unavailable there.
 
 ### Dana Talangan
 
@@ -584,6 +603,8 @@ The foundational token layer now exists in `resources/css/app.css`. It defines p
 Database 2.0 is the first completed operational Design System migration. It uses canonical page, toolbar, state, status, button, control, sync, presence, and modal primitives while retaining its lazy sheet tabs, dynamic metadata fields, wide table, frozen identity columns, skeleton, and sync-refresh orchestration as Database-specific behavior. It still has no project filter, domain filter, pagination, export/import, bulk action, detail route, or comments integration.
 
 Buku Saku Sales 2.0 is the second completed operational migration. It uses canonical page, toolbar, field, action, status, state, modal, pagination, presence, and table primitives while retaining URL-backed Leads/Agenda/Laporan views, primary-Sales versus monitoring hierarchy, daily reminder behavior, lead stages, Sales Agenda subtype/actions, weekly/custom metrics, drilldowns, and exports. Leads use one responsive record DOM; there is no backend search, chart, Kanban, new stage, or client-side report calculation.
+
+Buku Saku Sales 2.1 adds branch-workbook lead writes, canonical lifecycle status/history, site-visit/consumer-or-NUP/SLIK/freelance operations, pull-only Akad reconciliation, sync controls, lifecycle modals/details, and lifecycle export fields. It preserves the six legacy stage fields and does not add a rendered reconciliation-management screen; that destination is list-only JSON.
 
 Work Planner 2.0 is the third completed operational migration. It uses canonical page, toolbar, field, action, status, state, presence, and table primitives while retaining URL-backed Hari Ini/Kalender/Tugas/Agenda/Konten/Semua views, Today grouping, server-built calendar grid, task/agenda/content status workspaces, routed create/edit/import pages, detail JSON, Sortable status updates, comments, mentions, presence, optimistic conflicts, bulk endpoints, and XLSX import/export mappings. It adds no new item type, status, assignment rule, project relationship, calendar dependency, route, permission, or import/export architecture.
 
@@ -1082,6 +1103,7 @@ Production must invoke Laravel scheduler every minute. Current schedules in `rou
 
 - Konsumen Progress sync every 10 minutes;
 - Dana Talangan sync every 10 minutes;
+- Buku Saku Sales lead lifecycle sync every 10 minutes;
 - presence cleanup hourly;
 - notification cleanup weekly;
 - expired user-import cleanup daily.
@@ -1176,6 +1198,9 @@ Do not state visual/browser verification was completed unless it was actually pe
 - `PSJB` tab casing is significant.
 - Database metadata cleanup removes all matching metadata columns.
 - Google credentials may fail during service construction.
+- Buku Saku lifecycle write tests must mock `SalesLeadSpreadsheetWriter`; pull-sync tests must mock `GoogleSheetsApiService`. Creating a lead now performs a remote `lead` append inside the local transaction.
+- Buku Saku lifecycle pull identity is branch-scoped. `external_sync_id`/`oasis_sync_id` is stable; `external_lead_id`, kavling, generated IDs, names, NIK, and remote row numbers are fallback/context only and must not cross-link branches.
+- The JPR branch workbook currently has no `data_ceklok`; do not add a cross-branch fallback or claim site-visit spreadsheet writes work there.
 - `x-trap` is not supported unless Alpine Focus is explicitly installed/registered; prefer verified local focus management.
 - The layout has broad mobile control-size overrides; test compact overlays/tables carefully.
 - Some legacy views still use `alert()`/native `confirm()` and incomplete dialog semantics. Do not copy those as preferred patterns.

@@ -1,89 +1,108 @@
 # OASIS Buku Saku Sales 2.1 Multi-Branch Lifecycle Audit
 
-This document records the verified current state and the approved implementation contract for the multi-branch Buku Saku Sales lifecycle integration. This audit commit is documentation only; the subsequent implementation commits add the routes, database changes, synchronization, spreadsheet writes, permissions, and UI behavior.
+This document records the verified implementation delivered by commits `651619e`, `8d36681`, `b646941`, `3ec058e`, `3e230bb`, and `59817f7`. Executable code, migrations, database constraints, and each branch's configured spreadsheet remain authoritative. The audited Solo workbook is a schema reference, never a production fallback.
 
-`AGENTS.md`, executable application code, database constraints, and each branch's configured spreadsheet remain authoritative. The Solo workbook is a reference specimen, not a production default.
+## 1. Implemented Scope
 
-## 1. Purpose and Decision Boundary
+Buku Saku Sales 2.1 adds a branch-scoped lead lifecycle alongside the preserved six legacy stage timestamps. It implements:
 
-The intended 2.1 outcome is a branch-scoped lifecycle that can reconcile OASIS sales leads with the relevant operational tabs in each branch workbook without replacing the existing Buku Saku Sales lead model or silently standardizing unlike workbooks.
+- canonical lead status and status history;
+- linked site-visit, consumer/NUP, SLIK, freelance, and Akad records;
+- project-level NUP capability;
+- branch workbook contract resolution and stable metadata writes;
+- immediate lead and lifecycle spreadsheet writes;
+- pull synchronization, capability reporting, and reconciliation-item generation;
+- scoped sync/status/reconciliation routes, permissions, command, and schedule;
+- lifecycle controls and details in the existing Buku Saku Sales workspace;
+- one consolidated OASIS Changelog entry.
 
-This proposal covers:
+The existing `contacted_at`, `met_at`, `surveyed_at`, `utj_at`, `documents_completed_at`, and `akad_at` columns, their stage controls, reversal behavior, reports, and drilldowns remain. The canonical lifecycle does not replace that legacy stage model. Pull sync writes `akad_at` from a valid linked Akad date when it is currently null; other new lifecycle operations do not populate the legacy timestamps.
 
-- branch and spreadsheet resolution;
-- the verified Solo reference schema;
-- the verified Jepara differences;
-- lifecycle event interpretation;
-- stable cross-system identity;
-- field and status ownership;
-- deterministic reconciliation and conflict precedence;
-- migration, backfill, authorization, observability, rollback, and acceptance requirements.
+Database sync and Konsumen Progress sync remain independent. Buku Saku Sales lifecycle has its own services, status table, routes, permissions, command, and lock namespace.
 
-The task specification authorizes the implementation described here. Risky workbook mutations remain fail-closed and require the branch contract checks, stable identity, and backup/reconciliation safeguards defined below.
+## 2. Durable Model
 
-## 2. Current OASIS Baseline
+### `lead_master`
 
-`sales_leads` is the current durable Buku Saku Sales lead store. Each row belongs to one branch, one project, and one Sales user. It also stores the lead date, customer identity fields, lead source, notes, optional manual consumer reference, creator/updater references, and normal Laravel timestamps.
+`is_nup_eligible` is a boolean project capability with default `false`. It selects the consumer operation destination:
 
-The current lifecycle is represented by exactly six nullable timestamps, in order:
+- `false`: `data_konsumen`, then canonical status `utj`;
+- `true`: `data_konsumen_nup`, with no UTJ transition and no `consumer_converted_at` update.
 
-| Order | Column | Current label |
-|---|---|---|
-| 1 | `contacted_at` | `DIHUBUNGI` |
-| 2 | `met_at` | `TATAP MUKA` |
-| 3 | `surveyed_at` | `SURVEY` |
-| 4 | `utj_at` | `UTJ` |
-| 5 | `documents_completed_at` | `BERKAS AWAL LENGKAP` |
-| 6 | `akad_at` | `AKAD` |
+The flag is not inferred from workbook tabs or project text. Existing projects are effectively backfilled by the database default.
 
-The latest non-null timestamp determines the displayed current stage. Reversing a stage clears that timestamp and every later timestamp. Stage writes are optimistic-lock protected and activity logged.
+### `sales_leads`
 
-### Preservation requirement
+The lifecycle additions are:
 
-The six columns, their order, labels, reversal semantics, report use, drilldowns, and exports must be preserved. A spreadsheet lifecycle import may supply evidence or propose a missing timestamp, but it must not rename, collapse, reinterpret, or overwrite an existing timestamp without an approved field-level rule.
+| Group | Fields |
+|---|---|
+| External lead data | `external_lead_id`, `external_sync_id`, `id_promo`, `source`, `platform`, `campaign_id`, `campaign_name` |
+| Canonical status | `current_status`, `current_status_changed_at`, `current_status_source`, `current_status_source_id` |
+| Conversion markers | `consumer_converted_at`, `freelance_converted_at` |
+| External references | `consumer_external_id`, `freelance_external_id`, `slik_external_id`, `akad_external_id` |
 
-The current `linked_consumer_reference` is a manual string, not a stable foreign key. Names, phone numbers, row numbers, and replaceable Konsumen Progress cache IDs must not be promoted to durable identities.
+`current_status` defaults to `no_response` and is cast to `SalesLeadStatus`. Both `external_lead_id` and `external_sync_id` are unique only within a branch. A synchronized lead cannot be moved to another branch.
 
-## 3. Unchanged Product Contracts
+### Lifecycle tables
 
-The following behavior remains unchanged unless a later implementation scope explicitly says otherwise:
+| Table | Purpose and important identity |
+|---|---|
+| `sales_lead_status_histories` | Append-style status evidence with branch, actor, source/source ID, operation UUID, event time, and allowlisted metadata. Unique by `branch_id + operation_uuid` and by `sales_lead_id + source + source_id + status`. |
+| `sales_lead_site_visits` | Multiple complete or incomplete visits, including date, time bucket, result, notes, completion flag, sheet row, and sync UUID. |
+| `sales_lead_consumer_links` | Normal or NUP consumer link, NIK, kavling, payload snapshot, conversion time, and sheet identity. Each non-null NIK is unique per branch and sheet type at the database boundary; service validation prevents reuse by another lead while allowing one lead to progress from NUP to normal consumer. |
+| `sales_lead_slik_attempts` | Consumer-linked SLIK submissions/results, attempt number, NIK, kavling, SLIK date, rejection time, and sheet identity. |
+| `sales_lead_freelance_links` | Freelance conversion plus resolved coordinator, `OJT` Sales identity, source NIK/name values, and sheet identity. |
+| `sales_lead_akad_links` | Pull-synchronized Akad evidence linked to a consumer, with optional SLIK link, kavling, Akad reference/date, and source metadata. |
+| `sales_lead_lifecycle_sync_statuses` | One row per branch: state, operation UUID, message, summary, timing, last success, and initiator. |
+| `sales_lead_lifecycle_reconciliation_items` | Branch-scoped open/resolved issues keyed by entity type, identity key, and issue code. |
 
-- the current Buku Saku Sales routes and route names;
-- primary-role permission resolution and the primary Sales `sales.access` restriction;
-- `SalesLeadPolicy`, organization scope, branch/project assignment windows, and explicit denial of inaccessible filters;
-- lead creation, update, duplicate-phone warning, stage set/reverse, comments, mentions, presence, notifications, and optimistic conflict handling;
-- the independent 20-row lead and agenda paginators;
-- Sales Agenda ownership, subtype, completion, missing-result, and reschedule behavior;
-- weekly/custom reports, event-count metrics, conversion calculations, drilldowns, sorting, XLSX output, and all-time `last_input` behavior;
-- the daily Sales reminder and its dismissal/suppression rules;
-- the six legacy lifecycle timestamps and all historical values already stored in them.
+Each operation table uses branch-scoped uniqueness for `operation_uuid`, `oasis_sync_id`, and `sheet_name + remote_row_number`. Row number is retained as location metadata, not used as the durable write identity.
 
-Legacy reports must continue to read the same timestamp columns with the same period semantics. Backfill must not rewrite report history merely to make spreadsheet status totals agree.
+## 3. Status Ownership and Precedence
 
-Database sync and Konsumen Progress sync remain separate systems with separate routes, caches, completeness rules, and status tables. Buku Saku Sales 2.1 must not merge them, route through them implicitly, or attach durable lead identity to `KonsumenProgressSheetRow` IDs.
+Canonical statuses are:
 
-## 4. Spreadsheet Resolution and Reference Safety
+| Status | Owner/evidence |
+|---|---|
+| `no_response` | Manual |
+| `discussion` | Manual |
+| `site_visit` | Manual status or site-visit operation |
+| `utj` | Normal consumer conversion or linked normal-consumer pull evidence |
+| `slik_check` | SLIK submission or linked SLIK pull evidence |
+| `slik_rejected` | Explicit SLIK rejection or linked SLIK evidence |
+| `akad` | Valid linked Akad pull evidence |
+| `freelance` | Independent conversion flag/history; not part of primary precedence |
 
-The only production spreadsheet resolution rule is:
+Primary precedence is exactly:
+
+```text
+no_response < discussion < site_visit < utj < slik_check < slik_rejected < akad
+```
+
+Manual forms and the lifecycle-status endpoint accept only `no_response`, `discussion`, and `site_visit`. Manual statuses may move among those three, including back to `no_response`, but once the current status is system-owned it is read-only in lead forms. Forged system statuses are rejected.
+
+System transitions are monotonic according to primary precedence. Pull sync records lower/equal observations in history but does not downgrade `current_status`. `freelance` coexists with the primary status: it sets `freelance_converted_at`, external identity, and history without replacing the primary status. When appropriate, `lead.status_lead` is still written as `Jadi Freelance`; the local primary status remains unchanged.
+
+`Cek Silk` and `Cek SLIK` both ingest as `slik_check`. OASIS displays `Cek SLIK` but writes the historical spreadsheet validation value `Cek Silk`.
+
+### NUP and UTJ boundary
+
+NUP conversion writes `data_konsumen_nup` only. It does **not** set `utj`, `utj_at`, `consumer_converted_at`, or the normal consumer reference. A normal `data_konsumen` conversion sets canonical `utj` and the consumer conversion/reference fields, but does not set legacy `utj_at`.
+
+A `data_ceklok.status_ceklok` value of `utj` is only a visit outcome. It sets/retains canonical `site_visit`; it does **not** set canonical `utj` or legacy `utj_at`.
+
+## 4. Branch Spreadsheet Contract
+
+All lifecycle writes resolve the workbook only through:
 
 ```text
 sales_lead.branch_id -> branches.id -> branches.sheet_id
 ```
 
-Requirements:
+The resolver rejects inactive/missing branches, blank `sheet_id`, unknown/missing tabs, missing or reordered required headers, missing required row-two formulas, and incompatible validation metadata. It never falls back to Solo, another branch, project names, users, or workbook titles.
 
-- resolve the branch first through current access and organization scope;
-- use that exact branch's nonblank `branches.sheet_id`;
-- fail closed when the branch is inactive, inaccessible, missing, or lacks `sheet_id`;
-- never substitute another branch's workbook;
-- never infer the workbook from a project name, Sales name, workbook title, or a tab value;
-- never use a hard-coded spreadsheet ID in application code, configuration fallback, command default, test fixture that can reach production, or recovery path.
-
-The audited Solo spreadsheet ID is reference-only. It must never become a production fallback. This document intentionally does not reproduce that ID.
-
-## 5. Solo Reference Workbook Scope
-
-Solo is the schema reference because all seven audited lifecycle tabs exist there:
+The write contract registers these exact tabs:
 
 - `lead`;
 - `data_ceklok`;
@@ -93,405 +112,157 @@ Solo is the schema reference because all seven audited lifecycle tabs exist ther
 - `bi_checking`;
 - `akad`.
 
-The reference is descriptive, not universal. Exact tab names and headers are case-sensitive integration inputs. A branch workbook may be incompatible or partially compatible; the sync must report that state rather than silently reading a similarly named tab.
+The resolver accepts extra branch columns while requiring the registered headers in order. Formula-owned fields are detected from row two and are never replaced by submitted values. The writer copies row-two format and formulas to appended rows where formula ownership exists.
 
-The Solo audit found no hidden OASIS metadata columns on these tabs. Existing spreadsheet row positions and generated business IDs therefore cannot yet provide a stable OASIS identity.
+### Metadata and idempotency
 
-## 6. Exact Solo Headers
+Writable tabs use exact trailing metadata headers:
 
-The audited row-one headers, in exact order, are:
-
-| Tab | Columns | Exact headers |
-|---|---:|---|
-| `lead` | 12 | `id_lead`, `id_promo`, `tanggal_lead`, `sumber`, `platform`, `campaign`, `nama_konsumen`, `no_hp`, `proyek`, `sales_pic`, `status_lead`, `keterangan` |
-| `data_ceklok` | 5 | `nama_konsumen`, `tanggal_ceklok`, `waktu_ceklok`, `status_ceklok`, `keterangan` |
-| `data_sales` | 4 | `nik_sales`, `nama_sales`, `nik_koordinator`, `nama_koordinator` |
-| `data_konsumen_nup` | 14 | `nup`, `no_ktp`, `nama_konsumen`, `tanggal_lahir`, `pekerjaan`, `umur`, `alamat`, `kelurahan`, `kecamatan`, `kabupaten/kota`, `no_hp`, `nama_kondar`, `no_hp_kondar`, `keterangan` |
-| `data_konsumen` | 18 | `id_kavling`, `no_ktp`, `nama_konsumen`, `tanggal_lahir`, `pekerjaan`, `detail_pekerjaan`, `umur`, `alamat`, `kelurahan`, `kecamatan`, `kabupaten/kota`, `no_hp`, `nama_kondar`, `no_hp_kondar`, `status_cash`, `status_konsumen`, `Status`, `keterangan` |
-| `bi_checking` | 6 | `id_kavling`, `no_ktp`, `id_kons`, `tanggal_slik`, `hasil_slik`, `keterangan` |
-| `akad` | 9 | `id_kavling`, `id_ppjb_dev`, `no_ppjb_akad`, `tanggal_akad`, `kualitas_akad`, `lead_time_hari`, `status`, `keterangan_terlambat`, `keterangan` |
-
-Header normalization may be used only to produce a diagnostic. Reads and writes must validate the exact expected contract before mutation. Duplicate, blank, moved, or renamed required headers are schema drift, not an invitation to guess.
-
-## 7. Reference Formulas and Validations
-
-The following formulas describe the audited Solo row-two/reference behavior. Relative row references advance for later rows unless the formula is an array formula.
-
-### `lead`
-
-- `id_lead` is formula-owned. It returns blank when `nama_konsumen` is blank; otherwise it combines `tanggal_lead` as `yymmdd`, initials derived from `sumber` and `platform`, and a two-digit row sequence.
-- Exact reference formula:
-
-```gs
-=IF(G2="","",
-TEXT(C2,"yymmdd")&"-"&
-IFERROR(LEFT(UPPER(D2),1)&MID(UPPER(D2),FIND(" ",D2)+1,1),LEFT(UPPER(D2),2))
-&"-"&
-IFERROR(LEFT(UPPER(E2),1)&MID(UPPER(E2),FIND(" ",E2)+1,1),LEFT(UPPER(E2),2))
-&"-"&TEXT(ROW()-1,"00"))
+```text
+oasis_sync_id, oasis_deleted_at, oasis_deleted_by
 ```
 
-- Strict dropdowns exist for `id_promo`, `sumber`, `sales_pic`, and `status_lead`.
-- `tanggal_lead` is date-validated.
-- The `id_promo` and `sales_pic` option sets are workbook data and must be read from the branch workbook; they must not be copied from Solo into another branch.
-- Audited static `sumber` values are `Canvasing`, `Event`, `Freelance`, `Lead Cabang`, `Online`, `Pameran`, and `Refferal`. Spelling is source data and must not be silently corrected during raw ingestion.
+If none exist, the writer appends, re-reads, verifies, and hides exactly those new trailing columns. If metadata is partial, reordered, or not trailing, the operation fails closed. Existing unrelated hidden columns are not hidden or removed by this writer.
 
-### `data_ceklok`
+Every append requires a UUID operation ID. Before appending, and again after an uncertain append failure, the writer searches `oasis_sync_id`. A retry returns the existing row rather than appending a duplicate. Updates first resolve the current row by `oasis_sync_id`; stored row numbers are not trusted after row movement. Formula-owned, metadata, unknown, and unsupported fields are ignored by the write mapper.
 
-- `nama_konsumen` is formula-owned by a spill filter:
+Lead creation generates `external_sync_id` before the remote append, writes the `lead` row, then re-reads the generated `id_lead` and stores it as `external_lead_id`. A remote failure rolls back the local transaction and does not claim success. Lead updates write the remote row before the local update.
 
-```gs
-=FILTER(lead!G2:G,LOWER(TRIM(lead!K2:K))="cek lokasi")
-```
+## 5. Implemented Operations and Field Mapping
 
-- `tanggal_ceklok` is date-validated.
-- `waktu_ceklok` is a strict dropdown with `malam`, `pagi`, `siang`, and `sore`.
-- `status_ceklok` is a strict dropdown with `follow up`, `non ok`, and `utj`.
-
-### `data_sales`
-
-- No audited formula or validation was found in the reference rows.
-- NIK and name columns are manually maintained reference data.
-
-### `data_konsumen_nup`
-
-- `tanggal_lahir` is date-validated.
-- `umur` is formula-owned:
-
-```gs
-=IF(D2="", "", YEAR(TODAY())-RIGHT(D2,4) & " tahun")
-```
-
-### `data_konsumen`
-
-- `id_kavling` is a strict branch-workbook dropdown. Its current options are operational data, not a portable Solo enum.
-- `tanggal_lahir` is date-validated.
-- `status_cash` is a strict dropdown with `YA` and `TIDAK`.
-- `umur` uses the same formula shape as `data_konsumen_nup`.
-- `status_konsumen` is formula-owned. It returns blank for a blank `id_kavling`, returns `Mundur` when `keterangan` contains that term, otherwise reads the latest matching `proses_bank` response and maps `APPROVED`, `APPROVED TENOR`, or `APPROVED TURUN PLAFOND` to `Lanjut`; `REJECT` to `Reject`; `REVISI` to `Revisi`; and `CASH` to `Cash`.
-- Exact reference formula shape:
-
-```gs
-=IF(A2="","",IF(REGEXMATCH(UPPER(R2),"MUNDUR"),"Mundur",
-LET(respon,IFERROR(XLOOKUP(A2,proses_bank!$A:$A,proses_bank!$D:$D,"",0,-1),""),
-SWITCH(UPPER(TRIM(respon)),"APPROVED","Lanjut","APPROVED TENOR","Lanjut",
-"APPROVED TURUN PLAFOND","Lanjut","REJECT","Reject","REVISI","Revisi",
-"CASH","Cash",""))))
-```
-
-- `Status` is formula-owned completeness output:
-
-```gs
-=IF(A2:A="", "", IF(COUNTA(B2:O2)=14, "Data Lengkap", "Data Belum Lengkap"))
-```
-
-### `bi_checking`
-
-- `id_kavling` is a strict branch-workbook dropdown; options are operational data.
-- `no_ktp` is formula-owned. It selects a complete matching consumer occurrence from `data_konsumen` or returns `Data Belum Lengkap`.
-- `id_kons` is formula-owned from `tanggal_slik`, normalized `hasil_slik`, the final segment of `id_kavling`, and a duplicate sequence:
-
-```gs
-=IF(COUNTA(A2,B2,D2,E2)<4,"",
-LET(x,TEXT(D2,"yymmdd")&"-"&LEFT(SUBSTITUTE(UPPER(E2)," ",""),3)&"-"&REGEXEXTRACT(A2,"[^- ]+$"),
-x&"-"&TEXT(COUNTIFS($A$2:A2,A2,$D$2:D2,D2,$E$2:E2,E2),"00")))
-```
-
-- `tanggal_slik` is date-validated. The audit also found date formatting/validation metadata on `no_ktp`; because that conflicts with its identifier meaning, implementation must preserve raw values and treat this as workbook metadata drift rather than converting KTP identifiers to dates.
-- `hasil_slik` is a strict dropdown with `OK`, `KOL 1`, `KOL 2`, `KOL 3`, `KOL 4`, `KOL 5`, and `NO BIC`.
-
-### `akad`
-
-- `id_kavling` is a strict branch-workbook dropdown; options are operational data.
-- `id_ppjb_dev` is formula-owned by occurrence-aware lookup into `ppjb_dev`, returning `ID Tidak Ditemukan` when no result exists.
-- `no_ppjb_akad` is formula-owned from `tanggal_akad`, normalized `kualitas_akad`, the final segment of `id_kavling`, and a duplicate sequence:
-
-```gs
-=IF(COUNTA(A2,D2,E2)<3,"",
-TEXT(D2,"yymmdd")&"-"&LEFT(SUBSTITUTE(UPPER(E2)," ",""),2)&"-"&
-REGEXEXTRACT(A2,"[^- ]+$")&"-"&TEXT(COUNTIFS($A$2:A2,A2,$D$2:D2,D2,$E$2:E2,E2),"00"))
-```
-
-- `tanggal_akad` is date-validated. The audit also found date metadata on `no_ppjb_akad`; it must remain an identifier string.
-- `kualitas_akad` is a strict dropdown with `Akad Bangunan Belum Jadi`, `Akad DP Belum Lunas`, `Akad KLT Belum Lunas`, and `Akad Sempurna`.
-- `status` is formula-owned:
-
-```gs
-=IF(F2:F="","",IF(F2:F>3,"terlambat","ontime"))
-```
-
-Formula text is not a cross-branch identity and must not be rewritten merely because another branch uses a different but valid formula.
-
-## 8. Status Vocabulary and Alias Handling
-
-The exact audited `lead.status_lead` values are:
-
-| Raw value | Canonical ingestion value | Interpretation boundary |
+| Operation | Spreadsheet mutation | Local result |
 |---|---|---|
-| `No Respon` | `no_response` | manual lead disposition |
-| `Diskusi` | `discussion` | manual lead disposition |
-| `UTJ` | `utj` | imported status is accepted only when linked consumer evidence exists |
-| `Tidak Lolos BI Checking` | `slik_rejected` | system outcome after linked BI Checking update |
-| `Akad` | `akad` | system mirror only when linked `akad.tanggal_akad` is populated |
-| `Cek Lokasi` | `site_visit` | approved manual status; `data_ceklok` stores visit history |
-| `Cek Silk` | `slik_check` | accepted legacy spelling alias for `Cek SLIK` |
-| `Jadi Freelance` | `freelance` | system conversion flag after `data_sales` creation |
+| Create/update lead | Append/update `lead` by `external_sync_id` | Stores generated `id_lead`; updates canonical/manual status history. |
+| Set manual status | Update `lead.status_lead` when synchronized | Updates canonical status/history. |
+| Complete site visit | Append `data_ceklok` | Stores a completed visit and advances to at least `site_visit`. |
+| `Isi Nanti` site visit | No `data_ceklok` append | Stores an incomplete local visit and advances to at least `site_visit`. |
+| Convert normal consumer | Append `data_konsumen` | Stores completed consumer link and advances to `utj`. |
+| Convert NUP consumer | Append `data_konsumen_nup` | Stores completed NUP link without UTJ. |
+| Submit SLIK | Append `bi_checking` from the linked normal consumer | Stores active `submitted` attempt and advances to `slik_check`. |
+| Reject SLIK | Update existing `bi_checking` row by sync UUID | Stores result/reason and advances to `slik_rejected`. |
+| Convert freelance | Append `data_sales` | Stores independent freelance link/flag and status history. |
+| Akad | No web mutation | Pull sync mirrors valid `akad` rows and advances to `akad`. |
 
-`Cek Silk` must be retained verbatim as `source_status_raw` for audit and normalized only in the canonical comparison layer. The UI may display `Cek SLIK`, but sync must accept both spellings without producing two statuses. It must not rewrite the source cell solely to correct the alias.
+### Lead fields
 
-Status normalization is case-insensitive and trims surrounding whitespace. Unknown nonblank statuses are preserved as raw values, reported as unmapped, and excluded from automatic timestamp changes.
+OASIS writes `tanggal_lead`, `sumber`, `platform`, `campaign`, `nama_konsumen`, `no_hp`, `proyek`, `sales_pic`, `status_lead`, `keterangan`, and `id_promo`. `id_lead` remains formula-owned. When the detailed sheet source is blank, OASIS derives it from the OASIS lead-source snapshot; `Iklan Pusat` maps to legacy `Lead Cabang`.
 
-## 9. Jepara Comparison and Schema Drift
+### Site visit fields
 
-Jepara demonstrates why Solo cannot be treated as a universal template:
+OASIS supplies `tanggal_ceklok`, `waktu_ceklok`, `status_ceklok`, and `keterangan`; `nama_konsumen` remains formula-owned and is not overwritten. Complete visits require date, one of `pagi|siang|sore|malam`, and one of `follow up|non ok|utj`. Multiple visits are allowed and operation UUID makes retries idempotent.
 
-- `data_ceklok` is absent;
-- `data_konsumen` has no `status_konsumen` column;
-- `data_konsumen` adds `Kolom Bantu` after `keterangan`;
-- Jepara `data_konsumen` headers are therefore `id_kavling`, `no_ktp`, `nama_konsumen`, `tanggal_lahir`, `pekerjaan`, `detail_pekerjaan`, `umur`, `alamat`, `kelurahan`, `kecamatan`, `kabupaten/kota`, `no_hp`, `nama_kondar`, `no_hp_kondar`, `status_cash`, `Status`, `keterangan`, `Kolom Bantu`;
-- Jepara `Status` uses a different completeness formula and observed row formulas are not internally uniform, so completeness must be read as source output rather than reimplemented from a Solo column count;
-- Jepara `akad` adds `nama_sales` and `nama_koordinator` after the nine Solo columns;
-- those two columns use array lookup formulas against `PSJB` in the audited workbook;
-- Jepara's `no_ppjb_akad` formula format differs from Solo and can return `Data Belum Lengkap`;
-- Jepara `akad` zero-based column indexes 8 through 10 (`I:K`) are hidden; this includes `keterangan`, `nama_sales`, and `nama_koordinator` in the audited layout.
+### Consumer fields
 
-The integration must use per-branch capability detection. Missing `data_ceklok` means that source is unavailable for Jepara; it must not be synthesized from Solo or treated as an empty successful tab. Added columns must be preserved. Formula-owned hidden columns must not be exposed as manual inputs.
+Both consumer flows require a 16-digit, non-placeholder NIK and preserve leading zeroes. Normal consumer additionally requires `id_kavling`. Shared fields include customer name and lead phone; optional address, work, contact, date, cash, NUP, and notes fields are limited to headers supported by the selected tab. Duplicate completed NIK in the same branch is rejected.
 
-## 10. Target Lifecycle Model
+### SLIK fields
 
-The target model separates three concepts:
+SLIK requires a completed normal consumer with NIK and kavling. Submission writes `id_kavling`, `no_ktp`, `tanggal_slik`, and `keterangan`; a second active `submitted` attempt is blocked. Rejection updates `hasil_slik` and required `keterangan` on the stable row. Accepted rejection results are `KOL 1` through `KOL 5` and `NO BIC`.
 
-- the preserved six OASIS milestone timestamps;
-- source observations from branch tabs;
-- a derived lifecycle state used for reconciliation diagnostics.
+### Freelance and coordinator behavior
 
-Recommended source observations are branch-scoped and append/update by stable metadata identity. At minimum they distinguish lead, site-check, NUP, consumer, SLIK, and akad evidence. They must retain the source tab, source raw business ID where present, source status, observed business date, last source hash, and reconciliation state.
+Freelance writes `nik_sales=OJT`, `nama_sales` from the lead's customer name, the submitted coordinator NIK, and the resolved coordinator's OASIS name. The Sales user's active, branch/project-accessible `supervisor_user_id` is mandatory when valid. A different submitted coordinator is rejected. Only when no valid active supervisor is available may the user select a fallback coordinator, who must also be active and have access to the lead branch and project. Spreadsheet NIK values never update OASIS user identity or reporting hierarchy.
 
-The lifecycle must remain monotonic by default: later evidence can fill a missing earlier or same-stage timestamp only under an approved mapping, but it must not erase an existing OASIS timestamp. Reverse-stage remains an explicit authorized OASIS action, not a consequence of a source row disappearing or changing status.
+## 6. Pull Sync and Reconciliation
 
-### Milestone evidence boundary
+`SalesLeadLifecycleSyncService` reads a complete branch workbook response before changing lifecycle records and runs branch reconciliation inside a database transaction under `SyncLockService` key `sales-lead-lifecycle:branch:{id}`.
 
-| Existing timestamp | Permitted evidence candidate | Automatic-write position |
-|---|---|---|
-| `contacted_at` | an explicitly approved `lead.status_lead` mapping | not approved by this audit |
-| `met_at` | no exact audited spreadsheet event | preserve existing/manual only until a source is defined |
-| `surveyed_at` | first transition to canonical `site_visit` | backfill/compatibility only; visit history remains separate |
-| `utj_at` | successful linked `data_konsumen` creation/import | `status_ceklok=utj` explicitly does not set UTJ |
-| `documents_completed_at` | verified `data_konsumen.Status=Data Lengkap` | requires proof of the business date; formula output alone has no event timestamp |
-| `akad_at` | valid `akad.tanggal_akad` | strongest candidate, but still conflict-protected |
+`lead` is mandatory. Its missing tab or invalid required headers fail the run. Missing or invalid optional lifecycle tabs become disabled capabilities and open reconciliation items rather than empty successful sources.
 
-No timestamp may be fabricated from sync time when the business event date is absent. Such evidence remains pending completion.
+Lead matching is branch-isolated:
 
-## 11. NUP Project Strategy
+1. `external_sync_id` from `oasis_sync_id`;
+2. branch-local `external_lead_id` from `id_lead`;
+3. conflict if those identities point to different leads.
 
-NUP participation is a project capability, not a workbook-wide assumption. The target configuration is an explicit project-level flag such as “uses NUP lifecycle,” with a default of `false` for every existing and new project unless deliberately enabled.
+New/imported lead rows require a unique active project name in the branch and a unique active Sales name assigned to that project within the current assignment window. Existing project/Sales ownership is not silently changed; mismatches become reconciliation items.
 
-Rules:
+Consumer, SLIK, Akad, freelance, and visit rows prefer branch-scoped sync UUIDs. Limited fallback matching uses existing confirmed local links and unique branch-local kavling relationships. Ambiguous, missing, unknown-status, invalid-date, unsupported-capability, and assignment cases remain open items. Source deletion does not delete local leads or lifecycle records.
 
-- do not infer the flag from the presence of `data_konsumen_nup`;
-- do not infer it from an `NUP` substring in free text;
-- when false, NUP rows are ignored for lifecycle progression but may be reported as unmatched source observations;
-- when true, `data_konsumen_nup` may represent a pre-consumer phase, but promotion still requires an approved stable match to the later consumer record;
-- enabling or disabling the flag is configuration, must be permission-gated and audited, and must not delete prior observations;
-- disabling after use stops new NUP progression and leaves historical linkage readable.
+Before each successful reconciliation pass, prior open branch items are marked resolved; recurring issues are reopened through `updateOrCreate`. The summary records `imported`, `updated`, `linked`, `unresolved`, and per-tab capabilities. The status row records success/failure timing and message.
 
-The flag must be backfilled to `false` so deployment does not change existing project behavior.
+The reconciliation endpoint is **list-only JSON** with optional status filtering and 50-row pagination. There is no endpoint or UI operation to manually mutate, resolve, remap, or override a reconciliation item.
 
-## 12. Sales and Coordinator Resolution
+## 7. Routes, Permissions, Command, and Schedule
 
-`data_sales` contains `nik_sales`, `nama_sales`, `nik_koordinator`, and `nama_koordinator`. OASIS users currently have no NIK field. Therefore NIK cannot be used as an automatic OASIS user key.
+Lifecycle operation routes retain the main protected CRM middleware and authorize each lead through `SalesLeadPolicy::update`-equivalent abilities:
 
-The target coordinator relationship is the resolved Sales user's `users.supervisor_user_id`, subject to existing reporting-hierarchy validity. Supplemental roles and spreadsheet names do not grant coordinator scope.
+- `sales-leads.lifecycle-status.update`;
+- `sales-leads.site-visits.store`;
+- `sales-leads.consumer.store`;
+- `sales-leads.slik.store`;
+- `sales-leads.slik.reject`;
+- `sales-leads.freelance.store`.
 
-Required completion strategy:
+Sync routes are:
 
-- migration/import preview lists each distinct source Sales and coordinator pair;
-- an authorized operator explicitly maps the source Sales identity to an active OASIS Sales user or marks it unresolved;
-- `nik_sales` and `nik_koordinator` may be retained as source references, but not written into an unrelated user field;
-- after the Sales user is resolved, `supervisor_user_id` is the OASIS coordinator source of truth;
-- a mismatch between spreadsheet coordinator and `supervisor_user_id` is a review item, not an automatic hierarchy update;
-- exact-name matching may suggest candidates only; it must never confirm a user automatically;
-- unresolved or ambiguous mappings block automatic ownership assignment for affected rows.
+- `POST /buku-saku-sales/lifecycle-sync`, permission `sales_pocketbook.sync`;
+- `GET /buku-saku-sales/lifecycle-sync/status`, permission `sales_pocketbook.sync`;
+- `GET /buku-saku-sales/lifecycle-reconciliations`, permission `sales_pocketbook.reconcile`.
 
-Because no NIK field exists, completion input is mandatory before affected records can be reconciled automatically.
+In addition to the registered permission, sync/status/reconciliation require the requested active branch to be in the user's `sales_pocketbook.manage` organization scope, viewable through `WorkspaceAccessService`, and sync-enabled through `canSyncBranch()`. Explicit inaccessible branches return denial, not fallback.
 
-## 13. Stable Branch-Scoped Identity
+The migration maps both new permissions to primary `supervisor`, `manager`, `branch_manager`, `pusat`, and legacy `admin` roles. Superadmin receives registered-permission wildcard behavior. They are not mapped to `sales`, `sales_coordinator`, or `staff`, and supplemental roles do not grant them.
 
-Row number is not identity. Formula-generated IDs may change when rows move or source fields are corrected. Names and phone numbers are not unique. Identity must be explicit and branch-scoped.
+The command is:
 
-The preferred metadata contract for writable lifecycle tabs is:
+```text
+php artisan sales-lead-lifecycle:sync --branch=ID
+```
 
-| Metadata | Purpose |
-|---|---|
-| `oasis_sync_id` | immutable UUID assigned once per source record |
-| `oasis_deleted_at` | explicit soft-deletion marker, if deletion is in scope |
-| `oasis_deleted_by` | source actor/reference for the deletion marker |
+Without `--branch`, it processes every active branch with a nonblank `sheet_id`, continues after individual failures, and exits failure when any branch fails. It is scheduled every ten minutes with a 30-minute overlap lock as `sales-lead-lifecycle-sync`.
 
-The durable uniqueness boundary is at least `branch_id + source_tab + oasis_sync_id`. Spreadsheet ID may be stored as synchronization context, but changing `branches.sheet_id` must not cause cross-branch adoption of records.
+## 8. UI and Export
 
-Metadata columns must be appended only after a dry-run schema check, backup, explicit authorization, and confirmation that formulas/validations will not be displaced. They should be hidden after creation. Existing non-OASIS hidden columns must remain untouched.
+The existing Buku Saku Sales workspace now includes:
 
-Solo currently has no OASIS metadata, so the initial assignment requires a controlled metadata-seeding pass. A row receives one UUID and retains it through row movement and business-field edits. Blank/template/spill rows do not receive identity. The process must be idempotent and must stop on duplicate metadata IDs.
+- lifecycle sync status/control and open reconciliation count for authorized users;
+- lead status badges and lifecycle actions on each lead card;
+- canonical modals for site visit, consumer/NUP, SLIK, SLIK rejection, freelance, and read-only linked details;
+- manual status selection on create/edit only for the three manual statuses;
+- read-only display for a current system-owned status;
+- explicit NUP wording that it does not set UTJ;
+- a post-create/post-edit `site_visit` flow that opens the site-visit modal;
+- source-sheet, platform, campaign, promo ID, branch/Sales, and sync-identity visibility.
 
-For read-only or not-yet-migrated branches, natural keys are reconciliation candidates only:
+The create/edit forms distinguish the required OASIS lead-source category from `Sumber (Sheet)`. The lead export appends `External Sync ID`, `Sumber (Sheet)`, `Platform`, `Campaign`, `Siklus Saat Ini`, and `Freelance` columns without removing the legacy stage columns.
 
-- `lead.id_lead` within branch and tab;
-- `data_konsumen_nup.nup` within an explicitly NUP-enabled project;
-- `data_konsumen.id_kavling` plus an approved consumer occurrence discriminator;
-- `bi_checking.id_kons`;
-- `akad.no_ppjb_akad`.
+The reconciliation link currently navigates to JSON, not a rendered management screen. UI source-contract tests verify modal/status text and prohibit new `alert()`/`confirm()` use in this lifecycle surface, but no browser session was run for this audit.
 
-Candidate keys never authorize an update when duplicated, blank, formula-error-valued, or inconsistent with branch/project scope.
+## 9. Migration, Backfill, and Rollback
 
-## 14. Manual and System Ownership
+Migrations `000004` through `000013` add the model fields/tables, operation fields, sync identity, permissions, NUP-to-normal uniqueness correction, and one changelog entry.
 
-Field ownership must be explicit to prevent sync loops.
+The status backfill reads only existing `surveyed_at`, `utj_at`, and `akad_at`, in that order. The highest applicable status wins and each source becomes an idempotent `legacy_timestamp` history row. `contacted_at`, `met_at`, and `documents_completed_at` do not affect canonical backfill. Existing legacy timestamps are not changed.
 
-| Data | Owner | Sync rule |
-|---|---|---|
-| OASIS six milestone timestamps | OASIS/manual workflow unless separately approved | source evidence cannot clear or silently replace |
-| `lead.status_lead` | spreadsheet operator | ingest raw and normalized; do not rewrite for alias cleanup |
-| `data_ceklok` date/time/status/notes | spreadsheet operator, except formula-spilled name | ingest as source observation |
-| `data_sales` names and NIK references | spreadsheet operator | use for completion mapping only |
-| identity/contact fields on source tabs | spreadsheet operator until an approved two-way field map exists | do not overwrite OASIS PII automatically |
-| formula columns | spreadsheet system | read effective output; never replace formulas with values |
-| OASIS metadata columns | OASIS sync | operators must not edit; duplicate/change is a conflict |
-| derived canonical lifecycle state | OASIS system | recalculate from observations and preserved timestamps |
-| reconciliation decisions and overrides | authorized OASIS operator | audit actor, reason, old/new values |
-| `supervisor_user_id` | OASIS IAM | spreadsheet mismatch is advisory only |
+Rollback behavior is explicit but production-sensitive:
 
-Manual status and system-derived status must be stored/displayed separately. A manual status communicates operator intent; a derived status communicates verified lifecycle evidence. Neither should overwrite the other.
+- `000013` restores the earlier branch-wide NIK uniqueness boundary and therefore must not be rolled back after NUP-to-normal progression exists;
+- `000012` removes only its exact Changelog entry;
+- `000011` removes the two lifecycle permissions;
+- `000010` removes `external_sync_id` and its branch uniqueness;
+- `000008` removes operation-specific fields and constraints;
+- `000007` deletes `legacy_timestamp` histories and resets every canonical status/source field to `no_response`/null;
+- `000006`, `000005`, and `000004` drop reconciliation/status tables, lifecycle tables, and lead/project lifecycle fields.
 
-## 15. Reconciliation and Precedence
+Do not casually run these down migrations after production writes or pull sync. They discard lifecycle history/linkage and cannot undo appended spreadsheet rows or metadata columns. Operational rollback is to stop the scheduler and lifecycle writes first, preserve local evidence, and remediate forward. There is no feature flag or automated workbook restore. `sheet:cleanup-meta` is not a targeted lifecycle rollback because it removes every exact OASIS metadata header it finds.
 
-Each synchronization run must be branch-isolated, lock-protected, idempotent, and complete before replacing its observation snapshot. A partial Google response must not be treated as deletion.
+## 10. Verification and Known Limitations
 
-Recommended matching precedence:
+Focused tests cover status ownership/precedence, backfill, branch uniqueness, contract drift, formula and metadata protection, idempotent append retry, stable-row update, operation validation and rollback, NUP/UTJ separation, coordinator resolution, scoped permissions, command continuation, branch-isolated pull reconciliation, UI source contracts, export additions, and changelog rendering.
 
-1. exact `branch_id + source_tab + oasis_sync_id`;
-2. previously confirmed external-reference mapping in the same branch and tab;
-3. unique, nonblank business ID in the same branch and expected project;
-4. explicit operator completion from the migration review queue;
-5. otherwise unmatched.
+Known limitations:
 
-Names, normalized phones, NIK strings, kavling text, and row positions may rank review suggestions but cannot create a confirmed link by themselves.
+- JPR currently lacks `data_ceklok`; sync reports that capability unavailable and site-visit writes for that branch fail closed rather than using another workbook or synthesizing the tab.
+- The writer may provision and hide metadata columns during a valid live operation; there is no separate dry-run/approval UI for metadata provisioning.
+- Pull sync can import/update lead identity/contact fields from `lead`; it is not an observation-only cache.
+- Reconciliation matching without `oasis_sync_id` is intentionally limited and can leave rows unresolved; there is no manual mutation endpoint to complete those links.
+- `data_sales` pull reconciliation confirms only rows already carrying a known local freelance sync UUID. It does not infer OASIS users from NIK or names.
+- `data_ceklok` pull reconciliation confirms only known visit sync UUIDs. It does not link historical visits by customer name.
+- NUP rows do not automatically promote to normal consumers or UTJ.
+- Akad is pull-only in the web lifecycle; there is no Akad mutation form.
+- Source row absence does not delete local data, and `oasis_deleted_at`/`oasis_deleted_by` are provisioned metadata but deletion flows are not implemented here.
+- No live spreadsheet mutation was executed while verifying these commits. Contract/writer behavior was verified with mocks and source tests only.
+- No browser or responsive visual verification was performed for the lifecycle UI.
 
-Recommended field/event precedence:
-
-1. an existing non-null OASIS lifecycle timestamp is preserved;
-2. an explicit authorized OASIS override with reason wins over imported evidence;
-3. valid dated source evidence may fill a null timestamp only when its mapping is approved and unambiguous;
-4. among equivalent source observations, the earliest valid business event date supplies first-occurrence milestones unless the business rule explicitly defines latest occurrence;
-5. manual source status without a business date does not fabricate a timestamp;
-6. formula output is evidence, not authority to overwrite manual OASIS history;
-7. unknown, contradictory, duplicate, or cross-project evidence enters review and performs no automatic write.
-
-Negative statuses such as `Tidak Lolos BI Checking`, `non ok`, `Reject`, or `Mundur` must not reverse timestamps. They are outcomes with their own observation history. Source deletion also must not reverse a stage.
-
-Conflict classes must include duplicate identity, changed metadata identity, owner mismatch, branch/project mismatch, ambiguous consumer match, source date after/before contradictory milestones, unknown status, missing required tab/header, formula replaced by value, and inaccessible actor-requested scope.
-
-## 16. Migration and Backfill Plan
-
-A future implementation should be phased and reversible at the feature level:
-
-1. Deploy nullable/local integration structures and project NUP configuration with default `false`; do not enable sync writes.
-2. Register any new permissions through `PermissionCatalog` and an idempotent migration with deliberate role mappings.
-3. Inventory every active branch `sheet_id`, exact required tabs/headers, formula columns, validation columns, hidden columns, duplicate business IDs, and row counts in read-only dry-run mode.
-4. Produce branch capability reports. Do not classify a missing optional tab as success or a missing required tab as empty data.
-5. Load source observations read-only without changing `sales_leads` or workbooks.
-6. Collect mandatory completion mappings for Sales users, coordinators, projects, ambiguous consumers, NUP-enabled projects, and duplicate business IDs.
-7. Backfill confirmed links using branch-scoped identities. Preserve every existing six-stage timestamp exactly.
-8. Compare proposed lifecycle events against existing OASIS timestamps and legacy reports. Require zero unexplained report changes before enabling writes.
-9. Seed hidden OASIS metadata per branch/tab only after backup and approved dry-run. Never copy Solo metadata or IDs into another branch.
-10. Enable one pilot branch behind explicit configuration, initially in observe-only mode, then allow only approved null-timestamp fills.
-11. Expand branch by branch after reconciliation error thresholds, authorization tests, and operational sign-off pass.
-12. Enable branch-scoped two-way writes only for operations whose exact sheet/header/metadata contract has passed validation; incompatible operations remain disabled with a focused Indonesian configuration error.
-
-Backfill must be restartable. Each batch records scope, counts, hashes, completion decisions, conflicts, and actor/system identity. It must not use `updated_at` as the imported business event date.
-
-## 17. Authorization Matrix
-
-All access continues to require active, verified, password-complete accounts and the primary Sales route restriction. Supplemental roles do not grant permissions. Branch/project/user scope must be resolved through `WorkspaceAccessService` and `OrganizationScopeService`.
-
-The existing permissions do not automatically define lifecycle sync or reconciliation powers. If implementation adds those operations, use separately registered permissions with scoped variants rather than treating view, export, Database sync, or Konsumen Progress sync as equivalent.
-
-| Actor/scope | View reconciled lifecycle | Run read sync | Complete mappings/conflicts | Seed/write metadata | Change NUP flag | Reverse legacy stage |
-|---|---|---|---|---|---|---|
-| Primary Sales, own active assignment | own records only | no by default | no | no | no | no |
-| Sales Coordinator, team scope | authorized team records | no by default | only if a dedicated scoped permission is approved | no | no | existing policy denies Sales reversal only; all other checks still apply |
-| Supervisor, assigned/team scope | authorized intersection | dedicated assigned permission required | dedicated assigned permission required | no by default | no by default | current lead policy and branch edit right |
-| Manager/Branch Manager, branch scope | authorized branch/project intersection | dedicated branch permission required | dedicated branch permission required | dedicated high-risk permission required | dedicated configure permission required | current lead policy and branch edit right |
-| Pusat with explicit all-scope permission | authorized all scope | dedicated all-scope permission required | dedicated all-scope permission required | dedicated high-risk permission required | dedicated configure permission required | current lead policy |
-| Superadmin | registered-permission wildcard only | only after permissions are registered | only after permissions are registered | only after permissions are registered | only after permissions are registered | current policy |
-| No scoped Buku Saku permission | denied | denied | denied | denied | denied | denied |
-
-Direct URLs, commands, AJAX, exports, reconciliation detail, conflict payloads, and metadata writes require the same scope checks. Explicit inaccessible branch/project requests return denial, not fallback. Sync diagnostics must not expose PII from rows outside the viewer's scope.
-
-## 18. Operations, Rollback, and Validation
-
-### Observability
-
-Each branch run should record start/end time, workbook identity hash or configured context, requested and returned tabs, schema version/capabilities, source row counts, created/updated/unchanged observations, confirmed links, pending completions, conflicts by class, skipped formulas, proposed timestamp fills, applied fills, and failure message. Logs and notifications must exclude full KTP, phone, addresses, credentials, and spreadsheet contents.
-
-The UI must distinguish no data, unsupported/missing tab, schema drift, credentials/network failure, partial response, lock contention, and successful zero-change sync.
-
-### Rollback
-
-- Disable the lifecycle feature/scheduler first; do not redirect to Solo or another branch.
-- Stop metadata and timestamp writes while retaining observations and audit records for investigation.
-- Restore a workbook from its pre-seeding backup if metadata insertion damaged layout; remove only exact OASIS metadata columns introduced by the rollout.
-- Do not automatically roll back six-stage timestamp fills after users or reports may have relied on them. Review each applied event through its audit record and use the existing authorized reversal workflow where appropriate.
-- Do not delete confirmed identity mappings merely because a source row disappeared.
-- Database schema rollback is safe only before production observations and reconciliation decisions exist. After data exists, prefer forward remediation.
-- Changing `branches.sheet_id` requires a new dry-run and explicit confirmation; it must not transplant old mappings into the new workbook automatically.
-
-### Required validation
-
-- exact tab/header/formula/validation audit for every enabled branch;
-- Solo reference parity and Jepara drift behavior;
-- missing `data_ceklok` handling;
-- NUP flag default false and explicit enablement;
-- metadata seeding idempotency, duplicate detection, row movement, formula preservation, hidden-column preservation, and retry safety;
-- existing timestamp preservation and zero unexplained legacy report changes;
-- alias normalization for `Cek Silk`/`Cek SLIK` with raw-value retention;
-- manual versus derived status separation;
-- field/event precedence and all conflict classes;
-- Sales/coordinator completion with no NIK-based automatic user mutation;
-- full authorization matrix, supplemental-role denial, inaccessible explicit scope, commands, exports, and AJAX;
-- Google failure, partial response, lock, retry, and concurrent edit behavior;
-- Database and Konsumen Progress route/cache/status isolation;
-- rollback rehearsal from a backed-up pilot workbook.
-
-## 19. Known Gaps and Acceptance Gate
-
-The following gaps are known and must not be hidden by implementation defaults:
-
-- unknown spreadsheet statuses have no automatic mapping and remain reconciliation items;
-- `met_at` has no exact audited source event;
-- `documents_completed_at` cannot receive a truthful timestamp from a timeless completeness formula alone;
-- `data_ceklok` is absent in Jepara and may be absent elsewhere;
-- branch formulas and completeness definitions differ and may drift within one tab;
-- Solo currently has no OASIS metadata, so existing rows have no stable OASIS identity;
-- formula-generated IDs are not immutable and may collide or change;
-- OASIS users have no NIK field, so Sales mapping needs authorized completion input;
-- the exact relationship between a lead, NUP row, consumer/kavling row, BI record, and akad row is not guaranteed by a shared immutable key;
-- `linked_consumer_reference` remains manual and is not sufficient for automatic linkage;
-- the project-level NUP capability does not yet exist and must default to false if implemented;
-- source PII corrections remain field-owned by the explicit lifecycle operation; sync does not overwrite unrelated PII;
-- deletion semantics for source rows are not approved; absence must not mean deletion;
-- retention limits for source observations, conflict history, and potentially sensitive source snapshots require approval;
-- the operational process for workbook backup, metadata seeding approval, and spreadsheet-owner communication requires definition;
-- no release version is supplied, so a future behavior change must use a null changelog version unless a release version is explicitly provided.
-
-Implementation acceptance requires all of the following:
-
-- explicit branch capability definitions and pilot branch selection;
-- approved permissions and default role mappings deployed idempotently;
-- completed Sales/project/coordinator/NUP/ambiguous-record mapping input for the pilot scope;
-- successful read-only backfill with no cross-branch links and no unexplained changes to legacy timestamp reports;
-- verified stable metadata seeding against a restorable workbook backup;
-- focused authorization, reconciliation, concurrency, failure, and rollback tests;
-- confirmation that Database and Konsumen Progress remain operationally separate;
-- one Indonesian OASIS Changelog entry in the eventual behavior-changing implementation, not in this documentation-only audit.
-
-Any branch or operation that does not satisfy this gate remains disabled with a configuration/reconciliation message. There is never an automatic source deletion, hierarchy update, or cross-branch fallback.
+Exactly one user-facing Changelog entry is deployed by `2026_08_03_000012_add_sales_lead_lifecycle_ui_changelog.php`: `Siklus Lead Buku Saku Terhubung`, category `changed`, version `null`. The permissions migration does not create another entry.

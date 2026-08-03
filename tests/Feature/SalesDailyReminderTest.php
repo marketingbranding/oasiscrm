@@ -251,7 +251,14 @@ class SalesDailyReminderTest extends TestCase
         $this->assertStringContainsString('conflictOpen()', $view);
         $this->assertStringContainsString('reminder_dismiss_failed', $script);
         $this->assertStringContainsString('window.oasisToast', $script);
+        $this->assertStringContainsString('await this.hideForNavigation()', $script);
+        $this->assertStringContainsString('this.$root.hidden = true', $script);
+        $this->assertStringContainsString('window.requestAnimationFrame(resolve)', $script);
         $this->assertStringContainsString('window.location.assign(destination.toString())', $script);
+        $this->assertLessThan(
+            strpos($script, 'window.location.assign(destination.toString())'),
+            strpos($script, 'await this.hideForNavigation()'),
+        );
     }
 
     private function salesContext(): array

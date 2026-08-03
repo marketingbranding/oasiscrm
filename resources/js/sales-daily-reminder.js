@@ -67,11 +67,18 @@ export default function registerSalesDailyReminder(Alpine) {
             this.actionPending = false;
         },
 
+        async hideForNavigation() {
+            this.open = false;
+            this.$root.hidden = true;
+            this.restoreBodyScroll();
+
+            await new Promise(resolve => this.$nextTick(() => window.requestAnimationFrame(resolve)));
+        },
+
         async navigate(url) {
             if (this.actionPending) return;
             this.actionPending = true;
-            this.open = false;
-            this.restoreBodyScroll();
+            await this.hideForNavigation();
             const persisted = await this.persistDismissal();
             const destination = new URL(url, window.location.origin);
             if (this.hideToday && persisted === false) destination.searchParams.set('reminder_dismiss_failed', '1');

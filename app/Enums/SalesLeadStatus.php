@@ -65,8 +65,7 @@ enum SalesLeadStatus: string
 
     public function spreadsheetValue(): string
     {
-        // The legacy sheet validation still uses the historical "Cek Silk" spelling.
-        return $this === self::SlikCheck ? 'Cek Silk' : $this->label();
+        return $this->label();
     }
 
     public function precedence(): ?int

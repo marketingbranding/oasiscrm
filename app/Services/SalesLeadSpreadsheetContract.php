@@ -131,7 +131,12 @@ class SalesLeadSpreadsheetContract
             }
 
             $metadata = $this->googleSheets->columnMetadata($spreadsheetId, [$sheetName]);
-            $this->validateColumnMetadata($definition, $headerMap, $metadata[$sheetName] ?? []);
+            $sheetMetadata = $metadata[$sheetName] ?? [];
+            $this->validateColumnMetadata($definition, $headerMap, $sheetMetadata);
+            $validationOptions = [];
+            foreach ($definition->validations as $header => $expected) {
+                $validationOptions[$header] = array_values($sheetMetadata[$headerMap[$header]]['options'] ?? []);
+            }
 
             return new ResolvedSalesLeadSpreadsheetContract(
                 $spreadsheetId,
@@ -141,6 +146,7 @@ class SalesLeadSpreadsheetContract
                 $headerMap,
                 $formulaOwnedHeaders,
                 2,
+                $validationOptions,
             );
         } catch (SalesLeadSpreadsheetContractException $exception) {
             throw $exception;
@@ -151,7 +157,25 @@ class SalesLeadSpreadsheetContract
 
     public function normalizeReadStatus(string $value): string
     {
-        return strcasecmp(trim($value), 'Cek Silk') === 0 ? 'Cek SLIK' : trim($value);
+        return $this->normalizeValidationValue('status_lead', $value) === 'cek_slik'
+            ? 'Cek SLIK'
+            : trim($value);
+    }
+
+    public function valueForWrite(ResolvedSalesLeadSpreadsheetContract $contract, string $header, mixed $value): mixed
+    {
+        if (! is_string($value) || $header !== 'status_lead') {
+            return $value;
+        }
+
+        $normalized = $this->normalizeValidationValue($header, $value);
+        foreach ($contract->validationOptions[$header] ?? [] as $option) {
+            if ($this->normalizeValidationValue($header, $option) === $normalized) {
+                return $option;
+            }
+        }
+
+        return $value;
     }
 
     private function validateHeaders(SalesLeadSheetDefinition $definition, array $headers): void
@@ -180,14 +204,30 @@ class SalesLeadSpreadsheetContract
                 throw SalesLeadSpreadsheetContractException::validationInvalid($definition->sheetName, $header);
             }
             if (isset($expected['values'])) {
-                $actualValues = array_values($actual['options'] ?? []);
+                $actualValues = array_map(
+                    fn (string $value) => $this->normalizeValidationValue($header, $value),
+                    array_values($actual['options'] ?? []),
+                );
                 sort($actualValues);
-                $expectedValues = $expected['values'];
+                $expectedValues = array_map(
+                    fn (string $value) => $this->normalizeValidationValue($header, $value),
+                    $expected['values'],
+                );
                 sort($expectedValues);
                 if ($actualValues !== $expectedValues) {
                     throw SalesLeadSpreadsheetContractException::validationInvalid($definition->sheetName, $header);
                 }
             }
         }
+    }
+
+    private function normalizeValidationValue(string $header, string $value): string
+    {
+        $normalized = mb_strtolower(trim($value));
+        if ($header === 'status_lead' && in_array($normalized, ['cek silk', 'cek slik'], true)) {
+            return 'cek_slik';
+        }
+
+        return $normalized;
     }
 }

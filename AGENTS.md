@@ -442,6 +442,8 @@ Lifecycle records use dedicated status-history, site-visit, consumer, SLIK, free
 
 `SalesLeadSpreadsheetContract` resolves only `sales_lead.branch_id -> branches.sheet_id` and validates the target tab contract. `SalesLeadSpreadsheetWriter` owns immediate append/update, exact trailing OASIS metadata, formula preservation, and UUID-idempotent retry. `SalesLeadLifecycleService` owns web operations; `SalesLeadLifecycleSyncService` owns pull/reconciliation. Keep these responsibilities separate from Database and Konsumen Progress sync.
 
+Lead status validation treats `Cek Silk`, `Cek Slik`, and `Cek SLIK` as the same `slik_check` status. OASIS displays `Cek SLIK`, while spreadsheet writes use the exact strict-dropdown alias discovered for the selected branch contract.
+
 Implemented flows are lead create/update, site visit, normal consumer, NUP consumer, SLIK submission/rejection, freelance conversion, and pull-only Akad. `lead_master.is_nup_eligible` selects `data_konsumen_nup`; NUP never sets UTJ. A `data_ceklok` result of `utj` is only a site-visit outcome. Normal consumer conversion sets canonical `utj` but not legacy `utj_at`.
 
 Pull sync requires `sales_pocketbook.sync`; reconciliation listing requires `sales_pocketbook.reconcile`. Both also require `sales_pocketbook.manage` branch scope and workspace view/sync rights. Defaults map both permissions to primary `supervisor`, `manager`, `branch_manager`, `pusat`, and legacy `admin`; supplemental roles do not grant them. The reconciliation route is list-only JSON with no manual resolve/remap mutation.

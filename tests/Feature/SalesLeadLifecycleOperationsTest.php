@@ -24,6 +24,8 @@ class SalesLeadLifecycleOperationsTest extends TestCase
 {
     use RefreshDatabase;
 
+    private int $remoteRowNumber = 2;
+
     public function test_manual_status_endpoint_accepts_only_three_manual_values_and_rejects_forged_organization_ids(): void
     {
         [, , $sales, $lead] = $this->context();
@@ -341,7 +343,7 @@ class SalesLeadLifecycleOperationsTest extends TestCase
 
     private function writeResult(SalesLead $lead, string $sheet, string $uuid): SalesLeadSpreadsheetWriteResult
     {
-        return new SalesLeadSpreadsheetWriteResult('sheet-'.$lead->branch_id, $sheet, random_int(3, 100), $uuid);
+        return new SalesLeadSpreadsheetWriteResult('sheet-'.$lead->branch_id, $sheet, ++$this->remoteRowNumber, $uuid);
     }
 
     private function visitData(string $date): array

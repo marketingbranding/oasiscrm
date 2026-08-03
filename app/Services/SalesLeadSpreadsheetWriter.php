@@ -62,7 +62,7 @@ class SalesLeadSpreadsheetWriter
             if (! isset($headerMap[$header]) || isset($formulaHeaders[$header]) || isset($metadataHeaders[$header])) {
                 continue;
             }
-            $values[$headerMap[$header]] = $value;
+            $values[$headerMap[$header]] = $this->contracts->valueForWrite($contract, $header, $value);
         }
         $values[$headerMap['oasis_sync_id']] = $operationUuid;
 
@@ -138,7 +138,7 @@ class SalesLeadSpreadsheetWriter
                 $column = $this->columnLetter($headerMap[$header] + 1);
                 $ranges[] = [
                     'range' => $this->googleSheets->quoteSheetName($sheetName)."!{$column}{$rowNumber}",
-                    'values' => [[$value]],
+                    'values' => [[$this->contracts->valueForWrite($contract, $header, $value)]],
                 ];
             }
             $this->googleSheets->batchUpdateRanges($contract->spreadsheetId, $ranges);

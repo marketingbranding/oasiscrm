@@ -84,7 +84,7 @@ Manual forms and the lifecycle-status endpoint accept only `no_response`, `discu
 
 System transitions are monotonic according to primary precedence. Pull sync records lower/equal observations in history but does not downgrade `current_status`. `freelance` coexists with the primary status: it sets `freelance_converted_at`, external identity, and history without replacing the primary status. When appropriate, `lead.status_lead` is still written as `Jadi Freelance`; the local primary status remains unchanged.
 
-`Cek Silk` and `Cek SLIK` both ingest as `slik_check`. OASIS displays `Cek SLIK` but writes the historical spreadsheet validation value `Cek Silk`.
+`Cek Silk`, `Cek Slik`, and `Cek SLIK` all ingest as `slik_check`. OASIS displays `Cek SLIK`; writes use the exact alias present in the selected branch spreadsheet's strict dropdown validation.
 
 ### NUP and UTJ boundary
 
@@ -265,4 +265,4 @@ Known limitations:
 - No live spreadsheet mutation was executed while verifying these commits. Contract/writer behavior was verified with mocks and source tests only.
 - No browser or responsive visual verification was performed for the lifecycle UI.
 
-Exactly one user-facing Changelog entry is deployed by `2026_08_03_000012_add_sales_lead_lifecycle_ui_changelog.php`: `Siklus Lead Buku Saku Terhubung`, category `changed`, version `null`. The permissions migration does not create another entry.
+The original 2.1 release has one user-facing Changelog entry from `2026_08_03_000012_add_sales_lead_lifecycle_ui_changelog.php`: `Siklus Lead Buku Saku Terhubung`. The later strict-dropdown compatibility fix adds `Status Lead Spreadsheet Lebih Kompatibel` through `2026_08_03_000014_add_sales_lead_status_alias_fix_changelog.php`. The permissions migration creates no Changelog entry.

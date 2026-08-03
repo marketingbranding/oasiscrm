@@ -10,6 +10,6 @@ class SalesLeadSiteVisit extends Model
 
     protected function casts(): array
     {
-        return ['visited_at' => 'datetime', 'metadata' => 'array'];
+        return ['visited_at' => 'datetime', 'visit_date' => 'date', 'is_completed' => 'boolean', 'metadata' => 'array'];
     }
 }

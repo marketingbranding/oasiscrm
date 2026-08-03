@@ -273,6 +273,31 @@ class SalesLeadSpreadsheetFoundationTest extends TestCase
         $this->assertSame(['sheet-one', 'sheet-two'], [$first->spreadsheetId, $second->spreadsheetId]);
     }
 
+    public function test_writer_updates_remote_fields_by_stable_sync_id_instead_of_stale_row_number(): void
+    {
+        [$lead] = $this->leadContext('sheet-stable-update');
+        $syncId = (string) Str::uuid();
+        $google = $this->writerGoogle('sheet-stable-update');
+        $google->shouldReceive('findRowByHeaderValue')->once()->withArgs(fn (...$args) => end($args) === $syncId)->andReturn(27);
+        $google->shouldReceive('batchUpdateRanges')->once()->withArgs(function (string $spreadsheetId, array $ranges): bool {
+            return $spreadsheetId === 'sheet-stable-update'
+                && $ranges === [[
+                    'range' => "'data_sales'!D27",
+                    'values' => [['Nama Koordinator Baru']],
+                ]];
+        });
+
+        $result = (new SalesLeadSpreadsheetWriter($google, new SalesLeadSpreadsheetContract($google)))
+            ->updateBySyncId($lead, 'data_sales', $syncId, [
+                'nama_koordinator' => 'Nama Koordinator Baru',
+                'oasis_sync_id' => 'tidak-boleh-diubah',
+                'unknown' => 'diabaikan',
+            ]);
+
+        $this->assertSame(27, $result->rowNumber);
+        $this->assertSame($syncId, $result->syncId);
+    }
+
     public function test_application_source_contains_no_solo_or_reference_spreadsheet_fallback(): void
     {
         $files = new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator(app_path()));

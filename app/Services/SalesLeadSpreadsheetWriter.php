@@ -102,6 +102,60 @@ class SalesLeadSpreadsheetWriter
         }
     }
 
+    public function updateBySyncId(
+        SalesLead $lead,
+        string $sheetName,
+        string $syncId,
+        array $fields,
+    ): SalesLeadSpreadsheetWriteResult {
+        if (! Str::isUuid($syncId)) {
+            throw SalesLeadSpreadsheetContractException::invalidOperationId();
+        }
+
+        $contract = $this->contracts->resolve($lead, $sheetName);
+        try {
+            $headers = $this->googleSheets->ensureTrailingMetadataColumns(
+                $contract->spreadsheetId,
+                $sheetName,
+                $contract->sheetId,
+                $contract->headers,
+                SalesLeadSpreadsheetContract::META_HEADERS,
+            );
+            $rowNumber = $this->googleSheets->findRowByHeaderValue(
+                $contract->spreadsheetId,
+                $sheetName,
+                $headers,
+                'oasis_sync_id',
+                $syncId,
+            );
+            if ($rowNumber === null) {
+                throw SalesLeadSpreadsheetContractException::writeFailed();
+            }
+
+            $headerMap = array_flip($headers);
+            $formulaHeaders = array_flip($contract->formulaOwnedHeaders);
+            $metadataHeaders = array_flip(SalesLeadSpreadsheetContract::META_HEADERS);
+            $ranges = [];
+            foreach ($fields as $header => $value) {
+                if (! isset($headerMap[$header]) || isset($formulaHeaders[$header]) || isset($metadataHeaders[$header])) {
+                    continue;
+                }
+                $column = $this->columnLetter($headerMap[$header] + 1);
+                $ranges[] = [
+                    'range' => $this->googleSheets->quoteSheetName($sheetName)."!{$column}{$rowNumber}",
+                    'values' => [[$value]],
+                ];
+            }
+            $this->googleSheets->batchUpdateRanges($contract->spreadsheetId, $ranges);
+
+            return new SalesLeadSpreadsheetWriteResult($contract->spreadsheetId, $sheetName, $rowNumber, $syncId);
+        } catch (SalesLeadSpreadsheetContractException $exception) {
+            throw $exception;
+        } catch (Throwable) {
+            throw SalesLeadSpreadsheetContractException::writeFailed();
+        }
+    }
+
     private function copyTemplateWhenRequired(ResolvedSalesLeadSpreadsheetContract $contract, int $rowNumber): void
     {
         if ($contract->formulaOwnedHeaders === []) {

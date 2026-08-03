@@ -10,6 +10,6 @@ class SalesLeadConsumerLink extends Model
 
     protected function casts(): array
     {
-        return ['converted_at' => 'datetime', 'metadata' => 'array'];
+        return ['converted_at' => 'datetime', 'payload' => 'array', 'metadata' => 'array'];
     }
 }

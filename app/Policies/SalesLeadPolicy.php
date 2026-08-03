@@ -64,4 +64,34 @@ class SalesLeadPolicy
     {
         return ! $user->isSales() && $this->update($user, $lead);
     }
+
+    public function updateLifecycleStatus(User $user, SalesLead $lead): bool
+    {
+        return $this->update($user, $lead);
+    }
+
+    public function recordSiteVisit(User $user, SalesLead $lead): bool
+    {
+        return $this->update($user, $lead);
+    }
+
+    public function convertToConsumer(User $user, SalesLead $lead): bool
+    {
+        return $this->update($user, $lead);
+    }
+
+    public function submitToSlik(User $user, SalesLead $lead): bool
+    {
+        return $this->update($user, $lead);
+    }
+
+    public function markSlikRejected(User $user, SalesLead $lead): bool
+    {
+        return $this->update($user, $lead);
+    }
+
+    public function convertToFreelance(User $user, SalesLead $lead): bool
+    {
+        return $this->update($user, $lead);
+    }
 }

@@ -10,6 +10,6 @@ class SalesLeadSlikAttempt extends Model
 
     protected function casts(): array
     {
-        return ['checked_at' => 'datetime', 'metadata' => 'array'];
+        return ['checked_at' => 'datetime', 'slik_date' => 'date', 'rejected_at' => 'datetime', 'metadata' => 'array'];
     }
 }

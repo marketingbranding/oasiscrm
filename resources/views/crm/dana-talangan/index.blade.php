@@ -36,170 +36,27 @@
     if ($filterMode === 'month' && ($monthFrom || $monthTo)) {
         $activeFilters[] = 'Bulan: '.($monthFrom ?: 'awal').' - '.($monthTo ?: 'akhir');
     }
+    $danaTalanganConfig = [
+        'adding' => $errors->any() && old('form_mode') !== 'edit',
+        'editingRecord' => $oldEditingRecord,
+        'filterMode' => $filterMode,
+        'updateBaseUrl' => url('dana-talangan'),
+        'kavlingOptionsUrl' => route('dana-talangan.kavling-options'),
+        'projectCatalog' => $formProjects->map(fn ($project) => [
+            'id' => $project->id,
+            'name' => $project->project_name,
+            'branch_id' => $project->branch_id,
+        ])->values(),
+        'addForm' => [
+            'branch_id' => (string) old('branch_id', $selectedBranchId),
+            'project_name' => old('project_name', ''),
+            'kav' => old('kav', ''),
+        ],
+        'modalFocusSelector' => 'a[href], button:not([disabled]), input:not([type="hidden"]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+    ];
 @endphp
-<div x-data="{
-    ...crmDetailModal('/dana-talangan', '/dana-talangan', {sanggup:'#9ab6c8',tidak_sanggup:'#d77a7a',lunas:'#b3bd95'}),
-    adding: {{ $errors->any() && old('form_mode') !== 'edit' ? 'true' : 'false' }},
-    editingRecord: @js($oldEditingRecord),
-    filterMode: @js($filterMode),
-    filterOpen: false,
-    tableFrozen: true,
-    updateBaseUrl: @js(url('dana-talangan')),
-    kavlingOptionsUrl: @js(route('dana-talangan.kavling-options')),
-    projectCatalog: @js($formProjects->map(fn ($project) => ['id' => $project->id, 'name' => $project->project_name, 'branch_id' => $project->branch_id])->values()),
-    addForm: {
-        branch_id: @js((string) old('branch_id', $selectedBranchId)),
-        project_name: @js(old('project_name', '')),
-        kav: @js(old('kav', '')),
-    },
-    addKavlings: [],
-    editKavlings: [],
-    addKavLoading: false,
-    editKavLoading: false,
-    projectsFor(branchId, current = '') {
-        const projects = this.projectCatalog.filter(project => String(project.branch_id) === String(branchId || ''));
-        if (current && !projects.some(project => project.name === current)) {
-            projects.push({ id: null, name: current, branch_id: branchId });
-        }
-        return projects;
-    },
-    normalizeKav(value) { return String(value || '').toLowerCase().replace(/[^a-z0-9]/g, ''); },
-    async fetchKavlings(branchId, projectName) {
-        if (!branchId || !projectName) return [];
-        const params = new URLSearchParams({ branch_id: branchId, project_name: projectName });
-        const response = await fetch(this.kavlingOptionsUrl + '?' + params.toString(), { headers: { Accept: 'application/json' } });
-        if (!response.ok) return [];
-        const data = await response.json();
-        return data.options || [];
-    },
-    async loadAddKavlings(preserve = false) {
-        const projectName = this.addForm.project_name;
-        const current = preserve ? this.addForm.kav : '';
-        this.addKavLoading = true;
-        this.addKavlings = await this.fetchKavlings(this.addForm.branch_id, projectName);
-        if (projectName !== this.addForm.project_name) { this.addKavLoading = false; return; }
-        if (current && !this.addKavlings.some(code => this.normalizeKav(code) === this.normalizeKav(current))) this.addKavlings.push(current);
-        if (!preserve) this.addForm.kav = '';
-        this.addKavLoading = false;
-    },
-    changeAddBranch() { this.addForm.project_name = ''; this.addForm.kav = ''; this.addKavlings = []; },
-    changeAddProject() { this.addForm.kav = ''; this.loadAddKavlings(); },
-    openEdit(record) {
-        this.editingRecord = record;
-        this.editKavlings = [];
-        this.$nextTick(() => this.loadEditKavlings(true));
-    },
-    async loadEditKavlings(preserve = false) {
-        if (!this.editingRecord) return;
-        const projectName = this.editingRecord.project_name;
-        const current = preserve ? this.editingRecord.kav : '';
-        this.editKavLoading = true;
-        this.editKavlings = await this.fetchKavlings(this.editingRecord.branch_id, projectName);
-        if (!this.editingRecord || projectName !== this.editingRecord.project_name) { this.editKavLoading = false; return; }
-        if (current && !this.editKavlings.some(code => this.normalizeKav(code) === this.normalizeKav(current))) this.editKavlings.push(current);
-        if (!preserve) this.editingRecord.kav = '';
-        this.editKavLoading = false;
-    },
-    changeEditBranch() { this.editingRecord.project_name = ''; this.editingRecord.kav = ''; this.editKavlings = []; },
-    changeEditProject() { this.editingRecord.kav = ''; this.loadEditKavlings(); },
-    modalTriggers: {},
-    modalScrollOwner: 'dana-talangan-modal',
-    modalFocusSelector: 'a[href], button:not([disabled]), input:not([type="hidden"]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
-    lockModalScroll() {
-        window.oasisBodyScroll?.lock(this.modalScrollOwner);
-    },
-    unlockModalScroll() {
-        window.oasisBodyScroll?.unlock(this.modalScrollOwner);
-    },
-    firstFocusable(panel) {
-        if (!panel) return null;
-        return Array.from(panel.querySelectorAll(this.modalFocusSelector))
-            .find((element) => element.offsetParent !== null) || panel;
-    },
-    trapModalFocus(event, key) {
-        const panel = this.$refs[key];
-        if (!panel) return;
-        const focusable = Array.from(panel.querySelectorAll(this.modalFocusSelector))
-            .filter((element) => element.offsetParent !== null);
-        if (focusable.length === 0) {
-            event.preventDefault();
-            panel.focus();
-            return;
-        }
-        const first = focusable[0];
-        const last = focusable[focusable.length - 1];
-        if (event.shiftKey && document.activeElement === first) {
-            event.preventDefault();
-            last.focus();
-        } else if (!event.shiftKey && document.activeElement === last) {
-            event.preventDefault();
-            first.focus();
-        }
-    },
-    openModal(key, trigger, focusTarget = null) {
-        this.modalTriggers[key] = trigger;
-        this.lockModalScroll();
-        this.$nextTick(() => {
-            const panel = this.$refs[key];
-            const target = focusTarget || this.firstFocusable(panel);
-            target?.focus();
-        });
-    },
-    closeModal(key) {
-        const trigger = this.modalTriggers[key];
-        this.modalTriggers[key] = null;
-        this.unlockModalScroll();
-        this.$nextTick(() => trigger?.focus());
-    },
-    initModalState() {
-        if (this.adding) {
-            this.lockModalScroll();
-            this.$nextTick(() => this.firstFocusable(this.$refs.addModalPanel)?.focus());
-        }
-    },
-    openEdit(record, trigger) {
-        this.editingRecord = record;
-        this.editKavlings = [];
-        this.modalTriggers.editModalPanel = trigger;
-        this.lockModalScroll();
-        this.$nextTick(() => {
-            this.loadEditKavlings(true);
-            this.firstFocusable(this.$refs.editModalPanel)?.focus();
-        });
-    },
-    closeEditModal() {
-        this.editingRecord = null;
-        this.closeModal('editModalPanel');
-    },
-    async loadEditKavlings(preserve = false) {
-        if (!this.editingRecord) return;
-        const projectName = this.editingRecord.project_name;
-        const current = preserve ? this.editingRecord.kav : '';
-        this.editKavLoading = true;
-        this.editKavlings = await this.fetchKavlings(this.editingRecord.branch_id, projectName);
-        if (!this.editingRecord || projectName !== this.editingRecord.project_name) { this.editKavLoading = false; return; }
-        if (current && !this.editKavlings.some(code => this.normalizeKav(code) === this.normalizeKav(current))) this.editKavlings.push(current);
-        if (!preserve) this.editingRecord.kav = '';
-        this.editKavLoading = false;
-    },
-    changeEditBranch() { this.editingRecord.project_name = ''; this.editingRecord.kav = ''; this.editKavlings = []; },
-    changeEditProject() { this.editingRecord.kav = ''; this.loadEditKavlings(); },
-    closeFilterModal() {
-        if (!this.filterOpen) return;
-        this.filterOpen = false;
-        this.closeModal('filterModalPanel');
-    },
-    closeAddModal() {
-        if (!this.adding) return;
-        this.adding = false;
-        this.closeModal('addModalPanel');
-    },
-    closeEditModal() {
-        if (!this.editingRecord) return;
-        this.editingRecord = null;
-        this.closeModal('editModalPanel');
-    },
-}" x-init="initModalState(); if (addForm.project_name) loadAddKavlings(true)">
+<div x-data="danaTalanganPage(crmDetailModal('/dana-talangan', '/dana-talangan', {sanggup:'#9ab6c8',tidak_sanggup:'#d77a7a',lunas:'#b3bd95'}))">
+    <script type="application/json" data-dana-talangan-config>{!! \Illuminate\Support\Js::encode($danaTalanganConfig) !!}</script>
     <x-crm.page-header
         variant="canonical"
         title="Dana Talangan"

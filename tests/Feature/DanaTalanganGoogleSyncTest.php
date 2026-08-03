@@ -102,25 +102,24 @@ class DanaTalanganGoogleSyncTest extends TestCase
 
         $response = $this->actingAs($user)->get(route('dana-talangan.index'));
 
-        $response
-            ->assertOk()
-            ->assertSee('Rentang Tanggal')
-            ->assertSee('Cari Nama Konsumen')
-            ->assertSee('Filter Dana Talangan')
-            ->assertSee('Terapkan Filter')
-            ->assertSee('month-wrapper', false)
-            ->assertSee('month-display', false)
-            ->assertSee('kavlingOptionsUrl', false)
-            ->assertSee('changeAddBranch()', false)
-            ->assertSee('changeAddProject()', false)
-            ->assertSee('Sync Sekarang')
-            ->assertSee('Tambah Dana Talangan')
-            ->assertSee('crm-table-scroll', false)
-            ->assertSee('crm-data-table', false)
-            ->assertSee('crm-boolean-box', false)
-            ->assertSee('Tanggal ▲')
-            ->assertDontSee('aria-label="Sort Tanggal"', false)
-            ->assertSee('Konsumen Test');
+        $response->assertOk();
+        $response->assertSee('Rentang Tanggal');
+        $response->assertSee('Cari Nama Konsumen');
+        $response->assertSee('Filter Dana Talangan');
+        $response->assertSee('Terapkan Filter');
+        $response->assertSee('month-wrapper', false);
+        $response->assertSee('month-display', false);
+        $response->assertSee('kavlingOptionsUrl', false);
+        $response->assertSee('changeAddProject()', false);
+        $response->assertSee('Sync Sekarang');
+        $response->assertSee('Tambah Dana Talangan');
+        $response->assertSee('crm-table-scroll', false);
+        $response->assertSee('crm-data-table', false);
+        $response->assertSee('crm-boolean-box', false);
+        $response->assertSee('Tanggal ▲');
+        $response->assertDontSee('aria-label="Sort Tanggal"', false);
+        $response->assertSee('Konsumen Test');
+        $this->assertStringContainsString('changeAddBranch()', file_get_contents(resource_path('js/dana-talangan.js')));
         $this->assertMatchesRegularExpression('/<button[^>]+@click="openEdit\(.+?\)"[^>]*>Edit<\/button>/s', $response->getContent());
         $this->assertStringContainsString('color:#0000ee', $response->getContent());
         $this->assertStringContainsString('color:#c0392b', $response->getContent());

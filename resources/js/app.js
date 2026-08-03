@@ -17,6 +17,7 @@ import registerCrmShell from './crm-shell';
 import registerCrmModal from './crm-modal';
 import registerSalesPocketbook from './sales-pocketbook';
 import registerPwa from './pwa';
+import registerDanaTalangan from './dana-talangan';
 
 window.Alpine = Alpine;
 window.Sortable = Sortable;
@@ -33,5 +34,6 @@ registerCrmShell(Alpine);
 registerCrmModal(Alpine);
 registerSalesPocketbook(Alpine);
 registerPwa(Alpine);
+registerDanaTalangan(Alpine);
 
 Alpine.start();

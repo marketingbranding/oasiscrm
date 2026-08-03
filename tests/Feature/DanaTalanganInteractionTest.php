@@ -57,6 +57,41 @@ class DanaTalanganInteractionTest extends TestCase
         ]);
     }
 
+    public function test_page_alpine_attribute_is_complete_and_does_not_render_javascript_as_text(): void
+    {
+        [$branch, $user] = $this->makeBranchAndUser();
+        $this->makeProject($branch);
+        $this->makeRecord($branch, $user);
+
+        $response = $this->actingAs($user)->get(route('dana-talangan.index'));
+        $html = $response->getContent();
+
+        $response->assertOk();
+        $this->assertMatchesRegularExpression('/<h1 class="crm-page-header-title">\s*Dana Talangan\s*<\/h1>/', $html);
+        $this->assertMatchesRegularExpression('/<div x-data="danaTalanganPage\(crmDetailModal\([^\"]+\)\)">/', $html);
+        $this->assertStringContainsString('"modalFocusSelector"', $html);
+
+        $visibleHtml = preg_replace('/<script\b[^>]*>.*?<\/script>/is', '', $html);
+        $visibleText = html_entity_decode(strip_tags($visibleHtml));
+        $this->assertStringNotContainsString('modalFocusSelector:', $visibleText);
+        $this->assertStringNotContainsString('lockModalScroll()', $visibleText);
+        $this->assertStringNotContainsString('async loadEditKavlings', $visibleText);
+    }
+
+    public function test_rendering_fix_changelog_is_unique_and_visible(): void
+    {
+        [, $user] = $this->makeBranchAndUser();
+
+        $this->assertSame(1, app('db')->table('changelogs')
+            ->whereNull('version')
+            ->where('title', 'Tampilan Dana Talangan Kembali Normal')
+            ->count());
+
+        $this->actingAs($user)->get(route('changelogs.index'))
+            ->assertOk()
+            ->assertSeeText('Tampilan Dana Talangan Kembali Normal');
+    }
+
     public function test_add_modal_wires_focus_trap_and_escape_close(): void
     {
         [$branch, $user] = $this->makeBranchAndUser();
@@ -106,14 +141,19 @@ class DanaTalanganInteractionTest extends TestCase
         $this->makeRecord($branch, $user);
 
         $html = $this->actingAs($user)->get(route('dana-talangan.index'))->getContent();
+        $source = file_get_contents(resource_path('js/dana-talangan.js'));
 
-        $this->assertStringContainsString('window.oasisBodyScroll?.lock(this.modalScrollOwner)', $html);
-        $this->assertStringContainsString('window.oasisBodyScroll?.unlock(this.modalScrollOwner)', $html);
-        $this->assertStringContainsString('modalTriggers', $html);
-        $this->assertStringContainsString('trigger?.focus()', $html);
-        $this->assertStringContainsString('firstFocusable(panel)', $html);
-        $this->assertStringContainsString('if (!this.filterOpen) return;', $html);
-        $this->assertStringContainsString('if (!this.adding) return;', $html);
+        $this->assertStringContainsString('danaTalanganPage', $html);
+        $this->assertStringContainsString('window.oasisBodyScroll?.lock(this.modalScrollOwner)', $source);
+        $this->assertStringContainsString('window.oasisBodyScroll?.unlock(this.modalScrollOwner)', $source);
+        $this->assertStringContainsString('modalTriggers', $source);
+        $this->assertStringContainsString('trigger?.focus()', $source);
+        $this->assertStringContainsString('firstFocusable(panel)', $source);
+        $this->assertStringContainsString('if (!this.filterOpen) return;', $source);
+        $this->assertStringContainsString('if (!this.adding) return;', $source);
+        $this->assertSame(1, substr_count($source, 'openEdit(record, trigger)'));
+        $this->assertSame(1, substr_count($source, 'async loadEditKavlings(preserve = false)'));
+        $this->assertSame(1, substr_count($source, 'closeEditModal()'));
     }
 
     public function test_detail_fetch_failure_uses_oasis_feedback_without_native_alert(): void

@@ -146,6 +146,32 @@ class SalesLeadLifecycleOperationsTest extends TestCase
         }
     }
 
+    public function test_same_lead_can_progress_from_nup_to_normal_consumer_with_the_same_nik(): void
+    {
+        [, $project, $sales, $lead] = $this->context();
+        $project->update(['is_nup_eligible' => true]);
+        $writer = Mockery::mock(SalesLeadSpreadsheetWriter::class);
+        $writer->shouldReceive('append')->twice()
+            ->andReturnUsing(fn (SalesLead $item, string $sheet, array $fields, string $uuid) => $this->writeResult($item, $sheet, $uuid));
+        $this->app->instance(SalesLeadSpreadsheetWriter::class, $writer);
+        $nik = '0123456789012345';
+
+        app(SalesLeadLifecycleService::class)->convertToConsumer($lead, [
+            'project_id' => $project->id,
+            'nik' => $nik,
+        ], $sales);
+        $project->update(['is_nup_eligible' => false]);
+        app(SalesLeadLifecycleService::class)->convertToConsumer($lead->fresh(), [
+            'project_id' => $project->id,
+            'nik' => $nik,
+            'id_kavling' => 'A-9',
+        ], $sales);
+
+        $this->assertSame(2, $lead->consumerLinks()->where('nik', $nik)->count());
+        $this->assertSame(SalesLeadStatus::Utj, $lead->fresh()->current_status);
+        $this->assertNotNull($lead->fresh()->consumer_converted_at);
+    }
+
     public function test_slik_requires_normal_consumer_blocks_active_duplicate_and_rolls_back_remote_failure(): void
     {
         [, , $sales, $lead] = $this->context();

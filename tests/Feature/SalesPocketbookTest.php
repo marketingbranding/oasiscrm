@@ -15,7 +15,9 @@ use App\Models\SalesLeadLifecycleSyncStatus;
 use App\Models\User;
 use App\Services\OptimisticLockService;
 use App\Services\PhoneNormalizationService;
+use App\Services\SalesLeadSheetOptionService;
 use App\Services\SalesLeadSpreadsheetWriter;
+use App\Services\SalesSheetIdentityService;
 use App\ValueObjects\SalesLeadSpreadsheetWriteResult;
 use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -883,25 +885,35 @@ class SalesPocketbookTest extends TestCase
     {
         [$branch, $project, $sales] = $this->salesContext();
         $branch->update(['sheet_id' => 'branch-sheet']);
+        $operationUuid = (string) Str::uuid();
+        $options = ['promo' => [], 'source' => ['Online'], 'channel' => ['Instagram'], 'activity' => ['Agustus'], 'project' => [$project->project_name], 'sales' => [$sales->name], 'status' => ['Cek Lokasi']];
+        $optionService = Mockery::mock(SalesLeadSheetOptionService::class);
+        $optionService->shouldReceive('forBranch')->once()->andReturn($options);
+        $optionService->shouldReceive('exactOption')->andReturnUsing(fn (array $values, ?string $value) => in_array($value, $values, true) ? $value : null);
+        $this->app->instance(SalesLeadSheetOptionService::class, $optionService);
+        $identities = Mockery::mock(SalesSheetIdentityService::class);
+        $identities->shouldReceive('projectValue')->andReturn($project->project_name);
+        $identities->shouldReceive('salesValue')->andReturn($sales->name);
+        $this->app->instance(SalesSheetIdentityService::class, $identities);
         $captured = [];
         $writer = Mockery::mock(SalesLeadSpreadsheetWriter::class);
-        $writer->shouldReceive('append')->once()->withArgs(function (SalesLead $lead, string $sheet, array $fields, string $uuid) use (&$captured): bool {
+        $writer->shouldReceive('append')->once()->withArgs(function (SalesLead $lead, string $sheet, array $fields, string $uuid) use (&$captured, $operationUuid): bool {
             $captured = $fields;
 
-            return $sheet === 'lead' && $uuid === $lead->external_sync_id && Str::isUuid($uuid);
+            return $sheet === 'lead' && $uuid === $lead->external_sync_id && $uuid === $operationUuid;
         })->andReturnUsing(fn (SalesLead $lead, string $sheet, array $fields, string $uuid) => new SalesLeadSpreadsheetWriteResult('branch-sheet', $sheet, 4, $uuid));
         $this->app->instance(SalesLeadSpreadsheetWriter::class, $writer);
 
         $response = $this->actingAs($sales)->post(route('sales-leads.store'), $this->payload($sales, $project, [
             'source' => 'Online', 'platform' => 'Instagram', 'campaign_name' => 'Agustus', 'id_promo' => null,
-            'current_status' => 'site_visit', 'notes' => 'Hubungi sore.',
+            'current_status' => 'site_visit', 'notes' => 'Hubungi sore.', 'operation_uuid' => $operationUuid,
         ]));
 
         $lead = SalesLead::sole();
         $response->assertRedirect(route('sales-pocketbook.index', ['lifecycle_action' => 'site_visit', 'lead' => $lead->id]));
         $this->assertNotNull($lead->external_sync_id);
         $this->assertSame([
-            'tanggal_lead', 'sumber', 'platform', 'campaign', 'nama_konsumen', 'no_hp', 'proyek',
+            'tanggal_lead', 'source', 'platform', 'campaign_name', 'nama_konsumen', 'no_hp', 'proyek',
             'sales_pic', 'status_lead', 'keterangan', 'id_promo',
         ], array_keys($captured));
         $this->assertSame('Cek Lokasi', $captured['status_lead']);
@@ -911,6 +923,10 @@ class SalesPocketbookTest extends TestCase
     public function test_remote_create_failure_is_visible_and_does_not_claim_or_persist_success(): void
     {
         [, $project, $sales] = $this->salesContext();
+        $identities = Mockery::mock(SalesSheetIdentityService::class);
+        $identities->shouldReceive('projectValue')->once()->andReturn($project->project_name);
+        $identities->shouldReceive('salesValue')->once()->andReturn($sales->name);
+        $this->app->instance(SalesSheetIdentityService::class, $identities);
         $writer = Mockery::mock(SalesLeadSpreadsheetWriter::class);
         $writer->shouldReceive('append')->once()->andThrow(SalesLeadSpreadsheetContractException::writeFailed());
         $this->app->instance(SalesLeadSpreadsheetWriter::class, $writer);
@@ -918,6 +934,46 @@ class SalesPocketbookTest extends TestCase
         $this->actingAs($sales)->from(route('sales-pocketbook.index'))->post(route('sales-leads.store'), $this->payload($sales, $project))
             ->assertRedirect(route('sales-pocketbook.index'))->assertSessionHasErrors('spreadsheet')->assertSessionMissing('success');
         $this->assertDatabaseCount('sales_leads', 0);
+    }
+
+    public function test_invalid_branch_option_returns_field_error_without_calling_writer(): void
+    {
+        [$branch, $project, $sales] = $this->salesContext();
+        $branch->update(['sheet_id' => 'branch-options']);
+        $options = ['promo' => ['No Promo'], 'source' => ['Online'], 'channel' => ['WhatsApp'], 'activity' => ['Follow Up'], 'project' => [$project->project_name], 'sales' => [$sales->name], 'status' => ['No Respon']];
+        $optionService = Mockery::mock(SalesLeadSheetOptionService::class);
+        $optionService->shouldReceive('forBranch')->once()->andReturn($options);
+        $optionService->shouldReceive('exactOption')->andReturnUsing(fn (array $values, ?string $value) => in_array($value, $values, true) ? $value : null);
+        $this->app->instance(SalesLeadSheetOptionService::class, $optionService);
+        $identities = Mockery::mock(SalesSheetIdentityService::class);
+        $identities->shouldReceive('projectValue')->once()->andReturn($project->project_name);
+        $identities->shouldReceive('salesValue')->once()->andReturn($sales->name);
+        $this->app->instance(SalesSheetIdentityService::class, $identities);
+        $writer = Mockery::mock(SalesLeadSpreadsheetWriter::class);
+        $writer->shouldNotReceive('append');
+        $this->app->instance(SalesLeadSpreadsheetWriter::class, $writer);
+
+        $this->actingAs($sales)->post(route('sales-leads.store'), $this->payload($sales, $project, [
+            'source' => 'Online', 'platform' => 'Tidak Valid', 'campaign_name' => 'Follow Up',
+        ]))->assertSessionHasErrors('platform');
+
+        $this->assertDatabaseCount('sales_leads', 0);
+    }
+
+    public function test_branch_options_endpoint_is_rendered_and_authorized_by_branch_access(): void
+    {
+        [$branch, , $sales] = $this->salesContext();
+        $other = Branch::create(['name' => 'Other Options', 'code' => 'OPT', 'sheet_id' => 'other-sheet', 'is_active' => true]);
+        $options = ['promo' => [], 'source' => ['Online'], 'channel' => [], 'activity' => [], 'project' => [], 'sales' => [], 'status' => []];
+        $service = Mockery::mock(SalesLeadSheetOptionService::class);
+        $service->shouldReceive('forBranch')->once()->withArgs(fn (Branch $candidate) => $candidate->is($branch))->andReturn($options);
+        $this->app->instance(SalesLeadSheetOptionService::class, $service);
+
+        $this->actingAs($sales)->getJson(route('sales-leads.options', $branch))->assertOk()->assertJsonPath('options.source.0', 'Online');
+        $this->actingAs($sales)->getJson(route('sales-leads.options', $other))->assertForbidden();
+        $content = $this->actingAs($sales)->get(route('sales-pocketbook.index'))->assertOk()->getContent();
+        $this->assertStringContainsString('BRANCH_ID', $content);
+        $this->assertStringContainsString('name="operation_uuid"', $content);
     }
 
     public function test_lifecycle_ui_exposes_authorized_modal_contracts_nup_warning_and_read_only_system_status(): void
@@ -949,6 +1005,33 @@ class SalesPocketbookTest extends TestCase
         $this->assertSame(1, DB::table('changelogs')->whereNull('version')->where('title', $title)->count());
 
         [$branch] = $this->salesContext();
+        $this->actingAs($this->user('manager', $branch))->get(route('changelogs.index'))->assertOk()->assertSee($title);
+    }
+
+    public function test_read_only_status_uses_labelled_span_without_dangling_label(): void
+    {
+        [, $project, $sales] = $this->salesContext();
+        $lead = $this->lead($sales, $project, 'Read Only Status');
+        $lead->update(['current_status' => SalesLeadStatus::SlikCheck]);
+
+        $standalone = $this->actingAs($sales)->get(route('sales-leads.edit', $lead))->assertOk()->getContent();
+        $inline = $this->actingAs($sales)->get(route('sales-pocketbook.index'))->assertOk()->getContent();
+
+        $this->assertStringContainsString('aria-labelledby="edit-lead-status-label"', $standalone);
+        $this->assertStringNotContainsString('label for="edit-lead-status"', $standalone);
+        $this->assertStringContainsString('aria-labelledby="modal-lead-status-label"', $inline);
+        $this->assertStringNotContainsString('<p class="border border-gray-400', $inline);
+    }
+
+    public function test_verified_direct_write_changelog_is_idempotent_and_rendered(): void
+    {
+        $migration = require database_path('migrations/2026_08_04_000018_add_verified_lead_writes_changelog.php');
+        $migration->up();
+        $migration->up();
+        $title = 'Penulisan Lead Mengikuti Pilihan Spreadsheet Cabang';
+        [$branch] = $this->salesContext();
+
+        $this->assertSame(1, DB::table('changelogs')->whereNull('version')->where('title', $title)->count());
         $this->actingAs($this->user('manager', $branch))->get(route('changelogs.index'))->assertOk()->assertSee($title);
     }
 
@@ -1018,6 +1101,10 @@ class SalesPocketbookTest extends TestCase
             'lead_date' => '2026-07-01',
             'customer_name' => 'Prospect',
             'phone' => '08123456789',
+            'source' => 'Online',
+            'platform' => 'WhatsApp',
+            'campaign_name' => 'Follow Up',
+            'operation_uuid' => (string) Str::uuid(),
         ], $overrides);
     }
 
@@ -1079,6 +1166,10 @@ class SalesPocketbookTest extends TestCase
 
     private function mockLeadWriter(): void
     {
+        $identities = Mockery::mock(SalesSheetIdentityService::class);
+        $identities->shouldReceive('projectValue')->andReturnUsing(fn (LeadMaster $project) => $project->project_name);
+        $identities->shouldReceive('salesValue')->andReturnUsing(fn (Branch $branch, User $user) => $user->name);
+        $this->app->instance(SalesSheetIdentityService::class, $identities);
         $writer = Mockery::mock(SalesLeadSpreadsheetWriter::class);
         $writer->shouldReceive('append')->once()->andReturnUsing(
             fn (SalesLead $lead, string $sheet, array $fields, string $uuid) => new SalesLeadSpreadsheetWriteResult('sheet-'.$lead->branch_id, $sheet, 3, $uuid),

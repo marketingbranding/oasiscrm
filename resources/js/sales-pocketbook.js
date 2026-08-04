@@ -12,6 +12,18 @@ export default function registerSalesPocketbook(Alpine) {
         branch: String(initial.branch || ''),
         project: String(initial.project || ''),
         sales: String(initial.sales || ''),
+        optionsEndpoint: initial.optionsEndpoint || '',
+        sheetOptions: { promo: [], source: [], channel: [], activity: [], project: [], sales: [], status: [] },
+        optionsLoading: false,
+        optionsError: '',
+        source: String(initial.source || ''),
+        platform: String(initial.platform || ''),
+        campaignName: String(initial.campaignName || ''),
+        promo: String(initial.promo || ''),
+
+        init() {
+            if (this.optionsEndpoint && this.branch) this.loadSheetOptions();
+        },
 
         projectVisible(id) {
             return !this.branch || this.projects.find((item) => item.id === String(id))?.branch_id === this.branch;
@@ -32,6 +44,27 @@ export default function registerSalesPocketbook(Alpine) {
         branchChanged() {
             if (this.project && !this.projectVisible(this.project)) this.project = '';
             if (this.sales && !this.salesVisible(this.sales)) this.sales = '';
+            if (this.optionsEndpoint) this.loadSheetOptions();
+        },
+
+        async loadSheetOptions() {
+            if (!this.branch) return;
+            this.optionsLoading = true;
+            this.optionsError = '';
+            try {
+                const response = await fetch(this.optionsEndpoint.replace('BRANCH_ID', this.branch), { headers: { Accept: 'application/json' } });
+                if (!response.ok) throw new Error();
+                this.sheetOptions = (await response.json()).options;
+                if (this.source && !this.sheetOptions.source.includes(this.source)) this.source = '';
+                if (this.platform && !this.sheetOptions.channel.includes(this.platform)) this.platform = '';
+                if (this.campaignName && !this.sheetOptions.activity.includes(this.campaignName)) this.campaignName = '';
+                if (this.promo && !this.sheetOptions.promo.includes(this.promo)) this.promo = '';
+            } catch (_) {
+                this.optionsError = 'Pilihan spreadsheet cabang belum dapat dimuat.';
+                this.sheetOptions = { promo: [], source: [], channel: [], activity: [], project: [], sales: [], status: [] };
+            } finally {
+                this.optionsLoading = false;
+            }
         },
 
         projectChanged() {

@@ -6,6 +6,7 @@ final readonly class ResolvedSalesLeadSpreadsheetContract
 {
     /**
      * @param  array<string, int>  $headerMap
+     * @param  array<string, string>  $resolvedHeaders
      * @param  list<string>  $formulaOwnedHeaders
      * @param  array<string, list<string>>  $validationOptions
      */
@@ -18,5 +19,11 @@ final readonly class ResolvedSalesLeadSpreadsheetContract
         public array $formulaOwnedHeaders,
         public int $templateRowNumber,
         public array $validationOptions = [],
+        public array $resolvedHeaders = [],
     ) {}
+
+    public function actualHeader(string $canonicalHeader): string
+    {
+        return $this->resolvedHeaders[$canonicalHeader] ?? $canonicalHeader;
+    }
 }

@@ -9,6 +9,7 @@ use App\Models\Role;
 use App\Models\SalesLead;
 use App\Models\User;
 use App\Services\GoogleSheetsApiService;
+use App\Services\SalesLeadSheetOptionService;
 use App\Services\SalesLeadSpreadsheetContract;
 use App\Services\SalesLeadSpreadsheetWriter;
 use App\ValueObjects\GoogleSheetsAppendResult;
@@ -44,14 +45,17 @@ class SalesLeadSpreadsheetFoundationTest extends TestCase
     {
         [$lead] = $this->leadContext('sheet-status-alias');
         $headers = [
-            'id_lead', 'id_promo', 'tanggal_lead', 'sumber', 'platform', 'campaign',
-            'nama_konsumen', 'no_hp', 'proyek', 'sales_pic', 'status_lead', 'keterangan',
+            'id_lead', 'id_promo', 'tanggal_lead', 'sumber_lead', 'kanal_masuk', 'aktivitas_lead',
+            'nama_konsumen', 'no_hp', 'proyek', 'sales_pic', 'status_lead', 'keterangan', '', 'Sumber', 'Kanal', 'Aktivitas',
         ];
         $formulas = [$headers, ['=FORMULA_ID_LEAD()']];
         $metadata = array_fill(0, count($headers), null);
         $metadata[1] = ['type' => 'select', 'strict' => true, 'options' => ['PROMO-1']];
         $metadata[2] = ['type' => 'date', 'strict' => false, 'options' => []];
-        $metadata[3] = ['type' => 'select', 'strict' => true, 'options' => ['Canvasing', 'Event', 'Freelance', 'Lead Cabang', 'Online', 'Pameran', 'Refferal']];
+        $metadata[3] = ['type' => 'select', 'strict' => true, 'options' => ['Online']];
+        $metadata[4] = ['type' => 'select', 'strict' => true, 'options' => ['Instagram']];
+        $metadata[5] = ['type' => 'select', 'strict' => true, 'options' => ['Follow Up']];
+        $metadata[8] = ['type' => 'select', 'strict' => true, 'options' => ['Oasis Solo']];
         $metadata[9] = ['type' => 'select', 'strict' => true, 'options' => ['Sales Cabang']];
         $metadata[10] = ['type' => 'select', 'strict' => true, 'options' => [
             'No Respon', 'Diskusi', 'UTJ', 'Tidak Lolos BI Checking', 'Akad', 'Cek Lokasi', 'Cek Slik', 'Jadi Freelance',
@@ -67,6 +71,8 @@ class SalesLeadSpreadsheetFoundationTest extends TestCase
 
         $resolved = $contracts->resolve($lead, 'lead');
 
+        $this->assertSame('sumber_lead', $resolved->actualHeader('source'));
+        $this->assertSame(3, $resolved->headerMap['source']);
         $this->assertSame('Cek Slik', $contracts->valueForWrite($resolved, 'status_lead', 'Cek SLIK'));
         $this->assertSame('Cek Slik', $contracts->valueForWrite($resolved, 'status_lead', 'Cek Silk'));
         $this->assertSame('Diskusi', $contracts->valueForWrite($resolved, 'status_lead', 'Diskusi'));
@@ -98,6 +104,49 @@ class SalesLeadSpreadsheetFoundationTest extends TestCase
 
         $this->assertSame('sheet-alpha', $contracts->resolve($firstLead, 'data_sales')->spreadsheetId);
         $this->assertSame('sheet-beta', $contracts->resolve($secondLead, 'data_sales')->spreadsheetId);
+    }
+
+    public function test_live_and_shipped_lead_header_aliases_resolve_to_canonical_fields(): void
+    {
+        foreach ([
+            'live' => ['sumber_lead', 'kanal_masuk', 'aktivitas_lead'],
+            'shipped' => ['sumber', 'platform', 'campaign'],
+        ] as $suffix => [$source, $platform, $campaign]) {
+            [$lead] = $this->leadContext('sheet-'.$suffix);
+            $headers = ['id_lead', 'id_promo', 'tanggal_lead', $source, $platform, $campaign, 'nama_konsumen', 'no_hp', 'proyek', 'sales_pic', 'status_lead', 'keterangan'];
+            $google = Mockery::mock(GoogleSheetsApiService::class);
+            $google->shouldReceive('sheetTitles')->once()->andReturn(['lead']);
+            $google->shouldReceive('sheetIds')->once()->andReturn(['lead' => 7]);
+            $google->shouldReceive('quoteSheetName')->once()->andReturn("'lead'");
+            $google->shouldReceive('batchGetRaw')->once()->with('sheet-'.$suffix, ["'lead'!1:2"], 'FORMATTED_VALUE')->andReturn(['lead' => [$headers, []]]);
+            $google->shouldReceive('batchGetRaw')->once()->with('sheet-'.$suffix, ["'lead'!1:2"], 'FORMULA')->andReturn(['lead' => [$headers, ['=ID()']]]);
+            $google->shouldReceive('columnMetadata')->once()->andReturn(['lead' => $this->validLeadMetadata($headers)]);
+
+            $resolved = (new SalesLeadSpreadsheetContract($google))->resolve($lead, 'lead');
+
+            $this->assertSame([$source, $platform, $campaign], [
+                $resolved->actualHeader('source'), $resolved->actualHeader('platform'), $resolved->actualHeader('campaign_name'),
+            ]);
+        }
+    }
+
+    public function test_option_service_correlates_canonical_fields_without_extra_read(): void
+    {
+        [, $branch] = $this->leadContext('sheet-options');
+        $definition = (new SalesLeadSpreadsheetContract(Mockery::mock(GoogleSheetsApiService::class)))->definitions()['lead'];
+        $resolved = new ResolvedSalesLeadSpreadsheetContract('sheet-options', $definition, 1, [], [], [], 2, [
+            'id_promo' => ['No Promo'], 'source' => ['Online'], 'platform' => ['WA'], 'campaign_name' => ['Follow Up'],
+            'proyek' => ['Oasis'], 'sales_pic' => ['Sales A'], 'status_lead' => ['No Respon'],
+        ]);
+        $contracts = Mockery::mock(SalesLeadSpreadsheetContract::class);
+        $contracts->shouldReceive('resolveForBranch')->once()->with($branch, 'lead')->andReturn($resolved);
+
+        $options = (new SalesLeadSheetOptionService($contracts))->forBranch($branch);
+
+        $this->assertSame(['No Promo', 'Online', 'WA', 'Follow Up', 'Oasis', 'Sales A', 'No Respon'], [
+            $options['promo'][0], $options['source'][0], $options['channel'][0], $options['activity'][0],
+            $options['project'][0], $options['sales'][0], $options['status'][0],
+        ]);
     }
 
     public function test_cross_branch_lead_resolution_uses_lead_branch_not_project_or_user_branch(): void
@@ -223,6 +272,7 @@ class SalesLeadSpreadsheetFoundationTest extends TestCase
         );
         $contracts = Mockery::mock(SalesLeadSpreadsheetContract::class);
         $contracts->shouldReceive('resolve')->once()->with($lead, 'lead')->andReturn($resolved);
+        $contracts->shouldReceive('assertStrictValues')->once()->with($resolved, Mockery::type('array'));
         $contracts->shouldReceive('valueForWrite')->andReturnUsing(fn ($contract, $header, $value) => $value);
         $google = Mockery::mock(GoogleSheetsApiService::class);
         $headers = ['id_lead', 'nama_konsumen', ...SalesLeadSpreadsheetContract::META_HEADERS];
@@ -268,6 +318,7 @@ class SalesLeadSpreadsheetFoundationTest extends TestCase
         );
         $contracts = Mockery::mock(SalesLeadSpreadsheetContract::class);
         $contracts->shouldReceive('resolve')->once()->with($lead, 'lead')->andReturn($resolved);
+        $contracts->shouldReceive('assertStrictValues')->once()->with($resolved, ['status_lead' => 'Cek SLIK']);
         $contracts->shouldReceive('valueForWrite')->once()->with($resolved, 'status_lead', 'Cek SLIK')->andReturn('Cek Slik');
         $google = Mockery::mock(GoogleSheetsApiService::class);
         $headers = ['status_lead', ...SalesLeadSpreadsheetContract::META_HEADERS];
@@ -284,6 +335,72 @@ class SalesLeadSpreadsheetFoundationTest extends TestCase
             ['status_lead' => 'Cek SLIK'],
             $syncId,
         );
+    }
+
+    public function test_writer_places_canonical_fields_in_the_resolved_live_header_columns(): void
+    {
+        [$lead] = $this->leadContext('sheet-live-write');
+        $syncId = (string) Str::uuid();
+        $definition = new SalesLeadSheetDefinition(
+            'lead',
+            ['source', 'platform', 'campaign_name'],
+            [],
+            [],
+            [
+                'source' => ['sumber_lead', 'sumber'],
+                'platform' => ['kanal_masuk', 'platform'],
+                'campaign_name' => ['aktivitas_lead', 'campaign'],
+            ],
+        );
+        $physicalHeaders = ['sumber_lead', 'kanal_masuk', 'aktivitas_lead', '', 'helper'];
+        $resolved = new ResolvedSalesLeadSpreadsheetContract(
+            'sheet-live-write',
+            $definition,
+            19,
+            $physicalHeaders,
+            ['source' => 0, 'platform' => 1, 'campaign_name' => 2],
+            [],
+            2,
+            [],
+            ['source' => 'sumber_lead', 'platform' => 'kanal_masuk', 'campaign_name' => 'aktivitas_lead'],
+        );
+        $contracts = Mockery::mock(SalesLeadSpreadsheetContract::class);
+        $contracts->shouldReceive('resolve')->once()->andReturn($resolved);
+        $contracts->shouldReceive('assertStrictValues')->once();
+        $contracts->shouldReceive('valueForWrite')->times(3)->andReturnUsing(fn ($contract, $header, $value) => $value);
+        $google = Mockery::mock(GoogleSheetsApiService::class);
+        $allHeaders = [...$physicalHeaders, ...SalesLeadSpreadsheetContract::META_HEADERS];
+        $google->shouldReceive('ensureTrailingMetadataColumns')->once()->andReturn($allHeaders);
+        $google->shouldReceive('findRowByHeaderValue')->once()->andReturnNull();
+        $google->shouldReceive('quoteSheetName')->twice()->with('lead')->andReturn("'lead'");
+        $google->shouldReceive('appendRows')->once()->withArgs(fn ($spreadsheetId, $range, $rows) => $rows[0][0] === 'Online'
+            && $rows[0][1] === 'Instagram'
+            && $rows[0][2] === 'Story'
+            && $rows[0][3] === null
+            && $rows[0][5] === $syncId)->andReturn(new GoogleSheetsAppendResult("'lead'!A9:H9", 9));
+        $google->shouldReceive('batchGetRaw')->once()->andReturn(['lead' => [['Online', 'Instagram', 'Story', '', '', $syncId]]]);
+
+        (new SalesLeadSpreadsheetWriter($google, $contracts))->append($lead, 'lead', [
+            'source' => 'Online',
+            'platform' => 'Instagram',
+            'campaign_name' => 'Story',
+        ], $syncId);
+    }
+
+    public function test_writer_rejects_invalid_strict_value_before_metadata_or_append(): void
+    {
+        [$lead] = $this->leadContext('sheet-strict');
+        $google = Mockery::mock(GoogleSheetsApiService::class);
+        $google->shouldNotReceive('ensureTrailingMetadataColumns');
+        $google->shouldNotReceive('appendRows');
+        $definition = new SalesLeadSheetDefinition('lead', ['source'], [], ['source' => ['type' => 'select', 'strict' => true]]);
+        $resolved = new ResolvedSalesLeadSpreadsheetContract('sheet-strict', $definition, 1, ['sumber_lead'], ['source' => 0], [], 2, ['source' => ['Online']], ['source' => 'sumber_lead']);
+        $contracts = Mockery::mock(SalesLeadSpreadsheetContract::class, [$google])->makePartial();
+        $contracts->shouldReceive('resolve')->once()->andReturn($resolved);
+
+        $this->expectException(SalesLeadSpreadsheetContractException::class);
+        $this->expectExceptionMessage('Nilai source tidak tersedia');
+        (new SalesLeadSpreadsheetWriter($google, $contracts))->append($lead, 'lead', ['source' => 'Tidak Valid'], (string) Str::uuid());
     }
 
     public function test_metadata_provision_hides_only_newly_verified_exact_trailing_columns(): void
@@ -327,6 +444,33 @@ class SalesLeadSpreadsheetFoundationTest extends TestCase
         $this->assertSame(['sheet-metadata', "'data_sales'!C1:E1", [SalesLeadSpreadsheetContract::META_HEADERS]], $google->updated);
         $this->assertSame(['sheet-metadata', 73, 2, 5], $google->hidden);
         $this->assertSame('kolom_cabang_tersembunyi', $headers[1]);
+    }
+
+    public function test_lead_metadata_is_appended_after_blank_separator_and_helper_columns(): void
+    {
+        $google = new class extends GoogleSheetsApiService
+        {
+            public array $updated = [];
+
+            public function __construct() {}
+
+            public function updateRange(string $spreadsheetId, string $range, array $values): void
+            {
+                $this->updated = [$range, $values];
+            }
+
+            public function batchGetRaw(string $spreadsheetId, array $ranges, string $valueRenderOption = 'FORMATTED_VALUE'): array
+            {
+                return ['lead' => [[...array_fill(0, 12, 'header'), '', 'Sumber', 'Kanal', 'Aktivitas', ...SalesLeadSpreadsheetContract::META_HEADERS]]];
+            }
+
+            public function hideColumns(string $spreadsheetId, int $sheetId, int $startIndex, int $endIndex): void {}
+        };
+        $headers = [...array_fill(0, 12, 'header'), '', 'Sumber', 'Kanal', 'Aktivitas'];
+
+        $google->ensureTrailingMetadataColumns('sheet', 'lead', 1, $headers, SalesLeadSpreadsheetContract::META_HEADERS);
+
+        $this->assertSame("'lead'!Q1:S1", $google->updated[0]);
     }
 
     public function test_uncertain_append_success_is_reconciled_by_sync_id(): void
@@ -457,5 +601,17 @@ class SalesLeadSpreadsheetFoundationTest extends TestCase
         ]);
 
         return [$lead, $branch];
+    }
+
+    private function validLeadMetadata(array $headers): array
+    {
+        $metadata = array_fill(0, count($headers), null);
+        foreach (['id_promo', $headers[3], $headers[4], $headers[5], 'proyek', 'sales_pic'] as $header) {
+            $metadata[array_search($header, $headers, true)] = ['type' => 'select', 'strict' => true, 'options' => ['Option']];
+        }
+        $metadata[array_search('tanggal_lead', $headers, true)] = ['type' => 'date', 'strict' => false, 'options' => []];
+        $metadata[array_search('status_lead', $headers, true)] = ['type' => 'select', 'strict' => true, 'options' => ['No Respon', 'Diskusi', 'UTJ', 'Tidak Lolos BI Checking', 'Akad', 'Cek Lokasi', 'Cek Silk', 'Jadi Freelance']];
+
+        return $metadata;
     }
 }

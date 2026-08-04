@@ -164,6 +164,11 @@ class User extends Authenticatable implements MustVerifyEmail
             ->withTimestamps();
     }
 
+    public function salesSheetIdentities(): HasMany
+    {
+        return $this->hasMany(SalesSheetIdentity::class);
+    }
+
     public function primaryAssignedProject(): BelongsToMany
     {
         return $this->assignedProjects()->wherePivot('is_primary', true);

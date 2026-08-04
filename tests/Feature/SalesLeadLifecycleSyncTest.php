@@ -10,6 +10,7 @@ use App\Models\SalesLead;
 use App\Models\SalesLeadAkadLink;
 use App\Models\SalesLeadConsumerLink;
 use App\Models\SalesLeadLifecycleSyncStatus;
+use App\Models\SalesSheetIdentity;
 use App\Models\User;
 use App\Services\GoogleSheetsApiService;
 use App\Services\SalesLeadLifecycleSyncService;
@@ -101,6 +102,23 @@ class SalesLeadLifecycleSyncTest extends TestCase
         $this->assertTrue(app(SalesLeadLifecycleSyncService::class)->sync($branch)['ok']);
         $this->assertDatabaseMissing('sales_leads', ['branch_id' => $branch->id, 'external_lead_id' => 'AMB-1']);
         $this->assertDatabaseHas('sales_lead_lifecycle_reconciliation_items', ['branch_id' => $branch->id, 'issue_code' => 'project_ambiguous', 'status' => 'open']);
+    }
+
+    public function test_project_and_sales_sheet_mappings_are_branch_scoped_and_preferred_on_pull(): void
+    {
+        [$branch, $project, $sales] = $this->context('sheet-mapped', 'Internal Project', 'Internal Sales');
+        [$otherBranch, , $otherSales] = $this->context('sheet-other-mapped', 'Other Project', 'Other Sales');
+        $project->update(['sheet_project_name' => 'PROJECT-SHEET']);
+        SalesSheetIdentity::query()->create(['branch_id' => $branch->id, 'user_id' => $sales->id, 'spreadsheet_value' => 'SALES-SHEET']);
+        SalesSheetIdentity::query()->create(['branch_id' => $otherBranch->id, 'user_id' => $otherSales->id, 'spreadsheet_value' => 'OTHER-SHEET']);
+        $google = Mockery::mock(GoogleSheetsApiService::class);
+        $this->expectSheets($google, 'sheet-mapped', ['lead' => $this->leadSheet('MAP-1', 'PROJECT-SHEET', 'SALES-SHEET', 'Diskusi')]);
+        $this->app->instance(GoogleSheetsApiService::class, $google);
+
+        $this->assertTrue(app(SalesLeadLifecycleSyncService::class)->sync($branch)['ok']);
+
+        $this->assertDatabaseHas('sales_leads', ['branch_id' => $branch->id, 'external_lead_id' => 'MAP-1', 'project_id' => $project->id, 'sales_user_id' => $sales->id]);
+        $this->assertDatabaseMissing('sales_leads', ['branch_id' => $otherBranch->id, 'external_lead_id' => 'MAP-1']);
     }
 
     public function test_cec_silk_requires_branch_linked_bi_attempt_and_never_cross_links(): void

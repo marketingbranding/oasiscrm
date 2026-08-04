@@ -18,6 +18,7 @@ use App\Services\SalesLeadService;
 use App\Services\WorkspaceAccessService;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\ValidationException;
 use Symfony\Component\HttpFoundation\Response;
 
@@ -44,6 +45,7 @@ class SalesLeadController extends Controller
         try {
             $lead = $this->leads->create($request->safe()->except('expected_updated_at'), $request->user());
         } catch (SalesLeadSpreadsheetContractException $exception) {
+            Log::warning('Sales lead spreadsheet direct write failed.', ['stage' => 'create', 'branch_id' => $request->integer('branch_id'), 'sheet' => 'lead', 'operation_uuid' => $request->input('operation_uuid'), 'reason' => $exception->getMessage()]);
             throw ValidationException::withMessages(['spreadsheet' => $exception->getMessage().' Lead belum disimpan.']);
         }
         $duplicates = $this->duplicates->matches($request->user(), $lead->phone, $lead->id);
@@ -91,13 +93,14 @@ class SalesLeadController extends Controller
 
     public function update(UpdateSalesLeadRequest $request, SalesLead $salesLead)
     {
-        $data = $request->safe()->except('expected_updated_at');
+        $data = $request->safe()->except(['expected_updated_at', 'operation_uuid']);
         $result = $this->optimisticLock->execute($request, $salesLead, $request->input('expected_updated_at'), function (SalesLead $current) use ($request, $data) {
             $this->authorize('update', $current);
 
             try {
                 return $this->leads->update($current, $data, $request->user());
             } catch (SalesLeadSpreadsheetContractException $exception) {
+                Log::warning('Sales lead spreadsheet direct write failed.', ['stage' => 'update', 'branch_id' => $request->integer('branch_id'), 'sheet' => 'lead', 'operation_uuid' => $current->external_sync_id, 'reason' => $exception->getMessage()]);
                 throw ValidationException::withMessages(['spreadsheet' => $exception->getMessage().' Perubahan lokal dibatalkan.']);
             }
         });

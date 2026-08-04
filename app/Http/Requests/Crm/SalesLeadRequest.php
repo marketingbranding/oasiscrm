@@ -3,12 +3,17 @@
 namespace App\Http\Requests\Crm;
 
 use App\Enums\SalesLeadStatus;
+use App\Exceptions\SalesLeadSpreadsheetContractException;
+use App\Models\Branch;
 use App\Models\LeadMaster;
 use App\Models\SalesLead;
 use App\Models\User;
+use App\Services\SalesLeadSheetOptionService;
+use App\Services\SalesSheetIdentityService;
 use App\Services\WorkspaceAccessService;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 use Illuminate\Validation\Validator;
 
 abstract class SalesLeadRequest extends FormRequest
@@ -30,13 +35,25 @@ abstract class SalesLeadRequest extends FormRequest
             'phone' => ['nullable', 'string', 'max:50'],
             'notes' => ['nullable', 'string', 'max:5000'],
             'id_promo' => ['nullable', 'string', 'max:255'],
-            'source' => ['nullable', 'string', 'max:255'],
-            'platform' => ['nullable', 'string', 'max:255'],
+            'source' => ['required', 'string', 'max:255'],
+            'platform' => ['required', 'string', 'max:255'],
             'campaign_id' => ['nullable', 'string', 'max:255'],
-            'campaign_name' => ['nullable', 'string', 'max:255'],
+            'campaign_name' => ['required', 'string', 'max:255'],
             'current_status' => ['nullable', Rule::in(array_map(fn (SalesLeadStatus $status) => $status->value, SalesLeadStatus::MANUAL))],
             'linked_consumer_reference' => ['nullable', 'string', 'max:255'],
             'expected_updated_at' => ['sometimes', 'required', 'string', 'max:40'],
+            'operation_uuid' => [$this->lead() ? 'sometimes' : 'required', 'uuid'],
+        ];
+    }
+
+    public function messages(): array
+    {
+        return [
+            'source.required' => 'Sumber lead spreadsheet wajib dipilih.',
+            'platform.required' => 'Kanal masuk spreadsheet wajib dipilih.',
+            'campaign_name.required' => 'Aktivitas lead spreadsheet wajib dipilih.',
+            'operation_uuid.required' => 'Identitas operasi lead tidak tersedia. Muat ulang formulir lalu coba lagi.',
+            'operation_uuid.uuid' => 'Identitas operasi lead tidak valid. Muat ulang formulir lalu coba lagi.',
         ];
     }
 
@@ -79,6 +96,39 @@ abstract class SalesLeadRequest extends FormRequest
                 if (! $current->isManual()) {
                     $validator->errors()->add('current_status', 'Status sistem atau status yang lebih lanjut tidak dapat diubah melalui formulir lead.');
                 }
+            }
+
+            if ($validator->errors()->hasAny(['branch_id', 'project_id', 'sales_user_id'])) {
+                return;
+            }
+
+            $branch = Branch::find($branchId);
+            if (! $branch || blank($branch->sheet_id)) {
+                return;
+            }
+            try {
+                $options = app(SalesLeadSheetOptionService::class)->forBranch($branch);
+                $fields = [
+                    'id_promo' => ['promo', 'ID Promo tidak tersedia pada pilihan spreadsheet cabang.'],
+                    'source' => ['source', 'Sumber lead tidak tersedia pada pilihan spreadsheet cabang.'],
+                    'platform' => ['channel', 'Kanal masuk tidak tersedia pada pilihan spreadsheet cabang.'],
+                    'campaign_name' => ['activity', 'Aktivitas lead tidak tersedia pada pilihan spreadsheet cabang.'],
+                ];
+                foreach ($fields as $field => [$optionKey, $message]) {
+                    if ($this->filled($field) && app(SalesLeadSheetOptionService::class)->exactOption($options[$optionKey], $this->string($field)->toString()) === null) {
+                        $validator->errors()->add($field, $message);
+                    }
+                }
+                app(SalesSheetIdentityService::class)->projectValue($project, $options);
+                app(SalesSheetIdentityService::class)->salesValue($branch, $owner, $options);
+            } catch (ValidationException $exception) {
+                foreach ($exception->errors() as $field => $messages) {
+                    foreach ($messages as $message) {
+                        $validator->errors()->add($field, $message);
+                    }
+                }
+            } catch (SalesLeadSpreadsheetContractException $exception) {
+                $validator->errors()->add('spreadsheet', $exception->getMessage());
             }
         }];
     }

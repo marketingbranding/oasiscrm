@@ -47,6 +47,11 @@ class SalesLeadSpreadsheetContractException extends RuntimeException
         return new self("Validasi kolom {$header} di tab {$sheetName} tidak sesuai kontrak.");
     }
 
+    public static function valueInvalid(string $sheetName, string $header): self
+    {
+        return new self("Nilai {$header} tidak tersedia pada pilihan valid tab {$sheetName}.");
+    }
+
     public static function metadataUnsafe(string $sheetName): self
     {
         return new self("Kolom metadata OASIS pada tab {$sheetName} tidak aman untuk diprovisikan.");

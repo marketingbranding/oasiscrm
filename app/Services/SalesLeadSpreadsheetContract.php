@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Exceptions\SalesLeadSpreadsheetContractException;
+use App\Models\Branch;
 use App\Models\SalesLead;
 use App\ValueObjects\ResolvedSalesLeadSpreadsheetContract;
 use App\ValueObjects\SalesLeadSheetDefinition;
@@ -20,14 +21,22 @@ class SalesLeadSpreadsheetContract
         return [
             'lead' => new SalesLeadSheetDefinition(
                 'lead',
-                ['id_lead', 'id_promo', 'tanggal_lead', 'sumber', 'platform', 'campaign', 'nama_konsumen', 'no_hp', 'proyek', 'sales_pic', 'status_lead', 'keterangan'],
+                ['id_lead', 'id_promo', 'tanggal_lead', 'source', 'platform', 'campaign_name', 'nama_konsumen', 'no_hp', 'proyek', 'sales_pic', 'status_lead', 'keterangan'],
                 ['id_lead'],
                 [
                     'id_promo' => ['type' => 'select', 'strict' => true],
                     'tanggal_lead' => ['type' => 'date'],
-                    'sumber' => ['type' => 'select', 'strict' => true, 'values' => ['Canvasing', 'Event', 'Freelance', 'Lead Cabang', 'Online', 'Pameran', 'Refferal']],
+                    'source' => ['type' => 'select', 'strict' => true],
+                    'platform' => ['type' => 'select', 'strict' => true],
+                    'campaign_name' => ['type' => 'select', 'strict' => true],
+                    'proyek' => ['type' => 'select', 'strict' => true],
                     'sales_pic' => ['type' => 'select', 'strict' => true],
                     'status_lead' => ['type' => 'select', 'strict' => true, 'values' => ['No Respon', 'Diskusi', 'UTJ', 'Tidak Lolos BI Checking', 'Akad', 'Cek Lokasi', 'Cek Silk', 'Jadi Freelance']],
+                ],
+                [
+                    'source' => ['sumber_lead', 'sumber'],
+                    'platform' => ['kanal_masuk', 'platform'],
+                    'campaign_name' => ['aktivitas_lead', 'campaign'],
                 ],
             ),
             'data_ceklok' => new SalesLeadSheetDefinition(
@@ -85,8 +94,14 @@ class SalesLeadSpreadsheetContract
 
     public function resolve(SalesLead $lead, string $sheetName): ResolvedSalesLeadSpreadsheetContract
     {
-        $definition = $this->definitions()[$sheetName] ?? throw SalesLeadSpreadsheetContractException::unknownSheet($sheetName);
         $branch = $lead->branch()->first();
+
+        return $this->resolveForBranch($branch, $sheetName);
+    }
+
+    public function resolveForBranch(?Branch $branch, string $sheetName): ResolvedSalesLeadSpreadsheetContract
+    {
+        $definition = $this->definitions()[$sheetName] ?? throw SalesLeadSpreadsheetContractException::unknownSheet($sheetName);
 
         if ($branch === null || ! $branch->is_active) {
             throw SalesLeadSpreadsheetContractException::branchUnavailable();
@@ -112,13 +127,12 @@ class SalesLeadSpreadsheetContract
             $raw = $this->googleSheets->batchGetRaw($spreadsheetId, [$range], 'FORMATTED_VALUE')[$sheetName] ?? [];
             $formulas = $this->googleSheets->batchGetRaw($spreadsheetId, [$range], 'FORMULA')[$sheetName] ?? [];
             $headers = array_map(fn ($header) => trim((string) $header), $raw[0] ?? []);
-            $this->validateHeaders($definition, $headers);
-
-            $headerMap = array_flip($headers);
+            [$headerMap, $resolvedHeaders] = $this->resolveHeaders($definition, $headers);
             $formulaOwnedHeaders = [];
-            foreach ($headers as $index => $header) {
+            foreach ($definition->requiredHeaders as $canonicalHeader) {
+                $index = $headerMap[$canonicalHeader];
                 if (str_starts_with(trim((string) ($formulas[1][$index] ?? '')), '=')) {
-                    $formulaOwnedHeaders[] = $header;
+                    $formulaOwnedHeaders[] = $canonicalHeader;
                 }
             }
             foreach ($definition->formulaOwnedHeaders as $header) {
@@ -147,6 +161,7 @@ class SalesLeadSpreadsheetContract
                 $formulaOwnedHeaders,
                 2,
                 $validationOptions,
+                $resolvedHeaders,
             );
         } catch (SalesLeadSpreadsheetContractException $exception) {
             throw $exception;
@@ -178,19 +193,53 @@ class SalesLeadSpreadsheetContract
         return $value;
     }
 
-    private function validateHeaders(SalesLeadSheetDefinition $definition, array $headers): void
+    public function assertStrictValues(ResolvedSalesLeadSpreadsheetContract $contract, array $fields): void
     {
-        $missing = array_values(array_diff($definition->requiredHeaders, $headers));
+        foreach ($contract->definition->validations as $header => $validation) {
+            if (! ($validation['strict'] ?? false) || ! array_key_exists($header, $fields) || blank($fields[$header])) {
+                continue;
+            }
+            $candidate = $this->valueForWrite($contract, $header, $fields[$header]);
+            if (! in_array($candidate, $contract->validationOptions[$header] ?? [], true)) {
+                throw SalesLeadSpreadsheetContractException::valueInvalid($contract->definition->sheetName, $header);
+            }
+        }
+    }
+
+    private function resolveHeaders(SalesLeadSheetDefinition $definition, array $headers): array
+    {
+        $physicalMap = [];
+        foreach ($headers as $index => $header) {
+            if ($header !== '' && ! isset($physicalMap[$header])) {
+                $physicalMap[$header] = $index;
+            }
+        }
+        $headerMap = $physicalMap;
+        $resolvedHeaders = [];
+        $missing = [];
+        foreach ($definition->requiredHeaders as $canonicalHeader) {
+            $actual = collect($definition->headerAliases[$canonicalHeader] ?? [$canonicalHeader])
+                ->first(fn (string $alias) => isset($physicalMap[$alias]));
+            if ($actual === null) {
+                $missing[] = $canonicalHeader;
+
+                continue;
+            }
+            $headerMap[$canonicalHeader] = $physicalMap[$actual];
+            $resolvedHeaders[$canonicalHeader] = $actual;
+        }
         if ($missing !== []) {
             throw SalesLeadSpreadsheetContractException::headersMissing($definition->sheetName, $missing);
         }
 
-        $positions = array_map(fn ($header) => array_search($header, $headers, true), $definition->requiredHeaders);
+        $positions = array_map(fn ($header) => $headerMap[$header], $definition->requiredHeaders);
         $sorted = $positions;
         sort($sorted);
         if ($positions !== $sorted) {
             throw SalesLeadSpreadsheetContractException::headerOrderInvalid($definition->sheetName);
         }
+
+        return [$headerMap, $resolvedHeaders];
     }
 
     private function validateColumnMetadata(SalesLeadSheetDefinition $definition, array $headerMap, array $metadata): void

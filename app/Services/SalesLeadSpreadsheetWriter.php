@@ -27,6 +27,7 @@ class SalesLeadSpreadsheetWriter
         }
 
         $contract = $this->contracts->resolve($lead, $sheetName);
+        $this->contracts->assertStrictValues($contract, $fields);
         try {
             $headers = $this->googleSheets->ensureTrailingMetadataColumns(
                 $contract->spreadsheetId,
@@ -36,6 +37,9 @@ class SalesLeadSpreadsheetWriter
                 SalesLeadSpreadsheetContract::META_HEADERS,
             );
             $headerMap = array_flip($headers);
+            foreach ($contract->headerMap as $canonicalHeader => $index) {
+                $headerMap[$canonicalHeader] = $index;
+            }
 
             $existingRow = $this->googleSheets->findRowByHeaderValue(
                 $contract->spreadsheetId,
@@ -46,7 +50,8 @@ class SalesLeadSpreadsheetWriter
             );
         } catch (SalesLeadSpreadsheetContractException $exception) {
             throw $exception;
-        } catch (Throwable) {
+        } catch (Throwable $exception) {
+            report($exception);
             throw SalesLeadSpreadsheetContractException::writeFailed();
         }
         if ($existingRow !== null) {
@@ -75,7 +80,7 @@ class SalesLeadSpreadsheetWriter
             $this->copyTemplateWhenRequired($contract, $append->rowNumber);
 
             return $this->result($contract, $headers, $append->rowNumber, $operationUuid);
-        } catch (Throwable) {
+        } catch (Throwable $writeException) {
             try {
                 $rowNumber = $this->googleSheets->findRowByHeaderValue(
                     $contract->spreadsheetId,
@@ -89,10 +94,13 @@ class SalesLeadSpreadsheetWriter
 
                     return $this->result($contract, $headers, $rowNumber, $operationUuid);
                 }
-            } catch (Throwable) {
+            } catch (Throwable $reconciliationException) {
+                report($writeException);
+                report($reconciliationException);
                 throw SalesLeadSpreadsheetContractException::writeFailed();
             }
 
+            report($writeException);
             throw SalesLeadSpreadsheetContractException::writeFailed();
         }
     }
@@ -108,6 +116,7 @@ class SalesLeadSpreadsheetWriter
         }
 
         $contract = $this->contracts->resolve($lead, $sheetName);
+        $this->contracts->assertStrictValues($contract, $fields);
         try {
             $headers = $this->googleSheets->ensureTrailingMetadataColumns(
                 $contract->spreadsheetId,
@@ -128,6 +137,9 @@ class SalesLeadSpreadsheetWriter
             }
 
             $headerMap = array_flip($headers);
+            foreach ($contract->headerMap as $canonicalHeader => $index) {
+                $headerMap[$canonicalHeader] = $index;
+            }
             $formulaHeaders = array_flip($contract->formulaOwnedHeaders);
             $metadataHeaders = array_flip(SalesLeadSpreadsheetContract::META_HEADERS);
             $ranges = [];
@@ -146,7 +158,8 @@ class SalesLeadSpreadsheetWriter
             return new SalesLeadSpreadsheetWriteResult($contract->spreadsheetId, $sheetName, $rowNumber, $syncId);
         } catch (SalesLeadSpreadsheetContractException $exception) {
             throw $exception;
-        } catch (Throwable) {
+        } catch (Throwable $exception) {
+            report($exception);
             throw SalesLeadSpreadsheetContractException::writeFailed();
         }
     }
@@ -160,7 +173,8 @@ class SalesLeadSpreadsheetWriter
         try {
             $this->googleSheets->copyRowFormat($contract->spreadsheetId, $contract->sheetId, $contract->templateRowNumber, $rowNumber);
             $this->googleSheets->copyRowFormulas($contract->spreadsheetId, $contract->sheetId, $contract->templateRowNumber, $rowNumber);
-        } catch (Throwable) {
+        } catch (Throwable $exception) {
+            report($exception);
             throw SalesLeadSpreadsheetContractException::writeFailed();
         }
     }

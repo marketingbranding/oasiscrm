@@ -38,6 +38,7 @@ class SalesLeadLifecycleSyncService
         private readonly GoogleSheetsApiService $googleSheets,
         private readonly SyncLockService $locks,
         private readonly PhoneNormalizationService $phones,
+        private readonly SalesSheetIdentityService $sheetIdentities,
     ) {}
 
     public function sync(Branch $branch, ?User $actor = null): array
@@ -126,6 +127,14 @@ class SalesLeadLifecycleSyncService
 
             $values = $rawSheets[$sheet] ?? [];
             $headers = array_map(fn ($value) => trim((string) $value), $values[0] ?? []);
+            if ($sheet === 'lead') {
+                $headers = array_map(fn (string $header) => match ($header) {
+                    'sumber_lead', 'sumber' => 'source',
+                    'kanal_masuk' => 'platform',
+                    'aktivitas_lead', 'campaign' => 'campaign_name',
+                    default => $header,
+                }, $headers);
+            }
             $missing = array_values(array_diff(self::REQUIRED_HEADERS[$sheet], $headers));
             $duplicates = array_keys(array_filter(array_count_values(array_filter($headers)), fn (int $count) => $count > 1));
             if ($missing !== [] || $duplicates !== []) {
@@ -223,9 +232,9 @@ class SalesLeadLifecycleSyncService
                 'customer_name' => $row['nama_konsumen'],
                 'phone' => $row['no_hp'] ?? null,
                 'normalized_phone' => $this->phones->normalize($row['no_hp'] ?? null),
-                'source' => $row['sumber'] ?? null,
+                'source' => $row['source'] ?? null,
                 'platform' => $row['platform'] ?? null,
-                'campaign_name' => $row['campaign'] ?? null,
+                'campaign_name' => $row['campaign_name'] ?? null,
                 'notes' => $row['keterangan'] ?? null,
             ];
             if ($lead === null) {
@@ -484,26 +493,19 @@ class SalesLeadLifecycleSyncService
 
     private function uniqueProject(Branch $branch, string $name): array
     {
-        $projects = LeadMaster::query()->where('branch_id', $branch->id)->where('is_active', true)->where('project_name', $name)->get();
+        $projects = LeadMaster::query()->where('branch_id', $branch->id)->where('is_active', true)->get();
+        $normalize = fn (?string $value) => mb_strtolower(preg_replace('/\s+/u', ' ', trim((string) $value)) ?? '');
+        $mapped = $projects->filter(fn (LeadMaster $project) => filled($project->sheet_project_name) && $normalize($project->sheet_project_name) === $normalize($name))->values();
+        $projects = $mapped->isNotEmpty()
+            ? $mapped
+            : $projects->filter(fn (LeadMaster $project) => $normalize($project->project_name) === $normalize($name))->values();
 
         return $projects->count() === 1 ? [$projects->first(), null] : [null, $projects->isEmpty() ? 'project_not_found' : 'project_ambiguous'];
     }
 
     private function uniqueAssignedSales(LeadMaster $project, string $name): array
     {
-        $today = today()->toDateString();
-        $users = User::query()
-            ->join('project_user', 'project_user.user_id', '=', 'users.id')
-            ->select('users.*')
-            ->where('name', $name)
-            ->where('users.is_active', true)
-            ->where('project_user.project_id', $project->id)
-            ->where('project_user.is_active', true)
-            ->where(fn ($window) => $window->whereNull('project_user.assignment_start_date')->orWhereDate('project_user.assignment_start_date', '<=', $today))
-            ->where(fn ($window) => $window->whereNull('project_user.assignment_end_date')->orWhereDate('project_user.assignment_end_date', '>=', $today))
-            ->get();
-
-        return $users->count() === 1 ? [$users->first(), null] : [null, $users->isEmpty() ? 'sales_not_found' : 'sales_ambiguous'];
+        return $this->sheetIdentities->reverseSales($project->branch, $project, $name);
     }
 
     private function issue(Branch $branch, ?SalesLead $lead, string $entityType, string $identity, string $code, array $metadata, string $operationUuid, array &$summary): void

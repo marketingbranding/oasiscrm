@@ -14,6 +14,7 @@ class LeadMaster extends Model
     protected $fillable = [
         'branch_id',
         'project_name',
+        'sheet_project_name',
         'lead_source',
         'category',
         'is_active',

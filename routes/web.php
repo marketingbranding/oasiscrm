@@ -28,8 +28,10 @@ use App\Http\Controllers\Crm\SalesDailyReminderController;
 use App\Http\Controllers\Crm\SalesLeadController;
 use App\Http\Controllers\Crm\SalesLeadLifecycleController;
 use App\Http\Controllers\Crm\SalesLeadLifecycleSyncController;
+use App\Http\Controllers\Crm\SalesLeadOptionController;
 use App\Http\Controllers\Crm\SalesLeadStageController;
 use App\Http\Controllers\Crm\SalesPocketbookController;
+use App\Http\Controllers\Crm\SalesSheetIdentityController;
 use App\Http\Controllers\Crm\SystemHealthController;
 use App\Http\Controllers\ProfileController;
 use App\Models\Comment;
@@ -73,6 +75,7 @@ Route::middleware(['auth', 'active', 'verified', 'password.changed', 'operationa
     Route::post('/buku-saku-sales/agendas/{agenda}/reschedule', [SalesAgendaController::class, 'reschedule'])->name('sales-agendas.reschedule');
     Route::get('/buku-saku-sales/input', [SalesLeadController::class, 'create'])->name('sales-leads.create');
     Route::get('/buku-saku-sales/duplicate-phone', [SalesLeadController::class, 'duplicatePhone'])->name('sales-leads.duplicate-phone');
+    Route::get('/buku-saku-sales/branches/{branch}/lead-options', SalesLeadOptionController::class)->name('sales-leads.options');
     Route::post('/buku-saku-sales/leads', [SalesLeadController::class, 'store'])->name('sales-leads.store');
     Route::get('/buku-saku-sales/leads/{sales_lead}/edit', [SalesLeadController::class, 'edit'])->name('sales-leads.edit');
     Route::put('/buku-saku-sales/leads/{sales_lead}', [SalesLeadController::class, 'update'])->name('sales-leads.update');
@@ -216,6 +219,8 @@ Route::middleware(['auth', 'active', 'verified', 'password.changed', 'operationa
         Route::get('/{admin_user}', [AdminUserController::class, 'show'])->middleware('permission:users.view')->name('show');
         Route::get('/{admin_user}/edit', [AdminUserController::class, 'edit'])->middleware('permission:users.update')->name('edit');
         Route::put('/{admin_user}', [AdminUserController::class, 'update'])->middleware('permission:users.update')->name('update');
+        Route::get('/{admin_user}/sales-sheet-identities/{branch}', [SalesSheetIdentityController::class, 'edit'])->middleware('permission:users.update')->name('sales-sheet-identity.edit');
+        Route::put('/{admin_user}/sales-sheet-identities/{branch}', [SalesSheetIdentityController::class, 'update'])->middleware('permission:users.update')->name('sales-sheet-identity.update');
         Route::post('/{admin_user}/invitation', [AdminUserController::class, 'sendInvitation'])->middleware('permission:users.invite')->name('invitation.send');
         Route::post('/{admin_user}/invitation/resend', [AdminUserController::class, 'resendInvitation'])->middleware('permission:users.invite')->name('invitation.resend');
         Route::patch('/{admin_user}/invitation/revoke', [AdminUserController::class, 'revokeInvitation'])->middleware('permission:users.invite')->name('invitation.revoke');

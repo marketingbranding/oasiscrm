@@ -14,6 +14,7 @@ class SalesLeadService
     public function __construct(
         private readonly PhoneNormalizationService $phones,
         private readonly SalesLeadLifecycleService $lifecycle,
+        private readonly SalesSheetIdentityService $sheetIdentities,
     ) {}
 
     public function create(array $data, User $actor): SalesLead
@@ -26,7 +27,8 @@ class SalesLeadService
             $data['current_status_changed_at'] = now();
             $data['current_status_source'] = 'manual';
             $data['current_status_source_id'] = (string) $actor->id;
-            $data['external_sync_id'] = (string) Str::uuid();
+            $data['external_sync_id'] = $data['operation_uuid'];
+            unset($data['operation_uuid']);
             $data['created_by'] = $actor->id;
             $data['updated_by'] = $actor->id;
             $lead = SalesLead::create($data);
@@ -137,20 +139,20 @@ class SalesLeadService
 
     public function spreadsheetFields(SalesLead $lead): array
     {
-        $lead->loadMissing(['project:id,project_name', 'sales:id,name', 'leadSource:id,name']);
+        $lead->loadMissing(['branch:id,sheet_id,is_active', 'project:id,branch_id,project_name,sheet_project_name', 'sales:id,name', 'leadSource:id,name']);
         $status = $lead->current_status instanceof SalesLeadStatus
             ? $lead->current_status
             : SalesLeadStatus::fromInput($lead->current_status ?? SalesLeadStatus::NoResponse->value);
 
         return [
             'tanggal_lead' => $lead->lead_date?->format('Y-m-d'),
-            'sumber' => $lead->source ?: ($lead->source_name_snapshot ?: $lead->leadSource?->name),
+            'source' => $lead->source ?: ($lead->source_name_snapshot ?: $lead->leadSource?->name),
             'platform' => $lead->platform,
-            'campaign' => $lead->campaign_name ?: $lead->campaign_id,
+            'campaign_name' => $lead->campaign_name ?: $lead->campaign_id,
             'nama_konsumen' => $lead->customer_name,
             'no_hp' => $lead->phone,
-            'proyek' => $lead->project?->project_name,
-            'sales_pic' => $lead->sales?->name,
+            'proyek' => $this->sheetIdentities->projectValue($lead->project),
+            'sales_pic' => $this->sheetIdentities->salesValue($lead->branch, $lead->sales),
             'status_lead' => $status->spreadsheetValue(),
             'keterangan' => $lead->notes,
             'id_promo' => $lead->id_promo,

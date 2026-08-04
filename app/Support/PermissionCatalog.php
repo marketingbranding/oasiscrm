@@ -125,7 +125,7 @@ class PermissionCatalog
         return [
             'sales' => [
                 'sales_pocketbook.view_own', 'sales_pocketbook.manage_own', 'sales_pocketbook.export_own', 'work_planner.view_own',
-                'sales_pocketbook.export', 'work_planner.create', 'work_planner.update',
+                'sales_pocketbook.export', 'sales_pocketbook.sync', 'work_planner.create', 'work_planner.update',
                 ...$comments,
             ],
             'sales_coordinator' => [

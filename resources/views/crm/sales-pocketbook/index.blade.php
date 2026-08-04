@@ -31,11 +31,11 @@
         ['tab' => 'leads'],
     ));
     $hasLeadPeriodFilter = request()->filled('period_type') || request()->filled('week') || request()->filled('date_from') || request()->filled('date_to');
-    $hasLeadFilters = collect(['branch_id', 'project_id', 'sales_user_id', 'lead_source_id', 'stage', 'report_metric'])
+    $hasLeadFilters = collect(['branch_id', 'project_id', 'sales_user_id', 'lead_source', 'lead_source_id', 'stage', 'report_metric'])
         ->contains(fn (string $key) => request()->filled($key)) || $hasLeadPeriodFilter;
-    $activeLeadFilterCount = collect(['branch_id', 'project_id', 'sales_user_id', 'lead_source_id', 'stage', 'report_metric'])
+    $activeLeadFilterCount = collect(['branch_id', 'project_id', 'sales_user_id', 'lead_source', 'lead_source_id', 'stage', 'report_metric'])
         ->filter(fn (string $key) => request()->filled($key))->count() + ($hasLeadPeriodFilter ? 1 : 0);
-    $selectedLeadSource = request()->filled('lead_source_id') ? $leadSources->firstWhere('id', request()->integer('lead_source_id')) : null;
+    $selectedLeadSource = $leadSourceFilter;
     $selectedLeadStage = request()->filled('stage') ? (\App\Models\SalesLead::STAGES[request('stage')] ?? null) : null;
     $reportMetricLabels = [
         'lead_new' => 'Lead Baru',
@@ -65,7 +65,7 @@
         || Auth::user()->hasPrimaryRole(['sales', 'manager', 'admin', 'pusat']));
     $leadOptionsEndpoint = route('sales-leads.options', ['branch' => 'BRANCH_ID']);
 @endphp
-<div class="space-y-4" x-data="salesPocketbook()">
+<div class="space-y-4" x-data="salesPocketbook()" @oasis-sync-updated.window="handleLifecycleSync($event.detail)">
     <x-crm.page-header
         variant="canonical"
         class="sales-pocketbook-page-header"
@@ -112,7 +112,7 @@
         </x-crm.alert>
     @endif
 
-    @if($syncBranch && ($canLifecycleSync || $canReconcile))
+    @if($tab === 'leads' && $syncBranch)
         <x-crm.sync-status-panel module-key="sales-lead-lifecycle" :scope-name="$syncBranch->name" :branch-id="$syncBranch->id" :status="$lifecycleSyncStatus">
             <div class="flex flex-wrap items-center gap-2">
                 @if($canReconcile)<x-crm.button variant="text" size="sm" :href="route('sales-pocketbook.lifecycle-reconciliations.index', ['branch_id' => $syncBranch->id, 'status' => 'open'])">Rekonsiliasi ({{ $reconciliationCount }})</x-crm.button>@endif
@@ -120,6 +120,13 @@
             </div>
         </x-crm.sync-status-panel>
     @endif
+    @if($tab === 'leads' && $monitoring && !$syncBranch)
+        <x-crm.alert variant="info" title="Pilih cabang untuk sinkronisasi">Status dan aksi sinkronisasi lead tersedia setelah satu cabang dipilih.</x-crm.alert>
+    @endif
+    <div x-show="syncUpdateAvailable" x-cloak role="status" aria-live="polite" class="border-2 border-black bg-[#fff7cc] p-3 text-sm">
+        <strong>Data terbaru tersedia.</strong> Draf Anda tetap dipertahankan.
+        <button type="button" class="ml-2 font-bold underline" @click="window.location.reload()">Muat ulang</button>
+    </div>
 
     @if($branches->isEmpty())
         <x-crm.alert variant="error" title="Akses cabang belum tersedia" id="sales-pocketbook-assignment-alert">Anda belum memiliki akses cabang.</x-crm.alert>
@@ -283,8 +290,7 @@
                     <div x-show="!duplicatePending && duplicates.length" x-cloak class="sales-pocketbook-duplicate-result"><strong>Peringatan duplikat, lead tetap dapat disimpan.</strong><template x-for="item in duplicates" :key="item.id"><div x-text="`${item.sales} / ${item.branch} / ${item.project} / ${item.date}`"></div></template></div>
                 </div>
             </x-crm.field>
-            <x-crm.field label="Kategori Sumber Lead (OASIS)" for="quick-lead-source" required :error="$errors->first('lead_source_id')"><select id="quick-lead-source" class="sales-input" name="lead_source_id" required aria-invalid="{{ $errors->has('lead_source_id') ? 'true' : 'false' }}" @if($errors->has('lead_source_id')) aria-describedby="quick-lead-source-error" @endif><option value="">Pilih sumber</option>@foreach($leadSources as $source)<option value="{{ $source->id }}" @selected(old('lead_source_id') == $source->id)>{{ $source->name }}</option>@endforeach</select></x-crm.field>
-            <x-crm.field label="Sumber Lead (Sheet)" for="quick-lead-source-detail" required :error="$errors->first('source')"><select id="quick-lead-source-detail" class="sales-input" name="source" x-model="source" required><option value="">Pilih sumber</option><template x-if="source && !sheetOptions.source.includes(source)"><option :value="source" x-text="source"></option></template><template x-for="option in sheetOptions.source" :key="option"><option :value="option" x-text="option"></option></template></select></x-crm.field>
+            <x-crm.field label="Sumber Lead" for="quick-lead-source" required :error="$errors->first('source')"><select id="quick-lead-source" class="sales-input" name="source" x-model="source" required><option value="">Pilih sumber</option><template x-for="option in sheetOptions.source" :key="option"><option :value="option" x-text="option"></option></template></select><p x-show="historicalSource" x-cloak class="mt-1 text-xs text-amber-800">Nilai sebelumnya “<span x-text="historicalSource"></span>” tidak tersedia lagi. Pilih sumber aktif sebelum menyimpan.</p></x-crm.field>
             <x-crm.field label="Kanal Masuk" for="quick-lead-platform" required :error="$errors->first('platform')"><select id="quick-lead-platform" class="sales-input" name="platform" x-model="platform" required><option value="">Pilih kanal</option><template x-if="platform && !sheetOptions.channel.includes(platform)"><option :value="platform" x-text="platform"></option></template><template x-for="option in sheetOptions.channel" :key="option"><option :value="option" x-text="option"></option></template></select></x-crm.field>
             <x-crm.field label="Aktivitas Lead" for="quick-lead-campaign" required :error="$errors->first('campaign_name')"><select id="quick-lead-campaign" class="sales-input" name="campaign_name" x-model="campaignName" required><option value="">Pilih aktivitas</option><template x-if="campaignName && !sheetOptions.activity.includes(campaignName)"><option :value="campaignName" x-text="campaignName"></option></template><template x-for="option in sheetOptions.activity" :key="option"><option :value="option" x-text="option"></option></template></select></x-crm.field>
             <x-crm.field label="ID Promo" for="quick-lead-promo" :error="$errors->first('id_promo')"><select id="quick-lead-promo" class="sales-input" name="id_promo" x-model="promo"><option value="">Pilih ID Promo (opsional)</option><template x-if="promo && !sheetOptions.promo.includes(promo)"><option :value="promo" x-text="promo"></option></template><template x-for="option in sheetOptions.promo" :key="option"><option :value="option" x-text="option"></option></template></select></x-crm.field>
@@ -312,7 +318,7 @@
         @if($selectedBranch)<x-crm.filter-chip label="Cabang: {{ $selectedBranch->name }}" :remove-href="$leadFilterUrl(['branch_id'])" remove-label="Hapus filter cabang" />@endif
         @if($selectedProject)<x-crm.filter-chip label="Proyek: {{ $selectedProject->project_name }}" :remove-href="$leadFilterUrl(['project_id'])" remove-label="Hapus filter proyek" />@endif
         @if($selectedSales)<x-crm.filter-chip label="Sales: {{ $selectedSales->name }}" :remove-href="$leadFilterUrl(['sales_user_id'])" remove-label="Hapus filter sales" />@endif
-        @if($selectedLeadSource)<x-crm.filter-chip label="Sumber: {{ $selectedLeadSource->name }}" :remove-href="$leadFilterUrl(['lead_source_id'])" remove-label="Hapus filter sumber lead" />@endif
+        @if($selectedLeadSource)<x-crm.filter-chip label="Sumber: {{ $selectedLeadSource }}" :remove-href="$leadFilterUrl(['lead_source', 'lead_source_id'])" remove-label="Hapus filter sumber lead" />@endif
         @if($selectedLeadStage)<x-crm.filter-chip label="Tahap: {{ $selectedLeadStage }}" :remove-href="$leadFilterUrl(['stage'])" remove-label="Hapus filter tahap" />@endif
         @if($selectedReportMetric)<x-crm.filter-chip label="Drilldown: {{ $selectedReportMetric }}" :remove-href="$leadFilterUrl(['report_metric'])" remove-label="Hapus drilldown laporan" />@endif
         @if($hasLeadPeriodFilter)<x-crm.filter-chip label="Periode: {{ $reportPeriod['start']->format('d/m/Y') }} - {{ $reportPeriod['end']->format('d/m/Y') }}" :remove-href="$leadFilterUrl(['period_type', 'week', 'date_from', 'date_to'])" remove-label="Hapus filter periode" />@endif
@@ -329,7 +335,7 @@
             <x-crm.field label="Cabang" for="lead-filter-branch"><select id="lead-filter-branch" class="sales-input" name="branch_id" x-model="branch" @change="branchChanged()"><option value="">Semua cabang</option>@foreach($branches as $branch)<option value="{{ $branch->id }}">{{ $branch->name }}</option>@endforeach</select></x-crm.field>
             <x-crm.field label="Proyek" for="lead-filter-project"><select id="lead-filter-project" class="sales-input" name="project_id" x-model="project" @change="projectChanged()"><option value="">Semua proyek</option>@foreach($projects as $project)<option value="{{ $project->id }}" x-show="projectVisible('{{ $project->id }}')" :disabled="!projectVisible('{{ $project->id }}')">{{ $project->project_name }}</option>@endforeach</select></x-crm.field>
             <x-crm.field label="Sales" for="lead-filter-sales"><select id="lead-filter-sales" class="sales-input" name="sales_user_id" x-model="sales"><option value="">Semua sales</option>@foreach($salesUsers as $sales)<option value="{{ $sales->id }}" x-show="salesVisible('{{ $sales->id }}')" :disabled="!salesVisible('{{ $sales->id }}')">{{ $sales->name }}</option>@endforeach</select></x-crm.field>
-            <x-crm.field label="Sumber Lead" for="lead-filter-source"><select id="lead-filter-source" class="sales-input" name="lead_source_id"><option value="">Semua sumber</option>@foreach($leadSources as $source)<option value="{{ $source->id }}" @selected(request('lead_source_id') == $source->id)>{{ $source->name }}</option>@endforeach</select></x-crm.field>
+            <x-crm.field label="Sumber Lead" for="lead-filter-source"><select id="lead-filter-source" class="sales-input" name="lead_source"><option value="">Semua sumber</option>@foreach($leadSourceOptions as $source)<option value="{{ $source }}" @selected($selectedLeadSource === $source)>{{ $source }}</option>@endforeach</select></x-crm.field>
             <x-crm.field label="Tahap Saat Ini" for="lead-filter-stage"><select id="lead-filter-stage" class="sales-input" name="stage"><option value="">Semua tahap</option>@foreach(\App\Models\SalesLead::STAGES as $stage => $label)<option value="{{ $stage }}" @selected(request('stage') === $stage)>{{ $label }}</option>@endforeach</select></x-crm.field>
             <div class="crm-field"><span class="crm-field-label" id="lead-period-label">Periode</span><div class="crm-field-control">@include('crm.sales-pocketbook._period-picker', ['periodPickerId' => 'lead-period'])</div></div>
             <div class="sales-lead-filter-actions">
@@ -348,7 +354,7 @@
                 $leadStage = $lead->currentStage();
                 $leadActivityAt = $lead->lastActivityAt();
                 $leadStageVariant = $leadStage === 'akad_at' ? 'success' : ($leadStage ? 'processing' : 'pending');
-                $leadEditPayload = ['id' => $lead->id, 'url' => route('sales-leads.update', $lead), 'fallback_url' => route('sales-leads.edit', $lead), 'site_visit_modal' => 'lead-site-visit-'.$lead->id, 'token' => app(\App\Services\OptimisticLockService::class)->token($lead), 'branch_id' => (string) $lead->branch_id, 'project_id' => (string) $lead->project_id, 'sales_user_id' => (string) $lead->sales_user_id, 'lead_source_id' => (string) $lead->lead_source_id, 'source_name' => $lead->leadSource?->name ?? $lead->source_name_snapshot, 'source_active' => (bool) $lead->leadSource?->is_active, 'source' => $lead->source, 'platform' => $lead->platform, 'campaign_name' => $lead->campaign_name, 'id_promo' => $lead->id_promo, 'current_status' => $lead->current_status->value, 'current_status_label' => $lead->current_status->label(), 'status_manual' => $lead->current_status->isManual(), 'lead_date' => $lead->lead_date->toDateString(), 'customer_name' => $lead->customer_name, 'phone' => $lead->phone, 'notes' => $lead->notes, 'linked_consumer_reference' => $lead->linked_consumer_reference];
+                $leadEditPayload = ['id' => $lead->id, 'url' => route('sales-leads.update', $lead), 'fallback_url' => route('sales-leads.edit', $lead), 'site_visit_modal' => 'lead-site-visit-'.$lead->id, 'token' => app(\App\Services\OptimisticLockService::class)->token($lead), 'branch_id' => (string) $lead->branch_id, 'project_id' => (string) $lead->project_id, 'sales_user_id' => (string) $lead->sales_user_id, 'source' => $lead->source, 'platform' => $lead->platform, 'campaign_name' => $lead->campaign_name, 'id_promo' => $lead->id_promo, 'current_status' => $lead->current_status->value, 'current_status_label' => $lead->current_status->label(), 'status_manual' => $lead->current_status->isManual(), 'lead_date' => $lead->lead_date->toDateString(), 'customer_name' => $lead->customer_name, 'phone' => $lead->phone, 'notes' => $lead->notes, 'linked_consumer_reference' => $lead->linked_consumer_reference];
             @endphp
             <article class="sales-lead-item" data-lead-row="{{ $lead->id }}">
                 <div class="sales-lead-identity">
@@ -358,7 +364,7 @@
                 <dl class="sales-lead-facts">
                     <div><dt>Telepon</dt><dd data-lead-field="phone">{{ $lead->phone ?: '—' }}</dd></div>
                     <div><dt>Proyek</dt><dd data-lead-field="project">{{ $lead->project?->project_name ?: '—' }}</dd></div>
-                    <div><dt>Sumber</dt><dd data-lead-field="source">{{ $lead->source_name_snapshot ?: ($lead->leadSource?->name ?: '—') }}</dd></div>
+                    <div><dt>Sumber</dt><dd data-lead-field="source">{{ $lead->effective_source ?: '—' }}</dd></div>
                     <div><dt>Cabang / Sales</dt><dd data-lead-field="assignment">{{ $lead->branch?->name }} / {{ $lead->sales?->name }}</dd></div>
                     <div><dt>Platform / Campaign</dt><dd>{{ $lead->platform ?: '—' }} / {{ $lead->campaign_name ?: '—' }}</dd></div>
                     <div class="sales-lead-activity"><dt>Aktivitas terbaru</dt><dd><strong data-lead-activity-label="{{ $lead->id }}">{{ $leadStage ? 'Tahap '.$lead->currentStageLabel() : 'Lead dicatat' }}</strong><span data-lead-activity-time="{{ $lead->id }}" data-activity-stage="{{ $leadStage }}" data-lead-baseline="{{ $lead->lead_date->format('d/m/Y') }} 00:00">{{ $leadActivityAt?->format('d/m/Y H:i') ?: '—' }}</span></dd></div>
@@ -397,8 +403,7 @@
                 <x-crm.field label="Tanggal Lead" for="modal-lead-date" required><x-crm.date-field id="modal-lead-date" name="lead_date" x-ref="leadEditDate" x-model="edit.lead_date" required /></x-crm.field>
                 <x-crm.field label="Nama Calon Konsumen" for="modal-lead-name" required><input id="modal-lead-name" x-ref="leadEditName" class="sales-input" name="customer_name" x-model="edit.customer_name" required></x-crm.field>
                 <x-crm.field label="No. WhatsApp / Telepon" for="modal-lead-phone" hint="Peringatan duplikat tidak mencegah penyimpanan."><input id="modal-lead-phone" class="sales-input" name="phone" x-model="edit.phone" @blur="checkPhone($event.target.value, edit.id)" x-bind:aria-busy="duplicatePending" aria-describedby="modal-lead-phone-hint modal-lead-duplicate-status"><div id="modal-lead-duplicate-status" class="sales-pocketbook-duplicate-status" aria-live="polite" aria-atomic="true"><p x-show="duplicatePending" x-cloak>Memeriksa nomor duplikat...</p><div x-show="!duplicatePending && duplicates.length" x-cloak class="sales-pocketbook-duplicate-result"><strong>Peringatan duplikat, lead tetap dapat disimpan.</strong><template x-for="item in duplicates" :key="item.id"><div x-text="`${item.sales} / ${item.branch} / ${item.project} / ${item.date}`"></div></template></div></div></x-crm.field>
-                <x-crm.field label="Sumber Lead" for="modal-lead-source" required><select id="modal-lead-source" class="sales-input" name="lead_source_id" x-model="edit.lead_source_id" required><template x-if="!edit.source_active"><option :value="edit.lead_source_id" x-text="`${edit.source_name} (nonaktif)`"></option></template>@foreach($leadSources as $source)<option value="{{ $source->id }}">{{ $source->name }}</option>@endforeach</select></x-crm.field>
-                <x-crm.field label="Sumber Lead (Sheet)" for="modal-lead-source-detail" required><select id="modal-lead-source-detail" class="sales-input" name="source" x-model="edit.source" required><template x-for="option in leadOptions.source" :key="option"><option :value="option" x-text="option"></option></template></select></x-crm.field>
+                <x-crm.field label="Sumber Lead" for="modal-lead-source" required><select id="modal-lead-source" class="sales-input" name="source" x-model="edit.source" required><option value="">Pilih sumber</option><template x-for="option in leadOptions.source" :key="option"><option :value="option" x-text="option"></option></template></select><p x-show="edit.historical_source" x-cloak class="mt-1 text-xs text-amber-800">Nilai sebelumnya “<span x-text="edit.historical_source"></span>” tidak tersedia lagi. Pilih sumber aktif sebelum menyimpan.</p></x-crm.field>
                 <x-crm.field label="Kanal Masuk" for="modal-lead-platform" required><select id="modal-lead-platform" class="sales-input" name="platform" x-model="edit.platform" required><template x-for="option in leadOptions.channel" :key="option"><option :value="option" x-text="option"></option></template></select></x-crm.field>
                 <x-crm.field label="Aktivitas Lead" for="modal-lead-campaign" required><select id="modal-lead-campaign" class="sales-input" name="campaign_name" x-model="edit.campaign_name" required><template x-for="option in leadOptions.activity" :key="option"><option :value="option" x-text="option"></option></template></select></x-crm.field>
                 <x-crm.field label="ID Promo" for="modal-lead-promo"><select id="modal-lead-promo" class="sales-input" name="id_promo" x-model="edit.id_promo"><option value="">Pilih ID Promo (opsional)</option><template x-for="option in leadOptions.promo" :key="option"><option :value="option" x-text="option"></option></template></select></x-crm.field>
@@ -442,7 +447,7 @@ window.salesPocketbook = function salesPocketbook() {
     }
     return {
         duplicates: [], duplicatePending: false, phoneController: null, phoneRequestId: 0,
-        leadModalOpen: false, leadSaving: false, leadValidationError: '', leadTrigger: null, edit: {}, leadCache: {}, leadTokens: {}, leadOptions: { promo: [], source: [], channel: [], activity: [] },
+        leadModalOpen: false, leadSaving: false, leadValidationError: '', leadTrigger: null, edit: {}, leadCache: {}, leadTokens: {}, leadOptions: { promo: [], source: [], channel: [], activity: [] }, syncUpdateAvailable: false,
         stageModalOpen: false, stageSaving: false, stageValidationError: '', stageTrigger: null, stageEdit: {},
         async checkPhone(phone, exceptId = null) {
             this.phoneController?.abort()
@@ -512,12 +517,27 @@ window.salesPocketbook = function salesPocketbook() {
                 const response = await fetch(@json($leadOptionsEndpoint).replace('BRANCH_ID', branchId), { headers: { Accept: 'application/json' } })
                 if (!response.ok) throw new Error()
                 this.leadOptions = (await response.json()).options
+                if (this.edit.source && !this.leadOptions.source.includes(this.edit.source)) {
+                    this.edit.historical_source = this.edit.source
+                    this.edit.source = ''
+                } else this.edit.historical_source = ''
             } catch (_) { this.leadValidationError = 'Pilihan spreadsheet cabang belum dapat dimuat.' }
         },
         editProjectChanged() {
+            const previousBranch = this.edit.branch_id
             const selected = projects.find(item => item.id === String(this.edit.project_id))
             if (selected) this.edit.branch_id = selected.branch_id
             if (!this.editSalesVisible(this.edit.sales_user_id)) this.edit.sales_user_id = ''
+            if (this.edit.branch_id !== previousBranch) this.loadLeadOptions(this.edit.branch_id)
+        },
+        handleLifecycleSync(detail) {
+            if (detail?.module_key !== 'sales-lead-lifecycle' || String(detail?.scope?.id || '') !== String(@json($syncBranch?->id))) return
+            if (!['success', 'partial_success'].includes(detail.status)) return
+            const quickForm = document.querySelector('#quick-lead-input form')
+            const quickDraft = quickForm && [...quickForm.elements].some(field => field.name && !['operation_uuid', '_token', 'lead_date', 'branch_id', 'project_id', 'sales_user_id', 'current_status'].includes(field.name) && String(field.value || '').trim() !== '')
+            const draftActive = this.leadModalOpen || this.stageModalOpen || Boolean(document.querySelector('[role="dialog"]:not([style*="display: none"])')) || quickDraft
+            if (draftActive) this.syncUpdateAvailable = true
+            else window.location.reload()
         },
         conflictDialogOpen() { return document.documentElement.dataset.oasisConflictOpen === '1' },
         async responseData(response) {
@@ -533,7 +553,7 @@ window.salesPocketbook = function salesPocketbook() {
                     headers: { 'Content-Type': 'application/json', Accept: 'application/json', 'X-CSRF-TOKEN': @json(csrf_token()) },
                     body: JSON.stringify({
                         branch_id: this.edit.branch_id, project_id: this.edit.project_id, sales_user_id: this.edit.sales_user_id,
-                        lead_source_id: this.edit.lead_source_id, lead_date: this.edit.lead_date, customer_name: this.edit.customer_name,
+                        lead_date: this.edit.lead_date, customer_name: this.edit.customer_name,
                         phone: this.edit.phone, source: this.edit.source, platform: this.edit.platform, campaign_name: this.edit.campaign_name,
                         id_promo: this.edit.id_promo, current_status: this.edit.status_manual ? this.edit.current_status : null,
                         notes: this.edit.notes, linked_consumer_reference: this.edit.linked_consumer_reference,
@@ -555,9 +575,7 @@ window.salesPocketbook = function salesPocketbook() {
                     return
                 }
                 this.edit.token = data.updated_at
-                this.edit.source_name = data.lead.source
-                this.edit.source_active = data.lead.source_active
-                this.edit.source = data.lead.source_detail
+                this.edit.source = data.lead.source
                 this.edit.platform = data.lead.platform
                 this.edit.campaign_name = data.lead.campaign_name
                 this.edit.id_promo = data.lead.id_promo

@@ -23,7 +23,7 @@ class SalesLeadLifecycleSyncController extends Controller
 
     public function sync(Request $request, SalesLeadLifecycleSyncService $service): JsonResponse
     {
-        $branch = $this->authorizedBranch($request, 'sales_pocketbook.sync');
+        $branch = $this->authorizedSyncBranch($request);
         $result = $service->sync($branch, $request->user());
         $status = SalesLeadLifecycleSyncStatus::query()->where('branch_id', $branch->id)->first();
         $response = $this->responses->make('sales-lead-lifecycle', $this->scope($branch), $status, $result);
@@ -33,7 +33,7 @@ class SalesLeadLifecycleSyncController extends Controller
 
     public function status(Request $request): JsonResponse
     {
-        $branch = $this->authorizedBranch($request, 'sales_pocketbook.sync');
+        $branch = $this->viewableBranch($request);
 
         $status = SalesLeadLifecycleSyncStatus::query()->where('branch_id', $branch->id)->first();
 
@@ -63,6 +63,33 @@ class SalesLeadLifecycleSyncController extends Controller
         abort_unless(in_array((int) $branch->id, $allowedBranchIds, true), 403);
         abort_unless($this->workspaceAccess->canViewBranch($user, $branch), 403);
         abort_unless($this->workspaceAccess->canSyncBranch($user, $branch), 403);
+
+        return $branch;
+    }
+
+    private function authorizedSyncBranch(Request $request): Branch
+    {
+        $branch = $this->viewableBranch($request);
+        $user = $request->user();
+        abort_unless($user->hasPermission('sales_pocketbook.sync'), 403);
+        abort_unless(in_array((int) $branch->id, $this->organizationScope->branchIds($user, 'sales_pocketbook', 'manage'), true), 403);
+
+        if ($user->isSales()) {
+            abort_unless($this->workspaceAccess->accessibleProjectsQuery($user)->where('branch_id', $branch->id)->exists(), 403);
+        } else {
+            abort_unless($this->workspaceAccess->canSyncBranch($user, $branch), 403);
+        }
+
+        return $branch;
+    }
+
+    private function viewableBranch(Request $request): Branch
+    {
+        $request->validate(['branch_id' => ['required', 'integer', 'exists:branches,id']]);
+        $user = $request->user();
+        $branch = Branch::query()->whereKey($request->integer('branch_id'))->where('is_active', true)->firstOrFail();
+        abort_unless(in_array((int) $branch->id, $this->organizationScope->branchIds($user, 'sales_pocketbook'), true), 403);
+        abort_unless($this->workspaceAccess->canViewBranch($user, $branch), 403);
 
         return $branch;
     }

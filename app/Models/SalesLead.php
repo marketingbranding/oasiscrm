@@ -136,6 +136,34 @@ class SalesLead extends Model
         return $this->freelance_converted_at !== null;
     }
 
+    public function getEffectiveSourceAttribute(): ?string
+    {
+        foreach ([$this->source, $this->source_name_snapshot, $this->leadSource?->name] as $source) {
+            if (filled(trim((string) $source))) {
+                return trim((string) $source);
+            }
+        }
+
+        return null;
+    }
+
+    public function scopeWhereEffectiveSource(Builder $query, string $source): Builder
+    {
+        return $query->where(function (Builder $query) use ($source) {
+            $query->where(fn (Builder $sourceQuery) => $sourceQuery
+                ->whereRaw("TRIM(COALESCE(source, '')) <> ''")
+                ->where('source', $source))
+                ->orWhere(fn (Builder $snapshotQuery) => $snapshotQuery
+                    ->whereRaw("TRIM(COALESCE(source, '')) = ''")
+                    ->whereRaw("TRIM(COALESCE(source_name_snapshot, '')) <> ''")
+                    ->where('source_name_snapshot', $source))
+                ->orWhere(fn (Builder $relationQuery) => $relationQuery
+                    ->whereRaw("TRIM(COALESCE(source, '')) = ''")
+                    ->whereRaw("TRIM(COALESCE(source_name_snapshot, '')) = ''")
+                    ->whereHas('leadSource', fn (Builder $leadSource) => $leadSource->where('name', $source)));
+        });
+    }
+
     public function scopeVisibleTo(Builder $query, User $user): Builder
     {
         if ($user->hasPermission('sales_pocketbook.view_all')) {

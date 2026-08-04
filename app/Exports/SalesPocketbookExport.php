@@ -121,7 +121,7 @@ class SalesPocketbookExport
                 $lead->project?->project_name,
                 $lead->customer_name,
                 $lead->phone,
-                $lead->source_name_snapshot,
+                $lead->source_name_snapshot ?: $lead->effective_source,
                 $lead->contacted_at,
                 $lead->met_at,
                 $lead->surveyed_at,

@@ -377,6 +377,7 @@ export default function registerSync(Alpine) {
         finishedAt: config.initial.finished_at,
         lastSuccessfulAt: config.initial.last_successful_sync_at,
         initiatedBy: config.initial.initiated_by,
+        summary: config.initial.summary || {},
         stale: Boolean(config.initialStale),
         staleTimer: null,
 
@@ -396,6 +397,7 @@ export default function registerSync(Alpine) {
             this.finishedAt = detail.finished_at;
             this.lastSuccessfulAt = detail.last_successful_sync_at;
             this.initiatedBy = detail.initiated_by;
+            this.summary = detail.summary || {};
             this.stale = false;
             this.scheduleStaleTransition();
         },
@@ -455,6 +457,15 @@ export default function registerSync(Alpine) {
             if (this.state === 'failed') return 'bg-[#d77a7a] text-black';
             if (this.state === 'success' && !this.stale) return 'bg-[#b3bd95] text-black';
             return 'bg-[#fcc20f] text-black';
+        },
+
+        get lifecycleSummary() {
+            if (config.moduleKey !== 'sales-lead-lifecycle' || !Object.keys(this.summary).length) return '';
+            const labels = { imported: 'diimpor', updated: 'diperbarui', linked: 'ditautkan', unresolved: 'belum selesai', ignored_deleted: 'baris terhapus diabaikan' };
+            const values = Object.entries(labels).map(([key, label]) => `${label}: ${Number(this.summary[key] || 0)}`);
+            const capabilities = Object.values(this.summary.capabilities || {});
+            if (capabilities.length) values.push(`kapabilitas sehat: ${capabilities.filter(Boolean).length}/${capabilities.length}`);
+            return values.join(' · ');
         },
     }));
 }

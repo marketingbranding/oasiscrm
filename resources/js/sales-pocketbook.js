@@ -17,6 +17,7 @@ export default function registerSalesPocketbook(Alpine) {
         optionsLoading: false,
         optionsError: '',
         source: String(initial.source || ''),
+        historicalSource: '',
         platform: String(initial.platform || ''),
         campaignName: String(initial.campaignName || ''),
         promo: String(initial.promo || ''),
@@ -55,7 +56,12 @@ export default function registerSalesPocketbook(Alpine) {
                 const response = await fetch(this.optionsEndpoint.replace('BRANCH_ID', this.branch), { headers: { Accept: 'application/json' } });
                 if (!response.ok) throw new Error();
                 this.sheetOptions = (await response.json()).options;
-                if (this.source && !this.sheetOptions.source.includes(this.source)) this.source = '';
+                if (this.source && !this.sheetOptions.source.includes(this.source)) {
+                    this.historicalSource = this.source;
+                    this.source = '';
+                } else {
+                    this.historicalSource = '';
+                }
                 if (this.platform && !this.sheetOptions.channel.includes(this.platform)) this.platform = '';
                 if (this.campaignName && !this.sheetOptions.activity.includes(this.campaignName)) this.campaignName = '';
                 if (this.promo && !this.sheetOptions.promo.includes(this.promo)) this.promo = '';
@@ -68,9 +74,11 @@ export default function registerSalesPocketbook(Alpine) {
         },
 
         projectChanged() {
+            const previousBranch = this.branch;
             const selected = this.projects.find((item) => item.id === this.project);
             if (selected) this.branch = selected.branch_id;
             if (this.sales && !this.salesVisible(this.sales)) this.sales = '';
+            if (this.optionsEndpoint && this.branch && this.branch !== previousBranch) this.loadSheetOptions();
         },
 
         setSubmitting() {

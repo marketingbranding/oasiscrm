@@ -12,12 +12,14 @@ use App\Models\SalesLeadLifecycleSyncStatus;
 use App\Models\User;
 use App\Services\OrganizationScopeService;
 use App\Services\SalesDailyReminderService;
+use App\Services\SalesLeadSheetOptionService;
 use App\Services\SalesWeeklyMetricsService;
 use App\Services\WorkspaceAccessService;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
+use Throwable;
 
 class SalesPocketbookController extends Controller
 {
@@ -79,6 +81,7 @@ class SalesPocketbookController extends Controller
         }
         $selectedSalesId = $monitoring && $request->filled('sales_user_id') ? $request->integer('sales_user_id') : ($user->isSales() ? $user->id : null);
         $this->validateFilterScope($selectedBranchId, $selectedProjectId, $selectedSalesId, $projects, $salesUsers);
+        $leadSourceFilter = $this->leadSourceFilter($request);
 
         $periodType = $request->query('period_type', 'week');
         $reportPeriod = $this->weeklyMetrics->period(
@@ -100,7 +103,7 @@ class SalesPocketbookController extends Controller
             ->when($selectedBranchId, fn (Builder $query) => $query->where('branch_id', $selectedBranchId))
             ->when($selectedProjectId, fn (Builder $query) => $query->where('project_id', $selectedProjectId))
             ->when($monitoring && $request->filled('sales_user_id'), fn (Builder $query) => $query->where('sales_user_id', $request->integer('sales_user_id')))
-            ->when($request->filled('lead_source_id'), fn (Builder $query) => $query->where('lead_source_id', $request->integer('lead_source_id')))
+            ->when($leadSourceFilter, fn (Builder $query) => $query->whereEffectiveSource($leadSourceFilter))
             ->when($filterLeadPeriod, fn (Builder $query) => $query
                 ->whereDate($reportMetric ? SalesWeeklyMetricsService::METRIC_COLUMNS[$reportMetric] : 'lead_date', '>=', $reportPeriod['start']->toDateString())
                 ->whereDate($reportMetric ? SalesWeeklyMetricsService::METRIC_COLUMNS[$reportMetric] : 'lead_date', '<=', $reportPeriod['end']->toDateString()))
@@ -192,10 +195,15 @@ class SalesPocketbookController extends Controller
         $canLifecycleSync = $syncBranch !== null
             && $user->hasPermission('sales_pocketbook.sync')
             && in_array((int) $syncBranch->id, $manageBranchIds, true)
-            && $this->workspaceAccess->canSyncBranch($user, $syncBranch);
+            && $this->workspaceAccess->canViewBranch($user, $syncBranch)
+            && ($user->isSales()
+                ? $this->workspaceAccess->accessibleProjectsQuery($user)->where('branch_id', $syncBranch->id)->exists()
+                : $this->workspaceAccess->canSyncBranch($user, $syncBranch));
         $canReconcile = $syncBranch !== null
             && $user->hasPermission('sales_pocketbook.reconcile')
-            && in_array((int) $syncBranch->id, $manageBranchIds, true);
+            && in_array((int) $syncBranch->id, $manageBranchIds, true)
+            && $this->workspaceAccess->canViewBranch($user, $syncBranch)
+            && $this->workspaceAccess->canSyncBranch($user, $syncBranch);
         $lifecycleSyncStatus = $syncBranch
             ? SalesLeadLifecycleSyncStatus::query()->where('branch_id', $syncBranch->id)->first()
             : null;
@@ -204,7 +212,7 @@ class SalesPocketbookController extends Controller
             : 0;
         $lifecycleCapabilitiesByBranch = SalesLeadLifecycleSyncStatus::query()
             ->whereIn('branch_id', $branches->pluck('id'))
-            ->where('status', 'success')
+            ->whereIn('status', ['success', 'partial_success'])
             ->get()
             ->mapWithKeys(fn (SalesLeadLifecycleSyncStatus $status) => [
                 $status->branch_id => $status->summary['capabilities'] ?? [],
@@ -212,6 +220,34 @@ class SalesPocketbookController extends Controller
         $coordinators = User::query()->where('is_active', true)->whereIn('id', $visibleSalesIds)
             ->whereHas('role', fn (Builder $query) => $query->whereIn('slug', ['sales_coordinator', 'supervisor', 'manager', 'branch_manager']))
             ->orderBy('name')->get(['id', 'name', 'branch_id']);
+        $sourceOptionQuery = SalesLead::query()->visibleTo($user)
+            ->when($selectedBranchId, fn (Builder $query) => $query->where('branch_id', $selectedBranchId))
+            ->when($selectedProjectId, fn (Builder $query) => $query->where('project_id', $selectedProjectId))
+            ->when($selectedSalesId, fn (Builder $query) => $query->where('sales_user_id', $selectedSalesId));
+        $leadSourceOptions = (clone $sourceOptionQuery)
+            ->whereRaw("TRIM(COALESCE(source, '')) <> ''")
+            ->distinct()
+            ->pluck('source')
+            ->merge((clone $sourceOptionQuery)
+                ->whereRaw("TRIM(COALESCE(source, '')) = ''")
+                ->whereRaw("TRIM(COALESCE(source_name_snapshot, '')) <> ''")
+                ->distinct()
+                ->pluck('source_name_snapshot'))
+            ->merge((clone $sourceOptionQuery)
+                ->whereRaw("TRIM(COALESCE(sales_leads.source, '')) = ''")
+                ->whereRaw("TRIM(COALESCE(sales_leads.source_name_snapshot, '')) = ''")
+                ->join('lead_sources', 'lead_sources.id', '=', 'sales_leads.lead_source_id')
+                ->distinct()
+                ->pluck('lead_sources.name'))
+            ->filter()->unique()->values();
+        if ($selectedBranchId) {
+            try {
+                $workbookSources = app(SalesLeadSheetOptionService::class)->forBranch($branches->firstWhere('id', $selectedBranchId))['source'];
+                $leadSourceOptions = $leadSourceOptions->merge($workbookSources)->filter()->unique()->sort()->values();
+            } catch (Throwable) {
+                // Historical values remain available when the workbook is temporarily unavailable.
+            }
+        }
 
         return view('crm.sales-pocketbook.index', [
             'tab' => $tab,
@@ -219,7 +255,8 @@ class SalesPocketbookController extends Controller
             'branches' => $branches,
             'projects' => $projects,
             'salesUsers' => $salesUsers,
-            'leadSources' => LeadSource::where('is_active', true)->orderBy('name')->get(),
+            'leadSourceOptions' => $leadSourceOptions,
+            'leadSourceFilter' => $leadSourceFilter,
             'leads' => $leads,
             'agendas' => $agendas,
             'agendaDateFrom' => $agendaDateFrom,
@@ -287,6 +324,7 @@ class SalesPocketbookController extends Controller
         }
         $salesId = $user->isSales() ? $user->id : $requestedSalesId;
         $this->validateFilterScope($branchId, $projectId, $salesId, $projects, $salesUsers);
+        $leadSourceFilter = $this->leadSourceFilter($request);
 
         $periodType = $request->query('period_type', 'week');
         $period = $this->weeklyMetrics->period(
@@ -305,10 +343,10 @@ class SalesPocketbookController extends Controller
         $missingAgendaResultDrilldown = $request->boolean('report_agenda_missing_result');
 
         $leads = $this->weeklyMetrics->leadQuery($user, $filters)
-            ->with(['branch:id,name', 'project:id,project_name', 'sales:id,name'])
+            ->with(['branch:id,name', 'project:id,project_name', 'sales:id,name', 'leadSource:id,name'])
             ->whereDate($leadDateColumn, '>=', $period['start']->toDateString())
             ->whereDate($leadDateColumn, '<=', $period['end']->toDateString())
-            ->when($request->filled('lead_source_id'), fn (Builder $query) => $query->where('lead_source_id', $request->integer('lead_source_id')))
+            ->when($leadSourceFilter, fn (Builder $query) => $query->whereEffectiveSource($leadSourceFilter))
             ->when($request->filled('stage'), function (Builder $query) use ($request) {
                 $stage = (string) $request->query('stage');
                 $query->whereNotNull($stage);
@@ -357,7 +395,8 @@ class SalesPocketbookController extends Controller
             'branch_id' => ['nullable', 'integer'],
             'project_id' => ['nullable', 'integer'],
             'sales_user_id' => ['nullable', 'integer'],
-            'lead_source_id' => ['nullable', 'integer', Rule::exists('lead_sources', 'id')->where('is_active', true)],
+            'lead_source' => ['nullable', 'string', 'max:255'],
+            'lead_source_id' => ['nullable', 'integer', 'exists:lead_sources,id'],
             'stage' => ['nullable', Rule::in(array_keys(SalesLead::STAGES))],
             'period_type' => ['nullable', 'required_with:week,date_from,date_to', Rule::in(['week', 'custom'])],
             'week' => ['nullable', 'date', 'required_if:period_type,week', 'prohibited_if:period_type,custom'],
@@ -367,6 +406,17 @@ class SalesPocketbookController extends Controller
             'report_agenda_completed' => ['nullable', 'boolean'],
             'report_agenda_missing_result' => ['nullable', 'boolean'],
         ];
+    }
+
+    private function leadSourceFilter(Request $request): ?string
+    {
+        if ($request->filled('lead_source')) {
+            return trim($request->string('lead_source')->toString());
+        }
+
+        return $request->filled('lead_source_id')
+            ? LeadSource::query()->whereKey($request->integer('lead_source_id'))->value('name')
+            : null;
     }
 
     private function validateFilterScope(?int $branchId, ?int $projectId, ?int $salesId, $projects, $salesUsers): void

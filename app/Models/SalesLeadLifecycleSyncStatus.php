@@ -16,6 +16,7 @@ class SalesLeadLifecycleSyncStatus extends Model
             'started_at' => 'datetime',
             'finished_at' => 'datetime',
             'last_successful_at' => 'datetime',
+            'duration_ms' => 'integer',
         ];
     }
 

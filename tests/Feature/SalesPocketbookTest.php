@@ -58,6 +58,16 @@ class SalesPocketbookTest extends TestCase
         ], SalesLead::STAGES);
     }
 
+    public function test_one_source_sync_workspace_changelog_is_unique_and_rendered(): void
+    {
+        $title = 'Sumber lead dan sinkronisasi cabang diselaraskan';
+        $this->assertSame(1, DB::table('changelogs')->whereNull('version')->where('title', $title)->count());
+
+        $this->actingAs($this->user('superadmin'))->get(route('changelogs.index'))
+            ->assertOk()
+            ->assertSee($title);
+    }
+
     public function test_lead_sources_have_exact_canonical_active_taxonomy(): void
     {
         $this->assertSame([
@@ -93,11 +103,10 @@ class SalesPocketbookTest extends TestCase
         $this->assertSame(0, $inactiveCustom->fresh()->is_active);
     }
 
-    public function test_historical_inactive_source_can_be_retained_but_not_selected_for_another_lead(): void
+    public function test_tampered_legacy_source_id_is_ignored_and_historical_fields_are_preserved(): void
     {
         [, $project, $sales] = $this->salesContext();
         $legacy = LeadSource::where('name', 'Referensi')->firstOrFail();
-        $otherLegacy = LeadSource::where('name', 'Website')->firstOrFail();
         $lead = $this->lead($sales, $project);
         $lead->update(['lead_source_id' => $legacy->id, 'source_name_snapshot' => 'Referensi Historis']);
 
@@ -107,10 +116,7 @@ class SalesPocketbookTest extends TestCase
         ]))->assertRedirect();
         $this->assertSame('Referensi Historis', $lead->fresh()->source_name_snapshot);
 
-        $this->actingAs($sales)->put(route('sales-leads.update', $lead->fresh()), $this->payload($sales, $project, [
-            'lead_source_id' => $otherLegacy->id,
-            'expected_updated_at' => app(OptimisticLockService::class)->token($lead->fresh()),
-        ]))->assertSessionHasErrors('lead_source_id');
+        $this->assertSame($legacy->id, $lead->fresh()->lead_source_id);
     }
 
     public function test_sales_scope_only_exposes_own_records_even_in_same_branch(): void
@@ -123,6 +129,22 @@ class SalesPocketbookTest extends TestCase
         $this->assertEquals([$own->id], SalesLead::visibleTo($sales)->pluck('id')->all());
         $response = $this->actingAs($sales)->get(route('sales-pocketbook.index'))->assertOk();
         $response->assertSee('Own')->assertDontSee('Other');
+    }
+
+    public function test_effective_source_and_filter_use_ordered_current_snapshot_relation_fallbacks(): void
+    {
+        [, $project, $sales] = $this->salesContext();
+        $legacy = LeadSource::where('name', 'Referensi')->firstOrFail();
+        $current = $this->lead($sales, $project, 'Current Source');
+        $current->update(['source' => 'Workbook Kini', 'source_name_snapshot' => 'Snapshot Lama', 'lead_source_id' => $legacy->id]);
+        $snapshot = $this->lead($sales, $project, 'Snapshot Source');
+        $snapshot->update(['source' => '', 'source_name_snapshot' => 'Snapshot Lama', 'lead_source_id' => $legacy->id]);
+        $relation = $this->lead($sales, $project, 'Relation Source');
+        $relation->update(['source' => null, 'source_name_snapshot' => null, 'lead_source_id' => $legacy->id]);
+
+        $this->assertSame('Workbook Kini', $current->fresh()->effective_source);
+        $this->assertSame([$snapshot->id], SalesLead::query()->whereEffectiveSource('Snapshot Lama')->pluck('id')->all());
+        $this->assertSame([$relation->id], SalesLead::query()->whereEffectiveSource('Referensi')->pluck('id')->all());
     }
 
     public function test_branch_manager_sees_accessible_branch_and_global_user_sees_all(): void
@@ -164,11 +186,10 @@ class SalesPocketbookTest extends TestCase
     {
         [$branch, $project, $sales] = $this->salesContext();
         $this->mockLeadWriter();
-        $source = LeadSource::where('is_active', true)->firstOrFail();
         $payload = $this->payload($sales, $project, [
             'phone' => null,
             'lead_date' => '2026-07-21',
-            'lead_source_id' => $source->id,
+            'source' => 'Online',
             'submit_action' => 'add_another',
         ]);
 
@@ -178,7 +199,8 @@ class SalesPocketbookTest extends TestCase
         $lead = SalesLead::firstOrFail();
         $this->assertNull($lead->phone);
         $this->assertNull($lead->normalized_phone);
-        $this->assertSame($source->name, $lead->source_name_snapshot);
+        $this->assertNull($lead->lead_source_id);
+        $this->assertSame('Online', $lead->source_name_snapshot);
         $this->actingAs($sales)->get($redirect)->assertOk()
             ->assertSee('name="lead_date" value="2026-07-21"', false)
             ->assertSee('value="'.$project->id.'" data-branch="'.$branch->id.'" selected', false);
@@ -249,7 +271,7 @@ class SalesPocketbookTest extends TestCase
         ]))->assertOk()
             ->assertJsonPath('ok', true)
             ->assertJsonPath('message', 'Lead berhasil diperbarui.')
-            ->assertJsonPath('lead.source_active', true);
+            ->assertJsonMissingPath('lead.source_active');
 
         $lead->refresh();
         $this->assertSame('After', $lead->customer_name);
@@ -278,18 +300,21 @@ class SalesPocketbookTest extends TestCase
         $this->actingAs($outsider)->get(route('sales-leads.edit', $lead))->assertForbidden();
     }
 
-    public function test_updating_source_refreshes_snapshot(): void
+    public function test_updating_source_preserves_snapshot_and_legacy_relation(): void
     {
         [$branch, $project, $sales] = $this->salesContext();
         $lead = $this->lead($sales, $project);
-        $source = LeadSource::create(['name' => 'Partner Baru', 'is_active' => true]);
+        $legacy = LeadSource::where('name', 'Referensi')->firstOrFail();
+        $lead->update(['lead_source_id' => $legacy->id, 'source_name_snapshot' => 'Sumber Awal']);
 
         $this->actingAs($sales)->put(route('sales-leads.update', $lead), $this->payload($sales, $project, [
-            'lead_source_id' => $source->id,
+            'source' => 'Partner Baru',
             'expected_updated_at' => app(OptimisticLockService::class)->token($lead),
         ]))->assertRedirect(route('sales-pocketbook.index'));
 
-        $this->assertSame('Partner Baru', $lead->fresh()->source_name_snapshot);
+        $this->assertSame('Partner Baru', $lead->fresh()->source);
+        $this->assertSame('Sumber Awal', $lead->fresh()->source_name_snapshot);
+        $this->assertSame($legacy->id, $lead->fresh()->lead_source_id);
     }
 
     public function test_duplicate_warning_never_reveals_an_unauthorized_branch(): void
@@ -399,7 +424,15 @@ class SalesPocketbookTest extends TestCase
         $this->assertSame(4, substr_count($view, 'if (!conflictDialogOpen())'));
         $this->assertStringNotContainsString('prompt(', $view);
         $this->assertStringNotContainsString('toISOString', $view);
-        $this->assertStringNotContainsString('window.location.reload()', $view);
+        $this->assertStringContainsString('window.location.reload()', $view);
+        $this->assertStringContainsString('Data terbaru tersedia', $view);
+        $this->assertStringContainsString("detail?.module_key !== 'sales-lead-lifecycle'", $view);
+        $this->assertStringContainsString("['success', 'partial_success'].includes(detail.status)", $view);
+        $this->assertStringContainsString('quickDraft', $view);
+
+        $source = file_get_contents(resource_path('js/sales-pocketbook.js'));
+        $this->assertStringContainsString('this.branch !== previousBranch', $source);
+        $this->assertStringContainsString('this.historicalSource = this.source', $source);
     }
 
     public function test_monitoring_filters_render_branch_project_sales_order_and_reject_inconsistent_scope(): void
@@ -710,7 +743,6 @@ class SalesPocketbookTest extends TestCase
     {
         [$branch, $project, $sales] = $this->salesContext();
         $manager = $this->user('manager', $branch);
-        $source = LeadSource::where('is_active', true)->firstOrFail();
         foreach (range(1, 25) as $index) {
             $this->lead($sales, $project, sprintf('Lead Page %02d', $index), '08123'.str_pad((string) $index, 6, '0', STR_PAD_LEFT));
             $this->agenda($sales, $project, ['title' => sprintf('Agenda Page %02d', $index)]);
@@ -718,12 +750,12 @@ class SalesPocketbookTest extends TestCase
         $period = ['period_type' => 'custom', 'date_from' => '2026-07-01', 'date_to' => '2026-07-31'];
 
         $leadResponse = $this->actingAs($manager)->get(route('sales-pocketbook.index', [
-            'tab' => 'leads', 'page' => 2, 'agenda_page' => 2, 'lead_source_id' => $source->id, ...$period,
+            'tab' => 'leads', 'page' => 2, 'agenda_page' => 2, 'lead_source' => 'Online', ...$period,
         ]))->assertOk()
             ->assertViewHas('leads', fn ($leads) => $leads->perPage() === 20 && $leads->currentPage() === 2 && $leads->total() === 25)
             ->assertViewHas('agendas', fn ($agendas) => $agendas->perPage() === 20 && $agendas->currentPage() === 2 && $agendas->total() === 25);
         $leadContent = $leadResponse->getContent();
-        $this->assertStringContainsString('lead_source_id='.$source->id, $leadContent);
+        $this->assertStringContainsString('lead_source=Online', $leadContent);
         $this->assertStringNotContainsString('agenda_page=', $this->paginationSection($leadContent, 'sales-lead-monitor'));
 
         $agendaResponse = $this->actingAs($manager)->get(route('sales-pocketbook.index', [
@@ -863,6 +895,8 @@ class SalesPocketbookTest extends TestCase
         $this->assertStringNotContainsString('salesDuplicatePhone(@js(', $edit);
         $this->assertStringContainsString('x-data="salesDuplicatePhone($el.dataset.duplicateUrl, Number($el.dataset.leadId))"', $edit);
         $this->assertStringContainsString('data-duplicate-url="'.route('sales-leads.duplicate-phone').'"', $edit);
+        $this->assertSame(1, substr_count($edit, 'name="source"'));
+        $this->assertStringNotContainsString('name="lead_source_id"', $edit);
         $this->actingAs($sales)->getJson(route('sales-leads.duplicate-phone', [
             'phone' => $lead->phone, 'except_id' => $lead->id,
         ]))->assertOk()->assertJsonCount(0, 'matches');
@@ -889,7 +923,7 @@ class SalesPocketbookTest extends TestCase
         $options = ['promo' => [], 'source' => ['Online'], 'channel' => ['Instagram'], 'activity' => ['Agustus'], 'project' => [$project->project_name], 'sales' => [$sales->name], 'status' => ['Cek Lokasi']];
         $optionService = Mockery::mock(SalesLeadSheetOptionService::class);
         $optionService->shouldReceive('forBranch')->once()->andReturn($options);
-        $optionService->shouldReceive('exactOption')->andReturnUsing(fn (array $values, ?string $value) => in_array($value, $values, true) ? $value : null);
+        $optionService->shouldReceive('exactOption')->andReturnUsing(fn (array $values, ?string $value) => collect($values)->first(fn (string $option) => mb_strtolower(trim($option)) === mb_strtolower(trim((string) $value))));
         $this->app->instance(SalesLeadSheetOptionService::class, $optionService);
         $identities = Mockery::mock(SalesSheetIdentityService::class);
         $identities->shouldReceive('projectValue')->andReturn($project->project_name);
@@ -905,13 +939,16 @@ class SalesPocketbookTest extends TestCase
         $this->app->instance(SalesLeadSpreadsheetWriter::class, $writer);
 
         $response = $this->actingAs($sales)->post(route('sales-leads.store'), $this->payload($sales, $project, [
-            'source' => 'Online', 'platform' => 'Instagram', 'campaign_name' => 'Agustus', 'id_promo' => null,
+            'source' => ' online ', 'platform' => 'Instagram', 'campaign_name' => 'Agustus', 'id_promo' => null,
             'current_status' => 'site_visit', 'notes' => 'Hubungi sore.', 'operation_uuid' => $operationUuid,
         ]));
 
         $lead = SalesLead::sole();
         $response->assertRedirect(route('sales-pocketbook.index', ['lifecycle_action' => 'site_visit', 'lead' => $lead->id]));
         $this->assertNotNull($lead->external_sync_id);
+        $this->assertNull($lead->lead_source_id);
+        $this->assertSame('Online', $lead->source);
+        $this->assertSame('Online', $lead->source_name_snapshot);
         $this->assertSame([
             'tanggal_lead', 'source', 'platform', 'campaign_name', 'nama_konsumen', 'no_hp', 'proyek',
             'sales_pic', 'status_lead', 'keterangan', 'id_promo',
@@ -974,6 +1011,8 @@ class SalesPocketbookTest extends TestCase
         $content = $this->actingAs($sales)->get(route('sales-pocketbook.index'))->assertOk()->getContent();
         $this->assertStringContainsString('BRANCH_ID', $content);
         $this->assertStringContainsString('name="operation_uuid"', $content);
+        $this->assertSame(2, substr_count($content, 'name="source"'));
+        $this->assertStringNotContainsString('name="lead_source_id"', $content);
     }
 
     public function test_lifecycle_ui_exposes_authorized_modal_contracts_nup_warning_and_read_only_system_status(): void
@@ -1097,7 +1136,6 @@ class SalesPocketbookTest extends TestCase
             'branch_id' => $project->branch_id,
             'project_id' => $project->id,
             'sales_user_id' => $sales->id,
-            'lead_source_id' => LeadSource::where('is_active', true)->firstOrFail()->id,
             'lead_date' => '2026-07-01',
             'customer_name' => 'Prospect',
             'phone' => '08123456789',

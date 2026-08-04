@@ -42,6 +42,9 @@
         <span x-show="initiatedBy" class="text-gray-500">oleh <span x-text="initiatedBy">{{ $initial['initiated_by'] }}</span></span>
     </div>
     <span x-text="badgeText" :class="badgeClass" class="inline-block border-2 border-black px-2 py-1 font-[Helvetica] text-[10px] font-bold uppercase">{{ $serverBadge }}</span>
+    @if($moduleKey === 'sales-lead-lifecycle')
+        <span x-show="lifecycleSummary" x-text="lifecycleSummary" class="text-xs font-[Helvetica]" aria-live="polite"></span>
+    @endif
     @if($slot->isNotEmpty())
         <div class="sm:ml-auto">{{ $slot }}</div>
     @endif

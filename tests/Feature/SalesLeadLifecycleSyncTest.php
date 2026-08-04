@@ -38,7 +38,7 @@ class SalesLeadLifecycleSyncTest extends TestCase
 
         $this->assertDatabaseHas('sales_leads', ['branch_id' => $firstBranch->id, 'external_lead_id' => 'ID-1', 'external_sync_id' => 'SYNC-ONE', 'current_status' => 'discussion']);
         $this->assertDatabaseHas('sales_leads', ['branch_id' => $secondBranch->id, 'external_lead_id' => 'ID-1', 'external_sync_id' => 'SYNC-TWO', 'current_status' => 'no_response']);
-        $this->assertSame(2, SalesLeadLifecycleSyncStatus::query()->where('status', 'success')->count());
+        $this->assertSame(2, SalesLeadLifecycleSyncStatus::query()->where('status', 'partial_success')->count());
     }
 
     public function test_reference_google_date_format_and_lead_business_identity_are_stable(): void
@@ -65,6 +65,38 @@ class SalesLeadLifecycleSyncTest extends TestCase
         ]);
     }
 
+    public function test_pull_captures_source_snapshot_once_and_ignores_deleted_remote_leads(): void
+    {
+        [$branch, $project, $sales] = $this->context('sheet-source', 'Source Project', 'Source Sales');
+        $google = Mockery::mock(GoogleSheetsApiService::class);
+        $first = $this->leadSheet('SOURCE-1', $project->project_name, $sales->name, 'No Respon', 'SYNC-SOURCE');
+        $first[1][6] = 'Workbook Awal';
+        $this->expectSheets($google, 'sheet-source', ['lead' => $first]);
+        $this->app->instance(GoogleSheetsApiService::class, $google);
+
+        app(SalesLeadLifecycleSyncService::class)->sync($branch);
+        $lead = SalesLead::query()->where('external_sync_id', 'SYNC-SOURCE')->firstOrFail();
+        $this->assertSame('Workbook Awal', $lead->source);
+        $this->assertSame('Workbook Awal', $lead->source_name_snapshot);
+
+        $updatedGoogle = Mockery::mock(GoogleSheetsApiService::class);
+        $updated = $this->leadSheet('SOURCE-1', $project->project_name, $sales->name, 'Diskusi', 'SYNC-SOURCE');
+        $updated[1][6] = 'Workbook Kini';
+        $deleted = $this->leadSheet('SOURCE-1', $project->project_name, $sales->name, 'Akad', 'SYNC-SOURCE');
+        $header = $deleted[0];
+        $header[] = 'oasis_deleted_at';
+        $deleted[1][] = '2026-08-04 09:00:00';
+        $updated[1][] = '';
+        $this->expectSheets($updatedGoogle, 'sheet-source', ['lead' => [$header, $updated[1], $deleted[1]]]);
+        $this->app->instance(GoogleSheetsApiService::class, $updatedGoogle);
+
+        $result = app(SalesLeadLifecycleSyncService::class)->sync($branch);
+        $this->assertSame('Workbook Kini', $lead->fresh()->source);
+        $this->assertSame('Workbook Awal', $lead->source_name_snapshot);
+        $this->assertSame(1, $result['summary']['ignored_deleted']);
+        $this->assertSame(SalesLeadStatus::Discussion, $lead->fresh()->current_status);
+    }
+
     public function test_missing_optional_sheet_disables_capability_without_fallback_and_bad_lead_header_fails(): void
     {
         [$branch, $project, $sales] = $this->context('sheet-capability', 'Capability Project', 'Capability Sales');
@@ -89,6 +121,29 @@ class SalesLeadLifecycleSyncTest extends TestCase
         $missingSpreadsheet = Branch::query()->create(['name' => 'Missing Spreadsheet', 'code' => 'MISS', 'is_active' => true]);
         $this->assertFalse(app(SalesLeadLifecycleSyncService::class)->sync($missingSpreadsheet)['ok']);
         $this->assertSame('Spreadsheet cabang belum dikonfigurasi.', SalesLeadLifecycleSyncStatus::query()->where('branch_id', $missingSpreadsheet->id)->value('message'));
+    }
+
+    public function test_sync_is_success_only_when_all_relevant_capabilities_are_healthy_and_resolved(): void
+    {
+        [$branch, $project, $sales] = $this->context('sheet-healthy', 'Healthy Project', 'Healthy Sales');
+        $google = Mockery::mock(GoogleSheetsApiService::class);
+        $this->expectSheets($google, 'sheet-healthy', [
+            'lead' => $this->leadSheet('HEALTHY-1', $project->project_name, $sales->name, 'No Respon'),
+            'data_konsumen' => [['id_kavling', 'no_ktp', 'nama_konsumen']],
+            'data_konsumen_nup' => [['nup', 'no_ktp', 'nama_konsumen']],
+            'bi_checking' => [['id_kavling', 'tanggal_slik', 'hasil_slik']],
+            'akad' => [['id_kavling', 'tanggal_akad']],
+            'data_sales' => [['nik_sales', 'nama_sales']],
+            'data_ceklok' => [['nama_konsumen', 'tanggal_ceklok', 'status_ceklok']],
+        ]);
+        $this->app->instance(GoogleSheetsApiService::class, $google);
+
+        $result = app(SalesLeadLifecycleSyncService::class)->sync($branch);
+
+        $this->assertSame('success', $result['status']);
+        $this->assertSame(0, $result['summary']['unresolved']);
+        $this->assertDatabaseHas('sales_lead_lifecycle_sync_statuses', ['branch_id' => $branch->id, 'status' => 'success']);
+        $this->assertNotNull(SalesLeadLifecycleSyncStatus::query()->where('branch_id', $branch->id)->value('duration_ms'));
     }
 
     public function test_ambiguous_project_rows_remain_unlinked(): void
@@ -196,13 +251,15 @@ class SalesLeadLifecycleSyncTest extends TestCase
             'password_changed_at' => now(),
         ]);
         $salesUser->roles()->attach(Role::query()->where('slug', 'pusat')->firstOrFail());
-        $this->assertFalse($salesUser->hasPermission('sales_pocketbook.sync'));
-        $this->actingAs($salesUser)->postJson(route('sales-pocketbook.lifecycle-sync'), ['branch_id' => $goodBranch->id])->assertForbidden();
+        $salesUser->assignedProjects()->attach($project, ['is_active' => true]);
+        $this->assertTrue($salesUser->hasPermission('sales_pocketbook.sync'));
         foreach (['supervisor', 'manager', 'branch_manager', 'pusat', 'admin'] as $roleSlug) {
             $this->assertTrue(Role::query()->where('slug', $roleSlug)->firstOrFail()->permissions()->where('slug', 'sales_pocketbook.sync')->exists(), $roleSlug);
             $this->assertTrue(Role::query()->where('slug', $roleSlug)->firstOrFail()->permissions()->where('slug', 'sales_pocketbook.reconcile')->exists(), $roleSlug);
         }
-        foreach (['sales', 'sales_coordinator', 'staff'] as $roleSlug) {
+        $this->assertTrue(Role::query()->where('slug', 'sales')->firstOrFail()->permissions()->where('slug', 'sales_pocketbook.sync')->exists());
+        $this->assertFalse(Role::query()->where('slug', 'sales')->firstOrFail()->permissions()->where('slug', 'sales_pocketbook.reconcile')->exists());
+        foreach (['sales_coordinator', 'staff'] as $roleSlug) {
             $this->assertFalse(Role::query()->where('slug', $roleSlug)->firstOrFail()->permissions()->whereIn('slug', ['sales_pocketbook.sync', 'sales_pocketbook.reconcile'])->exists(), $roleSlug);
         }
 
@@ -214,7 +271,44 @@ class SalesLeadLifecycleSyncTest extends TestCase
         $this->artisan('sales-lead-lifecycle:sync')->assertFailed();
         $this->assertDatabaseHas('sales_leads', ['branch_id' => $goodBranch->id, 'external_lead_id' => 'CMD-1']);
         $this->assertDatabaseHas('sales_lead_lifecycle_sync_statuses', ['branch_id' => $badBranch->id, 'status' => 'failed']);
-        $this->assertDatabaseHas('sales_lead_lifecycle_sync_statuses', ['branch_id' => $goodBranch->id, 'status' => 'success']);
+        $this->assertDatabaseHas('sales_lead_lifecycle_sync_statuses', ['branch_id' => $goodBranch->id, 'status' => 'partial_success']);
+    }
+
+    public function test_primary_sales_syncs_only_current_project_branch_and_scoped_viewers_can_read_status(): void
+    {
+        [$branch, $project] = $this->context('sheet-sales-sync', 'Sales Sync Project', 'Assigned Sales');
+        [$otherBranch] = $this->context('sheet-sales-other', 'Other Sync Project', 'Other Sales');
+        $salesUser = User::factory()->create([
+            'role_id' => Role::query()->where('slug', 'sales')->value('id'),
+            'branch_id' => $branch->id,
+            'password_changed_at' => now(),
+        ]);
+        $salesUser->assignedProjects()->attach($project, ['is_active' => true, 'assignment_start_date' => today()->subDay()]);
+        SalesLeadLifecycleSyncStatus::query()->create([
+            'branch_id' => $branch->id,
+            'status' => 'partial_success',
+            'summary' => ['imported' => 1, 'updated' => 0, 'linked' => 0, 'unresolved' => 1, 'capabilities' => ['lead' => true]],
+        ]);
+        $service = Mockery::mock(SalesLeadLifecycleSyncService::class);
+        $service->shouldReceive('sync')->once()->withArgs(fn (Branch $candidate, User $actor) => $candidate->is($branch) && $actor->is($salesUser))
+            ->andReturn(['ok' => true, 'status' => 'partial_success', 'summary' => ['unresolved' => 1]]);
+        $this->app->instance(SalesLeadLifecycleSyncService::class, $service);
+
+        $this->actingAs($salesUser)->getJson(route('sales-pocketbook.lifecycle-sync.status', ['branch_id' => $branch->id]))
+            ->assertOk()->assertJsonPath('status', 'partial_success');
+        $this->actingAs($salesUser)->postJson(route('sales-pocketbook.lifecycle-sync'), ['branch_id' => $branch->id])
+            ->assertOk()->assertJsonPath('status', 'partial_success');
+        $this->actingAs($salesUser)->postJson(route('sales-pocketbook.lifecycle-sync'), ['branch_id' => $otherBranch->id])->assertForbidden();
+        $this->assertFalse($salesUser->hasPermission('database.sync'));
+
+        $supplemental = User::factory()->create([
+            'role_id' => Role::query()->where('slug', 'sales_coordinator')->value('id'),
+            'branch_id' => $branch->id,
+            'password_changed_at' => now(),
+        ]);
+        $supplemental->roles()->attach(Role::query()->where('slug', 'pusat')->firstOrFail());
+        $this->assertFalse($supplemental->hasPermission('sales_pocketbook.sync'));
+        $this->actingAs($supplemental)->postJson(route('sales-pocketbook.lifecycle-sync'), ['branch_id' => $branch->id])->assertForbidden();
     }
 
     private function context(string $sheetId, string $projectName, string $salesName): array
@@ -243,8 +337,8 @@ class SalesLeadLifecycleSyncTest extends TestCase
     private function leadSheet(string $id, string $project, string $sales, string $status, string $syncId = ''): array
     {
         return [
-            ['id_lead', 'tanggal_lead', 'nama_konsumen', 'proyek', 'sales_pic', 'status_lead', 'oasis_sync_id'],
-            [$id, '2026-08-03', 'Consumer '.$id, $project, $sales, $status, $syncId],
+            ['id_lead', 'tanggal_lead', 'nama_konsumen', 'proyek', 'sales_pic', 'status_lead', 'source', 'oasis_sync_id'],
+            [$id, '2026-08-03', 'Consumer '.$id, $project, $sales, $status, 'Online', $syncId],
         ];
     }
 

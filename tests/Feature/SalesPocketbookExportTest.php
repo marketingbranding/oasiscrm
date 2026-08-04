@@ -47,7 +47,7 @@ class SalesPocketbookExportTest extends TestCase
             'sales_user_id' => $sales->id,
             'period_type' => 'week',
             'week' => '2026-07-20',
-            'lead_source_id' => $source->id,
+            'lead_source' => 'Online',
             'stage' => 'contacted_at',
         ]))->assertOk()->assertDownload('buku-saku-sales_solo_solo-sales_2026-07-20_2026-07-26.xlsx');
 
@@ -79,6 +79,8 @@ class SalesPocketbookExportTest extends TestCase
         ], $agendas->rangeToArray('A1:L1')[0]);
 
         $this->assertSame($lead->customer_name, $leads->getCell('E2')->getValue());
+        $this->assertSame($source->name, $leads->getCell('G2')->getValue());
+        $this->assertSame('Online', $leads->getCell('R2')->getValue());
         $this->assertSame(DataType::TYPE_STRING, $leads->getCell('E2')->getDataType());
         $this->assertSame('11111111-1111-4111-8111-111111111111', $leads->getCell('Q2')->getValue());
         $this->assertSame('Diskusi', $leads->getCell('U2')->getValue());

@@ -3,7 +3,6 @@
 namespace App\Services;
 
 use App\Enums\SalesLeadStatus;
-use App\Models\LeadSource;
 use App\Models\SalesLead;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
@@ -21,8 +20,9 @@ class SalesLeadService
     {
         return DB::transaction(function () use ($data, $actor): SalesLead {
             $data['normalized_phone'] = $this->phones->normalize($data['phone'] ?? null);
-            $data['source_name_snapshot'] = isset($data['lead_source_id']) ? LeadSource::find($data['lead_source_id'])?->name : null;
-            $data['source'] = filled($data['source'] ?? null) ? $data['source'] : $this->legacySource($data['source_name_snapshot']);
+            unset($data['lead_source_id']);
+            $data['lead_source_id'] = null;
+            $data['source_name_snapshot'] = $data['source'];
             $data['current_status'] ??= SalesLeadStatus::NoResponse->value;
             $data['current_status_changed_at'] = now();
             $data['current_status_source'] = 'manual';
@@ -74,10 +74,7 @@ class SalesLeadService
 
             $changedFields = array_keys(array_filter($data, fn ($value, $key) => $locked->{$key} != $value, ARRAY_FILTER_USE_BOTH));
             $data['normalized_phone'] = $this->phones->normalize($data['phone'] ?? null);
-            if (isset($data['lead_source_id']) && (int) $data['lead_source_id'] !== (int) $locked->lead_source_id) {
-                $data['source_name_snapshot'] = LeadSource::find($data['lead_source_id'])?->name;
-            }
-            $data['source'] = filled($data['source'] ?? null) ? $data['source'] : $this->legacySource($data['source_name_snapshot'] ?? $locked->source_name_snapshot);
+            unset($data['lead_source_id'], $data['source_name_snapshot']);
             $previousStatus = $locked->current_status;
             $statusChanged = isset($data['current_status']) && $previousStatus !== SalesLeadStatus::fromInput($data['current_status']);
             if ($statusChanged) {
@@ -146,7 +143,7 @@ class SalesLeadService
 
         return [
             'tanggal_lead' => $lead->lead_date?->format('Y-m-d'),
-            'source' => $lead->source ?: ($lead->source_name_snapshot ?: $lead->leadSource?->name),
+            'source' => $lead->effective_source,
             'platform' => $lead->platform,
             'campaign_name' => $lead->campaign_name ?: $lead->campaign_id,
             'nama_konsumen' => $lead->customer_name,
@@ -162,10 +159,5 @@ class SalesLeadService
     private function writer(): SalesLeadSpreadsheetWriter
     {
         return app(SalesLeadSpreadsheetWriter::class);
-    }
-
-    private function legacySource(?string $source): ?string
-    {
-        return $source === 'Iklan Pusat' ? 'Lead Cabang' : $source;
     }
 }

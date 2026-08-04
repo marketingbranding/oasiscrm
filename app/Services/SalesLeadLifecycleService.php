@@ -127,7 +127,6 @@ class SalesLeadLifecycleService
             $changedAt ??= now();
 
             if ($locked->current_status !== $target) {
-                $this->syncLeadStatus($locked, $target);
                 $previousStatus = $locked->current_status->value;
                 $this->updateLeadSheetStatus($locked, $target);
                 $locked->update([
@@ -175,11 +174,6 @@ class SalesLeadLifecycleService
         $target = $status === SalesLeadStatus::Freelance
             ? $current
             : $this->resolvePrimaryStatus([$current, $status]);
-
-        $spreadsheetStatus = $status === SalesLeadStatus::Freelance && $current === SalesLeadStatus::NoResponse
-            ? SalesLeadStatus::Freelance
-            : $target;
-        $this->syncLeadStatus($lead, $spreadsheetStatus);
 
         $this->updateLeadSheetStatus($lead, $status === SalesLeadStatus::Freelance ? SalesLeadStatus::Freelance : $target);
 
@@ -542,16 +536,5 @@ class SalesLeadLifecycleService
             'sore' => '16:00:00',
             'malam' => '19:00:00',
         };
-    }
-
-    private function syncLeadStatus(SalesLead $lead, SalesLeadStatus $status): void
-    {
-        if (blank($lead->external_sync_id)) {
-            return;
-        }
-
-        $this->writer()->updateBySyncId($lead, 'lead', $lead->external_sync_id, [
-            'status_lead' => $status->spreadsheetValue(),
-        ]);
     }
 }

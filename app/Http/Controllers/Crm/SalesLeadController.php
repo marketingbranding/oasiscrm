@@ -7,7 +7,6 @@ use App\Exceptions\SalesLeadSpreadsheetContractException;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Crm\StoreSalesLeadRequest;
 use App\Http\Requests\Crm\UpdateSalesLeadRequest;
-use App\Models\LeadSource;
 use App\Models\SalesLead;
 use App\Models\User;
 use App\Services\CollaborationNotificationService;
@@ -84,9 +83,6 @@ class SalesLeadController extends Controller
                 ->whereHas('assignedProjects', fn (Builder $query) => $query->whereIn('branch_id', $branchIds))
                 ->when($user->isSales(), fn (Builder $query) => $query->whereKey($user->id))
                 ->with('assignedProjects:id,branch_id')->orderBy('name')->get(['id', 'name', 'branch_id']),
-            'leadSources' => LeadSource::query()->where('is_active', true)
-                ->when($salesLead->lead_source_id, fn (Builder $query) => $query->orWhere('id', $salesLead->lead_source_id))
-                ->orderBy('name')->get(),
             'optimisticToken' => $this->optimisticLock->token($salesLead),
         ]);
     }
@@ -112,7 +108,7 @@ class SalesLeadController extends Controller
         $this->notifications->recordUpdated($result, $request->user(), route('sales-pocketbook.index'));
 
         if ($request->expectsJson()) {
-            $result->load(['branch:id,name', 'project:id,project_name', 'sales:id,name', 'leadSource:id,name,is_active']);
+            $result->load(['branch:id,name', 'project:id,project_name', 'sales:id,name', 'leadSource:id,name']);
 
             return response()->json([
                 'ok' => true,
@@ -125,9 +121,7 @@ class SalesLeadController extends Controller
                     'branch' => $result->branch?->name,
                     'project' => $result->project?->project_name,
                     'sales' => $result->sales?->name,
-                    'source' => $result->source_name_snapshot ?: $result->leadSource?->name,
-                    'source_active' => (bool) $result->leadSource?->is_active,
-                    'source_detail' => $result->source,
+                    'source' => $result->effective_source,
                     'platform' => $result->platform,
                     'campaign_name' => $result->campaign_name,
                     'id_promo' => $result->id_promo,

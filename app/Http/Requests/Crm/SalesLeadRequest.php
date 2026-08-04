@@ -24,12 +24,6 @@ abstract class SalesLeadRequest extends FormRequest
             'branch_id' => ['required', 'integer', 'exists:branches,id'],
             'project_id' => ['required', 'integer', 'exists:lead_master,id'],
             'sales_user_id' => ['required', 'integer', 'exists:users,id'],
-            'lead_source_id' => ['required', 'integer', Rule::exists('lead_sources', 'id')->where(function ($query) {
-                $query->where('is_active', true);
-                if ($this->lead()?->lead_source_id) {
-                    $query->orWhere('id', $this->lead()->lead_source_id);
-                }
-            })],
             'lead_date' => ['required', 'date'],
             'customer_name' => ['required', 'string', 'max:255'],
             'phone' => ['nullable', 'string', 'max:50'],
@@ -115,8 +109,15 @@ abstract class SalesLeadRequest extends FormRequest
                     'campaign_name' => ['activity', 'Aktivitas lead tidak tersedia pada pilihan spreadsheet cabang.'],
                 ];
                 foreach ($fields as $field => [$optionKey, $message]) {
-                    if ($this->filled($field) && app(SalesLeadSheetOptionService::class)->exactOption($options[$optionKey], $this->string($field)->toString()) === null) {
+                    $exact = $this->filled($field)
+                        ? app(SalesLeadSheetOptionService::class)->exactOption($options[$optionKey], $this->string($field)->toString())
+                        : null;
+                    if ($this->filled($field) && $exact === null) {
                         $validator->errors()->add($field, $message);
+                    } elseif ($exact !== null) {
+                        // Persist the workbook's exact spelling/casing, not the browser-submitted variant.
+                        $this->merge([$field => $exact]);
+                        $validator->setData(array_replace($validator->getData(), [$field => $exact]));
                     }
                 }
                 app(SalesSheetIdentityService::class)->projectValue($project, $options);

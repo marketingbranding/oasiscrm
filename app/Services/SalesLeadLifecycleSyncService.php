@@ -47,7 +47,7 @@ class SalesLeadLifecycleSyncService
             $operationUuid = (string) Str::uuid();
             $status = SalesLeadLifecycleSyncStatus::query()->updateOrCreate(
                 ['branch_id' => $branch->id],
-                ['status' => 'syncing', 'operation_uuid' => $operationUuid, 'message' => null, 'summary' => null, 'started_at' => now(), 'finished_at' => null, 'initiated_by' => $actor?->id],
+                ['status' => 'syncing', 'operation_uuid' => $operationUuid, 'message' => null, 'summary' => null, 'started_at' => now(), 'finished_at' => null, 'duration_ms' => null, 'initiated_by' => $actor?->id],
             );
 
             try {
@@ -65,23 +65,30 @@ class SalesLeadLifecycleSyncService
                     $branch, $sheets, $configurationIssues, $capabilities, $operationUuid, $actor,
                 ));
 
+                $outcome = $summary['unresolved'] === 0 && ! in_array(false, $summary['capabilities'], true)
+                    ? 'success'
+                    : 'partial_success';
+                $finishedAt = now();
                 $status->update([
-                    'status' => 'success',
-                    'message' => 'Sinkronisasi siklus lead selesai.',
+                    'status' => $outcome,
+                    'message' => $outcome === 'success' ? 'Sinkronisasi siklus lead selesai.' : 'Sinkronisasi selesai dengan data atau kapabilitas yang perlu diperiksa.',
                     'summary' => $summary,
-                    'finished_at' => now(),
-                    'last_successful_at' => now(),
+                    'finished_at' => $finishedAt,
+                    'duration_ms' => $status->started_at?->diffInMilliseconds($finishedAt),
+                    'last_successful_at' => $finishedAt,
                 ]);
 
-                return ['ok' => true, 'status' => 'success', 'branch' => $branch->name, 'message' => $status->message, 'summary' => $summary];
+                return ['ok' => true, 'status' => $outcome, 'branch' => $branch->name, 'message' => $status->message, 'summary' => $summary];
             } catch (\DomainException $exception) {
-                $status->update(['status' => 'failed', 'message' => $exception->getMessage(), 'finished_at' => now()]);
+                $finishedAt = now();
+                $status->update(['status' => 'failed', 'message' => $exception->getMessage(), 'finished_at' => $finishedAt, 'duration_ms' => $status->started_at?->diffInMilliseconds($finishedAt)]);
 
                 return ['ok' => false, 'status' => 'failed', 'branch' => $branch->name, 'message' => $exception->getMessage(), 'summary' => []];
             } catch (Throwable $exception) {
                 report($exception);
                 $message = 'Sinkronisasi siklus lead gagal. Periksa koneksi dan konfigurasi spreadsheet cabang.';
-                $status->update(['status' => 'failed', 'message' => $message, 'finished_at' => now()]);
+                $finishedAt = now();
+                $status->update(['status' => 'failed', 'message' => $message, 'finished_at' => $finishedAt, 'duration_ms' => $status->started_at?->diffInMilliseconds($finishedAt)]);
 
                 return ['ok' => false, 'status' => 'failed', 'branch' => $branch->name, 'message' => $message, 'summary' => []];
             }
@@ -179,14 +186,17 @@ class SalesLeadLifecycleSyncService
             ->where('status', 'open')
             ->update(['status' => 'resolved', 'resolved_at' => now(), 'resolved_by' => $actor?->id]);
 
-        $summary = ['imported' => 0, 'updated' => 0, 'linked' => 0, 'unresolved' => 0, 'capabilities' => $capabilities];
+        $summary = ['imported' => 0, 'updated' => 0, 'linked' => 0, 'unresolved' => 0, 'ignored_deleted' => 0, 'capabilities' => $capabilities];
         foreach ($configurationIssues as [$identity, $code, $metadata]) {
             $this->issue($branch, null, 'capability', $identity, $code, $metadata, $operationUuid, $summary);
         }
 
         $leadRows = [];
-        $duplicateIds = collect($sheets['lead'] ?? [])->groupBy('id_lead')->filter(fn ($rows, $id) => $id !== '' && $rows->count() > 1)->keys()->all();
-        foreach ($sheets['lead'] ?? [] as $row) {
+        $remoteLeadRows = collect($sheets['lead'] ?? []);
+        $summary['ignored_deleted'] = $remoteLeadRows->filter(fn (array $row) => filled($row['oasis_deleted_at'] ?? null))->count();
+        $activeLeadRows = $remoteLeadRows->reject(fn (array $row) => filled($row['oasis_deleted_at'] ?? null))->values();
+        $duplicateIds = $activeLeadRows->groupBy('id_lead')->filter(fn ($rows, $id) => $id !== '' && $rows->count() > 1)->keys()->all();
+        foreach ($activeLeadRows as $row) {
             $idLead = $row['id_lead'] ?? '';
             $identity = $this->rowIdentity('lead', $row);
             if ($idLead === '' || in_array($idLead, $duplicateIds, true)) {
@@ -242,6 +252,7 @@ class SalesLeadLifecycleSyncService
                     'branch_id' => $branch->id,
                     'project_id' => $project->id,
                     'sales_user_id' => $sales->id,
+                    'source_name_snapshot' => $attributes['source'],
                     'current_status' => SalesLeadStatus::NoResponse,
                     'created_by' => $actor?->id,
                     'updated_by' => $actor?->id,

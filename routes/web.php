@@ -68,7 +68,7 @@ Route::middleware(['auth', 'active', 'verified', 'password.changed', 'operationa
     Route::get('/buku-saku-sales', [SalesPocketbookController::class, 'index'])->name('sales-pocketbook.index');
     Route::get('/buku-saku-sales/export', [SalesPocketbookController::class, 'export'])->middleware('permission:sales_pocketbook.export')->name('sales-pocketbook.export');
     Route::post('/buku-saku-sales/lifecycle-sync', [SalesLeadLifecycleSyncController::class, 'sync'])->middleware('permission:sales_pocketbook.sync')->name('sales-pocketbook.lifecycle-sync');
-    Route::get('/buku-saku-sales/lifecycle-sync/status', [SalesLeadLifecycleSyncController::class, 'status'])->middleware('permission:sales_pocketbook.sync')->name('sales-pocketbook.lifecycle-sync.status');
+    Route::get('/buku-saku-sales/lifecycle-sync/status', [SalesLeadLifecycleSyncController::class, 'status'])->name('sales-pocketbook.lifecycle-sync.status');
     Route::get('/buku-saku-sales/lifecycle-reconciliations', [SalesLeadLifecycleSyncController::class, 'reconciliations'])->middleware('permission:sales_pocketbook.reconcile')->name('sales-pocketbook.lifecycle-reconciliations.index');
     Route::post('/buku-saku-sales/agendas', [SalesAgendaController::class, 'store'])->name('sales-agendas.store');
     Route::patch('/buku-saku-sales/agendas/{agenda}', [SalesAgendaController::class, 'update'])->name('sales-agendas.update');

@@ -16,6 +16,7 @@ use App\ValueObjects\GoogleSheetsAppendResult;
 use App\ValueObjects\ResolvedSalesLeadSpreadsheetContract;
 use App\ValueObjects\SalesLeadSheetDefinition;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Mockery;
@@ -147,6 +148,43 @@ class SalesLeadSpreadsheetFoundationTest extends TestCase
             $options['promo'][0], $options['source'][0], $options['channel'][0], $options['activity'][0],
             $options['project'][0], $options['sales'][0], $options['status'][0],
         ]);
+    }
+
+    public function test_option_service_caches_array_payload_and_reuses_it(): void
+    {
+        [, $branch] = $this->leadContext('sheet-options-cache');
+        $definition = (new SalesLeadSpreadsheetContract(Mockery::mock(GoogleSheetsApiService::class)))->definitions()['lead'];
+        $resolved = new ResolvedSalesLeadSpreadsheetContract('sheet-options-cache', $definition, 1, ['h1'], ['id_promo' => 0], [], 2, ['source' => ['Online']], []);
+        $contracts = Mockery::mock(SalesLeadSpreadsheetContract::class);
+        $contracts->shouldReceive('resolveForBranch')->once()->with($branch, 'lead')->andReturn($resolved);
+
+        $service = new SalesLeadSheetOptionService($contracts);
+
+        $first = $service->contract($branch);
+        $this->assertInstanceOf(ResolvedSalesLeadSpreadsheetContract::class, $first);
+
+        $second = $service->contract($branch);
+        $this->assertSame('sheet-options-cache', $second->spreadsheetId);
+        $this->assertSame('Online', $second->validationOptions['source'][0]);
+    }
+
+    public function test_option_service_recovers_when_cache_holds_unexpected_payload(): void
+    {
+        [, $branch] = $this->leadContext('sheet-options-recover');
+        $definition = (new SalesLeadSpreadsheetContract(Mockery::mock(GoogleSheetsApiService::class)))->definitions()['lead'];
+        $resolved = new ResolvedSalesLeadSpreadsheetContract('sheet-options-recover', $definition, 1, [], [], [], 2, ['source' => ['Referral']], []);
+        $contracts = Mockery::mock(SalesLeadSpreadsheetContract::class);
+        $contracts->shouldReceive('resolveForBranch')->once()->with($branch, 'lead')->andReturn($resolved);
+
+        $key = 'sales-lead-sheet-options:v2:'.$branch->id.':'.hash('sha256', (string) $branch->sheet_id);
+        Cache::put($key, new \stdClass, now()->addSeconds(60));
+
+        $service = new SalesLeadSheetOptionService($contracts);
+        $contract = $service->contract($branch);
+
+        $this->assertInstanceOf(ResolvedSalesLeadSpreadsheetContract::class, $contract);
+        $this->assertSame('Referral', $contract->validationOptions['source'][0]);
+        $this->assertIsArray(Cache::get($key));
     }
 
     public function test_cross_branch_lead_resolution_uses_lead_branch_not_project_or_user_branch(): void

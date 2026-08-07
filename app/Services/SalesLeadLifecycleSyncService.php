@@ -22,6 +22,8 @@ use Throwable;
 
 class SalesLeadLifecycleSyncService
 {
+    public const SCOPE = 'lifecycle';
+
     private const SHEETS = ['lead', 'data_konsumen', 'data_konsumen_nup', 'bi_checking', 'akad', 'data_sales', 'data_ceklok'];
 
     private const REQUIRED_HEADERS = [
@@ -46,7 +48,7 @@ class SalesLeadLifecycleSyncService
         $result = $this->locks->run('sales-lead-lifecycle:branch:'.$branch->id, function () use ($branch, $actor): array {
             $operationUuid = (string) Str::uuid();
             $status = SalesLeadLifecycleSyncStatus::query()->updateOrCreate(
-                ['branch_id' => $branch->id],
+                ['branch_id' => $branch->id, 'scope' => self::SCOPE],
                 ['status' => 'syncing', 'operation_uuid' => $operationUuid, 'message' => null, 'summary' => null, 'started_at' => now(), 'finished_at' => null, 'duration_ms' => null, 'initiated_by' => $actor?->id],
             );
 

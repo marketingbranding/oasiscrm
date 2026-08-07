@@ -13,6 +13,7 @@ use App\Models\User;
 use App\Services\OrganizationScopeService;
 use App\Services\SalesDailyReminderService;
 use App\Services\SalesLeadSheetOptionService;
+use App\Services\SalesLeadSyncService;
 use App\Services\SalesWeeklyMetricsService;
 use App\Services\WorkspaceAccessService;
 use Illuminate\Database\Eloquent\Builder;
@@ -205,13 +206,14 @@ class SalesPocketbookController extends Controller
             && $this->workspaceAccess->canViewBranch($user, $syncBranch)
             && $this->workspaceAccess->canSyncBranch($user, $syncBranch);
         $lifecycleSyncStatus = $syncBranch
-            ? SalesLeadLifecycleSyncStatus::query()->where('branch_id', $syncBranch->id)->first()
+            ? SalesLeadLifecycleSyncStatus::query()->where('branch_id', $syncBranch->id)->where('scope', SalesLeadSyncService::SCOPE)->first()
             : null;
         $reconciliationCount = $canReconcile
-            ? SalesLeadLifecycleReconciliationItem::query()->where('branch_id', $syncBranch->id)->where('status', 'open')->count()
+            ? SalesLeadLifecycleReconciliationItem::query()->where('branch_id', $syncBranch->id)->where('status', 'open')->whereIn('entity_type', ['lead', 'lead_status'])->count()
             : 0;
         $lifecycleCapabilitiesByBranch = SalesLeadLifecycleSyncStatus::query()
             ->whereIn('branch_id', $branches->pluck('id'))
+            ->where('scope', SalesLeadSyncService::SCOPE)
             ->whereIn('status', ['success', 'partial_success'])
             ->get()
             ->mapWithKeys(fn (SalesLeadLifecycleSyncStatus $status) => [

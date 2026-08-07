@@ -14,6 +14,7 @@ use App\Models\SalesSheetIdentity;
 use App\Models\User;
 use App\Services\GoogleSheetsApiService;
 use App\Services\SalesLeadLifecycleSyncService;
+use App\Services\SalesLeadSyncService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Str;
 use Mockery;
@@ -326,10 +327,10 @@ class SalesLeadLifecycleSyncTest extends TestCase
             'status' => 'partial_success',
             'summary' => ['imported' => 1, 'updated' => 0, 'linked' => 0, 'unresolved' => 1, 'capabilities' => ['lead' => true]],
         ]);
-        $service = Mockery::mock(SalesLeadLifecycleSyncService::class);
+        $service = Mockery::mock(SalesLeadSyncService::class);
         $service->shouldReceive('sync')->once()->withArgs(fn (Branch $candidate, User $actor) => $candidate->is($branch) && $actor->is($salesUser))
             ->andReturn(['ok' => true, 'status' => 'partial_success', 'summary' => ['unresolved' => 1]]);
-        $this->app->instance(SalesLeadLifecycleSyncService::class, $service);
+        $this->app->instance(SalesLeadSyncService::class, $service);
 
         $this->actingAs($salesUser)->getJson(route('sales-pocketbook.lifecycle-sync.status', ['branch_id' => $branch->id]))
             ->assertOk()->assertJsonPath('status', 'partial_success');

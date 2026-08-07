@@ -7,7 +7,7 @@ use App\Models\Branch;
 use App\Models\SalesLeadLifecycleReconciliationItem;
 use App\Models\SalesLeadLifecycleSyncStatus;
 use App\Services\OrganizationScopeService;
-use App\Services\SalesLeadLifecycleSyncService;
+use App\Services\SalesLeadSyncService;
 use App\Services\SyncResponseService;
 use App\Services\WorkspaceAccessService;
 use Illuminate\Http\JsonResponse;
@@ -21,11 +21,11 @@ class SalesLeadLifecycleSyncController extends Controller
         private readonly SyncResponseService $responses,
     ) {}
 
-    public function sync(Request $request, SalesLeadLifecycleSyncService $service): JsonResponse
+    public function sync(Request $request, SalesLeadSyncService $service): JsonResponse
     {
         $branch = $this->authorizedSyncBranch($request);
         $result = $service->sync($branch, $request->user());
-        $status = SalesLeadLifecycleSyncStatus::query()->where('branch_id', $branch->id)->first();
+        $status = SalesLeadLifecycleSyncStatus::query()->where('branch_id', $branch->id)->where('scope', SalesLeadSyncService::SCOPE)->first();
         $response = $this->responses->make('sales-lead-lifecycle', $this->scope($branch), $status, $result);
 
         return response()->json($response, $result['ok'] ? 200 : ($result['status'] === 'syncing' ? 409 : 422));
@@ -35,7 +35,7 @@ class SalesLeadLifecycleSyncController extends Controller
     {
         $branch = $this->viewableBranch($request);
 
-        $status = SalesLeadLifecycleSyncStatus::query()->where('branch_id', $branch->id)->first();
+        $status = SalesLeadLifecycleSyncStatus::query()->where('branch_id', $branch->id)->where('scope', SalesLeadSyncService::SCOPE)->first();
 
         return response()->json($this->responses->make('sales-lead-lifecycle', $this->scope($branch), $status));
     }
@@ -45,6 +45,15 @@ class SalesLeadLifecycleSyncController extends Controller
         $branch = $this->authorizedBranch($request, 'sales_pocketbook.reconcile');
         $items = SalesLeadLifecycleReconciliationItem::query()
             ->where('branch_id', $branch->id)
+            ->when($request->filled('scope'), function ($query) use ($request) {
+                $scope = $request->string('scope')->toString();
+                if ($scope === 'lead') {
+                    $query->whereIn('entity_type', ['lead', 'lead_status']);
+                } elseif ($scope === 'lifecycle') {
+                    $query->whereNotIn('entity_type', ['lead', 'lead_status']);
+                }
+            })
+            ->when($request->filled('entity_type'), fn ($query) => $query->where('entity_type', $request->string('entity_type')->toString()))
             ->when($request->filled('status'), fn ($query) => $query->where('status', $request->string('status')->toString()))
             ->orderByRaw("CASE WHEN status = 'open' THEN 0 ELSE 1 END")
             ->latest('id')

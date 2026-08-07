@@ -200,6 +200,20 @@ Before each successful reconciliation pass, prior open branch items are marked r
 
 The reconciliation endpoint is **list-only JSON** with optional status filtering and 50-row pagination. There is no endpoint or UI operation to manually mutate, resolve, remap, or override a reconciliation item.
 
+### Lead sync vs. downstream lifecycle sync (separation)
+
+Buku Saku Sales is intended for Sales lead input and monitoring. Each branch shares one `lead` tab; `sales_pic` distinguishes rows. A normal Sales sync must therefore reflect **only** the shared `lead` tab and lead-specific reconciliation, never the downstream lifecycle.
+
+- `SalesLeadSyncService` (`scope = lead`) powers the standard sync button and the `sales-lead:sync` command. It reads only the `lead` tab, validates only the lead contract, imports/updates/links lead rows, maps `sales_pic → sales_user` and `proyek → project`, and writes a `scope = lead` status row.
+- `SalesLeadLifecycleSyncService` (`scope = lifecycle`) keeps the full seven-sheet pull (`lead`, `data_konsumen`, `data_konsumen_nup`, `bi_checking`, `akad`, `data_sales`, `data_ceklok`) for downstream reconciliation and the `sales-lead-lifecycle:sync` command/schedule.
+- Status truth for the Buku Saku button comes from the lead-scoped status row. SUCCESS means the lead contract is valid, lead read succeeded, and lead rows processed without lead reconciliation; PARTIAL is lead reconciliation only; FAILED is spreadsheet/API/lead-tab/header/lead failures. Downstream `consumer_link_unconfirmed`, SLIK, Akad, NUP, and data-sheet issues never color the lead status and never appear as "perlu diperiksa" for Sales.
+
+Reconciliation is separated by `entity_type`/`issue_code`: lead items (`lead` / `lead_status`; codes `lead_id_missing`, `lead_id_ambiguous`, `project_not_found`, `project_ambiguous`, `sales_not_found`, `sales_ambiguous`, `lead_data_invalid`, `lead_identity_conflict`, `lead_assignment_conflict`, `status_unknown`) count toward the Buku sync; downstream items are lifecycle-only. The reconciliation endpoint accepts `scope=lead` to list only lead items and `scope=lifecycle` for downstream.
+
+Historical or unmapped `sales_pic` rows (for example the Odi Damara history) are never auto- or fuzzy-assigned. They either match an explicit `SalesSheetIdentity` mapping or an exact normalized match to an active Sales assigned to the project in the current window; otherwise they become lead reconciliation items and are not exposed to another Sales. Project identity uses `sheet_project_name` when present (for example internal Jonggrangan = sheet Marison Kalinegoro) before falling back to `project_name`.
+
+`sales_lead_lifecycle_sync_statuses` gained a `scope` column (`lead` default); the branch-unique index is now `(branch_id, scope)`.
+
 ## 7. Routes, Permissions, Command, and Schedule
 
 Lifecycle operation routes retain the main protected CRM middleware and authorize each lead through `SalesLeadPolicy::update`-equivalent abilities:

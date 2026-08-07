@@ -461,10 +461,10 @@ export default function registerSync(Alpine) {
 
         get lifecycleSummary() {
             if (config.moduleKey !== 'sales-lead-lifecycle' || !Object.keys(this.summary).length) return '';
-            const labels = { imported: 'diimpor', updated: 'diperbarui', linked: 'ditautkan', unresolved: 'belum selesai', ignored_deleted: 'baris terhapus diabaikan' };
+            const labels = { imported: 'lead diimpor', updated: 'lead diperbarui', linked: 'lead ditautkan', unresolved: 'lead perlu diperiksa', ignored_deleted: 'baris terhapus diabaikan' };
             const values = Object.entries(labels).map(([key, label]) => `${label}: ${Number(this.summary[key] || 0)}`);
             const capabilities = Object.values(this.summary.capabilities || {});
-            if (capabilities.length) values.push(`kapabilitas sehat: ${capabilities.filter(Boolean).length}/${capabilities.length}`);
+            if (capabilities.length) values.push(`kapabilitas lead: ${capabilities.filter(Boolean).length}/${capabilities.length}`);
             return values.join(' · ');
         },
     }));

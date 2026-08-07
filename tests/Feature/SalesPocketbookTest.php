@@ -950,11 +950,11 @@ class SalesPocketbookTest extends TestCase
         $this->assertSame('Online', $lead->source);
         $this->assertSame('Online', $lead->source_name_snapshot);
         $this->assertSame([
-            'tanggal_lead', 'source', 'platform', 'campaign_name', 'nama_konsumen', 'no_hp', 'proyek',
+            'tanggal_lead', 'sumber_lead', 'kanal_masuk', 'aktivitas_lead', 'nama_konsumen', 'no_hp', 'proyek',
             'sales_pic', 'status_lead', 'keterangan', 'id_promo',
         ], array_keys($captured));
         $this->assertSame('Cek Lokasi', $captured['status_lead']);
-        $this->assertSame('Instagram', $captured['platform']);
+        $this->assertSame('Instagram', $captured['kanal_masuk']);
     }
 
     public function test_remote_create_failure_is_visible_and_does_not_claim_or_persist_success(): void

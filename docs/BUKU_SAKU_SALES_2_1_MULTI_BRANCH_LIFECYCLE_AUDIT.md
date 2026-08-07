@@ -145,7 +145,24 @@ Lead creation generates `external_sync_id` before the remote append, writes the 
 
 ### Lead fields
 
-OASIS writes `tanggal_lead`, `sumber`, `platform`, `campaign`, `nama_konsumen`, `no_hp`, `proyek`, `sales_pic`, `status_lead`, `keterangan`, and `id_promo`. `id_lead` remains formula-owned. When the detailed sheet source is blank, OASIS derives it from the OASIS lead-source snapshot; `Iklan Pusat` maps to legacy `Lead Cabang`.
+OASIS writes `tanggal_lead`, `sumber_lead`, `kanal_masuk`, `aktivitas_lead`, `nama_konsumen`, `no_hp`, `proyek`, `sales_pic`, `status_lead`, `keterangan`, and `id_promo`. `id_lead` remains formula-owned. When the detailed sheet source is blank, OASIS derives it from the OASIS lead-source snapshot; `Iklan Pusat` maps to legacy `Lead Cabang`.
+
+### Lead spreadsheet headers versus internal fields
+
+The spreadsheet contract is authoritative and uses the physical lead headers directly. The canonical `lead` tab requires exactly `id_lead, id_promo, tanggal_lead, sumber_lead, kanal_masuk, aktivitas_lead, nama_konsumen, no_hp, proyek, sales_pic, status_lead, keterangan` (plus optional trailing helper columns and OASIS metadata). OASIS never requires or writes internal names such as `source`, `platform`, or `campaign_name` in the workbook.
+
+Mapping happens only at the OASIS boundary, in both directions:
+
+| Spreadsheet header | Internal OASIS field |
+|---|---|
+| `sumber_lead` | `source` |
+| `kanal_masuk` | `platform` |
+| `aktivitas_lead` | `campaign_name` |
+
+- Write: `SalesLeadService::spreadsheetFields()` emits `sumber_lead` = effective source, `kanal_masuk` = platform, `aktivitas_lead` = campaign name (falling back to campaign ID). Form fields and the option service keep the internal keys (`source`/`platform`/`campaignName`, option keys `source`/`channel`/`activity`).
+- Pull: `SalesLeadLifecycleSyncService` reads `sumber_lead`/`kanal_masuk`/`aktivitas_lead` into `source`/`platform`/`campaign_name` and requires those physical headers for the `lead` tab, so missing columns fail the run instead of silently nulling the source.
+- Legacy aliases `sumber`, `kanal`, and `campaign` remain accepted on pull as header aliases for `sumber_lead`, `kanal_masuk`, and `aktivitas_lead` respectively. Error messages reference the physical headers only.
+- Workbooks that also reuse `sumber_lead`/`kanal_masuk`/`aktivitas_lead` in trailing helper dropdown lists (for example Magelang's `lead` helper columns) are accepted on pull: only the first occurrence of a header is read as data, and later duplicates are ignored.
 
 ### Site visit fields
 

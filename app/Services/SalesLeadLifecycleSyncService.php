@@ -25,7 +25,7 @@ class SalesLeadLifecycleSyncService
     private const SHEETS = ['lead', 'data_konsumen', 'data_konsumen_nup', 'bi_checking', 'akad', 'data_sales', 'data_ceklok'];
 
     private const REQUIRED_HEADERS = [
-        'lead' => ['id_lead', 'tanggal_lead', 'nama_konsumen', 'proyek', 'sales_pic', 'status_lead'],
+        'lead' => ['id_lead', 'tanggal_lead', 'nama_konsumen', 'proyek', 'sales_pic', 'status_lead', 'sumber_lead', 'kanal_masuk', 'aktivitas_lead'],
         'data_konsumen' => ['id_kavling', 'no_ktp', 'nama_konsumen'],
         'data_konsumen_nup' => ['nup', 'no_ktp', 'nama_konsumen'],
         'bi_checking' => ['id_kavling', 'tanggal_slik', 'hasil_slik'],
@@ -136,11 +136,18 @@ class SalesLeadLifecycleSyncService
             $headers = array_map(fn ($value) => trim((string) $value), $values[0] ?? []);
             if ($sheet === 'lead') {
                 $headers = array_map(fn (string $header) => match ($header) {
-                    'sumber_lead', 'sumber' => 'source',
-                    'kanal_masuk' => 'platform',
-                    'aktivitas_lead', 'campaign' => 'campaign_name',
+                    'sumber' => 'sumber_lead',
+                    'kanal' => 'kanal_masuk',
+                    'campaign' => 'aktivitas_lead',
                     default => $header,
                 }, $headers);
+                $seen = [];
+                foreach ($headers as $index => $header) {
+                    if ($header === '' || isset($seen[$header])) {
+                        $headers[$index] = '';
+                    }
+                    $seen[$header] = true;
+                }
             }
             $missing = array_values(array_diff(self::REQUIRED_HEADERS[$sheet], $headers));
             $duplicates = array_keys(array_filter(array_count_values(array_filter($headers)), fn (int $count) => $count > 1));
@@ -242,9 +249,9 @@ class SalesLeadLifecycleSyncService
                 'customer_name' => $row['nama_konsumen'],
                 'phone' => $row['no_hp'] ?? null,
                 'normalized_phone' => $this->phones->normalize($row['no_hp'] ?? null),
-                'source' => $row['source'] ?? null,
-                'platform' => $row['platform'] ?? null,
-                'campaign_name' => $row['campaign_name'] ?? null,
+                'source' => $row['sumber_lead'] ?? null,
+                'platform' => $row['kanal_masuk'] ?? null,
+                'campaign_name' => $row['aktivitas_lead'] ?? null,
                 'notes' => $row['keterangan'] ?? null,
             ];
             if ($lead === null) {

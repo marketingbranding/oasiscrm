@@ -47,8 +47,8 @@ class SalesLeadLifecycleSyncTest extends TestCase
         $google = Mockery::mock(GoogleSheetsApiService::class);
         $this->expectSheets($google, 'sheet-reference-date', [
             'lead' => [
-                ['id_lead', 'tanggal_lead', 'nama_konsumen', 'proyek', 'sales_pic', 'status_lead'],
-                ['260722-ON-TI-01', '22-Jul-2026', 'Reference Consumer', $project->project_name, $sales->name, 'Diskusi'],
+                ['id_lead', 'tanggal_lead', 'nama_konsumen', 'proyek', 'sales_pic', 'status_lead', 'sumber_lead', 'kanal_masuk', 'aktivitas_lead'],
+                ['260722-ON-TI-01', '22-Jul-2026', 'Reference Consumer', $project->project_name, $sales->name, 'Diskusi', 'Online', 'Instagram', 'Agustus'],
             ],
         ]);
         $this->app->instance(GoogleSheetsApiService::class, $google);
@@ -95,6 +95,43 @@ class SalesLeadLifecycleSyncTest extends TestCase
         $this->assertSame('Workbook Awal', $lead->source_name_snapshot);
         $this->assertSame(1, $result['summary']['ignored_deleted']);
         $this->assertSame(SalesLeadStatus::Discussion, $lead->fresh()->current_status);
+    }
+
+    public function test_pull_maps_physical_lead_headers_into_internal_fields(): void
+    {
+        [$branch, $project, $sales] = $this->context('sheet-read-map', 'Read Map Project', 'Read Map Sales');
+        $google = Mockery::mock(GoogleSheetsApiService::class);
+        $this->expectSheets($google, 'sheet-read-map', ['lead' => [
+            ['id_lead', 'tanggal_lead', 'nama_konsumen', 'proyek', 'sales_pic', 'status_lead', 'sumber_lead', 'kanal_masuk', 'aktivitas_lead'],
+            ['READ-MAP-1', '2026-08-03', 'Consumer Read', $project->project_name, $sales->name, 'No Respon', 'Online', 'Instagram', 'Agustus'],
+        ]]);
+        $this->app->instance(GoogleSheetsApiService::class, $google);
+
+        app(SalesLeadLifecycleSyncService::class)->sync($branch);
+
+        $lead = SalesLead::query()->where('branch_id', $branch->id)->where('external_lead_id', 'READ-MAP-1')->firstOrFail();
+        $this->assertSame('Online', $lead->source);
+        $this->assertSame('Instagram', $lead->platform);
+        $this->assertSame('Agustus', $lead->campaign_name);
+    }
+
+    public function test_pull_ignores_helper_column_duplicates_after_the_first_occurrence(): void
+    {
+        [$branch, $project, $sales] = $this->context('sheet-helper-dup', 'Helper Project', 'Helper Sales');
+        $google = Mockery::mock(GoogleSheetsApiService::class);
+        $this->expectSheets($google, 'sheet-helper-dup', ['lead' => [
+            ['id_lead', 'tanggal_lead', 'nama_konsumen', 'proyek', 'sales_pic', 'status_lead', 'sumber_lead', 'kanal_masuk', 'aktivitas_lead', '', 'sumber_lead', 'kanal_masuk', 'aktivitas_lead'],
+            ['HELP-1', '2026-08-03', 'Helper Consumer', $project->project_name, $sales->name, 'No Respon', 'Online', 'Instagram', 'Agustus', '', 'Referral', 'IG Ads', 'Agustus'],
+        ]]);
+        $this->app->instance(GoogleSheetsApiService::class, $google);
+
+        $result = app(SalesLeadLifecycleSyncService::class)->sync($branch);
+
+        $this->assertTrue($result['ok']);
+        $lead = SalesLead::query()->where('branch_id', $branch->id)->where('external_lead_id', 'HELP-1')->firstOrFail();
+        $this->assertSame('Online', $lead->source);
+        $this->assertSame('Instagram', $lead->platform);
+        $this->assertSame('Agustus', $lead->campaign_name);
     }
 
     public function test_missing_optional_sheet_disables_capability_without_fallback_and_bad_lead_header_fails(): void
@@ -337,8 +374,8 @@ class SalesLeadLifecycleSyncTest extends TestCase
     private function leadSheet(string $id, string $project, string $sales, string $status, string $syncId = ''): array
     {
         return [
-            ['id_lead', 'tanggal_lead', 'nama_konsumen', 'proyek', 'sales_pic', 'status_lead', 'source', 'oasis_sync_id'],
-            [$id, '2026-08-03', 'Consumer '.$id, $project, $sales, $status, 'Online', $syncId],
+            ['id_lead', 'tanggal_lead', 'nama_konsumen', 'proyek', 'sales_pic', 'status_lead', 'sumber_lead', 'kanal_masuk', 'aktivitas_lead', 'oasis_sync_id'],
+            [$id, '2026-08-03', 'Consumer '.$id, $project, $sales, $status, 'Online', 'WhatsApp', 'Follow Up', $syncId],
         ];
     }
 

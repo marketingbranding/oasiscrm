@@ -143,9 +143,9 @@ class SalesLeadService
 
         return [
             'tanggal_lead' => $lead->lead_date?->format('Y-m-d'),
-            'source' => $lead->effective_source,
-            'platform' => $lead->platform,
-            'campaign_name' => $lead->campaign_name ?: $lead->campaign_id,
+            'sumber_lead' => $lead->effective_source,
+            'kanal_masuk' => $lead->platform,
+            'aktivitas_lead' => $lead->campaign_name ?: $lead->campaign_id,
             'nama_konsumen' => $lead->customer_name,
             'no_hp' => $lead->phone,
             'proyek' => $this->sheetIdentities->projectValue($lead->project),

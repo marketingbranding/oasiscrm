@@ -18,9 +18,9 @@ class SalesLeadSheetOptionService
 
         return [
             'promo' => $contract->validationOptions['id_promo'] ?? [],
-            'source' => $contract->validationOptions['source'] ?? [],
-            'channel' => $contract->validationOptions['platform'] ?? [],
-            'activity' => $contract->validationOptions['campaign_name'] ?? [],
+            'source' => $contract->validationOptions['sumber_lead'] ?? [],
+            'channel' => $contract->validationOptions['kanal_masuk'] ?? [],
+            'activity' => $contract->validationOptions['aktivitas_lead'] ?? [],
             'project' => $contract->validationOptions['proyek'] ?? [],
             'sales' => $contract->validationOptions['sales_pic'] ?? [],
             'status' => $contract->validationOptions['status_lead'] ?? [],

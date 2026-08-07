@@ -21,23 +21,19 @@ class SalesLeadSpreadsheetContract
         return [
             'lead' => new SalesLeadSheetDefinition(
                 'lead',
-                ['id_lead', 'id_promo', 'tanggal_lead', 'source', 'platform', 'campaign_name', 'nama_konsumen', 'no_hp', 'proyek', 'sales_pic', 'status_lead', 'keterangan'],
+                ['id_lead', 'id_promo', 'tanggal_lead', 'sumber_lead', 'kanal_masuk', 'aktivitas_lead', 'nama_konsumen', 'no_hp', 'proyek', 'sales_pic', 'status_lead', 'keterangan'],
                 ['id_lead'],
                 [
                     'id_promo' => ['type' => 'select', 'strict' => true],
                     'tanggal_lead' => ['type' => 'date'],
-                    'source' => ['type' => 'select', 'strict' => true],
-                    'platform' => ['type' => 'select', 'strict' => true],
-                    'campaign_name' => ['type' => 'select', 'strict' => true],
+                    'sumber_lead' => ['type' => 'select', 'strict' => true],
+                    'kanal_masuk' => ['type' => 'select', 'strict' => true],
+                    'aktivitas_lead' => ['type' => 'select', 'strict' => true],
                     'proyek' => ['type' => 'select', 'strict' => true],
                     'sales_pic' => ['type' => 'select', 'strict' => true],
                     'status_lead' => ['type' => 'select', 'strict' => true, 'values' => ['No Respon', 'Diskusi', 'UTJ', 'Tidak Lolos BI Checking', 'Akad', 'Cek Lokasi', 'Cek Silk', 'Jadi Freelance']],
                 ],
-                [
-                    'source' => ['sumber_lead', 'sumber'],
-                    'platform' => ['kanal_masuk', 'platform'],
-                    'campaign_name' => ['aktivitas_lead', 'campaign'],
-                ],
+                [],
             ),
             'data_ceklok' => new SalesLeadSheetDefinition(
                 'data_ceklok',

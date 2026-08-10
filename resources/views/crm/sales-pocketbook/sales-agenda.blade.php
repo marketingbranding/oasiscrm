@@ -29,6 +29,14 @@
                 <x-crm.field label="Tanggal Agenda" for="scheduled_date" required :error="$errors->first('scheduled_date')">
                     <x-crm.date-field id="scheduled_date" name="scheduled_date" :value="old('scheduled_date', now()->toDateString())" required />
                 </x-crm.field>
+                <x-crm.field label="Kategori Aktivitas" for="sales_activity_category" required :error="$errors->first('sales_activity_category')">
+                    <select id="sales_activity_category" name="sales_activity_category" class="sales-input" required>
+                        <option value="">Pilih kategori</option>
+                        @foreach(\App\Models\ContentItem::SALES_ACTIVITY_CATEGORIES as $category)
+                            <option value="{{ $category }}" @selected(old('sales_activity_category') === $category)>{{ $category }}</option>
+                        @endforeach
+                    </select>
+                </x-crm.field>
                 <x-crm.field label="Judul Agenda" for="title" required :error="$errors->first('title')">
                     <input id="title" name="title" value="{{ old('title') }}" class="sales-input" required>
                 </x-crm.field>
@@ -46,11 +54,12 @@
     <x-crm.section id="agenda-saya" title="Daftar Agenda Saya">
         <div class="crm-table-scroll">
             <table class="crm-data-table">
-                <thead><tr><th>Tanggal</th><th>Agenda</th><th>Lokasi</th><th>Hasil</th><th>Status</th><th>Aksi</th></tr></thead>
+                <thead><tr><th>Tanggal</th><th>Kategori Aktivitas</th><th>Agenda</th><th>Lokasi</th><th>Hasil</th><th>Status</th><th>Aksi</th></tr></thead>
                 <tbody>
                     @forelse($agendas as $agenda)
                         <tr>
                             <td>{{ $agenda->scheduled_date->format('d/m/Y') }}</td>
+                            <td>{{ $agenda->sales_activity_category ?: '-' }}</td>
                             <td>{{ $agenda->title }}</td>
                             <td>{{ $agenda->location ?: '-' }}</td>
                             <td>{{ $agenda->activity_result ?: '-' }}</td>
@@ -71,7 +80,7 @@
                             </td>
                         </tr>
                     @empty
-                        <tr><td colspan="6"><x-crm.empty-state title="Belum ada agenda">Agenda Anda akan tampil di sini.</x-crm.empty-state></td></tr>
+                        <tr><td colspan="7"><x-crm.empty-state title="Belum ada agenda">Agenda Anda akan tampil di sini.</x-crm.empty-state></td></tr>
                     @endforelse
                 </tbody>
             </table>

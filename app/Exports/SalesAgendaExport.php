@@ -15,7 +15,7 @@ class SalesAgendaExport
     use ExcelStyle;
 
     private const HEADERS = [
-        'Tanggal Agenda', 'Sales', 'Cabang', 'Proyek', 'Agenda', 'Lokasi', 'Hasil', 'Status',
+        'Tanggal Agenda', 'Kategori Aktivitas', 'Sales', 'Cabang', 'Proyek', 'Agenda', 'Lokasi', 'Hasil', 'Status',
     ];
 
     public static function toBrowser(Collection $agendas, string $filename): BinaryFileResponse
@@ -29,6 +29,7 @@ class SalesAgendaExport
             $row = $index + 2;
             $sheet->setCellValue(self::cell(1, $row), ExcelDate::dateTimeToExcel($agenda->scheduled_date));
             foreach ([
+                $agenda->sales_activity_category,
                 $agenda->owner?->name,
                 $agenda->branch?->name,
                 $agenda->salesProject?->project_name ?? $agenda->project_name,
@@ -43,7 +44,7 @@ class SalesAgendaExport
 
         $lastRow = $agendas->count() + 1;
         self::applyStyles($spreadsheet, self::HEADERS, $lastRow, [
-            'A' => 16, 'B' => 22, 'C' => 18, 'D' => 24, 'E' => 30, 'F' => 24, 'G' => 32, 'H' => 16,
+            'A' => 16, 'B' => 22, 'C' => 22, 'D' => 18, 'E' => 24, 'F' => 30, 'G' => 24, 'H' => 32, 'I' => 16,
         ]);
         self::addAutoFilter($sheet, self::HEADERS, $lastRow);
         if ($lastRow > 1) {

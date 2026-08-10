@@ -25,12 +25,32 @@ Sales Agenda remains an OASIS workflow backed by local records. OASIS owns:
 - Sales owner;
 - branch and project context;
 - scheduled date and agenda details;
-- status, result, reschedule linkage, and optimistic lock state;
+- required Kategori Aktivitas (`sales_activity_category`);
+- optional Hasil (`activity_result`);
+- status, reschedule linkage, and optimistic lock state;
 - organization scope, authorization, comments, notifications, and audit history where supported.
+
+Kategori Aktivitas is required for new Sales Agenda input. Its exact canonical options are:
+
+- `Canvassing`;
+- `Follow-up`;
+- `Telepon/WhatsApp`;
+- `Tatap Muka Konsumen`;
+- `Cek Lokasi`;
+- `TikTok Live`;
+- `Pembuatan Konten`;
+- `Event/Pameran`;
+- `Administrasi`;
+- `Rapat`;
+- `Lainnya`.
+
+`Survey Lokasi` is a historical value. Existing records containing `Survey Lokasi` remain readable, but that value is unavailable for new input. Existing records with a null Kategori Aktivitas also remain valid and readable; the new required rule must not invalidate, hide, or rewrite them. Hasil remains optional.
+
+Supervisor Monitoring Tim shows Kategori Aktivitas as read-only in Sales Agenda detail and includes it as a read-only Sales Agenda export column. This field does not grant editing, synchronization, or broader record visibility. Detail and export queries must preserve the same team and organization-scope rules defined in Section 5.
 
 Creating, updating, completing, or rescheduling a Sales Agenda must not require Google availability. No Sales Agenda write is mirrored to `lead`, `data_sales`, or another Google tab.
 
-Sales Agenda may start or support a later lead workflow, but agenda identity and lead identity remain separate. Any conversion must be explicit and must create or link the local lead under normal policy and validation rules.
+Sales Agenda may start or support a later lead workflow, but agenda identity and lead identity remain separate. Any conversion must be explicit and must create or link the local lead under normal policy and validation rules. These field additions do not change record ownership, Sales Agenda subtype rules, role permissions, coordinator relationships, or organization scope.
 
 ## 3. Coordinator Lead Local Flow
 

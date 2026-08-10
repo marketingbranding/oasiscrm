@@ -24,7 +24,7 @@ class ContentItem extends Model
         'Follow-up',
         'Telepon/WhatsApp',
         'Tatap Muka Konsumen',
-        'Survey Lokasi',
+        'Cek Lokasi',
         'TikTok Live',
         'Pembuatan Konten',
         'Event/Pameran',

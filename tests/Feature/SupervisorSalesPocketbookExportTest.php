@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Exports\SalesAgendaExport;
 use App\Exports\SupervisorSalesAgendaExport;
 use App\Exports\SupervisorSalesLeadExport;
 use App\Models\Branch;
@@ -27,6 +28,7 @@ class SupervisorSalesPocketbookExportTest extends TestCase
             'owner_user_id' => 7,
             'scheduled_date' => Carbon::parse('2026-08-10'),
             'title' => 'Kunjungan',
+            'sales_activity_category' => 'Survey Lokasi',
             'location' => 'Kantor',
             'activity_result' => 'Lanjut',
             'status' => 'done',
@@ -42,11 +44,29 @@ class SupervisorSalesPocketbookExportTest extends TestCase
         ));
 
         $this->assertSame([
-            'Tanggal Agenda', 'Koordinator', 'Sales', 'Cabang', 'Proyek', 'Agenda', 'Lokasi', 'Hasil', 'Status',
-        ], array_slice($sheet->rangeToArray('A1:I1')[0], 0, 9));
+            'Tanggal Agenda', 'Koordinator', 'Sales', 'Cabang', 'Proyek', 'Kategori Aktivitas', 'Agenda', 'Lokasi', 'Hasil', 'Status',
+        ], array_slice($sheet->rangeToArray('A1:J1')[0], 0, 10));
         $this->assertSame('Koordinator A; Koordinator Z', $sheet->getCell('B2')->getValue());
-        $this->assertSame('Kunjungan', $sheet->getCell('F2')->getValue());
+        $this->assertSame('Survey Lokasi', $sheet->getCell('F2')->getValue());
+        $this->assertSame('Kunjungan', $sheet->getCell('G2')->getValue());
         $this->assertSame(2, $sheet->getHighestDataRow());
+    }
+
+    public function test_sales_agenda_export_has_exact_columns_and_blank_null_category(): void
+    {
+        $agenda = new ContentItem([
+            'scheduled_date' => Carbon::parse('2026-08-10'),
+            'title' => 'Kunjungan',
+            'status' => 'planned',
+        ]);
+
+        $sheet = $this->sheet(SalesAgendaExport::toBrowser(collect([$agenda]), 'agenda.xlsx'));
+
+        $this->assertSame([
+            'Tanggal Agenda', 'Kategori Aktivitas', 'Sales', 'Cabang', 'Proyek', 'Agenda', 'Lokasi', 'Hasil', 'Status',
+        ], array_slice($sheet->rangeToArray('A1:I1')[0], 0, 9));
+        $this->assertNull($sheet->getCell('B2')->getValue());
+        $this->assertSame('Kunjungan', $sheet->getCell('F2')->getValue());
     }
 
     public function test_lead_export_has_exact_columns_one_row_per_record_and_canonical_sync_labels(): void

@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Enums\AccountStatus;
 use App\Http\Requests\Crm\StoreSalesAgendaRequest;
 use App\Models\Branch;
+use App\Models\ContentItem;
 use App\Models\LeadMaster;
 use App\Models\Role;
 use App\Models\User;
@@ -69,7 +70,9 @@ class SalesAgendaRoleWorkspaceTest extends TestCase
         $request->setUserResolver(fn () => $sales);
 
         $this->assertTrue($request->authorize());
-        $this->assertSame(['scheduled_date', 'title', 'location', 'activity_result'], array_keys($request->rules()));
+        $this->assertSame(['scheduled_date', 'sales_activity_category', 'title', 'location', 'activity_result'], array_keys($request->rules()));
+        $this->assertSame(['required', 'string'], array_slice($request->rules()['sales_activity_category'], 0, 2));
+        $this->assertSame('in:"'.implode('","', ContentItem::SALES_ACTIVITY_CATEGORIES).'"', (string) $request->rules()['sales_activity_category'][2]);
 
         $request->setUserResolver(fn () => $coordinator);
         $this->assertFalse($request->authorize());

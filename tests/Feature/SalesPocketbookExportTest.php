@@ -54,6 +54,30 @@ class SalesPocketbookExportTest extends TestCase
         ]))->assertForbidden();
     }
 
+    public function test_sales_agenda_export_includes_category_and_only_own_rows_with_historical_values_safe(): void
+    {
+        [$branch, $project, $sales] = $this->context();
+        $otherSales = $this->user('sales', $branch, 'Other Sales');
+        $otherSales->assignedProjects()->attach($project, ['is_primary' => true]);
+        $this->agenda($sales, $project)->update(['title' => 'Agenda Cek Lokasi', 'sales_activity_category' => 'Cek Lokasi']);
+        $this->agenda($sales, $project)->update(['title' => 'Agenda Historical Null', 'sales_activity_category' => null]);
+        $this->agenda($sales, $project)->update(['title' => 'Agenda Survey Lokasi', 'sales_activity_category' => 'Survey Lokasi']);
+        $this->agenda($otherSales, $project)->update(['title' => 'Agenda Sales Lain', 'sales_activity_category' => 'TikTok Live']);
+
+        $response = $this->actingAs($sales)->get(route('sales-agendas.export'))->assertOk();
+        $workbook = IOFactory::load($response->baseResponse->getFile()->getPathname());
+        $sheet = $workbook->getActiveSheet();
+        $values = collect($sheet->toArray())->flatten()->implode('|');
+
+        $this->assertSame('Kategori Aktivitas', $sheet->getCell('B1')->getValue());
+        $this->assertStringContainsString('Cek Lokasi', $values);
+        $this->assertStringContainsString('Agenda Historical Null', $values);
+        $this->assertStringContainsString('Survey Lokasi', $values);
+        $this->assertStringNotContainsString('Agenda Sales Lain', $values);
+        $this->assertSame(4, $sheet->getHighestDataRow());
+        $workbook->disconnectWorksheets();
+    }
+
     private function context(): array
     {
         $branch = Branch::create(['name' => 'Solo', 'code' => 'SLO', 'is_active' => true]);

@@ -183,7 +183,7 @@ class SupervisorSalesPocketbookTest extends TestCase
             'project_name' => 'Proyek Tidak Ditugaskan',
             'is_active' => true,
         ]);
-        $allowedAgenda = $this->agenda($this->sales1, 'AGENDA_SCOPE_ALLOWED', '2026-08-10');
+        $allowedAgenda = $this->agenda($this->sales1, 'AGENDA_SCOPE_ALLOWED', '2026-08-10', category: 'Cek Lokasi');
         $outsideProjectAgenda = $this->agenda($this->sales1, 'AGENDA_SCOPE_PROJECT_HIDDEN', '2026-08-10');
         $outsideProjectAgenda->update(['sales_project_id' => $outsideProjectSameBranch->id]);
         $outsideBranchAgenda = $this->agenda($this->sales1, 'AGENDA_SCOPE_BRANCH_HIDDEN', '2026-08-10');
@@ -208,7 +208,9 @@ class SupervisorSalesPocketbookTest extends TestCase
         $agendaPath = $agendaResponse->baseResponse->getFile()->getPathname();
         $agendaSheet = IOFactory::load($agendaPath)->getActiveSheet();
         $this->assertSame(2, $agendaSheet->getHighestDataRow());
-        $this->assertSame($allowedAgenda->title, $agendaSheet->getCell('F2')->getValue());
+        $this->assertSame('Kategori Aktivitas', $agendaSheet->getCell('F1')->getValue());
+        $this->assertSame('Cek Lokasi', $agendaSheet->getCell('F2')->getValue());
+        $this->assertSame($allowedAgenda->title, $agendaSheet->getCell('G2')->getValue());
         @unlink($agendaPath);
 
         $leadResponse = $this->actingAs($this->supervisor)->get(route('sales-pocketbook.supervisor-monitoring.lead-export', ['period' => 'today', 'sales_id' => $this->sales1->id]))->assertOk();
@@ -242,7 +244,7 @@ class SupervisorSalesPocketbookTest extends TestCase
         $agendaPath = $agendaResponse->baseResponse->getFile()->getPathname();
         $agendaSheet = IOFactory::load($agendaPath)->getActiveSheet();
         $this->assertSame(2, $agendaSheet->getHighestDataRow());
-        $this->assertSame($visibleAgenda->title, $agendaSheet->getCell('F2')->getValue());
+        $this->assertSame($visibleAgenda->title, $agendaSheet->getCell('G2')->getValue());
         $this->assertSame('Koordinator A; Koordinator B', $agendaSheet->getCell('B2')->getValue());
         @unlink($agendaPath);
 
@@ -257,7 +259,8 @@ class SupervisorSalesPocketbookTest extends TestCase
 
     public function test_selected_sales_detail_contains_only_selected_records_and_no_write_or_sync_routes(): void
     {
-        $selectedAgenda = $this->agenda($this->sales1, 'AGENDA_SELECTED_ONLY', '2026-08-10');
+        $selectedAgenda = $this->agenda($this->sales1, 'AGENDA_SELECTED_ONLY', '2026-08-10', category: 'TikTok Live');
+        $historicalAgenda = $this->agenda($this->sales1, 'AGENDA_HISTORICAL_NULL', '2026-08-10');
         $otherAgenda = $this->agenda($this->sales2, 'AGENDA_OTHER_HIDDEN', '2026-08-10');
         $selectedLead = $this->lead($this->sales1, 'LEAD_SELECTED_ONLY', '2026-08-10', 'synced');
         $otherLead = $this->lead($this->sales2, 'LEAD_OTHER_HIDDEN', '2026-08-10', 'synced');
@@ -266,6 +269,9 @@ class SupervisorSalesPocketbookTest extends TestCase
 
         $response->assertOk()
             ->assertSee($selectedAgenda->title)
+            ->assertSee('TikTok Live')
+            ->assertSee($historicalAgenda->title)
+            ->assertSee('Aktivitas Sales')
             ->assertSee($selectedLead->customer_name)
             ->assertDontSee($otherAgenda->title)
             ->assertDontSee($otherLead->customer_name)
@@ -295,7 +301,7 @@ class SupervisorSalesPocketbookTest extends TestCase
         return $user;
     }
 
-    private function agenda(User $sales, string $title, string $date, string $status = 'planned', ?string $result = null): ContentItem
+    private function agenda(User $sales, string $title, string $date, string $status = 'planned', ?string $result = null, ?string $category = null): ContentItem
     {
         return ContentItem::create([
             'branch_id' => $sales->branch_id,
@@ -307,6 +313,7 @@ class SupervisorSalesPocketbookTest extends TestCase
             'scheduled_date' => $date,
             'status' => $status,
             'activity_result' => $result,
+            'sales_activity_category' => $category,
             'owner_user_id' => $sales->id,
             'created_by' => $sales->id,
         ]);

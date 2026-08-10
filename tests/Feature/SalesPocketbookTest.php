@@ -10,6 +10,7 @@ use App\Models\SalesLead;
 use App\Models\User;
 use App\Services\OptimisticLockService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
 class SalesPocketbookTest extends TestCase
@@ -26,6 +27,7 @@ class SalesPocketbookTest extends TestCase
             ->assertSee('name="scheduled_date"', false)
             ->assertSee('name="title"', false)
             ->assertSee('name="location"', false)
+            ->assertSee('name="sales_activity_category"', false)
             ->assertSee('name="activity_result"', false)
             ->assertDontSee('Lead Saya')
             ->assertDontSee('Input Lead')
@@ -34,8 +36,25 @@ class SalesPocketbookTest extends TestCase
             ->assertDontSee('name="project_id"', false)
             ->assertDontSee('name="sales_user_id"', false)
             ->assertDontSee('name="start_time"', false)
-            ->assertDontSee('name="end_time"', false)
-            ->assertDontSee('name="sales_activity_category"', false);
+            ->assertDontSee('name="end_time"', false);
+    }
+
+    public function test_sales_workspace_has_exact_category_options_and_displays_historical_values_safely(): void
+    {
+        [, $project, $sales] = $this->salesContext();
+        $this->agenda($sales, $project);
+        $historical = $this->agenda($sales, $project);
+        $historical->update(['title' => 'Agenda Survey Lama', 'sales_activity_category' => 'Survey Lokasi']);
+
+        $response = $this->actingAs($sales)->get(route('sales-pocketbook.index'))->assertOk();
+
+        $response->assertSeeInOrder(array_map(
+            static fn (string $category): string => 'value="'.$category.'"',
+            ContentItem::SALES_ACTIVITY_CATEGORIES,
+        ), false)->assertDontSee('value="Survey Lokasi"', false)
+            ->assertSee('Agenda Test')
+            ->assertSee('Agenda Survey Lama')
+            ->assertSee('Survey Lokasi');
     }
 
     public function test_sales_without_project_sees_exact_blocking_message_and_no_form(): void
@@ -48,15 +67,16 @@ class SalesPocketbookTest extends TestCase
             ->assertDontSee('name="scheduled_date"', false);
     }
 
-    public function test_sales_creates_agenda_from_simplified_payload(): void
+    public function test_sales_creates_planned_agenda_without_result_then_completes_it(): void
     {
         [$branch, $project, $sales] = $this->salesContext();
 
         $this->actingAs($sales)->post(route('sales-agendas.store'), [
             'scheduled_date' => '2026-07-10',
+            'sales_activity_category' => 'Cek Lokasi',
             'title' => 'Follow-up Konsumen',
             'location' => 'Kantor pemasaran',
-            'activity_result' => 'Konsumen tertarik.',
+            'activity_result' => null,
         ])->assertRedirect(route('sales-agendas.index'))
             ->assertSessionHas('success', 'Agenda sales berhasil ditambahkan.');
 
@@ -64,9 +84,66 @@ class SalesPocketbookTest extends TestCase
         $this->assertSame($branch->id, $agenda->branch_id);
         $this->assertSame($project->id, $agenda->sales_project_id);
         $this->assertSame($sales->id, $agenda->owner_user_id);
-        $this->assertSame('done', $agenda->status);
-        $this->assertSame('Konsumen tertarik.', $agenda->activity_result);
+        $this->assertSame('planned', $agenda->status);
+        $this->assertNull($agenda->activity_result);
+        $this->assertSame('Cek Lokasi', $agenda->sales_activity_category);
         $this->assertTrue($agenda->assignees->contains($sales));
+
+        $this->actingAs($sales)->patch(route('sales-agendas.update', $agenda), [
+            'activity_result' => 'Konsumen tertarik.',
+            'expected_updated_at' => app(OptimisticLockService::class)->token($agenda),
+        ])->assertRedirect(route('sales-agendas.index'));
+
+        $this->assertSame('done', $agenda->fresh()->status);
+        $this->assertSame('Konsumen tertarik.', $agenda->fresh()->activity_result);
+    }
+
+    #[DataProvider('salesActivityCategoryProvider')]
+    public function test_sales_can_store_every_exact_activity_category(string $category): void
+    {
+        [, , $sales] = $this->salesContext();
+
+        $this->actingAs($sales)->post(route('sales-agendas.store'), [
+            'scheduled_date' => '2026-07-10',
+            'sales_activity_category' => $category,
+            'title' => 'Agenda '.$category,
+        ])->assertSessionDoesntHaveErrors();
+
+        $this->assertSame($category, ContentItem::sole()->sales_activity_category);
+    }
+
+    public static function salesActivityCategoryProvider(): array
+    {
+        return array_combine(ContentItem::SALES_ACTIVITY_CATEGORIES, array_map(
+            static fn (string $category): array => [$category],
+            ContentItem::SALES_ACTIVITY_CATEGORIES,
+        ));
+    }
+
+    #[DataProvider('invalidSalesActivityCategoryProvider')]
+    public function test_sales_rejects_invalid_activity_category(?string $category): void
+    {
+        [, , $sales] = $this->salesContext();
+
+        $this->actingAs($sales)->post(route('sales-agendas.store'), [
+            'scheduled_date' => '2026-07-10',
+            'sales_activity_category' => $category,
+            'title' => 'Agenda Tidak Valid',
+        ])->assertSessionHasErrors('sales_activity_category');
+
+        $this->assertDatabaseCount('content_items', 0);
+    }
+
+    public static function invalidSalesActivityCategoryProvider(): array
+    {
+        return [
+            'null' => [null],
+            'blank' => [''],
+            'placeholder' => ['Pilih kategori'],
+            'legacy Survey Lokasi' => ['Survey Lokasi'],
+            'random activity' => ['Random Activity'],
+            'misspelled Canvassing' => ['Canvassinggg'],
+        ];
     }
 
     public function test_sales_agenda_requires_only_simplified_operational_fields(): void
@@ -75,13 +152,14 @@ class SalesPocketbookTest extends TestCase
 
         $this->actingAs($sales)->post(route('sales-agendas.store'), [
             'scheduled_date' => '2026-07-10',
+            'sales_activity_category' => 'Cek Lokasi',
             'title' => 'Kunjungan lokasi',
             'location' => '',
             'activity_result' => '',
         ])->assertSessionDoesntHaveErrors();
 
         $this->actingAs($sales)->post(route('sales-agendas.store'), [])->assertSessionHasErrors([
-            'scheduled_date', 'title',
+            'scheduled_date', 'sales_activity_category', 'title',
         ]);
     }
 

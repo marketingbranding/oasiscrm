@@ -50,6 +50,7 @@ class SalesAgendaController extends Controller
             'visibility' => 'personal',
             'title' => $data['title'],
             'agenda_type' => ContentItem::SALES_AGENDA_TYPE,
+            'sales_activity_category' => $data['sales_activity_category'],
             'location' => $data['location'] ?? null,
             'scheduled_date' => $data['scheduled_date'],
             'status' => $result ? 'done' : 'planned',

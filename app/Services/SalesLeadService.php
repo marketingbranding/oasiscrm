@@ -57,7 +57,7 @@ class SalesLeadService
             if (blank($data['current_status'] ?? null)) {
                 unset($data['current_status']);
             }
-            if ($locked->external_sync_id && (int) $locked->branch_id !== (int) $data['branch_id']) {
+            if ($locked->last_synced_at && (int) $locked->branch_id !== (int) $data['branch_id']) {
                 throw new \DomainException('Lead yang sudah tersinkron tidak dapat dipindahkan ke cabang lain.');
             }
 

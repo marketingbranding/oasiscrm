@@ -81,7 +81,7 @@ abstract class SalesLeadRequest extends FormRequest
                 $validator->errors()->add('sales_user_id', 'Sales harus anggota aktif tim koordinator.');
             }
 
-            if ($this->lead()?->external_sync_id && (int) $this->lead()->branch_id !== $branchId) {
+            if ($this->lead()?->last_synced_at && (int) $this->lead()->branch_id !== $branchId) {
                 $validator->errors()->add('branch_id', 'Lead yang sudah tersinkron tidak dapat dipindahkan ke spreadsheet cabang lain.');
             }
 

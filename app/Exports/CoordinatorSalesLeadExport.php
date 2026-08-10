@@ -41,7 +41,12 @@ class CoordinatorSalesLeadExport
                 $lead->project?->project_name,
                 $lead->current_status?->label(),
                 $lead->notes,
-                $lead->external_sync_id ? 'Tersinkron' : (filled($lead->branch?->sheet_id) ? 'Belum tersinkron' : 'Spreadsheet belum dikonfigurasi'),
+                match ($lead->sync_status) {
+                    'synced' => 'Tersinkron',
+                    'pending_update' => 'Perlu Sync Ulang',
+                    'sync_failed' => 'Sync Gagal',
+                    default => 'Belum Sync',
+                },
             ] as $column => $value) {
                 $sheet->setCellValueExplicit(self::cell($column + 2, $row), $value === null ? '' : (string) $value, DataType::TYPE_STRING);
             }

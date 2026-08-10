@@ -10,6 +10,7 @@ use App\Models\Role;
 use App\Models\User;
 use App\Services\SalesAgendaProjectResolver;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
 class SalesAgendaRoleWorkspaceTest extends TestCase
@@ -33,6 +34,19 @@ class SalesAgendaRoleWorkspaceTest extends TestCase
 
         $sales->assignedProjects()->attach($second->id, $this->assignment(false));
         $this->assertNull(app(SalesAgendaProjectResolver::class)->resolve($sales->fresh(), '2026-08-10'));
+    }
+
+    public function test_resolver_rejects_multiple_active_primary_assignments(): void
+    {
+        [$sales, $first, $second] = $this->context();
+        $sales->assignedProjects()->attach($first->id, $this->assignment(true));
+        $sales->assignedProjects()->attach($second->id, $this->assignment(false));
+        DB::table('project_user')->where('user_id', $sales->id)->update(['is_primary' => true]);
+
+        $this->assertNull(app(SalesAgendaProjectResolver::class)->resolve($sales, '2026-08-10'));
+        $this->actingAs($sales)->get(route('sales-pocketbook.index'))->assertOk()
+            ->assertSee('Proyek utama belum ditentukan. Hubungi admin untuk menetapkan proyek utama.')
+            ->assertDontSee('name="scheduled_date"', false);
     }
 
     public function test_resolver_ignores_inactive_future_and_expired_assignments(): void

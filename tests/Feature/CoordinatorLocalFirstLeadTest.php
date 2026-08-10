@@ -127,6 +127,48 @@ class CoordinatorLocalFirstLeadTest extends TestCase
         $this->assertNull($lead->fresh()->last_sync_error);
     }
 
+    public function test_unsynced_lead_can_move_branch_without_changing_external_identity(): void
+    {
+        foreach (['pending_create', 'sync_failed'] as $syncStatus) {
+            [$branch, $project, $sales, $coordinator] = $this->context(strtoupper(substr($syncStatus, 0, 2)));
+            $otherBranch = $this->branch('Move '.$syncStatus, 'M'.substr($syncStatus, 0, 2));
+            $otherProject = $this->project($otherBranch, 'Moved Project '.$syncStatus);
+            $otherSales = $this->sales($otherBranch, $otherProject, 'Moved Sales '.$syncStatus);
+            $coordinator->branches()->attach($otherBranch->id, ['can_view' => true, 'can_edit' => true]);
+            SalesCoordinatorSales::create(['coordinator_user_id' => $coordinator->id, 'sales_user_id' => $otherSales->id]);
+            $lead = $this->lead($sales, $project, ['sync_status' => $syncStatus, 'last_synced_at' => null]);
+            $syncId = $lead->external_sync_id;
+
+            $this->actingAs($coordinator)->put(route('sales-leads.update', $lead), $this->leadData($otherBranch, $otherProject, $otherSales, [
+                'expected_updated_at' => app(OptimisticLockService::class)->token($lead),
+            ]))->assertRedirect();
+
+            $this->assertSame($otherBranch->id, $lead->fresh()->branch_id);
+            $this->assertSame($otherProject->id, $lead->fresh()->project_id);
+            $this->assertSame($syncId, $lead->fresh()->external_sync_id);
+        }
+    }
+
+    public function test_delivered_lead_cannot_move_branch_when_synced_or_pending_update(): void
+    {
+        foreach (['synced', 'pending_update'] as $syncStatus) {
+            [$branch, $project, $sales, $coordinator] = $this->context(strtoupper(substr($syncStatus, 0, 2)));
+            $otherBranch = $this->branch('Locked '.$syncStatus, 'L'.substr($syncStatus, 0, 2));
+            $otherProject = $this->project($otherBranch, 'Locked Project '.$syncStatus);
+            $otherSales = $this->sales($otherBranch, $otherProject, 'Locked Sales '.$syncStatus);
+            $coordinator->branches()->attach($otherBranch->id, ['can_view' => true, 'can_edit' => true]);
+            SalesCoordinatorSales::create(['coordinator_user_id' => $coordinator->id, 'sales_user_id' => $otherSales->id]);
+            $lead = $this->lead($sales, $project, ['sync_status' => $syncStatus, 'last_synced_at' => now()->subDay()]);
+
+            $this->actingAs($coordinator)->from(route('sales-leads.edit', $lead))->put(route('sales-leads.update', $lead), $this->leadData($otherBranch, $otherProject, $otherSales, [
+                'expected_updated_at' => app(OptimisticLockService::class)->token($lead),
+            ]))->assertRedirect(route('sales-leads.edit', $lead))->assertSessionHasErrors('branch_id');
+
+            $this->assertSame($branch->id, $lead->fresh()->branch_id);
+            $this->assertSame($project->id, $lead->fresh()->project_id);
+        }
+    }
+
     public function test_push_is_isolated_to_accessible_branch(): void
     {
         [$branch, $project, $sales, $coordinator] = $this->context();
@@ -148,7 +190,7 @@ class CoordinatorLocalFirstLeadTest extends TestCase
         $this->assertSame('pending_create', $isolated->fresh()->sync_status);
     }
 
-    private function context(): array
+    private function context(string $suffix = ''): array
     {
         $options = Mockery::mock(SalesLeadSheetOptionService::class);
         $options->shouldReceive('forBranch')->andReturnUsing(fn (Branch $branch) => [
@@ -171,7 +213,7 @@ class CoordinatorLocalFirstLeadTest extends TestCase
         });
         $this->app->instance(SalesLeadSheetOptionService::class, $options);
 
-        $branch = $this->branch('Solo', 'SLO');
+        $branch = $this->branch('Solo'.$suffix, 'SLO'.$suffix);
         $project = $this->project($branch, 'Solo Project');
         $sales = $this->sales($branch, $project, 'Team Sales');
         $coordinator = $this->user('sales_coordinator', $branch, 'Coordinator');

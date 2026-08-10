@@ -36,14 +36,12 @@ class SalesCoordinatorTeamAdminTest extends TestCase
             ->assertDontSee('name="coordinator_sales_ids[]" value="'.$supplemental->id.'"', false);
     }
 
-    public function test_update_ends_omitted_assignment_and_reactivates_selected_history(): void
+    public function test_update_creates_new_assignment_episode_without_mutating_history(): void
     {
         $branch = $this->branch('SLO');
         $actor = $this->actor($branch);
         $coordinator = $this->user('sales_coordinator', $branch);
-        $omitted = $this->user('sales', $branch, 'Omitted Sales');
         $selected = $this->user('sales', $branch, 'Selected Sales');
-        $current = SalesCoordinatorSales::create(['coordinator_user_id' => $coordinator->id, 'sales_user_id' => $omitted->id]);
         $history = SalesCoordinatorSales::create([
             'coordinator_user_id' => $coordinator->id,
             'sales_user_id' => $selected->id,
@@ -51,15 +49,42 @@ class SalesCoordinatorTeamAdminTest extends TestCase
             'started_at' => today()->subMonth(),
             'ended_at' => today()->subWeek(),
         ]);
+        $historicalStartedAt = $history->started_at->toDateString();
+        $historicalEndedAt = $history->ended_at->toDateString();
 
         $this->actingAs($actor)->put(route('admin-users.update', $coordinator), $this->payload($coordinator, $branch, [$selected->id]))->assertRedirect(route('admin-users.show', $coordinator));
 
-        $this->assertFalse($current->fresh()->is_active);
-        $this->assertSame(today()->toDateString(), $current->fresh()->ended_at->toDateString());
-        $this->assertTrue($history->fresh()->is_active);
-        $this->assertSame(today()->toDateString(), $history->fresh()->started_at->toDateString());
-        $this->assertNull($history->fresh()->ended_at);
+        $this->assertSame($history->id, $history->fresh()->id);
+        $this->assertFalse($history->fresh()->is_active);
+        $this->assertSame($historicalStartedAt, $history->fresh()->started_at->toDateString());
+        $this->assertSame($historicalEndedAt, $history->fresh()->ended_at->toDateString());
+        $current = SalesCoordinatorSales::query()->whereKeyNot($history->id)->sole();
+        $this->assertTrue($current->is_active);
+        $this->assertSame(today()->toDateString(), $current->started_at->toDateString());
+        $this->assertNull($current->ended_at);
         $this->assertSame(2, SalesCoordinatorSales::count());
+    }
+
+    public function test_update_ends_current_assignment_without_changing_start_or_deleting_row(): void
+    {
+        $branch = $this->branch('SLO');
+        $actor = $this->actor($branch);
+        $coordinator = $this->user('sales_coordinator', $branch);
+        $sales = $this->user('sales', $branch);
+        $current = SalesCoordinatorSales::create([
+            'coordinator_user_id' => $coordinator->id,
+            'sales_user_id' => $sales->id,
+            'is_active' => true,
+            'started_at' => today()->subMonth(),
+        ]);
+        $startedAt = $current->started_at->toDateString();
+
+        $this->actingAs($actor)->put(route('admin-users.update', $coordinator), $this->payload($coordinator, $branch, []))->assertRedirect(route('admin-users.show', $coordinator));
+
+        $this->assertDatabaseCount('sales_coordinator_sales', 1);
+        $this->assertFalse($current->fresh()->is_active);
+        $this->assertSame($startedAt, $current->fresh()->started_at->toDateString());
+        $this->assertSame(today()->toDateString(), $current->fresh()->ended_at->toDateString());
     }
 
     public function test_update_rejects_out_of_scope_sales_and_supplemental_coordinator_target(): void

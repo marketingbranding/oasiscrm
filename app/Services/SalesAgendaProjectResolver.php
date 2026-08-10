@@ -25,7 +25,12 @@ class SalesAgendaProjectResolver
             ->with('branch')
             ->get();
 
-        return $projects->first(fn (LeadMaster $project) => (bool) $project->pivot->is_primary)
-            ?? ($projects->count() === 1 ? $projects->first() : null);
+        $primaryProjects = $projects->filter(fn (LeadMaster $project) => (bool) $project->pivot->is_primary);
+
+        if ($primaryProjects->count() === 1) {
+            return $primaryProjects->first();
+        }
+
+        return $primaryProjects->isEmpty() && $projects->count() === 1 ? $projects->first() : null;
     }
 }

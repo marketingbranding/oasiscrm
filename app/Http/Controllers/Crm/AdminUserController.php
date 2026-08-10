@@ -329,16 +329,12 @@ class AdminUserController extends Controller
         }
 
         foreach ($selected->diff($current->pluck('sales_user_id')) as $salesId) {
-            $historical = SalesCoordinatorSales::query()
-                ->where('coordinator_user_id', $coordinator->id)
-                ->where('sales_user_id', $salesId)
-                ->latest('id')
-                ->first();
-            if ($historical) {
-                $historical->update(['is_active' => true, 'started_at' => today(), 'ended_at' => null]);
-            } else {
-                SalesCoordinatorSales::create(['coordinator_user_id' => $coordinator->id, 'sales_user_id' => $salesId, 'is_active' => true, 'started_at' => today()]);
-            }
+            SalesCoordinatorSales::create([
+                'coordinator_user_id' => $coordinator->id,
+                'sales_user_id' => $salesId,
+                'is_active' => true,
+                'started_at' => today(),
+            ]);
         }
     }
 

@@ -1,0 +1,113 @@
+# OASIS Buku Saku Sales Local-First Architecture
+
+This document defines the intended architecture for Sales Agenda, Coordinator Lead, lead spreadsheet delivery, coordinator assignments, project resolution, and Phase 2 Google Login. OASIS application code, database constraints, routes, policies, and migrations remain authoritative for implemented behavior. This document does not claim that every target described below is already implemented.
+
+## 1. Architecture Boundary
+
+OASIS is the operational source of truth for this flow. Local database records own identity, authorization, organization scope, workflow state, history, and relationships.
+
+Google Sheets is not a second application database. The branch `lead` sheet is a push-only delivery target for lead data required outside OASIS. Runtime reads from Google must not decide Sales Agenda state, Coordinator Lead state, coordinator assignments, project ownership, authorization, or login identity.
+
+The flow is intentionally split:
+
+- Sales Agenda is local-only;
+- Coordinator Lead is local-only;
+- accepted lead data is stored in OASIS first;
+- OASIS pushes the required lead projection to the branch Google `lead` sheet;
+- OASIS does not pull lead ownership or workflow state back from Google for this architecture;
+- `data_sales` has no runtime role.
+
+## 2. Sales Agenda Local Flow
+
+Sales Agenda remains an OASIS workflow backed by local records. OASIS owns:
+
+- agenda identity;
+- Sales owner;
+- branch and project context;
+- scheduled date and agenda details;
+- status, result, reschedule linkage, and optimistic lock state;
+- organization scope, authorization, comments, notifications, and audit history where supported.
+
+Creating, updating, completing, or rescheduling a Sales Agenda must not require Google availability. No Sales Agenda write is mirrored to `lead`, `data_sales`, or another Google tab.
+
+Sales Agenda may start or support a later lead workflow, but agenda identity and lead identity remain separate. Any conversion must be explicit and must create or link the local lead under normal policy and validation rules.
+
+## 3. Coordinator Lead Local Flow
+
+Coordinator Lead is an OASIS-local handoff flow. Coordinator input, assignment, review, and transfer to Sales use local database records and local authorization.
+
+Required behavior:
+
+1. Coordinator creates or receives lead data in OASIS.
+2. OASIS validates branch, coordinator scope, selected Sales assignment, and resolved primary project.
+3. OASIS stores the lead and assignment locally.
+4. Local transaction establishes durable lead ownership and history.
+5. OASIS pushes the required lead projection to the configured branch Google `lead` sheet.
+6. Google failure is reported as delivery failure; Google must not become ownership truth or silently reassign the local lead.
+
+Coordinator monitoring reads OASIS data only. Names, NIK values, spreadsheet rows, or `sales_pic` text must not create coordinator-to-Sales relationships at runtime.
+
+## 4. Coordinator-to-Sales Assignment
+
+Coordinator-to-Sales membership uses a dedicated database pivot between OASIS users. The pivot is the source of truth for which Sales users a coordinator may manage or receive in assignment controls.
+
+The relationship must use user IDs, database constraints, active-account checks, organization scope, and policy enforcement. Display names, spreadsheet names, NIK values, and reporting-hierarchy inference are not durable relationship keys.
+
+Exact table name, columns, indexes, lifecycle fields, and migration behavior must be defined by the implementing migration and models. Do not reuse Google `data_sales` as this pivot and do not infer the relationship during requests.
+
+## 5. Primary Project Resolution
+
+Lead delivery requires one unambiguous active project for the selected Sales user in the applicable branch and assignment window.
+
+Resolution order is exact:
+
+1. Use the Sales user's active assignment marked primary when exactly one valid active primary assignment exists.
+2. If no valid active primary exists, use the project only when exactly one valid active project assignment remains.
+3. Otherwise block the operation and require assignment correction or explicit supported selection.
+
+Blocked cases include:
+
+- multiple valid active primary assignments;
+- no valid active assignment;
+- multiple active assignments without one valid primary;
+- inactive project or branch;
+- assignment outside its active date window;
+- project outside the coordinator's or Sales user's authorized scope.
+
+Resolution must not choose the first database row, newest row, alphabetically first project, project text from Google, or another branch's project.
+
+## 6. Google Lead Push-Only Contract
+
+Only the branch Google `lead` tab participates at runtime. Workbook resolution follows the lead's OASIS branch and that branch's configured spreadsheet ID. No fallback to another branch or shared reference workbook is allowed.
+
+OASIS pushes a validated projection after local ownership and project resolution succeed. Stable OASIS identity and idempotency metadata must be used so retries do not create duplicate rows. Remote row numbers are location metadata, not durable identity.
+
+This architecture does not use runtime pull synchronization to create, update, assign, or reconcile local leads from Google. Google edits do not override OASIS lead ownership, coordinator assignment, project assignment, or workflow history.
+
+`data_sales` is excluded from runtime reads, writes, validation, capability checks, reconciliation, and identity resolution. Historical spreadsheet data may be handled only by an explicit, offline migration or audit process with separate validation and authorization.
+
+## 7. Google Login Phase 2
+
+Google Login is Phase 2 and uses Laravel Socialite. It is an authentication convenience, not account provisioning or invitation activation.
+
+Rules:
+
+- accept Google authentication only when Google returns a verified email;
+- match only an existing OASIS user by normalized email;
+- allow login only for an existing active account that satisfies current OASIS lifecycle requirements;
+- do not create users automatically;
+- do not activate pending, invited, suspended, inactive, anonymized, or otherwise ineligible accounts;
+- do not grant roles, permissions, branches, projects, coordinator assignments, or Sales assignments from Google claims;
+- preserve existing OASIS session regeneration, account checks, audit behavior, and redirect safety;
+- use the intended shared application callback URL configured for the deployed OASIS environment;
+- do not send login tokens, invitation tokens, reset tokens, or bearer credentials in links.
+
+The OAuth callback must use Socialite state validation and server-side configuration. Account recovery, invitation activation, and password reset remain separate OASIS flows.
+
+## 8. Failure and Security Boundaries
+
+Local authorization and validation run before any Google push. Explicit inaccessible branch, project, coordinator, or Sales IDs are denied rather than replaced with a fallback.
+
+A failed Google push must expose a retryable delivery state without weakening local identity or creating another local lead. Retries must be idempotent. Logs, notifications, and URLs must not expose OAuth credentials, Google access tokens, invitation tokens, reset tokens, or hidden lead data.
+
+No runtime behavior may depend on `data_sales`, spreadsheet names as user identity, arbitrary project text, or token-bearing links.

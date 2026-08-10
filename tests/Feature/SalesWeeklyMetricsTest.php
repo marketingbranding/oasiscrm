@@ -67,11 +67,12 @@ class SalesWeeklyMetricsTest extends TestCase
 
     public function test_zero_denominator_is_null_and_report_displays_dash(): void
     {
-        [, , $sales] = $this->context();
+        [$branch, , $sales] = $this->context();
+        $manager = $this->user('manager', $branch);
         $period = app(SalesWeeklyMetricsService::class)->period('2026-07-23');
 
         $this->assertNull(app(SalesWeeklyMetricsService::class)->metrics($sales, $period)['conversions']['documents_akad']);
-        $this->actingAs($sales)->get(route('sales-pocketbook.index', ['tab' => 'report', 'period_type' => 'week', 'week' => '2026-07-23']))
+        $this->actingAs($manager)->get(route('sales-pocketbook.index', ['tab' => 'report', 'period_type' => 'week', 'week' => '2026-07-23']))
             ->assertOk()->assertSee('Konversi: —');
     }
 
@@ -132,19 +133,17 @@ class SalesWeeklyMetricsTest extends TestCase
         ]))->assertOk()->assertSee('Agenda Test');
     }
 
-    public function test_sales_dashboard_is_replaced_by_pocketbook_landing(): void
+    public function test_sales_shared_landing_is_agenda_only(): void
     {
-        Carbon::setTestNow(Carbon::parse('2026-07-22 12:00:00', config('app.timezone')));
-        [, $project, $sales] = $this->context();
-        $this->lead($sales, $project, ['lead_date' => '2026-07-18', 'contacted_at' => null, 'created_at' => '2026-07-18 09:00:00']);
-        $this->lead($sales, $project, ['lead_date' => '2026-07-21', 'normalized_phone' => '62812345']);
-        $this->lead($sales, $project, ['lead_date' => '2026-07-20', 'normalized_phone' => '62812345']);
+        [, , $sales] = $this->context();
 
         $this->actingAs($sales)->get(route('dashboard'))->assertForbidden();
         $this->actingAs($sales)->get('/')->assertRedirect(route('sales-pocketbook.index'));
         $this->actingAs($sales)->get(route('sales-pocketbook.index'))->assertOk()
-            ->assertSee('+ Input Lead Hari Ini')
-            ->assertSee('Pengingat Hari Ini');
+            ->assertSee('Agenda Saya')
+            ->assertDontSee('Input Lead')
+            ->assertDontSee('Ringkasan periode')
+            ->assertDontSee('Sinkronisasi');
     }
 
     public function test_non_sales_dashboard_keeps_existing_actions_and_global_roles_get_monitoring_only(): void

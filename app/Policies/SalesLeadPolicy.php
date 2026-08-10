@@ -4,6 +4,7 @@ namespace App\Policies;
 
 use App\Models\SalesLead;
 use App\Models\User;
+use App\Services\CoordinatorLeadTeamService;
 use App\Services\OrganizationScopeService;
 use App\Services\WorkspaceAccessService;
 
@@ -38,6 +39,14 @@ class SalesLeadPolicy
 
     public function create(User $user): bool
     {
+        if ($user->isSales()) {
+            return false;
+        }
+
+        if ($user->hasPrimaryRole('sales_coordinator')) {
+            return true;
+        }
+
         return $user->hasAnyPermission([
             'sales_pocketbook.manage_own',
             'sales_pocketbook.manage_all',
@@ -46,6 +55,15 @@ class SalesLeadPolicy
 
     public function update(User $user, SalesLead $lead): bool
     {
+        if ($user->isSales()) {
+            return false;
+        }
+
+        if ($user->hasPrimaryRole('sales_coordinator')) {
+            return app(CoordinatorLeadTeamService::class)->contains($user, $lead->sales_user_id)
+                && app(WorkspaceAccessService::class)->canViewBranch($user, $lead->branch_id);
+        }
+
         if (! $user->hasScopedPermission('sales_pocketbook', 'manage') || ! $this->view($user, $lead)) {
             return false;
         }

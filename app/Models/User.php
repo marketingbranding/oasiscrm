@@ -169,6 +169,36 @@ class User extends Authenticatable implements MustVerifyEmail
         return $this->hasMany(SalesSheetIdentity::class);
     }
 
+    public function coordinatorSalesAssignments(): HasMany
+    {
+        return $this->hasMany(SalesCoordinatorSales::class, 'coordinator_user_id');
+    }
+
+    public function salesCoordinatorAssignments(): HasMany
+    {
+        return $this->hasMany(SalesCoordinatorSales::class, 'sales_user_id');
+    }
+
+    public function currentCoordinatorSales(): BelongsToMany
+    {
+        return $this->belongsToMany(self::class, 'sales_coordinator_sales', 'coordinator_user_id', 'sales_user_id')
+            ->wherePivot('is_active', true)
+            ->where(fn ($query) => $query->whereNull('sales_coordinator_sales.started_at')->orWhereDate('sales_coordinator_sales.started_at', '<=', today()))
+            ->where(fn ($query) => $query->whereNull('sales_coordinator_sales.ended_at')->orWhereDate('sales_coordinator_sales.ended_at', '>=', today()))
+            ->withPivot(['id', 'is_active', 'started_at', 'ended_at'])
+            ->withTimestamps();
+    }
+
+    public function currentSalesCoordinators(): BelongsToMany
+    {
+        return $this->belongsToMany(self::class, 'sales_coordinator_sales', 'sales_user_id', 'coordinator_user_id')
+            ->wherePivot('is_active', true)
+            ->where(fn ($query) => $query->whereNull('sales_coordinator_sales.started_at')->orWhereDate('sales_coordinator_sales.started_at', '<=', today()))
+            ->where(fn ($query) => $query->whereNull('sales_coordinator_sales.ended_at')->orWhereDate('sales_coordinator_sales.ended_at', '>=', today()))
+            ->withPivot(['id', 'is_active', 'started_at', 'ended_at'])
+            ->withTimestamps();
+    }
+
     public function primaryAssignedProject(): BelongsToMany
     {
         return $this->assignedProjects()->wherePivot('is_primary', true);
@@ -258,7 +288,7 @@ class User extends Authenticatable implements MustVerifyEmail
 
     public function landingRouteName(): string
     {
-        return $this->isSales() ? 'sales-pocketbook.index' : 'dashboard';
+        return $this->hasPrimaryRole(['sales', 'sales_coordinator']) ? 'sales-pocketbook.index' : 'dashboard';
     }
 
     public function canViewAllBranches(): bool

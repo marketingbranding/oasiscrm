@@ -26,6 +26,27 @@ class SalesLeadLifecycleOperationsTest extends TestCase
 
     private int $remoteRowNumber = 2;
 
+    public function test_primary_sales_cannot_use_lifecycle_operation_endpoints(): void
+    {
+        [, $project, , $lead] = $this->context();
+        $sales = $this->user('sales', $lead->branch, 'Primary Sales');
+        $sales->assignedProjects()->attach($project->id, ['is_primary' => true, 'is_active' => true]);
+        $consumer = $this->consumerLink($lead);
+        $attempt = SalesLeadSlikAttempt::create([
+            'sales_lead_id' => $lead->id, 'branch_id' => $lead->branch_id, 'actor_id' => $lead->sales_user_id,
+            'consumer_link_id' => $consumer->id, 'operation_uuid' => (string) Str::uuid(),
+            'oasis_sync_id' => (string) Str::uuid(), 'sheet_name' => 'bi_checking', 'remote_row_number' => 4,
+            'status' => 'submitted', 'nik' => $consumer->nik, 'id_kavling' => $consumer->id_kavling,
+        ]);
+
+        $this->actingAs($sales)->patchJson(route('sales-leads.lifecycle-status.update', $lead), ['status' => 'discussion'])->assertForbidden();
+        $this->actingAs($sales)->postJson(route('sales-leads.site-visits.store', $lead), $this->visitData('2026-08-04'))->assertForbidden();
+        $this->actingAs($sales)->postJson(route('sales-leads.consumer.store', $lead), ['project_id' => $project->id, 'nik' => '1123456789012345', 'id_kavling' => 'A-2'])->assertForbidden();
+        $this->actingAs($sales)->postJson(route('sales-leads.slik.store', $lead), ['tanggal_slik' => '2026-08-05'])->assertForbidden();
+        $this->actingAs($sales)->patchJson(route('sales-leads.slik.reject', [$lead, $attempt]), ['hasil_slik' => 'KOL 3', 'keterangan' => 'Ditolak'])->assertForbidden();
+        $this->actingAs($sales)->postJson(route('sales-leads.freelance.store', $lead), ['nik_koordinator' => 'KOORD-01'])->assertForbidden();
+    }
+
     public function test_manual_status_endpoint_accepts_only_three_manual_values_and_rejects_forged_organization_ids(): void
     {
         [, , $sales, $lead] = $this->context();
@@ -299,7 +320,7 @@ class SalesLeadLifecycleOperationsTest extends TestCase
     {
         $branch = Branch::create(['name' => 'Branch '.Str::random(6), 'code' => strtoupper(Str::random(5)), 'sheet_id' => 'sheet-'.Str::random(8), 'is_active' => true]);
         $project = LeadMaster::create(['branch_id' => $branch->id, 'project_name' => 'Project '.Str::random(6), 'is_active' => true]);
-        $sales = $this->user('sales', $branch, 'Sales '.Str::random(5));
+        $sales = $this->user('manager', $branch, 'Manager '.Str::random(5));
         $sales->assignedProjects()->attach($project->id, ['is_primary' => true, 'is_active' => true]);
         $lead = $this->lead($sales, $project);
 

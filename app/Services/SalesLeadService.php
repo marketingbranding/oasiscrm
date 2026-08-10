@@ -27,25 +27,14 @@ class SalesLeadService
             $data['current_status_changed_at'] = now();
             $data['current_status_source'] = 'manual';
             $data['current_status_source_id'] = (string) $actor->id;
-            $data['external_sync_id'] = $data['operation_uuid'];
+            $data['external_sync_id'] = $data['operation_uuid'] ?? (string) Str::uuid();
             unset($data['operation_uuid']);
+            $data['sync_status'] = 'pending_create';
+            $data['last_synced_at'] = null;
+            $data['last_sync_error'] = null;
             $data['created_by'] = $actor->id;
             $data['updated_by'] = $actor->id;
             $lead = SalesLead::create($data);
-
-            $remote = $this->writer()->append($lead, 'lead', $this->spreadsheetFields($lead), $lead->external_sync_id);
-            $externalLeadId = trim((string) ($remote->rowValues['id_lead'] ?? ''));
-            if ($externalLeadId !== '') {
-                $duplicate = SalesLead::query()
-                    ->where('branch_id', $lead->branch_id)
-                    ->where('external_lead_id', $externalLeadId)
-                    ->where('id', '!=', $lead->id)
-                    ->exists();
-                if ($duplicate) {
-                    throw new \DomainException('ID lead dari spreadsheet sudah digunakan pada cabang ini.');
-                }
-                $lead->update(['external_lead_id' => $externalLeadId]);
-            }
             $this->lifecycle->recordStatusHistory(
                 $lead,
                 $lead->current_status,
@@ -84,11 +73,8 @@ class SalesLeadService
             }
             $data['updated_by'] = $actor->id;
 
-            $remote = $locked->replicate();
-            $remote->forceFill($data);
-            if ($locked->external_sync_id) {
-                $this->writer()->updateBySyncId($locked, 'lead', $locked->external_sync_id, $this->spreadsheetFields($remote));
-            }
+            $data['sync_status'] = $locked->last_synced_at ? 'pending_update' : 'pending_create';
+            $data['last_sync_error'] = null;
             $locked->update($data);
             if ($statusChanged) {
                 $this->lifecycle->recordStatusHistory(
@@ -154,10 +140,5 @@ class SalesLeadService
             'keterangan' => $lead->notes,
             'id_promo' => $lead->id_promo,
         ];
-    }
-
-    private function writer(): SalesLeadSpreadsheetWriter
-    {
-        return app(SalesLeadSpreadsheetWriter::class);
     }
 }

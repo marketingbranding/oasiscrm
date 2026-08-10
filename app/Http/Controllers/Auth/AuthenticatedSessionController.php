@@ -30,7 +30,7 @@ class AuthenticatedSessionController extends Controller
         $request->session()->regenerate();
         $accounts->recordSuccessfulLogin($request->user(), $request);
 
-        if ($request->user()->isSales()) {
+        if ($request->user()->hasPrimaryRole(['sales', 'sales_coordinator'])) {
             return redirect()->route($request->user()->landingRouteName());
         }
 

@@ -50,6 +50,7 @@
                 <div><dt class="font-bold">Cabang Tambahan</dt><dd>{{ $user->branches->where('id','!=',$user->branch_id)->pluck('name')->join(', ') ?: '-' }}</dd></div>
                 <div><dt class="font-bold">Proyek</dt><dd>{{ $user->assignedProjects->pluck('project_name')->join(', ') ?: '-' }}</dd></div>
                 <div><dt class="font-bold">Atasan</dt><dd>{{ $user->supervisor?->name ?: '-' }}</dd></div>
+                @if($user->hasPrimaryRole('sales_coordinator'))<div><dt class="font-bold">Tim Sales Aktif</dt><dd>{{ $user->currentCoordinatorSales->pluck('name')->join(', ') ?: '-' }}</dd></div>@endif
                 <div><dt class="font-bold">Status Akun</dt><dd><x-crm.status-badge :variant="$statusVariant">{{ $statusLabel }}</x-crm.status-badge></dd></div>
                 <div><dt class="font-bold">Email Terverifikasi</dt><dd>{{ $user->email_verified_at ? $user->email_verified_at->format('d/m/Y H:i') : 'Belum' }}</dd></div>
                 <div><dt class="font-bold">Password Diubah</dt><dd>{{ $user->password_changed_at ? $user->password_changed_at->format('d/m/Y H:i') : 'Belum' }}</dd></div>

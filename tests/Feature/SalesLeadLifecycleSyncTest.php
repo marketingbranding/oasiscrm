@@ -290,16 +290,15 @@ class SalesLeadLifecycleSyncTest extends TestCase
         ]);
         $salesUser->roles()->attach(Role::query()->where('slug', 'pusat')->firstOrFail());
         $salesUser->assignedProjects()->attach($project, ['is_active' => true]);
-        $this->assertTrue($salesUser->hasPermission('sales_pocketbook.sync'));
+        $this->assertFalse($salesUser->hasPermission('sales_pocketbook.sync'));
         foreach (['supervisor', 'manager', 'branch_manager', 'pusat', 'admin'] as $roleSlug) {
             $this->assertTrue(Role::query()->where('slug', $roleSlug)->firstOrFail()->permissions()->where('slug', 'sales_pocketbook.sync')->exists(), $roleSlug);
             $this->assertTrue(Role::query()->where('slug', $roleSlug)->firstOrFail()->permissions()->where('slug', 'sales_pocketbook.reconcile')->exists(), $roleSlug);
         }
-        $this->assertTrue(Role::query()->where('slug', 'sales')->firstOrFail()->permissions()->where('slug', 'sales_pocketbook.sync')->exists());
-        $this->assertFalse(Role::query()->where('slug', 'sales')->firstOrFail()->permissions()->where('slug', 'sales_pocketbook.reconcile')->exists());
-        foreach (['sales_coordinator', 'staff'] as $roleSlug) {
-            $this->assertFalse(Role::query()->where('slug', $roleSlug)->firstOrFail()->permissions()->whereIn('slug', ['sales_pocketbook.sync', 'sales_pocketbook.reconcile'])->exists(), $roleSlug);
-        }
+        $this->assertFalse(Role::query()->where('slug', 'sales')->firstOrFail()->permissions()->whereIn('slug', ['sales_pocketbook.sync', 'sales_pocketbook.reconcile'])->exists());
+        $this->assertTrue(Role::query()->where('slug', 'sales_coordinator')->firstOrFail()->permissions()->where('slug', 'sales_pocketbook.sync')->exists());
+        $this->assertFalse(Role::query()->where('slug', 'sales_coordinator')->firstOrFail()->permissions()->where('slug', 'sales_pocketbook.reconcile')->exists());
+        $this->assertFalse(Role::query()->where('slug', 'staff')->firstOrFail()->permissions()->whereIn('slug', ['sales_pocketbook.sync', 'sales_pocketbook.reconcile'])->exists());
 
         $google = Mockery::mock(GoogleSheetsApiService::class);
         $google->shouldReceive('sheetTitles')->once()->with('sheet-command-bad')->andReturn([]);
@@ -312,43 +311,37 @@ class SalesLeadLifecycleSyncTest extends TestCase
         $this->assertDatabaseHas('sales_lead_lifecycle_sync_statuses', ['branch_id' => $goodBranch->id, 'status' => 'partial_success']);
     }
 
-    public function test_primary_sales_syncs_only_current_project_branch_and_scoped_viewers_can_read_status(): void
+    public function test_lifecycle_pull_uses_authorized_manager_and_denies_sales_and_coordinator(): void
     {
-        [$branch, $project] = $this->context('sheet-sales-sync', 'Sales Sync Project', 'Assigned Sales');
-        [$otherBranch] = $this->context('sheet-sales-other', 'Other Sync Project', 'Other Sales');
-        $salesUser = User::factory()->create([
-            'role_id' => Role::query()->where('slug', 'sales')->value('id'),
+        [$branch] = $this->context('sheet-sales-sync', 'Sales Sync Project', 'Assigned Sales');
+        $manager = User::factory()->create([
+            'role_id' => Role::query()->where('slug', 'manager')->value('id'),
             'branch_id' => $branch->id,
             'password_changed_at' => now(),
         ]);
-        $salesUser->assignedProjects()->attach($project, ['is_active' => true, 'assignment_start_date' => today()->subDay()]);
+        $manager->branches()->updateExistingPivot($branch->id, ['can_view' => true, 'can_edit' => true, 'can_sync' => true]);
         SalesLeadLifecycleSyncStatus::query()->create([
             'branch_id' => $branch->id,
-            'scope' => SalesLeadSyncService::userScope($salesUser->id),
+            'scope' => SalesLeadSyncService::branchScope(),
             'status' => 'partial_success',
             'summary' => ['imported' => 1, 'updated' => 0, 'linked' => 0, 'unresolved' => 1, 'capabilities' => ['lead' => true]],
         ]);
         $service = Mockery::mock(SalesLeadSyncService::class);
-        $service->shouldReceive('sync')->once()->withArgs(fn (Branch $candidate, User $actor) => $candidate->is($branch) && $actor->is($salesUser))
-            ->andReturn(['ok' => true, 'status' => 'partial_success', 'summary' => ['unresolved' => 1]]);
+        $service->shouldReceive('sync')->andReturn(['ok' => true, 'status' => 'partial_success', 'summary' => ['unresolved' => 1]]);
         $this->app->instance(SalesLeadSyncService::class, $service);
 
-        $this->actingAs($salesUser)->getJson(route('sales-pocketbook.lifecycle-sync.status', ['branch_id' => $branch->id]))
+        $this->actingAs($manager)->postJson(route('sales-pocketbook.lifecycle-sync'), ['branch_id' => $branch->id])
             ->assertOk()->assertJsonPath('status', 'partial_success');
-        $this->actingAs($salesUser)->postJson(route('sales-pocketbook.lifecycle-sync'), ['branch_id' => $branch->id])
-            ->assertOk()->assertJsonPath('status', 'partial_success');
-        $this->actingAs($salesUser)->postJson(route('sales-pocketbook.lifecycle-sync'), ['branch_id' => $otherBranch->id])->assertForbidden();
-        $this->actingAs($salesUser)->getJson(route('sales-pocketbook.lifecycle-reconciliations.index', ['branch_id' => $branch->id]))->assertForbidden();
-        $this->assertFalse($salesUser->hasPermission('database.sync'));
 
-        $supplemental = User::factory()->create([
-            'role_id' => Role::query()->where('slug', 'sales_coordinator')->value('id'),
-            'branch_id' => $branch->id,
-            'password_changed_at' => now(),
-        ]);
-        $supplemental->roles()->attach(Role::query()->where('slug', 'pusat')->firstOrFail());
-        $this->assertFalse($supplemental->hasPermission('sales_pocketbook.sync'));
-        $this->actingAs($supplemental)->postJson(route('sales-pocketbook.lifecycle-sync'), ['branch_id' => $branch->id])->assertForbidden();
+        foreach (['sales', 'sales_coordinator'] as $roleSlug) {
+            $user = User::factory()->create([
+                'role_id' => Role::query()->where('slug', $roleSlug)->value('id'),
+                'branch_id' => $branch->id,
+                'password_changed_at' => now(),
+            ]);
+            $user->branches()->updateExistingPivot($branch->id, ['can_view' => true, 'can_edit' => true, 'can_sync' => true]);
+            $this->actingAs($user)->postJson(route('sales-pocketbook.lifecycle-sync'), ['branch_id' => $branch->id])->assertForbidden();
+        }
     }
 
     private function context(string $sheetId, string $projectName, string $salesName): array

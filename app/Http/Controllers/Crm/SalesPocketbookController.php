@@ -33,8 +33,17 @@ class SalesPocketbookController extends Controller
 
     public function index(Request $request)
     {
-        $this->authorize('viewAny', SalesLead::class);
         $user = $request->user();
+
+        if ($user->isSales()) {
+            return app(SalesAgendaController::class)->index($request);
+        }
+
+        if ($user->hasPrimaryRole('sales_coordinator')) {
+            return app(CoordinatorSalesLeadWorkspaceController::class)->index($request);
+        }
+
+        $this->authorize('viewAny', SalesLead::class);
         $reminderAction = $request->query('reminder_action');
         if ($user->isSales() && in_array($reminderAction, ['lead', 'agenda', 'result'], true)) {
             session()->flash('suppress_sales_reminder_once', true);
@@ -293,6 +302,7 @@ class SalesPocketbookController extends Controller
 
     public function export(Request $request)
     {
+        abort_if($request->user()->hasPrimaryRole(['sales', 'sales_coordinator']), 403);
         abort_unless($request->user()->hasPermission('sales_pocketbook.export'), 403);
         $this->authorize('viewAny', SalesLead::class);
         $request->validate($this->filterRules());

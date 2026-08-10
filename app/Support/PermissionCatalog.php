@@ -48,7 +48,7 @@ class PermissionCatalog
             ['name' => 'Menetapkan proyek pengguna', 'slug' => 'users.assign_projects', 'description' => 'Menetapkan proyek utama dan tambahan pengguna.', 'group_name' => 'Pengguna'],
             ['name' => 'Menetapkan atasan pengguna', 'slug' => 'users.assign_supervisor', 'description' => 'Menetapkan atasan langsung pengguna.', 'group_name' => 'Pengguna'],
             ['name' => 'Mengekspor Buku Saku Sales', 'slug' => 'sales_pocketbook.export', 'description' => 'Mengekspor data Buku Saku Sales sesuai lingkup akses.', 'group_name' => 'Buku Saku Sales'],
-            ['name' => 'Menyinkronkan siklus lead Buku Saku Sales', 'slug' => 'sales_pocketbook.sync', 'description' => 'Menarik dan menyinkronkan siklus lead dari spreadsheet cabang sesuai lingkup akses.', 'group_name' => 'Buku Saku Sales'],
+            ['name' => 'Menyinkronkan lead tim Buku Saku Sales', 'slug' => 'sales_pocketbook.sync', 'description' => 'Mendorong lead tim Buku Saku Sales ke spreadsheet cabang sesuai lingkup akses.', 'group_name' => 'Buku Saku Sales'],
             ['name' => 'Merekonsiliasi siklus lead Buku Saku Sales', 'slug' => 'sales_pocketbook.reconcile', 'description' => 'Melihat masalah rekonsiliasi siklus lead sesuai lingkup akses.', 'group_name' => 'Buku Saku Sales'],
             ['name' => 'Membuat Work Planner', 'slug' => 'work_planner.create', 'description' => 'Membuat item Work Planner.', 'group_name' => 'Work Planner'],
             ['name' => 'Memperbarui Work Planner', 'slug' => 'work_planner.update', 'description' => 'Memperbarui item Work Planner sesuai lingkup akses.', 'group_name' => 'Work Planner'],
@@ -125,12 +125,13 @@ class PermissionCatalog
         return [
             'sales' => [
                 'sales_pocketbook.view_own', 'sales_pocketbook.manage_own', 'sales_pocketbook.export_own', 'work_planner.view_own',
-                'sales_pocketbook.export', 'sales_pocketbook.sync', 'work_planner.create', 'work_planner.update',
+                'sales_pocketbook.export', 'work_planner.create', 'work_planner.update',
                 ...$comments,
             ],
             'sales_coordinator' => [
                 'sales_pocketbook.view_own', 'sales_pocketbook.view_team', 'sales_pocketbook.manage_own',
-                'sales_pocketbook.manage_team', 'work_planner.view_own',
+                'sales_pocketbook.manage_team', 'sales_pocketbook.export_team', 'sales_pocketbook.export',
+                'sales_pocketbook.sync', 'work_planner.view_own',
                 'work_planner.view_team', 'work_planner.create', 'work_planner.update', 'work_planner.assign',
                 ...$comments,
             ],

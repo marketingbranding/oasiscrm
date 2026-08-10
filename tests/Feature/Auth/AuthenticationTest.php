@@ -45,6 +45,20 @@ class AuthenticationTest extends TestCase
         $response->assertRedirect(route('sales-pocketbook.index'));
     }
 
+    public function test_sales_coordinator_login_ignores_unrelated_intended_url_and_redirects_to_pocketbook(): void
+    {
+        $role = Role::query()->where('slug', 'sales_coordinator')->firstOrFail();
+        $coordinator = User::factory()->create(['role_id' => $role->id, 'password_changed_at' => now()]);
+
+        $response = $this->withSession(['url.intended' => route('database.index')])->post('/login', [
+            'email' => $coordinator->email,
+            'password' => 'password',
+        ]);
+
+        $this->assertAuthenticatedAs($coordinator);
+        $response->assertRedirect(route('sales-pocketbook.index'));
+    }
+
     public function test_sales_forced_password_change_redirects_to_pocketbook(): void
     {
         $role = Role::firstOrCreate(['slug' => 'sales'], ['name' => 'Sales', 'is_superadmin' => false]);

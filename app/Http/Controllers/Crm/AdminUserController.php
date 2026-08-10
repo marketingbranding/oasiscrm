@@ -11,6 +11,7 @@ use App\Http\Requests\AdminUserUpdateRequest;
 use App\Models\Branch;
 use App\Models\LeadMaster;
 use App\Models\Role;
+use App\Models\SalesCoordinatorSales;
 use App\Models\User;
 use App\Services\AccountAuditService;
 use App\Services\BranchAssignmentService;
@@ -117,7 +118,7 @@ class AdminUserController extends Controller
     public function show(User $admin_user): View
     {
         $this->authorize('view', $admin_user);
-        $admin_user->load(['role', 'roles', 'branch', 'branches', 'assignedProjects.branch', 'supervisor', 'invitations.inviter', 'activityLogs.causer']);
+        $admin_user->load(['role', 'roles', 'branch', 'branches', 'assignedProjects.branch', 'supervisor', 'currentCoordinatorSales', 'invitations.inviter', 'activityLogs.causer']);
         $actor = request()->user();
         $deletionBlockers = $actor->hasPermission('users.delete_permanently')
             ? $this->lifecycle->deletionBlockers($admin_user)
@@ -129,9 +130,13 @@ class AdminUserController extends Controller
     public function edit(User $admin_user): View
     {
         $this->authorize('update', $admin_user);
-        $admin_user->load(['branches', 'assignedProjects', 'supervisor']);
+        $admin_user->load(['branches', 'assignedProjects', 'supervisor', 'currentCoordinatorSales']);
+        $options = $this->options(request()->user());
+        $options['coordinatorSales'] = $admin_user->hasPrimaryRole('sales_coordinator')
+            ? $this->manageableSales(request()->user())->get()
+            : collect();
 
-        return view('crm.admin-users.edit', array_merge($this->options(request()->user()), ['user' => $admin_user, 'lockToken' => $this->locks->token($admin_user)]));
+        return view('crm.admin-users.edit', array_merge($options, ['user' => $admin_user, 'lockToken' => $this->locks->token($admin_user)]));
     }
 
     public function update(AdminUserUpdateRequest $request, User $admin_user): RedirectResponse|JsonResponse
@@ -161,6 +166,7 @@ class AdminUserController extends Controller
             $this->branches->assign($user, $branchIds, (int) $data['branch_id'], $actor);
             $this->projects->assign($user, $projectIds, $this->nullableInt($data['primary_project_id'] ?? null), $actor);
             $this->hierarchy->assignSupervisor($user, $this->nullableInt($data['supervisor_user_id'] ?? null), $actor);
+            $this->syncCoordinatorSales($user, (array) ($data['coordinator_sales_ids'] ?? []));
             $this->audit->log('user_updated', $user, $actor, $old, $user->only(['name', 'email', 'phone', 'role_id']));
 
             return redirect()->route('admin-users.show', $user)->with('success', 'Data pengguna berhasil diperbarui.');
@@ -302,6 +308,38 @@ class AdminUserController extends Controller
         $supervisors = $this->administration->visibleQuery($actor)->where('account_status', AccountStatus::Active->value)->with('role')->orderBy('name')->get();
 
         return ['roles' => $this->administration->availableRoles($actor), 'branches' => $branches, 'projects' => $projects, 'projectsByBranch' => $projects->groupBy('branch_id'), 'supervisors' => $supervisors];
+    }
+
+    private function manageableSales(User $actor): Builder
+    {
+        return $this->administration->visibleQuery($actor)
+            ->where('account_status', AccountStatus::Active->value)
+            ->whereHas('role', fn (Builder $query) => $query->where('slug', 'sales'))
+            ->orderBy('name');
+    }
+
+    private function syncCoordinatorSales(User $coordinator, array $salesIds): void
+    {
+        $selected = collect($salesIds)->map(fn ($id) => (int) $id)->unique();
+        $current = SalesCoordinatorSales::query()->where('coordinator_user_id', $coordinator->id)->current()->get();
+        $current->whereNotIn('sales_user_id', $selected)->each->update(['is_active' => false, 'ended_at' => today()]);
+
+        if (! $coordinator->hasPrimaryRole('sales_coordinator')) {
+            return;
+        }
+
+        foreach ($selected->diff($current->pluck('sales_user_id')) as $salesId) {
+            $historical = SalesCoordinatorSales::query()
+                ->where('coordinator_user_id', $coordinator->id)
+                ->where('sales_user_id', $salesId)
+                ->latest('id')
+                ->first();
+            if ($historical) {
+                $historical->update(['is_active' => true, 'started_at' => today(), 'ended_at' => null]);
+            } else {
+                SalesCoordinatorSales::create(['coordinator_user_id' => $coordinator->id, 'sales_user_id' => $salesId, 'is_active' => true, 'started_at' => today()]);
+            }
+        }
     }
 
     private function branchIds(array $data): array

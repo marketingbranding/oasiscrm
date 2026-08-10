@@ -1,0 +1,82 @@
+@extends('layouts.crm')
+
+@section('title', 'Agenda Saya - Oasis CRM')
+
+@section('content')
+<div class="space-y-4">
+    <x-crm.page-header variant="canonical" eyebrow="Workspace Pribadi" title="Agenda Saya" description="Catat dan selesaikan agenda sales Anda.">
+        <x-slot:actions>
+            <x-crm.button variant="secondary" :href="route('sales-agendas.export')">Export XLSX</x-crm.button>
+        </x-slot:actions>
+    </x-crm.page-header>
+
+    <div class="sales-pocketbook-scope" aria-label="Konteks agenda aktif">
+        <div><span>Sales</span><strong>{{ Auth::user()->name }}</strong></div>
+        <div><span>Cabang</span><strong>{{ $project?->branch?->name ?? 'Belum tersedia' }}</strong></div>
+        <div><span>Proyek</span><strong>{{ $project?->project_name ?? 'Belum tersedia' }}</strong></div>
+    </div>
+
+    @if($errors->any())
+        <x-crm.alert variant="error" title="Data belum tersimpan.">{{ $errors->first() }}</x-crm.alert>
+    @endif
+
+    @if(!$project)
+        <x-crm.alert variant="warning" title="Penugasan proyek diperlukan">Proyek utama belum ditentukan. Hubungi admin untuk menetapkan proyek utama.</x-crm.alert>
+    @else
+        <x-crm.section id="agenda-baru" title="Agenda Baru">
+            <form method="POST" action="{{ route('sales-agendas.store') }}" class="grid gap-3 md:grid-cols-2">
+                @csrf
+                <x-crm.field label="Tanggal Agenda" for="scheduled_date" required :error="$errors->first('scheduled_date')">
+                    <x-crm.date-field id="scheduled_date" name="scheduled_date" :value="old('scheduled_date', now()->toDateString())" required />
+                </x-crm.field>
+                <x-crm.field label="Judul Agenda" for="title" required :error="$errors->first('title')">
+                    <input id="title" name="title" value="{{ old('title') }}" class="sales-input" required>
+                </x-crm.field>
+                <x-crm.field label="Lokasi" for="location" :error="$errors->first('location')">
+                    <input id="location" name="location" value="{{ old('location') }}" class="sales-input">
+                </x-crm.field>
+                <x-crm.field label="Hasil Aktivitas" for="activity_result" :error="$errors->first('activity_result')">
+                    <textarea id="activity_result" name="activity_result" class="sales-input" rows="2">{{ old('activity_result') }}</textarea>
+                </x-crm.field>
+                <div class="md:col-span-2"><x-crm.button type="submit" variant="primary" accent="sales">Simpan Agenda</x-crm.button></div>
+            </form>
+        </x-crm.section>
+    @endif
+
+    <x-crm.section id="agenda-saya" title="Daftar Agenda Saya">
+        <div class="crm-table-scroll">
+            <table class="crm-data-table">
+                <thead><tr><th>Tanggal</th><th>Agenda</th><th>Lokasi</th><th>Hasil</th><th>Status</th><th>Aksi</th></tr></thead>
+                <tbody>
+                    @forelse($agendas as $agenda)
+                        <tr>
+                            <td>{{ $agenda->scheduled_date->format('d/m/Y') }}</td>
+                            <td>{{ $agenda->title }}</td>
+                            <td>{{ $agenda->location ?: '-' }}</td>
+                            <td>{{ $agenda->activity_result ?: '-' }}</td>
+                            <td><x-crm.status-badge :status="$agenda->status">{{ ucfirst($agenda->status) }}</x-crm.status-badge></td>
+                            <td>
+                                @unless($agenda->isFinished())
+                                    <form method="POST" action="{{ route('sales-agendas.update', $agenda) }}" class="flex min-w-64 gap-2">
+                                        @csrf
+                                        @method('PATCH')
+                                        <input type="hidden" name="expected_updated_at" value="{{ app(\App\Services\OptimisticLockService::class)->token($agenda) }}">
+                                        <label class="sr-only" for="result-{{ $agenda->id }}">Hasil aktivitas</label>
+                                        <input id="result-{{ $agenda->id }}" name="activity_result" class="sales-input" required placeholder="Hasil aktivitas">
+                                        <x-crm.button type="submit" variant="secondary" size="sm">Selesaikan</x-crm.button>
+                                    </form>
+                                @else
+                                    <span>-</span>
+                                @endunless
+                            </td>
+                        </tr>
+                    @empty
+                        <tr><td colspan="6"><x-crm.empty-state title="Belum ada agenda">Agenda Anda akan tampil di sini.</x-crm.empty-state></td></tr>
+                    @endforelse
+                </tbody>
+            </table>
+        </div>
+        {{ $agendas->links() }}
+    </x-crm.section>
+</div>
+@endsection

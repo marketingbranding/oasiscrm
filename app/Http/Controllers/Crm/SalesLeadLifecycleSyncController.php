@@ -23,6 +23,7 @@ class SalesLeadLifecycleSyncController extends Controller
 
     public function sync(Request $request, SalesLeadSyncService $service): JsonResponse
     {
+        abort_if($request->user()->hasPrimaryRole(['sales', 'sales_coordinator']), 403);
         $branch = $this->authorizedSyncBranch($request);
         $result = $service->sync($branch, $request->user());
         $status = $this->personalOrBranchStatus($branch, $request);
@@ -33,6 +34,7 @@ class SalesLeadLifecycleSyncController extends Controller
 
     public function status(Request $request): JsonResponse
     {
+        abort_if($request->user()->hasPrimaryRole(['sales', 'sales_coordinator']), 403);
         $branch = $this->viewableBranch($request);
 
         $status = $this->personalOrBranchStatus($branch, $request);

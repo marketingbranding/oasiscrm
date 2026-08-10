@@ -3,17 +3,13 @@
 namespace App\Http\Requests\Crm;
 
 use App\Enums\SalesLeadStatus;
-use App\Exceptions\SalesLeadSpreadsheetContractException;
-use App\Models\Branch;
 use App\Models\LeadMaster;
 use App\Models\SalesLead;
 use App\Models\User;
-use App\Services\SalesLeadSheetOptionService;
-use App\Services\SalesSheetIdentityService;
+use App\Services\CoordinatorLeadTeamService;
 use App\Services\WorkspaceAccessService;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
-use Illuminate\Validation\ValidationException;
 use Illuminate\Validation\Validator;
 
 abstract class SalesLeadRequest extends FormRequest
@@ -72,12 +68,17 @@ abstract class SalesLeadRequest extends FormRequest
             }
             if (! $owner || ! $owner->is_active || ! $owner->isSales() || ! $access->canViewBranch($owner, $branchId)) {
                 $validator->errors()->add('sales_user_id', 'Sales aktif harus berada di cabang yang dipilih.');
-            } elseif (! $owner->assignedProjects()->whereKey($this->integer('project_id'))->exists()) {
-                $validator->errors()->add('sales_user_id', 'Sales belum ditugaskan ke proyek yang dipilih.');
+            } elseif (! $owner->assignedProjects()
+                ->whereKey($this->integer('project_id'))
+                ->wherePivot('is_active', true)
+                ->where(fn ($query) => $query->whereNull('project_user.assignment_start_date')->orWhereDate('project_user.assignment_start_date', '<=', today()))
+                ->where(fn ($query) => $query->whereNull('project_user.assignment_end_date')->orWhereDate('project_user.assignment_end_date', '>=', today()))
+                ->exists()) {
+                $validator->errors()->add('sales_user_id', 'Sales belum memiliki penugasan aktif pada proyek yang dipilih.');
             }
 
-            if ($user->isSales() && (int) $owner?->id !== (int) $user->id) {
-                $validator->errors()->add('sales_user_id', 'Sales hanya dapat memilih dirinya sendiri.');
+            if ($user->hasPrimaryRole('sales_coordinator') && ! app(CoordinatorLeadTeamService::class)->contains($user, (int) $owner?->id)) {
+                $validator->errors()->add('sales_user_id', 'Sales harus anggota aktif tim koordinator.');
             }
 
             if ($this->lead()?->external_sync_id && (int) $this->lead()->branch_id !== $branchId) {
@@ -92,45 +93,6 @@ abstract class SalesLeadRequest extends FormRequest
                 }
             }
 
-            if ($validator->errors()->hasAny(['branch_id', 'project_id', 'sales_user_id'])) {
-                return;
-            }
-
-            $branch = Branch::find($branchId);
-            if (! $branch || blank($branch->sheet_id)) {
-                return;
-            }
-            try {
-                $options = app(SalesLeadSheetOptionService::class)->forBranch($branch);
-                $fields = [
-                    'id_promo' => ['promo', 'ID Promo tidak tersedia pada pilihan spreadsheet cabang.'],
-                    'source' => ['source', 'Sumber lead tidak tersedia pada pilihan spreadsheet cabang.'],
-                    'platform' => ['channel', 'Kanal masuk tidak tersedia pada pilihan spreadsheet cabang.'],
-                    'campaign_name' => ['activity', 'Aktivitas lead tidak tersedia pada pilihan spreadsheet cabang.'],
-                ];
-                foreach ($fields as $field => [$optionKey, $message]) {
-                    $exact = $this->filled($field)
-                        ? app(SalesLeadSheetOptionService::class)->exactOption($options[$optionKey], $this->string($field)->toString())
-                        : null;
-                    if ($this->filled($field) && $exact === null) {
-                        $validator->errors()->add($field, $message);
-                    } elseif ($exact !== null) {
-                        // Persist the workbook's exact spelling/casing, not the browser-submitted variant.
-                        $this->merge([$field => $exact]);
-                        $validator->setData(array_replace($validator->getData(), [$field => $exact]));
-                    }
-                }
-                app(SalesSheetIdentityService::class)->projectValue($project, $options);
-                app(SalesSheetIdentityService::class)->salesValue($branch, $owner, $options);
-            } catch (ValidationException $exception) {
-                foreach ($exception->errors() as $field => $messages) {
-                    foreach ($messages as $message) {
-                        $validator->errors()->add($field, $message);
-                    }
-                }
-            } catch (SalesLeadSpreadsheetContractException $exception) {
-                $validator->errors()->add('spreadsheet', $exception->getMessage());
-            }
         }];
     }
 

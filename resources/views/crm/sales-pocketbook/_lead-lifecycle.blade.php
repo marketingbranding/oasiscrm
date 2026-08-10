@@ -8,7 +8,7 @@
     $freelance = $lead->freelanceLinks->firstWhere('status', 'completed');
     $akad = $lead->akadLinks->firstWhere('status', 'completed');
     $autoOpenSiteVisit = request('lifecycle_action') === 'site_visit' && request()->integer('lead') === $lead->id;
-    $sheetCapabilities = $lifecycleCapabilitiesByBranch->get($lead->branch_id, []);
+    $sheetCapabilities = $lifecycleCapabilitiesByBranch[$lead->branch_id] ?? [];
     $siteVisitAvailable = ($sheetCapabilities['data_ceklok'] ?? false) === true;
     $consumerSheet = $lead->project?->is_nup_eligible ? 'data_konsumen_nup' : 'data_konsumen';
     $consumerAvailable = ($sheetCapabilities[$consumerSheet] ?? false) === true;

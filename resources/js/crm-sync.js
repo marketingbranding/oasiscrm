@@ -349,7 +349,7 @@ export default function registerSync(Alpine) {
             },
 
             metricLabel(key) {
-                return { checked: 'data diperiksa', created: 'dibuat', updated: 'diperbarui', unchanged: 'tidak berubah', deleted: 'dihapus', failed: 'gagal' }[key] || key.replaceAll('_', ' ');
+                return { checked: 'data diperiksa', created: 'dibuat', updated: 'lead diperbarui', unchanged: 'tidak berubah', deleted: 'dihapus', failed: 'gagal', imported: 'lead diimpor', linked: 'lead ditautkan', unresolved: 'lead perlu diperiksa', ignored_deleted: 'baris terhapus diabaikan' }[key] || key.replaceAll('_', ' ');
             },
 
             get terminal() {

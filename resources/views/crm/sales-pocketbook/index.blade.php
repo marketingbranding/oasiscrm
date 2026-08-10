@@ -116,7 +116,7 @@
         <x-crm.sync-status-panel module-key="sales-lead-lifecycle" :scope-name="$syncBranch->name" :branch-id="$syncBranch->id" :status="$lifecycleSyncStatus">
             <div class="flex flex-wrap items-center gap-2">
                 @if($canReconcile)<x-crm.button variant="text" size="sm" :href="route('sales-pocketbook.lifecycle-reconciliations.index', ['branch_id' => $syncBranch->id, 'status' => 'open'])">Rekonsiliasi ({{ $reconciliationCount }})</x-crm.button>@endif
-                <x-crm.sync-control module-key="sales-lead-lifecycle" module-name="Sinkronisasi Lead" :scope-name="$syncBranch->name" :sync-url="route('sales-pocketbook.lifecycle-sync')" :status-url="route('sales-pocketbook.lifecycle-sync.status', ['branch_id' => $syncBranch->id])" :status="$lifecycleSyncStatus" :branch-id="$syncBranch->id" :can-sync="$canLifecycleSync" />
+                <x-crm.sync-control module-key="sales-lead-lifecycle" module-name="{{ $monitoring ? 'Sinkronisasi Lead Cabang' : 'Sinkronisasi Lead Saya' }}" :scope-name="$syncBranch->name" :sync-url="route('sales-pocketbook.lifecycle-sync')" :status-url="route('sales-pocketbook.lifecycle-sync.status', ['branch_id' => $syncBranch->id])" :status="$lifecycleSyncStatus" :branch-id="$syncBranch->id" :can-sync="$canLifecycleSync" />
             </div>
         </x-crm.sync-status-panel>
     @endif

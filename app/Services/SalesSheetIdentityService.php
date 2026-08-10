@@ -55,6 +55,18 @@ class SalesSheetIdentityService
         return $identity;
     }
 
+    public function personalSpreadsheetValue(Branch $branch, User $user): string
+    {
+        $mapped = SalesSheetIdentity::query()->whereBelongsTo($branch)->whereBelongsTo($user)->value('spreadsheet_value');
+
+        return (string) ($mapped ?: $user->name);
+    }
+
+    public function spreadsheetValueEqualsPersonalValue(Branch $branch, User $user, string $spreadsheetValue): bool
+    {
+        return $this->options->exactOption([$this->personalSpreadsheetValue($branch, $user)], $spreadsheetValue) !== null;
+    }
+
     public function reverseSales(Branch $branch, LeadMaster $project, string $value): array
     {
         $mappedIds = SalesSheetIdentity::query()->where('branch_id', $branch->id)->get()

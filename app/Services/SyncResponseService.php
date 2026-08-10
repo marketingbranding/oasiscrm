@@ -72,6 +72,24 @@ class SyncResponseService
             ], fn ($value) => $value !== null);
         }
 
+        if ($module === 'sales-lead-lifecycle') {
+            return array_filter([
+                'checked' => $summary !== [] ? array_sum([
+                    $summary['imported'] ?? 0,
+                    $summary['updated'] ?? 0,
+                    $summary['linked'] ?? 0,
+                    $summary['unresolved'] ?? 0,
+                    $summary['ignored_deleted'] ?? 0,
+                ]) : null,
+                'imported' => $summary['imported'] ?? null,
+                'updated' => $summary['updated'] ?? null,
+                'linked' => $summary['linked'] ?? null,
+                'unresolved' => $summary['unresolved'] ?? null,
+                'ignored_deleted' => $summary['ignored_deleted'] ?? null,
+                'capabilities' => $summary['capabilities'] ?? null,
+            ], fn ($value) => $value !== null);
+        }
+
         return ['checked' => array_sum(array_filter($summary, 'is_numeric'))];
     }
 }

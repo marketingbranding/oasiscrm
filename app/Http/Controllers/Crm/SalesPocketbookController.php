@@ -206,19 +206,26 @@ class SalesPocketbookController extends Controller
             && $this->workspaceAccess->canViewBranch($user, $syncBranch)
             && $this->workspaceAccess->canSyncBranch($user, $syncBranch);
         $lifecycleSyncStatus = $syncBranch
-            ? SalesLeadLifecycleSyncStatus::query()->where('branch_id', $syncBranch->id)->where('scope', SalesLeadSyncService::SCOPE)->first()
+            ? SalesLeadLifecycleSyncStatus::query()->where('branch_id', $syncBranch->id)->where('scope', SalesLeadSyncService::scopeFor($user))->first()
             : null;
         $reconciliationCount = $canReconcile
             ? SalesLeadLifecycleReconciliationItem::query()->where('branch_id', $syncBranch->id)->where('status', 'open')->whereIn('entity_type', ['lead', 'lead_status'])->count()
             : 0;
-        $lifecycleCapabilitiesByBranch = SalesLeadLifecycleSyncStatus::query()
+        $lifecycleCapabilitiesByBranch = [];
+        foreach (SalesLeadLifecycleSyncStatus::query()
             ->whereIn('branch_id', $branches->pluck('id'))
-            ->where('scope', SalesLeadSyncService::SCOPE)
+            ->where('scope', SalesLeadSyncService::branchScope())
             ->whereIn('status', ['success', 'partial_success'])
-            ->get()
-            ->mapWithKeys(fn (SalesLeadLifecycleSyncStatus $status) => [
-                $status->branch_id => $status->summary['capabilities'] ?? [],
-            ]);
+            ->get() as $status) {
+            $lifecycleCapabilitiesByBranch[$status->branch_id] = $status->summary['capabilities'] ?? [];
+        }
+        foreach (SalesLeadLifecycleSyncStatus::query()
+            ->whereIn('branch_id', $branches->pluck('id'))
+            ->where('scope', 'like', SalesLeadSyncService::SCOPE_USER_PREFIX.'%')
+            ->whereIn('status', ['success', 'partial_success'])
+            ->get() as $status) {
+            $lifecycleCapabilitiesByBranch[$status->branch_id] ??= $status->summary['capabilities'] ?? [];
+        }
         $coordinators = User::query()->where('is_active', true)->whereIn('id', $visibleSalesIds)
             ->whereHas('role', fn (Builder $query) => $query->whereIn('slug', ['sales_coordinator', 'supervisor', 'manager', 'branch_manager']))
             ->orderBy('name')->get(['id', 'name', 'branch_id']);

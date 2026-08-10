@@ -25,7 +25,7 @@ class SalesLeadLifecycleSyncController extends Controller
     {
         $branch = $this->authorizedSyncBranch($request);
         $result = $service->sync($branch, $request->user());
-        $status = SalesLeadLifecycleSyncStatus::query()->where('branch_id', $branch->id)->where('scope', SalesLeadSyncService::SCOPE)->first();
+        $status = $this->personalOrBranchStatus($branch, $request);
         $response = $this->responses->make('sales-lead-lifecycle', $this->scope($branch), $status, $result);
 
         return response()->json($response, $result['ok'] ? 200 : ($result['status'] === 'syncing' ? 409 : 422));
@@ -35,7 +35,7 @@ class SalesLeadLifecycleSyncController extends Controller
     {
         $branch = $this->viewableBranch($request);
 
-        $status = SalesLeadLifecycleSyncStatus::query()->where('branch_id', $branch->id)->where('scope', SalesLeadSyncService::SCOPE)->first();
+        $status = $this->personalOrBranchStatus($branch, $request);
 
         return response()->json($this->responses->make('sales-lead-lifecycle', $this->scope($branch), $status));
     }
@@ -60,6 +60,14 @@ class SalesLeadLifecycleSyncController extends Controller
             ->paginate(50);
 
         return response()->json($items);
+    }
+
+    private function personalOrBranchStatus(Branch $branch, Request $request): ?SalesLeadLifecycleSyncStatus
+    {
+        return SalesLeadLifecycleSyncStatus::query()
+            ->where('branch_id', $branch->id)
+            ->where('scope', SalesLeadSyncService::scopeFor($request->user()))
+            ->first();
     }
 
     private function authorizedBranch(Request $request, string $permission): Branch

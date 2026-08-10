@@ -324,6 +324,7 @@ class SalesLeadLifecycleSyncTest extends TestCase
         $salesUser->assignedProjects()->attach($project, ['is_active' => true, 'assignment_start_date' => today()->subDay()]);
         SalesLeadLifecycleSyncStatus::query()->create([
             'branch_id' => $branch->id,
+            'scope' => SalesLeadSyncService::userScope($salesUser->id),
             'status' => 'partial_success',
             'summary' => ['imported' => 1, 'updated' => 0, 'linked' => 0, 'unresolved' => 1, 'capabilities' => ['lead' => true]],
         ]);
@@ -337,6 +338,7 @@ class SalesLeadLifecycleSyncTest extends TestCase
         $this->actingAs($salesUser)->postJson(route('sales-pocketbook.lifecycle-sync'), ['branch_id' => $branch->id])
             ->assertOk()->assertJsonPath('status', 'partial_success');
         $this->actingAs($salesUser)->postJson(route('sales-pocketbook.lifecycle-sync'), ['branch_id' => $otherBranch->id])->assertForbidden();
+        $this->actingAs($salesUser)->getJson(route('sales-pocketbook.lifecycle-reconciliations.index', ['branch_id' => $branch->id]))->assertForbidden();
         $this->assertFalse($salesUser->hasPermission('database.sync'));
 
         $supplemental = User::factory()->create([

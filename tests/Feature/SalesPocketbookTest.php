@@ -17,6 +17,7 @@ use App\Services\OptimisticLockService;
 use App\Services\PhoneNormalizationService;
 use App\Services\SalesLeadSheetOptionService;
 use App\Services\SalesLeadSpreadsheetWriter;
+use App\Services\SalesLeadSyncService;
 use App\Services\SalesSheetIdentityService;
 use App\ValueObjects\SalesLeadSpreadsheetWriteResult;
 use Carbon\Carbon;
@@ -1023,6 +1024,7 @@ class SalesPocketbookTest extends TestCase
         $lead->update(['current_status' => SalesLeadStatus::SlikCheck]);
         SalesLeadLifecycleSyncStatus::query()->create([
             'branch_id' => $lead->branch_id,
+            'scope' => SalesLeadSyncService::userScope($sales->id),
             'status' => 'success',
             'summary' => ['capabilities' => ['data_konsumen_nup' => true]],
         ]);

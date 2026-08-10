@@ -27,7 +27,24 @@ class SalesLeadSyncService
      * read or required here, and downstream reconciliation never influences the
      * health reported for the normal Buku Saku Sales sync.
      */
-    public const SCOPE = 'lead';
+    public const SCOPE_BRANCH = 'lead:branch';
+
+    public const SCOPE_USER_PREFIX = 'lead:user:';
+
+    public static function branchScope(): string
+    {
+        return self::SCOPE_BRANCH;
+    }
+
+    public static function userScope(int $userId): string
+    {
+        return self::SCOPE_USER_PREFIX.$userId;
+    }
+
+    public static function scopeFor(?User $actor): string
+    {
+        return $actor !== null && $actor->isSales() ? self::userScope($actor->id) : self::branchScope();
+    }
 
     private const REQUIRED_HEADERS = ['id_lead', 'tanggal_lead', 'nama_konsumen', 'proyek', 'sales_pic', 'status_lead', 'sumber_lead', 'kanal_masuk', 'aktivitas_lead'];
 
@@ -40,11 +57,13 @@ class SalesLeadSyncService
 
     public function sync(Branch $branch, ?User $actor = null): array
     {
+        $scope = self::scopeFor($actor);
+
         // Same lock as the full lifecycle run so lead rows are never imported concurrently.
-        $result = $this->locks->run('sales-lead-lifecycle:branch:'.$branch->id, function () use ($branch, $actor): array {
+        $result = $this->locks->run('sales-lead-lifecycle:branch:'.$branch->id, function () use ($branch, $actor, $scope): array {
             $operationUuid = (string) Str::uuid();
             $status = SalesLeadLifecycleSyncStatus::query()->updateOrCreate(
-                ['branch_id' => $branch->id, 'scope' => self::SCOPE],
+                ['branch_id' => $branch->id, 'scope' => $scope],
                 ['status' => 'syncing', 'operation_uuid' => $operationUuid, 'message' => null, 'summary' => null, 'started_at' => now(), 'finished_at' => null, 'duration_ms' => null, 'initiated_by' => $actor?->id],
             );
 
@@ -157,11 +176,30 @@ class SalesLeadSyncService
 
     private function reconcileBranch(Branch $branch, array $rows, string $operationUuid, ?User $actor): array
     {
-        SalesLeadLifecycleReconciliationItem::query()
+        // Personal Sales sync processes ONLY rows whose sales_pic belongs to the actor.
+        // Unrelated Sales rows (and rows with unknown sales) are excluded entirely:
+        // they are never imported, never reconciled, and never count toward a
+        // Sales' personal summary. Historical/unmapped Sales problems remain
+        // admin/branch reconciliation concerns handled by the branch sync.
+        $actorSales = $actor !== null && $actor->isSales() ? $actor : null;
+        if ($actorSales !== null) {
+            $rows = array_values(array_filter(
+                $rows,
+                fn (array $row) => $this->sheetIdentities->spreadsheetValueEqualsPersonalValue($branch, $actorSales, (string) ($row['sales_pic'] ?? '')),
+            ));
+        }
+
+        $resolvedQuery = SalesLeadLifecycleReconciliationItem::query()
             ->where('branch_id', $branch->id)
             ->where('status', 'open')
-            ->whereIn('entity_type', ['lead', 'lead_status'])
-            ->update(['status' => 'resolved', 'resolved_at' => now(), 'resolved_by' => $actor?->id]);
+            ->whereIn('entity_type', ['lead', 'lead_status']);
+        if ($actorSales !== null) {
+            // A personal sync resolves only items attributable to the actor's own
+            // leads. Un-attributable branch/admin items (for example sales_not_found
+            // for unknown historical Sales) are left untouched.
+            $resolvedQuery->whereHas('salesLead', fn ($query) => $query->where('sales_user_id', $actorSales->id));
+        }
+        $resolvedQuery->update(['status' => 'resolved', 'resolved_at' => now(), 'resolved_by' => $actorSales?->id]);
 
         $summary = ['imported' => 0, 'updated' => 0, 'linked' => 0, 'unresolved' => 0, 'ignored_deleted' => 0, 'capabilities' => ['lead' => true]];
         $remoteLeadRows = collect($rows);

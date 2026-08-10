@@ -291,7 +291,8 @@ class SalesLeadLifecycleSyncTest extends TestCase
         $salesUser->roles()->attach(Role::query()->where('slug', 'pusat')->firstOrFail());
         $salesUser->assignedProjects()->attach($project, ['is_active' => true]);
         $this->assertFalse($salesUser->hasPermission('sales_pocketbook.sync'));
-        foreach (['supervisor', 'manager', 'branch_manager', 'pusat', 'admin'] as $roleSlug) {
+        $this->assertFalse(Role::query()->where('slug', 'supervisor')->firstOrFail()->permissions()->whereIn('slug', ['sales_pocketbook.sync', 'sales_pocketbook.reconcile'])->exists());
+        foreach (['manager', 'branch_manager', 'pusat', 'admin'] as $roleSlug) {
             $this->assertTrue(Role::query()->where('slug', $roleSlug)->firstOrFail()->permissions()->where('slug', 'sales_pocketbook.sync')->exists(), $roleSlug);
             $this->assertTrue(Role::query()->where('slug', $roleSlug)->firstOrFail()->permissions()->where('slug', 'sales_pocketbook.reconcile')->exists(), $roleSlug);
         }

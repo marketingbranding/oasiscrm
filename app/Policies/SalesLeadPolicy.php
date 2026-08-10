@@ -39,7 +39,7 @@ class SalesLeadPolicy
 
     public function create(User $user): bool
     {
-        if ($user->isSales()) {
+        if ($user->hasPrimaryRole('supervisor') || $user->isSales()) {
             return false;
         }
 
@@ -55,7 +55,7 @@ class SalesLeadPolicy
 
     public function update(User $user, SalesLead $lead): bool
     {
-        if ($user->isSales()) {
+        if ($user->hasPrimaryRole('supervisor') || $user->isSales()) {
             return false;
         }
 

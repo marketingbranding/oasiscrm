@@ -288,7 +288,7 @@ class User extends Authenticatable implements MustVerifyEmail
 
     public function landingRouteName(): string
     {
-        return $this->hasPrimaryRole(['sales', 'sales_coordinator']) ? 'sales-pocketbook.index' : 'dashboard';
+        return $this->hasPrimaryRole(['sales', 'sales_coordinator', 'supervisor']) ? 'sales-pocketbook.index' : 'dashboard';
     }
 
     public function canViewAllBranches(): bool

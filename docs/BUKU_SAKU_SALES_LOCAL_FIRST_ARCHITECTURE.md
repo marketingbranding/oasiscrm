@@ -55,7 +55,23 @@ The relationship must use user IDs, database constraints, active-account checks,
 
 Exact table name, columns, indexes, lifecycle fields, and migration behavior must be defined by the implementing migration and models. Do not reuse Google `data_sales` as this pivot and do not infer the relationship during requests.
 
-## 5. Primary Project Resolution
+## 5. Supervisor Monitoring Tim
+
+Supervisor Monitoring Tim is a primary read-only branch of the Buku Saku Sales flow. It uses the same shared OASIS application URL and provides:
+
+- team KPI summaries;
+- attention items requiring supervisor review;
+- coordinator and Sales monitoring;
+- Sales Agenda exports;
+- lead exports.
+
+Visible team membership is resolved from `supervisor_user_id` first, then from the current `sales_coordinator_sales` relationship, and is always intersected with the supervisor's authorized organization scope. Names, spreadsheet values, and historical relationships must not expand this scope.
+
+This branch permits no synchronization, editing, or operational input. All monitoring and exports read OASIS data only. Google and `data_sales` have no runtime role in KPI calculation, attention items, hierarchy resolution, monitoring, or exports.
+
+Google Login remains Phase 2. Its shared application URL and authentication boundary are unchanged by Supervisor Monitoring Tim.
+
+## 6. Primary Project Resolution
 
 Lead delivery requires one unambiguous active project for the selected Sales user in the applicable branch and assignment window.
 
@@ -76,7 +92,7 @@ Blocked cases include:
 
 Resolution must not choose the first database row, newest row, alphabetically first project, project text from Google, or another branch's project.
 
-## 6. Google Lead Push-Only Contract
+## 7. Google Lead Push-Only Contract
 
 Only the branch Google `lead` tab participates at runtime. Workbook resolution follows the lead's OASIS branch and that branch's configured spreadsheet ID. No fallback to another branch or shared reference workbook is allowed.
 
@@ -86,7 +102,7 @@ This architecture does not use runtime pull synchronization to create, update, a
 
 `data_sales` is excluded from runtime reads, writes, validation, capability checks, reconciliation, and identity resolution. Historical spreadsheet data may be handled only by an explicit, offline migration or audit process with separate validation and authorization.
 
-## 7. Google Login Phase 2
+## 8. Google Login Phase 2
 
 Google Login is Phase 2 and uses Laravel Socialite. It is an authentication convenience, not account provisioning or invitation activation.
 
@@ -104,7 +120,7 @@ Rules:
 
 The OAuth callback must use Socialite state validation and server-side configuration. Account recovery, invitation activation, and password reset remain separate OASIS flows.
 
-## 8. Failure and Security Boundaries
+## 9. Failure and Security Boundaries
 
 Local authorization and validation run before any Google push. Explicit inaccessible branch, project, coordinator, or Sales IDs are denied rather than replaced with a fallback.
 

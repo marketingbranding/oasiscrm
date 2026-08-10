@@ -2,10 +2,14 @@
 
 namespace Tests\Feature;
 
+use App\Http\Controllers\Crm\SupervisorSalesPocketbookController;
 use App\Models\Changelog;
 use App\Models\Role;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Route;
+use Mockery;
 use Tests\TestCase;
 
 class BukuSakuRolePermissionTest extends TestCase
@@ -40,16 +44,47 @@ class BukuSakuRolePermissionTest extends TestCase
     {
         $salesRole = Role::query()->where('slug', 'sales')->firstOrFail();
         $coordinatorRole = Role::query()->where('slug', 'sales_coordinator')->firstOrFail();
+        $supervisorRole = Role::query()->where('slug', 'supervisor')->firstOrFail();
         $staffRole = Role::query()->where('slug', 'staff')->firstOrFail();
 
         $sales = User::factory()->create(['role_id' => $salesRole->id]);
         $coordinator = User::factory()->create(['role_id' => $coordinatorRole->id]);
+        $supervisor = User::factory()->create(['role_id' => $supervisorRole->id]);
         $staff = User::factory()->create(['role_id' => $staffRole->id]);
-        $staff->roles()->attach($coordinatorRole);
+        $staff->roles()->attach([$coordinatorRole->id, $supervisorRole->id]);
 
         $this->assertSame('sales-pocketbook.index', $sales->landingRouteName());
         $this->assertSame('sales-pocketbook.index', $coordinator->landingRouteName());
+        $this->assertSame('sales-pocketbook.index', $supervisor->landingRouteName());
         $this->assertSame('dashboard', $staff->landingRouteName());
+    }
+
+    public function test_shared_pocketbook_dispatches_only_primary_supervisor(): void
+    {
+        $supervisorRole = Role::query()->where('slug', 'supervisor')->firstOrFail();
+        $staffRole = Role::query()->where('slug', 'staff')->firstOrFail();
+        $supervisor = User::factory()->create(['role_id' => $supervisorRole->id, 'password_changed_at' => now()]);
+        $staff = User::factory()->create(['role_id' => $staffRole->id, 'password_changed_at' => now()]);
+        $staff->roles()->attach($supervisorRole);
+
+        $controller = $this->mock(SupervisorSalesPocketbookController::class);
+        $controller->shouldReceive('index')->once()->with(Mockery::type(Request::class))->andReturn(view('auth.login'));
+
+        $this->actingAs($supervisor)->get(route('sales-pocketbook.index'))->assertOk();
+        $this->actingAs($staff)->get(route('sales-pocketbook.index'))->assertForbidden();
+    }
+
+    public function test_supervisor_export_routes_are_static_and_use_export_permission_middleware(): void
+    {
+        foreach ([
+            'sales-pocketbook.supervisor-monitoring.agenda-export',
+            'sales-pocketbook.supervisor-monitoring.lead-export',
+        ] as $name) {
+            $route = Route::getRoutes()->getByName($name);
+
+            $this->assertNotNull($route);
+            $this->assertContains('permission:sales_pocketbook.export', $route->gatherMiddleware());
+        }
     }
 
     public function test_permission_description_and_changelog_are_deployed_once(): void

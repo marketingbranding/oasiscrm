@@ -34,6 +34,7 @@ use App\Http\Controllers\Crm\SalesLeadOptionController;
 use App\Http\Controllers\Crm\SalesLeadStageController;
 use App\Http\Controllers\Crm\SalesPocketbookController;
 use App\Http\Controllers\Crm\SalesSheetIdentityController;
+use App\Http\Controllers\Crm\SupervisorSalesPocketbookController;
 use App\Http\Controllers\Crm\SystemHealthController;
 use App\Http\Controllers\ProfileController;
 use App\Models\Comment;
@@ -68,6 +69,8 @@ Route::middleware(['auth', 'active', 'verified', 'password.changed', 'operationa
     Route::post('/comments/{comment}/moderate', [CommentModerationController::class, 'store'])->middleware(['permission:comments.moderate', 'throttle:60,1'])->name('comments.moderate');
 
     Route::get('/buku-saku-sales', [SalesPocketbookController::class, 'index'])->name('sales-pocketbook.index');
+    Route::get('/buku-saku-sales/supervisor/agenda-export', [SupervisorSalesPocketbookController::class, 'agendaExport'])->middleware('permission:sales_pocketbook.export')->name('sales-pocketbook.supervisor-monitoring.agenda-export');
+    Route::get('/buku-saku-sales/supervisor/lead-export', [SupervisorSalesPocketbookController::class, 'leadExport'])->middleware('permission:sales_pocketbook.export')->name('sales-pocketbook.supervisor-monitoring.lead-export');
     Route::get('/buku-saku-sales/export', [SalesPocketbookController::class, 'export'])->middleware('permission:sales_pocketbook.export')->name('sales-pocketbook.export');
     Route::post('/buku-saku-sales/lifecycle-sync', [SalesLeadLifecycleSyncController::class, 'sync'])->middleware('permission:sales_pocketbook.sync')->name('sales-pocketbook.lifecycle-sync');
     Route::get('/buku-saku-sales/lifecycle-sync/status', [SalesLeadLifecycleSyncController::class, 'status'])->name('sales-pocketbook.lifecycle-sync.status');

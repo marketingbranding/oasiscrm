@@ -43,6 +43,10 @@ class SalesPocketbookController extends Controller
             return app(CoordinatorSalesLeadWorkspaceController::class)->index($request);
         }
 
+        if ($user->hasPrimaryRole('supervisor')) {
+            return app(SupervisorSalesPocketbookController::class)->index($request);
+        }
+
         $this->authorize('viewAny', SalesLead::class);
         $reminderAction = $request->query('reminder_action');
         if ($user->isSales() && in_array($reminderAction, ['lead', 'agenda', 'result'], true)) {
@@ -302,7 +306,7 @@ class SalesPocketbookController extends Controller
 
     public function export(Request $request)
     {
-        abort_if($request->user()->hasPrimaryRole(['sales', 'sales_coordinator']), 403);
+        abort_if($request->user()->hasPrimaryRole(['sales', 'sales_coordinator', 'supervisor']), 403);
         abort_unless($request->user()->hasPermission('sales_pocketbook.export'), 403);
         $this->authorize('viewAny', SalesLead::class);
         $request->validate($this->filterRules());

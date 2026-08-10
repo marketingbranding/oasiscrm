@@ -9,6 +9,7 @@ use App\Models\Role;
 use App\Models\SalesCoordinatorSales;
 use App\Models\SalesLead;
 use App\Models\User;
+use App\Services\OrganizationScopeService;
 use App\Services\SupervisorSalesMonitoringService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
@@ -63,6 +64,10 @@ class SupervisorSalesPocketbookTest extends TestCase
         $this->sales2 = $this->user('sales', 'Sales 2', $this->branch, $this->coordinatorA);
         $this->sales3 = $this->user('sales', 'Sales 3', $this->branch, $this->coordinatorB);
         $this->outsideSales = $this->user('sales', 'Sales Luar', $this->outsideBranch, $this->otherCoordinator);
+        foreach ([$this->sales1, $this->sales2, $this->sales3] as $sales) {
+            $sales->assignedProjects()->attach($this->project, ['is_primary' => true, 'is_active' => true]);
+        }
+        $this->outsideSales->assignedProjects()->attach($this->outsideProject, ['is_primary' => true, 'is_active' => true]);
 
         foreach ([[$this->coordinatorA, $this->sales1], [$this->coordinatorA, $this->sales2], [$this->coordinatorB, $this->sales3], [$this->otherCoordinator, $this->outsideSales]] as [$coordinator, $sales]) {
             SalesCoordinatorSales::create(['coordinator_user_id' => $coordinator->id, 'sales_user_id' => $sales->id]);
@@ -92,6 +97,7 @@ class SupervisorSalesPocketbookTest extends TestCase
 
     public function test_team_uses_current_direct_hierarchy_access_and_unique_mappings(): void
     {
+        $this->assertContains($this->project->id, app(OrganizationScopeService::class)->projectIds($this->supervisor, 'sales_pocketbook', 'view'));
         $data = $this->resolve(['period' => 'today']);
 
         $this->assertSame([$this->coordinatorA->id, $this->coordinatorB->id], $data['coordinators']->pluck('id')->sort()->values()->all());
@@ -168,6 +174,61 @@ class SupervisorSalesPocketbookTest extends TestCase
 
         $response = $this->actingAs($this->supervisor)->get(route('sales-pocketbook.index', ['sales_id' => $this->sales2->id]));
         $response->assertOk()->assertSee('Belum ada agenda pada periode ini.')->assertSee('Belum ada lead pada periode ini.');
+    }
+
+    public function test_record_scope_excludes_same_sales_records_outside_allowed_project_and_branch_everywhere(): void
+    {
+        $outsideProjectSameBranch = LeadMaster::create([
+            'branch_id' => $this->branch->id,
+            'project_name' => 'Proyek Tidak Ditugaskan',
+            'is_active' => true,
+        ]);
+        $allowedAgenda = $this->agenda($this->sales1, 'AGENDA_SCOPE_ALLOWED', '2026-08-10');
+        $outsideProjectAgenda = $this->agenda($this->sales1, 'AGENDA_SCOPE_PROJECT_HIDDEN', '2026-08-10');
+        $outsideProjectAgenda->update(['sales_project_id' => $outsideProjectSameBranch->id]);
+        $outsideBranchAgenda = $this->agenda($this->sales1, 'AGENDA_SCOPE_BRANCH_HIDDEN', '2026-08-10');
+        $outsideBranchAgenda->update(['branch_id' => $this->outsideBranch->id, 'sales_project_id' => $this->outsideProject->id]);
+        $allowedLead = $this->lead($this->sales1, 'LEAD_SCOPE_ALLOWED', '2026-08-10', 'pending_create');
+        $outsideProjectLead = $this->lead($this->sales1, 'LEAD_SCOPE_PROJECT_HIDDEN', '2026-08-10', 'sync_failed');
+        $outsideProjectLead->update(['project_id' => $outsideProjectSameBranch->id]);
+        $outsideBranchLead = $this->lead($this->sales1, 'LEAD_SCOPE_BRANCH_HIDDEN', '2026-08-10', 'pending_update');
+        $outsideBranchLead->update(['branch_id' => $this->outsideBranch->id, 'project_id' => $this->outsideProject->id]);
+
+        $data = $this->resolve(['period' => 'today', 'sales_id' => $this->sales1->id]);
+        $this->assertSame([1, 1, 0, 0], [$data['kpi']['agenda_count'], $data['kpi']['lead_count'], $data['kpi']['pending_update'], $data['kpi']['sync_failed']]);
+        $this->assertSame([$allowedAgenda->id], $data['agendas']->pluck('id')->all());
+        $this->assertSame([$allowedLead->id], $data['leads']->pluck('id')->all());
+
+        $response = $this->actingAs($this->supervisor)->get(route('sales-pocketbook.index', ['period' => 'today', 'sales_id' => $this->sales1->id]))->assertOk();
+        $response->assertSee($allowedAgenda->title)->assertSee($allowedLead->customer_name)
+            ->assertDontSee($outsideProjectAgenda->title)->assertDontSee($outsideBranchAgenda->title)
+            ->assertDontSee($outsideProjectLead->customer_name)->assertDontSee($outsideBranchLead->customer_name);
+
+        $agendaResponse = $this->actingAs($this->supervisor)->get(route('sales-pocketbook.supervisor-monitoring.agenda-export', ['period' => 'today', 'sales_id' => $this->sales1->id]))->assertOk();
+        $agendaPath = $agendaResponse->baseResponse->getFile()->getPathname();
+        $agendaSheet = IOFactory::load($agendaPath)->getActiveSheet();
+        $this->assertSame(2, $agendaSheet->getHighestDataRow());
+        $this->assertSame($allowedAgenda->title, $agendaSheet->getCell('F2')->getValue());
+        @unlink($agendaPath);
+
+        $leadResponse = $this->actingAs($this->supervisor)->get(route('sales-pocketbook.supervisor-monitoring.lead-export', ['period' => 'today', 'sales_id' => $this->sales1->id]))->assertOk();
+        $leadPath = $leadResponse->baseResponse->getFile()->getPathname();
+        $leadSheet = IOFactory::load($leadPath)->getActiveSheet();
+        $this->assertSame(2, $leadSheet->getHighestDataRow());
+        $this->assertSame($allowedLead->customer_name, $leadSheet->getCell('D2')->getValue());
+        @unlink($leadPath);
+    }
+
+    public function test_team_excludes_sales_without_current_assignment_in_allowed_projects(): void
+    {
+        $unassigned = $this->user('sales', 'Sales Tanpa Proyek Scope', $this->branch, $this->coordinatorA);
+        $unassigned->assignedProjects()->attach($this->outsideProject, ['is_primary' => true, 'is_active' => true]);
+        SalesCoordinatorSales::create(['coordinator_user_id' => $this->coordinatorA->id, 'sales_user_id' => $unassigned->id]);
+
+        $data = $this->resolve([]);
+
+        $this->assertNotContains($unassigned->id, $data['salesUsers']->pluck('id'));
+        $this->assertArrayNotHasKey($unassigned->id, $data['coordinatorNamesBySalesId']);
     }
 
     public function test_supervisor_exports_only_visible_period_records_without_duplicate_business_rows(): void

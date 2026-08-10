@@ -25,7 +25,8 @@ class SupervisorSalesMonitoringService
     public function resolve(User $actor, array $filters, bool $paginate = true): array
     {
         $period = $this->period($filters);
-        $team = $this->team($actor);
+        $scope = $this->scope($actor);
+        $team = $this->team($actor, $scope);
         $coordinatorId = filled($filters['coordinator_id'] ?? null) ? (int) $filters['coordinator_id'] : null;
         $salesId = filled($filters['sales_id'] ?? null) ? (int) $filters['sales_id'] : null;
 
@@ -42,10 +43,10 @@ class SupervisorSalesMonitoringService
         }
         $salesIds = $sales->pluck('id')->map(fn ($id) => (int) $id)->all();
 
-        $agendaAggregate = $this->agendaBase($salesIds, $period)
+        $agendaAggregate = $this->agendaBase($salesIds, $period, $scope)
             ->selectRaw("owner_user_id, COUNT(*) AS total, SUM(CASE WHEN status = 'done' THEN 1 ELSE 0 END) AS done, SUM(CASE WHEN COALESCE(activity_result, '') = '' AND status NOT IN ('cancelled', 'rescheduled') THEN 1 ELSE 0 END) AS missing")
             ->groupBy('owner_user_id')->get()->keyBy('owner_user_id');
-        $leadAggregate = $this->leadBase($salesIds, $period)
+        $leadAggregate = $this->leadBase($salesIds, $period, $scope)
             ->selectRaw("sales_user_id, COUNT(*) AS total, SUM(CASE WHEN sync_status = 'pending_create' THEN 1 ELSE 0 END) AS pending_create, SUM(CASE WHEN sync_status = 'pending_update' THEN 1 ELSE 0 END) AS pending_update, SUM(CASE WHEN sync_status = 'sync_failed' THEN 1 ELSE 0 END) AS sync_failed, MAX(created_at) AS latest_created_at, MAX(lead_date) AS latest_lead_date")
             ->groupBy('sales_user_id')->get()->keyBy('sales_user_id');
 
@@ -71,7 +72,7 @@ class SupervisorSalesMonitoringService
             ];
         });
 
-        $latestAgendas = $this->agendaBase($salesIds, $period)->select('owner_user_id', DB::raw('MAX(scheduled_date) AS latest'))->groupBy('owner_user_id')->pluck('latest', 'owner_user_id');
+        $latestAgendas = $this->agendaBase($salesIds, $period, $scope)->select('owner_user_id', DB::raw('MAX(scheduled_date) AS latest'))->groupBy('owner_user_id')->pluck('latest', 'owner_user_id');
         $salesRows->each(fn ($row) => $row->latest_agenda = $latestAgendas[$row->id] ?? null);
 
         $coordinators = $team['coordinators'];
@@ -94,10 +95,10 @@ class SupervisorSalesMonitoringService
         });
 
         $agendas = ($salesId || ! $paginate)
-            ? $this->agendaBase($salesIds, $period)->with(['owner:id,name', 'branch:id,name', 'salesProject:id,project_name'])->orderByDesc('scheduled_date')->orderByDesc('id')
+            ? $this->agendaBase($salesIds, $period, $scope)->with(['owner:id,name', 'branch:id,name', 'salesProject:id,project_name'])->orderByDesc('scheduled_date')->orderByDesc('id')
             : null;
         $leads = ($salesId || ! $paginate)
-            ? $this->leadBase($salesIds, $period)->with(['sales:id,name', 'branch:id,name', 'project:id,project_name', 'leadSource:id,name'])->orderByDesc('lead_date')->orderByDesc('id')
+            ? $this->leadBase($salesIds, $period, $scope)->with(['sales:id,name', 'branch:id,name', 'project:id,project_name', 'leadSource:id,name'])->orderByDesc('lead_date')->orderByDesc('id')
             : null;
 
         return [
@@ -149,21 +150,44 @@ class SupervisorSalesMonitoringService
         return compact('key', 'from', 'to');
     }
 
-    private function team(User $actor): array
+    private function scope(User $actor): array
+    {
+        $workspaceBranchIds = $this->workspaceAccess->accessibleBranchIds($actor);
+
+        return [
+            'branch_ids' => array_values(array_intersect(
+                $this->organizationScope->branchIds($actor, 'sales_pocketbook', 'view'),
+                $workspaceBranchIds,
+            )),
+            'project_ids' => $this->organizationScope->projectIds($actor, 'sales_pocketbook', 'view'),
+        ];
+    }
+
+    private function team(User $actor, array $scope): array
     {
         $visibleIds = $this->organizationScope->visibleUserIds($actor, 'sales_pocketbook');
-        $branchIds = $this->workspaceAccess->accessibleBranchIds($actor);
+        $branchIds = $scope['branch_ids'];
+        $projectIds = $scope['project_ids'];
         $coordinators = User::query()->where('supervisor_user_id', $actor->id)->where('is_active', true)->whereIn('id', $visibleIds)
             ->whereHas('role', fn (Builder $query) => $query->where('slug', 'sales_coordinator'))->orderBy('name')->get(['id', 'name']);
         $mappings = SalesCoordinatorSales::query()->current()->withValidRoles()->whereIn('coordinator_user_id', $coordinators->pluck('id'))->whereIn('sales_user_id', $visibleIds)
             ->whereHas('sales', fn (Builder $query) => $query->where('is_active', true)->whereIn('branch_id', $branchIds))->with(['coordinator:id,name'])->get();
         $salesIds = $mappings->pluck('sales_user_id')->unique()->values();
         $today = today()->toDateString();
-        $sales = User::query()->whereIn('id', $salesIds)->with(['branch:id,name', 'assignedProjects' => fn ($query) => $query
-            ->where('lead_master.is_active', true)->whereIn('lead_master.branch_id', $branchIds)->wherePivot('is_active', true)
+        $currentProjectAssignment = fn ($query) => $query
+            ->where('lead_master.is_active', true)
+            ->whereIn('lead_master.id', $projectIds)
+            ->where('project_user.is_active', true)
             ->where(fn ($query) => $query->whereNull('project_user.assignment_start_date')->orWhereDate('project_user.assignment_start_date', '<=', $today))
-            ->where(fn ($query) => $query->whereNull('project_user.assignment_end_date')->orWhereDate('project_user.assignment_end_date', '>=', $today))
-            ->orderByDesc('project_user.is_primary')->orderBy('lead_master.project_name')])->orderBy('name')->get(['id', 'name', 'branch_id']);
+            ->where(fn ($query) => $query->whereNull('project_user.assignment_end_date')->orWhereDate('project_user.assignment_end_date', '>=', $today));
+        $sales = User::query()->whereIn('id', $salesIds)
+            ->whereHas('assignedProjects', $currentProjectAssignment)
+            ->with([
+                'branch:id,name',
+                'assignedProjects' => fn ($query) => $currentProjectAssignment($query)
+                    ->orderByDesc('project_user.is_primary')
+                    ->orderBy('lead_master.project_name'),
+            ])->orderBy('name')->get(['id', 'name', 'branch_id']);
         $sales->each(function (User $user) {
             $primary = $user->assignedProjects->where('pivot.is_primary', true);
             $project = $primary->count() === 1 ? $primary->first() : ($user->assignedProjects->count() === 1 ? $user->assignedProjects->first() : null);
@@ -180,16 +204,24 @@ class SupervisorSalesMonitoringService
         ];
     }
 
-    private function agendaBase(array $salesIds, array $period): Builder
+    private function agendaBase(array $salesIds, array $period, array $scope): Builder
     {
-        return ContentItem::query()->where('item_type', 'agenda')->where('agenda_type', ContentItem::SALES_AGENDA_TYPE)->whereIn('owner_user_id', $salesIds)
+        return ContentItem::query()
+            ->where('item_type', 'agenda')
+            ->where('agenda_type', ContentItem::SALES_AGENDA_TYPE)
+            ->whereIn('owner_user_id', $salesIds)
+            ->whereIn('branch_id', $scope['branch_ids'])
+            ->whereIn('sales_project_id', $scope['project_ids'])
             ->whereDate('scheduled_date', '>=', $period['from']->toDateString())
             ->whereDate('scheduled_date', '<=', $period['to']->toDateString());
     }
 
-    private function leadBase(array $salesIds, array $period): Builder
+    private function leadBase(array $salesIds, array $period, array $scope): Builder
     {
-        return SalesLead::query()->whereIn('sales_user_id', $salesIds)
+        return SalesLead::query()
+            ->whereIn('sales_user_id', $salesIds)
+            ->whereIn('branch_id', $scope['branch_ids'])
+            ->whereIn('project_id', $scope['project_ids'])
             ->whereDate('lead_date', '>=', $period['from']->toDateString())
             ->whereDate('lead_date', '<=', $period['to']->toDateString());
     }

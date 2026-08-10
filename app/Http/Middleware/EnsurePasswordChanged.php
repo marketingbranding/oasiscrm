@@ -12,14 +12,10 @@ class EnsurePasswordChanged
     {
         $user = $request->user();
 
-        if (!$user || $user->password_changed_at) {
-            return $next($request);
+        if ($user?->must_change_password) {
+            return redirect()->route('password.change');
         }
 
-        if ($request->routeIs('password.change', 'password.change.update', 'logout')) {
-            return $next($request);
-        }
-
-        return redirect()->route('password.change');
+        return $next($request);
     }
 }

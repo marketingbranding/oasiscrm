@@ -73,7 +73,7 @@ class OperationalMaintenanceService
         return User::query()
             ->where('account_status', AccountStatus::Active->value)
             ->whereNotNull('email_verified_at')
-            ->whereNotNull('password_changed_at')
+            ->where('must_change_password', false)
             ->whereHas('role', function (Builder $roleQuery) {
                 $roleQuery->where(function (Builder $permissionQuery) {
                     $permissionQuery->where('is_superadmin', true)

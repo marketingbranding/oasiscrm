@@ -19,6 +19,7 @@ class UserInvitationService
         return User::create(array_merge($attributes, [
             'password' => Str::random(64),
             'account_status' => AccountStatus::PendingInvitation,
+            'must_change_password' => false,
             'created_by' => $creator->id,
             'updated_by' => $creator->id,
         ]));
@@ -73,6 +74,7 @@ class UserInvitationService
                 'account_status' => AccountStatus::Active,
                 'activated_at' => now(),
                 'password_changed_at' => now(),
+                'must_change_password' => false,
                 'updated_by' => $invitation->invited_by,
             ])->save();
             $invitation->update(['accepted_at' => now()]);

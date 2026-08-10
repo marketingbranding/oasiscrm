@@ -130,7 +130,7 @@ class UserLifecycleService
             ->where('account_status', AccountStatus::Active->value)
             ->where('is_active', true)
             ->whereNotNull('email_verified_at')
-            ->whereNotNull('password_changed_at')
+            ->where('must_change_password', false)
             ->where(fn (Builder $query) => $query
                 ->whereHas('role', fn (Builder $role) => $role->where('is_superadmin', true))
                 ->orWhereHas('role.permissions', fn (Builder $permissions) => $permissions->where('slug', $permission)))
@@ -144,7 +144,7 @@ class UserLifecycleService
         return $user->account_status === AccountStatus::Active
             && $user->is_active
             && $user->email_verified_at !== null
-            && $user->password_changed_at !== null;
+            && ! $user->must_change_password;
     }
 
     private function deletePasswordResetTokens(string $email): void

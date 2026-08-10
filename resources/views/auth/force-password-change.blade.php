@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="csrf-token" content="{{ csrf_token() }}">
     @include('partials.pwa-head')
-    <title>Ubah Password - Oasis CRM</title>
+    <title>Ganti Password - Oasis CRM</title>
     <link rel="preconnect" href="https://fonts.bunny.net">
     <link href="https://fonts.bunny.net/css?family=figtree:400,500,600&display=swap" rel="stylesheet" />
     @vite(['resources/css/app.css', 'resources/js/app.js'])
@@ -20,25 +20,16 @@
         <div class="flex-1 flex items-center justify-center p-4">
             <div class="w-full max-w-md border-2 border-black bg-white">
                 <div class="bg-[#e91d2a] text-white px-4 py-3">
-                    <h1 class="font-['Arial_Black'] font-black text-lg uppercase">Ubah Password</h1>
+                    <h1 class="font-['Arial_Black'] font-black text-lg uppercase">Ganti Password</h1>
                 </div>
                 <div class="p-6">
                     <p class="text-sm font-['Times_New_Roman'] mb-4">
-                        Anda harus mengubah password sebelum dapat mengakses sistem.
+                        Anda menggunakan password sementara. Buat password baru untuk melanjutkan.
                     </p>
 
                     <form method="POST" action="{{ route('password.change.update') }}" class="space-y-4">
                         @csrf
                         @method('PUT')
-
-                        <div>
-                            <label for="current_password" class="font-[Helvetica] font-bold text-xs uppercase block mb-1">Password Saat Ini</label>
-                            <input id="current_password" type="password" name="current_password" required autocomplete="current-password"
-                                class="w-full border-2 border-black px-3 py-2 text-sm font-['Times_New_Roman'] bg-white rounded-none @error('current_password') border-[#e91d2a] @enderror">
-                            @error('current_password')
-                                <p class="text-[#e91d2a] text-xs mt-1 font-[Helvetica] font-bold">{{ $message }}</p>
-                            @enderror
-                        </div>
 
                         <div>
                             <label for="password" class="font-[Helvetica] font-bold text-xs uppercase block mb-1">Password Baru</label>

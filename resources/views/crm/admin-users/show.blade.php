@@ -10,7 +10,10 @@
         \App\Enums\AccountStatus::Inactive => 'inactive',
         default => 'archived',
     };
-    $statusLabel = str_replace('_', ' ', ucwords($user->account_status->value));
+    $statusLabel = match ($user->account_status) {
+        \App\Enums\AccountStatus::Active => 'Aktif',
+        default => str_replace('_', ' ', ucwords($user->account_status->value)),
+    };
 @endphp
 <div x-data="{
     lifecycleAction: null,
@@ -52,6 +55,7 @@
                 <div><dt class="font-bold">Atasan</dt><dd>{{ $user->supervisor?->name ?: '-' }}</dd></div>
                 @if($user->hasPrimaryRole('sales_coordinator'))<div><dt class="font-bold">Tim Sales Aktif</dt><dd>{{ $user->currentCoordinatorSales->pluck('name')->join(', ') ?: '-' }}</dd></div>@endif
                 <div><dt class="font-bold">Status Akun</dt><dd><x-crm.status-badge :variant="$statusVariant">{{ $statusLabel }}</x-crm.status-badge></dd></div>
+                @if($user->account_status === \App\Enums\AccountStatus::Active && $user->must_change_password)<div><dt class="font-bold">Akses</dt><dd><x-crm.status-badge variant="warning">Menunggu ganti password pertama</x-crm.status-badge><p class="mt-1 text-xs font-['Times_New_Roman']">Pengguna wajib mengganti password sementara sebelum mengakses OASIS.</p></dd></div>@endif
                 <div><dt class="font-bold">Email Terverifikasi</dt><dd>{{ $user->email_verified_at ? $user->email_verified_at->format('d/m/Y H:i') : 'Belum' }}</dd></div>
                 <div><dt class="font-bold">Password Diubah</dt><dd>{{ $user->password_changed_at ? $user->password_changed_at->format('d/m/Y H:i') : 'Belum' }}</dd></div>
                 <div><dt class="font-bold">Login Terakhir</dt><dd>{{ $user->last_login_at?->format('d/m/Y H:i') ?: '-' }}</dd></div>

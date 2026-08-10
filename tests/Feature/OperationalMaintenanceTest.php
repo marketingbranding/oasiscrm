@@ -201,7 +201,7 @@ class OperationalMaintenanceTest extends TestCase
     public function test_authentication_lifecycle_routes_remain_available(): void
     {
         $user = $this->user('staff');
-        $user->update(['password_changed_at' => null]);
+        $user->update(['password_changed_at' => null, 'must_change_password' => true]);
         $this->activateDirectly();
 
         $this->get(route('login'))->assertOk()->assertDontSee('HTTP 503');

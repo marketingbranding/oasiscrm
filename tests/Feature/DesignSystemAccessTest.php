@@ -85,7 +85,7 @@ class DesignSystemAccessTest extends TestCase
         $unverified = $this->user('superadmin', ['email_verified_at' => null]);
         $this->actingAs($unverified)->get(route('admin.design-system'))->assertRedirect(route('verification.notice'));
 
-        $forced = $this->user('superadmin', ['password_changed_at' => null]);
+        $forced = $this->user('superadmin', ['password_changed_at' => null, 'must_change_password' => true]);
         $this->actingAs($forced)->get(route('admin.design-system'))->assertRedirect(route('password.change'));
     }
 

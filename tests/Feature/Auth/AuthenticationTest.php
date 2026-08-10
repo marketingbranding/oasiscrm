@@ -76,10 +76,13 @@ class AuthenticationTest extends TestCase
     public function test_sales_forced_password_change_redirects_to_pocketbook(): void
     {
         $role = Role::firstOrCreate(['slug' => 'sales'], ['name' => 'Sales', 'is_superadmin' => false]);
-        $sales = User::factory()->create(['role_id' => $role->id, 'password_changed_at' => null]);
+        $sales = User::factory()->create([
+            'role_id' => $role->id,
+            'must_change_password' => true,
+            'password_changed_at' => null,
+        ]);
 
         $this->actingAs($sales)->put(route('password.change.update'), [
-            'current_password' => 'password',
             'password' => 'new-password-123',
             'password_confirmation' => 'new-password-123',
         ])->assertRedirect(route('sales-pocketbook.index'));

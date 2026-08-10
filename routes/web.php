@@ -243,7 +243,7 @@ Route::middleware(['auth', 'active', 'verified', 'password.changed', 'operationa
     });
 });
 
-Route::middleware(['auth', 'active', 'operational.maintenance'])->group(function () {
+Route::middleware(['auth', 'active', 'verified', 'password.changed', 'operational.maintenance'])->group(function () {
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
 });

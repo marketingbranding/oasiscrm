@@ -28,6 +28,7 @@ class IamSessionRecoveryHardeningTest extends TestCase
         return User::factory()->create([
             'role_id' => $role->id,
             'password_changed_at' => $passwordChanged ? now() : null,
+            'must_change_password' => ! $passwordChanged,
             'account_status' => AccountStatus::Active,
             'is_active' => true,
             'email_verified_at' => $verified ? now() : null,

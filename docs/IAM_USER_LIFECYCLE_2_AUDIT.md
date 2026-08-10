@@ -139,6 +139,25 @@ References from other tables to `users`:
 7. Guard: anonymized users cannot be edited or reset-access; update path aborts for anonymized targets.
 8. Focused tests + documentation + idempotent changelog.
 
+## Account Activation Modes
+
+User administration supports two distinct onboarding contracts:
+
+1. **Invitation activation** remains the normal path. The user starts as `pending_invitation`, receives a hashed, expiring invitation token, and becomes verified and `active` only after setting a password through the invitation flow.
+2. **Direct activation** is an exceptional operator-assisted path restricted to an actor whose **primary role** is `superadmin`. A supplemental superadmin role, a wildcard-equivalent permission set, or another administrative role must not authorize it.
+
+Direct activation must receive `must_change_password` as an explicit boolean. Its safe default is `false`; omission must never silently opt a user into forced-password behavior. Direct activation is permitted only when the submitted value is `true`, making administrator intent explicit and guaranteeing a mandatory password change on first login. The created user is immediately `active`, has `is_active=true`, `email_verified_at` and `activated_at` set, no active invitation, and `password_changed_at=null`. Existing `password.changed` middleware therefore permits authentication only into the mandatory password-change flow and blocks protected CRM access until the user replaces the initial credential.
+
+Role, branch, project, supervisor, and other organization assignments must commit in the same database transaction as user creation and activation. Any validation, authorization, assignment, or persistence failure rolls back the entire operation; no partially activated or partially assigned account may remain.
+
+Direct activation must not create an invitation, send invitation or credential email, or record plaintext passwords, temporary credentials, invitation tokens, or reset tokens in application logs, audit properties, notifications, URLs, or database fields. Passwords remain one-way hashes. Initial credential delivery, when operationally required, uses an approved out-of-band process outside OASIS.
+
+After direct activation, account recovery follows the existing authenticated **reset-access active path**. It must not issue or resurrect an invitation for an already active account. Reset access revokes applicable sessions/tokens, establishes a new hashed credential through the existing protected flow, leaves the account active, and restores the mandatory-change boundary until the user changes that credential.
+
+### Google Login Phase 2 compatibility
+
+Google Login remains Phase 2 authentication convenience, not provisioning or activation. It may authenticate only an existing eligible OASIS account and must preserve the account's activation mode, primary role, assignments, lifecycle state, and forced-password-change boundary. OAuth callback success must not activate pending/invited users, bypass `password.changed`, create assignments, consume invitations, or convert direct activation into invitation activation. No Google token may appear in logs, invitation/reset flows, or user-facing URLs.
+
 ## Behavior Preserved (Explicit)
 
 - Primary-role permission resolution; supplemental-role non-escalation; superadmin wildcard.

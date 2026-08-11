@@ -66,6 +66,28 @@ class SalesLeadLifecycleSyncTest extends TestCase
         ]);
     }
 
+    public function test_pull_maps_tatap_muka_and_records_idempotent_history(): void
+    {
+        [$branch, $project, $sales] = $this->context('sheet-face-to-face', 'Face Project', 'Face Sales');
+        $google = Mockery::mock(GoogleSheetsApiService::class);
+        $this->expectSheets($google, 'sheet-face-to-face', [
+            'lead' => $this->leadSheet('FACE-1', $project->project_name, $sales->name, 'tatap muka', 'SYNC-FACE'),
+        ], 2);
+        $this->app->instance(GoogleSheetsApiService::class, $google);
+        $service = app(SalesLeadLifecycleSyncService::class);
+
+        $this->assertTrue($service->sync($branch)['ok']);
+        $this->assertTrue($service->sync($branch)['ok']);
+
+        $lead = SalesLead::query()->where('external_sync_id', 'SYNC-FACE')->firstOrFail();
+        $this->assertSame(SalesLeadStatus::FaceToFace, $lead->current_status);
+        $this->assertSame(1, $lead->statusHistories()
+            ->where('status', SalesLeadStatus::FaceToFace->value)
+            ->where('source', 'lead_sheet_sync')
+            ->where('source_id', 'SYNC-FACE')
+            ->count());
+    }
+
     public function test_pull_captures_source_snapshot_once_and_ignores_deleted_remote_leads(): void
     {
         [$branch, $project, $sales] = $this->context('sheet-source', 'Source Project', 'Source Sales');

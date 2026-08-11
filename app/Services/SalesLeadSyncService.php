@@ -46,7 +46,7 @@ class SalesLeadSyncService
         return $actor !== null && $actor->isSales() ? self::userScope($actor->id) : self::branchScope();
     }
 
-    private const REQUIRED_HEADERS = ['id_lead', 'tanggal_lead', 'nama_konsumen', 'proyek', 'sales_pic', 'status_lead', 'sumber_lead', 'kanal_masuk', 'aktivitas_lead'];
+    private const REQUIRED_HEADERS = ['id_lead', 'nama_promo', 'tanggal_lead', 'nama_konsumen', 'proyek', 'sales_pic', 'status_lead', 'sumber_lead', 'kanal_masuk', 'aktivitas_lead'];
 
     public function __construct(
         private readonly GoogleSheetsApiService $googleSheets,
@@ -135,6 +135,7 @@ class SalesLeadSyncService
         $values = $raw['lead'] ?? [];
         $headers = array_map(fn ($value) => trim((string) $value), $values[0] ?? []);
         $headers = array_map(fn (string $header) => match ($header) {
+            'id_promo' => 'nama_promo',
             'sumber' => 'sumber_lead',
             'kanal' => 'kanal_masuk',
             'campaign' => 'aktivitas_lead',
@@ -248,7 +249,7 @@ class SalesLeadSyncService
             $attributes = [
                 'external_lead_id' => $idLead,
                 'external_sync_id' => filled($row['oasis_sync_id'] ?? null) ? $row['oasis_sync_id'] : $lead?->external_sync_id,
-                'id_promo' => $row['id_promo'] ?? null,
+                'id_promo' => $row['nama_promo'] ?? null,
                 'lead_date' => $leadDate,
                 'customer_name' => $row['nama_konsumen'],
                 'phone' => $row['no_hp'] ?? null,
@@ -296,6 +297,7 @@ class SalesLeadSyncService
         $target = match ($normalized) {
             '', 'no respon', 'no response' => SalesLeadStatus::NoResponse,
             'diskusi' => SalesLeadStatus::Discussion,
+            'tatap muka' => SalesLeadStatus::FaceToFace,
             'cek lokasi' => SalesLeadStatus::SiteVisit,
             'utj' => SalesLeadStatus::Utj,
             'cek silk', 'cek slik' => SalesLeadStatus::SlikCheck,

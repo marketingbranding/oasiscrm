@@ -16,7 +16,7 @@ class SupervisorSalesLeadExport
 
     private const HEADERS = [
         'Tanggal Lead', 'Koordinator', 'Sales PIC', 'Nama Konsumen', 'No HP', 'Cabang', 'Proyek',
-        'Sumber Lead', 'Kanal Masuk', 'Aktivitas Lead', 'Status Lead', 'Status Sync',
+        'Sumber Lead', 'Kanal Masuk', 'Aktivitas Lead', 'Promo', 'Status Lead', 'Status Sync',
     ];
 
     public static function toBrowser(Collection $leads, array $coordinatorNamesBySalesId, string $filename): BinaryFileResponse
@@ -40,6 +40,7 @@ class SupervisorSalesLeadExport
                 $lead->effective_source,
                 $lead->platform,
                 $lead->campaign_name ?: $lead->campaign_id,
+                $lead->id_promo,
                 $lead->current_status?->label(),
                 self::syncLabel($lead->sync_status),
             ] as $column => $value) {
@@ -50,7 +51,7 @@ class SupervisorSalesLeadExport
         $lastRow = $leads->count() + 1;
         self::applyStyles($spreadsheet, self::HEADERS, $lastRow, [
             'A' => 16, 'B' => 24, 'C' => 22, 'D' => 28, 'E' => 20, 'F' => 18,
-            'G' => 24, 'H' => 22, 'I' => 20, 'J' => 24, 'K' => 18, 'L' => 20,
+            'G' => 24, 'H' => 22, 'I' => 20, 'J' => 24, 'K' => 20, 'L' => 18, 'M' => 20,
         ]);
         self::addAutoFilter($sheet, self::HEADERS, $lastRow);
         if ($lastRow > 1) {

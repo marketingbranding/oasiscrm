@@ -187,11 +187,16 @@ class SalesPocketbookTest extends TestCase
         [$branch, $project, $sales] = $this->salesContext();
         $other = $this->sales($branch, $project, 'Sales Lain');
         $coordinator = $this->user('sales_coordinator', $branch, 'Koordinator');
+        $sales->update(['supervisor_user_id' => $coordinator->id]);
         $coordinator->currentCoordinatorSales()->attach($sales, ['is_active' => true]);
         $visible = $this->lead($sales, $project, 'Lead Tim');
         $this->lead($other, $project, 'Lead Bukan Tim');
 
-        $response = $this->actingAs($coordinator)->get(route('sales-pocketbook.index'))->assertOk();
+        $response = $this->actingAs($coordinator)->get(route('sales-pocketbook.index', [
+            'period' => 'custom',
+            'date_from' => '2026-07-10',
+            'date_to' => '2026-07-10',
+        ]))->assertOk();
         $this->assertContains($visible->id, $response->viewData('leads')->pluck('id'));
         $this->assertNotContains('Lead Bukan Tim', $response->viewData('leads')->pluck('customer_name'));
     }
@@ -218,7 +223,7 @@ class SalesPocketbookTest extends TestCase
     private function sales(Branch $branch, LeadMaster $project, string $name): User
     {
         $sales = $this->user('sales', $branch, $name);
-        $sales->assignedProjects()->attach($project, ['is_primary' => true]);
+        $sales->assignedProjects()->attach($project, ['is_primary' => true, 'is_active' => true]);
 
         return $sales;
     }

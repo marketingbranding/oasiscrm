@@ -23,7 +23,7 @@ class SalesLeadLifecycleFoundationTest extends TestCase
         $service = app(SalesLeadLifecycleService::class);
 
         $this->assertSame(
-            ['no_response', 'discussion', 'site_visit'],
+            ['no_response', 'discussion', 'face_to_face', 'site_visit'],
             $service->allowedManualStatuses(),
         );
         $this->assertSame(SalesLeadStatus::SlikCheck, SalesLeadStatus::fromInput('Cek Silk'));
@@ -35,7 +35,11 @@ class SalesLeadLifecycleFoundationTest extends TestCase
         );
         $this->assertSame(
             SalesLeadStatus::SiteVisit,
-            $service->resolvePrimaryStatus(['freelance', 'site_visit']),
+            $service->resolvePrimaryStatus(['freelance', 'face_to_face', 'site_visit']),
+        );
+        $this->assertSame(
+            SalesLeadStatus::FaceToFace,
+            $service->resolvePrimaryStatus(['discussion', 'face_to_face']),
         );
     }
 

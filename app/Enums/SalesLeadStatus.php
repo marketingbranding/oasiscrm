@@ -6,6 +6,7 @@ enum SalesLeadStatus: string
 {
     case NoResponse = 'no_response';
     case Discussion = 'discussion';
+    case FaceToFace = 'face_to_face';
     case SiteVisit = 'site_visit';
     case Freelance = 'freelance';
     case Utj = 'utj';
@@ -16,6 +17,7 @@ enum SalesLeadStatus: string
     public const PRIMARY_PRECEDENCE = [
         self::NoResponse,
         self::Discussion,
+        self::FaceToFace,
         self::SiteVisit,
         self::Utj,
         self::SlikCheck,
@@ -26,6 +28,7 @@ enum SalesLeadStatus: string
     public const MANUAL = [
         self::NoResponse,
         self::Discussion,
+        self::FaceToFace,
         self::SiteVisit,
     ];
 
@@ -39,6 +42,7 @@ enum SalesLeadStatus: string
         $normalized = str_replace([' ', '-'], '_', $normalized);
 
         return self::from(match ($normalized) {
+            'tatap_muka' => self::FaceToFace->value,
             'cek_silk', 'cek_slik' => self::SlikCheck->value,
             default => $normalized,
         });
@@ -54,10 +58,11 @@ enum SalesLeadStatus: string
         return match ($this) {
             self::NoResponse => 'No Respon',
             self::Discussion => 'Diskusi',
+            self::FaceToFace => 'Tatap Muka',
             self::SiteVisit => 'Cek Lokasi',
             self::Freelance => 'Jadi Freelance',
             self::Utj => 'UTJ',
-            self::SlikCheck => 'Cek SLIK',
+            self::SlikCheck => 'Cek Slik',
             self::SlikRejected => 'Tidak Lolos BI Checking',
             self::Akad => 'Akad',
         };

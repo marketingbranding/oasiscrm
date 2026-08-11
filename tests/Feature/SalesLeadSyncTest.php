@@ -136,12 +136,12 @@ class SalesLeadSyncTest extends TestCase
 
     private function leadHeaders(): array
     {
-        return ['id_lead', 'tanggal_lead', 'nama_konsumen', 'proyek', 'sales_pic', 'status_lead', 'sumber_lead', 'kanal_masuk', 'aktivitas_lead', 'oasis_sync_id'];
+        return ['id_lead', 'nama_promo', 'tanggal_lead', 'nama_konsumen', 'proyek', 'sales_pic', 'status_lead', 'sumber_lead', 'kanal_masuk', 'aktivitas_lead', 'oasis_sync_id'];
     }
 
     private function leadRow(string $id, string $date, string $consumer, string $project, string $sales, string $status = 'No Respon', string $syncId = ''): array
     {
-        return [$id, $date, $consumer, $project, $sales, $status, 'Online', 'WhatsApp', 'Follow Up', $syncId];
+        return [$id, 'No Promo', $date, $consumer, $project, $sales, $status, 'Online', 'WhatsApp', 'Follow Up', $syncId];
     }
 
     public function test_personal_sales_sync_processes_only_own_rows(): void
@@ -266,8 +266,8 @@ class SalesLeadSyncTest extends TestCase
     private function leadSheet(string $id, string $project, string $sales, string $status, string $syncId = ''): array
     {
         return [
-            ['id_lead', 'tanggal_lead', 'nama_konsumen', 'proyek', 'sales_pic', 'status_lead', 'sumber_lead', 'kanal_masuk', 'aktivitas_lead', 'oasis_sync_id'],
-            [$id, '2026-08-03', 'Consumer '.$id, $project, $sales, $status, 'Online', 'WhatsApp', 'Follow Up', $syncId],
+            ['id_lead', 'nama_promo', 'tanggal_lead', 'nama_konsumen', 'proyek', 'sales_pic', 'status_lead', 'sumber_lead', 'kanal_masuk', 'aktivitas_lead', 'oasis_sync_id'],
+            [$id, 'No Promo', '2026-08-03', 'Consumer '.$id, $project, $sales, $status, 'Online', 'WhatsApp', 'Follow Up', $syncId],
         ];
     }
 

@@ -253,7 +253,7 @@ class SupervisorSalesPocketbookTest extends TestCase
         $leadSheet = IOFactory::load($leadPath)->getActiveSheet();
         $this->assertSame(2, $leadSheet->getHighestDataRow());
         $this->assertSame($visibleLead->customer_name, $leadSheet->getCell('D2')->getValue());
-        $this->assertSame('Perlu Sync Ulang', $leadSheet->getCell('L2')->getValue());
+        $this->assertSame('Perlu Sync Ulang', $leadSheet->getCell('M2')->getValue());
         @unlink($leadPath);
     }
 

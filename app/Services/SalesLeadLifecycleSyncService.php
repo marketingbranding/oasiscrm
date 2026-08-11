@@ -246,7 +246,7 @@ class SalesLeadLifecycleSyncService
             $attributes = [
                 'external_lead_id' => $idLead,
                 'external_sync_id' => filled($row['oasis_sync_id'] ?? null) ? $row['oasis_sync_id'] : $lead?->external_sync_id,
-                'id_promo' => $row['id_promo'] ?? null,
+                'id_promo' => $row['nama_promo'] ?? $row['id_promo'] ?? null,
                 'lead_date' => $leadDate,
                 'customer_name' => $row['nama_konsumen'],
                 'phone' => $row['no_hp'] ?? null,
@@ -455,6 +455,7 @@ class SalesLeadLifecycleSyncService
         $target = match (mb_strtolower($raw)) {
             '', 'no respon', 'no response' => SalesLeadStatus::NoResponse,
             'diskusi' => SalesLeadStatus::Discussion,
+            'tatap muka' => SalesLeadStatus::FaceToFace,
             'cek lokasi' => SalesLeadStatus::SiteVisit,
             'utj' => SalesLeadStatus::Utj,
             'cek silk', 'cek slik' => SalesLeadStatus::SlikCheck,

@@ -4,10 +4,12 @@ namespace App\Http\Requests\Crm;
 
 use App\Enums\SalesLeadStatus;
 use App\Models\LeadMaster;
+use App\Models\Promo;
 use App\Models\SalesLead;
 use App\Models\User;
 use App\Services\CoordinatorLeadTeamService;
 use App\Services\WorkspaceAccessService;
+use App\Support\SalesLeadMasterData;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Validator;
@@ -24,16 +26,23 @@ abstract class SalesLeadRequest extends FormRequest
             'customer_name' => ['required', 'string', 'max:255'],
             'phone' => ['nullable', 'string', 'max:50'],
             'notes' => ['nullable', 'string', 'max:5000'],
-            'id_promo' => ['nullable', 'string', 'max:255'],
-            'source' => ['required', 'string', 'max:255'],
-            'platform' => ['required', 'string', 'max:255'],
+            'promo_name' => ['nullable', 'string', 'max:255', $this->promoRule()],
+            'source' => ['required', 'string', 'max:255', $this->masterRule(SalesLeadMasterData::SOURCES, 'source')],
+            'platform' => ['required', 'string', 'max:255', $this->masterRule(SalesLeadMasterData::CHANNELS, 'platform')],
             'campaign_id' => ['nullable', 'string', 'max:255'],
-            'campaign_name' => ['required', 'string', 'max:255'],
-            'current_status' => ['nullable', Rule::in(array_map(fn (SalesLeadStatus $status) => $status->value, SalesLeadStatus::MANUAL))],
+            'campaign_name' => ['required', 'string', 'max:255', $this->masterRule(SalesLeadMasterData::ACTIVITIES, 'campaign_name')],
+            'current_status' => ['required', Rule::in(array_map(fn (SalesLeadStatus $status) => $status->value, SalesLeadStatus::cases()))],
             'linked_consumer_reference' => ['nullable', 'string', 'max:255'],
             'expected_updated_at' => ['sometimes', 'required', 'string', 'max:40'],
             'operation_uuid' => [$this->lead() ? 'sometimes' : 'required', 'uuid'],
         ];
+    }
+
+    protected function prepareForValidation(): void
+    {
+        if (! $this->exists('promo_name') && $this->exists('id_promo')) {
+            $this->merge(['promo_name' => $this->input('id_promo')]);
+        }
     }
 
     public function messages(): array
@@ -85,15 +94,24 @@ abstract class SalesLeadRequest extends FormRequest
                 $validator->errors()->add('branch_id', 'Lead yang sudah tersinkron tidak dapat dipindahkan ke spreadsheet cabang lain.');
             }
 
-            if ($this->lead() && $this->filled('current_status')) {
-                $current = $this->lead()->current_status;
-                $target = SalesLeadStatus::fromInput($this->string('current_status')->toString());
-                if (! $current->isManual()) {
-                    $validator->errors()->add('current_status', 'Status sistem atau status yang lebih lanjut tidak dapat diubah melalui formulir lead.');
-                }
-            }
-
         }];
+    }
+
+    private function masterRule(array $values, string $field): mixed
+    {
+        $current = $this->lead()?->{$field};
+
+        return $this->lead() && $this->input($field) === $current ? Rule::in([$current]) : Rule::in($values);
+    }
+
+    private function promoRule(): mixed
+    {
+        $value = $this->input('promo_name');
+        if ($this->lead() && $value === $this->lead()->id_promo) {
+            return Rule::in([$value]);
+        }
+
+        return Rule::exists(Promo::class, 'name')->where('is_active', true);
     }
 
     protected function lead(): ?SalesLead

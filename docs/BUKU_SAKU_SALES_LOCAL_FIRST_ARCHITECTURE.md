@@ -46,13 +46,19 @@ Kategori Aktivitas is required for new Sales Agenda input. Its exact canonical o
 
 `Survey Lokasi` is a historical value. Existing records containing `Survey Lokasi` remain readable, but that value is unavailable for new input. Existing records with a null Kategori Aktivitas also remain valid and readable; the new required rule must not invalidate, hide, or rewrite them. Hasil remains optional.
 
-Supervisor Monitoring Tim shows Kategori Aktivitas as read-only in Sales Agenda detail and includes it as a read-only Sales Agenda export column. This field does not grant editing, synchronization, or broader record visibility. Detail and export queries must preserve the same team and organization-scope rules defined in Section 5.
+Supervisor Monitoring Tim shows Kategori Aktivitas as read-only in Sales Agenda detail and includes it as a read-only Sales Agenda export column. This field does not grant editing, synchronization, or broader record visibility. Detail and export queries must preserve the same team and organization-scope rules defined in Section 9.
 
 Creating, updating, completing, or rescheduling a Sales Agenda must not require Google availability. No Sales Agenda write is mirrored to `lead`, `data_sales`, or another Google tab.
 
 Sales Agenda may start or support a later lead workflow, but agenda identity and lead identity remain separate. Any conversion must be explicit and must create or link the local lead under normal policy and validation rules. These field additions do not change record ownership, Sales Agenda subtype rules, role permissions, coordinator relationships, or organization scope.
 
-## 3. Coordinator Lead Local Flow
+## 3. Coordinator Final Structure
+
+Coordinator uses one scoped Buku Saku Sales workspace with three distinct responsibilities:
+
+1. **Lead Master** is the operational local lead workspace. Coordinator may create, review, edit, assign, export, and request delivery of leads only for authorized branches and Sales members in the coordinator's current team.
+2. **Monitoring Mingguan** is the read-only team performance view. Its default metrics use local lifecycle history as defined in Section 7.
+3. **Agenda Sales Tim** is the scoped read-only team agenda view defined in Section 8. It does not grant agenda mutation rights.
 
 Coordinator Lead is an OASIS-local handoff flow. Coordinator input, assignment, review, and transfer to Sales use local database records and local authorization.
 
@@ -62,12 +68,65 @@ Required behavior:
 2. OASIS validates branch, coordinator scope, selected Sales assignment, and resolved primary project.
 3. OASIS stores the lead and assignment locally.
 4. Local transaction establishes durable lead ownership and history.
-5. OASIS pushes the required lead projection to the configured branch Google `lead` sheet.
+5. OASIS marks the local projection for explicit push to the configured branch Google `lead` sheet.
 6. Google failure is reported as delivery failure; Google must not become ownership truth or silently reassign the local lead.
 
-Coordinator monitoring reads OASIS data only. Names, NIK values, spreadsheet rows, or `sales_pic` text must not create coordinator-to-Sales relationships at runtime.
+Coordinator monitoring reads OASIS data only. Names, NIK values, spreadsheet rows, or `sales_pic` text must not create coordinator-to-Sales relationships at runtime. Lead Master, Monitoring Mingguan, and Agenda Sales Tim must apply the same coordinator-team and organization-scope intersection; selecting an inaccessible branch, project, Sales user, lead, or agenda is denied rather than silently replaced.
 
-## 4. Coordinator-to-Sales Assignment
+## 4. Local Canonical Lead Classification
+
+Source, Channel, and Activity are OASIS-owned local canonical masters. Forms, filters, exports, validation, reporting, and push projections use these exact case-sensitive values. Google dropdowns or sheet contents must not define, add, rename, reorder, or remove local options at runtime.
+
+Exact **Source** values:
+
+- `Online`;
+- `Offline`;
+- `Referral`;
+- `Freelance`;
+- `Lead Cabang`.
+
+Exact **Channel** values:
+
+- `TikTok`;
+- `Facebook`;
+- `Instagram`;
+- `WhatsApp`;
+- `Website`;
+- `Marketplace`;
+- `Canvassing`;
+- `Pameran`;
+- `Event`;
+- `Telepon`;
+- `Datang Langsung`;
+- `Tidak Diketahui`.
+
+Exact **Activity** values:
+
+- `Live`;
+- `Konten Organik`;
+- `Story`;
+- `Reel`;
+- `Iklan Berbayar`;
+- `Marketplace`;
+- `Broadcast WhatsApp`;
+- `Follow Up Data Lama`;
+- `Sebar Brosur`;
+- `Pameran`;
+- `Event`;
+- `Referral`;
+- `Freelance`;
+- `Datang Langsung`;
+- `Tidak Diketahui`.
+
+Historical noncanonical values remain readable for audit and migration safety but are unavailable for new input. Normal request handling must not rewrite historical values implicitly.
+
+## 5. Promo Local Master
+
+Promo is an OASIS-owned local master, not a Google-derived dropdown. Lead input stores a local promo relationship or stable local promo identity and a durable display snapshot. Promo availability follows active state plus applicable branch/project scope; inactive historical Promo remains readable but unavailable for new selection.
+
+The physical Google `lead` projection uses `nama_promo`. It carries the exact OASIS Promo display name captured for delivery; Google `id_promo`, helper lists, formulas, or workbook lookups are not local identity and must not be read to resolve Promo. `nama_promo` is a physical delivery column, while OASIS local Promo identity remains authoritative.
+
+## 6. Coordinator-to-Sales Assignment
 
 Coordinator-to-Sales membership uses a dedicated database pivot between OASIS users. The pivot is the source of truth for which Sales users a coordinator may manage or receive in assignment controls.
 
@@ -75,7 +134,21 @@ The relationship must use user IDs, database constraints, active-account checks,
 
 Exact table name, columns, indexes, lifecycle fields, and migration behavior must be defined by the implementing migration and models. Do not reuse Google `data_sales` as this pivot and do not infer the relationship during requests.
 
-## 5. Supervisor Monitoring Tim
+## 7. Weekly Metrics from First Lifecycle Transitions
+
+Default weekly lead metrics are event metrics sourced from local lifecycle history. Each metric counts a lead only when its first qualifying transition into that lifecycle state occurred inside the selected week. Current status, repeated transitions, `updated_at`, legacy stage timestamps, Google row values, and push timestamps must not substitute for the first lifecycle transition.
+
+The same lead may count once in multiple metrics when its first transitions into different lifecycle states occur during the selected week. It must not count twice in one metric after retries, repeated events, or later re-entry. Week boundaries use the application's agreed business timezone and date range, and all queries retain coordinator-team plus organization scope.
+
+## 8. Agenda Sales Tim
+
+Agenda Sales Tim is a Coordinator-scoped read-only view of Sales Agenda records owned by current Sales members in the coordinator's authorized team and organization scope. It may provide list, detail, filters, and read-only reporting needed for monitoring, but it grants no create, edit, complete, reschedule, delete, assignment, comment mutation, export, synchronization, or broader visibility rights unless a separate existing permission and policy explicitly grants that operation.
+
+`Tatap Muka Konsumen` remains an exact Sales Agenda Kategori Aktivitas. It describes planned or completed agenda work and remains attached to Sales Agenda identity.
+
+**Lead Tatap Muka** is a distinct lead lifecycle event. It records the first qualifying face-to-face lead transition used by lifecycle history and weekly metrics. It is not an alias for Agenda `Tatap Muka Konsumen`, must not be inferred merely because such an agenda exists or is completed, and must not create, complete, or mutate an agenda automatically. Any explicit link between a lead and agenda preserves both identities, histories, policies, and scopes.
+
+## 9. Supervisor Monitoring Tim
 
 Supervisor Monitoring Tim is a primary read-only branch of the Buku Saku Sales flow. It uses the same shared OASIS application URL and provides:
 
@@ -91,7 +164,7 @@ This branch permits no synchronization, editing, or operational input. All monit
 
 Google Login remains Phase 2. Its shared application URL and authentication boundary are unchanged by Supervisor Monitoring Tim.
 
-## 6. Primary Project Resolution
+## 10. Primary Project Resolution
 
 Lead delivery requires one unambiguous active project for the selected Sales user in the applicable branch and assignment window.
 
@@ -112,17 +185,19 @@ Blocked cases include:
 
 Resolution must not choose the first database row, newest row, alphabetically first project, project text from Google, or another branch's project.
 
-## 7. Google Lead Push-Only Contract
+## 11. Google Lead Push-Only Contract
 
-Only the branch Google `lead` tab participates at runtime. Workbook resolution follows the lead's OASIS branch and that branch's configured spreadsheet ID. No fallback to another branch or shared reference workbook is allowed.
+Only the branch Google `lead` tab participates as a write-only delivery target. Workbook resolution follows the lead's OASIS branch and that branch's configured spreadsheet ID. No fallback to another branch or shared reference workbook is allowed.
 
-OASIS pushes a validated projection after local ownership and project resolution succeed. Stable OASIS identity and idempotency metadata must be used so retries do not create duplicate rows. Remote row numbers are location metadata, not durable identity.
+OASIS pushes a validated projection after local ownership and project resolution succeed. Stable OASIS identity and idempotency metadata must be used so retries do not create duplicate rows. Remote row numbers are location metadata, not durable identity. Delivery is local-first and push-only: normal create and update transactions commit without Google availability, then explicit or controlled delivery handles pending projections and retry state.
 
-This architecture does not use runtime pull synchronization to create, update, assign, or reconcile local leads from Google. Google edits do not override OASIS lead ownership, coordinator assignment, project assignment, or workflow history.
+No runtime Google reads are permitted for this architecture. OASIS must not read workbook headers, formulas, dropdowns, helper lists, rows, metadata, Promo, Source, Channel, Activity, project names, Sales names, statuses, or existing lead values to validate, enrich, authorize, calculate, reconcile, or display local workflows. Push code may use only local configuration and the fixed physical delivery contract.
+
+This architecture does not use runtime pull synchronization to create, update, assign, or reconcile local leads from Google. Google edits do not override OASIS lead ownership, coordinator assignment, project assignment, Promo, classification, workflow history, or weekly metrics.
 
 `data_sales` is excluded from runtime reads, writes, validation, capability checks, reconciliation, and identity resolution. Historical spreadsheet data may be handled only by an explicit, offline migration or audit process with separate validation and authorization.
 
-## 8. Google Login Phase 2
+## 12. Google Login Phase 2
 
 Google Login is Phase 2 and uses Laravel Socialite. It is an authentication convenience, not account provisioning or invitation activation.
 
@@ -140,10 +215,10 @@ Rules:
 
 The OAuth callback must use Socialite state validation and server-side configuration. Account recovery, invitation activation, and password reset remain separate OASIS flows.
 
-## 9. Failure and Security Boundaries
+## 13. Failure and Security Boundaries
 
 Local authorization and validation run before any Google push. Explicit inaccessible branch, project, coordinator, or Sales IDs are denied rather than replaced with a fallback.
 
 A failed Google push must expose a retryable delivery state without weakening local identity or creating another local lead. Retries must be idempotent. Logs, notifications, and URLs must not expose OAuth credentials, Google access tokens, invitation tokens, reset tokens, or hidden lead data.
 
-No runtime behavior may depend on `data_sales`, spreadsheet names as user identity, arbitrary project text, or token-bearing links.
+No runtime behavior may depend on Google reads, `data_sales`, spreadsheet names as user identity, arbitrary project text, remote option lists, or token-bearing links.

@@ -6,6 +6,7 @@ use App\Enums\SalesLeadStatus;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Crm\StoreSalesLeadRequest;
 use App\Http\Requests\Crm\UpdateSalesLeadRequest;
+use App\Models\Promo;
 use App\Models\SalesLead;
 use App\Models\User;
 use App\Services\CollaborationNotificationService;
@@ -14,6 +15,7 @@ use App\Services\PresenceService;
 use App\Services\SalesLeadDuplicateService;
 use App\Services\SalesLeadService;
 use App\Services\WorkspaceAccessService;
+use App\Support\SalesLeadMasterData;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -76,6 +78,10 @@ class SalesLeadController extends Controller
                 ->when($user->isSales(), fn (Builder $query) => $query->whereKey($user->id))
                 ->with('assignedProjects:id,branch_id')->orderBy('name')->get(['id', 'name', 'branch_id']),
             'optimisticToken' => $this->optimisticLock->token($salesLead),
+            'sources' => SalesLeadMasterData::SOURCES,
+            'channels' => SalesLeadMasterData::CHANNELS,
+            'activities' => SalesLeadMasterData::ACTIVITIES,
+            'promos' => Promo::query()->where('is_active', true)->orderBy('name')->pluck('name'),
         ]);
     }
 

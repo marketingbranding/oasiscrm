@@ -262,7 +262,7 @@ class CoordinatorLocalFirstLeadTest extends TestCase
             'source' => 'Referral',
             'source_name_snapshot' => 'Referral',
             'platform' => 'WhatsApp',
-            'campaign_name' => 'Campaign',
+            'campaign_name' => 'Referral',
             'external_sync_id' => (string) Str::uuid(),
             'sync_status' => 'pending_create',
             'created_by' => $sales->id,
@@ -281,7 +281,8 @@ class CoordinatorLocalFirstLeadTest extends TestCase
             'phone' => '081234567890',
             'source' => 'Referral',
             'platform' => 'WhatsApp',
-            'campaign_name' => 'Campaign',
+            'campaign_name' => 'Referral',
+            'current_status' => 'no_response',
             'operation_uuid' => (string) Str::uuid(),
         ], $attributes);
     }

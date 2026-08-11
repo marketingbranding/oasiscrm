@@ -41,16 +41,16 @@ class SalesLeadSpreadsheetFoundationTest extends TestCase
             ['lead', 'data_ceklok', 'data_sales', 'data_konsumen_nup', 'data_konsumen', 'bi_checking', 'akad'],
             array_keys($contracts->definitions()),
         );
-        $this->assertSame('Cek SLIK', $contracts->normalizeReadStatus(' Cek Silk '));
-        $this->assertSame('Cek SLIK', $contracts->normalizeReadStatus(' Cek Slik '));
-        $this->assertSame('Cek SLIK', $contracts->normalizeReadStatus(' Cek SLIK '));
+        $this->assertSame('Cek Slik', $contracts->normalizeReadStatus(' Cek Silk '));
+        $this->assertSame('Cek Slik', $contracts->normalizeReadStatus(' Cek Slik '));
+        $this->assertSame('Cek Slik', $contracts->normalizeReadStatus(' Cek SLIK '));
     }
 
     public function test_lead_contract_accepts_actual_cek_slik_validation_and_writes_the_branch_option(): void
     {
         [$lead] = $this->leadContext('sheet-status-alias');
         $headers = [
-            'id_lead', 'id_promo', 'tanggal_lead', 'sumber_lead', 'kanal_masuk', 'aktivitas_lead',
+            'id_lead', 'nama_promo', 'tanggal_lead', 'sumber_lead', 'kanal_masuk', 'aktivitas_lead',
             'nama_konsumen', 'no_hp', 'proyek', 'sales_pic', 'status_lead', 'keterangan', '', 'Sumber', 'Kanal', 'Aktivitas',
         ];
         $formulas = [$headers, ['=FORMULA_ID_LEAD()']];
@@ -63,7 +63,7 @@ class SalesLeadSpreadsheetFoundationTest extends TestCase
         $metadata[8] = ['type' => 'select', 'strict' => true, 'options' => ['Oasis Solo']];
         $metadata[9] = ['type' => 'select', 'strict' => true, 'options' => ['Sales Cabang']];
         $metadata[10] = ['type' => 'select', 'strict' => true, 'options' => [
-            'No Respon', 'Diskusi', 'UTJ', 'Tidak Lolos BI Checking', 'Akad', 'Cek Lokasi', 'Cek Slik', 'Jadi Freelance',
+            'No Respon', 'Diskusi', 'Tatap Muka', 'Cek Lokasi', 'UTJ', 'Tidak Lolos BI Checking', 'Cek Slik', 'Jadi Freelance', 'Akad',
         ]];
         $google = Mockery::mock(GoogleSheetsApiService::class);
         $google->shouldReceive('sheetTitles')->once()->with('sheet-status-alias')->andReturn(['lead']);
@@ -119,7 +119,7 @@ class SalesLeadSpreadsheetFoundationTest extends TestCase
     public function test_lead_contract_requires_physical_headers_without_alias_indirection(): void
     {
         [$lead] = $this->leadContext('sheet-live');
-        $headers = ['id_lead', 'id_promo', 'tanggal_lead', 'sumber_lead', 'kanal_masuk', 'aktivitas_lead', 'nama_konsumen', 'no_hp', 'proyek', 'sales_pic', 'status_lead', 'keterangan'];
+        $headers = ['id_lead', 'nama_promo', 'tanggal_lead', 'sumber_lead', 'kanal_masuk', 'aktivitas_lead', 'nama_konsumen', 'no_hp', 'proyek', 'sales_pic', 'status_lead', 'keterangan'];
         $google = Mockery::mock(GoogleSheetsApiService::class);
         $google->shouldReceive('sheetTitles')->once()->andReturn(['lead']);
         $google->shouldReceive('sheetIds')->once()->andReturn(['lead' => 7]);
@@ -141,7 +141,7 @@ class SalesLeadSpreadsheetFoundationTest extends TestCase
     public function test_lead_contract_rejects_canonical_names_as_physical_headers(): void
     {
         [$lead] = $this->leadContext('sheet-canonical');
-        $headers = ['id_lead', 'id_promo', 'tanggal_lead', 'source', 'platform', 'campaign_name', 'nama_konsumen', 'no_hp', 'proyek', 'sales_pic', 'status_lead', 'keterangan'];
+        $headers = ['id_lead', 'nama_promo', 'tanggal_lead', 'source', 'platform', 'campaign_name', 'nama_konsumen', 'no_hp', 'proyek', 'sales_pic', 'status_lead', 'keterangan'];
         $google = Mockery::mock(GoogleSheetsApiService::class);
         $google->shouldReceive('sheetTitles')->once()->andReturn(['lead']);
         $google->shouldReceive('sheetIds')->once()->andReturn(['lead' => 7]);
@@ -163,7 +163,7 @@ class SalesLeadSpreadsheetFoundationTest extends TestCase
         [, $branch] = $this->leadContext('sheet-options');
         $definition = (new SalesLeadSpreadsheetContract(Mockery::mock(GoogleSheetsApiService::class)))->definitions()['lead'];
         $resolved = new ResolvedSalesLeadSpreadsheetContract('sheet-options', $definition, 1, [], [], [], 2, [
-            'id_promo' => ['No Promo'], 'sumber_lead' => ['Online'], 'kanal_masuk' => ['WA'], 'aktivitas_lead' => ['Follow Up'],
+            'nama_promo' => ['No Promo'], 'id_promo' => ['No Promo'], 'sumber_lead' => ['Online'], 'kanal_masuk' => ['WA'], 'aktivitas_lead' => ['Follow Up'],
             'proyek' => ['Oasis'], 'sales_pic' => ['Sales A'], 'status_lead' => ['No Respon'],
         ]);
         $contracts = Mockery::mock(SalesLeadSpreadsheetContract::class);
@@ -181,7 +181,7 @@ class SalesLeadSpreadsheetFoundationTest extends TestCase
     {
         [, $branch] = $this->leadContext('sheet-options-cache');
         $definition = (new SalesLeadSpreadsheetContract(Mockery::mock(GoogleSheetsApiService::class)))->definitions()['lead'];
-        $resolved = new ResolvedSalesLeadSpreadsheetContract('sheet-options-cache', $definition, 1, ['h1'], ['id_promo' => 0], [], 2, ['sumber_lead' => ['Online']], []);
+        $resolved = new ResolvedSalesLeadSpreadsheetContract('sheet-options-cache', $definition, 1, ['h1'], ['nama_promo' => 0], [], 2, ['sumber_lead' => ['Online']], []);
         $contracts = Mockery::mock(SalesLeadSpreadsheetContract::class);
         $contracts->shouldReceive('resolveForBranch')->once()->with($branch, 'lead')->andReturn($resolved);
 
@@ -217,7 +217,7 @@ class SalesLeadSpreadsheetFoundationTest extends TestCase
     public function test_lead_contract_resolves_production_magelang_physical_header_layout(): void
     {
         $headers = [
-            'id_lead', 'id_promo', 'tanggal_lead', 'sumber_lead', 'kanal_masuk', 'aktivitas_lead',
+            'id_lead', 'nama_promo', 'tanggal_lead', 'sumber_lead', 'kanal_masuk', 'aktivitas_lead',
             'nama_konsumen', 'no_hp', 'proyek', 'sales_pic', 'status_lead', 'keterangan',
         ];
         [$lead] = $this->leadContext('sheet-magelang-fixture');
@@ -724,11 +724,11 @@ class SalesLeadSpreadsheetFoundationTest extends TestCase
     private function validLeadMetadata(array $headers): array
     {
         $metadata = array_fill(0, count($headers), null);
-        foreach (['id_promo', $headers[3], $headers[4], $headers[5], 'proyek', 'sales_pic'] as $header) {
+        foreach (['nama_promo', $headers[3], $headers[4], $headers[5], 'proyek', 'sales_pic'] as $header) {
             $metadata[array_search($header, $headers, true)] = ['type' => 'select', 'strict' => true, 'options' => ['Option']];
         }
         $metadata[array_search('tanggal_lead', $headers, true)] = ['type' => 'date', 'strict' => false, 'options' => []];
-        $metadata[array_search('status_lead', $headers, true)] = ['type' => 'select', 'strict' => true, 'options' => ['No Respon', 'Diskusi', 'UTJ', 'Tidak Lolos BI Checking', 'Akad', 'Cek Lokasi', 'Cek Silk', 'Jadi Freelance']];
+        $metadata[array_search('status_lead', $headers, true)] = ['type' => 'select', 'strict' => true, 'options' => ['No Respon', 'Diskusi', 'Tatap Muka', 'Cek Lokasi', 'UTJ', 'Tidak Lolos BI Checking', 'Cek Slik', 'Jadi Freelance', 'Akad']];
 
         return $metadata;
     }

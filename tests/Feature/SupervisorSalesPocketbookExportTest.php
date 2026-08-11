@@ -107,14 +107,14 @@ class SupervisorSalesPocketbookExportTest extends TestCase
 
         $this->assertSame([
             'Tanggal Lead', 'Koordinator', 'Sales PIC', 'Nama Konsumen', 'No HP', 'Cabang', 'Proyek',
-            'Sumber Lead', 'Kanal Masuk', 'Aktivitas Lead', 'Status Lead', 'Status Sync',
-        ], array_slice($sheet->rangeToArray('A1:L1')[0], 0, 12));
+            'Sumber Lead', 'Kanal Masuk', 'Aktivitas Lead', 'Promo', 'Status Lead', 'Status Sync',
+        ], array_slice($sheet->rangeToArray('A1:M1')[0], 0, 13));
         $this->assertSame('Koordinator A; Koordinator Z', $sheet->getCell('B2')->getValue());
         $this->assertSame('=danger', $sheet->getCell('E2')->getValue());
         $this->assertSame('s', $sheet->getCell('E2')->getDataType());
         $this->assertSame(array_values($labels), array_map(
             fn (array $row) => $row[0],
-            $sheet->rangeToArray('L2:L5'),
+            $sheet->rangeToArray('M2:M5'),
         ));
         $this->assertSame($leads->count() + 1, $sheet->getHighestDataRow());
     }

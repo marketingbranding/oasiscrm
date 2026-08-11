@@ -2,13 +2,14 @@
 
 namespace App\Http\Controllers\Crm;
 
+use App\Enums\SalesLeadStatus;
 use App\Exports\CoordinatorSalesLeadExport;
 use App\Http\Controllers\Controller;
-use App\Models\SalesLead;
+use App\Models\Promo;
 use App\Services\CoordinatorLeadPushService;
 use App\Services\CoordinatorLeadTeamService;
-use App\Services\SalesLeadService;
-use App\Services\WorkspaceAccessService;
+use App\Services\CoordinatorSalesMonitoringService;
+use App\Support\SalesLeadMasterData;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
@@ -20,43 +21,19 @@ class CoordinatorSalesLeadWorkspaceController extends Controller
         private readonly CoordinatorLeadTeamService $teams,
         private readonly CoordinatorLeadPushService $pushService,
         private readonly CoordinatorSalesLeadExport $export,
-        private readonly SalesLeadService $leads,
-        private readonly WorkspaceAccessService $workspaceAccess,
+        private readonly CoordinatorSalesMonitoringService $monitoring,
     ) {}
 
     public function index(Request $request): View
     {
-        $user = $request->user();
-        abort_unless($this->teams->isCoordinator($user), 403);
-
-        $salesUsers = $this->teams->currentSales($user)->sortBy('name')->values();
-        $accessibleProjectIds = $this->workspaceAccess->accessibleProjectIds($user);
-        $salesUsers->load(['assignedProjects' => fn ($query) => $query
-            ->where('lead_master.is_active', true)
-            ->whereIn('lead_master.id', $accessibleProjectIds)
-            ->wherePivot('is_active', true)
-            ->where(fn ($query) => $query->whereNull('project_user.assignment_start_date')->orWhereDate('project_user.assignment_start_date', '<=', today()))
-            ->where(fn ($query) => $query->whereNull('project_user.assignment_end_date')->orWhereDate('project_user.assignment_end_date', '>=', today()))
-            ->with('branch:id,name')
-            ->orderBy('project_name'),
+        $filters = $request->validate([
+            'period' => ['nullable', 'in:today,week,month,custom'],
+            'date_from' => ['nullable', 'required_if:period,custom', 'date'],
+            'date_to' => ['nullable', 'required_if:period,custom', 'date', 'after_or_equal:date_from'],
+            'sales_id' => ['nullable', 'integer'],
         ]);
-
-        $salesIds = $salesUsers->pluck('id');
-        $leads = SalesLead::query()
-            ->whereIn('sales_user_id', $salesIds)
-            ->with(['branch:id,name', 'project:id,project_name', 'sales:id,name'])
-            ->latest('lead_date')
-            ->latest('id')
-            ->paginate(20)
-            ->withQueryString();
-        $syncCounters = SalesLead::query()
-            ->whereIn('sales_user_id', $salesIds)
-            ->selectRaw("SUM(CASE WHEN sync_status = 'pending_create' THEN 1 ELSE 0 END) AS pending_create")
-            ->selectRaw("SUM(CASE WHEN sync_status = 'synced' THEN 1 ELSE 0 END) AS synced")
-            ->selectRaw("SUM(CASE WHEN sync_status = 'pending_update' THEN 1 ELSE 0 END) AS pending_update")
-            ->selectRaw("SUM(CASE WHEN sync_status = 'sync_failed' THEN 1 ELSE 0 END) AS sync_failed")
-            ->first();
-        $projectsBySales = $salesUsers->mapWithKeys(fn ($sales) => [
+        $data = $this->monitoring->resolve($request->user(), $filters);
+        $data['projectsBySales'] = $data['salesUsers']->mapWithKeys(fn ($sales) => [
             (string) $sales->id => $sales->assignedProjects->map(fn ($project) => [
                 'id' => (string) $project->id,
                 'name' => $project->project_name,
@@ -64,14 +41,14 @@ class CoordinatorSalesLeadWorkspaceController extends Controller
                 'branch_name' => $project->branch?->name,
             ])->values(),
         ]);
+        $data['sources'] = SalesLeadMasterData::SOURCES;
+        $data['channels'] = SalesLeadMasterData::CHANNELS;
+        $data['activities'] = SalesLeadMasterData::ACTIVITIES;
+        $data['promos'] = Promo::query()->where('is_active', true)->orderBy('name')->pluck('name');
+        $data['statuses'] = SalesLeadStatus::cases();
+        $data['canSync'] = $request->user()->hasPermission('sales_pocketbook.sync');
 
-        return view('crm.sales-pocketbook.coordinator-leads', [
-            'salesUsers' => $salesUsers,
-            'projectsBySales' => $projectsBySales,
-            'leads' => $leads,
-            'syncCounters' => $syncCounters,
-            'canSync' => $user->hasPermission('sales_pocketbook.sync'),
-        ]);
+        return view('crm.sales-pocketbook.coordinator-leads', $data);
     }
 
     public function export(Request $request): BinaryFileResponse
@@ -80,14 +57,15 @@ class CoordinatorSalesLeadWorkspaceController extends Controller
         abort_unless($this->teams->isCoordinator($user), 403);
         abort_unless($user->hasPermission('sales_pocketbook.export'), 403);
 
-        $leads = SalesLead::query()
-            ->whereIn('sales_user_id', $this->teams->currentSales($user)->pluck('id'))
-            ->with(['branch:id,name', 'project:id,project_name', 'sales:id,name', 'leadSource:id,name'])
-            ->orderBy('lead_date')
-            ->orderBy('id')
-            ->get();
+        $filters = $request->validate([
+            'period' => ['nullable', 'in:today,week,month,custom'],
+            'date_from' => ['nullable', 'required_if:period,custom', 'date'],
+            'date_to' => ['nullable', 'required_if:period,custom', 'date', 'after_or_equal:date_from'],
+            'sales_id' => ['nullable', 'integer'],
+        ]);
+        $data = $this->monitoring->resolve($user, $filters, false);
 
-        return $this->export->toBrowser($leads, 'lead-tim-sales-'.now()->format('Ymd-His').'.xlsx');
+        return $this->export->toBrowser($data['exportData'], 'lead-tim-sales-'.now()->format('Ymd-His').'.xlsx');
     }
 
     public function push(Request $request): RedirectResponse

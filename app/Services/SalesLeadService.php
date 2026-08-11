@@ -19,6 +19,8 @@ class SalesLeadService
     public function create(array $data, User $actor): SalesLead
     {
         return DB::transaction(function () use ($data, $actor): SalesLead {
+            $data['id_promo'] = $data['promo_name'] ?? null;
+            unset($data['promo_name']);
             $data['normalized_phone'] = $this->phones->normalize($data['phone'] ?? null);
             unset($data['lead_source_id']);
             $data['lead_source_id'] = null;
@@ -54,6 +56,8 @@ class SalesLeadService
     {
         return DB::transaction(function () use ($lead, $data, $actor): SalesLead {
             $locked = SalesLead::query()->lockForUpdate()->findOrFail($lead->id);
+            $data['id_promo'] = $data['promo_name'] ?? null;
+            unset($data['promo_name']);
             if (blank($data['current_status'] ?? null)) {
                 unset($data['current_status']);
             }
@@ -138,7 +142,7 @@ class SalesLeadService
             'sales_pic' => $this->sheetIdentities->salesValue($lead->branch, $lead->sales),
             'status_lead' => $status->spreadsheetValue(),
             'keterangan' => $lead->notes,
-            'id_promo' => $lead->id_promo,
+            'nama_promo' => $lead->id_promo,
         ];
     }
 }

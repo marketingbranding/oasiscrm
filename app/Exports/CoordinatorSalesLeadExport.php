@@ -16,7 +16,7 @@ class CoordinatorSalesLeadExport
 
     private const HEADERS = [
         'Tanggal Lead', 'Nama Konsumen', 'No HP', 'Sumber Lead', 'Kanal Masuk', 'Aktivitas Lead',
-        'ID Promo', 'Sales PIC', 'Cabang', 'Proyek', 'Status Lead', 'Catatan', 'Status Sync',
+        'Promo', 'Sales PIC', 'Cabang', 'Proyek', 'Status Lead', 'Catatan', 'Status Sync',
     ];
 
     public static function toBrowser(Collection $leads, string $filename): BinaryFileResponse

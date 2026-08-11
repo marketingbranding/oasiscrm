@@ -21,19 +21,19 @@ class SalesLeadSpreadsheetContract
         return [
             'lead' => new SalesLeadSheetDefinition(
                 'lead',
-                ['id_lead', 'id_promo', 'tanggal_lead', 'sumber_lead', 'kanal_masuk', 'aktivitas_lead', 'nama_konsumen', 'no_hp', 'proyek', 'sales_pic', 'status_lead', 'keterangan'],
+                ['id_lead', 'nama_promo', 'tanggal_lead', 'sumber_lead', 'kanal_masuk', 'aktivitas_lead', 'nama_konsumen', 'no_hp', 'proyek', 'sales_pic', 'status_lead', 'keterangan'],
                 ['id_lead'],
                 [
-                    'id_promo' => ['type' => 'select', 'strict' => true],
+                    'nama_promo' => ['type' => 'select', 'strict' => true],
                     'tanggal_lead' => ['type' => 'date'],
                     'sumber_lead' => ['type' => 'select', 'strict' => true],
                     'kanal_masuk' => ['type' => 'select', 'strict' => true],
                     'aktivitas_lead' => ['type' => 'select', 'strict' => true],
                     'proyek' => ['type' => 'select', 'strict' => true],
                     'sales_pic' => ['type' => 'select', 'strict' => true],
-                    'status_lead' => ['type' => 'select', 'strict' => true, 'values' => ['No Respon', 'Diskusi', 'UTJ', 'Tidak Lolos BI Checking', 'Akad', 'Cek Lokasi', 'Cek Silk', 'Jadi Freelance']],
+                    'status_lead' => ['type' => 'select', 'strict' => true, 'values' => ['No Respon', 'Diskusi', 'Tatap Muka', 'Cek Lokasi', 'UTJ', 'Tidak Lolos BI Checking', 'Cek Slik', 'Jadi Freelance', 'Akad']],
                 ],
-                [],
+                ['nama_promo' => ['nama_promo', 'id_promo']],
             ),
             'data_ceklok' => new SalesLeadSheetDefinition(
                 'data_ceklok',
@@ -147,6 +147,9 @@ class SalesLeadSpreadsheetContract
             foreach ($definition->validations as $header => $expected) {
                 $validationOptions[$header] = array_values($sheetMetadata[$headerMap[$header]]['options'] ?? []);
             }
+            if (isset($validationOptions['nama_promo'])) {
+                $validationOptions['id_promo'] = $validationOptions['nama_promo'];
+            }
 
             return new ResolvedSalesLeadSpreadsheetContract(
                 $spreadsheetId,
@@ -169,7 +172,7 @@ class SalesLeadSpreadsheetContract
     public function normalizeReadStatus(string $value): string
     {
         return $this->normalizeValidationValue('status_lead', $value) === 'cek_slik'
-            ? 'Cek SLIK'
+            ? 'Cek Slik'
             : trim($value);
     }
 

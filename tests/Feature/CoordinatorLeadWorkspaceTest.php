@@ -33,6 +33,11 @@ class CoordinatorLeadWorkspaceTest extends TestCase
         }
         $this->assertStringContainsString('$statuses as $status', $view);
         $this->assertStringContainsString("route('sales-leads.edit'", $view);
+        foreach (['id="coordinator-team-agenda"', 'id="coordinator-team-leads"', 'id="monitor-date-from"', 'id="monitor-date-to"', 'id="coordinator-lead-date"'] as $contract) {
+            $this->assertStringContainsString($contract, $view);
+        }
+        $this->assertStringNotContainsString('<section class="border-2 border-black bg-white">', $view);
+        $this->assertStringNotContainsString('type="date"', $view);
     }
 
     public function test_edit_form_uses_local_options_and_preserves_historical_values(): void

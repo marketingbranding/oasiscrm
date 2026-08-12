@@ -60,9 +60,8 @@
         ->contains(fn (string $key) => request()->filled($key)) || $hasExplicitAgendaPeriod;
     $activeAgendaFilterCount = collect(['branch_id', 'project_id', 'sales_user_id', 'report_agenda_completed', 'report_agenda_missing_result'])
         ->filter(fn (string $key) => request()->filled($key))->count() + ($hasExplicitAgendaPeriod ? 1 : 0);
-    $canManageAgenda = Auth::user()->hasScopedPermission('sales_pocketbook', 'manage');
-    $canCreateAgenda = $canManageAgenda && (Auth::user()->isSuperadmin()
-        || Auth::user()->hasPrimaryRole(['sales', 'manager', 'admin', 'pusat']));
+    $canManageAgenda = Auth::user()->isSales()
+        && Auth::user()->hasScopedPermission('sales_pocketbook', 'manage');
     $leadOptionsEndpoint = route('sales-leads.options', ['branch' => 'BRANCH_ID']);
 @endphp
 <div class="space-y-4" x-data="salesPocketbook()" @oasis-sync-updated.window="handleLifecycleSync($event.detail)">
@@ -154,39 +153,6 @@
     @if($tab === 'report')
         @include('crm.sales-pocketbook._report')
     @elseif($tab === 'agenda')
-    @php
-        $agendaProjectId = old('project_id', request('project_id', $defaultProject?->id));
-        $agendaProject = $projects->firstWhere('id', (int) $agendaProjectId);
-        $agendaOwnerId = old('owner_user_id', Auth::user()->isSales()
-            ? Auth::id()
-            : $agendaProject?->assignedUsers->first(fn ($assigned) => $salesUsers->contains('id', $assigned->id))?->id);
-        $hasQuickAgendaErrors = $errors->any() && (old('title') !== null || old('sales_activity_category') !== null || old('owner_user_id') !== null);
-    @endphp
-    @if($canCreateAgenda && $projects->isNotEmpty() && $salesUsers->isNotEmpty())
-    <details id="quick-agenda-input" class="sales-agenda-quick {{ $monitoring ? 'sales-agenda-quick--monitoring' : 'sales-agenda-quick--primary' }}" @if(!$monitoring || $hasQuickAgendaErrors) open @endif>
-        <summary class="sales-agenda-quick-summary">
-            <span class="sales-agenda-quick-eyebrow">{{ $monitoring ? 'Input operasional' : 'Agenda berikutnya' }}</span>
-            <span class="sales-agenda-quick-title">Isi Agenda Baru</span>
-            <span class="sales-agenda-quick-description">{{ $monitoring ? 'Buka formulir untuk mencatat agenda Sales dalam scope Anda.' : 'Rencanakan aktivitas, waktu, dan konteks kunjungan atau tindak lanjut.' }}</span>
-        </summary>
-        <form method="POST" action="{{ route('sales-agendas.store') }}" x-data="salesCascade(@js($cascadeProjects), @js($cascadeSales), @js(['branch' => old('branch_id', $defaultProject?->branch_id), 'project' => $agendaProjectId, 'sales' => $agendaOwnerId]))" @submit="setSubmitting()" class="sales-pocketbook-quick-form sales-agenda-quick-form" aria-describedby="quick-agenda-required-note">
-            @csrf
-            <p id="quick-agenda-required-note" class="sales-pocketbook-required-note sm:col-span-2 xl:col-span-4"><span aria-hidden="true">*</span> Wajib diisi</p>
-            <x-crm.field label="Tanggal Agenda" for="quick-agenda-scheduled-date" required :error="$errors->first('scheduled_date')"><x-crm.date-field id="quick-agenda-scheduled-date" name="scheduled_date" :value="old('scheduled_date', now()->toDateString())" required :aria-invalid="$errors->has('scheduled_date') ? 'true' : 'false'" :aria-describedby="$errors->has('scheduled_date') ? 'quick-agenda-scheduled-date-error' : null" /></x-crm.field>
-            <x-crm.field label="Jam Mulai" for="quick-agenda-start-time" required :error="$errors->first('start_time')"><x-crm.time-field id="quick-agenda-start-time" name="start_time" :value="old('start_time')" required :aria-invalid="$errors->has('start_time') ? 'true' : 'false'" :aria-describedby="$errors->has('start_time') ? 'quick-agenda-start-time-error' : null" /></x-crm.field>
-            <x-crm.field label="Jam Selesai" for="quick-agenda-end-time" required :error="$errors->first('end_time')"><x-crm.time-field id="quick-agenda-end-time" name="end_time" :value="old('end_time')" required :aria-invalid="$errors->has('end_time') ? 'true' : 'false'" :aria-describedby="$errors->has('end_time') ? 'quick-agenda-end-time-error' : null" /></x-crm.field>
-            <x-crm.field label="Kategori Aktivitas" for="quick-agenda-category" required :error="$errors->first('sales_activity_category')"><select id="quick-agenda-category" class="sales-input" name="sales_activity_category" required aria-invalid="{{ $errors->has('sales_activity_category') ? 'true' : 'false' }}" @if($errors->has('sales_activity_category')) aria-describedby="quick-agenda-category-error" @endif><option value="">Pilih kategori</option>@foreach(\App\Models\ContentItem::SALES_ACTIVITY_CATEGORIES as $category)<option value="{{ $category }}" @selected(old('sales_activity_category') === $category)>{{ $category }}</option>@endforeach</select></x-crm.field>
-            <x-crm.field label="Judul Agenda" for="quick-agenda-title" required :error="$errors->first('title')"><input id="quick-agenda-title" class="sales-input" name="title" value="{{ old('title') }}" required aria-invalid="{{ $errors->has('title') ? 'true' : 'false' }}" @if($errors->has('title')) aria-describedby="quick-agenda-title-error" @endif></x-crm.field>
-            <x-crm.field label="Cabang" for="quick-agenda-branch" required :error="$errors->first('branch_id')"><select id="quick-agenda-branch" class="sales-input" name="branch_id" x-model="branch" @change="branchChanged()" required aria-invalid="{{ $errors->has('branch_id') ? 'true' : 'false' }}" @if($errors->has('branch_id')) aria-describedby="quick-agenda-branch-error" @endif>@foreach($branches as $branch)<option value="{{ $branch->id }}">{{ $branch->name }}</option>@endforeach</select></x-crm.field>
-            <x-crm.field label="Proyek" for="quick-agenda-project" required :error="$errors->first('project_id')"><select id="quick-agenda-project" class="sales-input" name="project_id" x-model="project" @change="projectChanged()" required aria-invalid="{{ $errors->has('project_id') ? 'true' : 'false' }}" @if($errors->has('project_id')) aria-describedby="quick-agenda-project-error" @endif><option value="">Pilih proyek</option>@foreach($projects as $project)<option value="{{ $project->id }}" x-show="projectVisible('{{ $project->id }}')" :disabled="!projectVisible('{{ $project->id }}')">{{ $project->project_name }}</option>@endforeach</select></x-crm.field>
-            <x-crm.field label="Sales" for="quick-agenda-owner" required :error="$errors->first('owner_user_id')"><select id="quick-agenda-owner" class="sales-input" name="owner_user_id" x-model="sales" required @disabled(!$monitoring) aria-invalid="{{ $errors->has('owner_user_id') ? 'true' : 'false' }}" @if($errors->has('owner_user_id')) aria-describedby="quick-agenda-owner-error" @endif>@foreach($salesUsers as $sales)<option value="{{ $sales->id }}" x-show="salesVisible('{{ $sales->id }}')" :disabled="!salesVisible('{{ $sales->id }}')">{{ $sales->name }}</option>@endforeach</select>@unless($monitoring)<input type="hidden" name="owner_user_id" value="{{ Auth::id() }}">@endunless</x-crm.field>
-            <x-crm.field label="Lokasi" for="quick-agenda-location" :error="$errors->first('location')"><input id="quick-agenda-location" class="sales-input" name="location" value="{{ old('location') }}" aria-invalid="{{ $errors->has('location') ? 'true' : 'false' }}" @if($errors->has('location')) aria-describedby="quick-agenda-location-error" @endif></x-crm.field>
-            <x-crm.field label="Catatan" for="quick-agenda-notes" :error="$errors->first('notes')" class="sm:col-span-2 xl:col-span-3"><textarea id="quick-agenda-notes" class="sales-input" name="notes" rows="2" aria-invalid="{{ $errors->has('notes') ? 'true' : 'false' }}" @if($errors->has('notes')) aria-describedby="quick-agenda-notes-error" @endif>{{ old('notes') }}</textarea></x-crm.field>
-            <div class="sales-pocketbook-form-actions xl:col-span-4"><x-crm.button type="submit" variant="primary" accent="sales" x-bind:disabled="submitting" x-bind:aria-busy="submitting"><span x-show="!submitting">Simpan Agenda</span><span x-show="submitting" x-cloak>Menyimpan agenda...</span></x-crm.button><span class="sr-only" aria-live="polite" x-text="submitting ? 'Agenda sedang disimpan.' : ''"></span></div>
-        </form>
-    </details>
-    @endif
-
     <x-crm.toolbar label="Filter agenda" class="sales-agenda-toolbar">
         <div class="sales-agenda-filter-summary">
             <strong>Daftar agenda</strong>

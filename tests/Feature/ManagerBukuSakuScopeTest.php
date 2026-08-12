@@ -26,6 +26,7 @@ class ManagerBukuSakuScopeTest extends TestCase
 
         foreach (['manager', 'branch_manager'] as $managerRole) {
             $manager = $this->user($managerRole, "{$managerRole} Magelang", $magelang);
+            $manager->roles()->attach(Role::where('slug', 'sales')->value('id'));
             $supervisor = $this->user('supervisor', "SPV {$managerRole}", $magelang, $manager);
             $coordinator = $this->user('sales_coordinator', "Koordinator {$managerRole}", $magelang, $supervisor);
             $sales = $this->user('sales', "Sales {$managerRole}", $magelang);
@@ -50,6 +51,19 @@ class ManagerBukuSakuScopeTest extends TestCase
                 ->assertDontSee($outsideBranch->customer_name)
                 ->assertDontSee($soloSupervisor->name)->assertDontSee($soloCoordinator->name)->assertDontSee($soloSales->name);
             $page->assertSee('Buku Saku Sales');
+
+            $agendaPage = $this->actingAs($manager)->get(route('sales-pocketbook.index', ['tab' => 'agenda']))->assertOk()
+                ->assertSee('Monitoring Agenda')
+                ->assertSee('Hierarki Tim Sales')
+                ->assertDontSee('Isi Agenda Baru')
+                ->assertDontSee('Jam Mulai')
+                ->assertDontSee('Jam Selesai')
+                ->assertDontSee('Simpan Agenda');
+            $this->actingAs($manager)->post(route('sales-agendas.store'), [
+                'scheduled_date' => now()->toDateString(),
+                'sales_activity_category' => 'Cek Lokasi',
+                'title' => 'Agenda terlarang',
+            ])->assertForbidden();
 
             $export = $this->actingAs($manager)->get(route('sales-pocketbook.export'))->assertOk();
             $path = $export->baseResponse->getFile()->getPathname();

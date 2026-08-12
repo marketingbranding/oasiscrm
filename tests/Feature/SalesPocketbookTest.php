@@ -6,6 +6,7 @@ use App\Models\Branch;
 use App\Models\ContentItem;
 use App\Models\LeadMaster;
 use App\Models\Role;
+use App\Models\SalesCoordinatorSales;
 use App\Models\SalesLead;
 use App\Models\User;
 use App\Services\OptimisticLockService;
@@ -206,6 +207,9 @@ class SalesPocketbookTest extends TestCase
         [$branch, $project, $sales] = $this->salesContext();
         $lead = $this->lead($sales, $project, 'Lead Cabang');
         $manager = $this->user('manager', $branch);
+        $coordinator = $this->user('sales_coordinator', $branch, 'Koordinator Manager');
+        $coordinator->update(['supervisor_user_id' => $manager->id]);
+        SalesCoordinatorSales::create(['coordinator_user_id' => $coordinator->id, 'sales_user_id' => $sales->id]);
         $otherBranch = Branch::create(['name' => 'Pati', 'code' => 'PTI', 'is_active' => true]);
 
         $this->actingAs($manager)->get(route('sales-pocketbook.index'))->assertOk()->assertSee($lead->customer_name);

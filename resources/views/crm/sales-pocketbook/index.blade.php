@@ -93,6 +93,15 @@
         <div><span>Proyek</span><strong>{{ $selectedProject?->project_name ?? 'Semua dalam akses' }}</strong></div>
         <div><span>Sales</span><strong>{{ $monitoring ? ($selectedSales?->name ?? 'Semua dalam akses') : Auth::user()->name }}</strong></div>
     </div>
+    @if($managerHierarchy)
+        <x-crm.section id="manager-sales-hierarchy" title="Hierarki Tim Sales" description="Tim canonical dalam tanggung jawab Anda. Data operasional tetap dibatasi akses cabang dan proyek.">
+            <div class="grid gap-3 md:grid-cols-3">
+                <div><strong class="block text-sm">Supervisor</strong><span>{{ $managerHierarchy['supervisors']->pluck('name')->join(', ') ?: 'Belum ada' }}</span></div>
+                <div><strong class="block text-sm">Koordinator</strong><span>{{ $managerHierarchy['coordinators']->pluck('name')->join(', ') ?: 'Belum ada' }}</span></div>
+                <div><strong class="block text-sm">Sales</strong><span>{{ $managerHierarchy['sales']->pluck('name')->join(', ') ?: 'Belum ada' }}</span></div>
+            </div>
+        </x-crm.section>
+    @endif
     <x-crm.page-presence page-key="sales-pocketbook" :branch-id="$selectedBranchId" />
     @if(Auth::user()->isSales())
         @include('crm.sales-pocketbook._daily-reminder')

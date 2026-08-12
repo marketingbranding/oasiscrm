@@ -13,6 +13,7 @@ use App\Services\OptimisticLockService;
 use App\Services\SalesLeadSheetOptionService;
 use App\Services\SalesLeadSpreadsheetWriter;
 use App\ValueObjects\SalesLeadSpreadsheetWriteResult;
+use Illuminate\Foundation\Http\Middleware\ValidateCsrfToken;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Str;
 use Mockery;
@@ -22,6 +23,12 @@ use Tests\TestCase;
 class CoordinatorLocalFirstLeadTest extends TestCase
 {
     use RefreshDatabase;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+        $this->withoutMiddleware(ValidateCsrfToken::class);
+    }
 
     public function test_coordinator_creates_team_lead_locally_without_spreadsheet_write(): void
     {

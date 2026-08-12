@@ -6,6 +6,7 @@ use App\Models\Branch;
 use App\Models\ContentItem;
 use App\Models\LeadMaster;
 use App\Models\Role;
+use App\Models\SalesCoordinatorSales;
 use App\Models\SalesLead;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -20,6 +21,9 @@ class SalesPocketbookExportTest extends TestCase
     {
         [$branch, $project, $sales] = $this->context();
         $manager = $this->user('manager', $branch);
+        $coordinator = $this->user('sales_coordinator', $branch);
+        $coordinator->update(['supervisor_user_id' => $manager->id]);
+        SalesCoordinatorSales::create(['coordinator_user_id' => $coordinator->id, 'sales_user_id' => $sales->id]);
         $this->lead($sales, $project, 'Lead Dalam Periode', '2026-07-20');
         $this->lead($sales, $project, 'Lead Di Luar Periode', '2026-07-01');
         $this->agenda($sales, $project);

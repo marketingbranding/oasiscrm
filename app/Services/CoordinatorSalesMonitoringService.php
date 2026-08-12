@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Enums\SalesLeadStatus;
 use App\Models\ContentItem;
+use App\Models\LeadMaster;
 use App\Models\SalesLead;
 use App\Models\SalesLeadStatusHistory;
 use App\Models\User;
@@ -14,6 +15,7 @@ class CoordinatorSalesMonitoringService
 {
     public function __construct(
         private readonly CoordinatorLeadTeamService $coordinatorTeam,
+        private readonly SalesTeamScopeService $salesTeamScope,
         private readonly OrganizationScopeService $organizationScope,
         private readonly WorkspaceAccessService $workspaceAccess,
     ) {}
@@ -61,7 +63,7 @@ class CoordinatorSalesMonitoringService
             ->with(['branch:id,name', 'project:id,project_name', 'sales:id,name', 'leadSource:id,name'])
             ->latest('lead_date')->latest('id');
 
-        return [
+        $result = [
             'period' => $period,
             'filters' => [
                 'period' => $period['key'],
@@ -81,11 +83,15 @@ class CoordinatorSalesMonitoringService
             'leads' => $paginate
                 ? $leads->paginate(20, ['*'], 'lead_page')->withQueryString()
                 : $leads->get(),
-            'exportData' => (clone $leads)->reorder('lead_date')->orderBy('id')->get(),
             'agendas' => $paginate
                 ? $agendas->paginate(15, ['*'], 'agenda_page')->withQueryString()
                 : $agendas->get(),
         ];
+        if (! $paginate) {
+            $result['exportData'] = (clone $leads)->reorder('lead_date')->orderBy('id')->get();
+        }
+
+        return $result;
     }
 
     private function period(array $filters): array
@@ -111,16 +117,25 @@ class CoordinatorSalesMonitoringService
 
     private function scope(User $actor): array
     {
+        $branchIds = array_values(array_intersect(
+            $this->organizationScope->branchIds($actor, 'sales_pocketbook', 'view'),
+            $this->workspaceAccess->accessibleBranchIds($actor),
+        ));
+        $salesIds = $this->salesTeamScope->for($actor)['sales']->pluck('id');
+        $today = today()->toDateString();
+
         return [
-            'visible_user_ids' => $this->organizationScope->visibleUserIds($actor, 'sales_pocketbook', 'view'),
-            'branch_ids' => array_values(array_intersect(
-                $this->organizationScope->branchIds($actor, 'sales_pocketbook', 'view'),
-                $this->workspaceAccess->accessibleBranchIds($actor),
-            )),
-            'project_ids' => array_values(array_intersect(
-                $this->organizationScope->projectIds($actor, 'sales_pocketbook', 'view'),
-                $this->workspaceAccess->accessibleProjectIds($actor),
-            )),
+            'branch_ids' => $branchIds,
+            'project_ids' => LeadMaster::query()
+                ->whereIn('branch_id', $branchIds)
+                ->whereIn('id', $this->workspaceAccess->accessibleProjectIds($actor))
+                ->where('is_active', true)
+                ->whereHas('assignedUsers', fn ($query) => $query
+                    ->whereIn('users.id', $salesIds)
+                    ->where('project_user.is_active', true)
+                    ->where(fn ($query) => $query->whereNull('project_user.assignment_start_date')->orWhereDate('project_user.assignment_start_date', '<=', $today))
+                    ->where(fn ($query) => $query->whereNull('project_user.assignment_end_date')->orWhereDate('project_user.assignment_end_date', '>=', $today)))
+                ->pluck('id')->map(fn ($id) => (int) $id)->all(),
         ];
     }
 
@@ -133,13 +148,13 @@ class CoordinatorSalesMonitoringService
             ->where('project_user.is_active', true)
             ->where(fn ($query) => $query->whereNull('project_user.assignment_start_date')->orWhereDate('project_user.assignment_start_date', '<=', $today))
             ->where(fn ($query) => $query->whereNull('project_user.assignment_end_date')->orWhereDate('project_user.assignment_end_date', '>=', $today));
+        $teamSalesIds = $this->salesTeamScope->displayedFor($actor, $scope['branch_ids'], $scope['project_ids'])['sales']->pluck('id');
 
-        $sales = $this->coordinatorTeam->currentSalesQuery($actor)
-            ->whereIn('users.id', $scope['visible_user_ids'])
-            ->whereHas('assignedProjects', $assignment)
+        $sales = User::query()
+            ->whereIn('users.id', $teamSalesIds)
             ->with([
                 'branch:id,name',
-                'assignedProjects' => fn ($query) => $assignment($query)->orderByDesc('project_user.is_primary')->orderBy('lead_master.project_name'),
+                'assignedProjects' => fn ($query) => $assignment($query)->with('branch:id,name')->orderByDesc('project_user.is_primary')->orderBy('lead_master.project_name'),
             ])->orderBy('name')->get(['users.id', 'users.name', 'users.branch_id']);
 
         $sales->each(function (User $user) {
@@ -153,18 +168,10 @@ class CoordinatorSalesMonitoringService
 
     private function leadBase(array $salesIds, array $scope): Builder
     {
-        $today = today()->toDateString();
-
         return SalesLead::query()
             ->whereIn('sales_user_id', $salesIds)
             ->whereIn('branch_id', $scope['branch_ids'])
-            ->whereIn('project_id', $scope['project_ids'])
-            ->whereExists(fn ($query) => $query->selectRaw('1')->from('project_user')
-                ->whereColumn('project_user.user_id', 'sales_leads.sales_user_id')
-                ->whereColumn('project_user.project_id', 'sales_leads.project_id')
-                ->where('project_user.is_active', true)
-                ->where(fn ($query) => $query->whereNull('assignment_start_date')->orWhereDate('assignment_start_date', '<=', $today))
-                ->where(fn ($query) => $query->whereNull('assignment_end_date')->orWhereDate('assignment_end_date', '>=', $today)));
+            ->whereIn('project_id', $scope['project_ids']);
     }
 
     private function statusCounts(array $salesIds, array $scope, array $period)
@@ -188,8 +195,6 @@ class CoordinatorSalesMonitoringService
 
     private function agendaBase(array $salesIds, array $scope, array $period): Builder
     {
-        $today = today()->toDateString();
-
         return ContentItem::query()
             ->where('item_type', 'agenda')
             ->where('agenda_type', ContentItem::SALES_AGENDA_TYPE)
@@ -197,12 +202,6 @@ class CoordinatorSalesMonitoringService
             ->whereIn('branch_id', $scope['branch_ids'])
             ->whereIn('sales_project_id', $scope['project_ids'])
             ->whereDate('scheduled_date', '>=', $period['from']->toDateString())
-            ->whereDate('scheduled_date', '<=', $period['to']->toDateString())
-            ->whereExists(fn ($query) => $query->selectRaw('1')->from('project_user')
-                ->whereColumn('project_user.user_id', 'content_items.owner_user_id')
-                ->whereColumn('project_user.project_id', 'content_items.sales_project_id')
-                ->where('project_user.is_active', true)
-                ->where(fn ($query) => $query->whereNull('assignment_start_date')->orWhereDate('assignment_start_date', '<=', $today))
-                ->where(fn ($query) => $query->whereNull('assignment_end_date')->orWhereDate('assignment_end_date', '>=', $today)));
+            ->whereDate('scheduled_date', '<=', $period['to']->toDateString());
     }
 }

@@ -3,7 +3,7 @@
 namespace App\Services;
 
 use App\Models\ContentItem;
-use App\Models\SalesCoordinatorSales;
+use App\Models\LeadMaster;
 use App\Models\SalesLead;
 use App\Models\User;
 use Carbon\CarbonImmutable;
@@ -15,6 +15,7 @@ class SupervisorSalesMonitoringService
     public function __construct(
         private readonly OrganizationScopeService $organizationScope,
         private readonly WorkspaceAccessService $workspaceAccess,
+        private readonly SalesTeamScopeService $salesTeamScope,
     ) {}
 
     public function isSupervisor(User $user): bool
@@ -152,39 +153,52 @@ class SupervisorSalesMonitoringService
 
     private function scope(User $actor): array
     {
-        $workspaceBranchIds = $this->workspaceAccess->accessibleBranchIds($actor);
+        $branchIds = array_values(array_intersect(
+            $this->organizationScope->branchIds($actor, 'sales_pocketbook', 'view'),
+            $this->workspaceAccess->accessibleBranchIds($actor),
+        ));
+        $salesIds = $this->salesTeamScope->for($actor)['sales']->pluck('id');
+        $today = today()->toDateString();
 
         return [
-            'branch_ids' => array_values(array_intersect(
-                $this->organizationScope->branchIds($actor, 'sales_pocketbook', 'view'),
-                $workspaceBranchIds,
-            )),
-            'project_ids' => $this->organizationScope->projectIds($actor, 'sales_pocketbook', 'view'),
+            'branch_ids' => $branchIds,
+            'project_ids' => LeadMaster::query()
+                ->whereIn('branch_id', $branchIds)
+                ->whereIn('id', $this->workspaceAccess->accessibleProjectIds($actor))
+                ->where('is_active', true)
+                ->whereHas('assignedUsers', fn ($query) => $query
+                    ->whereIn('users.id', $salesIds)
+                    ->where('project_user.is_active', true)
+                    ->where(fn ($query) => $query->whereNull('project_user.assignment_start_date')->orWhereDate('project_user.assignment_start_date', '<=', $today))
+                    ->where(fn ($query) => $query->whereNull('project_user.assignment_end_date')->orWhereDate('project_user.assignment_end_date', '>=', $today)))
+                ->pluck('id')->map(fn ($id) => (int) $id)->all(),
         ];
     }
 
     private function team(User $actor, array $scope): array
     {
-        $visibleIds = $this->organizationScope->visibleUserIds($actor, 'sales_pocketbook');
-        $branchIds = $scope['branch_ids'];
-        $projectIds = $scope['project_ids'];
-        $coordinators = User::query()->where('supervisor_user_id', $actor->id)->where('is_active', true)->whereIn('id', $visibleIds)
-            ->whereHas('role', fn (Builder $query) => $query->where('slug', 'sales_coordinator'))->orderBy('name')->get(['id', 'name']);
-        $mappings = SalesCoordinatorSales::query()->current()->withValidRoles()->whereIn('coordinator_user_id', $coordinators->pluck('id'))->whereIn('sales_user_id', $visibleIds)
-            ->whereHas('sales', fn (Builder $query) => $query->where('is_active', true)->whereIn('branch_id', $branchIds))->with(['coordinator:id,name'])->get();
-        $salesIds = $mappings->pluck('sales_user_id')->unique()->values();
-        $today = today()->toDateString();
-        $currentProjectAssignment = fn ($query) => $query
-            ->where('lead_master.is_active', true)
-            ->whereIn('lead_master.id', $projectIds)
-            ->where('project_user.is_active', true)
-            ->where(fn ($query) => $query->whereNull('project_user.assignment_start_date')->orWhereDate('project_user.assignment_start_date', '<=', $today))
-            ->where(fn ($query) => $query->whereNull('project_user.assignment_end_date')->orWhereDate('project_user.assignment_end_date', '>=', $today));
-        $sales = User::query()->whereIn('id', $salesIds)
-            ->whereHas('assignedProjects', $currentProjectAssignment)
+        $canonical = $this->salesTeamScope->displayedFor($actor, $scope['branch_ids'], $scope['project_ids']);
+        $coordinators = $canonical['coordinators']->sortBy('name')->values();
+        $salesIdsByCoordinator = $canonical['sales_ids_by_coordinator']->map(
+            fn ($ids) => $ids->mapWithKeys(fn ($id) => [(int) $id => true])->all()
+        )->all();
+        $coordinatorNames = $coordinators->keyBy('id');
+        $coordinatorNamesBySalesId = collect($salesIdsByCoordinator)
+            ->flatMap(fn ($salesIds, $coordinatorId) => collect(array_keys($salesIds))->map(fn ($salesId) => [
+                'sales_id' => $salesId,
+                'name' => $coordinatorNames->get((int) $coordinatorId)?->name,
+            ]))
+            ->groupBy('sales_id')
+            ->map(fn ($rows) => $rows->pluck('name')->filter()->unique()->sort()->values()->all())
+            ->all();
+        $sales = User::query()->whereIn('id', $canonical['sales']->pluck('id'))
             ->with([
                 'branch:id,name',
-                'assignedProjects' => fn ($query) => $currentProjectAssignment($query)
+                'assignedProjects' => fn ($query) => $query->whereIn('lead_master.id', $scope['project_ids'])
+                    ->where('lead_master.is_active', true)
+                    ->where('project_user.is_active', true)
+                    ->where(fn ($query) => $query->whereNull('project_user.assignment_start_date')->orWhereDate('project_user.assignment_start_date', '<=', today()->toDateString()))
+                    ->where(fn ($query) => $query->whereNull('project_user.assignment_end_date')->orWhereDate('project_user.assignment_end_date', '>=', today()->toDateString()))
                     ->orderByDesc('project_user.is_primary')
                     ->orderBy('lead_master.project_name'),
             ])->orderBy('name')->get(['id', 'name', 'branch_id']);
@@ -193,14 +207,12 @@ class SupervisorSalesMonitoringService
             $project = $primary->count() === 1 ? $primary->first() : ($user->assignedProjects->count() === 1 ? $user->assignedProjects->first() : null);
             $user->setAttribute('resolved_project_name', $project?->project_name);
         });
-        $validSalesIds = $sales->pluck('id')->flip();
-        $mappings = $mappings->filter(fn ($mapping) => $validSalesIds->has($mapping->sales_user_id));
 
         return [
             'coordinators' => $coordinators,
             'sales' => $sales,
-            'coordinator_names_by_sales_id' => $mappings->groupBy('sales_user_id')->map(fn ($rows) => $rows->pluck('coordinator.name')->filter()->unique()->sort()->values()->all())->all(),
-            'sales_ids_by_coordinator' => $mappings->groupBy('coordinator_user_id')->map(fn ($rows) => $rows->pluck('sales_user_id')->unique()->mapWithKeys(fn ($id) => [(int) $id => true])->all())->all(),
+            'coordinator_names_by_sales_id' => $coordinatorNamesBySalesId,
+            'sales_ids_by_coordinator' => $salesIdsByCoordinator,
         ];
     }
 

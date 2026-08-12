@@ -41,9 +41,11 @@ class SalesWeeklyMetricsService
         return compact('start', 'end');
     }
 
-    public function metrics(User $viewer, array $period, array $filters = []): array
+    public function metrics(User $viewer, array $period, array $filters = [], ?array $canonicalScope = null): array
     {
-        $leadQuery = $this->leadQuery($viewer, $filters);
+        $leadQuery = $canonicalScope
+            ? $this->canonicalLeadQuery($canonicalScope, $filters)
+            : $this->leadQuery($viewer, $filters);
         $metrics = [];
         foreach (self::METRIC_COLUMNS as $metric => $column) {
             $metrics[$metric] = $column === 'lead_date'
@@ -52,7 +54,9 @@ class SalesWeeklyMetricsService
                 : (clone $leadQuery)->whereBetween($column, [$period['start'], $period['end']])->count();
         }
 
-        $agendaQuery = $this->agendaQuery($viewer, $filters);
+        $agendaQuery = $canonicalScope
+            ? $this->canonicalAgendaQuery($canonicalScope, $filters)
+            : $this->agendaQuery($viewer, $filters);
         $metrics['agenda_completed'] = (clone $agendaQuery)
             ->where('status', 'done')
             ->whereBetween('completed_at', [$period['start'], $period['end']])
@@ -132,6 +136,30 @@ class SalesWeeklyMetricsService
             ->when(! empty($filters['branch_id']), fn (Builder $query) => $query->where('branch_id', $filters['branch_id']))
             ->when(! empty($filters['project_id']), fn (Builder $query) => $query->where('project_id', $filters['project_id']))
             ->when(! empty($filters['sales_user_id']), fn (Builder $query) => $query->where('sales_user_id', $filters['sales_user_id']));
+    }
+
+    public function canonicalLeadQuery(array $scope, array $filters = []): Builder
+    {
+        return SalesLead::query()
+            ->whereIn('sales_user_id', $scope['owner_ids'])
+            ->whereIn('branch_id', $scope['branch_ids'])
+            ->whereIn('project_id', $scope['project_ids'])
+            ->when(! empty($filters['branch_id']), fn (Builder $query) => $query->where('branch_id', $filters['branch_id']))
+            ->when(! empty($filters['project_id']), fn (Builder $query) => $query->where('project_id', $filters['project_id']))
+            ->when(! empty($filters['sales_user_id']), fn (Builder $query) => $query->where('sales_user_id', $filters['sales_user_id']));
+    }
+
+    public function canonicalAgendaQuery(array $scope, array $filters = []): Builder
+    {
+        return ContentItem::query()
+            ->where('item_type', 'agenda')
+            ->where('agenda_type', ContentItem::SALES_AGENDA_TYPE)
+            ->whereIn('owner_user_id', $scope['owner_ids'])
+            ->whereIn('branch_id', $scope['branch_ids'])
+            ->whereIn('sales_project_id', $scope['project_ids'])
+            ->when(! empty($filters['branch_id']), fn (Builder $query) => $query->where('branch_id', $filters['branch_id']))
+            ->when(! empty($filters['project_id']), fn (Builder $query) => $query->where('sales_project_id', $filters['project_id']))
+            ->when(! empty($filters['sales_user_id']), fn (Builder $query) => $query->where('owner_user_id', $filters['sales_user_id']));
     }
 
     public function agendaQuery(User $viewer, array $filters = []): Builder

@@ -115,6 +115,9 @@ class SalesWeeklyMetricsTest extends TestCase
         $lead = $this->lead($sales, $project, ['lead_date' => '2026-06-01', 'customer_name' => 'Old UTJ Lead', 'utj_at' => '2026-07-22 09:00:00']);
         $this->agenda($sales, $project, ['status' => 'done', 'completed_at' => '2026-07-23 12:00:00', 'activity_result' => 'Selesai']);
         $manager = $this->user('manager', $branch);
+        $coordinator = $this->user('sales_coordinator', $branch);
+        $coordinator->update(['supervisor_user_id' => $manager->id]);
+        $coordinator->currentCoordinatorSales()->attach([$sales->id, $alpha->id], ['is_active' => true]);
 
         $response = $this->actingAs($manager)->get(route('sales-pocketbook.index', ['tab' => 'report', 'period_type' => 'week', 'week' => '2026-07-22', 'sort' => 'sales', 'direction' => 'desc']));
         $response->assertOk()->assertViewHas('reportRows', fn ($rows) => $rows->pluck('sales.name')->values()->all() === ['Zulu Sales', 'Alpha Sales']

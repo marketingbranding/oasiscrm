@@ -45,8 +45,9 @@ class CoordinatorSalesMonitoringServiceTest extends TestCase
         $this->project = LeadMaster::create(['branch_id' => $this->branch->id, 'project_name' => 'Proyek Solo', 'is_active' => true]);
         $this->outsideProject = LeadMaster::create(['branch_id' => $this->outsideBranch->id, 'project_name' => 'Proyek Luar', 'is_active' => true]);
         $this->coordinator = $this->user('sales_coordinator', 'Koordinator', $this->branch);
-        $this->sales = $this->user('sales', 'Sales Tim', $this->branch, $this->coordinator);
-        $this->outsideSales = $this->user('sales', 'Sales Luar', $this->outsideBranch, $this->coordinator);
+        $this->sales = $this->user('sales', 'Sales Tim', $this->branch);
+        $elsewhere = $this->user('sales_coordinator', 'Koordinator Lain', $this->outsideBranch);
+        $this->outsideSales = $this->user('sales', 'Sales Luar', $this->outsideBranch, $elsewhere);
         $this->sales->assignedProjects()->attach($this->project, ['is_primary' => true, 'is_active' => true]);
         $this->outsideSales->assignedProjects()->attach($this->outsideProject, ['is_primary' => true, 'is_active' => true]);
         SalesCoordinatorSales::create(['coordinator_user_id' => $this->coordinator->id, 'sales_user_id' => $this->sales->id]);
@@ -79,7 +80,8 @@ class CoordinatorSalesMonitoringServiceTest extends TestCase
         $outsidePeriod = $this->lead($this->sales, 'Outside period', '2026-08-03', $this->project, $this->branch);
         $this->history($outsidePeriod, SalesLeadStatus::Utj, '2026-08-03 09:00:00');
         $this->lead($this->outsideSales, 'Outside team scope', '2026-08-11', $this->outsideProject, $this->outsideBranch);
-        $this->lead($this->sales, 'Wrong project', '2026-08-11', $this->outsideProject, $this->branch);
+        $unassignedProject = LeadMaster::create(['branch_id' => $this->branch->id, 'project_name' => 'Proyek Tidak Ditugaskan', 'is_active' => true]);
+        $this->lead($this->sales, 'Wrong project', '2026-08-11', $unassignedProject, $this->branch);
         $this->lead($this->sales, 'Wrong branch', '2026-08-11', $this->project, $this->outsideBranch);
 
         $data = app(CoordinatorSalesMonitoringService::class)->resolve($this->coordinator, [], false);
@@ -87,12 +89,16 @@ class CoordinatorSalesMonitoringServiceTest extends TestCase
         $this->assertSame(['lead_new' => 10, 'face_to_face' => 4, 'site_visit' => 3, 'utj' => 2], $data['kpi']);
         $this->assertSame('week', $data['period']['key']);
         $this->assertSame([$this->sales->id], $data['salesUsers']->pluck('id')->all());
+        $this->assertNull($data['salesRows']->firstWhere('id', $this->outsideSales->id));
+        $this->assertNotContains('Wrong project', $data['leads']->pluck('customer_name'));
     }
 
     public function test_forged_sales_filter_is_forbidden(): void
     {
+        $outsider = $this->user('sales', 'Bukan Tim', $this->branch);
+
         try {
-            app(CoordinatorSalesMonitoringService::class)->resolve($this->coordinator, ['sales_id' => $this->outsideSales->id]);
+            app(CoordinatorSalesMonitoringService::class)->resolve($this->coordinator, ['sales_id' => $outsider->id]);
             $this->fail('Expected 403.');
         } catch (HttpException $exception) {
             $this->assertSame(403, $exception->getStatusCode());

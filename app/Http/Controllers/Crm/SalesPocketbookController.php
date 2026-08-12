@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Crm;
 use App\Exports\SalesPocketbookExport;
 use App\Http\Controllers\Controller;
 use App\Models\ContentItem;
+use App\Models\LeadMaster;
 use App\Models\LeadSource;
 use App\Models\SalesLead;
 use App\Models\SalesLeadLifecycleReconciliationItem;
@@ -14,8 +15,10 @@ use App\Services\OrganizationScopeService;
 use App\Services\SalesDailyReminderService;
 use App\Services\SalesLeadSheetOptionService;
 use App\Services\SalesLeadSyncService;
+use App\Services\SalesTeamScopeService;
 use App\Services\SalesWeeklyMetricsService;
 use App\Services\WorkspaceAccessService;
+use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -29,6 +32,7 @@ class SalesPocketbookController extends Controller
         private readonly SalesWeeklyMetricsService $weeklyMetrics,
         private readonly SalesDailyReminderService $dailyReminder,
         private readonly OrganizationScopeService $organizationScope,
+        private readonly SalesTeamScopeService $salesTeamScope,
     ) {}
 
     public function index(Request $request)
@@ -65,11 +69,35 @@ class SalesPocketbookController extends Controller
         ]));
         $tab = in_array($request->query('tab'), ['leads', 'agenda', 'report'], true) ? $request->query('tab') : 'leads';
         $monitoring = ! $user->isSales();
-        $allowedBranchIds = $this->organizationScope->branchIds($user, 'sales_pocketbook');
-        $allowedProjectIds = $this->organizationScope->projectIds($user, 'sales_pocketbook');
-        $visibleSalesIds = $this->organizationScope->visibleUserIds($user, 'sales_pocketbook');
+        $allowedBranchIds = array_values(array_intersect(
+            $this->organizationScope->branchIds($user, 'sales_pocketbook'),
+            $this->workspaceAccess->accessibleBranchIds($user),
+        ));
+        $allowedProjectIds = array_values(array_intersect(
+            $this->organizationScope->projectIds($user, 'sales_pocketbook'),
+            $this->workspaceAccess->accessibleProjectIds($user),
+        ));
+        $pureManagerHierarchy = $user->hasPrimaryRole(['manager', 'branch_manager']) ? $this->salesTeamScope->for($user) : null;
+        if ($pureManagerHierarchy) {
+            $today = today()->toDateString();
+            $allowedProjectIds = LeadMaster::query()
+                ->whereIn('id', $allowedProjectIds)->whereIn('branch_id', $allowedBranchIds)->where('is_active', true)
+                ->whereHas('assignedUsers', fn (Builder $query) => $query
+                    ->whereIn('users.id', $pureManagerHierarchy['sales']->pluck('id'))
+                    ->where('project_user.is_active', true)
+                    ->where(fn (Builder $dates) => $dates->whereNull('project_user.assignment_start_date')->orWhereDate('project_user.assignment_start_date', '<=', $today))
+                    ->where(fn (Builder $dates) => $dates->whereNull('project_user.assignment_end_date')->orWhereDate('project_user.assignment_end_date', '>=', $today)))
+                ->pluck('id')->map(fn ($id) => (int) $id)->all();
+        }
+        $managerHierarchy = $pureManagerHierarchy
+            ? $this->salesTeamScope->displayedFor($user, $allowedBranchIds, $allowedProjectIds)
+            : null;
+        $visibleSalesIds = $managerHierarchy
+            ? $managerHierarchy['sales']->pluck('id')->map(fn ($id) => (int) $id)->all()
+            : $this->organizationScope->visibleUserIds($user, 'sales_pocketbook');
+        $canonicalScope = $managerHierarchy ? ['owner_ids' => $visibleSalesIds, 'branch_ids' => $allowedBranchIds, 'project_ids' => $allowedProjectIds] : null;
         $branches = $this->workspaceAccess->accessibleBranches($user)->whereIn('id', $allowedBranchIds)->values();
-        $projects = $this->workspaceAccess->accessibleProjects($user)->whereIn('id', $allowedProjectIds)->values();
+        $projects = $this->workspaceAccess->accessibleProjects($user)->whereIn('id', $allowedProjectIds)->where('is_active', true)->values();
         $allowedProjectNames = $projects->pluck('project_name')->all();
         $projects->load('assignedUsers:id');
         $selectedBranchId = $request->filled('branch_id') ? $request->integer('branch_id') : null;
@@ -106,7 +134,9 @@ class SalesPocketbookController extends Controller
 
         $reportMetric = $request->query('report_metric');
         $filterLeadPeriod = $reportMetric || $request->filled('period_type') || $request->filled('week') || ($request->filled('date_from') && $request->filled('date_to'));
-        $leads = SalesLead::query()->visibleTo($user)
+        $leads = ($canonicalScope
+            ? $this->weeklyMetrics->canonicalLeadQuery($canonicalScope)
+            : SalesLead::query()->visibleTo($user)->whereIn('sales_user_id', $visibleSalesIds))
             ->with([
                 'branch:id,name,sheet_id', 'project:id,project_name,is_nup_eligible', 'sales:id,name,supervisor_user_id',
                 'leadSource:id,name,is_active', 'siteVisits' => fn ($query) => $query->latest('id'),
@@ -136,9 +166,9 @@ class SalesPocketbookController extends Controller
         $agendaDateTo = $reportPeriod['end']->toDateString();
         $completedAgendaDrilldown = $request->boolean('report_agenda_completed');
         $missingAgendaResultDrilldown = $request->boolean('report_agenda_missing_result');
-        $agendas = ContentItem::query()
-            ->where('item_type', 'agenda')
-            ->where('agenda_type', ContentItem::SALES_AGENDA_TYPE)
+        $agendas = ($canonicalScope
+            ? $this->weeklyMetrics->canonicalAgendaQuery($canonicalScope)
+            : ContentItem::query()->where('item_type', 'agenda')->where('agenda_type', ContentItem::SALES_AGENDA_TYPE))
             ->with(['branch:id,name', 'owner:id,name', 'rescheduledFrom:id,scheduled_date'])
             ->withCount('comments')
             ->where(fn (Builder $query) => $query->whereIn('sales_project_id', $allowedProjectIds)
@@ -161,7 +191,7 @@ class SalesPocketbookController extends Controller
             'project_id' => $selectedProjectId,
             'sales_user_id' => $monitoring && $request->filled('sales_user_id') ? $request->integer('sales_user_id') : ($user->isSales() ? $user->id : null),
         ]);
-        $reportSummary = $this->weeklyMetrics->metrics($user, $reportPeriod, $reportFilters);
+        $reportSummary = $this->weeklyMetrics->metrics($user, $reportPeriod, $reportFilters, $canonicalScope);
         $reportRows = collect();
         if ($monitoring) {
             $reportRows = $this->weeklyMetrics->monitoringRows($user, $reportPeriod, $salesUsers, $projects, $reportFilters);
@@ -243,6 +273,7 @@ class SalesPocketbookController extends Controller
             ->whereHas('role', fn (Builder $query) => $query->whereIn('slug', ['sales_coordinator', 'supervisor', 'manager', 'branch_manager']))
             ->orderBy('name')->get(['id', 'name', 'branch_id']);
         $sourceOptionQuery = SalesLead::query()->visibleTo($user)
+            ->whereIn('sales_user_id', $visibleSalesIds)
             ->when($selectedBranchId, fn (Builder $query) => $query->where('branch_id', $selectedBranchId))
             ->when($selectedProjectId, fn (Builder $query) => $query->where('project_id', $selectedProjectId))
             ->when($selectedSalesId, fn (Builder $query) => $query->where('sales_user_id', $selectedSalesId));
@@ -301,6 +332,7 @@ class SalesPocketbookController extends Controller
             'reconciliationCount' => $reconciliationCount,
             'lifecycleCapabilitiesByBranch' => $lifecycleCapabilitiesByBranch,
             'coordinators' => $coordinators,
+            'managerHierarchy' => $managerHierarchy,
         ]);
     }
 
@@ -313,9 +345,27 @@ class SalesPocketbookController extends Controller
         $user = $request->user();
         $allowedBranchIds = $this->organizationScope->branchIds($user, 'sales_pocketbook', 'export');
         $allowedProjectIds = $this->organizationScope->projectIds($user, 'sales_pocketbook', 'export');
-        $visibleSalesIds = $this->organizationScope->visibleUserIds($user, 'sales_pocketbook', 'export');
+        $pureManagerHierarchy = $user->hasPrimaryRole(['manager', 'branch_manager']) ? $this->salesTeamScope->for($user) : null;
+        if ($pureManagerHierarchy) {
+            $today = today()->toDateString();
+            $allowedProjectIds = LeadMaster::query()
+                ->whereIn('id', $allowedProjectIds)->whereIn('branch_id', $allowedBranchIds)->where('is_active', true)
+                ->whereHas('assignedUsers', fn (Builder $query) => $query
+                    ->whereIn('users.id', $pureManagerHierarchy['sales']->pluck('id'))
+                    ->where('project_user.is_active', true)
+                    ->where(fn (Builder $dates) => $dates->whereNull('project_user.assignment_start_date')->orWhereDate('project_user.assignment_start_date', '<=', $today))
+                    ->where(fn (Builder $dates) => $dates->whereNull('project_user.assignment_end_date')->orWhereDate('project_user.assignment_end_date', '>=', $today)))
+                ->pluck('id')->map(fn ($id) => (int) $id)->all();
+        }
+        $managerHierarchy = $pureManagerHierarchy
+            ? $this->salesTeamScope->displayedFor($user, $allowedBranchIds, $allowedProjectIds)
+            : null;
+        $visibleSalesIds = $managerHierarchy
+            ? $managerHierarchy['sales']->pluck('id')->map(fn ($id) => (int) $id)->all()
+            : $this->organizationScope->visibleUserIds($user, 'sales_pocketbook', 'export');
+        $canonicalScope = $managerHierarchy ? ['owner_ids' => $visibleSalesIds, 'branch_ids' => $allowedBranchIds, 'project_ids' => $allowedProjectIds] : null;
         $branches = $this->workspaceAccess->accessibleBranches($user)->whereIn('id', $allowedBranchIds)->values();
-        $projects = $this->workspaceAccess->accessibleProjects($user)->whereIn('id', $allowedProjectIds)->values();
+        $projects = $this->workspaceAccess->accessibleProjects($user)->whereIn('id', $allowedProjectIds)->where('is_active', true)->values();
         $projects->load(['branch', 'assignedUsers:id']);
 
         $branchId = $request->filled('branch_id') ? $request->integer('branch_id') : null;
@@ -365,13 +415,16 @@ class SalesPocketbookController extends Controller
         $completedAgendaDrilldown = $request->boolean('report_agenda_completed');
         $missingAgendaResultDrilldown = $request->boolean('report_agenda_missing_result');
 
-        $leads = $this->weeklyMetrics->leadQuery($user, $filters)
+        $leads = ($canonicalScope
+            ? $this->weeklyMetrics->canonicalLeadQuery($canonicalScope, $filters)
+            : $this->weeklyMetrics->leadQuery($user, $filters)->whereIn('sales_user_id', $visibleSalesIds))
             ->with(['branch:id,name', 'project:id,project_name', 'sales:id,name', 'leadSource:id,name'])
             ->whereDate($leadDateColumn, '>=', $period['start']->toDateString())
             ->whereDate($leadDateColumn, '<=', $period['end']->toDateString())
             ->when($leadSourceFilter, fn (Builder $query) => $query->whereEffectiveSource($leadSourceFilter))
             ->when($request->filled('stage'), function (Builder $query) use ($request) {
                 $stage = (string) $request->query('stage');
+                abort_unless(array_key_exists($stage, SalesLead::STAGES), 422);
                 $query->whereNotNull($stage);
                 $laterStages = array_slice(SalesLead::STAGE_ORDER, array_search($stage, SalesLead::STAGE_ORDER, true) + 1);
                 foreach ($laterStages as $laterStage) {
@@ -382,7 +435,9 @@ class SalesPocketbookController extends Controller
             ->orderBy('id')
             ->get();
 
-        $agendas = $this->weeklyMetrics->agendaQuery($user, $filters)
+        $agendas = ($canonicalScope
+            ? $this->weeklyMetrics->canonicalAgendaQuery($canonicalScope, $filters)
+            : $this->weeklyMetrics->agendaQuery($user, $filters)->whereIn('owner_user_id', $visibleSalesIds))
             ->with(['branch:id,name', 'owner:id,name', 'salesProject:id,project_name', 'rescheduledFrom:id,scheduled_date'])
             ->when($completedAgendaDrilldown, fn (Builder $query) => $query->where('status', 'done'))
             ->when($missingAgendaResultDrilldown, fn (Builder $query) => $query->where('status', 'done')->whereRaw("TRIM(COALESCE(activity_result, '')) = ''"))
@@ -410,6 +465,31 @@ class SalesPocketbookController extends Controller
         );
 
         return SalesPocketbookExport::toBrowser($weeklyRows, $leads, $agendas, $period, $filename);
+    }
+
+    private function managerMetrics(User $user, array $period, array $filters, array $salesIds): array
+    {
+        $leadQuery = $this->weeklyMetrics->leadQuery($user, $filters)->whereIn('sales_user_id', $salesIds);
+        $metrics = [];
+        foreach (SalesWeeklyMetricsService::METRIC_COLUMNS as $metric => $column) {
+            $metrics[$metric] = $column === 'lead_date'
+                ? (clone $leadQuery)->whereDate($column, '>=', $period['start']->toDateString())->whereDate($column, '<=', $period['end']->toDateString())->count()
+                : (clone $leadQuery)->whereBetween($column, [$period['start'], $period['end']])->count();
+        }
+        $agendaQuery = $this->weeklyMetrics->agendaQuery($user, $filters)->whereIn('owner_user_id', $salesIds);
+        $metrics['agenda_completed'] = (clone $agendaQuery)->where('status', 'done')->whereBetween('completed_at', [$period['start'], $period['end']])->count();
+        $metrics['conversions'] = [
+            'lead_contacted' => $metrics['lead_new'] ? round($metrics['contacted'] / $metrics['lead_new'] * 100, 1) : null,
+            'contacted_met' => $metrics['contacted'] ? round($metrics['met'] / $metrics['contacted'] * 100, 1) : null,
+            'met_survey' => $metrics['met'] ? round($metrics['surveyed'] / $metrics['met'] * 100, 1) : null,
+            'survey_utj' => $metrics['surveyed'] ? round($metrics['utj'] / $metrics['surveyed'] * 100, 1) : null,
+            'utj_documents' => $metrics['utj'] ? round($metrics['documents_completed'] / $metrics['utj'] * 100, 1) : null,
+            'documents_akad' => $metrics['documents_completed'] ? round($metrics['akad'] / $metrics['documents_completed'] * 100, 1) : null,
+        ];
+        $lastInput = collect([(clone $leadQuery)->max('created_at'), (clone $agendaQuery)->max('created_at')])->filter()->max();
+        $metrics['last_input'] = $lastInput ? CarbonImmutable::parse($lastInput, config('app.timezone')) : null;
+
+        return $metrics;
     }
 
     private function filterRules(): array

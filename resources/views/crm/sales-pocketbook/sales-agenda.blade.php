@@ -85,7 +85,7 @@
                 </tbody>
             </table>
         </div>
-        {{ $agendas->links() }}
+        <x-crm.pagination :collection="$agendas" :show-per-page="false" />
     </x-crm.section>
 </div>
 @endsection

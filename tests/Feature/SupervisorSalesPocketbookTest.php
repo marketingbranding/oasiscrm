@@ -107,16 +107,18 @@ class SupervisorSalesPocketbookTest extends TestCase
         $this->assertArrayNotHasKey($this->outsideSales->id, $data['coordinatorNamesBySalesId']);
     }
 
-    public function test_branch_scope_excludes_descendants_and_mappings_outside_accessible_branch(): void
+    public function test_canonical_team_people_outside_workspace_scope_are_hidden(): void
     {
         $outsideCoordinator = $this->user('sales_coordinator', 'Koordinator Hierarki Luar', $this->outsideBranch, $this->supervisor);
-        $outsideHierarchySales = $this->user('sales', 'Sales Hierarki Luar', $this->outsideBranch, $outsideCoordinator);
+        $outsideHierarchySales = $this->user('sales', 'Sales Hierarki Luar', $this->outsideBranch);
         SalesCoordinatorSales::create(['coordinator_user_id' => $outsideCoordinator->id, 'sales_user_id' => $outsideHierarchySales->id]);
+        $this->lead($outsideHierarchySales, 'LEAD_OUTSIDE_SCOPE', '2026-08-10', 'synced');
 
         $data = $this->resolve([]);
 
         $this->assertNotContains($outsideCoordinator->id, $data['coordinators']->pluck('id'));
         $this->assertNotContains($outsideHierarchySales->id, $data['salesUsers']->pluck('id'));
+        $this->assertNull($data['salesRows']->firstWhere('id', $outsideHierarchySales->id));
     }
 
     public function test_forged_coordinator_and_sales_filters_return_403(): void
@@ -221,16 +223,16 @@ class SupervisorSalesPocketbookTest extends TestCase
         @unlink($leadPath);
     }
 
-    public function test_team_excludes_sales_without_current_assignment_in_allowed_projects(): void
+    public function test_pivot_only_sales_without_hierarchy_or_current_project_assignment_remains_visible(): void
     {
-        $unassigned = $this->user('sales', 'Sales Tanpa Proyek Scope', $this->branch, $this->coordinatorA);
-        $unassigned->assignedProjects()->attach($this->outsideProject, ['is_primary' => true, 'is_active' => true]);
+        $unassigned = $this->user('sales', 'Sales Tanpa Proyek Scope', $this->branch);
         SalesCoordinatorSales::create(['coordinator_user_id' => $this->coordinatorA->id, 'sales_user_id' => $unassigned->id]);
 
         $data = $this->resolve([]);
 
-        $this->assertNotContains($unassigned->id, $data['salesUsers']->pluck('id'));
-        $this->assertArrayNotHasKey($unassigned->id, $data['coordinatorNamesBySalesId']);
+        $this->assertContains($unassigned->id, $data['salesUsers']->pluck('id'));
+        $this->assertSame(['Koordinator A'], $data['coordinatorNamesBySalesId'][$unassigned->id]);
+        $this->assertSame(0, $data['salesRows']->firstWhere('id', $unassigned->id)->lead_count);
     }
 
     public function test_supervisor_exports_only_visible_period_records_without_duplicate_business_rows(): void
@@ -255,6 +257,19 @@ class SupervisorSalesPocketbookTest extends TestCase
         $this->assertSame($visibleLead->customer_name, $leadSheet->getCell('D2')->getValue());
         $this->assertSame('Perlu Sync Ulang', $leadSheet->getCell('M2')->getValue());
         @unlink($leadPath);
+    }
+
+    public function test_supervisor_ui_uses_canonical_sections_and_shared_date_fields(): void
+    {
+        $response = $this->actingAs($this->supervisor)->get(route('sales-pocketbook.index'));
+
+        $response->assertOk()
+            ->assertSee('Pantau Koordinator dan Sales dalam tim Anda.')
+            ->assertSee('Koordinator Saya')
+            ->assertSee('Sales Tim')
+            ->assertSee('crm-section', false)
+            ->assertSee('date-wrapper', false);
+        $this->assertStringNotContainsString('type="date"', file_get_contents(resource_path('views/crm/sales-pocketbook/supervisor-monitoring.blade.php')));
     }
 
     public function test_selected_sales_detail_contains_only_selected_records_and_no_write_or_sync_routes(): void

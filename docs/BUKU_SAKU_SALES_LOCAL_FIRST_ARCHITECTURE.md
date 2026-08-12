@@ -126,13 +126,31 @@ Promo is an OASIS-owned local master, not a Google-derived dropdown. Lead input 
 
 The physical Google `lead` projection uses `nama_promo`. It carries the exact OASIS Promo display name captured for delivery; Google `id_promo`, helper lists, formulas, or workbook lookups are not local identity and must not be read to resolve Promo. `nama_promo` is a physical delivery column, while OASIS local Promo identity remains authoritative.
 
-## 6. Coordinator-to-Sales Assignment
+## 6. Final Team Semantics
 
-Coordinator-to-Sales membership uses a dedicated database pivot between OASIS users. The pivot is the source of truth for which Sales users a coordinator may manage or receive in assignment controls.
+Team membership answers **who** belongs below a viewer. Record scope answers **where** that viewer may see or act. These are separate checks and neither one expands the other.
 
-The relationship must use user IDs, database constraints, active-account checks, organization scope, and policy enforcement. Display names, spreadsheet names, NIK values, and reporting-hierarchy inference are not durable relationship keys.
+Management hierarchy uses `users.supervisor_user_id`:
 
-Exact table name, columns, indexes, lifecycle fields, and migration behavior must be defined by the implementing migration and models. Do not reuse Google `data_sales` as this pivot and do not infer the relationship during requests.
+- Manager or Branch Manager may supervise an SPV;
+- SPV may supervise a Coordinator;
+- direct Manager or Branch Manager to Coordinator assignment is valid and does not require an intermediate SPV;
+- this hierarchy must not be inferred from names, spreadsheet values, branch membership, project assignment, or role alone.
+
+Coordinator-to-Sales membership uses only the current `sales_coordinator_sales` relationship. Sales users do not need `users.supervisor_user_id` to point to a Coordinator, SPV, Manager, or Branch Manager. `users.supervisor_user_id` must not be used as a fallback for Coordinator-to-Sales membership, and historical coordinator relationships must not grant current team access.
+
+Both relationship families use OASIS user IDs, database constraints, active-account checks, and policy enforcement. Google `data_sales`, display names, spreadsheet names, and NIK values have no runtime role.
+
+Every team query applies two independent stages:
+
+1. Resolve **team WHO** from the current reporting episode: Manager or Branch Manager descendants through `users.supervisor_user_id`, including a directly assigned Coordinator; SPV descendants through `users.supervisor_user_id`; and each included Coordinator's current `sales_coordinator_sales` members.
+2. Intersect records with **record WHERE** from `OrganizationScopeService` and `WorkspaceAccessService`, including applicable branch, project, assignment-window, permission, and workspace rights.
+
+A person in the team does not make all of that person's records visible. A record in an accessible branch or project does not make its owner a team member. Explicit inaccessible people, branches, projects, or records are denied rather than replaced with a fallback.
+
+Current monitoring uses the current episode only: current active reporting edges, current Coordinator-to-Sales edges, and applicable active account and assignment windows. Historical episodes remain available only for authorized historical reporting or audit and must preserve the relationships effective during the selected period; they must not grant current workspace access.
+
+Duplicate paths are normalized deliberately. A Sales user reached through multiple Coordinators appears once in global team totals, people lists, and record result sets by user or record ID. Per-Coordinator breakdowns preserve one edge for each current Coordinator-to-Sales relationship, so the same Sales user may appear once under each applicable Coordinator. Aggregation must state whether it is global-deduplicated or edge-based and must not multiply lead, agenda, or lifecycle counts because the same person is reachable through multiple paths.
 
 ## 7. Weekly Metrics from First Lifecycle Transitions
 
@@ -158,9 +176,16 @@ Supervisor Monitoring Tim is a primary read-only branch of the Buku Saku Sales f
 - Sales Agenda exports;
 - lead exports.
 
-Visible team membership is resolved from `supervisor_user_id` first, then from the current `sales_coordinator_sales` relationship, and is always intersected with the supervisor's authorized organization scope. Names, spreadsheet values, and historical relationships must not expand this scope.
+Visible team membership follows Section 6: management levels use current `users.supervisor_user_id` edges, while Coordinator-to-Sales membership uses only current `sales_coordinator_sales` edges. Every result is intersected with `OrganizationScopeService` record scope and `WorkspaceAccessService` workspace rights. Names, spreadsheet values, branch/project coincidence, Sales supervisor fields, and historical relationships must not expand current scope.
 
-This branch permits no synchronization, editing, or operational input. All monitoring and exports read OASIS data only. Google and `data_sales` have no runtime role in KPI calculation, attention items, hierarchy resolution, monitoring, or exports.
+Role workspace outcomes are:
+
+- Manager and Branch Manager: read-only monitoring for authorized organization scope across current SPV and directly or indirectly supervised Coordinator episodes, plus those Coordinators' current Sales edges;
+- SPV: read-only monitoring for authorized organization scope across current directly supervised Coordinators and those Coordinators' current Sales edges;
+- Coordinator: scoped Lead Master operations plus read-only Monitoring Mingguan and Agenda Sales Tim for current `sales_coordinator_sales` members, always within authorized organization scope and workspace rights;
+- Sales: own-only Buku Saku Sales workspace and own records within authorized branch/project assignments; team edges, shared branch/project access, or a populated `supervisor_user_id` do not grant another Sales user's records.
+
+Monitoring branches permit no synchronization, editing, or operational input unless a separate existing permission and policy explicitly grants that operation. All monitoring and exports read OASIS data only. Google and `data_sales` have no runtime role in KPI calculation, attention items, hierarchy resolution, monitoring, or exports.
 
 Google Login remains Phase 2. Its shared application URL and authentication boundary are unchanged by Supervisor Monitoring Tim.
 

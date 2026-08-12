@@ -11,7 +11,6 @@ use App\Http\Requests\AdminUserUpdateRequest;
 use App\Models\Branch;
 use App\Models\LeadMaster;
 use App\Models\Role;
-use App\Models\SalesCoordinatorSales;
 use App\Models\User;
 use App\Services\AccountAuditService;
 use App\Services\BranchAssignmentService;
@@ -19,6 +18,7 @@ use App\Services\OptimisticLockService;
 use App\Services\OrganizationScopeService;
 use App\Services\ProjectAssignmentService;
 use App\Services\ReportingHierarchyService;
+use App\Services\SalesCoordinatorAssignmentService;
 use App\Services\UserAccountService;
 use App\Services\UserAdministrationService;
 use App\Services\UserInvitationService;
@@ -39,6 +39,7 @@ class AdminUserController extends Controller
         private readonly BranchAssignmentService $branches,
         private readonly ProjectAssignmentService $projects,
         private readonly ReportingHierarchyService $hierarchy,
+        private readonly SalesCoordinatorAssignmentService $salesCoordinators,
         private readonly UserInvitationService $invitations,
         private readonly UserProvisioningService $provisioning,
         private readonly UserAccountService $accounts,
@@ -186,7 +187,7 @@ class AdminUserController extends Controller
             $this->branches->assign($user, $branchIds, (int) $data['branch_id'], $actor);
             $this->projects->assign($user, $projectIds, $this->nullableInt($data['primary_project_id'] ?? null), $actor);
             $this->hierarchy->assignSupervisor($user, $this->nullableInt($data['supervisor_user_id'] ?? null), $actor);
-            $this->syncCoordinatorSales($user, (array) ($data['coordinator_sales_ids'] ?? []));
+            $this->salesCoordinators->sync($user, (array) ($data['coordinator_sales_ids'] ?? []));
             $this->audit->log('user_updated', $user, $actor, $old, $user->only(['name', 'email', 'phone', 'role_id']));
 
             return redirect()->route('admin-users.show', $user)->with('success', 'Data pengguna berhasil diperbarui.');
@@ -336,26 +337,6 @@ class AdminUserController extends Controller
             ->where('account_status', AccountStatus::Active->value)
             ->whereHas('role', fn (Builder $query) => $query->where('slug', 'sales'))
             ->orderBy('name');
-    }
-
-    private function syncCoordinatorSales(User $coordinator, array $salesIds): void
-    {
-        $selected = collect($salesIds)->map(fn ($id) => (int) $id)->unique();
-        $current = SalesCoordinatorSales::query()->where('coordinator_user_id', $coordinator->id)->current()->get();
-        $current->whereNotIn('sales_user_id', $selected)->each->update(['is_active' => false, 'ended_at' => today()]);
-
-        if (! $coordinator->hasPrimaryRole('sales_coordinator')) {
-            return;
-        }
-
-        foreach ($selected->diff($current->pluck('sales_user_id')) as $salesId) {
-            SalesCoordinatorSales::create([
-                'coordinator_user_id' => $coordinator->id,
-                'sales_user_id' => $salesId,
-                'is_active' => true,
-                'started_at' => today(),
-            ]);
-        }
     }
 
     private function branchIds(array $data): array

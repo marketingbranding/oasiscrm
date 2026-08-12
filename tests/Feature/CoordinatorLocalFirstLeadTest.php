@@ -106,6 +106,25 @@ class CoordinatorLocalFirstLeadTest extends TestCase
         $this->assertSame($syncId, $lead->fresh()->external_sync_id);
     }
 
+    public function test_push_uses_canonical_oasis_sales_name_and_keeps_sync_identity(): void
+    {
+        [$branch, $project, $sales, $coordinator] = $this->context();
+        $sales->update(['name' => 'Canonical OASIS Sales']);
+        $lead = $this->lead($sales, $project);
+        $writer = Mockery::mock(SalesLeadSpreadsheetWriter::class);
+        $writer->shouldReceive('append')->once()->withArgs(fn (SalesLead $item, string $sheet, array $fields, string $syncId) => $item->is($lead)
+            && $sheet === 'lead'
+            && $fields['sales_pic'] === 'Canonical OASIS Sales'
+            && $syncId === $lead->external_sync_id
+        )->andReturn($this->writeResult($branch, $lead->external_sync_id, 'REMOTE-NAME'));
+        $this->app->instance(SalesLeadSpreadsheetWriter::class, $writer);
+
+        $result = app(CoordinatorLeadPushService::class)->push($coordinator);
+
+        $this->assertSame(['processed' => 1, 'synced' => 1, 'failed' => 0], $result);
+        $this->assertSame($lead->external_sync_id, $lead->fresh()->external_sync_id);
+    }
+
     public function test_push_failure_preserves_lead_retry_succeeds_and_synced_second_push_is_noop(): void
     {
         [$branch, $project, $sales, $coordinator] = $this->context();

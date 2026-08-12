@@ -16,7 +16,7 @@ class UserImportParser
 {
     public const FIELDS = [
         'name', 'email', 'role', 'primary_branch', 'additional_branches',
-        'primary_project', 'additional_projects', 'supervisor_email', 'status',
+        'primary_project', 'additional_projects', 'supervisor_email', 'status', 'sales_coordinator_email',
     ];
 
     /** @return array<int, array{row_number:int, raw_data:array<string, string>, parser_errors:array<int, string>}> */
@@ -56,11 +56,13 @@ class UserImportParser
             }
 
             $actualHeaders = [];
-            foreach (range(1, 9) as $column) {
+            foreach (range(1, 10) as $column) {
                 $actualHeaders[] = $this->normalizeHeader((string) $sheet->getCell(Coordinate::stringFromColumnIndex($column).'1')->getValue());
             }
             $expectedHeaders = array_map($this->normalizeHeader(...), UserImportTemplateExport::HEADERS);
-            if ($actualHeaders !== $expectedHeaders) {
+            $legacyHeaders = array_slice($expectedHeaders, 0, 9);
+            $columnCount = $actualHeaders === $expectedHeaders ? 10 : 9;
+            if ($columnCount === 9 && (array_slice($actualHeaders, 0, 9) !== $legacyHeaders || $actualHeaders[9] !== '')) {
                 $this->invalid('Header sheet IMPORT USER tidak sesuai template. Gunakan tepat: '.implode(', ', UserImportTemplateExport::HEADERS).'.');
             }
 
@@ -68,7 +70,7 @@ class UserImportParser
             for ($rowNumber = 2; $rowNumber <= min(502, max(2, $sheet->getHighestDataRow())); $rowNumber++) {
                 $values = [];
                 $errors = [];
-                foreach (range(1, 9) as $column) {
+                foreach (range(1, $columnCount) as $column) {
                     $coordinate = Coordinate::stringFromColumnIndex($column).$rowNumber;
                     $cell = $sheet->getCell($coordinate);
                     $value = $cell->getValue();
@@ -89,7 +91,7 @@ class UserImportParser
 
                 $rows[] = [
                     'row_number' => $rowNumber,
-                    'raw_data' => array_combine(self::FIELDS, $values),
+                    'raw_data' => array_combine(self::FIELDS, array_pad($values, count(self::FIELDS), '')),
                     'parser_errors' => array_values(array_unique($errors)),
                 ];
             }

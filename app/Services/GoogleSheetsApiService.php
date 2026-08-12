@@ -11,6 +11,7 @@ use Google\Service\Sheets\BatchUpdateValuesRequest;
 use Google\Service\Sheets\CopyPasteRequest;
 use Google\Service\Sheets\GridRange;
 use Google\Service\Sheets\Request;
+use Google\Service\Sheets\SetDataValidationRequest;
 use Google\Service\Sheets\ValueRange;
 use GuzzleHttp\Client as GuzzleClient;
 use RuntimeException;
@@ -284,6 +285,35 @@ class GoogleSheetsApiService
         }
 
         return null;
+    }
+
+    public function makeColumnValidationWarningOnly(string $spreadsheetId, string $sheetName, int $sheetId, int $columnIndex): void
+    {
+        $spreadsheet = $this->sheets->spreadsheets->get($spreadsheetId, [
+            'ranges' => [$this->quoteSheetName($sheetName).'!'.$this->columnLetter($columnIndex + 1).'2'],
+            'includeGridData' => true,
+            'fields' => 'sheets.data.rowData.values.dataValidation',
+        ]);
+        $rule = $spreadsheet->getSheets()[0]?->getData()[0]?->getRowData()[0]?->getValues()[0]?->getDataValidation();
+        if ($rule === null || ! in_array($rule->getCondition()?->getType(), ['ONE_OF_LIST', 'ONE_OF_RANGE'], true) || ! $rule->getStrict()) {
+            return;
+        }
+
+        $rule->setStrict(false);
+        $request = new Request([
+            'setDataValidation' => new SetDataValidationRequest([
+                'range' => new GridRange([
+                    'sheetId' => $sheetId,
+                    'startRowIndex' => 1,
+                    'startColumnIndex' => $columnIndex,
+                    'endColumnIndex' => $columnIndex + 1,
+                ]),
+                'rule' => $rule,
+            ]),
+        ]);
+        $this->sheets->spreadsheets->batchUpdate($spreadsheetId, new BatchUpdateSpreadsheetRequest([
+            'requests' => [$request],
+        ]));
     }
 
     public function hideColumns(string $spreadsheetId, int $sheetId, int $startIndex, int $endIndex): void

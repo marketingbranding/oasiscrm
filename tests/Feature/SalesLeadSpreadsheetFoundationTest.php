@@ -72,6 +72,7 @@ class SalesLeadSpreadsheetFoundationTest extends TestCase
         $google->shouldReceive('batchGetRaw')->once()->with('sheet-status-alias', ["'lead'!1:2"], 'FORMATTED_VALUE')->andReturn(['lead' => [$headers, []]]);
         $google->shouldReceive('batchGetRaw')->once()->with('sheet-status-alias', ["'lead'!1:2"], 'FORMULA')->andReturn(['lead' => $formulas]);
         $google->shouldReceive('columnMetadata')->once()->with('sheet-status-alias', ['lead'])->andReturn(['lead' => $metadata]);
+        $google->shouldReceive('makeColumnValidationWarningOnly')->once()->with('sheet-status-alias', 'lead', 17, 9);
         $contracts = new SalesLeadSpreadsheetContract($google);
 
         $resolved = $contracts->resolve($lead, 'lead');
@@ -253,8 +254,8 @@ class SalesLeadSpreadsheetFoundationTest extends TestCase
 
         $sheetIdentities = Mockery::mock(SalesSheetIdentityService::class);
         $sheetIdentities->shouldReceive('projectValue')->andReturn('OASIS');
-        $sheetIdentities->shouldReceive('salesValue')
-            ->andReturnUsing(fn ($resultBranch, $resultSales) => $resultBranch->is($branch) && $resultSales->getKey() === $sales->getKey() ? 'Sales PIC' : 'OTHER');
+        $sheetIdentities->shouldNotReceive('salesValue');
+        $sales->update(['name' => 'Canonical OASIS Sales']);
         $service = new SalesLeadService(
             Mockery::mock(PhoneNormalizationService::class),
             Mockery::mock(SalesLeadLifecycleService::class),
@@ -266,6 +267,7 @@ class SalesLeadSpreadsheetFoundationTest extends TestCase
         $this->assertSame('Online', $fields['sumber_lead']);
         $this->assertSame('Instagram', $fields['kanal_masuk']);
         $this->assertSame('Follow Up', $fields['aktivitas_lead']);
+        $this->assertSame('Canonical OASIS Sales', $fields['sales_pic']);
         $this->assertArrayNotHasKey('source', $fields);
         $this->assertArrayNotHasKey('platform', $fields);
         $this->assertArrayNotHasKey('campaign_name', $fields);
@@ -724,9 +726,10 @@ class SalesLeadSpreadsheetFoundationTest extends TestCase
     private function validLeadMetadata(array $headers): array
     {
         $metadata = array_fill(0, count($headers), null);
-        foreach (['nama_promo', $headers[3], $headers[4], $headers[5], 'proyek', 'sales_pic'] as $header) {
+        foreach (['nama_promo', $headers[3], $headers[4], $headers[5], 'proyek'] as $header) {
             $metadata[array_search($header, $headers, true)] = ['type' => 'select', 'strict' => true, 'options' => ['Option']];
         }
+        $metadata[array_search('sales_pic', $headers, true)] = ['type' => 'select', 'strict' => false, 'options' => ['Option']];
         $metadata[array_search('tanggal_lead', $headers, true)] = ['type' => 'date', 'strict' => false, 'options' => []];
         $metadata[array_search('status_lead', $headers, true)] = ['type' => 'select', 'strict' => true, 'options' => ['No Respon', 'Diskusi', 'Tatap Muka', 'Cek Lokasi', 'UTJ', 'Tidak Lolos BI Checking', 'Cek Slik', 'Jadi Freelance', 'Akad']];
 

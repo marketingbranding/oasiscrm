@@ -13,6 +13,6 @@ class UserImportReadFilter implements IReadFilter
             && $row <= 502
             && strlen($columnAddress) === 1
             && $columnAddress >= 'A'
-            && $columnAddress <= 'I';
+            && $columnAddress <= 'J';
     }
 }

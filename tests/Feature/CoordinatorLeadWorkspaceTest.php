@@ -44,6 +44,23 @@ class CoordinatorLeadWorkspaceTest extends TestCase
         $this->assertStringNotContainsString('type="date"', $view);
     }
 
+    public function test_lead_team_table_exposes_safe_sync_status_contract(): void
+    {
+        $view = file_get_contents(resource_path('views/crm/sales-pocketbook/coordinator-leads.blade.php'));
+
+        $this->assertStringContainsString('<th>Status Sync</th>', $view);
+        foreach ([
+            "'pending_create' => ['Belum Sync', 'pending']",
+            "'synced' => ['Tersinkron', 'success']",
+            "'pending_update' => ['Perlu Sync', 'warning']",
+            "'sync_failed' => ['Sync Gagal', 'danger']",
+        ] as $mapping) {
+            $this->assertStringContainsString($mapping, $view);
+        }
+        $this->assertStringContainsString('Sinkronisasi gagal. Silakan coba lagi.', $view);
+        $this->assertStringNotContainsString('{{ $lead->last_sync_error }}', $view);
+    }
+
     public function test_required_master_messages_use_oasis_language_not_spreadsheet_language(): void
     {
         $request = new StoreSalesLeadRequest;

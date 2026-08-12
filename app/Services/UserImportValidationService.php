@@ -32,7 +32,8 @@ class UserImportValidationService
 
         $fileEmails = collect($parsedRows)->map(fn (array $row) => $this->key($row['raw_data']['email']))->filter()->values();
         $supervisorEmails = collect($parsedRows)->map(fn (array $row) => $this->key($row['raw_data']['supervisor_email']))->filter()->values();
-        $lookupEmails = $fileEmails->merge($supervisorEmails)->unique()->values()->all();
+        $coordinatorEmails = collect($parsedRows)->map(fn (array $row) => $this->key($row['raw_data']['sales_coordinator_email']))->filter()->values();
+        $lookupEmails = $fileEmails->merge($supervisorEmails)->merge($coordinatorEmails)->unique()->values()->all();
         $existingUsers = User::query()
             ->with(['role.permissions', 'branch', 'branches', 'assignedProjects'])
             ->when($lookupEmails !== [], fn ($query) => $query->whereIn(DB::raw('LOWER(email)'), $lookupEmails), fn ($query) => $query->whereRaw('1 = 0'))
@@ -163,6 +164,7 @@ class UserImportValidationService
                     'additional_projects' => $additionalProjectLabels,
                     'project_ids' => $projectIds,
                     'supervisor_email' => $this->key($raw['supervisor_email']),
+                    'sales_coordinator_email' => $this->key($raw['sales_coordinator_email']),
                     'status' => $status,
                 ],
                 'errors' => array_values(array_unique($errors)),
@@ -180,6 +182,34 @@ class UserImportValidationService
 
         $fileRowsByEmail = collect($rows)->filter(fn (array $row, string $key) => ! str_starts_with($key, '#'));
         foreach ($rows as $key => &$row) {
+            $coordinatorEmail = $row['normalized_data']['sales_coordinator_email'];
+            if ($coordinatorEmail !== '') {
+                if ($row['normalized_data']['role_slug'] !== 'sales') {
+                    $row['errors'][] = 'Koordinator Sales hanya boleh diisi untuk pengguna dengan role sales.';
+                } elseif (filter_var($coordinatorEmail, FILTER_VALIDATE_EMAIL) === false || mb_strlen($coordinatorEmail) > 255) {
+                    $row['errors'][] = 'Email Koordinator Sales harus berupa alamat email yang valid dan maksimal 255 karakter.';
+                } elseif ($fileRowsByEmail->has($coordinatorEmail)) {
+                    $coordinatorRow = $fileRowsByEmail->get($coordinatorEmail);
+                    if (! $coordinatorRow['preflight_valid'] || $coordinatorRow['normalized_data']['role_slug'] !== 'sales_coordinator') {
+                        $row['errors'][] = 'Koordinator Sales dalam file harus memiliki primary role sales_coordinator yang valid.';
+                    } elseif (! $this->sharesAssignment($row['normalized_data'], $coordinatorRow['normalized_data'])) {
+                        $row['errors'][] = 'Koordinator Sales harus berbagi cabang atau proyek dengan Sales.';
+                    }
+                } else {
+                    /** @var User|null $coordinator */
+                    $coordinator = $existingUsers->get($coordinatorEmail);
+                    if ($coordinator === null) {
+                        $row['errors'][] = 'Email Koordinator Sales tidak ditemukan.';
+                    } elseif (! $coordinator->isAccountActive() || ! $coordinator->hasPrimaryRole('sales_coordinator')) {
+                        $row['errors'][] = 'Koordinator Sales harus merupakan pengguna aktif dengan primary role sales_coordinator.';
+                    } elseif (! $this->sharesExistingAssignment($row['normalized_data'], $coordinator)) {
+                        $row['errors'][] = 'Koordinator Sales harus berbagi cabang atau proyek dengan Sales.';
+                    } else {
+                        $row['normalized_data']['sales_coordinator_user_id'] = $coordinator->id;
+                    }
+                }
+            }
+
             $supervisorEmail = $row['normalized_data']['supervisor_email'];
             if ($supervisorEmail === '') {
                 continue;

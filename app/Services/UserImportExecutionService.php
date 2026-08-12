@@ -22,6 +22,7 @@ class UserImportExecutionService
         private readonly BranchAssignmentService $branches,
         private readonly ProjectAssignmentService $projects,
         private readonly ReportingHierarchyService $hierarchy,
+        private readonly SalesCoordinatorAssignmentService $salesCoordinators,
         private readonly AccountAuditService $audit,
     ) {}
 
@@ -121,6 +122,12 @@ class UserImportExecutionService
 
                 foreach ($batch->rows()->orderBy('row_number')->get() as $row) {
                     $data = $row->normalized_data;
+                    if ($data['sales_coordinator_email'] !== '') {
+                        $coordinator = $usersByEmail[$data['sales_coordinator_email']]
+                            ?? User::findOrFail($data['sales_coordinator_user_id']);
+                        $this->salesCoordinators->assign(User::findOrFail($row->created_user_id), $coordinator);
+                    }
+
                     if ($data['supervisor_email'] === '') {
                         continue;
                     }

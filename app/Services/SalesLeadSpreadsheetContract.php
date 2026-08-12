@@ -30,7 +30,7 @@ class SalesLeadSpreadsheetContract
                     'kanal_masuk' => ['type' => 'select', 'strict' => true],
                     'aktivitas_lead' => ['type' => 'select', 'strict' => true],
                     'proyek' => ['type' => 'select', 'strict' => true],
-                    'sales_pic' => ['type' => 'select', 'strict' => true],
+                    'sales_pic' => ['type' => 'select', 'strict' => false],
                     'status_lead' => ['type' => 'select', 'strict' => true, 'values' => ['No Respon', 'Diskusi', 'Tatap Muka', 'Cek Lokasi', 'UTJ', 'Tidak Lolos BI Checking', 'Cek Slik', 'Jadi Freelance', 'Akad']],
                 ],
                 ['nama_promo' => ['nama_promo', 'id_promo']],
@@ -142,6 +142,10 @@ class SalesLeadSpreadsheetContract
 
             $metadata = $this->googleSheets->columnMetadata($spreadsheetId, [$sheetName]);
             $sheetMetadata = $metadata[$sheetName] ?? [];
+            if ($sheetName === 'lead' && ($sheetMetadata[$headerMap['sales_pic']]['strict'] ?? false)) {
+                $this->googleSheets->makeColumnValidationWarningOnly($spreadsheetId, $sheetName, (int) $sheetIds[$sheetName], $headerMap['sales_pic']);
+                $sheetMetadata[$headerMap['sales_pic']]['strict'] = false;
+            }
             $this->validateColumnMetadata($definition, $headerMap, $sheetMetadata);
             $validationOptions = [];
             foreach ($definition->validations as $header => $expected) {

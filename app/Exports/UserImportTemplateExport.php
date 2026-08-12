@@ -24,7 +24,7 @@ class UserImportTemplateExport
 
     public const HEADERS = [
         'Nama', 'Email', 'Role', 'Cabang Utama', 'Cabang Tambahan', 'Proyek Utama',
-        'Proyek Tambahan', 'Atasan Langsung', 'Status',
+        'Proyek Tambahan', 'Atasan Langsung', 'Status', 'Koordinator Sales',
     ];
 
     public static function download(Collection $roles, Collection $branches, Collection $projects): BinaryFileResponse
@@ -69,20 +69,20 @@ class UserImportTemplateExport
         $example = [
             self::EXAMPLE_MARKER, 'contoh@oasis.test', 'sales', 'Cabang Contoh',
             'Cabang A; Cabang B', 'Proyek Contoh', 'Proyek A; Proyek B',
-            'atasan@oasis.test', 'pending_invitation',
+            'atasan@oasis.test', 'pending_invitation', 'koordinator@oasis.test',
         ];
         foreach ($example as $column => $value) {
             self::text($sheet, $column + 1, 2, $value);
         }
 
-        $sheet->getStyle('A2:I501')->getNumberFormat()->setFormatCode('@');
-        self::blackHeader($sheet, 'A1:I1');
-        $sheet->getStyle('A1:I501')->getBorders()->getAllBorders()->setBorderStyle(Border::BORDER_THIN);
+        $sheet->getStyle('A2:J501')->getNumberFormat()->setFormatCode('@');
+        self::blackHeader($sheet, 'A1:J1');
+        $sheet->getStyle('A1:J501')->getBorders()->getAllBorders()->setBorderStyle(Border::BORDER_THIN);
         $sheet->getStyle('A2:I2')->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setRGB('FFF3B0');
         $sheet->freezePane('A2');
-        $sheet->setAutoFilter('A1:I501');
+        $sheet->setAutoFilter('A1:J501');
 
-        foreach (['A' => 31, 'B' => 31, 'C' => 22, 'D' => 25, 'E' => 34, 'F' => 28, 'G' => 38, 'H' => 31, 'I' => 22] as $column => $width) {
+        foreach (['A' => 31, 'B' => 31, 'C' => 22, 'D' => 25, 'E' => 34, 'F' => 28, 'G' => 38, 'H' => 31, 'I' => 22, 'J' => 31] as $column => $width) {
             $sheet->getColumnDimension($column)->setWidth($width);
         }
 
@@ -138,7 +138,8 @@ class UserImportTemplateExport
             'Pisahkan Cabang Tambahan dan Proyek Tambahan dengan titik koma (;).',
             'Contoh cabang tambahan: Cabang Solo; Cabang Pati',
             'Contoh proyek tambahan: Oasis Residence; Oasis Garden',
-            'Atasan Langsung diisi dengan email pengguna aktif.',
+            'Atasan Langsung diisi dengan email pengguna aktif untuk hierarchy organisasi.',
+            'Koordinator Sales opsional dan hanya diisi pada role sales dengan email primary sales_coordinator untuk tim operasional Buku Saku.',
             'Baris bertanda '.self::EXAMPLE_MARKER.' hanya contoh dan tidak akan diimpor.',
         ] as $index => $instruction) {
             self::text($sheet, 13, $index + 2, $instruction);

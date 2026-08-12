@@ -139,7 +139,7 @@ class SalesLeadService
             'nama_konsumen' => $lead->customer_name,
             'no_hp' => $lead->phone,
             'proyek' => $this->sheetIdentities->projectValue($lead->project),
-            'sales_pic' => $this->sheetIdentities->salesValue($lead->branch, $lead->sales),
+            'sales_pic' => $lead->sales->name,
             'status_lead' => $status->spreadsheetValue(),
             'keterangan' => $lead->notes,
             'nama_promo' => $lead->id_promo,

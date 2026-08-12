@@ -97,13 +97,13 @@ class AdminUserImportFoundationTest extends TestCase
         $this->assertSame(['IMPORT USER', 'REFERENSI'], $workbook->getSheetNames());
         $import = $workbook->getSheetByName('IMPORT USER');
         $reference = $workbook->getSheetByName('REFERENSI');
-        $this->assertSame(UserImportTemplateExport::HEADERS, $import->rangeToArray('A1:I1')[0]);
+        $this->assertSame(UserImportTemplateExport::HEADERS, $import->rangeToArray('A1:J1')[0]);
         $this->assertSame([
             UserImportTemplateExport::EXAMPLE_MARKER, 'contoh@oasis.test', 'sales', 'Cabang Contoh',
             'Cabang A; Cabang B', 'Proyek Contoh', 'Proyek A; Proyek B',
-            'atasan@oasis.test', 'pending_invitation',
-        ], $import->rangeToArray('A2:I2')[0]);
-        foreach (range('A', 'I') as $column) {
+            'atasan@oasis.test', 'pending_invitation', 'koordinator@oasis.test',
+        ], $import->rangeToArray('A2:J2')[0]);
+        foreach (range('A', 'J') as $column) {
             $this->assertSame(DataType::TYPE_STRING, $import->getCell($column.'2')->getDataType());
         }
         $this->assertSame(UserImportTemplateExport::ROLE_SLUGS, array_column($reference->rangeToArray('A3:A8'), 0));
@@ -121,7 +121,7 @@ class AdminUserImportFoundationTest extends TestCase
             $this->assertStringContainsString($expectedRange, $validation->getFormula1());
         }
         $this->assertSame('A2', $import->getFreezePane());
-        $this->assertSame('A1:I501', $import->getAutoFilter()->getRange());
+        $this->assertSame('A1:J501', $import->getAutoFilter()->getRange());
         $workbook->disconnectWorksheets();
     }
 

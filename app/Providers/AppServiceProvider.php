@@ -2,6 +2,7 @@
 
 namespace App\Providers;
 
+use App\Auth\ActiveUserProvider;
 use App\Models\Comment;
 use App\Models\DanaTalangan;
 use App\Models\Permission;
@@ -25,6 +26,8 @@ class AppServiceProvider extends ServiceProvider
 
     public function boot(): void
     {
+        Auth::provider('active-eloquent', fn ($app, array $config) => new ActiveUserProvider($app['hash'], $config['model']));
+
         Gate::policy(User::class, UserPolicy::class);
         Gate::policy(Comment::class, CommentPolicy::class);
         Gate::policy(DanaTalangan::class, DanaTalanganPolicy::class);

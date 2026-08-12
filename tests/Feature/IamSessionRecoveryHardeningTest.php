@@ -68,12 +68,13 @@ class IamSessionRecoveryHardeningTest extends TestCase
         $targetSession = $this->addSession($target);
         $otherSession = $this->addSession($other);
         $this->addResetToken($target);
+        $rememberToken = $target->remember_token;
 
         $this->actingAs($actor)->patch(route('admin-users.suspend', $target), ['reason' => 'Cuti'])->assertRedirect();
 
         $target->refresh();
         $this->assertSame(AccountStatus::Suspended, $target->account_status);
-        $this->assertNotSame(null, $target->remember_token);
+        $this->assertNotSame($rememberToken, $target->remember_token);
         $this->assertDatabaseMissing('sessions', ['id' => $targetSession]);
         $this->assertDatabaseHas('sessions', ['id' => $otherSession]);
         $this->assertDatabaseMissing('password_reset_tokens', ['email' => $target->email]);
@@ -86,12 +87,13 @@ class IamSessionRecoveryHardeningTest extends TestCase
         $other = $this->activeUser('staff');
         $targetSession = $this->addSession($target);
         $otherSession = $this->addSession($other);
+        $rememberToken = $target->remember_token;
 
         $this->actingAs($actor)->patch(route('admin-users.deactivate', $target), ['reason' => 'Pensiun'])->assertRedirect();
 
         $target->refresh();
         $this->assertSame(AccountStatus::Inactive, $target->account_status);
-        $this->assertNotSame(null, $target->remember_token);
+        $this->assertNotSame($rememberToken, $target->remember_token);
         $this->assertDatabaseMissing('sessions', ['id' => $targetSession]);
         $this->assertDatabaseHas('sessions', ['id' => $otherSession]);
     }
@@ -104,12 +106,13 @@ class IamSessionRecoveryHardeningTest extends TestCase
         $targetSession = $this->addSession($target);
         $otherSession = $this->addSession($other);
         $this->addResetToken($target);
+        $rememberToken = $target->remember_token;
 
         $this->actingAs($actor)->patch(route('admin-users.anonymize', $target), ['reason' => 'Hapus data pribadi'])->assertRedirect();
 
         $target->refresh();
         $this->assertSame(AccountStatus::Anonymized, $target->account_status);
-        $this->assertNotSame(null, $target->remember_token);
+        $this->assertNotSame($rememberToken, $target->remember_token);
         $this->assertDatabaseMissing('sessions', ['id' => $targetSession]);
         $this->assertDatabaseHas('sessions', ['id' => $otherSession]);
         $this->assertDatabaseMissing('password_reset_tokens', ['email' => $target->email]);

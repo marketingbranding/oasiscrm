@@ -17,12 +17,12 @@
             @csrf
             <div>
                 <x-input-label for="password" value="Kata Sandi" />
-                <x-text-input id="password" class="mt-1 block w-full rounded-none border-2 border-black" type="password" name="password" required autofocus autocomplete="new-password" />
+                <x-password-input id="password" class="mt-1 block w-full rounded-none border-2 border-black" name="password" required autofocus autocomplete="new-password" />
                 <x-input-error :messages="$errors->get('password')" class="mt-2" />
             </div>
             <div>
                 <x-input-label for="password_confirmation" value="Konfirmasi Kata Sandi" />
-                <x-text-input id="password_confirmation" class="mt-1 block w-full rounded-none border-2 border-black" type="password" name="password_confirmation" required autocomplete="new-password" />
+                <x-password-input id="password_confirmation" class="mt-1 block w-full rounded-none border-2 border-black" name="password_confirmation" required autocomplete="new-password" />
             </div>
             <button class="w-full border-2 border-black bg-black px-4 py-3 font-bold text-white hover:bg-gray-800">Aktifkan Akun</button>
         </form>

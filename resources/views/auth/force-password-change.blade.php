@@ -33,8 +33,8 @@
 
                         <div>
                             <label for="password" class="font-[Helvetica] font-bold text-xs uppercase block mb-1">Password Baru</label>
-                            <input id="password" type="password" name="password" required autocomplete="new-password"
-                                class="w-full border-2 border-black px-3 py-2 text-sm font-['Times_New_Roman'] bg-white rounded-none @error('password') border-[#e91d2a] @enderror">
+                            <x-password-input id="password" name="password" required autocomplete="new-password"
+                                class="w-full border-2 border-black px-3 py-2 text-sm font-['Times_New_Roman'] bg-white rounded-none @error('password') border-[#e91d2a] @enderror" />
                             @error('password')
                                 <p class="text-[#e91d2a] text-xs mt-1 font-[Helvetica] font-bold">{{ $message }}</p>
                             @enderror
@@ -42,8 +42,8 @@
 
                         <div>
                             <label for="password_confirmation" class="font-[Helvetica] font-bold text-xs uppercase block mb-1">Konfirmasi Password Baru</label>
-                            <input id="password_confirmation" type="password" name="password_confirmation" required autocomplete="new-password"
-                                class="w-full border-2 border-black px-3 py-2 text-sm font-['Times_New_Roman'] bg-white rounded-none">
+                            <x-password-input id="password_confirmation" name="password_confirmation" required autocomplete="new-password"
+                                class="w-full border-2 border-black px-3 py-2 text-sm font-['Times_New_Roman'] bg-white rounded-none" />
                         </div>
 
                         <div class="flex items-center justify-between pt-2">

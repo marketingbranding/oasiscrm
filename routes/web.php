@@ -197,6 +197,8 @@ Route::middleware(['auth', 'active', 'verified', 'password.changed', 'operationa
     Route::view('/admin/design-system', 'crm.design-system.index')->middleware('can:viewDesignSystem')->name('admin.design-system');
     Route::middleware('permission:branches.manage')->group(function () {
         Route::get('/branches', [BranchController::class, 'index'])->name('branches.index');
+        Route::get('/branches/{branch}/edit', [BranchController::class, 'edit'])->name('branches.edit');
+        Route::put('/branches/{branch}', [BranchController::class, 'update'])->name('branches.update');
         Route::get('/branches/{branch}/assign', [BranchController::class, 'assignForm'])->name('branches.assign');
         Route::post('/branches/{branch}/assign', [BranchController::class, 'assignStore'])->name('branches.assign-store');
         Route::delete('/branches/{user}/remove-admin', [BranchController::class, 'removeAdmin'])->name('branches.remove-admin');

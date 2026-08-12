@@ -9,6 +9,9 @@ use App\Models\User;
 use App\Services\CollaborationNotificationService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
 
 class BranchController extends Controller
 {
@@ -20,6 +23,59 @@ class BranchController extends Controller
         $branches = Branch::withCount(['contentItems', 'users as members_count'])->where('is_active', true)->forDropdown()->get();
 
         return view('crm.branches.index', compact('branches'));
+    }
+
+    public function edit(Branch $branch)
+    {
+        $this->ensureSuperadmin();
+        abort_unless($branch->is_active, 404);
+
+        return view('crm.branches.edit', compact('branch'));
+    }
+
+    public function update(Request $request, Branch $branch)
+    {
+        $this->ensureSuperadmin();
+        abort_unless($branch->is_active, 404);
+        $name = Str::squish($request->string('name')->toString());
+        validator(['name' => $name], ['name' => ['required', 'string', 'max:255']])->validate();
+
+        DB::transaction(function () use ($branch, $name): void {
+            $lockedBranch = Branch::query()->lockForUpdate()->findOrFail($branch->id);
+            abort_unless($lockedBranch->is_active, 404);
+            $duplicate = Branch::query()
+                ->where('is_active', true)
+                ->whereKeyNot($lockedBranch->id)
+                ->lockForUpdate()
+                ->pluck('name')
+                ->contains(fn (string $existingName): bool => mb_strtolower(Str::squish($existingName)) === mb_strtolower($name));
+
+            if ($duplicate) {
+                throw ValidationException::withMessages(['name' => 'Nama cabang sudah digunakan.']);
+            }
+
+            $oldName = $lockedBranch->name;
+            if ($oldName === $name) {
+                return;
+            }
+
+            $lockedBranch->update(['name' => $name]);
+            ActivityLog::create([
+                'causer_id' => Auth::id(),
+                'subject_type' => Branch::class,
+                'subject_id' => $lockedBranch->id,
+                'event' => 'branch_renamed',
+                'description' => 'Nama cabang diubah dari '.$oldName.' menjadi '.$name,
+                'properties' => [
+                    'branch_id' => $lockedBranch->id,
+                    'old_name' => $oldName,
+                    'new_name' => $name,
+                    'actor_id' => Auth::id(),
+                ],
+            ]);
+        });
+
+        return redirect()->route('branches.index')->with('success', 'Nama cabang berhasil diperbarui.');
     }
 
     public function assignForm(Branch $branch)

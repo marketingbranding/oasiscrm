@@ -18,6 +18,7 @@ class UserImportValidationService
         private readonly UserAdministrationService $administration,
         private readonly OrganizationScopeService $scope,
         private readonly ReportingHierarchyService $hierarchy,
+        private readonly BranchLabelResolver $branchLabels,
     ) {}
 
     /** @param array<int, array{row_number:int, raw_data:array<string, string>, parser_errors:array<int, string>}> $parsedRows */
@@ -73,7 +74,7 @@ class UserImportValidationService
                 $errors[] = 'Anda tidak berwenang menetapkan role tersebut.';
             }
 
-            $primaryBranch = $this->resolveBranch($raw['primary_branch'], $branches);
+            $primaryBranch = $this->branchLabels->resolve($raw['primary_branch'], $branches);
             if ($primaryBranch === null || ! $primaryBranch->is_active) {
                 $errors[] = 'Cabang utama wajib diisi dengan nama atau kode cabang aktif yang valid.';
             } elseif (! in_array((int) $primaryBranch->id, $allowedBranchIds, true)) {
@@ -83,7 +84,7 @@ class UserImportValidationService
             $branchIds = $primaryBranch?->is_active ? [(int) $primaryBranch->id] : [];
             $additionalBranchLabels = $this->list($raw['additional_branches']);
             foreach ($additionalBranchLabels as $label) {
-                $branch = $this->resolveBranch($label, $branches);
+                $branch = $this->branchLabels->resolve($label, $branches);
                 if ($branch === null || ! $branch->is_active) {
                     $errors[] = "Cabang tambahan '{$label}' tidak ditemukan atau tidak aktif.";
 
@@ -284,15 +285,6 @@ class UserImportValidationService
         return ($actor->isSuperadmin() || $actor->hasPrimaryRole('pusat'))
             ? LeadMaster::query()->where('is_active', true)->pluck('id')->map(fn ($id) => (int) $id)->all()
             : $this->scope->projectIds($actor);
-    }
-
-    private function resolveBranch(string $label, Collection $branches): ?Branch
-    {
-        $key = $this->key($label);
-        $matches = $branches->filter(fn (Branch $branch) => $branch->is_active
-            && in_array($key, [$this->key($branch->name), $this->key($branch->code)], true));
-
-        return $matches->count() === 1 ? $matches->first() : null;
     }
 
     private function resolveProject(string $label, Collection $projects, array $branchIds): ?LeadMaster

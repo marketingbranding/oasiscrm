@@ -21,11 +21,9 @@
                     <div>Anggota: <strong>{{ $branch->members_count ?? 0 }}</strong></div>
                 </div>
             </div>
-            <div class="border-t-2 border-black bg-white px-3 py-2">
-                <a href="{{ route('branches.assign', $branch->id) }}"
-                   class="text-[#0000ee] underline text-xs font-[Helvetica] font-bold">
-                     Atur Anggota →
-                </a>
+            <div class="border-t-2 border-black bg-white px-3 py-2 flex flex-wrap gap-3">
+                <x-crm.button :href="route('branches.edit', $branch)" variant="text" size="sm">Edit Nama</x-crm.button>
+                <x-crm.button :href="route('branches.assign', $branch)" variant="text" size="sm">Atur Anggota</x-crm.button>
             </div>
         </div>
         @endforeach

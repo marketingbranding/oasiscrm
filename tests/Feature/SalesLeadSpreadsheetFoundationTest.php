@@ -252,9 +252,17 @@ class SalesLeadSpreadsheetFoundationTest extends TestCase
         $lead->campaign_name = 'Follow Up';
         $lead->save();
 
-        $sheetIdentities = Mockery::mock(SalesSheetIdentityService::class);
-        $sheetIdentities->shouldReceive('projectValue')->andReturn('OASIS');
-        $sheetIdentities->shouldNotReceive('salesValue');
+        $project->update([
+            'project_name' => 'Canonical OASIS Project',
+            'sheet_project_name' => 'Sheet Project',
+        ]);
+        $options = Mockery::mock(SalesLeadSheetOptionService::class);
+        $options->shouldReceive('forBranch')->times(3)->andReturn([
+            'project' => ['Sheet Project', 'Canonical OASIS Project'],
+        ]);
+        $options->shouldReceive('exactOption')->twice()->with(['Sheet Project', 'Canonical OASIS Project'], 'Sheet Project')->andReturn('Sheet Project');
+        $options->shouldReceive('exactOption')->once()->with(['Sheet Project', 'Canonical OASIS Project'], 'Canonical OASIS Project')->andReturn('Canonical OASIS Project');
+        $sheetIdentities = new SalesSheetIdentityService($options);
         $sales->update(['name' => 'Canonical OASIS Sales']);
         $service = new SalesLeadService(
             Mockery::mock(PhoneNormalizationService::class),
@@ -264,6 +272,10 @@ class SalesLeadSpreadsheetFoundationTest extends TestCase
 
         $fields = $service->spreadsheetFields($lead->fresh());
 
+        $this->assertSame('Canonical OASIS Project', $project->fresh()->project_name);
+        $this->assertSame('Sheet Project', $project->fresh()->sheet_project_name);
+        $this->assertSame('Sheet Project', $sheetIdentities->projectValue($project->fresh()));
+        $this->assertSame('Sheet Project', $fields['proyek']);
         $this->assertSame('Online', $fields['sumber_lead']);
         $this->assertSame('Instagram', $fields['kanal_masuk']);
         $this->assertSame('Follow Up', $fields['aktivitas_lead']);
@@ -271,6 +283,12 @@ class SalesLeadSpreadsheetFoundationTest extends TestCase
         $this->assertArrayNotHasKey('source', $fields);
         $this->assertArrayNotHasKey('platform', $fields);
         $this->assertArrayNotHasKey('campaign_name', $fields);
+
+        $project->update(['sheet_project_name' => null]);
+        $fallbackFields = $service->spreadsheetFields($lead->fresh());
+
+        $this->assertSame('Canonical OASIS Project', $fallbackFields['proyek']);
+        $this->assertSame('Canonical OASIS Sales', $fallbackFields['sales_pic']);
     }
 
     public function test_cross_branch_lead_resolution_uses_lead_branch_not_project_or_user_branch(): void

@@ -66,6 +66,47 @@ class AdminUserImportValidationCoverageTest extends TestCase
         $this->assertSame(UserImportRow::VALIDATION_ERROR, $byEmail['inactive-role@example.test']->validation_status);
     }
 
+    public function test_branch_labels_resolve_canonical_names_and_legacy_aliases_without_creating_branches(): void
+    {
+        $actor = $this->importActor();
+        $aliases = [
+            'Malang' => 'KC MALANG',
+            'Madiun' => 'KC MADIUN',
+            'Solo' => 'KC SOLO',
+            'Magelang' => 'KC MAGELANG',
+            'Purworejo' => 'KC PURWOREJO',
+            'Jepara' => 'KC JEPARA',
+            'Pekalongan' => 'KC BATANG',
+            'Sumedang' => 'KC BANDUNG',
+        ];
+        $branches = collect($aliases)->unique()->mapWithKeys(function (string $name, string $alias) {
+            $branch = Branch::create(['name' => $name, 'code' => 'CODE '.strtoupper($alias), 'is_active' => true]);
+
+            return [$name => $branch];
+        });
+        $directSolo = Branch::create(['name' => 'Solo', 'code' => 'DIRECT SOLO', 'is_active' => true]);
+        $branchCount = Branch::count();
+        $rows = [];
+
+        foreach ($aliases as $alias => $canonical) {
+            $rows[] = ["Primary {$alias}", "primary-{$alias}@example.test", 'manager', "  {$alias}  ", '', '', '', '', ''];
+            $rows[] = ["Additional {$alias}", "additional-{$alias}@example.test", 'manager', 'KC MALANG', strtolower($alias), '', '', '', ''];
+            $rows[] = ["Canonical {$alias}", "canonical-{$alias}@example.test", 'manager', strtolower($canonical), '', '', '', '', ''];
+        }
+
+        $this->uploadImport($actor, $rows);
+        $byEmail = UserImportRow::all()->keyBy(fn (UserImportRow $row) => $row->normalized_data['email']);
+
+        foreach ($aliases as $alias => $canonical) {
+            $emailLabel = strtolower($alias);
+            $expectedPrimary = $alias === 'Solo' ? $directSolo : $branches[$canonical];
+            $this->assertSame($expectedPrimary->id, $byEmail["primary-{$emailLabel}@example.test"]->normalized_data['primary_branch_id']);
+            $this->assertContains($expectedPrimary->id, $byEmail["additional-{$emailLabel}@example.test"]->normalized_data['branch_ids']);
+            $this->assertSame($branches[$canonical]->id, $byEmail["canonical-{$emailLabel}@example.test"]->normalized_data['primary_branch_id']);
+        }
+        $this->assertSame($branchCount, Branch::count());
+    }
+
     public function test_branch_and_project_validation_covers_inactive_unknown_and_project_outside_assigned_branches(): void
     {
         $actor = $this->importActor();

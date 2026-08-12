@@ -19,7 +19,7 @@ class ProductionBranchProjectStandardizationMigrationTest extends TestCase
             4 => 'Magelang',
             5 => 'Purworejo',
             6 => 'Jepara',
-            7 => 'Batang',
+            7 => 'Pekalongan',
             8 => 'Sumedang',
             9 => 'Kantor Pusat',
         ];
@@ -128,6 +128,7 @@ class ProductionBranchProjectStandardizationMigrationTest extends TestCase
         foreach ($targetBranchNames as $id => $name) {
             $this->assertDatabaseHas('branches', ['id' => $id, 'name' => $name]);
         }
+        $this->assertDatabaseHas('branches', ['id' => 7, 'name' => 'KC BATANG', 'code' => 'CODE-7']);
         foreach ($targetProjectNames as $id => $name) {
             $expectedSheetName = $id === 14 ? 'Marison Kalinegoro' : ($projectNames[$id] === $name ? null : $projectNames[$id]);
             $this->assertDatabaseHas('lead_master', ['id' => $id, 'project_name' => $name, 'sheet_project_name' => $expectedSheetName]);
@@ -164,6 +165,29 @@ class ProductionBranchProjectStandardizationMigrationTest extends TestCase
 
         $this->assertDatabaseHas('branches', ['id' => 1, 'name' => 'Malang']);
         $this->assertSame($changelogCount, DB::table('changelogs')->whereNull('version')->where('title', 'Standardisasi Cabang & Proyek Produksi')->count());
+    }
+
+    public function test_branch_seven_requires_production_pekalongan_name_or_canonical_target(): void
+    {
+        DB::table('branches')->insert([
+            'id' => 7,
+            'name' => 'Unexpected Batang',
+            'code' => 'PKL',
+            'is_active' => true,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $migration = require database_path('migrations/2026_08_12_000003_standardize_production_branches_and_projects.php');
+
+        try {
+            $migration->up();
+            $this->fail('Migration should reject an unexpected branch 7 name.');
+        } catch (\RuntimeException $exception) {
+            $this->assertStringContainsString("Branch id 7: expected old 'Pekalongan', actual 'Unexpected Batang', target 'KC BATANG'", $exception->getMessage());
+        }
+
+        $this->assertDatabaseHas('branches', ['id' => 7, 'name' => 'Unexpected Batang', 'code' => 'PKL']);
     }
 
     public function test_unexpected_project_name_fails_with_context_and_rolls_back(): void

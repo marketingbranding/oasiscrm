@@ -14,7 +14,7 @@ return new class extends Migration
         4 => ['old' => 'Magelang', 'new' => 'KC MAGELANG'],
         5 => ['old' => 'Purworejo', 'new' => 'KC PURWOREJO'],
         6 => ['old' => 'Jepara', 'new' => 'KC JEPARA'],
-        7 => ['old' => 'Batang', 'new' => 'KC BATANG'],
+        7 => ['old' => 'Pekalongan', 'new' => 'KC BATANG'],
         8 => ['old' => 'Sumedang', 'new' => 'KC BANDUNG'],
         9 => ['old' => 'Kantor Pusat', 'new' => 'Kantor Pusat'],
     ];

@@ -61,7 +61,7 @@ class ProductionBranchProjectStandardizationMigrationTest extends TestCase
             7 => 'Sragen',
             11 => 'Wonosari',
             12 => 'Wonosari Kios',
-            14 => 'Piyungan',
+            14 => 'Jonggrangan',
             19 => 'Cawang',
             20 => 'Mutiara Garden 5',
             21 => 'Mlonggo 1',
@@ -143,5 +143,106 @@ class ProductionBranchProjectStandardizationMigrationTest extends TestCase
         $this->assertSame($projectCount, DB::table('lead_master')->count());
         $this->assertSame(1, DB::table('changelogs')->whereNull('version')->where('title', 'Standardisasi Cabang & Proyek Produksi')->count());
         $this->assertDatabaseHas('changelogs', ['title' => 'Standardisasi Cabang & Proyek Produksi', 'category' => 'changed']);
+    }
+
+    public function test_unexpected_branch_name_fails_with_context_and_rolls_back(): void
+    {
+        DB::table('branches')->insert([
+            ['id' => 1, 'name' => 'Malang', 'code' => 'MAL', 'is_active' => true, 'created_at' => now(), 'updated_at' => now()],
+            ['id' => 2, 'name' => 'Unexpected Madiun', 'code' => 'MAD', 'is_active' => true, 'created_at' => now(), 'updated_at' => now()],
+        ]);
+
+        $changelogCount = DB::table('changelogs')->whereNull('version')->where('title', 'Standardisasi Cabang & Proyek Produksi')->count();
+        $migration = require database_path('migrations/2026_08_12_000003_standardize_production_branches_and_projects.php');
+
+        try {
+            $migration->up();
+            $this->fail('Migration should reject an unexpected branch name.');
+        } catch (\RuntimeException $exception) {
+            $this->assertStringContainsString("Branch id 2: expected old 'Madiun', actual 'Unexpected Madiun', target 'KC MADIUN'", $exception->getMessage());
+        }
+
+        $this->assertDatabaseHas('branches', ['id' => 1, 'name' => 'Malang']);
+        $this->assertSame($changelogCount, DB::table('changelogs')->whereNull('version')->where('title', 'Standardisasi Cabang & Proyek Produksi')->count());
+    }
+
+    public function test_unexpected_project_name_fails_with_context_and_rolls_back(): void
+    {
+        DB::table('lead_master')->where('id', 2)->delete();
+        DB::table('branches')->insert([
+            'id' => 1,
+            'name' => 'Malang',
+            'code' => 'MAL',
+            'is_active' => true,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        DB::table('lead_master')->insert([
+            'id' => 2,
+            'branch_id' => 1,
+            'project_name' => 'Unexpected Wagir',
+            'sheet_project_name' => null,
+            'is_active' => true,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $changelogCount = DB::table('changelogs')->whereNull('version')->where('title', 'Standardisasi Cabang & Proyek Produksi')->count();
+        $migration = require database_path('migrations/2026_08_12_000003_standardize_production_branches_and_projects.php');
+
+        try {
+            $migration->up();
+            $this->fail('Migration should reject an unexpected project name.');
+        } catch (\RuntimeException $exception) {
+            $this->assertStringContainsString("Project id 2: expected old 'Wagir', actual 'Unexpected Wagir', target 'Marison Regency Wagir Malang'", $exception->getMessage());
+        }
+
+        $this->assertDatabaseHas('branches', ['id' => 1, 'name' => 'Malang']);
+        $this->assertDatabaseHas('lead_master', ['id' => 2, 'project_name' => 'Unexpected Wagir']);
+        $this->assertSame($changelogCount, DB::table('changelogs')->whereNull('version')->where('title', 'Standardisasi Cabang & Proyek Produksi')->count());
+    }
+
+    public function test_null_sheet_name_uses_expected_old_name_and_existing_sheet_name_is_preserved(): void
+    {
+        DB::table('lead_master')->whereIn('id', [2, 3])->delete();
+        DB::table('branches')->insert([
+            'id' => 1,
+            'name' => 'Malang',
+            'code' => 'MAL',
+            'is_active' => true,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        DB::table('lead_master')->insert([
+            [
+                'id' => 2,
+                'branch_id' => 1,
+                'project_name' => 'Wagir',
+                'sheet_project_name' => null,
+                'is_active' => true,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ],
+            [
+                'id' => 3,
+                'branch_id' => 1,
+                'project_name' => 'Madiun 2 Perluasan',
+                'sheet_project_name' => 'Nama Sheet Tetap',
+                'is_active' => true,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ],
+        ]);
+
+        $migration = require database_path('migrations/2026_08_12_000003_standardize_production_branches_and_projects.php');
+        $migration->up();
+
+        $this->assertDatabaseHas('lead_master', ['id' => 2, 'project_name' => 'Marison Regency Wagir Malang', 'sheet_project_name' => 'Wagir']);
+        $this->assertDatabaseHas('lead_master', ['id' => 3, 'project_name' => 'Madiun Perluasan', 'sheet_project_name' => 'Nama Sheet Tetap']);
+
+        $migration->up();
+
+        $this->assertDatabaseHas('lead_master', ['id' => 2, 'project_name' => 'Marison Regency Wagir Malang', 'sheet_project_name' => 'Wagir']);
+        $this->assertDatabaseHas('lead_master', ['id' => 3, 'project_name' => 'Madiun Perluasan', 'sheet_project_name' => 'Nama Sheet Tetap']);
     }
 }

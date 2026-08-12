@@ -18,6 +18,7 @@ class HorizontalTabsContractTest extends TestCase
             'layouts/crm.blade.php',
             'crm/database/index.blade.php',
             'crm/sales-pocketbook/index.blade.php',
+            'crm/sales-pocketbook/coordinator-leads.blade.php',
             'crm/content-calendar/index.blade.php',
             'crm/konsumen-progress/index.blade.php',
             'crm/ai-chat/_widget.blade.php',

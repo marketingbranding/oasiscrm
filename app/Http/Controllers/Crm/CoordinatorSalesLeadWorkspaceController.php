@@ -27,11 +27,15 @@ class CoordinatorSalesLeadWorkspaceController extends Controller
     public function index(Request $request): View
     {
         $filters = $request->validate([
+            'tab' => ['nullable', 'in:lead,agenda,report'],
             'period' => ['nullable', 'in:today,week,month,custom'],
             'date_from' => ['nullable', 'required_if:period,custom', 'date'],
             'date_to' => ['nullable', 'required_if:period,custom', 'date', 'after_or_equal:date_from'],
             'sales_id' => ['nullable', 'integer'],
         ]);
+        $tab = $filters['tab'] ?? 'lead';
+        unset($filters['tab']);
+
         $data = $this->monitoring->resolve($request->user(), $filters);
         $data['projectsBySales'] = $data['salesUsers']->mapWithKeys(fn ($sales) => [
             (string) $sales->id => $sales->assignedProjects->map(fn ($project) => [
@@ -47,6 +51,7 @@ class CoordinatorSalesLeadWorkspaceController extends Controller
         $data['promos'] = Promo::query()->where('is_active', true)->orderBy('name')->pluck('name');
         $data['statuses'] = SalesLeadStatus::cases();
         $data['canSync'] = $request->user()->hasPermission('sales_pocketbook.sync');
+        $data['tab'] = $tab;
 
         return view('crm.sales-pocketbook.coordinator-leads', $data);
     }

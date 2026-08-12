@@ -33,9 +33,9 @@ class SalesRoleWorkspaceScopeTest extends TestCase
             ->assertSee($sales1->name)->assertSee($sales2->name)->assertSee($sales3->name);
 
         $this->actingAs($coordinatorA)->get(route('sales-pocketbook.index'))->assertOk()
-            ->assertSee('Lead Tim Sales')->assertSee($sales1->name)->assertSee($sales2->name)->assertDontSee($sales3->name);
+            ->assertSee('Buku Saku Sales')->assertSee($sales1->name)->assertSee($sales2->name)->assertDontSee($sales3->name);
         $this->actingAs($coordinatorB)->get(route('sales-pocketbook.index'))->assertOk()
-            ->assertSee('Lead Tim Sales')->assertSee($sales3->name)->assertDontSee($sales1->name)->assertDontSee($sales2->name);
+            ->assertSee('Buku Saku Sales')->assertSee($sales3->name)->assertDontSee($sales1->name)->assertDontSee($sales2->name);
     }
 
     public function test_sales_shared_workspace_is_own_only_without_team_selectors_or_foreign_mutation(): void
@@ -76,7 +76,7 @@ class SalesRoleWorkspaceScopeTest extends TestCase
         $agenda = $this->agenda($sales, 'AGENDA_READ_ONLY');
 
         $coordinatorPage = $this->actingAs($coordinator)->get(route('sales-pocketbook.index'))->assertOk()
-            ->assertSee('Lead Tim Sales')->assertSee('date-wrapper', false);
+            ->assertSee('Buku Saku Sales')->assertSee('date-wrapper', false);
         $supervisorPage = $this->actingAs($supervisor)->get(route('sales-pocketbook.index'))->assertOk()
             ->assertSee('Monitoring Tim')->assertSee('date-wrapper', false);
         foreach ([$coordinator, $supervisor] as $viewer) {

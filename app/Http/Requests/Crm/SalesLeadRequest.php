@@ -48,9 +48,9 @@ abstract class SalesLeadRequest extends FormRequest
     public function messages(): array
     {
         return [
-            'source.required' => 'Sumber lead spreadsheet wajib dipilih.',
-            'platform.required' => 'Kanal masuk spreadsheet wajib dipilih.',
-            'campaign_name.required' => 'Aktivitas lead spreadsheet wajib dipilih.',
+            'source.required' => 'Sumber lead wajib dipilih.',
+            'platform.required' => 'Kanal masuk wajib dipilih.',
+            'campaign_name.required' => 'Aktivitas lead wajib dipilih.',
             'operation_uuid.required' => 'Identitas operasi lead tidak tersedia. Muat ulang formulir lalu coba lagi.',
             'operation_uuid.uuid' => 'Identitas operasi lead tidak valid. Muat ulang formulir lalu coba lagi.',
         ];

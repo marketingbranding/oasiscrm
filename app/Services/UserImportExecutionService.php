@@ -11,13 +11,14 @@ use App\Models\UserImportBatch;
 use App\Models\UserImportRow;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 use Throwable;
 
 class UserImportExecutionService
 {
     public const MAX_SYNCHRONOUS_INVITATIONS = 100;
+
+    private const DIRECT_ACTIVATION_PASSWORD = 'password';
 
     public function __construct(
         private readonly UserImportValidationService $validator,
@@ -117,7 +118,7 @@ class UserImportExecutionService
                 $branchNames = $directActivation ? Branch::query()->whereIn('id', collect($validatedRows)->pluck('normalized_data.primary_branch_id'))->pluck('name', 'id') : collect();
                 foreach ($batch->rows()->orderBy('row_number')->get() as $row) {
                     $data = $row->normalized_data;
-                    $password = $directActivation ? Str::password(20) : null;
+                    $password = $directActivation ? self::DIRECT_ACTIVATION_PASSWORD : null;
                     $attributes = [
                         'name' => $data['name'],
                         'email' => $data['email'],

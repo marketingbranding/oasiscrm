@@ -83,7 +83,8 @@ class AdminUserImportDirectActivationTest extends TestCase
             $this->assertNotNull($user->email_verified_at);
             $this->assertTrue($user->must_change_password);
             $this->assertNull($user->password_changed_at);
-            $this->assertTrue(Hash::check($credentials[$index]['temporary_password'], $user->password));
+            $this->assertSame('password', $credentials[$index]['temporary_password']);
+            $this->assertTrue(Hash::check('password', $user->password));
             $this->assertSame($branch->id, $user->branch_id);
             $this->assertSame($supervisor->id, $user->supervisor_user_id);
             $this->assertTrue($user->assignedProjects()->whereKey($project->id)->wherePivot('is_primary', true)->exists());
@@ -111,16 +112,21 @@ class AdminUserImportDirectActivationTest extends TestCase
         $this->uploadImport($actor, [['Direct Manager', 'login.direct@example.test', 'manager', 'Solo', '', '', '', '', 'pending_invitation', '']]);
         $batch = UserImportBatch::firstOrFail();
         $this->confirm($actor, $batch, UserImportBatch::ACTIVATION_MODE_DIRECT)->assertSessionHasNoErrors();
-        $password = $batch->fresh()->credential_payload[0]['temporary_password'];
+        $this->assertSame('password', $batch->fresh()->credential_payload[0]['temporary_password']);
         $this->post(route('logout'));
 
-        $this->post('/login', ['email' => 'login.direct@example.test', 'password' => $password])->assertRedirect(route('password.change'));
+        $this->post('/login', ['email' => 'login.direct@example.test', 'password' => 'wrong-password'])->assertSessionHasErrors('email');
+        $this->post('/login', ['email' => 'login.direct@example.test', 'password' => 'password'])->assertRedirect(route('password.change'));
         $user = User::where('email', 'login.direct@example.test')->firstOrFail();
+        $this->assertTrue($user->must_change_password);
         $this->get(route($user->landingRouteName()))->assertRedirect(route('password.change'));
         $this->put(route('password.change.update'), ['password' => 'ChangedPassword123', 'password_confirmation' => 'ChangedPassword123'])
             ->assertRedirect(route($user->landingRouteName()));
         $this->get(route($user->landingRouteName()))->assertOk();
         $this->assertFalse($user->fresh()->must_change_password);
+        $this->post(route('logout'));
+        $this->post('/login', ['email' => $user->email, 'password' => 'password'])->assertSessionHasErrors('email');
+        $this->post('/login', ['email' => $user->email, 'password' => 'ChangedPassword123'])->assertRedirect();
     }
 
     public function test_non_superadmin_and_supplemental_superadmin_cannot_forge_direct_mode(): void

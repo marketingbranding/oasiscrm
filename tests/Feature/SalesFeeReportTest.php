@@ -184,24 +184,44 @@ class SalesFeeReportTest extends TestCase
 
     public function test_detail_and_print_are_read_only_with_expected_tables_and_metadata(): void
     {
-        $this->agenda($this->sales, $this->project, 'Agenda Detail', '2026-08-05', 'done');
-        $this->lead($this->sales, $this->project, 'Konsumen Detail', '2026-08-05');
+        $agendaWithResult = $this->agenda($this->sales, $this->project, 'Agenda Dengan Hasil', '2026-08-05', 'done');
+        $agendaWithResult->update(['activity_result' => 'Konsumen setuju survei', 'sales_activity_category' => 'Follow Up', 'location' => 'Kantor']);
+        $this->agenda($this->sales, $this->project, 'Agenda Tanpa Hasil', '2026-08-06', 'planned');
+        $this->lead($this->sales, $this->project, 'Konsumen Lengkap', '2026-08-05')->update(['platform' => 'WhatsApp', 'campaign_name' => 'Promo Agustus']);
+        $this->lead($this->sales, $this->project, 'Konsumen Platform', '2026-08-06')->update(['platform' => 'Instagram']);
+        $this->lead($this->sales, $this->project, 'Konsumen Kampanye', '2026-08-07')->update(['campaign_name' => 'Open House']);
 
         foreach (['sales-fee-reports.show', 'sales-fee-reports.print'] as $route) {
             $response = $this->actingAs($this->actor)->get(route($route, [$this->sales, $this->project] + $this->period()));
             $response->assertOk()
                 ->assertSee('LAPORAN AKTIVITAS SALES')->assertSee('Sales Sendiri')->assertSee('Koordinator Aktif')
                 ->assertSee('Cabang Sendiri')->assertSee('Proyek Utama')->assertSee('01/08/2026 - 31/08/2026')
-                ->assertSee('DETAIL AGENDA')->assertSee('DETAIL LEAD')->assertSee('Agenda Detail')->assertSee('Konsumen Detail')
+                ->assertSee('DETAIL AGENDA')->assertSee('DETAIL LEAD')->assertSee('Agenda Dengan Hasil')->assertSee('Konsumen Lengkap')
                 ->assertDontSee('Edit')->assertDontSee('Push ke Google')->assertDontSee('Sync Lead');
         }
 
-        $this->actingAs($this->actor)
-            ->get(route('sales-fee-reports.print', [$this->sales, $this->project] + $this->period()))
-            ->assertSee('class="screen-toolbar screen-only"', false)
+        $response = $this->actingAs($this->actor)
+            ->get(route('sales-fee-reports.print', [$this->sales, $this->project] + $this->period()));
+        $content = $response->getContent();
+        $resultRow = str($content)->between('<div class="agenda-title">Agenda Dengan Hasil</div>', '</tr>')->toString();
+        $blankRow = str($content)->between('<div class="agenda-title">Agenda Tanpa Hasil</div>', '</tr>')->toString();
+
+        $response->assertSee('class="screen-toolbar screen-only"', false)
             ->assertSee('class="print-sheet"', false)
             ->assertSee('@page { size: A4 portrait; margin: 0; }', false)
-            ->assertSee('.print-sheet { width: 210mm; min-height: auto; margin: 0; padding: 12mm; box-shadow: none; }', false);
+            ->assertSee('.print-sheet { width: 210mm; min-height: auto; margin: 0; padding: 12mm; box-shadow: none; }', false)
+            ->assertSeeTextInOrder(['Tanggal', 'Kategori', 'Agenda / Hasil', 'Lokasi', 'Status'])
+            ->assertSeeTextInOrder(['Tanggal', 'Konsumen', 'Sumber', 'Kanal / Aktivitas', 'Status'])
+            ->assertSee('Hasil: Konsumen setuju survei')->assertSee('WhatsApp / Promo Agustus')
+            ->assertSee('Konsumen Platform')->assertSee('Instagram')->assertSee('Konsumen Kampanye')->assertSee('Open House')
+            ->assertSee('Total Agenda')->assertSee('Agenda Selesai')->assertSee('Total Lead')
+            ->assertSee('Tatap Muka')->assertSee('Cek Lokasi')->assertSee('UTJ')
+            ->assertDontSee('Tanggal Lead')->assertDontSee('Nama Konsumen')->assertDontSee('Sumber Lead')
+            ->assertDontSee('Aktivitas Lead')->assertDontSee('<th>Proyek</th>', false)
+            ->assertDontSee(' / Instagram')->assertDontSee('Instagram / ')
+            ->assertDontSee(' / Open House')->assertDontSee('Open House / ');
+        $this->assertStringContainsString('Hasil: Konsumen setuju survei', $resultRow);
+        $this->assertStringNotContainsString('Hasil:', $blankRow);
     }
 
     public function test_only_primary_legacy_admin_role_is_allowed(): void

@@ -17,7 +17,12 @@
         <div><strong>EMAIL GAGAL</strong><br>{{ $batch->invitation_failed_rows }}</div>
         <div><strong>DILEWATI</strong><br>{{ $batch->skipped_rows }}</div>
     </div>
-    @if($batch->invitation_failed_rows > 0)<p class="mt-3 text-sm font-bold">Akun tetap berhasil dibuat. Email yang gagal dapat dikirim ulang dari baris hasil di bawah.</p>@endif
+    @if($batch->activation_mode === \App\Models\UserImportBatch::ACTIVATION_MODE_DIRECT)
+        <p class="mt-3 text-sm font-bold">Import berhasil. {{ $batch->created_rows }} akun telah diaktifkan. Pengguna wajib mengganti password sementara saat login pertama.</p>
+        @if($credentialDownloadUrl)
+            <a href="{{ $credentialDownloadUrl }}" class="mt-3 inline-block border-2 border-black bg-[#8c9ae0] px-4 py-2 text-xs font-bold">DOWNLOAD PASSWORD SEMENTARA</a>
+        @endif
+    @elseif($batch->invitation_failed_rows > 0)<p class="mt-3 text-sm font-bold">Akun tetap berhasil dibuat. Email yang gagal dapat dikirim ulang dari baris hasil di bawah.</p>@endif
 </div>
 @elseif($batch->status === 'failed')
 <div class="mb-4 border-2 border-black bg-[#ffd6d6] p-3 text-sm"><strong>Import gagal.</strong> Tidak ada akun dari batch ini yang dibuat.</div>
@@ -60,12 +65,27 @@
     <a href="{{ route('admin-users.index') }}" class="border-2 border-black bg-white px-4 py-2 text-xs font-bold">ADMIN USER</a>
     @if(in_array($batch->status, ['completed', 'failed']))<a href="{{ route('admin-users.import-result', $batch) }}" class="border-2 border-black bg-[#8c9ae0] px-4 py-2 text-xs font-bold">UNDUH HASIL XLSX</a>@endif
     @if($canConfirm)
-    <form action="{{ route('admin-users.import-confirm') }}" method="POST" class="w-full border-t-2 border-black pt-3 sm:ml-auto sm:w-auto sm:border-0 sm:pt-0" onsubmit="return confirm('Konfirmasi import {{ $batch->total_rows }} pengguna? Data akan divalidasi ulang dan akun yang berhasil dibuat tidak dapat dibatalkan dari halaman ini.')">@csrf
+    <form action="{{ route('admin-users.import-confirm') }}" method="POST" x-data="{ activationMode: '{{ old('activation_mode', \App\Models\UserImportBatch::ACTIVATION_MODE_INVITATION) }}' }" class="w-full border-t-2 border-black pt-3 sm:ml-auto sm:w-auto sm:border-0 sm:pt-0" onsubmit="return confirm('Konfirmasi import {{ $batch->total_rows }} pengguna? Data akan divalidasi ulang dan akun yang berhasil dibuat tidak dapat dibatalkan dari halaman ini.')">@csrf
         <input type="hidden" name="batch_id" value="{{ $batch->id }}">
         <input type="hidden" name="expected_updated_at" value="{{ $batch->updated_at->toISOString() }}">
-        <input type="hidden" name="send_invitations" value="0">
-        <label class="mr-3 inline-flex items-center gap-2 text-xs font-bold"><input type="checkbox" name="send_invitations" value="1" @checked($batch->send_invitations)> KIRIM UNDANGAN UNTUK SEMUA BARIS</label>
-        <button class="border-2 border-black bg-[#8c9ae0] px-4 py-2 text-xs font-bold">KONFIRMASI DAN BUAT USER</button>
+        <fieldset class="mb-3">
+            <legend class="mb-2 text-xs font-bold">MODE AKTIVASI</legend>
+            <label class="mb-2 flex items-start gap-2 text-sm">
+                <input type="radio" name="activation_mode" value="{{ \App\Models\UserImportBatch::ACTIVATION_MODE_INVITATION }}" x-model="activationMode">
+                <span><strong>Invitation</strong><br><span class="text-xs">Akun dibuat melalui undangan seperti workflow normal.</span></span>
+            </label>
+            @if($canDirectActivation)
+                <label class="flex items-start gap-2 text-sm">
+                    <input type="radio" name="activation_mode" value="{{ \App\Models\UserImportBatch::ACTIVATION_MODE_DIRECT }}" x-model="activationMode">
+                    <span><strong>Direct Activation</strong><br><span class="text-xs">Akun langsung aktif dengan password sementara dan wajib mengganti password saat login pertama.</span></span>
+                </label>
+            @endif
+        </fieldset>
+        <div x-show="activationMode === '{{ \App\Models\UserImportBatch::ACTIVATION_MODE_INVITATION }}'">
+            <input type="hidden" name="send_invitations" value="0">
+            <label class="mr-3 inline-flex items-center gap-2 text-xs font-bold"><input type="checkbox" name="send_invitations" value="1" @checked($batch->send_invitations) x-bind:disabled="activationMode !== '{{ \App\Models\UserImportBatch::ACTIVATION_MODE_INVITATION }}'"> KIRIM UNDANGAN UNTUK SEMUA BARIS</label>
+        </div>
+        <button class="mt-3 border-2 border-black bg-[#8c9ae0] px-4 py-2 text-xs font-bold">KONFIRMASI DAN BUAT USER</button>
     </form>
     @elseif(!in_array($batch->status, ['completed', 'failed']))
         <button disabled class="sm:ml-auto border-2 border-black bg-gray-300 px-4 py-2 text-xs font-bold opacity-60">KONFIRMASI TIDAK TERSEDIA</button>

@@ -19,13 +19,13 @@ class AdminUserImportAuthorizationSecurityTest extends TestCase
     use CreatesUserImportWorkbooks;
     use RefreshDatabase;
 
-    public function test_all_seven_bulk_routes_require_all_six_permissions(): void
+    public function test_all_eight_bulk_routes_require_all_six_permissions(): void
     {
         $middleware = 'permissions.all:'.implode(',', UserImportBatchPolicy::REQUIRED_PERMISSIONS);
         $names = [
             'admin-users.import', 'admin-users.import-preview', 'admin-users.import-confirm',
             'admin-users.import-template', 'admin-users.import-history', 'admin-users.import-result',
-            'admin-users.import-batches.show',
+            'admin-users.import-credentials', 'admin-users.import-batches.show',
         ];
 
         foreach ($names as $name) {

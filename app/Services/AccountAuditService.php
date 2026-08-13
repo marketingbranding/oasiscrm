@@ -47,7 +47,7 @@ class AccountAuditService
     {
         $safeCounts = collect($counts)->only([
             'total_rows', 'valid_rows', 'warning_rows', 'error_rows', 'created_rows',
-            'invitation_sent_rows', 'invitation_failed_rows', 'skipped_rows',
+            'invitation_sent_rows', 'invitation_failed_rows', 'skipped_rows', 'credential_rows',
         ])->all();
 
         return ActivityLog::create([
@@ -60,6 +60,7 @@ class AccountAuditService
                 'user_import_preview_generated' => "Preview impor pengguna batch {$batch->id} dibuat",
                 'user_import_confirmed' => "Impor pengguna batch {$batch->id} dikonfirmasi",
                 'user_import_completed' => "Impor pengguna batch {$batch->id} selesai",
+                'user_import_credentials_downloaded' => "Kredensial pengguna batch {$batch->id} diunduh",
                 default => "Peristiwa impor pengguna batch {$batch->id}: {$event}",
             },
             'properties' => ['batch_id' => $batch->id, ...$safeCounts],

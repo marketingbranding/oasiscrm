@@ -27,14 +27,18 @@ class CleanupUserImportBatches extends Command
                 ->whereNull('confirmed_at')->whereNotNull('expires_at')->where('expires_at', '<=', now());
             $eligibleBatches = (clone $query)->count();
             $eligibleRows = (clone $query)->withCount('rows')->get()->sum('rows_count');
+            $expiredCredentials = UserImportBatch::query()->whereNotNull('credential_payload')
+                ->whereNotNull('credential_expires_at')->where('credential_expires_at', '<=', now())->count();
 
             if ($this->option('dry-run')) {
                 Log::info('User import staging cleanup dry run', [
                     'eligible_batches' => $eligibleBatches,
                     'eligible_rows' => $eligibleRows,
                     'deleted_batches' => 0,
+                    'expired_credentials' => $expiredCredentials,
+                    'cleared_credentials' => 0,
                 ]);
-                $this->info("Dry run: {$eligibleBatches} batches and {$eligibleRows} staging rows are eligible for deletion.");
+                $this->info("Dry run: {$eligibleBatches} batches and {$eligibleRows} staging rows are eligible for deletion; {$expiredCredentials} credential payloads are eligible for clearing.");
 
                 return self::SUCCESS;
             }
@@ -45,12 +49,17 @@ class CleanupUserImportBatches extends Command
                 $deleted += UserImportBatch::query()->whereIn('id', $ids)->whereIn('status', $statuses)
                     ->whereNull('confirmed_at')->where('expires_at', '<=', now())->delete();
             });
+            $clearedCredentials = UserImportBatch::query()->whereNotNull('credential_payload')
+                ->whereNotNull('credential_expires_at')->where('credential_expires_at', '<=', now())
+                ->update(['credential_payload' => null]);
             Log::info('User import staging cleanup completed', [
                 'eligible_batches' => $eligibleBatches,
                 'eligible_rows' => $eligibleRows,
                 'deleted_batches' => $deleted,
+                'expired_credentials' => $expiredCredentials,
+                'cleared_credentials' => $clearedCredentials,
             ]);
-            $this->info("{$deleted} expired staging batches deleted with {$eligibleRows} staged rows.");
+            $this->info("{$deleted} expired staging batches deleted with {$eligibleRows} staged rows; {$clearedCredentials} credential payloads cleared.");
 
             return self::SUCCESS;
         } catch (Throwable $exception) {

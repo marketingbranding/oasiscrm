@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Crm;
 
+use App\Exports\UserImportCredentialExport;
 use App\Exports\UserImportResultExport;
 use App\Exports\UserImportTemplateExport;
 use App\Http\Controllers\Controller;
@@ -20,6 +21,7 @@ use App\Services\UserImportValidationService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\URL;
 use Illuminate\View\View;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
 
@@ -117,8 +119,12 @@ class AdminUserImportController extends Controller
             && $batch->confirmed_at === null
             && $batch->expires_at?->isFuture();
         $invitedRows = $batch->rows->filter(fn ($row) => ($row->normalized_data['status'] ?? null) === 'invited')->count();
+        $canDirectActivation = request()->user()->hasPrimaryRole('superadmin');
+        $credentialDownloadUrl = $this->canDownloadCredentials($batch, request()->user())
+            ? URL::temporarySignedRoute('admin-users.import-credentials', $batch->credential_expires_at, $batch)
+            : null;
 
-        return view('crm.admin-users.import-batch-show', compact('batch', 'canConfirm', 'invitedRows'));
+        return view('crm.admin-users.import-batch-show', compact('batch', 'canConfirm', 'invitedRows', 'canDirectActivation', 'credentialDownloadUrl'));
     }
 
     public function confirm(AdminUserImportConfirmRequest $request): RedirectResponse
@@ -131,6 +137,7 @@ class AdminUserImportController extends Controller
             $request->user(),
             $request->boolean('send_invitations'),
             $data['expected_updated_at'],
+            $data['activation_mode'],
         );
 
         return redirect()->route('admin-users.import-batches.show', $batch)->with('success', 'Import pengguna selesai diproses.');
@@ -142,6 +149,42 @@ class AdminUserImportController extends Controller
         abort_unless(in_array($user_import_batch->status, [UserImportBatch::STATUS_COMPLETED, UserImportBatch::STATUS_FAILED], true), 404);
 
         return UserImportResultExport::download($user_import_batch);
+    }
+
+    public function credentials(Request $request, UserImportBatch $user_import_batch): BinaryFileResponse
+    {
+        $actor = $request->user();
+        abort_unless($actor->hasPrimaryRole('superadmin') && $user_import_batch->uploaded_by === $actor->id, 404);
+        abort_if($user_import_batch->credential_expires_at?->isPast(), 410, 'Tautan kredensial telah kedaluwarsa.');
+
+        [$path, $batchId] = DB::transaction(function () use ($actor, $user_import_batch) {
+            $batch = UserImportBatch::query()->lockForUpdate()->findOrFail($user_import_batch->id);
+            abort_unless($this->canDownloadCredentials($batch, $actor), 404);
+            $credentials = $batch->credential_payload;
+            $path = UserImportCredentialExport::create($credentials);
+            $batch->update([
+                'credential_downloaded_at' => now(),
+                'credential_payload' => null,
+            ]);
+            $this->audit->logUserImportBatch('user_import_credentials_downloaded', $batch, $actor, [
+                'credential_rows' => count($credentials),
+            ]);
+
+            return [$path, $batch->id];
+        });
+
+        return UserImportCredentialExport::download($path, $batchId);
+    }
+
+    private function canDownloadCredentials(UserImportBatch $batch, User $actor): bool
+    {
+        return $actor->hasPrimaryRole('superadmin')
+            && $batch->uploaded_by === $actor->id
+            && $batch->status === UserImportBatch::STATUS_COMPLETED
+            && $batch->activation_mode === 'direct'
+            && $batch->credential_payload !== null
+            && $batch->credential_downloaded_at === null
+            && $batch->credential_expires_at?->isFuture();
     }
 
     private function branchIds(User $actor): array

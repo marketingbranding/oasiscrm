@@ -222,6 +222,8 @@ Route::middleware(['auth', 'active', 'verified', 'password.changed', 'operationa
             Route::get('/import/template', [AdminUserImportController::class, 'template'])->name('import-template');
             Route::get('/import/history', [AdminUserImportController::class, 'history'])->name('import-history');
             Route::get('/import/batches/{user_import_batch}/result', [AdminUserImportController::class, 'result'])->name('import-result');
+            Route::get('/import/batches/{user_import_batch}/credentials', [AdminUserImportController::class, 'credentials'])
+                ->middleware(['signed', 'throttle:3,1'])->name('import-credentials');
             Route::get('/import/batches/{user_import_batch}', [AdminUserImportController::class, 'show'])->name('import-batches.show');
         });
         Route::get('/', [AdminUserController::class, 'index'])->middleware('permission:users.view')->name('index');

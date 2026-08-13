@@ -4,11 +4,14 @@ namespace App\Services;
 
 use App\Enums\AccountStatus;
 use App\Models\ActivityLog;
+use App\Models\Branch;
+use App\Models\Role;
 use App\Models\User;
 use App\Models\UserImportBatch;
 use App\Models\UserImportRow;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 use Throwable;
 
@@ -19,6 +22,7 @@ class UserImportExecutionService
     public function __construct(
         private readonly UserImportValidationService $validator,
         private readonly UserInvitationService $invitations,
+        private readonly UserProvisioningService $provisioning,
         private readonly BranchAssignmentService $branches,
         private readonly ProjectAssignmentService $projects,
         private readonly ReportingHierarchyService $hierarchy,
@@ -26,13 +30,21 @@ class UserImportExecutionService
         private readonly AccountAuditService $audit,
     ) {}
 
-    public function execute(int $batchId, User $actor, bool $sendInvitations, string $expectedUpdatedAt): UserImportBatch
-    {
+    public function execute(
+        int $batchId,
+        User $actor,
+        bool $sendInvitations,
+        string $expectedUpdatedAt,
+        string $activationMode = UserImportBatch::ACTIVATION_MODE_INVITATION,
+    ): UserImportBatch {
         try {
-            $outcome = DB::transaction(function () use ($batchId, $actor, $sendInvitations, $expectedUpdatedAt) {
+            $outcome = DB::transaction(function () use ($batchId, $actor, $sendInvitations, $expectedUpdatedAt, $activationMode) {
                 $batch = UserImportBatch::query()->lockForUpdate()->findOrFail($batchId);
                 if ((int) $batch->uploaded_by !== (int) $actor->id && ! $actor->isSuperadmin()) {
                     return ['state' => 'unavailable', 'message' => 'Batch impor tidak dapat dikonfirmasi oleh pengguna ini.'];
+                }
+                if ($activationMode === UserImportBatch::ACTIVATION_MODE_DIRECT && ! $actor->isSuperadmin()) {
+                    return ['state' => 'unavailable', 'message' => 'Hanya Super Admin yang dapat mengaktifkan pengguna secara langsung.'];
                 }
                 if ($batch->status !== UserImportBatch::STATUS_PREVIEW_READY || $batch->confirmed_at !== null) {
                     return ['state' => 'unavailable', 'message' => 'Batch impor sudah diproses atau tidak siap dikonfirmasi.'];
@@ -44,13 +56,17 @@ class UserImportExecutionService
                     return ['state' => 'unavailable', 'message' => 'Preview impor telah berubah. Muat ulang halaman sebelum mengonfirmasi.'];
                 }
 
+                $batch->update(['activation_mode' => $activationMode]);
+                $activationMode = $batch->activation_mode;
+                $directActivation = $activationMode === UserImportBatch::ACTIVATION_MODE_DIRECT;
+
                 $storedRows = $batch->rows()->orderBy('row_number')->lockForUpdate()->get();
                 $validatedRows = $this->validator->validate($storedRows->map(fn (UserImportRow $row) => [
                     'row_number' => $row->row_number,
                     'raw_data' => $row->raw_data,
                     'parser_errors' => $this->unsafeValueErrors($row->raw_data),
                 ])->all(), $actor);
-                $effectiveInvitations = collect($validatedRows)->filter(fn (array $row) => $sendInvitations
+                $effectiveInvitations = $directActivation ? 0 : collect($validatedRows)->filter(fn (array $row) => $sendInvitations
                     || $row['normalized_data']['status'] === AccountStatus::Invited->value)->count();
                 if ($effectiveInvitations > self::MAX_SYNCHRONOUS_INVITATIONS) {
                     foreach ($validatedRows as &$validatedRow) {
@@ -96,13 +112,20 @@ class UserImportExecutionService
                 $batch->update(['status' => UserImportBatch::STATUS_PROCESSING]);
 
                 $usersByEmail = [];
+                $credentials = [];
+                $roles = $directActivation ? Role::query()->whereIn('id', collect($validatedRows)->pluck('normalized_data.role_id'))->pluck('name', 'id') : collect();
+                $branchNames = $directActivation ? Branch::query()->whereIn('id', collect($validatedRows)->pluck('normalized_data.primary_branch_id'))->pluck('name', 'id') : collect();
                 foreach ($batch->rows()->orderBy('row_number')->get() as $row) {
                     $data = $row->normalized_data;
-                    $user = $this->invitations->createDraft([
+                    $password = $directActivation ? Str::password(20) : null;
+                    $attributes = [
                         'name' => $data['name'],
                         'email' => $data['email'],
                         'role_id' => $data['role_id'],
-                    ], $actor);
+                    ];
+                    $user = $directActivation
+                        ? $this->provisioning->createDirectlyActivated($attributes, $password, $actor)
+                        : $this->invitations->createDraft($attributes, $actor);
                     $branchAssignments = collect($data['branch_ids'])->map(fn ($id) => ['branch_id' => (int) $id])->all();
                     $this->branches->assign($user, $branchAssignments, (int) $data['primary_branch_id'], $actor);
                     $projectAssignments = collect($data['project_ids'])->map(fn ($id) => [
@@ -116,7 +139,22 @@ class UserImportExecutionService
                         'creation_status' => 'created',
                         'invitation_status' => 'not_requested',
                     ]);
-                    $this->audit->logBulkUser('user_created_bulk', $user, $actor, $batch, $row->id);
+                    $this->audit->logBulkUser(
+                        $directActivation ? 'user_directly_activated_bulk' : 'user_created_bulk',
+                        $user,
+                        $actor,
+                        $batch,
+                        $row->id,
+                    );
+                    if ($directActivation) {
+                        $credentials[] = [
+                            'name' => $data['name'],
+                            'email' => $data['email'],
+                            'role' => $roles[$data['role_id']],
+                            'primary_branch' => $branchNames[$data['primary_branch_id']],
+                            'temporary_password' => $password,
+                        ];
+                    }
                     $usersByEmail[$data['email']] = $user;
                 }
 
@@ -140,9 +178,19 @@ class UserImportExecutionService
                     }
                 }
 
-                $batch->update(['created_rows' => $batch->total_rows]);
+                $batch->update([
+                    'created_rows' => $batch->total_rows,
+                    'credential_payload' => $directActivation ? $credentials : null,
+                    'credential_expires_at' => $directActivation ? now()->addDay() : null,
+                    'credential_downloaded_at' => null,
+                    'status' => $directActivation ? UserImportBatch::STATUS_COMPLETED : UserImportBatch::STATUS_PROCESSING,
+                    'completed_at' => $directActivation ? now() : null,
+                ]);
+                if ($directActivation) {
+                    $this->audit->logUserImportBatch('user_import_direct_activation_completed', $batch, $actor, $this->resultCounts($batch));
+                }
 
-                return ['state' => 'created', 'batch' => $batch->fresh()];
+                return ['state' => $directActivation ? 'direct_completed' : 'created', 'batch' => $batch->fresh()];
             });
         } catch (Throwable $exception) {
             report($exception);
@@ -185,6 +233,10 @@ class UserImportExecutionService
 
         /** @var UserImportBatch $batch */
         $batch = $outcome['batch'];
+        if ($outcome['state'] === 'direct_completed') {
+            return $batch;
+        }
+
         $sent = 0;
         $failed = 0;
         foreach ($batch->rows()->orderBy('row_number')->get() as $row) {

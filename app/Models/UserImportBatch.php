@@ -11,6 +11,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
     'original_filename', 'uploaded_by', 'status', 'total_rows', 'valid_rows', 'warning_rows',
     'error_rows', 'send_invitations', 'confirmed_at', 'completed_at', 'expires_at',
     'created_rows', 'invitation_sent_rows', 'invitation_failed_rows', 'skipped_rows',
+    'activation_mode', 'credential_payload', 'credential_expires_at', 'credential_downloaded_at',
 ])]
 class UserImportBatch extends Model
 {
@@ -32,6 +33,15 @@ class UserImportBatch extends Model
 
     public const STATUS_FAILED = 'failed';
 
+    public const ACTIVATION_MODE_INVITATION = 'invitation';
+
+    public const ACTIVATION_MODE_DIRECT = 'direct';
+
+    public const ACTIVATION_MODES = [
+        self::ACTIVATION_MODE_INVITATION,
+        self::ACTIVATION_MODE_DIRECT,
+    ];
+
     public const STATUSES = [
         self::STATUS_DRAFT, self::STATUS_VALIDATING, self::STATUS_READY,
         self::STATUS_PREVIEW_READY, self::STATUS_VALIDATION_FAILED, self::STATUS_CONFIRMED,
@@ -45,6 +55,9 @@ class UserImportBatch extends Model
             'confirmed_at' => 'datetime',
             'completed_at' => 'datetime',
             'expires_at' => 'datetime',
+            'credential_payload' => 'encrypted:array',
+            'credential_expires_at' => 'datetime',
+            'credential_downloaded_at' => 'datetime',
         ];
     }
 

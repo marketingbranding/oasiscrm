@@ -16,6 +16,7 @@ use App\ValueObjects\SalesLeadSpreadsheetWriteResult;
 use Illuminate\Foundation\Http\Middleware\ValidateCsrfToken;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Str;
+use Illuminate\Support\ViewErrorBag;
 use Mockery;
 use RuntimeException;
 use Tests\TestCase;
@@ -45,6 +46,75 @@ class CoordinatorLocalFirstLeadTest extends TestCase
         $this->assertSame('pending_create', $lead->sync_status);
         $this->assertNull($lead->last_synced_at);
         $this->assertSame($sales->id, $lead->sales_user_id);
+    }
+
+    public function test_coordinator_renders_and_updates_current_team_lead_locally(): void
+    {
+        [$branch, $project, $sales, $coordinator] = $this->context();
+        $lead = $this->lead($sales, $project);
+        $this->app->instance(SalesLeadSpreadsheetWriter::class, Mockery::mock(SalesLeadSpreadsheetWriter::class));
+
+        $this->actingAs($coordinator)->get(route('sales-leads.edit', $lead))
+            ->assertOk()
+            ->assertSee('id="edit-lead-source"', false)
+            ->assertSee('name="source"', false)
+            ->assertSee('id="edit-lead-platform"', false)
+            ->assertSee('name="platform"', false)
+            ->assertSee('id="edit-lead-campaign_name"', false)
+            ->assertSee('name="campaign_name"', false)
+            ->assertSee('id="edit-lead-sales"', false)
+            ->assertDontSee('id="edit-lead-sales" class="sales-input" name="sales_user_id" x-model="sales" required disabled', false);
+
+        $this->actingAs($coordinator)->put(route('sales-leads.update', $lead), $this->leadData($branch, $project, $sales, [
+            'customer_name' => 'Updated Team Lead',
+            'source' => 'Referral',
+            'platform' => 'WhatsApp',
+            'campaign_name' => 'Referral',
+            'expected_updated_at' => app(OptimisticLockService::class)->token($lead),
+        ]))->assertRedirect()->assertSessionHasNoErrors();
+
+        $this->assertDatabaseHas('sales_leads', [
+            'id' => $lead->id,
+            'customer_name' => 'Updated Team Lead',
+            'source' => 'Referral',
+            'platform' => 'WhatsApp',
+            'campaign_name' => 'Referral',
+            'sync_status' => 'pending_create',
+        ]);
+    }
+
+    public function test_coordinator_cannot_view_or_update_lead_outside_current_team(): void
+    {
+        [$branch, $project, , $coordinator] = $this->context();
+        $outside = $this->sales($branch, $project, 'Outside Sales');
+        $lead = $this->lead($outside, $project);
+
+        $this->actingAs($coordinator)->get(route('sales-leads.edit', $lead))->assertForbidden();
+        $this->actingAs($coordinator)->put(route('sales-leads.update', $lead), $this->leadData($branch, $project, $outside, [
+            'expected_updated_at' => app(OptimisticLockService::class)->token($lead),
+        ]))->assertForbidden();
+    }
+
+    public function test_edit_view_keeps_primary_sales_selector_disabled_with_hidden_value(): void
+    {
+        [$branch, $project, $sales] = $this->context();
+        $lead = $this->lead($sales, $project);
+
+        $html = $this->actingAs($sales)->view('crm.sales-pocketbook.edit', [
+            'errors' => new ViewErrorBag,
+            'lead' => $lead,
+            'branches' => collect([$branch]),
+            'projects' => collect([$project->setRelation('assignedUsers', collect([$sales]))]),
+            'salesUsers' => collect([$sales->setRelation('assignedProjects', collect([$project]))]),
+            'sources' => ['Referral'],
+            'channels' => ['WhatsApp'],
+            'activities' => ['Campaign'],
+            'promos' => collect(),
+            'optimisticToken' => app(OptimisticLockService::class)->token($lead),
+        ]);
+
+        $html->assertSee('id="edit-lead-sales" class="sales-input" name="sales_user_id" x-model="sales" required disabled', false)
+            ->assertSee('<input type="hidden" name="sales_user_id" value="'.$sales->id.'">', false);
     }
 
     public function test_coordinator_cannot_forge_sales_outside_current_team(): void

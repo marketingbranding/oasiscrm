@@ -5,14 +5,16 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Laporan Fee Sales - {{ $sales->name }}</title>
     <style>
-        @page { size: A4 portrait; margin: 12mm; }
+        @page { size: A4 portrait; margin: 0; }
         * { box-sizing: border-box; }
-        body { margin: 0; color: #000; background: #fff; font: 11pt Arial, sans-serif; }
-        main { width: 100%; }
-        h1 { margin: 0 0 4mm; text-align: center; font-size: 18pt; }
-        h2 { margin: 6mm 0 2mm; font-size: 12pt; text-transform: uppercase; }
+        html, body { margin: 0; color: #000; background: #ddd; font: 11pt Arial, sans-serif; }
+        .screen-toolbar { width: 210mm; margin: 16px auto 0; }
+        .print-sheet { width: 210mm; min-height: 297mm; margin: 16px auto; padding: 12mm; background: #fff; box-shadow: 0 4px 18px rgba(0, 0, 0, .2); }
+        h1 { margin: 0 0 4mm; text-align: center; font-size: 18pt; break-after: avoid; page-break-after: avoid; }
+        h2 { margin: 6mm 0 2mm; font-size: 12pt; text-transform: uppercase; break-after: avoid; page-break-after: avoid; }
         dl { margin: 0; }
         .metadata { display: grid; grid-template-columns: 32mm 1fr; gap: 1mm 3mm; }
+        .metadata-section, .summary-section { break-inside: avoid; page-break-inside: avoid; }
         dt { font-weight: bold; }
         dd { margin: 0; }
         .kpis { display: grid; grid-template-columns: repeat(3, 1fr); gap: 2mm; }
@@ -24,20 +26,26 @@
         th, td { border: 1px solid #000; padding: 1.5mm; text-align: left; vertical-align: top; }
         th { font-weight: bold; }
         .empty { text-align: center; }
-        .print-button { margin: 0 0 5mm; border: 2px solid #000; padding: 2mm 4mm; color: #000; background: #fff; font-weight: bold; cursor: pointer; }
-        @media print { .screen-only { display: none !important; } }
+        .print-button { border: 2px solid #000; padding: 2mm 4mm; color: #000; background: #fff; font-weight: bold; cursor: pointer; }
+        @media print {
+            html, body { background: #fff; }
+            .screen-only, .screen-toolbar, .print-button { display: none !important; }
+            .print-sheet { width: 210mm; min-height: auto; margin: 0; padding: 12mm; box-shadow: none; }
+        }
     </style>
 </head>
 <body>
 @php($periodLabel = \Illuminate\Support\Carbon::parse($dateFrom)->format('d/m/Y').' - '.\Illuminate\Support\Carbon::parse($dateTo)->format('d/m/Y'))
-<main>
-    <button type="button" class="print-button screen-only" onclick="window.print()">Cetak</button>
+<div class="screen-toolbar screen-only">
+    <button type="button" class="print-button" onclick="window.print()">Cetak</button>
+</div>
+<main class="print-sheet">
     <header><h1>LAPORAN AKTIVITAS SALES</h1></header>
-    <section aria-labelledby="metadata-title">
+    <section class="metadata-section" aria-labelledby="metadata-title">
         <h2 id="metadata-title">Informasi Laporan</h2>
         <dl class="metadata"><dt>Sales</dt><dd>{{ $sales->name }}</dd><dt>Koordinator</dt><dd>{{ $coordinator?->name ?? '-' }}</dd><dt>Cabang</dt><dd>{{ $branch->name }}</dd><dt>Proyek</dt><dd>{{ $project->project_name }}</dd><dt>Periode</dt><dd>{{ $periodLabel }}</dd></dl>
     </section>
-    <section aria-labelledby="summary-title">
+    <section class="summary-section" aria-labelledby="summary-title">
         <h2 id="summary-title">RINGKASAN</h2>
         <dl class="kpis">@foreach(['total_agenda' => 'Total Agenda', 'agenda_done' => 'Agenda Selesai', 'total_lead' => 'Total Lead', 'face_to_face' => 'Tatap Muka', 'site_visit' => 'Cek Lokasi', 'utj' => 'UTJ'] as $key => $label)<div class="kpi"><dt>{{ $label }}</dt><dd>{{ $metrics[$key] }}</dd></div>@endforeach</dl>
     </section>

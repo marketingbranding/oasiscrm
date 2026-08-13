@@ -190,11 +190,18 @@ class SalesFeeReportTest extends TestCase
         foreach (['sales-fee-reports.show', 'sales-fee-reports.print'] as $route) {
             $response = $this->actingAs($this->actor)->get(route($route, [$this->sales, $this->project] + $this->period()));
             $response->assertOk()
-                ->assertSee('LAPORAN FEE SALES')->assertSee('Sales Sendiri')->assertSee('Koordinator Aktif')
+                ->assertSee('LAPORAN AKTIVITAS SALES')->assertSee('Sales Sendiri')->assertSee('Koordinator Aktif')
                 ->assertSee('Cabang Sendiri')->assertSee('Proyek Utama')->assertSee('01/08/2026 - 31/08/2026')
                 ->assertSee('DETAIL AGENDA')->assertSee('DETAIL LEAD')->assertSee('Agenda Detail')->assertSee('Konsumen Detail')
                 ->assertDontSee('Edit')->assertDontSee('Push ke Google')->assertDontSee('Sync Lead');
         }
+
+        $this->actingAs($this->actor)
+            ->get(route('sales-fee-reports.print', [$this->sales, $this->project] + $this->period()))
+            ->assertSee('class="screen-toolbar screen-only"', false)
+            ->assertSee('class="print-sheet"', false)
+            ->assertSee('@page { size: A4 portrait; margin: 0; }', false)
+            ->assertSee('.print-sheet { width: 210mm; min-height: auto; margin: 0; padding: 12mm; box-shadow: none; }', false);
     }
 
     public function test_only_primary_legacy_admin_role_is_allowed(): void

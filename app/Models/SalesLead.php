@@ -9,6 +9,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\Relations\MorphMany;
 
 class SalesLead extends Model
@@ -101,6 +102,14 @@ class SalesLead extends Model
     public function statusHistories(): HasMany
     {
         return $this->hasMany(SalesLeadStatusHistory::class);
+    }
+
+    public function latestStatusHistory(): HasOne
+    {
+        return $this->hasOne(SalesLeadStatusHistory::class)->ofMany([
+            'changed_at' => 'max',
+            'id' => 'max',
+        ]);
     }
 
     public function siteVisits(): HasMany

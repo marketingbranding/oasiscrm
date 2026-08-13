@@ -51,6 +51,10 @@ class SalesPocketbookController extends Controller
             return app(SupervisorSalesPocketbookController::class)->index($request);
         }
 
+        if ($user->hasPrimaryRole('admin')) {
+            return app(AdminSalesPocketbookController::class)->index($request);
+        }
+
         $this->authorize('viewAny', SalesLead::class);
         $reminderAction = $request->query('reminder_action');
         if ($user->isSales() && in_array($reminderAction, ['lead', 'agenda', 'result'], true)) {

@@ -26,6 +26,12 @@ class SalesLeadLifecycleOperationsTest extends TestCase
 
     private int $remoteRowNumber = 2;
 
+    protected function setUp(): void
+    {
+        parent::setUp();
+        config()->set('services.google_sheets.sales_lead_sync_enabled', true);
+    }
+
     public function test_primary_sales_cannot_use_lifecycle_operation_endpoints(): void
     {
         [, $project, , $lead] = $this->context();

@@ -12,6 +12,7 @@ use App\Services\CoordinatorLeadPushService;
 use App\Services\OptimisticLockService;
 use App\Services\SalesLeadSheetOptionService;
 use App\Services\SalesLeadSpreadsheetWriter;
+use App\Services\SalesLeadSyncService;
 use App\ValueObjects\SalesLeadSpreadsheetWriteResult;
 use Illuminate\Foundation\Http\Middleware\ValidateCsrfToken;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -28,6 +29,7 @@ class CoordinatorLocalFirstLeadTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
+        config()->set('services.google_sheets.sales_lead_sync_enabled', false);
         $this->withoutMiddleware(ValidateCsrfToken::class);
     }
 
@@ -146,6 +148,52 @@ class CoordinatorLocalFirstLeadTest extends TestCase
         $this->actingAs($sales)->get(route('coordinator-leads.export'))->assertForbidden();
     }
 
+    public function test_local_only_hides_coordinator_sync_and_rejects_direct_push_without_service_call(): void
+    {
+        [, , , $coordinator] = $this->context();
+        $push = Mockery::mock(CoordinatorLeadPushService::class);
+        $push->shouldNotReceive('push');
+        $this->app->instance(CoordinatorLeadPushService::class, $push);
+
+        $this->actingAs($coordinator)->get(route('sales-pocketbook.index'))
+            ->assertOk()
+            ->assertDontSee('SYNC KE SPREADSHEET');
+        $this->actingAs($coordinator)->post(route('coordinator-leads.sync'))
+            ->assertStatus(503)
+            ->assertSessionHas('error', 'Sinkronisasi Google Sheets Lead Sales sedang dinonaktifkan.');
+    }
+
+    public function test_local_only_rejects_lifecycle_sync_without_service_call(): void
+    {
+        [$branch, , , $coordinator] = $this->context();
+        $manager = $this->user('manager', $branch, 'Manager');
+        $manager->branches()->updateExistingPivot($branch->id, ['can_view' => true, 'can_edit' => true, 'can_sync' => true]);
+        $sync = Mockery::mock(SalesLeadSyncService::class);
+        $sync->shouldNotReceive('sync');
+        $this->app->instance(SalesLeadSyncService::class, $sync);
+
+        $this->actingAs($manager)->postJson(route('sales-pocketbook.lifecycle-sync'), ['branch_id' => $branch->id])
+            ->assertStatus(503)
+            ->assertJsonPath('message', 'Sinkronisasi Google Sheets Lead Sales sedang dinonaktifkan.');
+    }
+
+    public function test_enabled_mode_shows_coordinator_sync_and_calls_push_service(): void
+    {
+        config()->set('services.google_sheets.sales_lead_sync_enabled', true);
+        [, , , $coordinator] = $this->context();
+        $push = Mockery::mock(CoordinatorLeadPushService::class);
+        $push->shouldReceive('push')->once()->withArgs(fn (User $user) => $user->is($coordinator))
+            ->andReturn(['processed' => 1, 'synced' => 1, 'failed' => 0]);
+        $this->app->instance(CoordinatorLeadPushService::class, $push);
+
+        $this->actingAs($coordinator)->get(route('sales-pocketbook.index'))
+            ->assertOk()
+            ->assertSee('SYNC KE SPREADSHEET');
+        $this->actingAs($coordinator)->post(route('coordinator-leads.sync'))
+            ->assertRedirect()
+            ->assertSessionHas('success', '1 lead tersinkron.');
+    }
+
     public function test_synced_lead_update_stays_local_then_push_updates_same_external_identity(): void
     {
         [$branch, $project, $sales, $coordinator] = $this->context();
@@ -168,7 +216,9 @@ class CoordinatorLocalFirstLeadTest extends TestCase
 
         $this->assertSame('pending_update', $lead->fresh()->sync_status);
         $this->assertSame($syncId, $lead->fresh()->external_sync_id);
+        $this->assertTrue($lead->last_synced_at->equalTo($lead->fresh()->last_synced_at));
 
+        config()->set('services.google_sheets.sales_lead_sync_enabled', true);
         $result = app(CoordinatorLeadPushService::class)->push($coordinator);
 
         $this->assertSame(['processed' => 1, 'synced' => 1, 'failed' => 0], $result);
@@ -178,6 +228,7 @@ class CoordinatorLocalFirstLeadTest extends TestCase
 
     public function test_push_uses_canonical_oasis_sales_name_and_keeps_sync_identity(): void
     {
+        config()->set('services.google_sheets.sales_lead_sync_enabled', true);
         [$branch, $project, $sales, $coordinator] = $this->context();
         $sales->update(['name' => 'Canonical OASIS Sales']);
         $lead = $this->lead($sales, $project);
@@ -197,6 +248,7 @@ class CoordinatorLocalFirstLeadTest extends TestCase
 
     public function test_push_failure_preserves_lead_retry_succeeds_and_synced_second_push_is_noop(): void
     {
+        config()->set('services.google_sheets.sales_lead_sync_enabled', true);
         [$branch, $project, $sales, $coordinator] = $this->context();
         $lead = $this->lead($sales, $project);
         $writer = Mockery::mock(SalesLeadSpreadsheetWriter::class);
@@ -267,6 +319,7 @@ class CoordinatorLocalFirstLeadTest extends TestCase
 
     public function test_push_is_isolated_to_accessible_branch(): void
     {
+        config()->set('services.google_sheets.sales_lead_sync_enabled', true);
         [$branch, $project, $sales, $coordinator] = $this->context();
         $accessible = $this->lead($sales, $project);
         $otherBranch = $this->branch('Other', 'OTH');

@@ -14,9 +14,15 @@ class SyncSalesLead extends Command
 
     protected $description = 'Tarik dan rekonsiliasi tab lead Buku Saku Sales per cabang (atau per Sales saat --user diberikan)';
 
-    public function handle(SalesLeadSyncService $service, WorkspaceAccessService $workspaceAccess): int
+    public function handle(WorkspaceAccessService $workspaceAccess): int
     {
-        $results = $this->results($service, $workspaceAccess);
+        if (! config('services.google_sheets.sales_lead_sync_enabled')) {
+            $this->warn('Sinkronisasi Google Sheets Lead Sales sedang dinonaktifkan.');
+
+            return self::SUCCESS;
+        }
+
+        $results = $this->results(app(SalesLeadSyncService::class), $workspaceAccess);
         if ($results === []) {
             $this->warn('Tidak ada cabang aktif dengan sheet_id untuk disinkronkan.');
 

@@ -32,6 +32,13 @@ class SalesLeadSpreadsheetFoundationTest extends TestCase
 {
     use RefreshDatabase;
 
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        config(['services.google_sheets.sales_lead_sync_enabled' => true]);
+    }
+
     public function test_registry_contains_exact_target_sheets_and_read_alias(): void
     {
         $google = Mockery::mock(GoogleSheetsApiService::class);
@@ -263,11 +270,11 @@ class SalesLeadSpreadsheetFoundationTest extends TestCase
         $options->shouldReceive('exactOption')->twice()->with(['Sheet Project', 'Canonical OASIS Project'], 'Sheet Project')->andReturn('Sheet Project');
         $options->shouldReceive('exactOption')->once()->with(['Sheet Project', 'Canonical OASIS Project'], 'Canonical OASIS Project')->andReturn('Canonical OASIS Project');
         $sheetIdentities = new SalesSheetIdentityService($options);
+        $this->app->instance(SalesSheetIdentityService::class, $sheetIdentities);
         $sales->update(['name' => 'Canonical OASIS Sales']);
         $service = new SalesLeadService(
             Mockery::mock(PhoneNormalizationService::class),
             Mockery::mock(SalesLeadLifecycleService::class),
-            $sheetIdentities,
         );
 
         $fields = $service->spreadsheetFields($lead->fresh());

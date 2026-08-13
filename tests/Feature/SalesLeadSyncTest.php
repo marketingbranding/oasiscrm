@@ -21,6 +21,12 @@ class SalesLeadSyncTest extends TestCase
 {
     use RefreshDatabase;
 
+    protected function setUp(): void
+    {
+        parent::setUp();
+        config()->set('services.google_sheets.sales_lead_sync_enabled', true);
+    }
+
     public function test_lead_sync_reads_only_lead_and_ignores_downstream_sheet_health(): void
     {
         [$branch, $project, $sales] = $this->context('sheet-lead-only', 'Lead Only Project', 'Lead Only Sales');

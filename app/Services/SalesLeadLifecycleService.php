@@ -212,7 +212,7 @@ class SalesLeadLifecycleService
             }
 
             $completed = ($data['completion'] ?? null) === 'complete';
-            $result = $completed ? $this->writer()->append($locked, 'data_ceklok', [
+            $result = $completed && $this->syncEnabled() ? $this->writer()->append($locked, 'data_ceklok', [
                 'nama_konsumen' => $locked->customer_name,
                 'tanggal_ceklok' => $data['tanggal'],
                 'waktu_ceklok' => $data['waktu'],
@@ -289,18 +289,18 @@ class SalesLeadLifecycleService
                 'nama_konsumen' => $locked->customer_name,
                 'no_hp' => $locked->phone,
             ];
-            $result = $this->writer()->append($locked, $sheetName, $fields, $operationUuid);
+            $result = $this->syncEnabled() ? $this->writer()->append($locked, $sheetName, $fields, $operationUuid) : null;
 
             $link = SalesLeadConsumerLink::query()->create([
                 'sales_lead_id' => $locked->id,
                 'branch_id' => $locked->branch_id,
                 'actor_id' => $actor->id,
                 'operation_uuid' => $operationUuid,
-                'oasis_sync_id' => $result->syncId,
-                'sheet_name' => $result->sheetName,
-                'remote_row_number' => $result->rowNumber,
+                'oasis_sync_id' => $result?->syncId,
+                'sheet_name' => $result?->sheetName,
+                'remote_row_number' => $result?->rowNumber,
                 'status' => 'completed',
-                'consumer_reference' => $result->syncId,
+                'consumer_reference' => $result?->syncId ?? $operationUuid,
                 'sheet_type' => $sheetName,
                 'nik' => $data['nik'],
                 'id_kavling' => $data['id_kavling'] ?? null,
@@ -310,12 +310,12 @@ class SalesLeadLifecycleService
             if ($sheetName === 'data_konsumen') {
                 $locked->update([
                     'consumer_converted_at' => now(),
-                    'consumer_external_id' => $result->syncId,
-                    'linked_consumer_reference' => $result->syncId,
+                    'consumer_external_id' => $result?->syncId,
+                    'linked_consumer_reference' => $result?->syncId ?? $operationUuid,
                 ]);
                 $this->transitionSystemStatus($locked->fresh(), SalesLeadStatus::Utj, 'consumer', (string) $link->id, $actor, $operationUuid, metadata: [
-                    'sheet_name' => $result->sheetName,
-                    'remote_row_number' => $result->rowNumber,
+                    'sheet_name' => $result?->sheetName,
+                    'remote_row_number' => $result?->rowNumber,
                 ]);
             }
 
@@ -340,21 +340,21 @@ class SalesLeadLifecycleService
                 throw ValidationException::withMessages(['lead' => 'Lead ini masih memiliki pengajuan SLIK aktif.']);
             }
 
-            $result = $this->writer()->append($locked, 'bi_checking', [
+            $result = $this->syncEnabled() ? $this->writer()->append($locked, 'bi_checking', [
                 'id_kavling' => $consumer->id_kavling,
                 'no_ktp' => $consumer->nik,
                 'tanggal_slik' => $data['tanggal_slik'],
                 'keterangan' => $data['keterangan'] ?? null,
-            ], $operationUuid);
+            ], $operationUuid) : null;
             $attempt = SalesLeadSlikAttempt::query()->create([
                 'sales_lead_id' => $locked->id,
                 'branch_id' => $locked->branch_id,
                 'actor_id' => $actor->id,
                 'consumer_link_id' => $consumer->id,
                 'operation_uuid' => $operationUuid,
-                'oasis_sync_id' => $result->syncId,
-                'sheet_name' => $result->sheetName,
-                'remote_row_number' => $result->rowNumber,
+                'oasis_sync_id' => $result?->syncId,
+                'sheet_name' => $result?->sheetName,
+                'remote_row_number' => $result?->rowNumber,
                 'status' => 'submitted',
                 'nik' => $consumer->nik,
                 'id_kavling' => $consumer->id_kavling,
@@ -363,10 +363,10 @@ class SalesLeadLifecycleService
                 'notes' => $data['keterangan'] ?? null,
                 'attempt_number' => $locked->slikAttempts()->count() + 1,
             ]);
-            $locked->update(['slik_external_id' => $result->syncId]);
+            $locked->update(['slik_external_id' => $result?->syncId]);
             $this->transitionSystemStatus($locked->fresh(), SalesLeadStatus::SlikCheck, 'slik', (string) $attempt->id, $actor, $operationUuid, metadata: [
-                'sheet_name' => $result->sheetName,
-                'remote_row_number' => $result->rowNumber,
+                'sheet_name' => $result?->sheetName,
+                'remote_row_number' => $result?->rowNumber,
             ]);
 
             return $attempt;
@@ -386,25 +386,25 @@ class SalesLeadLifecycleService
             if ($lockedAttempt->status === 'rejected') {
                 return $lockedAttempt;
             }
-            if ($lockedAttempt->status !== 'submitted' || blank($lockedAttempt->oasis_sync_id)) {
+            if ($lockedAttempt->status !== 'submitted' || ($this->syncEnabled() && blank($lockedAttempt->oasis_sync_id))) {
                 throw ValidationException::withMessages(['slik_attempt_id' => 'Pengajuan SLIK aktif tidak ditemukan.']);
             }
 
-            $result = $this->writer()->updateBySyncId($locked, 'bi_checking', $lockedAttempt->oasis_sync_id, [
+            $result = $this->syncEnabled() ? $this->writer()->updateBySyncId($locked, 'bi_checking', $lockedAttempt->oasis_sync_id, [
                 'hasil_slik' => $data['hasil_slik'],
                 'keterangan' => $data['keterangan'],
-            ]);
+            ]) : null;
             $lockedAttempt->update([
                 'status' => 'rejected',
                 'result' => $data['hasil_slik'],
                 'slik_result' => $data['hasil_slik'],
                 'notes' => $data['keterangan'],
                 'rejected_at' => now(),
-                'remote_row_number' => $result->rowNumber,
+                'remote_row_number' => $result?->rowNumber,
             ]);
             $this->transitionSystemStatus($locked, SalesLeadStatus::SlikRejected, 'slik_rejection', (string) $lockedAttempt->id, $actor, $operationUuid, metadata: [
-                'sheet_name' => $result->sheetName,
-                'remote_row_number' => $result->rowNumber,
+                'sheet_name' => $result?->sheetName,
+                'remote_row_number' => $result?->rowNumber,
                 'reason' => $data['hasil_slik'],
             ]);
 
@@ -438,23 +438,23 @@ class SalesLeadLifecycleService
                 throw ValidationException::withMessages(['coordinator_user_id' => 'Koordinator harus menggunakan atasan aktif Sales lead.']);
             }
 
-            $result = $this->writer()->append($locked, 'data_sales', [
+            $result = $this->syncEnabled() ? $this->writer()->append($locked, 'data_sales', [
                 'nik_sales' => 'OJT',
                 'nama_sales' => $locked->customer_name,
                 'nik_koordinator' => $data['nik_koordinator'],
                 'nama_koordinator' => $coordinator->name,
-            ], $operationUuid);
+            ], $operationUuid) : null;
             $link = SalesLeadFreelanceLink::query()->create([
                 'sales_lead_id' => $locked->id,
                 'branch_id' => $locked->branch_id,
                 'actor_id' => $actor->id,
                 'coordinator_user_id' => $coordinator->id,
                 'operation_uuid' => $operationUuid,
-                'oasis_sync_id' => $result->syncId,
-                'sheet_name' => $result->sheetName,
-                'remote_row_number' => $result->rowNumber,
+                'oasis_sync_id' => $result?->syncId,
+                'sheet_name' => $result?->sheetName,
+                'remote_row_number' => $result?->rowNumber,
                 'status' => 'completed',
-                'freelance_reference' => $result->syncId,
+                'freelance_reference' => $result?->syncId ?? $operationUuid,
                 'nik_sales' => 'OJT',
                 'sales_name' => $locked->customer_name,
                 'coordinator_nik' => $data['nik_koordinator'],
@@ -463,11 +463,11 @@ class SalesLeadLifecycleService
             ]);
             $locked->update([
                 'freelance_converted_at' => now(),
-                'freelance_external_id' => $result->syncId,
+                'freelance_external_id' => $result?->syncId,
             ]);
             $this->transitionSystemStatus($locked->fresh(), SalesLeadStatus::Freelance, 'freelance', (string) $link->id, $actor, $operationUuid, metadata: [
-                'sheet_name' => $result->sheetName,
-                'remote_row_number' => $result->rowNumber,
+                'sheet_name' => $result?->sheetName,
+                'remote_row_number' => $result?->rowNumber,
             ]);
 
             return $link;
@@ -484,6 +484,11 @@ class SalesLeadLifecycleService
         return $uuid;
     }
 
+    private function syncEnabled(): bool
+    {
+        return (bool) config('services.google_sheets.sales_lead_sync_enabled');
+    }
+
     private function writer(): SalesLeadSpreadsheetWriter
     {
         return app(SalesLeadSpreadsheetWriter::class);
@@ -491,7 +496,7 @@ class SalesLeadLifecycleService
 
     private function updateLeadSheetStatus(SalesLead $lead, SalesLeadStatus $status): void
     {
-        if (! $lead->external_sync_id) {
+        if (! $this->syncEnabled() || ! $lead->external_sync_id) {
             return;
         }
 

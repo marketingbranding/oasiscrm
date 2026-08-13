@@ -120,7 +120,7 @@
         </x-crm.alert>
     @endif
 
-    @if($tab === 'leads' && $syncBranch)
+    @if(config('services.google_sheets.sales_lead_sync_enabled') && $tab === 'leads' && $syncBranch)
         <x-crm.sync-status-panel module-key="sales-lead-lifecycle" :scope-name="$syncBranch->name" :branch-id="$syncBranch->id" :status="$lifecycleSyncStatus">
             <div class="flex flex-wrap items-center gap-2">
                 @if($canReconcile)<x-crm.button variant="text" size="sm" :href="route('sales-pocketbook.lifecycle-reconciliations.index', ['branch_id' => $syncBranch->id, 'status' => 'open'])">Rekonsiliasi ({{ $reconciliationCount }})</x-crm.button>@endif
@@ -128,7 +128,7 @@
             </div>
         </x-crm.sync-status-panel>
     @endif
-    @if($tab === 'leads' && $monitoring && !$syncBranch)
+    @if(config('services.google_sheets.sales_lead_sync_enabled') && $tab === 'leads' && $monitoring && !$syncBranch)
         <x-crm.alert variant="info" title="Pilih cabang untuk sinkronisasi">Status dan aksi sinkronisasi lead tersedia setelah satu cabang dipilih.</x-crm.alert>
     @endif
     <div x-show="syncUpdateAvailable" x-cloak role="status" aria-live="polite" class="border-2 border-black bg-[#fff7cc] p-3 text-sm">

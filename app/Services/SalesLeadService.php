@@ -13,7 +13,6 @@ class SalesLeadService
     public function __construct(
         private readonly PhoneNormalizationService $phones,
         private readonly SalesLeadLifecycleService $lifecycle,
-        private readonly SalesSheetIdentityService $sheetIdentities,
     ) {}
 
     public function create(array $data, User $actor): SalesLead
@@ -126,6 +125,11 @@ class SalesLeadService
 
     public function spreadsheetFields(SalesLead $lead): array
     {
+        if (! config('services.google_sheets.sales_lead_sync_enabled')) {
+            return [];
+        }
+
+        $sheetIdentities = app(SalesSheetIdentityService::class);
         $lead->loadMissing(['branch:id,sheet_id,is_active', 'project:id,branch_id,project_name,sheet_project_name', 'sales:id,name', 'leadSource:id,name']);
         $status = $lead->current_status instanceof SalesLeadStatus
             ? $lead->current_status
@@ -138,7 +142,7 @@ class SalesLeadService
             'aktivitas_lead' => $lead->campaign_name ?: $lead->campaign_id,
             'nama_konsumen' => $lead->customer_name,
             'no_hp' => $lead->phone,
-            'proyek' => $this->sheetIdentities->projectValue($lead->project),
+            'proyek' => $sheetIdentities->projectValue($lead->project),
             'sales_pic' => $lead->sales->name,
             'status_lead' => $status->spreadsheetValue(),
             'keterangan' => $lead->notes,

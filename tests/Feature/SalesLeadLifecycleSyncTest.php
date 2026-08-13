@@ -24,6 +24,12 @@ class SalesLeadLifecycleSyncTest extends TestCase
 {
     use RefreshDatabase;
 
+    protected function setUp(): void
+    {
+        parent::setUp();
+        config()->set('services.google_sheets.sales_lead_sync_enabled', true);
+    }
+
     public function test_same_lead_id_is_isolated_per_branch_and_statuses_are_independent(): void
     {
         [$firstBranch, $firstProject, $firstSales] = $this->context('sheet-one', 'Project One', 'Sales One');

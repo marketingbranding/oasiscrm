@@ -19,7 +19,6 @@ class CoordinatorSalesLeadWorkspaceController extends Controller
 {
     public function __construct(
         private readonly CoordinatorLeadTeamService $teams,
-        private readonly CoordinatorLeadPushService $pushService,
         private readonly CoordinatorSalesLeadExport $export,
         private readonly CoordinatorSalesMonitoringService $monitoring,
     ) {}
@@ -50,7 +49,8 @@ class CoordinatorSalesLeadWorkspaceController extends Controller
         $data['activities'] = SalesLeadMasterData::ACTIVITIES;
         $data['promos'] = Promo::query()->where('is_active', true)->orderBy('name')->pluck('name');
         $data['statuses'] = SalesLeadStatus::cases();
-        $data['canSync'] = $request->user()->hasPermission('sales_pocketbook.sync');
+        $data['canSync'] = config('services.google_sheets.sales_lead_sync_enabled')
+            && $request->user()->hasPermission('sales_pocketbook.sync');
         $data['tab'] = $tab;
 
         return view('crm.sales-pocketbook.coordinator-leads', $data);
@@ -79,7 +79,11 @@ class CoordinatorSalesLeadWorkspaceController extends Controller
         abort_unless($this->teams->isCoordinator($user), 403);
         abort_unless($user->hasPermission('sales_pocketbook.sync'), 403);
 
-        $result = $this->pushService->push($user);
+        if (! config('services.google_sheets.sales_lead_sync_enabled')) {
+            return back()->with('error', 'Sinkronisasi Google Sheets Lead Sales sedang dinonaktifkan.')->setStatusCode(503);
+        }
+
+        $result = app(CoordinatorLeadPushService::class)->push($user);
         $message = "{$result['synced']} lead tersinkron";
 
         return back()->with($result['failed'] > 0 ? 'warning' : 'success', $result['failed'] > 0

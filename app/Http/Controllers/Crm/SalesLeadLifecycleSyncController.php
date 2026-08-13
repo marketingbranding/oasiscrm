@@ -21,11 +21,15 @@ class SalesLeadLifecycleSyncController extends Controller
         private readonly SyncResponseService $responses,
     ) {}
 
-    public function sync(Request $request, SalesLeadSyncService $service): JsonResponse
+    public function sync(Request $request): JsonResponse
     {
         abort_if($request->user()->hasPrimaryRole(['sales', 'sales_coordinator', 'supervisor']), 403);
         $branch = $this->authorizedSyncBranch($request);
-        $result = $service->sync($branch, $request->user());
+        if (! config('services.google_sheets.sales_lead_sync_enabled')) {
+            return response()->json(['message' => 'Sinkronisasi Google Sheets Lead Sales sedang dinonaktifkan.'], 503);
+        }
+
+        $result = app(SalesLeadSyncService::class)->sync($branch, $request->user());
         $status = $this->personalOrBranchStatus($branch, $request);
         $response = $this->responses->make('sales-lead-lifecycle', $this->scope($branch), $status, $result);
 
@@ -36,6 +40,9 @@ class SalesLeadLifecycleSyncController extends Controller
     {
         abort_if($request->user()->hasPrimaryRole(['sales', 'sales_coordinator', 'supervisor']), 403);
         $branch = $this->viewableBranch($request);
+        if (! config('services.google_sheets.sales_lead_sync_enabled')) {
+            return response()->json(['message' => 'Sinkronisasi Google Sheets Lead Sales sedang dinonaktifkan.'], 503);
+        }
 
         $status = $this->personalOrBranchStatus($branch, $request);
 

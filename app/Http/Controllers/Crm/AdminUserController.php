@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Crm;
 
 use App\Enums\AccountStatus;
 use App\Http\Controllers\Controller;
+use App\Http\Requests\AdminUserBulkResetAccessRequest;
 use App\Http\Requests\AdminUserFilterRequest;
 use App\Http\Requests\AdminUserStatusRequest;
 use App\Http\Requests\AdminUserStoreRequest;
@@ -226,6 +227,17 @@ class AdminUserController extends Controller
     public function reactivate(AdminUserStatusRequest $request, User $admin_user): RedirectResponse
     {
         return $this->changeStatus($request, $admin_user, 'reactivate');
+    }
+
+    public function bulkResetAccess(AdminUserBulkResetAccessRequest $request): RedirectResponse
+    {
+        try {
+            $users = $this->provisioning->resetExistingAccess($request->validated('user_ids'), 'password', $request->user());
+        } catch (\DomainException $exception) {
+            return back()->with('error', $exception->getMessage());
+        }
+
+        return back()->with('success', "Akses {$users->count()} pengguna berhasil direset.");
     }
 
     public function resetAccess(User $admin_user): RedirectResponse

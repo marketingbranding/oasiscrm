@@ -229,6 +229,7 @@ Route::middleware(['auth', 'active', 'verified', 'password.changed', 'operationa
         Route::get('/', [AdminUserController::class, 'index'])->middleware('permission:users.view')->name('index');
         Route::get('/create', [AdminUserController::class, 'create'])->middleware('permission:users.create')->name('create');
         Route::post('/', [AdminUserController::class, 'store'])->middleware('permission:users.create')->name('store');
+        Route::post('/bulk-reset-access', [AdminUserController::class, 'bulkResetAccess'])->middleware('permission:users.reset_password')->name('bulk-reset-access');
         Route::get('/{admin_user}', [AdminUserController::class, 'show'])->middleware('permission:users.view')->name('show');
         Route::get('/{admin_user}/edit', [AdminUserController::class, 'edit'])->middleware('permission:users.update')->name('edit');
         Route::put('/{admin_user}', [AdminUserController::class, 'update'])->middleware('permission:users.update')->name('update');

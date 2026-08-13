@@ -51,6 +51,9 @@ class NavigationService
                 ! $isSales && ($user->isSuperadmin() || $user->hasPrimaryRole('pusat'))
                     ? $this->item('Review Laporan', 'feedback-reports.index', 'report', 'reports', ['feedback-reports.index', 'feedback-reports.show', 'feedback-reports.review'], $routeName)
                     : null,
+                $user->hasPrimaryRole('admin') && $user->hasScopedPermission('sales_pocketbook')
+                    ? $this->item('Laporan Fee Sales', 'sales-fee-reports.index', 'report', 'reports', ['sales-fee-reports.*'], $routeName)
+                    : null,
             ]),
             $this->group('administration', 'Administrasi', 'administration', [
                 ! $isSales && $user->isSuperadmin() && $user->hasPermission('branches.manage')

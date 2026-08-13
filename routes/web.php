@@ -27,6 +27,7 @@ use App\Http\Controllers\Crm\ProjectController;
 use App\Http\Controllers\Crm\SalesAgendaController;
 use App\Http\Controllers\Crm\SalesAgendaExportController;
 use App\Http\Controllers\Crm\SalesDailyReminderController;
+use App\Http\Controllers\Crm\SalesFeeReportController;
 use App\Http\Controllers\Crm\SalesLeadController;
 use App\Http\Controllers\Crm\SalesLeadLifecycleController;
 use App\Http\Controllers\Crm\SalesLeadLifecycleSyncController;
@@ -69,6 +70,9 @@ Route::middleware(['auth', 'active', 'verified', 'password.changed', 'operationa
     Route::post('/comments/{comment}/moderate', [CommentModerationController::class, 'store'])->middleware(['permission:comments.moderate', 'throttle:60,1'])->name('comments.moderate');
 
     Route::get('/buku-saku-sales', [SalesPocketbookController::class, 'index'])->name('sales-pocketbook.index');
+    Route::get('/sales-fee-reports', [SalesFeeReportController::class, 'index'])->name('sales-fee-reports.index');
+    Route::get('/sales-fee-reports/{salesUser}/{project}', [SalesFeeReportController::class, 'show'])->name('sales-fee-reports.show');
+    Route::get('/sales-fee-reports/{salesUser}/{project}/print', [SalesFeeReportController::class, 'print'])->name('sales-fee-reports.print');
     Route::get('/buku-saku-sales/supervisor/agenda-export', [SupervisorSalesPocketbookController::class, 'agendaExport'])->middleware('permission:sales_pocketbook.export')->name('sales-pocketbook.supervisor-monitoring.agenda-export');
     Route::get('/buku-saku-sales/supervisor/lead-export', [SupervisorSalesPocketbookController::class, 'leadExport'])->middleware('permission:sales_pocketbook.export')->name('sales-pocketbook.supervisor-monitoring.lead-export');
     Route::get('/buku-saku-sales/export', [SalesPocketbookController::class, 'export'])->middleware('permission:sales_pocketbook.export')->name('sales-pocketbook.export');

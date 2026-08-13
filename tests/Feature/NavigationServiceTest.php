@@ -2,10 +2,12 @@
 
 namespace Tests\Feature;
 
+use App\Models\Permission;
 use App\Models\Role;
 use App\Models\User;
 use App\Services\NavigationService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Route;
 use Tests\TestCase;
 
 class NavigationServiceTest extends TestCase
@@ -68,6 +70,31 @@ class NavigationServiceTest extends TestCase
         $this->assertSame(['activities', 'sales'], array_column($navigation, 'key'));
         $this->assertNotContains('Administrasi', array_column($navigation, 'label'));
         $this->assertNotContains('Maintenance', $this->labels($navigation));
+    }
+
+    public function test_sales_fee_report_requires_primary_admin_and_sales_pocketbook_scope(): void
+    {
+        Route::get('/test-sales-fee-reports', fn () => null)->name('sales-fee-reports.index');
+
+        $adminRole = Role::query()->where('slug', 'admin')->firstOrFail();
+        $adminRole->permissions()->attach(Permission::query()->where('slug', 'sales_pocketbook.view_own')->firstOrFail());
+        $admin = $this->user('admin');
+        $supplementalAdmin = $this->user('sales_coordinator');
+        $supplementalAdmin->roles()->attach(Role::query()->where('slug', 'admin')->firstOrFail());
+
+        $adminNavigation = app(NavigationService::class)->forUser($admin, 'sales-fee-reports.index');
+        $supplementalNavigation = app(NavigationService::class)->forUser($supplementalAdmin->fresh('role.permissions'));
+        $reports = collect($adminNavigation)->firstWhere('key', 'reports');
+        $feeReport = collect($reports['children'])->firstWhere('label', 'Laporan Fee Sales');
+
+        $this->assertSame('sales-fee-reports.index', $feeReport['route']);
+        $this->assertSame('report', $feeReport['icon']);
+        $this->assertSame('reports', $feeReport['accent']);
+        $this->assertSame(['sales-fee-reports.*'], $feeReport['active_patterns']);
+        $this->assertTrue($feeReport['active']);
+        $this->assertTrue($reports['active']);
+        $this->assertNotContains('Review Laporan', $this->labels($adminNavigation));
+        $this->assertNotContains('Laporan Fee Sales', $this->labels($supplementalNavigation));
     }
 
     public function test_current_route_marks_child_and_parent_active(): void

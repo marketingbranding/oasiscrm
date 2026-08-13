@@ -17,6 +17,7 @@ use App\Http\Controllers\Crm\DatabaseController;
 use App\Http\Controllers\Crm\ExpenseCategoryController;
 use App\Http\Controllers\Crm\ExpenseController;
 use App\Http\Controllers\Crm\FeedbackReportController;
+use App\Http\Controllers\Crm\ImpersonationController;
 use App\Http\Controllers\Crm\KavlingController;
 use App\Http\Controllers\Crm\KonsumenProgressController;
 use App\Http\Controllers\Crm\LeadSourceController;
@@ -53,6 +54,7 @@ Route::get('/', function () {
 Route::middleware(['auth', 'active', 'verified'])->group(function () {
     Route::get('/password/change', [PasswordChangeController::class, 'show'])->name('password.change');
     Route::put('/password/change', [PasswordChangeController::class, 'update'])->name('password.change.update');
+    Route::post('/impersonation/stop', [ImpersonationController::class, 'stop'])->name('impersonation.stop');
 });
 
 Route::middleware(['auth', 'active', 'verified', 'password.changed', 'operational.maintenance', 'sales.access'])->group(function () {
@@ -202,53 +204,55 @@ Route::middleware(['auth', 'active', 'verified', 'password.changed', 'operationa
     Route::middleware('permission:branches.manage')->group(function () {
         Route::get('/branches', [BranchController::class, 'index'])->name('branches.index');
         Route::get('/branches/{branch}/edit', [BranchController::class, 'edit'])->name('branches.edit');
-        Route::put('/branches/{branch}', [BranchController::class, 'update'])->name('branches.update');
+        Route::put('/branches/{branch}', [BranchController::class, 'update'])->middleware('not.impersonating')->name('branches.update');
         Route::get('/branches/{branch}/assign', [BranchController::class, 'assignForm'])->name('branches.assign');
-        Route::post('/branches/{branch}/assign', [BranchController::class, 'assignStore'])->name('branches.assign-store');
-        Route::delete('/branches/{user}/remove-admin', [BranchController::class, 'removeAdmin'])->name('branches.remove-admin');
+        Route::post('/branches/{branch}/assign', [BranchController::class, 'assignStore'])->middleware('not.impersonating')->name('branches.assign-store');
+        Route::delete('/branches/{user}/remove-admin', [BranchController::class, 'removeAdmin'])->middleware('not.impersonating')->name('branches.remove-admin');
 
     });
     Route::middleware('permission:projects.manage')->group(function () {
         Route::bind('project', fn ($v) => LeadMaster::findOrFail($v));
-        Route::resource('projects', ProjectController::class);
+        Route::resource('projects', ProjectController::class)
+            ->middlewareFor(['store', 'update', 'destroy'], 'not.impersonating');
         Route::get('/projects/{project}/kavlings', [KavlingController::class, 'index'])->name('kavlings.index');
         Route::get('/projects/{project}/kavlings/bulk-import', [KavlingController::class, 'bulkImport'])->name('kavlings.bulk-import');
-        Route::post('/projects/{project}/kavlings/bulk-store', [KavlingController::class, 'bulkStore'])->name('kavlings.bulk-store');
-        Route::delete('/kavlings/{kavling}', [KavlingController::class, 'destroy'])->name('kavlings.destroy');
-        Route::post('kavlings/bulk-delete', [KavlingController::class, 'bulkDestroy'])->name('kavlings.bulk-destroy');
+        Route::post('/projects/{project}/kavlings/bulk-store', [KavlingController::class, 'bulkStore'])->middleware('not.impersonating')->name('kavlings.bulk-store');
+        Route::delete('/kavlings/{kavling}', [KavlingController::class, 'destroy'])->middleware('not.impersonating')->name('kavlings.destroy');
+        Route::post('kavlings/bulk-delete', [KavlingController::class, 'bulkDestroy'])->middleware('not.impersonating')->name('kavlings.bulk-destroy');
     });
 
     Route::prefix('admin-users')->name('admin-users.')->group(function () {
+        Route::post('/{target}/impersonate', [ImpersonationController::class, 'start'])->middleware('not.impersonating')->name('impersonate');
         Route::middleware('permissions.all:users.create,users.invite,users.assign_roles,users.assign_branches,users.assign_projects,users.assign_supervisor')->group(function () {
             Route::get('/import', [AdminUserImportController::class, 'create'])->name('import');
             Route::post('/import/preview', [AdminUserImportController::class, 'preview'])->name('import-preview');
-            Route::post('/import/confirm', [AdminUserImportController::class, 'confirm'])->name('import-confirm');
+            Route::post('/import/confirm', [AdminUserImportController::class, 'confirm'])->middleware('not.impersonating')->name('import-confirm');
             Route::get('/import/template', [AdminUserImportController::class, 'template'])->name('import-template');
             Route::get('/import/history', [AdminUserImportController::class, 'history'])->name('import-history');
             Route::get('/import/batches/{user_import_batch}/result', [AdminUserImportController::class, 'result'])->name('import-result');
             Route::get('/import/batches/{user_import_batch}/credentials', [AdminUserImportController::class, 'credentials'])
-                ->middleware(['signed', 'throttle:3,1'])->name('import-credentials');
+                ->middleware(['signed', 'throttle:3,1', 'not.impersonating'])->name('import-credentials');
             Route::get('/import/batches/{user_import_batch}', [AdminUserImportController::class, 'show'])->name('import-batches.show');
         });
         Route::get('/', [AdminUserController::class, 'index'])->middleware('permission:users.view')->name('index');
         Route::get('/create', [AdminUserController::class, 'create'])->middleware('permission:users.create')->name('create');
-        Route::post('/', [AdminUserController::class, 'store'])->middleware('permission:users.create')->name('store');
-        Route::post('/bulk-reset-access', [AdminUserController::class, 'bulkResetAccess'])->middleware('permission:users.reset_password')->name('bulk-reset-access');
+        Route::post('/', [AdminUserController::class, 'store'])->middleware(['permission:users.create', 'not.impersonating'])->name('store');
+        Route::post('/bulk-reset-access', [AdminUserController::class, 'bulkResetAccess'])->middleware(['permission:users.reset_password', 'not.impersonating'])->name('bulk-reset-access');
         Route::get('/{admin_user}', [AdminUserController::class, 'show'])->middleware('permission:users.view')->name('show');
         Route::get('/{admin_user}/edit', [AdminUserController::class, 'edit'])->middleware('permission:users.update')->name('edit');
-        Route::put('/{admin_user}', [AdminUserController::class, 'update'])->middleware('permission:users.update')->name('update');
+        Route::put('/{admin_user}', [AdminUserController::class, 'update'])->middleware(['permission:users.update', 'not.impersonating'])->name('update');
         Route::get('/{admin_user}/sales-sheet-identities/{branch}', [SalesSheetIdentityController::class, 'edit'])->middleware('permission:users.update')->name('sales-sheet-identity.edit');
-        Route::put('/{admin_user}/sales-sheet-identities/{branch}', [SalesSheetIdentityController::class, 'update'])->middleware('permission:users.update')->name('sales-sheet-identity.update');
-        Route::post('/{admin_user}/invitation', [AdminUserController::class, 'sendInvitation'])->middleware('permission:users.invite')->name('invitation.send');
-        Route::post('/{admin_user}/invitation/resend', [AdminUserController::class, 'resendInvitation'])->middleware('permission:users.invite')->name('invitation.resend');
-        Route::patch('/{admin_user}/invitation/revoke', [AdminUserController::class, 'revokeInvitation'])->middleware('permission:users.invite')->name('invitation.revoke');
-        Route::patch('/{admin_user}/suspend', [AdminUserController::class, 'suspend'])->middleware('permission:users.suspend')->name('suspend');
-        Route::patch('/{admin_user}/reactivate', [AdminUserController::class, 'reactivate'])->middleware('permission:users.reactivate')->name('reactivate');
-        Route::patch('/{admin_user}/deactivate', [AdminUserController::class, 'deactivate'])->middleware('permission:users.deactivate')->name('deactivate');
-        Route::patch('/{admin_user}/anonymize', [AdminUserController::class, 'anonymize'])->middleware('permission:users.anonymize')->name('anonymize');
-        Route::patch('/{admin_user}/release-email', [AdminUserController::class, 'releaseEmail'])->middleware('permission:users.release_email')->name('release-email');
-        Route::delete('/{admin_user}', [AdminUserController::class, 'destroy'])->middleware('permission:users.delete_permanently')->name('destroy');
-        Route::post('/{admin_user}/reset-access', [AdminUserController::class, 'resetAccess'])->middleware('permission:users.reset_password')->name('reset-access');
+        Route::put('/{admin_user}/sales-sheet-identities/{branch}', [SalesSheetIdentityController::class, 'update'])->middleware(['permission:users.update', 'not.impersonating'])->name('sales-sheet-identity.update');
+        Route::post('/{admin_user}/invitation', [AdminUserController::class, 'sendInvitation'])->middleware(['permission:users.invite', 'not.impersonating'])->name('invitation.send');
+        Route::post('/{admin_user}/invitation/resend', [AdminUserController::class, 'resendInvitation'])->middleware(['permission:users.invite', 'not.impersonating'])->name('invitation.resend');
+        Route::patch('/{admin_user}/invitation/revoke', [AdminUserController::class, 'revokeInvitation'])->middleware(['permission:users.invite', 'not.impersonating'])->name('invitation.revoke');
+        Route::patch('/{admin_user}/suspend', [AdminUserController::class, 'suspend'])->middleware(['permission:users.suspend', 'not.impersonating'])->name('suspend');
+        Route::patch('/{admin_user}/reactivate', [AdminUserController::class, 'reactivate'])->middleware(['permission:users.reactivate', 'not.impersonating'])->name('reactivate');
+        Route::patch('/{admin_user}/deactivate', [AdminUserController::class, 'deactivate'])->middleware(['permission:users.deactivate', 'not.impersonating'])->name('deactivate');
+        Route::patch('/{admin_user}/anonymize', [AdminUserController::class, 'anonymize'])->middleware(['permission:users.anonymize', 'not.impersonating'])->name('anonymize');
+        Route::patch('/{admin_user}/release-email', [AdminUserController::class, 'releaseEmail'])->middleware(['permission:users.release_email', 'not.impersonating'])->name('release-email');
+        Route::delete('/{admin_user}', [AdminUserController::class, 'destroy'])->middleware(['permission:users.delete_permanently', 'not.impersonating'])->name('destroy');
+        Route::post('/{admin_user}/reset-access', [AdminUserController::class, 'resetAccess'])->middleware(['permission:users.reset_password', 'not.impersonating'])->name('reset-access');
     });
 });
 

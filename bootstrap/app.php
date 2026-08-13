@@ -7,6 +7,7 @@ use App\Http\Middleware\EnforceOperationalMaintenance;
 use App\Http\Middleware\EnsurePasswordChanged;
 use App\Http\Middleware\EnsureUserIsActive;
 use App\Http\Middleware\PermissionMiddleware;
+use App\Http\Middleware\RejectImpersonatedRequest;
 use App\Http\Middleware\RestrictSalesModuleAccess;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
@@ -29,6 +30,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'operational.maintenance' => EnforceOperationalMaintenance::class,
             'permission' => PermissionMiddleware::class,
             'permissions.all' => AllPermissionsMiddleware::class,
+            'not.impersonating' => RejectImpersonatedRequest::class,
             'sales.access' => RestrictSalesModuleAccess::class,
         ]);
     })

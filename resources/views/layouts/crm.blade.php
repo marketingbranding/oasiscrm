@@ -128,6 +128,18 @@
 
         <main id="crm-main" class="crm-main flex-1 overflow-x-hidden">
             <div class="crm-page-shell">
+                @if($impersonationBanner)
+                    <x-crm.alert variant="warning" title="PERINGATAN: MODE IMPERSONASI AKTIF" role="alert" class="mb-4">
+                        <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                            <p>Anda sedang masuk sebagai <strong>{{ $impersonationBanner['name'] }}</strong> ({{ $impersonationBanner['role'] }}, {{ $impersonationBanner['branch'] }}). Dimulai {{ \Illuminate\Support\Carbon::parse($impersonationBanner['started_at'])->format('d/m/Y H:i') }}. Semua tindakan diaudit.</p>
+                            <form method="POST" action="{{ $impersonationBanner['stop_route'] }}" class="shrink-0">
+                                @csrf
+                                <x-crm.button type="submit" variant="secondary" class="w-full sm:w-auto">Kembali ke Superadmin</x-crm.button>
+                            </form>
+                        </div>
+                    </x-crm.alert>
+                @endif
+
                 @hasSection('breadcrumbs')
                     <nav class="crm-page-breadcrumbs" aria-label="Breadcrumb">
                         @yield('breadcrumbs')

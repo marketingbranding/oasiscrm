@@ -10,6 +10,7 @@ use App\Models\User;
 use App\Policies\CommentPolicy;
 use App\Policies\DanaTalanganPolicy;
 use App\Policies\UserPolicy;
+use App\Services\ImpersonationService;
 use App\Services\NavigationService;
 use App\Services\WorkPlannerReminderService;
 use Illuminate\Support\Facades\Auth;
@@ -38,6 +39,23 @@ class AppServiceProvider extends ServiceProvider
 
         View::composer('layouts.crm', function ($view) {
             $user = Auth::user();
+            $impersonationBanner = null;
+            $impersonation = app(ImpersonationService::class);
+            if ($user && $impersonation->isActive(request())) {
+                $target = $impersonation->targetUser(request());
+                if ($target?->is($user)) {
+                    $target->loadMissing(['role', 'branch']);
+                    $impersonationBanner = [
+                        'name' => $target->name,
+                        'role' => $target->role?->name ?? '-',
+                        'branch' => $target->branch?->name ?? '-',
+                        'started_at' => request()->session()->get('impersonation.started_at'),
+                        'stop_route' => route('impersonation.stop'),
+                    ];
+                }
+            }
+
+            $view->with('impersonationBanner', $impersonationBanner);
             if (! $user) {
                 $view->with('navigation', [])->with('overdueItems', collect())->with('todayItems', collect())->with('tomorrowItems', collect())->with('needsConfirmation', collect())->with('totalCount', 0);
 

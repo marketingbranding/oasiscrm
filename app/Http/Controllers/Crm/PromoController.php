@@ -8,6 +8,7 @@ use App\Http\Requests\Crm\UpdatePromoRequest;
 use App\Models\ActivityLog;
 use App\Models\Promo;
 use App\Services\PromoAccessService;
+use App\Services\PromoCodeGenerator;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -15,7 +16,7 @@ use Illuminate\View\View;
 
 class PromoController extends Controller
 {
-    public function __construct(private PromoAccessService $access) {}
+    public function __construct(private PromoAccessService $access, private PromoCodeGenerator $codeGenerator) {}
 
     public function index(Request $request): View
     {
@@ -65,8 +66,9 @@ class PromoController extends Controller
 
     public function store(StorePromoRequest $request): RedirectResponse
     {
-        DB::transaction(function () use ($request) {
-            $promo = Promo::create($request->validated() + ['created_by' => $request->user()->id, 'updated_by' => $request->user()->id]);
+        $attributes = $request->safe()->except(['branch_id', 'code']);
+        DB::transaction(function () use ($request, $attributes) {
+            $promo = $this->codeGenerator->create($request->integer('branch_id'), $attributes, $request->user());
             $this->audit($request, $promo, 'promo_created', ['attributes' => $promo->only(['branch_id', 'code', 'name', 'start_date', 'end_date', 'description', 'is_active'])]);
         });
 
@@ -83,9 +85,10 @@ class PromoController extends Controller
     public function update(UpdatePromoRequest $request, Promo $promo): RedirectResponse
     {
         DB::transaction(function () use ($request, $promo) {
-            $before = $promo->only(['branch_id', 'code', 'name', 'start_date', 'end_date', 'description', 'is_active']);
-            $promo->update($request->validated() + ['updated_by' => $request->user()->id]);
-            $this->audit($request, $promo, 'promo_updated', ['before' => $before, 'after' => $promo->fresh()->only(array_keys($before))]);
+            $lockedPromo = Promo::query()->whereKey($promo->id)->lockForUpdate()->firstOrFail();
+            $before = $lockedPromo->only(['branch_id', 'code', 'name', 'start_date', 'end_date', 'description', 'is_active']);
+            $lockedPromo->update($request->safe()->except('code') + ['updated_by' => $request->user()->id]);
+            $this->audit($request, $lockedPromo, 'promo_updated', ['before' => $before, 'after' => $lockedPromo->fresh()->only(array_keys($before))]);
         });
 
         return redirect()->route('promos.index')->with('success', 'Promo berhasil diperbarui.');

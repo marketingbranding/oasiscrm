@@ -7,6 +7,7 @@ use App\Models\Branch;
 use App\Models\Promo;
 use App\Models\Role;
 use App\Models\User;
+use App\Services\PromoCodeGenerator;
 use App\Services\PromoOptionService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -50,7 +51,7 @@ class PromoManagementTest extends TestCase
         $admin = $this->user('admin', $branch, true);
 
         $this->actingAs($admin)->post(route('promos.store'), $this->data($branch, '  Promo Baru  ', '  Promo   Baru  ', ['description' => ' catatan ']))->assertRedirect()->assertSessionHasNoErrors();
-        $promo = Promo::where('code', 'PROMO-BARU')->sole();
+        $promo = Promo::where('code', '260101-PB-01')->sole();
         $this->assertSame('Promo Baru', $promo->name);
         $this->assertSame('catatan', $promo->description);
 
@@ -58,6 +59,49 @@ class PromoManagementTest extends TestCase
         $this->actingAs($admin)->patch(route('promos.toggle', $promo))->assertRedirect();
         $this->assertSame(['promo_created', 'promo_updated', 'promo_status_changed'], ActivityLog::where('subject_type', Promo::class)->orderBy('id')->pluck('event')->all());
         $this->assertFalse($promo->fresh()->is_active);
+    }
+
+    public function test_generator_builds_tokens_and_branch_scoped_sequences(): void
+    {
+        [$branch, $other] = $this->branches();
+        $actor = $this->user('superadmin', $branch);
+        $generator = app(PromoCodeGenerator::class);
+
+        foreach ([
+            ['DP 1 Juta', '260814-D1-01'],
+            ['DP 3 Juta', '260814-D3-01'],
+            ['DP 7 Juta', '260814-D7-01'],
+            ['Cash Keras', '260814-CK-01'],
+            ['Single', '260814-SI-01'],
+            ['!!!', '260814-PR-01'],
+        ] as [$name, $code]) {
+            $this->assertSame($code, $generator->create($branch->id, $this->generatorData($name), $actor)->code);
+        }
+
+        $this->promo($branch, '260814-D1-7', 'Gap');
+        $this->promo($branch, '260814-D1-99', 'Max');
+        $this->promo($branch, '260814-D1-X', 'Malformed');
+        $this->promo($other, '260814-D1-500', 'Other');
+        $this->assertSame('260814-D1-100', $generator->create($branch->id, $this->generatorData('dp 1 juta'), $actor)->code);
+        $this->assertSame('260814-D1-501', $generator->create($other->id, $this->generatorData('DP 1 Juta'), $actor)->code);
+    }
+
+    public function test_manual_code_is_prohibited_and_edit_never_regenerates_code(): void
+    {
+        [$branch] = $this->branches();
+        $admin = $this->user('admin', $branch, true);
+
+        $this->actingAs($admin)->post(route('promos.store'), $this->data($branch, '', 'Cash Keras') + ['code' => 'FORGED'])->assertSessionHasErrors('code');
+        $this->actingAs($admin)->post(route('promos.store'), collect($this->data($branch, '', 'Cash Keras'))->except('code')->all())->assertRedirect()->assertSessionHasNoErrors();
+        $promo = Promo::where('name', 'Cash Keras')->sole();
+        $this->assertSame('260101-CK-01', $promo->code);
+
+        $update = collect($this->data($branch, '', 'Nama Baru', ['start_date' => '2026-02-02']))->except('code')->all();
+        $this->actingAs($admin)->put(route('promos.update', $promo), $update)->assertRedirect()->assertSessionHasNoErrors();
+        $this->assertSame('260101-CK-01', $promo->fresh()->code);
+        $this->assertSame('Nama Baru', $promo->fresh()->name);
+        $this->assertSame('2026-02-02', $promo->fresh()->start_date->toDateString());
+        $this->assertSame('260101-CK-01', ActivityLog::where('event', 'promo_created')->sole()->properties['attributes']['code']);
     }
 
     public function test_supplemental_privileged_role_does_not_grant_promo_access(): void
@@ -111,6 +155,11 @@ class PromoManagementTest extends TestCase
 
     private function data(Branch $branch, string $code, string $name, array $extra = []): array
     {
-        return $extra + ['branch_id' => $branch->id, 'code' => $code, 'name' => $name, 'start_date' => '2026-01-01', 'end_date' => '2026-12-31', 'is_active' => true];
+        return $extra + ['branch_id' => $branch->id, 'name' => $name, 'start_date' => '2026-01-01', 'end_date' => '2026-12-31', 'is_active' => true];
+    }
+
+    private function generatorData(string $name): array
+    {
+        return ['name' => $name, 'start_date' => '2026-08-14', 'end_date' => null, 'description' => null, 'is_active' => true];
     }
 }

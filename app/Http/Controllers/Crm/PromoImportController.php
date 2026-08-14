@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Crm;
 
 use App\Http\Controllers\Controller;
 use App\Models\ActivityLog;
+use App\Models\Branch;
 use App\Models\Promo;
 use App\Models\PromoImportBatch;
 use App\Services\PromoAccessService;
@@ -66,6 +67,7 @@ class PromoImportController extends Controller
         $data = $request->validate(['expected_updated_at' => ['required', 'date']]);
         $result = DB::transaction(function () use ($request, $promo_import_batch, $data) {
             $batch = PromoImportBatch::query()->whereKey($promo_import_batch->id)->lockForUpdate()->firstOrFail();
+            Branch::query()->whereKey($batch->branch_id)->lockForUpdate()->firstOrFail();
             abort_unless(($batch->uploaded_by === $request->user()->id || $request->user()->isSuperadmin()) && $this->access->canManageBranch($request->user(), $batch->branch_id), 403);
             abort_if($batch->status !== 'preview_ready' || $batch->expires_at->isPast(), 409, 'Preview impor tidak lagi dapat dikonfirmasi.');
             abort_if(! $batch->updated_at->equalTo($data['expected_updated_at']), 409, 'Preview impor telah berubah.');

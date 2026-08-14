@@ -4,10 +4,10 @@ namespace App\Http\Requests\Crm;
 
 use App\Enums\SalesLeadStatus;
 use App\Models\LeadMaster;
-use App\Models\Promo;
 use App\Models\SalesLead;
 use App\Models\User;
 use App\Services\CoordinatorLeadTeamService;
+use App\Services\PromoOptionService;
 use App\Services\WorkspaceAccessService;
 use App\Support\SalesLeadMasterData;
 use Illuminate\Foundation\Http\FormRequest;
@@ -26,7 +26,17 @@ abstract class SalesLeadRequest extends FormRequest
             'customer_name' => ['required', 'string', 'max:255'],
             'phone' => ['nullable', 'string', 'max:50'],
             'notes' => ['nullable', 'string', 'max:5000'],
-            'promo_name' => ['nullable', 'string', 'max:255', $this->promoRule()],
+            'promo_name' => ['nullable', 'string', 'max:255', function (string $attribute, mixed $value, \Closure $fail): void {
+                $project = LeadMaster::find($this->integer('project_id'));
+                if (! $project || ! $this->date('lead_date') || ! app(PromoOptionService::class)->accepts(
+                    (int) $project->branch_id,
+                    $this->date('lead_date'),
+                    $value,
+                    $this->lead()?->id_promo,
+                )) {
+                    $fail('Promo tidak tersedia untuk proyek dan tanggal lead yang dipilih.');
+                }
+            }],
             'source' => ['required', 'string', 'max:255', $this->masterRule(SalesLeadMasterData::SOURCES, 'source')],
             'platform' => ['required', 'string', 'max:255', $this->masterRule(SalesLeadMasterData::CHANNELS, 'platform')],
             'campaign_id' => ['nullable', 'string', 'max:255'],
@@ -102,16 +112,6 @@ abstract class SalesLeadRequest extends FormRequest
         $current = $this->lead()?->{$field};
 
         return $this->lead() && $this->input($field) === $current ? Rule::in([$current]) : Rule::in($values);
-    }
-
-    private function promoRule(): mixed
-    {
-        $value = $this->input('promo_name');
-        if ($this->lead() && $value === $this->lead()->id_promo) {
-            return Rule::in([$value]);
-        }
-
-        return Rule::exists(Promo::class, 'name')->where('is_active', true);
     }
 
     protected function lead(): ?SalesLead

@@ -1,0 +1,16 @@
+@extends('layouts.crm')
+@section('title', 'Master Promo - Oasis CRM')
+@section('content')
+<x-crm.page-header variant="canonical" eyebrow="Administrasi Sales" title="Master Promo Cabang" description="Kelola promo manual sesuai cakupan cabang dan periode berlaku."><x-slot:actions><x-crm.button href="{{ route('promos.import.create') }}" variant="secondary">Impor TSV</x-crm.button><x-crm.button href="{{ route('promos.create') }}" variant="primary" accent="sales">Tambah Promo</x-crm.button></x-slot:actions></x-crm.page-header>
+<form method="GET" action="{{ route('promos.index') }}"><x-crm.toolbar>
+    <x-crm.field label="Cari" for="promo-search"><input name="search" value="{{ request('search') }}" class="crm-control" placeholder="Nama atau kode"></x-crm.field>
+    <x-crm.field label="Cabang" for="promo-branch"><select name="branch_id" class="crm-control"><option value="">Semua cabang</option>@foreach($branches as $branch)<option value="{{ $branch->id }}" @selected(request('branch_id') == $branch->id)>{{ $branch->name }}</option>@endforeach</select></x-crm.field>
+    <x-crm.field label="Status" for="promo-status"><select name="status" class="crm-control"><option value="">Semua status</option><option value="active" @selected(request('status') === 'active')>Aktif</option><option value="inactive" @selected(request('status') === 'inactive')>Nonaktif</option></select></x-crm.field>
+    <x-crm.field label="Masa berlaku" for="promo-validity"><select name="validity" class="crm-control"><option value="">Semua periode</option><option value="current" @selected(request('validity') === 'current')>Berlaku</option><option value="upcoming" @selected(request('validity') === 'upcoming')>Akan datang</option><option value="expired" @selected(request('validity') === 'expired')>Berakhir</option></select></x-crm.field>
+    <x-crm.button type="submit" variant="secondary">Terapkan</x-crm.button><x-crm.button href="{{ route('promos.index') }}" variant="text">Hapus semua filter</x-crm.button>
+</x-crm.toolbar></form>
+<div class="crm-table-scroll"><table class="crm-data-table"><thead><tr><th>Cabang</th><th>Kode</th><th>Nama</th><th>Periode</th><th>Status</th><th>Aksi</th></tr></thead><tbody>
+@forelse($promos as $promo)<tr><td>{{ $promo->branch?->name ?? 'Global legacy' }}</td><td class="font-mono">{{ $promo->code }}</td><td title="{{ $promo->description }}">{{ $promo->name }}</td><td>{{ $promo->start_date?->format('d/m/Y') ?? 'Tanpa batas' }} – {{ $promo->end_date?->format('d/m/Y') ?? 'Tanpa batas' }}</td><td><x-crm.status-badge :variant="$promo->is_active ? 'success' : 'inactive'">{{ $promo->is_active ? 'AKTIF' : 'NONAKTIF' }}</x-crm.status-badge></td><td><a href="{{ route('promos.edit', $promo) }}" class="font-bold text-[#0000ee] underline">Edit</a> <form method="POST" action="{{ route('promos.toggle', $promo) }}" class="inline">@csrf @method('PATCH')<button class="font-bold text-[#0000ee] underline">{{ $promo->is_active ? 'Nonaktifkan' : 'Aktifkan' }}</button></form></td></tr>
+@empty<tr><td colspan="6"><x-crm.empty-state title="Promo tidak ditemukan." description="Ubah filter atau tambahkan promo cabang." /></td></tr>@endforelse
+</tbody></table></div><div class="mt-3">{{ $promos->links() }}</div>
+@endsection

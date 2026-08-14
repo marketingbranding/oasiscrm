@@ -20,12 +20,12 @@
 
 <x-crm.section id="sales-lead-edit" title="Data Lead" description="Bidang bertanda bintang wajib diisi." class="sales-pocketbook-edit-section">
     <x-crm.card padding="none">
-    <form method="POST" action="{{ route('sales-leads.update', $lead) }}" x-data="salesCascade(@js($projects->map(fn ($project) => ['id' => (string) $project->id, 'branch_id' => (string) $project->branch_id, 'sales_ids' => $project->assignedUsers->pluck('id')->map(fn ($id) => (string) $id)->all()])), @js($salesUsers->map(fn ($sales) => ['id' => (string) $sales->id, 'project_ids' => $sales->assignedProjects->pluck('id')->map(fn ($id) => (string) $id)->all()])), @js(['branch' => old('branch_id', $lead->branch_id), 'project' => old('project_id', $lead->project_id), 'sales' => old('sales_user_id', $lead->sales_user_id)]))" @submit="setSubmitting()" class="sales-pocketbook-edit-form" data-conflict-form :aria-busy="submitting">
+    <form method="POST" action="{{ route('sales-leads.update', $lead) }}" x-data="salesCascade(@js($projects->map(fn ($project) => ['id' => (string) $project->id, 'branch_id' => (string) $project->branch_id, 'sales_ids' => $project->assignedUsers->pluck('id')->map(fn ($id) => (string) $id)->all()])), @js($salesUsers->map(fn ($sales) => ['id' => (string) $sales->id, 'project_ids' => $sales->assignedProjects->pluck('id')->map(fn ($id) => (string) $id)->all()])), @js(['branch' => old('branch_id', $lead->branch_id), 'project' => old('project_id', $lead->project_id), 'sales' => old('sales_user_id', $lead->sales_user_id), 'promoOptionsEndpoint' => $promoOptionsEndpoint ?? null, 'leadDate' => old('lead_date', $lead->lead_date->toDateString()), 'promos' => $promos->values(), 'promo' => old('promo_name', $lead->id_promo)]))" @submit="setSubmitting()" class="sales-pocketbook-edit-form" data-conflict-form :aria-busy="submitting">
         @csrf
         @method('PUT')
         <input type="hidden" name="expected_updated_at" value="{{ old('expected_updated_at', $optimisticToken) }}">
 
-        <x-crm.field label="Tanggal Lead" for="edit-lead-date" required :error="$errors->first('lead_date')"><x-crm.date-field id="edit-lead-date" name="lead_date" :value="old('lead_date', $lead->lead_date->toDateString())" required :aria-invalid="$errors->has('lead_date') ? 'true' : 'false'" :aria-describedby="$errors->has('lead_date') ? 'edit-lead-date-error' : null" /></x-crm.field>
+        <x-crm.field label="Tanggal Lead" for="edit-lead-date" required :error="$errors->first('lead_date')"><x-crm.date-field id="edit-lead-date" name="lead_date" :value="old('lead_date', $lead->lead_date->toDateString())" x-model="leadDate" @change="loadPromoOptions()" required :aria-invalid="$errors->has('lead_date') ? 'true' : 'false'" :aria-describedby="$errors->has('lead_date') ? 'edit-lead-date-error' : null" /></x-crm.field>
         <x-crm.field label="Nama Calon Konsumen" for="edit-lead-customer-name" required :error="$errors->first('customer_name')"><input id="edit-lead-customer-name" class="sales-input" name="customer_name" value="{{ old('customer_name', $lead->customer_name) }}" required aria-invalid="{{ $errors->has('customer_name') ? 'true' : 'false' }}" aria-describedby="{{ $errors->has('customer_name') ? 'edit-lead-customer-name-error' : '' }}"></x-crm.field>
         <x-crm.field label="No. WhatsApp / Telepon" for="edit-lead-phone" hint="Pemeriksaan duplikat hanya berupa peringatan dan tidak mencegah penyimpanan." :error="$errors->first('phone')" data-duplicate-url="{{ route('sales-leads.duplicate-phone') }}" data-lead-id="{{ $lead->id }}" x-data="salesDuplicatePhone($el.dataset.duplicateUrl, Number($el.dataset.leadId))">
             <input id="edit-lead-phone" class="sales-input" name="phone" value="{{ old('phone', $lead->phone) }}" @blur="checkPhone($event.target.value)" x-bind:aria-busy="duplicatePending" aria-invalid="{{ $errors->has('phone') ? 'true' : 'false' }}" aria-describedby="edit-lead-phone-hint{{ $errors->has('phone') ? ' edit-lead-phone-error' : '' }} edit-lead-duplicate-status">
@@ -47,18 +47,10 @@
                 </select>
             </x-crm.field>
         @endforeach
-        @php
-            $selectedPromo = old('promo_name', $lead->id_promo);
-        @endphp
         <x-crm.field label="Nama Promo" for="edit-lead-promo" :error="$errors->first('promo_name')">
-            <select id="edit-lead-promo" class="sales-input" name="promo_name">
-                <option value="">Pilih promo (opsional)</option>
-                @if(filled($selectedPromo) && !$promos->contains($selectedPromo))
-                    <option value="{{ $selectedPromo }}" selected>{{ $selectedPromo }} (historis)</option>
-                @endif
-                @foreach($promos as $promo)
-                    <option value="{{ $promo }}" {{ $selectedPromo === $promo ? 'selected' : '' }}>{{ $promo }}</option>
-                @endforeach
+            <select id="edit-lead-promo" class="sales-input" name="promo_name" x-model="promo">
+                <template x-for="option in promoOptions" :key="option"><option :value="option" x-text="option"></option></template>
+                @if(filled($lead->id_promo))<option class="hidden">{{ $lead->id_promo }} (historis)</option>@endif
             </select>
         </x-crm.field>
         @php

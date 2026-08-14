@@ -1,0 +1,8 @@
+@extends('layouts.crm')
+@section('title', 'Preview Impor Promo - Oasis CRM')
+@section('content')
+<x-crm.page-header variant="canonical" eyebrow="Administrasi Sales" title="Preview Impor Promo" description="Cabang {{ $batch->branch->name }}. Periksa hasil sebelum konfirmasi." />
+<div class="mb-4 grid gap-3 sm:grid-cols-3"><x-crm.card><strong>{{ $batch->total_rows }}</strong><br>Total baris</x-crm.card><x-crm.card><strong>{{ $batch->valid_rows }}</strong><br>Dapat diimpor</x-crm.card><x-crm.card><strong>{{ $batch->invalid_rows }}</strong><br>Dilewati</x-crm.card></div>
+<div class="crm-table-scroll"><table class="crm-data-table"><thead><tr><th>Baris</th><th>Status</th><th>ID Promo</th><th>Nama</th><th>Mulai</th><th>Selesai</th><th>Keterangan</th><th>Masalah</th></tr></thead><tbody>@foreach($batch->rows as $row)<tr><td>{{ $row->line_number }}</td><td>{{ $row->status }}</td><td class="font-mono">{{ $row->normalized_data['code'] }}</td><td>{{ $row->normalized_data['name'] }}</td><td>{{ $row->normalized_data['start_date'] ?? '-' }}</td><td>{{ $row->normalized_data['end_date'] ?? '-' }}</td><td>{{ $row->normalized_data['description'] ?? '-' }}</td><td>{{ implode(' ', $row->errors) ?: '-' }}</td></tr>@endforeach</tbody></table></div>
+<div class="mt-4 flex gap-2"><form method="POST" action="{{ route('promos.import.confirm', $batch) }}">@csrf<input type="hidden" name="expected_updated_at" value="{{ $batch->updated_at->toISOString() }}"><x-crm.button type="submit" variant="primary" accent="sales" :disabled="$batch->valid_rows === 0">Konfirmasi Impor</x-crm.button></form><x-crm.button href="{{ route('promos.import.create') }}" variant="secondary">Batal</x-crm.button></div>
+@endsection

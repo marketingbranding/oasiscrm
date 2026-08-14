@@ -6,12 +6,12 @@ use App\Enums\SalesLeadStatus;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Crm\StoreSalesLeadRequest;
 use App\Http\Requests\Crm\UpdateSalesLeadRequest;
-use App\Models\Promo;
 use App\Models\SalesLead;
 use App\Models\User;
 use App\Services\CollaborationNotificationService;
 use App\Services\OptimisticLockService;
 use App\Services\PresenceService;
+use App\Services\PromoOptionService;
 use App\Services\SalesLeadDuplicateService;
 use App\Services\SalesLeadService;
 use App\Services\WorkspaceAccessService;
@@ -29,6 +29,7 @@ class SalesLeadController extends Controller
         private readonly CollaborationNotificationService $notifications,
         private readonly PresenceService $presence,
         private readonly WorkspaceAccessService $workspaceAccess,
+        private readonly PromoOptionService $promoOptions,
     ) {}
 
     public function create(Request $request)
@@ -95,7 +96,14 @@ class SalesLeadController extends Controller
             'sources' => SalesLeadMasterData::SOURCES,
             'channels' => SalesLeadMasterData::CHANNELS,
             'activities' => SalesLeadMasterData::ACTIVITIES,
-            'promos' => Promo::query()->where('is_active', true)->orderBy('name')->pluck('name'),
+            'promos' => $this->promoOptions->availableForBranchAndDate(
+                (int) $salesLead->project->branch_id,
+                $salesLead->lead_date,
+                $salesLead->id_promo,
+            ),
+            'promoOptionsEndpoint' => $user->hasPrimaryRole('sales_coordinator')
+                ? route('coordinator-leads.promo-options', ['project' => 'PROJECT_ID', 'lead_id' => $salesLead->id])
+                : null,
         ]);
     }
 

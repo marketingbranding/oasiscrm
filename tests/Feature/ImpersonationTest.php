@@ -273,6 +273,11 @@ class ImpersonationTest extends TestCase
             'kavlings.bulk-store' => 'POST',
             'kavlings.destroy' => 'DELETE',
             'kavlings.bulk-destroy' => 'POST',
+            'promos.store' => 'POST',
+            'promos.update' => 'PUT',
+            'promos.toggle' => 'PATCH',
+            'promos.import.preview' => 'POST',
+            'promos.import.confirm' => 'POST',
         ];
 
         foreach ($contracts as $name => $method) {

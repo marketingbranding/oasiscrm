@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\Promo;
 use App\Models\User;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Str;
@@ -56,6 +57,9 @@ class NavigationService
                     : null,
             ]),
             $this->group('administration', 'Administrasi', 'administration', [
+                ! $isSales && $user->can('viewAny', Promo::class)
+                    ? $this->item('Promo', 'promos.index', 'sales', 'administration', ['promos.*'], $routeName)
+                    : null,
                 ! $isSales && $user->isSuperadmin() && $user->hasPermission('branches.manage')
                     ? $this->item('Cabang', 'branches.index', 'branch', 'administration', ['branches.*'], $routeName)
                     : null,

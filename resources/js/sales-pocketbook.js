@@ -13,7 +13,10 @@ export default function registerSalesPocketbook(Alpine) {
         project: String(initial.project || ''),
         sales: String(initial.sales || ''),
         optionsEndpoint: initial.optionsEndpoint || '',
-        sheetOptions: { promo: [], source: [], channel: [], activity: [], project: [], sales: [], status: [] },
+        promoOptionsEndpoint: initial.promoOptionsEndpoint || '',
+        leadDate: String(initial.leadDate || ''),
+        sheetOptions: { promo: initial.promos || [], source: [], channel: [], activity: [], project: [], sales: [], status: [] },
+        promoOptions: initial.promos || [],
         optionsLoading: false,
         optionsError: '',
         source: String(initial.source || ''),
@@ -79,6 +82,17 @@ export default function registerSalesPocketbook(Alpine) {
             if (selected) this.branch = selected.branch_id;
             if (this.sales && !this.salesVisible(this.sales)) this.sales = '';
             if (this.optionsEndpoint && this.branch && this.branch !== previousBranch) this.loadSheetOptions();
+            if (this.promoOptionsEndpoint) this.loadPromoOptions();
+        },
+
+        async loadPromoOptions() {
+            if (!this.project || !this.leadDate) return;
+            const url = new URL(this.promoOptionsEndpoint.replace('PROJECT_ID', this.project), window.location.origin);
+            url.searchParams.set('date', this.leadDate);
+            const response = await fetch(url, { headers: { Accept: 'application/json' } });
+            if (!response.ok) return;
+            this.promoOptions = (await response.json()).options;
+            if (!this.promoOptions.includes(this.promo)) this.promo = 'No Promo';
         },
 
         setSubmitting() {

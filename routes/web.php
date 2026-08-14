@@ -25,6 +25,8 @@ use App\Http\Controllers\Crm\NotificationController;
 use App\Http\Controllers\Crm\OperationalMaintenanceController;
 use App\Http\Controllers\Crm\PresenceController;
 use App\Http\Controllers\Crm\ProjectController;
+use App\Http\Controllers\Crm\PromoController;
+use App\Http\Controllers\Crm\PromoImportController;
 use App\Http\Controllers\Crm\SalesAgendaController;
 use App\Http\Controllers\Crm\SalesAgendaExportController;
 use App\Http\Controllers\Crm\SalesDailyReminderController;
@@ -90,6 +92,7 @@ Route::middleware(['auth', 'active', 'verified', 'password.changed', 'operationa
     Route::get('/buku-saku-sales/duplicate-phone', [SalesLeadController::class, 'duplicatePhone'])->name('sales-leads.duplicate-phone');
     Route::get('/buku-saku-sales/branches/{branch}/lead-options', SalesLeadOptionController::class)->name('sales-leads.options');
     Route::get('/buku-saku-sales/leads/export', [CoordinatorSalesLeadWorkspaceController::class, 'export'])->middleware('permission:sales_pocketbook.export_team')->name('coordinator-leads.export');
+    Route::get('/buku-saku-sales/projects/{project}/promo-options', [CoordinatorSalesLeadWorkspaceController::class, 'promoOptions'])->name('coordinator-leads.promo-options');
     Route::post('/buku-saku-sales/leads/sync', [CoordinatorSalesLeadWorkspaceController::class, 'push'])->middleware('permission:sales_pocketbook.sync')->name('coordinator-leads.sync');
     Route::post('/buku-saku-sales/leads', [SalesLeadController::class, 'store'])->name('sales-leads.store');
     Route::get('/buku-saku-sales/leads/{sales_lead}', [SalesLeadController::class, 'show'])->name('sales-leads.show');
@@ -150,6 +153,17 @@ Route::middleware(['auth', 'active', 'verified', 'password.changed', 'operationa
     Route::get('/konsumen-progress/sync/status', [KonsumenProgressController::class, 'syncStatus'])->middleware('permission:consumer_progress.sync')->name('konsumen-progress.sync-status');
 
     Route::get('changelogs', [ChangelogController::class, 'index'])->name('changelogs.index');
+
+    Route::get('promos', [PromoController::class, 'index'])->name('promos.index');
+    Route::get('promos/import', [PromoImportController::class, 'create'])->name('promos.import.create');
+    Route::post('promos/import/preview', [PromoImportController::class, 'preview'])->middleware('not.impersonating')->name('promos.import.preview');
+    Route::get('promos/import/{promo_import_batch}', [PromoImportController::class, 'show'])->name('promos.import.show');
+    Route::post('promos/import/{promo_import_batch}/confirm', [PromoImportController::class, 'confirm'])->middleware('not.impersonating')->name('promos.import.confirm');
+    Route::get('promos/create', [PromoController::class, 'create'])->name('promos.create');
+    Route::post('promos', [PromoController::class, 'store'])->middleware('not.impersonating')->name('promos.store');
+    Route::get('promos/{promo}/edit', [PromoController::class, 'edit'])->name('promos.edit');
+    Route::put('promos/{promo}', [PromoController::class, 'update'])->middleware('not.impersonating')->name('promos.update');
+    Route::patch('promos/{promo}/toggle', [PromoController::class, 'toggle'])->middleware('not.impersonating')->name('promos.toggle');
 
     Route::post('lead-sources/bulk-delete', [LeadSourceController::class, 'bulkDestroy'])->name('lead-sources.bulk-destroy');
     Route::post('lead-sources/{leadSource}/toggle-active', [LeadSourceController::class, 'toggleActive'])->name('lead-sources.toggle-active');

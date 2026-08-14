@@ -90,9 +90,9 @@ class PromoTsvParser
             return null;
         }
         if (preg_match('/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/', $value, $matches)) {
-            $date = DateTimeImmutable::createFromFormat('!j/n/Y', "{$matches[1]}/{$matches[2]}/{$matches[3]}");
+            $date = DateTimeImmutable::createFromFormat('!n/j/Y', "{$matches[1]}/{$matches[2]}/{$matches[3]}");
             $errors = DateTimeImmutable::getLastErrors();
-            if ($date && ($errors === false || ($errors['warning_count'] === 0 && $errors['error_count'] === 0)) && (int) $date->format('j') === (int) $matches[1] && (int) $date->format('n') === (int) $matches[2]) {
+            if ($date && ($errors === false || ($errors['warning_count'] === 0 && $errors['error_count'] === 0)) && (int) $date->format('n') === (int) $matches[1] && (int) $date->format('j') === (int) $matches[2]) {
                 return $date->format('Y-m-d');
             }
         }

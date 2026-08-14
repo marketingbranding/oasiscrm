@@ -23,13 +23,22 @@ class PromoTsvParserTest extends TestCase
 
     public static function dates(): array
     {
-        return [['1/1/2026', '2026-01-01'], ['01/01/2026', '2026-01-01'], ['2026-01-01', '2026-01-01']];
+        return [
+            ['7/1/2025', '2025-07-01'],
+            ['07/01/2025', '2025-07-01'],
+            ['10/31/2025', '2025-10-31'],
+            ['1/31/2026', '2026-01-31'],
+            ['1/1/2026', '2026-01-01'],
+            ['12/31/2026', '2026-12-31'],
+            ['2026-01-01', '2026-01-01'],
+        ];
     }
 
     public function test_marks_every_duplicate_and_invalid_date_order(): void
     {
-        $rows = (new PromoTsvParser)->parse("P1\tPromo\t31/2/2026\t2026-01-01\t\nP1\tPromo lain\t2026-02-01\t2026-01-01\t");
+        $rows = (new PromoTsvParser)->parse("P1\tPromo\t13/31/2026\t2026-01-01\t\nP1\tPromo lain\t2026-02-01\t2026-01-01\t");
         $this->assertSame(['Duplikat Input', 'Duplikat Input'], array_column($rows, 'status'));
+        $this->assertStringContainsString('tidak valid', implode(' ', $rows[0]['errors']));
         $this->assertStringContainsString('duplikat', implode(' ', $rows[0]['errors']));
         $this->assertStringContainsString('setelah', implode(' ', $rows[1]['errors']));
     }

@@ -20,7 +20,7 @@ class PromoImportTest extends TestCase
     public function test_parser_supports_header_no_header_tabs_whitespace_dates_order_and_duplicates(): void
     {
         $parser = app(PromoTsvParser::class);
-        $rows = $parser->parse(" id_promo \t nama_promo \t tanggal_mulai \t tanggal_selesai \t keterangan \n P1 \t Promo 1 \t 1/8/2026 \t 01/08/2026 \t Catatan ");
+        $rows = $parser->parse(" id_promo \t nama_promo \t tanggal_mulai \t tanggal_selesai \t keterangan \n P1 \t Promo 1 \t 8/1/2026 \t 08/01/2026 \t Catatan ");
         $this->assertSame('2026-08-01', $rows[0]['normalized_data']['start_date']);
         $this->assertSame('2026-08-01', $rows[0]['normalized_data']['end_date']);
         $this->assertSame([], $rows[0]['errors']);

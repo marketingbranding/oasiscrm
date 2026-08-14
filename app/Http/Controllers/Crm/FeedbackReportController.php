@@ -102,6 +102,7 @@ class FeedbackReportController extends Controller
 
         return view('crm.feedback-reports.show', [
             'report' => $feedbackReport,
+            'allowedStatuses' => $feedbackReport->allowedTransitions(),
             'assignees' => User::where('is_active', true)->orderBy('name')->get(['id', 'name', 'branch_id']),
         ]);
     }
@@ -110,19 +111,13 @@ class FeedbackReportController extends Controller
     {
         $this->authorize('review', $feedbackReport);
         $data = $request->validated();
-        $allowedTransitions = [
-            'pending' => ['pending', 'reviewing', 'approved', 'rejected', 'in_progress'],
-            'reviewing' => ['reviewing', 'approved', 'rejected', 'in_progress'],
-            'approved' => ['approved', 'in_progress', 'implemented', 'fixed', 'closed'],
-            'in_progress' => ['in_progress', 'implemented', 'fixed', 'closed'],
-            'rejected' => ['rejected', 'closed'],
-            'implemented' => ['implemented', 'closed'],
-            'fixed' => ['fixed', 'closed'],
-            'closed' => ['closed'],
-        ];
-        abort_unless(in_array($data['status'], $allowedTransitions[$feedbackReport->status] ?? [], true), 409);
-        abort_if($data['status'] === 'implemented' && $feedbackReport->type === 'bug', 422, 'Bug harus ditandai Sudah Diperbaiki.');
-        abort_if($data['status'] === 'fixed' && $feedbackReport->type !== 'bug', 422, 'Masukan atau fitur harus ditandai Sudah Diterapkan.');
+        if (! in_array($data['status'], $feedbackReport->allowedTransitions(), true)) {
+            $message = 'Status laporan sudah berubah atau transisi status yang dipilih tidak diperbolehkan. Silakan muat ulang dan coba lagi.';
+
+            return $request->expectsJson()
+                ? response()->json(['message' => $message], 409)
+                : back()->withInput()->with('error', $message);
+        }
         if (filled($data['assigned_to'] ?? null)) {
             $assignee = User::where('is_active', true)->findOrFail($data['assigned_to']);
             abort_unless($this->workspaceAccess->canViewBranch($assignee, (int) $feedbackReport->branch_id), 422);

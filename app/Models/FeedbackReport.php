@@ -14,6 +14,17 @@ class FeedbackReport extends Model
 
     public const STATUSES = ['pending', 'reviewing', 'approved', 'rejected', 'in_progress', 'implemented', 'fixed', 'closed'];
 
+    public const STATUS_TRANSITIONS = [
+        'pending' => ['pending', 'reviewing', 'approved', 'rejected', 'in_progress'],
+        'reviewing' => ['reviewing', 'approved', 'rejected', 'in_progress'],
+        'approved' => ['approved', 'in_progress', 'implemented', 'fixed', 'closed'],
+        'in_progress' => ['in_progress', 'implemented', 'fixed', 'closed'],
+        'rejected' => ['rejected', 'closed'],
+        'implemented' => ['implemented', 'closed'],
+        'fixed' => ['fixed', 'closed'],
+        'closed' => ['closed'],
+    ];
+
     public const PRIORITIES = ['low', 'medium', 'high', 'critical'];
 
     protected $fillable = [
@@ -93,9 +104,22 @@ class FeedbackReport extends Model
         };
     }
 
-    public function statusLabel(): string
+    public function allowedTransitions(): array
     {
-        return match ($this->status) {
+        $transitions = self::STATUS_TRANSITIONS[$this->status] ?? [];
+        $forbidden = $this->type === 'bug' ? 'implemented' : 'fixed';
+        $transitions = array_values(array_diff($transitions, [$forbidden]));
+
+        if (in_array($this->status, self::STATUSES, true) && ! in_array($this->status, $transitions, true)) {
+            array_unshift($transitions, $this->status);
+        }
+
+        return $transitions;
+    }
+
+    public static function statusLabelFor(string $status): string
+    {
+        return match ($status) {
             'reviewing' => 'Sedang Ditinjau',
             'approved' => 'Disetujui',
             'rejected' => 'Ditolak',
@@ -105,6 +129,11 @@ class FeedbackReport extends Model
             'closed' => 'Ditutup',
             default => 'Menunggu',
         };
+    }
+
+    public function statusLabel(): string
+    {
+        return self::statusLabelFor($this->status);
     }
 
     protected function activityLabel(): string

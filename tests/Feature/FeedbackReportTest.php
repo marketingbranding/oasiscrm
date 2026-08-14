@@ -95,6 +95,18 @@ class FeedbackReportTest extends TestCase
         $this->assertSame('reviewing', $report->fresh()->status);
     }
 
+    public function test_superadmin_can_review_branch_report_and_pusat_scope_is_unchanged(): void
+    {
+        [$branch, $reporter] = $this->branchAndUser();
+        $otherBranch = Branch::create(['name' => 'Pati', 'code' => 'PTI', 'is_active' => true]);
+        $report = FeedbackReport::create($this->modelPayload($branch, $reporter));
+        $pusatRole = Role::firstOrCreate(['slug' => 'pusat'], ['name' => 'Tim Pusat', 'is_superadmin' => false]);
+        $pusat = User::factory()->create(['role_id' => $pusatRole->id, 'branch_id' => $otherBranch->id, 'password_changed_at' => now()]);
+
+        $this->actingAs($this->superadmin())->get(route('feedback-reports.show', $report))->assertOk();
+        $this->actingAs($pusat)->get(route('feedback-reports.show', $report))->assertOk();
+    }
+
     public function test_status_and_assignment_changes_create_private_notifications(): void
     {
         [$branch, $reporter] = $this->branchAndUser();
@@ -148,6 +160,69 @@ class FeedbackReportTest extends TestCase
             $report = new FeedbackReport(['status' => $status]);
             $this->assertNotSame('Menunggu', $report->statusLabel());
         }
+    }
+
+    public function test_review_transitions_are_status_and_type_aware(): void
+    {
+        [$branch, $reporter] = $this->branchAndUser();
+        $super = $this->superadmin();
+
+        foreach ([
+            ['pending', 'reviewing', 'bug', true],
+            ['pending', 'fixed', 'bug', false],
+            ['reviewing', 'closed', 'bug', false],
+            ['approved', 'fixed', 'bug', true],
+            ['approved', 'implemented', 'bug', false],
+            ['approved', 'implemented', 'masukan', true],
+            ['approved', 'fixed', 'masukan', false],
+        ] as [$from, $to, $type, $allowed]) {
+            $report = FeedbackReport::create(array_merge($this->modelPayload($branch, $reporter), ['status' => $from, 'type' => $type]));
+            $response = $this->actingAs($super)->patch(route('feedback-reports.review', $report), $this->reviewPayload(['status' => $to]));
+            $allowed ? $response->assertRedirect(route('feedback-reports.show', $report)) : $response->assertRedirect()->assertSessionHas('error', $this->transitionError());
+            $this->assertSame($allowed ? $to : $from, $report->fresh()->status);
+        }
+    }
+
+    public function test_same_status_updates_fields_for_active_and_closed_reports(): void
+    {
+        [$branch, $reporter] = $this->branchAndUser();
+        $super = $this->superadmin();
+        $assignee = User::factory()->create(['role_id' => $reporter->role_id, 'branch_id' => $branch->id, 'password_changed_at' => now()]);
+
+        foreach (['reviewing', 'closed'] as $status) {
+            $report = FeedbackReport::create(array_merge($this->modelPayload($branch, $reporter), ['status' => $status]));
+            $this->actingAs($super)->patch(route('feedback-reports.review', $report), $this->reviewPayload([
+                'status' => $status, 'priority' => 'critical', 'assigned_to' => $assignee->id, 'admin_note' => 'Catatan baru.',
+            ]))->assertRedirect(route('feedback-reports.show', $report));
+            $report->refresh();
+            $this->assertSame('Catatan baru.', $report->admin_note);
+            $this->assertSame('critical', $report->priority);
+            $this->assertSame($assignee->id, $report->assigned_to);
+        }
+    }
+
+    public function test_forged_json_transition_returns_controlled_conflict(): void
+    {
+        [$branch, $reporter] = $this->branchAndUser();
+        $report = FeedbackReport::create($this->modelPayload($branch, $reporter));
+
+        $this->actingAs($this->superadmin())->patchJson(route('feedback-reports.review', $report), $this->reviewPayload(['status' => 'fixed']))
+            ->assertStatus(409)->assertJsonPath('message', $this->transitionError());
+        $this->assertSame('pending', $report->fresh()->status);
+    }
+
+    public function test_review_form_omits_type_invalid_and_disallowed_statuses(): void
+    {
+        [$branch, $reporter] = $this->branchAndUser();
+        $report = FeedbackReport::create(array_merge($this->modelPayload($branch, $reporter), ['status' => 'approved']));
+
+        $response = $this->actingAs($this->superadmin())->get(route('feedback-reports.show', $report))->assertOk();
+        $response->assertSee('value="fixed"', false)->assertDontSee('value="implemented"', false)->assertDontSee('value="pending"', false);
+    }
+
+    private function transitionError(): string
+    {
+        return 'Status laporan sudah berubah atau transisi status yang dipilih tidak diperbolehkan. Silakan muat ulang dan coba lagi.';
     }
 
     private function bugPayload(Branch $branch): array

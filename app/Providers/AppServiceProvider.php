@@ -11,6 +11,7 @@ use App\Policies\CommentPolicy;
 use App\Policies\DanaTalanganPolicy;
 use App\Policies\UserPolicy;
 use App\Services\ImpersonationService;
+use App\Services\ModuleMaintenanceService;
 use App\Services\NavigationService;
 use App\Services\WorkPlannerReminderService;
 use Illuminate\Support\Facades\Auth;
@@ -56,18 +57,21 @@ class AppServiceProvider extends ServiceProvider
             }
 
             $view->with('impersonationBanner', $impersonationBanner);
+            $view->with('moduleMaintenanceContext', request()->attributes->get('module_maintenance_context'));
             if (! $user) {
                 $view->with('navigation', [])->with('overdueItems', collect())->with('todayItems', collect())->with('tomorrowItems', collect())->with('needsConfirmation', collect())->with('totalCount', 0);
 
                 return;
             }
 
+            $moduleMaintenance = app(ModuleMaintenanceService::class)->enabledMap();
+
             if ($user->isSales() && request()->boolean('reminder_dismiss_failed')) {
                 session()->flash('warning', 'Pengingat belum dapat disembunyikan untuk hari ini. Pengingat mungkin muncul kembali.');
             }
 
             if (request()->routeIs('admin.design-system')) {
-                $view->with('navigation', app(NavigationService::class)->forUser($user))
+                $view->with('navigation', app(NavigationService::class)->forUser($user, moduleMaintenance: $moduleMaintenance))
                     ->with('overdueItems', collect())->with('todayItems', collect())->with('tomorrowItems', collect())
                     ->with('needsConfirmation', collect())->with('totalCount', 0);
 
@@ -93,7 +97,7 @@ class AppServiceProvider extends ServiceProvider
             $overdueEvents = collect();
 
             $totalCount = $overdueItems->count() + $todayItems->count() + $tomorrowItems->count() + $needsConfirmation->count();
-            $navigation = app(NavigationService::class)->forUser($user);
+            $navigation = app(NavigationService::class)->forUser($user, moduleMaintenance: $moduleMaintenance);
 
             $view->with(compact('navigation', 'overdueItems', 'todayItems', 'tomorrowItems', 'needsConfirmation', 'totalCount'));
         });

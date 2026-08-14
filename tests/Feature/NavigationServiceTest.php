@@ -60,6 +60,22 @@ class NavigationServiceTest extends TestCase
         $this->assertNotContains([], array_column($navigation, 'children'));
     }
 
+    public function test_maintained_navigation_item_is_retained_with_item_and_group_markers(): void
+    {
+        $navigation = app(NavigationService::class)->forUser(
+            $this->user('superadmin'),
+            'database.index',
+            ['database' => true],
+        );
+        $sales = collect($navigation)->firstWhere('key', 'sales');
+        $database = collect($sales['children'])->firstWhere('label', 'Database');
+
+        $this->assertTrue($sales['maintenance']);
+        $this->assertTrue($database['maintenance']);
+        $this->assertTrue($database['active']);
+        $this->assertSame('database', $database['module_key']);
+    }
+
     public function test_supplemental_role_does_not_add_navigation_access(): void
     {
         $user = $this->user('sales');

@@ -3,6 +3,7 @@
 use App\Http\Middleware\AllPermissionsMiddleware;
 use App\Http\Middleware\CheckBranch;
 use App\Http\Middleware\CheckRole;
+use App\Http\Middleware\EnforceModuleMaintenance;
 use App\Http\Middleware\EnforceOperationalMaintenance;
 use App\Http\Middleware\EnsurePasswordChanged;
 use App\Http\Middleware\EnsureUserIsActive;
@@ -28,6 +29,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'password.changed' => EnsurePasswordChanged::class,
             'active' => EnsureUserIsActive::class,
             'operational.maintenance' => EnforceOperationalMaintenance::class,
+            'module.maintenance' => EnforceModuleMaintenance::class,
             'permission' => PermissionMiddleware::class,
             'permissions.all' => AllPermissionsMiddleware::class,
             'not.impersonating' => RejectImpersonatedRequest::class,

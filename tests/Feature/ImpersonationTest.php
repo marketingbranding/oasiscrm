@@ -6,10 +6,12 @@ use App\Enums\AccountStatus;
 use App\Models\ActivityLog;
 use App\Models\Branch;
 use App\Models\LeadMaster;
+use App\Models\ModuleMaintenance;
 use App\Models\Role;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Route;
 use Tests\TestCase;
@@ -87,6 +89,24 @@ class ImpersonationTest extends TestCase
             ->assertSee('Kembali ke Superadmin')
             ->assertSee('action="'.route('impersonation.stop').'"', false)
             ->assertSee('method="POST"', false);
+    }
+
+    public function test_impersonated_target_is_blocked_by_module_maintenance_then_stop_restores_superadmin_bypass(): void
+    {
+        $actor = $this->user('superadmin');
+        $target = $this->user('admin');
+        ModuleMaintenance::create([
+            'module_key' => 'promo',
+            'is_enabled' => true,
+            'message' => 'Promo maintenance',
+            'started_at' => now(),
+        ]);
+        Cache::forget('oasis.module_maintenance.all');
+
+        $this->actingAs($actor)->post(route('admin-users.impersonate', $target));
+        $this->get(route('promos.index'))->assertServiceUnavailable();
+        $this->post(route('impersonation.stop'))->assertRedirect(route('admin-users.index'));
+        $this->get(route('promos.index'))->assertOk()->assertSee('MODE MAINTENANCE MODUL AKTIF — Promo');
     }
 
     public function test_stop_restores_original_clears_session_and_regenerates_id(): void

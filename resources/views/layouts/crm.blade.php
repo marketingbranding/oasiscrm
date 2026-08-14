@@ -73,6 +73,7 @@
                            @if($child['active']) aria-current="page" @endif>
                             <x-crm.nav-icon :name="$child['icon']" />
                             <span class="crm-sidebar-label">{{ $child['label'] }}</span>
+                            @if($child['maintenance'])<span class="crm-sidebar-label border border-black bg-[var(--oasis-yellow)] px-1 font-[Helvetica] text-[9px] font-bold uppercase">Maintenance</span>@endif
                         </a>
                     @else
                         <section class="border-b border-[var(--oasis-border)] py-1" aria-labelledby="crm-nav-group-{{ $group['key'] }}">
@@ -82,6 +83,7 @@
                                     aria-controls="crm-nav-children-{{ $group['key'] }}" title="{{ $group['label'] }}">
                                 <x-crm.nav-icon :name="$group['icon']" />
                                 <span class="crm-sidebar-label flex-1">{{ $group['label'] }}</span>
+                                @if($group['maintenance'])<span class="crm-sidebar-label mr-1 border border-black bg-[var(--oasis-yellow)] px-1 font-[Helvetica] text-[9px] font-bold uppercase" aria-label="Grup memuat modul dalam maintenance">Maintenance</span>@endif
                                 <svg class="crm-sidebar-chevron size-4 transition-transform duration-150" :class="isGroupOpen('{{ $group['key'] }}') ? 'rotate-90' : ''" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m7 4 6 6-6 6" /></svg>
                             </button>
                             <div id="crm-nav-children-{{ $group['key'] }}" class="crm-nav-children" x-show="isGroupOpen('{{ $group['key'] }}')" x-cloak>
@@ -90,8 +92,9 @@
                                        style="--nav-accent: var(--oasis-accent-{{ $child['accent'] }})" title="{{ $child['label'] }}"
                                        @if($child['active']) aria-current="page" @endif>
                                         <x-crm.nav-icon :name="$child['icon']" class="size-[18px]" />
-                                        <span class="crm-sidebar-label">{{ $child['label'] }}</span>
-                                    </a>
+                                         <span class="crm-sidebar-label flex-1">{{ $child['label'] }}</span>
+                                         @if($child['maintenance'])<span class="crm-sidebar-label border border-black bg-[var(--oasis-yellow)] px-1 font-[Helvetica] text-[9px] font-bold uppercase">Maintenance</span>@endif
+                                     </a>
                                 @endforeach
                             </div>
                         </section>
@@ -128,6 +131,13 @@
 
         <main id="crm-main" class="crm-main flex-1 overflow-x-hidden">
             <div class="crm-page-shell">
+                @if($moduleMaintenanceContext)
+                    <x-crm.alert variant="warning" title="MODE MAINTENANCE MODUL AKTIF — {{ $moduleMaintenanceContext['module_label'] }}" role="alert" class="mb-4">
+                        <p>User lain tidak dapat mengakses modul ini.</p>
+                        <p>{{ $moduleMaintenanceContext['message'] ?: 'Modul ini sedang dalam pemeliharaan. Silakan coba kembali nanti.' }}@if($moduleMaintenanceContext['estimated_end_at']) Perkiraan selesai {{ \Illuminate\Support\Carbon::parse($moduleMaintenanceContext['estimated_end_at'])->timezone(config('app.timezone'))->translatedFormat('d F Y, H.i T') }}.@endif</p>
+                    </x-crm.alert>
+                @endif
+
                 @if($impersonationBanner)
                     <x-crm.alert variant="warning" title="PERINGATAN: MODE IMPERSONASI AKTIF" role="alert" class="mb-4">
                         <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">

@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Crm;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Crm\DisableOperationalMaintenanceRequest;
 use App\Http\Requests\Crm\EnableOperationalMaintenanceRequest;
+use App\Services\ModuleMaintenanceService;
 use App\Services\OperationalMaintenanceService;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Http\RedirectResponse;
@@ -15,10 +16,11 @@ use Throwable;
 
 class OperationalMaintenanceController extends Controller
 {
-    public function index(OperationalMaintenanceService $maintenance): View
+    public function index(OperationalMaintenanceService $maintenance, ModuleMaintenanceService $modules): View
     {
         return view('crm.operational-maintenance.index', [
             'setting' => $maintenance->currentConfiguration(),
+            'moduleStatuses' => $modules->statuses(),
         ]);
     }
 

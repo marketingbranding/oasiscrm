@@ -84,6 +84,61 @@
         </x-crm.card>
     </div>
 
+    <x-crm.section id="module-maintenance" title="Module Maintenance" description="Batasi modul tertentu tanpa menyembunyikan navigasi atau mengubah full maintenance mode." class="mt-6">
+        <div class="grid gap-4 lg:grid-cols-2">
+            @foreach($moduleStatuses as $module)
+                @php($modalName = 'module-maintenance-'.$module['module_key'])
+                <x-crm.card :variant="$module['is_enabled'] ? 'emphasis' : 'muted'" padding="md">
+                    <x-slot:header>
+                        <div class="flex flex-wrap items-start justify-between gap-3">
+                            <div>
+                                <h3 class="font-[Helvetica] text-sm font-bold">{{ $module['module_label'] }}</h3>
+                                @if($module['module_description'])<p class="mt-1 text-sm text-gray-600">{{ $module['module_description'] }}</p>@endif
+                            </div>
+                            <x-crm.status-badge :variant="$module['is_enabled'] ? 'danger' : 'success'">
+                                {{ $module['is_enabled'] ? 'Maintenance aktif' : 'Tersedia' }}
+                            </x-crm.status-badge>
+                        </div>
+                    </x-slot:header>
+                    <dl class="grid gap-3 text-sm sm:grid-cols-2">
+                        <div class="sm:col-span-2"><dt class="font-[Helvetica] text-xs font-bold uppercase text-gray-600">Pesan</dt><dd class="mt-1 whitespace-pre-line break-words">{{ $module['message'] ?: 'Belum ada pesan khusus.' }}</dd></div>
+                        <div><dt class="font-[Helvetica] text-xs font-bold uppercase text-gray-600">Perkiraan selesai</dt><dd class="mt-1">{{ $module['estimated_end_at'] ? \Illuminate\Support\Carbon::parse($module['estimated_end_at'])->timezone(config('app.timezone'))->translatedFormat('d F Y, H.i T') : 'Belum ditentukan' }}</dd></div>
+                        <div><dt class="font-[Helvetica] text-xs font-bold uppercase text-gray-600">Terakhir diperbarui</dt><dd class="mt-1">{{ $module['updated_at'] ? \Illuminate\Support\Carbon::parse($module['updated_at'])->timezone(config('app.timezone'))->translatedFormat('d F Y, H.i T') : 'Belum pernah' }}@if($module['updated_by']) oleh {{ $module['updated_by'] }}@endif</dd></div>
+                    </dl>
+                    @if(auth()->user()->isSuperadmin())
+                        <x-slot:footer>
+                            <div class="flex flex-wrap justify-end gap-2">
+                                <x-crm.button variant="secondary" @click="$dispatch('oasis:modal-open', { name: '{{ $modalName }}', trigger: $el })">{{ $module['is_enabled'] ? 'Perbarui' : 'Atur' }}</x-crm.button>
+                                @if($module['is_enabled'])
+                                    <form method="POST" action="{{ route('admin.maintenance.modules.disable', $module['module_key']) }}">@csrf @method('PUT')<x-crm.button type="submit" variant="danger">Nonaktifkan</x-crm.button></form>
+                                @endif
+                            </div>
+                        </x-slot:footer>
+                    @endif
+                </x-crm.card>
+
+                @if(auth()->user()->isSuperadmin())
+                    <x-crm.modal name="{{ $modalName }}" title="{{ $module['is_enabled'] ? 'Perbarui' : 'Aktifkan' }} maintenance {{ $module['module_label'] }}" :initially-open="$errors->any() && old('module_key') === $module['module_key']">
+                        <form method="POST" action="{{ $module['is_enabled'] ? route('admin.maintenance.modules.update', $module['module_key']) : route('admin.maintenance.modules.enable', $module['module_key']) }}" class="space-y-4">
+                            @csrf @method('PUT')
+                            <input type="hidden" name="module_key" value="{{ $module['module_key'] }}">
+                            <x-crm.field label="Pesan maintenance" for="message-{{ $module['module_key'] }}" hint="Opsional, maksimal 1.000 karakter." :error="old('module_key') === $module['module_key'] ? $errors->first('message') : null">
+                                <textarea id="message-{{ $module['module_key'] }}" name="message" rows="4" maxlength="1000" class="crm-control">{{ old('module_key') === $module['module_key'] ? old('message') : $module['message'] }}</textarea>
+                            </x-crm.field>
+                            <x-crm.field label="Perkiraan selesai" for="estimate-{{ $module['module_key'] }}" hint="Opsional. Estimasi yang sudah lewat tidak menonaktifkan maintenance otomatis." :error="old('module_key') === $module['module_key'] ? $errors->first('estimated_end_at') : null">
+                                <input id="estimate-{{ $module['module_key'] }}" name="estimated_end_at" type="datetime-local" class="crm-control" value="{{ old('module_key') === $module['module_key'] ? old('estimated_end_at') : ($module['estimated_end_at'] ? \Illuminate\Support\Carbon::parse($module['estimated_end_at'])->timezone(config('app.timezone'))->format('Y-m-d\TH:i') : '') }}">
+                            </x-crm.field>
+                            <div class="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+                                <x-crm.button variant="secondary" @click="$dispatch('oasis:modal-close', { name: '{{ $modalName }}' })">Batal</x-crm.button>
+                                <x-crm.button type="submit" variant="primary" accent="administration">{{ $module['is_enabled'] ? 'Simpan perubahan' : 'Aktifkan maintenance' }}</x-crm.button>
+                            </div>
+                        </form>
+                    </x-crm.modal>
+                @endif
+            @endforeach
+        </div>
+    </x-crm.section>
+
     @if(! $setting->enabled)
         <x-crm.modal
             name="enable-maintenance"

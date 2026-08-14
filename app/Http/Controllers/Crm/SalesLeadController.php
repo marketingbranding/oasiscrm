@@ -61,6 +61,20 @@ class SalesLeadController extends Controller
         return $response;
     }
 
+    public function show(SalesLead $salesLead)
+    {
+        $this->authorize('viewSiteVisit', $salesLead);
+        $salesLead->load([
+            'branch',
+            'project',
+            'sales',
+            'statusHistories' => fn ($query) => $query->latest('id'),
+            'siteVisits' => fn ($query) => $query->latest('id'),
+        ]);
+
+        return view('crm.sales-pocketbook.lead-detail', ['lead' => $salesLead]);
+    }
+
     public function edit(SalesLead $salesLead)
     {
         $this->authorize('update', $salesLead);

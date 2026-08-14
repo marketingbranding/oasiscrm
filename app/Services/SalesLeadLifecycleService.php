@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Enums\SalesLeadStatus;
+use App\Models\ActivityLog;
 use App\Models\SalesLead;
 use App\Models\SalesLeadConsumerLink;
 use App\Models\SalesLeadFreelanceLink;
@@ -91,7 +92,13 @@ class SalesLeadLifecycleService
                 'status' => $status->value,
             ];
 
-        $existing = SalesLeadStatusHistory::query()->where($identity)->first();
+        $existing = SalesLeadStatusHistory::query()->where($identity)->first()
+            ?? SalesLeadStatusHistory::query()->where([
+                'sales_lead_id' => $lead->id,
+                'source' => $source,
+                'source_id' => $sourceId,
+                'status' => $status->value,
+            ])->first();
         if ($existing !== null) {
             if ($existing->sales_lead_id !== $lead->id) {
                 throw new \DomainException('Identitas operasi sudah digunakan oleh lead lain.');
@@ -212,6 +219,7 @@ class SalesLeadLifecycleService
             }
 
             $completed = ($data['completion'] ?? null) === 'complete';
+            $this->validateSiteVisit($data, $completed);
             $result = $completed && $this->syncEnabled() ? $this->writer()->append($locked, 'data_ceklok', [
                 'nama_konsumen' => $locked->customer_name,
                 'tanggal_ceklok' => $data['tanggal'],
@@ -237,13 +245,65 @@ class SalesLeadLifecycleService
                 'is_completed' => $completed,
             ]);
 
-            $this->transitionSystemStatus($locked, SalesLeadStatus::SiteVisit, 'site_visit', (string) $visit->id, $actor, $operationUuid, metadata: [
+            $target = $completed && $data['status'] === 'utj' ? SalesLeadStatus::Utj : SalesLeadStatus::SiteVisit;
+            $this->transitionSystemStatus($locked, $target, 'site_visit', (string) $visit->id, $actor, $operationUuid, metadata: [
                 'sheet_name' => $result?->sheetName,
                 'remote_row_number' => $result?->rowNumber,
                 'reason' => $completed ? $data['status'] : 'isi_nanti',
             ]);
+            $this->logSiteVisit('sales_lead_site_visit_created', $visit, $locked, $actor);
 
             return $visit;
+        });
+    }
+
+    public function updateSiteVisit(SalesLead $lead, SalesLeadSiteVisit $visit, array $data, User $actor): SalesLeadSiteVisit
+    {
+        return DB::transaction(function () use ($lead, $visit, $data, $actor): SalesLeadSiteVisit {
+            $locked = $this->lockLead($lead);
+            $lockedVisit = SalesLeadSiteVisit::query()->lockForUpdate()->findOrFail($visit->id);
+            if ((int) $lockedVisit->sales_lead_id !== (int) $locked->id) {
+                abort(404);
+            }
+
+            $completed = ($data['completion'] ?? null) === 'complete';
+            $this->validateSiteVisit($data, $completed);
+            $fields = $completed ? [
+                'nama_konsumen' => $locked->customer_name,
+                'tanggal_ceklok' => $data['tanggal'],
+                'waktu_ceklok' => $data['waktu'],
+                'status_ceklok' => $data['status'],
+                'keterangan' => $data['keterangan'] ?? null,
+            ] : [];
+            $result = null;
+            if ($completed && $this->syncEnabled()) {
+                if ($lockedVisit->is_completed && filled($lockedVisit->oasis_sync_id)) {
+                    $this->writer()->updateBySyncId($locked, 'data_ceklok', $lockedVisit->oasis_sync_id, $fields);
+                } else {
+                    $result = $this->writer()->append($locked, 'data_ceklok', $fields, $lockedVisit->operation_uuid);
+                }
+            }
+
+            $lockedVisit->update([
+                'oasis_sync_id' => $result?->syncId ?? $lockedVisit->oasis_sync_id,
+                'sheet_name' => $result?->sheetName ?? $lockedVisit->sheet_name,
+                'remote_row_number' => $result?->rowNumber ?? $lockedVisit->remote_row_number,
+                'status' => $completed ? 'completed' : 'incomplete',
+                'visited_at' => $completed ? $data['tanggal'].' '.$this->visitClock($data['waktu']) : null,
+                'visit_date' => $completed ? $data['tanggal'] : null,
+                'visit_time' => $completed ? $data['waktu'] : null,
+                'visit_status' => $completed ? $data['status'] : null,
+                'notes' => $completed ? ($data['keterangan'] ?? null) : null,
+                'is_completed' => $completed,
+            ]);
+
+            if ($completed) {
+                $target = $data['status'] === 'utj' ? SalesLeadStatus::Utj : SalesLeadStatus::SiteVisit;
+                $this->transitionSystemStatus($locked, $target, 'site_visit', (string) $lockedVisit->id, $actor, (string) Str::uuid(), metadata: ['reason' => $data['status']]);
+            }
+            $this->logSiteVisit('sales_lead_site_visit_updated', $lockedVisit, $locked, $actor);
+
+            return $lockedVisit->fresh();
         });
     }
 
@@ -531,6 +591,40 @@ class SalesLeadLifecycleService
             && $user->isAccountActive()
             && $this->workspaceAccess->canViewBranch($user, $lead->branch_id)
             && $this->workspaceAccess->canAccessProject($user, $lead->project_id);
+    }
+
+    private function validateSiteVisit(array $data, bool $completed): void
+    {
+        if (! $completed) {
+            return;
+        }
+
+        foreach (['tanggal', 'waktu', 'status'] as $field) {
+            if (blank($data[$field] ?? null)) {
+                throw ValidationException::withMessages([$field => 'Data cek lokasi wajib diisi lengkap.']);
+            }
+        }
+        if (($data['status'] ?? null) === 'non ok' && blank($data['keterangan'] ?? null)) {
+            throw ValidationException::withMessages(['keterangan' => 'Keterangan wajib diisi untuk hasil Non OK.']);
+        }
+    }
+
+    private function logSiteVisit(string $event, SalesLeadSiteVisit $visit, SalesLead $lead, User $actor): void
+    {
+        ActivityLog::query()->create([
+            'causer_id' => $actor->id,
+            'subject_type' => SalesLeadSiteVisit::class,
+            'subject_id' => $visit->id,
+            'event' => $event,
+            'description' => "Aktivitas cek lokasi lead #{$lead->id}: {$event}",
+            'properties' => [
+                'sales_lead_id' => $lead->id,
+                'branch_id' => $lead->branch_id,
+                'project_id' => $lead->project_id,
+                'is_completed' => $visit->is_completed,
+                'visit_status' => $visit->visit_status,
+            ],
+        ]);
     }
 
     private function visitClock(string $period): string

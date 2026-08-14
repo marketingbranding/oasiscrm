@@ -18,7 +18,7 @@ class SalesPocketbookTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_primary_sales_shared_url_renders_agenda_only_with_simplified_fields(): void
+    public function test_primary_sales_shared_url_keeps_agenda_form_and_adds_read_only_lead_tab(): void
     {
         [, , $sales] = $this->salesContext();
 
@@ -30,7 +30,7 @@ class SalesPocketbookTest extends TestCase
             ->assertSee('name="location"', false)
             ->assertSee('name="sales_activity_category"', false)
             ->assertSee('name="activity_result"', false)
-            ->assertDontSee('Lead Saya')
+            ->assertSee('Lead Saya')
             ->assertDontSee('Input Lead')
             ->assertDontSee('Sinkronisasi')
             ->assertDontSee('name="branch_id"', false)

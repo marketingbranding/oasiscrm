@@ -10,7 +10,9 @@ use App\Http\Requests\Crm\RecordSalesLeadSiteVisitRequest;
 use App\Http\Requests\Crm\RejectSalesLeadSlikRequest;
 use App\Http\Requests\Crm\SubmitSalesLeadSlikRequest;
 use App\Http\Requests\Crm\UpdateSalesLeadLifecycleStatusRequest;
+use App\Http\Requests\Crm\UpdateSalesLeadSiteVisitRequest;
 use App\Models\SalesLead;
+use App\Models\SalesLeadSiteVisit;
 use App\Models\SalesLeadSlikAttempt;
 use App\Services\SalesLeadLifecycleService;
 use Illuminate\Http\RedirectResponse;
@@ -38,6 +40,14 @@ class SalesLeadLifecycleController extends Controller
         $visit = $this->run(fn () => $this->lifecycle->recordSiteVisit($salesLead, $request->validated(), $request->user()));
 
         return $this->respond($request, 'Cek lokasi berhasil dicatat.', ['site_visit_id' => $visit->id, 'completed' => $visit->is_completed, 'operation_uuid' => $visit->operation_uuid]);
+    }
+
+    public function updateSiteVisit(UpdateSalesLeadSiteVisitRequest $request, SalesLead $salesLead, SalesLeadSiteVisit $siteVisit): RedirectResponse|Response
+    {
+        abort_unless((int) $siteVisit->sales_lead_id === (int) $salesLead->id, 404);
+        $visit = $this->run(fn () => $this->lifecycle->updateSiteVisit($salesLead, $siteVisit, $request->validated(), $request->user()));
+
+        return $this->respond($request, 'Cek lokasi berhasil diperbarui.', ['site_visit_id' => $visit->id, 'completed' => $visit->is_completed, 'operation_uuid' => $visit->operation_uuid]);
     }
 
     public function consumer(ConvertSalesLeadConsumerRequest $request, SalesLead $salesLead): RedirectResponse|Response

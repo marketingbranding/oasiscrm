@@ -7,6 +7,7 @@ use App\Http\Requests\Crm\CompleteSalesAgendaRequest;
 use App\Http\Requests\Crm\RescheduleSalesAgendaRequest;
 use App\Http\Requests\Crm\StoreSalesAgendaRequest;
 use App\Models\ContentItem;
+use App\Models\SalesLead;
 use App\Services\OptimisticLockService;
 use App\Services\SalesAgendaProjectResolver;
 use Illuminate\Http\Request;
@@ -23,6 +24,7 @@ class SalesAgendaController extends Controller
     {
         abort_unless($request->user()->isSales(), 403);
         $project = $this->projectResolver->resolve($request->user());
+        $tab = $request->query('tab') === 'leads' ? 'leads' : 'agenda';
         $agendas = ContentItem::query()
             ->with(['branch', 'salesProject'])
             ->where('item_type', 'agenda')
@@ -30,9 +32,16 @@ class SalesAgendaController extends Controller
             ->where('owner_user_id', $request->user()->id)
             ->latest('scheduled_date')
             ->latest('id')
-            ->paginate(20);
+            ->paginate(20, ['*'], 'agenda_page');
+        $leads = SalesLead::query()
+            ->visibleTo($request->user())
+            ->where('sales_user_id', $request->user()->id)
+            ->with(['branch:id,name', 'project:id,project_name'])
+            ->latest('lead_date')
+            ->latest('id')
+            ->paginate(20, ['*'], 'lead_page');
 
-        return view('crm.sales-pocketbook.sales-agenda', compact('project', 'agendas'));
+        return view('crm.sales-pocketbook.sales-agenda', compact('project', 'agendas', 'leads', 'tab'));
     }
 
     public function store(StoreSalesAgendaRequest $request)

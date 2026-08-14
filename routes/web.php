@@ -92,11 +92,13 @@ Route::middleware(['auth', 'active', 'verified', 'password.changed', 'operationa
     Route::get('/buku-saku-sales/leads/export', [CoordinatorSalesLeadWorkspaceController::class, 'export'])->middleware('permission:sales_pocketbook.export_team')->name('coordinator-leads.export');
     Route::post('/buku-saku-sales/leads/sync', [CoordinatorSalesLeadWorkspaceController::class, 'push'])->middleware('permission:sales_pocketbook.sync')->name('coordinator-leads.sync');
     Route::post('/buku-saku-sales/leads', [SalesLeadController::class, 'store'])->name('sales-leads.store');
+    Route::get('/buku-saku-sales/leads/{sales_lead}', [SalesLeadController::class, 'show'])->name('sales-leads.show');
     Route::get('/buku-saku-sales/leads/{sales_lead}/edit', [SalesLeadController::class, 'edit'])->name('sales-leads.edit');
     Route::put('/buku-saku-sales/leads/{sales_lead}', [SalesLeadController::class, 'update'])->name('sales-leads.update');
     Route::patch('/buku-saku-sales/leads/{sales_lead}/stage', [SalesLeadStageController::class, 'update'])->name('sales-leads.stage.update');
     Route::patch('/buku-saku-sales/leads/{sales_lead}/lifecycle-status', [SalesLeadLifecycleController::class, 'updateStatus'])->name('sales-leads.lifecycle-status.update');
     Route::post('/buku-saku-sales/leads/{sales_lead}/site-visits', [SalesLeadLifecycleController::class, 'siteVisit'])->name('sales-leads.site-visits.store');
+    Route::patch('/buku-saku-sales/leads/{sales_lead}/site-visits/{site_visit}', [SalesLeadLifecycleController::class, 'updateSiteVisit'])->name('sales-leads.site-visits.update');
     Route::post('/buku-saku-sales/leads/{sales_lead}/consumer', [SalesLeadLifecycleController::class, 'consumer'])->name('sales-leads.consumer.store');
     Route::post('/buku-saku-sales/leads/{sales_lead}/slik', [SalesLeadLifecycleController::class, 'slik'])->name('sales-leads.slik.store');
     Route::patch('/buku-saku-sales/leads/{sales_lead}/slik/{slik_attempt}/reject', [SalesLeadLifecycleController::class, 'rejectSlik'])->name('sales-leads.slik.reject');

@@ -117,6 +117,34 @@ class SalesLead extends Model
         return $this->hasMany(SalesLeadSiteVisit::class);
     }
 
+    public function latestSiteVisit(): HasOne
+    {
+        return $this->hasOne(SalesLeadSiteVisit::class)->latestOfMany();
+    }
+
+    public function shouldShowSiteVisitResults(): bool
+    {
+        $status = $this->current_status instanceof SalesLeadStatus
+            ? $this->current_status
+            : SalesLeadStatus::tryFrom((string) $this->current_status);
+
+        if ($status === SalesLeadStatus::SiteVisit) {
+            return true;
+        }
+
+        $hasHistory = $this->relationLoaded('statusHistories')
+            ? $this->statusHistories->contains(fn (SalesLeadStatusHistory $history) => $history->status === SalesLeadStatus::SiteVisit)
+            : $this->statusHistories()->where('status', SalesLeadStatus::SiteVisit->value)->exists();
+
+        if ($hasHistory) {
+            return true;
+        }
+
+        return $this->relationLoaded('siteVisits')
+            ? $this->siteVisits->isNotEmpty()
+            : $this->siteVisits()->exists();
+    }
+
     public function consumerLinks(): HasMany
     {
         return $this->hasMany(SalesLeadConsumerLink::class);

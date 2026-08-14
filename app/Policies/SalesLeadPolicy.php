@@ -6,6 +6,7 @@ use App\Models\SalesLead;
 use App\Models\User;
 use App\Services\CoordinatorLeadTeamService;
 use App\Services\OrganizationScopeService;
+use App\Services\SalesTeamScopeService;
 use App\Services\WorkspaceAccessService;
 
 class SalesLeadPolicy
@@ -88,9 +89,23 @@ class SalesLeadPolicy
         return $this->update($user, $lead);
     }
 
+    public function viewSiteVisit(User $user, SalesLead $lead): bool
+    {
+        if (! $this->view($user, $lead)) {
+            return false;
+        }
+
+        return ! $user->hasPrimaryRole('sales_coordinator')
+            || app(SalesTeamScopeService::class)->contains($user, $lead->sales_user_id);
+    }
+
     public function recordSiteVisit(User $user, SalesLead $lead): bool
     {
-        return $this->update($user, $lead);
+        return $user->isSales()
+            && (int) $lead->sales_user_id === (int) $user->id
+            && $user->hasPermission('sales_pocketbook.manage_own')
+            && $this->view($user, $lead)
+            && app(WorkspaceAccessService::class)->canAccessProject($user, $lead->project_id);
     }
 
     public function convertToConsumer(User $user, SalesLead $lead): bool

@@ -73,7 +73,7 @@ class SalesLeadLifecycleOperationsTest extends TestCase
         ])->assertRedirect()->assertSessionHasErrors('branch_id');
     }
 
-    public function test_site_visit_supports_isi_nanti_multiple_rows_and_utj_outcome_does_not_set_utj(): void
+    public function test_site_visit_supports_isi_nanti_multiple_rows_and_utj_outcome_sets_utj(): void
     {
         [$branch, , $sales, $lead] = $this->context();
         $writer = Mockery::mock(SalesLeadSpreadsheetWriter::class);
@@ -96,12 +96,12 @@ class SalesLeadLifecycleOperationsTest extends TestCase
         $this->assertSame(4, $lead->siteVisits()->count());
         $this->assertNotSame($first->operation_uuid, $second->operation_uuid);
         $this->assertTrue($idempotent->is($retried));
-        $this->assertSame(SalesLeadStatus::SiteVisit, $lead->fresh()->current_status);
+        $this->assertSame(SalesLeadStatus::Utj, $lead->fresh()->current_status);
         $this->assertNull($lead->fresh()->utj_at);
 
-        $this->actingAs($sales)->from(route('sales-pocketbook.index'))->post(route('sales-leads.site-visits.store', $lead), [
+        $this->actingAs($sales)->postJson(route('sales-leads.site-visits.store', $lead), [
             'completion' => 'isi_nanti', 'branch_id' => $branch->id,
-        ])->assertRedirect()->assertSessionHasErrors('branch_id');
+        ])->assertForbidden();
     }
 
     public function test_consumer_enforces_nik_rules_preserves_leading_zero_and_blocks_branch_duplicate(): void

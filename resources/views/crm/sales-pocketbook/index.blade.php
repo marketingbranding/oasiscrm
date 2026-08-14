@@ -347,6 +347,7 @@
                 @include('crm.sales-pocketbook._lead-lifecycle', ['lead' => $lead])
                 @can('updateStage', $lead)<div class="sales-lead-progress"><span class="sales-lead-section-label">Perbarui progres</span>@include('crm.sales-pocketbook._stage-controls', ['lead' => $lead])</div>@endcan
                 <footer class="sales-lead-actions">
+                    @can('viewSiteVisit', $lead)<x-crm.button variant="text" :href="route('sales-leads.show', $lead)">Detail</x-crm.button>@endcan
                     @if(auth()->user()->hasPermission('comments.view'))<x-crm.button variant="text" :href="route('comments.thread', ['alias' => 'sales-lead', 'id' => $lead->id])">Komentar ({{ $lead->comments_count }})</x-crm.button>@endif
                     @can('update', $lead)<button type="button" class="crm-button crm-button--text crm-button--md" @click="openLeadEdit(@js($leadEditPayload))">Edit lead</button>@endcan
                 </footer>

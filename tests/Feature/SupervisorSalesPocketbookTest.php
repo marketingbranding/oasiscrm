@@ -290,8 +290,9 @@ class SupervisorSalesPocketbookTest extends TestCase
             ->assertSee($selectedLead->customer_name)
             ->assertDontSee($otherAgenda->title)
             ->assertDontSee($otherLead->customer_name)
+            ->assertSee(route('sales-leads.show', $selectedLead), false)
             ->assertDontSee(route('sales-leads.edit', $selectedLead), false)
-            ->assertDontSee(route('sales-leads.update', $selectedLead), false)
+            ->assertDontSee('method="PATCH"', false)
             ->assertDontSee(route('sales-agendas.update', $selectedAgenda), false)
             ->assertDontSee(route('coordinator-leads.sync'), false)
             ->assertDontSee(route('sales-pocketbook.lifecycle-sync'), false);

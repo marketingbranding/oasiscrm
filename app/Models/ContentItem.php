@@ -129,6 +129,11 @@ class ContentItem extends Model
         return $this->morphMany(Comment::class, 'commentable');
     }
 
+    public function evidence(): HasMany
+    {
+        return $this->hasMany(SalesAgendaEvidence::class);
+    }
+
     public function scopeVisibleTo(Builder $query, User $user): Builder
     {
         if ($user->hasPermission('work_planner.view_all')) {

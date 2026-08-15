@@ -26,7 +26,7 @@ class SalesAgendaController extends Controller
         $project = $this->projectResolver->resolve($request->user());
         $tab = $request->query('tab') === 'leads' ? 'leads' : 'agenda';
         $agendas = ContentItem::query()
-            ->with(['branch', 'salesProject'])
+            ->with(['branch', 'salesProject', 'evidence'])
             ->where('item_type', 'agenda')
             ->where('agenda_type', ContentItem::SALES_AGENDA_TYPE)
             ->where('owner_user_id', $request->user()->id)

@@ -38,6 +38,20 @@ return [
             'report' => false,
         ],
 
+        'agenda_evidence' => [
+            'driver' => 'local',
+            'root' => storage_path('app/agenda-evidence'),
+            'throw' => false,
+            'report' => false,
+        ],
+
+        'agenda_evidence_archives' => [
+            'driver' => 'local',
+            'root' => storage_path('app/agenda-evidence-archives'),
+            'throw' => false,
+            'report' => false,
+        ],
+
         'public' => [
             'driver' => 'local',
             'root' => storage_path('app/public'),

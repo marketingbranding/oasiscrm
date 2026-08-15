@@ -73,10 +73,28 @@
                             <td>{{ $agenda->sales_activity_category ?: '-' }}</td>
                             <td>{{ $agenda->title }}</td>
                             <td>{{ $agenda->location ?: '-' }}</td>
-                            <td>{{ $agenda->activity_result ?: '-' }}</td>
+                            <td>{{ $agenda->activity_result ?: '-' }}
+                                <div class="mt-2 flex flex-wrap gap-2">
+                                    @foreach($agenda->evidence as $evidence)
+                                        @if($evidence->purged_at)<span>Bukti foto telah dipindahkan ke arsip.</span>
+                                        @else
+                                            <a class="font-bold underline" href="{{ route('sales-agendas.evidence.show', [$agenda, $evidence]) }}">Foto {{ $loop->iteration }}</a>
+                                            @unless($agenda->isFinished())
+                                                <form method="POST" action="{{ route('sales-agendas.evidence.destroy', [$agenda, $evidence]) }}">@csrf @method('DELETE')<button type="submit" class="font-bold text-red-700 underline" onclick="return confirm('Hapus bukti foto ini?')">Hapus</button></form>
+                                            @endunless
+                                        @endif
+                                    @endforeach
+                                </div>
+                            </td>
                             <td><x-crm.status-badge :status="$agenda->status">{{ ucfirst($agenda->status) }}</x-crm.status-badge></td>
                             <td>
                                 @unless($agenda->isFinished())
+                                    <form method="POST" enctype="multipart/form-data" action="{{ route('sales-agendas.evidence.store', $agenda) }}" class="mb-2">
+                                        @csrf
+                                        <label class="block text-xs" for="photo-{{ $agenda->id }}">Opsional. Maksimal 2 foto (JPEG, PNG, atau WebP), masing-masing maksimal 10 MB.</label>
+                                        <input id="photo-{{ $agenda->id }}" type="file" name="photo" accept="image/jpeg,image/png,image/webp" @disabled($agenda->evidence->count() >= 2)>
+                                        <x-crm.button type="submit" variant="secondary" size="sm">Unggah Foto</x-crm.button>
+                                    </form>
                                     <form method="POST" action="{{ route('sales-agendas.update', $agenda) }}" class="flex min-w-64 gap-2">
                                         @csrf
                                         @method('PATCH')

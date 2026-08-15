@@ -13,6 +13,12 @@ class SyncStatusPanelTest extends TestCase
 {
     use RefreshDatabase;
 
+    protected function setUp(): void
+    {
+        parent::setUp();
+        $this->fakeGoogleSheets();
+    }
+
     public function test_page_reload_renders_persisted_success_as_fresh_authoritative_status(): void
     {
         [$branch, $user] = $this->branchAndUser();

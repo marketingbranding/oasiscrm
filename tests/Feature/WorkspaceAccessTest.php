@@ -16,6 +16,12 @@ class WorkspaceAccessTest extends TestCase
 {
     use RefreshDatabase;
 
+    protected function setUp(): void
+    {
+        parent::setUp();
+        $this->fakeGoogleSheets();
+    }
+
     public function test_user_can_have_multiple_unique_branch_memberships(): void
     {
         [$user, $primary, $secondary] = $this->branchUser();

@@ -22,6 +22,12 @@ class OptimisticLockTest extends TestCase
 {
     use RefreshDatabase;
 
+    protected function setUp(): void
+    {
+        parent::setUp();
+        $this->fakeGoogleSheets();
+    }
+
     public function test_work_planner_status_update_succeeds_with_matching_token_and_conflicts_when_stale(): void
     {
         [$branch, $user] = $this->branchAndUser();

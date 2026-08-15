@@ -15,6 +15,12 @@ class SalesAccessRestrictionTest extends TestCase
 {
     use RefreshDatabase;
 
+    protected function setUp(): void
+    {
+        parent::setUp();
+        $this->fakeGoogleSheets();
+    }
+
     public function test_sales_can_access_only_primary_modules_and_required_shared_endpoints(): void
     {
         [$branch, , $sales] = $this->salesContext();

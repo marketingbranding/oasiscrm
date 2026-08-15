@@ -213,6 +213,7 @@ class ModuleMaintenanceTest extends TestCase
 
         OperationalMaintenanceSetting::whereKey(OperationalMaintenanceSetting::GLOBAL_ID)->update(['enabled' => false]);
         $this->setModule('database', false);
+        $this->fakeGoogleSheets();
         $this->actingAs($staff)->get(route('database.index'))->assertOk();
         $this->actingAs($this->user('superadmin'))->get(route('admin.maintenance.index'))->assertOk();
     }

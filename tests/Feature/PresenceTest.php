@@ -16,6 +16,12 @@ class PresenceTest extends TestCase
 {
     use RefreshDatabase;
 
+    protected function setUp(): void
+    {
+        parent::setUp();
+        $this->fakeGoogleSheets();
+    }
+
     public function test_authenticated_user_can_heartbeat_and_guest_cannot(): void
     {
         [$branch, $user] = $this->branchAndUser();

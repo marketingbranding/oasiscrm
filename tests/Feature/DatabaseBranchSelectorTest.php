@@ -12,6 +12,12 @@ class DatabaseBranchSelectorTest extends TestCase
 {
     use RefreshDatabase;
 
+    protected function setUp(): void
+    {
+        parent::setUp();
+        $this->fakeGoogleSheets();
+    }
+
     public function test_pusat_can_select_non_primary_database_branch_with_separate_get_and_sync_forms(): void
     {
         [$user, , $selected] = $this->pusatUser();

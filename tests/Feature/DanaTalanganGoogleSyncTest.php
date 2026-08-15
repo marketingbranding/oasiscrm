@@ -23,6 +23,7 @@ class DanaTalanganGoogleSyncTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
+        $this->fakeGoogleSheets();
         config([
             'services.google_sheets.dana_talangan_spreadsheet_id' => 'spreadsheet-id',
             'services.google_sheets.dana_talangan_sheet_name' => 'Talangan',

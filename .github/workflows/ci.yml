@@ -21,6 +21,7 @@ jobs:
     timeout-minutes: 20
     env:
       APP_ENV: testing
+      APP_URL: http://localhost
       CACHE_STORE: array
       DB_CONNECTION: sqlite
       DB_DATABASE: ':memory:'

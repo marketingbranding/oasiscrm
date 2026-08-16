@@ -1,8 +1,8 @@
 # Database Local Source-of-Truth Migration Plan
 
-Status: **PLANNED / NOT IMPLEMENTED**
+Status: **PHASE 1 FOUNDATION IMPLEMENTED / NO READ/WRITE CUTOVER**
 Audit baseline: `cef28361f33aaa532aed289a54b81c1e86f936d4`
-Scope: architecture audit and additive implementation design only. No schema, read path, write path, or Google retirement is included in this change.
+Scope: architecture audit plus additive Phase 1 schema foundation. No read path, write path, importer, or Google retirement is included in this change.
 
 ## 1. Executive Summary
 
@@ -471,7 +471,7 @@ Open decisions before Phase 1 migration:
 8. Implement local-first writes and optional Google bridge/outbox.
 9. Retire mirror paths only after rollback window and operational sign-off.
 
-**Recommended roadmap — not implemented.** This document does not create tables, commands, feature flags, importers, adapters, or production behavior.
+**Phase 1 foundation implemented.** This change creates only additive local tables, models, factories, and focused tests. It does not create commands, feature flags, importers, adapters, or production read/write behavior.
 
 ## Audit References
 
@@ -496,4 +496,4 @@ Relevant current code anchors include:
 - `database/migrations/2026_06_19_072000_create_kavlings_table.php`
 - `database/migrations/2026_08_10_000007_create_promos_table.php`
 
-No executable code was changed for this audit.
+Phase 1 executable foundation is implemented in additive migrations, models, factories, and focused tests; no runtime read/write path was changed.

@@ -35,7 +35,7 @@ Users, roles, permissions, invitations, branches, projects, assignments, leads, 
 
 `GoogleSheetsApiService` is still used by Database, Konsumen Progress, Dana Talangan, and optional Sales lifecycle flows. `SalesLeadSpreadsheetContract`, `SalesLeadSpreadsheetWriter`, and lifecycle sync services provide explicit branch workbook contracts where enabled. Google is not a universal source of truth: inspect each module before changing ownership or consistency assumptions.
 
-Recommended direction, not implemented: migrate remaining Google mirror/snapshot modules to normalized local data with explicit import/sync boundaries. Detailed audit and additive Phase 1 schema foundation: `docs/DATABASE_LOCAL_MIGRATION_PLAN.md` (**PHASE 1 FOUNDATION IMPLEMENTED / NO READ/WRITE CUTOVER**).
+Recommended direction, not implemented: migrate remaining Google mirror/snapshot modules to normalized local data with explicit import/sync boundaries. Detailed audit, Phase 1 schema foundation, and Phase 2 manual TSV paste reconciliation: `docs/DATABASE_LOCAL_MIGRATION_PLAN.md` (**PHASE 2 MANUAL PASTE IMPORT IMPLEMENTED / NO NORMAL READ/WRITE CUTOVER**).
 
 ## 3. Authorization and Scope
 

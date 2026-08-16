@@ -10,6 +10,7 @@ use App\Http\Controllers\Crm\CommentController;
 use App\Http\Controllers\Crm\CommentModerationController;
 use App\Http\Controllers\Crm\CommentThreadController;
 use App\Http\Controllers\Crm\ContentCalendarController;
+use App\Http\Controllers\Crm\ConsumerPasteImportController;
 use App\Http\Controllers\Crm\CoordinatorSalesLeadWorkspaceController;
 use App\Http\Controllers\Crm\DanaTalanganController;
 use App\Http\Controllers\Crm\DashboardController;
@@ -165,6 +166,11 @@ Route::middleware(['auth', 'active', 'verified', 'password.changed', 'operationa
     });
 
     Route::middleware('module.maintenance:consumer_progress')->group(function () {
+        Route::get('/consumer-import', [ConsumerPasteImportController::class, 'create'])->middleware('not.impersonating')->name('consumer-import.create');
+        Route::get('/consumer-import/projects', [ConsumerPasteImportController::class, 'projects'])->middleware('not.impersonating')->name('consumer-import.projects');
+        Route::post('/consumer-import/preview', [ConsumerPasteImportController::class, 'preview'])->middleware('not.impersonating')->name('consumer-import.preview');
+        Route::get('/consumer-import/{consumer_import_batch}', [ConsumerPasteImportController::class, 'show'])->middleware('not.impersonating')->name('consumer-import.show');
+        Route::post('/consumer-import/{consumer_import_batch}/confirm', [ConsumerPasteImportController::class, 'confirm'])->middleware('not.impersonating')->name('consumer-import.confirm');
         Route::get('/konsumen-progress', [KonsumenProgressController::class, 'index'])->middleware('permission:consumer_progress.view')->name('konsumen-progress.index');
         Route::get('/konsumen-progress/stage', [KonsumenProgressController::class, 'stage'])->middleware('permission:consumer_progress.view')->name('konsumen-progress.stage');
         Route::post('/konsumen-progress/sync', [KonsumenProgressController::class, 'sync'])->middleware('permission:consumer_progress.sync')->name('konsumen-progress.sync');

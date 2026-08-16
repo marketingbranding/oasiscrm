@@ -376,14 +376,15 @@ Import completion requires an accepted reconciliation report, not only a success
 
 ## 16. Rollout Phases
 
-1. **Foundation local schema** — additive tables, models, relationships, indexes, policies, and tests. No read/write cutover.
-2. **Legacy importer and reconciliation** — staged, idempotent Google/cache import with dry-run and human-review output.
-3. **Local read model / compatibility adapter** — read local plus compare legacy; preserve old UI contract.
-4. **Konsumen Progress local** — derive current stage from local stage events/read model; keep old sync for comparison.
-5. **Dashboard local** — switch one metric group at a time behind controlled fallback; compare KPI definitions and counts.
-6. **Local-first writes** — new consumer/application/stage writes local; optional Google bridge after transaction.
-7. **Google bridge/export only** — explicit export/reconciliation, no Google authority for local records.
-8. **Legacy mirror retirement** — only after retention, audit, reconciliation, rollback, and operational acceptance windows close.
+1. **Foundation local schema — IMPLEMENTED** — additive tables, models, relationships, indexes, factories, and tests. No read/write cutover.
+2. **Manual paste importer and reconciliation — IMPLEMENTED** — Superadmin-only TSV preview/import into dormant local tables. No Google API dependency, no scheduled import, and no normal operational read/write cutover.
+3. **Legacy importer and reconciliation** — staged, idempotent Google/cache import with dry-run and human-review output.
+4. **Local read model / compatibility adapter** — read local plus compare legacy; preserve old UI contract.
+5. **Konsumen Progress local** — derive current stage from local stage events/read model; keep old sync for comparison.
+6. **Dashboard local** — switch one metric group at a time behind controlled fallback; compare KPI definitions and counts.
+7. **Local-first writes** — new consumer/application/stage writes local; optional Google bridge after transaction.
+8. **Google bridge/export only** — explicit export/reconciliation, no Google authority for local records.
+9. **Legacy mirror retirement** — only after retention, audit, reconciliation, rollback, and operational acceptance windows close.
 
 Recommended flags only when a phase is implemented: `CONSUMER_LOCAL_READ_ENABLED`, `CONSUMER_LOCAL_WRITE_ENABLED`, `CONSUMER_LEGACY_COMPARE_ENABLED`. Do not add flags before their rollout semantics exist.
 
@@ -471,7 +472,7 @@ Open decisions before Phase 1 migration:
 8. Implement local-first writes and optional Google bridge/outbox.
 9. Retire mirror paths only after rollback window and operational sign-off.
 
-**Phase 1 foundation implemented.** This change creates only additive local tables, models, factories, and focused tests. It does not create commands, feature flags, importers, adapters, or production read/write behavior.
+**Phase 2 manual paste implemented.** This change adds only a Superadmin-only TSV migration tool writing dormant local tables. It does not change normal reads/writes, Dashboard, Konsumen Progress behavior, Google sync, or scheduled imports.
 
 ## Audit References
 

@@ -196,14 +196,36 @@ Before release, verify backup/restore readiness, migration order, scheduler regi
 - Native Vite/Rolldown Windows file locks can cause npm `EPERM`; stop processes and reinstall dependencies instead of forcing upgrades.
 - `vendor/bin/pint --test` may report legacy repository style issues; inspect changed files separately and do not reformat unrelated code.
 
-## 12. Current Technical Debt
+## 12. GitHub CI Baseline
+
+`.github/workflows/ci.yml` is the first CI workflow. It runs on pushes to `main`, pull requests targeting `main`, and manual `workflow_dispatch`. It has two read-only jobs with concurrency cancellation for superseded runs:
+
+- **PHP / Laravel** on Ubuntu with PHP 8.3, Composer lockfile install, ctype/fileinfo/GD/mbstring/PDO SQLite/SQLite3/XML/Zip extensions, generated local `APP_KEY`, config clear, Google credential absence assertion, Pint, `composer test`, and `composer audit`.
+- **Frontend** on Ubuntu with Node.js 22 LTS line, `npm ci`, `npm run build`, and `npm audit`.
+
+PHPUnit continues to use its configured SQLite `:memory:` database. CI creates no `database/database.sqlite`, Google service-account JSON, production database, production `APP_KEY`, or custom secret. Google isolation remains in tests and `tests/TestCase.php`.
+
+CI does not deploy, publish artifacts, run browser/E2E coverage, upload coverage, run dependency update automation, or mutate lockfiles. Those are future improvements, not current automation.
+
+Local equivalent gates:
+
+```bash
+vendor/bin/pint --test
+composer test
+composer audit
+npm ci
+npm run build
+npm audit
+```
+
+## 13. Current Technical Debt
 
 Verified debt and boundaries:
 
 - Database remains a Google spreadsheet cache/sync and write integration rather than a fully normalized local domain.
 - Konsumen Progress remains a replaceable Google sheet snapshot with separate sync/status infrastructure.
 - Dana Talangan retains Google integration and a local cache boundary.
-- Deployment is documented for Hostinger but release execution remains an operational workflow; repository does not provide a verified GitHub CI pipeline.
+- Deployment is documented for Hostinger but release execution remains an operational workflow; GitHub CI validates code but does not deploy.
 - Some legacy UI views and dialogs retain older styling/focus patterns while newer CRM primitives exist. Improve only in scoped UI work.
 - OpenSpout is installed but unused; PhpSpreadsheet is the current XLSX implementation. Removing or switching it requires dependency audit and migration scope.
 
@@ -211,7 +233,7 @@ Do not classify local-first Sales Agenda, evidence, users, comments, or notifica
 
 ## 13. Recommended Roadmap — Not Implemented
 
-1. Add GitHub CI for PHP tests, Pint, Vite build, and dependency audits.
+1. Extend GitHub CI with browser/E2E coverage, coverage reporting, dependency update automation, and scheduled security scans.
 2. Define and execute Database local normalization with explicit migration/backfill and remote compatibility period.
 3. Define normalized Proses Konsumen workflow after reconciling current Konsumen Progress tabs, ownership, and reporting requirements.
 

@@ -270,6 +270,31 @@ vendor/bin/pint --test
 vendor/bin/pint
 ```
 
+## Continuous Integration
+
+GitHub Actions workflow: `.github/workflows/ci.yml`.
+
+It runs on pushes to `main`, pull requests targeting `main`, and manual `workflow_dispatch`. Two jobs run in parallel:
+
+- **PHP / Laravel**: PHP 8.3, Composer lockfile install, Laravel test environment, Google credential absence check, Pint, `composer test`, and `composer audit`.
+- **Frontend**: Node.js 22 LTS line, `npm ci`, Vite production build, and `npm audit`.
+
+Workflow permissions are read-only. CI requires no custom secrets, production database, production `APP_KEY`, Google service-account JSON, Hostinger credentials, or API tokens. PHPUnit uses its configured SQLite `:memory:` database and test isolation remains responsible for Google-dependent services.
+
+Local equivalents:
+
+```bash
+composer install --no-interaction --prefer-dist --no-progress
+vendor/bin/pint --test
+composer test
+composer audit
+npm ci
+npm run build
+npm audit
+```
+
+Outdated runs for the same ref are cancelled. CI does not deploy, publish artifacts, run browser tests, or mutate dependencies.
+
 ## Frontend Build and Security Audits
 
 ```bash
@@ -447,7 +472,7 @@ Before commit:
 
 Recommended future roadmap — not implemented:
 
-1. Add GitHub CI for tests, build, Pint, and audits.
+1. Extend GitHub CI with browser/E2E coverage, coverage reporting, dependency update automation, and scheduled security scans.
 2. Migrate remaining Database Google mirror paths toward normalized local data.
 3. Build a normalized Proses Konsumen workflow after validating current Konsumen Progress boundaries.
 

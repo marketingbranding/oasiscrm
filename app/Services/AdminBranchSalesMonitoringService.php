@@ -62,7 +62,7 @@ class AdminBranchSalesMonitoringService
         });
 
         $agendas = $this->agendaQuery($scope, $period, $salesIds, $filters, $projectId)
-            ->with(['owner:id,name', 'salesProject:id,project_name'])
+            ->with(['owner:id,name', 'salesProject:id,project_name', 'evidence'])
             ->orderByDesc('scheduled_date')->orderByDesc('id')
             ->paginate(20, ['*'], 'agenda_page')->withQueryString();
 

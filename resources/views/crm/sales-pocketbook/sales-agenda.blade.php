@@ -3,6 +3,7 @@
 @section('title', 'Agenda Saya - Oasis CRM')
 
 @section('content')
+@php($canCleanup = auth()->user()->hasPrimaryRole('superadmin') || (app(\App\Services\ImpersonationService::class)->isActive(request()) && app(\App\Services\ImpersonationService::class)->originalUser(request())?->isSuperadmin()))
 <div class="space-y-4">
     <x-crm.page-header variant="canonical" eyebrow="Workspace Pribadi" title="Agenda Saya" description="Catat dan selesaikan agenda sales Anda.">
         <x-slot:actions>
@@ -63,6 +64,9 @@
     @endif
 
     <x-crm.section id="agenda-saya" title="Daftar Agenda Saya">
+        @if($canCleanup)
+            <p class="mb-3 text-sm">Superadmin: hapus agenda kanonik beserta semua bukti lokal hanya jika belum masuk arsip.</p>
+        @endif
         <div class="crm-table-scroll">
             <table class="crm-data-table">
                 <thead><tr><th>Tanggal</th><th>Kategori Aktivitas</th><th>Agenda</th><th>Lokasi</th><th>Hasil</th><th>Status</th><th>Aksi</th></tr></thead>
@@ -88,6 +92,9 @@
                             </td>
                             <td><x-crm.status-badge :status="$agenda->status">{{ ucfirst($agenda->status) }}</x-crm.status-badge></td>
                             <td>
+                                @if($canCleanup)
+                                    <x-crm.sales-agenda-cleanup :agenda="$agenda" :can-cleanup="$canCleanup" />
+                                @endif
                                 @unless($agenda->isFinished())
                                     <form method="POST" enctype="multipart/form-data" action="{{ route('sales-agendas.evidence.store', $agenda) }}" class="mb-2">
                                         @csrf

@@ -55,7 +55,7 @@ class CoordinatorSalesMonitoringService
             ];
         });
         $agendas = $this->agendaBase($salesIds, $scope, $period)
-            ->with(['owner:id,name', 'branch:id,name', 'salesProject:id,project_name'])
+            ->with(['owner:id,name', 'branch:id,name', 'salesProject:id,project_name', 'evidence'])
             ->orderByDesc('scheduled_date')->orderByDesc('id');
         $leads = $this->leadBase($salesIds, $scope)
             ->whereDate('lead_date', '>=', $period['from']->toDateString())

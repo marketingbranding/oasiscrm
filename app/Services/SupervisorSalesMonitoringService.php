@@ -96,7 +96,7 @@ class SupervisorSalesMonitoringService
         });
 
         $agendas = ($salesId || ! $paginate)
-            ? $this->agendaBase($salesIds, $period, $scope)->with(['owner:id,name', 'branch:id,name', 'salesProject:id,project_name'])->orderByDesc('scheduled_date')->orderByDesc('id')
+            ? $this->agendaBase($salesIds, $period, $scope)->with(['owner:id,name', 'branch:id,name', 'salesProject:id,project_name', 'evidence'])->orderByDesc('scheduled_date')->orderByDesc('id')
             : null;
         $leads = ($salesId || ! $paginate)
             ? $this->leadBase($salesIds, $period, $scope)->with(['sales:id,name', 'branch:id,name', 'project:id,project_name', 'leadSource:id,name'])->orderByDesc('lead_date')->orderByDesc('id')

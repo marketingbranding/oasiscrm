@@ -3,11 +3,13 @@
 namespace App\Http\Controllers\Crm;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Crm\CleanupSalesAgendaEvidenceRequest;
 use App\Http\Requests\Crm\StoreSalesAgendaEvidenceRequest;
 use App\Models\ActivityLog;
 use App\Models\ContentItem;
 use App\Models\SalesAgendaEvidence;
 use App\Services\SalesAgendaEvidenceAuthorizationService;
+use App\Services\SalesAgendaEvidenceCleanupService;
 use App\Services\SalesAgendaEvidenceImageService;
 use App\Support\SalesAgendaEvidenceRules;
 use Illuminate\Http\Request;
@@ -54,5 +56,12 @@ class SalesAgendaEvidenceController extends Controller
         ActivityLog::create(['causer_id' => $request->user()->id, 'subject_type' => SalesAgendaEvidence::class, 'subject_id' => $evidence->id, 'event' => 'agenda_evidence_deleted_before_done', 'description' => 'Bukti foto Agenda Sales dihapus sebelum Agenda selesai.', 'properties' => ['agenda_id' => $agenda->id, 'evidence_id' => $evidence->id]]);
 
         return back()->with('success', 'Bukti foto dihapus.');
+    }
+
+    public function cleanup(CleanupSalesAgendaEvidenceRequest $request, ContentItem $agenda, SalesAgendaEvidenceCleanupService $cleanup)
+    {
+        $cleanup->cleanup($request, $agenda, $request->validated('reason'));
+
+        return back()->with('success', 'Agenda Sales dan bukti lokal dibersihkan.');
     }
 }

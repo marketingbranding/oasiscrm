@@ -95,6 +95,7 @@ Route::middleware(['auth', 'active', 'verified', 'password.changed', 'operationa
         Route::post('/buku-saku-sales/agendas/{agenda}/evidence', [SalesAgendaEvidenceController::class, 'store'])->name('sales-agendas.evidence.store');
         Route::get('/buku-saku-sales/agendas/{agenda}/evidence/{evidence}', [SalesAgendaEvidenceController::class, 'show'])->name('sales-agendas.evidence.show');
         Route::delete('/buku-saku-sales/agendas/{agenda}/evidence/{evidence}', [SalesAgendaEvidenceController::class, 'destroy'])->name('sales-agendas.evidence.destroy');
+        Route::match(['post', 'delete'], '/buku-saku-sales/agendas/{agenda}/cleanup', [SalesAgendaEvidenceController::class, 'cleanup'])->name('sales-agendas.cleanup');
         Route::get('/buku-saku-sales/agenda-evidence-archives', [SalesAgendaEvidenceArchiveController::class, 'index'])->name('sales-agendas.evidence-archives.index');
         Route::post('/buku-saku-sales/agenda-evidence-archives/build', [SalesAgendaEvidenceArchiveController::class, 'build'])->name('sales-agendas.evidence-archives.build');
         Route::get('/buku-saku-sales/agenda-evidence-archives/{archive}/download', [SalesAgendaEvidenceArchiveController::class, 'download'])->name('sales-agendas.evidence-archives.download');

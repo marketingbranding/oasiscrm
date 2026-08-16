@@ -19,6 +19,13 @@ jobs:
     name: PHP / Laravel
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    env:
+      APP_ENV: testing
+      CACHE_STORE: array
+      DB_CONNECTION: sqlite
+      DB_DATABASE: ':memory:'
+      QUEUE_CONNECTION: sync
+      SESSION_DRIVER: array
     steps:
       - name: Checkout
         uses: actions/checkout@v4

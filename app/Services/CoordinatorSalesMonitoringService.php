@@ -20,6 +20,19 @@ class CoordinatorSalesMonitoringService
         private readonly WorkspaceAccessService $workspaceAccess,
     ) {}
 
+    public function canViewAgenda(User $actor, ContentItem $agenda): bool
+    {
+        if (! $this->coordinatorTeam->isCoordinator($actor)
+            || $agenda->item_type !== 'agenda'
+            || $agenda->agenda_type !== ContentItem::SALES_AGENDA_TYPE
+            || ! in_array((int) $agenda->branch_id, $this->scope($actor)['branch_ids'], true)
+            || ! in_array((int) $agenda->sales_project_id, $this->scope($actor)['project_ids'], true)) {
+            return false;
+        }
+
+        return $this->salesTeamScope->contains($actor, (int) $agenda->owner_user_id);
+    }
+
     public function resolve(User $actor, array $filters, bool $paginate = true): array
     {
         abort_unless($this->coordinatorTeam->isCoordinator($actor), 403);

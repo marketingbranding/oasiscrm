@@ -11,6 +11,7 @@ class SalesAgendaEvidenceAuthorizationService
 {
     public function __construct(
         private readonly CommentableAccessService $agendaAccess,
+        private readonly CoordinatorSalesMonitoringService $coordinatorMonitoring,
         private readonly WorkspaceAccessService $workspaceAccess,
     ) {}
 
@@ -36,7 +37,11 @@ class SalesAgendaEvidenceAuthorizationService
                 && $this->workspaceAccess->canViewBranch($user, (int) $agenda->branch_id);
         }
 
-        return ($user->hasPrimaryRole('sales_coordinator') || $user->hasPrimaryRole('supervisor'))
+        if ($user->hasPrimaryRole('sales_coordinator')) {
+            return $this->coordinatorMonitoring->canViewAgenda($user, $agenda);
+        }
+
+        return $user->hasPrimaryRole('supervisor')
             && $this->agendaAccess->canView($user, $agenda);
     }
 

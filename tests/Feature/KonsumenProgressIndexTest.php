@@ -3,10 +3,18 @@
 namespace Tests\Feature;
 
 use App\Models\Branch;
+use App\Models\ConsumerApplication;
+use App\Models\ConsumerBankProcess;
+use App\Models\ConsumerStageEvent;
+use App\Models\Customer;
+use App\Models\Kavling;
 use App\Models\KonsumenProgressSheetRow;
 use App\Models\KonsumenProgressSyncStatus;
+use App\Models\LeadMaster;
 use App\Models\Role;
 use App\Models\User;
+use App\Services\KonsumenPipelineService;
+use App\Services\KonsumenProgressReadService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -18,8 +26,8 @@ class KonsumenProgressIndexTest extends TestCase
     {
         $role = Role::firstOrCreate(['slug' => $roleSlug], ['name' => $roleSlug, 'is_superadmin' => $roleSlug === 'superadmin']);
         $branch = Branch::create([
-            'name' => 'Jepara',
-            'code' => 'JPR',
+            'name' => 'Jepara '.str()->random(4),
+            'code' => 'J'.str()->upper(str()->random(2)),
             'is_active' => true,
             'sheet_id' => $withSheet ? 'sheet-jepara' : null,
         ]);
@@ -171,5 +179,99 @@ class KonsumenProgressIndexTest extends TestCase
         $response = $this->actingAs($user)->get(route('konsumen-progress.index'));
 
         $response->assertOk()->assertViewHas('isStale', true);
+    }
+
+    public function test_default_source_remains_legacy_even_when_local_application_exists(): void
+    {
+        [$branch, $user] = $this->branchAndUser();
+        $this->pipelineCustomer($branch, 'A-01', 'Legacy Budi', 'akad');
+        $this->localApplication($branch, 'Local Budi', 'bast');
+
+        $response = $this->actingAs($user)->get(route('konsumen-progress.index'));
+
+        $response->assertOk()->assertViewHas('readSource', 'legacy')->assertSee('Legacy Budi')->assertDontSee('Local Budi');
+    }
+
+    public function test_local_mode_renders_local_application_and_stage_counts_once(): void
+    {
+        config(['oasis.consumer_progress_read_source' => 'local']);
+        [$branch, $user] = $this->branchAndUser();
+        $this->localApplication($branch, 'Local Budi', 'akad');
+        $this->localApplication($branch, 'Local Siti', 'bast');
+
+        $response = $this->actingAs($user)->get(route('konsumen-progress.index'));
+
+        $response->assertOk()->assertViewHas('readSource', 'local')->assertSee('Local Budi')->assertSee('Local Siti');
+        $this->assertCount(1, $response->viewData('pipeline')['akad']);
+        $this->assertCount(1, $response->viewData('pipeline')['bast']);
+    }
+
+    public function test_local_read_failure_falls_back_to_legacy_and_logs_warning(): void
+    {
+        config(['oasis.consumer_progress_read_source' => 'local']);
+        [$branch, $user] = $this->branchAndUser();
+        $this->pipelineCustomer($branch, 'A-01', 'Legacy Budi', 'akad');
+        $reader = \Mockery::mock(KonsumenProgressReadService::class);
+        $reader->shouldReceive('read')->once()->andReturn(['pipeline' => app(KonsumenPipelineService::class)->buildPipeline($branch), 'source' => 'legacy', 'fallback_used' => true]);
+        $this->app->instance(KonsumenProgressReadService::class, $reader);
+
+        $this->actingAs($user)->get(route('konsumen-progress.index'))->assertOk()->assertSee('Legacy Budi')->assertViewHas('fallbackUsed', true);
+    }
+
+    public function test_local_mode_keeps_empty_result_empty_without_legacy_fallback(): void
+    {
+        config(['oasis.consumer_progress_read_source' => 'local']);
+        [$branch, $user] = $this->branchAndUser();
+        $this->pipelineCustomer($branch, 'A-01', 'Legacy Budi', 'akad');
+
+        $response = $this->actingAs($user)->get(route('konsumen-progress.index'));
+
+        $response->assertOk()->assertViewHas('readSource', 'local')->assertViewHas('pipeline', fn (array $pipeline) => array_sum(array_map('count', $pipeline)) === 0)->assertDontSee('Legacy Budi');
+    }
+
+    public function test_local_mode_isolates_consumer_applications_by_branch(): void
+    {
+        config(['oasis.consumer_progress_read_source' => 'local']);
+        [$branch, $user] = $this->branchAndUser();
+        [$otherBranch] = $this->branchAndUser();
+        $this->localApplication($branch, 'Branch A Consumer', 'akad');
+        $this->localApplication($otherBranch, 'Branch B Consumer', 'akad');
+
+        $response = $this->actingAs($user)->get(route('konsumen-progress.index'));
+
+        $response->assertOk()->assertSee('Branch A Consumer')->assertDontSee('Branch B Consumer');
+    }
+
+    public function test_local_adapter_isolates_consumer_applications_by_project(): void
+    {
+        config(['oasis.consumer_progress_read_source' => 'local']);
+        [$branch] = $this->branchAndUser();
+        $projectA = LeadMaster::create(['branch_id' => $branch->id, 'project_name' => 'Project A', 'is_active' => true]);
+        $projectB = LeadMaster::create(['branch_id' => $branch->id, 'project_name' => 'Project B', 'is_active' => true]);
+        $this->localApplicationForProject($branch, $projectA, 'Project A Consumer', 'akad');
+        $this->localApplicationForProject($branch, $projectB, 'Project B Consumer', 'akad');
+
+        $result = app(KonsumenProgressReadService::class)->read($branch, $projectA);
+        $items = collect($result['pipeline'])->flatten(1);
+
+        $this->assertTrue($items->contains('nama', 'Project A Consumer'));
+        $this->assertFalse($items->contains('nama', 'Project B Consumer'));
+    }
+
+    private function localApplication(Branch $branch, string $name, string $stage): ConsumerApplication
+    {
+        $project = LeadMaster::firstOrCreate(['branch_id' => $branch->id, 'project_name' => 'Oasis Jepara'], ['is_active' => true]);
+
+        return $this->localApplicationForProject($branch, $project, $name, $stage);
+    }
+
+    private function localApplicationForProject(Branch $branch, LeadMaster $project, string $name, string $stage): ConsumerApplication
+    {
+        $kavling = Kavling::create(['project_id' => $project->id, 'kavling_code' => 'LOCAL-'.str()->random(5), 'name' => $name]);
+        $application = ConsumerApplication::create(['customer_id' => Customer::create(['name' => $name, 'phone' => '0812345678'])->id, 'branch_id' => $branch->id, 'project_id' => $project->id, 'kavling_id' => $kavling->id, 'application_status' => 'active', 'current_stage' => $stage, 'booking_date' => '2026-08-01']);
+        ConsumerStageEvent::create(['consumer_application_id' => $application->id, 'stage' => $stage, 'status' => 'current', 'occurred_at' => now()]);
+        ConsumerBankProcess::create(['consumer_application_id' => $application->id, 'bank_name' => 'BCA', 'status' => 'submitted', 'submitted_at' => now()]);
+
+        return $application;
     }
 }

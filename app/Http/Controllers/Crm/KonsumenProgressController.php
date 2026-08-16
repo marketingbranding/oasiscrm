@@ -7,6 +7,7 @@ use App\Models\Branch;
 use App\Models\KonsumenProgressSyncStatus;
 use App\Services\CollaborationNotificationService;
 use App\Services\KonsumenPipelineService;
+use App\Services\KonsumenProgressReadService;
 use App\Services\KonsumenProgressSyncService;
 use App\Services\OrganizationScopeService;
 use App\Services\SyncResponseService;
@@ -19,6 +20,7 @@ class KonsumenProgressController extends Controller
 {
     public function __construct(
         private readonly KonsumenPipelineService $pipelineService,
+        private readonly KonsumenProgressReadService $progressRead,
         private readonly WorkspaceAccessService $workspaceAccess,
         private readonly CollaborationNotificationService $notifications,
         private readonly SyncResponseService $syncResponses,
@@ -46,8 +48,13 @@ class KonsumenProgressController extends Controller
         $isStale = $syncStatus?->status !== 'success' || ! $syncStatus?->finished_at
             || $syncStatus->finished_at->lt(now()->subMinutes((int) config('services.google_sheets.cache_stale_minutes', 30)));
 
-        if ($selectedBranch && $selectedBranch->sheet_id) {
-            $pipeline = $this->pipelineService->buildPipeline($selectedBranch);
+        $readSource = 'legacy';
+        $fallbackUsed = false;
+        if ($selectedBranch && ($selectedBranch->sheet_id || config('oasis.consumer_progress_read_source') === 'local')) {
+            $read = $this->progressRead->read($selectedBranch);
+            $pipeline = $read['pipeline'];
+            $readSource = $read['source'];
+            $fallbackUsed = $read['fallback_used'];
             if (array_sum(array_map('count', $pipeline)) === 0) {
                 $errors[] = 'Data lokal belum tersedia. Klik Sync Sekarang terlebih dahulu.';
             }
@@ -55,7 +62,7 @@ class KonsumenProgressController extends Controller
 
         $canSync = $user->hasPermission('consumer_progress.sync') && $selectedBranch && $this->workspaceAccess->canSyncBranch($user, $selectedBranch);
 
-        return view('crm.konsumen-progress.index', compact('branches', 'selectedBranch', 'selectedBranchId', 'pipeline', 'errors', 'syncStatus', 'isStale', 'canSync'));
+        return view('crm.konsumen-progress.index', compact('branches', 'selectedBranch', 'selectedBranchId', 'pipeline', 'errors', 'syncStatus', 'isStale', 'canSync', 'readSource', 'fallbackUsed'));
     }
 
     public function sync(Request $request)
@@ -118,7 +125,7 @@ class KonsumenProgressController extends Controller
 
         $branch = $this->resolveBranch($request);
         abort_unless(! $branch || in_array((int) $branch->id, $this->organizationScope->branchIds($request->user(), 'consumer_progress'), true), 403);
-        if (! $branch || ! $branch->sheet_id) {
+        if (! $branch || (! $branch->sheet_id && config('oasis.consumer_progress_read_source') !== 'local')) {
             return response()->json([
                 'ok' => false,
                 'items' => [],
@@ -127,7 +134,8 @@ class KonsumenProgressController extends Controller
             ], 422);
         }
 
-        $items = $this->pipelineService->customersForStage($branch, $stageKey);
+        $read = $this->progressRead->read($branch);
+        $items = $read['pipeline'][$stageKey] ?? [];
 
         return response()->json([
             'ok' => true,

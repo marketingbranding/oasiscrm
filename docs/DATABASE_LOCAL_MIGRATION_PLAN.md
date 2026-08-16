@@ -1,6 +1,6 @@
 # Database Local Source-of-Truth Migration Plan
 
-Status: **PHASE 3 READ COMPARISON IMPLEMENTED / NO OPERATIONAL READ/WRITE CUTOVER**
+Status: **PHASE 4 LOCAL READ FOUNDATION IMPLEMENTED / DEFAULT LEGACY / LOCAL MODE OPT-IN / NO WRITE CUTOVER**
 Audit baseline: `cef28361f33aaa532aed289a54b81c1e86f936d4`
 Scope: architecture audit, additive Phase 1 schema foundation, Phase 2 manual paste import, and Phase 3 read comparison. No operational read/write cutover or Google retirement is included.
 
@@ -502,3 +502,5 @@ Relevant current code anchors include:
 - `database/migrations/2026_08_10_000007_create_promos_table.php`
 
 Phase 1 executable foundation is implemented in additive migrations, models, factories, and focused tests; no runtime read/write path was changed.
+
+**Phase 4 local read foundation implemented.** Konsumen Progress now has one read adapter with `legacy` as default and explicit `CONSUMER_PROGRESS_READ_SOURCE=local` opt-in. Local reads use eager-loaded normalized application data, canonical stages, and deterministic latest-bank selection. Local read failure falls back to legacy with sanitized branch-scoped warning logging. Empty local results remain empty in local mode. No write cutover, Dashboard cutover, Database cutover, Google retirement, or new schema migration is included.

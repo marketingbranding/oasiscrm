@@ -35,7 +35,7 @@ Users, roles, permissions, invitations, branches, projects, assignments, leads, 
 
 `GoogleSheetsApiService` is still used by Database, Konsumen Progress, Dana Talangan, and optional Sales lifecycle flows. `SalesLeadSpreadsheetContract`, `SalesLeadSpreadsheetWriter`, and lifecycle sync services provide explicit branch workbook contracts where enabled. Google is not a universal source of truth: inspect each module before changing ownership or consistency assumptions.
 
-Recommended direction, not implemented: migrate remaining Google mirror/snapshot modules to normalized local data with explicit import/sync boundaries. Detailed audit, Phase 1 schema foundation, Phase 2 manual TSV paste reconciliation, and Phase 3 read comparison: `docs/DATABASE_LOCAL_MIGRATION_PLAN.md` (**PHASE 3 READ COMPARISON IMPLEMENTED / NO OPERATIONAL READ/WRITE CUTOVER**). The Superadmin-only `consumer-comparison.index` page compares cached legacy snapshot data with dormant local consumer tables; it does not change operational source of truth.
+Recommended direction, not implemented: migrate remaining Google mirror/snapshot modules to normalized local data with explicit import/sync boundaries. Detailed audit, Phase 1 schema foundation, Phase 2 manual TSV paste reconciliation, Phase 3 read comparison, and Phase 4 local read foundation: `docs/DATABASE_LOCAL_MIGRATION_PLAN.md` (**LOCAL READ FOUNDATION IMPLEMENTED / DEFAULT LEGACY / LOCAL MODE OPT-IN / NO WRITE CUTOVER**). Konsumen Progress uses one read adapter; `CONSUMER_PROGRESS_READ_SOURCE=local` is an explicit deployment override, while local failures fall back to cached legacy data. The Superadmin-only `consumer-comparison.index` page remains diagnostic and read-only.
 
 ## 3. Authorization and Scope
 

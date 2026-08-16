@@ -87,7 +87,7 @@
 
 <script>window.__kpItems = @json($allItemsFlat);</script>
 
-    @if($selectedBranch && $selectedBranch->sheet_id)
+    @if($selectedBranch && ($selectedBranch->sheet_id || $readSource === 'local'))
     <div x-data="{
         stage: '{{ $defaultStage }}',
         searchQuery: '',

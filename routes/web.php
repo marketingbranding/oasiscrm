@@ -9,6 +9,7 @@ use App\Http\Controllers\Crm\ChangelogController;
 use App\Http\Controllers\Crm\CommentController;
 use App\Http\Controllers\Crm\CommentModerationController;
 use App\Http\Controllers\Crm\CommentThreadController;
+use App\Http\Controllers\Crm\ConsumerComparisonController;
 use App\Http\Controllers\Crm\ConsumerPasteImportController;
 use App\Http\Controllers\Crm\ContentCalendarController;
 use App\Http\Controllers\Crm\CoordinatorSalesLeadWorkspaceController;
@@ -166,6 +167,7 @@ Route::middleware(['auth', 'active', 'verified', 'password.changed', 'operationa
     });
 
     Route::middleware('module.maintenance:consumer_progress')->group(function () {
+        Route::get('/consumer-comparison', [ConsumerComparisonController::class, 'index'])->middleware('not.impersonating')->name('consumer-comparison.index');
         Route::get('/consumer-import', [ConsumerPasteImportController::class, 'create'])->middleware('not.impersonating')->name('consumer-import.create');
         Route::get('/consumer-import/projects', [ConsumerPasteImportController::class, 'projects'])->middleware('not.impersonating')->name('consumer-import.projects');
         Route::post('/consumer-import/preview', [ConsumerPasteImportController::class, 'preview'])->middleware('not.impersonating')->name('consumer-import.preview');

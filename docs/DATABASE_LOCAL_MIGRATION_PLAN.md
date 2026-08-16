@@ -1,8 +1,8 @@
 # Database Local Source-of-Truth Migration Plan
 
-Status: **PHASE 1 FOUNDATION IMPLEMENTED / NO READ/WRITE CUTOVER**
+Status: **PHASE 3 READ COMPARISON IMPLEMENTED / NO OPERATIONAL READ/WRITE CUTOVER**
 Audit baseline: `cef28361f33aaa532aed289a54b81c1e86f936d4`
-Scope: architecture audit plus additive Phase 1 schema foundation. No read path, write path, importer, or Google retirement is included in this change.
+Scope: architecture audit, additive Phase 1 schema foundation, Phase 2 manual paste import, and Phase 3 read comparison. No operational read/write cutover or Google retirement is included.
 
 ## 1. Executive Summary
 
@@ -473,6 +473,10 @@ Open decisions before Phase 1 migration:
 9. Retire mirror paths only after rollback window and operational sign-off.
 
 **Phase 2 manual paste implemented.** This change adds only a Superadmin-only TSV migration tool writing dormant local tables. It does not change normal reads/writes, Dashboard, Konsumen Progress behavior, Google sync, or scheduled imports.
+
+**Phase 3 read comparison implemented.** `ConsumerReadComparisonService` compares the cached legacy Konsumen Progress snapshot with existing local consumer/application tables for an explicitly selected branch and project. The diagnostic page is Superadmin-only, read-only, uses stable legacy identity mappings first, reports coverage and field differences, and does not change any operational source of truth. No operational read cutover, normal write cutover, schema migration, Google behavior, Dashboard behavior, Database behavior, or Konsumen Progress behavior is included.
+
+Phase 3 compares identity, normalized phone, branch/project context, Sales, Kavling, canonical stage, booking date, Akad date, bank, and bank status. Legacy application status is excluded because the current snapshot does not prove equivalent semantics. Raw spreadsheet fields, sensitive identifiers, documents, financial values, and inferred business states are excluded. Legacy rows without a shared stable identity remain unmatched rather than being matched by name. Latest bank process is selected by submitted date, then updated date; ties follow existing row order.
 
 ## Audit References
 

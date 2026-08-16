@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Models\ActivityLog;
 use App\Models\Branch;
 use App\Models\ConsumerApplication;
 use App\Models\Customer;
@@ -77,6 +78,30 @@ class ConsumerPasteImportTest extends TestCase
         $this->assertSame(1, $second->warning_rows);
         $this->assertSame(1, $second->review_rows);
         $this->assertSame(1, $second->invalid_rows);
+    }
+
+    public function test_confirm_reconciles_mixed_rows_without_importing_review_or_invalid_rows(): void
+    {
+        [$branch, $project] = $this->context();
+        $actor = $this->admin();
+        $input = "Nama Konsumen\tNo HP\tPromo\tTahap\tExternal ID\nReady\t081231\t\t\tREADY-1\nWarning\t081232\tMissing Promo\t\tWARN-1\nReview\t\t\tTahap Baru\tREVIEW-1\nInvalid\t081234\textra\t\tINVALID-1\textra";
+        $batch = app(ConsumerPasteImportService::class)->createBatch($actor, $branch, $project, $input);
+
+        $result = app(ConsumerPasteImportService::class)->import($batch, $actor);
+        $rows = $result['batch']->rows()->orderBy('line_number')->get();
+
+        $this->assertSame(['IMPORTED', 'IMPORTED', 'SKIPPED', 'SKIPPED'], $rows->pluck('status')->all());
+        $this->assertSame(1, $result['warning']);
+        $this->assertSame(1, $result['review']);
+        $this->assertSame(1, $result['invalid']);
+        $this->assertSame(2, $result['created_applications']);
+        $this->assertSame(2, ConsumerApplication::count());
+        $this->assertDatabaseHas('activity_log', [
+            'event' => 'consumer_legacy_paste_import',
+        ]);
+        $log = ActivityLog::where('event', 'consumer_legacy_paste_import')->latest('id')->firstOrFail();
+        $this->assertSame(1, $log->properties['invalid']);
+        $this->assertSame(1, $log->properties['warning']);
     }
 
     public function test_import_creates_local_customer_application_identity_and_is_idempotent(): void

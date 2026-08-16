@@ -131,8 +131,9 @@ class ConsumerPasteImportService
                     continue;
                 }
                 if (in_array($row->status, ['INVALID', 'NEEDS_REVIEW'], true)) {
+                    $originalStatus = $row->status;
                     $row->update(['status' => 'SKIPPED']);
-                    $row->status === 'INVALID' ? $invalid++ : $review++;
+                    $originalStatus === 'INVALID' ? $invalid++ : $review++;
 
                     continue;
                 }

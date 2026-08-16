@@ -10,6 +10,7 @@ use App\Models\DatabaseSheetRecord;
 use App\Models\DatabaseSheetSyncStatus;
 use App\Models\KonsumenProgressSheetRow;
 use App\Models\LeadMaster;
+use App\Services\DashboardConsumerMetricsService;
 use App\Services\KonsumenProgressSyncService;
 use App\Services\SalesWeeklyMetricsService;
 use App\Services\WorkspaceAccessService;
@@ -21,6 +22,7 @@ class DashboardController extends Controller
     public function __construct(
         private readonly WorkspaceAccessService $workspaceAccess,
         private readonly SalesWeeklyMetricsService $weeklyMetrics,
+        private readonly DashboardConsumerMetricsService $consumerMetrics,
     ) {}
 
     public function index(Request $request)
@@ -64,6 +66,10 @@ class DashboardController extends Controller
         $dashboardSyncStatus = $selectedBranchId ? DatabaseSheetSyncStatus::where('branch_id', $selectedBranchId)->first() : null;
         $canSyncDatabase = $user->hasPermission('database.sync') && $branch && $this->workspaceAccess->canSyncBranch($user, $branch);
         $konsumenProgress = $this->getKonsumenProgress($selectedBranchId);
+        $localConsumerMetrics = $this->consumerMetrics->local($selectedBranchId, $branches->pluck('id')->all());
+        if ($localConsumerMetrics !== null) {
+            $konsumenProgress = $localConsumerMetrics['metrics'];
+        }
         $salesWeekly = null;
         $salesReminders = null;
         if ($user->isSales()) {

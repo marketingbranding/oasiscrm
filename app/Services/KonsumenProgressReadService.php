@@ -15,9 +15,9 @@ class KonsumenProgressReadService
     ) {}
 
     /** @return array{pipeline: array<string, array<int, array<string, mixed>>>, source: string, fallback_used: bool} */
-    public function read(Branch $branch, ?LeadMaster $project = null): array
+    public function read(Branch $branch, ?LeadMaster $project = null, ?string $sourceOverride = null): array
     {
-        $source = config('oasis.consumer_progress_read_source', 'legacy');
+        $source = $sourceOverride ?? config('oasis.consumer_progress_read_source', 'legacy');
         if ($source !== 'local') {
             return ['pipeline' => $this->legacy->buildPipeline($branch), 'source' => 'legacy', 'fallback_used' => false];
         }

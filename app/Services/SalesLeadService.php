@@ -97,6 +97,26 @@ class SalesLeadService
         });
     }
 
+    public function delete(SalesLead $lead, User $actor): void
+    {
+        if ($lead->consumerLinks()->exists() || $lead->consumer_converted_at !== null || filled($lead->linked_consumer_reference)) {
+            throw new \DomainException('Lead ini sudah terhubung ke data konsumen dan tidak dapat dihapus.');
+        }
+
+        DB::transaction(function () use ($lead): void {
+            $locked = SalesLead::query()->lockForUpdate()->findOrFail($lead->id);
+            if ($locked->consumerLinks()->exists() || $locked->consumer_converted_at !== null || filled($locked->linked_consumer_reference)) {
+                throw new \DomainException('Lead ini sudah terhubung ke data konsumen dan tidak dapat dihapus.');
+            }
+            $locked->logSalesActivity('deleted', [
+                'branch_id' => $locked->branch_id,
+                'project_id' => $locked->project_id,
+                'sales_user_id' => $locked->sales_user_id,
+            ]);
+            $locked->delete();
+        });
+    }
+
     public function setStage(SalesLead $lead, string $stage, mixed $timestamp, User $actor): SalesLead
     {
         $lead->update([$stage => $timestamp, 'updated_by' => $actor->id]);

@@ -74,6 +74,11 @@ class SalesLeadPolicy
             || app(WorkspaceAccessService::class)->canEditBranch($user, $lead->branch_id);
     }
 
+    public function delete(User $user, SalesLead $lead): bool
+    {
+        return $user->isSuperadmin();
+    }
+
     public function updateStage(User $user, SalesLead $lead): bool
     {
         return $this->update($user, $lead);

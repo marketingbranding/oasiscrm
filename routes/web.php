@@ -114,6 +114,7 @@ Route::middleware(['auth', 'active', 'verified', 'password.changed', 'operationa
         Route::get('/buku-saku-sales/leads/{sales_lead}', [SalesLeadController::class, 'show'])->name('sales-leads.show');
         Route::get('/buku-saku-sales/leads/{sales_lead}/edit', [SalesLeadController::class, 'edit'])->name('sales-leads.edit');
         Route::put('/buku-saku-sales/leads/{sales_lead}', [SalesLeadController::class, 'update'])->name('sales-leads.update');
+        Route::delete('/buku-saku-sales/leads/{sales_lead}', [SalesLeadController::class, 'destroy'])->middleware('not.impersonating')->name('sales-leads.destroy');
         Route::patch('/buku-saku-sales/leads/{sales_lead}/stage', [SalesLeadStageController::class, 'update'])->name('sales-leads.stage.update');
         Route::patch('/buku-saku-sales/leads/{sales_lead}/lifecycle-status', [SalesLeadLifecycleController::class, 'updateStatus'])->name('sales-leads.lifecycle-status.update');
         Route::post('/buku-saku-sales/leads/{sales_lead}/site-visits', [SalesLeadLifecycleController::class, 'siteVisit'])->name('sales-leads.site-visits.store');

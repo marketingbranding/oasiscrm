@@ -150,6 +150,19 @@ class SalesLeadController extends Controller
         return redirect()->route('sales-pocketbook.index')->with('success', 'Lead berhasil diperbarui.');
     }
 
+    public function destroy(Request $request, SalesLead $salesLead)
+    {
+        $this->authorize('delete', $salesLead);
+
+        try {
+            $this->leads->delete($salesLead, $request->user());
+        } catch (\DomainException $exception) {
+            return back()->with('error', $exception->getMessage());
+        }
+
+        return redirect()->route('sales-pocketbook.index')->with('success', 'Lead berhasil dihapus dari data operasional.');
+    }
+
     public function duplicatePhone(Request $request)
     {
         $this->authorize('viewAny', SalesLead::class);

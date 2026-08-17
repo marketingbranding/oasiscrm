@@ -10,7 +10,7 @@
 @endphp
 <div class="space-y-4">
     <x-crm.page-header variant="canonical" eyebrow="Buku Saku Sales" :title="$lead->customer_name" description="Detail read only Lead dan hasil cek lokasi.">
-        <x-slot:meta><x-crm.status-badge :variant="$statusVariant">{{ $lead->current_status->label() }}</x-crm.status-badge></x-slot:meta>
+        <x-slot:actions><div class="flex flex-wrap items-center gap-2"><x-crm.status-badge :variant="$statusVariant">{{ $lead->current_status->label() }}</x-crm.status-badge>@if(Auth::user()->isSuperadmin())<form method="POST" action="{{ route('sales-leads.destroy', $lead) }}" onsubmit="return confirm('Hapus lead ini? Lead tidak akan lagi muncul di data operasional.')">@csrf @method('DELETE')<x-crm.button type="submit" variant="danger">Hapus Lead</x-crm.button></form>@endif</div></x-slot:actions>
     </x-crm.page-header>
 
     <nav class="sales-pocketbook-tabs crm-horizontal-tabs" aria-label="Detail Lead">

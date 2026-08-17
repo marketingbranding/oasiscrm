@@ -11,9 +11,12 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\Relations\MorphMany;
+use Illuminate\Database\Eloquent\SoftDeletes;
 
 class SalesLead extends Model
 {
+    use SoftDeletes;
+
     public const STAGES = [
         'contacted_at' => 'DIHUBUNGI',
         'met_at' => 'TATAP MUKA',
@@ -264,6 +267,7 @@ class SalesLead extends Model
                 'updated' => 'Lead Buku Saku diperbarui',
                 'stage_updated' => 'Progres lead diperbarui',
                 'stage_reversed' => 'Progres lead dibatalkan',
+                'deleted' => 'Lead Buku Saku dihapus',
                 default => 'Lead Buku Saku diperbarui',
             },
             // Deliberately limited to identifiers and stage metadata; never persist lead PII here.

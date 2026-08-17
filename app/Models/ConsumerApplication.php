@@ -78,4 +78,14 @@ class ConsumerApplication extends Model
     {
         return $this->hasMany(ConsumerLegacyIdentity::class);
     }
+
+    public function kavlingAssignments(): HasMany
+    {
+        return $this->hasMany(ConsumerKavlingAssignment::class);
+    }
+
+    public function activeKavlingAssignment(): HasMany
+    {
+        return $this->hasMany(ConsumerKavlingAssignment::class)->where('assignment_status', 'active')->whereNull('released_at');
+    }
 }

@@ -22,12 +22,27 @@ final class ConsumerReadComparisonService
         $legacy = $this->legacy->records($branch, $project);
         $local = $this->local->records($branch, $project);
         $localByKey = [];
+        $provenanceByKey = [];
         $duplicateKeys = [];
         foreach ($local as $record) {
-            if (isset($localByKey[$record->legacyKey])) {
-                $duplicateKeys[$record->legacyKey] = true;
-            }
             $localByKey[$record->legacyKey][] = $record;
+            foreach ($record->values['provenance'] ?? [] as $provenance) {
+                if (($provenance['legacy_source'] ?? null) !== 'manual_spreadsheet_paste' || ! filled($provenance['external_key'] ?? null)) {
+                    continue;
+                }
+                $key = Str::lower($provenance['external_key']);
+                $provenanceByKey[$key][] = $record;
+            }
+        }
+        foreach ($localByKey as $key => $records) {
+            if (count($records) > 1) {
+                $duplicateKeys[$key] = true;
+            }
+        }
+        foreach ($provenanceByKey as $key => $records) {
+            if (count($records) > 1 || count(array_unique(array_map(fn ($record) => $record->localApplicationId, $records))) > 1) {
+                $duplicateKeys[$key] = true;
+            }
         }
 
         $rows = [];
@@ -37,7 +52,13 @@ final class ConsumerReadComparisonService
         $exact = 0;
 
         foreach ($legacy as $legacyRecord) {
+            $provenanceKey = Str::lower($legacyRecord->legacyKey);
             $candidates = $localByKey[$legacyRecord->legacyKey] ?? [];
+            $resolutionSource = $candidates !== [] ? 'EXISTING_PROVENANCE' : null;
+            if ($candidates === []) {
+                $candidates = $provenanceByKey[$provenanceKey] ?? [];
+                $resolutionSource = $candidates !== [] ? 'EXISTING_PROVENANCE' : null;
+            }
             if (count($candidates) > 1 || isset($duplicateKeys[$legacyRecord->legacyKey])) {
                 $summary['AMBIGUOUS']++;
                 $rows[] = $this->row('AMBIGUOUS', $legacyRecord, null, [], ['Multiple local applications share stable identity.']);
@@ -62,7 +83,7 @@ final class ConsumerReadComparisonService
             if ($status === 'MATCHED') {
                 $exact++;
             }
-            $rows[] = $this->row($status, $legacyRecord, $localRecord, $mismatches, [...$legacyRecord->notes, ...$localRecord->notes]);
+            $rows[] = $this->row($status, $legacyRecord, $localRecord, $mismatches, [...$legacyRecord->notes, ...$localRecord->notes], $resolutionSource);
         }
 
         foreach ($local as $localRecord) {
@@ -118,7 +139,7 @@ final class ConsumerReadComparisonService
         return $value === null || trim((string) $value) === '' ? null : Str::lower(trim((string) $value));
     }
 
-    private function row(string $status, ?ConsumerComparisonRecord $legacy, ?ConsumerComparisonRecord $local, array $mismatches, array $notes): array
+    private function row(string $status, ?ConsumerComparisonRecord $legacy, ?ConsumerComparisonRecord $local, array $mismatches, array $notes, ?string $resolutionSource = null): array
     {
         $record = $local ?: $legacy;
 
@@ -132,7 +153,7 @@ final class ConsumerReadComparisonService
             'legacy_values' => $legacy?->toArray(),
             'local_values' => $local?->toArray(),
             'mismatch_fields' => $mismatches,
-            'notes' => array_values(array_unique($notes)),
+            'notes' => array_values(array_unique(array_filter([...$notes, $resolutionSource]))),
         ];
     }
 }

@@ -45,6 +45,7 @@ final class LocalConsumerReadService
                 akadDate: $application->akad_date?->format('Y-m-d'),
                 bankName: $bank?->bank_name,
                 bankStatus: $bank?->status,
+                values: ['provenance' => $application->legacyIdentities->map(fn ($identity) => ['external_key' => $identity->external_key, 'legacy_source' => $identity->legacy_source, 'application_id' => $identity->consumer_application_id])->values()->all()],
             );
         })->all();
     }

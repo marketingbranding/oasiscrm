@@ -44,6 +44,23 @@ class ConsumerReadComparisonTest extends TestCase
         $this->assertSame(100.0, $result->coverage['link_coverage_percent']);
     }
 
+    public function test_existing_manual_paste_provenance_resolves_without_identity_write(): void
+    {
+        [$branch, $project] = $this->context();
+        $customer = Customer::create(['name' => 'Provenance Consumer', 'phone' => '0812345678']);
+        $application = ConsumerApplication::create(['customer_id' => $customer->id, 'branch_id' => $branch->id, 'project_id' => $project->id, 'application_status' => 'draft', 'current_stage' => 'akad']);
+        ConsumerLegacyIdentity::create(['consumer_application_id' => $application->id, 'customer_id' => $customer->id, 'legacy_source' => 'manual_spreadsheet_paste', 'external_key' => 'external:provenance-1']);
+        $this->legacy($branch, 'K-01', ['nama_konsumen' => 'Provenance Consumer', 'external_id' => 'provenance-1'], 'akad');
+        $before = ConsumerLegacyIdentity::count();
+
+        $result = app(ConsumerReadComparisonService::class)->compare($branch, $project);
+
+        $row = collect($result->rows)->first(fn ($row) => in_array($row['status'], ['MATCHED', 'MISMATCH'], true));
+        $this->assertSame(1, $result->summary['matched'] + $result->summary['mismatch']);
+        $this->assertContains('EXISTING_PROVENANCE', $row['notes']);
+        $this->assertSame($before, ConsumerLegacyIdentity::count());
+    }
+
     public function test_reports_mismatch_legacy_only_local_only_and_ambiguous(): void
     {
         [$branch, $project] = $this->context();

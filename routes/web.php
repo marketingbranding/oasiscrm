@@ -10,6 +10,7 @@ use App\Http\Controllers\Crm\CommentController;
 use App\Http\Controllers\Crm\CommentModerationController;
 use App\Http\Controllers\Crm\CommentThreadController;
 use App\Http\Controllers\Crm\ConsumerComparisonController;
+use App\Http\Controllers\Crm\ConsumerLocalController;
 use App\Http\Controllers\Crm\ConsumerPasteImportController;
 use App\Http\Controllers\Crm\ContentCalendarController;
 use App\Http\Controllers\Crm\CoordinatorSalesLeadWorkspaceController;
@@ -176,6 +177,8 @@ Route::middleware(['auth', 'active', 'verified', 'password.changed', 'operationa
         Route::post('/consumer-import/{consumer_import_batch}/confirm', [ConsumerPasteImportController::class, 'confirm'])->middleware('not.impersonating')->name('consumer-import.confirm');
         Route::post('/consumer-import/{consumer_import_batch}/enrich', [ConsumerPasteImportController::class, 'enrich'])->middleware('not.impersonating')->name('consumer-import.enrich');
         Route::get('/konsumen-progress', [KonsumenProgressController::class, 'index'])->middleware('permission:consumer_progress.view')->name('konsumen-progress.index');
+        Route::get('/konsumen-progress-local', [ConsumerLocalController::class, 'index'])->middleware('permission:consumer_progress.view')->name('consumer-local.index');
+        Route::get('/konsumen-progress-local/{application}', [ConsumerLocalController::class, 'show'])->middleware('permission:consumer_progress.view')->name('consumer-local.show');
         Route::get('/konsumen-progress/stage', [KonsumenProgressController::class, 'stage'])->middleware('permission:consumer_progress.view')->name('konsumen-progress.stage');
         Route::post('/konsumen-progress/sync', [KonsumenProgressController::class, 'sync'])->middleware('permission:consumer_progress.sync')->name('konsumen-progress.sync');
         Route::get('/konsumen-progress/sync/status', [KonsumenProgressController::class, 'syncStatus'])->middleware('permission:consumer_progress.sync')->name('konsumen-progress.sync-status');

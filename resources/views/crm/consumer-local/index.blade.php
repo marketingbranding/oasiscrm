@@ -1,0 +1,37 @@
+@extends('layouts.crm')
+
+@section('title', 'Data Konsumen - Oasis CRM')
+
+@section('content')
+<x-crm.page-header variant="canonical" title="Data Konsumen" eyebrow="Sales" description="Daftar data konsumen lokal sesuai akses cabang dan proyek." />
+<x-crm.toolbar label="Cari dan filter data konsumen" class="mb-3">
+    <form method="GET" action="{{ route('consumer-local.index') }}" class="flex flex-wrap items-end gap-2">
+        <label for="consumer-search" class="font-[Helvetica] text-xs font-bold uppercase">Cari nama, no HP, kavling<input id="consumer-search" type="search" name="search" value="{{ request('search') }}" class="block border-2 border-black bg-white px-2 py-1.5 text-sm"></label>
+        <label class="font-[Helvetica] text-xs font-bold uppercase">Proyek<select name="project_id" class="block border-2 border-black bg-white px-2 py-1.5 text-sm"><option value="">Semua</option>@foreach($projects as $project)<option value="{{ $project->id }}" @selected((string) request('project_id') === (string) $project->id)>{{ $project->project_name }}</option>@endforeach</select></label>
+        <label class="font-[Helvetica] text-xs font-bold uppercase">Sales<select name="sales_user_id" class="block border-2 border-black bg-white px-2 py-1.5 text-sm"><option value="">Semua</option>@foreach($sales as $person)<option value="{{ $person->id }}" @selected((string) request('sales_user_id') === (string) $person->id)>{{ $person->name }}</option>@endforeach</select></label>
+        @foreach(['source_completeness_status' => ['Kelengkapan', ['Data Lengkap', 'Data Belum Lengkap', 'Belum Ada Data']], 'consumer_status' => ['Status Konsumen', ['Lanjut', 'Mundur', 'Pindah Kavling', 'Reject', 'Belum Diisi']], 'source_last_process' => ['Proses Terakhir', []], 'application_status' => ['Status Aplikasi', []]] as $name => [$label, $options])
+            <label class="font-[Helvetica] text-xs font-bold uppercase">{{ $label }}<select name="{{ $name }}" class="block border-2 border-black bg-white px-2 py-1.5 text-sm"><option value="">Semua</option>@foreach($options as $option)<option value="{{ $option }}" @selected(request($name) === $option)>{{ $option }}</option>@endforeach</select></label>
+        @endforeach
+        <button class="border-2 border-black bg-[#fcc20f] px-3 py-2 font-bold">Terapkan</button>
+        @if(request()->query())<a href="{{ route('consumer-local.index') }}" class="border-2 border-black bg-white px-3 py-2 font-bold">Hapus filter</a>@endif
+    </form>
+</x-crm.toolbar>
+<div x-data="{ open: false, loading: false, detail: {}, async show(url) { this.loading = true; this.open = true; this.detail = {}; const response = await fetch(url, { headers: { Accept: 'application/json' } }); this.detail = (await response.json()).data; this.loading = false; } }">
+<div class="crm-table-scroll"><table class="crm-data-table"><thead><tr><th>Nama Konsumen</th><th>No HP</th><th>Kavling</th><th>Proyek</th><th>Sales</th><th>Status Kelengkapan</th><th>Status Konsumen</th><th>Proses Terakhir</th><th>Status Aplikasi</th><th>Aksi</th></tr></thead><tbody>
+@forelse($applications as $application)
+@php $completeness = $application->source_completeness_status ?: 'Belum Ada Data'; $consumerStatus = $application->consumer_status ?: 'Belum Diisi'; $lastProcess = $application->source_last_process ?: 'Belum Ada Data'; @endphp
+<tr><td><button type="button" @click="show('{{ route('consumer-local.show', $application) }}')" class="font-bold text-[#0000ee] underline">{{ $application->customer?->name ?? '—' }}</button></td><td>{{ $application->customer?->phone ?? '—' }}</td><td>{{ $application->kavling?->kavling_code ?? $application->kavling?->name ?? '—' }}</td><td>{{ $application->project?->project_name ?? '—' }}</td><td>{{ $application->sales?->name ?? '—' }}</td><td><x-crm.status-badge variant="{{ $completeness === 'Data Lengkap' ? 'success' : ($completeness === 'Data Belum Lengkap' ? 'warning' : 'neutral') }}">{{ $completeness }}</x-crm.status-badge></td><td><x-crm.status-badge variant="neutral">{{ $consumerStatus }}</x-crm.status-badge></td><td>{{ $lastProcess }}</td><td><x-crm.status-badge variant="info">{{ $application->application_status ?: 'Belum Ada Data' }}</x-crm.status-badge></td><td><button type="button" @click="show('{{ route('consumer-local.show', $application) }}')" class="font-bold text-[#0000ee] underline">Detail</button></td></tr>
+@empty<tr><td colspan="10">Belum ada data konsumen lokal.</td></tr>@endforelse
+</tbody></table></div>
+<div class="mt-3">{{ $applications->links() }}</div>
+<div x-show="open" x-cloak @keydown.escape.window="open = false" class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" role="dialog" aria-modal="true" aria-label="Detail konsumen">
+    <div @click.outside="open = false" class="max-h-[90vh] w-full max-w-3xl overflow-y-auto border-2 border-black bg-white p-4">
+        <div class="mb-3 flex items-center justify-between border-b-2 border-black pb-2"><h2 class="font-[Helvetica] text-lg font-bold uppercase">Detail Konsumen</h2><button type="button" @click="open = false" aria-label="Tutup detail" class="border-2 border-black px-3 py-1 font-bold">Tutup</button></div>
+        <div x-show="loading">Memuat detail...</div>
+        <dl x-show="!loading" class="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            @foreach(['name' => 'Nama', 'phone' => 'No HP', 'date_of_birth' => 'Tanggal Lahir', 'occupation' => 'Pekerjaan', 'occupation_detail' => 'Detail Pekerjaan', 'address' => 'Alamat', 'kelurahan' => 'Kelurahan', 'kecamatan' => 'Kecamatan', 'kabupaten_kota' => 'Kabupaten/Kota', 'project' => 'Proyek', 'kavling' => 'Kavling', 'sales' => 'Sales', 'promo' => 'Promo', 'status_cash' => 'Status Cash', 'consumer_status' => 'Status Konsumen', 'last_process' => 'Proses Terakhir', 'completeness_status' => 'Kelengkapan Sumber', 'application_status' => 'Status Aplikasi', 'booking_date' => 'Tanggal Booking', 'akad_date' => 'Tanggal Akad', 'notes' => 'Keterangan', 'emergency_contact_name' => 'Nama Kondar', 'emergency_contact_phone' => 'No HP Kondar', 'nik' => 'NIK'] as $key => $label)<div><dt class="font-[Helvetica] text-xs font-bold uppercase">{{ $label }}</dt><dd class="font-['Times_New_Roman']" x-text="detail.{{ $key }} || 'Belum Ada Data'"></dd></div>@endforeach
+        </dl>
+    </div>
+</div>
+</div>
+@endsection

@@ -258,6 +258,44 @@ class KonsumenProgressIndexTest extends TestCase
         $this->assertFalse($items->contains('nama', 'Project B Consumer'));
     }
 
+    public function test_local_consumer_page_filters_search_and_masks_nik(): void
+    {
+        [$branch, $user] = $this->branchAndUser();
+        $project = LeadMaster::firstOrCreate(['branch_id' => $branch->id, 'project_name' => 'Oasis Jepara'], ['is_active' => true]);
+        $kavling = Kavling::create(['project_id' => $project->id, 'kavling_code' => 'LOCAL-A1', 'name' => 'LOCAL-A1']);
+        $sales = User::factory()->create(['role_id' => $user->role_id, 'branch_id' => $branch->id, 'password_changed_at' => now()]);
+        $customer = Customer::create(['name' => 'Data Lengkap Budi', 'phone' => '081234567890', 'nik_encrypted' => '1234567890123456']);
+        ConsumerApplication::create(['customer_id' => $customer->id, 'branch_id' => $branch->id, 'project_id' => $project->id, 'sales_user_id' => $sales->id, 'kavling_id' => $kavling->id, 'application_status' => 'active', 'consumer_status' => 'Lanjut', 'source_last_process' => 'Akad', 'source_completeness_status' => 'Data Lengkap']);
+
+        $response = $this->actingAs($user)->get(route('consumer-local.index', ['search' => '081234567890', 'source_completeness_status' => 'Data Lengkap', 'consumer_status' => 'Lanjut', 'source_last_process' => 'Akad']));
+
+        $response->assertOk()->assertSee('Data Lengkap Budi')->assertSee('Data Lengkap')->assertSee('Lanjut')->assertSee('Akad')->assertDontSee('1234567890123456');
+        $this->actingAs($user)->getJson(route('consumer-local.show', ['application' => $customer->applications()->first()->id]))->assertOk()->assertJsonPath('data.nik', '••••••••••••••••');
+    }
+
+    public function test_local_consumer_page_hides_other_branch_and_paginates(): void
+    {
+        [$branch, $user] = $this->branchAndUser();
+        [$otherBranch] = $this->branchAndUser();
+        for ($i = 1; $i <= 26; $i++) {
+            $this->localApplication($branch, 'Allowed Consumer '.$i, 'akad');
+        }
+        $this->localApplication($otherBranch, 'Hidden Consumer', 'akad');
+
+        $response = $this->actingAs($user)->get(route('consumer-local.index', ['page' => 2]));
+
+        $response->assertOk()->assertDontSee('Hidden Consumer')->assertSee('page=1');
+    }
+
+    public function test_local_consumer_detail_denies_other_branch(): void
+    {
+        [$branch, $user] = $this->branchAndUser();
+        [$otherBranch] = $this->branchAndUser();
+        $application = $this->localApplication($otherBranch, 'Hidden Consumer', 'akad');
+
+        $this->actingAs($user)->getJson(route('consumer-local.show', $application))->assertForbidden();
+    }
+
     private function localApplication(Branch $branch, string $name, string $stage): ConsumerApplication
     {
         $project = LeadMaster::firstOrCreate(['branch_id' => $branch->id, 'project_name' => 'Oasis Jepara'], ['is_active' => true]);

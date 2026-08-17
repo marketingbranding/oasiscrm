@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Crm;
 use App\Http\Controllers\Controller;
 use App\Models\Branch;
 use App\Models\LeadMaster;
+use App\Services\ConsumerIdentityBridgeAuditService;
 use App\Services\ConsumerReadComparisonService;
 use App\Services\ConsumerReadinessService;
 use Illuminate\Http\Request;
@@ -15,6 +16,7 @@ class ConsumerComparisonController extends Controller
     public function __construct(
         private readonly ConsumerReadComparisonService $comparison,
         private readonly ConsumerReadinessService $readiness,
+        private readonly ConsumerIdentityBridgeAuditService $identityAudit,
     ) {}
 
     public function index(Request $request): View
@@ -43,6 +45,8 @@ class ConsumerComparisonController extends Controller
             $readiness = $this->readiness->summarize($result);
         }
 
-        return view('crm.consumer-comparison.index', compact('branches', 'projects', 'selectedBranch', 'selectedProject', 'result', 'readiness'));
+        $audit = $selectedBranch && $selectedProject ? $this->identityAudit->audit($selectedBranch, $selectedProject) : null;
+
+        return view('crm.consumer-comparison.index', compact('branches', 'projects', 'selectedBranch', 'selectedProject', 'result', 'readiness', 'audit'));
     }
 }

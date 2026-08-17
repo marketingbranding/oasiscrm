@@ -36,6 +36,14 @@
             <div class="border-r border-b border-black p-3">{{ $label }}<br><span class="text-xl">{{ $value }}</span></div>
         @endforeach
     </div>
+    <section class="mb-4 border-2 border-black bg-white p-4" aria-labelledby="identity-audit-heading">
+        <h2 id="identity-audit-heading" class="text-lg font-bold">Phase 5.6 — Consumer Identity Bridge Audit</h2>
+        <p class="mb-3 text-sm text-gray-700">Audit baca-saja. Tidak membuat atau mengubah identity mapping.</p>
+        <div class="grid grid-cols-2 gap-3 text-sm md:grid-cols-4"><div>Legacy rows<br><strong>{{ $audit['legacy']['total'] }}</strong></div><div>Local applications<br><strong>{{ $audit['local']['total'] }}</strong></div><div>Unique phone+kavling<br><strong>{{ $audit['candidates']['UNIQUE_PHONE_KAVLING'] }}</strong></div><div>Ambiguous<br><strong>{{ $audit['candidates']['AMBIGUOUS'] }}</strong></div></div>
+        <div class="mt-3 grid gap-3 text-sm md:grid-cols-2"><div><strong>Legacy identity fields</strong><br>{{ collect($audit['legacy']['counts'])->except(['phone', 'kavling', 'status', 'nik'])->map(fn ($v, $k) => $k.': '.$v)->implode(' · ') }}<br>Phone {{ $audit['legacy']['counts']['phone'] }} · Kavling {{ $audit['legacy']['counts']['kavling'] }} · NIK tersedia {{ $audit['legacy']['counts']['nik'] }}</div><div><strong>Local status / identity</strong><br>{{ collect($audit['local']['application_status'])->map(fn ($v, $k) => $k.': '.$v)->implode(' · ') }}<br>{{ collect($audit['local']['identity_prefixes'])->map(fn ($v, $k) => $k.': '.$v)->implode(' · ') }}</div></div>
+        <div class="mt-3 grid gap-3 text-sm md:grid-cols-3"><div>Legacy duplicate phone<br><strong>{{ $audit['legacy']['duplicates']['phone'] }}</strong></div><div>Legacy duplicate kavling<br><strong>{{ $audit['legacy']['duplicates']['kavling'] }}</strong></div><div>Local duplicate phone+kavling<br><strong>{{ $audit['local']['duplicates']['phone_kavling'] }}</strong></div></div>
+        <div class="mt-3 overflow-x-auto"><table class="min-w-full text-left text-xs"><thead class="bg-black text-white"><tr><th class="p-2">Nama</th><th class="p-2">Phone</th><th class="p-2">Kavling</th><th class="p-2">Source status</th><th class="p-2">Kategori</th></tr></thead><tbody>@foreach($audit['candidates']['rows'] as $row)<tr class="border-b border-gray-300"><td class="p-2">{{ $row['name'] ?: '—' }}</td><td class="p-2">{{ $row['phone'] }}</td><td class="p-2">{{ $row['kavling'] ?: '—' }}</td><td class="p-2">{{ $row['status'] }}</td><td class="p-2 font-bold">{{ $row['category'] }}</td></tr>@endforeach</tbody></table></div>
+    </section>
     <p class="mb-4 text-sm">Cakupan link: {{ $result->coverage['link_coverage_percent'] }}% · Exact match dari data terhubung: {{ $result->coverage['exact_match_percent'] }}%</p>
     <div class="overflow-x-auto border-2 border-black bg-white">
         <table class="min-w-full text-left text-sm">

@@ -6,6 +6,7 @@ use App\Models\ActivityLog;
 use App\Models\Branch;
 use App\Models\ConsumerApplication;
 use App\Models\Customer;
+use App\Models\Kavling;
 use App\Models\LeadMaster;
 use App\Models\Role;
 use App\Models\User;
@@ -122,6 +123,49 @@ class ConsumerPasteImportTest extends TestCase
         $secondResult = app(ConsumerPasteImportService::class)->import($second, $actor);
         $this->assertSame(0, $secondResult['created_applications']);
         $this->assertSame(1, ConsumerApplication::count());
+    }
+
+    public function test_operational_spreadsheet_headers_store_profile_fields_and_encrypted_nik(): void
+    {
+        [$branch, $project] = $this->context();
+        Kavling::create(['project_id' => $project->id, 'kavling_code' => 'Marison Kalinegoro-A09', 'name' => 'Marison Kalinegoro-A09']);
+        $actor = $this->admin();
+        $headers = ['id_kavling', 'no_ktp', 'nama_konsumen', 'tanggal_lahir', 'pekerjaan', 'detail_pekerjaan', 'umur', 'alamat', 'kelurahan', 'kecamatan', 'kabupaten/kota', 'no_hp', 'nama_kondar', 'no_hp_kondar', 'status_cash', 'Status', 'keterangan'];
+        $row = ['Marison Kalinegoro-A09', '3308106504650003', 'Rr Arista Widiastuti', '04/25/1965', 'Karyawan Swasta', 'PT XYZ', '61 tahun', 'Jl Kanon', 'Jogonegoro', 'Mertoyudan', 'Kabupaten Magelang', '081392267571', 'Arismaya', '081338628019', 'YA', 'Data Lengkap', 'Catatan'];
+        $batch = app(ConsumerPasteImportService::class)->createBatch($actor, $branch, $project, implode("\t", $headers)."\n".implode("\t", $row));
+        $this->assertSame('READY', $batch->rows()->sole()->status);
+        $this->assertArrayNotHasKey('nik', $batch->rows()->sole()->normalized_data);
+        $this->assertSame('************0003', '************'.substr($batch->rows()->sole()->sensitive_data['nik'], -4));
+        app(ConsumerPasteImportService::class)->import($batch, $actor);
+        $customer = Customer::sole();
+        $this->assertSame('3308106504650003', $customer->nik_encrypted);
+        $this->assertNotSame('3308106504650003', $customer->getRawOriginal('nik_encrypted'));
+        $this->assertSame('1965-04-25', $customer->date_of_birth->format('Y-m-d'));
+        $application = ConsumerApplication::sole();
+        $this->assertTrue($application->status_cash);
+        $this->assertSame('draft', $application->application_status);
+        $this->assertSame('Catatan', $application->notes);
+        $this->assertSame('Arismaya', $customer->emergency_contact_name);
+    }
+
+    public function test_nik_reveal_is_superadmin_only_no_store_and_audited(): void
+    {
+        [$branch, $project] = $this->context();
+        $actor = $this->admin();
+        $batch = app(ConsumerPasteImportService::class)->createBatch($actor, $branch, $project, "Nama Konsumen\tNo KTP\tNo HP\nBudi\t3308106504650003\t0812345678");
+        app(ConsumerPasteImportService::class)->import($batch, $actor);
+        $customer = Customer::sole();
+
+        $preview = $this->actingAs($actor)->get(route('consumer-import.show', $batch));
+        $preview->assertOk()->assertSee('************0003')->assertDontSee('3308106504650003');
+
+        $response = $this->actingAs($actor)->postJson(route('consumer-import.nik-reveal', $customer));
+
+        $response->assertOk()->assertJson(['nik' => '3308106504650003'])->assertHeader('Cache-Control', 'no-store, private');
+        $log = ActivityLog::where('event', 'consumer.nik_revealed')->sole();
+        $this->assertStringNotContainsString('3308106504650003', json_encode($log->properties));
+        $this->actingAs(User::factory()->create(['role_id' => Role::where('slug', 'admin')->value('id'), 'password_changed_at' => now()]))
+            ->postJson(route('consumer-import.nik-reveal', $customer))->assertForbidden();
     }
 
     public function test_only_superadmin_can_open_import_routes(): void

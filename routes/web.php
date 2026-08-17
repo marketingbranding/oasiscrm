@@ -179,6 +179,7 @@ Route::middleware(['auth', 'active', 'verified', 'password.changed', 'operationa
         Route::get('/konsumen-progress', [KonsumenProgressController::class, 'index'])->middleware('permission:consumer_progress.view')->name('konsumen-progress.index');
         Route::get('/konsumen-progress-local', [ConsumerLocalController::class, 'index'])->middleware('permission:consumer_progress.view')->name('consumer-local.index');
         Route::get('/konsumen-progress-local/{application}', [ConsumerLocalController::class, 'show'])->middleware('permission:consumer_progress.view')->name('consumer-local.show');
+        Route::post('/konsumen-progress-local/{application}/nik/reveal', [ConsumerLocalController::class, 'revealNik'])->middleware('permission:consumer_progress.reveal_nik')->name('consumer-local.nik-reveal');
         Route::get('/konsumen-progress/stage', [KonsumenProgressController::class, 'stage'])->middleware('permission:consumer_progress.view')->name('konsumen-progress.stage');
         Route::post('/konsumen-progress/sync', [KonsumenProgressController::class, 'sync'])->middleware('permission:consumer_progress.sync')->name('konsumen-progress.sync');
         Route::get('/konsumen-progress/sync/status', [KonsumenProgressController::class, 'syncStatus'])->middleware('permission:consumer_progress.sync')->name('konsumen-progress.sync-status');

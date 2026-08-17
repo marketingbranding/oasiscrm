@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Models\ActivityLog;
 use App\Models\Branch;
 use App\Models\ConsumerApplication;
 use App\Models\ConsumerBankProcess;
@@ -276,6 +277,43 @@ class KonsumenProgressIndexTest extends TestCase
         $detail = $this->actingAs($user)->getJson(route('consumer-local.show', ['application' => $application->id]));
         $detail->assertOk()->assertJsonPath('data.nik', '••••••••••••••••')->assertJsonPath('data.timeline.0.stage', 'bi_checking')->assertJsonPath('data.timeline.1.stage', 'akad')->assertJsonPath('data.banks.0.bank_name', 'BCA')->assertJsonPath('data.attention', []);
         $this->assertStringNotContainsString('1234567890123456', $detail->getContent());
+    }
+
+    public function test_local_consumer_index_supports_safe_sorting_and_preserves_query(): void
+    {
+        [$branch, $user] = $this->branchAndUser();
+        $this->localApplication($branch, 'Sort Budi', 'akad');
+        $response = $this->actingAs($user)->get(route('consumer-local.index', ['sort' => 'name', 'direction' => 'desc', 'search' => 'Sort', 'consumer_status' => 'Lanjut', 'page' => 2]));
+        $response->assertOk()->assertSee('sort=name')->assertSee('search=Sort')->assertSee('consumer_status=Lanjut');
+        $this->actingAs($user)->get(route('consumer-local.index', ['sort' => 'unsafe', 'direction' => 'wat']))->assertOk();
+    }
+
+    public function test_local_consumer_nik_reveal_requires_permission_and_audits_without_plaintext(): void
+    {
+        [$branch, $user] = $this->branchAndUser('branch_manager');
+        $project = LeadMaster::firstOrCreate(['branch_id' => $branch->id, 'project_name' => 'Oasis Jepara'], ['is_active' => true]);
+        $customer = Customer::create(['name' => 'Private Budi', 'nik_encrypted' => '1234567890123456']);
+        $application = ConsumerApplication::create(['customer_id' => $customer->id, 'branch_id' => $branch->id, 'project_id' => $project->id, 'application_status' => 'active']);
+
+        $this->actingAs($user)->getJson(route('consumer-local.show', $application))->assertJsonPath('data.nik', '••••••••••••••••')->assertJsonMissing(['nik' => '1234567890123456']);
+        $reveal = $this->actingAs($user)->postJson(route('consumer-local.nik-reveal', $application));
+        $reveal->assertOk()->assertJsonPath('nik', '1234567890123456');
+        $this->assertStringContainsString('no-store', (string) $reveal->headers->get('Cache-Control'));
+        $this->assertDatabaseHas('activity_log', ['event' => 'consumer.nik_revealed', 'subject_id' => $application->id]);
+        $this->assertStringNotContainsString('1234567890123456', json_encode(ActivityLog::query()->latest('id')->first()->properties));
+    }
+
+    public function test_local_consumer_nik_reveal_denies_missing_permission_and_other_scope(): void
+    {
+        [$branch, $user] = $this->branchAndUser('manager');
+        $project = LeadMaster::firstOrCreate(['branch_id' => $branch->id, 'project_name' => 'Oasis Jepara'], ['is_active' => true]);
+        $customer = Customer::create(['name' => 'Private Siti', 'nik_encrypted' => '1234567890123456']);
+        $application = ConsumerApplication::create(['customer_id' => $customer->id, 'branch_id' => $branch->id, 'project_id' => $project->id, 'application_status' => 'active']);
+        $this->actingAs($user)->postJson(route('consumer-local.nik-reveal', $application))->assertForbidden();
+        [$otherBranch] = $this->branchAndUser('branch_manager');
+        $otherProject = LeadMaster::firstOrCreate(['branch_id' => $otherBranch->id, 'project_name' => 'Other'], ['is_active' => true]);
+        $other = ConsumerApplication::create(['customer_id' => $customer->id, 'branch_id' => $otherBranch->id, 'project_id' => $otherProject->id, 'application_status' => 'active']);
+        $this->actingAs($user)->postJson(route('consumer-local.nik-reveal', $other))->assertForbidden();
     }
 
     public function test_local_consumer_detail_keeps_source_process_separate_and_attention_explicit(): void

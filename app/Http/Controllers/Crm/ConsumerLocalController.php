@@ -3,10 +3,12 @@
 namespace App\Http\Controllers\Crm;
 
 use App\Http\Controllers\Controller;
+use App\Models\ActivityLog;
 use App\Models\ConsumerApplication;
 use App\Models\LeadMaster;
 use App\Models\User;
 use App\Services\OrganizationScopeService;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 class ConsumerLocalController extends Controller
@@ -38,11 +40,38 @@ class ConsumerLocalController extends Controller
             }
         }
 
-        $applications = $query->latest('id')->paginate(25)->withQueryString();
+        $sorts = ['name' => 'customer_name', 'kavling' => 'kavling_code', 'project' => 'project_name', 'sales' => 'sales_name', 'completeness' => 'source_completeness_status', 'consumer_status' => 'consumer_status', 'last_process' => 'source_last_process'];
+        $sort = array_key_exists($request->query('sort'), $sorts) ? $request->query('sort') : 'name';
+        $direction = $request->query('direction') === 'desc' ? 'desc' : 'asc';
+        $sortColumn = $sorts[$sort];
+        if ($sortColumn === 'customer_name') {
+            $query->orderByRaw('(select name from customers where customers.id = consumer_applications.customer_id) '.$direction);
+        } elseif ($sortColumn === 'kavling_code') {
+            $query->orderByRaw('(select kavling_code from kavlings where kavlings.id = consumer_applications.kavling_id) '.$direction);
+        } elseif ($sortColumn === 'project_name') {
+            $query->orderByRaw('(select project_name from lead_masters where lead_masters.id = consumer_applications.project_id) '.$direction);
+        } elseif ($sortColumn === 'sales_name') {
+            $query->orderByRaw('(select name from users where users.id = consumer_applications.sales_user_id) '.$direction);
+        } else {
+            $query->orderBy($sortColumn, $direction);
+        }
+        $applications = $query->orderBy('consumer_applications.id', 'asc')->paginate(25)->withQueryString();
         $projects = LeadMaster::query()->whereIn('id', $projectIds)->where('is_active', true)->orderBy('project_name')->get(['id', 'project_name']);
-        $sales = User::query()->whereIn('id', $applications->getCollection()->pluck('sales_user_id')->filter()->unique())->orderBy('name')->get(['id', 'name']);
+        $sales = User::query()->whereIn('id', ConsumerApplication::query()->whereIn('branch_id', $branchIds)->whereIn('project_id', $projectIds)->whereNotNull('sales_user_id')->distinct()->pluck('sales_user_id'))->orderBy('name')->get(['id', 'name']);
 
         return view('crm.consumer-local.index', compact('applications', 'projects', 'sales'));
+    }
+
+    public function revealNik(Request $request, ConsumerApplication $application, OrganizationScopeService $scope): JsonResponse
+    {
+        abort_unless($request->user()->hasPermission('consumer_progress.reveal_nik'), 403);
+        abort_unless(in_array((int) $application->branch_id, $scope->branchIds($request->user(), 'consumer_progress'), true), 403);
+        abort_unless(in_array((int) $application->project_id, $scope->projectIds($request->user(), 'consumer_progress'), true), 403);
+        $customer = $application->customer()->select(['id', 'nik_encrypted'])->first();
+        abort_unless($customer?->nik_encrypted !== null, 404);
+        ActivityLog::create(['causer_id' => $request->user()->id, 'subject_type' => ConsumerApplication::class, 'subject_id' => $application->id, 'event' => 'consumer.nik_revealed', 'description' => 'NIK konsumen ditampilkan secara eksplisit.', 'properties' => ['actor_id' => $request->user()->id, 'application_id' => $application->id, 'customer_id' => $customer->id, 'branch_id' => $application->branch_id, 'project_id' => $application->project_id]]);
+
+        return response()->json(['nik' => $customer->nik_encrypted])->header('Cache-Control', 'no-store');
     }
 
     public function show(Request $request, ConsumerApplication $application, OrganizationScopeService $scope)

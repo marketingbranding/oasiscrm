@@ -18,6 +18,19 @@
     <div class="self-end text-sm">Sumber legacy: snapshot `KonsumenProgressSheetRow`.<br>Perbandingan hanya baca.</div>
 </form>
 @if($result)
+    @php
+        $statusClass = ['NOT_READY' => 'bg-red-100 text-red-900', 'REVIEW' => 'bg-yellow-100 text-yellow-900', 'PILOT_CANDIDATE' => 'bg-green-100 text-green-900'][$readiness['status']];
+    @endphp
+    <section class="mb-4 border-2 border-black bg-white p-4" aria-labelledby="readiness-heading">
+        <div class="mb-3 flex flex-wrap items-start justify-between gap-3">
+            <div><p class="text-xs font-bold uppercase tracking-wide">Pilot readiness</p><h2 id="readiness-heading" class="text-lg font-bold">{{ $readiness['status'] }}</h2><p class="text-sm text-gray-700">Status ini hanya panduan pilot terbatas, bukan cutover produksi.</p></div>
+            <span class="px-3 py-2 text-xs font-bold {{ $statusClass }}">{{ $readiness['status'] === 'NOT_READY' ? 'Belum cukup untuk pilot' : ($readiness['status'] === 'REVIEW' ? 'Perlu review manual' : 'Kandidat pilot terbatas') }}</span>
+        </div>
+        <div class="grid grid-cols-2 gap-3 text-sm md:grid-cols-4"><div>Coverage link<br><strong>{{ $readiness['link_coverage_percent'] }}%</strong></div><div>Exact match<br><strong>{{ $readiness['exact_match_percent'] }}%</strong></div><div>Identity ambiguity<br><strong>{{ $readiness['ambiguous'] }}</strong></div><div>Mismatches<br><strong>{{ $readiness['mismatch'] }}</strong></div></div>
+        <ul class="mt-3 list-disc pl-5 text-sm">@foreach($readiness['recommendations'] as $recommendation)<li>{{ $recommendation }}</li>@endforeach</ul>
+        <div class="mt-3 text-xs text-gray-700">Mismatch field: @foreach($readiness['field_mismatches'] as $field => $count) @if($count > 0)<span class="mr-2">{{ $field }} ({{ $count }})</span>@endif @endforeach</div>
+        <p class="mt-3 text-xs text-gray-600">Coverage rendah dapat berasal dari identity compatibility Phase 2. Tidak ada fuzzy matching atau auto-link.</p>
+    </section>
     <div class="mb-4 grid grid-cols-2 gap-0 border-2 border-black bg-white text-center text-xs font-bold sm:grid-cols-4 lg:grid-cols-7">
         @foreach(['Legacy' => $result->summary['total_legacy'], 'Lokal' => $result->summary['total_local'], 'Cocok' => $result->summary['matched'], 'Berbeda' => $result->summary['mismatch'], 'Hanya Legacy' => $result->summary['legacy_only'], 'Hanya Lokal' => $result->summary['local_only'], 'Perlu Review' => $result->summary['ambiguous']] as $label => $value)
             <div class="border-r border-b border-black p-3">{{ $label }}<br><span class="text-xl">{{ $value }}</span></div>

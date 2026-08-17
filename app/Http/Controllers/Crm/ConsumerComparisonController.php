@@ -6,12 +6,16 @@ use App\Http\Controllers\Controller;
 use App\Models\Branch;
 use App\Models\LeadMaster;
 use App\Services\ConsumerReadComparisonService;
+use App\Services\ConsumerReadinessService;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
 
 class ConsumerComparisonController extends Controller
 {
-    public function __construct(private readonly ConsumerReadComparisonService $comparison) {}
+    public function __construct(
+        private readonly ConsumerReadComparisonService $comparison,
+        private readonly ConsumerReadinessService $readiness,
+    ) {}
 
     public function index(Request $request): View
     {
@@ -33,10 +37,12 @@ class ConsumerComparisonController extends Controller
         abort_if($request->filled('project_id') && ! $selectedProject, 403);
 
         $result = null;
+        $readiness = null;
         if ($selectedBranch && $selectedProject) {
             $result = $this->comparison->compare($selectedBranch, $selectedProject);
+            $readiness = $this->readiness->summarize($result);
         }
 
-        return view('crm.consumer-comparison.index', compact('branches', 'projects', 'selectedBranch', 'selectedProject', 'result'));
+        return view('crm.consumer-comparison.index', compact('branches', 'projects', 'selectedBranch', 'selectedProject', 'result', 'readiness'));
     }
 }

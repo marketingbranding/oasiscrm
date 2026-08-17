@@ -75,7 +75,7 @@ class ConsumerReadComparisonTest extends TestCase
             $this->actingAs($this->user($slug))->get(route('consumer-comparison.index', ['branch_id' => $branch->id, 'project_id' => $project->id]))->assertForbidden();
         }
         $response = $this->actingAs($this->user('superadmin'))->get(route('consumer-comparison.index', ['branch_id' => $branch->id, 'project_id' => $project->id]));
-        $response->assertOk()->assertSee('Perbandingan Data Konsumen')->assertDontSee('Sinkronkan')->assertDontSee('Perbaiki');
+        $response->assertOk()->assertSee('Perbandingan Data Konsumen')->assertSee('NOT_READY')->assertSee('Coverage link')->assertDontSee('Sinkronkan')->assertDontSee('Perbaiki');
     }
 
     public function test_comparison_page_is_blocked_while_impersonating(): void

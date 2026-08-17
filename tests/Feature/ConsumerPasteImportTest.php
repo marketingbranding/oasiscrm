@@ -71,12 +71,18 @@ class ConsumerPasteImportTest extends TestCase
         $this->assertSame('Catatan', $data['notes']);
     }
 
-    public function test_blank_header_layout_is_rejected_for_non_magelang_branch(): void
+    public function test_blank_header_layout_is_accepted_for_all_branches(): void
     {
         [$branch, $project] = $this->context();
         $headers = ['id_kavling', 'no_ktp', 'nama_konsumen', 'tanggal_lahir', 'pekerjaan', 'detail_pekerjaan', 'umur', 'alamat', 'kelurahan', 'kecamatan', 'kabupaten/kota', 'no_hp', 'nama_kondar', 'no_hp_kondar', 'status_cash', 'status_konsumen', 'Status', '', 'keterangan'];
-        $this->expectException(InvalidArgumentException::class);
-        app(ConsumerPasteImportService::class)->createBatch($this->admin(), $branch, $project, implode("\t", $headers)."\n".implode("\t", array_fill(0, 19, 'Budi')));
+        $row = ['K-01', '', 'Budi', '', 'Karyawan', '', '', 'Jalan Mawar', '', '', '', '0812345678', '', '', '', 'Mundur', 'Data Belum Lengkap', '', 'Catatan'];
+        $batch = app(ConsumerPasteImportService::class)->createBatch($this->admin(), $branch, $project, implode("\t", $headers)."\n".implode("\t", $row));
+        $data = $batch->rows()->sole()->normalized_data;
+
+        $this->assertSame('Budi', $data['name']);
+        $this->assertSame('Mundur', $data['consumer_status']);
+        $this->assertSame('Data Belum Lengkap', $data['source_completeness_status']);
+        $this->assertSame('Catatan', $data['notes']);
     }
 
     public function test_recognized_headers_can_be_reordered_and_unknown_optional_fields_can_be_absent(): void
@@ -317,6 +323,73 @@ class ConsumerPasteImportTest extends TestCase
         }
 
         $this->actingAs($this->admin())->get(route('consumer-import.create'))->assertOk();
+    }
+
+    public function test_reordered_database_master_with_missing_optional_headers_succeeds(): void
+    {
+        [$branch, $project] = $this->context();
+        Kavling::create(['project_id' => $project->id, 'kavling_code' => 'K-01', 'name' => 'K-01']);
+        $headers = ['no_hp', 'nama_konsumen', 'id_kavling', 'no_ktp', 'alamat'];
+        $row = ['0812345678', 'Budi', 'K-01', '3308106504650001', 'Jalan Mawar'];
+        $batch = app(ConsumerPasteImportService::class)->createBatch($this->admin(), $branch, $project, implode("\t", $headers)."\n".implode("\t", $row));
+        $data = $batch->rows()->sole()->normalized_data;
+
+        $this->assertSame('READY', $batch->rows()->sole()->status);
+        $this->assertSame('Budi', $data['name']);
+        $this->assertSame('0812345678', $data['phone']);
+        $this->assertSame('K-01', $data['kavling']);
+        $this->assertSame('Jalan Mawar', $data['address']);
+        $this->assertNull($data['consumer_status']);
+        $this->assertNull($data['source_last_process']);
+        $this->assertNull($data['source_completeness_status']);
+        $this->assertNull($data['notes']);
+    }
+
+    public function test_old_oasis_header_aliases_are_supported(): void
+    {
+        [$branch, $project] = $this->context();
+        Kavling::create(['project_id' => $project->id, 'kavling_code' => 'K-01', 'name' => 'K-01']);
+        $headers = ['Nama Konsumen', 'No HP', 'Kav', 'External ID', 'Status', 'Keterangan'];
+        $row = ['Budi', '0812345678', 'K-01', 'EXT-ALIAS', 'Data Lengkap', 'Catatan lama'];
+        $batch = app(ConsumerPasteImportService::class)->createBatch($this->admin(), $branch, $project, implode("\t", $headers)."\n".implode("\t", $row));
+        $data = $batch->rows()->sole()->normalized_data;
+
+        $this->assertSame('READY', $batch->rows()->sole()->status);
+        $this->assertSame('Budi', $data['name']);
+        $this->assertSame('0812345678', $data['phone']);
+        $this->assertSame('K-01', $data['kavling']);
+        $this->assertSame('EXT-ALIAS', $data['external_id']);
+        $this->assertSame('Data Lengkap', $data['source_completeness_status']);
+        $this->assertSame('Catatan lama', $data['notes']);
+    }
+
+    public function test_multiple_trailing_blank_headers_are_trimmed(): void
+    {
+        [$branch, $project] = $this->context();
+        $headers = ['Nama Konsumen', 'No HP', '', '', ''];
+        $row = ['Budi', '0812345678', '', '', ''];
+        $batch = app(ConsumerPasteImportService::class)->createBatch($this->admin(), $branch, $project, implode("\t", $headers)."\n".implode("\t", $row));
+
+        $this->assertSame('READY', $batch->rows()->sole()->status);
+        $this->assertSame('Budi', $batch->rows()->sole()->normalized_data['name']);
+    }
+
+    public function test_idempotent_paste_same_data_twice_does_not_create_duplicates(): void
+    {
+        [$branch, $project] = $this->context();
+        $actor = $this->admin();
+        $input = "Nama Konsumen\tNo HP\tExternal ID\nBudi\t081234\tIDEM-1";
+        $first = app(ConsumerPasteImportService::class)->createBatch($actor, $branch, $project, $input);
+        app(ConsumerPasteImportService::class)->import($first, $actor);
+
+        $this->assertSame(1, ConsumerApplication::count());
+
+        $second = app(ConsumerPasteImportService::class)->createBatch($actor, $branch, $project, $input);
+        $this->assertSame('ALREADY_IMPORTED', $second->rows()->sole()->status);
+
+        $secondResult = app(ConsumerPasteImportService::class)->import($second, $actor);
+        $this->assertSame(0, $secondResult['created_applications']);
+        $this->assertSame(1, ConsumerApplication::count());
     }
 
     private function context(): array

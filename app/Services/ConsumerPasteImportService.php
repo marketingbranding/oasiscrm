@@ -246,7 +246,14 @@ class ConsumerPasteImportService
             throw new InvalidArgumentException('Data TSV tidak memiliki baris.');
         }
         $headerCells = array_shift($records);
-        $headers = array_map(fn ($value, $index) => $this->headerKey((string) $value, $index, $headerCells, $branch), $headerCells, array_keys($headerCells));
+        $allHeaders = array_map(fn ($value, $index) => $this->headerKey((string) $value, $index, $headerCells, $branch), $headerCells, array_keys($headerCells));
+        $headerBlankPositions = [];
+        foreach ($allHeaders as $i => $h) {
+            if ($h === '') {
+                $headerBlankPositions[] = $i;
+            }
+        }
+        $headers = array_values(array_filter($allHeaders, fn ($h) => $h !== ''));
         if ($headers === [] || ! in_array('name', $headers, true)) {
             throw new InvalidArgumentException('Header wajib memuat Nama Konsumen.');
         }
@@ -260,6 +267,11 @@ class ConsumerPasteImportService
         foreach ($records as $offset => $values) {
             if (count($values) === 1 && trim((string) $values[0]) === '') {
                 continue;
+            }
+            if ($headerBlankPositions !== []) {
+                foreach (array_reverse($headerBlankPositions) as $pos) {
+                    array_splice($values, $pos, 1);
+                }
             }
             $errors = [];
             if (count($values) === count($headers) - 1 && end($headers) === 'notes' && $this->isOperationalTrailingNotesOmission($values)) {
@@ -457,18 +469,11 @@ class ConsumerPasteImportService
     {
         $key = Str::lower(trim(preg_replace('/\s+/', ' ', $header)));
 
-        if ($key === '' && $index === 17 && count($headers) === 19 && $this->knownMagelangLayout($headers, $branch)) {
-            return 'legacy_blank_17';
+        if ($key === '') {
+            return '';
         }
 
         return self::HEADER_ALIASES[$key] ?? throw new InvalidArgumentException('Header tidak dikenali: '.$header);
-    }
-
-    private function knownMagelangLayout(array $headers, ?Branch $branch): bool
-    {
-        $normalized = array_map(fn ($header) => Str::lower(trim(preg_replace('/\s+/', ' ', (string) $header))), $headers);
-
-        return $branch !== null && str_contains(Str::lower($branch->name.' '.$branch->code), 'magelang') && $normalized[15] === 'status_konsumen' && $normalized[16] === 'status' && $normalized[18] === 'keterangan';
     }
 
     private function norm(?string $value): string

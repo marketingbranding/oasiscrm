@@ -16,8 +16,9 @@ final class ConsumerIdentityBridgeAuditService
         $local = $this->local($branch, $project);
         $candidates = $this->candidates($legacy['records'], $local['records']);
         $diagnostics = $this->diagnostics($legacy['records'], $local['records']);
+        $bridgePlan = $this->bridgePlan($legacy['records'], $local['records']);
 
-        return compact('legacy', 'local', 'candidates', 'diagnostics');
+        return compact('legacy', 'local', 'candidates', 'diagnostics', 'bridgePlan');
     }
 
     private function legacy(Branch $branch, LeadMaster $project): array
@@ -224,6 +225,46 @@ final class ConsumerIdentityBridgeAuditService
         }
 
         return ['phone_kavling' => ['legacy_rows' => array_sum(array_map('count', $legacyPairs)), 'local_applications' => array_sum(array_map('count', $localPairs)), 'raw_exact_matches' => $raw, 'raw_unique_one_to_one' => $unique, 'duplicate_legacy_keys' => count(array_filter($legacyPairs, fn ($v) => count($v) > 1)), 'duplicate_local_keys' => count(array_filter($localPairs, fn ($v) => count($v) > 1)), 'ambiguous_matches' => $ambiguous, 'unmatched_legacy' => $unmatchedLegacy, 'unmatched_local' => $unmatchedLocal], 'nik' => ['legacy_valid' => array_sum(array_map('count', $legacyNik)), 'local_valid' => array_sum(array_map('count', $localNik)), 'unique_legacy_fingerprints' => count($legacyNik), 'unique_local_fingerprints' => count($localNik), 'exact_matches' => $exact, 'safe_one_to_one' => $safe, 'duplicate_legacy_groups' => count(array_filter($legacyNik, fn ($v) => count($v) > 1)), 'duplicate_local_groups' => count(array_filter($localNik, fn ($v) => count($v) > 1)), 'one_legacy_multiple_local' => $oneMany, 'multiple_legacy_one_local' => $manyOne, 'unmatched_legacy' => $unmatchedLegacyNik, 'unmatched_local' => $unmatchedLocalNik, 'identity_conflicts' => $conflicts, 'safe_linkable' => $safeLinkable, 'classifications' => $classifications, 'duplicate_local_details' => $duplicateLocalGroups, 'unmatched_legacy_details' => $unmatchedLegacyDetails, 'unmatched_local_details' => $unmatchedLocalDetails]];
+    }
+
+    private function bridgePlan(array $legacy, array $local): array
+    {
+        $legacyNik = $this->group($legacy, 'nik_hash');
+        $localNik = $this->group($local, 'nik_hash');
+        $counts = ['READY_EXISTING_SAME_APP' => 0, 'BLOCK_TRUE_CONFLICT' => 0, 'BLOCK_AMBIGUOUS' => 0, 'BLOCK_UNMATCHED' => 0, 'BLOCK_UNMATCHED_LEGACY' => 0, 'BLOCK_UNMATCHED_LOCAL' => 0];
+        $rows = [];
+        foreach (array_keys($legacyNik) as $key) {
+            $legacyRows = $legacyNik[$key] ?? [];
+            $localRows = $localNik[$key] ?? [];
+            if (! $localRows) {
+                $counts['BLOCK_UNMATCHED'] += count($legacyRows);
+                $counts['BLOCK_UNMATCHED_LEGACY'] += count($legacyRows);
+                foreach ($legacyRows as $row) {
+                    $rows[] = $this->planRow('BLOCK_UNMATCHED', 'no local NIK match', [$row], []);
+                }
+
+                continue;
+            }
+            $sameApplication = count($legacyRows) === 1 && count($localRows) === 1 && count($localRows[0]['identity_rows'] ?? []) === 1
+                && ($localRows[0]['identity_rows'][0]['application_id'] ?? null) === $localRows[0]['id']
+                && ($localRows[0]['identity_rows'][0]['legacy_source'] ?? null) === 'manual_spreadsheet_paste';
+            $action = count($legacyRows) === 1 && count($localRows) === 1
+                ? ($sameApplication ? 'READY_EXISTING_SAME_APP' : 'BLOCK_TRUE_CONFLICT')
+                : 'BLOCK_AMBIGUOUS';
+            $reason = $action === 'READY_EXISTING_SAME_APP' ? 'existing manual-paste identity already points to application' : ($action === 'BLOCK_TRUE_CONFLICT' ? 'TRUE_CONFLICT classification' : 'NIK cardinality is ambiguous');
+            $counts[$action]++;
+            $rows[] = $this->planRow($action, $reason, $legacyRows, $localRows);
+        }
+
+        $safe = $counts['READY_EXISTING_SAME_APP'];
+        $counts['BLOCK_UNMATCHED_LOCAL'] = array_sum(array_map('count', array_diff_key($localNik, $legacyNik)));
+
+        return ['counts' => $counts, 'rows' => $rows, 'future_write_strategy' => 'D', 'future_write_reason' => 'Existing manual_spreadsheet_paste identity rows already provide stable application provenance; comparison/read services should resolve through them without duplicate rows.', 'simulation' => ['matched' => $safe, 'legacy_only' => $counts['BLOCK_UNMATCHED_LEGACY'], 'local_only' => $counts['BLOCK_UNMATCHED_LOCAL'], 'ambiguous' => $counts['BLOCK_AMBIGUOUS'] + $counts['BLOCK_TRUE_CONFLICT'], 'coverage_percent' => $legacy ? round($safe / count($legacy) * 100, 2) : 0]];
+    }
+
+    private function planRow(string $action, string $reason, array $legacy, array $local): array
+    {
+        return ['action' => $action, 'reason' => $reason, 'legacy_candidates' => count($legacy), 'local_candidates' => count($local), 'legacy_phone' => $this->maskPhone($legacy[0]['phone'] ?? ''), 'legacy_kavling' => $legacy[0]['kavling'] ?? '—', 'legacy_name' => $legacy[0]['name'] ?? '—', 'local_applications' => array_values(array_column($local, 'id')), 'local_phones' => array_values(array_map(fn ($row) => $this->maskPhone($row['phone'] ?? ''), $local)), 'local_kavlings' => array_values(array_column($local, 'kavling')), 'local_names' => array_values(array_column($local, 'name')), 'duplicate_nik' => count($local) > 1];
     }
 
     private function normalized(array $data): array

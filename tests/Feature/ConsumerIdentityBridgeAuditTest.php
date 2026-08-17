@@ -106,6 +106,45 @@ class ConsumerIdentityBridgeAuditTest extends TestCase
         $this->assertSame(['draft' => 4, 'submitted' => 1], $local['application_status']);
     }
 
+    public function test_bridge_plan_uses_existing_same_application_identity_without_proposed_duplicate(): void
+    {
+        [$branch, $project] = $this->context();
+        $this->legacy($branch, ['nama_konsumen' => 'Budi', 'nik' => '3308106504650001']);
+        $customer = Customer::create(['name' => 'Budi', 'nik_encrypted' => '3308106504650001']);
+        $application = ConsumerApplication::create(['customer_id' => $customer->id, 'branch_id' => $branch->id, 'project_id' => $project->id, 'application_status' => 'draft']);
+        ConsumerLegacyIdentity::create(['consumer_application_id' => $application->id, 'customer_id' => $customer->id, 'legacy_source' => 'manual_spreadsheet_paste', 'external_key' => 'legacy:1']);
+        $before = ConsumerLegacyIdentity::count();
+
+        $plan = app(ConsumerIdentityBridgeAuditService::class)->audit($branch, $project)['bridgePlan'];
+
+        $this->assertSame(1, $plan['counts']['READY_EXISTING_SAME_APP']);
+        $this->assertSame(0, $plan['counts']['BLOCK_TRUE_CONFLICT']);
+        $this->assertSame('D', $plan['future_write_strategy']);
+        $this->assertSame(1, $plan['simulation']['matched']);
+        $this->assertSame($before, ConsumerLegacyIdentity::count());
+    }
+
+    public function test_bridge_plan_blocks_conflict_duplicate_and_unmatched_without_fuzzy_fallback(): void
+    {
+        [$branch, $project] = $this->context();
+        $this->legacy($branch, ['nama_konsumen' => 'Budi', 'no_hp' => '0812345678', 'id_kavling' => 'K-01', 'nik' => '3308106504650001']);
+        $this->legacy($branch, ['nama_konsumen' => 'Sari', 'nik' => '3308106504650002']);
+        foreach (['Budi', 'Sari'] as $name) {
+            $customer = Customer::create(['name' => $name, 'phone' => '0812345678', 'nik_encrypted' => $name === 'Budi' ? '3308106504650001' : '3308106504650003']);
+            ConsumerApplication::create(['customer_id' => $customer->id, 'branch_id' => $branch->id, 'project_id' => $project->id, 'application_status' => 'draft']);
+        }
+
+        $audit = app(ConsumerIdentityBridgeAuditService::class)->audit($branch, $project);
+        $plan = $audit['bridgePlan'];
+        $json = json_encode($audit, JSON_THROW_ON_ERROR);
+
+        $this->assertSame(1, $plan['counts']['BLOCK_TRUE_CONFLICT']);
+        $this->assertSame(1, $plan['counts']['BLOCK_UNMATCHED']);
+        $this->assertSame(1, $plan['simulation']['ambiguous']);
+        $this->assertStringNotContainsString('3308106504650001', $json);
+        $this->assertStringNotContainsString('3308106504650002', $json);
+    }
+
     private function legacy(Branch $branch, array $data): void
     {
         KonsumenProgressSheetRow::create(['branch_id' => $branch->id, 'sheet_id' => $branch->sheet_id, 'sheet_name' => 'data_konsumen', 'row_hash' => Str::uuid(), 'row_data' => ['project_name' => 'Audit Project', ...$data]]);

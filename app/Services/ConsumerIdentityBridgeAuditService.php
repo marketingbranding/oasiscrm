@@ -112,7 +112,7 @@ final class ConsumerIdentityBridgeAuditService
                 $phoneKavlings[] = $phone.'|'.$kavling;
             }
             $customers[$app->customer_id] = ($customers[$app->customer_id] ?? 0) + 1;
-            $records[] = ['id' => $app->id, 'name' => $app->customer?->name, 'phone' => $phone, 'kavling' => $kavling, 'external_id' => $identity?->external_key && Str::startsWith($identity->external_key, 'external:') ? Str::after($identity->external_key, 'external:') : null, 'nik_hash' => $app->customer?->nik_encrypted ? $this->fingerprint($app->customer->nik_encrypted) : null, 'identity_count' => $app->legacyIdentities->count(), 'status' => null];
+            $records[] = ['id' => $app->id, 'customer_id' => $app->customer_id, 'name' => $app->customer?->name, 'phone' => $phone, 'kavling' => $kavling, 'external_id' => $identity?->external_key && Str::startsWith($identity->external_key, 'external:') ? Str::after($identity->external_key, 'external:') : null, 'nik_hash' => $app->customer?->nik_encrypted ? $this->fingerprint($app->customer->nik_encrypted) : null, 'identity_count' => $app->legacyIdentities->count(), 'identity_rows' => $app->legacyIdentities->map(fn ($identity) => ['application_id' => $identity->consumer_application_id, 'legacy_source' => $identity->legacy_source, 'external_key' => $identity->external_key])->values()->all(), 'status' => null];
         }
 
         return ['total' => $apps->count(), 'unique_customers' => count($customers), 'with_phone' => count($phones), 'with_kavling' => count($kavlings), 'with_nik' => $apps->filter(fn ($a) => filled($a->customer?->getRawOriginal('nik_encrypted')))->count(), 'application_status' => $statuses, 'identity_prefixes' => $prefixes, 'consumer_status' => $consumerStatuses, 'source_last_process' => $lastProcesses, 'source_completeness_status' => $completenessStatuses, 'semantic_coverage' => $semanticCoverage, 'duplicates' => $this->duplicates($phones, $kavlings, $phoneKavlings), 'customers_with_multiple_applications' => count(array_filter($customers, fn ($n) => $n > 1)), 'records' => $records];
@@ -171,35 +171,59 @@ final class ConsumerIdentityBridgeAuditService
         }
         $legacyNik = $this->group($legacy, 'nik_hash');
         $localNik = $this->group($local, 'nik_hash');
-        $exact = $safe = $oneMany = $manyOne = $unmatchedLegacyNik = $unmatchedLocalNik = $conflicts = 0;
+        $exact = $safe = $safeLinkable = $oneMany = $manyOne = $unmatchedLegacyNik = $unmatchedLocalNik = $conflicts = 0;
+        $classifications = ['SAME_APPLICATION_EXPECTED' => 0, 'TRUE_CONFLICT' => 0, 'MULTIPLE_IDENTITY_ROWS' => 0, 'NO_CONFLICT' => 0];
+        $duplicateLocalGroups = $unmatchedLegacyDetails = $unmatchedLocalDetails = [];
         foreach (array_unique(array_merge(array_keys($legacyNik), array_keys($localNik))) as $key) {
             $left = count($legacyNik[$key] ?? []);
             $right = count($localNik[$key] ?? []);
             if (! $left || ! $right) {
                 if ($left) {
                     $unmatchedLegacyNik += $left;
+                    foreach ($legacyNik[$key] as $row) {
+                        $unmatchedLegacyDetails[] = ['phone' => $this->maskPhone($row['phone']), 'kavling' => $row['kavling'], 'reason' => 'no local NIK match'];
+                    }
                 } else {
                     $unmatchedLocalNik += $right;
+                    foreach ($localNik[$key] as $row) {
+                        $unmatchedLocalDetails[] = ['application_id' => $row['id'], 'phone' => $this->maskPhone($row['phone']), 'kavling' => $row['kavling'], 'reason' => 'no legacy NIK match'];
+                    }
                 }
 
-continue;
+                continue;
             }
             $exact++;
             if ($right > 1) {
                 $oneMany++;
-            } if ($left > 1) {
+            }
+            if ($left > 1) {
                 $manyOne++;
             }
             if ($left === 1 && $right === 1) {
-                if (($localNik[$key][0]['identity_count'] ?? 0) > 0) {
+                $identityRows = $localNik[$key][0]['identity_rows'] ?? [];
+                $classification = count($identityRows) > 1 ? 'MULTIPLE_IDENTITY_ROWS' : (count($identityRows) === 0 ? 'NO_CONFLICT' : (($identityRows[0]['application_id'] ?? null) === $localNik[$key][0]['id'] && ($identityRows[0]['legacy_source'] ?? null) === 'manual_spreadsheet_paste' ? 'SAME_APPLICATION_EXPECTED' : 'TRUE_CONFLICT'));
+                $classifications[$classification]++;
+                if ($classification === 'TRUE_CONFLICT' || $classification === 'MULTIPLE_IDENTITY_ROWS') {
                     $conflicts++;
-                } else {
+                }
+                if ($classification === 'NO_CONFLICT' || $classification === 'SAME_APPLICATION_EXPECTED') {
+                    $safeLinkable++;
+                }
+                if ($classification === 'NO_CONFLICT') {
                     $safe++;
                 }
+            } elseif ($left > 1 || $right > 1) {
+                $classifications['TRUE_CONFLICT']++;
             }
         }
 
-        return ['phone_kavling' => ['legacy_rows' => array_sum(array_map('count', $legacyPairs)), 'local_applications' => array_sum(array_map('count', $localPairs)), 'raw_exact_matches' => $raw, 'raw_unique_one_to_one' => $unique, 'duplicate_legacy_keys' => count(array_filter($legacyPairs, fn ($v) => count($v) > 1)), 'duplicate_local_keys' => count(array_filter($localPairs, fn ($v) => count($v) > 1)), 'ambiguous_matches' => $ambiguous, 'unmatched_legacy' => $unmatchedLegacy, 'unmatched_local' => $unmatchedLocal], 'nik' => ['legacy_valid' => array_sum(array_map('count', $legacyNik)), 'local_valid' => array_sum(array_map('count', $localNik)), 'unique_legacy_fingerprints' => count($legacyNik), 'unique_local_fingerprints' => count($localNik), 'exact_matches' => $exact, 'safe_one_to_one' => $safe, 'duplicate_legacy_groups' => count(array_filter($legacyNik, fn ($v) => count($v) > 1)), 'duplicate_local_groups' => count(array_filter($localNik, fn ($v) => count($v) > 1)), 'one_legacy_multiple_local' => $oneMany, 'multiple_legacy_one_local' => $manyOne, 'unmatched_legacy' => $unmatchedLegacyNik, 'unmatched_local' => $unmatchedLocalNik, 'identity_conflicts' => $conflicts]];
+        foreach ($localNik as $fingerprint => $rows) {
+            if (count($rows) > 1) {
+                $duplicateLocalGroups[] = ['applications' => count($rows), 'customers' => count(array_unique(array_map(fn ($r) => $r['customer_id'] ?? null, $rows))), 'phones' => count(array_unique(array_filter(array_map(fn ($r) => $r['phone'], $rows)))), 'kavlings' => count(array_unique(array_filter(array_map(fn ($r) => $r['kavling'], $rows)))), 'names' => count(array_unique(array_filter(array_map(fn ($r) => $r['name'], $rows)))), 'manual_external_keys' => collect($rows)->flatMap(fn ($r) => collect($r['identity_rows'] ?? [])->where('legacy_source', 'manual_spreadsheet_paste')->pluck('external_key'))->filter()->unique()->count(), 'reason' => 'duplicate local NIK fingerprint'];
+            }
+        }
+
+        return ['phone_kavling' => ['legacy_rows' => array_sum(array_map('count', $legacyPairs)), 'local_applications' => array_sum(array_map('count', $localPairs)), 'raw_exact_matches' => $raw, 'raw_unique_one_to_one' => $unique, 'duplicate_legacy_keys' => count(array_filter($legacyPairs, fn ($v) => count($v) > 1)), 'duplicate_local_keys' => count(array_filter($localPairs, fn ($v) => count($v) > 1)), 'ambiguous_matches' => $ambiguous, 'unmatched_legacy' => $unmatchedLegacy, 'unmatched_local' => $unmatchedLocal], 'nik' => ['legacy_valid' => array_sum(array_map('count', $legacyNik)), 'local_valid' => array_sum(array_map('count', $localNik)), 'unique_legacy_fingerprints' => count($legacyNik), 'unique_local_fingerprints' => count($localNik), 'exact_matches' => $exact, 'safe_one_to_one' => $safe, 'duplicate_legacy_groups' => count(array_filter($legacyNik, fn ($v) => count($v) > 1)), 'duplicate_local_groups' => count(array_filter($localNik, fn ($v) => count($v) > 1)), 'one_legacy_multiple_local' => $oneMany, 'multiple_legacy_one_local' => $manyOne, 'unmatched_legacy' => $unmatchedLegacyNik, 'unmatched_local' => $unmatchedLocalNik, 'identity_conflicts' => $conflicts, 'safe_linkable' => $safeLinkable, 'classifications' => $classifications, 'duplicate_local_details' => $duplicateLocalGroups, 'unmatched_legacy_details' => $unmatchedLegacyDetails, 'unmatched_local_details' => $unmatchedLocalDetails]];
     }
 
     private function normalized(array $data): array

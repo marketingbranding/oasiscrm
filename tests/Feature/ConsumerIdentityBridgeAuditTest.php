@@ -68,7 +68,9 @@ class ConsumerIdentityBridgeAuditTest extends TestCase
         $this->assertSame(1, $audit['candidates']['SHARED_EXTERNAL_ID']);
         $this->assertSame(1, $audit['diagnostics']['nik']['exact_matches']);
         $this->assertSame(0, $audit['diagnostics']['nik']['safe_one_to_one']);
-        $this->assertSame(1, $audit['diagnostics']['nik']['identity_conflicts']);
+        $this->assertSame(1, $audit['diagnostics']['nik']['safe_linkable']);
+        $this->assertSame(0, $audit['diagnostics']['nik']['identity_conflicts']);
+        $this->assertSame(1, $audit['diagnostics']['nik']['classifications']['SAME_APPLICATION_EXPECTED']);
         $this->assertSame(0, $audit['candidates']['NIK_FINGERPRINT_CANDIDATE']);
         $this->assertSame(1, $audit['legacy']['counts']['nik']);
         $this->assertSame(1, $audit['local']['with_nik']);

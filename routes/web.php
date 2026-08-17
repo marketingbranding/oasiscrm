@@ -174,6 +174,7 @@ Route::middleware(['auth', 'active', 'verified', 'password.changed', 'operationa
         Route::get('/consumer-import/{consumer_import_batch}', [ConsumerPasteImportController::class, 'show'])->middleware('not.impersonating')->name('consumer-import.show');
         Route::post('/consumer-import/nik/{customer}/reveal', [ConsumerPasteImportController::class, 'revealNik'])->middleware('not.impersonating')->name('consumer-import.nik-reveal');
         Route::post('/consumer-import/{consumer_import_batch}/confirm', [ConsumerPasteImportController::class, 'confirm'])->middleware('not.impersonating')->name('consumer-import.confirm');
+        Route::post('/consumer-import/{consumer_import_batch}/enrich', [ConsumerPasteImportController::class, 'enrich'])->middleware('not.impersonating')->name('consumer-import.enrich');
         Route::get('/konsumen-progress', [KonsumenProgressController::class, 'index'])->middleware('permission:consumer_progress.view')->name('konsumen-progress.index');
         Route::get('/konsumen-progress/stage', [KonsumenProgressController::class, 'stage'])->middleware('permission:consumer_progress.view')->name('konsumen-progress.stage');
         Route::post('/konsumen-progress/sync', [KonsumenProgressController::class, 'sync'])->middleware('permission:consumer_progress.sync')->name('konsumen-progress.sync');

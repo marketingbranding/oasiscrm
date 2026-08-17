@@ -80,4 +80,12 @@ class ConsumerPasteImportController extends Controller
 
         return redirect()->route('consumer-import.show', $result['batch'])->with('success', 'Import lokal selesai.');
     }
+
+    public function enrich(Request $request, ConsumerImportBatch $consumer_import_batch): RedirectResponse
+    {
+        abort_unless($request->user()->isSuperadmin(), 403);
+        $updated = $this->importer->enrich($consumer_import_batch, $request->user());
+
+        return redirect()->route('consumer-import.show', $consumer_import_batch)->with('success', "Semantik sumber diperkaya: {$updated} aplikasi.");
+    }
 }

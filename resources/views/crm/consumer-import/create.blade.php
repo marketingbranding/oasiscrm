@@ -16,10 +16,10 @@
         <x-crm.input-error :messages="$errors->get('project_id')" />
     </x-crm.field>
     <x-crm.field label="Data TSV dari Spreadsheet" for="tsv" required>
-        <textarea id="tsv" name="tsv" rows="18" class="crm-control font-mono" maxlength="262144" required placeholder="id_kavling&#9;no_ktp&#9;nama_konsumen&#9;tanggal_lahir&#9;pekerjaan&#9;detail_pekerjaan&#9;umur&#9;alamat&#9;kelurahan&#9;kecamatan&#9;kabupaten/kota&#9;no_hp&#9;nama_kondar&#9;no_hp_kondar&#9;status_cash&#9;Status&#9;keterangan">{{ old('tsv') }}</textarea>
+        <textarea id="tsv" name="tsv" rows="18" class="crm-control font-mono" maxlength="262144" required placeholder="id_kavling&#9;no_ktp&#9;nama_konsumen&#9;tanggal_lahir&#9;pekerjaan&#9;detail_pekerjaan&#9;umur&#9;alamat&#9;kelurahan&#9;kecamatan&#9;kabupaten/kota&#9;no_hp&#9;nama_kondar&#9;no_hp_kondar&#9;status_cash&#9;status_konsumen&#9;proses_terakhir&#9;Status&#9;keterangan">{{ old('tsv') }}</textarea>
         <x-crm.input-error :messages="$errors->get('tsv')" />
     </x-crm.field>
-    <p class="text-sm text-gray-600">Format mengikuti spreadsheet Database Master.</p>
+    <p class="text-sm text-gray-600">Format utama mengikuti Database Master 2026. Format cabang lama yang masih kompatibel tetap dapat diproses.</p>
     <p class="text-sm">Salin header beserta data konsumen langsung dari spreadsheet Database Master, lalu tempel di sini. Minimal <strong>Nama Konsumen</strong> harus terisi. Sistem akan memeriksa data terlebih dahulu melalui Preview sebelum disimpan. Tanggal: YYYY-MM-DD atau M/D/YYYY. Format DD/MM/YYYY ambigu dan ditolak.</p>
     <div class="flex gap-2"><x-crm.button type="submit" variant="primary" accent="sales">Buat Preview</x-crm.button><x-crm.button href="{{ route('konsumen-progress.index') }}" variant="secondary">Batal</x-crm.button></div>
 </form>

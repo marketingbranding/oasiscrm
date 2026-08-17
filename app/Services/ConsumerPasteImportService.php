@@ -39,7 +39,7 @@ class ConsumerPasteImportService
         'pekerjaan' => 'occupation', 'detail pekerjaan' => 'occupation_detail', 'detail_pekerjaan' => 'occupation_detail',
         'umur' => 'age', 'alamat' => 'address', 'kelurahan' => 'kelurahan', 'kecamatan' => 'kecamatan', 'kabupaten/kota' => 'kabupaten_kota', 'kabupaten kota' => 'kabupaten_kota',
         'nama kondar' => 'emergency_contact_name', 'nama_kondar' => 'emergency_contact_name', 'no hp kondar' => 'emergency_contact_phone', 'no_hp_kondar' => 'emergency_contact_phone',
-        'status cash' => 'status_cash', 'status_cash' => 'status_cash', 'keterangan' => 'notes',
+        'status cash' => 'status_cash', 'status_cash' => 'status_cash', 'status konsumen' => 'consumer_status', 'status_konsumen' => 'consumer_status', 'proses terakhir' => 'source_last_process', 'proses_terakhir' => 'source_last_process', 'keterangan' => 'notes',
         'proyek' => 'project', 'project' => 'project', 'project name' => 'project', 'project_name' => 'project',
         'sales' => 'sales', 'sales pic' => 'sales', 'sales_pic' => 'sales',
         'kavling' => 'kavling', 'id kavling' => 'kavling', 'id_kavling' => 'kavling', 'kav' => 'kavling',
@@ -60,7 +60,7 @@ class ConsumerPasteImportService
 
     public function preview(string $input, Branch $branch, LeadMaster $project): array
     {
-        $rows = $this->parse($input);
+        $rows = $this->parse($input, $branch);
         $existing = $this->existingIdentityMap($branch, $project);
         $seen = [];
 
@@ -164,6 +164,34 @@ class ConsumerPasteImportService
         });
     }
 
+    public function enrich(ConsumerImportBatch $batch, User $actor): int
+    {
+        return DB::transaction(function () use ($batch, $actor): int {
+            abort_unless($batch->uploaded_by === $actor->id && $batch->status === 'preview_ready', 403);
+            $updated = 0;
+            foreach ($batch->rows()->where('status', 'ALREADY_IMPORTED')->lockForUpdate()->get() as $row) {
+                $applicationId = $row->normalized_data['existing_application_id'] ?? null;
+                $application = $applicationId ? ConsumerApplication::query()->where('branch_id', $batch->branch_id)->where('project_id', $batch->project_id)->find($applicationId) : null;
+                if (! $application) {
+                    continue;
+                }
+                $patch = [];
+                foreach (['consumer_status', 'source_last_process', 'source_completeness_status'] as $field) {
+                    if ($application->{$field} === null && trim((string) ($row->normalized_data[$field] ?? '')) !== '') {
+                        $patch[$field] = $row->normalized_data[$field];
+                    }
+                }
+                if ($patch !== []) {
+                    $application->update($patch);
+                    $updated++;
+                }
+            }
+            ActivityLog::create(['causer_id' => $actor->id, 'subject_type' => ConsumerImportBatch::class, 'subject_id' => $batch->id, 'event' => 'consumer_source_semantics_enriched', 'description' => 'Semantik sumber konsumen yang kosong diperkaya secara eksplisit.', 'properties' => ['actor_id' => $actor->id, 'batch_id' => $batch->id, 'updated' => $updated]]);
+
+            return $updated;
+        });
+    }
+
     private function importRow(array $data, array $sensitiveData, ConsumerImportBatch $batch, User $actor): array
     {
         $identity = ConsumerLegacyIdentity::query()->where('legacy_source', self::SOURCE)->where('spreadsheet_id', 'manual-paste')->where('sheet_name', (string) $batch->project_id)->where('external_key', $data['external_key'])->lockForUpdate()->first();
@@ -172,7 +200,7 @@ class ConsumerPasteImportService
         }
         $customer = $this->resolveCustomer($data, $sensitiveData);
         $customerCreated = $customer->wasRecentlyCreated;
-        $application = ConsumerApplication::create(['customer_id' => $customer->id, 'branch_id' => $batch->branch_id, 'project_id' => $batch->project_id, 'sales_user_id' => $data['sales_user_id'] ?? null, 'kavling_id' => $data['kavling_id'] ?? null, 'promo_id' => $data['promo_id'] ?? null, 'application_status' => 'draft', 'status_cash' => $data['status_cash'] ?? null, 'current_stage' => $data['current_stage'] ?? null, 'booking_date' => $data['booking_date'] ?? null, 'akad_date' => $data['akad_date'] ?? null, 'notes' => $data['notes'] ?? null, 'sales_lead_id' => $data['sales_lead_id'] ?? null]);
+        $application = ConsumerApplication::create(['customer_id' => $customer->id, 'branch_id' => $batch->branch_id, 'project_id' => $batch->project_id, 'sales_user_id' => $data['sales_user_id'] ?? null, 'kavling_id' => $data['kavling_id'] ?? null, 'promo_id' => $data['promo_id'] ?? null, 'application_status' => 'draft', 'consumer_status' => $data['consumer_status'] ?? null, 'status_cash' => $data['status_cash'] ?? null, 'current_stage' => $data['current_stage'] ?? null, 'source_last_process' => $data['source_last_process'] ?? null, 'source_completeness_status' => $data['source_completeness_status'] ?? null, 'booking_date' => $data['booking_date'] ?? null, 'akad_date' => $data['akad_date'] ?? null, 'notes' => $data['notes'] ?? null, 'sales_lead_id' => $data['sales_lead_id'] ?? null]);
         ConsumerLegacyIdentity::create(['consumer_application_id' => $application->id, 'customer_id' => $customer->id, 'legacy_source' => self::SOURCE, 'spreadsheet_id' => 'manual-paste', 'sheet_name' => (string) $batch->project_id, 'external_key' => $data['external_key'], 'source_payload_hash' => hash('sha256', json_encode($data)), 'first_seen_at' => now(), 'last_seen_at' => now(), 'mapping_status' => 'imported']);
         if (! empty($data['current_stage'])) {
             ConsumerStageEvent::create(['consumer_application_id' => $application->id, 'stage' => $data['current_stage'], 'status' => 'current', 'source' => self::SOURCE, 'source_id' => $data['external_key']]);
@@ -205,7 +233,7 @@ class ConsumerPasteImportService
         return ['nik_encrypted' => $sensitiveData['nik'] ?? null, 'date_of_birth' => $data['date_of_birth'] ?? null, 'occupation' => $data['occupation'] ?? null, 'occupation_detail' => $data['occupation_detail'] ?? null, 'address' => $data['address'] ?? null, 'kelurahan' => $data['kelurahan'] ?? null, 'kecamatan' => $data['kecamatan'] ?? null, 'kabupaten_kota' => $data['kabupaten_kota'] ?? null, 'emergency_contact_name' => $data['emergency_contact_name'] ?? null, 'emergency_contact_phone' => $this->normalizePhone($data['emergency_contact_phone'] ?? null)];
     }
 
-    private function parse(string $input): array
+    private function parse(string $input, Branch $branch): array
     {
         if (strlen($input) > 262144) {
             throw new InvalidArgumentException('Data TSV maksimal 256KB.');
@@ -218,7 +246,7 @@ class ConsumerPasteImportService
             throw new InvalidArgumentException('Data TSV tidak memiliki baris.');
         }
         $headerCells = array_shift($records);
-        $headers = array_map(fn ($value) => $this->headerKey((string) $value), $headerCells);
+        $headers = array_map(fn ($value, $index) => $this->headerKey((string) $value, $index, $headerCells, $branch), $headerCells, array_keys($headerCells));
         if ($headers === [] || ! in_array('name', $headers, true)) {
             throw new InvalidArgumentException('Header wajib memuat Nama Konsumen.');
         }
@@ -234,7 +262,7 @@ class ConsumerPasteImportService
                 continue;
             }
             $errors = [];
-            if ($this->isOperationalHeader($headers) && count($values) === count($headers) - 1 && $this->isOperationalTrailingNotesOmission($values)) {
+            if (count($values) === count($headers) - 1 && end($headers) === 'notes' && $this->isOperationalTrailingNotesOmission($values)) {
                 $values[] = '';
             }
             if (count($values) !== count($headers)) {
@@ -245,7 +273,7 @@ class ConsumerPasteImportService
             if ($raw['name'] === '') {
                 $errors[] = 'Nama Konsumen wajib diisi.';
             }
-            $normalized = ['name' => $raw['name'], 'phone' => $raw['phone'] ?? null, 'project' => $raw['project'] ?? null, 'sales' => $raw['sales'] ?? null, 'kavling' => $raw['kavling'] ?? null, 'promo' => $raw['promo'] ?? null, 'application_status' => 'draft', 'current_stage' => $this->stage($raw['stage'] ?? null), 'booking_date' => $this->date($raw['booking_date'] ?? null), 'akad_date' => $this->date($raw['akad_date'] ?? null), 'bank' => $raw['bank'] ?? null, 'bank_status' => $raw['bank_status'] ?? null, 'external_id' => $raw['external_id'] ?? null, 'date_of_birth' => $this->date($raw['date_of_birth'] ?? null), 'occupation' => $raw['occupation'] ?? null, 'occupation_detail' => $raw['occupation_detail'] ?? null, 'address' => $raw['address'] ?? null, 'kelurahan' => $raw['kelurahan'] ?? null, 'kecamatan' => $raw['kecamatan'] ?? null, 'kabupaten_kota' => $raw['kabupaten_kota'] ?? null, 'emergency_contact_name' => $raw['emergency_contact_name'] ?? null, 'emergency_contact_phone' => $raw['emergency_contact_phone'] ?? null, 'status_cash' => $this->boolean($raw['status_cash'] ?? null), 'notes' => $raw['notes'] ?? null];
+            $normalized = ['name' => $raw['name'], 'phone' => $raw['phone'] ?? null, 'project' => $raw['project'] ?? null, 'sales' => $raw['sales'] ?? null, 'kavling' => $raw['kavling'] ?? null, 'promo' => $raw['promo'] ?? null, 'application_status' => 'draft', 'consumer_status' => $raw['consumer_status'] ?? null, 'current_stage' => $this->stage($raw['stage'] ?? null), 'source_last_process' => $raw['source_last_process'] ?? null, 'source_completeness_status' => $raw['status'] ?? null, 'booking_date' => $this->date($raw['booking_date'] ?? null), 'akad_date' => $this->date($raw['akad_date'] ?? null), 'bank' => $raw['bank'] ?? null, 'bank_status' => $raw['bank_status'] ?? null, 'external_id' => $raw['external_id'] ?? null, 'date_of_birth' => $this->date($raw['date_of_birth'] ?? null), 'occupation' => $raw['occupation'] ?? null, 'occupation_detail' => $raw['occupation_detail'] ?? null, 'address' => $raw['address'] ?? null, 'kelurahan' => $raw['kelurahan'] ?? null, 'kecamatan' => $raw['kecamatan'] ?? null, 'kabupaten_kota' => $raw['kabupaten_kota'] ?? null, 'emergency_contact_name' => $raw['emergency_contact_name'] ?? null, 'emergency_contact_phone' => $raw['emergency_contact_phone'] ?? null, 'status_cash' => $this->boolean($raw['status_cash'] ?? null), 'notes' => $raw['notes'] ?? null];
             $sensitiveData = ['nik' => $this->normalizeNik($raw['nik'] ?? null)];
             if ($sensitiveData['nik'] !== null && ! preg_match('/^\d{16}$/', $sensitiveData['nik'])) {
                 $errors[] = 'NIK harus berupa 16 digit.';
@@ -425,11 +453,22 @@ class ConsumerPasteImportService
         return isset($values[14]) && in_array(Str::lower(trim((string) $values[14])), ['ya', 'yes', 'true', '1', 'tidak', 'no', 'false', '0'], true);
     }
 
-    private function headerKey(string $header): string
+    private function headerKey(string $header, int $index = -1, array $headers = [], ?Branch $branch = null): string
     {
         $key = Str::lower(trim(preg_replace('/\s+/', ' ', $header)));
 
+        if ($key === '' && $index === 17 && count($headers) === 19 && $this->knownMagelangLayout($headers, $branch)) {
+            return 'legacy_blank_17';
+        }
+
         return self::HEADER_ALIASES[$key] ?? throw new InvalidArgumentException('Header tidak dikenali: '.$header);
+    }
+
+    private function knownMagelangLayout(array $headers, ?Branch $branch): bool
+    {
+        $normalized = array_map(fn ($header) => Str::lower(trim(preg_replace('/\s+/', ' ', (string) $header))), $headers);
+
+        return $branch !== null && str_contains(Str::lower($branch->name.' '.$branch->code), 'magelang') && $normalized[15] === 'status_konsumen' && $normalized[16] === 'status' && $normalized[18] === 'keterangan';
     }
 
     private function norm(?string $value): string

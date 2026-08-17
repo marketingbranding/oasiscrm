@@ -41,6 +41,55 @@ class ConsumerPasteImportTest extends TestCase
         app(ConsumerPasteImportService::class)->createBatch($this->admin(), $branch, $project, "Nama Konsumen\tNama Konsumen\nBudi\tBudi");
     }
 
+    public function test_canonical_database_master_semantics_are_separate(): void
+    {
+        [$branch, $project] = $this->context();
+        $headers = ['id_kavling', 'no_ktp', 'nama_konsumen', 'tanggal_lahir', 'pekerjaan', 'detail_pekerjaan', 'umur', 'alamat', 'kelurahan', 'kecamatan', 'kabupaten/kota', 'no_hp', 'nama_kondar', 'no_hp_kondar', 'status_cash', 'status_konsumen', 'proses_terakhir', 'Status', 'keterangan'];
+        $row = ['K-01', '', 'Budi', '1994-11-19', 'Karyawan', '', '31', 'Jalan Mawar', '', '', '', '0812345678', '', '', 'YA', 'Lanjut', 'Akad', 'Data Lengkap', ''];
+        $batch = app(ConsumerPasteImportService::class)->createBatch($this->admin(), $branch, $project, implode("\t", $headers)."\n".implode("\t", $row));
+        $data = $batch->rows()->sole()->normalized_data;
+
+        $this->assertSame('Lanjut', $data['consumer_status']);
+        $this->assertSame('Akad', $data['source_last_process']);
+        $this->assertSame('Data Lengkap', $data['source_completeness_status']);
+        $this->assertSame('', $data['notes']);
+        $this->assertSame('draft', $data['application_status']);
+    }
+
+    public function test_magelang_blank_header_layout_is_supported_but_optional_headers_may_be_absent(): void
+    {
+        [$branch, $project] = $this->context();
+        $branch->update(['name' => 'KC MAGELANG']);
+        $headers = ['id_kavling', 'no_ktp', 'nama_konsumen', 'tanggal_lahir', 'pekerjaan', 'detail_pekerjaan', 'umur', 'alamat', 'kelurahan', 'kecamatan', 'kabupaten/kota', 'no_hp', 'nama_kondar', 'no_hp_kondar', 'status_cash', 'status_konsumen', 'Status', '', 'keterangan'];
+        $row = ['K-01', '', 'Budi', '', 'Karyawan', '', '', 'Jalan Mawar', '', '', '', '0812345678', '', '', '', 'Mundur', 'Data Belum Lengkap', '', 'Catatan'];
+        $batch = app(ConsumerPasteImportService::class)->createBatch($this->admin(), $branch, $project, implode("\t", $headers)."\n".implode("\t", $row));
+        $data = $batch->rows()->sole()->normalized_data;
+
+        $this->assertSame('Mundur', $data['consumer_status']);
+        $this->assertNull($data['source_last_process']);
+        $this->assertSame('Data Belum Lengkap', $data['source_completeness_status']);
+        $this->assertSame('Catatan', $data['notes']);
+    }
+
+    public function test_blank_header_layout_is_rejected_for_non_magelang_branch(): void
+    {
+        [$branch, $project] = $this->context();
+        $headers = ['id_kavling', 'no_ktp', 'nama_konsumen', 'tanggal_lahir', 'pekerjaan', 'detail_pekerjaan', 'umur', 'alamat', 'kelurahan', 'kecamatan', 'kabupaten/kota', 'no_hp', 'nama_kondar', 'no_hp_kondar', 'status_cash', 'status_konsumen', 'Status', '', 'keterangan'];
+        $this->expectException(InvalidArgumentException::class);
+        app(ConsumerPasteImportService::class)->createBatch($this->admin(), $branch, $project, implode("\t", $headers)."\n".implode("\t", array_fill(0, 19, 'Budi')));
+    }
+
+    public function test_recognized_headers_can_be_reordered_and_unknown_optional_fields_can_be_absent(): void
+    {
+        [$branch, $project] = $this->context();
+        $batch = app(ConsumerPasteImportService::class)->createBatch($this->admin(), $branch, $project, "Status\tNama Konsumen\tstatus_konsumen\nData Lengkap\tBudi\tReject");
+        $data = $batch->rows()->sole()->normalized_data;
+
+        $this->assertSame('Budi', $data['name']);
+        $this->assertSame('Reject', $data['consumer_status']);
+        $this->assertNull($data['source_last_process']);
+    }
+
     public function test_operational_row_accepts_blank_final_keterangan_and_is_complete(): void
     {
         [$branch, $project] = $this->context();
@@ -193,6 +242,27 @@ class ConsumerPasteImportTest extends TestCase
         $secondResult = app(ConsumerPasteImportService::class)->import($second, $actor);
         $this->assertSame(0, $secondResult['created_applications']);
         $this->assertSame(1, ConsumerApplication::count());
+    }
+
+    public function test_explicit_enrichment_fills_only_new_source_semantics_without_recreating_application(): void
+    {
+        [$branch, $project] = $this->context();
+        $actor = $this->admin();
+        $service = app(ConsumerPasteImportService::class);
+        $first = $service->createBatch($actor, $branch, $project, "Nama Konsumen\tExternal ID\nBudi\tEXT-ENRICH");
+        $service->import($first, $actor);
+        $application = ConsumerApplication::sole();
+
+        $second = $service->createBatch($actor, $branch, $project, "Nama Konsumen\tExternal ID\tstatus_konsumen\tproses_terakhir\tStatus\nBudi\tEXT-ENRICH\tLanjut\tAkad\tData Lengkap");
+        $this->assertSame('ALREADY_IMPORTED', $second->rows()->sole()->status);
+        $this->assertSame(1, $service->enrich($second, $actor));
+
+        $application->refresh();
+        $this->assertSame(1, ConsumerApplication::count());
+        $this->assertSame('Lanjut', $application->consumer_status);
+        $this->assertSame('Akad', $application->source_last_process);
+        $this->assertSame('Data Lengkap', $application->source_completeness_status);
+        $this->assertSame('draft', $application->application_status);
     }
 
     public function test_operational_spreadsheet_headers_store_profile_fields_and_encrypted_nik(): void

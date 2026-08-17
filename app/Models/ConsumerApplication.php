@@ -16,7 +16,7 @@ class ConsumerApplication extends Model
 
     protected $fillable = [
         'customer_id', 'branch_id', 'project_id', 'sales_user_id', 'kavling_id', 'promo_id', 'sales_lead_id',
-        'application_status', 'status_cash', 'current_stage', 'booking_date', 'akad_date', 'notes',
+        'application_status', 'consumer_status', 'status_cash', 'current_stage', 'source_last_process', 'source_completeness_status', 'booking_date', 'akad_date', 'notes',
     ];
 
     protected function casts(): array

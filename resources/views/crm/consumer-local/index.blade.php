@@ -24,8 +24,8 @@
 @empty<tr><td colspan="10">Belum ada data konsumen lokal.</td></tr>@endforelse
 </tbody></table></div>
 <div class="mt-3">{{ $applications->links() }}</div>
-<div x-show="open" x-cloak @keydown.escape.window="open = false" class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" role="dialog" aria-modal="true" aria-label="Detail konsumen">
-    <div @click.outside="open = false" class="max-h-[90vh] w-full max-w-3xl overflow-y-auto border-2 border-black bg-white p-4">
+<div x-show="open" x-cloak @keydown.escape.window="open = false" class="fixed inset-0 z-50 flex justify-end bg-black/50" role="dialog" aria-modal="true" aria-label="Detail konsumen" x-transition:enter="transition-opacity duration-150" x-transition:enter-start="opacity-0" x-transition:enter-end="opacity-100" x-transition:leave="transition-opacity duration-150" x-transition:leave-start="opacity-100" x-transition:leave-end="opacity-0">
+    <div @click.outside="open = false" class="h-full max-h-screen w-full max-w-3xl overflow-y-auto border-l-2 border-black bg-white p-4 shadow-[-6px_0_0_0_#000]" x-transition:enter="transition-transform duration-150" x-transition:enter-start="translate-x-full" x-transition:enter-end="translate-x-0" x-transition:leave="transition-transform duration-150" x-transition:leave-start="translate-x-0" x-transition:leave-end="translate-x-full">
         <div class="mb-3 flex items-center justify-between border-b-2 border-black pb-2"><h2 class="font-[Helvetica] text-lg font-bold uppercase">Detail Konsumen</h2><button type="button" @click="open = false" aria-label="Tutup detail" class="border-2 border-black px-3 py-1 font-bold">Tutup</button></div>
         <div x-show="loading">Memuat detail...</div>
         <div x-show="!loading" class="space-y-4">

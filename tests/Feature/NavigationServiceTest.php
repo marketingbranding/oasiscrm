@@ -113,6 +113,36 @@ class NavigationServiceTest extends TestCase
         $this->assertNotContains('Laporan Fee Sales', $this->labels($supplementalNavigation));
     }
 
+    public function test_consumer_navigation_shows_data_konsumen_before_progress_and_database(): void
+    {
+        $navigation = $this->navigationFor('superadmin', 'consumer-local.index');
+        $sales = collect($navigation)->firstWhere('key', 'sales');
+        $labels = array_column($sales['children'], 'label');
+
+        $this->assertSame(['Buku Saku Sales', 'Data Konsumen', 'Konsumen Progress', 'Database'], $labels);
+        $this->assertTrue(collect($sales['children'])->firstWhere('label', 'Data Konsumen')['active']);
+        $this->assertFalse(collect($sales['children'])->firstWhere('label', 'Database')['active']);
+    }
+
+    public function test_consumer_detail_route_keeps_data_konsumen_active(): void
+    {
+        $navigation = $this->navigationFor('superadmin', 'consumer-local.show');
+        $sales = collect($navigation)->firstWhere('key', 'sales');
+        $dataConsumer = collect($sales['children'])->firstWhere('label', 'Data Konsumen');
+
+        $this->assertTrue($dataConsumer['active']);
+    }
+
+    public function test_consumer_navigation_requires_permission_and_scope(): void
+    {
+        $user = $this->user('branch_manager');
+        $user->role->permissions()->detach(Permission::query()->where('slug', 'consumer_progress.view')->firstOrFail());
+
+        $navigation = app(NavigationService::class)->forUser($user->fresh('role.permissions'), 'consumer-local.index');
+
+        $this->assertNotContains('Data Konsumen', $this->labels($navigation));
+    }
+
     public function test_current_route_marks_child_and_parent_active(): void
     {
         $navigation = $this->navigationFor('superadmin', 'kavlings.index');

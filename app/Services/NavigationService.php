@@ -28,11 +28,14 @@ class NavigationService
                 $user->hasScopedPermission('sales_pocketbook')
                     ? $this->item('Buku Saku Sales', 'sales-pocketbook.index', 'sales', 'sales', ['sales-pocketbook.*', 'sales-leads.*', 'sales-agendas.*', 'sales-reminders.*'], $routeName, 'sales_pocketbook', $moduleMaintenance)
                     : null,
-                ! $isSales && $user->hasPermission('database.view') && $user->hasScopedPermission('database')
-                    ? $this->item('Database', 'database.index', 'database', 'database', ['database.*'], $routeName, 'database', $moduleMaintenance)
+                ! $isSales && $user->hasPermission('consumer_progress.view') && $user->hasScopedPermission('consumer_progress')
+                    ? $this->item('Data Konsumen', 'consumer-local.index', 'customers', 'consumer-progress', ['consumer-local.*'], $routeName, 'consumer_progress', $moduleMaintenance)
                     : null,
                 ! $isSales && $user->hasPermission('consumer_progress.view') && $user->hasScopedPermission('consumer_progress')
                     ? $this->item('Konsumen Progress', 'konsumen-progress.index', 'customers', 'consumer-progress', ['konsumen-progress.*'], $routeName, 'consumer_progress', $moduleMaintenance)
+                    : null,
+                ! $isSales && $user->hasPermission('database.view') && $user->hasScopedPermission('database')
+                    ? $this->item('Database', 'database.index', 'database', 'database', ['database.*'], $routeName, 'database', $moduleMaintenance)
                     : null,
             ]),
             $this->group('operations', 'Operasional', 'operations', [

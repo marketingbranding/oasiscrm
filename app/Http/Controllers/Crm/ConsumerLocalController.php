@@ -49,9 +49,37 @@ class ConsumerLocalController extends Controller
     {
         abort_unless(in_array((int) $application->branch_id, $scope->branchIds($request->user(), 'consumer_progress'), true), 403);
         abort_unless(in_array((int) $application->project_id, $scope->projectIds($request->user(), 'consumer_progress'), true), 403);
-        $application->load(['customer:id,name,phone,date_of_birth,occupation,occupation_detail,address,kelurahan,kecamatan,kabupaten_kota,emergency_contact_name,emergency_contact_phone,nik_encrypted', 'branch:id,name,code', 'project:id,project_name', 'sales:id,name', 'kavling:id,kavling_code,name', 'promo:id,name']);
+        $application->load(['customer:id,name,phone,date_of_birth,occupation,occupation_detail,address,kelurahan,kecamatan,kabupaten_kota,emergency_contact_name,emergency_contact_phone,nik_encrypted', 'branch:id,name,code', 'project:id,project_name', 'sales:id,name', 'kavling:id,kavling_code,name', 'promo:id,name', 'stageEvents:id,consumer_application_id,stage,status,occurred_at,completed_at,source', 'bankProcesses:id,consumer_application_id,bank_name,status,submitted_at,verified_at,sp3k_at,rejected_at,source']);
         $customer = $application->customer;
         $empty = fn ($value) => $value ?: 'Belum Ada Data';
+        $stageLabels = ['bi_checking' => 'BI Checking', 'PSJB' => 'PSJB', 'pemberkasan' => 'Pemberkasan', 'proses_bank' => 'Proses Bank', 'ppjb_dev' => 'PPJB Developer', 'akad' => 'Akad', 'bast' => 'BAST'];
+        $stageOrder = array_keys($stageLabels);
+        $timeline = $application->stageEvents->sortBy(fn ($event) => [array_search($event->stage, $stageOrder, true), $event->occurred_at?->timestamp ?? PHP_INT_MAX, $event->id])->values()->map(fn ($event) => ['stage' => $event->stage, 'stage_label' => $stageLabels[$event->stage] ?? $event->stage, 'status' => $empty($event->status), 'date' => $event->occurred_at?->format('Y-m-d H:i') ?? 'Belum Ada Data', 'source' => $empty($event->source)])->all();
+        $attention = [];
+        if ($application->source_completeness_status === 'Data Belum Lengkap') {
+            $attention[] = 'Data Belum Lengkap';
+        }
+        if (! $application->consumer_status) {
+            $attention[] = 'Consumer Status belum diisi';
+        }
+        if (! $application->source_last_process) {
+            $attention[] = 'Proses terakhir belum ada';
+        }
+        if (! $application->sales_user_id) {
+            $attention[] = 'Sales belum terhubung';
+        }
+        if (! $application->kavling_id) {
+            $attention[] = 'Kavling belum terhubung';
+        }
+        if ($application->bankProcesses->isEmpty()) {
+            $attention[] = 'Bank process belum ada';
+        }
+        $currentStageCount = $application->stageEvents->where('status', 'current')->count();
+        $integrity = [];
+        if ($currentStageCount > 1) {
+            $integrity[] = 'Terdapat beberapa proses aktif yang perlu diperiksa.';
+        }
+        $banks = $application->bankProcesses->sortBy(fn ($bank) => $bank->submitted_at?->timestamp ?? PHP_INT_MAX)->values()->map(fn ($bank) => ['bank_name' => $empty($bank->bank_name), 'status' => $empty($bank->status), 'source' => $empty($bank->source), 'date' => ($bank->submitted_at ?? $bank->verified_at ?? $bank->sp3k_at ?? $bank->rejected_at)?->format('Y-m-d H:i') ?? 'Belum Ada Data'])->all();
 
         return response()->json(['data' => [
             'id' => $application->id,
@@ -80,6 +108,11 @@ class ConsumerLocalController extends Controller
             'booking_date' => $application->booking_date?->format('Y-m-d') ?? 'Belum Ada Data',
             'akad_date' => $application->akad_date?->format('Y-m-d') ?? 'Belum Ada Data',
             'notes' => $empty($application->notes),
+            'current_process' => $application->current_stage ? ($stageLabels[$application->current_stage] ?? $application->current_stage) : 'Belum Ada Data',
+            'timeline' => $timeline,
+            'banks' => $banks,
+            'attention' => $attention,
+            'integrity' => $integrity,
         ]]);
     }
 }

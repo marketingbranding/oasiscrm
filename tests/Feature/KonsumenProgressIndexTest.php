@@ -265,12 +265,31 @@ class KonsumenProgressIndexTest extends TestCase
         $kavling = Kavling::create(['project_id' => $project->id, 'kavling_code' => 'LOCAL-A1', 'name' => 'LOCAL-A1']);
         $sales = User::factory()->create(['role_id' => $user->role_id, 'branch_id' => $branch->id, 'password_changed_at' => now()]);
         $customer = Customer::create(['name' => 'Data Lengkap Budi', 'phone' => '081234567890', 'nik_encrypted' => '1234567890123456']);
-        ConsumerApplication::create(['customer_id' => $customer->id, 'branch_id' => $branch->id, 'project_id' => $project->id, 'sales_user_id' => $sales->id, 'kavling_id' => $kavling->id, 'application_status' => 'active', 'consumer_status' => 'Lanjut', 'source_last_process' => 'Akad', 'source_completeness_status' => 'Data Lengkap']);
+        $application = ConsumerApplication::create(['customer_id' => $customer->id, 'branch_id' => $branch->id, 'project_id' => $project->id, 'sales_user_id' => $sales->id, 'kavling_id' => $kavling->id, 'application_status' => 'active', 'consumer_status' => 'Lanjut', 'source_last_process' => 'Akad', 'source_completeness_status' => 'Data Lengkap', 'current_stage' => 'akad']);
+        ConsumerStageEvent::create(['consumer_application_id' => $application->id, 'stage' => 'bi_checking', 'status' => 'completed', 'occurred_at' => now()->subDays(2), 'source' => 'local']);
+        ConsumerStageEvent::create(['consumer_application_id' => $application->id, 'stage' => 'akad', 'status' => 'current', 'occurred_at' => now(), 'source' => 'local']);
+        ConsumerBankProcess::create(['consumer_application_id' => $application->id, 'bank_name' => 'BCA', 'status' => 'submitted', 'submitted_at' => now(), 'source' => 'local']);
 
         $response = $this->actingAs($user)->get(route('consumer-local.index', ['search' => '081234567890', 'source_completeness_status' => 'Data Lengkap', 'consumer_status' => 'Lanjut', 'source_last_process' => 'Akad']));
 
         $response->assertOk()->assertSee('Data Lengkap Budi')->assertSee('Data Lengkap')->assertSee('Lanjut')->assertSee('Akad')->assertDontSee('1234567890123456');
-        $this->actingAs($user)->getJson(route('consumer-local.show', ['application' => $customer->applications()->first()->id]))->assertOk()->assertJsonPath('data.nik', '••••••••••••••••');
+        $detail = $this->actingAs($user)->getJson(route('consumer-local.show', ['application' => $application->id]));
+        $detail->assertOk()->assertJsonPath('data.nik', '••••••••••••••••')->assertJsonPath('data.timeline.0.stage', 'bi_checking')->assertJsonPath('data.timeline.1.stage', 'akad')->assertJsonPath('data.banks.0.bank_name', 'BCA')->assertJsonPath('data.attention', []);
+        $this->assertStringNotContainsString('1234567890123456', $detail->getContent());
+    }
+
+    public function test_local_consumer_detail_keeps_source_process_separate_and_attention_explicit(): void
+    {
+        [$branch, $user] = $this->branchAndUser();
+        $application = $this->localApplication($branch, 'Source Process Consumer', 'akad');
+        $application->update(['current_stage' => null, 'source_last_process' => 'PPJB', 'notes' => 'Reject karena alasan lama']);
+        ConsumerStageEvent::query()->where('consumer_application_id', $application->id)->delete();
+        ConsumerBankProcess::query()->where('consumer_application_id', $application->id)->delete();
+
+        $response = $this->actingAs($user)->getJson(route('consumer-local.show', $application));
+
+        $response->assertOk()->assertJsonPath('data.timeline', [])->assertJsonPath('data.last_process', 'PPJB')->assertJsonPath('data.current_process', 'Belum Ada Data')->assertJsonPath('data.attention.0', 'Consumer Status belum diisi')->assertJsonPath('data.attention.1', 'Sales belum terhubung')->assertJsonPath('data.attention.2', 'Bank process belum ada')->assertJsonPath('data.notes', 'Reject karena alasan lama');
+        $this->assertFalse(in_array('Reject', $response->json('data.attention'), true));
     }
 
     public function test_local_consumer_page_hides_other_branch_and_paginates(): void

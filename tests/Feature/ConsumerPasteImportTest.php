@@ -54,6 +54,31 @@ class ConsumerPasteImportTest extends TestCase
         $this->assertTrue($parsed->normalized_data['completeness']['complete']);
     }
 
+    public function test_operational_row_accepts_omitted_blank_final_keterangan(): void
+    {
+        [$branch, $project] = $this->context();
+        Kavling::create(['project_id' => $project->id, 'kavling_code' => 'Marison Kalinegoro-A11', 'name' => 'Marison Kalinegoro-A11']);
+        $headers = ['id_kavling', 'no_ktp', 'nama_konsumen', 'tanggal_lahir', 'pekerjaan', 'detail_pekerjaan', 'umur', 'alamat', 'kelurahan', 'kecamatan', 'kabupaten/kota', 'no_hp', 'nama_kondar', 'no_hp_kondar', 'status_cash', 'Status', 'keterangan'];
+        $row = ['Marison Kalinegoro-A11', '3308106504650004', 'Hamid Saifudin', '11/19/1994', 'Karyawan Swasta', 'Spec Desa Bahasa Borobudur', '31 tahun', 'Jalan Mawar', 'Borobudur', 'Borobudur', 'Magelang', '0812345678', 'Kontak', '0812345679', 'YA', 'Data Lengkap'];
+        $batch = app(ConsumerPasteImportService::class)->createBatch($this->admin(), $branch, $project, implode("\t", $headers)."\n".implode("\t", $row));
+        $parsed = $batch->rows()->sole();
+
+        $this->assertSame('READY', $parsed->status);
+        $this->assertSame('', $parsed->normalized_data['notes']);
+        $this->assertTrue($parsed->normalized_data['completeness']['complete']);
+    }
+
+    public function test_operational_missing_middle_column_is_invalid(): void
+    {
+        [$branch, $project] = $this->context();
+        Kavling::create(['project_id' => $project->id, 'kavling_code' => 'KAV-A11', 'name' => 'KAV-A11']);
+        $headers = ['id_kavling', 'no_ktp', 'nama_konsumen', 'tanggal_lahir', 'pekerjaan', 'detail_pekerjaan', 'umur', 'alamat', 'kelurahan', 'kecamatan', 'kabupaten/kota', 'no_hp', 'nama_kondar', 'no_hp_kondar', 'status_cash', 'Status', 'keterangan'];
+        $row = ['KAV-A11', '3308106504650004', 'Hamid Saifudin', '11/19/1994', 'Karyawan Swasta', 'Spec', '31 tahun', 'Jalan Mawar', 'Borobudur', 'Borobudur', 'Magelang', '0812345678', 'Kontak', '0812345679', 'YA'];
+        $batch = app(ConsumerPasteImportService::class)->createBatch($this->admin(), $branch, $project, implode("\t", $headers)."\n".implode("\t", $row));
+
+        $this->assertSame('INVALID', $batch->rows()->sole()->status);
+    }
+
     public function test_extra_column_reports_safe_diagnostic(): void
     {
         [$branch, $project] = $this->context();

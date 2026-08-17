@@ -234,6 +234,9 @@ class ConsumerPasteImportService
                 continue;
             }
             $errors = [];
+            if ($this->isOperationalHeader($headers) && count($values) === count($headers) - 1 && $this->isOperationalTrailingNotesOmission($values)) {
+                $values[] = '';
+            }
             if (count($values) !== count($headers)) {
                 $errors[] = sprintf('Jumlah kolom tidak sesuai: header %d kolom, baris terbaca %d kolom. Periksa tab atau baris baru di dalam sel.', count($headers), count($values));
             }
@@ -410,6 +413,16 @@ class ConsumerPasteImportService
     private function reviewStatus(array $errors): string
     {
         return collect($errors)->contains(fn ($error) => str_contains($error, 'tidak ditemukan') || str_contains($error, 'ambigu') || str_contains($error, 'Kavling sudah') || str_contains($error, 'identitas stabil')) ? 'NEEDS_REVIEW' : 'INVALID';
+    }
+
+    private function isOperationalHeader(array $headers): bool
+    {
+        return $headers === ['kavling', 'nik', 'name', 'date_of_birth', 'occupation', 'occupation_detail', 'age', 'address', 'kelurahan', 'kecamatan', 'kabupaten_kota', 'phone', 'emergency_contact_name', 'emergency_contact_phone', 'status_cash', 'status', 'notes'];
+    }
+
+    private function isOperationalTrailingNotesOmission(array $values): bool
+    {
+        return isset($values[14]) && in_array(Str::lower(trim((string) $values[14])), ['ya', 'yes', 'true', '1', 'tidak', 'no', 'false', '0'], true);
     }
 
     private function headerKey(string $header): string

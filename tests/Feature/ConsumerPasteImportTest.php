@@ -41,6 +41,51 @@ class ConsumerPasteImportTest extends TestCase
         app(ConsumerPasteImportService::class)->createBatch($this->admin(), $branch, $project, "Nama Konsumen\tNama Konsumen\nBudi\tBudi");
     }
 
+    public function test_operational_row_accepts_blank_final_keterangan_and_is_complete(): void
+    {
+        [$branch, $project] = $this->context();
+        Kavling::create(['project_id' => $project->id, 'kavling_code' => 'Marison Kalinegoro-A11', 'name' => 'Marison Kalinegoro-A11']);
+        $headers = ['id_kavling', 'no_ktp', 'nama_konsumen', 'tanggal_lahir', 'pekerjaan', 'detail_pekerjaan', 'umur', 'alamat', 'kelurahan', 'kecamatan', 'kabupaten/kota', 'no_hp', 'nama_kondar', 'no_hp_kondar', 'status_cash', 'Status', 'keterangan'];
+        $row = ['Marison Kalinegoro-A11', '3308106504650004', 'Hamid Saifudin', '11/19/1994', 'Karyawan Swasta', 'Spec Desa Bahasa Borobudur', '31 tahun', 'Jalan Mawar', 'Borobudur', 'Borobudur', 'Magelang', '0812345678', 'Kontak', '0812345679', 'YA', 'Data Lengkap', ''];
+        $batch = app(ConsumerPasteImportService::class)->createBatch($this->admin(), $branch, $project, implode("\t", $headers)."\n".implode("\t", $row));
+        $parsed = $batch->rows()->sole();
+
+        $this->assertSame('READY', $parsed->status);
+        $this->assertTrue($parsed->normalized_data['completeness']['complete']);
+    }
+
+    public function test_extra_column_reports_safe_diagnostic(): void
+    {
+        [$branch, $project] = $this->context();
+        $batch = app(ConsumerPasteImportService::class)->createBatch($this->admin(), $branch, $project, "Nama Konsumen\tNo HP\nBudi\t081234\textra");
+
+        $this->assertSame('INVALID', $batch->rows()->sole()->status);
+        $this->assertStringContainsString('header 2 kolom, baris terbaca 3 kolom', $batch->rows()->sole()->errors[0]);
+        $this->assertStringNotContainsString('extra', $batch->rows()->sole()->errors[0]);
+    }
+
+    public function test_quoted_tab_and_newline_are_one_logical_row(): void
+    {
+        [$branch, $project] = $this->context();
+        $input = implode("\n", [
+            "Nama Konsumen\tAlamat\tNo HP",
+            "\"Nama \"\"Budi\"\"\"\t\"Jalan Mawar\nBlok A\"\t0812345678",
+        ]);
+        $batch = app(ConsumerPasteImportService::class)->createBatch($this->admin(), $branch, $project, $input);
+        $row = $batch->rows()->sole();
+
+        $this->assertSame('Nama "Budi"', $row->normalized_data['name']);
+        $this->assertSame("Jalan Mawar\nBlok A", $row->normalized_data['address']);
+        $this->assertSame('READY', $row->status);
+    }
+
+    public function test_unterminated_quote_is_rejected(): void
+    {
+        [$branch, $project] = $this->context();
+        $this->expectException(InvalidArgumentException::class);
+        app(ConsumerPasteImportService::class)->createBatch($this->admin(), $branch, $project, "Nama Konsumen\tNo HP\n\"Budi\t081234");
+    }
+
     public function test_malformed_row_is_previewed_invalid_without_aborting_other_rows(): void
     {
         [$branch, $project] = $this->context();

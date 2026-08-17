@@ -7,7 +7,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class ConsumerImportRow extends Model
 {
-    protected $fillable = ['batch_id', 'line_number', 'normalized_data', 'sensitive_data', 'status', 'warnings', 'errors'];
+    protected $fillable = ['batch_id', 'line_number', 'normalized_data', 'sensitive_data', 'status', 'skip_reason', 'warnings', 'errors'];
 
     protected function casts(): array
     {

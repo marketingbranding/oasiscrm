@@ -140,7 +140,7 @@ class ConsumerPasteImportService
                 }
                 if (in_array($row->status, ['INVALID', 'NEEDS_REVIEW'], true)) {
                     $originalStatus = $row->status;
-                    $row->update(['status' => 'SKIPPED']);
+                    $row->update(['status' => 'SKIPPED', 'skip_reason' => $originalStatus]);
                     $originalStatus === 'INVALID' ? $invalid++ : $review++;
 
                     continue;
@@ -210,15 +210,14 @@ class ConsumerPasteImportService
         if (strlen($input) > 262144) {
             throw new InvalidArgumentException('Data TSV maksimal 256KB.');
         }
-        $input = preg_replace('/^\xEF\xBB\xBF/', '', str_replace(["\r\n", "\r"], "\n", $input));
-        $lines = explode("\n", $input);
-        while ($lines !== [] && trim((string) end($lines)) === '') {
-            array_pop($lines);
+        $records = $this->parseRecords(preg_replace('/^\xEF\xBB\xBF/', '', $input));
+        while ($records !== [] && count(end($records)) === 1 && trim((string) end($records)[0]) === '') {
+            array_pop($records);
         }
-        if ($lines === []) {
+        if ($records === []) {
             throw new InvalidArgumentException('Data TSV tidak memiliki baris.');
         }
-        $headerCells = str_getcsv(array_shift($lines), "\t");
+        $headerCells = array_shift($records);
         $headers = array_map(fn ($value) => $this->headerKey((string) $value), $headerCells);
         if ($headers === [] || ! in_array('name', $headers, true)) {
             throw new InvalidArgumentException('Header wajib memuat Nama Konsumen.');
@@ -226,18 +225,17 @@ class ConsumerPasteImportService
         if (count($headers) !== count(array_unique($headers))) {
             throw new InvalidArgumentException('Header TSV tidak boleh duplikat.');
         }
-        if (count($lines) > 500) {
+        if (count($records) > 500) {
             throw new InvalidArgumentException('Data TSV maksimal 500 baris.');
         }
         $rows = [];
-        foreach ($lines as $offset => $line) {
-            if (trim($line) === '') {
+        foreach ($records as $offset => $values) {
+            if (count($values) === 1 && trim((string) $values[0]) === '') {
                 continue;
             }
-            $values = str_getcsv($line, "\t");
             $errors = [];
             if (count($values) !== count($headers)) {
-                $errors[] = 'Jumlah kolom baris tidak cocok dengan header.';
+                $errors[] = sprintf('Jumlah kolom tidak sesuai: header %d kolom, baris terbaca %d kolom. Periksa tab atau baris baru di dalam sel.', count($headers), count($values));
             }
             $values = array_pad(array_slice($values, 0, count($headers)), count($headers), '');
             $raw = array_combine($headers, array_map(fn ($value) => trim((string) $value), $values));
@@ -258,10 +256,71 @@ class ConsumerPasteImportService
             if (($raw['akad_date'] ?? '') !== '' && $normalized['akad_date'] === null) {
                 $errors[] = 'Tanggal Akad tidak valid atau ambigu.';
             }
+            $normalized['completeness'] = $this->completeness($normalized, $sensitiveData);
             $rows[] = ['line_number' => $offset + 2, 'raw_data' => $raw, 'normalized_data' => $normalized, 'sensitive_data' => $sensitiveData, 'warnings' => $normalized['current_stage'] === null && ($raw['stage'] ?? '') !== '' ? ['Tahap tidak dikenal; baris perlu diperiksa.'] : [], 'errors' => $errors, 'status' => 'READY'];
         }
 
         return $rows;
+    }
+
+    private function parseRecords(string $input): array
+    {
+        $records = [];
+        $row = [];
+        $cell = '';
+        $quoted = false;
+        $length = strlen($input);
+        for ($i = 0; $i < $length; $i++) {
+            $char = $input[$i];
+            if ($char === '"') {
+                if ($quoted && ($input[$i + 1] ?? null) === '"') {
+                    $cell .= '"';
+                    $i++;
+                } else {
+                    $quoted = ! $quoted;
+                }
+
+                continue;
+            }
+            if (! $quoted && $char === "\t") {
+                $row[] = $cell;
+                $cell = '';
+
+                continue;
+            }
+            if (! $quoted && ($char === "\n" || $char === "\r")) {
+                if ($char === "\r" && ($input[$i + 1] ?? null) === "\n") {
+                    $i++;
+                }
+                $row[] = $cell;
+                $records[] = $row;
+                $row = [];
+                $cell = '';
+
+                continue;
+            }
+            $cell .= $char;
+        }
+        if ($quoted) {
+            throw new InvalidArgumentException('TSV memiliki tanda kutip yang belum ditutup.');
+        }
+        if ($cell !== '' || $row !== []) {
+            $row[] = $cell;
+            $records[] = $row;
+        }
+
+        return $records;
+    }
+
+    private function completeness(array $data, array $sensitiveData): array
+    {
+        $required = ['name' => 'Nama Konsumen', 'kavling' => 'Kavling', 'phone' => 'No HP', 'date_of_birth' => 'Tanggal Lahir', 'occupation' => 'Pekerjaan', 'address' => 'Alamat'];
+        $missing = array_values(array_map(fn ($label) => $label, array_filter($required, fn ($key) => trim((string) ($data[$key] ?? '')) === '', ARRAY_FILTER_USE_KEY)));
+        if (($sensitiveData['nik'] ?? null) !== null && ! preg_match('/^\d{16}$/', $sensitiveData['nik'])) {
+            $missing[] = 'NIK valid';
+        }
+
+        return ['complete' => $missing === [], 'missing' => $missing];
     }
 
     private function mapRow(array &$data, Branch $branch, LeadMaster $project): array

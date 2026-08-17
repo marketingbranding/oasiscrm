@@ -12,11 +12,11 @@ class ConsumerBankProcess extends Model
     /** @use HasFactory<ConsumerBankProcessFactory> */
     use HasFactory;
 
-    protected $fillable = ['consumer_application_id', 'bank_name', 'status', 'submitted_at', 'verified_at', 'sp3k_at', 'rejected_at', 'rejection_reason', 'source'];
+    protected $fillable = ['consumer_application_id', 'bank_name', 'status', 'submitted_at', 'verified_at', 'sp3k_at', 'rejected_at', 'rejection_reason', 'source', 'source_id', 'metadata'];
 
     protected function casts(): array
     {
-        return ['submitted_at' => 'datetime', 'verified_at' => 'datetime', 'sp3k_at' => 'datetime', 'rejected_at' => 'datetime'];
+        return ['submitted_at' => 'datetime', 'verified_at' => 'datetime', 'sp3k_at' => 'datetime', 'rejected_at' => 'datetime', 'metadata' => 'array'];
     }
 
     public function application(): BelongsTo

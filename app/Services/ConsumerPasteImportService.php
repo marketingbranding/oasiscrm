@@ -214,7 +214,7 @@ class ConsumerPasteImportService
 
     private function resolveCustomer(array $data, array $sensitiveData): Customer
     {
-        $phone = $this->normalizePhone($data['phone'] ?? null);
+        $phone = self::normalizePhone($data['phone'] ?? null);
         if ($phone !== '') {
             $matches = Customer::query()->where('phone', $phone)->get();
             if ($matches->count() === 1) {
@@ -230,7 +230,7 @@ class ConsumerPasteImportService
 
     private function customerProfile(array $data, array $sensitiveData): array
     {
-        return ['nik_encrypted' => $sensitiveData['nik'] ?? null, 'date_of_birth' => $data['date_of_birth'] ?? null, 'occupation' => $data['occupation'] ?? null, 'occupation_detail' => $data['occupation_detail'] ?? null, 'address' => $data['address'] ?? null, 'kelurahan' => $data['kelurahan'] ?? null, 'kecamatan' => $data['kecamatan'] ?? null, 'kabupaten_kota' => $data['kabupaten_kota'] ?? null, 'emergency_contact_name' => $data['emergency_contact_name'] ?? null, 'emergency_contact_phone' => $this->normalizePhone($data['emergency_contact_phone'] ?? null)];
+        return ['nik_encrypted' => $sensitiveData['nik'] ?? null, 'date_of_birth' => $data['date_of_birth'] ?? null, 'occupation' => $data['occupation'] ?? null, 'occupation_detail' => $data['occupation_detail'] ?? null, 'address' => $data['address'] ?? null, 'kelurahan' => $data['kelurahan'] ?? null, 'kecamatan' => $data['kecamatan'] ?? null, 'kabupaten_kota' => $data['kabupaten_kota'] ?? null, 'emergency_contact_name' => $data['emergency_contact_name'] ?? null, 'emergency_contact_phone' => self::normalizePhone($data['emergency_contact_phone'] ?? null)];
     }
 
     private function parse(string $input, Branch $branch): array
@@ -369,7 +369,7 @@ class ConsumerPasteImportService
     private function mapRow(array &$data, Branch $branch, LeadMaster $project): array
     {
         $errors = [];
-        if ($data['project'] !== null && $this->norm($data['project']) !== $this->norm($project->project_name)) {
+        if ($data['project'] !== null && self::norm($data['project']) !== self::norm($project->project_name)) {
             $errors[] = 'Proyek pasted tidak cocok dengan proyek terpilih.';
         }
         if (($data['project'] ?? '') !== '') {
@@ -378,7 +378,7 @@ class ConsumerPasteImportService
             $data['project'] = $project->id;
         }
         if ($data['sales']) {
-            $sales = User::query()->where('branch_id', $branch->id)->whereRaw('LOWER(name) = ?', [$this->norm($data['sales'])])->where('is_active', true)->whereHas('assignedProjects', fn ($q) => $q->whereKey($project->id)->wherePivot('is_active', true))->get();
+            $sales = User::query()->where('branch_id', $branch->id)->whereRaw('LOWER(name) = ?', [self::norm($data['sales'])])->where('is_active', true)->whereHas('assignedProjects', fn ($q) => $q->whereKey($project->id)->wherePivot('is_active', true))->get();
             if ($sales->count() === 1) {
                 $data['sales_user_id'] = $sales->first()->id;
             } else {
@@ -386,7 +386,7 @@ class ConsumerPasteImportService
             }
         }
         if ($data['kavling']) {
-            $kavlings = Kavling::query()->where('project_id', $project->id)->where(fn ($q) => $q->whereRaw('LOWER(kavling_code) = ?', [$this->norm($data['kavling'])])->orWhereRaw('LOWER(name) = ?', [$this->norm($data['kavling'])]))->get();
+            $kavlings = Kavling::query()->where('project_id', $project->id)->where(fn ($q) => $q->whereRaw('LOWER(kavling_code) = ?', [self::norm($data['kavling'])])->orWhereRaw('LOWER(name) = ?', [self::norm($data['kavling'])]))->get();
             if ($kavlings->count() === 1) {
                 $data['kavling_id'] = $kavlings->first()->id;
                 if (ConsumerApplication::where('kavling_id', $data['kavling_id'])->whereNull('deleted_at')->whereNotIn('application_status', ['cancelled', 'rejected'])->exists()) {
@@ -397,7 +397,7 @@ class ConsumerPasteImportService
             }
         }
         if ($data['promo']) {
-            $promo = Promo::query()->where('branch_id', $branch->id)->where(fn ($q) => $q->whereRaw('LOWER(code) = ?', [$this->norm($data['promo'])])->orWhereRaw('LOWER(name) = ?', [$this->norm($data['promo'])]))->first();
+            $promo = Promo::query()->where('branch_id', $branch->id)->where(fn ($q) => $q->whereRaw('LOWER(code) = ?', [self::norm($data['promo'])])->orWhereRaw('LOWER(name) = ?', [self::norm($data['promo'])]))->first();
             if ($promo) {
                 $data['promo_id'] = $promo->id;
             } else {
@@ -408,7 +408,7 @@ class ConsumerPasteImportService
             $data['external_id'] = trim($data['external_id']);
         }
         $data['sales_lead_id'] = $this->salesLeadId($data, $branch, $project);
-        $data['phone'] = $this->normalizePhone($data['phone']);
+        $data['phone'] = self::normalizePhone($data['phone']);
         if ($data['application_status'] === null || $data['application_status'] === '') {
             $data['application_status'] = 'draft';
         }
@@ -430,14 +430,19 @@ class ConsumerPasteImportService
         return ConsumerLegacyIdentity::query()->where('legacy_source', self::SOURCE)->where('spreadsheet_id', 'manual-paste')->where('sheet_name', (string) $project->id)->pluck('consumer_application_id', 'external_key')->all();
     }
 
-    private function identityKey(array $data, Branch $branch, LeadMaster $project): string
+    public static function deterministicIdentityKey(array $data, int $branchId, int $projectId): string
     {
         $stable = trim((string) ($data['external_id'] ?? ''));
         if ($stable !== '') {
             return 'external:'.mb_strtolower($stable);
         }
 
-        return 'row:'.hash('sha256', implode('|', [$branch->id, $project->id, $this->normalizePhone($data['phone'] ?? null), $this->norm($data['kavling'] ?? ''), $this->norm($data['name'] ?? '')]));
+        return 'row:'.hash('sha256', implode('|', [$branchId, $projectId, self::normalizePhone($data['phone'] ?? null), self::norm($data['kavling'] ?? ''), self::norm($data['name'] ?? '')]));
+    }
+
+    private function identityKey(array $data, Branch $branch, LeadMaster $project): string
+    {
+        return self::deterministicIdentityKey($data, $branch->id, $project->id);
     }
 
     private function identityStable(array $data): bool
@@ -476,12 +481,12 @@ class ConsumerPasteImportService
         return self::HEADER_ALIASES[$key] ?? throw new InvalidArgumentException('Header tidak dikenali: '.$header);
     }
 
-    private function norm(?string $value): string
+    private static function norm(?string $value): string
     {
         return Str::lower(trim(preg_replace('/\s+/', ' ', (string) $value)));
     }
 
-    private function normalizePhone(?string $value): string
+    private static function normalizePhone(?string $value): string
     {
         $phone = preg_replace('/[^0-9+]/', '', (string) $value);
         if (str_starts_with($phone, '+62')) {

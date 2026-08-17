@@ -64,7 +64,7 @@ final class ConsumerIdentityBridgeAuditService
             if ($phone !== '' && $kavling !== '') {
                 $phoneKavlings[] = $phone.'|'.$this->key($kavling);
             }
-            $records[] = ['name' => $this->first($data, ['nama_konsumen', 'nama konsumen', 'nama']), 'phone' => $phone, 'kavling' => $this->key($kavling), 'external_id' => $sourceId, 'nik_hash' => $nik === '' ? null : $this->fingerprint($nik), 'status' => $statusValue ?: null];
+            $records[] = ['name' => $this->first($data, ['nama_konsumen', 'nama konsumen', 'nama']), 'phone' => $phone, 'kavling' => $this->key($kavling), 'external_id' => $sourceId, 'nik_hash' => $nik === '' ? null : $this->fingerprint($nik), 'consumer_status' => $this->first($data, ['status_konsumen']) ?: null];
         }
 
         return ['total' => count($records), 'counts' => $counts, 'status_distribution' => $status, 'duplicates' => $this->duplicates($phones, $kavlings, $phoneKavlings), 'nik_fingerprint_available' => $counts['nik'] > 0, 'records' => $records];
@@ -74,7 +74,8 @@ final class ConsumerIdentityBridgeAuditService
     {
         $apps = ConsumerApplication::with(['customer', 'kavling', 'legacyIdentities'])->where('branch_id', $branch->id)->where('project_id', $project->id)->get();
         $phones = $kavlings = $phoneKavlings = $customers = [];
-        $statuses = $prefixes = [];
+        $statuses = $prefixes = $consumerStatuses = $lastProcesses = $completenessStatuses = [];
+        $semanticCoverage = ['at_least_one' => 0, 'all_three' => 0, 'none' => 0];
         $records = [];
         foreach ($apps as $app) {
             $phone = $this->phone($app->customer?->phone);
@@ -83,6 +84,23 @@ final class ConsumerIdentityBridgeAuditService
             $prefix = $identity?->external_key ? Str::before($identity->external_key, ':') : 'local/none';
             $prefixes[$prefix] = ($prefixes[$prefix] ?? 0) + 1;
             $statuses[$app->application_status] = ($statuses[$app->application_status] ?? 0) + 1;
+            $consumerStatus = trim((string) $app->consumer_status);
+            $lastProcess = trim((string) $app->source_last_process);
+            $completenessStatus = trim((string) $app->source_completeness_status);
+            $consumerStatusKey = in_array($consumerStatus, ['Lanjut', 'Mundur', 'Pindah Kavling', 'Reject'], true) ? $consumerStatus : 'null/unknown';
+            $completenessStatusKey = in_array($completenessStatus, ['Data Lengkap', 'Data Belum Lengkap'], true) ? $completenessStatus : ($completenessStatus === '' ? 'null' : 'other');
+            $consumerStatuses[$consumerStatusKey] = ($consumerStatuses[$consumerStatusKey] ?? 0) + 1;
+            $lastProcesses[$lastProcess !== '' ? $lastProcess : 'null'] = ($lastProcesses[$lastProcess !== '' ? $lastProcess : 'null'] ?? 0) + 1;
+            $completenessStatuses[$completenessStatusKey] = ($completenessStatuses[$completenessStatusKey] ?? 0) + 1;
+            $semanticCount = collect([$consumerStatus, $lastProcess, $completenessStatus])->filter()->count();
+            if ($semanticCount === 0) {
+                $semanticCoverage['none']++;
+            } else {
+                $semanticCoverage['at_least_one']++;
+                if ($semanticCount === 3) {
+                    $semanticCoverage['all_three']++;
+                }
+            }
             if ($phone !== '') {
                 $phones[] = $phone;
             }
@@ -96,7 +114,7 @@ final class ConsumerIdentityBridgeAuditService
             $records[] = ['id' => $app->id, 'name' => $app->customer?->name, 'phone' => $phone, 'kavling' => $kavling, 'external_id' => $identity?->external_key && Str::startsWith($identity->external_key, 'external:') ? Str::after($identity->external_key, 'external:') : null, 'nik_hash' => $app->customer?->nik_encrypted ? $this->fingerprint($app->customer->nik_encrypted) : null, 'status' => null];
         }
 
-        return ['total' => $apps->count(), 'unique_customers' => count($customers), 'with_phone' => count($phones), 'with_kavling' => count($kavlings), 'with_nik' => $apps->filter(fn ($a) => filled($a->customer?->getRawOriginal('nik_encrypted')))->count(), 'application_status' => $statuses, 'identity_prefixes' => $prefixes, 'duplicates' => $this->duplicates($phones, $kavlings, $phoneKavlings), 'customers_with_multiple_applications' => count(array_filter($customers, fn ($n) => $n > 1)), 'records' => $records];
+        return ['total' => $apps->count(), 'unique_customers' => count($customers), 'with_phone' => count($phones), 'with_kavling' => count($kavlings), 'with_nik' => $apps->filter(fn ($a) => filled($a->customer?->getRawOriginal('nik_encrypted')))->count(), 'application_status' => $statuses, 'identity_prefixes' => $prefixes, 'consumer_status' => $consumerStatuses, 'source_last_process' => $lastProcesses, 'source_completeness_status' => $completenessStatuses, 'semantic_coverage' => $semanticCoverage, 'duplicates' => $this->duplicates($phones, $kavlings, $phoneKavlings), 'customers_with_multiple_applications' => count(array_filter($customers, fn ($n) => $n > 1)), 'records' => $records];
     }
 
     private function candidates(array $legacy, array $local): array
@@ -120,7 +138,7 @@ final class ConsumerIdentityBridgeAuditService
                 $category = 'AMBIGUOUS';
             }
             $out[$category]++;
-            $out['rows'][] = ['name' => $record['name'], 'phone' => $this->maskPhone($record['phone']), 'kavling' => $record['kavling'], 'status' => $record['status'] ?: 'unknown / unavailable', 'category' => $category];
+            $out['rows'][] = ['name' => $record['name'], 'phone' => $this->maskPhone($record['phone']), 'kavling' => $record['kavling'], 'consumer_status' => $record['consumer_status'] ?: 'unknown / unavailable', 'category' => $category];
         }
 
         return $out;

@@ -82,6 +82,23 @@ class ConsumerIdentityBridgeAuditTest extends TestCase
         $this->flushSession()->actingAs($actor)->get(route('consumer-comparison.index', ['branch_id' => $branch->id, 'project_id' => $project->id]))->assertOk()->assertSee('Phase 5.6');
     }
 
+    public function test_audit_separates_source_semantics_from_application_status(): void
+    {
+        [$branch, $project] = $this->context();
+        foreach ([['Lanjut', 'Akad', 'Data Lengkap', 'draft'], ['Mundur', '', 'Data Belum Lengkap', 'submitted'], ['Pindah Kavling', 'Berkas di Bank', 'Other', 'draft'], ['Reject', '', '', 'draft'], ['', '', '', 'draft']] as $index => [$consumerStatus, $lastProcess, $completeness, $applicationStatus]) {
+            $customer = Customer::create(['name' => 'Consumer '.$index]);
+            ConsumerApplication::create(['customer_id' => $customer->id, 'branch_id' => $branch->id, 'project_id' => $project->id, 'application_status' => $applicationStatus, 'consumer_status' => $consumerStatus ?: null, 'source_last_process' => $lastProcess ?: null, 'source_completeness_status' => $completeness ?: null]);
+        }
+
+        $local = app(ConsumerIdentityBridgeAuditService::class)->audit($branch, $project)['local'];
+
+        $this->assertEqualsCanonicalizing(['Lanjut' => 1, 'Mundur' => 1, 'Pindah Kavling' => 1, 'Reject' => 1, 'null/unknown' => 1], $local['consumer_status']);
+        $this->assertEqualsCanonicalizing(['Akad' => 1, 'null' => 3, 'Berkas di Bank' => 1], $local['source_last_process']);
+        $this->assertEqualsCanonicalizing(['Data Lengkap' => 1, 'Data Belum Lengkap' => 1, 'other' => 1, 'null' => 2], $local['source_completeness_status']);
+        $this->assertSame(['at_least_one' => 4, 'all_three' => 2, 'none' => 1], $local['semantic_coverage']);
+        $this->assertSame(['draft' => 4, 'submitted' => 1], $local['application_status']);
+    }
+
     private function legacy(Branch $branch, array $data): void
     {
         KonsumenProgressSheetRow::create(['branch_id' => $branch->id, 'sheet_id' => $branch->sheet_id, 'sheet_name' => 'data_konsumen', 'row_hash' => Str::uuid(), 'row_data' => ['project_name' => 'Audit Project', ...$data]]);

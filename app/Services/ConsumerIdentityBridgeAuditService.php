@@ -15,8 +15,9 @@ final class ConsumerIdentityBridgeAuditService
         $legacy = $this->legacy($branch, $project);
         $local = $this->local($branch, $project);
         $candidates = $this->candidates($legacy['records'], $local['records']);
+        $diagnostics = $this->diagnostics($legacy['records'], $local['records']);
 
-        return compact('legacy', 'local', 'candidates');
+        return compact('legacy', 'local', 'candidates', 'diagnostics');
     }
 
     private function legacy(Branch $branch, LeadMaster $project): array
@@ -111,7 +112,7 @@ final class ConsumerIdentityBridgeAuditService
                 $phoneKavlings[] = $phone.'|'.$kavling;
             }
             $customers[$app->customer_id] = ($customers[$app->customer_id] ?? 0) + 1;
-            $records[] = ['id' => $app->id, 'name' => $app->customer?->name, 'phone' => $phone, 'kavling' => $kavling, 'external_id' => $identity?->external_key && Str::startsWith($identity->external_key, 'external:') ? Str::after($identity->external_key, 'external:') : null, 'nik_hash' => $app->customer?->nik_encrypted ? $this->fingerprint($app->customer->nik_encrypted) : null, 'status' => null];
+            $records[] = ['id' => $app->id, 'name' => $app->customer?->name, 'phone' => $phone, 'kavling' => $kavling, 'external_id' => $identity?->external_key && Str::startsWith($identity->external_key, 'external:') ? Str::after($identity->external_key, 'external:') : null, 'nik_hash' => $app->customer?->nik_encrypted ? $this->fingerprint($app->customer->nik_encrypted) : null, 'identity_count' => $app->legacyIdentities->count(), 'status' => null];
         }
 
         return ['total' => $apps->count(), 'unique_customers' => count($customers), 'with_phone' => count($phones), 'with_kavling' => count($kavlings), 'with_nik' => $apps->filter(fn ($a) => filled($a->customer?->getRawOriginal('nik_encrypted')))->count(), 'application_status' => $statuses, 'identity_prefixes' => $prefixes, 'consumer_status' => $consumerStatuses, 'source_last_process' => $lastProcesses, 'source_completeness_status' => $completenessStatuses, 'semantic_coverage' => $semanticCoverage, 'duplicates' => $this->duplicates($phones, $kavlings, $phoneKavlings), 'customers_with_multiple_applications' => count(array_filter($customers, fn ($n) => $n > 1)), 'records' => $records];
@@ -138,10 +139,67 @@ final class ConsumerIdentityBridgeAuditService
                 $category = 'AMBIGUOUS';
             }
             $out[$category]++;
-            $out['rows'][] = ['name' => $record['name'], 'phone' => $this->maskPhone($record['phone']), 'kavling' => $record['kavling'], 'consumer_status' => $record['consumer_status'] ?: 'unknown / unavailable', 'category' => $category];
+            $pairCount = $pair ? count($byPair[$pair] ?? []) : 0;
+            $nikCount = $nik ? count($byNik[$nik] ?? []) : 0;
+            $out['rows'][] = ['name' => $record['name'], 'phone' => $this->maskPhone($record['phone']), 'kavling' => $record['kavling'], 'consumer_status' => $record['consumer_status'] ?: 'unknown / unavailable', 'category' => $category, 'reason' => $category === 'AMBIGUOUS' ? ($nikCount > 1 ? 'duplicate NIK fingerprint' : ($pairCount > 1 ? 'duplicate phone+kavling' : 'conflicting candidate')) : null, 'legacy_candidate_count' => 1, 'local_candidate_count' => max($pairCount, $nikCount, $key ? count($byExternal[$key] ?? []) : 0), 'duplicate_nik' => $nikCount > 1, 'duplicate_phone_kavling' => $pairCount > 1, 'reused_kavling' => $record['kavling'] !== '' && count(array_filter($local, fn ($r) => $r['kavling'] === $record['kavling'])) > 1];
         }
 
         return $out;
+    }
+
+    private function diagnostics(array $legacy, array $local): array
+    {
+        $legacyPairs = $this->group($legacy, fn ($r) => $r['phone'] && $r['kavling'] ? $r['phone'].'|'.$r['kavling'] : '');
+        $localPairs = $this->group($local, fn ($r) => $r['phone'] && $r['kavling'] ? $r['phone'].'|'.$r['kavling'] : '');
+        $pairKeys = array_unique(array_merge(array_keys($legacyPairs), array_keys($localPairs)));
+        $raw = $unique = $ambiguous = $unmatchedLegacy = $unmatchedLocal = 0;
+        foreach ($pairKeys as $key) {
+            $left = count($legacyPairs[$key] ?? []);
+            $right = count($localPairs[$key] ?? []);
+            if ($left && $right) {
+                $raw++;
+                if ($left === 1 && $right === 1) {
+                    $unique++;
+                } else {
+                    $ambiguous++;
+                }
+            } elseif ($left) {
+                $unmatchedLegacy += $left;
+            } elseif ($right) {
+                $unmatchedLocal += $right;
+            }
+        }
+        $legacyNik = $this->group($legacy, 'nik_hash');
+        $localNik = $this->group($local, 'nik_hash');
+        $exact = $safe = $oneMany = $manyOne = $unmatchedLegacyNik = $unmatchedLocalNik = $conflicts = 0;
+        foreach (array_unique(array_merge(array_keys($legacyNik), array_keys($localNik))) as $key) {
+            $left = count($legacyNik[$key] ?? []);
+            $right = count($localNik[$key] ?? []);
+            if (! $left || ! $right) {
+                if ($left) {
+                    $unmatchedLegacyNik += $left;
+                } else {
+                    $unmatchedLocalNik += $right;
+                }
+
+continue;
+            }
+            $exact++;
+            if ($right > 1) {
+                $oneMany++;
+            } if ($left > 1) {
+                $manyOne++;
+            }
+            if ($left === 1 && $right === 1) {
+                if (($localNik[$key][0]['identity_count'] ?? 0) > 0) {
+                    $conflicts++;
+                } else {
+                    $safe++;
+                }
+            }
+        }
+
+        return ['phone_kavling' => ['legacy_rows' => array_sum(array_map('count', $legacyPairs)), 'local_applications' => array_sum(array_map('count', $localPairs)), 'raw_exact_matches' => $raw, 'raw_unique_one_to_one' => $unique, 'duplicate_legacy_keys' => count(array_filter($legacyPairs, fn ($v) => count($v) > 1)), 'duplicate_local_keys' => count(array_filter($localPairs, fn ($v) => count($v) > 1)), 'ambiguous_matches' => $ambiguous, 'unmatched_legacy' => $unmatchedLegacy, 'unmatched_local' => $unmatchedLocal], 'nik' => ['legacy_valid' => array_sum(array_map('count', $legacyNik)), 'local_valid' => array_sum(array_map('count', $localNik)), 'unique_legacy_fingerprints' => count($legacyNik), 'unique_local_fingerprints' => count($localNik), 'exact_matches' => $exact, 'safe_one_to_one' => $safe, 'duplicate_legacy_groups' => count(array_filter($legacyNik, fn ($v) => count($v) > 1)), 'duplicate_local_groups' => count(array_filter($localNik, fn ($v) => count($v) > 1)), 'one_legacy_multiple_local' => $oneMany, 'multiple_legacy_one_local' => $manyOne, 'unmatched_legacy' => $unmatchedLegacyNik, 'unmatched_local' => $unmatchedLocalNik, 'identity_conflicts' => $conflicts]];
     }
 
     private function normalized(array $data): array

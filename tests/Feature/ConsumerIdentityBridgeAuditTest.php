@@ -31,6 +31,8 @@ class ConsumerIdentityBridgeAuditTest extends TestCase
         $audit = app(ConsumerIdentityBridgeAuditService::class)->audit($branch, $project);
 
         $this->assertSame(1, $audit['candidates']['UNIQUE_PHONE_KAVLING']);
+        $this->assertSame(1, $audit['diagnostics']['phone_kavling']['raw_unique_one_to_one']);
+        $this->assertSame(1, $audit['diagnostics']['phone_kavling']['raw_exact_matches']);
         $this->assertSame(0, $audit['candidates']['AMBIGUOUS']);
         $this->assertSame($before, ConsumerLegacyIdentity::count());
         $this->assertSame('0812****5678', $audit['candidates']['rows'][0]['phone']);
@@ -64,6 +66,9 @@ class ConsumerIdentityBridgeAuditTest extends TestCase
         $json = json_encode($audit, JSON_THROW_ON_ERROR);
 
         $this->assertSame(1, $audit['candidates']['SHARED_EXTERNAL_ID']);
+        $this->assertSame(1, $audit['diagnostics']['nik']['exact_matches']);
+        $this->assertSame(0, $audit['diagnostics']['nik']['safe_one_to_one']);
+        $this->assertSame(1, $audit['diagnostics']['nik']['identity_conflicts']);
         $this->assertSame(0, $audit['candidates']['NIK_FINGERPRINT_CANDIDATE']);
         $this->assertSame(1, $audit['legacy']['counts']['nik']);
         $this->assertSame(1, $audit['local']['with_nik']);

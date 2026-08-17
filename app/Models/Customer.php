@@ -13,7 +13,12 @@ class Customer extends Model
     /** @use HasFactory<CustomerFactory> */
     use HasFactory, SoftDeletes;
 
-    protected $fillable = ['name', 'phone', 'email'];
+    protected $fillable = ['name', 'phone', 'email', 'nik_encrypted', 'date_of_birth', 'occupation', 'occupation_detail', 'address', 'kelurahan', 'kecamatan', 'kabupaten_kota', 'emergency_contact_name', 'emergency_contact_phone'];
+
+    protected function casts(): array
+    {
+        return ['nik_encrypted' => 'encrypted', 'date_of_birth' => 'date'];
+    }
 
     public function applications(): HasMany
     {

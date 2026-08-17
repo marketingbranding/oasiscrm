@@ -3,10 +3,13 @@
 namespace App\Http\Controllers\Crm;
 
 use App\Http\Controllers\Controller;
+use App\Models\ActivityLog;
 use App\Models\Branch;
 use App\Models\ConsumerImportBatch;
+use App\Models\Customer;
 use App\Models\LeadMaster;
 use App\Services\ConsumerPasteImportService;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
@@ -57,6 +60,15 @@ class ConsumerPasteImportController extends Controller
         $batch = $consumer_import_batch->load(['branch', 'project', 'rows']);
 
         return view('crm.consumer-import.preview', compact('batch'));
+    }
+
+    public function revealNik(Customer $customer): JsonResponse
+    {
+        abort_unless(request()->user()->isSuperadmin(), 403);
+        abort_unless($customer->nik_encrypted !== null, 404);
+        ActivityLog::create(['causer_id' => request()->user()->id, 'subject_type' => Customer::class, 'subject_id' => $customer->id, 'event' => 'consumer.nik_revealed', 'description' => 'NIK konsumen ditampilkan secara eksplisit.', 'properties' => ['actor_id' => request()->user()->id, 'customer_id' => $customer->id]]);
+
+        return response()->json(['nik' => $customer->nik_encrypted])->header('Cache-Control', 'no-store');
     }
 
     public function confirm(Request $request, ConsumerImportBatch $consumer_import_batch): RedirectResponse

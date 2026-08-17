@@ -172,6 +172,7 @@ Route::middleware(['auth', 'active', 'verified', 'password.changed', 'operationa
         Route::get('/consumer-import/projects', [ConsumerPasteImportController::class, 'projects'])->middleware('not.impersonating')->name('consumer-import.projects');
         Route::post('/consumer-import/preview', [ConsumerPasteImportController::class, 'preview'])->middleware('not.impersonating')->name('consumer-import.preview');
         Route::get('/consumer-import/{consumer_import_batch}', [ConsumerPasteImportController::class, 'show'])->middleware('not.impersonating')->name('consumer-import.show');
+        Route::post('/consumer-import/nik/{customer}/reveal', [ConsumerPasteImportController::class, 'revealNik'])->middleware('not.impersonating')->name('consumer-import.nik-reveal');
         Route::post('/consumer-import/{consumer_import_batch}/confirm', [ConsumerPasteImportController::class, 'confirm'])->middleware('not.impersonating')->name('consumer-import.confirm');
         Route::get('/konsumen-progress', [KonsumenProgressController::class, 'index'])->middleware('permission:consumer_progress.view')->name('konsumen-progress.index');
         Route::get('/konsumen-progress/stage', [KonsumenProgressController::class, 'stage'])->middleware('permission:consumer_progress.view')->name('konsumen-progress.stage');

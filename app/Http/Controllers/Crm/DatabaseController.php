@@ -127,6 +127,15 @@ class DatabaseController extends Controller
         $canSync = $user->hasPermission('database.sync') && $selectedBranch && $this->workspaceAccess->canSyncBranch($user, $selectedBranch);
         $sheetCounts = [];
 
+        if ($selectedBranch) {
+            $sheetCounts = DatabaseSheetRecord::where('branch_id', $selectedBranch->id)
+                ->whereNull('oasis_deleted_at')
+                ->select('sheet_name', DatabaseSheetRecord::raw('count(*) as count'))
+                ->groupBy('sheet_name')
+                ->pluck('count', 'sheet_name')
+                ->toArray();
+        }
+
         $canEdit = $user->hasPermission('database.edit')
             && $selectedBranch
             && in_array((int) $selectedBranch->id, $this->organizationScope->branchIds($user, 'database', 'manage'), true)

@@ -116,7 +116,15 @@
          @oasis-sync-updated.window="handleSyncUpdated($event.detail)"
          @oasis:modal-closed.window="handleModalClosed($event.detail)"
          @oasis-form-error.window="handleFormError($event.detail)">
-        <div class="database-tabs crm-horizontal-tabs" data-horizontal-tabs role="tablist" aria-label="Sheet Database">
+        <div class="database-tabs crm-horizontal-tabs" data-horizontal-tabs role="tablist" aria-label="Sheet Database"
+             x-data="databaseTabStrip()"
+             x-init="init($el)"
+             @wheel.prevent="onWheel($event)"
+             @pointerdown="onPointerDown($event)"
+             @pointermove="onPointerMove($event)"
+             @pointerup="onPointerUp($event)"
+             @pointerleave="onPointerUp($event)"
+             @click="onTabClick($event)">
             @foreach($sheetNames as $name)
             <button type="button"
                     role="tab"
@@ -459,6 +467,54 @@
 @push('scripts')
 <script>
 document.addEventListener('alpine:init', () => {
+    Alpine.data('databaseTabStrip', () => ({
+        dragging: false,
+        startX: 0,
+        startScroll: 0,
+        moved: false,
+
+        init(el) {
+            this.el = el;
+        },
+
+        onPointerDown(e) {
+            if (e.pointerType === 'touch') return;
+            this.dragging = true;
+            this.moved = false;
+            this.startX = e.clientX;
+            this.startScroll = this.el.scrollLeft;
+            this.el.classList.add('database-tabs--dragging');
+        },
+
+        onPointerMove(e) {
+            if (!this.dragging) return;
+            const dx = e.clientX - this.startX;
+            if (Math.abs(dx) > 4) this.moved = true;
+            this.el.scrollLeft = this.startScroll - dx;
+        },
+
+        onPointerUp(e) {
+            if (!this.dragging) return;
+            this.dragging = false;
+            this.el.classList.remove('database-tabs--dragging');
+        },
+
+        onTabClick(e) {
+            if (this.moved) {
+                e.preventDefault();
+                e.stopPropagation();
+            }
+        },
+
+        onWheel(e) {
+            if (Math.abs(e.deltaX) >= Math.abs(e.deltaY)) {
+                this.el.scrollLeft += e.deltaX;
+            } else {
+                this.el.scrollLeft += e.deltaY;
+            }
+        },
+    }));
+
     Alpine.data('databaseTabs', (config) => ({
         tab: config.firstSheet,
         branchId: config.branchId,

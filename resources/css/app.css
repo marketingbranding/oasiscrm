@@ -663,7 +663,18 @@
     margin-bottom: var(--oasis-space-3);
     overflow-x: auto;
     border-bottom: var(--oasis-border-width-strong) solid var(--oasis-border-strong);
+    cursor: grab;
+    touch-action: pan-x;
+    scrollbar-width: thin;
+    scrollbar-color: var(--oasis-border-strong) var(--oasis-surface-muted);
+    -webkit-overflow-scrolling: touch;
 }
+
+.database-tabs--dragging { cursor: grabbing; }
+
+.database-tabs::-webkit-scrollbar { height: 6px; }
+.database-tabs::-webkit-scrollbar-track { background: var(--oasis-surface-muted); }
+.database-tabs::-webkit-scrollbar-thumb { background: var(--oasis-border-strong); }
 
 .database-tab {
     flex: 0 0 auto;

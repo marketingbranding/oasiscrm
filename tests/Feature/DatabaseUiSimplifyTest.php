@@ -282,6 +282,154 @@ class DatabaseUiSimplifyTest extends TestCase
         $this->assertStringNotContainsString('/[^\\d.-]/g', $html, 'formatMoney must not use the old regex that fails on Indonesian-formatted numbers');
     }
 
+    public function test_dashboard_count_uses_active_branch_cached_records(): void
+    {
+        [$branch] = $this->setupSheet('data_konsumen', ['id_kavling', 'nama_konsumen']);
+        $this->createRows($branch, 'data_konsumen', 5);
+        $user = $this->pusatUser($branch);
+        $this->mockSheetTitles($branch, ['data_konsumen']);
+
+        $response = $this->actingAs($user)
+            ->get(route('database.index', ['branch_id' => $branch->id]))
+            ->assertOk()
+            ->assertViewHas('sheetCounts');
+
+        $sheetCounts = $response->viewData('sheetCounts');
+        $this->assertSame(6, $sheetCounts['data_konsumen'] ?? 0, 'data_konsumen should count 1 template + 5 business rows');
+    }
+
+    public function test_dashboard_count_representative_second_module(): void
+    {
+        [$branch] = $this->setupSheet('bi_checking', ['id_kavling', 'hasil_slik']);
+        $this->createRows($branch, 'bi_checking', 3);
+        $user = $this->pusatUser($branch);
+        $this->mockSheetTitles($branch, ['bi_checking']);
+
+        $response = $this->actingAs($user)
+            ->get(route('database.index', ['branch_id' => $branch->id]))
+            ->assertOk();
+
+        $sheetCounts = $response->viewData('sheetCounts');
+        $this->assertSame(4, $sheetCounts['bi_checking'] ?? 0, 'bi_checking should count 1 template + 3 business rows');
+    }
+
+    public function test_dashboard_count_excludes_deleted_rows(): void
+    {
+        [$branch] = $this->setupSheet('data_konsumen', ['id_kavling']);
+        $this->createRows($branch, 'data_konsumen', 2);
+        DatabaseSheetRecord::query()->where('branch_id', $branch->id)
+            ->where('sheet_name', 'data_konsumen')
+            ->latest('id')->first()->update(['oasis_deleted_at' => now()]);
+
+        $user = $this->pusatUser($branch);
+        $this->mockSheetTitles($branch, ['data_konsumen']);
+
+        $response = $this->actingAs($user)
+            ->get(route('database.index', ['branch_id' => $branch->id]))
+            ->assertOk();
+
+        $sheetCounts = $response->viewData('sheetCounts');
+        $this->assertSame(2, $sheetCounts['data_konsumen'] ?? 0, 'deleted row should not be counted');
+    }
+
+    public function test_dashboard_count_excludes_wrong_branch_records(): void
+    {
+        [$branch] = $this->setupSheet('data_konsumen', ['id_kavling']);
+        $this->createRows($branch, 'data_konsumen', 3);
+
+        $otherBranch = Branch::query()->create([
+            'name' => 'Solo', 'code' => 'SLO', 'is_active' => true, 'sheet_id' => 'sheet-solo',
+        ]);
+        DatabaseSheetRecord::query()->create([
+            'branch_id' => $otherBranch->id, 'sheet_id' => $otherBranch->sheet_id,
+            'sheet_name' => 'data_konsumen', 'row_number' => 2,
+            'headers' => ['id_kavling'], 'row_data' => ['id_kavling' => 'X'], 'formula_columns' => [], 'column_metadata' => [],
+        ]);
+
+        $user = $this->pusatUser($branch);
+        $this->mockSheetTitles($branch, ['data_konsumen']);
+
+        $response = $this->actingAs($user)
+            ->get(route('database.index', ['branch_id' => $branch->id]))
+            ->assertOk();
+
+        $sheetCounts = $response->viewData('sheetCounts');
+        $this->assertSame(4, $sheetCounts['data_konsumen'] ?? 0, 'other branch rows should not be counted');
+    }
+
+    public function test_dashboard_count_zero_for_genuinely_empty_module(): void
+    {
+        [$branch] = $this->setupSheet('bast', ['id_kavling', 'tanggal_bast']);
+        $user = $this->pusatUser($branch);
+        $this->mockSheetTitles($branch, ['bast']);
+
+        $response = $this->actingAs($user)
+            ->get(route('database.index', ['branch_id' => $branch->id]))
+            ->assertOk();
+
+        $sheetCounts = $response->viewData('sheetCounts');
+        $this->assertSame(1, $sheetCounts['bast'] ?? 0, 'template row itself counts as 1');
+        $this->assertArrayNotHasKey('data_konsumen', $sheetCounts, 'data_konsumen has no records for this branch');
+    }
+
+    public function test_tab_strip_has_horizontal_drag_and_wheel_handlers(): void
+    {
+        $html = file_get_contents(resource_path('views/crm/database/index.blade.php'));
+
+        $this->assertStringContainsString('databaseTabStrip()', $html);
+        $this->assertStringContainsString('onPointerDown', $html);
+        $this->assertStringContainsString('onPointerMove', $html);
+        $this->assertStringContainsString('onPointerUp', $html);
+        $this->assertStringContainsString('onWheel', $html);
+        $this->assertStringContainsString('onTabClick', $html);
+        $this->assertStringContainsString('database-tabs--dragging', $html);
+    }
+
+    public function test_tab_strip_css_has_drag_cursor_and_scrollbar(): void
+    {
+        $css = file_get_contents(resource_path('css/app.css'));
+
+        $this->assertStringContainsString('cursor: grab', $css);
+        $this->assertStringContainsString('cursor: grabbing', $css);
+        $this->assertStringContainsString('touch-action: pan-x', $css);
+        $this->assertStringContainsString('scrollbar-width: thin', $css);
+        $this->assertStringContainsString('::-webkit-scrollbar', $css);
+    }
+
+    public function test_dashboard_count_changelog_is_idempotent_and_visible(): void
+    {
+        $title = 'Dashboard Database Menampilkan Jumlah Data dan Tab Lebih Mudah Digeser';
+        $migration = require database_path('migrations/2026_08_23_000003_add_database_dashboard_count_and_tab_strip_changelog.php');
+        $migration->up();
+        $migration->up();
+        $superadmin = User::factory()->create([
+            'role_id' => Role::query()->where('slug', 'superadmin')->firstOrFail()->id,
+            'password_changed_at' => now(),
+        ]);
+
+        $this->assertSame(1, Changelog::query()->whereNull('version')->where('title', $title)->count());
+        $this->actingAs($superadmin)->get(route('changelogs.index'))->assertOk()->assertSee($title);
+    }
+
+    private function createRows(Branch $branch, string $sheetName, int $count): void
+    {
+        $baseRow = DatabaseSheetRecord::query()->where('branch_id', $branch->id)
+            ->where('sheet_name', $sheetName)->latest('id')->first();
+        $startRow = $baseRow ? $baseRow->row_number + 1 : 2;
+        for ($i = 0; $i < $count; $i++) {
+            DatabaseSheetRecord::query()->create([
+                'branch_id' => $branch->id,
+                'sheet_id' => $branch->sheet_id,
+                'sheet_name' => $sheetName,
+                'row_number' => $startRow + $i,
+                'headers' => $baseRow ? $baseRow->headers : ['id_kavling'],
+                'row_data' => ['id_kavling' => 'A-'.($i + 1)],
+                'formula_columns' => [],
+                'column_metadata' => [],
+            ]);
+        }
+    }
+
     private function setupSheet(string $sheetName, array $headers): array
     {
         $branch = Branch::query()->create([

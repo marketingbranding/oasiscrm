@@ -186,9 +186,10 @@ class DatabaseUiTest extends TestCase
             ->filter(fn (string $query) => str_contains($query, 'database_sheet_records'))
             ->values();
 
-        $this->assertCount(2, $recordQueries);
+        $this->assertCount(3, $recordQueries);
         $this->assertTrue($recordQueries->contains(fn (string $query) => str_contains($query, 'select distinct') && str_contains($query, 'sheet_name')));
         $this->assertTrue($recordQueries->contains(fn (string $query) => str_contains($query, '"sheet_name" = ?')));
+        $this->assertTrue($recordQueries->contains(fn (string $query) => str_contains($query, 'group by') && str_contains($query, 'sheet_name')));
         $this->assertCount(1, $response->viewData('records')['Leads']);
         $this->assertSame([], $response->viewData('records')['Archive']);
     }

@@ -74,7 +74,13 @@
     </x-crm.alert>
     @endif
 
-    @if($selectedBranch && !empty($sheetNames))
+     @if($selectedBranch)
+     <x-crm.section id="database-dashboard" title="Dashboard" description="Ringkasan jumlah baris dari cache spreadsheet aktif." class="mb-4">
+         <div class="grid grid-cols-2 gap-3 md:grid-cols-4 xl:grid-cols-8">@foreach(\App\Http\Controllers\Crm\DatabaseController::SHEET_MODULES as $sheet => $label)<div class="border border-gray-300 bg-white p-3"><div class="text-xs font-bold uppercase">{{ $label }}</div><div class="text-2xl font-bold">{{ $sheetCounts[$sheet] ?? 0 }}</div></div>@endforeach</div>
+     </x-crm.section>
+     @endif
+
+     @if($selectedBranch && !empty($sheetNames))
     @php
         $firstSheet = $sheetNames[0] ?? '';
         $initialRows = $records[$firstSheet] ?? [];
@@ -124,7 +130,7 @@
                     :tabindex="tab === @js($name) ? 0 : -1"
                     :class="{ 'active': tab === @js($name), 'loading': loading && tab === @js($name) }"
                     class="database-tab">
-                {{ $name }} <span :class="tab === @js($name) ? 'text-black/60' : 'text-gray-500'" class="database-tab-count">(<span x-text="sheetCount(@js($name))">0</span>)</span>
+                                 {{ \App\Http\Controllers\Crm\DatabaseController::SHEET_MODULES[$name] ?? $name }} <span :class="tab === @js($name) ? 'text-black/60' : 'text-gray-500'" class="database-tab-count">(<span x-text="sheetCount(@js($name))">0</span>)</span>
             </button>
             @endforeach
         </div>

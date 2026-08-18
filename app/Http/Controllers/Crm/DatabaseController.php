@@ -23,6 +23,17 @@ use Throwable;
 
 class DatabaseController extends Controller
 {
+    public const SHEET_MODULES = [
+        'data_konsumen' => 'Data Konsumen',
+        'bi_checking' => 'BI Checking',
+        'PSJB' => 'PSJB',
+        'pemberkasan' => 'Pemberkasan',
+        'proses_bank' => 'Proses Bank',
+        'ppjb_dev' => 'PPJB Developer',
+        'akad' => 'Akad',
+        'bast' => 'BAST',
+    ];
+
     public function __construct(
         private readonly WorkspaceAccessService $workspaceAccess,
         private readonly OptimisticLockService $optimisticLock,
@@ -112,12 +123,14 @@ class DatabaseController extends Controller
         $requestAdd = $request->boolean('add');
 
         $canSync = $user->hasPermission('database.sync') && $selectedBranch && $this->workspaceAccess->canSyncBranch($user, $selectedBranch);
+        $sheetCounts = [];
+
         $canEdit = $user->hasPermission('database.edit')
             && $selectedBranch
             && in_array((int) $selectedBranch->id, $this->organizationScope->branchIds($user, 'database', 'manage'), true)
             && $this->workspaceAccess->canEditBranch($user, $selectedBranch);
 
-        return view('crm.database.index', compact('branches', 'selectedBranch', 'selectedBranchId', 'sheetNames', 'records', 'syncStatus', 'isStale', 'requestSheet', 'requestAdd', 'canSync', 'canEdit'));
+        return view('crm.database.index', compact('branches', 'selectedBranch', 'selectedBranchId', 'sheetNames', 'records', 'syncStatus', 'isStale', 'requestSheet', 'requestAdd', 'canSync', 'canEdit', 'sheetCounts'));
     }
 
     public function sheetData(Request $request, $branchId, $sheetName)

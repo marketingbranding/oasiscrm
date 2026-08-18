@@ -8,6 +8,7 @@ use App\Models\ContentItem;
 use App\Models\LeadMaster;
 use App\Models\SalesLead;
 use App\Models\User;
+use Carbon\CarbonImmutable;
 use Illuminate\Database\Query\Builder;
 use Illuminate\Support\Facades\DB;
 
@@ -80,18 +81,36 @@ class SalesFeeReportService
             ->where('sales_user_id', $salesUser->id)->where('project_id', $project->id)
             ->whereBetween('lead_date', [$filters['date_from'], $filters['date_to']])
             ->orderBy('lead_date')->orderBy('id')->get();
-        $firstStatuses = DB::table('sales_lead_status_histories')
-            ->join('sales_leads', 'sales_leads.id', '=', 'sales_lead_status_histories.sales_lead_id')
-            ->select('sales_lead_status_histories.sales_lead_id', 'sales_lead_status_histories.status', DB::raw('MIN(sales_lead_status_histories.changed_at) as changed_at'))
-            ->where('sales_leads.branch_id', $access['branchId'])
-            ->where('sales_leads.sales_user_id', $salesUser->id)->where('sales_leads.project_id', $project->id)
-            ->where('sales_lead_status_histories.branch_id', $access['branchId'])
-            ->whereIn('sales_lead_status_histories.status', [SalesLeadStatus::FaceToFace->value, SalesLeadStatus::SiteVisit->value, SalesLeadStatus::Utj->value])
-            ->groupBy('sales_lead_status_histories.sales_lead_id', 'sales_lead_status_histories.status');
-        $lifecycle = DB::query()->fromSub($firstStatuses, 'first_statuses')
-            ->whereBetween('changed_at', [$filters['date_from'].' 00:00:00', $filters['date_to'].' 23:59:59'])
-            ->select('status', DB::raw('COUNT(DISTINCT sales_lead_id) as total'))
-            ->groupBy('status')->pluck('total', 'status');
+        $lifecycleLeads = SalesLead::query()
+            ->with(['statusHistories' => fn ($query) => $query
+                ->whereIn('status', [SalesLeadStatus::FaceToFace->value, SalesLeadStatus::SiteVisit->value, SalesLeadStatus::Utj->value])
+                ->orderBy('changed_at')
+                ->orderBy('id')])
+            ->where('branch_id', $access['branchId'])
+            ->where('sales_user_id', $salesUser->id)
+            ->where('project_id', $project->id)
+            ->get();
+        $lifecycle = collect([
+            SalesLeadStatus::FaceToFace->value => 'met_at',
+            SalesLeadStatus::SiteVisit->value => 'surveyed_at',
+            SalesLeadStatus::Utj->value => 'utj_at',
+        ])->mapWithKeys(function (string $field, string $status) use ($lifecycleLeads, $filters): array {
+            $total = $lifecycleLeads->filter(function (SalesLead $lead) use ($field, $status, $filters): bool {
+                $timestamp = $lead->{$field};
+                if ($timestamp === null) {
+                    $timestamp = $lead->statusHistories
+                        ->firstWhere('status', $status)?->changed_at;
+                }
+
+                return $timestamp !== null
+                    && $timestamp->betweenIncluded(
+                        CarbonImmutable::parse($filters['date_from'])->startOfDay(),
+                        CarbonImmutable::parse($filters['date_to'])->endOfDay(),
+                    );
+            })->count();
+
+            return [$status => $total];
+        });
 
         return [
             'sales' => $salesUser,

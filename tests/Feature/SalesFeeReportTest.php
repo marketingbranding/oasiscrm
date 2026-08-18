@@ -161,6 +161,61 @@ class SalesFeeReportTest extends TestCase
             ->assertViewHas('metrics', fn (array $metrics) => $metrics['face_to_face'] === 1 && $metrics['site_visit'] === 1 && $metrics['utj'] === 1);
     }
 
+    public function test_authoritative_lifecycle_dates_count_backdated_progression_even_after_current_status_advances(): void
+    {
+        $lead = $this->lead($this->sales, $this->project, 'Lead Backdated UTJ', '2026-08-10');
+        $lead->update([
+            'met_at' => '2026-08-11 09:00:00',
+            'surveyed_at' => '2026-08-12 09:00:00',
+            'utj_at' => '2026-08-13 09:00:00',
+            'current_status' => SalesLeadStatus::Akad,
+        ]);
+        $outside = $this->lead($this->sales, $this->project, 'Lead UTJ Outside', '2026-08-10');
+        $outside->update(['utj_at' => '2026-09-01 09:00:00']);
+
+        $response = $this->actingAs($this->actor)->get(route('sales-fee-reports.show', [$this->sales, $this->project] + $this->period()));
+
+        $response->assertViewHas('metrics', fn (array $metrics) => $metrics['face_to_face'] === 1 && $metrics['site_visit'] === 1 && $metrics['utj'] === 1);
+    }
+
+    public function test_duplicate_authoritative_events_count_once_and_legacy_history_is_fallback(): void
+    {
+        $lead = $this->lead($this->sales, $this->project, 'Lead Duplicate UTJ', '2026-08-10');
+        $lead->update(['utj_at' => '2026-08-14 10:00:00']);
+        $this->history($lead, SalesLeadStatus::Utj, '2026-08-12 09:00:00', 'old-history');
+        $legacy = $this->lead($this->sales, $this->project, 'Lead Legacy UTJ', '2026-08-10');
+        $this->history($legacy, SalesLeadStatus::Utj, '2026-08-13 09:00:00', 'legacy-history');
+        $outside = $this->lead($this->sales, $this->project, 'Lead Legacy Outside', '2026-08-10');
+        $this->history($outside, SalesLeadStatus::Utj, '2026-09-01 09:00:00', 'outside-history');
+
+        $response = $this->actingAs($this->actor)->get(route('sales-fee-reports.show', [$this->sales, $this->project] + $this->period()));
+
+        $response->assertViewHas('metrics', fn (array $metrics) => $metrics['utj'] === 2);
+    }
+
+    public function test_print_and_detail_share_authoritative_lifecycle_metrics(): void
+    {
+        $lead = $this->lead($this->sales, $this->project, 'Lead Print Metric', '2026-08-10');
+        $lead->update(['utj_at' => '2026-08-12 09:00:00', 'current_status' => SalesLeadStatus::Akad]);
+
+        $detail = $this->actingAs($this->actor)->get(route('sales-fee-reports.show', [$this->sales, $this->project] + $this->period()));
+        $print = $this->actingAs($this->actor)->get(route('sales-fee-reports.print', [$this->sales, $this->project] + $this->period()));
+
+        $detail->assertViewHas('metrics', fn (array $metrics) => $metrics['utj'] === 1);
+        $print->assertSee('UTJ')->assertSee('1');
+    }
+
+    public function test_lifecycle_metrics_keep_scope_to_sales_project_and_branch(): void
+    {
+        $this->lead($this->sales, $this->project, 'Scoped Lead', '2026-08-10')->update(['utj_at' => '2026-08-12 09:00:00']);
+        $foreign = $this->lead($this->foreignSales, $this->foreignProject, 'Foreign Lead', '2026-08-10');
+        $foreign->update(['utj_at' => '2026-08-12 09:00:00']);
+
+        $response = $this->actingAs($this->actor)->get(route('sales-fee-reports.show', [$this->sales, $this->project] + $this->period()));
+
+        $response->assertViewHas('metrics', fn (array $metrics) => $metrics['utj'] === 1);
+    }
+
     public function test_multi_project_rows_are_separate_counts_are_not_duplicated_and_zero_activity_row_remains(): void
     {
         $this->agenda($this->sales, $this->project, 'P1 Agenda', '2026-08-05', 'done');

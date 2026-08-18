@@ -30,7 +30,7 @@ class ConsumerOperationalController extends Controller
     {
         $this->authorizeManage($request);
         [$projects, $sales] = $this->options($request);
-        $kavlings = Kavling::query()->whereIn('project_id', $projects->pluck('id'))->with('project')->orderBy('kavling_code')->get();
+        $kavlings = Kavling::query()->whereIn('project_id', $projects->pluck('id'))->with('project')->orderBy('kavling_code')->orderBy('id')->get();
 
         return view('crm.consumer-local.create', compact('projects', 'sales', 'kavlings'));
     }
@@ -40,6 +40,13 @@ class ConsumerOperationalController extends Controller
         $this->authorizeManage($request);
         $data = $this->validatedApplication($request);
         $this->assertScope($request, (int) $data['project_id']);
+        $kavling = ! empty($data['kavling_id']) ? Kavling::query()->findOrFail($data['kavling_id']) : null;
+        if ($kavling !== null && (int) $kavling->project_id !== (int) $data['project_id']) {
+            abort(422, 'Kavling harus berasal dari proyek yang dipilih.');
+        }
+        if ($kavling !== null && $this->lifecycle->availability($kavling) !== 'AVAILABLE') {
+            abort(422, 'Kavling yang dipilih tidak tersedia.');
+        }
         $customer = Customer::create([
             'name' => $data['nama_konsumen'], 'phone' => $data['no_hp'], 'nik_encrypted' => $data['nik'],
             'date_of_birth' => $data['tanggal_lahir'], 'occupation' => $data['pekerjaan'], 'occupation_detail' => $data['detail_pekerjaan'] ?? null,

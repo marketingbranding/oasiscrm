@@ -11,6 +11,7 @@ use App\Models\SalesLead;
 use App\Models\User;
 use App\Services\OptimisticLockService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Str;
 use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
@@ -18,26 +19,33 @@ class SalesPocketbookTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_primary_sales_shared_url_keeps_agenda_form_and_adds_read_only_lead_tab(): void
+    public function test_primary_sales_shared_url_keeps_agenda_form_and_lead_input_route_opens_same_workflow(): void
     {
-        [, , $sales] = $this->salesContext();
+        [$branch, $project, $sales] = $this->salesContext();
 
         $this->actingAs($sales)->get(route('sales-pocketbook.index'))->assertOk()
             ->assertSee('Agenda Saya')
-            ->assertSee('Catat dan selesaikan agenda sales Anda.')
-            ->assertSee('name="scheduled_date"', false)
-            ->assertSee('name="title"', false)
-            ->assertSee('name="location"', false)
-            ->assertSee('name="sales_activity_category"', false)
-            ->assertSee('name="activity_result"', false)
             ->assertSee('Lead Saya')
-            ->assertDontSee('Input Lead')
-            ->assertDontSee('Sinkronisasi')
-            ->assertDontSee('name="branch_id"', false)
-            ->assertDontSee('name="project_id"', false)
-            ->assertDontSee('name="sales_user_id"', false)
-            ->assertDontSee('name="start_time"', false)
-            ->assertDontSee('name="end_time"', false);
+            ->assertDontSee('name="sales_user_id"', false);
+
+        $this->actingAs($sales)->get(route('sales-leads.create'))->assertRedirect(route('sales-pocketbook.index', ['input' => 1]));
+        $this->actingAs($sales)->get(route('sales-pocketbook.index', ['input' => 1]))->assertOk()
+            ->assertSee('Input Lead Hari Ini')
+            ->assertSee('name="sales_user_id" value="'.$sales->id.'"', false)
+            ->assertSee('value="'.$project->id.'"', false)
+            ->assertSee('value="'.$branch->id.'"', false);
+    }
+
+    public function test_primary_sales_creates_lead_for_self_and_cannot_spoof_sales_owner(): void
+    {
+        [$branch, $project, $sales] = $this->salesContext();
+        $otherSales = $this->user('sales', $branch);
+        $otherSales->assignedProjects()->attach($project, ['is_primary' => false, 'is_active' => true]);
+
+        $this->actingAs($sales)->post(route('sales-leads.store'), $this->leadData($branch, $project, $otherSales))->assertRedirect();
+
+        $this->assertDatabaseHas('sales_leads', ['customer_name' => 'Lead Test', 'sales_user_id' => $sales->id]);
+        $this->assertDatabaseMissing('sales_leads', ['customer_name' => 'Lead Test', 'sales_user_id' => $otherSales->id]);
     }
 
     public function test_sales_workspace_has_exact_category_options_and_displays_historical_values_safely(): void
@@ -254,6 +262,23 @@ class SalesPocketbookTest extends TestCase
             'owner_user_id' => $sales->id,
             'created_by' => $sales->id,
         ]);
+    }
+
+    private function leadData(Branch $branch, LeadMaster $project, User $sales): array
+    {
+        return [
+            'branch_id' => $branch->id,
+            'project_id' => $project->id,
+            'sales_user_id' => $sales->id,
+            'lead_date' => '2026-07-10',
+            'customer_name' => 'Lead Test',
+            'phone' => '081234567890',
+            'source' => 'Referral',
+            'platform' => 'WhatsApp',
+            'campaign_name' => 'Referral',
+            'current_status' => 'no_response',
+            'operation_uuid' => (string) Str::uuid(),
+        ];
     }
 
     private function lead(User $sales, LeadMaster $project, string $name): SalesLead

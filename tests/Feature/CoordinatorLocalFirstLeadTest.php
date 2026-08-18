@@ -133,13 +133,13 @@ class CoordinatorLocalFirstLeadTest extends TestCase
         $this->assertDatabaseCount('sales_leads', 0);
     }
 
-    public function test_primary_sales_cannot_store_edit_update_push_or_export(): void
+    public function test_primary_sales_can_store_but_cannot_edit_update_push_or_export(): void
     {
         [$branch, $project, $sales] = $this->context();
         $lead = $this->lead($sales, $project);
         $this->app->instance(SalesLeadSpreadsheetWriter::class, Mockery::mock(SalesLeadSpreadsheetWriter::class));
 
-        $this->actingAs($sales)->post(route('sales-leads.store'), $this->leadData($branch, $project, $sales))->assertForbidden();
+        $this->actingAs($sales)->post(route('sales-leads.store'), $this->leadData($branch, $project, $sales))->assertRedirect();
         $this->actingAs($sales)->get(route('sales-leads.edit', $lead))->assertForbidden();
         $this->actingAs($sales)->put(route('sales-leads.update', $lead), $this->leadData($branch, $project, $sales, [
             'expected_updated_at' => app(OptimisticLockService::class)->token($lead),

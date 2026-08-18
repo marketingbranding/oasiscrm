@@ -40,7 +40,7 @@ class SalesLeadPolicy
 
     public function create(User $user): bool
     {
-        if ($user->hasPrimaryRole('supervisor') || $user->isSales()) {
+        if ($user->hasPrimaryRole('supervisor')) {
             return false;
         }
 

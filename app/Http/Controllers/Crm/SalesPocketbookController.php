@@ -39,7 +39,7 @@ class SalesPocketbookController extends Controller
     {
         $user = $request->user();
 
-        if ($user->isSales()) {
+        if ($user->isSales() && ! $request->boolean('input')) {
             return app(SalesAgendaController::class)->index($request);
         }
 

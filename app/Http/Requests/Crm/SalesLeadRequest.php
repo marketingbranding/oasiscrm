@@ -50,8 +50,16 @@ abstract class SalesLeadRequest extends FormRequest
 
     protected function prepareForValidation(): void
     {
+        $data = [];
         if (! $this->exists('promo_name') && $this->exists('id_promo')) {
-            $this->merge(['promo_name' => $this->input('id_promo')]);
+            $data['promo_name'] = $this->input('id_promo');
+        }
+        if ($this->user()?->isSales()) {
+            $data['sales_user_id'] = $this->user()->id;
+            $data['branch_id'] = $this->user()->branch_id;
+        }
+        if ($data !== []) {
+            $this->merge($data);
         }
     }
 

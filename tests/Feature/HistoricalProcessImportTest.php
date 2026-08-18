@@ -128,7 +128,7 @@ class HistoricalProcessImportTest extends TestCase
         $this->assertSame('K-001', $application->legacyIdentity->id_kons);
         $this->assertSame('PS-1', $application->legacyIdentity->id_psjb);
         $this->assertSame(2, $application->stageEvents()->count());
-        $this->assertDatabaseHas('consumer_stage_events', ['application_id' => $application->id, 'stage' => 'PSJB', 'source_id' => 'PS-1']);
+        $this->assertDatabaseHas('consumer_stage_events', ['consumer_application_id' => $application->id, 'stage' => 'PSJB', 'source_id' => 'PS-1']);
     }
 
     public function test_downstream_row_without_existing_chain_is_flagged_and_skipped(): void
@@ -172,11 +172,11 @@ class HistoricalProcessImportTest extends TestCase
         $this->stage($superadmin, $branch->id, "id_kavling\tid_berkas\tno_sp3k\tjenis_respon\tapproved_plafond\tapproved_tenor\tlead_time_hari\tstatus\tkategori_revisi\tdetail_revisi\tkendala\tketerangan\nKAV-1\tB-1\tSP-2\tApproved\t200000000\t240\t\t\t\t\t\t");
 
         $application = ConsumerApplication::sole();
-        $this->assertSame(2, ConsumerBankProcess::where('application_id', $application->id)->count());
+        $this->assertSame(2, ConsumerBankProcess::where('consumer_application_id', $application->id)->count());
         $this->assertSame('SP-1', ConsumerBankProcess::where('no_sp3k', 'SP-1')->value('no_sp3k'));
         $this->assertSame('Approved', ConsumerBankProcess::where('no_sp3k', 'SP-2')->value('response_type'));
         $this->assertSame('200000000.00', ConsumerBankProcess::where('no_sp3k', 'SP-2')->value('approved_plafond'));
-        $this->assertSame(2, ConsumerStageEvent::where('application_id', $application->id)->where('stage', 'proses_bank')->count());
+        $this->assertSame(2, ConsumerStageEvent::where('consumer_application_id', $application->id)->where('stage', 'proses_bank')->count());
     }
 
     public function test_preview_and_confirm_reject_non_superadmin_and_impersonation(): void

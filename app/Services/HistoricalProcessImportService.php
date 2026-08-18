@@ -197,7 +197,7 @@ class HistoricalProcessImportService
             $produce = self::CHAIN[$row['sheet_type']]['produce'];
             $sourceId = $row['normalized_data'][$produce] ?? null;
             $duplicate = $sourceId !== null && ConsumerStageEvent::query()
-                ->where('application_id', $resolution['application'])
+                ->where('consumer_application_id', $resolution['application'])
                 ->where('stage', $row['sheet_type'])
                 ->where('source_id', $sourceId)
                 ->exists();
@@ -269,7 +269,7 @@ class HistoricalProcessImportService
                 $produce = self::CHAIN[$row->sheet_type]['produce'];
                 $sourceId = $row->normalized_data[$produce] ?? null;
                 $exists = $sourceId !== null && ConsumerStageEvent::query()
-                    ->where('application_id', $resolution['application'])
+                    ->where('consumer_application_id', $resolution['application'])
                     ->where('stage', $row->sheet_type)
                     ->where('source_id', $sourceId)
                     ->exists();
@@ -308,9 +308,9 @@ class HistoricalProcessImportService
             }
         }
 
-        $identity = ConsumerLegacyIdentity::query()->where('application_id', $applicationId)->first();
+        $identity = ConsumerLegacyIdentity::query()->where('consumer_application_id', $applicationId)->first();
         if ($identity === null) {
-            $identity = ConsumerLegacyIdentity::create(['application_id' => $applicationId]);
+            $identity = ConsumerLegacyIdentity::create(['consumer_application_id' => $applicationId, 'legacy_source' => 'historical_import']);
         }
         $identity->update([$produce => $normalized[$produce]]);
 
@@ -324,7 +324,7 @@ class HistoricalProcessImportService
 
         $notes = json_encode($normalized, JSON_UNESCAPED_UNICODE);
         ConsumerStageEvent::create([
-            'application_id' => $applicationId,
+            'consumer_application_id' => $applicationId,
             'stage' => $sheetType,
             'source_id' => $normalized[$produce],
             'event_date' => $eventDate,
@@ -334,7 +334,7 @@ class HistoricalProcessImportService
 
         if ($sheetType === 'proses_bank') {
             ConsumerBankProcess::create([
-                'application_id' => $applicationId,
+                'consumer_application_id' => $applicationId,
                 'id_berkas' => $normalized['id_berkas'] ?? null,
                 'no_sp3k' => $normalized['no_sp3k'] ?? null,
                 'response_type' => $normalized['jenis_respon'] ?? null,
@@ -360,7 +360,7 @@ class HistoricalProcessImportService
             $application = ConsumerLegacyIdentity::query()
                 ->where('id_kons', $idKons)
                 ->whereHas('application', fn ($q) => $q->where('branch_id', $branchId))
-                ->value('application_id');
+                ->value('consumer_application_id');
 
             return ['application' => $application];
         }
@@ -385,7 +385,7 @@ class HistoricalProcessImportService
             $application = ConsumerLegacyIdentity::query()
                 ->where('id_kons', $idKons)
                 ->whereHas('application', fn ($q) => $q->where('branch_id', $branchId))
-                ->value('application_id');
+                ->value('consumer_application_id');
             if ($application !== null) {
                 return ['application' => $application];
             }
@@ -395,7 +395,7 @@ class HistoricalProcessImportService
                 'nama_konsumen' => $normalized['nama_konsumen'],
                 'nik' => $nik,
             ])->id;
-            ConsumerLegacyIdentity::create(['application_id' => $application, 'id_kons' => $idKons]);
+            ConsumerLegacyIdentity::create(['consumer_application_id' => $application, 'id_kons' => $idKons, 'legacy_source' => 'historical_import']);
 
             return ['application' => $application];
         }
@@ -414,7 +414,7 @@ class HistoricalProcessImportService
         return ConsumerLegacyIdentity::query()
             ->where($column, $value)
             ->whereHas('application', fn ($q) => $q->where('branch_id', $branchId))
-            ->value('application_id');
+            ->value('consumer_application_id');
     }
 
     private function date(string $value): ?string

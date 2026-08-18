@@ -10,9 +10,9 @@ return new class extends Migration
     {
         Schema::create('consumer_applications', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('customer_id')->constrained('customers')->restrictOnDelete();
+            $table->foreignId('customer_id')->nullable()->constrained('customers')->nullOnDelete();
             $table->foreignId('branch_id')->constrained('branches')->restrictOnDelete();
-            $table->foreignId('project_id')->constrained('lead_master')->restrictOnDelete();
+            $table->foreignId('project_id')->nullable()->constrained('lead_master')->nullOnDelete();
             $table->foreignId('sales_user_id')->nullable()->constrained('users')->nullOnDelete();
             $table->foreignId('kavling_id')->nullable()->constrained('kavlings')->nullOnDelete();
             $table->foreignId('promo_id')->nullable()->constrained('promos')->nullOnDelete();

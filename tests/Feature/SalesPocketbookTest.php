@@ -28,6 +28,11 @@ class SalesPocketbookTest extends TestCase
             ->assertSee('Lead Saya')
             ->assertDontSee('name="sales_user_id"', false);
 
+        $this->actingAs($sales)->get(route('sales-agendas.index', ['tab' => 'leads']))
+            ->assertOk()
+            ->assertSee('+ Tambah Lead')
+            ->assertSee('href="'.route('sales-leads.create').'"', false);
+
         $this->actingAs($sales)->get(route('sales-leads.create'))->assertRedirect(route('sales-pocketbook.index', ['input' => 1]));
         $this->actingAs($sales)->get(route('sales-pocketbook.index', ['input' => 1]))->assertOk()
             ->assertSee('Input Lead Hari Ini')

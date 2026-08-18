@@ -295,7 +295,7 @@ class DatabaseUiSimplifyTest extends TestCase
             ->assertViewHas('sheetCounts');
 
         $sheetCounts = $response->viewData('sheetCounts');
-        $this->assertSame(6, $sheetCounts['data_konsumen'] ?? 0, 'data_konsumen should count 1 template + 5 business rows');
+        $this->assertSame(5, $sheetCounts['data_konsumen'] ?? 0, 'data_konsumen should count 5 business rows only, template excluded');
     }
 
     public function test_dashboard_count_representative_second_module(): void
@@ -310,7 +310,7 @@ class DatabaseUiSimplifyTest extends TestCase
             ->assertOk();
 
         $sheetCounts = $response->viewData('sheetCounts');
-        $this->assertSame(4, $sheetCounts['bi_checking'] ?? 0, 'bi_checking should count 1 template + 3 business rows');
+        $this->assertSame(3, $sheetCounts['bi_checking'] ?? 0, 'bi_checking should count 3 business rows only, template excluded');
     }
 
     public function test_dashboard_count_excludes_deleted_rows(): void
@@ -329,7 +329,7 @@ class DatabaseUiSimplifyTest extends TestCase
             ->assertOk();
 
         $sheetCounts = $response->viewData('sheetCounts');
-        $this->assertSame(2, $sheetCounts['data_konsumen'] ?? 0, 'deleted row should not be counted');
+        $this->assertSame(1, $sheetCounts['data_konsumen'] ?? 0, 'deleted business row should not be counted, template excluded');
     }
 
     public function test_dashboard_count_excludes_wrong_branch_records(): void
@@ -354,7 +354,7 @@ class DatabaseUiSimplifyTest extends TestCase
             ->assertOk();
 
         $sheetCounts = $response->viewData('sheetCounts');
-        $this->assertSame(4, $sheetCounts['data_konsumen'] ?? 0, 'other branch rows should not be counted');
+        $this->assertSame(3, $sheetCounts['data_konsumen'] ?? 0, 'other branch rows should not be counted, template excluded');
     }
 
     public function test_dashboard_count_zero_for_genuinely_empty_module(): void
@@ -368,8 +368,30 @@ class DatabaseUiSimplifyTest extends TestCase
             ->assertOk();
 
         $sheetCounts = $response->viewData('sheetCounts');
-        $this->assertSame(1, $sheetCounts['bast'] ?? 0, 'template row itself counts as 1');
+        $this->assertSame(0, $sheetCounts['bast'] ?? 0, 'template-only BAST should count 0 business rows');
         $this->assertArrayNotHasKey('data_konsumen', $sheetCounts, 'data_konsumen has no records for this branch');
+    }
+
+    public function test_dashboard_count_excludes_formula_only_template_row(): void
+    {
+        [$branch] = $this->setupSheet('data_konsumen', ['id_kavling', 'nama_konsumen', 'umur']);
+        DatabaseSheetRecord::query()->where('branch_id', $branch->id)
+            ->where('sheet_name', 'data_konsumen')
+            ->latest('id')->first()->update([
+                'row_data' => ['id_kavling' => '', 'nama_konsumen' => '', 'umur' => '25', 'oasis_sync_id' => 'template-uuid'],
+                'formula_columns' => ['umur'],
+            ]);
+        $this->createRows($branch, 'data_konsumen', 2);
+
+        $user = $this->pusatUser($branch);
+        $this->mockSheetTitles($branch, ['data_konsumen']);
+
+        $response = $this->actingAs($user)
+            ->get(route('database.index', ['branch_id' => $branch->id]))
+            ->assertOk();
+
+        $sheetCounts = $response->viewData('sheetCounts');
+        $this->assertSame(2, $sheetCounts['data_konsumen'] ?? 0, 'formula-only template row should not be counted');
     }
 
     public function test_tab_strip_has_horizontal_drag_and_wheel_handlers(): void

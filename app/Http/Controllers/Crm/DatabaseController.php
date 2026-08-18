@@ -128,12 +128,7 @@ class DatabaseController extends Controller
         $sheetCounts = [];
 
         if ($selectedBranch) {
-            $sheetCounts = DatabaseSheetRecord::where('branch_id', $selectedBranch->id)
-                ->whereNull('oasis_deleted_at')
-                ->select('sheet_name', DatabaseSheetRecord::raw('count(*) as count'))
-                ->groupBy('sheet_name')
-                ->pluck('count', 'sheet_name')
-                ->toArray();
+            $sheetCounts = $this->businessRowCount($selectedBranch);
         }
 
         $canEdit = $user->hasPermission('database.edit')
@@ -402,6 +397,41 @@ class DatabaseController extends Controller
         abort_unless($user->hasPermission('database.edit'), 403);
         abort_unless(in_array((int) $branch->id, $this->organizationScope->branchIds($user, 'database', 'manage'), true), 403);
         abort_unless($this->workspaceAccess->canEditBranch($user, $branch), 403);
+    }
+
+    private function businessRowCount(Branch $branch): array
+    {
+        $oasisCols = ['oasis_sync_id', 'oasis_deleted_at', 'oasis_deleted_by'];
+
+        $rows = DatabaseSheetRecord::where('branch_id', $branch->id)
+            ->whereNull('oasis_deleted_at')
+            ->get(['sheet_name', 'headers', 'formula_columns', 'row_data']);
+
+        $bySheet = $rows->groupBy('sheet_name');
+        $counts = [];
+
+        foreach ($bySheet as $sheetName => $sheetRows) {
+            $sample = $sheetRows->first();
+            $headers = $sample->headers ?? [];
+            $formulaCols = $sample->formula_columns ?? [];
+            $editable = array_values(array_filter(
+                $headers,
+                fn ($h) => ! in_array($h, $formulaCols, true) && ! in_array($h, $oasisCols, true)
+            ));
+
+            $count = 0;
+            foreach ($sheetRows as $row) {
+                foreach ($editable as $header) {
+                    if (trim((string) ($row->row_data[$header] ?? '')) !== '') {
+                        $count++;
+                        break;
+                    }
+                }
+            }
+            $counts[$sheetName] = $count;
+        }
+
+        return $counts;
     }
 
     private function validateTypedInput(array $input, array $columnMetadata, array $existingValues = []): void

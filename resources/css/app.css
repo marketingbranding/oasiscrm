@@ -729,6 +729,8 @@
 .database-import-actions { display: flex; justify-content: flex-start; margin-top: var(--oasis-space-3); }
 .database-import-preview { margin-top: var(--oasis-space-4); }
 .database-import-summary { display: flex; flex-wrap: wrap; gap: var(--oasis-space-2); margin-bottom: var(--oasis-space-3); }
+.database-import-headers { word-break: break-all; }
+.database-dynamic-fields .crm-field--full { grid-column: span 2; }
 
 @media (max-width: 639px) {
     .database-dynamic-fields { grid-template-columns: minmax(0, 1fr); }

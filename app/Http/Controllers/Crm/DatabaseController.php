@@ -7,6 +7,7 @@ use App\Models\Branch;
 use App\Models\DatabaseSheetRecord;
 use App\Models\DatabaseSheetSyncStatus;
 use App\Services\CollaborationNotificationService;
+use App\Services\DatabaseFieldConfig;
 use App\Services\DatabaseSheetImportService;
 use App\Services\DatabaseSheetSyncService;
 use App\Services\DatabaseSheetWriteService;
@@ -131,7 +132,9 @@ class DatabaseController extends Controller
             && in_array((int) $selectedBranch->id, $this->organizationScope->branchIds($user, 'database', 'manage'), true)
             && $this->workspaceAccess->canEditBranch($user, $selectedBranch);
 
-        return view('crm.database.index', compact('branches', 'selectedBranch', 'selectedBranchId', 'sheetNames', 'records', 'syncStatus', 'isStale', 'requestSheet', 'requestAdd', 'canSync', 'canEdit', 'sheetCounts'));
+        $fieldConfig = DatabaseFieldConfig::config();
+
+        return view('crm.database.index', compact('branches', 'selectedBranch', 'selectedBranchId', 'sheetNames', 'records', 'syncStatus', 'isStale', 'requestSheet', 'requestAdd', 'canSync', 'canEdit', 'sheetCounts', 'fieldConfig'));
     }
 
     public function sheetData(Request $request, $branchId, $sheetName)

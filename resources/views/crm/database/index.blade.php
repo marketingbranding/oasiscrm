@@ -108,6 +108,8 @@
             'requestSheet' => $requestSheet ?? '',
             'requestAdd' => (bool) ($requestAdd ?? false),
             'canEdit' => (bool) $canEdit,
+            'sheetLabels' => \App\Http\Controllers\Crm\DatabaseController::SHEET_MODULES,
+            'fieldConfig' => $fieldConfig,
         ];
     @endphp
     <div x-data="databaseTabs(@js($databaseTabsConfig))"
@@ -197,11 +199,14 @@
                 </div>
 
                 <div x-show="!isLoaded(name) && !loadErrors[name]" class="database-table-state" aria-live="polite">
-                    <x-crm.loading-state label="Memuat data Database..." />
+                    <div role="status" aria-live="polite" class="crm-loading-state">
+                        <span class="crm-loading-spinner" aria-hidden="true"></span>
+                        <span x-text="'Memuat data ' + sheetLabel(name) + '...'">Memuat data...</span>
+                    </div>
                     <div x-show="inFlight[name]" class="mt-3 space-y-2" aria-hidden="true"><div class="h-3 bg-gray-200 animate-pulse motion-reduce:animate-none"></div><div class="h-3 bg-gray-200 animate-pulse motion-reduce:animate-none"></div><div class="h-3 bg-gray-200 animate-pulse motion-reduce:animate-none"></div></div>
                 </div>
                 <x-crm.alert x-show="loadErrors[name]" x-cloak variant="error" title="Data gagal dimuat." aria-live="polite">
-                    <p>Tabel tidak dianggap kosong karena permintaan data belum berhasil.</p>
+                    <p x-text="'Gagal memuat data ' + sheetLabel(name) + ' dari spreadsheet.'"></p>
                     <div class="crm-alert-actions"><x-crm.button type="button" size="sm" @click="switchTab(name, true)">Coba Lagi</x-crm.button><x-crm.button type="button" size="sm" @click="window.dispatchEvent(new CustomEvent('open-feedback'))">Laporkan Masalah</x-crm.button></div>
                 </x-crm.alert>
 
@@ -212,13 +217,12 @@
                             <thead>
                                 <tr>
                                     <th scope="col" class="crm-row-num" :class="{ 'row-num': frozen }">Baris</th>
-                                    <template x-for="h in currentData(name).headers" :key="h">
+                                    <template x-for="h in tableHeaders(name)" :key="h">
                                         <th scope="col"
-                                            x-show="!['oasis_sync_id','oasis_deleted_at','oasis_deleted_by'].includes(h)"
                                             :class="(currentData(name).formula_columns.includes(h) ? 'formula-col ' : '') + (isIdKavlingColumn(h) ? 'col-id_kavling' : '')"
                                             :aria-sort="sortAria(h)">
                                             <button type="button" class="database-sort-button" @click="sortBy(h)" :aria-label="sortLabel(h)">
-                                                <span x-text="h"></span><span class="database-sort-indicator" aria-hidden="true" x-text="sortIcon(h)"></span>
+                                                <span x-text="fieldLabel(name, h)"></span><span class="database-sort-indicator" aria-hidden="true" x-text="sortIcon(h)"></span>
                                             </button>
                                             <button type="button"
                                                     x-show="isIdKavlingColumn(h)"
@@ -241,9 +245,8 @@
                                 <template x-for="rec in sortedRecords(name)" :key="rec.id">
                                     <tr>
                                         <td class="crm-row-num" :class="{ 'row-num': frozen }" x-text="rec.row_number"></td>
-                                        <template x-for="h in currentData(name).headers" :key="h">
-                                            <td x-show="!['oasis_sync_id','oasis_deleted_at','oasis_deleted_by'].includes(h)"
-                                                :class="(isIdKavlingColumn(h) ? 'col-id_kavling ' : '') + (currentData(name).formula_columns.includes(h) ? 'database-formula-cell' : '')"
+                                        <template x-for="h in tableHeaders(name)" :key="h">
+                                            <td :class="(isIdKavlingColumn(h) ? 'col-id_kavling ' : '') + (currentData(name).formula_columns.includes(h) ? 'database-formula-cell' : '')"
                                                 :title="rec.row_data[h] || ''">
                                                   <template x-if="isBooleanValue(rec.row_data[h])">
                                                        <span class="crm-boolean-box"
@@ -253,7 +256,7 @@
                                                        </span>
                                                    </template>
                                                    <template x-if="!isBooleanValue(rec.row_data[h])">
-                                                    <span x-text="rec.row_data[h] || ''"></span>
+                                                    <span x-text="formatCell(name, h, rec.row_data[h])"></span>
                                                 </template>
                                             </td>
                                         </template>
@@ -272,7 +275,13 @@
                 </template>
 
                 <template x-if="isLoaded(name) && currentData(name).records.length === 0">
-                    <x-crm.empty-state title="Sheet belum memiliki data" description="Tambahkan minimal satu baris contoh di Google Sheet, lalu sinkronkan agar form tambah data dapat dibuat." />
+                    <div class="crm-empty-state">
+                        <span class="crm-empty-state-mark" aria-hidden="true"></span>
+                        <div class="min-w-0">
+                            <div class="crm-empty-state-title" x-text="'Belum ada data ' + sheetLabel(name) + '.'"></div>
+                            <p class="crm-empty-state-description">Tambahkan minimal satu baris data atau sinkronkan dari Google Sheet.</p>
+                        </div>
+                    </div>
                 </template>
 
                 <template x-if="isLoaded(name) && currentData(name).records.length > 0 && sortedRecords(name).length === 0">
@@ -302,9 +311,9 @@
                     <input type="hidden" name="expected_sync_id" :value="editing?.oasis_sync_id || ''">
                     <template x-if="editing"><div x-data="crmPresence(@js(['enabled' => config('presence.enabled', true), 'heartbeatUrl' => route('presence.heartbeat'), 'indexUrl' => route('presence.index'), 'destroyUrl' => route('presence.destroy'), 'heartbeatSeconds' => config('presence.heartbeat_seconds', 25), 'pageKey' => 'database', 'branchId' => null, 'recordType' => 'database_sheet_record', 'recordId' => null, 'mode' => 'editing']))" x-init="updateContext({ branchId: branchId, recordType: 'database_sheet_record', recordId: editing.id, mode: 'editing' })" x-show="others.length" :title="fullNames" class="database-editing-presence"><span class="font-bold" x-text="summary"></span><span>Perubahan terakhir akan diperiksa saat menyimpan.</span></div></template>
                     <div class="database-dynamic-fields">
-                        <template x-for="h in editableHeaders()" :key="h">
-                            <div class="crm-field">
-                                <label :id="fieldLabelId('edit', tab, h)" :for="fieldId('edit', tab, h)" class="crm-field-label" x-text="h"></label>
+                        <template x-for="h in formHeaders(tab)" :key="h">
+                            <div class="crm-field" :class="{ 'crm-field--full': isFullWidth(tab, h) }">
+                                <label :id="fieldLabelId('edit', tab, h)" :for="fieldId('edit', tab, h)" class="crm-field-label" x-text="fieldLabel(tab, h)"></label>
                                 <template x-if="fieldType(tab, h, editForm[h]) === 'checkbox'">
                                     <label class="database-checkbox-control">
                                         <input type="hidden" :name="h" :value="editForm[h]">
@@ -340,9 +349,9 @@
                     <input type="hidden" name="sheet_name" :value="adding || ''">
                     <input type="hidden" name="branch_id" value="{{ $selectedBranchId }}">
                     <div class="database-dynamic-fields">
-                        <template x-for="h in addHeaders(adding)" :key="h">
-                            <div class="crm-field">
-                                <label :id="fieldLabelId('add', adding, h)" :for="fieldId('add', adding, h)" class="crm-field-label" x-text="h"></label>
+                        <template x-for="h in formHeaders(adding)" :key="h">
+                            <div class="crm-field" :class="{ 'crm-field--full': isFullWidth(adding, h) }">
+                                <label :id="fieldLabelId('add', adding, h)" :for="fieldId('add', adding, h)" class="crm-field-label" x-text="fieldLabel(adding, h)"></label>
                                 <template x-if="fieldType(adding, h) === 'checkbox'">
                                     <label class="database-checkbox-control"><input type="hidden" :name="h" :value="uncheckedValue(adding, h)"><input type="checkbox" :id="fieldId('add', adding, h)" :name="h" :value="checkedValue(adding, h)" @change="$event.target.nextElementSibling.textContent = $event.target.checked ? 'Aktif' : 'Tidak'" class="database-checkbox"><span>Tidak</span></label>
                                 </template>
@@ -381,6 +390,7 @@
                         <label for="database-import-raw" class="crm-field-label">Tempel data di sini</label>
                         <textarea id="database-import-raw" name="raw" rows="12" x-model="importRaw" placeholder="no_ktp&#9;nama_konsumen&#9;tanggal_lahir&#10;3374...&#9;Andrew&#9;1994-01-18" class="crm-control database-import-textarea"></textarea>
                         <p class="crm-field-hint">Baris pertama adalah header. Pisahkan kolom dengan tab.</p>
+                        <p class="crm-field-hint database-import-headers" x-show="importing" x-cloak>Header: <span x-text="importHelperText(importing)"></span></p>
                     </div>
                     <div class="database-import-actions">
                         <x-crm.button type="submit" variant="secondary" size="sm" x-bind:disabled="importing && !importRaw">Preview</x-crm.button>
@@ -453,6 +463,8 @@ document.addEventListener('alpine:init', () => {
         tab: config.firstSheet,
         branchId: config.branchId,
         editBaseUrl: config.editBaseUrl,
+        sheetLabels: config.sheetLabels || {},
+        fieldConfig: config.fieldConfig || {},
         loading: false,
         editing: null,
         editForm: {},
@@ -765,19 +777,131 @@ document.addEventListener('alpine:init', () => {
         editableHeaders() {
             const sheet = this.cache[this.tab];
             if (!sheet) return [];
+            const hidden = this.hiddenFormKeys(this.tab);
             return (sheet.headers || []).filter(h =>
                 !sheet.formula_columns.includes(h) &&
-                !['oasis_sync_id', 'oasis_deleted_at', 'oasis_deleted_by'].includes(h)
+                !['oasis_sync_id', 'oasis_deleted_at', 'oasis_deleted_by'].includes(h) &&
+                !hidden.includes(this.normalizeKey(h))
             );
         },
 
         addHeaders(name) {
-            const sheet = this.cache[name];
-            if (!sheet) return [];
-            return (sheet.headers || []).filter(h =>
-                !sheet.formula_columns.includes(h) &&
-                !['oasis_sync_id', 'oasis_deleted_at', 'oasis_deleted_by'].includes(h)
+            return this.formHeaders(name);
+        },
+
+        normalizeKey(h) {
+            return String(h || '').toLowerCase().replace(/[\s_/-]+/g, ' ').trim();
+        },
+
+        moduleConfig(name) {
+            return this.fieldConfig[this.normalizeKey(name)] || {};
+        },
+
+        hiddenFormKeys(name) {
+            return (this.moduleConfig(name).hidden_form || []).map(h => this.normalizeKey(h));
+        },
+
+        tableHeaders(name) {
+            const data = this.cache[name];
+            if (!data) return [];
+            const cfg = this.moduleConfig(name);
+            const oasis = ['oasis_sync_id', 'oasis_deleted_at', 'oasis_deleted_by'];
+            if (!cfg.table) {
+                return (data.headers || []).filter(h => !oasis.includes(h));
+            }
+            const result = [];
+            for (const ch of cfg.table) {
+                const match = (data.headers || []).find(h => this.normalizeKey(h) === this.normalizeKey(ch));
+                if (match && !oasis.includes(match) && !result.includes(match)) result.push(match);
+            }
+            return result;
+        },
+
+        formHeaders(name) {
+            const data = this.cache[name];
+            if (!data) return [];
+            const cfg = this.moduleConfig(name);
+            const oasis = ['oasis_sync_id', 'oasis_deleted_at', 'oasis_deleted_by'];
+            const editable = (data.headers || []).filter(h =>
+                !(data.formula_columns || []).includes(h) && !oasis.includes(h)
             );
+            if (!cfg.form) return editable;
+            const hidden = this.hiddenFormKeys(name);
+            const configuredKeys = (cfg.form || []).map(h => this.normalizeKey(h));
+            const result = [];
+            for (const ch of (cfg.form || [])) {
+                const key = this.normalizeKey(ch);
+                if (hidden.includes(key)) continue;
+                const match = editable.find(h => this.normalizeKey(h) === key);
+                if (match && !result.includes(match)) result.push(match);
+            }
+            for (const h of editable) {
+                const key = this.normalizeKey(h);
+                if (!configuredKeys.includes(key) && !hidden.includes(key) && !result.includes(h)) {
+                    result.push(h);
+                }
+            }
+            return result;
+        },
+
+        fieldLabel(name, header) {
+            const cfg = this.moduleConfig(name);
+            const labels = cfg.labels || {};
+            const key = this.normalizeKey(header);
+            for (const [k, v] of Object.entries(labels)) {
+                if (this.normalizeKey(k) === key) return v;
+            }
+            return this.prettifyLabel(header);
+        },
+
+        prettifyLabel(header) {
+            return String(header || '')
+                .replace(/[_/]/g, ' ')
+                .replace(/\b\w/g, c => c.toUpperCase())
+                .trim();
+        },
+
+        formatCell(name, header, value) {
+            if (value === null || value === undefined || value === '') return '';
+            const cfg = this.moduleConfig(name);
+            const key = this.normalizeKey(header);
+            if ((cfg.money || []).some(h => this.normalizeKey(h) === key)) return this.formatMoney(value);
+            if ((cfg.date || []).some(h => this.normalizeKey(h) === key)) return this.formatDate(value);
+            return String(value);
+        },
+
+        formatMoney(value) {
+            const num = parseFloat(String(value).replace(/[^\d.-]/g, ''));
+            if (isNaN(num)) return String(value);
+            return 'Rp ' + num.toLocaleString('id-ID');
+        },
+
+        formatDate(value) {
+            const match = String(value).match(/^(\d{4})-(\d{1,2})-(\d{1,2})(?:[T ](\d{1,2}):(\d{2}))?/);
+            if (!match) return String(value);
+            const d = match[3].padStart(2, '0');
+            const m = match[2].padStart(2, '0');
+            const y = match[1];
+            if (match[4]) return d + '/' + m + '/' + y + ' ' + match[4].padStart(2, '0') + ':' + match[5];
+            return d + '/' + m + '/' + y;
+        },
+
+        isFullWidth(name, header) {
+            const cfg = this.moduleConfig(name);
+            return (cfg.full_width || []).some(h => this.normalizeKey(h) === this.normalizeKey(header));
+        },
+
+        sheetLabel(name) {
+            return this.sheetLabels[name] || name;
+        },
+
+        importHelperText(name) {
+            const data = this.cache[name];
+            if (!data) return '';
+            return (data.headers || [])
+                .filter(h => !['oasis_sync_id', 'oasis_deleted_at', 'oasis_deleted_by'].includes(h)
+                    && !(data.formula_columns || []).includes(h))
+                .join(', ');
         },
 
         sortedRecords(name) {

@@ -1,0 +1,16 @@
+{
+  "permissions": {
+    "allow": [
+      "Shell(php -r \"require 'vendor/autoload.php'; echo class_exists('Database\\Seeders\\DatabaseSeeder') ? 'seeder ok' : 'no seeder';\" && php -r \"require 'vendor/autoload.php'; echo Laravel\\SerializableClosure\\SerializableClosure::class ? 'ok' : '';\" 2>nul; php artisan --version 2>nul; php -v | head -1)",
+      "Shell(php artisan --version)",
+      "Shell(php -v)",
+      "Shell(php artisan test tests/Feature/DatabaseBusinessUiTest.php 2 >& 1)",
+      "Shell(php artisan test tests/Feature/DatabaseBusinessUiTest.php --filter=test_data_konsumen_table_uses_configured_visible_columns 2 >& 1)",
+      "Shell(cat > tests/tmp_debug_database.php <<'PHP' <?php use App\\Models\\Branch; use App\\Models\\DatabaseSheetRecord; use App\\Models\\Permission; use App\\Models\\Role; use App\\Models\\User; use Illuminate\\Foundation\\Testing\\RefreshDatabase; $app = require __DIR__.'/../bootstrap/app.php'; $kernel = $app->make(Illuminate\\Contracts\\Console\\Kernel::class); $kernel->bootstrap(); // Build a minimal environment similar to the test try { $branch = Branch::create(['name' => 'Magelang', 'code' => 'MGL', 'is_active' => true, 'sheet_id' => 'spreadsheet-id']); $record = DatabaseSheetRecord::create([ 'branch_id' => $branch->id, 'sheet_id' => $branch->sheet_id, 'sheet_name' => 'data_konsumen', 'row_number' => 2, 'headers' => ['id_kavling', 'nama_konsumen'], 'row_data' => ['id_kavling' => 'A-01', 'nama_konsumen' => 'Siti'], 'formula_columns' => [], 'column_metadata' => [], ]); echo \"record created: {$record->id}\\n\"; $role = Role::create(['name' => 'Database Viewer', 'slug' => 'db_viewer_'.uniqid(), 'is_superadmin' => false, 'is_active' => true]); $role->permissions()->sync(Permission::whereIn('slug', ['database.view', 'database.view_branch'])->pluck('id')); echo \"permissions synced: \".$role->permissions()->count().\"\\n\"; } catch (Throwable $e) { echo \"SETUP ERROR: \".$e->getMessage().\"\\n\".$e->getTraceAsString().\"\\n\"; exit(1); } PHP php tests/tmp_debug_database.php 2>&1 | head -40)",
+      "Shell(php tests/tmp_debug_database.php 2 >& 1)",
+      "Shell(php artisan test tests/Feature/DatabaseBusinessUiTest.php --filter=test_viewer_sees_no_write_actions 2 >& 1)"
+    ],
+    "deny": [],
+    "defaultMode": "default"
+  }
+}

@@ -144,6 +144,33 @@ class SalesLeadSiteVisitResultsTest extends TestCase
         $this->actingAs($standalone)->get(route('sales-leads.show', $lead))->assertForbidden();
     }
 
+    public function test_coordinator_uses_same_site_visit_workflow_for_current_team_sales(): void
+    {
+        [$sales, $lead, $project] = $this->context();
+        $lead->update(['current_status' => SalesLeadStatus::SiteVisit]);
+        $coordinator = $this->user('sales_coordinator', $lead->branch);
+        $coordinator->assignedProjects()->attach($project, ['is_primary' => true, 'is_active' => true]);
+        SalesCoordinatorSales::create(['coordinator_user_id' => $coordinator->id, 'sales_user_id' => $sales->id, 'is_active' => true]);
+
+        $this->actingAs($coordinator)->get(route('sales-leads.show', $lead))->assertOk()->assertSee('Isi Hasil Cek Lokasi');
+        $this->actingAs($coordinator)->postJson(route('sales-leads.site-visits.store', $lead), $this->complete())->assertOk();
+        $visit = $lead->siteVisits()->sole();
+        $this->assertSame($sales->id, $lead->fresh()->sales_user_id);
+        $this->assertSame($lead->id, $visit->sales_lead_id);
+        $this->actingAs($coordinator)->patchJson(route('sales-leads.site-visits.update', [$lead, $visit]), $this->complete('siang'))->assertOk();
+    }
+
+    public function test_coordinator_cannot_record_site_visit_for_inactive_or_unrelated_sales(): void
+    {
+        [$sales, $lead, $project] = $this->context();
+        $coordinator = $this->user('sales_coordinator', $lead->branch);
+        $coordinator->assignedProjects()->attach($project, ['is_primary' => true, 'is_active' => true]);
+        SalesCoordinatorSales::create(['coordinator_user_id' => $coordinator->id, 'sales_user_id' => $sales->id, 'is_active' => false]);
+        $this->actingAs($coordinator)->postJson(route('sales-leads.site-visits.store', $lead), ['completion' => 'isi_nanti'])->assertForbidden();
+        SalesCoordinatorSales::create(['coordinator_user_id' => $coordinator->id, 'sales_user_id' => $this->user('sales', $lead->branch)->id, 'is_active' => true]);
+        $this->actingAs($coordinator)->postJson(route('sales-leads.site-visits.store', $lead), ['completion' => 'isi_nanti'])->assertForbidden();
+    }
+
     public function test_coordinator_supervisor_and_admin_have_scoped_read_only_access(): void
     {
         [$sales, $lead] = $this->context();
@@ -159,7 +186,11 @@ class SalesLeadSiteVisitResultsTest extends TestCase
 
         foreach ([$coordinator, $supervisor, $admin] as $viewer) {
             $this->actingAs($viewer)->get(route('sales-leads.show', $lead))->assertOk();
-            $this->actingAs($viewer)->postJson(route('sales-leads.site-visits.store', $lead), ['completion' => 'isi_nanti'])->assertForbidden();
+            if ($viewer->role?->slug === 'sales_coordinator') {
+                $this->actingAs($viewer)->postJson(route('sales-leads.site-visits.store', $lead), ['completion' => 'isi_nanti'])->assertOk();
+            } else {
+                $this->actingAs($viewer)->postJson(route('sales-leads.site-visits.store', $lead), ['completion' => 'isi_nanti'])->assertForbidden();
+            }
             $this->actingAs($viewer)->get(route('sales-leads.show', $foreignLead))->assertForbidden();
         }
         $this->actingAs($historical)->get(route('sales-leads.show', $lead))->assertForbidden();

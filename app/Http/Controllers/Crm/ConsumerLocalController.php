@@ -78,7 +78,7 @@ class ConsumerLocalController extends Controller
     {
         abort_unless(in_array((int) $application->branch_id, $scope->branchIds($request->user(), 'consumer_progress'), true), 403);
         abort_unless(in_array((int) $application->project_id, $scope->projectIds($request->user(), 'consumer_progress'), true), 403);
-        $application->load(['customer:id,name,phone,date_of_birth,occupation,occupation_detail,address,kelurahan,kecamatan,kabupaten_kota,emergency_contact_name,emergency_contact_phone,nik_encrypted', 'branch:id,name,code', 'project:id,project_name', 'sales:id,name', 'kavling:id,kavling_code,name', 'promo:id,name', 'stageEvents:id,consumer_application_id,stage,status,occurred_at,completed_at,source', 'bankProcesses:id,consumer_application_id,bank_name,status,submitted_at,verified_at,sp3k_at,rejected_at,source']);
+        $application->load(['customer:id,name,phone,date_of_birth,occupation,occupation_detail,address,kelurahan,kecamatan,kabupaten_kota,emergency_contact_name,emergency_contact_phone,nik_encrypted', 'branch:id,name,code', 'project:id,project_name', 'sales:id,name', 'kavling:id,kavling_code,name', 'promo:id,name', 'stageEvents:id,consumer_application_id,stage,status,occurred_at,completed_at,source,notes', 'bankProcesses:id,consumer_application_id,bank_name,status,submitted_at,verified_at,sp3k_at,rejected_at,source,no_sp3k,response_type,request_plafond,approved_plafond']);
         $customer = $application->customer;
         $empty = fn ($value) => $value ?: 'Belum Ada Data';
         $stageLabels = ['bi_checking' => 'BI Checking', 'PSJB' => 'PSJB', 'pemberkasan' => 'Pemberkasan', 'proses_bank' => 'Proses Bank', 'ppjb_dev' => 'PPJB Developer', 'akad' => 'Akad', 'bast' => 'BAST'];
@@ -142,6 +142,10 @@ class ConsumerLocalController extends Controller
                 'edit' => route('consumer-local.edit', $application),
                 'bi_checking' => route('consumer-local.bi-checking.create', $application),
                 'psjb' => route('consumer-local.psjb.create', $application),
+                'bank' => route('consumer-local.bank.create', $application),
+                'ppjb' => route('consumer-local.ppjb.create', $application),
+                'akad' => route('consumer-local.akad.create', $application),
+                'bast' => route('consumer-local.bast.create', $application),
             ],
             'timeline' => $timeline,
             'banks' => $banks,

@@ -2,7 +2,11 @@
 
 namespace App\Services;
 
+use App\Models\ConsumerAkadRecord;
 use App\Models\ConsumerApplication;
+use App\Models\ConsumerBankProcess;
+use App\Models\ConsumerBastRecord;
+use App\Models\ConsumerPpjbDeveloper;
 use App\Models\ConsumerPsjb;
 use App\Models\ConsumerStageEvent;
 use App\Models\Kavling;
@@ -143,6 +147,80 @@ final class ConsumerOperationalService
 
             return $psjb;
         });
+    }
+
+    public function recordPemberkasan(ConsumerApplication $application, array $data, User $actor): ConsumerBankProcess
+    {
+        return $this->recordBankStage($application, 'pemberkasan', $data, $actor);
+    }
+
+    public function recordProsesBank(ConsumerApplication $application, array $data, User $actor): ConsumerBankProcess
+    {
+        return $this->recordBankStage($application, 'proses_bank', $data, $actor);
+    }
+
+    private function recordBankStage(ConsumerApplication $application, string $stage, array $data, User $actor): ConsumerBankProcess
+    {
+        return \DB::transaction(function () use ($application, $stage, $data, $actor): ConsumerBankProcess {
+            $date = $data['tanggal_terima_bank'] ?? now()->toDateString();
+            $event = $this->appendEvent($application, $stage, $data['status'] ?? $data['response_type'] ?? null, $data['notes'] ?? null, $date, $actor, $data);
+            $record = $application->bankProcesses()->create($data + ['consumer_stage_event_id' => $event->id, 'source' => 'manual']);
+            $this->advanceStage($application, $stage, $actor);
+
+            return $record;
+        });
+    }
+
+    public function recordPpjb(ConsumerApplication $application, array $data, User $actor): ConsumerPpjbDeveloper
+    {
+        return \DB::transaction(function () use ($application, $data, $actor): ConsumerPpjbDeveloper {
+            $date = $data['tanggal_ttd_ppjb'] ?? $data['tanggal_sp3k'] ?? now()->toDateString();
+            $event = $this->appendEvent($application, 'ppjb_dev', null, $data['notes'] ?? null, $date, $actor, $data);
+            $record = $application->ppjbDevelopers()->create($data + ['consumer_stage_event_id' => $event->id]);
+            $this->advanceStage($application, 'ppjb_dev', $actor);
+
+            return $record;
+        });
+    }
+
+    public function recordAkad(ConsumerApplication $application, array $data, User $actor, ConsumerKavlingLifecycleService $lifecycle): ConsumerAkadRecord
+    {
+        return \DB::transaction(function () use ($application, $data, $actor, $lifecycle): ConsumerAkadRecord {
+            $event = $this->appendEvent($application, 'akad', $data['status_konsumen'] ?? null, $data['keterangan_terlambat'] ?? null, $data['tanggal_akad'] ?? now()->toDateString(), $actor, $data);
+            $record = $application->akadRecords()->create($data + ['consumer_stage_event_id' => $event->id]);
+            $application->update(['akad_date' => $data['tanggal_akad'] ?? now()->toDateString()]);
+            $lifecycle->ensureSold($application);
+            $this->advanceStage($application, 'akad', $actor);
+
+            return $record;
+        });
+    }
+
+    public function recordBast(ConsumerApplication $application, array $data, User $actor, ConsumerKavlingLifecycleService $lifecycle): ConsumerBastRecord
+    {
+        return \DB::transaction(function () use ($application, $data, $actor, $lifecycle): ConsumerBastRecord {
+            $event = $this->appendEvent($application, 'bast', null, null, $data['tanggal_bast'] ?? now()->toDateString(), $actor, $data);
+            $record = $application->bastRecords()->create($data + ['consumer_stage_event_id' => $event->id]);
+            $lifecycle->ensureSold($application);
+            $this->advanceStage($application, 'bast', $actor);
+
+            return $record;
+        });
+    }
+
+    private function appendEvent(ConsumerApplication $application, string $stage, ?string $status, ?string $notes, string $date, User $actor, array $metadata): ConsumerStageEvent
+    {
+        return $application->stageEvents()->create(['stage' => $stage, 'source' => 'manual', 'occurred_at' => CarbonImmutable::parse($date), 'status' => $status, 'notes' => $notes, 'actor_id' => $actor->id, 'metadata' => $metadata]);
+    }
+
+    private function advanceStage(ConsumerApplication $application, string $stage, User $actor): void
+    {
+        $order = array_flip(['bi_checking', 'PSJB', 'pemberkasan', 'proses_bank', 'ppjb_dev', 'akad', 'bast']);
+        $current = $application->current_stage;
+        if ($current === null || ($order[$stage] ?? -1) >= ($order[$current] ?? -1)) {
+            $application->update(['current_stage' => $stage]);
+        }
+        $this->refreshDerived($application->fresh(['customer', 'stageEvents']), $actor);
     }
 
     public function nextId(string $stage, CarbonImmutable $date, ConsumerApplication $application, string $seed): string

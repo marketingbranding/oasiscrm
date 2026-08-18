@@ -89,6 +89,17 @@ final class ConsumerKavlingLifecycleService
         });
     }
 
+    public function ensureSold(ConsumerApplication $application): void
+    {
+        DB::transaction(function () use ($application): void {
+            $application = ConsumerApplication::query()->lockForUpdate()->findOrFail($application->id);
+            $assignment = $this->lockCurrentAssignment($application);
+            if ($assignment !== null && $assignment->assignment_status === 'active') {
+                $assignment->update(['assignment_status' => 'sold']);
+            }
+        });
+    }
+
     public function markAkad(ConsumerApplication $application): void
     {
         DB::transaction(function () use ($application): void {

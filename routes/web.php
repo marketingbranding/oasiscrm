@@ -196,6 +196,14 @@ Route::middleware(['auth', 'active', 'verified', 'password.changed', 'operationa
         Route::post('/konsumen-progress-local/{application}/bi-checking', [ConsumerOperationalController::class, 'biCheckingStore'])->middleware('not.impersonating')->name('consumer-local.bi-checking.store');
         Route::get('/konsumen-progress-local/{application}/psjb/create', [ConsumerOperationalController::class, 'psjbCreate'])->middleware('not.impersonating')->name('consumer-local.psjb.create');
         Route::post('/konsumen-progress-local/{application}/psjb', [ConsumerOperationalController::class, 'psjbStore'])->middleware('not.impersonating')->name('consumer-local.psjb.store');
+        Route::get('/konsumen-progress-local/{application}/bank/create', [ConsumerOperationalController::class, 'bankCreate'])->middleware('not.impersonating')->name('consumer-local.bank.create');
+        Route::post('/konsumen-progress-local/{application}/bank', [ConsumerOperationalController::class, 'bankStore'])->middleware('not.impersonating')->name('consumer-local.bank.store');
+        Route::get('/konsumen-progress-local/{application}/ppjb/create', [ConsumerOperationalController::class, 'ppjbCreate'])->middleware('not.impersonating')->name('consumer-local.ppjb.create');
+        Route::post('/konsumen-progress-local/{application}/ppjb', [ConsumerOperationalController::class, 'ppjbStore'])->middleware('not.impersonating')->name('consumer-local.ppjb.store');
+        Route::get('/konsumen-progress-local/{application}/akad/create', [ConsumerOperationalController::class, 'akadCreate'])->middleware('not.impersonating')->name('consumer-local.akad.create');
+        Route::post('/konsumen-progress-local/{application}/akad', [ConsumerOperationalController::class, 'akadStore'])->middleware('not.impersonating')->name('consumer-local.akad.store');
+        Route::get('/konsumen-progress-local/{application}/bast/create', [ConsumerOperationalController::class, 'bastCreate'])->middleware('not.impersonating')->name('consumer-local.bast.create');
+        Route::post('/konsumen-progress-local/{application}/bast', [ConsumerOperationalController::class, 'bastStore'])->middleware('not.impersonating')->name('consumer-local.bast.store');
         Route::post('/konsumen-progress-local/{application}/nik/reveal', [ConsumerLocalController::class, 'revealNik'])->middleware('permission:consumer_progress.reveal_nik')->name('consumer-local.nik-reveal');
         Route::get('/konsumen-progress/stage', [KonsumenProgressController::class, 'stage'])->middleware('permission:consumer_progress.view')->name('konsumen-progress.stage');
         Route::post('/konsumen-progress/sync', [KonsumenProgressController::class, 'sync'])->middleware('permission:consumer_progress.sync')->name('konsumen-progress.sync');

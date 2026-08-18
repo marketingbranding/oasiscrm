@@ -109,4 +109,19 @@ class ConsumerApplication extends Model
     {
         return $this->hasMany(ConsumerBankProcess::class, 'consumer_application_id');
     }
+
+    public function ppjbDevelopers(): HasMany
+    {
+        return $this->hasMany(ConsumerPpjbDeveloper::class, 'consumer_application_id');
+    }
+
+    public function akadRecords(): HasMany
+    {
+        return $this->hasMany(ConsumerAkadRecord::class, 'consumer_application_id');
+    }
+
+    public function bastRecords(): HasMany
+    {
+        return $this->hasMany(ConsumerBastRecord::class, 'consumer_application_id');
+    }
 }

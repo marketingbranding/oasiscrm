@@ -124,6 +124,78 @@ class ConsumerOperationalController extends Controller
         return redirect()->route('consumer-local.show', $application)->with('success', 'PSJB berhasil dicatat.');
     }
 
+    public function bankCreate(Request $request, ConsumerApplication $application): View
+    {
+        $this->authorizeManage($request, $application);
+
+        return view('crm.consumer-local.bank', compact('application'));
+    }
+
+    public function bankStore(Request $request, ConsumerApplication $application): RedirectResponse
+    {
+        $this->authorizeManage($request, $application);
+        $stage = $request->input('stage', 'pemberkasan');
+        $rules = $stage === 'pemberkasan'
+            ? ['tanggal_terima_bank' => ['required', 'date'], 'bank_name' => ['required', 'string', 'max:255'], 'kc_unit' => ['nullable', 'string', 'max:255'], 'request_plafond' => ['nullable', 'numeric', 'min:0'], 'request_tenor' => ['nullable', 'integer', 'min:0'], 'tipe_pemberkasan' => ['nullable', 'string', 'max:255'], 'notes' => ['nullable', 'string', 'max:5000']]
+            : ['no_sp3k' => ['required', 'string', 'max:255'], 'response_type' => ['required', 'string', 'max:255'], 'approved_plafond' => ['nullable', 'numeric', 'min:0'], 'approved_tenor' => ['nullable', 'integer', 'min:0'], 'revision_category' => ['nullable', 'string', 'max:255'], 'revision_detail' => ['nullable', 'string', 'max:5000'], 'obstacle' => ['nullable', 'string', 'max:5000'], 'notes' => ['nullable', 'string', 'max:5000']];
+        $data = $request->validate($rules);
+        if ($stage === 'pemberkasan') {
+            $this->service->recordPemberkasan($application, $data, $request->user());
+        } else {
+            $this->service->recordProsesBank($application, $data, $request->user());
+        }
+
+        return redirect()->route('consumer-local.show', $application)->with('success', 'Data bank berhasil dicatat.');
+    }
+
+    public function ppjbCreate(Request $request, ConsumerApplication $application): View
+    {
+        $this->authorizeManage($request, $application);
+
+        return view('crm.consumer-local.ppjb', compact('application'));
+    }
+
+    public function ppjbStore(Request $request, ConsumerApplication $application): RedirectResponse
+    {
+        $this->authorizeManage($request, $application);
+        $data = $request->validate(['tanggal_sp3k' => ['nullable', 'date'], 'tanggal_ttd_ppjb' => ['required', 'date'], 'notes' => ['nullable', 'string', 'max:5000']]);
+        $this->service->recordPpjb($application, $data, $request->user());
+
+        return redirect()->route('consumer-local.show', $application)->with('success', 'PPJB Developer berhasil dicatat.');
+    }
+
+    public function akadCreate(Request $request, ConsumerApplication $application): View
+    {
+        $this->authorizeManage($request, $application);
+
+        return view('crm.consumer-local.akad', compact('application'));
+    }
+
+    public function akadStore(Request $request, ConsumerApplication $application): RedirectResponse
+    {
+        $this->authorizeManage($request, $application);
+        $data = $request->validate(['tanggal_akad' => ['required', 'date'], 'kualitas_akad' => ['nullable', 'string', 'max:255'], 'status_bangunan' => ['nullable', 'string', 'max:255'], 'status_dp_konsumen' => ['nullable', 'string', 'max:255'], 'status_utilitas' => ['nullable', 'string', 'max:255'], 'status_konsumen' => ['nullable', 'string', 'max:255'], 'keterangan_terlambat' => ['nullable', 'string', 'max:5000']]);
+        $this->service->recordAkad($application, $data, $request->user(), $this->lifecycle);
+
+        return redirect()->route('consumer-local.show', $application)->with('success', 'Akad berhasil dicatat.');
+    }
+
+    public function bastCreate(Request $request, ConsumerApplication $application): View
+    {
+        $this->authorizeManage($request, $application);
+
+        return view('crm.consumer-local.bast', compact('application'));
+    }
+
+    public function bastStore(Request $request, ConsumerApplication $application): RedirectResponse
+    {
+        $this->authorizeManage($request, $application);
+        $data = $request->validate(['tanggal_bast' => ['required', 'date']]);
+        $this->service->recordBast($application, $data, $request->user(), $this->lifecycle);
+
+        return redirect()->route('consumer-local.show', $application)->with('success', 'BAST berhasil dicatat.');
+    }
+
     private function authorizeManage(Request $request, ?ConsumerApplication $application = null): void
     {
         abort_unless($request->user()->hasPermission('consumer_progress.manage') || $request->user()->hasScopedPermission('consumer_progress', 'manage'), 403);

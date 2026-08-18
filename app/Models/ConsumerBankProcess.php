@@ -12,10 +12,12 @@ class ConsumerBankProcess extends Model
 
     protected $fillable = [
         'consumer_application_id',
+        'tanggal_terima_bank',
         'id_berkas',
         'no_sp3k',
         'bank_name',
         'kc_unit',
+        'tipe_pemberkasan',
         'request_plafond',
         'request_tenor',
         'approved_plafond',
@@ -39,6 +41,7 @@ class ConsumerBankProcess extends Model
     protected function casts(): array
     {
         return [
+            'tanggal_terima_bank' => 'date',
             'request_plafond' => 'decimal:2',
             'approved_plafond' => 'decimal:2',
             'request_tenor' => 'integer',

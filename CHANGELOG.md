@@ -1,5 +1,12 @@
 ## Catatan Perubahan (Changelog)
 
+### 2026-08-22 — Alur Operasional Konsumen Lokal
+
+- Penyederhanaan alur operasional konsumen lokal dari Data Konsumen hingga BAST.
+- Penambahan Pemberkasan, Proses Bank, PPJB Developer, Akad, dan BAST.
+- Histori konsumen dan riwayat kavling tetap dipertahankan melalui satu ConsumerApplication dan event append-only.
+- ID teknis tidak dibebankan kepada pengguna operasional.
+
 ### 2026-07-17 — Work Planner
 
 - Task Tracker menjadi Work Planner dengan tipe Task, Agenda, dan Konten dalam satu kalender.

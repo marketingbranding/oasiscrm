@@ -2,7 +2,9 @@
 
 namespace Tests\Feature;
 
+use App\Models\ConsumerAkadRecord;
 use App\Models\ConsumerApplication;
+use App\Models\ConsumerBastRecord;
 use App\Models\ConsumerKavlingAssignment;
 use App\Models\ConsumerPsjb;
 use App\Models\Kavling;
@@ -50,6 +52,26 @@ class ConsumerOperationalTest extends TestCase
         app(ConsumerKavlingLifecycleService::class)->assign($application, $kavling);
         $this->assertSame('active', ConsumerKavlingAssignment::sole()->assignment_status);
         $this->assertSame($kavling->id, $application->fresh()->kavling_id);
+    }
+
+    public function test_bank_ppjb_akad_and_bast_append_events_and_keep_sold_kavling(): void
+    {
+        [$application, $kavling, $actor] = $this->records();
+        $lifecycle = app(ConsumerKavlingLifecycleService::class);
+        $lifecycle->assign($application, $kavling);
+        $service = app(ConsumerOperationalService::class);
+        $service->recordPemberkasan($application, ['tanggal_terima_bank' => '2026-08-01', 'bank_name' => 'Bank A', 'request_plafond' => '0'], $actor);
+        $service->recordProsesBank($application->fresh(), ['no_sp3k' => 'SP3K-1', 'response_type' => 'approved', 'approved_plafond' => '0'], $actor);
+        $service->recordPpjb($application->fresh(), ['tanggal_ttd_ppjb' => '2026-08-03'], $actor);
+        $service->recordAkad($application->fresh(), ['tanggal_akad' => '2026-08-04'], $actor, $lifecycle);
+        $service->recordBast($application->fresh(), ['tanggal_bast' => '2026-08-05'], $actor, $lifecycle);
+
+        $fresh = $application->fresh();
+        $this->assertSame('bast', $fresh->current_stage);
+        $this->assertSame(5, $fresh->stageEvents()->count());
+        $this->assertSame('sold', $fresh->kavling?->consumerAssignments()->latest('id')->first()?->assignment_status);
+        $this->assertSame(1, ConsumerAkadRecord::where('consumer_application_id', $fresh->id)->count());
+        $this->assertSame(1, ConsumerBastRecord::where('consumer_application_id', $fresh->id)->count());
     }
 
     private function records(): array

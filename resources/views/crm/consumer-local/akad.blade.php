@@ -1,0 +1,6 @@
+@extends('layouts.crm')
+@section('title', 'Akad - Oasis CRM')
+@section('content')
+<x-crm.page-header variant="canonical" title="Akad" eyebrow="Proses Konsumen" description="Catat Akad. Kavling akan ditandai SOLD melalui lifecycle service." />
+<form method="POST" action="{{ route('consumer-local.akad.store', $application) }}" class="grid gap-4 bg-white p-4 md:grid-cols-2">@csrf@foreach(['tanggal_akad'=>'Tanggal Akad','kualitas_akad'=>'Kualitas Akad','status_bangunan'=>'Status Bangunan','status_dp_konsumen'=>'Status DP Konsumen','status_utilitas'=>'Status Utilitas','status_konsumen'=>'Status Konsumen'] as $name => $label)<label class="text-xs font-bold uppercase">{{ $label }}<input name="{{ $name }}" type="{{ $name === 'tanggal_akad' ? 'date' : 'text' }}" value="{{ old($name) }}" class="mt-1 block w-full border border-gray-300 px-3 py-2" @required($name === 'tanggal_akad')></label>@endforeach<label class="text-xs font-bold uppercase md:col-span-2">Keterangan Terlambat<textarea name="keterangan_terlambat" class="mt-1 block w-full border border-gray-300 px-3 py-2"></textarea></label><button class="border-2 border-black bg-[#fcc20f] px-4 py-2 font-bold md:col-span-2">Simpan Akad</button></form>
+@endsection

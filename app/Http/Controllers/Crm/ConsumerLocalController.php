@@ -138,6 +138,11 @@ class ConsumerLocalController extends Controller
             'akad_date' => $application->akad_date?->format('Y-m-d') ?? 'Belum Ada Data',
             'notes' => $empty($application->notes),
             'current_process' => $application->current_stage ? ($stageLabels[$application->current_stage] ?? $application->current_stage) : 'Belum Ada Data',
+            'actions' => [
+                'edit' => route('consumer-local.edit', $application),
+                'bi_checking' => route('consumer-local.bi-checking.create', $application),
+                'psjb' => route('consumer-local.psjb.create', $application),
+            ],
             'timeline' => $timeline,
             'banks' => $banks,
             'attention' => $attention,

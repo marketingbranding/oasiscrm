@@ -58,6 +58,7 @@ class PermissionCatalog
             ['name' => 'Mengubah Database', 'slug' => 'database.edit', 'description' => 'Mengubah data Database sesuai lingkup akses.', 'group_name' => 'Database'],
             ['name' => 'Menyinkronkan Database', 'slug' => 'database.sync', 'description' => 'Menjalankan sinkronisasi Database sesuai kewenangan.', 'group_name' => 'Database'],
             ['name' => 'Melihat Progress Konsumen', 'slug' => 'consumer_progress.view', 'description' => 'Melihat Progress Konsumen sesuai lingkup akses.', 'group_name' => 'Progress Konsumen'],
+            ['name' => 'Mengelola Progress Konsumen', 'slug' => 'consumer_progress.manage', 'description' => 'Membuat dan memperbarui data konsumen serta proses penjualan sesuai lingkup akses.', 'group_name' => 'Progress Konsumen'],
             ['name' => 'Melihat NIK Konsumen', 'slug' => 'consumer_progress.reveal_nik', 'description' => 'Menampilkan NIK konsumen secara eksplisit sesuai lingkup akses.', 'group_name' => 'Progress Konsumen'],
             ['name' => 'Menyinkronkan Progress Konsumen', 'slug' => 'consumer_progress.sync', 'description' => 'Menjalankan sinkronisasi Progress Konsumen.', 'group_name' => 'Progress Konsumen'],
             ['name' => 'Melihat Dana Talangan', 'slug' => 'bridge_fund.view', 'description' => 'Melihat Dana Talangan sesuai lingkup akses.', 'group_name' => 'Dana Talangan'],
@@ -130,6 +131,7 @@ class PermissionCatalog
                 ...$comments,
             ],
             'sales_coordinator' => [
+                'consumer_progress.manage_assigned',
                 'sales_pocketbook.view_own', 'sales_pocketbook.view_team', 'sales_pocketbook.manage_own',
                 'sales_pocketbook.manage_team', 'sales_pocketbook.export_team', 'sales_pocketbook.export',
                 'sales_pocketbook.sync', 'work_planner.view_own',

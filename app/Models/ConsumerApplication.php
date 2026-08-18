@@ -100,6 +100,11 @@ class ConsumerApplication extends Model
         return $this->hasMany(ConsumerStageEvent::class, 'consumer_application_id');
     }
 
+    public function psjbs(): HasMany
+    {
+        return $this->hasMany(ConsumerPsjb::class, 'consumer_application_id');
+    }
+
     public function bankProcesses(): HasMany
     {
         return $this->hasMany(ConsumerBankProcess::class, 'consumer_application_id');

@@ -7,6 +7,7 @@ use App\Models\Branch;
 use App\Models\DatabaseSheetRecord;
 use App\Models\DatabaseSheetSyncStatus;
 use App\Services\CollaborationNotificationService;
+use App\Services\DatabaseSheetImportService;
 use App\Services\DatabaseSheetSyncService;
 use App\Services\DatabaseSheetWriteService;
 use App\Services\GoogleSheetsApiService;
@@ -347,6 +348,48 @@ class DatabaseController extends Controller
         }
 
         return back()->with('success', 'Data berhasil dihapus.');
+    }
+
+    public function importPreview(Request $request, DatabaseSheetImportService $importService)
+    {
+        $request->validate([
+            'sheet_name' => 'required|string',
+            'branch_id' => 'required|exists:branches,id',
+            'raw' => 'required|string',
+        ]);
+
+        $branch = Branch::findOrFail($request->input('branch_id'));
+        $sheetName = $request->input('sheet_name');
+        $this->authorizeDatabaseEdit($branch);
+
+        $result = $importService->preview($branch, $sheetName, $request->input('raw'));
+
+        return response()->json($result);
+    }
+
+    public function importSave(Request $request, DatabaseSheetImportService $importService)
+    {
+        $request->validate([
+            'sheet_name' => 'required|string',
+            'branch_id' => 'required|exists:branches,id',
+            'raw' => 'required|string',
+        ]);
+
+        $branch = Branch::findOrFail($request->input('branch_id'));
+        $sheetName = $request->input('sheet_name');
+        $this->authorizeDatabaseEdit($branch);
+
+        $result = $importService->save($branch, $sheetName, $request->input('raw'));
+
+        return response()->json($result);
+    }
+
+    private function authorizeDatabaseEdit(Branch $branch): void
+    {
+        $user = Auth::user();
+        abort_unless($user->hasPermission('database.edit'), 403);
+        abort_unless(in_array((int) $branch->id, $this->organizationScope->branchIds($user, 'database', 'manage'), true), 403);
+        abort_unless($this->workspaceAccess->canEditBranch($user, $branch), 403);
     }
 
     private function validateTypedInput(array $input, array $columnMetadata, array $existingValues = []): void

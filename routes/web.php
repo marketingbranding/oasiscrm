@@ -169,6 +169,8 @@ Route::middleware(['auth', 'active', 'verified', 'password.changed', 'operationa
         Route::post('/database/records', [DatabaseController::class, 'store'])->middleware('permission:database.edit')->name('database.records.store');
         Route::put('/database/records/{record}', [DatabaseController::class, 'update'])->middleware('permission:database.edit')->name('database.records.update');
         Route::delete('/database/records/{record}', [DatabaseController::class, 'destroy'])->middleware('permission:database.edit')->name('database.records.destroy');
+        Route::post('/database/import/preview', [DatabaseController::class, 'importPreview'])->middleware('permission:database.edit')->name('database.import.preview');
+        Route::post('/database/import', [DatabaseController::class, 'importSave'])->middleware('permission:database.edit')->name('database.import.save');
     });
 
     Route::middleware('module.maintenance:consumer_progress')->group(function () {

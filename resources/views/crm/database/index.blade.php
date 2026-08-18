@@ -172,6 +172,11 @@
                         <template x-if="canAdd(name)">
                             <x-crm.button accent="database" variant="primary" size="sm" @click="openAdd(name, $el)">Tambah Data</x-crm.button>
                         </template>
+                        @if($canEdit)
+                        <template x-if="canAdd(name)">
+                            <x-crm.button variant="secondary" size="sm" @click="openImport(name, $el)">Import Copas</x-crm.button>
+                        </template>
+                        @endif
                         <x-crm.button
                             variant="secondary"
                             size="sm"
@@ -360,6 +365,71 @@
             </div>
             <x-slot:footer><x-crm.button type="button" @click="closeAdd()">Batal</x-crm.button><x-crm.button type="submit" form="database-add-form" accent="database" variant="primary" data-autofocus>Simpan</x-crm.button></x-slot:footer>
         </x-crm.modal>
+
+        @if($canEdit)
+        <x-crm.modal name="database-import" title="Import Copas" description="Tempel data dari Google Sheets / Excel (dipisah tab). Baris valid akan ditambahkan ke sheet aktif." size="xl">
+            <div x-show="importing" x-cloak x-ref="importPanel">
+                <p class="database-modal-scope">Sheet: <strong x-text="importing"></strong></p>
+                <x-crm.alert x-show="importError" x-cloak x-ref="importError" variant="error" title="Import belum dapat diproses" role="alert" tabindex="-1">
+                    <p x-text="importError"></p>
+                </x-crm.alert>
+                <form id="database-import-form" method="POST" action="{{ route('database.import.preview') }}" @submit.prevent="previewImport()">
+                    @csrf
+                    <input type="hidden" name="sheet_name" :value="importing || ''">
+                    <input type="hidden" name="branch_id" value="{{ $selectedBranchId }}">
+                    <div class="crm-field">
+                        <label for="database-import-raw" class="crm-field-label">Tempel data di sini</label>
+                        <textarea id="database-import-raw" name="raw" rows="12" x-model="importRaw" placeholder="no_ktp&#9;nama_konsumen&#9;tanggal_lahir&#10;3374...&#9;Andrew&#9;1994-01-18" class="crm-control database-import-textarea"></textarea>
+                        <p class="crm-field-hint">Baris pertama adalah header. Pisahkan kolom dengan tab.</p>
+                    </div>
+                    <div class="database-import-actions">
+                        <x-crm.button type="submit" variant="secondary" size="sm" x-bind:disabled="importing && !importRaw">Preview</x-crm.button>
+                    </div>
+                </form>
+
+                <template x-if="importPreview">
+                    <div class="database-import-preview">
+                        <div class="database-import-summary">
+                            <x-crm.status-badge variant="success"><span x-text="importPreview.valid_count"></span> valid</x-crm.status-badge>
+                            <x-crm.status-badge variant="danger"><span x-text="importPreview.invalid_count"></span> invalid</x-crm.status-badge>
+                        </div>
+                        <div class="crm-table-scroll">
+                            <table class="crm-data-table">
+                                <thead>
+                                    <tr>
+                                        <th scope="col" class="crm-row-num">Baris</th>
+                                        <template x-for="h in importPreview.headers" :key="h"><th scope="col" x-text="h"></th></template>
+                                        <th scope="col">Status</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <template x-for="row in importPreview.rows" :key="row.line">
+                                        <tr>
+                                            <td class="crm-row-num" x-text="row.line"></td>
+                                            <template x-for="h in importPreview.headers" :key="h"><td x-text="row.values[h] || ''"></td></template>
+                                            <td>
+                                                <template x-if="row.status === 'VALID'">
+                                                    <x-crm.status-badge variant="success">VALID</x-crm.status-badge>
+                                                </template>
+                                                <template x-if="row.status !== 'VALID'">
+                                                    <x-crm.status-badge variant="danger" x-bind:title="row.errors.join(', ')">ERROR</x-crm.status-badge>
+                                                </template>
+                                            </td>
+                                        </tr>
+                                    </template>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </template>
+            </div>
+            <x-slot:footer>
+                <x-crm.button type="button" @click="closeImport()">Batal</x-crm.button>
+                <x-crm.button type="button" variant="secondary" @click="backToImportEdit()">Kembali Edit</x-crm.button>
+                <x-crm.button type="button" accent="database" variant="primary" x-bind:disabled="!importPreview || importPreview.valid_count === 0" @click="saveImport()">Simpan Data Valid</x-crm.button>
+            </x-slot:footer>
+        </x-crm.modal>
+        @endif
     </div>
     @elseif($selectedBranch)
         @if(Auth::user()->isSuperadmin())
@@ -390,6 +460,12 @@ document.addEventListener('alpine:init', () => {
         editTrigger: null,
         adding: null,
         addTrigger: null,
+        importing: null,
+        importTrigger: null,
+        importRaw: '',
+        importPreview: null,
+        importError: '',
+        importSaving: false,
         cache: {},
         loaded: {},
         loadErrors: {},
@@ -445,6 +521,93 @@ document.addEventListener('alpine:init', () => {
             this.$dispatch('oasis:modal-close', { name: 'database-add', reason: 'cancel' });
         },
 
+        openImport(name, trigger = null) {
+            this.importing = name;
+            this.importTrigger = trigger;
+            this.importRaw = '';
+            this.importPreview = null;
+            this.importError = '';
+            this.$nextTick(() => this.$dispatch('oasis:modal-open', { name: 'database-import', trigger }));
+        },
+
+        closeImport() {
+            this.$dispatch('oasis:modal-close', { name: 'database-import', reason: 'cancel' });
+        },
+
+        backToImportEdit() {
+            this.importPreview = null;
+            this.importError = '';
+            this.$nextTick(() => this.$refs.importPanel?.querySelector('textarea')?.focus());
+        },
+
+        async previewImport() {
+            this.importError = '';
+            this.importPreview = null;
+            if (!this.importing) return;
+            try {
+                const response = await fetch('{{ route('database.import.preview') }}', {
+                    method: 'POST',
+                    headers: {
+                        Accept: 'application/json',
+                        'Content-Type': 'application/json',
+                        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.content || '',
+                    },
+                    body: JSON.stringify({
+                        sheet_name: this.importing,
+                        branch_id: this.branchId,
+                        raw: this.importRaw,
+                    }),
+                });
+                const data = await response.json();
+                if (!response.ok) {
+                    this.importError = data.error || data.message || 'Data belum dapat diproses.';
+                    return;
+                }
+                if (data.error) {
+                    this.importError = data.error;
+                    return;
+                }
+                this.importPreview = data;
+            } catch (e) {
+                this.importError = 'Data belum dapat diproses. Coba lagi.';
+            }
+        },
+
+        async saveImport() {
+            if (!this.importPreview || this.importPreview.valid_count === 0) return;
+            this.importSaving = true;
+            try {
+                const response = await fetch('{{ route('database.import.save') }}', {
+                    method: 'POST',
+                    headers: {
+                        Accept: 'application/json',
+                        'Content-Type': 'application/json',
+                        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.content || '',
+                    },
+                    body: JSON.stringify({
+                        sheet_name: this.importing,
+                        branch_id: this.branchId,
+                        raw: this.importRaw,
+                    }),
+                });
+                const data = await response.json();
+                if (!response.ok) {
+                    this.importError = data.message || 'Import belum tersimpan.';
+                    return;
+                }
+                this.importError = '';
+                this.importPreview = null;
+                this.importRaw = '';
+                this.$dispatch('oasis:modal-close', { name: 'database-import', reason: 'saved' });
+                window.oasisToast?.(data.message || 'Data berhasil diimpor.', 'success');
+                await this.refreshActiveSheet(this.importing);
+            } catch (e) {
+                this.importError = 'Import belum tersimpan. Coba lagi.';
+            } finally {
+                this.importSaving = false;
+            }
+        },
+
         closeEdit() {
             this.$dispatch('oasis:modal-close', { name: 'database-edit', reason: 'cancel' });
         },
@@ -458,6 +621,14 @@ document.addEventListener('alpine:init', () => {
             if (detail?.name === 'database-add') {
                 this.adding = null;
                 this.addTrigger = null;
+            }
+            if (detail?.name === 'database-import') {
+                this.importing = null;
+                this.importTrigger = null;
+                this.importRaw = '';
+                this.importPreview = null;
+                this.importError = '';
+                this.importSaving = false;
             }
         },
 

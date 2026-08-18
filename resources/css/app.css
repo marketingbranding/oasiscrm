@@ -725,6 +725,10 @@
 .database-checkbox-control { display: flex; min-height: var(--oasis-control-height); align-items: center; gap: var(--oasis-space-2); font-family: var(--oasis-font-data); }
 .database-checkbox { width: 20px; height: 20px; border: var(--oasis-border-width-strong) solid var(--oasis-border-strong); accent-color: var(--oasis-accent-database); }
 .database-editing-presence { display: grid; gap: var(--oasis-space-1); margin-bottom: var(--oasis-space-3); border: var(--oasis-border-width-standard) solid var(--oasis-info); background: var(--oasis-surface-muted); padding: var(--oasis-space-2) var(--oasis-space-3); font: var(--oasis-type-caption-size)/1.4 var(--oasis-font-controls); }
+.database-import-textarea { width: 100%; min-height: 12rem; font-family: var(--oasis-font-data); font-size: var(--oasis-type-compact-size); line-height: 1.5; white-space: pre; resize: vertical; }
+.database-import-actions { display: flex; justify-content: flex-start; margin-top: var(--oasis-space-3); }
+.database-import-preview { margin-top: var(--oasis-space-4); }
+.database-import-summary { display: flex; flex-wrap: wrap; gap: var(--oasis-space-2); margin-bottom: var(--oasis-space-3); }
 
 @media (max-width: 639px) {
     .database-dynamic-fields { grid-template-columns: minmax(0, 1fr); }

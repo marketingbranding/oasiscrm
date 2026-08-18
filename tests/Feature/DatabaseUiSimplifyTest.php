@@ -250,6 +250,38 @@ class DatabaseUiSimplifyTest extends TestCase
         $this->actingAs($superadmin)->get(route('changelogs.index'))->assertOk()->assertSee($title);
     }
 
+    public function test_module_config_lookup_uses_exact_key_not_normalized_key(): void
+    {
+        $html = file_get_contents(resource_path('views/crm/database/index.blade.php'));
+
+        $this->assertStringNotContainsString('this.fieldConfig[this.normalizeKey(name)]', $html, 'moduleConfig must not use normalizeKey for config key lookup — it breaks underscore keys like data_konsumen');
+        $this->assertStringContainsString('this.fieldConfig[name]', $html, 'moduleConfig must use exact name lookup first');
+    }
+
+    public function test_sort_label_uses_friendly_label_not_raw_header(): void
+    {
+        $html = file_get_contents(resource_path('views/crm/database/index.blade.php'));
+
+        $this->assertStringContainsString('sortLabel(name, h)', $html, 'sortLabel must receive sheet name to produce friendly label');
+        $this->assertStringContainsString('this.fieldLabel(name, header)', $html, 'sortLabel must use fieldLabel for aria-label text');
+        $this->assertStringNotContainsString('sortLabel(h)', $html, 'sortLabel must not be called with only raw header');
+    }
+
+    public function test_import_preview_headers_use_friendly_labels(): void
+    {
+        $html = file_get_contents(resource_path('views/crm/database/index.blade.php'));
+
+        $this->assertStringContainsString('fieldLabel(importing, h)', $html, 'Import preview headers must use fieldLabel instead of raw header');
+    }
+
+    public function test_format_money_handles_indonesian_thousand_separators(): void
+    {
+        $html = file_get_contents(resource_path('views/crm/database/index.blade.php'));
+
+        $this->assertStringContainsString("replace(/\\./g, '')", $html, 'formatMoney must remove Indonesian thousand separator dots before parsing');
+        $this->assertStringNotContainsString('/[^\\d.-]/g', $html, 'formatMoney must not use the old regex that fails on Indonesian-formatted numbers');
+    }
+
     private function setupSheet(string $sheetName, array $headers): array
     {
         $branch = Branch::query()->create([

@@ -221,7 +221,7 @@
                                         <th scope="col"
                                             :class="(currentData(name).formula_columns.includes(h) ? 'formula-col ' : '') + (isIdKavlingColumn(h) ? 'col-id_kavling' : '')"
                                             :aria-sort="sortAria(h)">
-                                            <button type="button" class="database-sort-button" @click="sortBy(h)" :aria-label="sortLabel(h)">
+                                            <button type="button" class="database-sort-button" @click="sortBy(h)" :aria-label="sortLabel(name, h)">
                                                 <span x-text="fieldLabel(name, h)"></span><span class="database-sort-indicator" aria-hidden="true" x-text="sortIcon(h)"></span>
                                             </button>
                                             <button type="button"
@@ -408,7 +408,7 @@
                                 <thead>
                                     <tr>
                                         <th scope="col" class="crm-row-num">Baris</th>
-                                        <template x-for="h in importPreview.headers" :key="h"><th scope="col" x-text="h"></th></template>
+                                        <template x-for="h in importPreview.headers" :key="h"><th scope="col" x-text="fieldLabel(importing, h)"></th></template>
                                         <th scope="col">Status</th>
                                     </tr>
                                 </thead>
@@ -794,7 +794,12 @@ document.addEventListener('alpine:init', () => {
         },
 
         moduleConfig(name) {
-            return this.fieldConfig[this.normalizeKey(name)] || {};
+            if (this.fieldConfig[name]) return this.fieldConfig[name];
+            const lower = String(name).toLowerCase();
+            for (const k of Object.keys(this.fieldConfig)) {
+                if (k.toLowerCase() === lower) return this.fieldConfig[k];
+            }
+            return {};
         },
 
         hiddenFormKeys(name) {
@@ -871,7 +876,9 @@ document.addEventListener('alpine:init', () => {
         },
 
         formatMoney(value) {
-            const num = parseFloat(String(value).replace(/[^\d.-]/g, ''));
+            const s = String(value).replace(/[^\d.,-]/g, '');
+            const normalized = s.replace(/\./g, '').replace(',', '.');
+            const num = parseFloat(normalized);
             if (isNaN(num)) return String(value);
             return 'Rp ' + num.toLocaleString('id-ID');
         },
@@ -966,10 +973,11 @@ document.addEventListener('alpine:init', () => {
             return this.sortDirection === 'asc' ? 'ascending' : 'descending';
         },
 
-        sortLabel(header) {
-            if (this.sortColumn !== header) return `Urutkan berdasarkan ${header}, menaik`;
-            if (this.sortDirection === 'asc') return `Urutkan berdasarkan ${header}, menurun`;
-            return `Hapus urutan ${header}`;
+        sortLabel(name, header) {
+            const label = this.fieldLabel(name, header);
+            if (this.sortColumn !== header) return `Urutkan berdasarkan ${label}, menaik`;
+            if (this.sortDirection === 'asc') return `Urutkan berdasarkan ${label}, menurun`;
+            return `Hapus urutan ${label}`;
         },
 
         tabKey(name) {

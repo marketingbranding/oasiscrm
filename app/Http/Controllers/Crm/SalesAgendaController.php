@@ -7,9 +7,13 @@ use App\Http\Requests\Crm\CompleteSalesAgendaRequest;
 use App\Http\Requests\Crm\RescheduleSalesAgendaRequest;
 use App\Http\Requests\Crm\StoreSalesAgendaRequest;
 use App\Models\ContentItem;
+use App\Models\LeadMaster;
 use App\Models\SalesLead;
 use App\Services\OptimisticLockService;
+use App\Services\PromoOptionService;
 use App\Services\SalesAgendaProjectResolver;
+use App\Services\SalesDailyReminderService;
+use App\Services\WorkspaceAccessService;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
 
@@ -18,6 +22,9 @@ class SalesAgendaController extends Controller
     public function __construct(
         private readonly SalesAgendaProjectResolver $projectResolver,
         private readonly OptimisticLockService $optimisticLock,
+        private readonly WorkspaceAccessService $workspaceAccess,
+        private readonly PromoOptionService $promoOptions,
+        private readonly SalesDailyReminderService $dailyReminder,
     ) {}
 
     public function index(Request $request)
@@ -40,8 +47,23 @@ class SalesAgendaController extends Controller
             ->latest('lead_date')
             ->latest('id')
             ->paginate(20, ['*'], 'lead_page');
+        $projects = $this->workspaceAccess->accessibleProjects($request->user())->where('is_active', true)->values();
+        $defaultProjectId = old('project_id', $request->query('project_id', $project?->id));
+        $cascadeProjects = $projects->map(fn (LeadMaster $item) => [
+            'id' => (string) $item->id,
+            'branch_id' => (string) $item->branch_id,
+        ])->values();
+        $leadOptionsEndpoint = route('sales-leads.options', ['branch' => 'BRANCH_ID']);
+        $promos = $defaultProjectId
+            ? $this->promoOptions->availableForBranchAndDate((int) $projects->firstWhere('id', (int) $defaultProjectId)?->branch_id, old('lead_date', $request->query('lead_date', today())))
+            : collect([PromoOptionService::NO_PROMO]);
+        $dailyReminder = $this->dailyReminder->state($request->user()) + [
+            'leadInputUrl' => route('sales-agendas.index', ['tab' => 'leads', 'input' => 1]).'#lead-saya',
+            'agendaInputUrl' => route('sales-agendas.index', ['tab' => 'agenda']).'#agenda-baru',
+            'missingResultUrl' => route('sales-agendas.index', ['tab' => 'agenda']).'#agenda-saya',
+        ];
 
-        return view('crm.sales-pocketbook.sales-agenda', compact('project', 'agendas', 'leads', 'tab'));
+        return view('crm.sales-pocketbook.sales-agenda', compact('project', 'agendas', 'leads', 'tab', 'projects', 'defaultProjectId', 'cascadeProjects', 'leadOptionsEndpoint', 'promos', 'dailyReminder'));
     }
 
     public function store(StoreSalesAgendaRequest $request)

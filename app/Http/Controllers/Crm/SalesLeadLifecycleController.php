@@ -86,7 +86,7 @@ class SalesLeadLifecycleController extends Controller
             return response(['ok' => true, 'message' => $message] + $data);
         }
 
-        return redirect()->route('sales-pocketbook.index')->with('success', $message);
+        return redirect()->route($request->user()->isSales() ? 'sales-agendas.index' : 'sales-pocketbook.index', $request->user()->isSales() ? ['tab' => 'leads'] : [])->with('success', $message);
     }
 
     private function run(callable $operation): mixed

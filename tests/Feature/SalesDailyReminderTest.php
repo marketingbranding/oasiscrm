@@ -22,16 +22,17 @@ class SalesDailyReminderTest extends TestCase
         parent::tearDown();
     }
 
-    public function test_sales_shared_url_shows_agenda_only_without_lead_reminder_actions(): void
+    public function test_sales_shared_url_shows_canonical_agenda_with_lead_reminder_action(): void
     {
         Carbon::setTestNow(Carbon::parse('2026-07-27 08:00:00', config('app.timezone')));
         [, , $sales] = $this->salesContext();
 
         $this->actingAs($sales)->get(route('sales-pocketbook.index'))->assertOk()
             ->assertSee('Agenda Saya')
-            ->assertDontSee('Input Lead')
-            ->assertDontSee('Belum ada lead yang dicatat hari ini.')
-            ->assertDontSee('data-lead-input-url', false);
+            ->assertSee('Input Lead')
+            ->assertSee('Belum ada lead yang dicatat hari ini.')
+            ->assertSee('tab=leads&amp;input=1', false)
+            ->assertDontSee('<title>Buku Saku Sales - Oasis CRM</title>', false);
     }
 
     public function test_daily_reminder_service_still_counts_sales_agenda(): void

@@ -33,12 +33,20 @@ class SalesPocketbookTest extends TestCase
             ->assertSee('+ Tambah Lead')
             ->assertSee('href="'.route('sales-leads.create').'"', false);
 
-        $this->actingAs($sales)->get(route('sales-leads.create'))->assertRedirect(route('sales-pocketbook.index', ['input' => 1]));
-        $this->actingAs($sales)->get(route('sales-pocketbook.index', ['input' => 1]))->assertOk()
+        $this->actingAs($sales)->get(route('sales-leads.create'))->assertRedirect(route('sales-agendas.index', ['tab' => 'leads', 'input' => 1]));
+        $this->actingAs($sales)->get(route('sales-agendas.index', ['tab' => 'leads', 'input' => 1]))->assertOk()
             ->assertSee('Input Lead Hari Ini')
             ->assertSee('name="sales_user_id" value="'.$sales->id.'"', false)
             ->assertSee('value="'.$project->id.'"', false)
             ->assertSee('value="'.$branch->id.'"', false);
+    }
+
+    public function test_sales_pocketbook_always_delegates_to_canonical_workspace(): void
+    {
+        [, , $sales] = $this->salesContext();
+
+        $this->actingAs($sales)->get(route('sales-pocketbook.index'))->assertOk()->assertSee('Agenda Saya');
+        $this->actingAs($sales)->get(route('sales-pocketbook.index', ['input' => 1]))->assertOk()->assertSee('Agenda Saya')->assertSee('Lead Saya')->assertDontSee('<title>Buku Saku Sales - Oasis CRM</title>', false);
     }
 
     public function test_primary_sales_creates_lead_for_self_and_cannot_spoof_sales_owner(): void

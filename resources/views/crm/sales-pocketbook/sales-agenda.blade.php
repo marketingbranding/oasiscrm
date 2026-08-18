@@ -5,6 +5,7 @@
 @section('content')
 @php($canCleanup = auth()->user()->hasPrimaryRole('superadmin') || (app(\App\Services\ImpersonationService::class)->isActive(request()) && app(\App\Services\ImpersonationService::class)->originalUser(request())?->isSuperadmin()))
 <div class="space-y-4">
+    @if($dailyReminder['shouldShow']) @include('crm.sales-pocketbook._daily-reminder', ['dailyReminder' => $dailyReminder]) @endif
     <x-crm.page-header variant="canonical" eyebrow="Workspace Pribadi" title="Agenda Saya" description="Catat dan selesaikan agenda sales Anda.">
         <x-slot:actions>
             <x-crm.button variant="secondary" :href="route('sales-agendas.export')">Export XLSX</x-crm.button>
@@ -29,6 +30,24 @@
                     <x-crm.button variant="primary" accent="sales" :href="route('sales-leads.create')">+ Tambah Lead</x-crm.button>
                 @endcan
             </x-slot:actions>
+            @if(request()->boolean('input') && auth()->user()->can('create', \App\Models\SalesLead::class))
+                <div class="mb-3 border-b-2 border-black bg-black px-3 py-2 text-xs font-bold uppercase text-[#fcc20f]">Input Lead Hari Ini</div>
+                @if($errors->any())<x-crm.alert variant="error" title="Data belum tersimpan.">{{ $errors->first() }}</x-crm.alert>@endif
+                @if(session('success'))<x-crm.alert variant="success" title="Berhasil">{{ session('success') }}</x-crm.alert>@endif
+                <form method="POST" action="{{ route('sales-leads.store') }}" class="mb-4 grid gap-3 border-2 border-black bg-white p-4 md:grid-cols-2" data-conflict-form>
+                    @csrf
+                    <input type="hidden" name="operation_uuid" value="{{ old('operation_uuid', (string) \Illuminate\Support\Str::uuid()) }}">
+                    <input type="hidden" name="sales_user_id" value="{{ auth()->id() }}">
+                    <input type="hidden" name="branch_id" value="{{ auth()->user()->branch_id }}">
+                    <label class="text-xs font-bold uppercase">Tanggal Lead<input type="date" name="lead_date" value="{{ old('lead_date', request('lead_date', today()->toDateString())) }}" class="mt-1 block w-full border border-gray-300 px-3 py-2" required></label>
+                    <label class="text-xs font-bold uppercase">Proyek<select name="project_id" class="mt-1 block w-full border border-gray-300 px-3 py-2" required>@foreach($projects as $item)<option value="{{ $item->id }}" @selected((string) old('project_id', $defaultProjectId) === (string) $item->id)>{{ $item->project_name }}</option>@endforeach</select></label>
+                    @foreach(['customer_name' => 'Nama Calon Konsumen', 'phone' => 'No. WhatsApp / Telepon'] as $name => $label)<label class="text-xs font-bold uppercase">{{ $label }}<input name="{{ $name }}" value="{{ old($name) }}" class="mt-1 block w-full border border-gray-300 px-3 py-2" @required($name === 'customer_name')></label>@endforeach
+                    @foreach(['source' => ['Sumber Lead', \App\Support\SalesLeadMasterData::SOURCES], 'platform' => ['Kanal Masuk', \App\Support\SalesLeadMasterData::CHANNELS], 'campaign_name' => ['Aktivitas Lead', \App\Support\SalesLeadMasterData::ACTIVITIES]] as $name => [$label, $options])<label class="text-xs font-bold uppercase">{{ $label }}<select name="{{ $name }}" class="mt-1 block w-full border border-gray-300 px-3 py-2" required><option value="">Pilih {{ strtolower($label) }}</option>@foreach($options as $option)<option value="{{ $option }}" @selected(old($name) === $option)>{{ $option }}</option>@endforeach</select></label>@endforeach
+                    <label class="text-xs font-bold uppercase">Status Lead<select name="current_status" class="mt-1 block w-full border border-gray-300 px-3 py-2" required><option value="no_response">No Respon</option><option value="discussion" @selected(old('current_status') === 'discussion')>Diskusi</option><option value="site_visit" @selected(old('current_status') === 'site_visit')>Cek Lokasi</option></select></label>
+                    <label class="text-xs font-bold uppercase md:col-span-2">Catatan<textarea name="notes" class="mt-1 block w-full border border-gray-300 px-3 py-2">{{ old('notes') }}</textarea></label>
+                    <div class="flex gap-2 md:col-span-2"><button name="submit_action" value="save" class="border-2 border-black bg-[#fcc20f] px-4 py-2 font-bold">Simpan</button><button name="submit_action" value="add_another" class="border border-gray-400 bg-white px-4 py-2 font-bold">Simpan &amp; Tambah Lagi</button></div>
+                </form>
+            @endif
             <div class="crm-table-scroll"><table class="crm-data-table"><thead><tr><th>Tanggal</th><th>Konsumen</th><th>Cabang</th><th>Proyek</th><th>Status</th><th>Aksi</th></tr></thead><tbody>@forelse($leads as $lead)<tr><td>{{ $lead->lead_date->format('d/m/Y') }}</td><td>{{ $lead->customer_name }}</td><td>{{ $lead->branch?->name ?: '-' }}</td><td>{{ $lead->project?->project_name ?: '-' }}</td><td><x-crm.status-badge variant="neutral">{{ $lead->current_status->label() }}</x-crm.status-badge></td><td><x-crm.button variant="text" size="sm" :href="route('sales-leads.show', $lead)">Detail</x-crm.button></td></tr>@empty<tr><td colspan="6"><x-crm.empty-state title="Belum ada lead" description="Lead Anda akan tampil di sini." /></td></tr>@endforelse</tbody></table></div>
             <x-crm.pagination :collection="$leads" :show-per-page="false" />
         </x-crm.section>

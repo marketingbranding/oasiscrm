@@ -36,7 +36,9 @@ class SalesLeadController extends Controller
     {
         $this->authorize('create', SalesLead::class);
 
-        return redirect()->route('sales-pocketbook.index', ['input' => 1]);
+        return $request->user()->isSales()
+            ? redirect()->route('sales-agendas.index', ['tab' => 'leads', 'input' => 1])
+            : redirect()->route('sales-pocketbook.index', ['input' => 1]);
     }
 
     public function store(StoreSalesLeadRequest $request)
@@ -44,15 +46,24 @@ class SalesLeadController extends Controller
         $lead = $this->leads->create($request->safe()->except('expected_updated_at'), $request->user());
         $duplicates = $this->duplicates->matches($request->user(), $lead->phone, $lead->id);
 
-        $redirect = $request->input('submit_action') === 'add_another'
-            ? route('sales-pocketbook.index', [
-                'input' => 1,
-                'lead_date' => $lead->lead_date->toDateString(),
-                'project_id' => $lead->project_id,
-            ])
-            : route('sales-pocketbook.index', $lead->current_status === SalesLeadStatus::SiteVisit
-                ? ['lifecycle_action' => 'site_visit', 'lead' => $lead->id]
-                : []);
+        if ($request->user()->isSales()) {
+            $redirect = route('sales-agendas.index', array_filter([
+                'tab' => 'leads',
+                'input' => $request->input('submit_action') === 'add_another' ? 1 : null,
+                'lead_date' => $request->input('submit_action') === 'add_another' ? $lead->lead_date->toDateString() : null,
+                'project_id' => $request->input('submit_action') === 'add_another' ? $lead->project_id : null,
+            ]));
+        } else {
+            $redirect = $request->input('submit_action') === 'add_another'
+                ? route('sales-pocketbook.index', [
+                    'input' => 1,
+                    'lead_date' => $lead->lead_date->toDateString(),
+                    'project_id' => $lead->project_id,
+                ])
+                : route('sales-pocketbook.index', $lead->current_status === SalesLeadStatus::SiteVisit
+                    ? ['lifecycle_action' => 'site_visit', 'lead' => $lead->id]
+                    : []);
+        }
 
         $response = redirect($redirect)->with('success', 'Lead berhasil disimpan.');
         if ($duplicates->isNotEmpty()) {
@@ -147,7 +158,7 @@ class SalesLeadController extends Controller
             ]);
         }
 
-        return redirect()->route('sales-pocketbook.index')->with('success', 'Lead berhasil diperbarui.');
+        return redirect()->route($request->user()->isSales() ? 'sales-agendas.index' : 'sales-pocketbook.index', $request->user()->isSales() ? ['tab' => 'leads'] : [])->with('success', 'Lead berhasil diperbarui.');
     }
 
     public function destroy(Request $request, SalesLead $salesLead)
@@ -160,7 +171,7 @@ class SalesLeadController extends Controller
             return back()->with('error', $exception->getMessage());
         }
 
-        return redirect()->route('sales-pocketbook.index')->with('success', 'Lead berhasil dihapus dari data operasional.');
+        return redirect()->route($request->user()->isSales() ? 'sales-agendas.index' : 'sales-pocketbook.index', $request->user()->isSales() ? ['tab' => 'leads'] : [])->with('success', 'Lead berhasil dihapus dari data operasional.');
     }
 
     public function duplicatePhone(Request $request)

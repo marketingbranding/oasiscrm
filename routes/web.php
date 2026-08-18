@@ -21,6 +21,7 @@ use App\Http\Controllers\Crm\DatabaseController;
 use App\Http\Controllers\Crm\ExpenseCategoryController;
 use App\Http\Controllers\Crm\ExpenseController;
 use App\Http\Controllers\Crm\FeedbackReportController;
+use App\Http\Controllers\Crm\HistoricalProcessImportController;
 use App\Http\Controllers\Crm\ImpersonationController;
 use App\Http\Controllers\Crm\KavlingController;
 use App\Http\Controllers\Crm\KonsumenProgressController;
@@ -190,6 +191,13 @@ Route::middleware(['auth', 'active', 'verified', 'password.changed', 'operationa
         Route::get('/konsumen-progress/stage', [KonsumenProgressController::class, 'stage'])->middleware('permission:consumer_progress.view')->name('konsumen-progress.stage');
         Route::post('/konsumen-progress/sync', [KonsumenProgressController::class, 'sync'])->middleware('permission:consumer_progress.sync')->name('konsumen-progress.sync');
         Route::get('/konsumen-progress/sync/status', [KonsumenProgressController::class, 'syncStatus'])->middleware('permission:consumer_progress.sync')->name('konsumen-progress.sync-status');
+    });
+
+    Route::middleware('permission:consumer_progress.view')->group(function () {
+        Route::get('historical-process/import', [HistoricalProcessImportController::class, 'create'])->name('historical-process.import.create');
+        Route::post('historical-process/import/preview', [HistoricalProcessImportController::class, 'preview'])->middleware('not.impersonating')->name('historical-process.import.preview');
+        Route::get('historical-process/import/{historical_process_import_batch}', [HistoricalProcessImportController::class, 'show'])->name('historical-process.import.show');
+        Route::post('historical-process/import/{historical_process_import_batch}/confirm', [HistoricalProcessImportController::class, 'confirm'])->middleware('not.impersonating')->name('historical-process.import.confirm');
     });
 
     Route::get('changelogs', [ChangelogController::class, 'index'])->name('changelogs.index');

@@ -2,30 +2,29 @@
 
 namespace App\Models;
 
-use Database\Factories\ConsumerStageEventFactory;
-use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class ConsumerStageEvent extends Model
 {
-    /** @use HasFactory<ConsumerStageEventFactory> */
-    use HasFactory;
-
-    protected $fillable = ['consumer_application_id', 'stage', 'status', 'occurred_at', 'completed_at', 'actor_id', 'source', 'source_id', 'reason', 'metadata'];
+    protected $fillable = [
+        'application_id',
+        'stage',
+        'source_id',
+        'event_date',
+        'status',
+        'notes',
+    ];
 
     protected function casts(): array
     {
-        return ['occurred_at' => 'datetime', 'completed_at' => 'datetime', 'metadata' => 'array'];
+        return [
+            'event_date' => 'date',
+        ];
     }
 
     public function application(): BelongsTo
     {
-        return $this->belongsTo(ConsumerApplication::class, 'consumer_application_id');
-    }
-
-    public function actor(): BelongsTo
-    {
-        return $this->belongsTo(User::class, 'actor_id');
+        return $this->belongsTo(ConsumerApplication::class, 'application_id');
     }
 }

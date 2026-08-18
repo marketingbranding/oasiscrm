@@ -2,503 +2,266 @@
 
 namespace Tests\Feature;
 
+use App\Models\ActivityLog;
 use App\Models\Branch;
 use App\Models\ConsumerApplication;
 use App\Models\ConsumerBankProcess;
 use App\Models\ConsumerLegacyIdentity;
 use App\Models\ConsumerStageEvent;
-use App\Models\Customer;
-use App\Models\Kavling;
-use App\Models\LeadMaster;
+use App\Models\HistoricalProcessImportBatch;
 use App\Models\Role;
 use App\Models\User;
-use App\Services\ConsumerHistoricalProcessImportService;
-use App\Services\ConsumerPasteImportService;
+use App\Services\ConsumerKavlingBackfillService;
+use App\Services\HistoricalProcessImportService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use InvalidArgumentException;
 use Tests\TestCase;
 
 class HistoricalProcessImportTest extends TestCase
 {
     use RefreshDatabase;
 
-    private function branchAndUser(string $roleSlug = 'superadmin'): array
+    public function test_canonical_headers_per_stage_are_accepted_and_normalized(): void
+    {
+        $service = app(HistoricalProcessImportService::class);
+
+        $bi = "id_kavling\tnama_konsumen\tno_ktp\tid_kons\ttanggal_slik\thasil_slik\tketerangan\nKAV-1\tBudi\t0123456789012345\tK-001\t8/1/2026\tLancar\t";
+        $rows = $service->parse($bi);
+        $this->assertSame('bi_checking', $rows[0]['sheet_type']);
+        $this->assertSame('2026-08-01', $rows[0]['normalized_data']['tanggal_slik']);
+        $this->assertSame('0123456789012345', $rows[0]['nik']);
+        $this->assertArrayNotHasKey('no_ktp', $rows[0]['normalized_data']);
+        $this->assertArrayNotHasKey('no_ktp', $rows[0]['raw_data']);
+
+        $psjb = "id_kavling\tid_kons\tid_psjb\ttanggal_psjb\tnama_koordinator\tnama_sales\tharga_unit\ttanggal_utj\tutj\ttanggal_dp_klt\tdp_all_in\tnominal_cicilan\tjumlah_cicilan\tluas_klt\tharga_klt/m\tharga_klt_total\tcara_pembayaran\tid_promo\tlead_time_hari\tstatus\tketerangan\nKAV-1\tK-001\tPS-1\t2026-08-02\tKoor\tSales\t150000000\t\t\t\t\t\t\t0\t0\t0\tTunai\t\t\t\t";
+        $rows = $service->parse($psjb);
+        $this->assertSame('PSJB', $rows[0]['sheet_type']);
+        $this->assertSame('2026-08-02', $rows[0]['normalized_data']['tanggal_psjb']);
+        $this->assertSame('150000000.00', $rows[0]['normalized_data']['harga_unit']);
+
+        $pemberkasan = "id_kavling\tid_psjb\tid_berkas\ttanggal_terima_bank\tbank\tkc/unit\trequest_plafond\trequest_tenor\ttipe_pemberkasan\tlead_time_hari\tstatus\tketerangan\nKAV-1\tPS-1\tB-1\t2026-08-03\tBCA\tKC A\t200000000\t240\tReguler\t\t\t";
+        $this->assertSame('pemberkasan', $service->parse($pemberkasan)[0]['sheet_type']);
+
+        $prosesBank = "id_kavling\tid_berkas\tno_sp3k\tjenis_respon\tapproved_plafond\tapproved_tenor\tlead_time_hari\tstatus\tkategori_revisi\tdetail_revisi\tkendala\tketerangan\nKAV-1\tB-1\tSP-1\tApproved\t200000000\t240\t\t\t\t\t\t";
+        $this->assertSame('proses_bank', $service->parse($prosesBank)[0]['sheet_type']);
+
+        $ppjbDev = "id_kavling\tno_sp3k\tid_ppjb_dev\ttanggal_sp3k\ttanggal_ttd_ppjb\tlead_time_hari\tstatus\tketerangan\nKAV-1\tSP-1\tPP-1\t2026-08-04\t2026-08-05\t\t\t";
+        $this->assertSame('ppjb_dev', $service->parse($ppjbDev)[0]['sheet_type']);
+
+        $akad = "id_kavling\tid_ppjb_dev\tno_ppjb_akad\ttanggal_akad\tkualitas_akad\tlead_time_hari\tstatus\tstatus_bangunan\tstatus_dp_konsumen\tstatus_utilitas\tstatus_konsumen\tketerangan_terlambat\tketerangan\nKAV-1\tPP-1\tAK-1\t2026-09-01\tBaik\t\tAktif\t\t\t\t\t\t";
+        $this->assertSame('akad', $service->parse($akad)[0]['sheet_type']);
+
+        $bast = "id_kavling\tno_ppjb_akad\tno_bast\ttanggal_bast\tlead_time_hari\tstatus\tketerangan\nKAV-1\tAK-1\tBast-1\t2026-10-01\t\t\t";
+        $this->assertSame('bast', $service->parse($bast)[0]['sheet_type']);
+    }
+
+    public function test_unknown_or_reordered_headers_are_rejected(): void
+    {
+        $service = app(HistoricalProcessImportService::class);
+        $caught = 0;
+
+        try {
+            $service->parse("nama_konsumen\tid_kavling\tno_ktp\tid_kons\ttanggal_slik\thasil_slik\tketerangan\nBudi\tKAV-1\t0123456789012345\tK-001\t\t\t");
+        } catch (InvalidArgumentException) {
+            $caught++;
+        }
+
+        try {
+            $service->parse("id_kavling\tnama_konsumen\tno_ktp\tid_kons\ttanggal_slik\thasil_slik\nKAV-1\tBudi\t0123456789012345\tK-001\t\t");
+        } catch (InvalidArgumentException) {
+            $caught++;
+        }
+
+        try {
+            $service->parse("id_kavling\tnama_konsumen\tno_ktp\tid_kons\ttanggal_slik\tspelled_wrong\tketerangan\nKAV-1\tBudi\t0123456789012345\tK-001\t\t\t");
+        } catch (InvalidArgumentException) {
+            $caught++;
+        }
+
+        $this->assertSame(3, $caught);
+    }
+
+    public function test_preview_stages_rows_without_writing_consumer_tables(): void
+    {
+        [$branch, $superadmin] = $this->context();
+        $bi = "id_kavling\tnama_konsumen\tno_ktp\tid_kons\ttanggal_slik\thasil_slik\tketerangan\nKAV-1\tBudi\t0123456789012345\tK-001\t8/1/2026\tLancar\t";
+
+        $this->actingAs($superadmin)->post(route('historical-process.import.preview'), ['branch_id' => $branch->id, 'tsv' => $bi])->assertRedirect();
+
+        $this->assertSame(0, ConsumerApplication::count());
+        $this->assertSame(0, ConsumerLegacyIdentity::count());
+        $this->assertSame(0, ConsumerStageEvent::count());
+        $this->assertSame(0, ConsumerBankProcess::count());
+        $batch = HistoricalProcessImportBatch::sole();
+        $this->assertSame('preview_ready', $batch->status);
+        $this->assertSame(1, $batch->rows()->count());
+        $this->assertSame('Baru', $batch->rows()->first()->status);
+    }
+
+    public function test_confirm_creates_application_and_stage_chain_with_encrypted_nik(): void
+    {
+        [$branch, $superadmin] = $this->context();
+        $this->stage($superadmin, $branch->id, "id_kavling\tnama_konsumen\tno_ktp\tid_kons\ttanggal_slik\thasil_slik\tketerangan\nKAV-1\tBudi\t0123456789012345\tK-001\t8/1/2026\tLancar\t");
+
+        $application = ConsumerApplication::sole();
+        $this->assertSame('KAV-1', $application->id_kavling);
+        $this->assertSame('Budi', $application->nama_konsumen);
+        $this->assertSame('0123456789012345', $application->nik);
+        $this->assertNotSame('0123456789012345', $application->getRawOriginal('nik'));
+        $this->assertSame('K-001', $application->legacyIdentity->id_kons);
+        $event = ConsumerStageEvent::sole();
+        $this->assertSame('bi_checking', $event->stage);
+        $this->assertSame('K-001', $event->source_id);
+        $this->assertSame('2026-08-01', $event->event_date->format('Y-m-d'));
+        $this->assertStringNotContainsString('0123456789012345', $event->notes);
+        $audit = ActivityLog::where('event', 'historical_process_imported')->sole();
+        $this->assertStringNotContainsString('0123456789012345', json_encode($audit->properties));
+    }
+
+    public function test_downstream_stages_follow_canonical_id_chain_not_kavling(): void
+    {
+        [$branch, $superadmin] = $this->context();
+        $this->stage($superadmin, $branch->id, "id_kavling\tnama_konsumen\tno_ktp\tid_kons\ttanggal_slik\thasil_slik\tketerangan\nKAV-1\tBudi\t0123456789012345\tK-001\t8/1/2026\tLancar\t");
+        $this->stage($superadmin, $branch->id, "id_kavling\tid_kons\tid_psjb\ttanggal_psjb\tnama_koordinator\tnama_sales\tharga_unit\ttanggal_utj\tutj\ttanggal_dp_klt\tdp_all_in\tnominal_cicilan\tjumlah_cicilan\tluas_klt\tharga_klt/m\tharga_klt_total\tcara_pembayaran\tid_promo\tlead_time_hari\tstatus\tketerangan\nKAV-1\tK-001\tPS-1\t2026-08-02\tKoor\tSales\t150000000\t\t\t\t\t\t\t0\t0\t0\tTunai\t\t\t\t");
+
+        $application = ConsumerApplication::sole();
+        $this->assertSame('K-001', $application->legacyIdentity->id_kons);
+        $this->assertSame('PS-1', $application->legacyIdentity->id_psjb);
+        $this->assertSame(2, $application->stageEvents()->count());
+        $this->assertDatabaseHas('consumer_stage_events', ['application_id' => $application->id, 'stage' => 'PSJB', 'source_id' => 'PS-1']);
+    }
+
+    public function test_downstream_row_without_existing_chain_is_flagged_and_skipped(): void
+    {
+        [$branch, $superadmin] = $this->context();
+        $psjb = "id_kavling\tid_kons\tid_psjb\ttanggal_psjb\tnama_koordinator\tnama_sales\tharga_unit\ttanggal_utj\tutj\ttanggal_dp_klt\tdp_all_in\tnominal_cicilan\tjumlah_cicilan\tluas_klt\tharga_klt/m\tharga_klt_total\tcara_pembayaran\tid_promo\tlead_time_hari\tstatus\tketerangan\nKAV-1\tK-999\tPS-1\t2026-08-02\tKoor\tSales\t0\t\t\t\t\t\t\t0\t0\t0\tTunai\t\t\t\t";
+
+        $this->actingAs($superadmin)->post(route('historical-process.import.preview'), ['branch_id' => $branch->id, 'tsv' => $psjb])->assertRedirect();
+        $batch = HistoricalProcessImportBatch::sole();
+        $this->assertSame('Perlu Diperiksa', $batch->rows()->first()->status);
+
+        $this->actingAs($superadmin)->post(route('historical-process.import.confirm', $batch), ['expected_updated_at' => $batch->updated_at->toISOString()])->assertRedirect();
+        $this->assertSame(0, ConsumerApplication::count());
+        $this->assertSame(0, ConsumerStageEvent::count());
+        $this->assertSame(0, $batch->fresh()->created_rows);
+    }
+
+    public function test_reimport_same_source_id_is_idempotent_and_skipped(): void
+    {
+        [$branch, $superadmin] = $this->context();
+        $bi = "id_kavling\tnama_konsumen\tno_ktp\tid_kons\ttanggal_slik\thasil_slik\tketerangan\nKAV-1\tBudi\t0123456789012345\tK-001\t8/1/2026\tLancar\t";
+        $this->stage($superadmin, $branch->id, $bi);
+
+        $this->actingAs($superadmin)->post(route('historical-process.import.preview'), ['branch_id' => $branch->id, 'tsv' => $bi])->assertRedirect();
+        $batch = HistoricalProcessImportBatch::latest('id')->firstOrFail();
+        $this->assertSame('Duplikat', $batch->rows()->first()->status);
+        $this->actingAs($superadmin)->post(route('historical-process.import.confirm', $batch), ['expected_updated_at' => $batch->updated_at->toISOString()])->assertRedirect();
+
+        $this->assertSame(1, ConsumerApplication::count());
+        $this->assertSame(1, ConsumerStageEvent::count());
+        $this->assertSame(0, $batch->fresh()->created_rows);
+    }
+
+    public function test_multiple_bank_process_attempts_are_appended_without_overwrite(): void
+    {
+        [$branch, $superadmin] = $this->context();
+        $this->stage($superadmin, $branch->id, "id_kavling\tnama_konsumen\tno_ktp\tid_kons\ttanggal_slik\thasil_slik\tketerangan\nKAV-1\tBudi\t0123456789012345\tK-001\t8/1/2026\tLancar\t");
+        $this->stage($superadmin, $branch->id, "id_kavling\tid_kons\tid_psjb\ttanggal_psjb\tnama_koordinator\tnama_sales\tharga_unit\ttanggal_utj\tutj\ttanggal_dp_klt\tdp_all_in\tnominal_cicilan\tjumlah_cicilan\tluas_klt\tharga_klt/m\tharga_klt_total\tcara_pembayaran\tid_promo\tlead_time_hari\tstatus\tketerangan\nKAV-1\tK-001\tPS-1\t2026-08-02\tKoor\tSales\t0\t\t\t\t\t\t\t0\t0\t0\tTunai\t\t\t\t");
+        $this->stage($superadmin, $branch->id, "id_kavling\tid_psjb\tid_berkas\ttanggal_terima_bank\tbank\tkc/unit\trequest_plafond\trequest_tenor\ttipe_pemberkasan\tlead_time_hari\tstatus\tketerangan\nKAV-1\tPS-1\tB-1\t2026-08-03\tBCA\tKC A\t200000000\t240\tReguler\t\t\t");
+        $this->stage($superadmin, $branch->id, "id_kavling\tid_berkas\tno_sp3k\tjenis_respon\tapproved_plafond\tapproved_tenor\tlead_time_hari\tstatus\tkategori_revisi\tdetail_revisi\tkendala\tketerangan\nKAV-1\tB-1\tSP-1\tRevisi\t\t\t\t\t1\tDokumen\t\t\t");
+        $this->stage($superadmin, $branch->id, "id_kavling\tid_berkas\tno_sp3k\tjenis_respon\tapproved_plafond\tapproved_tenor\tlead_time_hari\tstatus\tkategori_revisi\tdetail_revisi\tkendala\tketerangan\nKAV-1\tB-1\tSP-2\tApproved\t200000000\t240\t\t\t\t\t\t");
+
+        $application = ConsumerApplication::sole();
+        $this->assertSame(2, ConsumerBankProcess::where('application_id', $application->id)->count());
+        $this->assertSame('SP-1', ConsumerBankProcess::where('no_sp3k', 'SP-1')->value('no_sp3k'));
+        $this->assertSame('Approved', ConsumerBankProcess::where('no_sp3k', 'SP-2')->value('response_type'));
+        $this->assertSame('200000000.00', ConsumerBankProcess::where('no_sp3k', 'SP-2')->value('approved_plafond'));
+        $this->assertSame(2, ConsumerStageEvent::where('application_id', $application->id)->where('stage', 'proses_bank')->count());
+    }
+
+    public function test_preview_and_confirm_reject_non_superadmin_and_impersonation(): void
+    {
+        [$branch, $superadmin] = $this->context();
+        $admin = $this->user('admin', $branch);
+        $bi = "id_kavling\tnama_konsumen\tno_ktp\tid_kons\ttanggal_slik\thasil_slik\tketerangan\nKAV-1\tBudi\t0123456789012345\tK-001\t8/1/2026\tLancar\t";
+
+        $this->actingAs($admin)->get(route('historical-process.import.create'))->assertForbidden();
+        $this->actingAs($admin)->post(route('historical-process.import.preview'), ['branch_id' => $branch->id, 'tsv' => $bi])->assertForbidden();
+
+        $session = ['impersonation.original_user_id' => 999, 'impersonation.target_user_id' => $superadmin->id];
+        $this->actingAs($superadmin)->withSession($session)->post(route('historical-process.import.preview'), ['branch_id' => $branch->id, 'tsv' => $bi])->assertForbidden();
+    }
+
+    public function test_akad_and_bast_imports_are_recognized_as_sold_by_backfill_preview(): void
+    {
+        [$branch, $superadmin] = $this->context();
+        $this->stage($superadmin, $branch->id, "id_kavling\tnama_konsumen\tno_ktp\tid_kons\ttanggal_slik\thasil_slik\tketerangan\nKAV-1\tBudi\t0123456789012345\tK-001\t8/1/2026\tLancar\t");
+        $this->stage($superadmin, $branch->id, "id_kavling\tid_kons\tid_psjb\ttanggal_psjb\tnama_koordinator\tnama_sales\tharga_unit\ttanggal_utj\tutj\ttanggal_dp_klt\tdp_all_in\tnominal_cicilan\tjumlah_cicilan\tluas_klt\tharga_klt/m\tharga_klt_total\tcara_pembayaran\tid_promo\tlead_time_hari\tstatus\tketerangan\nKAV-1\tK-001\tPS-1\t2026-08-02\tKoor\tSales\t0\t\t\t\t\t\t\t0\t0\t0\tTunai\t\t\t\t");
+        $this->stage($superadmin, $branch->id, "id_kavling\tid_psjb\tid_berkas\ttanggal_terima_bank\tbank\tkc/unit\trequest_plafond\trequest_tenor\ttipe_pemberkasan\tlead_time_hari\tstatus\tketerangan\nKAV-1\tPS-1\tB-1\t2026-08-03\tBCA\tKC A\t0\t240\tReguler\t\t\t");
+        $this->stage($superadmin, $branch->id, "id_kavling\tid_berkas\tno_sp3k\tjenis_respon\tapproved_plafond\tapproved_tenor\tlead_time_hari\tstatus\tkategori_revisi\tdetail_revisi\tkendala\tketerangan\nKAV-1\tB-1\tSP-1\tApproved\t0\t240\t\t\t\t\t\t");
+        $this->stage($superadmin, $branch->id, "id_kavling\tno_sp3k\tid_ppjb_dev\ttanggal_sp3k\ttanggal_ttd_ppjb\tlead_time_hari\tstatus\tketerangan\nKAV-1\tSP-1\tPP-1\t2026-08-04\t2026-08-05\t\t\t");
+        $this->stage($superadmin, $branch->id, "id_kavling\tid_ppjb_dev\tno_ppjb_akad\ttanggal_akad\tkualitas_akad\tlead_time_hari\tstatus\tstatus_bangunan\tstatus_dp_konsumen\tstatus_utilitas\tstatus_konsumen\tketerangan_terlambat\tketerangan\nKAV-1\tPP-1\tAK-1\t2026-09-01\tBaik\t\tAktif\t\t\t\t\t\t");
+
+        $stats = app(ConsumerKavlingBackfillService::class)->preview($branch);
+        $this->assertSame(1, $stats['TOTAL_CANDIDATES']);
+        $this->assertSame(1, $stats['READY_SOLD']);
+        $this->assertSame(0, $stats['READY_RESERVED']);
+        $this->assertSame(0, $stats['CONFLICT']);
+        $this->assertSame(0, $stats['SKIPPED']);
+    }
+
+    public function test_reused_kavling_between_applications_is_reported_as_conflict_not_sold(): void
+    {
+        [$branch, $superadmin] = $this->context();
+        $this->stage($superadmin, $branch->id, "id_kavling\tnama_konsumen\tno_ktp\tid_kons\ttanggal_slik\thasil_slik\tketerangan\nKAV-1\tBudi\t0123456789012345\tK-001\t8/1/2026\tLancar\t");
+        $this->stage($superadmin, $branch->id, "id_kavling\tnama_konsumen\tno_ktp\tid_kons\ttanggal_slik\thasil_slik\tketerangan\nKAV-1\tSiti\t1123456789012345\tK-002\t8/1/2026\tLancar\t");
+        $this->stage($superadmin, $branch->id, "id_kavling\tid_kons\tid_psjb\ttanggal_psjb\tnama_koordinator\tnama_sales\tharga_unit\ttanggal_utj\tutj\ttanggal_dp_klt\tdp_all_in\tnominal_cicilan\tjumlah_cicilan\tluas_klt\tharga_klt/m\tharga_klt_total\tcara_pembayaran\tid_promo\tlead_time_hari\tstatus\tketerangan\nKAV-1\tK-001\tPS-1\t2026-08-02\tKoor\tSales\t0\t\t\t\t\t\t\t0\t0\t0\tTunai\t\t\t\t");
+        $this->stage($superadmin, $branch->id, "id_kavling\tid_kons\tid_psjb\ttanggal_psjb\tnama_koordinator\tnama_sales\tharga_unit\ttanggal_utj\tutj\ttanggal_dp_klt\tdp_all_in\tnominal_cicilan\tjumlah_cicilan\tluas_klt\tharga_klt/m\tharga_klt_total\tcara_pembayaran\tid_promo\tlead_time_hari\tstatus\tketerangan\nKAV-1\tK-002\tPS-2\t2026-08-02\tKoor\tSales\t0\t\t\t\t\t\t\t0\t0\t0\tTunai\t\t\t\t");
+
+        $stats = app(ConsumerKavlingBackfillService::class)->preview($branch);
+        $this->assertSame(2, $stats['TOTAL_CANDIDATES']);
+        $this->assertSame(0, $stats['READY_SOLD']);
+        $this->assertSame(0, $stats['READY_RESERVED']);
+        $this->assertSame(2, $stats['CONFLICT']);
+    }
+
+    public function test_preview_html_never_exposes_plaintext_nik(): void
+    {
+        [$branch, $superadmin] = $this->context();
+        $bi = "id_kavling\tnama_konsumen\tno_ktp\tid_kons\ttanggal_slik\thasil_slik\tketerangan\nKAV-1\tBudi\t0123456789012345\tK-001\t8/1/2026\tLancar\t";
+
+        $this->actingAs($superadmin)->post(route('historical-process.import.preview'), ['branch_id' => $branch->id, 'tsv' => $bi]);
+        $batch = HistoricalProcessImportBatch::sole();
+
+        $html = $this->actingAs($superadmin)->get(route('historical-process.import.show', $batch))->getContent();
+        $this->assertStringNotContainsString('0123456789012345', $html);
+        $this->assertStringContainsString('••••••••••••2345', $html);
+    }
+
+    private function stage(User $superadmin, int $branchId, string $tsv): void
+    {
+        $this->actingAs($superadmin)->post(route('historical-process.import.preview'), ['branch_id' => $branchId, 'tsv' => $tsv])->assertRedirect();
+        $batch = HistoricalProcessImportBatch::latest('id')->firstOrFail();
+        $this->actingAs($superadmin)->post(route('historical-process.import.confirm', $batch), ['expected_updated_at' => $batch->updated_at->toISOString()])->assertRedirect();
+    }
+
+    private function context(): array
+    {
+        $branch = Branch::create(['name' => 'Magelang', 'code' => 'MGL', 'is_active' => true, 'sheet_id' => 'sheet-mgl']);
+
+        return [$branch, $this->user('superadmin', $branch)];
+    }
+
+    private function user(string $roleSlug, Branch $branch): User
     {
         $role = Role::firstOrCreate(['slug' => $roleSlug], ['name' => $roleSlug, 'is_superadmin' => $roleSlug === 'superadmin']);
-        $branch = Branch::create([
-            'name' => 'Test Branch '.str()->random(4),
-            'code' => 'T'.str()->upper(str()->random(2)),
-            'is_active' => true,
-        ]);
         $user = User::factory()->create([
             'role_id' => $role->id,
             'branch_id' => $branch->id,
             'password_changed_at' => now(),
         ]);
+        $user->branches()->syncWithoutDetaching([$branch->id => ['can_view' => true, 'can_edit' => true]]);
 
-        return [$branch, $user];
-    }
-
-    private function projectFor(Branch $branch): LeadMaster
-    {
-        return LeadMaster::firstOrCreate(['branch_id' => $branch->id, 'project_name' => 'Oasis Test'], ['is_active' => true]);
-    }
-
-    private function localApplication(Branch $branch, string $kavlingCode, string $stage = 'bi_checking'): ConsumerApplication
-    {
-        $project = $this->projectFor($branch);
-        $customer = Customer::create(['name' => 'Test Consumer']);
-        $kavling = Kavling::firstOrCreate(['project_id' => $project->id, 'kavling_code' => $kavlingCode], ['name' => $kavlingCode]);
-        $application = ConsumerApplication::create([
-            'customer_id' => $customer->id, 'branch_id' => $branch->id, 'project_id' => $project->id,
-            'kavling_id' => $kavling->id, 'application_status' => 'draft', 'current_stage' => $stage,
-        ]);
-
-        return $application;
-    }
-
-    private function attachPasteIdentity(ConsumerApplication $app, string $externalId): ConsumerLegacyIdentity
-    {
-        return ConsumerLegacyIdentity::create([
-            'consumer_application_id' => $app->id,
-            'customer_id' => $app->customer_id,
-            'legacy_source' => ConsumerPasteImportService::SOURCE,
-            'spreadsheet_id' => 'manual-paste',
-            'sheet_name' => (string) $app->project_id,
-            'external_key' => 'external:'.mb_strtolower($externalId),
-            'mapping_status' => 'imported',
-        ]);
-    }
-
-    public function test_parsing_reordered_headers(): void
-    {
-        [$branch, $user] = $this->branchAndUser();
-        $app = $this->localApplication($branch, 'KAV-001');
-        $this->attachPasteIdentity($app, 'lead-001');
-        $project = $this->projectFor($branch);
-        $tsv = "tanggal\tstatus\tid_kavling\tketerangan\texternal id\n2025-06-15\tLolos\tKAV-001\tSelesai\tlead-001\n";
-        $service = new ConsumerHistoricalProcessImportService;
-        $rows = $service->preview($tsv, $branch, $project, 'bi_checking');
-        $this->assertCount(1, $rows);
-        $this->assertEquals('READY', $rows[0]['status']);
-        $this->assertEquals('KAV-001', $rows[0]['normalized_data']['kavling']);
-        $this->assertEquals($app->id, $rows[0]['normalized_data']['consumer_application_id']);
-    }
-
-    public function test_missing_optional_columns(): void
-    {
-        [$branch, $user] = $this->branchAndUser();
-        $app = $this->localApplication($branch, 'KAV-002');
-        $this->attachPasteIdentity($app, 'lead-002');
-        $project = $this->projectFor($branch);
-        $tsv = "id_kavling\texternal id\nKAV-002\tlead-002\n";
-        $service = new ConsumerHistoricalProcessImportService;
-        $rows = $service->preview($tsv, $branch, $project, 'psjb');
-        $this->assertCount(1, $rows);
-        $this->assertEquals('READY', $rows[0]['status']);
-        $this->assertNull($rows[0]['normalized_data']['date']);
-        $this->assertNull($rows[0]['normalized_data']['status']);
-    }
-
-    public function test_blank_header_columns(): void
-    {
-        [$branch, $user] = $this->branchAndUser();
-        $app = $this->localApplication($branch, 'KAV-003');
-        $this->attachPasteIdentity($app, 'lead-003');
-        $project = $this->projectFor($branch);
-        $tsv = "id_kavling\t\tstatus\t\texternal id\nKAV-003\textra\tLolos\t\tlead-003\n";
-        $service = new ConsumerHistoricalProcessImportService;
-        $rows = $service->preview($tsv, $branch, $project, 'pemberkasan');
-        $this->assertCount(1, $rows);
-        $this->assertEquals('READY', $rows[0]['status']);
-    }
-
-    public function test_supported_aliases(): void
-    {
-        [$branch, $user] = $this->branchAndUser();
-        $app = $this->localApplication($branch, 'KAV-004');
-        $this->attachPasteIdentity($app, 'lead-004');
-        $project = $this->projectFor($branch);
-        $tsv = "kav\ttgl pemberkasan\thasil\tcatatan\texternal_id\nKAV-004\t2025-07-01\tSelesai\tOke\tlead-004\n";
-        $service = new ConsumerHistoricalProcessImportService;
-        $rows = $service->preview($tsv, $branch, $project, 'pemberkasan');
-        $this->assertCount(1, $rows);
-        $this->assertEquals('READY', $rows[0]['status']);
-        $this->assertEquals('2025-07-01', $rows[0]['normalized_data']['date']);
-    }
-
-    public function test_same_paste_idempotency(): void
-    {
-        [$branch, $user] = $this->branchAndUser();
-        $app = $this->localApplication($branch, 'KAV-005');
-        $this->attachPasteIdentity($app, 'lead-005');
-        $project = $this->projectFor($branch);
-        $tsv = "id_kavling\ttanggal\tstatus\texternal id\nKAV-005\t2025-08-01\tLolos\tlead-005\n";
-        $service = new ConsumerHistoricalProcessImportService;
-        $batch1 = $service->createBatch($user, $branch, $project, $tsv, 'bi_checking');
-        $result1 = $service->import($batch1, $user);
-        $this->assertEquals(1, $result1['created_events']);
-        $this->assertDatabaseHas('consumer_stage_events', ['consumer_application_id' => $app->id, 'stage' => 'bi_checking', 'source' => ConsumerHistoricalProcessImportService::SOURCE]);
-        $previewRows = $service->preview($tsv, $branch, $project, 'bi_checking');
-        $this->assertEquals('ALREADY_IMPORTED', $previewRows[0]['status']);
-    }
-
-    public function test_reused_kavling_alone_never_resolves(): void
-    {
-        [$branch, $user] = $this->branchAndUser();
-        $project = $this->projectFor($branch);
-        $customer1 = Customer::create(['name' => 'Consumer A']);
-        $customer2 = Customer::create(['name' => 'Consumer B']);
-        $kavling = Kavling::firstOrCreate(['project_id' => $project->id, 'kavling_code' => 'KAV-SHARE'], ['name' => 'KAV-SHARE']);
-        ConsumerApplication::create(['customer_id' => $customer1->id, 'branch_id' => $branch->id, 'project_id' => $project->id, 'kavling_id' => $kavling->id, 'application_status' => 'draft']);
-        ConsumerApplication::create(['customer_id' => $customer2->id, 'branch_id' => $branch->id, 'project_id' => $project->id, 'kavling_id' => $kavling->id, 'application_status' => 'draft']);
-        $tsv = "id_kavling\ttanggal\tstatus\nKAV-SHARE\t2025-09-01\tSelesai\n";
-        $service = new ConsumerHistoricalProcessImportService;
-        $rows = $service->preview($tsv, $branch, $project, 'psjb');
-        $this->assertEquals('UNRESOLVED_APPLICATION', $rows[0]['status']);
-    }
-
-    public function test_reused_kavling_resolves_via_provenance_to_single_application(): void
-    {
-        [$branch, $user] = $this->branchAndUser();
-        $project = $this->projectFor($branch);
-        $customer1 = Customer::create(['name' => 'Consumer A']);
-        $customer2 = Customer::create(['name' => 'Consumer B']);
-        $kavling = Kavling::firstOrCreate(['project_id' => $project->id, 'kavling_code' => 'KAV-SHARE'], ['name' => 'KAV-SHARE']);
-        $appA = ConsumerApplication::create(['customer_id' => $customer1->id, 'branch_id' => $branch->id, 'project_id' => $project->id, 'kavling_id' => $kavling->id, 'application_status' => 'draft']);
-        $appB = ConsumerApplication::create(['customer_id' => $customer2->id, 'branch_id' => $branch->id, 'project_id' => $project->id, 'kavling_id' => $kavling->id, 'application_status' => 'draft']);
-        $this->attachPasteIdentity($appA, 'lead-share-a');
-        $this->attachPasteIdentity($appB, 'lead-share-b');
-        $service = new ConsumerHistoricalProcessImportService;
-        $rows = $service->preview("id_kavling\ttanggal\tstatus\texternal id\nKAV-SHARE\t2025-09-01\tSelesai\tlead-share-b\n", $branch, $project, 'psjb');
-        $this->assertEquals('READY', $rows[0]['status']);
-        $this->assertEquals($appB->id, $rows[0]['normalized_data']['consumer_application_id']);
-    }
-
-    public function test_provenance_kavling_conflict_classified(): void
-    {
-        [$branch, $user] = $this->branchAndUser();
-        $project = $this->projectFor($branch);
-        $app = $this->localApplication($branch, 'KAV-CONFLICT-A');
-        $this->attachPasteIdentity($app, 'lead-conflict');
-        $service = new ConsumerHistoricalProcessImportService;
-        $rows = $service->preview("id_kavling\ttanggal\tstatus\texternal id\nKAV-CONFLICT-B\t2025-10-01\tOK\tlead-conflict\n", $branch, $project, 'akad');
-        $this->assertEquals('IDENTITY_CONFLICT', $rows[0]['status']);
-    }
-
-    public function test_safe_application_resolution(): void
-    {
-        [$branch, $user] = $this->branchAndUser();
-        $app = $this->localApplication($branch, 'KAV-RESOLVE');
-        $this->attachPasteIdentity($app, 'lead-resolve');
-        $project = $this->projectFor($branch);
-        $tsv = "id_kavling\ttanggal\tstatus\texternal id\nKAV-RESOLVE\t2025-10-01\tOK\tlead-resolve\n";
-        $service = new ConsumerHistoricalProcessImportService;
-        $rows = $service->preview($tsv, $branch, $project, 'akad');
-        $this->assertEquals('READY', $rows[0]['status']);
-        $this->assertEquals($app->id, $rows[0]['normalized_data']['consumer_application_id']);
-    }
-
-    public function test_unresolved_application(): void
-    {
-        [$branch, $user] = $this->branchAndUser();
-        $project = $this->projectFor($branch);
-        $tsv = "id_kavling\ttanggal\tstatus\texternal id\nKAV-NONE\t2025-11-01\tDone\tlead-none\n";
-        $service = new ConsumerHistoricalProcessImportService;
-        $rows = $service->preview($tsv, $branch, $project, 'bast');
-        $this->assertEquals('UNRESOLVED_APPLICATION', $rows[0]['status']);
-    }
-
-    public function test_invalid_row_missing_kavling(): void
-    {
-        [$branch, $user] = $this->branchAndUser();
-        $project = $this->projectFor($branch);
-        $tsv = "id_kavling\ttanggal\n\t2025-12-01\n";
-        $service = new ConsumerHistoricalProcessImportService;
-        $rows = $service->preview($tsv, $branch, $project, 'bi_checking');
-        $this->assertEquals('INVALID', $rows[0]['status']);
-    }
-
-    public function test_bi_checking_stage_event_import(): void
-    {
-        [$branch, $user] = $this->branchAndUser();
-        $app = $this->localApplication($branch, 'KAV-BIC');
-        $this->attachPasteIdentity($app, 'lead-bic');
-        $project = $this->projectFor($branch);
-        $tsv = "id_kavling\ttanggal\tstatus\tketerangan\texternal id\nKAV-BIC\t2025-06-15\tLolos\tBI checking selesai\tlead-bic\n";
-        $service = new ConsumerHistoricalProcessImportService;
-        $batch = $service->createBatch($user, $branch, $project, $tsv, 'bi_checking');
-        $result = $service->import($batch, $user);
-        $this->assertEquals(1, $result['created_events']);
-        $event = ConsumerStageEvent::where('consumer_application_id', $app->id)->where('stage', 'bi_checking')->first();
-        $this->assertNotNull($event);
-        $this->assertEquals('2025-06-15', $event->occurred_at->format('Y-m-d'));
-        $this->assertEquals('BI checking selesai', $event->reason);
-        $this->assertEquals(ConsumerHistoricalProcessImportService::SOURCE, $event->source);
-    }
-
-    public function test_psjb_stage_event_import(): void
-    {
-        [$branch, $user] = $this->branchAndUser();
-        $app = $this->localApplication($branch, 'KAV-PSJB');
-        $this->attachPasteIdentity($app, 'lead-psjb');
-        $project = $this->projectFor($branch);
-        $tsv = "id_kavling\ttanggal\tstatus\texternal id\nKAV-PSJB\t2025-07-10\tSelesai\tlead-psjb\n";
-        $service = new ConsumerHistoricalProcessImportService;
-        $batch = $service->createBatch($user, $branch, $project, $tsv, 'psjb');
-        $result = $service->import($batch, $user);
-        $this->assertEquals(1, $result['created_events']);
-        $event = ConsumerStageEvent::where('consumer_application_id', $app->id)->where('stage', 'PSJB')->first();
-        $this->assertNotNull($event);
-    }
-
-    public function test_pemberkasan_stage_event_import(): void
-    {
-        [$branch, $user] = $this->branchAndUser();
-        $app = $this->localApplication($branch, 'KAV-PBK');
-        $this->attachPasteIdentity($app, 'lead-pbk');
-        $project = $this->projectFor($branch);
-        $tsv = "id_kavling\ttanggal\tstatus\texternal id\nKAV-PBK\t2025-08-01\tLengkap\tlead-pbk\n";
-        $service = new ConsumerHistoricalProcessImportService;
-        $batch = $service->createBatch($user, $branch, $project, $tsv, 'pemberkasan');
-        $result = $service->import($batch, $user);
-        $this->assertEquals(1, $result['created_events']);
-        $event = ConsumerStageEvent::where('consumer_application_id', $app->id)->where('stage', 'pemberkasan')->first();
-        $this->assertNotNull($event);
-    }
-
-    public function test_ppjb_developer_stage_event_import(): void
-    {
-        [$branch, $user] = $this->branchAndUser();
-        $app = $this->localApplication($branch, 'KAV-PPJB');
-        $this->attachPasteIdentity($app, 'lead-ppjb');
-        $project = $this->projectFor($branch);
-        $tsv = "id_kavling\ttanggal\tstatus\texternal id\nKAV-PPJB\t2025-09-01\tOK\tlead-ppjb\n";
-        $service = new ConsumerHistoricalProcessImportService;
-        $batch = $service->createBatch($user, $branch, $project, $tsv, 'ppjb_developer');
-        $result = $service->import($batch, $user);
-        $this->assertEquals(1, $result['created_events']);
-        $event = ConsumerStageEvent::where('consumer_application_id', $app->id)->where('stage', 'ppjb_dev')->first();
-        $this->assertNotNull($event);
-    }
-
-    public function test_akad_stage_event_import(): void
-    {
-        [$branch, $user] = $this->branchAndUser();
-        $app = $this->localApplication($branch, 'KAV-AKAD');
-        $this->attachPasteIdentity($app, 'lead-akad');
-        $project = $this->projectFor($branch);
-        $tsv = "id_kavling\ttanggal\tstatus\texternal id\nKAV-AKAD\t2025-10-01\tSelesai\tlead-akad\n";
-        $service = new ConsumerHistoricalProcessImportService;
-        $batch = $service->createBatch($user, $branch, $project, $tsv, 'akad');
-        $result = $service->import($batch, $user);
-        $this->assertEquals(1, $result['created_events']);
-        $event = ConsumerStageEvent::where('consumer_application_id', $app->id)->where('stage', 'akad')->first();
-        $this->assertNotNull($event);
-    }
-
-    public function test_bast_stage_event_import(): void
-    {
-        [$branch, $user] = $this->branchAndUser();
-        $app = $this->localApplication($branch, 'KAV-BAST');
-        $this->attachPasteIdentity($app, 'lead-bast');
-        $project = $this->projectFor($branch);
-        $tsv = "id_kavling\ttanggal\tstatus\texternal id\nKAV-BAST\t2025-11-01\tDone\tlead-bast\n";
-        $service = new ConsumerHistoricalProcessImportService;
-        $batch = $service->createBatch($user, $branch, $project, $tsv, 'bast');
-        $result = $service->import($batch, $user);
-        $this->assertEquals(1, $result['created_events']);
-        $event = ConsumerStageEvent::where('consumer_application_id', $app->id)->where('stage', 'bast')->first();
-        $this->assertNotNull($event);
-    }
-
-    public function test_proses_bank_import(): void
-    {
-        [$branch, $user] = $this->branchAndUser();
-        $app = $this->localApplication($branch, 'KAV-BANK');
-        $this->attachPasteIdentity($app, 'lead-bank');
-        $project = $this->projectFor($branch);
-        $tsv = "id_kavling\tbank\tstatus bank\ttanggal\tketerangan\texternal id\nKAV-BANK\tBCA\tDisetujui\t2025-10-15\tProses lancar\tlead-bank\n";
-        $service = new ConsumerHistoricalProcessImportService;
-        $batch = $service->createBatch($user, $branch, $project, $tsv, 'proses_bank');
-        $result = $service->import($batch, $user);
-        $this->assertEquals(1, $result['created_bank_processes']);
-        $bank = ConsumerBankProcess::where('consumer_application_id', $app->id)->first();
-        $this->assertNotNull($bank);
-        $this->assertEquals('BCA', $bank->bank_name);
-        $this->assertEquals('Disetujui', $bank->status);
-        $this->assertEquals('2025-10-15', $bank->submitted_at->format('Y-m-d'));
-        $this->assertEquals(ConsumerHistoricalProcessImportService::SOURCE, $bank->source);
-        $this->assertNotNull($bank->source_id);
-        $this->assertNotNull($bank->metadata);
-    }
-
-    public function test_multiple_bank_rows_preserved(): void
-    {
-        [$branch, $user] = $this->branchAndUser();
-        $app = $this->localApplication($branch, 'KAV-MULTI');
-        $this->attachPasteIdentity($app, 'lead-multi');
-        $project = $this->projectFor($branch);
-        $tsv = "id_kavling\tbank\tstatus bank\ttanggal\texternal id\nKAV-MULTI\tBCA\tSubmitted\t2025-10-01\tlead-multi\nKAV-MULTI\tMandiri\tSubmitted\t2025-10-05\tlead-multi\nKAV-MULTI\tBCA\tDisetujui\t2025-10-15\tlead-multi\n";
-        $service = new ConsumerHistoricalProcessImportService;
-        $batch = $service->createBatch($user, $branch, $project, $tsv, 'proses_bank');
-        $result = $service->import($batch, $user);
-        $this->assertEquals(3, $result['created_bank_processes']);
-        $banks = ConsumerBankProcess::where('consumer_application_id', $app->id)->get();
-        $this->assertCount(3, $banks);
-    }
-
-    public function test_source_last_process_does_not_fabricate_events(): void
-    {
-        [$branch, $user] = $this->branchAndUser();
-        $app = $this->localApplication($branch, 'KAV-NF');
-        $app->update(['source_last_process' => 'M-2']);
-        $eventCount = ConsumerStageEvent::where('consumer_application_id', $app->id)->count();
-        $this->assertEquals(0, $eventCount);
-    }
-
-    public function test_superadmin_access(): void
-    {
-        [$branch, $user] = $this->branchAndUser('superadmin');
-        $response = $this->actingAs($user)->get(route('historical-process-import.create'));
-        $response->assertOk()->assertSee('Import Proses Historis');
-    }
-
-    public function test_impersonation_denied(): void
-    {
-        [$branch, $user] = $this->branchAndUser('superadmin');
-        $response = $this->actingAs($user)->withSession(['impersonation.original_user_id' => 1])->get(route('historical-process-import.create'));
-        $response->assertForbidden();
-    }
-
-    public function test_normal_branch_user_denied(): void
-    {
-        [$branch, $user] = $this->branchAndUser('sales');
-        $response = $this->actingAs($user)->get(route('historical-process-import.create'));
-        $response->assertForbidden();
-    }
-
-    public function test_wrong_branch_application_never_linked(): void
-    {
-        [$branch, $user] = $this->branchAndUser();
-        [$otherBranch] = $this->branchAndUser();
-        $otherProject = LeadMaster::firstOrCreate(['branch_id' => $otherBranch->id, 'project_name' => 'Other'], ['is_active' => true]);
-        $customer = Customer::create(['name' => 'Wrong Branch']);
-        $kavling = Kavling::firstOrCreate(['project_id' => $otherProject->id, 'kavling_code' => 'KAV-WRONG'], ['name' => 'KAV-WRONG']);
-        $otherApp = ConsumerApplication::create(['customer_id' => $customer->id, 'branch_id' => $otherBranch->id, 'project_id' => $otherProject->id, 'kavling_id' => $kavling->id, 'application_status' => 'draft']);
-        $this->attachPasteIdentity($otherApp, 'lead-wrong');
-        $project = $this->projectFor($branch);
-        $tsv = "id_kavling\ttanggal\tstatus\texternal id\nKAV-WRONG\t2025-10-01\tOK\tlead-wrong\n";
-        $service = new ConsumerHistoricalProcessImportService;
-        $rows = $service->preview($tsv, $branch, $project, 'akad');
-        $this->assertEquals('UNRESOLVED_APPLICATION', $rows[0]['status']);
-    }
-
-    public function test_no_plaintext_nik_in_preview(): void
-    {
-        [$branch, $user] = $this->branchAndUser();
-        $app = $this->localApplication($branch, 'KAV-NIK');
-        $this->attachPasteIdentity($app, 'lead-nik');
-        $project = $this->projectFor($branch);
-        $tsv = "id_kavling\ttanggal\tstatus\texternal id\nKAV-NIK\t2025-10-01\tOK\tlead-nik\n";
-        $service = new ConsumerHistoricalProcessImportService;
-        $rows = $service->preview($tsv, $branch, $project, 'akad');
-        $rowJson = json_encode($rows);
-        $this->assertStringNotContainsString('nik_encrypted', $rowJson);
-    }
-
-    public function test_repeat_confirm_does_not_duplicate_stage_events(): void
-    {
-        [$branch, $user] = $this->branchAndUser();
-        $app = $this->localApplication($branch, 'KAV-DUP');
-        $this->attachPasteIdentity($app, 'lead-dup');
-        $project = $this->projectFor($branch);
-        $tsv = "id_kavling\ttanggal\tstatus\texternal id\nKAV-DUP\t2025-10-01\tSelesai\tlead-dup\n";
-        $service = new ConsumerHistoricalProcessImportService;
-        $batch1 = $service->createBatch($user, $branch, $project, $tsv, 'bast');
-        $service->import($batch1, $user);
-        $count1 = ConsumerStageEvent::where('consumer_application_id', $app->id)->where('stage', 'bast')->count();
-        $this->assertEquals(1, $count1);
-        $batch2 = $service->createBatch($user, $branch, $project, $tsv, 'bast');
-        $service->import($batch2, $user);
-        $count2 = ConsumerStageEvent::where('consumer_application_id', $app->id)->where('stage', 'bast')->count();
-        $this->assertEquals(1, $count2);
-    }
-
-    public function test_repeat_confirm_does_not_duplicate_bank_processes(): void
-    {
-        [$branch, $user] = $this->branchAndUser();
-        $app = $this->localApplication($branch, 'KAV-BDUP');
-        $this->attachPasteIdentity($app, 'lead-bdup');
-        $project = $this->projectFor($branch);
-        $tsv = "id_kavling\tbank\tstatus bank\ttanggal\texternal id\nKAV-BDUP\tBCA\tOK\t2025-10-01\tlead-bdup\n";
-        $service = new ConsumerHistoricalProcessImportService;
-        $batch1 = $service->createBatch($user, $branch, $project, $tsv, 'proses_bank');
-        $service->import($batch1, $user);
-        $count1 = ConsumerBankProcess::where('consumer_application_id', $app->id)->count();
-        $this->assertEquals(1, $count1);
-        $batch2 = $service->createBatch($user, $branch, $project, $tsv, 'proses_bank');
-        $service->import($batch2, $user);
-        $count2 = ConsumerBankProcess::where('consumer_application_id', $app->id)->count();
-        $this->assertEquals(1, $count2);
-    }
-
-    public function test_deterministic_row_identity_resolves_via_imported_identity(): void
-    {
-        [$branch, $user] = $this->branchAndUser();
-        $app = $this->localApplication($branch, 'KAV-ROW');
-        $project = $this->projectFor($branch);
-        $key = ConsumerPasteImportService::deterministicIdentityKey([
-            'name' => 'Budi Santoso', 'phone' => '081234567890', 'kavling' => 'KAV-ROW', 'external_id' => null,
-        ], $branch->id, $project->id);
-        $this->assertStringStartsWith('row:', $key);
-        ConsumerLegacyIdentity::create([
-            'consumer_application_id' => $app->id,
-            'customer_id' => $app->customer_id,
-            'legacy_source' => ConsumerPasteImportService::SOURCE,
-            'spreadsheet_id' => 'manual-paste',
-            'sheet_name' => (string) $project->id,
-            'external_key' => $key,
-            'mapping_status' => 'imported',
-        ]);
-        $service = new ConsumerHistoricalProcessImportService;
-        $rows = $service->preview("id_kavling\tnama konsumen\tno hp\ttanggal\tstatus\nKAV-ROW\tBudi Santoso\t0812-3456-7890\t2025-10-01\tOK\n", $branch, $project, 'akad');
-        $this->assertEquals('READY', $rows[0]['status']);
-        $this->assertEquals($app->id, $rows[0]['normalized_data']['consumer_application_id']);
-    }
-
-    public function test_create_page_renders_with_process_types(): void
-    {
-        [$branch, $user] = $this->branchAndUser();
-        $response = $this->actingAs($user)->get(route('historical-process-import.create'));
-        $response->assertOk()->assertSee('BI Checking')->assertSee('Proses Bank')->assertSee('BAST');
-    }
-
-    public function test_preview_route_creates_batch(): void
-    {
-        [$branch, $user] = $this->branchAndUser();
-        $project = $this->projectFor($branch);
-        $app = $this->localApplication($branch, 'KAV-PREV');
-        $this->attachPasteIdentity($app, 'lead-prev');
-        $response = $this->actingAs($user)->post(route('historical-process-import.preview'), [
-            'branch_id' => $branch->id, 'project_id' => $project->id, 'process_type' => 'bi_checking',
-            'tsv' => "id_kavling\ttanggal\tstatus\texternal id\nKAV-PREV\t2025-10-01\tLolos\tlead-prev\n",
-        ]);
-        $response->assertRedirect();
-        $this->assertDatabaseHas('consumer_import_batches', ['source' => ConsumerHistoricalProcessImportService::SOURCE, 'status' => 'preview_ready']);
-    }
-
-    public function test_confirm_route_executes_import(): void
-    {
-        [$branch, $user] = $this->branchAndUser();
-        $app = $this->localApplication($branch, 'KAV-CONF');
-        $this->attachPasteIdentity($app, 'lead-conf');
-        $project = $this->projectFor($branch);
-        $service = new ConsumerHistoricalProcessImportService;
-        $batch = $service->createBatch($user, $branch, $project, "id_kavling\ttanggal\tstatus\texternal id\nKAV-CONF\t2025-10-01\tDone\tlead-conf\n", 'akad');
-        $response = $this->actingAs($user)->post(route('historical-process-import.confirm', $batch), [
-            'expected_updated_at' => $batch->updated_at->toISOString(),
-        ]);
-        $response->assertRedirect();
-        $this->assertDatabaseHas('consumer_stage_events', ['consumer_application_id' => $app->id, 'stage' => 'akad']);
+        return $user;
     }
 }

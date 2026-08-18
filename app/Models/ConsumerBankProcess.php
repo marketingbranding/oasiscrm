@@ -2,25 +2,41 @@
 
 namespace App\Models;
 
-use Database\Factories\ConsumerBankProcessFactory;
-use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class ConsumerBankProcess extends Model
 {
-    /** @use HasFactory<ConsumerBankProcessFactory> */
-    use HasFactory;
-
-    protected $fillable = ['consumer_application_id', 'bank_name', 'status', 'submitted_at', 'verified_at', 'sp3k_at', 'rejected_at', 'rejection_reason', 'source', 'source_id', 'metadata'];
+    protected $fillable = [
+        'application_id',
+        'id_berkas',
+        'no_sp3k',
+        'bank',
+        'kc_unit',
+        'request_plafond',
+        'request_tenor',
+        'approved_plafond',
+        'approved_tenor',
+        'response_type',
+        'status',
+        'revision_category',
+        'revision_detail',
+        'obstacle',
+        'notes',
+    ];
 
     protected function casts(): array
     {
-        return ['submitted_at' => 'datetime', 'verified_at' => 'datetime', 'sp3k_at' => 'datetime', 'rejected_at' => 'datetime', 'metadata' => 'array'];
+        return [
+            'request_plafond' => 'decimal:2',
+            'approved_plafond' => 'decimal:2',
+            'request_tenor' => 'integer',
+            'approved_tenor' => 'integer',
+        ];
     }
 
     public function application(): BelongsTo
     {
-        return $this->belongsTo(ConsumerApplication::class, 'consumer_application_id');
+        return $this->belongsTo(ConsumerApplication::class, 'application_id');
     }
 }

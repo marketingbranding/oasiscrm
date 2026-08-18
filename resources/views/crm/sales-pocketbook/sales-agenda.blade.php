@@ -25,12 +25,7 @@
 
     @if($tab === 'leads')
         <x-crm.section id="lead-saya" title="Lead Saya" description="Lead milik Anda dalam cakupan aktif.">
-            <x-slot:actions>
-                @can('create', \App\Models\SalesLead::class)
-                    <x-crm.button variant="primary" accent="sales" :href="route('sales-leads.create')">+ Tambah Lead</x-crm.button>
-                @endcan
-            </x-slot:actions>
-            @if(request()->boolean('input') && auth()->user()->can('create', \App\Models\SalesLead::class))
+            @if(request('tab') === 'leads' && auth()->user()->can('create', \App\Models\SalesLead::class))
                 <div class="mb-3 border-b-2 border-black bg-black px-3 py-2 text-xs font-bold uppercase text-[#fcc20f]">Input Lead Hari Ini</div>
                 @if($errors->any())<x-crm.alert variant="error" title="Data belum tersimpan.">{{ $errors->first() }}</x-crm.alert>@endif
                 @if(session('success'))<x-crm.alert variant="success" title="Berhasil">{{ session('success') }}</x-crm.alert>@endif

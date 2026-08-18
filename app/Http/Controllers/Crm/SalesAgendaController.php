@@ -58,7 +58,8 @@ class SalesAgendaController extends Controller
             ? $this->promoOptions->availableForBranchAndDate((int) $projects->firstWhere('id', (int) $defaultProjectId)?->branch_id, old('lead_date', $request->query('lead_date', today())))
             : collect([PromoOptionService::NO_PROMO]);
         $dailyReminder = $this->dailyReminder->state($request->user()) + [
-            'leadInputUrl' => route('sales-agendas.index', ['tab' => 'leads', 'input' => 1]).'#lead-saya',
+            'leadInputUrl' => route('sales-agendas.index', ['tab' => 'leads']).'#lead-saya',
+            'dismissUrl' => route('sales-reminders.dismiss'),
             'agendaInputUrl' => route('sales-agendas.index', ['tab' => 'agenda']).'#agenda-baru',
             'missingResultUrl' => route('sales-agendas.index', ['tab' => 'agenda']).'#agenda-saya',
         ];

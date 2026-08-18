@@ -37,7 +37,7 @@ class SalesLeadController extends Controller
         $this->authorize('create', SalesLead::class);
 
         return $request->user()->isSales()
-            ? redirect()->route('sales-agendas.index', ['tab' => 'leads', 'input' => 1])
+            ? redirect()->route('sales-agendas.index', ['tab' => 'leads'])
             : redirect()->route('sales-pocketbook.index', ['input' => 1]);
     }
 
@@ -49,7 +49,6 @@ class SalesLeadController extends Controller
         if ($request->user()->isSales()) {
             $redirect = route('sales-agendas.index', array_filter([
                 'tab' => 'leads',
-                'input' => $request->input('submit_action') === 'add_another' ? 1 : null,
                 'lead_date' => $request->input('submit_action') === 'add_another' ? $lead->lead_date->toDateString() : null,
                 'project_id' => $request->input('submit_action') === 'add_another' ? $lead->project_id : null,
             ]));

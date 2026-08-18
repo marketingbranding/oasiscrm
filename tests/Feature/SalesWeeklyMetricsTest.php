@@ -145,7 +145,7 @@ class SalesWeeklyMetricsTest extends TestCase
         $this->actingAs($sales)->get(route('sales-pocketbook.index'))->assertOk()
             ->assertSee('Agenda Saya')
             ->assertSee('Input Lead')
-            ->assertSee('tab=leads&amp;input=1', false)
+            ->assertSee('tab=leads', false)
             ->assertDontSee('Ringkasan periode')
             ->assertDontSee('Sinkronisasi');
     }

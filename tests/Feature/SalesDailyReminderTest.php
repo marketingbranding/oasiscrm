@@ -31,7 +31,7 @@ class SalesDailyReminderTest extends TestCase
             ->assertSee('Agenda Saya')
             ->assertSee('Input Lead')
             ->assertSee('Belum ada lead yang dicatat hari ini.')
-            ->assertSee('tab=leads&amp;input=1', false)
+            ->assertSee('tab=leads', false)
             ->assertDontSee('<title>Buku Saku Sales - Oasis CRM</title>', false);
     }
 
@@ -58,6 +58,38 @@ class SalesDailyReminderTest extends TestCase
         $this->assertDatabaseCount('user_daily_reminder_dismissals', 1);
         $this->assertFalse(app(SalesDailyReminderService::class)->state($sales)['shouldShow']);
         $this->assertTrue(app(SalesDailyReminderService::class)->state($other)['shouldShow']);
+    }
+
+    public function test_dismissal_is_today_only_and_rejects_spoofed_identity(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-07-27 10:00:00', config('app.timezone')));
+        [$branch, $project, $sales] = $this->salesContext();
+        $this->actingAs($sales)->postJson(route('sales-reminders.dismiss'), [
+            'reminder_key' => 'wrong_key', 'user_id' => 999, 'dismissed_for_date' => '2026-01-01',
+        ])->assertStatus(422);
+        $this->actingAs($sales)->postJson(route('sales-reminders.dismiss'), ['reminder_key' => SalesDailyReminderService::KEY])->assertOk();
+        $this->assertDatabaseHas('user_daily_reminder_dismissals', ['user_id' => $sales->id, 'dismissed_for_date' => '2026-07-27']);
+        Carbon::setTestNow(Carbon::parse('2026-07-28 10:00:00', config('app.timezone')));
+        $this->assertTrue(app(SalesDailyReminderService::class)->state($sales)['shouldShow']);
+    }
+
+    public function test_non_sales_cannot_dismiss_reminder(): void
+    {
+        $this->actingAs($this->user('admin'))->postJson(route('sales-reminders.dismiss'), ['reminder_key' => SalesDailyReminderService::KEY])->assertForbidden();
+    }
+
+    public function test_impersonated_sales_dismissal_belongs_to_target_user(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-07-27 10:00:00', config('app.timezone')));
+        [$branch, $project, $sales] = $this->salesContext();
+        $superadmin = $this->user('superadmin');
+        $this->actingAs($superadmin)->post(route('admin-users.impersonate', $sales))->assertRedirect();
+        $this->assertAuthenticatedAs($sales);
+        $this->get(route('sales-pocketbook.index'))->assertOk();
+        $this->postJson(route('sales-reminders.dismiss'), ['reminder_key' => SalesDailyReminderService::KEY])->assertOk();
+        $this->assertDatabaseHas('user_daily_reminder_dismissals', ['user_id' => $sales->id]);
+        $this->assertDatabaseMissing('user_daily_reminder_dismissals', ['user_id' => $superadmin->id]);
+        $this->assertFalse(app(SalesDailyReminderService::class)->state($sales)['shouldShow']);
     }
 
     public function test_no_project_uses_exact_blocking_text_without_agenda_form(): void

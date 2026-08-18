@@ -30,11 +30,13 @@ class SalesPocketbookTest extends TestCase
 
         $this->actingAs($sales)->get(route('sales-agendas.index', ['tab' => 'leads']))
             ->assertOk()
-            ->assertSee('+ Tambah Lead')
-            ->assertSee('href="'.route('sales-leads.create').'"', false);
+            ->assertSee('Input Lead Hari Ini')
+            ->assertDontSee('+ Tambah Lead')
+            ->assertSee('Simpan')
+            ->assertSee('Simpan & Tambah Lagi');
 
-        $this->actingAs($sales)->get(route('sales-leads.create'))->assertRedirect(route('sales-agendas.index', ['tab' => 'leads', 'input' => 1]));
-        $this->actingAs($sales)->get(route('sales-agendas.index', ['tab' => 'leads', 'input' => 1]))->assertOk()
+        $this->actingAs($sales)->get(route('sales-leads.create'))->assertRedirect(route('sales-agendas.index', ['tab' => 'leads']));
+        $this->actingAs($sales)->get(route('sales-agendas.index', ['tab' => 'leads']))->assertOk()
             ->assertSee('Input Lead Hari Ini')
             ->assertSee('name="sales_user_id" value="'.$sales->id.'"', false)
             ->assertSee('value="'.$project->id.'"', false)

@@ -295,7 +295,7 @@ class DatabaseUiSimplifyTest extends TestCase
             ->assertViewHas('sheetCounts');
 
         $sheetCounts = $response->viewData('sheetCounts');
-        $this->assertSame(5, $sheetCounts['data_konsumen'] ?? 0, 'data_konsumen should count 5 business rows only, template excluded');
+        $this->assertSame(0, $sheetCounts['data_konsumen'] ?? 0, 'data_konsumen without NIK/process projection is not counted');
     }
 
     public function test_dashboard_count_representative_second_module(): void
@@ -310,7 +310,7 @@ class DatabaseUiSimplifyTest extends TestCase
             ->assertOk();
 
         $sheetCounts = $response->viewData('sheetCounts');
-        $this->assertSame(3, $sheetCounts['bi_checking'] ?? 0, 'bi_checking should count 3 business rows only, template excluded');
+        $this->assertSame(0, $sheetCounts['bi_checking'] ?? 0, 'non-root process rows do not determine latest position');
     }
 
     public function test_dashboard_count_excludes_deleted_rows(): void
@@ -329,7 +329,7 @@ class DatabaseUiSimplifyTest extends TestCase
             ->assertOk();
 
         $sheetCounts = $response->viewData('sheetCounts');
-        $this->assertSame(1, $sheetCounts['data_konsumen'] ?? 0, 'deleted business row should not be counted, template excluded');
+        $this->assertSame(0, $sheetCounts['data_konsumen'] ?? 0, 'deleted root row leaves no active latest position');
     }
 
     public function test_dashboard_count_excludes_wrong_branch_records(): void
@@ -354,7 +354,7 @@ class DatabaseUiSimplifyTest extends TestCase
             ->assertOk();
 
         $sheetCounts = $response->viewData('sheetCounts');
-        $this->assertSame(3, $sheetCounts['data_konsumen'] ?? 0, 'other branch rows should not be counted, template excluded');
+        $this->assertSame(0, $sheetCounts['data_konsumen'] ?? 0, 'root rows without process projection are not counted');
     }
 
     public function test_dashboard_count_zero_for_genuinely_empty_module(): void
@@ -391,7 +391,7 @@ class DatabaseUiSimplifyTest extends TestCase
             ->assertOk();
 
         $sheetCounts = $response->viewData('sheetCounts');
-        $this->assertSame(2, $sheetCounts['data_konsumen'] ?? 0, 'formula-only template row should not be counted');
+        $this->assertSame(0, $sheetCounts['data_konsumen'] ?? 0, 'formula-only/template rows without process projection are not counted');
     }
 
     public function test_dashboard_uses_one_canonical_identity_header_per_sheet(): void
@@ -404,7 +404,7 @@ class DatabaseUiSimplifyTest extends TestCase
         $user = $this->pusatUser($branch);
         $this->mockSheetTitles($branch, ['pemberkasan']);
         $count = $this->actingAs($user)->get(route('database.index', ['branch_id' => $branch->id]))->viewData('sheetCounts');
-        $this->assertSame(1, $count['pemberkasan']);
+        $this->assertSame(0, $count['pemberkasan'] ?? 0);
     }
 
     public function test_dashboard_uses_nik_when_kavling_header_is_absent(): void
@@ -417,7 +417,23 @@ class DatabaseUiSimplifyTest extends TestCase
         $user = $this->pusatUser($branch);
         $this->mockSheetTitles($branch, ['bi_checking']);
         $count = $this->actingAs($user)->get(route('database.index', ['branch_id' => $branch->id]))->viewData('sheetCounts');
-        $this->assertSame(1, $count['bi_checking']);
+        $this->assertSame(0, $count['bi_checking'] ?? 0);
+    }
+
+    public function test_dashboard_counts_latest_position_once_per_nik_and_excludes_terminal_status(): void
+    {
+        [$branch] = $this->setupSheet('data_konsumen', ['no_ktp', 'proses_terakhir', 'status_konsumen']);
+        DatabaseSheetRecord::query()->where('branch_id', $branch->id)->where('sheet_name', 'data_konsumen')->delete();
+        foreach ([['3374', 'PSJB', 'Lanjut'], ['3374', 'Akad', 'Lanjut'], ['3375', 'SP3K', 'Mundur'], ['3376', 'Berkas di Bank', '']] as $index => [$nik, $process, $status]) {
+            DatabaseSheetRecord::create(['branch_id' => $branch->id, 'sheet_id' => $branch->sheet_id, 'sheet_name' => 'data_konsumen', 'row_number' => $index + 2, 'headers' => ['no_ktp', 'proses_terakhir', 'status_konsumen'], 'row_data' => ['no_ktp' => $nik, 'proses_terakhir' => $process, 'status_konsumen' => $status], 'formula_columns' => [], 'column_metadata' => []]);
+        }
+        $user = $this->pusatUser($branch);
+        $this->mockSheetTitles($branch, ['data_konsumen']);
+        $count = $this->actingAs($user)->get(route('database.index', ['branch_id' => $branch->id]))->viewData('sheetCounts');
+        $this->assertSame(1, $count['akad']);
+        $this->assertSame(1, $count['pemberkasan']);
+        $this->assertArrayNotHasKey('PSJB', $count);
+        $this->assertArrayNotHasKey('proses_bank', $count);
     }
 
     public function test_tab_strip_has_horizontal_drag_and_wheel_handlers(): void

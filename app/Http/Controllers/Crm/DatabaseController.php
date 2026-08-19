@@ -401,26 +401,50 @@ class DatabaseController extends Controller
 
     private function businessRowCount(Branch $branch): array
     {
-        $identityFields = ['id_kavling', 'no_ktp', 'id_kons', 'id_psjb', 'id_berkas', 'no_sp3k', 'id_ppjb_dev', 'no_ppjb_akad', 'no_bast'];
         $rows = DatabaseSheetRecord::where('branch_id', $branch->id)
+            ->where('sheet_name', 'data_konsumen')
             ->whereNull('oasis_deleted_at')
-            ->get(['sheet_name', 'headers', 'formula_columns', 'row_data']);
-        $counts = [];
+            ->orderBy('row_number')
+            ->get(['row_number', 'headers', 'formula_columns', 'row_data']);
+        $latestByNik = [];
 
-        foreach ($rows->groupBy('sheet_name') as $sheetName => $sheetRows) {
-            $headers = $sheetRows->first()->headers ?? [];
-            $canonicalHeader = collect($identityFields)->first(fn (string $field) => in_array($field, $headers, true));
-            $identities = [];
-            if ($canonicalHeader !== null) {
-                foreach ($sheetRows as $row) {
-                    $value = trim((string) (($row->row_data ?? [])[$canonicalHeader] ?? ''));
-                    if ($value !== '') {
-                        $identities[mb_strtolower($value)] = true;
-                    }
-                }
+        foreach ($rows as $row) {
+            $headers = $row->headers ?? [];
+            if (! in_array('no_ktp', $headers, true) || in_array('no_ktp', $row->formula_columns ?? [], true)) {
+                continue;
             }
-            if (array_key_exists($sheetName, self::SHEET_MODULES)) {
-                $counts[$sheetName] = count($identities);
+            $nik = mb_strtolower(trim((string) (($row->row_data ?? [])['no_ktp'] ?? '')));
+            if ($nik !== '') {
+                $latestByNik[$nik] = $row;
+            }
+        }
+
+        $counts = [];
+        $processMap = [
+            'belum proses' => 'data_konsumen',
+            'bi check / slik' => 'bi_checking',
+            'bi checking' => 'bi_checking',
+            'psjb' => 'PSJB',
+            'berkas di bank' => 'pemberkasan',
+            'pemberkasan' => 'pemberkasan',
+            'sp3k' => 'proses_bank',
+            'proses bank' => 'proses_bank',
+            'ppjb developer' => 'ppjb_dev',
+            'ppjb dev' => 'ppjb_dev',
+            'akad' => 'akad',
+            'bast' => 'bast',
+        ];
+
+        foreach ($latestByNik as $row) {
+            $data = $row->row_data ?? [];
+            $status = mb_strtolower(trim((string) ($data['status_konsumen'] ?? '')));
+            if (in_array($status, ['mundur', 'reject'], true)) {
+                continue;
+            }
+            $process = mb_strtolower(trim((string) ($data['proses_terakhir'] ?? '')));
+            $card = $processMap[$process] ?? null;
+            if ($card !== null) {
+                $counts[$card] = ($counts[$card] ?? 0) + 1;
             }
         }
 

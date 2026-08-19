@@ -255,6 +255,16 @@ class DatabaseImportCopasTest extends TestCase
         ])->assertForbidden();
     }
 
+    public function test_system_identity_fields_are_not_editable_per_sheet(): void
+    {
+        $service = app(DatabaseSheetWriteService::class);
+        $this->assertNotContains('nama_konsumen', $service->editableHeaders(['id_kavling', 'nama_konsumen', 'no_ktp', 'tanggal_slik'], [], 'bi_checking'));
+        $this->assertNotContains('no_ktp', $service->editableHeaders(['id_kavling', 'nama_konsumen', 'no_ktp', 'tanggal_slik'], [], 'bi_checking'));
+        $this->assertNotContains('id_psjb', $service->editableHeaders(['id_kavling', 'id_psjb', 'tanggal_terima_bank'], [], 'pemberkasan'));
+        $this->assertNotContains('id_berkas', $service->editableHeaders(['id_kavling', 'id_berkas', 'no_sp3k'], [], 'proses_bank'));
+        $this->assertContains('tanggal_slik', $service->editableHeaders(['id_kavling', 'nama_konsumen', 'no_ktp', 'tanggal_slik'], [], 'bi_checking'));
+    }
+
     public function test_import_does_not_update_local_cache_when_remote_write_fails(): void
     {
         [$branch] = $this->setupBranchWithTemplate();

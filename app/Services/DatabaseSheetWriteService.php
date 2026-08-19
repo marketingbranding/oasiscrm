@@ -16,7 +16,7 @@ class DatabaseSheetWriteService
         $headers = $record->headers;
         $formulaColumns = $record->formula_columns ?? [];
         $rowData = $record->row_data;
-        $editable = $this->editableHeaders($headers, $formulaColumns);
+        $editable = $this->editableHeaders($headers, $formulaColumns, $record->sheet_name);
         $changed = [];
 
         foreach ($editable as $header) {
@@ -77,7 +77,7 @@ class DatabaseSheetWriteService
         $rowData = array_fill_keys($headers, '');
         $syncId = (string) Str::uuid();
 
-        foreach ($this->editableHeaders($headers, $formulaColumns) as $header) {
+        foreach ($this->editableHeaders($headers, $formulaColumns, $sheetName) as $header) {
             if (array_key_exists($header, $input)) {
                 $rowData[$header] = trim((string) $input[$header]);
             }
@@ -92,7 +92,7 @@ class DatabaseSheetWriteService
                 $this->googleSheets->copyRowFormulas($branch->sheet_id, $sheetIds[$sheetName], $template->row_number, $rowNumber);
             }
 
-            $ranges = collect($this->editableHeaders($headers, $formulaColumns))->map(fn ($header) => [
+            $ranges = collect($this->editableHeaders($headers, $formulaColumns, $sheetName))->map(fn ($header) => [
                 'range' => $this->cellRange($sheetName, $rowNumber, $headers, $header),
                 'values' => [[$rowData[$header] ?? '']],
             ])->filter(fn ($item) => filled($item['range']))->values()->all();
@@ -154,10 +154,14 @@ class DatabaseSheetWriteService
         }
     }
 
-    public function editableHeaders(array $headers, array $formulaColumns): array
+    public function editableHeaders(array $headers, array $formulaColumns, ?string $sheetName = null): array
     {
+        $protected = $sheetName ? DatabaseFieldConfig::protectedFields($sheetName) : [];
+        $system = ['oasis_sync_id', 'oasis_deleted_at', 'oasis_deleted_by'];
+
         return array_values(array_filter($headers, fn ($header) => ! in_array($header, $formulaColumns, true)
-            && ! in_array($header, ['oasis_sync_id', 'oasis_deleted_at', 'oasis_deleted_by'], true)));
+            && ! in_array($header, $protected, true)
+            && ! in_array($header, $system, true)));
     }
 
     private function cellRange(string $sheetName, int $rowNumber, array $headers, string $header): ?string

@@ -4,6 +4,20 @@ namespace App\Services;
 
 class DatabaseFieldConfig
 {
+    public static function protectedFields(string $sheetName): array
+    {
+        return [
+            'data_konsumen' => ['umur', 'proses_terakhir', 'status_terakhir', 'status_kelengkapan'],
+            'bi_checking' => ['nama_konsumen', 'no_ktp', 'id_kons', 'id_bi'],
+            'PSJB' => ['nama_konsumen', 'id_kons', 'id_psjb'],
+            'pemberkasan' => ['nama_konsumen', 'id_psjb', 'id_berkas'],
+            'proses_bank' => ['nama_konsumen', 'id_berkas'],
+            'ppjb_dev' => ['nama_konsumen', 'no_sp3k', 'id_ppjb_dev'],
+            'akad' => ['nama_konsumen', 'id_ppjb_dev', 'no_ppjb_akad'],
+            'bast' => ['nama_konsumen', 'no_ppjb_akad', 'no_bast'],
+        ][$sheetName] ?? [];
+    }
+
     public static function config(): array
     {
         return [
@@ -47,11 +61,11 @@ class DatabaseFieldConfig
                     'keterangan' => 'Keterangan',
                 ],
                 'table' => ['id_kavling', 'nama_konsumen', 'tanggal_slik', 'hasil_slik'],
-                'form' => ['id_kavling', 'nama_konsumen', 'no_ktp', 'tanggal_slik', 'hasil_slik', 'keterangan'],
+                'form' => ['id_kavling', 'tanggal_slik', 'hasil_slik', 'keterangan'],
+                'hidden_form' => ['nama_konsumen', 'no_ktp', 'id_kons', 'id_bi'],
                 'full_width' => ['keterangan'],
                 'money' => [],
                 'date' => ['tanggal_slik'],
-                'hidden_form' => ['id_bi'],
             ],
             'PSJB' => [
                 'labels' => [

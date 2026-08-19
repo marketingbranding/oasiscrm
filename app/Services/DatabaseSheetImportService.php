@@ -63,7 +63,7 @@ class DatabaseSheetImportService
             return ['error' => 'Template sheet belum tersedia. Sinkronkan data terlebih dahulu.'];
         }
 
-        $editable = $this->writeService->editableHeaders($template->headers, $template->formula_columns ?? []);
+        $editable = $this->writeService->editableHeaders($template->headers, $template->formula_columns ?? [], $sheetName);
 
         $editableLookup = [];
         foreach ($editable as $header) {
@@ -71,7 +71,7 @@ class DatabaseSheetImportService
         }
 
         $ignoredLookup = [];
-        foreach (array_merge($template->formula_columns ?? [], DatabaseSheetSyncService::META_COLUMNS) as $header) {
+        foreach (array_merge($template->formula_columns ?? [], DatabaseFieldConfig::protectedFields($sheetName), DatabaseSheetSyncService::META_COLUMNS) as $header) {
             $ignoredLookup[$this->headerKey($header)] = true;
         }
 

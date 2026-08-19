@@ -530,7 +530,7 @@ document.addEventListener('alpine:init', () => {
                 const res = await fetch(`${this.baseUrl}/${this.importing}/import/preview`, {
                     method: 'POST',
                     headers: { Accept: 'application/json', 'Content-Type': 'application/json', 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.content || '' },
-                    body: JSON.stringify({ raw: this.importRaw }),
+                    body: JSON.stringify({ raw: this.importRaw, branch_id: this.branchId }),
                 });
                 const data = await res.json();
                 if (data.error) { this.importError = data.error; return; }
@@ -555,16 +555,19 @@ document.addEventListener('alpine:init', () => {
                 const res = await fetch(`${this.baseUrl}/${this.importing}/import`, {
                     method: 'POST',
                     headers: { Accept: 'application/json', 'Content-Type': 'application/json', 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.content || '' },
-                    body: JSON.stringify({ raw: this.importRaw, valid_only: validOnly }),
+                    body: JSON.stringify({ raw: this.importRaw, valid_only: validOnly, branch_id: this.branchId }),
                 });
-                const data = await res.json();
-                if (!res.ok) { this.importError = data.message || 'Import belum tersimpan.'; return; }
+                const data = await res.json().catch(() => ({ message: 'Server tidak merespons dengan JSON. Import gagal.' }));
+                if (!res.ok) {
+                    this.importError = data.message || `Import gagal (HTTP ${res.status}).`;
+                    return;
+                }
                 this.closeImport();
                 window.oasisToast?.(data.message || 'Data berhasil diimpor.', 'success');
                 this.loaded[this.importing] = false;
                 await this.loadModule(this.importing);
             } catch (e) {
-                this.importError = 'Import belum tersimpan. Coba lagi.';
+                this.importError = 'Import belum tersimpan. Periksa koneksi dan coba lagi.';
             }
         },
 

@@ -10,6 +10,7 @@ use App\Services\WorkspaceAccessService;
 use App\Support\DatabaseV2ModuleConfig;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Validation\ValidationException;
 use PhpOffice\PhpSpreadsheet\Cell\Coordinate;
 use PhpOffice\PhpSpreadsheet\Cell\DataType;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
@@ -106,7 +107,15 @@ class DatabaseV2Controller extends Controller
         $data['created_by'] = Auth::id();
         $data['updated_by'] = Auth::id();
 
-        $record = $config['model']::create($data);
+        try {
+            $record = $config['model']::create($data);
+        } catch (\Throwable $e) {
+            report($e);
+            $errorId = uniqid('dbv2_store_');
+            \Log::error('Database V2 store failed: '.$errorId, ['exception' => $e->getMessage()]);
+
+            return response()->json(['ok' => false, 'message' => 'Gagal menyimpan. Referensi: '.$errorId], 500);
+        }
 
         return response()->json(['ok' => true, 'id' => $record->id, 'message' => 'Data berhasil ditambahkan.']);
     }
@@ -120,7 +129,16 @@ class DatabaseV2Controller extends Controller
         $record = $config['model']::where('branch_id', $branch->id)->findOrFail($id);
         $data = $request->only($config['fields']);
         $data['updated_by'] = Auth::id();
-        $record->update($data);
+
+        try {
+            $record->update($data);
+        } catch (\Throwable $e) {
+            report($e);
+            $errorId = uniqid('dbv2_update_');
+            \Log::error('Database V2 update failed: '.$errorId, ['exception' => $e->getMessage()]);
+
+            return response()->json(['ok' => false, 'message' => 'Gagal menyimpan. Referensi: '.$errorId], 500);
+        }
 
         return response()->json(['ok' => true, 'message' => 'Data berhasil diperbarui.']);
     }
@@ -153,9 +171,25 @@ class DatabaseV2Controller extends Controller
         $request->validate(['raw' => 'required|string']);
         $validOnly = $request->boolean('valid_only');
 
-        return response()->json($this->importService->save(
-            $module, $request->input('raw'), $branch->id, Auth::id(), $validOnly
-        ));
+        try {
+            return response()->json($this->importService->save(
+                $module, $request->input('raw'), $branch->id, Auth::id(), $validOnly
+            ));
+        } catch (ValidationException $e) {
+            return response()->json([
+                'ok' => false,
+                'message' => 'Validasi gagal: '.implode(' ', array_map(fn ($m) => implode(', ', $m), array_values($e->errors()))),
+            ], 422);
+        } catch (\Throwable $e) {
+            report($e);
+            $errorId = uniqid('dbv2_import_');
+            \Log::error('Database V2 import save failed: '.$errorId, ['exception' => $e->getMessage()]);
+
+            return response()->json([
+                'ok' => false,
+                'message' => 'Import gagal. Referensi: '.$errorId,
+            ], 500);
+        }
     }
 
     public function export(Request $request, string $module): BinaryFileResponse

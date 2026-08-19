@@ -172,12 +172,20 @@ class DatabaseV2ImportService
             $data['updated_by'] = $userId;
             $data['created_at'] = now();
             $data['updated_at'] = now();
+            foreach ($fields as $field) {
+                $data[$field] ??= null;
+            }
+            unset($data['umur'], $data['proses_terakhir'], $data['status_terakhir'], $data['status_kelengkapan']);
             $rowsToInsert[] = $data;
         }
 
         if ($rowsToInsert !== []) {
             $table = (new $modelClass)->getTable();
-            DB::table($table)->insert($rowsToInsert);
+            DB::transaction(function () use ($table, $rowsToInsert) {
+                foreach (array_chunk($rowsToInsert, 200) as $chunk) {
+                    DB::table($table)->insert($chunk);
+                }
+            });
             $saved = count($rowsToInsert);
         }
 

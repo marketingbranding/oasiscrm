@@ -306,6 +306,131 @@ class DatabaseV2Test extends TestCase
             ->assertJsonPath('error', 'Kolom tidak dikenal: kolom_ngawur_xyz');
     }
 
+    public function test_import_save_psjb_with_decimal_and_date_values(): void
+    {
+        [$branch, $user] = $this->setupBranchAndUser();
+
+        $raw = "id_kons\tid_kavling\tno_ktp\tnama_konsumen\tid_psjb\ttanggal_psjb\tnama_koordinator\tnama_sales\tharga_unit\ttanggal_utj\tutj\ttanggal_dp_klt\tdp_all_in\tnominal_cicilan\tjumlah_cicilan\tluas_klt\tharga_klt_m\tharga_klt_total\tcara_pembayaran\tnama_promo"
+            ."\nK001\tA01\t3374\tBudi\tPSJB001\t15/01/2026\tAndi\tSiti\t166000000\t10/01/2026\t5000000\t12/01/2026\t20000000\t500000\t12\t60\t2750000\t165000000\tKPR\tPromo A"
+            ."\nK002\tA02\t3375\tSiti\tPSJB002\t20/01/2026\tJoko\tBudi\t200000000\t15/01/2026\t10000000\t17/01/2026\t30000000\t750000\t15\t70\t2857142\t200000000\tCash\tPromo B";
+
+        $response = $this->actingAs($user)
+            ->postJson(route('database-v2.import.save', ['module' => 'psjb']), [
+                'raw' => $raw,
+                'valid_only' => true,
+            ])
+            ->assertOk();
+
+        $this->assertSame(2, $response->json('saved'));
+        $this->assertDatabaseCount('db_v2_psjb', 2);
+    }
+
+    public function test_import_save_120_valid_rows_reproduces_browser(): void
+    {
+        [$branch, $user] = $this->setupBranchAndUser();
+
+        $headers = "id_kavling\tno_ktp\tnama_konsumen\ttanggal_lahir\tpekerjaan\tno_hp\tstatus_konsumen";
+        $lines = [$headers];
+        for ($i = 1; $i <= 120; $i++) {
+            $lines[] = "A{$i}\t3374{$i}\tKonsumen {$i}\t15/01/1990\tKaryawan\t081234{$i}\tLanjut";
+        }
+
+        $response = $this->actingAs($user)
+            ->postJson(route('database-v2.import.save', ['module' => 'data_konsumen']), [
+                'raw' => implode("\n", $lines),
+            ])
+            ->assertOk();
+
+        $this->assertSame(120, $response->json('saved'));
+        $this->assertDatabaseCount('db_v2_data_konsumen', 120);
+    }
+
+    public function test_import_save_spot_checks_values_and_legacy_exclusion(): void
+    {
+        [$branch, $user] = $this->setupBranchAndUser();
+
+        $raw = "id_kons\tid_kavling\tno_ktp\tnama_konsumen\ttanggal_lahir\tpekerjaan\tno_hp\tstatus_konsumen\tumur"
+            ."\nK001\tA01\t3374\tBudi\t15/07/1990\tKaryawan\t081234\tLanjut\t35"
+            ."\nK002\tA02\t3375\tSiti\t1990-07-15\tWiraswasta\t085678\tLanjut\t28";
+
+        $this->actingAs($user)
+            ->postJson(route('database-v2.import.save', ['module' => 'data_konsumen']), [
+                'raw' => $raw,
+                'valid_only' => true,
+            ])
+            ->assertOk()
+            ->assertJsonPath('saved', 2);
+
+        $record = DataKonsumen::where('id_kavling', 'A01')->first();
+        $this->assertSame('3374', $record->no_ktp);
+        $this->assertSame('Budi', $record->nama_konsumen);
+        $this->assertSame('1990-07-15', $record->tanggal_lahir->format('Y-m-d'));
+        $this->assertSame('Karyawan', $record->pekerjaan);
+        $this->assertSame('Lanjut', $record->status_konsumen);
+        $this->assertNull($record->umur ?? null);
+    }
+
+    public function test_import_end_to_end_120_rows_preview_then_save_with_spot_checks(): void
+    {
+        [$branch, $user] = $this->setupBranchAndUser();
+
+        $headers = "id_kons\tid_kavling\tno_ktp\tnama_konsumen\ttanggal_lahir\tpekerjaan\tdetail_pekerjaan\talamat\tkelurahan\tkecamatan\tkabupaten/kota\tno_hp\tnama_kondar\tno_hp_kondar\tstatus_cash\tstatus_konsumen\tketerangan\tumur\tproses_terakhir\tstatus_terakhir\tstatus_kelengkapan";
+        $lines = [$headers];
+        for ($i = 1; $i <= 120; $i++) {
+            $lines[] = "K{$i}\tA{$i}\t3374{$i}\tKonsumen {$i}\t15/01/1990\tKaryawan\tDetail {$i}\tAlamat {$i}\tKel {$i}\tKec {$i}\tKota {$i}\t081234{$i}\tKondar {$i}\t08567{$i}\tCash\tLanjut\tKet {$i}\t{$i}\tBelum Proses\tLanjut\tLengkap";
+        }
+        $raw = implode("\n", $lines);
+
+        $preview = $this->actingAs($user)
+            ->postJson(route('database-v2.import.preview', ['module' => 'data_konsumen']), [
+                'raw' => $raw,
+                'branch_id' => $branch->id,
+            ])
+            ->assertOk()
+            ->json();
+
+        $this->assertSame(120, $preview['valid_count']);
+        $this->assertSame(0, $preview['invalid_count']);
+        $this->assertContains('id_kons', $preview['ignored_headers']);
+        $this->assertContains('umur', $preview['ignored_headers']);
+        $this->assertContains('proses_terakhir', $preview['ignored_headers']);
+
+        $save = $this->actingAs($user)
+            ->postJson(route('database-v2.import.save', ['module' => 'data_konsumen']), [
+                'raw' => $raw,
+                'branch_id' => $branch->id,
+            ])
+            ->assertOk()
+            ->json();
+
+        $this->assertSame(120, $save['saved']);
+        $this->assertDatabaseCount('db_v2_data_konsumen', 120);
+
+        $spot = DataKonsumen::where('id_kavling', 'A1')->first();
+        $this->assertNotNull($spot);
+        $this->assertSame('33741', $spot->no_ktp);
+        $this->assertSame('Konsumen 1', $spot->nama_konsumen);
+        $this->assertSame('1990-01-15', $spot->tanggal_lahir->format('Y-m-d'));
+        $this->assertSame('Lanjut', $spot->status_konsumen);
+        $this->assertSame('Kota 1', $spot->kabupaten_kota);
+    }
+
+    public function test_import_save_atomic_all_or_nothing_on_failure(): void
+    {
+        [$branch, $user] = $this->setupBranchAndUser();
+
+        $raw = "id_kavling\tno_ktp\tnama_konsumen\ttanggal_lahir\nA01\t3374\tBudi\t15/01/1990\nA02\t3375\tSiti\tbad-date\nA03\t3376\tJoko\t20/01/1990";
+
+        $this->actingAs($user)
+            ->postJson(route('database-v2.import.save', ['module' => 'data_konsumen']), [
+                'raw' => $raw,
+                'branch_id' => $branch->id,
+            ])
+            ->assertOk();
+
+        $this->assertDatabaseCount('db_v2_data_konsumen', 0);
+    }
+
     public function test_export_returns_xlsx(): void
     {
         [$branch, $user] = $this->setupBranchAndUser();

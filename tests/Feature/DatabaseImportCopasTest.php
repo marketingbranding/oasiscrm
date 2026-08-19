@@ -257,6 +257,7 @@ class DatabaseImportCopasTest extends TestCase
 
     public function test_system_identity_fields_are_not_editable_per_sheet(): void
     {
+        $this->fakeGoogleSheets();
         $service = app(DatabaseSheetWriteService::class);
         $this->assertNotContains('nama_konsumen', $service->editableHeaders(['id_kavling', 'nama_konsumen', 'no_ktp', 'tanggal_slik'], [], 'bi_checking'));
         $this->assertNotContains('no_ktp', $service->editableHeaders(['id_kavling', 'nama_konsumen', 'no_ktp', 'tanggal_slik'], [], 'bi_checking'));

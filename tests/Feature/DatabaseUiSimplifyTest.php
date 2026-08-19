@@ -475,6 +475,60 @@ class DatabaseUiSimplifyTest extends TestCase
         $this->actingAs($superadmin)->get(route('changelogs.index'))->assertOk()->assertSee($title);
     }
 
+    public function test_dashboard_is_inside_database_tabs_alpine_scope(): void
+    {
+        $html = file_get_contents(resource_path('views/crm/database/index.blade.php'));
+
+        $this->assertStringContainsString('database-dashboard', $html);
+        $this->assertStringNotContainsString('x-data="{ dashboardCounts:', $html, 'Dashboard must not have its own separate x-data scope');
+    }
+
+    public function test_dashboard_count_has_server_rendered_fallback(): void
+    {
+        [$branch] = $this->setupSheet('data_konsumen', ['id_kavling', 'nama_konsumen', 'no_ktp', 'proses_terakhir', 'status_konsumen']);
+        DatabaseSheetRecord::query()->where('branch_id', $branch->id)->where('sheet_name', 'data_konsumen')->delete();
+        DatabaseSheetRecord::create(['branch_id' => $branch->id, 'sheet_id' => $branch->sheet_id, 'sheet_name' => 'data_konsumen', 'row_number' => 2, 'headers' => ['id_kavling', 'nama_konsumen', 'no_ktp', 'proses_terakhir', 'status_konsumen'], 'row_data' => ['id_kavling' => 'A01', 'nama_konsumen' => 'Budi', 'no_ktp' => '3374', 'proses_terakhir' => 'Akad', 'status_konsumen' => 'Lanjut'], 'formula_columns' => [], 'column_metadata' => []]);
+        $user = $this->pusatUser($branch);
+        $this->mockSheetTitles($branch, ['data_konsumen']);
+
+        $html = $this->actingAs($user)
+            ->get(route('database.index', ['branch_id' => $branch->id]))
+            ->assertOk()
+            ->getContent();
+
+        $this->assertStringContainsString('database-dashboard', $html);
+        $this->assertStringContainsString('x-text="dashboardCounts', $html, 'Alpine binding must be present for reactive update');
+        $this->assertStringContainsString('initialDashboardCounts', $html, 'Config must pass initialDashboardCounts for SSR fallback');
+    }
+
+    public function test_dashboard_counts_initialized_from_config(): void
+    {
+        $html = file_get_contents(resource_path('views/crm/database/index.blade.php'));
+
+        $this->assertStringContainsString('initialDashboardCounts', $html, 'Config must pass initialDashboardCounts');
+        $this->assertStringContainsString('config.initialDashboardCounts', $html, 'Alpine state must initialize from config');
+    }
+
+    public function test_state_refresh_failure_preserves_existing_counts(): void
+    {
+        $html = file_get_contents(resource_path('views/crm/database/index.blade.php'));
+
+        $this->assertStringContainsString('refreshDatabaseState', $html);
+        $this->assertStringContainsString('if (!response.ok) return', $html, 'State refresh must preserve old counts on HTTP failure');
+        $this->assertStringContainsString('} catch (_)', $html, 'State refresh must preserve old counts on network error');
+    }
+
+    public function test_sync_event_triggers_state_refresh(): void
+    {
+        $html = file_get_contents(resource_path('views/crm/database/index.blade.php'));
+
+        $this->assertStringContainsString('handleSyncUpdated', $html);
+        $this->assertStringContainsString('refreshDatabaseState', $html);
+        $idxHandleSync = strpos($html, 'handleSyncUpdated');
+        $idxRefresh = strpos($html, 'refreshDatabaseState', $idxHandleSync);
+        $this->assertNotFalse($idxRefresh, 'refreshDatabaseState must be called within handleSyncUpdated');
+    }
+
     private function createRows(Branch $branch, string $sheetName, int $count): void
     {
         $baseRow = DatabaseSheetRecord::query()->where('branch_id', $branch->id)

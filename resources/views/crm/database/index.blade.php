@@ -64,7 +64,7 @@
     </x-crm.section>
     @endif
 
-    @if($errors->any())
+     @if($errors->any())
     <x-crm.alert variant="error" title="Data belum dapat disimpan" class="mb-4">
         <ul class="list-disc pl-5 mt-1">
             @foreach($errors->all() as $error)
@@ -73,12 +73,6 @@
         </ul>
     </x-crm.alert>
     @endif
-
-     @if($selectedBranch)
-     <x-crm.section id="database-dashboard" title="Dashboard" description="Ringkasan jumlah baris dari cache spreadsheet aktif." class="mb-4" x-data="{ dashboardCounts: @js($sheetCounts) }" @oasis-dashboard-updated.window="dashboardCounts = $event.detail">
-         <div class="grid grid-cols-2 gap-3 md:grid-cols-4 xl:grid-cols-8">@foreach(\App\Http\Controllers\Crm\DatabaseController::SHEET_MODULES as $sheet => $label)<div class="border border-gray-300 bg-white p-3"><div class="text-xs font-bold uppercase">{{ $label }}</div><div class="text-2xl font-bold"><span x-text="dashboardCounts[@js($sheet)] ?? 0">{{ $sheetCounts[$sheet] ?? 0 }}</span></div></div>@endforeach</div>
-     </x-crm.section>
-     @endif
 
      @if($selectedBranch && !empty($sheetNames))
     @php
@@ -108,16 +102,19 @@
             'requestSheet' => $requestSheet ?? '',
             'requestAdd' => (bool) ($requestAdd ?? false),
             'canEdit' => (bool) $canEdit,
-             'dashboardCounts' => $sheetCounts,
+             'initialDashboardCounts' => $sheetCounts,
              'eligibleKavlings' => $eligibleKavlings,
             'sheetLabels' => \App\Http\Controllers\Crm\DatabaseController::SHEET_MODULES,
             'fieldConfig' => $fieldConfig,
         ];
     @endphp
-    <div x-data="databaseTabs(@js($databaseTabsConfig))"
+     <div x-data="databaseTabs(@js($databaseTabsConfig))"
          @oasis-sync-updated.window="handleSyncUpdated($event.detail)"
          @oasis:modal-closed.window="handleModalClosed($event.detail)"
          @oasis-form-error.window="handleFormError($event.detail)">
+        <x-crm.section id="database-dashboard" title="Dashboard" description="Ringkasan jumlah baris dari cache spreadsheet aktif." class="mb-4">
+            <div class="grid grid-cols-2 gap-3 md:grid-cols-4 xl:grid-cols-8">@foreach(\App\Http\Controllers\Crm\DatabaseController::SHEET_MODULES as $sheet => $label)<div class="border border-gray-300 bg-white p-3"><div class="text-xs font-bold uppercase">{{ $label }}</div><div class="text-2xl font-bold"><span x-text="dashboardCounts[@js($sheet)] ?? 0">{{ $sheetCounts[$sheet] ?? 0 }}</span></div></div>@endforeach</div>
+        </x-crm.section>
         <div class="database-tabs crm-horizontal-tabs" data-horizontal-tabs role="tablist" aria-label="Sheet Database"
              x-data="databaseTabStrip()"
              x-init="init($el)"
@@ -452,6 +449,9 @@
         @endif
     </div>
     @elseif($selectedBranch)
+        <x-crm.section id="database-dashboard" title="Dashboard" description="Ringkasan jumlah baris dari cache spreadsheet aktif." class="mb-4">
+            <div class="grid grid-cols-2 gap-3 md:grid-cols-4 xl:grid-cols-8">@foreach(\App\Http\Controllers\Crm\DatabaseController::SHEET_MODULES as $sheet => $label)<div class="border border-gray-300 bg-white p-3"><div class="text-xs font-bold uppercase">{{ $label }}</div><div class="text-2xl font-bold">{{ $sheetCounts[$sheet] ?? 0 }}</div></div>@endforeach</div>
+        </x-crm.section>
         @if(Auth::user()->isSuperadmin())
             <x-crm.empty-state title="Database belum memiliki data" description="Belum ada data. Klik Sync Sekarang untuk memuat data." />
         @else
@@ -520,7 +520,7 @@ document.addEventListener('alpine:init', () => {
     Alpine.data('databaseTabs', (config) => ({
         tab: config.firstSheet,
          branchId: config.branchId,
-         dashboardCounts: config.dashboardCounts || {},
+         dashboardCounts: { ...(config.initialDashboardCounts || {}) },
          eligibleKavlings: config.eligibleKavlings || {},
          editBaseUrl: config.editBaseUrl,
         sheetLabels: config.sheetLabels || {},
@@ -769,12 +769,14 @@ document.addEventListener('alpine:init', () => {
         },
 
         async refreshDatabaseState() {
-            const response = await fetch(`{{ url('database/state') }}/${this.branchId}`, { headers: { Accept: 'application/json' } });
-            if (!response.ok) return;
-            const state = await response.json();
-            this.dashboardCounts = state.counts || {};
-            this.eligibleKavlings = state.eligible_kavlings || {};
-            this.$dispatch('oasis-dashboard-updated', this.dashboardCounts);
+            try {
+                const response = await fetch(`{{ url('database/state') }}/${this.branchId}`, { headers: { Accept: 'application/json' } });
+                if (!response.ok) return;
+                const state = await response.json();
+                this.dashboardCounts = state.counts || {};
+                this.eligibleKavlings = state.eligible_kavlings || {};
+            } catch (_) {
+            }
         },
 
         async refreshActiveSheet(sheet = this.tab) {

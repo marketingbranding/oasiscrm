@@ -19,6 +19,7 @@ use App\Http\Controllers\Crm\CoordinatorSalesLeadWorkspaceController;
 use App\Http\Controllers\Crm\DanaTalanganController;
 use App\Http\Controllers\Crm\DashboardController;
 use App\Http\Controllers\Crm\DatabaseController;
+use App\Http\Controllers\Crm\DatabaseV2Controller;
 use App\Http\Controllers\Crm\ExpenseCategoryController;
 use App\Http\Controllers\Crm\ExpenseController;
 use App\Http\Controllers\Crm\FeedbackReportController;
@@ -172,6 +173,17 @@ Route::middleware(['auth', 'active', 'verified', 'password.changed', 'operationa
         Route::delete('/database/records/{record}', [DatabaseController::class, 'destroy'])->middleware('permission:database.edit')->name('database.records.destroy');
         Route::post('/database/import/preview', [DatabaseController::class, 'importPreview'])->middleware('permission:database.edit')->name('database.import.preview');
         Route::post('/database/import', [DatabaseController::class, 'importSave'])->middleware('permission:database.edit')->name('database.import.save');
+    });
+
+    Route::middleware('module.maintenance:database')->group(function () {
+        Route::get('/database-v2', [DatabaseV2Controller::class, 'index'])->middleware('permission:database_v2.view')->name('database-v2.index');
+        Route::get('/database-v2/{module}/list', [DatabaseV2Controller::class, 'list'])->middleware('permission:database_v2.view')->name('database-v2.list');
+        Route::get('/database-v2/{module}/export', [DatabaseV2Controller::class, 'export'])->middleware('permission:database_v2.export')->name('database-v2.export');
+        Route::post('/database-v2/{module}', [DatabaseV2Controller::class, 'store'])->middleware('permission:database_v2.edit')->name('database-v2.store');
+        Route::put('/database-v2/{module}/{id}', [DatabaseV2Controller::class, 'update'])->middleware('permission:database_v2.edit')->name('database-v2.update');
+        Route::delete('/database-v2/{module}/{id}', [DatabaseV2Controller::class, 'destroy'])->middleware('permission:database_v2.edit')->name('database-v2.destroy');
+        Route::post('/database-v2/{module}/import/preview', [DatabaseV2Controller::class, 'importPreview'])->middleware('permission:database_v2.edit')->name('database-v2.import.preview');
+        Route::post('/database-v2/{module}/import', [DatabaseV2Controller::class, 'importSave'])->middleware('permission:database_v2.edit')->name('database-v2.import.save');
     });
 
     Route::middleware('module.maintenance:consumer_progress')->group(function () {

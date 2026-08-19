@@ -8,6 +8,7 @@ class PermissionCatalog
         'sales_pocketbook' => ['Buku Saku Sales', ['own', 'team', 'assigned', 'branch', 'all'], true],
         'work_planner' => ['Work Planner', ['own', 'team', 'assigned', 'branch', 'all'], true],
         'database' => ['Database', ['assigned', 'branch', 'all'], true],
+        'database_v2' => ['Database V2', ['branch', 'all'], false],
         'consumer_progress' => ['Progress Konsumen', ['assigned', 'branch', 'all'], true],
         'bridge_fund' => ['Dana Talangan', ['assigned', 'branch', 'all'], true],
         'expenses' => ['Pengeluaran', ['assigned', 'branch', 'all'], true],
@@ -57,6 +58,9 @@ class PermissionCatalog
             ['name' => 'Melihat Database', 'slug' => 'database.view', 'description' => 'Melihat data Database sesuai lingkup akses.', 'group_name' => 'Database'],
             ['name' => 'Mengubah Database', 'slug' => 'database.edit', 'description' => 'Mengubah data Database sesuai lingkup akses.', 'group_name' => 'Database'],
             ['name' => 'Menyinkronkan Database', 'slug' => 'database.sync', 'description' => 'Menjalankan sinkronisasi Database sesuai kewenangan.', 'group_name' => 'Database'],
+            ['name' => 'Melihat Database V2', 'slug' => 'database_v2.view', 'description' => 'Melihat data Database V2 sesuai lingkup akses.', 'group_name' => 'Database V2'],
+            ['name' => 'Mengubah Database V2', 'slug' => 'database_v2.edit', 'description' => 'Mengubah data Database V2 sesuai lingkup akses.', 'group_name' => 'Database V2'],
+            ['name' => 'Mengekspor Database V2', 'slug' => 'database_v2.export', 'description' => 'Mengekspor data Database V2 sesuai lingkup akses.', 'group_name' => 'Database V2'],
             ['name' => 'Melihat Progress Konsumen', 'slug' => 'consumer_progress.view', 'description' => 'Melihat Progress Konsumen sesuai lingkup akses.', 'group_name' => 'Progress Konsumen'],
             ['name' => 'Mengelola Progress Konsumen', 'slug' => 'consumer_progress.manage', 'description' => 'Membuat dan memperbarui data konsumen serta proses penjualan sesuai lingkup akses.', 'group_name' => 'Progress Konsumen'],
             ['name' => 'Melihat NIK Konsumen', 'slug' => 'consumer_progress.reveal_nik', 'description' => 'Menampilkan NIK konsumen secara eksplisit sesuai lingkup akses.', 'group_name' => 'Progress Konsumen'],
@@ -121,8 +125,11 @@ class PermissionCatalog
 
         $salesModules = ['sales_pocketbook', 'work_planner'];
         $operations = ['database', 'consumer_progress', 'bridge_fund', 'expenses'];
+        $v2Modules = ['database_v2'];
         $allModules = [...$salesModules, ...$operations];
         $comments = ['comments.view', 'comments.create', 'comments.reply', 'comments.update_own', 'comments.delete_own', 'comments.mention'];
+        $v2Branch = ['database_v2.view', 'database_v2.edit', 'database_v2.export', 'database_v2.view_branch', 'database_v2.manage_branch', 'database_v2.export_branch'];
+        $v2All = [...$v2Branch, 'database_v2.view_all', 'database_v2.manage_all', 'database_v2.export_all'];
 
         return [
             'sales' => [
@@ -143,6 +150,7 @@ class PermissionCatalog
                 ...$scoped(['work_planner'], ['own', 'team', 'assigned'], ['view', 'manage', 'export']),
                 ...$scoped($operations, ['assigned'], ['view', 'manage', 'export']),
                 ...$scoped(['database', 'consumer_progress', 'bridge_fund'], ['assigned'], ['sync']),
+                ...$v2Branch,
                 'work_planner.create', 'work_planner.update', 'work_planner.assign', 'work_planner.export',
                 'sales_pocketbook.export', 'database.view', 'database.edit', 'database.sync',
                 'consumer_progress.view', 'consumer_progress.sync',
@@ -153,6 +161,7 @@ class PermissionCatalog
             'manager' => [
                 ...$scoped($allModules, ['assigned', 'branch'], ['view', 'export']),
                 ...$scoped(['sales_pocketbook'], ['assigned', 'branch'], ['manage']),
+                'database_v2.view', 'database_v2.export', 'database_v2.view_branch', 'database_v2.export_branch',
                 'sales_pocketbook.export', 'work_planner.create', 'work_planner.update', 'work_planner.assign',
                 'sales_pocketbook.sync', 'sales_pocketbook.reconcile',
                 'work_planner.export', 'database.view', 'consumer_progress.view', 'bridge_fund.view', 'bridge_fund.export',
@@ -161,6 +170,7 @@ class PermissionCatalog
             'branch_manager' => [
                 'users.view', 'users.create', 'users.invite', 'users.update', 'users.reset_password', 'users.export',
                 'users.assign_branches', 'users.assign_projects', 'users.assign_supervisor',
+                ...$v2Branch,
                 'sales_pocketbook.export', 'work_planner.create', 'work_planner.update', 'work_planner.assign',
                 'sales_pocketbook.sync', 'sales_pocketbook.reconcile',
                 'work_planner.export', 'database.view', 'database.edit', 'database.sync',
@@ -176,6 +186,7 @@ class PermissionCatalog
                 'users.assign_branches', 'users.assign_projects', 'users.assign_supervisor', 'activity_logs.view',
                 'users.anonymize', 'users.release_email',
                 'system.maintenance_bypass',
+                ...$v2All,
                 'sales_pocketbook.sync', 'sales_pocketbook.reconcile',
                 'sales_pocketbook.export', 'work_planner.create', 'work_planner.update', 'work_planner.assign',
                 'work_planner.export', 'database.view', 'database.edit', 'database.sync',
@@ -188,6 +199,7 @@ class PermissionCatalog
             'admin' => [
                 'users.view', 'users.create', 'users.invite', 'users.update', 'users.reset_password',
                 'users.assign_branches', 'users.assign_projects', 'users.assign_supervisor',
+                ...$v2Branch,
                 'sales_pocketbook.export', 'work_planner.create', 'work_planner.update', 'work_planner.assign', 'work_planner.export',
                 'sales_pocketbook.sync', 'sales_pocketbook.reconcile',
                 'database.view', 'database.edit', 'database.sync', 'consumer_progress.view',
@@ -198,6 +210,7 @@ class PermissionCatalog
             ],
             'staff' => [
                 'work_planner.create', 'work_planner.update', 'database.view', 'database.edit',
+                'database_v2.view', 'database_v2.view_branch',
                 'consumer_progress.view', 'bridge_fund.view', 'bridge_fund.manage',
                 ...$scoped(['work_planner'], ['own'], ['view', 'manage']),
                 ...$scoped($operations, ['assigned'], ['view', 'manage']),

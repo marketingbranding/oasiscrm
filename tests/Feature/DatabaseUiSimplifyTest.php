@@ -436,6 +436,28 @@ class DatabaseUiSimplifyTest extends TestCase
         $this->assertArrayNotHasKey('proses_bank', $count);
     }
 
+    public function test_dashboard_belum_proses_counted_once_not_twice(): void
+    {
+        [$branch] = $this->setupSheet('data_konsumen', ['no_ktp', 'proses_terakhir', 'status_konsumen']);
+        DatabaseSheetRecord::query()->where('branch_id', $branch->id)->where('sheet_name', 'data_konsumen')->delete();
+        DatabaseSheetRecord::create(['branch_id' => $branch->id, 'sheet_id' => $branch->sheet_id, 'sheet_name' => 'data_konsumen', 'row_number' => 2, 'headers' => ['no_ktp', 'proses_terakhir', 'status_konsumen'], 'row_data' => ['no_ktp' => '3374', 'proses_terakhir' => 'Belum Proses', 'status_konsumen' => 'Lanjut'], 'formula_columns' => [], 'column_metadata' => []]);
+        $user = $this->pusatUser($branch);
+        $this->mockSheetTitles($branch, ['data_konsumen']);
+        $count = $this->actingAs($user)->get(route('database.index', ['branch_id' => $branch->id]))->viewData('sheetCounts');
+        $this->assertSame(1, $count['data_konsumen'] ?? 0, 'Belum Proses must count data_konsumen once, not twice');
+    }
+
+    public function test_dashboard_blank_proses_terakhir_not_counted(): void
+    {
+        [$branch] = $this->setupSheet('data_konsumen', ['no_ktp', 'proses_terakhir', 'status_konsumen']);
+        DatabaseSheetRecord::query()->where('branch_id', $branch->id)->where('sheet_name', 'data_konsumen')->delete();
+        DatabaseSheetRecord::create(['branch_id' => $branch->id, 'sheet_id' => $branch->sheet_id, 'sheet_name' => 'data_konsumen', 'row_number' => 2, 'headers' => ['no_ktp', 'proses_terakhir', 'status_konsumen'], 'row_data' => ['no_ktp' => '3374', 'proses_terakhir' => '', 'status_konsumen' => 'Lanjut'], 'formula_columns' => [], 'column_metadata' => []]);
+        $user = $this->pusatUser($branch);
+        $this->mockSheetTitles($branch, ['data_konsumen']);
+        $count = $this->actingAs($user)->get(route('database.index', ['branch_id' => $branch->id]))->viewData('sheetCounts');
+        $this->assertArrayNotHasKey('data_konsumen', $count, 'Blank proses_terakhir must not be counted in dashboard');
+    }
+
     public function test_tab_strip_has_horizontal_drag_and_wheel_handlers(): void
     {
         $html = file_get_contents(resource_path('views/crm/database/index.blade.php'));

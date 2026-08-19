@@ -37,6 +37,9 @@ class NavigationService
                 ! $isSales && $user->hasPermission('database.view') && $user->hasScopedPermission('database')
                     ? $this->item('Database', 'database.index', 'database', 'database', ['database.*'], $routeName, 'database', $moduleMaintenance)
                     : null,
+                ! $isSales && $user->hasPermission('database_v2.view') && $user->hasScopedPermission('database_v2')
+                    ? $this->item('Database V2', 'database-v2.index', 'database', 'database-v2', ['database-v2.*'], $routeName, 'database_v2', $moduleMaintenance)
+                    : null,
             ]),
             $this->group('operations', 'Operasional', 'operations', [
                 ! $isSales && $user->hasPermission('bridge_fund.view') && $user->hasScopedPermission('bridge_fund')

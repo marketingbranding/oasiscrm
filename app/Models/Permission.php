@@ -22,4 +22,9 @@ class Permission extends Model
 
         return isset(self::$registeredSlugs[$slug]);
     }
+
+    public static function resetRegisteredSlugs(): void
+    {
+        self::$registeredSlugs = null;
+    }
 }

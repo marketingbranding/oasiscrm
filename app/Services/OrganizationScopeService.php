@@ -12,7 +12,7 @@ use Illuminate\Support\Facades\DB;
 class OrganizationScopeService
 {
     private const MODULES = [
-        'sales_pocketbook', 'work_planner', 'database', 'consumer_progress', 'bridge_fund', 'expenses',
+        'sales_pocketbook', 'work_planner', 'database', 'database_v2', 'consumer_progress', 'bridge_fund', 'expenses',
     ];
 
     public function __construct(

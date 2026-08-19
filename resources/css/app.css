@@ -2063,3 +2063,38 @@
 .crm-data-table input[type='checkbox'] {
     min-height: 0 !important;
 }
+
+.database-v2-scope-toolbar { margin-bottom: var(--oasis-space-4); }
+.database-v2-branch-form { display: flex; flex-wrap: wrap; align-items: center; gap: var(--oasis-space-2); }
+.database-v2-branch-select { min-width: min(20rem, 100%); }
+.database-v2-scope-summary { display: grid; gap: var(--oasis-space-1); font-family: var(--oasis-font-controls); }
+.database-v2-tabs { display: flex; max-width: 100%; margin-bottom: var(--oasis-space-3); overflow-x: auto; border-bottom: var(--oasis-border-width-strong) solid var(--oasis-border-strong); cursor: grab; touch-action: pan-x; scrollbar-width: thin; }
+.database-v2-tab { flex: 0 0 auto; min-height: 40px; padding: var(--oasis-space-2) var(--oasis-space-3); border: var(--oasis-border-width-strong) solid var(--oasis-border-strong); border-bottom: 0; background: var(--oasis-surface-flat); font: 700 var(--oasis-type-caption-size)/1.2 var(--oasis-font-controls); text-transform: uppercase; }
+.database-v2-tab + .database-v2-tab { border-left: 0; }
+.database-v2-tab:hover:not(.active) { background: var(--oasis-surface-muted); }
+.database-v2-tab.active { background: var(--oasis-accent-database); color: #111; }
+.database-v2-tab-count { margin-left: var(--oasis-space-1); font-size: 9px; font-weight: 400; }
+.database-v2-sheet-toolbar { margin-bottom: var(--oasis-space-2); }
+.database-v2-search-group { display: grid; min-width: min(28rem, 100%); gap: var(--oasis-space-1); }
+.database-v2-search-control { display: flex; align-items: center; gap: var(--oasis-space-2); }
+.database-v2-search-input { width: min(26rem, 100%); }
+.database-v2-result-count { color: var(--oasis-text-muted); font: var(--oasis-type-caption-size)/1.4 var(--oasis-font-controls); }
+.database-v2-table-state { min-height: 9rem; border: var(--oasis-border-width-strong) solid var(--oasis-border-strong); background: var(--oasis-surface-flat); padding: var(--oasis-space-6); }
+.database-v2-modal-scope { margin-bottom: var(--oasis-space-3); color: var(--oasis-text-muted); font: var(--oasis-type-compact-size)/1.4 var(--oasis-font-controls); }
+.database-v2-dynamic-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--oasis-space-3); }
+.database-v2-dynamic-fields .crm-field--full { grid-column: span 2; }
+.database-v2-import-textarea { width: 100%; min-height: 12rem; font-family: var(--oasis-font-data); font-size: var(--oasis-type-compact-size); line-height: 1.5; white-space: pre; resize: vertical; }
+.database-v2-import-preview { margin-top: var(--oasis-space-4); }
+.database-v2-import-summary { display: flex; flex-wrap: wrap; gap: var(--oasis-space-2); margin-bottom: var(--oasis-space-3); }
+.database-v2-import-actions { display: flex; flex-wrap: wrap; gap: var(--oasis-space-2); margin-top: var(--oasis-space-3); }
+.database-v2-import-ignored { margin-bottom: var(--oasis-space-3); }
+.database-v2-import-ignored-list { display: flex; flex-wrap: wrap; gap: var(--oasis-space-1); }
+.database-v2-ignored-chip { display: inline-block; border: 1px solid var(--oasis-border-subtle); background: var(--oasis-surface-muted); padding: 2px var(--oasis-space-2); font: var(--oasis-type-caption-size)/1.3 var(--oasis-font-controls); color: var(--oasis-text-muted); }
+.database-v2-import-error { border: var(--oasis-border-width-strong) solid var(--oasis-danger); background: var(--oasis-surface-muted); padding: var(--oasis-space-2) var(--oasis-space-3); margin-bottom: var(--oasis-space-3); font: var(--oasis-type-compact-size)/1.4 var(--oasis-font-controls); }
+.database-v2-pagination { display: flex; align-items: center; gap: var(--oasis-space-2); margin-top: var(--oasis-space-3); }
+.crm-status-success { color: var(--oasis-success); font-weight: 700; }
+.crm-status-error { color: var(--oasis-danger); font-weight: 700; }
+@media (max-width: 639px) { .database-v2-dynamic-fields { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 767px) {
+    .database-v2-branch-form, .database-v2-branch-select, .database-v2-search-group, .database-v2-search-control, .database-v2-search-input { width: 100%; min-width: 0; }
+}

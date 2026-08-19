@@ -454,9 +454,6 @@ class DatabaseController extends Controller
                     }
                 }
             }
-            if ($process === 'belum proses') {
-                $counts['data_konsumen'] = ($counts['data_konsumen'] ?? 0) + 1;
-            }
         }
 
         return ['counts' => $counts, 'eligible_kavlings' => array_map(fn ($items) => array_values($items), $eligible)];

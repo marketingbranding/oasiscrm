@@ -394,6 +394,32 @@ class DatabaseUiSimplifyTest extends TestCase
         $this->assertSame(2, $sheetCounts['data_konsumen'] ?? 0, 'formula-only template row should not be counted');
     }
 
+    public function test_dashboard_uses_one_canonical_identity_header_per_sheet(): void
+    {
+        [$branch] = $this->setupSheet('pemberkasan', ['id_kavling', 'no_ktp']);
+        DatabaseSheetRecord::query()->where('branch_id', $branch->id)->where('sheet_name', 'pemberkasan')->delete();
+        foreach ([['id_kavling' => 'A01', 'no_ktp' => '3374'], ['id_kavling' => 'A01', 'no_ktp' => '3374'], ['id_kavling' => '', 'no_ktp' => '3374']] as $index => $row) {
+            DatabaseSheetRecord::create(['branch_id' => $branch->id, 'sheet_id' => $branch->sheet_id, 'sheet_name' => 'pemberkasan', 'row_number' => $index + 2, 'headers' => ['id_kavling', 'no_ktp'], 'row_data' => $row, 'formula_columns' => [], 'column_metadata' => []]);
+        }
+        $user = $this->pusatUser($branch);
+        $this->mockSheetTitles($branch, ['pemberkasan']);
+        $count = $this->actingAs($user)->get(route('database.index', ['branch_id' => $branch->id]))->viewData('sheetCounts');
+        $this->assertSame(1, $count['pemberkasan']);
+    }
+
+    public function test_dashboard_uses_nik_when_kavling_header_is_absent(): void
+    {
+        [$branch] = $this->setupSheet('bi_checking', ['no_ktp']);
+        DatabaseSheetRecord::query()->where('branch_id', $branch->id)->where('sheet_name', 'bi_checking')->delete();
+        foreach (['3374', '3374'] as $index => $nik) {
+            DatabaseSheetRecord::create(['branch_id' => $branch->id, 'sheet_id' => $branch->sheet_id, 'sheet_name' => 'bi_checking', 'row_number' => $index + 2, 'headers' => ['no_ktp'], 'row_data' => ['no_ktp' => $nik], 'formula_columns' => [], 'column_metadata' => []]);
+        }
+        $user = $this->pusatUser($branch);
+        $this->mockSheetTitles($branch, ['bi_checking']);
+        $count = $this->actingAs($user)->get(route('database.index', ['branch_id' => $branch->id]))->viewData('sheetCounts');
+        $this->assertSame(1, $count['bi_checking']);
+    }
+
     public function test_tab_strip_has_horizontal_drag_and_wheel_handlers(): void
     {
         $html = file_get_contents(resource_path('views/crm/database/index.blade.php'));

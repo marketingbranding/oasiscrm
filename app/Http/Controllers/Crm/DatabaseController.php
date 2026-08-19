@@ -401,34 +401,27 @@ class DatabaseController extends Controller
 
     private function businessRowCount(Branch $branch): array
     {
-        $oasisCols = ['oasis_sync_id', 'oasis_deleted_at', 'oasis_deleted_by'];
-
+        $identityFields = ['id_kavling', 'no_ktp', 'id_kons', 'id_psjb', 'id_berkas', 'no_sp3k', 'id_ppjb_dev', 'no_ppjb_akad', 'no_bast'];
         $rows = DatabaseSheetRecord::where('branch_id', $branch->id)
             ->whereNull('oasis_deleted_at')
             ->get(['sheet_name', 'headers', 'formula_columns', 'row_data']);
-
-        $bySheet = $rows->groupBy('sheet_name');
         $counts = [];
 
-        foreach ($bySheet as $sheetName => $sheetRows) {
-            $sample = $sheetRows->first();
-            $headers = $sample->headers ?? [];
-            $formulaCols = $sample->formula_columns ?? [];
-            $editable = array_values(array_filter(
-                $headers,
-                fn ($h) => ! in_array($h, $formulaCols, true) && ! in_array($h, $oasisCols, true)
-            ));
-
-            $count = 0;
-            foreach ($sheetRows as $row) {
-                foreach ($editable as $header) {
-                    if (trim((string) ($row->row_data[$header] ?? '')) !== '') {
-                        $count++;
-                        break;
+        foreach ($rows->groupBy('sheet_name') as $sheetName => $sheetRows) {
+            $headers = $sheetRows->first()->headers ?? [];
+            $canonicalHeader = collect($identityFields)->first(fn (string $field) => in_array($field, $headers, true));
+            $identities = [];
+            if ($canonicalHeader !== null) {
+                foreach ($sheetRows as $row) {
+                    $value = trim((string) (($row->row_data ?? [])[$canonicalHeader] ?? ''));
+                    if ($value !== '') {
+                        $identities[mb_strtolower($value)] = true;
                     }
                 }
             }
-            $counts[$sheetName] = $count;
+            if (array_key_exists($sheetName, self::SHEET_MODULES)) {
+                $counts[$sheetName] = count($identities);
+            }
         }
 
         return $counts;

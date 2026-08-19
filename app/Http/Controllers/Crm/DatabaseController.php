@@ -125,11 +125,13 @@ class DatabaseController extends Controller
         $requestAdd = $request->boolean('add');
 
         $canSync = $user->hasPermission('database.sync') && $selectedBranch && $this->workspaceAccess->canSyncBranch($user, $selectedBranch);
-        $sheetCounts = [];
+        $currentState = ['counts' => [], 'eligible_kavlings' => []];
 
         if ($selectedBranch) {
-            $sheetCounts = $this->businessRowCount($selectedBranch);
+            $currentState = $this->currentState($selectedBranch);
         }
+        $sheetCounts = $currentState['counts'];
+        $eligibleKavlings = $currentState['eligible_kavlings'];
 
         $canEdit = $user->hasPermission('database.edit')
             && $selectedBranch
@@ -138,7 +140,23 @@ class DatabaseController extends Controller
 
         $fieldConfig = DatabaseFieldConfig::config();
 
-        return view('crm.database.index', compact('branches', 'selectedBranch', 'selectedBranchId', 'sheetNames', 'records', 'syncStatus', 'isStale', 'requestSheet', 'requestAdd', 'canSync', 'canEdit', 'sheetCounts', 'fieldConfig'));
+        return view('crm.database.index', compact('branches', 'selectedBranch', 'selectedBranchId', 'sheetNames', 'records', 'syncStatus', 'isStale', 'requestSheet', 'requestAdd', 'canSync', 'canEdit', 'sheetCounts', 'eligibleKavlings', 'fieldConfig'));
+    }
+
+    public function state(Request $request, Branch $branch)
+    {
+        $this->authorizeDatabaseView($branch);
+        $state = $this->currentState($branch);
+
+        return response()->json($state);
+    }
+
+    private function authorizeDatabaseView(Branch $branch): void
+    {
+        $user = Auth::user();
+        abort_unless($user->hasPermission('database.view'), 403);
+        abort_unless(in_array((int) $branch->id, $this->organizationScope->branchIds($user, 'database'), true), 403);
+        abort_unless($this->workspaceAccess->canViewBranch($user, $branch), 403);
     }
 
     public function sheetData(Request $request, $branchId, $sheetName)
@@ -399,56 +417,54 @@ class DatabaseController extends Controller
         abort_unless($this->workspaceAccess->canEditBranch($user, $branch), 403);
     }
 
-    private function businessRowCount(Branch $branch): array
+    private function currentState(Branch $branch): array
     {
-        $rows = DatabaseSheetRecord::where('branch_id', $branch->id)
-            ->where('sheet_name', 'data_konsumen')
-            ->whereNull('oasis_deleted_at')
-            ->orderBy('row_number')
-            ->get(['row_number', 'headers', 'formula_columns', 'row_data']);
-        $latestByNik = [];
-
+        $rows = DatabaseSheetRecord::query()->where('branch_id', $branch->id)->where('sheet_name', 'data_konsumen')->whereNull('oasis_deleted_at')->orderBy('row_number')->get(['row_number', 'headers', 'formula_columns', 'row_data']);
+        $latest = [];
         foreach ($rows as $row) {
-            $headers = $row->headers ?? [];
-            if (! in_array('no_ktp', $headers, true) || in_array('no_ktp', $row->formula_columns ?? [], true)) {
+            if (in_array('no_ktp', $row->formula_columns ?? [], true)) {
                 continue;
             }
             $nik = mb_strtolower(trim((string) (($row->row_data ?? [])['no_ktp'] ?? '')));
             if ($nik !== '') {
-                $latestByNik[$nik] = $row;
+                $latest[$nik] = $row->row_data ?? [];
             }
         }
-
-        $counts = [];
-        $processMap = [
-            'belum proses' => 'data_konsumen',
-            'bi check / slik' => 'bi_checking',
-            'bi checking' => 'bi_checking',
-            'psjb' => 'PSJB',
-            'berkas di bank' => 'pemberkasan',
-            'pemberkasan' => 'pemberkasan',
-            'sp3k' => 'proses_bank',
-            'proses bank' => 'proses_bank',
-            'ppjb developer' => 'ppjb_dev',
-            'ppjb dev' => 'ppjb_dev',
-            'akad' => 'akad',
-            'bast' => 'bast',
+        $allowed = [
+            'bi_checking' => ['belum proses'], 'PSJB' => ['bi check / slik', 'bi checking'], 'pemberkasan' => ['psjb'],
+            'proses_bank' => ['berkas di bank', 'pemberkasan'], 'ppjb_dev' => ['sp3k', 'proses bank'], 'akad' => ['ppjb dev', 'ppjb developer'], 'bast' => ['akad'],
         ];
-
-        foreach ($latestByNik as $row) {
-            $data = $row->row_data ?? [];
-            $status = mb_strtolower(trim((string) ($data['status_konsumen'] ?? '')));
-            if (in_array($status, ['mundur', 'reject'], true)) {
+        $counts = [];
+        $processMap = ['belum proses' => 'data_konsumen', 'bi check / slik' => 'bi_checking', 'bi checking' => 'bi_checking', 'psjb' => 'PSJB', 'berkas di bank' => 'pemberkasan', 'pemberkasan' => 'pemberkasan', 'sp3k' => 'proses_bank', 'proses bank' => 'proses_bank', 'ppjb dev' => 'ppjb_dev', 'ppjb developer' => 'ppjb_dev', 'akad' => 'akad', 'bast' => 'bast'];
+        $eligible = array_fill_keys(array_keys($allowed), []);
+        foreach ($latest as $data) {
+            if (in_array(mb_strtolower(trim((string) ($data['status_konsumen'] ?? ''))), ['mundur', 'reject'], true)) {
                 continue;
             }
             $process = mb_strtolower(trim((string) ($data['proses_terakhir'] ?? '')));
-            $card = $processMap[$process] ?? null;
-            if ($card !== null) {
-                $counts[$card] = ($counts[$card] ?? 0) + 1;
+            $stage = $processMap[$process] ?? null;
+            if ($stage !== null) {
+                $counts[$stage] = ($counts[$stage] ?? 0) + 1;
+                foreach ($allowed as $eligibleStage => $labels) {
+                    if (in_array($process, $labels, true)) {
+                        $kavling = trim((string) ($data['id_kavling'] ?? ''));
+                        if ($kavling !== '') {
+                            $eligible[$eligibleStage][$kavling] = ['value' => $kavling, 'label' => $kavling.' — '.trim((string) ($data['nama_konsumen'] ?? ''))];
+                        }
+                    }
+                }
+            }
+            if ($process === 'belum proses') {
+                $counts['data_konsumen'] = ($counts['data_konsumen'] ?? 0) + 1;
             }
         }
 
-        return $counts;
+        return ['counts' => $counts, 'eligible_kavlings' => array_map(fn ($items) => array_values($items), $eligible)];
+    }
+
+    private function businessRowCount(Branch $branch): array
+    {
+        return $this->currentState($branch)['counts'];
     }
 
     private function validateTypedInput(array $input, array $columnMetadata, array $existingValues = []): void

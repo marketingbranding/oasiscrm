@@ -75,8 +75,8 @@
     @endif
 
      @if($selectedBranch)
-     <x-crm.section id="database-dashboard" title="Dashboard" description="Ringkasan jumlah baris dari cache spreadsheet aktif." class="mb-4">
-         <div class="grid grid-cols-2 gap-3 md:grid-cols-4 xl:grid-cols-8">@foreach(\App\Http\Controllers\Crm\DatabaseController::SHEET_MODULES as $sheet => $label)<div class="border border-gray-300 bg-white p-3"><div class="text-xs font-bold uppercase">{{ $label }}</div><div class="text-2xl font-bold">{{ $sheetCounts[$sheet] ?? 0 }}</div></div>@endforeach</div>
+     <x-crm.section id="database-dashboard" title="Dashboard" description="Ringkasan jumlah baris dari cache spreadsheet aktif." class="mb-4" x-data="{ dashboardCounts: @js($sheetCounts) }" @oasis-dashboard-updated.window="dashboardCounts = $event.detail">
+         <div class="grid grid-cols-2 gap-3 md:grid-cols-4 xl:grid-cols-8">@foreach(\App\Http\Controllers\Crm\DatabaseController::SHEET_MODULES as $sheet => $label)<div class="border border-gray-300 bg-white p-3"><div class="text-xs font-bold uppercase">{{ $label }}</div><div class="text-2xl font-bold"><span x-text="dashboardCounts[@js($sheet)] ?? 0">{{ $sheetCounts[$sheet] ?? 0 }}</span></div></div>@endforeach</div>
      </x-crm.section>
      @endif
 
@@ -108,6 +108,8 @@
             'requestSheet' => $requestSheet ?? '',
             'requestAdd' => (bool) ($requestAdd ?? false),
             'canEdit' => (bool) $canEdit,
+             'dashboardCounts' => $sheetCounts,
+             'eligibleKavlings' => $eligibleKavlings,
             'sheetLabels' => \App\Http\Controllers\Crm\DatabaseController::SHEET_MODULES,
             'fieldConfig' => $fieldConfig,
         ];
@@ -330,7 +332,7 @@
                                     </label>
                                 </template>
                                 <template x-if="fieldType(tab, h, editForm[h]) === 'select'">
-                                    <select :id="fieldId('edit', tab, h)" :name="h" x-model="editForm[h]" class="crm-control"><option value="">— Pilih —</option><template x-for="option in fieldOptions(tab, h, editForm[h])" :key="option"><option :value="option" x-text="option"></option></template></select>
+                                    <select :id="fieldId('edit', tab, h)" :name="h" x-model="editForm[h]" class="crm-control"><option value="">— Pilih —</option><template x-for="option in fieldOptions(tab, h, editForm[h])" :key="option.value ?? option"><option :value="option.value ?? option" x-text="option.label ?? option"></option></template></select>
                                 </template>
                                 <template x-if="fieldType(tab, h, editForm[h]) === 'date'">
                                     <div class="date-wrapper" data-accent="#d77a7a"><button type="button" class="date-display crm-control" :aria-labelledby="fieldLabelId('edit', tab, h)"><span class="date-text">— Pilih Tanggal —</span><span class="date-arrow">▼</span></button><input type="date" :id="fieldId('edit', tab, h)" :name="h" x-model="editForm[h]" class="sr-only"></div>
@@ -364,7 +366,7 @@
                                     <label class="database-checkbox-control"><input type="hidden" :name="h" :value="uncheckedValue(adding, h)"><input type="checkbox" :id="fieldId('add', adding, h)" :name="h" :value="checkedValue(adding, h)" @change="$event.target.nextElementSibling.textContent = $event.target.checked ? 'Aktif' : 'Tidak'" class="database-checkbox"><span>Tidak</span></label>
                                 </template>
                                 <template x-if="fieldType(adding, h) === 'select'">
-                                    <select :id="fieldId('add', adding, h)" :name="h" class="crm-control"><option value="">— Pilih —</option><template x-for="option in fieldOptions(adding, h)" :key="option"><option :value="option" x-text="option"></option></template></select>
+                                    <select :id="fieldId('add', adding, h)" :name="h" class="crm-control"><option value="">— Pilih —</option><template x-for="option in fieldOptions(adding, h)" :key="option.value ?? option"><option :value="option.value ?? option" x-text="option.label ?? option"></option></template></select>
                                 </template>
                                 <template x-if="fieldType(adding, h) === 'date'">
                                     <div class="date-wrapper" data-accent="#d77a7a"><button type="button" class="date-display crm-control" :aria-labelledby="fieldLabelId('add', adding, h)"><span class="date-text">— Pilih Tanggal —</span><span class="date-arrow">▼</span></button><input type="date" :id="fieldId('add', adding, h)" :name="h" class="sr-only"></div>
@@ -517,8 +519,10 @@ document.addEventListener('alpine:init', () => {
 
     Alpine.data('databaseTabs', (config) => ({
         tab: config.firstSheet,
-        branchId: config.branchId,
-        editBaseUrl: config.editBaseUrl,
+         branchId: config.branchId,
+         dashboardCounts: config.dashboardCounts || {},
+         eligibleKavlings: config.eligibleKavlings || {},
+         editBaseUrl: config.editBaseUrl,
         sheetLabels: config.sheetLabels || {},
         fieldConfig: config.fieldConfig || {},
         loading: false,
@@ -761,6 +765,16 @@ document.addEventListener('alpine:init', () => {
                 return;
             }
             await this.refreshActiveSheet(sheet);
+            await this.refreshDatabaseState();
+        },
+
+        async refreshDatabaseState() {
+            const response = await fetch(`{{ url('database/state') }}/${this.branchId}`, { headers: { Accept: 'application/json' } });
+            if (!response.ok) return;
+            const state = await response.json();
+            this.dashboardCounts = state.counts || {};
+            this.eligibleKavlings = state.eligible_kavlings || {};
+            this.$dispatch('oasis-dashboard-updated', this.dashboardCounts);
         },
 
         async refreshActiveSheet(sheet = this.tab) {
@@ -798,7 +812,7 @@ document.addEventListener('alpine:init', () => {
             this.newerDataAvailable = false;
             this.pendingRefreshSheet = null;
             this.$dispatch('oasis:modal-close', { name: 'database-edit', reason: 'reload' });
-            this.refreshActiveSheet(sheet);
+            this.refreshActiveSheet(sheet).then(() => this.refreshDatabaseState());
         },
 
         editRecord(rec, trigger = null) {
@@ -1094,6 +1108,12 @@ document.addEventListener('alpine:init', () => {
         },
 
         fieldOptions(sheetName, header, currentValue = '') {
+            if (header === 'id_kavling' && this.eligibleKavlings[sheetName]) {
+                const options = [...this.eligibleKavlings[sheetName]];
+                const current = String(currentValue || '').trim();
+                if (current && !options.some(option => option.value === current)) options.push({ value: current, label: current });
+                return options;
+            }
             const options = [...(this.columnMetadata(sheetName, header).options || [])];
             const current = String(currentValue || '').trim();
             if (current && !options.includes(current)) options.push(current);

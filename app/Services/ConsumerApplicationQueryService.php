@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\Branch;
 use App\Models\ConsumerApplication;
 use App\Models\LeadMaster;
 use App\Models\User;
@@ -14,7 +15,6 @@ final class ConsumerApplicationQueryService
     public function __construct(
         private DatabaseModuleRegistry $registry,
         private OrganizationScopeService $scope,
-        private WorkspaceAccessService $workspace,
     ) {}
 
     public function dataset(User $user, string $slug, Request $request): array
@@ -32,10 +32,27 @@ final class ConsumerApplicationQueryService
             abort_if($branchId && (int) $project->branch_id !== $branchId, 403);
         }
 
+        $relations = collect($module['columns'])
+            ->pluck('path')
+            ->filter(fn (string $path) => str_starts_with($path, 'application.'))
+            ->map(fn (string $path) => str($path)->after('application.')->contains('.') ? str($path)->after('application.')->beforeLast('.')->toString() : null)
+            ->filter()
+            ->unique()
+            ->all();
+        if (! $module['relation']) {
+            $relations = collect($module['columns'])
+                ->pluck('path')
+                ->filter(fn (string $path) => str_starts_with($path, 'record.'))
+                ->map(fn (string $path) => str($path)->after('record.')->contains('.') ? str($path)->after('record.')->beforeLast('.')->toString() : null)
+                ->filter()
+                ->unique()
+                ->all();
+        }
+
         $query = ConsumerApplication::query()
             ->whereIn('branch_id', $branchIds)
             ->whereIn('project_id', $projectIds)
-            ->with(['branch', 'customer', 'project', 'kavling', 'sales']);
+            ->with($relations);
 
         if ($branchId) {
             $query->where('branch_id', $branchId);
@@ -70,8 +87,8 @@ final class ConsumerApplicationQueryService
         return [
             'module' => $module,
             'rows' => $applications,
-            'branches' => $this->workspace->accessibleBranches($user)->whereIn('id', $branchIds)->values(),
-            'projects' => $this->workspace->accessibleProjects($user)->whereIn('id', $projectIds)->when($branchId, fn ($items) => $items->where('branch_id', $branchId))->values(),
+            'branches' => Branch::query()->whereIn('id', $branchIds)->forDropdown()->get(),
+            'projects' => LeadMaster::query()->with('branch')->whereIn('id', $projectIds)->when($branchId, fn (Builder $projects) => $projects->where('branch_id', $branchId))->orderBy('project_name')->get(),
             'filterColumns' => collect($module['columns'])->where('filterable', true)->values(),
         ];
     }
@@ -83,8 +100,8 @@ final class ConsumerApplicationQueryService
         }
 
         $relation = $module['relation'];
-        $constraint = fn (Builder|Relation $related) => $this->related($related, $module);
-        $query->whereHas($relation, $constraint)->with([$relation => fn (Builder|Relation $related) => $constraint($related)->latest('id')]);
+        $constraint = fn (Builder|Relation $related) => $this->latest($related, $module);
+        $query->whereHas($relation, $constraint)->with([$relation => $constraint]);
     }
 
     private function filter(Builder $query, array $module, string $key, string $value): void
@@ -100,20 +117,35 @@ final class ConsumerApplicationQueryService
 
         $field = str($column['path'])->afterLast('.')->toString();
         if ($module['relation']) {
-            $query->whereHas($module['relation'], fn (Builder $related) => $this->related($related, $module)->where($field, $value));
+            $query->whereHas($module['relation'], fn (Builder $related) => $this->latest($related, $module)->where($field, $value));
         } else {
             $query->where($field, $value);
         }
     }
 
-    private function related(Builder|Relation $query, array $module): Builder|Relation
+    private function latest(Builder|Relation $query, array $module): Builder|Relation
     {
+        $query = $this->related($query, $module);
+        $table = $query->getModel()->getTable();
+        $latest = $query->getModel()->newQuery()
+            ->from("{$table} as latest_record")
+            ->selectRaw('MAX(latest_record.id)')
+            ->whereColumn('latest_record.consumer_application_id', "{$table}.consumer_application_id");
+        $this->related($latest, $module, 'latest_record');
+
+        return $query->where("{$table}.id", $latest)->orderByDesc("{$table}.id");
+    }
+
+    private function related(Builder|Relation $query, array $module, ?string $table = null): Builder|Relation
+    {
+        $column = fn (string $name) => $table ? "{$table}.{$name}" : $name;
+
         return match ($module['relation']) {
-            'stageEvents' => $query->where('stage', $module['stage']),
-            'psjbs', 'ppjbDevelopers', 'akadRecords', 'bastRecords' => $query->whereHas('event', fn (Builder $event) => $event->where('stage', $module['stage'])),
+            'stageEvents' => $query->where($column('stage'), $module['stage']),
+            'psjbs', 'ppjbDevelopers', 'akadRecords', 'bastRecords' => $query,
             'bankProcesses' => $module['stage'] === 'pemberkasan'
-                ? $query->where(fn (Builder $bank) => $bank->whereNotNull('tipe_pemberkasan')->orWhereNotNull('tanggal_terima_bank'))
-                : $query->where(fn (Builder $bank) => $bank->whereNotNull('response_type')->orWhereNotNull('approved_plafond')->orWhereNotNull('approved_tenor')->orWhereNotNull('verified_at')->orWhereNotNull('sp3k_at')->orWhereNotNull('rejected_at')),
+                ? $query->where(fn (Builder $bank) => $bank->whereNotNull($column('tipe_pemberkasan'))->orWhereNotNull($column('tanggal_terima_bank')))
+                : $query->where(fn (Builder $bank) => $bank->whereNotNull($column('response_type'))->orWhereNotNull($column('approved_plafond'))->orWhereNotNull($column('approved_tenor'))->orWhereNotNull($column('verified_at'))->orWhereNotNull($column('sp3k_at'))->orWhereNotNull($column('rejected_at'))),
         };
     }
 

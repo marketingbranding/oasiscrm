@@ -8,11 +8,12 @@
     'directionParam' => 'dir',
     'resetPageKeys' => ['page'],
     'currentIndicator' => false,
+    'routeParameters' => [],
 ])
 @php
     $isActive = $currentSort === $field;
     $nextDir = $isActive && $currentDir === 'asc' ? 'desc' : 'asc';
-    $params = array_merge(request()->query(), ['sort' => $field, $directionParam => $nextDir]);
+    $params = array_merge($routeParameters, request()->query(), ['sort' => $field, $directionParam => $nextDir]);
     foreach ($resetPageKeys as $pageKey) {
         $params[$pageKey] = null;
     }

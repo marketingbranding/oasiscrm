@@ -10,6 +10,7 @@ use App\Http\Controllers\Crm\CommentController;
 use App\Http\Controllers\Crm\CommentModerationController;
 use App\Http\Controllers\Crm\CommentThreadController;
 use App\Http\Controllers\Crm\ConsumerComparisonController;
+use App\Http\Controllers\Crm\ConsumerDatabase\ConsumerDatabaseController;
 use App\Http\Controllers\Crm\ConsumerHistoricalProcessImportController;
 use App\Http\Controllers\Crm\ConsumerLocalController;
 use App\Http\Controllers\Crm\ConsumerOperationalController;
@@ -187,6 +188,10 @@ Route::middleware(['auth', 'active', 'verified', 'password.changed', 'operationa
     });
 
     Route::middleware('module.maintenance:consumer_progress')->group(function () {
+        Route::middleware('permission:consumer_progress.view')->group(function () {
+            Route::get('/consumer-database', [ConsumerDatabaseController::class, 'root'])->name('consumer-database.index');
+            Route::get('/consumer-database/{module}', [ConsumerDatabaseController::class, 'module'])->whereIn('module', ['data-konsumen', 'bi-checking', 'psjb', 'pemberkasan', 'proses-bank', 'ppjb', 'akad', 'bast'])->name('consumer-database.module');
+        });
         Route::get('/consumer-comparison', [ConsumerComparisonController::class, 'index'])->middleware('not.impersonating')->name('consumer-comparison.index');
         Route::get('/consumer-import', [ConsumerPasteImportController::class, 'create'])->middleware('not.impersonating')->name('consumer-import.create');
         Route::get('/consumer-import/projects', [ConsumerPasteImportController::class, 'projects'])->middleware('not.impersonating')->name('consumer-import.projects');

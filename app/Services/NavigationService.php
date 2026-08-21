@@ -34,6 +34,9 @@ class NavigationService
                 ! $isSales && $user->hasPermission('consumer_progress.view') && $user->hasScopedPermission('consumer_progress')
                     ? $this->item('Konsumen Progress', 'konsumen-progress.index', 'customers', 'consumer-progress', ['konsumen-progress.*'], $routeName, 'consumer_progress', $moduleMaintenance)
                     : null,
+                ! $isSales && $user->hasPermission('consumer_progress.view') && $user->hasScopedPermission('consumer_progress')
+                    ? $this->item('Database Baru', 'consumer-database.index', 'database', 'consumer-progress', ['consumer-database.*'], $routeName, 'consumer_progress', $moduleMaintenance)
+                    : null,
                 ! $isSales && $user->hasPermission('database.view') && $user->hasScopedPermission('database')
                     ? $this->item('Database', 'database.index', 'database', 'database', ['database.*'], $routeName, 'database', $moduleMaintenance)
                     : null,

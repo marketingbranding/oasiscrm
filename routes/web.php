@@ -188,6 +188,7 @@ Route::middleware(['auth', 'active', 'verified', 'password.changed', 'operationa
     });
 
     Route::middleware('module.maintenance:consumer_progress')->group(function () {
+        Route::patch('/consumer-database/{module}/{application}/cell', [ConsumerDatabaseController::class, 'updateCell'])->middleware('not.impersonating')->whereIn('module', ['data-konsumen', 'bi-checking', 'psjb', 'pemberkasan', 'proses-bank', 'ppjb', 'akad', 'bast'])->whereNumber('application')->name('consumer-database.cell.update');
         Route::middleware('permission:consumer_progress.view')->group(function () {
             Route::get('/consumer-database', [ConsumerDatabaseController::class, 'root'])->name('consumer-database.index');
             Route::get('/consumer-database/{module}', [ConsumerDatabaseController::class, 'module'])->whereIn('module', ['data-konsumen', 'bi-checking', 'psjb', 'pemberkasan', 'proses-bank', 'ppjb', 'akad', 'bast'])->name('consumer-database.module');

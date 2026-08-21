@@ -8,24 +8,50 @@ final class DatabaseModuleRegistry
 {
     public function all(): array
     {
-        $application = fn (string $key, string $label, string $path, string $type = 'text', bool $sortable = false, bool $filterable = false): array => compact('key', 'label', 'path', 'type', 'sortable', 'filterable') + ['data_type' => $type];
-        $process = fn (string $key, string $label, string $path, string $type = 'text', bool $sortable = false, bool $filterable = false): array => compact('key', 'label', 'path', 'type', 'sortable', 'filterable') + ['data_type' => $type];
+        $column = fn (string $key, string $label, string $path, string $classification, string $type = 'text', bool $sortable = false, bool $filterable = false, array $edit = []): array => array_merge(compact('key', 'label', 'path', 'type', 'sortable', 'filterable', 'classification'), [
+            'data_type' => $type,
+            'editable' => false,
+            'edit_type' => null,
+            'validation' => [],
+            'write_strategy' => null,
+            'permission' => 'consumer_progress.manage',
+            'scope_action' => 'manage',
+            'readonly_reason' => match ($classification) {
+                'relation_lifecycle' => 'Relasi dan lifecycle dikelola melalui workflow terkait.',
+                'process_stage' => 'Tahap proses dikelola melalui workflow terkait.',
+                'derived_identifier' => 'Nilai turunan atau identifier dihitung sistem.',
+                default => 'Kolom ini hanya dapat dibaca.',
+            },
+        ], $edit);
+        $editable = fn (string $strategy, string $target, string $field, string $editType = 'text', array $validation = [], array $extra = []): array => [
+            'editable' => true,
+            'edit_type' => $editType,
+            'validation' => $validation,
+            'write_strategy' => $strategy,
+            'permission' => 'consumer_progress.manage',
+            'readonly_reason' => null,
+            'write_target' => ['model' => $target, 'field' => $field],
+        ] + $extra;
+        $application = fn (string $key, string $label, string $path, string $classification, string $type = 'text', bool $sortable = false, bool $filterable = false, array $edit = []): array => $column($key, $label, $path, $classification, $type, $sortable, $filterable, $edit);
+        $process = fn (string $key, string $label, string $path, string $type = 'text', bool $sortable = false, bool $filterable = false, string $classification = 'process_stage'): array => $column($key, $label, $path, $classification, $type, $sortable, $filterable, ['readonly_reason' => 'Data proses dan lifecycle hanya dapat dibaca dari modul ini.']);
         $identity = [
-            $process('customer_name', 'Nama Konsumen', 'application.customer.name', sortable: true),
-            $process('project', 'Proyek', 'application.project.project_name', sortable: true),
-            $process('kavling', 'Kavling', 'application.kavling.kavling_code'),
+            $process('customer_name', 'Nama Konsumen', 'application.customer.name', sortable: true, classification: 'simple_master'),
+            $process('project', 'Proyek', 'application.project.project_name', sortable: true, classification: 'relation_lifecycle'),
+            $process('kavling', 'Kavling', 'application.kavling.kavling_code', classification: 'relation_lifecycle'),
         ];
 
         return [
             'data-konsumen' => $this->module('data-konsumen', 'Data Konsumen', 'Data utama ConsumerApplication lokal.', null, null, [
-                $application('customer_name', 'Nama Konsumen', 'record.customer.name', sortable: true),
-                $application('phone', 'No HP', 'record.customer.phone'),
-                $application('project', 'Proyek', 'record.project.project_name', sortable: true),
-                $application('kavling', 'Kavling', 'record.kavling.kavling_code'),
-                $application('sales', 'Sales', 'record.sales.name'),
-                $application('consumer_status', 'Status Konsumen', 'record.consumer_status', filterable: true),
-                $application('current_stage', 'Current Stage / Proses Terakhir', 'record.current_stage', filterable: true),
-                $application('completeness', 'Kelengkapan Data', 'record.source_completeness_status', filterable: true),
+                $application('customer_name', 'Nama Konsumen', 'record.customer.name', 'simple_master', sortable: true, edit: $editable('customer_field', 'customer', 'name', validation: ['required', 'string', 'max:255'])),
+                $application('phone', 'No HP', 'record.customer.phone', 'simple_master', edit: $editable('customer_field', 'customer', 'phone', validation: ['required', 'string', 'max:50'])),
+                $application('project', 'Proyek', 'record.project.project_name', 'relation_lifecycle'),
+                $application('kavling', 'Kavling', 'record.kavling.kavling_code', 'relation_lifecycle'),
+                $application('sales', 'Sales', 'record.sales.name', 'relation_lifecycle'),
+                $application('consumer_status', 'Status Konsumen', 'record.consumer_status', 'process_stage', filterable: true),
+                $application('current_stage', 'Current Stage / Proses Terakhir', 'record.current_stage', 'derived_identifier', filterable: true),
+                $application('completeness', 'Kelengkapan Data', 'record.source_completeness_status', 'derived_identifier', filterable: true),
+                $application('notes', 'Keterangan', 'record.notes', 'simple_application', edit: $editable('application_field', 'application', 'notes', validation: ['nullable', 'string', 'max:5000'])),
+                $application('status_cash', 'Status Cash', 'record.status_cash', 'simple_application', edit: $editable('application_field', 'application', 'status_cash', 'select', ['nullable', 'boolean'], ['options' => [['value' => '', 'label' => 'Belum diisi'], ['value' => true, 'label' => 'Ya'], ['value' => false, 'label' => 'Tidak']]])),
             ]),
             'bi-checking' => $this->module('bi-checking', 'BI Checking', 'Riwayat pemeriksaan BI/SLIK konsumen.', 'stageEvents', 'bi_checking', [...$identity, $process('occurred_at', 'Tanggal', 'record.occurred_at', 'date'), $process('status', 'Status', 'record.status', filterable: true), $process('source', 'Sumber', 'record.source'), $process('notes', 'Keterangan', 'record.notes')]),
             'psjb' => $this->module('psjb', 'PSJB', 'Data proses PSJB konsumen.', 'psjbs', 'PSJB', [...$identity, $process('tanggal_psjb', 'Tanggal PSJB', 'record.tanggal_psjb', 'date'), $process('payment_method', 'Cara Pembayaran', 'record.cara_pembayaran', filterable: true), $process('status', 'Status', 'record.status', filterable: true), $process('notes', 'Keterangan', 'record.keterangan')]),

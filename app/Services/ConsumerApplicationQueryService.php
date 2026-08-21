@@ -15,6 +15,7 @@ final class ConsumerApplicationQueryService
     public function __construct(
         private DatabaseModuleRegistry $registry,
         private OrganizationScopeService $scope,
+        private ConsumerDatabaseWriteService $writer,
     ) {}
 
     public function dataset(User $user, string $slug, Request $request): array
@@ -77,11 +78,25 @@ final class ConsumerApplicationQueryService
             $query->leftJoin('lead_master', 'lead_master.id', '=', 'consumer_applications.project_id')->select('consumer_applications.*');
         }
 
+        $canManage = $user->hasPermission('consumer_progress.manage') || $user->hasScopedPermission('consumer_progress', 'manage');
+        $manageBranchIds = $canManage ? $this->scope->branchIds($user, 'consumer_progress', 'manage') : [];
+        $manageProjectIds = $canManage ? $this->scope->projectIds($user, 'consumer_progress', 'manage') : [];
         $applications = $query->orderBy($sort, $direction)->orderBy('consumer_applications.id')->paginate(25)->withQueryString();
-        $applications->setCollection($applications->getCollection()->map(function (ConsumerApplication $application) use ($module): array {
+        $applications->setCollection($applications->getCollection()->map(function (ConsumerApplication $application) use ($module, $manageBranchIds, $manageProjectIds): array {
             $record = $module['relation'] ? $application->{$module['relation']}->first() : $application;
+            $canEdit = $module['key'] === 'data-konsumen' && in_array((int) $application->branch_id, $manageBranchIds, true) && in_array((int) $application->project_id, $manageProjectIds, true);
+            $cells = [];
+            if ($canEdit) {
+                foreach ($module['columns'] as $column) {
+                    if (! $column['editable'] || ($column['write_strategy'] === 'customer_field' && ! $application->customer)) {
+                        continue;
+                    }
+                    $target = $column['write_strategy'] === 'customer_field' ? $application->customer : $application;
+                    $cells[$column['key']] = ['value' => $target->{$column['write_target']['field']}, 'write_token' => $this->writer->token($target)];
+                }
+            }
 
-            return ['source_id' => $module['key'].':'.$record->getKey(), 'application' => $application, 'record' => $record];
+            return ['source_id' => $module['key'].':'.$record->getKey(), 'application' => $application, 'record' => $record, 'can_edit' => $canEdit, 'update_url' => $canEdit ? route('consumer-database.cell.update', [$module['key'], $application->id]) : null, 'editable_cells' => $cells];
         }));
 
         return [

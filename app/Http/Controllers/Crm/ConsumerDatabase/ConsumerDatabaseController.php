@@ -4,9 +4,12 @@ namespace App\Http\Controllers\Crm\ConsumerDatabase;
 
 use App\Http\Controllers\Controller;
 use App\Services\ConsumerApplicationQueryService;
+use App\Services\ConsumerDatabaseWriteService;
 use App\Services\DatabaseModuleRegistry;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Validator;
 use Illuminate\View\View;
 
 final class ConsumerDatabaseController extends Controller
@@ -27,5 +30,15 @@ final class ConsumerDatabaseController extends Controller
             'moduleSlug' => $module,
             'viewMode' => $view,
         ]);
+    }
+
+    public function updateCell(Request $request, string $module, int $application, ConsumerDatabaseWriteService $writer): JsonResponse
+    {
+        $validator = Validator::make($request->all(), ['column' => ['required', 'string'], 'expected_updated_at' => ['required', 'date']]);
+        if ($validator->fails()) {
+            return response()->json(['message' => 'Nilai tidak valid.', 'errors' => $validator->errors()], 422);
+        }
+
+        return response()->json($writer->update($request->user(), $module, $application, $request->all()));
     }
 }

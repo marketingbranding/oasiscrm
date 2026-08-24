@@ -10,17 +10,13 @@ use App\Http\Controllers\Crm\CommentController;
 use App\Http\Controllers\Crm\CommentModerationController;
 use App\Http\Controllers\Crm\CommentThreadController;
 use App\Http\Controllers\Crm\ConsumerComparisonController;
-use App\Http\Controllers\Crm\ConsumerDatabase\ConsumerDatabaseController;
 use App\Http\Controllers\Crm\ConsumerHistoricalProcessImportController;
-use App\Http\Controllers\Crm\ConsumerLocalController;
-use App\Http\Controllers\Crm\ConsumerOperationalController;
 use App\Http\Controllers\Crm\ConsumerPasteImportController;
 use App\Http\Controllers\Crm\ContentCalendarController;
 use App\Http\Controllers\Crm\CoordinatorSalesLeadWorkspaceController;
 use App\Http\Controllers\Crm\DanaTalanganController;
 use App\Http\Controllers\Crm\DashboardController;
 use App\Http\Controllers\Crm\DatabaseController;
-use App\Http\Controllers\Crm\DatabaseV2Controller;
 use App\Http\Controllers\Crm\ExpenseCategoryController;
 use App\Http\Controllers\Crm\ExpenseController;
 use App\Http\Controllers\Crm\FeedbackReportController;
@@ -176,23 +172,7 @@ Route::middleware(['auth', 'active', 'verified', 'password.changed', 'operationa
         Route::post('/database/import', [DatabaseController::class, 'importSave'])->middleware('permission:database.edit')->name('database.import.save');
     });
 
-    Route::middleware('module.maintenance:database')->group(function () {
-        Route::get('/database-v2', [DatabaseV2Controller::class, 'index'])->middleware('permission:database_v2.view')->name('database-v2.index');
-        Route::get('/database-v2/{module}/list', [DatabaseV2Controller::class, 'list'])->middleware('permission:database_v2.view')->name('database-v2.list');
-        Route::get('/database-v2/{module}/export', [DatabaseV2Controller::class, 'export'])->middleware('permission:database_v2.export')->name('database-v2.export');
-        Route::post('/database-v2/{module}', [DatabaseV2Controller::class, 'store'])->middleware('permission:database_v2.edit')->name('database-v2.store');
-        Route::put('/database-v2/{module}/{id}', [DatabaseV2Controller::class, 'update'])->middleware('permission:database_v2.edit')->name('database-v2.update');
-        Route::delete('/database-v2/{module}/{id}', [DatabaseV2Controller::class, 'destroy'])->middleware('permission:database_v2.edit')->name('database-v2.destroy');
-        Route::post('/database-v2/{module}/import/preview', [DatabaseV2Controller::class, 'importPreview'])->middleware('permission:database_v2.edit')->name('database-v2.import.preview');
-        Route::post('/database-v2/{module}/import', [DatabaseV2Controller::class, 'importSave'])->middleware('permission:database_v2.edit')->name('database-v2.import.save');
-    });
-
     Route::middleware('module.maintenance:consumer_progress')->group(function () {
-        Route::patch('/consumer-database/{module}/{application}/cell', [ConsumerDatabaseController::class, 'updateCell'])->middleware('not.impersonating')->whereIn('module', ['data-konsumen', 'bi-checking', 'psjb', 'pemberkasan', 'proses-bank', 'ppjb', 'akad', 'bast'])->whereNumber('application')->name('consumer-database.cell.update');
-        Route::middleware('permission:consumer_progress.view')->group(function () {
-            Route::get('/consumer-database', [ConsumerDatabaseController::class, 'root'])->name('consumer-database.index');
-            Route::get('/consumer-database/{module}', [ConsumerDatabaseController::class, 'module'])->whereIn('module', ['data-konsumen', 'bi-checking', 'psjb', 'pemberkasan', 'proses-bank', 'ppjb', 'akad', 'bast'])->name('consumer-database.module');
-        });
         Route::get('/consumer-comparison', [ConsumerComparisonController::class, 'index'])->middleware('not.impersonating')->name('consumer-comparison.index');
         Route::get('/consumer-import', [ConsumerPasteImportController::class, 'create'])->middleware('not.impersonating')->name('consumer-import.create');
         Route::get('/consumer-import/projects', [ConsumerPasteImportController::class, 'projects'])->middleware('not.impersonating')->name('consumer-import.projects');
@@ -207,25 +187,6 @@ Route::middleware(['auth', 'active', 'verified', 'password.changed', 'operationa
         Route::get('/historical-process-import/{consumer_import_batch}', [ConsumerHistoricalProcessImportController::class, 'show'])->middleware('not.impersonating')->name('historical-process-import.show');
         Route::post('/historical-process-import/{consumer_import_batch}/confirm', [ConsumerHistoricalProcessImportController::class, 'confirm'])->middleware('not.impersonating')->name('historical-process-import.confirm');
         Route::get('/konsumen-progress', [KonsumenProgressController::class, 'index'])->middleware('permission:consumer_progress.view')->name('konsumen-progress.index');
-        Route::get('/konsumen-progress-local', [ConsumerLocalController::class, 'index'])->middleware('permission:consumer_progress.view')->name('consumer-local.index');
-        Route::get('/konsumen-progress-local/create', [ConsumerOperationalController::class, 'create'])->middleware('not.impersonating')->name('consumer-local.create');
-        Route::get('/konsumen-progress-local/{application}', [ConsumerLocalController::class, 'show'])->middleware('permission:consumer_progress.view')->name('consumer-local.show');
-        Route::post('/konsumen-progress-local', [ConsumerOperationalController::class, 'store'])->middleware('not.impersonating')->name('consumer-local.store');
-        Route::get('/konsumen-progress-local/{application}/edit', [ConsumerOperationalController::class, 'edit'])->middleware('not.impersonating')->name('consumer-local.edit');
-        Route::put('/konsumen-progress-local/{application}', [ConsumerOperationalController::class, 'update'])->middleware('not.impersonating')->name('consumer-local.update');
-        Route::get('/konsumen-progress-local/{application}/bi-checking/create', [ConsumerOperationalController::class, 'biCheckingCreate'])->middleware('not.impersonating')->name('consumer-local.bi-checking.create');
-        Route::post('/konsumen-progress-local/{application}/bi-checking', [ConsumerOperationalController::class, 'biCheckingStore'])->middleware('not.impersonating')->name('consumer-local.bi-checking.store');
-        Route::get('/konsumen-progress-local/{application}/psjb/create', [ConsumerOperationalController::class, 'psjbCreate'])->middleware('not.impersonating')->name('consumer-local.psjb.create');
-        Route::post('/konsumen-progress-local/{application}/psjb', [ConsumerOperationalController::class, 'psjbStore'])->middleware('not.impersonating')->name('consumer-local.psjb.store');
-        Route::get('/konsumen-progress-local/{application}/bank/create', [ConsumerOperationalController::class, 'bankCreate'])->middleware('not.impersonating')->name('consumer-local.bank.create');
-        Route::post('/konsumen-progress-local/{application}/bank', [ConsumerOperationalController::class, 'bankStore'])->middleware('not.impersonating')->name('consumer-local.bank.store');
-        Route::get('/konsumen-progress-local/{application}/ppjb/create', [ConsumerOperationalController::class, 'ppjbCreate'])->middleware('not.impersonating')->name('consumer-local.ppjb.create');
-        Route::post('/konsumen-progress-local/{application}/ppjb', [ConsumerOperationalController::class, 'ppjbStore'])->middleware('not.impersonating')->name('consumer-local.ppjb.store');
-        Route::get('/konsumen-progress-local/{application}/akad/create', [ConsumerOperationalController::class, 'akadCreate'])->middleware('not.impersonating')->name('consumer-local.akad.create');
-        Route::post('/konsumen-progress-local/{application}/akad', [ConsumerOperationalController::class, 'akadStore'])->middleware('not.impersonating')->name('consumer-local.akad.store');
-        Route::get('/konsumen-progress-local/{application}/bast/create', [ConsumerOperationalController::class, 'bastCreate'])->middleware('not.impersonating')->name('consumer-local.bast.create');
-        Route::post('/konsumen-progress-local/{application}/bast', [ConsumerOperationalController::class, 'bastStore'])->middleware('not.impersonating')->name('consumer-local.bast.store');
-        Route::post('/konsumen-progress-local/{application}/nik/reveal', [ConsumerLocalController::class, 'revealNik'])->middleware('permission:consumer_progress.reveal_nik')->name('consumer-local.nik-reveal');
         Route::get('/konsumen-progress/stage', [KonsumenProgressController::class, 'stage'])->middleware('permission:consumer_progress.view')->name('konsumen-progress.stage');
         Route::post('/konsumen-progress/sync', [KonsumenProgressController::class, 'sync'])->middleware('permission:consumer_progress.sync')->name('konsumen-progress.sync');
         Route::get('/konsumen-progress/sync/status', [KonsumenProgressController::class, 'syncStatus'])->middleware('permission:consumer_progress.sync')->name('konsumen-progress.sync-status');

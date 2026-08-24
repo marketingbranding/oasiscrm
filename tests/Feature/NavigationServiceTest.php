@@ -113,35 +113,28 @@ class NavigationServiceTest extends TestCase
         $this->assertNotContains('Laporan Fee Sales', $this->labels($supplementalNavigation));
     }
 
-    public function test_consumer_navigation_shows_data_konsumen_before_progress_and_database(): void
+    public function test_sales_navigation_keeps_only_konsumen_progress_and_database_workspaces(): void
     {
-        $navigation = $this->navigationFor('superadmin', 'consumer-local.index');
+        $navigation = $this->navigationFor('superadmin', 'konsumen-progress.index');
         $sales = collect($navigation)->firstWhere('key', 'sales');
         $labels = array_column($sales['children'], 'label');
 
-        $this->assertSame(['Buku Saku Sales', 'Data Konsumen', 'Konsumen Progress', 'Database Baru', 'Database', 'Database V2'], $labels);
-        $this->assertTrue(collect($sales['children'])->firstWhere('label', 'Data Konsumen')['active']);
-        $this->assertFalse(collect($sales['children'])->firstWhere('label', 'Database Baru')['active']);
+        $this->assertSame(['Buku Saku Sales', 'Konsumen Progress', 'Database'], $labels);
+        $this->assertTrue(collect($sales['children'])->firstWhere('label', 'Konsumen Progress')['active']);
         $this->assertFalse(collect($sales['children'])->firstWhere('label', 'Database')['active']);
+        $this->assertNotContains('Data Konsumen', $labels);
+        $this->assertNotContains('Database Baru', $labels);
+        $this->assertNotContains('Database V2', $labels);
     }
 
-    public function test_consumer_detail_route_keeps_data_konsumen_active(): void
-    {
-        $navigation = $this->navigationFor('superadmin', 'consumer-local.show');
-        $sales = collect($navigation)->firstWhere('key', 'sales');
-        $dataConsumer = collect($sales['children'])->firstWhere('label', 'Data Konsumen');
-
-        $this->assertTrue($dataConsumer['active']);
-    }
-
-    public function test_consumer_navigation_requires_permission_and_scope(): void
+    public function test_konsumen_progress_navigation_requires_permission_and_scope(): void
     {
         $user = $this->user('branch_manager');
         $user->role->permissions()->detach(Permission::query()->where('slug', 'consumer_progress.view')->firstOrFail());
 
-        $navigation = app(NavigationService::class)->forUser($user->fresh('role.permissions'), 'consumer-local.index');
+        $navigation = app(NavigationService::class)->forUser($user->fresh('role.permissions'), 'konsumen-progress.index');
 
-        $this->assertNotContains('Data Konsumen', $this->labels($navigation));
+        $this->assertNotContains('Konsumen Progress', $this->labels($navigation));
     }
 
     public function test_current_route_marks_child_and_parent_active(): void

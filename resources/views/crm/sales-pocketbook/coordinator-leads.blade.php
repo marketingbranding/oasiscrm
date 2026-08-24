@@ -53,17 +53,18 @@
 
     <x-crm.section id="coordinator-filters" title="Filter Tim & Periode" :description="$period['from']->format('d/m/Y').' - '.$period['to']->format('d/m/Y')">
         <x-crm.toolbar label="Filter periode koordinator">
-            <form method="GET" class="grid w-full gap-3 md:grid-cols-4">
+            <form method="GET" class="grid w-full gap-3 md:grid-cols-4" x-data="{ period: @js($filters['period']) }">
                 <input type="hidden" name="tab" value="{{ $tab }}">
+                <input type="hidden" name="period" :value="period">
                 <div class="flex flex-wrap gap-2 md:col-span-4">
                     @foreach(['today' => 'Hari Ini', 'week' => 'Minggu Ini', 'month' => 'Bulan Ini', 'custom' => 'Kustom'] as $value => $label)
-                        <button type="submit" class="border-2 border-black px-3 py-2 text-xs font-bold {{ $filters['period'] === $value ? 'bg-[#fcc20f]' : 'bg-white' }}" name="period" value="{{ $value }}">{{ $label }}</button>
+                        <button type="button" class="border-2 border-black px-3 py-2 text-xs font-bold" :class="period === @js($value) ? 'bg-[#fcc20f]' : 'bg-white'" :aria-pressed="period === @js($value)" @click="period = @js($value); if (period !== 'custom') $nextTick(() => $el.form.requestSubmit())">{{ $label }}</button>
                     @endforeach
                 </div>
-                <x-crm.field label="Dari" for="monitor-date-from"><x-crm.date-field id="monitor-date-from" name="date_from" :value="$filters['date_from']" /></x-crm.field>
-                <x-crm.field label="Sampai" for="monitor-date-to"><x-crm.date-field id="monitor-date-to" name="date_to" :value="$filters['date_to']" /></x-crm.field>
+                <div x-show="period === 'custom'" x-cloak><x-crm.field label="Dari" for="monitor-date-from"><x-crm.date-field id="monitor-date-from" name="date_from" :value="$filters['date_from']" x-bind:disabled="period !== 'custom'" /></x-crm.field></div>
+                <div x-show="period === 'custom'" x-cloak><x-crm.field label="Sampai" for="monitor-date-to"><x-crm.date-field id="monitor-date-to" name="date_to" :value="$filters['date_to']" x-bind:disabled="period !== 'custom'" /></x-crm.field></div>
                 <x-crm.field label="Sales" for="monitor-sales"><select id="monitor-sales" class="sales-input" name="sales_id"><option value="">Semua Sales</option>@foreach($salesUsers as $sales)<option value="{{ $sales->id }}" @selected((string) $filters['sales_id'] === (string) $sales->id)>{{ $sales->name }}</option>@endforeach</select></x-crm.field>
-                <div class="self-end"><x-crm.button type="submit" variant="secondary" name="period" value="{{ $filters['period'] }}">Terapkan</x-crm.button></div>
+                <div class="self-end"><x-crm.button type="submit" variant="secondary">Terapkan</x-crm.button></div>
             </form>
         </x-crm.toolbar>
     </x-crm.section>

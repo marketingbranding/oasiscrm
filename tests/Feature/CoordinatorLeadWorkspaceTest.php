@@ -41,7 +41,10 @@ class CoordinatorLeadWorkspaceTest extends TestCase
         $this->assertStringContainsString('id="coordinator-lead-{{ $name }}"', $view);
         $this->assertStringNotContainsString(':name="$name"', $view);
         $this->assertStringNotContainsString('<section class="border-2 border-black bg-white">', $view);
-        $this->assertStringContainsString('name="period" value="{{ $filters[\'period\'] }}">Terapkan', $view);
+        foreach (['x-data="{ period: @js($filters[\'period\']) }"', 'name="period" :value="period"', 'x-show="period === \'custom\'"', 'x-bind:disabled="period !== \'custom\'"', "if (period !== 'custom') \$nextTick(() => \$el.form.requestSubmit())"] as $contract) {
+            $this->assertStringContainsString($contract, $view);
+        }
+        $this->assertStringNotContainsString('name="period" value="{{ $filters[\'period\'] }}">Terapkan', $view);
         $this->assertStringNotContainsString('type="date"', $view);
     }
 

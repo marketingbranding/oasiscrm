@@ -41,6 +41,7 @@ class CoordinatorLeadWorkspaceTest extends TestCase
         $this->assertStringContainsString('id="coordinator-lead-{{ $name }}"', $view);
         $this->assertStringNotContainsString(':name="$name"', $view);
         $this->assertStringNotContainsString('<section class="border-2 border-black bg-white">', $view);
+        $this->assertStringContainsString('name="period" value="{{ $filters[\'period\'] }}">Terapkan', $view);
         $this->assertStringNotContainsString('type="date"', $view);
     }
 

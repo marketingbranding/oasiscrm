@@ -63,7 +63,7 @@
                 <x-crm.field label="Dari" for="monitor-date-from"><x-crm.date-field id="monitor-date-from" name="date_from" :value="$filters['date_from']" /></x-crm.field>
                 <x-crm.field label="Sampai" for="monitor-date-to"><x-crm.date-field id="monitor-date-to" name="date_to" :value="$filters['date_to']" /></x-crm.field>
                 <x-crm.field label="Sales" for="monitor-sales"><select id="monitor-sales" class="sales-input" name="sales_id"><option value="">Semua Sales</option>@foreach($salesUsers as $sales)<option value="{{ $sales->id }}" @selected((string) $filters['sales_id'] === (string) $sales->id)>{{ $sales->name }}</option>@endforeach</select></x-crm.field>
-                <div class="self-end"><x-crm.button type="submit" variant="secondary">Terapkan</x-crm.button></div>
+                <div class="self-end"><x-crm.button type="submit" variant="secondary" name="period" value="{{ $filters['period'] }}">Terapkan</x-crm.button></div>
             </form>
         </x-crm.toolbar>
     </x-crm.section>

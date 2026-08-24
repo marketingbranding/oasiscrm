@@ -93,6 +93,29 @@ class CoordinatorSalesMonitoringServiceTest extends TestCase
         $this->assertNotContains('Wrong project', $data['leads']->pluck('customer_name'));
     }
 
+    public function test_custom_period_applies_exact_dates_to_leads_agendas_and_metrics(): void
+    {
+        $included = $this->lead($this->sales, 'Dalam Rentang', '2026-08-06', $this->project, $this->branch);
+        $this->lead($this->sales, 'Di Luar Rentang', '2026-08-08', $this->project, $this->branch);
+        $this->history($included, SalesLeadStatus::FaceToFace, '2026-08-07 09:00:00');
+        $this->agenda($this->sales, 'Agenda Dalam Rentang', $this->branch, $this->project, '2026-08-05');
+        $this->agenda($this->sales, 'Agenda Di Luar Rentang', $this->branch, $this->project, '2026-08-08');
+
+        $data = app(CoordinatorSalesMonitoringService::class)->resolve($this->coordinator, [
+            'period' => 'custom',
+            'date_from' => '2026-08-05',
+            'date_to' => '2026-08-07',
+        ], false);
+
+        $this->assertSame('custom', $data['period']['key']);
+        $this->assertSame('2026-08-05', $data['period']['from']->toDateString());
+        $this->assertSame('2026-08-07', $data['period']['to']->toDateString());
+        $this->assertSame(['Dalam Rentang'], $data['leads']->pluck('customer_name')->all());
+        $this->assertSame(['Agenda Dalam Rentang'], $data['agendas']->pluck('title')->all());
+        $this->assertSame(1, $data['kpi']['lead_new']);
+        $this->assertSame(1, $data['kpi']['face_to_face']);
+    }
+
     public function test_forged_sales_filter_is_forbidden(): void
     {
         $outsider = $this->user('sales', 'Bukan Tim', $this->branch);

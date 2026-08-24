@@ -86,59 +86,60 @@
         @if($canCleanup)
             <p class="mb-3 text-sm">Superadmin: hapus agenda kanonik beserta semua bukti lokal hanya jika belum masuk arsip.</p>
         @endif
-        <div class="crm-table-scroll">
-            <table class="crm-data-table">
-                <thead><tr><th>Tanggal</th><th>Kategori Aktivitas</th><th>Agenda</th><th>Lokasi</th><th>Hasil</th><th>Status</th><th>Aksi</th></tr></thead>
-                <tbody>
-                    @forelse($agendas as $agenda)
-                        <tr>
-                            <td>{{ $agenda->scheduled_date->format('d/m/Y') }}</td>
-                            <td>{{ $agenda->sales_activity_category ?: '-' }}</td>
-                            <td>{{ $agenda->title }}</td>
-                            <td>{{ $agenda->location ?: '-' }}</td>
-                            <td>{{ $agenda->activity_result ?: '-' }}
-                                <div class="mt-2 flex flex-wrap gap-2">
+        <div class="sales-agenda-monitor">
+            <div class="sales-agenda-list">
+                @forelse($agendas as $agenda)
+                    <article class="sales-agenda-item">
+                        <div class="sales-agenda-identity">
+                            <div><span class="sales-agenda-kicker">{{ $agenda->sales_activity_category ?: 'Aktivitas Sales' }}</span><h3>{{ $agenda->title }}</h3></div>
+                            <x-crm.status-badge :status="$agenda->status">{{ ucfirst($agenda->status) }}</x-crm.status-badge>
+                        </div>
+                        <dl class="sales-agenda-facts">
+                            <div><dt>Tanggal</dt><dd>{{ $agenda->scheduled_date->format('d/m/Y') }}</dd></div>
+                            <div><dt>Lokasi</dt><dd>{{ $agenda->location ?: 'Tidak dicatat' }}</dd></div>
+                        </dl>
+                        @if(filled($agenda->activity_result))<div class="sales-agenda-result"><strong>Hasil Aktivitas</strong><p class="whitespace-pre-line">{{ $agenda->activity_result }}</p></div>@endif
+                        @if($agenda->evidence->isNotEmpty())
+                            <div class="sales-agenda-notes">
+                                <strong>Bukti Foto</strong>
+                                <div class="flex flex-wrap gap-3">
                                     @foreach($agenda->evidence as $evidence)
                                         @if($evidence->purged_at)<span>Bukti foto telah dipindahkan ke arsip.</span>
                                         @else
-                                            <a class="font-bold underline" href="{{ route('sales-agendas.evidence.show', [$agenda, $evidence]) }}">Foto {{ $loop->iteration }}</a>
-                                            @unless($agenda->isFinished())
-                                                <form method="POST" action="{{ route('sales-agendas.evidence.destroy', [$agenda, $evidence]) }}">@csrf @method('DELETE')<button type="submit" class="font-bold text-red-700 underline" onclick="return confirm('Hapus bukti foto ini?')">Hapus</button></form>
-                                            @endunless
+                                            <span class="flex items-center gap-2"><a class="font-bold text-[#0000ee] underline" href="{{ route('sales-agendas.evidence.show', [$agenda, $evidence]) }}">Foto {{ $loop->iteration }}</a>@unless($agenda->isFinished())<form method="POST" action="{{ route('sales-agendas.evidence.destroy', [$agenda, $evidence]) }}">@csrf @method('DELETE')<button type="submit" class="font-bold text-red-700 underline" onclick="return confirm('Hapus bukti foto ini?')">Hapus</button></form>@endunless</span>
                                         @endif
                                     @endforeach
                                 </div>
-                            </td>
-                            <td><x-crm.status-badge :status="$agenda->status">{{ ucfirst($agenda->status) }}</x-crm.status-badge></td>
-                            <td>
-                                @if($canCleanup)
-                                    <x-crm.sales-agenda-cleanup :agenda="$agenda" :can-cleanup="$canCleanup" />
-                                @endif
-                                @unless($agenda->isFinished())
-                                    <form method="POST" enctype="multipart/form-data" action="{{ route('sales-agendas.evidence.store', $agenda) }}" class="mb-2">
+                            </div>
+                        @endif
+                        @unless($agenda->isFinished())
+                            <div class="sales-agenda-action-grid">
+                                @if($agenda->evidence->count() < 2)
+                                    <form method="POST" enctype="multipart/form-data" action="{{ route('sales-agendas.evidence.store', $agenda) }}" class="sales-agenda-action-form">
                                         @csrf
-                                        <label class="block text-xs" for="photo-{{ $agenda->id }}">Opsional. Maksimal 2 foto (JPEG, PNG, atau WebP), masing-masing maksimal 10 MB.</label>
-                                        <input id="photo-{{ $agenda->id }}" type="file" name="photo" accept="image/jpeg,image/png,image/webp" @disabled($agenda->evidence->count() >= 2)>
+                                        <x-crm.field label="Bukti Foto" for="photo-{{ $agenda->id }}" hint="Opsional untuk penyelesaian agenda. Maksimal 2 foto JPEG, PNG, atau WebP; masing-masing maksimal 10 MB.">
+                                            <input id="photo-{{ $agenda->id }}" type="file" name="photo" accept="image/jpeg,image/png,image/webp" class="block w-full min-w-0 text-sm" required>
+                                        </x-crm.field>
                                         <x-crm.button type="submit" variant="secondary" size="sm">Unggah Foto</x-crm.button>
                                     </form>
-                                    <form method="POST" action="{{ route('sales-agendas.update', $agenda) }}" class="flex min-w-64 gap-2">
-                                        @csrf
-                                        @method('PATCH')
-                                        <input type="hidden" name="expected_updated_at" value="{{ app(\App\Services\OptimisticLockService::class)->token($agenda) }}">
-                                        <label class="sr-only" for="result-{{ $agenda->id }}">Hasil aktivitas</label>
-                                        <input id="result-{{ $agenda->id }}" name="activity_result" class="sales-input" required placeholder="Hasil aktivitas">
-                                        <x-crm.button type="submit" variant="secondary" size="sm">Selesaikan</x-crm.button>
-                                    </form>
                                 @else
-                                    <span>-</span>
-                                @endunless
-                            </td>
-                        </tr>
-                    @empty
-                        <tr><td colspan="7"><x-crm.empty-state title="Belum ada agenda">Agenda Anda akan tampil di sini.</x-crm.empty-state></td></tr>
-                    @endforelse
-                </tbody>
-            </table>
+                                    <div class="sales-agenda-action-form" role="status"><strong class="font-[Helvetica] text-xs uppercase">Bukti Foto Lengkap</strong><p>Maksimal 2 foto telah terunggah.</p></div>
+                                @endif
+                                <form method="POST" action="{{ route('sales-agendas.update', $agenda) }}" class="sales-agenda-action-form">
+                                    @csrf
+                                    @method('PATCH')
+                                    <input type="hidden" name="expected_updated_at" value="{{ app(\App\Services\OptimisticLockService::class)->token($agenda) }}">
+                                    <x-crm.field label="Hasil Aktivitas" for="result-{{ $agenda->id }}" required><input id="result-{{ $agenda->id }}" name="activity_result" class="sales-input" required></x-crm.field>
+                                    <x-crm.button type="submit" variant="secondary" size="sm">Selesaikan</x-crm.button>
+                                </form>
+                            </div>
+                        @endunless
+                        @if($canCleanup)<footer class="sales-agenda-footer"><x-crm.sales-agenda-cleanup :agenda="$agenda" :can-cleanup="$canCleanup" /></footer>@endif
+                    </article>
+                @empty
+                    <x-crm.empty-state title="Belum ada agenda">Agenda Anda akan tampil di sini.</x-crm.empty-state>
+                @endforelse
+            </div>
         </div>
         <x-crm.pagination :collection="$agendas" :show-per-page="false" />
     </x-crm.section>

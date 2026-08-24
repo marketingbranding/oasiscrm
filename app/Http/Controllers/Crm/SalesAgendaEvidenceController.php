@@ -10,7 +10,7 @@ use App\Models\ContentItem;
 use App\Models\SalesAgendaEvidence;
 use App\Services\SalesAgendaEvidenceAuthorizationService;
 use App\Services\SalesAgendaEvidenceCleanupService;
-use App\Services\SalesAgendaEvidenceImageService;
+use App\Services\SalesAgendaEvidenceUploadService;
 use App\Support\SalesAgendaEvidenceRules;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -19,21 +19,26 @@ use Illuminate\Validation\ValidationException;
 
 class SalesAgendaEvidenceController extends Controller
 {
-    public function store(StoreSalesAgendaEvidenceRequest $request, ContentItem $agenda, SalesAgendaEvidenceImageService $images, SalesAgendaEvidenceAuthorizationService $access)
+    public function store(StoreSalesAgendaEvidenceRequest $request, ContentItem $agenda, SalesAgendaEvidenceUploadService $uploads, SalesAgendaEvidenceAuthorizationService $access)
     {
         abort_unless($access->canMutate($request->user(), $agenda), 403);
+        $prepared = $uploads->prepare([$request->file('photo')]);
 
-        return DB::transaction(function () use ($request, $agenda, $images, $access) {
-            $agenda = ContentItem::query()->lockForUpdate()->findOrFail($agenda->id);
-            abort_unless($access->canMutate($request->user(), $agenda), 403);
-            if ($agenda->evidence()->count() >= SalesAgendaEvidenceRules::MAX_FILES) {
-                throw ValidationException::withMessages(['photo' => 'Maksimal 2 foto.']);
-            }
-            $evidence = $agenda->evidence()->create($images->store($request->file('photo')) + ['uploaded_by_user_id' => $request->user()->id]);
-            ActivityLog::create(['causer_id' => $request->user()->id, 'subject_type' => SalesAgendaEvidence::class, 'subject_id' => $evidence->id, 'event' => 'agenda_evidence_uploaded', 'description' => 'Bukti foto Agenda Sales diunggah.', 'properties' => ['agenda_id' => $agenda->id, 'evidence_id' => $evidence->id]]);
+        try {
+            DB::transaction(function () use ($request, $agenda, $uploads, $access, $prepared) {
+                $agenda = ContentItem::query()->lockForUpdate()->findOrFail($agenda->id);
+                abort_unless($access->canMutate($request->user(), $agenda), 403);
+                if ($agenda->evidence()->count() >= SalesAgendaEvidenceRules::MAX_FILES) {
+                    throw ValidationException::withMessages(['photo' => 'Maksimal 2 foto.']);
+                }
+                $uploads->persist($agenda, $prepared, $request->user());
+            });
+        } catch (\Throwable $exception) {
+            $uploads->cleanup($prepared);
+            throw $exception;
+        }
 
-            return back()->with('success', 'Bukti foto berhasil ditambahkan.');
-        });
+        return back()->with('success', 'Bukti foto berhasil ditambahkan.');
     }
 
     public function show(Request $request, ContentItem $agenda, SalesAgendaEvidence $evidence, SalesAgendaEvidenceAuthorizationService $access)

@@ -55,7 +55,7 @@
         <x-crm.alert variant="warning" title="Penugasan proyek diperlukan">Proyek utama belum ditentukan. Hubungi admin untuk menetapkan proyek utama.</x-crm.alert>
     @else
         <x-crm.section id="agenda-baru" title="Agenda Baru">
-            <form method="POST" action="{{ route('sales-agendas.store') }}" class="grid gap-3 md:grid-cols-2">
+            <form method="POST" enctype="multipart/form-data" action="{{ route('sales-agendas.store') }}" class="grid gap-3 md:grid-cols-2">
                 @csrf
                 <x-crm.field label="Tanggal Agenda" for="scheduled_date" required :error="$errors->first('scheduled_date')">
                     <x-crm.date-field id="scheduled_date" name="scheduled_date" :value="old('scheduled_date', now()->toDateString())" required />
@@ -76,6 +76,9 @@
                 </x-crm.field>
                 <x-crm.field label="Hasil Aktivitas" for="activity_result" :error="$errors->first('activity_result')">
                     <textarea id="activity_result" name="activity_result" class="sales-input" rows="2">{{ old('activity_result') }}</textarea>
+                </x-crm.field>
+                <x-crm.field label="Bukti Foto" for="photos" hint="Opsional. Maksimal 2 foto JPEG, PNG, atau WebP; masing-masing maksimal 10 MB." :error="$errors->first('photos') ?: $errors->first('photos.*')">
+                    <input id="photos" type="file" name="photos[]" accept="image/jpeg,image/png,image/webp" class="block min-h-11 w-full min-w-0 py-2 text-sm" multiple>
                 </x-crm.field>
                 <div class="md:col-span-2"><x-crm.button type="submit" variant="primary" accent="sales">Simpan Agenda</x-crm.button></div>
             </form>

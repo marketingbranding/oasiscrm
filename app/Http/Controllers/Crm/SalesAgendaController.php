@@ -11,10 +11,12 @@ use App\Models\LeadMaster;
 use App\Models\SalesLead;
 use App\Services\OptimisticLockService;
 use App\Services\PromoOptionService;
+use App\Services\SalesAgendaEvidenceUploadService;
 use App\Services\SalesAgendaProjectResolver;
 use App\Services\SalesDailyReminderService;
 use App\Services\WorkspaceAccessService;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Symfony\Component\HttpFoundation\Response;
 
 class SalesAgendaController extends Controller
@@ -67,31 +69,43 @@ class SalesAgendaController extends Controller
         return view('crm.sales-pocketbook.sales-agenda', compact('project', 'agendas', 'leads', 'tab', 'projects', 'defaultProjectId', 'cascadeProjects', 'leadOptionsEndpoint', 'promos', 'dailyReminder'));
     }
 
-    public function store(StoreSalesAgendaRequest $request)
+    public function store(StoreSalesAgendaRequest $request, SalesAgendaEvidenceUploadService $uploads)
     {
         $data = $request->validated();
         $project = $this->projectResolver->resolve($request->user(), $data['scheduled_date']);
         abort_unless($project, 422, 'Proyek utama belum ditentukan. Hubungi admin untuk menetapkan proyek utama.');
+        $prepared = $uploads->prepare($request->file('photos', []), 'photos');
         $result = filled($data['activity_result'] ?? null) ? $data['activity_result'] : null;
 
-        $agenda = ContentItem::create([
-            'branch_id' => $project->branch_id,
-            'project_name' => $project->project_name,
-            'sales_project_id' => $project->id,
-            'item_type' => 'agenda',
-            'visibility' => 'personal',
-            'title' => $data['title'],
-            'agenda_type' => ContentItem::SALES_AGENDA_TYPE,
-            'sales_activity_category' => $data['sales_activity_category'],
-            'location' => $data['location'] ?? null,
-            'scheduled_date' => $data['scheduled_date'],
-            'status' => $result ? 'done' : 'planned',
-            'completed_at' => $result ? now() : null,
-            'activity_result' => $result,
-            'owner_user_id' => $request->user()->id,
-            'created_by' => $request->user()->id,
-        ]);
-        $agenda->assignees()->sync([$request->user()->id]);
+        try {
+            DB::transaction(function () use ($request, $project, $data, $result, $prepared, $uploads) {
+                $agenda = ContentItem::create([
+                    'branch_id' => $project->branch_id,
+                    'project_name' => $project->project_name,
+                    'sales_project_id' => $project->id,
+                    'item_type' => 'agenda',
+                    'visibility' => 'personal',
+                    'title' => $data['title'],
+                    'agenda_type' => ContentItem::SALES_AGENDA_TYPE,
+                    'sales_activity_category' => $data['sales_activity_category'],
+                    'location' => $data['location'] ?? null,
+                    'scheduled_date' => $data['scheduled_date'],
+                    'status' => $result ? 'done' : 'planned',
+                    'completed_at' => $result ? now() : null,
+                    'activity_result' => $result,
+                    'owner_user_id' => $request->user()->id,
+                    'created_by' => $request->user()->id,
+                ]);
+                $agenda->assignees()->sync([$request->user()->id]);
+                if ($result) {
+                    $agenda->logActivity('agenda_result_recorded', ['status' => 'done']);
+                }
+                $uploads->persist($agenda, $prepared, $request->user());
+            });
+        } catch (\Throwable $exception) {
+            $uploads->cleanup($prepared);
+            throw $exception;
+        }
 
         return redirect()->route('sales-agendas.index')->with('success', 'Agenda sales berhasil ditambahkan.');
     }

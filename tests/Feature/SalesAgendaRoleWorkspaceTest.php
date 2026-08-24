@@ -69,7 +69,9 @@ class SalesAgendaRoleWorkspaceTest extends TestCase
         $request->setUserResolver(fn () => $sales);
 
         $this->assertTrue($request->authorize());
-        $this->assertSame(['scheduled_date', 'sales_activity_category', 'title', 'location', 'activity_result'], array_keys($request->rules()));
+        $this->assertSame(['scheduled_date', 'sales_activity_category', 'title', 'location', 'activity_result', 'photos', 'photos.*'], array_keys($request->rules()));
+        $this->assertSame(['nullable', 'array', 'max:2'], $request->rules()['photos']);
+        $this->assertSame(['required', 'file', 'max:10240'], $request->rules()['photos.*']);
         $this->assertSame(['required', 'string'], array_slice($request->rules()['sales_activity_category'], 0, 2));
         $this->assertSame('in:"'.implode('","', ContentItem::SALES_ACTIVITY_CATEGORIES).'"', (string) $request->rules()['sales_activity_category'][2]);
 

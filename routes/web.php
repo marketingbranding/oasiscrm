@@ -161,6 +161,7 @@ Route::middleware(['auth', 'active', 'verified', 'password.changed', 'operationa
 
     Route::middleware('module.maintenance:database')->group(function () {
         Route::get('/database', [DatabaseController::class, 'index'])->middleware('permission:database.view')->name('database.index');
+        Route::get('/database/consumer/{branch}', [DatabaseController::class, 'consumer'])->middleware('permission:database.view')->name('database.consumer');
         Route::get('/database/state/{branch}', [DatabaseController::class, 'state'])->middleware('permission:database.view')->name('database.state');
         Route::get('/database/sheet/{branchId}/{sheetName}', [DatabaseController::class, 'sheetData'])->middleware('permission:database.view')->name('database.sheet');
         Route::post('/database/sync', [DatabaseController::class, 'sync'])->middleware('permission:database.sync')->name('database.sync');

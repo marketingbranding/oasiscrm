@@ -93,6 +93,7 @@
             'branchId' => (string) $selectedBranch->id,
             'editBaseUrl' => url('database/records'),
             'sheetDataBaseUrl' => url('database/sheet'),
+            'consumerDetailUrl' => route('database.consumer', ['branch' => $selectedBranch]),
             'sheetNames' => $sheetNames,
             'firstSheet' => $firstSheet,
             'initialHeaders' => $initialHeaders,
@@ -263,7 +264,20 @@
                                                        </span>
                                                    </template>
                                                    <template x-if="!isBooleanValue(rec.row_data[h])">
-                                                    <span x-text="formatCell(name, h, rec.row_data[h])"></span>
+                                                    <span>
+                                                        <template x-if="normalizeKey(h) === 'nama konsumen' && String(rec.row_data.id_kavling ?? '').trim() !== ''">
+                                                            <button type="button"
+                                                                    class="database-consumer-detail-link"
+                                                                    aria-haspopup="dialog"
+                                                                    aria-controls="crm-modal-database-consumer-detail"
+                                                                    :aria-label="'Buka detail konsumen ' + String(rec.row_data[h] ?? '')"
+                                                                    @click="openConsumerDetail(rec, $el)"
+                                                                    x-text="formatCell(name, h, rec.row_data[h])"></button>
+                                                        </template>
+                                                        <template x-if="normalizeKey(h) !== 'nama konsumen' || String(rec.row_data.id_kavling ?? '').trim() === ''">
+                                                            <span x-text="formatCell(name, h, rec.row_data[h])"></span>
+                                                        </template>
+                                                    </span>
                                                 </template>
                                             </td>
                                         </template>
@@ -300,6 +314,85 @@
                 </template>
             </section>
         </template>
+
+        <x-crm.modal name="database-consumer-detail" title="Detail Konsumen" placement="right" size="md">
+            <div class="database-consumer-detail">
+                <div x-show="consumerSummaryLoading" role="status" aria-live="polite" class="crm-loading-state database-consumer-detail-state">
+                    <span class="crm-loading-spinner" aria-hidden="true"></span>
+                    <span>Memuat ringkasan konsumen...</span>
+                </div>
+
+                <div x-show="consumerSummaryError" x-cloak role="alert" aria-live="assertive" class="crm-alert crm-alert--error database-consumer-detail-state">
+                    <div>
+                        <strong>Detail konsumen gagal dimuat</strong>
+                        <p x-text="consumerSummaryError"></p>
+                    </div>
+                    <div class="crm-alert-actions"><x-crm.button type="button" size="sm" @click="loadConsumerSummary()">Coba Lagi</x-crm.button></div>
+                </div>
+
+                <template x-if="consumerSummary">
+                    <div>
+                        <div class="database-consumer-detail-heading">
+                            <p class="crm-type-label">Konsumen</p>
+                            <h3 x-text="consumerFieldValue(consumerSummary.fields, 'nama_konsumen') || 'Tanpa nama'"></h3>
+                            <p><span>ID Kavling: </span><strong x-text="consumerSummary.identity.id_kavling"></strong></p>
+                            <p><span>Cabang: </span><span x-text="consumerSummary.identity.branch_name"></span></p>
+                        </div>
+
+                        <dl class="database-consumer-detail-grid">
+                            <template x-for="field in consumerSummary.fields" :key="field.key">
+                                <div class="database-consumer-detail-field">
+                                    <dt x-text="field.label"></dt>
+                                    <dd x-text="formatDetailValue(field)"></dd>
+                                </div>
+                            </template>
+                        </dl>
+
+                        <details class="database-consumer-history" @toggle="loadConsumerHistory($event)">
+                            <summary>Riwayat Proses</summary>
+                            <div class="database-consumer-history-body">
+                                <div x-show="consumerHistoryLoading" role="status" aria-live="polite" class="crm-loading-state database-consumer-detail-state">
+                                    <span class="crm-loading-spinner" aria-hidden="true"></span>
+                                    <span>Memuat seluruh riwayat proses...</span>
+                                </div>
+                                <div x-show="consumerHistoryError" x-cloak role="alert" aria-live="assertive" class="crm-alert crm-alert--error database-consumer-detail-state">
+                                    <div><strong>Riwayat gagal dimuat</strong><p x-text="consumerHistoryError"></p></div>
+                                    <div class="crm-alert-actions"><x-crm.button type="button" size="sm" @click="retryConsumerHistory()">Coba Lagi</x-crm.button></div>
+                                </div>
+                                <template x-if="consumerHistoryLoaded && consumerHistory">
+                                    <div>
+                                        <p class="database-consumer-history-warning" x-text="consumerHistory.warning"></p>
+                                        <div class="database-consumer-history-stages">
+                                            <template x-for="stage in consumerHistory.stages" :key="stage.key">
+                                                <details class="database-consumer-history-stage">
+                                                    <summary><span x-text="stage.label"></span> <span x-text="'(' + stage.items.length + ')'" class="database-consumer-history-count"></span></summary>
+                                                    <div class="database-consumer-history-items">
+                                                        <p x-show="stage.items.length === 0" class="database-consumer-history-empty">Belum ada catatan.</p>
+                                                        <template x-for="item in stage.items" :key="stage.key + '-' + item.row_number">
+                                                            <article class="database-consumer-history-item">
+                                                                <p class="database-consumer-history-row">Baris <span x-text="item.row_number"></span></p>
+                                                                <dl class="database-consumer-detail-grid">
+                                                                    <template x-for="field in item.fields" :key="field.key">
+                                                                        <div class="database-consumer-detail-field">
+                                                                            <dt x-text="field.label"></dt>
+                                                                            <dd x-text="formatDetailValue(field)"></dd>
+                                                                        </div>
+                                                                    </template>
+                                                                </dl>
+                                                            </article>
+                                                        </template>
+                                                    </div>
+                                                </details>
+                                            </template>
+                                        </div>
+                                    </div>
+                                </template>
+                            </div>
+                        </details>
+                    </div>
+                </template>
+            </div>
+        </x-crm.modal>
 
         <x-crm.modal name="database-edit" title="Edit data Database" description="Perubahan disimpan ke Google Sheet lalu diperbarui pada cache Database." size="xl">
             <div x-ref="editPanel" x-show="editing" x-cloak>
@@ -522,8 +615,9 @@ document.addEventListener('alpine:init', () => {
          branchId: config.branchId,
          dashboardCounts: { ...(config.initialDashboardCounts || {}) },
          eligibleKavlings: config.eligibleKavlings || {},
-         editBaseUrl: config.editBaseUrl,
-        sheetLabels: config.sheetLabels || {},
+          editBaseUrl: config.editBaseUrl,
+         consumerDetailUrl: config.consumerDetailUrl,
+         sheetLabels: config.sheetLabels || {},
         fieldConfig: config.fieldConfig || {},
         loading: false,
         editing: null,
@@ -549,6 +643,18 @@ document.addEventListener('alpine:init', () => {
         sortDirection: 'asc',
         filterText: '',
         frozen: true,
+        consumerIdKavling: '',
+        consumerSummary: null,
+        consumerSummaryLoading: false,
+        consumerSummaryError: '',
+        consumerHistory: null,
+        consumerHistoryLoading: false,
+        consumerHistoryError: '',
+        consumerHistoryLoaded: false,
+        consumerRequestSequence: 0,
+        consumerHistorySequence: 0,
+        consumerSummaryController: null,
+        consumerHistoryController: null,
 
         init() {
             this.cache[config.firstSheet] = {
@@ -702,6 +808,13 @@ document.addEventListener('alpine:init', () => {
                 this.importError = '';
                 this.importSaving = false;
             }
+            if (detail?.name === 'database-consumer-detail') {
+                this.consumerSummaryController?.abort();
+                this.consumerHistoryController?.abort();
+                this.consumerRequestSequence++;
+                this.consumerHistorySequence++;
+                this.resetConsumerDetail();
+            }
         },
 
         handleFormError(detail) {
@@ -712,6 +825,118 @@ document.addEventListener('alpine:init', () => {
 
         clearSearch() {
             this.filterText = '';
+        },
+
+        resetConsumerDetail() {
+            this.consumerIdKavling = '';
+            this.consumerSummary = null;
+            this.consumerSummaryLoading = false;
+            this.consumerSummaryError = '';
+            this.consumerHistory = null;
+            this.consumerHistoryLoading = false;
+            this.consumerHistoryError = '';
+            this.consumerHistoryLoaded = false;
+            this.consumerSummaryController = null;
+            this.consumerHistoryController = null;
+        },
+
+        openConsumerDetail(rec, trigger = null) {
+            const idKavling = String(rec?.row_data?.id_kavling ?? '').trim();
+            if (!idKavling) return;
+            this.consumerSummaryController?.abort();
+            this.consumerHistoryController?.abort();
+            this.resetConsumerDetail();
+            this.consumerIdKavling = idKavling;
+            this.$dispatch('oasis:modal-open', { name: 'database-consumer-detail', trigger });
+            this.loadConsumerSummary();
+        },
+
+        consumerEndpoint(section) {
+            const query = new URLSearchParams({ id_kavling: this.consumerIdKavling, section });
+            return `${this.consumerDetailUrl}?${query.toString()}`;
+        },
+
+        async loadConsumerSummary() {
+            if (!this.consumerIdKavling) return;
+            this.consumerSummaryController?.abort();
+            const controller = new AbortController();
+            const sequence = ++this.consumerRequestSequence;
+            this.consumerSummaryController = controller;
+            this.consumerSummaryLoading = true;
+            this.consumerSummaryError = '';
+            try {
+                const response = await fetch(this.consumerEndpoint('summary'), {
+                    headers: { Accept: 'application/json' },
+                    signal: controller.signal,
+                });
+                const payload = await response.json();
+                if (sequence !== this.consumerRequestSequence) return;
+                if (!response.ok) {
+                    this.consumerSummaryError = payload.code === 'ambiguous_id_kavling'
+                        ? 'ID Kavling memiliki lebih dari satu data konsumen utama. Periksa data sumber.'
+                        : payload.message || 'Detail konsumen tidak dapat dimuat.';
+                    return;
+                }
+                this.consumerSummary = payload.data;
+            } catch (error) {
+                if (error.name !== 'AbortError' && sequence === this.consumerRequestSequence) {
+                    this.consumerSummaryError = 'Detail konsumen tidak dapat dimuat. Periksa koneksi lalu coba lagi.';
+                }
+            } finally {
+                if (sequence === this.consumerRequestSequence) this.consumerSummaryLoading = false;
+            }
+        },
+
+        async loadConsumerHistory(event = null) {
+            if (event && !event.currentTarget.open) return;
+            if (!this.consumerIdKavling || this.consumerHistoryLoaded || this.consumerHistoryLoading) return;
+            this.consumerHistoryController?.abort();
+            const controller = new AbortController();
+            const sequence = ++this.consumerHistorySequence;
+            this.consumerHistoryController = controller;
+            this.consumerHistoryLoading = true;
+            this.consumerHistoryError = '';
+            try {
+                const response = await fetch(this.consumerEndpoint('history'), {
+                    headers: { Accept: 'application/json' },
+                    signal: controller.signal,
+                });
+                const payload = await response.json();
+                if (sequence !== this.consumerHistorySequence) return;
+                if (!response.ok) {
+                    this.consumerHistoryError = payload.code === 'ambiguous_id_kavling'
+                        ? 'ID Kavling memiliki lebih dari satu data konsumen utama. Riwayat tidak dapat ditentukan.'
+                        : payload.message || 'Riwayat proses tidak dapat dimuat.';
+                    return;
+                }
+                this.consumerHistory = payload.data;
+                this.consumerHistoryLoaded = true;
+            } catch (error) {
+                if (error.name !== 'AbortError' && sequence === this.consumerHistorySequence) {
+                    this.consumerHistoryError = 'Riwayat proses tidak dapat dimuat. Periksa koneksi lalu coba lagi.';
+                }
+            } finally {
+                if (sequence === this.consumerHistorySequence) this.consumerHistoryLoading = false;
+            }
+        },
+
+        retryConsumerHistory() {
+            this.consumerHistoryLoaded = false;
+            this.loadConsumerHistory();
+        },
+
+        consumerFieldValue(fields, key) {
+            return fields?.find(field => field.key === key)?.value ?? '';
+        },
+
+        formatDetailValue(field) {
+            const value = field?.value;
+            if (value === null || value === undefined || value === '') return '—';
+            if (field.type === 'date') return this.formatDate(value);
+            if (field.type === 'money') return this.formatMoney(value);
+            if (field.type === 'boolean') return String(value).toLowerCase() === 'true' ? 'Ya' : 'Tidak';
+            if (typeof value === 'object') return JSON.stringify(value);
+            return String(value);
         },
 
         searchInputId(name) {

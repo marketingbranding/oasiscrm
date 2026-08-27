@@ -128,11 +128,19 @@ class DesignSystemComponentTest extends TestCase
         $this->assertStringContainsString('aria-label="Tutup dialog"', $html);
         $this->assertStringContainsString("event.key === 'Escape'", $source);
         $this->assertStringContainsString("event.key !== 'Tab'", $source);
+        $this->assertStringContainsString('button:not([disabled]), summary, input:not([disabled])', $source);
         $this->assertStringContainsString('lockBodyScroll(this.lockOwner)', $source);
         $this->assertStringContainsString('if (this.open)', $source);
         $this->assertStringContainsString('this.trigger?.focus()', $source);
         $this->assertStringContainsString("'oasis:modal-opened'", $source);
         $this->assertStringContainsString("'oasis:modal-closed'", $source);
         $this->assertStringContainsString('hasOpenPicker()', $source);
+        $this->assertStringContainsString('class="crm-modal-backdrop"', $html);
+        $this->assertStringNotContainsString('crm-modal-backdrop--right', $html);
+
+        $right = Blade::render('<x-crm.modal name="drawer" title="Panel" placement="right">Isi</x-crm.modal>');
+        $this->assertStringContainsString('class="crm-modal-backdrop crm-modal-backdrop--right"', $right);
+        $this->assertStringContainsString('crm-modal-panel--right', $right);
+        $this->assertStringContainsString('x-transition:enter="crm-modal-transition-enter"', $right);
     }
 }

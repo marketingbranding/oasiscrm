@@ -77,7 +77,7 @@ export default function registerCrmModal(Alpine) {
             }
 
             const focusable = Array.from(this.$refs.panel.querySelectorAll(
-                'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+                'a[href], button:not([disabled]), summary, input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
             )).filter((element) => element.offsetParent !== null);
 
             if (focusable.length === 0) {

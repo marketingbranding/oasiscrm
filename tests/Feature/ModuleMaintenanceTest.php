@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Enums\AccountStatus;
 use App\Models\ActivityLog;
+use App\Models\Branch;
 use App\Models\ModuleMaintenance;
 use App\Models\OperationalMaintenanceSetting;
 use App\Models\Role;
@@ -105,15 +106,18 @@ class ModuleMaintenanceTest extends TestCase
         }
     }
 
-    public function test_database_all_seven_routes_have_contract_and_controller_short_circuits_before_google(): void
+    public function test_database_routes_have_contract_and_controller_short_circuits_before_google(): void
     {
-        $names = ['database.index', 'database.sheet', 'database.sync', 'database.sync-status', 'database.records.store', 'database.records.update', 'database.records.destroy'];
+        $names = ['database.index', 'database.consumer', 'database.sheet', 'database.sync', 'database.sync-status', 'database.records.store', 'database.records.update', 'database.records.destroy'];
         foreach ($names as $name) {
             $this->assertRouteModule($name, 'database');
         }
 
         $this->setModule('database', true);
-        $this->actingAs($this->user('staff'))->get(route('database.index'))->assertServiceUnavailable();
+        $staff = $this->user('staff');
+        $branch = Branch::query()->create(['name' => 'Maintenance', 'code' => 'MNT', 'is_active' => true]);
+        $this->actingAs($staff)->get(route('database.index'))->assertServiceUnavailable();
+        $this->actingAs($staff)->getJson(route('database.consumer', ['branch' => $branch, 'id_kavling' => 'KV-01']))->assertServiceUnavailable();
     }
 
     public function test_promo_and_sales_pocketbook_representatives_and_every_registry_route_contract(): void
@@ -135,7 +139,7 @@ class ModuleMaintenanceTest extends TestCase
                 }
             }
         }
-        $this->assertCount(152, $matched);
+        $this->assertCount(153, $matched);
     }
 
     public function test_other_modules_remain_accessible_two_can_run_and_disable_is_independent(): void

@@ -187,6 +187,15 @@
                             <x-crm.button variant="secondary" size="sm" @click="openImport(name, $el)">Import Copas</x-crm.button>
                         </template>
                         @endif
+                        <template x-if="freezeEligible(name)">
+                            <x-crm.button
+                                variant="secondary"
+                                size="sm"
+                                @click="frozen = !frozen"
+                                ::aria-pressed="effectiveFrozen(name)"
+                                x-text="effectiveFrozen(name) ? 'Lepaskan ID Kavling' : 'Bekukan ID Kavling'"
+                            ></x-crm.button>
+                        </template>
                         <x-crm.button
                             variant="secondary"
                             size="sm"
@@ -220,26 +229,17 @@
 
                 <template x-if="isLoaded(name) && currentData(name).records.length > 0">
                     <div class="crm-table-scroll" :data-sheet-scroll="name">
-                        <table class="crm-data-table db-table" :class="{ frozen: frozen }">
+                        <table class="crm-data-table db-table" :class="{ frozen: effectiveFrozen(name) }">
                             <caption class="sr-only" x-text="'Data konsumen pada sheet ' + name + ', cabang ' + @js($selectedBranch->name)"></caption>
                             <thead>
                                 <tr>
-                                    <th scope="col" class="crm-row-num" :class="{ 'row-num': frozen }">Baris</th>
+                                    <th scope="col" class="crm-row-num" :class="{ 'row-num': effectiveFrozen(name) }">Baris</th>
                                     <template x-for="h in tableHeaders(name)" :key="h">
                                         <th scope="col"
                                             :class="(currentData(name).formula_columns.includes(h) ? 'formula-col ' : '') + (isIdKavlingColumn(h) ? 'col-id_kavling' : '')"
                                             :aria-sort="sortAria(h)">
                                             <button type="button" class="database-sort-button" @click="sortBy(h)" :aria-label="sortLabel(name, h)">
                                                 <span x-text="fieldLabel(name, h)"></span><span class="database-sort-indicator" aria-hidden="true" x-text="sortIcon(h)"></span>
-                                            </button>
-                                            <button type="button"
-                                                    x-show="isIdKavlingColumn(h)"
-                                                    @click.stop="frozen = !frozen"
-                                                    class="database-freeze-toggle"
-                                                    :aria-pressed="frozen"
-                                                    :aria-label="frozen ? 'Lepaskan kolom ID Kavling' : 'Bekukan kolom ID Kavling'"
-                                                    :title="frozen ? 'Lepaskan kolom ID Kavling' : 'Bekukan kolom ID Kavling'">
-                                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="5" y="10" width="14" height="10" /><path :d="frozen ? 'M8 10V7a4 4 0 0 1 8 0v3' : 'M8 10V7a4 4 0 0 1 7.5-2'" /></svg>
                                             </button>
                                             <template x-if="currentData(name).formula_columns.includes(h)">
                                                 <span class="database-formula-label">Formula</span>
@@ -252,7 +252,7 @@
                             <tbody>
                                 <template x-for="rec in sortedRecords(name)" :key="rec.id">
                                     <tr>
-                                        <td class="crm-row-num" :class="{ 'row-num': frozen }" x-text="rec.row_number"></td>
+                                        <td class="crm-row-num" :class="{ 'row-num': effectiveFrozen(name) }" x-text="rec.row_number"></td>
                                         <template x-for="h in tableHeaders(name)" :key="h">
                                             <td :class="(isIdKavlingColumn(h) ? 'col-id_kavling ' : '') + (currentData(name).formula_columns.includes(h) ? 'database-formula-cell' : '')"
                                                 :title="rec.row_data[h] || ''">
@@ -265,7 +265,7 @@
                                                    </template>
                                                    <template x-if="!isBooleanValue(rec.row_data[h])">
                                                     <span>
-                                                        <template x-if="normalizeKey(h) === 'nama konsumen' && String(rec.row_data.id_kavling ?? '').trim() !== ''">
+                                                        <template x-if="normalizeKey(h) === 'nama konsumen' && detailSupported(name) && Number.isInteger(Number(rec.id)) && Number(rec.id) > 0">
                                                             <button type="button"
                                                                     class="database-consumer-detail-link"
                                                                     aria-haspopup="dialog"
@@ -274,7 +274,7 @@
                                                                     @click="openConsumerDetail(rec, $el)"
                                                                     x-text="formatCell(name, h, rec.row_data[h])"></button>
                                                         </template>
-                                                        <template x-if="normalizeKey(h) !== 'nama konsumen' || String(rec.row_data.id_kavling ?? '').trim() === ''">
+                                                        <template x-if="normalizeKey(h) !== 'nama konsumen' || !detailSupported(name) || !Number.isInteger(Number(rec.id)) || Number(rec.id) < 1">
                                                             <span x-text="formatCell(name, h, rec.row_data[h])"></span>
                                                         </template>
                                                     </span>
@@ -335,7 +335,8 @@
                         <div class="database-consumer-detail-heading">
                             <p class="crm-type-label">Konsumen</p>
                             <h3 x-text="consumerFieldValue(consumerSummary.fields, 'nama_konsumen') || 'Tanpa nama'"></h3>
-                            <p><span>ID Kavling: </span><strong x-text="consumerSummary.identity.id_kavling"></strong></p>
+                            <p><span>ID Kavling: </span><strong x-text="consumerSummary.identity.id_kavling || '—'"></strong></p>
+                            <p><span>Data dibuka: </span><span x-text="sheetLabel(consumerSummary.identity.anchor.sheet_name) + ', baris ' + consumerSummary.identity.anchor.row_number"></span></p>
                             <p><span>Cabang: </span><span x-text="consumerSummary.identity.branch_name"></span></p>
                         </div>
 
@@ -349,7 +350,7 @@
                         </dl>
 
                         <details class="database-consumer-history" @toggle="loadConsumerHistory($event)">
-                            <summary>Riwayat Proses</summary>
+                            <summary x-text="consumerSummary.identity.history_available ? 'Riwayat Proses' : 'Mengapa Riwayat Tidak Tersedia'"></summary>
                             <div class="database-consumer-history-body">
                                 <div x-show="consumerHistoryLoading" role="status" aria-live="polite" class="crm-loading-state database-consumer-detail-state">
                                     <span class="crm-loading-spinner" aria-hidden="true"></span>
@@ -359,18 +360,32 @@
                                     <div><strong>Riwayat gagal dimuat</strong><p x-text="consumerHistoryError"></p></div>
                                     <div class="crm-alert-actions"><x-crm.button type="button" size="sm" @click="retryConsumerHistory()">Coba Lagi</x-crm.button></div>
                                 </div>
+                                <template x-if="consumerSummary && !consumerSummary.identity.history_available">
+                                    <p class="database-consumer-history-warning" x-text="consumerErrorMessage(consumerSummary.identity.history_unavailable_reason, 'Riwayat proses tidak tersedia untuk data ini.')"></p>
+                                </template>
                                 <template x-if="consumerHistoryLoaded && consumerHistory">
                                     <div>
-                                        <p class="database-consumer-history-warning" x-text="consumerHistory.warning"></p>
+                                        <template x-for="warning in consumerHistory.warnings" :key="warning">
+                                            <p class="database-consumer-history-warning" x-text="warning"></p>
+                                        </template>
+                                        <template x-for="diagnostic in consumerHistory.diagnostics" :key="diagnostic.code + '-' + diagnostic.sheet_name + '-' + diagnostic.row_number">
+                                            <p class="database-consumer-history-warning" x-text="diagnostic.message"></p>
+                                        </template>
                                         <div class="database-consumer-history-stages">
                                             <template x-for="stage in consumerHistory.stages" :key="stage.key">
                                                 <details class="database-consumer-history-stage">
                                                     <summary><span x-text="stage.label"></span> <span x-text="'(' + stage.items.length + ')'" class="database-consumer-history-count"></span></summary>
                                                     <div class="database-consumer-history-items">
+                                                        <template x-for="warning in stage.warnings" :key="warning">
+                                                            <p class="database-consumer-history-warning" x-text="warning"></p>
+                                                        </template>
                                                         <p x-show="stage.items.length === 0" class="database-consumer-history-empty">Belum ada catatan.</p>
-                                                        <template x-for="item in stage.items" :key="stage.key + '-' + item.row_number">
+                                                        <template x-for="item in stage.items" :key="item.record_id">
                                                             <article class="database-consumer-history-item">
                                                                 <p class="database-consumer-history-row">Baris <span x-text="item.row_number"></span></p>
+                                                                <template x-for="warning in item.warnings" :key="warning">
+                                                                    <p class="database-consumer-history-warning" x-text="warning"></p>
+                                                                </template>
                                                                 <dl class="database-consumer-detail-grid">
                                                                     <template x-for="field in item.fields" :key="field.key">
                                                                         <div class="database-consumer-detail-field">
@@ -642,8 +657,8 @@ document.addEventListener('alpine:init', () => {
         sortColumn: null,
         sortDirection: 'asc',
         filterText: '',
-        frozen: true,
-        consumerIdKavling: '',
+         frozen: true,
+         consumerRecordId: null,
         consumerSummary: null,
         consumerSummaryLoading: false,
         consumerSummaryError: '',
@@ -828,7 +843,7 @@ document.addEventListener('alpine:init', () => {
         },
 
         resetConsumerDetail() {
-            this.consumerIdKavling = '';
+            this.consumerRecordId = null;
             this.consumerSummary = null;
             this.consumerSummaryLoading = false;
             this.consumerSummaryError = '';
@@ -841,23 +856,23 @@ document.addEventListener('alpine:init', () => {
         },
 
         openConsumerDetail(rec, trigger = null) {
-            const idKavling = String(rec?.row_data?.id_kavling ?? '').trim();
-            if (!idKavling) return;
+            const recordId = Number(rec?.id);
+            if (!Number.isInteger(recordId) || recordId < 1 || !this.detailSupported(this.tab)) return;
             this.consumerSummaryController?.abort();
             this.consumerHistoryController?.abort();
             this.resetConsumerDetail();
-            this.consumerIdKavling = idKavling;
+            this.consumerRecordId = recordId;
             this.$dispatch('oasis:modal-open', { name: 'database-consumer-detail', trigger });
             this.loadConsumerSummary();
         },
 
         consumerEndpoint(section) {
-            const query = new URLSearchParams({ id_kavling: this.consumerIdKavling, section });
+            const query = new URLSearchParams({ record_id: this.consumerRecordId, section });
             return `${this.consumerDetailUrl}?${query.toString()}`;
         },
 
         async loadConsumerSummary() {
-            if (!this.consumerIdKavling) return;
+            if (!this.consumerRecordId) return;
             this.consumerSummaryController?.abort();
             const controller = new AbortController();
             const sequence = ++this.consumerRequestSequence;
@@ -872,9 +887,7 @@ document.addEventListener('alpine:init', () => {
                 const payload = await response.json();
                 if (sequence !== this.consumerRequestSequence) return;
                 if (!response.ok) {
-                    this.consumerSummaryError = payload.code === 'ambiguous_id_kavling'
-                        ? 'ID Kavling memiliki lebih dari satu data konsumen utama. Periksa data sumber.'
-                        : payload.message || 'Detail konsumen tidak dapat dimuat.';
+                    this.consumerSummaryError = this.consumerErrorMessage(payload.code, payload.message || 'Detail konsumen tidak dapat dimuat.');
                     return;
                 }
                 this.consumerSummary = payload.data;
@@ -889,7 +902,7 @@ document.addEventListener('alpine:init', () => {
 
         async loadConsumerHistory(event = null) {
             if (event && !event.currentTarget.open) return;
-            if (!this.consumerIdKavling || this.consumerHistoryLoaded || this.consumerHistoryLoading) return;
+            if (!this.consumerRecordId || !this.consumerSummary?.identity?.history_available || this.consumerHistoryLoaded || this.consumerHistoryLoading) return;
             this.consumerHistoryController?.abort();
             const controller = new AbortController();
             const sequence = ++this.consumerHistorySequence;
@@ -904,9 +917,7 @@ document.addEventListener('alpine:init', () => {
                 const payload = await response.json();
                 if (sequence !== this.consumerHistorySequence) return;
                 if (!response.ok) {
-                    this.consumerHistoryError = payload.code === 'ambiguous_id_kavling'
-                        ? 'ID Kavling memiliki lebih dari satu data konsumen utama. Riwayat tidak dapat ditentukan.'
-                        : payload.message || 'Riwayat proses tidak dapat dimuat.';
+                    this.consumerHistoryError = this.consumerErrorMessage(payload.code, payload.message || 'Riwayat proses tidak dapat dimuat.');
                     return;
                 }
                 this.consumerHistory = payload.data;
@@ -923,6 +934,18 @@ document.addEventListener('alpine:init', () => {
         retryConsumerHistory() {
             this.consumerHistoryLoaded = false;
             this.loadConsumerHistory();
+        },
+
+        consumerErrorMessage(code, fallback) {
+            const messages = {
+                consumer_not_found: 'Data berubah setelah sinkronisasi. Muat ulang tabel lalu buka detail kembali.',
+                ambiguous_consumer_identity: 'NIK digunakan oleh lebih dari satu data konsumen utama. Riwayat belum dapat ditentukan.',
+                ambiguous_chain_id: 'ID rantai proses digunakan oleh lebih dari satu data. Periksa data sumber.',
+                consumer_chain_broken: 'Rantai ID proses tidak lengkap. Periksa data sumber.',
+                history_limit_exceeded: 'Riwayat proses melebihi batas aman 500 baris.',
+                invalid_request: 'Permintaan detail konsumen tidak valid.',
+            };
+            return messages[code] || fallback;
         },
 
         consumerFieldValue(fields, key) {
@@ -982,6 +1005,7 @@ document.addEventListener('alpine:init', () => {
         async handleSyncUpdated(detail) {
             if (detail.module_key !== 'database' || detail.status !== 'success') return;
             if (String(detail.scope?.id ?? '') !== String(this.branchId)) return;
+            if (this.consumerRecordId) this.$dispatch('oasis:modal-close', { name: 'database-consumer-detail', reason: 'sync' });
             const sheet = this.tab;
             if (!sheet) return;
             if (this.editing) {
@@ -1101,6 +1125,18 @@ document.addEventListener('alpine:init', () => {
 
         hiddenFormKeys(name) {
             return (this.moduleConfig(name).hidden_form || []).map(h => this.normalizeKey(h));
+        },
+
+        detailSupported(name) {
+            return ['data_konsumen', 'bi_checking', 'PSJB', 'pemberkasan', 'proses_bank', 'ppjb_dev', 'akad', 'bast'].includes(name);
+        },
+
+        freezeEligible(name) {
+            return this.isIdKavlingColumn(this.tableHeaders(name)[0]);
+        },
+
+        effectiveFrozen(name) {
+            return this.frozen && this.freezeEligible(name);
         },
 
         tableHeaders(name) {

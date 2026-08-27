@@ -50,7 +50,10 @@ class DatabaseUiTest extends TestCase
         $this->assertStringContainsString('role="tabpanel"', $html, 'Missing tab panel semantics.');
         $this->assertStringContainsString(':aria-sort="sortAria(h)"', $html, 'Missing active sort semantics.');
         $this->assertStringContainsString('class="database-sort-button"', $html, 'Missing keyboard sort control.');
-        $this->assertStringContainsString('Bekukan kolom ID Kavling', $html, 'Missing named freeze control.');
+        $this->assertStringContainsString('Bekukan ID Kavling', $html, 'Missing named freeze control.');
+        $this->assertStringContainsString('freezeEligible(name)', $html, 'Freeze control must require ID Kavling as first visible data column.');
+        $this->assertStringContainsString('effectiveFrozen(name)', $html, 'Sticky classes must use effective eligibility.');
+        $this->assertStringNotContainsString('database-freeze-toggle', $html, 'Freeze icon must not remain in table header.');
         $this->assertStringContainsString('<caption class="sr-only"', $html, 'Missing table caption.');
         $this->assertStringContainsString('crm-row-num', $html, 'Missing canonical row-number column.');
         $this->assertStringContainsString('id="crm-modal-database-edit-title"', $html);

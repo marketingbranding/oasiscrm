@@ -12,7 +12,7 @@ return new class extends Migration
         DB::table('changelogs')->updateOrInsert(
             ['version' => null, 'title' => self::TITLE],
             [
-                'description' => 'Nama konsumen di Database kini membuka ringkasan dan riwayat proses berbasis ID Kavling dalam panel samping, dengan NIK tetap disamarkan.',
+                'description' => 'Nama konsumen di delapan tahap Database kini membuka profil utama dan riwayat proses melalui rantai ID kanonis yang akurat dalam panel samping, dengan NIK tetap disamarkan.',
                 'category' => 'added',
                 'created_by' => null,
                 'created_at' => now(),

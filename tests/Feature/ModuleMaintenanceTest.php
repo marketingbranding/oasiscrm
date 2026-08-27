@@ -117,7 +117,7 @@ class ModuleMaintenanceTest extends TestCase
         $staff = $this->user('staff');
         $branch = Branch::query()->create(['name' => 'Maintenance', 'code' => 'MNT', 'is_active' => true]);
         $this->actingAs($staff)->get(route('database.index'))->assertServiceUnavailable();
-        $this->actingAs($staff)->getJson(route('database.consumer', ['branch' => $branch, 'id_kavling' => 'KV-01']))->assertServiceUnavailable();
+        $this->actingAs($staff)->getJson(route('database.consumer', ['branch' => $branch, 'record_id' => 1]))->assertServiceUnavailable();
     }
 
     public function test_promo_and_sales_pocketbook_representatives_and_every_registry_route_contract(): void

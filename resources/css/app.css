@@ -697,7 +697,7 @@
 .database-table-state { min-height: 9rem; border: var(--oasis-border-width-strong) solid var(--oasis-border-strong); background: var(--oasis-surface-flat); padding: var(--oasis-space-6); }
 
 .db-table th.row-num,
-.db-table td.row-num { width: 52px; min-width: 52px; max-width: 52px; text-align: center; }
+.db-table td.row-num { width: 44px; min-width: 44px; max-width: 44px; text-align: center; }
 .db-table.frozen th.row-num,
 .db-table.frozen td.row-num { position: sticky; left: 0; z-index: 10; }
 .db-table.frozen thead th.row-num { z-index: 13; }
@@ -705,7 +705,7 @@
 .db-table.frozen tbody tr:nth-child(even) td.row-num { background: var(--oasis-surface-muted) !important; }
 .db-table.frozen tbody tr:hover td.row-num { background: #fef3c7 !important; }
 .db-table.frozen th.col-id_kavling,
-.db-table.frozen td.col-id_kavling { position: sticky; left: 52px; z-index: 9; box-shadow: 3px 0 0 var(--oasis-border-strong); }
+.db-table.frozen td.col-id_kavling { position: sticky; left: 44px; z-index: 9; box-shadow: 2px 0 0 var(--oasis-border-strong); }
 .db-table.frozen thead th.col-id_kavling { z-index: 12; }
 .db-table.frozen tbody td.col-id_kavling { background: var(--oasis-surface-flat); }
 .db-table.frozen tbody tr:nth-child(even) td.col-id_kavling { background: var(--oasis-surface-muted); }
@@ -720,9 +720,6 @@
 }
 
 .database-sort-indicator { color: var(--oasis-yellow); }
-.database-freeze-toggle { display: inline-grid; width: 32px; height: 32px; margin-left: var(--oasis-space-1); place-items: center; vertical-align: middle; }
-.database-freeze-toggle svg { width: 14px; height: 14px; }
-.database-freeze-toggle[aria-pressed='true'] { background: var(--oasis-yellow); color: var(--oasis-text); }
 .database-formula-label { display: inline-block; margin-left: var(--oasis-space-1); color: var(--oasis-yellow); font-size: 9px; font-weight: 400; }
 .db-table td.database-formula-cell { background: #d8e7d1; font-style: italic; }
 .crm-table-action { font: 700 11px/1.3 var(--oasis-font-controls); text-decoration: underline; text-underline-offset: 2px; }
@@ -787,7 +784,6 @@
     .database-sheet-toolbar .crm-toolbar-actions .crm-button { width: 100%; }
     .database-tabs { margin-inline: calc(var(--oasis-space-2) * -1); padding-inline: var(--oasis-space-2); }
     .database-tab { min-height: var(--oasis-control-height); }
-    .database-freeze-toggle { width: var(--oasis-control-height); height: var(--oasis-control-height); }
     .crm-modal-footer .crm-button { flex: 1 1 0; }
     .crm-table-scroll { max-width: 100%; max-height: 60dvh; }
 }

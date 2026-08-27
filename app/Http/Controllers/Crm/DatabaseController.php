@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Crm;
 
+use App\Exceptions\DatabaseConsumerDetailException;
 use App\Http\Controllers\Controller;
 use App\Models\Branch;
 use App\Models\DatabaseSheetRecord;
@@ -18,7 +19,6 @@ use App\Services\OrganizationScopeService;
 use App\Services\PresenceService;
 use App\Services\SyncResponseService;
 use App\Services\WorkspaceAccessService;
-use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Validation\Rule;
@@ -160,7 +160,7 @@ class DatabaseController extends Controller
 
         try {
             $validated = $request->validate([
-                'id_kavling' => ['required', 'string', 'max:255'],
+                'record_id' => ['required', 'integer', 'min:1'],
                 'section' => ['nullable', Rule::in(['summary', 'history'])],
             ]);
         } catch (ValidationException $exception) {
@@ -176,25 +176,14 @@ class DatabaseController extends Controller
 
         try {
             $data = $section === 'history'
-                ? $consumerDetails->history($branch, $validated['id_kavling'])
-                : $consumerDetails->summary($branch, $validated['id_kavling']);
-        } catch (ModelNotFoundException) {
+                ? $consumerDetails->history($branch, (int) $validated['record_id'])
+                : $consumerDetails->summary($branch, (int) $validated['record_id']);
+        } catch (DatabaseConsumerDetailException $exception) {
             return response()->json([
                 'ok' => false,
-                'code' => 'consumer_not_found',
-                'message' => 'Detail konsumen tidak ditemukan.',
-            ], 404);
-        } catch (ValidationException $exception) {
-            $historyLimitExceeded = array_key_exists('history', $exception->errors());
-
-            return response()->json([
-                'ok' => false,
-                'code' => $historyLimitExceeded ? 'history_limit_exceeded' : 'ambiguous_id_kavling',
-                'message' => $historyLimitExceeded
-                    ? 'Riwayat proses terlalu besar untuk ditampilkan.'
-                    : 'ID Kavling tidak dapat digunakan karena data konsumen utama ganda.',
-                'errors' => $exception->errors(),
-            ], 422);
+                'code' => $exception->errorCode,
+                'message' => $exception->getMessage(),
+            ], $exception->status);
         }
 
         return response()->json(['ok' => true, 'data' => $data]);

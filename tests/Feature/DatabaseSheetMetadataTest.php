@@ -76,7 +76,7 @@ class DatabaseSheetMetadataTest extends TestCase
         DatabaseSheetRecord::create([
             'branch_id' => $branch->id,
             'sheet_id' => $branch->sheet_id,
-            'sheet_name' => 'Leads',
+            'sheet_name' => 'PSJB',
             'row_number' => 2,
             'headers' => ['nama', 'status'],
             'row_data' => ['nama' => 'Idam', 'status' => 'Aktif'],
@@ -88,7 +88,7 @@ class DatabaseSheetMetadataTest extends TestCase
 
         $response = $this->actingAs($user)->get(route('database.sheet', [
             'branchId' => $branch->id,
-            'sheetName' => 'Leads',
+            'sheetName' => 'PSJB',
         ]));
 
         $response
@@ -119,7 +119,7 @@ class DatabaseSheetMetadataTest extends TestCase
         $record = DatabaseSheetRecord::create([
             'branch_id' => $branch->id,
             'sheet_id' => $branch->sheet_id,
-            'sheet_name' => 'Leads',
+            'sheet_name' => 'PSJB',
             'row_number' => 2,
             'headers' => ['status'],
             'row_data' => ['status' => 'Aktif'],

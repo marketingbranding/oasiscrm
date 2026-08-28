@@ -77,7 +77,7 @@ class DatabaseImportCopasTest extends TestCase
         $user->branches()->syncWithoutDetaching([$branch->id => ['can_view' => true]]);
 
         $google = Mockery::mock(GoogleSheetsApiService::class);
-        $google->shouldReceive('sheetTitles')->once()->with($branch->sheet_id)->andReturn(['data_konsumen']);
+        $google->shouldNotReceive('sheetTitles');
         $this->app->instance(GoogleSheetsApiService::class, $google);
 
         $response = $this->actingAs($user)->get(route('database.index', ['branch_id' => $branch->id]))
@@ -85,6 +85,37 @@ class DatabaseImportCopasTest extends TestCase
             ->assertViewHas('canEdit', false);
 
         $this->assertStringNotContainsString('Import Copas', $response->getContent());
+    }
+
+    public function test_import_preview_rejects_hidden_sheet_before_service_work(): void
+    {
+        [$branch] = $this->setupBranchWithTemplate();
+        $user = $this->editor($branch);
+        $writeService = Mockery::mock(DatabaseSheetWriteService::class);
+        $writeService->shouldNotReceive('editableHeaders');
+        $this->app->instance(DatabaseSheetWriteService::class, $writeService);
+
+        $this->actingAs($user)->postJson(route('database.import.preview'), [
+            'sheet_name' => 'Leads',
+            'branch_id' => $branch->id,
+            'raw' => "id_kavling\tnama_konsumen\nA-02\tBudi",
+        ])->assertUnprocessable();
+    }
+
+    public function test_import_save_rejects_hidden_sheet_before_service_work(): void
+    {
+        [$branch] = $this->setupBranchWithTemplate();
+        $user = $this->editor($branch);
+        $writeService = Mockery::mock(DatabaseSheetWriteService::class);
+        $writeService->shouldNotReceive('editableHeaders');
+        $writeService->shouldNotReceive('createRecord');
+        $this->app->instance(DatabaseSheetWriteService::class, $writeService);
+
+        $this->actingAs($user)->postJson(route('database.import.save'), [
+            'sheet_name' => 'Leads',
+            'branch_id' => $branch->id,
+            'raw' => "id_kavling\tnama_konsumen\nA-02\tBudi",
+        ])->assertUnprocessable();
     }
 
     public function test_import_preview_rejects_unknown_header(): void

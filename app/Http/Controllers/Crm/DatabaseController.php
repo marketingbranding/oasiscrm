@@ -13,7 +13,6 @@ use App\Services\DatabaseFieldConfig;
 use App\Services\DatabaseSheetImportService;
 use App\Services\DatabaseSheetSyncService;
 use App\Services\DatabaseSheetWriteService;
-use App\Services\GoogleSheetsApiService;
 use App\Services\OptimisticLockService;
 use App\Services\OrganizationScopeService;
 use App\Services\PresenceService;
@@ -48,7 +47,7 @@ class DatabaseController extends Controller
         private readonly OrganizationScopeService $organizationScope,
     ) {}
 
-    public function index(Request $request, GoogleSheetsApiService $googleSheets)
+    public function index(Request $request)
     {
         $user = Auth::user();
         $selectedBranchId = $request->get('branch_id');
@@ -71,61 +70,31 @@ class DatabaseController extends Controller
             $isStale = $syncStatus?->status !== 'success' || ! $syncStatus?->finished_at
                 || $syncStatus->finished_at->lt(now()->subMinutes((int) config('services.google_sheets.cache_stale_minutes', 30)));
 
-            $cachedSheetNames = DatabaseSheetRecord::where('branch_id', $selectedBranch->id)
+            $sheetNames = array_keys(self::SHEET_MODULES);
+            $records = array_fill_keys($sheetNames, []);
+
+            $firstSheet = $sheetNames[0];
+            $records[$firstSheet] = DatabaseSheetRecord::where('branch_id', $selectedBranch->id)
+                ->where('sheet_name', $firstSheet)
                 ->whereNull('oasis_deleted_at')
-                ->select('sheet_name')
-                ->distinct()
-                ->orderBy('sheet_name')
-                ->pluck('sheet_name');
-
-            $orderedSheetNames = [];
-            $sheetSeen = [];
-
-            try {
-                $apiSheetNames = $googleSheets->sheetTitles($selectedBranch->sheet_id);
-                foreach ($apiSheetNames as $name) {
-                    $orderedSheetNames[] = $name;
-                    $sheetSeen[$name] = true;
-                    if (! isset($records[$name])) {
-                        $records[$name] = [];
-                    }
-                }
-            } catch (Throwable $e) {
-                // API unavailable, show only sheets with records
-            }
-
-            foreach ($cachedSheetNames as $name) {
-                if (! isset($sheetSeen[$name])) {
-                    $orderedSheetNames[] = $name;
-                    $sheetSeen[$name] = true;
-                }
-            }
-
-            $sheetNames = $orderedSheetNames;
-
-            $firstSheet = $sheetNames[0] ?? null;
-            if ($firstSheet) {
-                $records[$firstSheet] = DatabaseSheetRecord::where('branch_id', $selectedBranch->id)
-                    ->where('sheet_name', $firstSheet)
-                    ->whereNull('oasis_deleted_at')
-                    ->orderBy('row_number')
-                    ->get([
-                        'id',
-                        'sheet_name',
-                        'row_number',
-                        'oasis_sync_id',
-                        'headers',
-                        'row_data',
-                        'formula_columns',
-                        'column_metadata',
-                        'updated_at',
-                    ])
-                    ->all();
-            }
+                ->orderBy('row_number')
+                ->get([
+                    'id',
+                    'sheet_name',
+                    'row_number',
+                    'oasis_sync_id',
+                    'headers',
+                    'row_data',
+                    'formula_columns',
+                    'column_metadata',
+                    'updated_at',
+                ])
+                ->all();
         }
 
-        $requestSheet = $request->get('sheet');
-        $requestAdd = $request->boolean('add');
+        $requestSheet = $request->string('sheet')->toString();
+        $requestSheet = self::isSalesProcessSheet($requestSheet) ? $requestSheet : null;
+        $requestAdd = $requestSheet !== null && $request->boolean('add');
 
         $canSync = $user->hasPermission('database.sync') && $selectedBranch && $this->workspaceAccess->canSyncBranch($user, $selectedBranch);
         $currentState = ['counts' => [], 'eligible_kavlings' => []];
@@ -205,6 +174,7 @@ class DatabaseController extends Controller
         abort_unless($user->hasPermission('database.view'), 403);
         abort_unless(in_array((int) $branch->id, $this->organizationScope->branchIds($user, 'database'), true), 403);
         abort_unless($this->workspaceAccess->canViewBranch($user, $branch), 403);
+        self::authorizeSupportedSheet($sheetName);
 
         $rows = DatabaseSheetRecord::where('branch_id', $branch->id)
             ->where('sheet_name', $sheetName)
@@ -290,9 +260,10 @@ class DatabaseController extends Controller
 
     public function store(Request $request, DatabaseSheetWriteService $writeService)
     {
+        abort_unless(self::isSalesProcessSheet($request->input('sheet_name')), 422);
         $request->validate([
-            'sheet_name' => 'required|string',
-            'branch_id' => 'required|exists:branches,id',
+            'sheet_name' => ['required', 'string', Rule::in(array_keys(self::SHEET_MODULES))],
+            'branch_id' => ['required', 'exists:branches,id'],
         ]);
 
         $branch = Branch::findOrFail($request->input('branch_id'));
@@ -323,10 +294,13 @@ class DatabaseController extends Controller
         $record = DatabaseSheetRecord::find($routeRecordId);
         $recordWasReplaced = false;
         if (! $record && $request->filled('expected_sync_id')) {
-            $record = DatabaseSheetRecord::where('oasis_sync_id', $request->input('expected_sync_id'))->first();
+            $record = DatabaseSheetRecord::whereIn('sheet_name', array_keys(self::SHEET_MODULES))
+                ->where('oasis_sync_id', $request->input('expected_sync_id'))
+                ->first();
             $recordWasReplaced = (bool) $record;
         }
         abort_unless($record, 404);
+        self::authorizeSupportedSheet($record->sheet_name);
 
         $branch = $record->branch;
         if (! $branch) {
@@ -347,6 +321,7 @@ class DatabaseController extends Controller
         ]);
         $input = $request->except(['_token', '_method', 'expected_updated_at', 'expected_sync_id', 'presence_session_key']);
         $result = $this->optimisticLock->execute($request, $record, $request->input('expected_updated_at'), function (DatabaseSheetRecord $current) use ($request, $input, $user) {
+            self::authorizeSupportedSheet($current->sheet_name);
             abort_unless($current->branch && $this->workspaceAccess->canEditBranch($user, $current->branch), 403);
             $identityMatches = blank($current->oasis_sync_id)
                 || hash_equals((string) $current->oasis_sync_id, (string) $request->input('expected_sync_id'));
@@ -396,6 +371,7 @@ class DatabaseController extends Controller
 
     public function destroy(DatabaseSheetRecord $record, DatabaseSheetWriteService $writeService)
     {
+        self::authorizeSupportedSheet($record->sheet_name);
         $branch = $record->branch;
         if (! $branch) {
             return back()->with('error', 'Branch tidak ditemukan.');
@@ -415,10 +391,11 @@ class DatabaseController extends Controller
 
     public function importPreview(Request $request, DatabaseSheetImportService $importService)
     {
+        abort_unless(self::isSalesProcessSheet($request->input('sheet_name')), 422);
         $request->validate([
-            'sheet_name' => 'required|string',
-            'branch_id' => 'required|exists:branches,id',
-            'raw' => 'required|string',
+            'sheet_name' => ['required', 'string', Rule::in(array_keys(self::SHEET_MODULES))],
+            'branch_id' => ['required', 'exists:branches,id'],
+            'raw' => ['required', 'string'],
         ]);
 
         $branch = Branch::findOrFail($request->input('branch_id'));
@@ -432,10 +409,11 @@ class DatabaseController extends Controller
 
     public function importSave(Request $request, DatabaseSheetImportService $importService)
     {
+        abort_unless(self::isSalesProcessSheet($request->input('sheet_name')), 422);
         $request->validate([
-            'sheet_name' => 'required|string',
-            'branch_id' => 'required|exists:branches,id',
-            'raw' => 'required|string',
+            'sheet_name' => ['required', 'string', Rule::in(array_keys(self::SHEET_MODULES))],
+            'branch_id' => ['required', 'exists:branches,id'],
+            'raw' => ['required', 'string'],
         ]);
 
         $branch = Branch::findOrFail($request->input('branch_id'));
@@ -445,6 +423,16 @@ class DatabaseController extends Controller
         $result = $importService->save($branch, $sheetName, $request->input('raw'));
 
         return response()->json($result);
+    }
+
+    private static function isSalesProcessSheet(?string $sheetName): bool
+    {
+        return $sheetName !== null && array_key_exists($sheetName, self::SHEET_MODULES);
+    }
+
+    private static function authorizeSupportedSheet(?string $sheetName): void
+    {
+        abort_unless(self::isSalesProcessSheet($sheetName), 404);
     }
 
     private function authorizeDatabaseEdit(Branch $branch): void

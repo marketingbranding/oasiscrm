@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\Branch;
 use App\Models\Changelog;
 use App\Models\ContentItem;
+use App\Models\DatabaseSheetRecord;
 use App\Models\LeadMaster;
 use App\Models\Permission;
 use App\Models\Role;
@@ -113,7 +114,49 @@ class DashboardTest extends TestCase
         $user = User::factory()->create(['role_id' => $role->id, 'branch_id' => $branch->id, 'password_changed_at' => now()]);
 
         $this->actingAs($user)->get(route('dashboard'))->assertOk()
-            ->assertDontSee(route('database.index', ['sheet' => 'lead', 'add' => 1]), false);
+            ->assertDontSee(route('sales-leads.create'), false);
+    }
+
+    public function test_dashboard_lead_actions_use_buku_saku_destinations(): void
+    {
+        [$branch, $user] = $this->dashboardUser('sales_coordinator');
+        DatabaseSheetRecord::query()->create([
+            'branch_id' => $branch->id,
+            'sheet_id' => 'dashboard-lead-sheet',
+            'sheet_name' => 'lead',
+            'row_number' => 2,
+            'headers' => ['nama_konsumen', 'tanggal_lead'],
+            'row_data' => ['nama_konsumen' => 'Siti', 'tanggal_lead' => today()->format('Y-m-d')],
+            'formula_columns' => [],
+            'column_metadata' => [],
+        ]);
+
+        $this->actingAs($user)->get(route('dashboard'))->assertOk()
+            ->assertSee(route('sales-leads.create'), false)
+            ->assertSee(route('sales-pocketbook.index'), false)
+            ->assertDontSee(route('database.index', ['sheet' => 'lead']), false);
+    }
+
+    public function test_dashboard_lead_queue_is_hidden_without_buku_saku_scope(): void
+    {
+        $role = Role::create(['slug' => 'database_only_dashboard', 'name' => 'Database Only Dashboard', 'is_active' => true]);
+        $role->permissions()->sync(Permission::query()->whereIn('slug', ['database.view', 'database.view_branch'])->pluck('id'));
+        $branch = Branch::create(['name' => 'Database Only', 'code' => 'DBO', 'is_active' => true]);
+        $user = User::factory()->create(['role_id' => $role->id, 'branch_id' => $branch->id, 'password_changed_at' => now()]);
+        DatabaseSheetRecord::query()->create([
+            'branch_id' => $branch->id,
+            'sheet_id' => 'dashboard-lead-sheet',
+            'sheet_name' => 'lead',
+            'row_number' => 2,
+            'headers' => ['nama_konsumen', 'tanggal_lead'],
+            'row_data' => ['nama_konsumen' => 'Hidden Lead', 'tanggal_lead' => today()->format('Y-m-d')],
+            'formula_columns' => [],
+            'column_metadata' => [],
+        ]);
+
+        $this->actingAs($user)->get(route('dashboard'))->assertOk()
+            ->assertDontSee('Lead baru: Hidden Lead')
+            ->assertDontSee(route('sales-leads.create'), false);
     }
 
     public function test_global_dashboard_requires_branch_selection_before_project_filtering(): void

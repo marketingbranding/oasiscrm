@@ -12,6 +12,7 @@
 
     $canViewPlanner = $user->hasScopedPermission('work_planner');
     $canAccessDatabase = $user->hasPermission('database.view') && $user->hasScopedPermission('database');
+    $canAccessSalesPocketbook = $user->hasScopedPermission('sales_pocketbook');
     $canAccessBridgeFund = $user->hasPermission('bridge_fund.view') && $user->hasScopedPermission('bridge_fund');
     $canAccessConsumerProgress = $user->hasPermission('consumer_progress.view') && $user->hasScopedPermission('consumer_progress');
     $canViewDatabase = $canAccessDatabase && $user->hasAnyPermission(['database.view_branch', 'database.view_all']);
@@ -45,11 +46,11 @@
     ]);
     $quickActions = [];
 
-    if ($user->hasScopedPermission('sales_pocketbook')) {
+    if ($canAccessSalesPocketbook) {
         $quickActions[] = ['label' => 'Monitoring Buku Saku', 'url' => route('sales-pocketbook.index', $monitoringParams), 'accent' => 'sales'];
     }
-    if ($canAccessDatabase && $user->hasPermission('database.edit') && $user->hasScopedPermission('database', 'manage')) {
-        $quickActions[] = ['label' => 'Tambah Lead', 'url' => route('database.index', ['sheet' => 'lead', 'add' => 1]), 'accent' => 'sales'];
+    if ($user->can('create', \App\Models\SalesLead::class)) {
+        $quickActions[] = ['label' => 'Tambah Lead', 'url' => route('sales-leads.create'), 'accent' => 'sales'];
     }
     $canCreatePlanner = $canViewPlanner && $user->hasPermission('work_planner.create');
     if ($canCreatePlanner) {
@@ -71,11 +72,11 @@
         $quickActions[] = ['label' => 'Tambah Proyek', 'url' => route('projects.create'), 'accent' => 'administration'];
     }
 
-    $canOpenQueueItem = function (array $item) use ($canViewPlanner, $canViewDatabase, $canViewBridgeFund): bool {
+    $canOpenQueueItem = function (array $item) use ($canViewPlanner, $canAccessSalesPocketbook, $canViewBridgeFund): bool {
         return match (true) {
             str_starts_with($item['type'], 'dana_') => $canViewBridgeFund,
             str_starts_with($item['type'], 'task_'), str_starts_with($item['type'], 'agenda_') => $canViewPlanner,
-            $item['type'] === 'lead_today' => $canViewDatabase,
+            $item['type'] === 'lead_today' => $canAccessSalesPocketbook,
             default => false,
         };
     };

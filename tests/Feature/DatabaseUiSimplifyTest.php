@@ -604,7 +604,7 @@ class DatabaseUiSimplifyTest extends TestCase
     private function mockSheetTitles(Branch $branch, array $titles): void
     {
         $google = Mockery::mock(GoogleSheetsApiService::class);
-        $google->shouldReceive('sheetTitles')->once()->with($branch->sheet_id)->andReturn($titles);
+        $google->shouldNotReceive('sheetTitles');
         $this->app->instance(GoogleSheetsApiService::class, $google);
     }
 }

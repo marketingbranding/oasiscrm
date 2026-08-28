@@ -249,21 +249,23 @@ class DashboardController extends Controller
                 'time' => $t->scheduled_date,
             ]));
 
-        DatabaseSheetRecord::whereRaw('LOWER(sheet_name) = ?', ['lead'])
-            ->whereNull('oasis_deleted_at')
-            ->where('row_data->tanggal_lead', today()->format('Y-m-d'))
-            ->when($branchId, fn ($q) => $q->where('branch_id', $branchId))
-            ->when($projectName, fn ($q) => $q->where('row_data->proyek', $projectName))
-            ->latest()
-            ->take(5)
-            ->get()
-            ->each(fn ($r) => $queue->push([
-                'text' => 'Lead baru: '.($r->row_data['nama_konsumen'] ?? '-'),
-                'urgency' => 5,
-                'type' => 'lead_today',
-                'link' => route('database.index', ['sheet' => 'lead']),
-                'time' => $r->created_at,
-            ]));
+        if ($user->hasScopedPermission('sales_pocketbook')) {
+            DatabaseSheetRecord::whereRaw('LOWER(sheet_name) = ?', ['lead'])
+                ->whereNull('oasis_deleted_at')
+                ->where('row_data->tanggal_lead', today()->format('Y-m-d'))
+                ->when($branchId, fn ($q) => $q->where('branch_id', $branchId))
+                ->when($projectName, fn ($q) => $q->where('row_data->proyek', $projectName))
+                ->latest()
+                ->take(5)
+                ->get()
+                ->each(fn ($r) => $queue->push([
+                    'text' => 'Lead baru: '.($r->row_data['nama_konsumen'] ?? '-'),
+                    'urgency' => 5,
+                    'type' => 'lead_today',
+                    'link' => route('sales-pocketbook.index'),
+                    'time' => $r->created_at,
+                ]));
+        }
 
         return $queue->sortBy('urgency')->take(10)->values();
     }

@@ -649,6 +649,13 @@
 .database-branch-select { min-width: min(20rem, 100%); }
 .database-scope-summary { display: grid; gap: var(--oasis-space-1); font-family: var(--oasis-font-controls); }
 .database-sync-section { margin: var(--oasis-space-4) 0 var(--oasis-space-5); }
+.database-submodule-tabs { display: flex; border-bottom: var(--oasis-border-width-strong) solid var(--oasis-border-strong); }
+.database-submodule-tab { min-height: var(--oasis-control-height); border: var(--oasis-border-width-strong) solid var(--oasis-border-strong); border-bottom: 0; background: var(--oasis-surface-flat); padding: var(--oasis-space-2) var(--oasis-space-4); font: 700 var(--oasis-type-caption-size)/1.2 var(--oasis-font-controls); text-transform: uppercase; }
+.database-submodule-tab.active { position: relative; background: var(--oasis-accent-database); }
+.database-submodule-tab.active::after { position: absolute; right: 0; bottom: -2px; left: 0; height: 2px; background: var(--oasis-accent-database); content: ''; }
+.database-submodule-heading { margin-bottom: var(--oasis-space-4); }
+.database-submodule-heading h2 { font: 900 var(--oasis-type-section-title-size)/1.2 var(--oasis-font-display); text-transform: uppercase; }
+.database-submodule-heading p { margin-top: var(--oasis-space-1); color: var(--oasis-text-muted); font: var(--oasis-type-compact-size)/1.4 var(--oasis-font-controls); }
 
 .database-sheet-toolbar { margin-bottom: var(--oasis-space-2); }
 .database-search-group { display: grid; min-width: min(28rem, 100%); gap: var(--oasis-space-1); }

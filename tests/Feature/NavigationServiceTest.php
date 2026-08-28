@@ -48,7 +48,7 @@ class NavigationServiceTest extends TestCase
         $navigation = $this->navigationFor('superadmin');
 
         $this->assertSame(
-            ['dashboard', 'activities', 'sales', 'operations', 'finance', 'reports', 'administration'],
+            ['dashboard', 'database', 'activities', 'sales', 'operations', 'finance', 'reports', 'administration'],
             array_column($navigation, 'key'),
         );
         $this->assertContains('Cabang', $this->labels($navigation));
@@ -67,10 +67,11 @@ class NavigationServiceTest extends TestCase
             'database.index',
             ['database' => true],
         );
-        $sales = collect($navigation)->firstWhere('key', 'sales');
-        $database = collect($sales['children'])->firstWhere('label', 'Database');
+        $databaseGroup = collect($navigation)->firstWhere('key', 'database');
+        $database = $databaseGroup['children'][0];
 
-        $this->assertTrue($sales['maintenance']);
+        $this->assertTrue($databaseGroup['direct']);
+        $this->assertTrue($databaseGroup['maintenance']);
         $this->assertTrue($database['maintenance']);
         $this->assertTrue($database['active']);
         $this->assertSame('database', $database['module_key']);
@@ -113,18 +114,19 @@ class NavigationServiceTest extends TestCase
         $this->assertNotContains('Laporan Fee Sales', $this->labels($supplementalNavigation));
     }
 
-    public function test_sales_navigation_keeps_only_konsumen_progress_and_database_workspaces(): void
+    public function test_database_is_direct_group_and_sales_keeps_buku_saku_and_konsumen_progress(): void
     {
         $navigation = $this->navigationFor('superadmin', 'konsumen-progress.index');
+        $database = collect($navigation)->firstWhere('key', 'database');
         $sales = collect($navigation)->firstWhere('key', 'sales');
         $labels = array_column($sales['children'], 'label');
 
-        $this->assertSame(['Buku Saku Sales', 'Konsumen Progress', 'Database'], $labels);
+        $this->assertSame(['Buku Saku Sales', 'Konsumen Progress'], $labels);
+        $this->assertSame('Database', $database['label']);
+        $this->assertSame('database', $database['icon']);
+        $this->assertTrue($database['direct']);
         $this->assertTrue(collect($sales['children'])->firstWhere('label', 'Konsumen Progress')['active']);
-        $this->assertFalse(collect($sales['children'])->firstWhere('label', 'Database')['active']);
-        $this->assertNotContains('Data Konsumen', $labels);
-        $this->assertNotContains('Database Baru', $labels);
-        $this->assertNotContains('Database V2', $labels);
+        $this->assertNotContains('Database', $labels);
     }
 
     public function test_konsumen_progress_navigation_requires_permission_and_scope(): void

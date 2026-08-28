@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Http\Controllers\Crm\DatabaseController;
 use App\Models\Branch;
 use App\Models\Changelog;
 use App\Models\DatabaseSheetRecord;
@@ -37,6 +38,22 @@ class DatabaseUiTest extends TestCase
         $this->assertStringContainsString('database-page-header', $html);
         $this->assertStringContainsString('aria-label="Ruang kerja Database"', $html);
         $this->assertStringContainsString('Cabang: Magelang', $html);
+        $this->assertStringContainsString('8 sheet Proses Penjualan', $html);
+        $this->assertStringContainsString('aria-label="Submodule Database"', $html);
+        $this->assertStringContainsString('aria-current="page">Proses Penjualan', $html);
+        $this->assertStringContainsString('Ringkasan jumlah konsumen berdasarkan posisi proses terkini.', $html);
+        $this->assertStringContainsString('aria-label="Tahap Proses Penjualan"', $html);
+        $this->assertStringNotContainsString('Sales / Database', $html);
+        $this->assertStringNotContainsString('"Leads"', $html);
+        $this->assertStringNotContainsString('"data_kav"', $html);
+        $tabLabels = ['Data Konsumen', 'BI Checking', 'PSJB', 'Pemberkasan', 'Proses Bank', 'PPJB Developer', 'Akad', 'BAST'];
+        $position = -1;
+        foreach ($tabLabels as $label) {
+            $next = strpos($html, $label, $position + 1);
+            $this->assertNotFalse($next, "Missing Database tab {$label}");
+            $this->assertGreaterThan($position, $next);
+            $position = $next;
+        }
         $this->assertStringContainsString('id="database-sync-state-title"', $html);
         $this->assertStringContainsString('Data yang sudah tersedia tetap dapat digunakan ketika pembaruan gagal.', $html);
         $this->assertSame(1, substr_count($html, 'x-data="crmSyncStatus('));
@@ -120,7 +137,7 @@ class DatabaseUiTest extends TestCase
         $operator->branches()->syncWithoutDetaching([$branch->id => ['can_view' => true, 'can_edit' => false]]);
 
         $google = Mockery::mock(GoogleSheetsApiService::class);
-        $google->shouldReceive('sheetTitles')->times(3)->with($branch->sheet_id)->andReturn(['Leads']);
+        $google->shouldNotReceive('sheetTitles');
         $this->app->instance(GoogleSheetsApiService::class, $google);
 
         $this->actingAs($viewer)->get(route('database.index', ['branch_id' => $branch->id]))
@@ -133,7 +150,7 @@ class DatabaseUiTest extends TestCase
             ->assertOk()->assertViewHas('canEdit', true);
     }
 
-    public function test_database_preserves_existing_sheet_and_add_deep_link_contract(): void
+    public function test_database_deep_links_require_exact_canonical_sheet(): void
     {
         [$branch] = $this->databaseRecord();
         $user = User::factory()->create([
@@ -141,17 +158,24 @@ class DatabaseUiTest extends TestCase
             'branch_id' => $branch->id,
             'password_changed_at' => now(),
         ]);
-        $this->mockSheetTitles($branch);
+
+        $this->actingAs($user)->get(route('database.index', [
+            'branch_id' => $branch->id,
+            'sheet' => 'lead',
+            'add' => 1,
+        ]))->assertOk()
+            ->assertViewHas('requestSheet', null)
+            ->assertViewHas('requestAdd', false);
 
         $response = $this->actingAs($user)->get(route('database.index', [
             'branch_id' => $branch->id,
-            'sheet' => 'LEADS',
+            'sheet' => 'PSJB',
             'add' => 1,
         ]))->assertOk()
-            ->assertViewHas('requestSheet', 'LEADS')
+            ->assertViewHas('requestSheet', 'PSJB')
             ->assertViewHas('requestAdd', true);
-        $html = $response->getContent();
 
+        $html = $response->getContent();
         $this->assertStringContainsString('databaseTabs(', $html);
         $this->assertStringContainsString('switchTabWithAdd(match, config.requestAdd)', $html);
         $this->assertStringContainsString('this.openAdd(this.tab)', $html);
@@ -176,7 +200,7 @@ class DatabaseUiTest extends TestCase
             'password_changed_at' => now(),
         ]);
         $google = Mockery::mock(GoogleSheetsApiService::class);
-        $google->shouldReceive('sheetTitles')->once()->with($branch->sheet_id)->andReturn(['Leads', 'Archive']);
+        $google->shouldNotReceive('sheetTitles');
         $this->app->instance(GoogleSheetsApiService::class, $google);
 
         DB::flushQueryLog();
@@ -189,12 +213,13 @@ class DatabaseUiTest extends TestCase
             ->filter(fn (string $query) => str_contains($query, 'database_sheet_records'))
             ->values();
 
-        $this->assertCount(3, $recordQueries);
-        $this->assertTrue($recordQueries->contains(fn (string $query) => str_contains($query, 'select distinct') && str_contains($query, 'sheet_name')));
+        $this->assertCount(2, $recordQueries);
         $this->assertTrue($recordQueries->contains(fn (string $query) => str_contains($query, '"sheet_name" = ?')));
         $this->assertTrue($recordQueries->contains(fn (string $query) => str_contains($query, 'row_data') && str_contains($query, 'sheet_name')));
-        $this->assertCount(1, $response->viewData('records')['Leads']);
-        $this->assertSame([], $response->viewData('records')['Archive']);
+        $this->assertSame(array_keys(DatabaseController::SHEET_MODULES), $response->viewData('sheetNames'));
+        $this->assertCount(1, $response->viewData('records')['data_konsumen']);
+        $this->assertSame([], $response->viewData('records')['PSJB']);
+        $this->assertArrayNotHasKey('Archive', $response->viewData('records'));
     }
 
     public function test_database_client_query_state_and_responsive_contract_remain_local(): void
@@ -217,6 +242,21 @@ class DatabaseUiTest extends TestCase
     {
         $title = 'Ruang kerja Database diperbarui';
         $migration = require database_path('migrations/2026_07_30_000001_add_database_2_changelog.php');
+        $migration->up();
+        $migration->up();
+        $superadmin = User::factory()->create([
+            'role_id' => Role::query()->where('slug', 'superadmin')->firstOrFail()->id,
+            'password_changed_at' => now(),
+        ]);
+
+        $this->assertSame(1, Changelog::query()->whereNull('version')->where('title', $title)->count());
+        $this->actingAs($superadmin)->get(route('changelogs.index'))->assertOk()->assertSee($title);
+    }
+
+    public function test_database_sales_process_focus_changelog_is_idempotent_and_visible(): void
+    {
+        $title = 'Database Kini Berfokus pada Proses Penjualan';
+        $migration = require database_path('migrations/2026_08_24_000011_focus_database_sales_process_changelog.php');
         $migration->up();
         $migration->up();
         $superadmin = User::factory()->create([
@@ -254,7 +294,7 @@ class DatabaseUiTest extends TestCase
         $record = DatabaseSheetRecord::query()->create([
             'branch_id' => $branch->id,
             'sheet_id' => $branch->sheet_id,
-            'sheet_name' => 'Leads',
+            'sheet_name' => 'data_konsumen',
             'row_number' => 2,
             'headers' => ['id_kavling', 'nama_konsumen'],
             'row_data' => ['id_kavling' => 'A-01', 'nama_konsumen' => 'Siti'],
@@ -268,7 +308,7 @@ class DatabaseUiTest extends TestCase
     private function mockSheetTitles(Branch $branch): void
     {
         $google = Mockery::mock(GoogleSheetsApiService::class);
-        $google->shouldReceive('sheetTitles')->once()->with($branch->sheet_id)->andReturn(['Leads']);
+        $google->shouldNotReceive('sheetTitles');
         $this->app->instance(GoogleSheetsApiService::class, $google);
     }
 

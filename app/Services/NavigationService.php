@@ -19,6 +19,11 @@ class NavigationService
             $this->group('dashboard', 'Dashboard', 'dashboard', [
                 ! $isSales ? $this->item('Dashboard', 'dashboard', 'dashboard', 'dashboard', ['dashboard'], $routeName, null, $moduleMaintenance) : null,
             ], direct: true),
+            $this->group('database', 'Database', 'database', [
+                ! $isSales && $user->hasPermission('database.view') && $user->hasScopedPermission('database')
+                    ? $this->item('Database', 'database.index', 'database', 'database', ['database.*'], $routeName, 'database', $moduleMaintenance)
+                    : null,
+            ], direct: true),
             $this->group('activities', 'Aktivitas', 'calendar', [
                 $user->hasScopedPermission('work_planner')
                     ? $this->item('Work Planner', 'content-calendar.index', 'calendar', 'planner', ['content-calendar.*'], $routeName, 'work_planner', $moduleMaintenance)
@@ -30,9 +35,6 @@ class NavigationService
                     : null,
                 ! $isSales && $user->hasPermission('consumer_progress.view') && $user->hasScopedPermission('consumer_progress')
                     ? $this->item('Konsumen Progress', 'konsumen-progress.index', 'customers', 'consumer-progress', ['konsumen-progress.*'], $routeName, 'consumer_progress', $moduleMaintenance)
-                    : null,
-                ! $isSales && $user->hasPermission('database.view') && $user->hasScopedPermission('database')
-                    ? $this->item('Database', 'database.index', 'database', 'database', ['database.*'], $routeName, 'database', $moduleMaintenance)
                     : null,
             ]),
             $this->group('operations', 'Operasional', 'operations', [

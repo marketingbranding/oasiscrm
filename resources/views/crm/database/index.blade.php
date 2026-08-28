@@ -5,7 +5,7 @@
 @section('content')
     <x-crm.page-header
         variant="canonical"
-        eyebrow="Sales / Database"
+        eyebrow="Database"
         title="Database"
         description="Temukan dan kelola data konsumen dari cache Google Sheet pada ruang kerja yang sedang aktif."
         class="database-page-header"
@@ -13,7 +13,7 @@
         <x-slot:actions>
             @if($selectedBranch)
                 <x-crm.status-badge variant="info">Cabang: {{ $selectedBranch->name }}</x-crm.status-badge>
-                <x-crm.status-badge variant="neutral">{{ count($sheetNames) }} sheet</x-crm.status-badge>
+                <x-crm.status-badge variant="neutral">{{ count(\App\Http\Controllers\Crm\DatabaseController::SHEET_MODULES) }} sheet Proses Penjualan</x-crm.status-badge>
             @else
                 <x-crm.status-badge variant="warning">Cabang belum dipilih</x-crm.status-badge>
             @endif
@@ -57,7 +57,7 @@
     <x-crm.section
         id="database-sync-state"
         title="Status Sinkronisasi"
-        description="Status cache Database untuk cabang {{ $selectedBranch->name }}. Data yang sudah tersedia tetap dapat digunakan ketika pembaruan gagal."
+        description="Status cache 8 sheet Proses Penjualan untuk cabang {{ $selectedBranch->name }}. Data yang sudah tersedia tetap dapat digunakan ketika pembaruan gagal."
         class="database-sync-section"
     >
         <x-crm.sync-status-panel module-key="database" :scope-name="$selectedBranch->name" :branch-id="$selectedBranchId" :status="$syncStatus" :is-stale="$isStale" />
@@ -113,10 +113,18 @@
          @oasis-sync-updated.window="handleSyncUpdated($event.detail)"
          @oasis:modal-closed.window="handleModalClosed($event.detail)"
          @oasis-form-error.window="handleFormError($event.detail)">
-        <x-crm.section id="database-dashboard" title="Dashboard" description="Ringkasan jumlah baris dari cache spreadsheet aktif." class="mb-4">
+        <section aria-labelledby="database-sales-process-title">
+            <nav class="database-submodule-tabs crm-horizontal-tabs crm-page-tabs" aria-label="Submodule Database">
+                <button type="button" class="database-submodule-tab active" aria-current="page">Proses Penjualan</button>
+            </nav>
+            <div class="database-submodule-heading">
+                <h2 id="database-sales-process-title">Proses Penjualan</h2>
+                <p>Delapan tahap data konsumen dari awal proses hingga BAST.</p>
+            </div>
+        <x-crm.section id="database-dashboard" title="Dashboard" description="Ringkasan jumlah konsumen berdasarkan posisi proses terkini." class="mb-4">
             <div class="grid grid-cols-2 gap-3 md:grid-cols-4 xl:grid-cols-8">@foreach(\App\Http\Controllers\Crm\DatabaseController::SHEET_MODULES as $sheet => $label)<div class="border border-gray-300 bg-white p-3"><div class="text-xs font-bold uppercase">{{ $label }}</div><div class="text-2xl font-bold"><span x-text="dashboardCounts[@js($sheet)] ?? 0">{{ $sheetCounts[$sheet] ?? 0 }}</span></div></div>@endforeach</div>
         </x-crm.section>
-        <div class="database-tabs crm-horizontal-tabs" data-horizontal-tabs role="tablist" aria-label="Sheet Database"
+        <div class="database-tabs crm-horizontal-tabs" data-horizontal-tabs role="tablist" aria-label="Tahap Proses Penjualan"
              x-data="databaseTabStrip()"
              x-init="init($el)"
              @wheel.prevent="onWheel($event)"
@@ -555,9 +563,10 @@
             </x-slot:footer>
         </x-crm.modal>
         @endif
+        </section>
     </div>
     @elseif($selectedBranch)
-        <x-crm.section id="database-dashboard" title="Dashboard" description="Ringkasan jumlah baris dari cache spreadsheet aktif." class="mb-4">
+        <x-crm.section id="database-dashboard" title="Dashboard" description="Ringkasan jumlah konsumen berdasarkan posisi proses terkini." class="mb-4">
             <div class="grid grid-cols-2 gap-3 md:grid-cols-4 xl:grid-cols-8">@foreach(\App\Http\Controllers\Crm\DatabaseController::SHEET_MODULES as $sheet => $label)<div class="border border-gray-300 bg-white p-3"><div class="text-xs font-bold uppercase">{{ $label }}</div><div class="text-2xl font-bold">{{ $sheetCounts[$sheet] ?? 0 }}</div></div>@endforeach</div>
         </x-crm.section>
         @if(Auth::user()->isSuperadmin())
@@ -682,8 +691,7 @@ document.addEventListener('alpine:init', () => {
             this.sheetNameList = config.sheetNames;
 
             if (config.requestSheet) {
-                const lowerRequest = config.requestSheet.toLowerCase();
-                const match = this.sheetNameList.find(s => s.toLowerCase() === lowerRequest);
+                const match = this.sheetNameList.find(s => s === config.requestSheet);
                 if (match) {
                     if (match !== config.firstSheet) {
                         this.$nextTick(() => this.switchTabWithAdd(match, config.requestAdd));

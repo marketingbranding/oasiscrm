@@ -86,7 +86,7 @@ class OptimisticLockTest extends TestCase
     {
         [$branch, $user] = $this->branchAndUser();
         $record = DatabaseSheetRecord::create([
-            'branch_id' => $branch->id, 'sheet_id' => 'sheet', 'sheet_name' => 'Leads', 'row_number' => 2,
+            'branch_id' => $branch->id, 'sheet_id' => 'sheet', 'sheet_name' => 'PSJB', 'row_number' => 2,
             'oasis_sync_id' => 'stable-source-id', 'headers' => ['status'], 'row_data' => ['status' => 'Aktif'],
         ]);
         $writer = Mockery::mock(DatabaseSheetWriteService::class);
@@ -105,14 +105,14 @@ class OptimisticLockTest extends TestCase
     {
         [$branch, $user] = $this->branchAndUser();
         $old = DatabaseSheetRecord::create([
-            'branch_id' => $branch->id, 'sheet_id' => 'sheet', 'sheet_name' => 'Leads', 'row_number' => 2,
+            'branch_id' => $branch->id, 'sheet_id' => 'sheet', 'sheet_name' => 'PSJB', 'row_number' => 2,
             'oasis_sync_id' => 'stable-replaced-id', 'headers' => ['status'], 'row_data' => ['status' => 'Aktif'],
         ]);
         $oldId = $old->id;
         $oldToken = app(OptimisticLockService::class)->token($old);
         $old->delete();
         $replacement = DatabaseSheetRecord::create([
-            'branch_id' => $branch->id, 'sheet_id' => 'sheet', 'sheet_name' => 'Leads', 'row_number' => 2,
+            'branch_id' => $branch->id, 'sheet_id' => 'sheet', 'sheet_name' => 'PSJB', 'row_number' => 2,
             'oasis_sync_id' => 'stable-replaced-id', 'headers' => ['status'], 'row_data' => ['status' => 'Baru'],
         ]);
         $writer = Mockery::mock(DatabaseSheetWriteService::class);

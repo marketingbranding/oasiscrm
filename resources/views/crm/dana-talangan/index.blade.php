@@ -72,9 +72,13 @@
     <x-crm.page-presence page-key="dana-talangan" :branch-id="$selectedBranchId" />
 
     <x-crm.sync-status-panel module-key="dana-talangan" scope-name="Global" :status="$syncStatus">
-        <div class="flex items-center gap-2">
-            <a href="https://docs.google.com/spreadsheets/d/{{ config('services.google_sheets.dana_talangan_spreadsheet_id') }}" target="_blank"
-               class="border-2 border-black bg-white px-3 py-1.5 text-xs font-[Helvetica] font-bold hover:bg-gray-100">Buka Sheet</a>
+        <div class="flex flex-wrap items-center gap-2">
+            <x-crm.status-badge :variant="$bridgeSetting?->mode?->value === 'bidirectional' ? 'success' : ($bridgeSetting?->mode?->value === 'push_only' ? 'info' : 'neutral')">
+                BRIDGE {{ strtoupper($bridgeSetting?->mode?->value ?? 'off') }}
+            </x-crm.status-badge>
+            @if($canReview)
+            <a href="{{ route('dana-talangan.reconciliation') }}" class="border-2 border-black bg-white px-3 py-1.5 text-xs font-[Helvetica] font-bold hover:bg-gray-100">Rekonsiliasi ({{ $openReconciliationCount }})</a>
+            @endif
             <x-crm.sync-control module-key="dana-talangan" module-name="Sinkronisasi Dana Talangan" scope-name="Global" :sync-url="route('dana-talangan.sync')" :status-url="route('dana-talangan.sync-status')" :status="$syncStatus" :can-sync="$canSync" button-class="border-2 border-black bg-[#5d8e8e] text-white px-3 py-1.5 text-xs font-[Helvetica] font-bold" />
         </div>
     </x-crm.sync-status-panel>
@@ -200,6 +204,7 @@
                     <th>Progress Penagihan</th>
                     <th>Konfirmasi</th>
                     <x-crm.click-sort-th field="status" route="dana-talangan.index" label="Status Cicilan" :currentSort="$sortField" :currentDir="$sortDir" align="center" />
+                    <th>Bridge</th>
                     <th class="crm-actions">Aksi</th>
                 </tr>
             </thead>
@@ -227,11 +232,36 @@
                             {{ $r->status === 'sanggup' ? 'SANGGUP' : ($r->status === 'tidak_sanggup' ? 'TIDAK SANGGUP' : 'LUNAS') }}
                         </x-crm.status-badge>
                     </td>
+                    <td class="text-center">
+                        @php
+                            $bridgeLabel = match($r->sync_status) {
+                                'synced' => 'TERSINKRON',
+                                'conflict' => 'KONFLIK',
+                                'sync_failed', 'failed' => 'GAGAL',
+                                'pending_delete' => 'MENUNGGU HAPUS',
+                                'pending_create', 'pending_update', 'pending' => 'MENUNGGU',
+                                default => 'LOKAL',
+                            };
+                            $bridgeVariant = match($r->sync_status) {
+                                'synced' => 'success',
+                                'conflict', 'sync_failed', 'failed' => 'danger',
+                                'pending_delete', 'pending_create', 'pending_update', 'pending' => 'warning',
+                                default => 'neutral',
+                            };
+                        @endphp
+                        <x-crm.status-badge :variant="$bridgeVariant">{{ $bridgeLabel }}</x-crm.status-badge>
+                    </td>
                     <td class="crm-actions">
                         @if(auth()->user()->hasPermission('comments.view'))
                         <a href="{{ route('comments.thread', ['alias' => 'bridge-fund', 'id' => $r->id]) }}" class="font-[Helvetica] font-bold underline" style="font-size:11px;color:#0000ee;">Komentar ({{ $r->comments_count }})</a>
                         @endif
                         @if($canManage)
+                        @if(in_array($r->sync_status, ['pending_create', 'pending_update', 'sync_failed', 'failed']))
+                        <form method="POST" action="{{ route('dana-talangan.retry', $r) }}" class="inline">
+                            @csrf
+                            <button class="font-[Helvetica] font-bold underline" style="font-size:11px;color:#0000ee;">Kirim Ulang</button>
+                        </form>
+                        @endif
                         <div class="flex items-center justify-center gap-1">
                             <button type="button" @click="openEdit(@js([
                                 "id" => $r->id,
@@ -268,7 +298,7 @@
                 </tr>
                 @empty
                 <tr>
-                    <td colspan="16"><x-crm.empty-state title="Belum ada data dana talangan." description="Ubah filter atau tambahkan data dana talangan baru melalui tombol utama." /></td>
+                    <td colspan="17"><x-crm.empty-state title="Belum ada data dana talangan." description="Ubah filter atau tambahkan data dana talangan baru melalui tombol utama." /></td>
                 </tr>
                 @endforelse
             </tbody>

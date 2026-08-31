@@ -4,6 +4,7 @@ namespace App\Imports;
 
 use App\Imports\Concerns\ParsesImport;
 use App\Models\DanaTalangan;
+use App\Models\LeadMaster;
 use Illuminate\Support\Facades\Auth;
 
 class DanaTalanganImport
@@ -100,12 +101,29 @@ class DanaTalanganImport
                 continue;
             }
 
+            $project = null;
+            if ($projectName !== '') {
+                $projects = LeadMaster::query()
+                    ->where('branch_id', $resolvedBranchId)
+                    ->where('is_active', true)
+                    ->get()
+                    ->filter(fn (LeadMaster $item) => $item->project_name === $projectName || $item->sheet_project_name === $projectName);
+                if ($projects->count() !== 1) {
+                    $errors[] = "Baris {$rowNum}: Proyek harus cocok tepat dengan satu proyek aktif pada cabang.";
+
+                    continue;
+                }
+                $project = $projects->first();
+            }
+
             $data = [
                 'branch_id' => $resolvedBranchId,
+                'project_id' => $project?->id,
+                'sync_status' => 'pending_create',
                 'tanggal' => $tanggal,
                 'nama_konsumen' => $namaKonsumen,
                 'kav' => $kav ?: null,
-                'project_name' => $projectName ?: null,
+                'project_name' => $project?->project_name ?? ($projectName ?: null),
                 'pinjam_nama' => self::parseBool((string) $pinjamNama),
                 'pekerjaan' => $pekerjaan ?: null,
                 'status_perkawinan' => $statusKawin ?: null,

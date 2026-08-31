@@ -126,19 +126,14 @@ class DanaTalanganGoogleSyncTest extends TestCase
         $this->assertStringContainsString('color:#c0392b', $response->getContent());
     }
 
-    public function test_branch_user_store_pushes_new_record_to_google_service(): void
+    public function test_branch_user_store_is_local_only_while_bridge_is_off(): void
     {
         [$branch, $user] = $this->makeBranchAndUser();
-        LeadMaster::create([
+        $project = LeadMaster::create([
             'branch_id' => $branch->id,
             'project_name' => 'Proyek Test',
             'is_active' => true,
         ]);
-        $googleService = Mockery::mock(DanaTalanganGoogleService::class);
-        $googleService->shouldReceive('branchIdForProject')->once()->with('Proyek Test')->andReturn($branch->id);
-        $googleService->shouldReceive('push')->once()->withArgs(fn ($record, $actorId) => $record instanceof DanaTalangan && $record->nama_konsumen === 'Konsumen Baru' && $actorId === $user->id
-        )->andReturnTrue();
-        $this->app->instance(DanaTalanganGoogleService::class, $googleService);
 
         $response = $this->actingAs($user)->post(route('dana-talangan.store'), [
             'tanggal' => '2026-07-15',
@@ -153,6 +148,9 @@ class DanaTalanganGoogleSyncTest extends TestCase
         $this->assertDatabaseHas('dana_talangans', [
             'nama_konsumen' => 'Konsumen Baru',
             'branch_id' => $branch->id,
+            'project_id' => $project->id,
+            'sync_status' => 'local',
+            'oasis_sync_id' => null,
         ]);
     }
 
@@ -160,12 +158,8 @@ class DanaTalanganGoogleSyncTest extends TestCase
     {
         [$branch, $user] = $this->makeBranchAndUser();
         LeadMaster::create(['branch_id' => $branch->id, 'project_name' => 'Proyek Test', 'is_active' => true]);
-        $googleService = Mockery::mock(DanaTalanganGoogleService::class);
-        $googleService->shouldReceive('branchIdForProject')->once()->with('Proyek Test')->andReturn($branch->id);
-        $googleService->shouldNotReceive('push');
         $optionService = Mockery::mock(DanaTalanganOptionService::class);
         $optionService->shouldReceive('isValidKavling')->once()->andReturnFalse();
-        $this->app->instance(DanaTalanganGoogleService::class, $googleService);
         $this->app->instance(DanaTalanganOptionService::class, $optionService);
 
         $response = $this->actingAs($user)->post(route('dana-talangan.store'), [
@@ -183,18 +177,13 @@ class DanaTalanganGoogleSyncTest extends TestCase
     public function test_branch_user_can_update_and_delete_from_action_column(): void
     {
         [$branch, $user] = $this->makeBranchAndUser();
-        LeadMaster::create([
+        $project = LeadMaster::create([
             'branch_id' => $branch->id,
             'project_name' => 'Proyek Test',
             'is_active' => true,
         ]);
         $record = $this->makeRecord($branch, $user);
-        $googleService = Mockery::mock(DanaTalanganGoogleService::class);
-        $googleService->shouldReceive('branchIdForProject')->once()->with('Proyek Test')->andReturn($branch->id);
-        $googleService->shouldReceive('push')->once()->andReturnTrue();
-        $googleService->shouldReceive('delete')->once()->withArgs(fn ($deletedRecord, $actorId) => $deletedRecord->is($record) && $actorId === $user->id
-        )->andReturnTrue();
-        $this->app->instance(DanaTalanganGoogleService::class, $googleService);
+        $record->update(['project_id' => $project->id]);
 
         $this->actingAs($user)->put(route('dana-talangan.update', $record), [
             'tanggal' => '2026-07-15',
@@ -308,11 +297,9 @@ class DanaTalanganGoogleSyncTest extends TestCase
     {
         [$branch, $admin] = $this->makeBranchAndUser();
         $otherBranch = Branch::create(['name' => 'Cabang Lain', 'code' => 'OTHER', 'is_active' => true]);
-        $googleService = Mockery::mock(DanaTalanganGoogleService::class);
-        $googleService->shouldReceive('branchIdForProject')->once()->with('Proyek Lain')->andReturn($otherBranch->id);
+        LeadMaster::create(['branch_id' => $otherBranch->id, 'project_name' => 'Proyek Lain', 'is_active' => true]);
         $optionService = Mockery::mock(DanaTalanganOptionService::class);
         $optionService->shouldReceive('kavlings')->once()->withArgs(fn ($requestedBranch, $project) => $requestedBranch->is($otherBranch) && $project === 'Proyek Lain')->andReturn(['A01']);
-        $this->app->instance(DanaTalanganGoogleService::class, $googleService);
         $this->app->instance(DanaTalanganOptionService::class, $optionService);
 
         $this->actingAs($admin)->getJson(route('dana-talangan.kavling-options', [

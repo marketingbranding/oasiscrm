@@ -56,4 +56,9 @@ class LeadMaster extends Model
     {
         return $this->hasMany(Expense::class, 'project_id');
     }
+
+    public function danaTalangans(): HasMany
+    {
+        return $this->hasMany(DanaTalangan::class, 'project_id');
+    }
 }

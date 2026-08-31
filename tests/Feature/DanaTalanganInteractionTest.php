@@ -7,9 +7,7 @@ use App\Models\DanaTalangan;
 use App\Models\LeadMaster;
 use App\Models\Role;
 use App\Models\User;
-use App\Services\DanaTalanganGoogleService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Mockery;
 use Tests\TestCase;
 
 class DanaTalanganInteractionTest extends TestCase
@@ -200,10 +198,6 @@ class DanaTalanganInteractionTest extends TestCase
         $this->makeProject($branch);
         $record = $this->makeRecord($branch, $user);
 
-        $googleService = Mockery::mock(DanaTalanganGoogleService::class);
-        $googleService->shouldReceive('push')->once()->withArgs(fn ($pushed, $actorId) => $pushed->is($record) && $actorId === $user->id)->andReturnTrue();
-        $this->app->instance(DanaTalanganGoogleService::class, $googleService);
-
         $this->actingAs($user)->post(route('dana-talangan.bulk-update'), [
             'selected_ids' => (string) $record->id,
             'new_status' => 'lunas',
@@ -217,16 +211,6 @@ class DanaTalanganInteractionTest extends TestCase
         [$branch, $user] = $this->makeBranchAndUser();
         $this->makeProject($branch);
         $record = $this->makeRecord($branch, $user);
-
-        $googleService = Mockery::mock(DanaTalanganGoogleService::class);
-        $googleService->shouldReceive('delete')->once()->andReturnUsing(function ($deletedRecord, $actorId) use ($record, $user) {
-            $this->assertTrue($deletedRecord->is($record));
-            $this->assertSame($user->id, $actorId);
-            $deletedRecord->delete();
-
-            return true;
-        });
-        $this->app->instance(DanaTalanganGoogleService::class, $googleService);
 
         $this->actingAs($user)->post(route('dana-talangan.bulk-destroy'), [
             'selected_ids' => (string) $record->id,

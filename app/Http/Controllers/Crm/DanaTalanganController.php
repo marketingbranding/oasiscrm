@@ -14,12 +14,15 @@ use App\Http\Requests\Crm\UpdateDanaTalanganRequest;
 use App\Imports\DanaTalanganImport;
 use App\Models\Branch;
 use App\Models\DanaTalangan;
+use App\Models\DanaTalanganBridgeSetting;
+use App\Models\DanaTalanganReconciliationItem;
 use App\Models\DanaTalanganSyncStatus;
 use App\Models\Kavling;
 use App\Models\LeadMaster;
 use App\Services\CollaborationNotificationService;
-use App\Services\DanaTalanganGoogleService;
+use App\Services\DanaTalanganBridgeService;
 use App\Services\DanaTalanganOptionService;
+use App\Services\DanaTalanganService;
 use App\Services\OptimisticLockService;
 use App\Services\OrganizationScopeService;
 use App\Services\PresenceService;
@@ -174,12 +177,16 @@ class DanaTalanganController extends Controller
             $records = $query->orderBy($sortField, $sortDir)->paginate((int) $perPage)->withQueryString();
         }
 
-        $syncStatus = DanaTalanganSyncStatus::where('spreadsheet_id', config('services.google_sheets.dana_talangan_spreadsheet_id'))->first();
-        $canSync = $user->hasPermission('bridge_fund.manage_all');
+        $spreadsheetId = config('services.google_sheets.dana_talangan_spreadsheet_id');
+        $syncStatus = DanaTalanganSyncStatus::where('spreadsheet_id', $spreadsheetId)->first();
+        $bridgeSetting = DanaTalanganBridgeSetting::where('spreadsheet_id', $spreadsheetId)->first();
+        $canReview = $user->hasPermission('bridge_fund.manage_all');
+        $canSync = $canReview && config('services.google_sheets.dana_talangan_bridge_enabled') && $bridgeSetting?->mode?->pullEnabled();
         $canManage = $user->hasPermission('bridge_fund.manage');
         $canExport = $user->hasPermission('bridge_fund.export');
+        $openReconciliationCount = $canReview ? DanaTalanganReconciliationItem::where('status', 'open')->count() : 0;
 
-        return view('crm.dana-talangan.index', compact('records', 'branches', 'projects', 'formProjects', 'projectOptions', 'selectedBranchId', 'selectedProject', 'selectedStatus', 'sortField', 'sortDir', 'perPage', 'syncStatus', 'search', 'trackingSummary', 'filterMode', 'dateFrom', 'dateTo', 'monthFrom', 'monthTo', 'canSync', 'canManage', 'canExport', 'summary'));
+        return view('crm.dana-talangan.index', compact('records', 'branches', 'projects', 'formProjects', 'projectOptions', 'selectedBranchId', 'selectedProject', 'selectedStatus', 'sortField', 'sortDir', 'perPage', 'syncStatus', 'bridgeSetting', 'search', 'trackingSummary', 'filterMode', 'dateFrom', 'dateTo', 'monthFrom', 'monthTo', 'canSync', 'canManage', 'canExport', 'canReview', 'openReconciliationCount', 'summary'));
     }
 
     public function create()
@@ -200,18 +207,18 @@ class DanaTalanganController extends Controller
         return view('crm.dana-talangan.create', compact('branches', 'projects', 'kavlings'));
     }
 
-    public function store(StoreDanaTalanganRequest $request, DanaTalanganGoogleService $googleService, DanaTalanganOptionService $optionService)
+    public function store(StoreDanaTalanganRequest $request, DanaTalanganService $service, DanaTalanganOptionService $optionService)
     {
         $user = Auth::user();
         $data = $request->validated();
         $data['branch_id'] ??= $this->workspaceAccess->resolveRequestedBranch($user, null)?->id;
-
-        $projectBranchId = $googleService->branchIdForProject($data['project_name']);
-        if (! $projectBranchId || (int) $data['branch_id'] !== $projectBranchId) {
-            return back()->withInput()->withErrors(['project_name' => 'Proyek tidak terdaftar pada cabang yang dipilih.']);
+        $project = $service->resolveProject($data['project_name'], (int) $data['branch_id']);
+        if ($project === null) {
+            return back()->withInput()->withErrors(['project_name' => 'Proyek tidak terdaftar tepat pada cabang yang dipilih.']);
         }
-        $data['branch_id'] = $projectBranchId;
-        $branch = Branch::findOrFail($projectBranchId);
+        $data['project_id'] = $project->id;
+        $data['project_name'] = $project->project_name;
+        $branch = Branch::findOrFail($project->branch_id);
         abort_unless(in_array((int) $branch->id, $this->organizationScope->branchIds($user, 'bridge_fund', 'manage'), true), 403);
         abort_unless($this->workspaceAccess->canEditBranch($user, $branch), 403);
         if (! $optionService->isValidKavling($branch, $data['project_name'], $data['kav'] ?? null)) {
@@ -220,16 +227,10 @@ class DanaTalanganController extends Controller
 
         $data['pinjam_nama'] = $request->boolean('pinjam_nama');
         $data['konfirmasi_keuangan'] = $request->boolean('konfirmasi_keuangan');
-        $data['created_by'] = $user->id;
-
-        $record = DanaTalangan::create($data);
-        if (! $googleService->push($record, $user->id)) {
-            return redirect()->route('dana-talangan.index')
-                ->with('error', 'Data lokal tersimpan, tetapi gagal dikirim ke Google Sheets: '.$record->last_sync_error);
-        }
+        $service->create($data, $user);
 
         return redirect()->route('dana-talangan.index')
-            ->with('success', 'Data dana talangan berhasil ditambahkan.');
+            ->with(config('services.google_sheets.dana_talangan_bridge_enabled') && app(DanaTalanganBridgeModeService::class)->isPushEnabled() ? 'success' : 'warning', config('services.google_sheets.dana_talangan_bridge_enabled') && app(DanaTalanganBridgeModeService::class)->isPushEnabled() ? 'Data dana talangan berhasil ditambahkan.' : 'Data dana talangan tersimpan lokal; bridge belum aktif.');
     }
 
     public function edit(DanaTalangan $danaTalangan)
@@ -253,7 +254,7 @@ class DanaTalanganController extends Controller
         return view('crm.dana-talangan.edit', compact('record', 'branches', 'projects', 'kavlings'));
     }
 
-    public function update(UpdateDanaTalanganRequest $request, DanaTalangan $danaTalangan, DanaTalanganGoogleService $googleService, DanaTalanganOptionService $optionService)
+    public function update(UpdateDanaTalanganRequest $request, DanaTalangan $danaTalangan, DanaTalanganService $service, DanaTalanganOptionService $optionService)
     {
         $user = Auth::user();
         abort_unless(in_array((int) $danaTalangan->branch_id, $this->organizationScope->branchIds($user, 'bridge_fund', 'manage'), true), 403);
@@ -264,12 +265,14 @@ class DanaTalanganController extends Controller
         unset($data['expected_updated_at']);
         $data['branch_id'] ??= $danaTalangan->branch_id;
 
-        $projectBranchId = $googleService->branchIdForProject($data['project_name']);
-        if (! $projectBranchId || (int) $data['branch_id'] !== $projectBranchId) {
-            return back()->withInput()->withErrors(['project_name' => 'Proyek tidak terdaftar pada cabang yang dipilih.']);
+        $project = $service->resolveProject($data['project_name'], (int) $data['branch_id']);
+        if ($project === null) {
+            return back()->withInput()->withErrors(['project_name' => 'Proyek tidak terdaftar tepat pada cabang yang dipilih.']);
         }
-        $data['branch_id'] = $projectBranchId;
-        $branch = Branch::findOrFail($projectBranchId);
+        $data['branch_id'] = $project->branch_id;
+        $data['project_id'] = $project->id;
+        $data['project_name'] = $project->project_name;
+        $branch = Branch::findOrFail($project->branch_id);
         abort_unless(in_array((int) $branch->id, $this->organizationScope->branchIds($user, 'bridge_fund', 'manage'), true), 403);
         abort_unless($this->workspaceAccess->canEditBranch($user, $branch), 403);
         $kavChanged = $this->normalizeKav($data['kav'] ?? null) !== $this->normalizeKav($danaTalangan->kav);
@@ -290,22 +293,8 @@ class DanaTalanganController extends Controller
             return $result;
         }
         $danaTalangan = $result;
+        $service->updated($danaTalangan, $user);
         $this->notifications->recordUpdated($danaTalangan, $user, route('dana-talangan.edit', $danaTalangan));
-        if (! $googleService->push($danaTalangan, $user->id)) {
-            if ($request->expectsJson()) {
-                return response()->json([
-                    'ok' => false,
-                    'local_saved' => true,
-                    'message' => 'Data lokal diperbarui, tetapi gagal dikirim ke Google Sheets.',
-                    'updated_at' => $this->optimisticLock->token($danaTalangan->fresh()),
-                    'reload_url' => route('dana-talangan.edit', $danaTalangan),
-                ], 422);
-            }
-
-            return redirect()->route('dana-talangan.index')
-                ->with('error', 'Data lokal diperbarui, tetapi gagal dikirim ke Google Sheets: '.$danaTalangan->last_sync_error);
-        }
-
         $this->presence->clearEditing($user, $danaTalangan, $request->input('presence_session_key'));
 
         if ($request->expectsJson()) {
@@ -363,14 +352,18 @@ class DanaTalanganController extends Controller
         return response()->json($danaTalangan);
     }
 
-    public function destroy(DanaTalangan $danaTalangan, DanaTalanganGoogleService $googleService)
+    public function destroy(DanaTalangan $danaTalangan, DanaTalanganService $service)
     {
         $user = Auth::user();
         abort_unless(in_array((int) $danaTalangan->branch_id, $this->organizationScope->branchIds($user, 'bridge_fund', 'manage'), true), 403);
         abort_unless($this->workspaceAccess->canEditBranch($user, $danaTalangan->branch_id), 403);
 
-        if (! $googleService->delete($danaTalangan, $user->id)) {
-            return back()->with('error', 'Gagal menghapus data dari Google Sheets: '.$danaTalangan->last_sync_error);
+        try {
+            $service->delete($danaTalangan, $user);
+        } catch (Throwable $exception) {
+            report($exception);
+
+            return back()->with('error', 'Data belum dihapus karena tombstone remote belum aman.');
         }
 
         return redirect()->route('dana-talangan.index', array_filter(request()->only($this->bulkRedirectParams)))
@@ -382,10 +375,17 @@ class DanaTalanganController extends Controller
         $user = Auth::user();
         abort_unless($user->hasPermission('bridge_fund.manage_all'), 403);
         try {
-            $result = app(DanaTalanganGoogleService::class)->sync(Auth::id());
+            $result = app(DanaTalanganBridgeService::class)->pull($user);
         } catch (Throwable $exception) {
             report($exception);
             $result = ['ok' => false, 'message' => 'Layanan sinkronisasi global tidak dapat dijalankan.', 'summary' => []];
+        }
+        if (($result['status'] ?? null) === 'disabled') {
+            if ($request->expectsJson()) {
+                return response()->json(['ok' => false, 'status' => 'disabled', 'message' => 'Mode bridge Dana Talangan belum bidirectional.'], 422);
+            }
+
+            return back()->with('warning', 'Mode bridge Dana Talangan belum bidirectional.');
         }
         $status = DanaTalanganSyncStatus::with('initiator')->where('spreadsheet_id', config('services.google_sheets.dana_talangan_spreadsheet_id'))->first();
         $payload = $this->syncResponses->make('dana-talangan', ['type' => 'global', 'id' => null, 'name' => 'Global'], $status, $result);
@@ -412,7 +412,7 @@ class DanaTalanganController extends Controller
             return response()->json($payload);
         }
 
-        return back()->with($warningCount > 0 ? 'error' : 'success', "Sync selesai: {$summary['updated']} diperbarui, {$summary['imported']} diimpor, {$summary['pushed']} dikirim.".$warningText);
+        return back()->with($warningCount > 0 || ($summary['unresolved'] ?? 0) > 0 ? 'warning' : 'success', 'Sync selesai: '.($summary['updated'] ?? 0).' diperbarui, '.($summary['unresolved'] ?? 0).' perlu ditinjau.'.$warningText);
     }
 
     public function syncStatus(Request $request)
@@ -426,7 +426,7 @@ class DanaTalanganController extends Controller
         return response()->json($payload);
     }
 
-    public function kavlingOptions(Request $request, DanaTalanganGoogleService $googleService, DanaTalanganOptionService $optionService)
+    public function kavlingOptions(Request $request, DanaTalanganService $service, DanaTalanganOptionService $optionService)
     {
         $validated = $request->validate([
             'branch_id' => 'required|integer|exists:branches,id',
@@ -436,8 +436,8 @@ class DanaTalanganController extends Controller
         $branch = Branch::where('is_active', true)->findOrFail($validated['branch_id']);
         abort_unless(in_array((int) $branch->id, $this->organizationScope->branchIds($user, 'bridge_fund'), true), 403);
         abort_unless($this->workspaceAccess->canViewBranch($user, $branch), 403);
-        if ($googleService->branchIdForProject($validated['project_name']) !== $branch->id) {
-            abort(422, 'Proyek tidak terdaftar pada cabang yang dipilih.');
+        if ($service->resolveProject($validated['project_name'], $branch->id) === null) {
+            abort(422, 'Proyek tidak terdaftar tepat pada cabang yang dipilih.');
         }
 
         return response()->json([
@@ -445,43 +445,74 @@ class DanaTalanganController extends Controller
         ]);
     }
 
-    public function importStore(Request $request, DanaTalanganGoogleService $googleService)
+    public function importStore(Request $request)
     {
-        $response = $this->traitImportStore($request);
-        if (Auth::user()->hasPermission('bridge_fund.manage_all') && ! session()->has('import_errors')) {
-            $googleService->sync(Auth::id());
-        }
-
-        return $response;
+        return $this->traitImportStore($request);
     }
 
-    public function bulkDestroy(Request $request, DanaTalanganGoogleService $googleService)
+    public function bulkDestroy(Request $request, DanaTalanganService $service)
     {
         abort_unless($request->user()->hasPermission('bridge_fund.manage'), 403);
-        $records = $this->bulkRecords($request);
         $deleted = 0;
-        foreach ($records as $record) {
-            if ($googleService->delete($record, Auth::id())) {
+        $failed = 0;
+        foreach ($this->bulkRecords($request) as $record) {
+            try {
+                $service->delete($record, $request->user());
                 $deleted++;
+            } catch (Throwable $exception) {
+                report($exception);
+                $failed++;
             }
         }
 
-        return back()->with('success', "{$deleted} data dana talangan berhasil dihapus.");
+        return back()->with($failed ? 'warning' : 'success', "{$deleted} data dihapus; {$failed} data menunggu tombstone remote.");
     }
 
-    public function bulkUpdate(Request $request, DanaTalanganGoogleService $googleService)
+    public function bulkUpdate(Request $request, DanaTalanganService $service)
     {
         abort_unless($request->user()->hasPermission('bridge_fund.manage'), 403);
         $status = $request->validate(['new_status' => 'required|in:sanggup,tidak_sanggup,lunas'])['new_status'];
         $updated = 0;
         foreach ($this->bulkRecords($request) as $record) {
-            $record->update(['status' => $status]);
-            if ($googleService->push($record, Auth::id())) {
-                $updated++;
-            }
+            $record->update(['status' => $status, 'updated_by' => $request->user()->id]);
+            $service->updated($record, $request->user());
+            $updated++;
         }
 
         return back()->with('success', "{$updated} data dana talangan berhasil diperbarui.");
+    }
+
+    public function retry(DanaTalangan $danaTalangan, DanaTalanganService $service)
+    {
+        $user = Auth::user();
+        abort_unless(in_array((int) $danaTalangan->branch_id, $this->organizationScope->branchIds($user, 'bridge_fund', 'manage'), true), 403);
+        abort_unless($this->workspaceAccess->canEditBranch($user, $danaTalangan->branch_id), 403);
+        $result = $service->retry($danaTalangan, $user);
+
+        return back()->with(($result['ok'] ?? false) ? 'success' : 'warning', ($result['ok'] ?? false) ? 'Pengiriman ulang berhasil.' : 'Pengiriman ulang belum berhasil; periksa rekonsiliasi.');
+    }
+
+    public function reconciliation(Request $request)
+    {
+        abort_unless($request->user()->hasPermission('bridge_fund.manage_all'), 403);
+        $items = DanaTalanganReconciliationItem::query()->where('status', 'open')->latest()->paginate(30);
+
+        return view('crm.dana-talangan.reconciliation', compact('items'));
+    }
+
+    public function approveReconciliation(DanaTalanganReconciliationItem $reconciliationItem, DanaTalanganBridgeService $bridge)
+    {
+        $user = Auth::user();
+        abort_unless($user->hasPermission('bridge_fund.manage_all'), 403);
+        try {
+            $bridge->approveRemoteCreate($reconciliationItem, $user);
+        } catch (Throwable $exception) {
+            report($exception);
+
+            return back()->with('error', 'Baris remote tidak dapat disetujui karena berubah atau tidak valid.');
+        }
+
+        return back()->with('success', 'Baris remote berhasil disetujui dan masuk ke OASIS.');
     }
 
     private function bulkRecords(Request $request)

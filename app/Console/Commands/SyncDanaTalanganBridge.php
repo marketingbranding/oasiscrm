@@ -4,12 +4,13 @@ namespace App\Console\Commands;
 
 use App\Services\DanaTalanganBridgeService;
 use Illuminate\Console\Command;
+use Throwable;
 
-class SyncDanaTalangan extends Command
+class SyncDanaTalanganBridge extends Command
 {
-    protected $signature = 'dana-talangan:sync {--dry-run : Preview changes without writing data}';
+    protected $signature = 'dana-talangan-bridge:sync {--dry-run}';
 
-    protected $description = 'Synchronize Dana Talangan with the canonical Google Sheets tab';
+    protected $description = 'Tarik perubahan aman tab Talangan ke OASIS';
 
     public function handle(): int
     {
@@ -23,20 +24,22 @@ class SyncDanaTalangan extends Command
 
             return self::FAILURE;
         }
-        $result = app(DanaTalanganBridgeService::class)->pull(null, (bool) $this->option('dry-run'));
+        try {
+            $result = app(DanaTalanganBridgeService::class)->pull(null, (bool) $this->option('dry-run'));
+        } catch (Throwable $exception) {
+            report($exception);
+            $this->error('Sinkronisasi bridge Dana Talangan gagal.');
+
+            return self::FAILURE;
+        }
         if (($result['status'] ?? null) === 'disabled') {
             $this->warn('Mode bridge Dana Talangan belum bidirectional.');
 
             return self::SUCCESS;
         }
-        if (! $result['ok']) {
-            $this->error($result['message'] ?? 'Sinkronisasi bridge Dana Talangan gagal.');
-
-            return self::FAILURE;
-        }
-
+        $this->line('Dana Talangan: '.strtoupper($result['status']));
         $this->table(array_keys($result['summary']), [array_values($result['summary'])]);
 
-        return self::SUCCESS;
+        return $result['ok'] ? self::SUCCESS : self::FAILURE;
     }
 }

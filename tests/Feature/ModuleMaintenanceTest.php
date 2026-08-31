@@ -139,7 +139,7 @@ class ModuleMaintenanceTest extends TestCase
                 }
             }
         }
-        $this->assertCount(154, $matched);
+        $this->assertCount(157, $matched);
     }
 
     public function test_other_modules_remain_accessible_two_can_run_and_disable_is_independent(): void

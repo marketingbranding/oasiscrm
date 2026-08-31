@@ -10,7 +10,7 @@ use App\Models\User;
 use App\Models\UserNotification;
 use App\Models\UserPresence;
 use App\Services\CollaborationNotificationService;
-use App\Services\DanaTalanganGoogleService;
+use App\Services\DanaTalanganBridgeService;
 use App\Services\DatabaseSheetSyncService;
 use App\Services\KonsumenProgressSyncService;
 use App\Services\OptimisticLockService;
@@ -140,11 +140,11 @@ class CollaborationNotificationTest extends TestCase
         $pusatRole = Role::firstOrCreate(['slug' => 'pusat'], ['name' => 'Pusat', 'is_superadmin' => false]);
         $user->update(['role_id' => $pusatRole->id]);
         $user->setRelation('role', $pusatRole);
-        $dana = Mockery::mock(DanaTalanganGoogleService::class);
-        $dana->shouldReceive('sync')->once()->with($user->id)->andReturn([
-            'ok' => true, 'summary' => ['updated' => 1, 'imported' => 2, 'pushed' => 3],
+        $dana = Mockery::mock(DanaTalanganBridgeService::class);
+        $dana->shouldReceive('pull')->once()->withArgs(fn (User $actor) => $actor->is($user))->andReturn([
+            'ok' => true, 'status' => 'success', 'summary' => ['updated' => 1, 'unresolved' => 0],
         ]);
-        $this->app->instance(DanaTalanganGoogleService::class, $dana);
+        $this->app->instance(DanaTalanganBridgeService::class, $dana);
         $this->actingAs($user)->postJson(route('dana-talangan.sync'))->assertOk();
 
         $this->assertDatabaseHas('user_notifications', ['user_id' => $user->id, 'type' => 'sync_completed']);

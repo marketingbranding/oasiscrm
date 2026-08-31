@@ -168,6 +168,51 @@ class GoogleSheetsApiService
         return $metadata;
     }
 
+    public function gridMetadata(string $spreadsheetId, string $sheetName, string $range = 'A:Q'): array
+    {
+        $spreadsheet = $this->sheets->spreadsheets->get($spreadsheetId, [
+            'ranges' => [$this->quoteSheetName($sheetName).'!'.$range],
+            'includeGridData' => true,
+            'fields' => 'sheets(properties(sheetId,title),data(startRow,startColumn,rowData(values(userEnteredValue,dataValidation))))',
+        ]);
+        $sheet = collect($spreadsheet->getSheets() ?? [])->first(fn ($item) => $item->getProperties()->getTitle() === $sheetName);
+        if ($sheet === null) {
+            return [];
+        }
+
+        $formulas = [];
+        $validations = [];
+        foreach ($sheet->getData() ?? [] as $gridData) {
+            $startRow = (int) ($gridData->getStartRow() ?? 0);
+            $startColumn = (int) ($gridData->getStartColumn() ?? 0);
+            foreach ($gridData->getRowData() ?? [] as $rowOffset => $rowData) {
+                foreach ($rowData->getValues() ?? [] as $columnOffset => $cell) {
+                    $row = $startRow + $rowOffset + 1;
+                    $column = $startColumn + $columnOffset + 1;
+                    $formula = (string) ($cell->getUserEnteredValue()?->getFormulaValue() ?? '');
+                    if ($formula !== '') {
+                        $formulas[] = ['row' => $row, 'column' => $column];
+                    }
+                    $validation = $cell->getDataValidation();
+                    if ($validation !== null) {
+                        $validations[] = [
+                            'row' => $row,
+                            'column' => $column,
+                            'type' => $validation->getCondition()?->getType(),
+                            'strict' => (bool) $validation->getStrict(),
+                        ];
+                    }
+                }
+            }
+        }
+
+        return [
+            'sheet_id' => (int) $sheet->getProperties()->getSheetId(),
+            'formulas' => $formulas,
+            'validations' => $validations,
+        ];
+    }
+
     public function updateRange(string $spreadsheetId, string $range, array $values): void
     {
         $body = new ValueRange(['values' => $values]);

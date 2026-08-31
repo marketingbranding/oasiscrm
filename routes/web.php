@@ -223,16 +223,22 @@ Route::middleware(['auth', 'active', 'verified', 'password.changed', 'operationa
     Route::bind('dana_talangan', fn ($v) => DanaTalangan::findOrFail($v));
     Route::middleware('module.maintenance:dana_talangan')->group(function () {
         Route::get('dana-talangan/kavling-options', [DanaTalanganController::class, 'kavlingOptions'])->middleware('permission:bridge_fund.view')->name('dana-talangan.kavling-options');
-        Route::post('dana-talangan/sync', [DanaTalanganController::class, 'sync'])->middleware('permission:bridge_fund.manage')->name('dana-talangan.sync');
-        Route::get('dana-talangan/sync/status', [DanaTalanganController::class, 'syncStatus'])->middleware('permission:bridge_fund.manage')->name('dana-talangan.sync-status');
+        Route::post('dana-talangan/sync', [DanaTalanganController::class, 'sync'])->middleware(['permission:bridge_fund.manage_all', 'not.impersonating'])->name('dana-talangan.sync');
+        Route::get('dana-talangan/sync/status', [DanaTalanganController::class, 'syncStatus'])->middleware('permission:bridge_fund.manage_all')->name('dana-talangan.sync-status');
+        Route::get('dana-talangan/reconciliation', [DanaTalanganController::class, 'reconciliation'])->middleware('permission:bridge_fund.manage_all')->name('dana-talangan.reconciliation');
+        Route::post('dana-talangan/reconciliation/{reconciliationItem}/approve', [DanaTalanganController::class, 'approveReconciliation'])->middleware(['permission:bridge_fund.manage_all', 'not.impersonating'])->name('dana-talangan.reconciliation.approve');
+        Route::post('dana-talangan/{dana_talangan}/retry', [DanaTalanganController::class, 'retry'])->middleware(['permission:bridge_fund.manage', 'not.impersonating'])->name('dana-talangan.retry');
         Route::get('dana-talangan/export', [DanaTalanganController::class, 'export'])->middleware('permission:bridge_fund.export')->name('dana-talangan.export');
         Route::get('dana-talangan/export-template', [DanaTalanganController::class, 'exportTemplate'])->middleware('permission:bridge_fund.export')->name('dana-talangan.export-template');
         Route::get('dana-talangan/import', [DanaTalanganController::class, 'import'])->middleware('permission:bridge_fund.manage')->name('dana-talangan.import');
-        Route::post('dana-talangan/import', [DanaTalanganController::class, 'importStore'])->middleware('permission:bridge_fund.manage')->name('dana-talangan.import-store');
-        Route::post('dana-talangan/bulk-delete', [DanaTalanganController::class, 'bulkDestroy'])->middleware('permission:bridge_fund.manage')->name('dana-talangan.bulk-destroy');
-        Route::post('dana-talangan/bulk-update', [DanaTalanganController::class, 'bulkUpdate'])->middleware('permission:bridge_fund.manage')->name('dana-talangan.bulk-update');
+        Route::post('dana-talangan/import', [DanaTalanganController::class, 'importStore'])->middleware(['permission:bridge_fund.manage', 'not.impersonating'])->name('dana-talangan.import-store');
+        Route::post('dana-talangan/bulk-delete', [DanaTalanganController::class, 'bulkDestroy'])->middleware(['permission:bridge_fund.manage', 'not.impersonating'])->name('dana-talangan.bulk-destroy');
+        Route::post('dana-talangan/bulk-update', [DanaTalanganController::class, 'bulkUpdate'])->middleware(['permission:bridge_fund.manage', 'not.impersonating'])->name('dana-talangan.bulk-update');
         Route::get('dana-talangan/{dana_talangan}/detail', [DanaTalanganController::class, 'detail'])->middleware('permission:bridge_fund.view')->name('dana-talangan.detail');
-        Route::resource('dana-talangan', DanaTalanganController::class)->middlewareFor(['index', 'show'], 'permission:bridge_fund.view')->middlewareFor(['create', 'store', 'edit', 'update', 'destroy'], 'permission:bridge_fund.manage');
+        Route::resource('dana-talangan', DanaTalanganController::class)
+            ->middlewareFor(['index', 'show'], 'permission:bridge_fund.view')
+            ->middlewareFor(['create', 'edit'], 'permission:bridge_fund.manage')
+            ->middlewareFor(['store', 'update', 'destroy'], ['permission:bridge_fund.manage', 'not.impersonating']);
     });
 
     Route::middleware('module.maintenance:feedback_reports')->group(function () {

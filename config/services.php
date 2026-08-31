@@ -37,6 +37,7 @@ return [
         'verify_ssl' => env('GOOGLE_SHEETS_VERIFY_SSL', true),
         'connect_timeout' => env('GOOGLE_SHEETS_CONNECT_TIMEOUT', 10),
         'request_timeout' => env('GOOGLE_SHEETS_REQUEST_TIMEOUT', 60),
+        'dana_talangan_bridge_enabled' => env('DANA_TALANGAN_BRIDGE_ENABLED', false),
         'dana_talangan_spreadsheet_id' => env('DANA_TALANGAN_SHEET_ID'),
         'dana_talangan_sheet_name' => env('DANA_TALANGAN_SHEET_NAME', 'Talangan'),
         'dana_talangan_project_branches' => [

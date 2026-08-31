@@ -42,8 +42,13 @@ enum SalesLeadStatus: string
         $normalized = str_replace([' ', '-'], '_', $normalized);
 
         return self::from(match ($normalized) {
+            'no_respon', 'no_response' => self::NoResponse->value,
+            'diskusi' => self::Discussion->value,
             'tatap_muka' => self::FaceToFace->value,
+            'cek_lokasi' => self::SiteVisit->value,
             'cek_silk', 'cek_slik' => self::SlikCheck->value,
+            'tidak_lolos_bi_checking' => self::SlikRejected->value,
+            'jadi_freelance' => self::Freelance->value,
             default => $normalized,
         });
     }

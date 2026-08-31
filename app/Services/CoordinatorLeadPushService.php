@@ -13,6 +13,8 @@ class CoordinatorLeadPushService
         private readonly CoordinatorLeadTeamService $teams,
         private readonly SalesLeadSpreadsheetWriter $writer,
         private readonly SalesLeadService $leads,
+        private readonly SalesLeadBridgeModeService $bridgeModes,
+        private readonly SalesLeadBridgeService $bridge,
         private readonly WorkspaceAccessService $workspaceAccess,
     ) {}
 
@@ -39,6 +41,13 @@ class CoordinatorLeadPushService
         foreach ($query->cursor() as $lead) {
             $result['processed']++;
             try {
+                $lead->loadMissing('branch');
+                if ($this->bridgeModes->isPushEnabled($lead->branch)) {
+                    $outcome = $this->bridge->push($lead, $coordinator);
+                    $result[$outcome['ok'] ?? false ? 'synced' : 'failed']++;
+
+                    continue;
+                }
                 $write = $lead->last_synced_at
                     ? $this->writer->updateBySyncId($lead, 'lead', $lead->external_sync_id, $this->leads->spreadsheetFields($lead))
                     : $this->writer->append($lead, 'lead', $this->leads->spreadsheetFields($lead), $lead->external_sync_id);
@@ -55,7 +64,7 @@ class CoordinatorLeadPushService
                 $result['synced']++;
             } catch (Throwable $exception) {
                 report($exception);
-                $lead->update(['sync_status' => 'sync_failed', 'last_sync_error' => $exception->getMessage()]);
+                $lead->update(['sync_status' => 'sync_failed', 'last_sync_error' => 'Sinkronisasi spreadsheet gagal.']);
                 $result['failed']++;
             }
         }

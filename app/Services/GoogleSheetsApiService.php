@@ -176,7 +176,7 @@ class GoogleSheetsApiService
         ]);
     }
 
-    public function batchUpdateRanges(string $spreadsheetId, array $ranges): void
+    public function batchUpdateRanges(string $spreadsheetId, array $ranges, string $valueInputOption = 'USER_ENTERED'): void
     {
         if (empty($ranges)) {
             return;
@@ -187,9 +187,30 @@ class GoogleSheetsApiService
             'values' => $item['values'],
         ]))->all();
         $this->sheets->spreadsheets_values->batchUpdate($spreadsheetId, new BatchUpdateValuesRequest([
-            'valueInputOption' => 'USER_ENTERED',
+            'valueInputOption' => $valueInputOption,
             'data' => $data,
         ]));
+    }
+
+    public function readLeadRows(string $spreadsheetId): array
+    {
+        $raw = $this->batchGetRaw($spreadsheetId, [$this->quoteSheetName('lead').'!A:ZZ'], 'FORMATTED_VALUE');
+        $values = $raw['lead'] ?? [];
+        $headers = array_map(fn ($value) => trim((string) $value), $values[0] ?? []);
+        $rows = [];
+        foreach (array_slice($values, 1) as $offset => $cells) {
+            $row = ['_row_number' => $offset + 2];
+            foreach ($headers as $index => $header) {
+                if ($header !== '') {
+                    $row[$header] = trim((string) ($cells[$index] ?? ''));
+                }
+            }
+            if (collect($row)->except('_row_number')->contains(fn ($value) => $value !== '')) {
+                $rows[] = $row;
+            }
+        }
+
+        return ['headers' => $headers, 'rows' => $rows];
     }
 
     public function appendRange(string $spreadsheetId, string $range, array $values): void
@@ -260,6 +281,20 @@ class GoogleSheetsApiService
     }
 
     /** @param list<string> $headers */
+    public function writeRowMetadata(string $spreadsheetId, string $sheetName, array $headers, int $rowNumber, ?string $syncId, ?string $deletedAt, ?int $deletedBy): void
+    {
+        $values = ['oasis_sync_id' => $syncId, 'oasis_deleted_at' => $deletedAt, 'oasis_deleted_by' => $deletedBy];
+        $ranges = [];
+        foreach ($values as $header => $value) {
+            $index = array_search($header, $headers, true);
+            if ($index !== false) {
+                $column = $this->columnLetter($index + 1);
+                $ranges[] = ['range' => $this->quoteSheetName($sheetName)."!{$column}{$rowNumber}", 'values' => [[$value]]];
+            }
+        }
+        $this->batchUpdateRanges($spreadsheetId, $ranges, 'RAW');
+    }
+
     public function findRowByHeaderValue(
         string $spreadsheetId,
         string $sheetName,

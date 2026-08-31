@@ -7,17 +7,20 @@ use App\Models\SalesLead;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
+use Throwable;
 
 class SalesLeadService
 {
     public function __construct(
         private readonly PhoneNormalizationService $phones,
         private readonly SalesLeadLifecycleService $lifecycle,
+        private readonly ?SalesLeadBridgeModeService $bridgeModes = null,
+        private readonly ?SalesLeadBridgeService $bridge = null,
     ) {}
 
     public function create(array $data, User $actor): SalesLead
     {
-        return DB::transaction(function () use ($data, $actor): SalesLead {
+        $lead = DB::transaction(function () use ($data, $actor): SalesLead {
             $data['id_promo'] = $data['promo_name'] ?? null;
             unset($data['promo_name']);
             $data['normalized_phone'] = $this->phones->normalize($data['phone'] ?? null);
@@ -49,19 +52,22 @@ class SalesLeadService
 
             return $lead->fresh();
         });
+        $this->schedulePush($lead, $actor);
+
+        return $lead;
     }
 
     public function update(SalesLead $lead, array $data, User $actor): SalesLead
     {
-        return DB::transaction(function () use ($lead, $data, $actor): SalesLead {
+        $updated = DB::transaction(function () use ($lead, $data, $actor): SalesLead {
             $locked = SalesLead::query()->lockForUpdate()->findOrFail($lead->id);
             $data['id_promo'] = $data['promo_name'] ?? null;
             unset($data['promo_name']);
             if (blank($data['current_status'] ?? null)) {
                 unset($data['current_status']);
             }
-            if ($locked->last_synced_at && (int) $locked->branch_id !== (int) $data['branch_id']) {
-                throw new \DomainException('Lead yang sudah tersinkron tidak dapat dipindahkan ke cabang lain.');
+            if (($locked->remote_target_branch_id !== null || $locked->delivery_attempted_at !== null || $locked->last_synced_at !== null) && (int) $locked->branch_id !== (int) $data['branch_id']) {
+                throw new \DomainException('Lead yang sudah memiliki tujuan remote tidak dapat dipindahkan ke cabang lain.');
             }
 
             $changedFields = array_keys(array_filter($data, fn ($value, $key) => $locked->{$key} != $value, ARRAY_FILTER_USE_BOTH));
@@ -95,25 +101,54 @@ class SalesLeadService
 
             return $locked->fresh();
         });
+        $this->schedulePush($updated, $actor);
+
+        return $updated;
     }
 
     public function delete(SalesLead $lead, User $actor): void
     {
-        if ($lead->consumerLinks()->exists() || $lead->consumer_converted_at !== null || filled($lead->linked_consumer_reference)) {
-            throw new \DomainException('Lead ini sudah terhubung ke data konsumen dan tidak dapat dihapus.');
-        }
-
-        DB::transaction(function () use ($lead): void {
+        [$candidate, $requiresTombstone, $expectedFingerprint] = DB::transaction(function () use ($lead): array {
             $locked = SalesLead::query()->lockForUpdate()->findOrFail($lead->id);
             if ($locked->consumerLinks()->exists() || $locked->consumer_converted_at !== null || filled($locked->linked_consumer_reference)) {
                 throw new \DomainException('Lead ini sudah terhubung ke data konsumen dan tidak dapat dihapus.');
             }
-            $locked->logSalesActivity('deleted', [
-                'branch_id' => $locked->branch_id,
-                'project_id' => $locked->project_id,
-                'sales_user_id' => $locked->sales_user_id,
-            ]);
-            $locked->delete();
+            $requiresTombstone = $locked->remote_target_branch_id !== null
+                || $locked->delivery_attempted_at !== null
+                || $locked->last_synced_at !== null;
+            if ($requiresTombstone) {
+                $locked->update(['sync_status' => 'pending_delete', 'delete_pending_at' => now(), 'last_sync_error' => null]);
+            }
+
+            $candidate = $locked->fresh(['branch']);
+
+            return [$candidate, (bool) $requiresTombstone, $this->deleteFingerprint($candidate)];
+        });
+
+        if ($requiresTombstone) {
+            try {
+                if ($this->bridge === null) {
+                    throw new \DomainException('Bridge lead belum tersedia.');
+                }
+                $this->bridge->tombstone($candidate, $actor);
+            } catch (Throwable $exception) {
+                report($exception);
+                SalesLead::query()->whereKey($candidate->id)->update(['sync_status' => 'pending_delete', 'delete_pending_at' => now(), 'last_sync_error' => 'Tombstone spreadsheet gagal.']);
+                throw new \DomainException('Lead belum dapat dihapus karena tombstone spreadsheet gagal.');
+            }
+        }
+
+        DB::transaction(function () use ($candidate, $expectedFingerprint): void {
+            $current = SalesLead::query()->lockForUpdate()->findOrFail($candidate->id);
+            if ($current->consumerLinks()->exists() || $current->consumer_converted_at !== null || filled($current->linked_consumer_reference)) {
+                throw new \DomainException('Lead berubah setelah tombstone dan tidak dapat dihapus.');
+            }
+            if (! hash_equals($expectedFingerprint, $this->deleteFingerprint($current))) {
+                $current->update(['sync_status' => 'pending_delete', 'delete_pending_at' => now(), 'last_sync_error' => 'Lead berubah setelah tombstone.']);
+                throw new \DomainException('Lead berubah setelah tombstone dan tidak dapat dihapus.');
+            }
+            $current->logSalesActivity('deleted', ['branch_id' => $current->branch_id, 'project_id' => $current->project_id, 'sales_user_id' => $current->sales_user_id]);
+            $current->delete();
         });
     }
 
@@ -136,6 +171,31 @@ class SalesLeadService
         $lead->logSalesActivity('stage_reversed', $this->activityContext($lead) + ['stage' => $stage, 'stage_label' => SalesLead::STAGES[$stage]]);
 
         return $lead->fresh();
+    }
+
+    private function deleteFingerprint(SalesLead $lead): string
+    {
+        return hash('sha256', json_encode($lead->only([
+            'branch_id', 'project_id', 'sales_user_id', 'lead_date', 'customer_name', 'phone', 'source', 'platform',
+            'campaign_name', 'notes', 'current_status', 'external_sync_id', 'remote_target_branch_id', 'last_synced_at',
+            'consumer_converted_at', 'linked_consumer_reference', 'updated_by',
+        ]), JSON_THROW_ON_ERROR));
+    }
+
+    private function schedulePush(SalesLead $lead, User $actor): void
+    {
+        $lead->loadMissing('branch');
+        if ($this->bridgeModes === null || $this->bridge === null || ! $this->bridgeModes->isPushEnabled($lead->branch)) {
+            return;
+        }
+        DB::afterCommit(function () use ($lead, $actor): void {
+            try {
+                $this->bridge->push($lead->fresh(), $actor);
+            } catch (Throwable $exception) {
+                report($exception);
+                SalesLead::query()->whereKey($lead->id)->update(['sync_status' => 'sync_failed', 'last_sync_error' => 'Sinkronisasi spreadsheet gagal.', 'delivery_attempted_at' => now()]);
+            }
+        });
     }
 
     private function activityContext(SalesLead $lead): array

@@ -7,9 +7,11 @@ use App\Models\LeadMaster;
 use App\Models\Role;
 use App\Models\SalesCoordinatorSales;
 use App\Models\SalesLead;
+use App\Models\SalesLeadBridgeSetting;
 use App\Models\User;
 use App\Services\CoordinatorLeadPushService;
 use App\Services\OptimisticLockService;
+use App\Services\SalesLeadBridgeService;
 use App\Services\SalesLeadSheetOptionService;
 use App\Services\SalesLeadSpreadsheetWriter;
 use App\Services\SalesLeadSyncService;
@@ -203,12 +205,6 @@ class CoordinatorLocalFirstLeadTest extends TestCase
             'sync_status' => 'synced',
             'last_synced_at' => now()->subMinute(),
         ]);
-        $writer = Mockery::mock(SalesLeadSpreadsheetWriter::class);
-        $writer->shouldNotReceive('append');
-        $writer->shouldReceive('updateBySyncId')->once()->withArgs(fn (SalesLead $item, string $sheet, string $externalSyncId) => $item->is($lead) && $sheet === 'lead' && $externalSyncId === $syncId
-        )->andReturn($this->writeResult($branch, $syncId, 'REMOTE-1'));
-        $this->app->instance(SalesLeadSpreadsheetWriter::class, $writer);
-
         $this->actingAs($coordinator)->put(route('sales-leads.update', $lead), $this->leadData($branch, $project, $sales, [
             'customer_name' => 'Edited Local Lead',
             'expected_updated_at' => app(OptimisticLockService::class)->token($lead),
@@ -219,6 +215,15 @@ class CoordinatorLocalFirstLeadTest extends TestCase
         $this->assertTrue($lead->last_synced_at->equalTo($lead->fresh()->last_synced_at));
 
         config()->set('services.google_sheets.sales_lead_sync_enabled', true);
+        $this->enablePush($branch);
+        $bridge = Mockery::mock(SalesLeadBridgeService::class);
+        $bridge->shouldReceive('push')->once()->withArgs(fn (SalesLead $item, User $actor) => $item->is($lead) && $actor->is($coordinator))->andReturnUsing(function (SalesLead $item): array {
+            $item->update(['sync_status' => 'synced', 'last_sync_error' => null]);
+
+            return ['ok' => true, 'status' => 'synced'];
+        });
+        $this->app->instance(SalesLeadBridgeService::class, $bridge);
+        $this->app->forgetInstance(CoordinatorLeadPushService::class);
         $result = app(CoordinatorLeadPushService::class)->push($coordinator);
 
         $this->assertSame(['processed' => 1, 'synced' => 1, 'failed' => 0], $result);
@@ -232,13 +237,14 @@ class CoordinatorLocalFirstLeadTest extends TestCase
         [$branch, $project, $sales, $coordinator] = $this->context();
         $sales->update(['name' => 'Canonical OASIS Sales']);
         $lead = $this->lead($sales, $project);
-        $writer = Mockery::mock(SalesLeadSpreadsheetWriter::class);
-        $writer->shouldReceive('append')->once()->withArgs(fn (SalesLead $item, string $sheet, array $fields, string $syncId) => $item->is($lead)
-            && $sheet === 'lead'
-            && $fields['sales_pic'] === 'Canonical OASIS Sales'
-            && $syncId === $lead->external_sync_id
-        )->andReturn($this->writeResult($branch, $lead->external_sync_id, 'REMOTE-NAME'));
-        $this->app->instance(SalesLeadSpreadsheetWriter::class, $writer);
+        $this->enablePush($branch);
+        $bridge = Mockery::mock(SalesLeadBridgeService::class);
+        $bridge->shouldReceive('push')->once()->withArgs(fn (SalesLead $item, User $actor) => $item->is($lead) && $item->sales->name === 'Canonical OASIS Sales' && $actor->is($coordinator))->andReturnUsing(function (SalesLead $item): array {
+            $item->update(['sync_status' => 'synced']);
+
+            return ['ok' => true, 'status' => 'synced'];
+        });
+        $this->app->instance(SalesLeadBridgeService::class, $bridge);
 
         $result = app(CoordinatorLeadPushService::class)->push($coordinator);
 
@@ -251,19 +257,23 @@ class CoordinatorLocalFirstLeadTest extends TestCase
         config()->set('services.google_sheets.sales_lead_sync_enabled', true);
         [$branch, $project, $sales, $coordinator] = $this->context();
         $lead = $this->lead($sales, $project);
-        $writer = Mockery::mock(SalesLeadSpreadsheetWriter::class);
-        $writer->shouldReceive('append')->once()->andThrow(new RuntimeException('remote unavailable'));
-        $this->app->instance(SalesLeadSpreadsheetWriter::class, $writer);
+        $this->enablePush($branch);
+        $bridge = Mockery::mock(SalesLeadBridgeService::class);
+        $bridge->shouldReceive('push')->once()->andThrow(new RuntimeException('remote unavailable'));
+        $this->app->instance(SalesLeadBridgeService::class, $bridge);
 
         $failed = app(CoordinatorLeadPushService::class)->push($coordinator);
 
         $this->assertSame(['processed' => 1, 'synced' => 0, 'failed' => 1], $failed);
-        $this->assertDatabaseHas('sales_leads', ['id' => $lead->id, 'sync_status' => 'sync_failed', 'last_sync_error' => 'remote unavailable']);
+        $this->assertDatabaseHas('sales_leads', ['id' => $lead->id, 'sync_status' => 'sync_failed', 'last_sync_error' => 'Sinkronisasi spreadsheet gagal.']);
 
-        $retryWriter = Mockery::mock(SalesLeadSpreadsheetWriter::class);
-        $retryWriter->shouldReceive('append')->once()->andReturn($this->writeResult($branch, $lead->external_sync_id, 'REMOTE-2'));
-        $retryWriter->shouldNotReceive('updateBySyncId');
-        $this->app->instance(SalesLeadSpreadsheetWriter::class, $retryWriter);
+        $retryBridge = Mockery::mock(SalesLeadBridgeService::class);
+        $retryBridge->shouldReceive('push')->once()->andReturnUsing(function (SalesLead $item): array {
+            $item->update(['sync_status' => 'synced', 'last_sync_error' => null]);
+
+            return ['ok' => true, 'status' => 'synced'];
+        });
+        $this->app->instance(SalesLeadBridgeService::class, $retryBridge);
         $this->app->forgetInstance(CoordinatorLeadPushService::class);
 
         $retried = app(CoordinatorLeadPushService::class)->push($coordinator);
@@ -327,10 +337,14 @@ class CoordinatorLocalFirstLeadTest extends TestCase
         $otherSales = $this->sales($otherBranch, $otherProject, 'Other Sales');
         SalesCoordinatorSales::create(['coordinator_user_id' => $coordinator->id, 'sales_user_id' => $otherSales->id]);
         $isolated = $this->lead($otherSales, $otherProject);
-        $writer = Mockery::mock(SalesLeadSpreadsheetWriter::class);
-        $writer->shouldReceive('append')->once()->withArgs(fn (SalesLead $item) => $item->is($accessible))
-            ->andReturn($this->writeResult($branch, $accessible->external_sync_id, 'REMOTE-3'));
-        $this->app->instance(SalesLeadSpreadsheetWriter::class, $writer);
+        $this->enablePush($branch);
+        $bridge = Mockery::mock(SalesLeadBridgeService::class);
+        $bridge->shouldReceive('push')->once()->withArgs(fn (SalesLead $item) => $item->is($accessible))->andReturnUsing(function (SalesLead $item): array {
+            $item->update(['sync_status' => 'synced']);
+
+            return ['ok' => true, 'status' => 'synced'];
+        });
+        $this->app->instance(SalesLeadBridgeService::class, $bridge);
 
         $result = app(CoordinatorLeadPushService::class)->push($coordinator);
 
@@ -434,6 +448,19 @@ class CoordinatorLocalFirstLeadTest extends TestCase
             'current_status' => 'no_response',
             'operation_uuid' => (string) Str::uuid(),
         ], $attributes);
+    }
+
+    private function enablePush(Branch $branch): void
+    {
+        SalesLeadBridgeSetting::create([
+            'branch_id' => $branch->id,
+            'mode' => 'push_only',
+            'status' => 'active',
+            'last_preflight_at' => now(),
+            'last_preflight_hash' => hash('sha256', $branch->sheet_id),
+            'enabled_at' => now(),
+        ]);
+        $branch->unsetRelation('bridgeSetting');
     }
 
     private function writeResult(Branch $branch, string $syncId, string $externalLeadId): SalesLeadSpreadsheetWriteResult

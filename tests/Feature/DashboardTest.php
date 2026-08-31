@@ -7,8 +7,10 @@ use App\Models\Changelog;
 use App\Models\ContentItem;
 use App\Models\DatabaseSheetRecord;
 use App\Models\LeadMaster;
+use App\Models\LeadSource;
 use App\Models\Permission;
 use App\Models\Role;
+use App\Models\SalesLead;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -120,21 +122,85 @@ class DashboardTest extends TestCase
     public function test_dashboard_lead_actions_use_buku_saku_destinations(): void
     {
         [$branch, $user] = $this->dashboardUser('sales_coordinator');
+        $project = LeadMaster::create(['branch_id' => $branch->id, 'project_name' => 'Buku Saku', 'is_active' => true]);
+        $user->assignedProjects()->attach($project, ['is_active' => true]);
+        SalesLead::create([
+            'branch_id' => $branch->id,
+            'project_id' => $project->id,
+            'sales_user_id' => $user->id,
+            'lead_date' => today(),
+            'customer_name' => 'Siti',
+        ]);
+
+        $this->actingAs($user)->get(route('dashboard'))->assertOk()
+            ->assertSee('Lead baru: Siti')
+            ->assertSee(route('sales-leads.create'), false)
+            ->assertSee(route('sales-pocketbook.index'), false)
+            ->assertDontSee(route('database.index', ['sheet' => 'lead']), false);
+    }
+
+    public function test_dashboard_leads_use_scoped_local_records_and_ignore_hidden_cache_leads(): void
+    {
+        [$branch, $user] = $this->dashboardUser('admin');
+        $project = LeadMaster::create(['branch_id' => $branch->id, 'project_name' => 'Dashboard Local', 'is_active' => true]);
+        $legacySource = LeadSource::firstOrCreate(['name' => 'Legacy Source'], ['is_active' => true]);
+        $firstLead = SalesLead::create([
+            'branch_id' => $branch->id,
+            'project_id' => $project->id,
+            'sales_user_id' => $user->id,
+            'lead_source_id' => $legacySource->id,
+            'lead_date' => today(),
+            'customer_name' => 'Local Lead One',
+            'source' => 'Local Source',
+            'source_name_snapshot' => 'Snapshot Source',
+            'external_lead_id' => 'LOCAL-1',
+        ]);
+        $secondLead = SalesLead::create([
+            'branch_id' => $branch->id,
+            'project_id' => $project->id,
+            'sales_user_id' => $user->id,
+            'lead_date' => today(),
+            'customer_name' => 'Local Lead Two',
+            'source_name_snapshot' => 'Local Source',
+        ]);
+        SalesLead::create([
+            'branch_id' => $branch->id,
+            'project_id' => $project->id,
+            'sales_user_id' => $user->id,
+            'lead_source_id' => $legacySource->id,
+            'lead_date' => today()->subMonthNoOverflow(),
+            'customer_name' => 'Older Local Lead',
+        ]);
         DatabaseSheetRecord::query()->create([
             'branch_id' => $branch->id,
-            'sheet_id' => 'dashboard-lead-sheet',
+            'sheet_id' => 'hidden-dashboard-cache',
             'sheet_name' => 'lead',
             'row_number' => 2,
-            'headers' => ['nama_konsumen', 'tanggal_lead'],
-            'row_data' => ['nama_konsumen' => 'Siti', 'tanggal_lead' => today()->format('Y-m-d')],
+            'headers' => ['nama_konsumen', 'tanggal_lead', 'sumber'],
+            'row_data' => [
+                'nama_konsumen' => 'Hidden Cache Lead',
+                'tanggal_lead' => today()->toDateString(),
+                'sumber' => 'Hidden Cache Source',
+            ],
             'formula_columns' => [],
             'column_metadata' => [],
         ]);
 
-        $this->actingAs($user)->get(route('dashboard'))->assertOk()
-            ->assertSee(route('sales-leads.create'), false)
+        $response = $this->actingAs($user)->get(route('dashboard'))->assertOk();
+
+        $leadStats = $response->viewData('leadStats');
+        $this->assertSame(2, $leadStats['leadToday']);
+        $this->assertSame(2, $leadStats['leadThisMonth']);
+        $this->assertSame('Local Source', $leadStats['topSource']);
+
+        $response->assertSee('Local Lead One (LOCAL-1)')
+            ->assertSee('Local Lead Two (#'.$secondLead->id.')')
+            ->assertSee('Lead baru: Local Lead One')
             ->assertSee(route('sales-pocketbook.index'), false)
-            ->assertDontSee(route('database.index', ['sheet' => 'lead']), false);
+            ->assertDontSee('Hidden Cache Lead')
+            ->assertDontSee('Hidden Cache Source');
+
+        $this->assertSame('Local Source', $firstLead->effective_source);
     }
 
     public function test_dashboard_lead_queue_is_hidden_without_buku_saku_scope(): void

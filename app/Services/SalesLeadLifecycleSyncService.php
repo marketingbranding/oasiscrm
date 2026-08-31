@@ -99,12 +99,13 @@ class SalesLeadLifecycleSyncService
         return ['branch' => $branch->name] + $result;
     }
 
-    public function syncAll(?int $branchId = null): array
+    public function syncAll(?int $branchId = null, array $excludeBranchIds = []): array
     {
         return Branch::query()
             ->where('is_active', true)
             ->whereNotNull('sheet_id')
             ->where('sheet_id', '!=', '')
+            ->when($excludeBranchIds !== [], fn ($query) => $query->whereNotIn('id', $excludeBranchIds))
             ->when($branchId, fn ($query) => $query->whereKey($branchId))
             ->orderBy('id')
             ->get()

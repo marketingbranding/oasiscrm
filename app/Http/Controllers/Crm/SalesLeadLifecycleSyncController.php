@@ -7,6 +7,8 @@ use App\Models\Branch;
 use App\Models\SalesLeadLifecycleReconciliationItem;
 use App\Models\SalesLeadLifecycleSyncStatus;
 use App\Services\OrganizationScopeService;
+use App\Services\SalesLeadBridgeModeService;
+use App\Services\SalesLeadBridgeService;
 use App\Services\SalesLeadSyncService;
 use App\Services\SyncResponseService;
 use App\Services\WorkspaceAccessService;
@@ -29,7 +31,22 @@ class SalesLeadLifecycleSyncController extends Controller
             return response()->json(['message' => 'Sinkronisasi Google Sheets Lead Sales sedang dinonaktifkan.'], 503);
         }
 
-        $result = app(SalesLeadSyncService::class)->sync($branch, $request->user());
+        $result = app(SalesLeadBridgeModeService::class)->isPullEnabled($branch)
+            ? app(SalesLeadBridgeService::class)->pull($branch, $request->user())
+            : app(SalesLeadSyncService::class)->sync($branch, $request->user());
+        $status = $this->personalOrBranchStatus($branch, $request);
+        $response = $this->responses->make('sales-lead-lifecycle', $this->scope($branch), $status, $result);
+
+        return response()->json($response, $result['ok'] ? 200 : ($result['status'] === 'syncing' ? 409 : 422));
+    }
+
+    public function bridgeSync(Request $request): JsonResponse
+    {
+        $branch = $this->authorizedSyncBranch($request);
+        if (! config('services.google_sheets.sales_lead_sync_enabled')) {
+            return response()->json(['message' => 'Sinkronisasi Google Sheets Lead Sales sedang dinonaktifkan.'], 503);
+        }
+        $result = app(SalesLeadBridgeService::class)->pull($branch, $request->user());
         $status = $this->personalOrBranchStatus($branch, $request);
         $response = $this->responses->make('sales-lead-lifecycle', $this->scope($branch), $status, $result);
 
@@ -69,6 +86,21 @@ class SalesLeadLifecycleSyncController extends Controller
             ->latest('id')
             ->paginate(50);
 
+        $items->getCollection()->transform(function (SalesLeadLifecycleReconciliationItem $item): mixed {
+            if (! in_array($item->issue_code, SalesLeadBridgeService::BRIDGE_ISSUES, true)) {
+                return $item;
+            }
+            $metadata = $item->metadata ?? [];
+
+            return [
+                'id' => $item->id,
+                'code' => $item->issue_code,
+                'status' => $item->status,
+                'field_names' => $metadata['field_names'] ?? [],
+                'remote_row_number' => $metadata['remote_row_number'] ?? null,
+            ];
+        });
+
         return response()->json($items);
     }
 
@@ -76,7 +108,8 @@ class SalesLeadLifecycleSyncController extends Controller
     {
         return SalesLeadLifecycleSyncStatus::query()
             ->where('branch_id', $branch->id)
-            ->where('scope', SalesLeadSyncService::scopeFor($request->user()))
+            ->whereIn('scope', [SalesLeadSyncService::scopeFor($request->user()), SalesLeadBridgeService::SCOPE])
+            ->latest('updated_at')
             ->first();
     }
 

@@ -14,9 +14,22 @@ class SalesLeadSpreadsheetWriter
     public function __construct(
         private GoogleSheetsApiService $googleSheets,
         private SalesLeadSpreadsheetContract $contracts,
+        private ?SyncLockService $locks = null,
     ) {}
 
     public function append(
+        SalesLead $lead,
+        string $sheetName,
+        array $fields,
+        string $operationUuid,
+        bool $manageLock = true,
+    ): SalesLeadSpreadsheetWriteResult {
+        $run = fn (): SalesLeadSpreadsheetWriteResult => $this->appendUnlocked($lead, $sheetName, $fields, $operationUuid);
+
+        return $manageLock && $this->locks !== null ? $this->locks->runOrThrow($this->lockKey($lead, $sheetName), $run) : $run();
+    }
+
+    private function appendUnlocked(
         SalesLead $lead,
         string $sheetName,
         array $fields,
@@ -55,9 +68,13 @@ class SalesLeadSpreadsheetWriter
             throw SalesLeadSpreadsheetContractException::writeFailed();
         }
         if ($existingRow !== null) {
+            $existing = $this->result($contract, $headers, $existingRow, $operationUuid);
+            if (filled($existing->rowValues['oasis_deleted_at'] ?? null)) {
+                throw SalesLeadSpreadsheetContractException::writeFailed();
+            }
             $this->copyTemplateWhenRequired($contract, $existingRow);
 
-            return $this->result($contract, $headers, $existingRow, $operationUuid);
+            return $existing;
         }
 
         $formulaHeaders = array_flip($contract->formulaOwnedHeaders);
@@ -105,7 +122,68 @@ class SalesLeadSpreadsheetWriter
         }
     }
 
+    public function setSyncIdByRow(SalesLead $lead, int $rowNumber, string $syncId, bool $manageLock = true): void
+    {
+        $run = function () use ($lead, $rowNumber, $syncId): void {
+            if (! Str::isUuid($syncId)) {
+                throw SalesLeadSpreadsheetContractException::invalidOperationId();
+            }
+            $contract = $this->contracts->resolve($lead, 'lead');
+            $headers = $this->googleSheets->ensureTrailingMetadataColumns($contract->spreadsheetId, 'lead', $contract->sheetId, $contract->headers, SalesLeadSpreadsheetContract::META_HEADERS);
+            $this->googleSheets->writeRowMetadata($contract->spreadsheetId, 'lead', $headers, $rowNumber, $syncId, null, null);
+        };
+        if ($manageLock && $this->locks !== null) {
+            $this->locks->runOrThrow('sales-lead-bridge:branch:'.$lead->branch_id.':lead', $run);
+
+            return;
+        }
+        $run();
+    }
+
+    public function tombstoneBySyncId(SalesLead $lead, string $syncId, ?int $deletedBy = null, bool $manageLock = true): SalesLeadSpreadsheetWriteResult
+    {
+        if (! Str::isUuid($syncId)) {
+            throw SalesLeadSpreadsheetContractException::invalidOperationId();
+        }
+
+        $run = fn (): SalesLeadSpreadsheetWriteResult => $this->tombstone($lead, $syncId, $deletedBy);
+
+        return $manageLock && $this->locks !== null ? $this->locks->runOrThrow('sales-lead-bridge:branch:'.$lead->branch_id.':lead', $run) : $run();
+    }
+
+    private function tombstone(SalesLead $lead, string $syncId, ?int $deletedBy): SalesLeadSpreadsheetWriteResult
+    {
+        try {
+            $contract = $this->contracts->resolve($lead, 'lead');
+            $headers = $this->googleSheets->ensureTrailingMetadataColumns($contract->spreadsheetId, 'lead', $contract->sheetId, $contract->headers, SalesLeadSpreadsheetContract::META_HEADERS);
+            $rowNumber = $this->googleSheets->findRowByHeaderValue($contract->spreadsheetId, 'lead', $headers, 'oasis_sync_id', $syncId);
+            if ($rowNumber === null) {
+                throw SalesLeadSpreadsheetContractException::writeFailed();
+            }
+            $this->googleSheets->writeRowMetadata($contract->spreadsheetId, 'lead', $headers, $rowNumber, $syncId, now()->toIso8601String(), $deletedBy);
+
+            return new SalesLeadSpreadsheetWriteResult($contract->spreadsheetId, 'lead', $rowNumber, $syncId);
+        } catch (SalesLeadSpreadsheetContractException $exception) {
+            throw $exception;
+        } catch (Throwable $exception) {
+            report($exception);
+            throw SalesLeadSpreadsheetContractException::writeFailed();
+        }
+    }
+
     public function updateBySyncId(
+        SalesLead $lead,
+        string $sheetName,
+        string $syncId,
+        array $fields,
+        bool $manageLock = true,
+    ): SalesLeadSpreadsheetWriteResult {
+        $run = fn (): SalesLeadSpreadsheetWriteResult => $this->updateBySyncIdUnlocked($lead, $sheetName, $syncId, $fields);
+
+        return $manageLock && $this->locks !== null ? $this->locks->runOrThrow($this->lockKey($lead, $sheetName), $run) : $run();
+    }
+
+    private function updateBySyncIdUnlocked(
         SalesLead $lead,
         string $sheetName,
         string $syncId,
@@ -201,6 +279,13 @@ class SalesLeadSpreadsheetWriter
             $syncId,
             $rowValues,
         );
+    }
+
+    private function lockKey(SalesLead $lead, string $sheetName): string
+    {
+        return $sheetName === 'lead'
+            ? 'sales-lead-bridge:branch:'.$lead->branch_id.':lead'
+            : 'sales-lead-spreadsheet:branch:'.$lead->branch_id.':sheet:'.$sheetName;
     }
 
     private function columnLetter(int $column): string

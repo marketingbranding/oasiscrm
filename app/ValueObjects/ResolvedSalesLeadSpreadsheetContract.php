@@ -20,6 +20,7 @@ final readonly class ResolvedSalesLeadSpreadsheetContract
         public int $templateRowNumber,
         public array $validationOptions = [],
         public array $resolvedHeaders = [],
+        public array $columnMetadata = [],
     ) {}
 
     public function actualHeader(string $canonicalHeader): string

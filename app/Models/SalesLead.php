@@ -42,7 +42,7 @@ class SalesLead extends Model
         'normalized_phone', 'source_name_snapshot', 'notes', 'linked_consumer_reference',
         'contacted_at', 'met_at', 'surveyed_at', 'utj_at', 'documents_completed_at',
         'akad_at', 'created_by', 'updated_by',
-        'external_lead_id', 'external_sync_id', 'sync_status', 'last_synced_at', 'last_sync_error',
+        'external_lead_id', 'external_sync_id', 'remote_target_branch_id', 'sync_status', 'last_synced_at', 'last_synced_payload_hash', 'last_remote_payload_hash', 'last_synced_field_hashes', 'delivery_attempted_at', 'delete_pending_at', 'last_sync_error',
         'id_promo', 'source', 'platform', 'campaign_id', 'campaign_name',
         'current_status', 'current_status_changed_at', 'current_status_source', 'current_status_source_id',
         'consumer_converted_at', 'freelance_converted_at', 'consumer_external_id',
@@ -64,6 +64,9 @@ class SalesLead extends Model
             'consumer_converted_at' => 'datetime',
             'freelance_converted_at' => 'datetime',
             'last_synced_at' => 'datetime',
+            'delivery_attempted_at' => 'datetime',
+            'delete_pending_at' => 'datetime',
+            'last_synced_field_hashes' => 'array',
         ];
     }
 

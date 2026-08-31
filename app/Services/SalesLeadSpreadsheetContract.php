@@ -95,7 +95,7 @@ class SalesLeadSpreadsheetContract
         return $this->resolveForBranch($branch, $sheetName);
     }
 
-    public function resolveForBranch(?Branch $branch, string $sheetName): ResolvedSalesLeadSpreadsheetContract
+    public function resolveForBranch(?Branch $branch, string $sheetName, bool $allowRemoteMutation = true): ResolvedSalesLeadSpreadsheetContract
     {
         $definition = $this->definitions()[$sheetName] ?? throw SalesLeadSpreadsheetContractException::unknownSheet($sheetName);
 
@@ -142,7 +142,7 @@ class SalesLeadSpreadsheetContract
 
             $metadata = $this->googleSheets->columnMetadata($spreadsheetId, [$sheetName]);
             $sheetMetadata = $metadata[$sheetName] ?? [];
-            if ($sheetName === 'lead' && ($sheetMetadata[$headerMap['sales_pic']]['strict'] ?? false)) {
+            if ($sheetName === 'lead' && ($sheetMetadata[$headerMap['sales_pic']]['strict'] ?? false) && $allowRemoteMutation) {
                 $this->googleSheets->makeColumnValidationWarningOnly($spreadsheetId, $sheetName, (int) $sheetIds[$sheetName], $headerMap['sales_pic']);
                 $sheetMetadata[$headerMap['sales_pic']]['strict'] = false;
             }
@@ -165,6 +165,7 @@ class SalesLeadSpreadsheetContract
                 2,
                 $validationOptions,
                 $resolvedHeaders,
+                $sheetMetadata,
             );
         } catch (SalesLeadSpreadsheetContractException $exception) {
             throw $exception;
@@ -182,7 +183,15 @@ class SalesLeadSpreadsheetContract
 
     public function valueForWrite(ResolvedSalesLeadSpreadsheetContract $contract, string $header, mixed $value): mixed
     {
-        if (! is_string($value) || $header !== 'status_lead') {
+        if (! is_string($value)) {
+            return $value;
+        }
+
+        if (in_array($header, ['nama_promo', 'sumber_lead', 'kanal_masuk', 'aktivitas_lead', 'nama_konsumen', 'no_hp', 'keterangan'], true) && preg_match('/^[=+\-@]/', $value)) {
+            $value = "'".$value;
+        }
+
+        if ($header !== 'status_lead') {
             return $value;
         }
 

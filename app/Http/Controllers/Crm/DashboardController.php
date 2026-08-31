@@ -6,12 +6,13 @@ use App\Http\Controllers\Controller;
 use App\Models\Branch;
 use App\Models\ContentItem;
 use App\Models\DanaTalangan;
-use App\Models\DatabaseSheetRecord;
 use App\Models\DatabaseSheetSyncStatus;
 use App\Models\KonsumenProgressSheetRow;
 use App\Models\LeadMaster;
+use App\Models\SalesLead;
 use App\Services\DashboardConsumerMetricsService;
 use App\Services\KonsumenProgressSyncService;
+use App\Services\OrganizationScopeService;
 use App\Services\SalesWeeklyMetricsService;
 use App\Services\WorkspaceAccessService;
 use Illuminate\Http\Request;
@@ -21,6 +22,7 @@ class DashboardController extends Controller
 {
     public function __construct(
         private readonly WorkspaceAccessService $workspaceAccess,
+        private readonly OrganizationScopeService $organizationScope,
         private readonly SalesWeeklyMetricsService $weeklyMetrics,
         private readonly DashboardConsumerMetricsService $consumerMetrics,
     ) {}
@@ -59,7 +61,7 @@ class DashboardController extends Controller
                 ->get();
 
         $recentActivity = $this->getRecentActivity($user, $selectedBranchId, $selectedProject);
-        $leadStats = $this->getLeadStats($selectedBranchId, $selectedProject);
+        $leadStats = $this->getLeadStats($user, $selectedBranchId, $selectedProject);
         $danaStats = $this->getDanaTalanganStats($selectedBranchId, $selectedProject);
         $actionQueue = $this->getActionQueue($user, $selectedBranchId, $selectedProject);
         $syncHealth = $this->getSyncHealth($selectedBranchId);
@@ -97,15 +99,12 @@ class DashboardController extends Controller
                 'text' => $i->title, 'time' => $i->created_at, 'user' => $i->creator?->name ?? '-',
             ]));
 
-        DatabaseSheetRecord::whereRaw('LOWER(sheet_name) = ?', ['lead'])
-            ->whereNull('oasis_deleted_at')
-            ->when($branchId, fn ($q) => $q->where('branch_id', $branchId))
-            ->when($projectName, fn ($q) => $q->where('row_data->proyek', $projectName))
+        $this->databaseLeadQuery($user, $branchId, $projectName)
             ->latest()->take(5)->get()
-            ->each(fn ($r) => $activity->push([
+            ->each(fn ($lead) => $activity->push([
                 'type' => 'Lead', 'color' => '#e6915d',
-                'text' => ($r->row_data['nama_konsumen'] ?? '-').' ('.($r->row_data['id_lead'] ?? '#'.$r->id).')',
-                'time' => $r->created_at, 'user' => '-',
+                'text' => $lead->customer_name.' ('.($lead->external_lead_id ?? '#'.$lead->id).')',
+                'time' => $lead->created_at, 'user' => '-',
             ]));
 
         DanaTalangan::with('creator')
@@ -121,52 +120,49 @@ class DashboardController extends Controller
         return $activity->sortByDesc('time')->take(10)->values();
     }
 
-    private function getLeadStats($branchId = null, $projectName = null): array
+    private function getLeadStats($user, $branchId = null, $projectName = null): array
     {
-        $query = DatabaseSheetRecord::whereRaw('LOWER(sheet_name) = ?', ['lead'])
-            ->whereNull('oasis_deleted_at')
-            ->when($branchId, fn ($q) => $q->where('branch_id', $branchId));
+        $query = $this->databaseLeadQuery($user, $branchId, $projectName);
+        $today = now()->toDateString();
+        $startOfMonth = now()->startOfMonth()->toDateString();
+        $endOfMonth = now()->endOfMonth()->toDateString();
 
-        if ($projectName) {
-            $query->where('row_data->proyek', $projectName);
-        }
-
-        $today = now()->format('Y-m-d');
-        $startOfMonth = now()->startOfMonth()->format('Y-m-d');
-        $endOfMonth = now()->endOfMonth()->format('Y-m-d');
-
-        $leadToday = (clone $query)
-            ->where('row_data->tanggal_lead', $today)
-            ->count();
-
+        $leadToday = (clone $query)->whereDate('lead_date', $today)->count();
         $leadThisMonth = (clone $query)
-            ->where('row_data->tanggal_lead', '>=', $startOfMonth)
-            ->where('row_data->tanggal_lead', '<=', $endOfMonth)
+            ->whereDate('lead_date', '>=', $startOfMonth)
+            ->whereDate('lead_date', '<=', $endOfMonth)
             ->count();
 
-        $sourceRecords = (clone $query)->get(['row_data']);
-        $sourceCounts = [];
-        foreach ($sourceRecords as $r) {
-            $source = $r->row_data['sumber'] ?? null;
-            if ($source) {
-                $sourceCounts[$source] = ($sourceCounts[$source] ?? 0) + 1;
-            }
-        }
-        arsort($sourceCounts);
-        $topSource = array_key_first($sourceCounts) ?: '—';
+        $sourceCounts = (clone $query)->with('leadSource')->get()->map->effective_source->filter()->countBy();
+        $topSource = $sourceCounts->sortDesc()->keys()->first() ?: '—';
 
         $latestLeads = (clone $query)
+            ->with(['leadSource', 'project'])
             ->latest()
             ->take(5)
             ->get()
-            ->map(fn ($r) => [
-                'nama' => $r->row_data['nama_konsumen'] ?? '-',
-                'source' => $r->row_data['sumber'] ?? '-',
-                'tanggal' => $r->row_data['tanggal_lead'] ?? '-',
-                'project' => $r->row_data['proyek'] ?? '-',
+            ->map(fn ($lead) => [
+                'nama' => $lead->customer_name,
+                'source' => $lead->effective_source ?: '-',
+                'tanggal' => $lead->lead_date?->toDateString() ?? '-',
+                'project' => $lead->project?->project_name ?? '-',
             ]);
 
         return compact('leadToday', 'leadThisMonth', 'topSource', 'latestLeads');
+    }
+
+    private function databaseLeadQuery($user, $branchId = null, $projectName = null)
+    {
+        $query = SalesLead::query();
+        if (! $user->hasPermission('database.view') || ! $user->hasScopedPermission('database')) {
+            return $query->whereKey([]);
+        }
+
+        return $query
+            ->whereIn('branch_id', $this->organizationScope->branchIds($user, 'database'))
+            ->whereIn('project_id', $this->organizationScope->projectIds($user, 'database'))
+            ->when($branchId, fn ($query) => $query->where('branch_id', $branchId))
+            ->when($projectName, fn ($query) => $query->whereHas('project', fn ($project) => $project->where('project_name', $projectName)));
     }
 
     private function getDanaTalanganStats($branchId = null, $projectName = null): array
@@ -250,20 +246,19 @@ class DashboardController extends Controller
             ]));
 
         if ($user->hasScopedPermission('sales_pocketbook')) {
-            DatabaseSheetRecord::whereRaw('LOWER(sheet_name) = ?', ['lead'])
-                ->whereNull('oasis_deleted_at')
-                ->where('row_data->tanggal_lead', today()->format('Y-m-d'))
-                ->when($branchId, fn ($q) => $q->where('branch_id', $branchId))
-                ->when($projectName, fn ($q) => $q->where('row_data->proyek', $projectName))
+            SalesLead::query()->visibleTo($user)
+                ->whereDate('lead_date', today())
+                ->when($branchId, fn ($query) => $query->where('branch_id', $branchId))
+                ->when($projectName, fn ($query) => $query->whereHas('project', fn ($project) => $project->where('project_name', $projectName)))
                 ->latest()
                 ->take(5)
                 ->get()
-                ->each(fn ($r) => $queue->push([
-                    'text' => 'Lead baru: '.($r->row_data['nama_konsumen'] ?? '-'),
+                ->each(fn ($lead) => $queue->push([
+                    'text' => 'Lead baru: '.$lead->customer_name,
                     'urgency' => 5,
                     'type' => 'lead_today',
                     'link' => route('sales-pocketbook.index'),
-                    'time' => $r->created_at,
+                    'time' => $lead->created_at,
                 ]));
         }
 

@@ -75,15 +75,17 @@ class SyncResponseService
         if ($module === 'sales-lead-lifecycle') {
             return array_filter([
                 'checked' => $summary !== [] ? array_sum([
-                    $summary['imported'] ?? 0,
+                    $summary['imported'] ?? ($summary['claimed'] ?? 0),
                     $summary['updated'] ?? 0,
                     $summary['linked'] ?? 0,
                     $summary['unresolved'] ?? 0,
                     $summary['ignored_deleted'] ?? 0,
                 ]) : null,
-                'imported' => $summary['imported'] ?? null,
+                'imported' => $summary['imported'] ?? ($summary['claimed'] ?? null),
                 'updated' => $summary['updated'] ?? null,
                 'linked' => $summary['linked'] ?? null,
+                'unchanged' => $summary['unchanged'] ?? null,
+                'claimable' => $summary['claimable'] ?? null,
                 'unresolved' => $summary['unresolved'] ?? null,
                 'ignored_deleted' => $summary['ignored_deleted'] ?? null,
                 'capabilities' => $summary['capabilities'] ?? null,

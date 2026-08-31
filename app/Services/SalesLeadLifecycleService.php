@@ -15,11 +15,14 @@ use Carbon\CarbonInterface;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
+use Throwable;
 
 class SalesLeadLifecycleService
 {
     public function __construct(
         private readonly WorkspaceAccessService $workspaceAccess,
+        private readonly ?SalesLeadBridgeModeService $bridgeModes = null,
+        private readonly ?SalesLeadBridgeService $bridge = null,
     ) {}
 
     /** @return list<string> */
@@ -135,7 +138,10 @@ class SalesLeadLifecycleService
 
             if ($locked->current_status !== $target) {
                 $previousStatus = $locked->current_status->value;
-                $this->updateLeadSheetStatus($locked, $target);
+                $bridge = $this->bridgePushEnabled($locked);
+                if (! $bridge) {
+                    $this->updateLeadSheetStatus($locked, $target);
+                }
                 $locked->update([
                     'current_status' => $target,
                     'current_status_changed_at' => $changedAt,
@@ -154,6 +160,9 @@ class SalesLeadLifecycleService
                     ['previous_status' => $previousStatus],
                     $operationUuid,
                 );
+                if ($bridge) {
+                    $this->scheduleBridgePush($locked, $actor);
+                }
             }
 
             return $locked->fresh();
@@ -182,7 +191,10 @@ class SalesLeadLifecycleService
             ? $current
             : $this->resolvePrimaryStatus([$current, $status]);
 
-        $this->updateLeadSheetStatus($lead, $status === SalesLeadStatus::Freelance ? SalesLeadStatus::Freelance : $target);
+        $bridge = $this->bridgePushEnabled($lead);
+        if (! $bridge) {
+            $this->updateLeadSheetStatus($lead, $status === SalesLeadStatus::Freelance ? SalesLeadStatus::Freelance : $target);
+        }
 
         if ($target !== $current) {
             $lead->update([
@@ -204,6 +216,9 @@ class SalesLeadLifecycleService
             ['previous_status' => $current->value] + $metadata,
             $operationUuid,
         );
+        if ($bridge) {
+            $this->scheduleBridgePush($lead, $actor);
+        }
 
         return $lead->fresh();
     }
@@ -563,6 +578,26 @@ class SalesLeadLifecycleService
         $this->writer()->updateBySyncId($lead, 'lead', $lead->external_sync_id, [
             'status_lead' => $status->spreadsheetValue(),
         ]);
+    }
+
+    private function bridgePushEnabled(SalesLead $lead): bool
+    {
+        $lead->loadMissing('branch');
+
+        return $this->bridgeModes !== null && $this->bridge !== null && $this->bridgeModes->isPushEnabled($lead->branch);
+    }
+
+    private function scheduleBridgePush(SalesLead $lead, User $actor): void
+    {
+        $lead->update(['sync_status' => $lead->last_synced_at ? 'pending_update' : 'pending_create', 'last_sync_error' => null]);
+        DB::afterCommit(function () use ($lead, $actor): void {
+            try {
+                $this->bridge->push($lead->fresh(), $actor);
+            } catch (Throwable $exception) {
+                report($exception);
+                SalesLead::query()->whereKey($lead->id)->update(['sync_status' => 'sync_failed', 'last_sync_error' => 'Sinkronisasi spreadsheet gagal.', 'delivery_attempted_at' => now()]);
+            }
+        });
     }
 
     private function lockLead(SalesLead $lead): SalesLead

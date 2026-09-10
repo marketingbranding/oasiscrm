@@ -8,6 +8,7 @@ use App\Models\Role;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Route;
 use Mockery;
 use Tests\TestCase;
@@ -85,6 +86,22 @@ class BukuSakuRolePermissionTest extends TestCase
             $this->assertNotNull($route);
             $this->assertContains('permission:sales_pocketbook.export', $route->gatherMiddleware());
         }
+    }
+
+    public function test_p2_action_visibility_changelog_is_idempotent_and_visible(): void
+    {
+        $title = 'Penyelarasan Aksi Buku Saku Sales';
+        $migration = require database_path('migrations/2026_09_10_000003_fix_sales_pocketbook_action_visibility_changelog.php');
+
+        $migration->up();
+        $migration->up();
+
+        $this->assertSame(1, DB::table('changelogs')->whereNull('version')->where('title', $title)->count());
+        $actor = User::factory()->create([
+            'role_id' => Role::query()->where('slug', 'superadmin')->value('id'),
+            'password_changed_at' => now(),
+        ]);
+        $this->actingAs($actor)->get(route('changelogs.index'))->assertOk()->assertSeeText($title);
     }
 
     public function test_permission_description_and_changelog_are_deployed_once(): void

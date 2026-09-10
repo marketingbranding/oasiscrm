@@ -26,7 +26,7 @@
 <div class="space-y-4" x-data="{ selectedLead: null, leads: @js($leadData) }">
     <x-crm.page-header variant="canonical" eyebrow="BUKU SAKU SALES" title="Buku Saku Sales" description="Admin Cabang · Monitoring Read Only">
         <x-slot:meta><x-crm.status-badge variant="inactive">ADMIN CABANG · MONITORING READ ONLY</x-crm.status-badge></x-slot:meta>
-        <x-slot:actions><x-crm.button variant="secondary" :href="route('sales-fee-reports.index')">Laporan Fee Sales</x-crm.button></x-slot:actions>
+        <x-slot:actions>@if($canViewFeeReport)<x-crm.button variant="secondary" :href="route('sales-fee-reports.index')">Laporan Fee Sales</x-crm.button>@endif</x-slot:actions>
     </x-crm.page-header>
 
     <nav class="sales-pocketbook-tabs crm-horizontal-tabs" data-horizontal-tabs aria-label="Monitoring Buku Saku Sales">

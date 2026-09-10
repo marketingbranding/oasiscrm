@@ -42,6 +42,7 @@ class SalesLeadLifecycleSyncController extends Controller
 
     public function bridgeSync(Request $request): JsonResponse
     {
+        abort_if($request->user()->hasPrimaryRole(['sales', 'sales_coordinator', 'supervisor']), 403);
         $branch = $this->authorizedSyncBranch($request);
         if (! config('services.google_sheets.sales_lead_sync_enabled')) {
             return response()->json(['message' => 'Sinkronisasi Google Sheets Lead Sales sedang dinonaktifkan.'], 503);

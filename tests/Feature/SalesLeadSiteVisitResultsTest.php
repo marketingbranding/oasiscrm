@@ -171,7 +171,7 @@ class SalesLeadSiteVisitResultsTest extends TestCase
         $this->actingAs($coordinator)->postJson(route('sales-leads.site-visits.store', $lead), ['completion' => 'isi_nanti'])->assertForbidden();
     }
 
-    public function test_coordinator_supervisor_and_admin_have_scoped_read_only_access(): void
+    public function test_scoped_management_roles_can_record_site_visits_while_supervisor_remains_read_only(): void
     {
         [$sales, $lead] = $this->context();
         [, $foreignLead] = $this->context();
@@ -179,19 +179,22 @@ class SalesLeadSiteVisitResultsTest extends TestCase
         SalesCoordinatorSales::create(['coordinator_user_id' => $coordinator->id, 'sales_user_id' => $sales->id]);
         $historical = $this->user('sales_coordinator', $lead->branch);
         $supervisor = $this->user('supervisor', $lead->branch);
-        $admin = $this->user('admin', $lead->branch);
-        foreach ([$coordinator, $supervisor, $admin] as $viewer) {
+        $management = collect(['admin', 'manager', 'branch_manager', 'pusat', 'superadmin'])
+            ->map(fn (string $role) => $this->user($role, $lead->branch));
+        foreach (collect([$coordinator, $supervisor])->merge($management) as $viewer) {
             $viewer->assignedProjects()->attach($lead->project_id, ['is_primary' => true, 'is_active' => true]);
         }
 
-        foreach ([$coordinator, $supervisor, $admin] as $viewer) {
+        foreach (collect([$coordinator])->merge($management) as $viewer) {
             $this->actingAs($viewer)->get(route('sales-leads.show', $lead))->assertOk();
-            if ($viewer->role?->slug === 'sales_coordinator') {
-                $this->actingAs($viewer)->postJson(route('sales-leads.site-visits.store', $lead), ['completion' => 'isi_nanti'])->assertOk();
-            } else {
-                $this->actingAs($viewer)->postJson(route('sales-leads.site-visits.store', $lead), ['completion' => 'isi_nanti'])->assertForbidden();
-            }
+            $this->actingAs($viewer)->postJson(route('sales-leads.site-visits.store', $lead), ['completion' => 'isi_nanti'])->assertOk();
+        }
+        $this->actingAs($supervisor)->get(route('sales-leads.show', $lead))->assertOk();
+        $this->actingAs($supervisor)->postJson(route('sales-leads.site-visits.store', $lead), ['completion' => 'isi_nanti'])->assertForbidden();
+        $branchScoped = $management->reject(fn (User $viewer) => $viewer->hasPrimaryRole(['pusat', 'superadmin']));
+        foreach (collect([$coordinator, $supervisor])->merge($branchScoped) as $viewer) {
             $this->actingAs($viewer)->get(route('sales-leads.show', $foreignLead))->assertForbidden();
+            $this->actingAs($viewer)->postJson(route('sales-leads.site-visits.store', $foreignLead), ['completion' => 'isi_nanti'])->assertForbidden();
         }
         $this->actingAs($historical)->get(route('sales-leads.show', $lead))->assertForbidden();
     }

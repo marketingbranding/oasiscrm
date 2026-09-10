@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\Branch;
 use App\Models\ContentItem;
 use App\Models\LeadMaster;
+use App\Models\Permission;
 use App\Models\Role;
 use App\Models\SalesCoordinatorSales;
 use App\Models\SalesLead;
@@ -56,6 +57,17 @@ class SalesPocketbookExportTest extends TestCase
             'period_type' => 'week',
             'week' => '2026-07-20',
         ]))->assertForbidden();
+    }
+
+    public function test_sales_agenda_export_action_hides_when_own_export_permission_is_removed(): void
+    {
+        [, , $sales] = $this->context();
+        $sales->role->permissions()->detach(Permission::query()->where('slug', 'sales_pocketbook.export_own')->firstOrFail());
+
+        $this->actingAs($sales->fresh('role.permissions'))->get(route('sales-agendas.index'))
+            ->assertOk()
+            ->assertDontSee('Export XLSX');
+        $this->actingAs($sales)->get(route('sales-agendas.export'))->assertForbidden();
     }
 
     public function test_sales_agenda_export_includes_category_and_only_own_rows_with_historical_values_safe(): void

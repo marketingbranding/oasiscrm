@@ -99,6 +99,7 @@ class SalesFeeReportTest extends TestCase
     public function test_foreign_filters_and_detail_routes_are_forbidden(): void
     {
         foreach ([
+            ['branch_id' => $this->foreignBranch->id],
             ['project_id' => $this->foreignProject->id],
             ['sales_user_id' => $this->foreignSales->id],
             ['coordinator_id' => $this->foreignCoordinator->id],
@@ -279,13 +280,15 @@ class SalesFeeReportTest extends TestCase
         $this->assertStringNotContainsString('Hasil:', $blankRow);
     }
 
-    public function test_only_primary_legacy_admin_role_is_allowed(): void
+    public function test_primary_admin_and_superadmin_are_allowed_while_other_roles_are_denied(): void
     {
-        $allowed = $this->user('admin', $this->branch, 'Admin Allowed');
-        $allowed->branches()->updateExistingPivot($this->branch, $this->branchMembership());
-        $this->actingAs($allowed)->get($this->indexUrl())->assertOk();
+        foreach (['admin', 'superadmin'] as $slug) {
+            $allowed = $this->user($slug, $this->branch, 'Allowed '.$slug);
+            $allowed->branches()->updateExistingPivot($this->branch, $this->branchMembership());
+            $this->actingAs($allowed)->get($this->indexUrl())->assertOk();
+        }
 
-        foreach (['branch_manager', 'manager', 'pusat', 'superadmin', 'supervisor', 'sales_coordinator', 'sales', 'staff'] as $slug) {
+        foreach (['branch_manager', 'manager', 'pusat', 'supervisor', 'sales_coordinator', 'sales', 'staff'] as $slug) {
             $user = $this->user($slug, $this->branch, 'Denied '.$slug);
             $user->branches()->updateExistingPivot($this->branch, $this->branchMembership());
             $this->actingAs($user)->get($this->indexUrl())->assertForbidden();
@@ -295,6 +298,32 @@ class SalesFeeReportTest extends TestCase
         $supplemental->branches()->updateExistingPivot($this->branch, $this->branchMembership());
         $supplemental->roles()->attach(Role::query()->where('slug', 'admin')->firstOrFail());
         $this->actingAs($supplemental)->get($this->indexUrl())->assertForbidden();
+    }
+
+    public function test_superadmin_can_select_an_accessible_branch_without_scope_leakage(): void
+    {
+        $superadmin = $this->user('superadmin', $this->branch, 'Superadmin');
+
+        $scope = ['branch_id' => $this->foreignBranch->id] + $this->period();
+        $this->actingAs($superadmin)->get(route('sales-fee-reports.index', $scope))
+            ->assertOk()
+            ->assertSee('Cabang Asing')
+            ->assertSee('Sales Asing')
+            ->assertDontSee('Sales Sendiri');
+        $this->actingAs($superadmin)->get(route('sales-fee-reports.show', [$this->foreignSales, $this->foreignProject] + $scope))->assertOk();
+        $this->actingAs($superadmin)->get(route('sales-fee-reports.print', [$this->foreignSales, $this->foreignProject] + $scope))->assertOk();
+    }
+
+    public function test_p1_access_changelog_is_deployed_once_and_visible(): void
+    {
+        $title = 'Penyelarasan Akses Buku Saku Sales';
+        $migration = require database_path('migrations/2026_09_10_000002_fix_sales_pocketbook_access_alignment_changelog.php');
+
+        $migration->up();
+        $migration->up();
+
+        $this->assertSame(1, DB::table('changelogs')->whereNull('version')->where('title', $title)->count());
+        $this->actingAs($this->actor)->get(route('changelogs.index'))->assertOk()->assertSeeText($title);
     }
 
     public function test_dates_are_required_valid_and_ordered(): void

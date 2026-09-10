@@ -370,7 +370,20 @@ class SalesLeadLifecycleSyncTest extends TestCase
             ]);
             $user->branches()->updateExistingPivot($branch->id, ['can_view' => true, 'can_edit' => true, 'can_sync' => true]);
             $this->actingAs($user)->postJson(route('sales-pocketbook.lifecycle-sync'), ['branch_id' => $branch->id])->assertForbidden();
+            $this->actingAs($user)->postJson(route('sales-pocketbook.lead-bridge-sync'), ['branch_id' => $branch->id])->assertForbidden();
         }
+    }
+
+    public function test_bridge_authorization_changelog_is_deployed_once_and_visible(): void
+    {
+        $title = 'Pembatasan Sinkronisasi Bridge Lead';
+        $actor = User::factory()->create([
+            'role_id' => Role::query()->where('slug', 'superadmin')->value('id'),
+            'password_changed_at' => now(),
+        ]);
+
+        $this->assertSame(1, \DB::table('changelogs')->whereNull('version')->where('title', $title)->count());
+        $this->actingAs($actor)->get(route('changelogs.index'))->assertOk()->assertSeeText($title);
     }
 
     private function context(string $sheetId, string $projectName, string $salesName): array

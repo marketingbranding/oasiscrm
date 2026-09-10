@@ -5,12 +5,12 @@
 @section('content')
 @php
     $periodLabel = \Illuminate\Support\Carbon::parse($dateFrom)->format('d/m/Y').' - '.\Illuminate\Support\Carbon::parse($dateTo)->format('d/m/Y');
-    $printParameters = array_merge(request()->only(['date_from', 'date_to', 'project_id', 'coordinator_id', 'sales_user_id']), ['salesUser' => $sales->id, 'project' => $project->id]);
+    $printParameters = array_merge(request()->only(['branch_id', 'date_from', 'date_to', 'project_id', 'coordinator_id', 'sales_user_id']), ['salesUser' => $sales->id, 'project' => $project->id]);
 @endphp
 
 <x-crm.page-header variant="canonical" eyebrow="Laporan Fee Sales" title="LAPORAN AKTIVITAS SALES">
     <x-slot:actions>
-        <x-crm.button variant="secondary" :href="route('sales-fee-reports.index', request()->only(['date_from', 'date_to', 'project_id', 'coordinator_id', 'sales_user_id']))">Kembali</x-crm.button>
+        <x-crm.button variant="secondary" :href="route('sales-fee-reports.index', request()->only(['branch_id', 'date_from', 'date_to', 'project_id', 'coordinator_id', 'sales_user_id']))">Kembali</x-crm.button>
         <x-crm.button variant="primary" accent="reports" :href="route('sales-fee-reports.print', $printParameters)" target="_blank" rel="noopener">Cetak</x-crm.button>
     </x-slot:actions>
 </x-crm.page-header>

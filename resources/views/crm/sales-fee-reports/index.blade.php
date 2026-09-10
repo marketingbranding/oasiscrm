@@ -7,6 +7,15 @@
 
 <form method="GET" action="{{ route('sales-fee-reports.index') }}">
     <x-crm.toolbar label="Filter laporan aktivitas Sales">
+        @if($branches->count() > 1)
+            <x-crm.field label="Cabang" for="branch_id">
+                <select id="branch_id" name="branch_id" class="crm-control">
+                    @foreach($branches as $branchOption)
+                        <option value="{{ $branchOption->id }}" @selected((int) $branchId === (int) $branchOption->id)>{{ $branchOption->name }}</option>
+                    @endforeach
+                </select>
+            </x-crm.field>
+        @endif
         <x-crm.field label="Tanggal Mulai" for="date_from">
             <x-crm.date-field id="date_from" name="date_from" :value="$dateFrom" required />
         </x-crm.field>
@@ -51,7 +60,7 @@
             </thead>
             <tbody>
                 @forelse($rows as $row)
-                    @php($routeParameters = ['salesUser' => $row->user_id, 'project' => $row->project_id, 'date_from' => $dateFrom, 'date_to' => $dateTo, 'project_id' => $projectId, 'coordinator_id' => $coordinatorId, 'sales_user_id' => $salesUserId])
+                    @php($routeParameters = ['salesUser' => $row->user_id, 'project' => $row->project_id, 'branch_id' => $branchId, 'date_from' => $dateFrom, 'date_to' => $dateTo, 'project_id' => $projectId, 'coordinator_id' => $coordinatorId, 'sales_user_id' => $salesUserId])
                     <tr>
                         <td>{{ $row->sales_name }}</td>
                         <td>{{ $row->coordinator_name ?? '-' }}</td>

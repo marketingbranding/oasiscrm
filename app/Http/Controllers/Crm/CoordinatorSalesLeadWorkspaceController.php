@@ -59,6 +59,9 @@ class CoordinatorSalesLeadWorkspaceController extends Controller
             : collect([PromoOptionService::NO_PROMO]);
         $data['promoOptionsEndpoint'] = route('coordinator-leads.promo-options', ['project' => 'PROJECT_ID']);
         $data['statuses'] = SalesLeadStatus::cases();
+        $data['canCreate'] = $request->user()->can('create', SalesLead::class);
+        $data['canExport'] = $request->user()->hasPermission('sales_pocketbook.export_team')
+            && $request->user()->hasPermission('sales_pocketbook.export');
         $data['canSync'] = config('services.google_sheets.sales_lead_sync_enabled')
             && $request->user()->hasPermission('sales_pocketbook.sync');
         $data['tab'] = $tab;

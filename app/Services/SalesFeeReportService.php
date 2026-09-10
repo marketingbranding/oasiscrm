@@ -21,7 +21,7 @@ class SalesFeeReportService
 
     public function summary(User $actor, array $filters): array
     {
-        $access = $this->access($actor);
+        $access = $this->access($actor, $filters);
         $this->authorizeFilters($filters, $access);
         $assignments = $this->assignmentQuery($access, $filters)->get();
         $salesIds = $assignments->pluck('user_id')->unique()->all();
@@ -54,7 +54,9 @@ class SalesFeeReportService
             'projectId' => $filters['project_id'] ?? null,
             'coordinatorId' => $filters['coordinator_id'] ?? null,
             'salesUserId' => $filters['sales_user_id'] ?? null,
+            'branchId' => $access['branchId'],
             'branch' => Branch::query()->findOrFail($access['branchId']),
+            'branches' => Branch::query()->whereIn('id', $access['branchIds'])->orderBy('name')->get(),
             'rows' => $rows,
             'projects' => LeadMaster::query()->whereIn('id', $access['projectIds'])->orderBy('project_name')->get(),
             'coordinators' => User::query()->whereIn('id', $access['coordinatorIds'])->orderBy('name')->get(),
@@ -64,7 +66,7 @@ class SalesFeeReportService
 
     public function detail(User $actor, User $salesUser, LeadMaster $project, array $filters): array
     {
-        $access = $this->access($actor);
+        $access = $this->access($actor, $filters);
         $this->authorizeFilters($filters, $access);
         abort_unless(in_array((int) $salesUser->id, $access['salesIds'], true) && in_array((int) $project->id, $access['projectIds'], true), 403);
         $assignment = $this->assignmentQuery($access, [])->where('project_user.user_id', $salesUser->id)->where('project_user.project_id', $project->id)->first();
@@ -139,11 +141,17 @@ class SalesFeeReportService
         ];
     }
 
-    private function access(User $actor): array
+    private function access(User $actor, array $filters): array
     {
-        abort_unless($actor->hasPrimaryRole('admin') && $actor->branch_id, 403);
-        $branchId = (int) $actor->branch_id;
-        $branchIds = array_intersect($this->scope->branchIds($actor, 'sales_pocketbook'), $this->workspace->accessibleBranchIds($actor));
+        abort_unless($actor->hasPrimaryRole('admin') || $actor->isSuperadmin(), 403);
+        $branchIds = array_values(array_intersect(
+            $this->scope->branchIds($actor, 'sales_pocketbook', 'export'),
+            $this->workspace->accessibleBranchIds($actor),
+        ));
+        $branchId = $actor->isSuperadmin()
+            ? (int) ($filters['branch_id'] ?? $actor->branch_id ?? $branchIds[0] ?? 0)
+            : (int) $actor->branch_id;
+        abort_if(! $actor->isSuperadmin() && isset($filters['branch_id']) && (int) $filters['branch_id'] !== $branchId, 403);
         abort_unless(in_array($branchId, $branchIds, true), 403);
         $projectIds = LeadMaster::query()->where('branch_id', $branchId)->where('is_active', true)
             ->whereIn('id', array_intersect($this->scope->projectIds($actor, 'sales_pocketbook'), $this->workspace->accessibleProjectIds($actor)))
@@ -156,7 +164,7 @@ class SalesFeeReportService
             ->whereHas('role', fn ($query) => $query->where('slug', 'sales_coordinator')->where('is_active', true))
             ->pluck('id')->map(fn ($id) => (int) $id)->all();
 
-        return compact('branchId', 'projectIds', 'salesIds', 'coordinatorIds');
+        return compact('branchId', 'branchIds', 'projectIds', 'salesIds', 'coordinatorIds');
     }
 
     private function authorizeFilters(array $filters, array $access): void

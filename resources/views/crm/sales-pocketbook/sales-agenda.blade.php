@@ -8,7 +8,7 @@
     @if($dailyReminder['shouldShow']) @include('crm.sales-pocketbook._daily-reminder', ['dailyReminder' => $dailyReminder]) @endif
     <x-crm.page-header variant="canonical" eyebrow="Workspace Pribadi" title="Agenda Saya" description="Catat dan selesaikan agenda sales Anda.">
         <x-slot:actions>
-            <x-crm.button variant="secondary" :href="route('sales-agendas.export')">Export XLSX</x-crm.button>
+            @if($canExport)<x-crm.button variant="secondary" :href="route('sales-agendas.export')">Export XLSX</x-crm.button>@endif
         </x-slot:actions>
     </x-crm.page-header>
 
@@ -109,13 +109,13 @@
                                     @foreach($agenda->evidence as $evidence)
                                         @if($evidence->purged_at)<span>Bukti foto telah dipindahkan ke arsip.</span>
                                         @else
-                                            <span class="flex items-center gap-2"><a class="font-bold text-[#0000ee] underline" href="{{ route('sales-agendas.evidence.show', [$agenda, $evidence]) }}">Foto {{ $loop->iteration }}</a>@unless($agenda->isFinished())<form method="POST" action="{{ route('sales-agendas.evidence.destroy', [$agenda, $evidence]) }}">@csrf @method('DELETE')<button type="submit" class="font-bold text-red-700 underline" onclick="return confirm('Hapus bukti foto ini?')">Hapus</button></form>@endunless</span>
+                                            <span class="flex items-center gap-2"><a class="font-bold text-[#0000ee] underline" href="{{ route('sales-agendas.evidence.show', [$agenda, $evidence]) }}">Foto {{ $loop->iteration }}</a>@if(app(\App\Services\SalesAgendaEvidenceAuthorizationService::class)->canMutate(auth()->user(), $agenda))<form method="POST" action="{{ route('sales-agendas.evidence.destroy', [$agenda, $evidence]) }}">@csrf @method('DELETE')<button type="submit" class="font-bold text-red-700 underline" onclick="return confirm('Hapus bukti foto ini?')">Hapus</button></form>@endif</span>
                                         @endif
                                     @endforeach
                                 </div>
                             </div>
                         @endif
-                        @unless($agenda->isFinished())
+                        @if(app(\App\Services\SalesAgendaEvidenceAuthorizationService::class)->canMutate(auth()->user(), $agenda))
                             <div class="sales-agenda-action-grid">
                                 @if($agenda->evidence->count() < 2)
                                     <form method="POST" enctype="multipart/form-data" action="{{ route('sales-agendas.evidence.store', $agenda) }}" class="sales-agenda-action-form">
@@ -136,7 +136,7 @@
                                     <x-crm.button type="submit" variant="secondary" size="sm">Selesaikan</x-crm.button>
                                 </form>
                             </div>
-                        @endunless
+                        @endif
                         @if($canCleanup)<footer class="sales-agenda-footer"><x-crm.sales-agenda-cleanup :agenda="$agenda" :can-cleanup="$canCleanup" /></footer>@endif
                     </article>
                 @empty

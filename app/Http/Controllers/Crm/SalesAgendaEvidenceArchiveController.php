@@ -27,8 +27,22 @@ class SalesAgendaEvidenceArchiveController extends Controller
         $branches = $this->superadmin($request)
             ? Branch::orderBy('name')->get()
             : Branch::whereKey($request->user()->branch_id)->get();
+        $archives = $query->paginate(20);
+        $access = app(SalesAgendaEvidenceAuthorizationService::class);
+        $downloadableArchiveIds = $archives->getCollection()
+            ->filter(fn (SalesAgendaEvidenceArchive $archive) => $archive->status === 'ready'
+                && filled($archive->storage_path)
+                && $access->canDownloadArchive($request->user(), $archive))
+            ->pluck('id')
+            ->all();
 
-        return view('crm.sales-pocketbook.evidence-archives', ['archives' => $query->paginate(20), 'branches' => $branches]);
+        return view('crm.sales-pocketbook.evidence-archives', [
+            'archives' => $archives,
+            'branches' => $branches,
+            'canBuildArchive' => $branches->contains(fn (Branch $branch) => $access->canBuildArchive($request->user(), $branch->id)),
+            'canPurgeArchives' => $access->canPurge($request->user()),
+            'downloadableArchiveIds' => $downloadableArchiveIds,
+        ]);
     }
 
     public function build(Request $request, SalesAgendaEvidenceArchiveService $service)

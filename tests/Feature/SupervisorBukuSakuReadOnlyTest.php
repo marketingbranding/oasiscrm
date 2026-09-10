@@ -87,6 +87,19 @@ class SupervisorBukuSakuReadOnlyTest extends TestCase
         $this->actingAs($this->supervisor)->post(route('coordinator-leads.sync'))->assertForbidden();
     }
 
+    public function test_supervisor_export_actions_hide_when_export_permission_is_removed(): void
+    {
+        $this->supervisor->role->permissions()->detach(Permission::query()->where('slug', 'sales_pocketbook.export')->firstOrFail());
+        $supervisor = $this->supervisor->fresh('role.permissions');
+
+        $this->actingAs($supervisor)->get(route('sales-pocketbook.index'))
+            ->assertOk()
+            ->assertDontSee('Export Aktivitas Sales')
+            ->assertDontSee('Export Lead Tim');
+        $this->actingAs($supervisor)->get(route('sales-pocketbook.supervisor-monitoring.agenda-export'))->assertForbidden();
+        $this->actingAs($supervisor)->get(route('sales-pocketbook.supervisor-monitoring.lead-export'))->assertForbidden();
+    }
+
     public function test_supervisor_cannot_write_sales_agendas_with_stale_permissions(): void
     {
         $this->actingAs($this->supervisor)->post(route('sales-agendas.store'))->assertForbidden();

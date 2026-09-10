@@ -32,8 +32,8 @@
     <x-crm.page-header variant="canonical" eyebrow="Koordinator Sales" title="Buku Saku Sales" description="Kelola Lead tim, pantau Agenda Sales, dan tinjau laporan performa.">
         @if($tab === 'lead')
             <x-slot:actions>
-                <x-crm.button variant="primary" accent="sales" href="#coordinator-lead-input">INPUT LEAD</x-crm.button>
-                <x-crm.button variant="secondary" :href="route('coordinator-leads.export', $filters)">EXPORT LEAD</x-crm.button>
+                @if($canCreate)<x-crm.button variant="primary" accent="sales" href="#coordinator-lead-input">INPUT LEAD</x-crm.button>@endif
+                @if($canExport)<x-crm.button variant="secondary" :href="route('coordinator-leads.export', $filters)">EXPORT LEAD</x-crm.button>@endif
                 @if($canSync)
                     <form method="POST" action="{{ route('coordinator-leads.sync') }}">@csrf<x-crm.button type="submit" variant="secondary">SYNC KE SPREADSHEET</x-crm.button></form>
                 @endif
@@ -70,7 +70,7 @@
     </x-crm.section>
 
     @if($tab === 'lead')
-        @if($salesUsers->isNotEmpty())
+        @if($canCreate && $salesUsers->isNotEmpty())
             <x-crm.section id="coordinator-lead-input" title="Input Lead Tim">
                 <form method="POST" action="{{ route('sales-leads.store') }}" class="grid grid-cols-1 gap-3 p-4 md:grid-cols-2 xl:grid-cols-4">@csrf
                     <input type="hidden" name="operation_uuid" value="{{ old('operation_uuid', (string) Illuminate\Support\Str::uuid()) }}"><input type="hidden" name="branch_id" x-model="branch">
@@ -95,7 +95,7 @@
 
         <x-crm.section id="coordinator-team-leads" title="Lead Tim" description="Lead yang dicatat untuk Sales aktif dalam tim Anda.">
             <x-slot:actions><x-crm.status-badge variant="neutral">{{ $leads->total() }} Lead</x-crm.status-badge></x-slot:actions>
-            <div class="crm-table-scroll"><table class="crm-data-table"><thead><tr><th>Tanggal</th><th>Konsumen</th><th>Sales PIC</th><th>Cabang</th><th>Proyek</th><th>Promo</th><th>Status Lead</th><th>Status Sync</th><th>Aksi</th></tr></thead><tbody>@forelse($leads as $lead)@php([$syncStatusLabel, $syncStatusVariant] = $syncStatuses[$lead->sync_status] ?? [ucfirst(str_replace('_', ' ', $lead->sync_status)), 'neutral'])<tr><td>{{ $lead->lead_date->format('d/m/Y') }}</td><td>{{ $lead->customer_name }}</td><td>{{ $lead->sales?->name }}</td><td>{{ $lead->branch?->name }}</td><td>{{ $lead->project?->project_name }}</td><td>{{ $lead->id_promo ?: '-' }}</td><td>{{ $lead->current_status->label() }}</td><td><x-crm.status-badge :variant="$syncStatusVariant">{{ $syncStatusLabel }}</x-crm.status-badge>@if($lead->sync_status === 'sync_failed' && filled($lead->last_sync_error))<span class="mt-1 block text-xs text-gray-700">Sinkronisasi gagal. Silakan coba lagi.</span>@endif</td><td><div class="flex gap-2"><x-crm.button variant="text" size="sm" :href="route('sales-leads.show', $lead)">Detail</x-crm.button><x-crm.button variant="text" size="sm" :href="route('sales-leads.edit', $lead)">Edit</x-crm.button></div></td></tr>@empty<tr><td colspan="9"><x-crm.empty-state title="Belum ada lead tim" description="Lead anggota aktif tim pada periode ini akan muncul di sini." /></td></tr>@endforelse</tbody></table></div>
+            <div class="crm-table-scroll"><table class="crm-data-table"><thead><tr><th>Tanggal</th><th>Konsumen</th><th>Sales PIC</th><th>Cabang</th><th>Proyek</th><th>Promo</th><th>Status Lead</th><th>Status Sync</th><th>Aksi</th></tr></thead><tbody>@forelse($leads as $lead)@php([$syncStatusLabel, $syncStatusVariant] = $syncStatuses[$lead->sync_status] ?? [ucfirst(str_replace('_', ' ', $lead->sync_status)), 'neutral'])<tr><td>{{ $lead->lead_date->format('d/m/Y') }}</td><td>{{ $lead->customer_name }}</td><td>{{ $lead->sales?->name }}</td><td>{{ $lead->branch?->name }}</td><td>{{ $lead->project?->project_name }}</td><td>{{ $lead->id_promo ?: '-' }}</td><td>{{ $lead->current_status->label() }}</td><td><x-crm.status-badge :variant="$syncStatusVariant">{{ $syncStatusLabel }}</x-crm.status-badge>@if($lead->sync_status === 'sync_failed' && filled($lead->last_sync_error))<span class="mt-1 block text-xs text-gray-700">Sinkronisasi gagal. Silakan coba lagi.</span>@endif</td><td><div class="flex gap-2">@can('viewSiteVisit', $lead)<x-crm.button variant="text" size="sm" :href="route('sales-leads.show', $lead)">Detail</x-crm.button>@endcan @can('update', $lead)<x-crm.button variant="text" size="sm" :href="route('sales-leads.edit', $lead)">Edit</x-crm.button>@endcan</div></td></tr>@empty<tr><td colspan="9"><x-crm.empty-state title="Belum ada lead tim" description="Lead anggota aktif tim pada periode ini akan muncul di sini." /></td></tr>@endforelse</tbody></table></div>
             <x-crm.pagination :collection="$leads" :show-per-page="false" />
         </x-crm.section>
     @elseif($tab === 'agenda')

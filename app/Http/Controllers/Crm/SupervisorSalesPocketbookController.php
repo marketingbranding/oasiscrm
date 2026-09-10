@@ -17,8 +17,10 @@ class SupervisorSalesPocketbookController extends Controller
     public function index(Request $request): View
     {
         $this->authorizeSupervisor($request);
+        $data = $this->monitoring->resolve($request->user(), $this->validatedFilters($request));
+        $data['canExport'] = $request->user()->hasPermission('sales_pocketbook.export');
 
-        return view('crm.sales-pocketbook.supervisor-monitoring', $this->monitoring->resolve($request->user(), $this->validatedFilters($request)));
+        return view('crm.sales-pocketbook.supervisor-monitoring', $data);
     }
 
     public function agendaExport(Request $request): BinaryFileResponse

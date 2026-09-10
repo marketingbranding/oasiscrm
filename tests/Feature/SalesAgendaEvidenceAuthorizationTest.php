@@ -7,6 +7,7 @@ use App\Models\ContentItem;
 use App\Models\LeadMaster;
 use App\Models\Role;
 use App\Models\SalesAgendaEvidence;
+use App\Models\SalesAgendaEvidenceArchive;
 use App\Models\SalesCoordinatorSales;
 use App\Models\User;
 use App\Services\SalesAgendaEvidenceAuthorizationService;
@@ -38,6 +39,30 @@ class SalesAgendaEvidenceAuthorizationTest extends TestCase
         $agenda->update(['status' => 'cancelled']);
         $this->assertFalse($access->canMutate($sales, $agenda));
         $this->assertTrue($access->canView($sales, $agenda));
+    }
+
+    public function test_archive_page_exposes_only_backend_authorized_ready_downloads(): void
+    {
+        $branch = Branch::create(['name' => 'Solo', 'code' => 'SO', 'is_active' => true]);
+        $admin = $this->user('admin', $branch);
+        $ready = SalesAgendaEvidenceArchive::create([
+            'branch_id' => $branch->id,
+            'week_start' => '2026-08-03',
+            'status' => 'ready',
+            'storage_path' => 'ready.zip',
+        ]);
+        $failed = SalesAgendaEvidenceArchive::create([
+            'branch_id' => $branch->id,
+            'week_start' => '2026-08-10',
+            'status' => 'failed',
+        ]);
+
+        $this->actingAs($admin)->get(route('sales-agendas.evidence-archives.index'))
+            ->assertOk()
+            ->assertSee('Bangun ZIP')
+            ->assertSee(route('sales-agendas.evidence-archives.download', $ready), false)
+            ->assertDontSee(route('sales-agendas.evidence-archives.download', $failed), false)
+            ->assertDontSee('PURGE FILE LOKAL');
     }
 
     public function test_coordinator_private_stream_uses_current_operational_assignment_and_monitoring_scope(): void

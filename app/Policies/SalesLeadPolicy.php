@@ -69,7 +69,6 @@ class SalesLeadPolicy
         }
 
         return $user->hasPermission('sales_pocketbook.manage_all')
-            || ($user->isSales() && (int) $lead->sales_user_id === (int) $user->id)
             || app(WorkspaceAccessService::class)->canEditBranch($user, $lead->branch_id);
     }
 
@@ -119,7 +118,7 @@ class SalesLeadPolicy
                 && app(WorkspaceAccessService::class)->canAccessProject($user, $lead->project_id);
         }
 
-        return false;
+        return $this->update($user, $lead);
     }
 
     public function convertToConsumer(User $user, SalesLead $lead): bool

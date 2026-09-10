@@ -13,6 +13,7 @@
 /.vscode
 /.zed
 /auth.json
+/DUMMY_ACCOUNTS_LOCAL.txt
 /node_modules
 /public/fonts-manifest.dev.json
 /public/hot

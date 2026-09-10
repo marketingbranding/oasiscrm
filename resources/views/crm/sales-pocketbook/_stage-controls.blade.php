@@ -4,7 +4,7 @@
             <button type="button" class="stage-button {{ $lead->{$stage} ? 'done' : '' }}" data-url="{{ route('sales-leads.stage.update', $lead) }}" data-stage="{{ $stage }}" data-label="{{ $label }}" data-current="{{ $lead->{$stage}?->format('Y-m-d H:i') }}" data-stage-kind="value" @click="stage($event)" aria-label="{{ $lead->{$stage} ? 'Ubah waktu tahap '.$label : 'Catat tahap '.$label }}">
                 <span>{{ $lead->{$stage} ? 'Tercatat' : 'Catat' }}</span><strong>{{ $label }}</strong>
             </button>
-            @if($monitoring)<button type="button" class="sales-lead-stage-reverse {{ $lead->{$stage} ? '' : 'hidden' }}" data-url="{{ route('sales-leads.stage.update', $lead) }}" data-stage="{{ $stage }}" data-label="{{ $label }}" data-current="{{ $lead->{$stage}?->format('Y-m-d H:i') }}" data-stage-kind="reverse" data-reverse="1" @click="stage($event)">Batalkan {{ $label }}</button>@endif
+            @can('reverseStage', $lead)<button type="button" class="sales-lead-stage-reverse {{ $lead->{$stage} ? '' : 'hidden' }}" data-url="{{ route('sales-leads.stage.update', $lead) }}" data-stage="{{ $stage }}" data-label="{{ $label }}" data-current="{{ $lead->{$stage}?->format('Y-m-d H:i') }}" data-stage-kind="reverse" data-reverse="1" @click="stage($event)">Batalkan {{ $label }}</button>@endcan
         </div>
     @endforeach
 </div>

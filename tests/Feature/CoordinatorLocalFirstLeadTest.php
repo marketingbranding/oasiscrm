@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\Branch;
 use App\Models\LeadMaster;
+use App\Models\Permission;
 use App\Models\Role;
 use App\Models\SalesCoordinatorSales;
 use App\Models\SalesLead;
@@ -12,6 +13,7 @@ use App\Models\User;
 use App\Services\CoordinatorLeadPushService;
 use App\Services\OptimisticLockService;
 use App\Services\SalesLeadBridgeService;
+use App\Services\SalesLeadService;
 use App\Services\SalesLeadSheetOptionService;
 use App\Services\SalesLeadSpreadsheetWriter;
 use App\Services\SalesLeadSyncService;
@@ -20,6 +22,7 @@ use Illuminate\Foundation\Http\Middleware\ValidateCsrfToken;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Str;
 use Illuminate\Support\ViewErrorBag;
+use Illuminate\Validation\ValidationException;
 use Mockery;
 use RuntimeException;
 use Tests\TestCase;
@@ -50,6 +53,124 @@ class CoordinatorLocalFirstLeadTest extends TestCase
         $this->assertSame('pending_create', $lead->sync_status);
         $this->assertNull($lead->last_synced_at);
         $this->assertSame($sales->id, $lead->sales_user_id);
+    }
+
+    public function test_generic_create_defaults_status_and_rejects_system_status_without_history_mutation(): void
+    {
+        [$branch, $project, $sales, $coordinator] = $this->context();
+        $data = $this->leadData($branch, $project, $sales);
+        unset($data['current_status']);
+
+        $this->actingAs($coordinator)->postJson(route('sales-leads.store'), $data)->assertRedirect();
+        $lead = SalesLead::sole();
+        $this->assertSame('no_response', $lead->current_status->value);
+        $historyCount = $lead->statusHistories()->count();
+
+        $response = $this->actingAs($coordinator)->putJson(route('sales-leads.update', $lead), $this->leadData($branch, $project, $sales, [
+            'current_status' => 'utj',
+            'expected_updated_at' => app(OptimisticLockService::class)->token($lead),
+        ]));
+        $this->assertSame(422, $response->getStatusCode(), $response->getContent());
+        $this->assertArrayHasKey('current_status', json_decode($response->getContent(), true, flags: JSON_THROW_ON_ERROR)['errors']);
+
+        $this->assertSame('no_response', $lead->fresh()->current_status->value);
+        $this->assertSame($historyCount, $lead->statusHistories()->count());
+
+        $this->actingAs($coordinator)->postJson(route('sales-leads.store'), $this->leadData($branch, $project, $sales, [
+            'customer_name' => 'Face To Face Lead',
+            'current_status' => 'face_to_face',
+        ]))->assertRedirect();
+        $this->assertDatabaseHas('sales_leads', ['customer_name' => 'Face To Face Lead', 'current_status' => 'face_to_face']);
+    }
+
+    public function test_sales_lead_service_rejects_system_status_for_create_and_update(): void
+    {
+        [$branch, $project, $sales, $coordinator] = $this->context();
+        $lead = $this->lead($sales, $project);
+        $service = app(SalesLeadService::class);
+
+        foreach ([
+            fn () => $service->create(['current_status' => 'slik_check'], $coordinator),
+            fn () => $service->update($lead, ['current_status' => 'akad'], $coordinator),
+        ] as $operation) {
+            try {
+                $operation();
+                $this->fail('System status was accepted by SalesLeadService.');
+            } catch (ValidationException $exception) {
+                $this->assertArrayHasKey('current_status', $exception->errors());
+            }
+        }
+
+        $this->assertSame('no_response', $lead->fresh()->current_status->value);
+        $this->assertSame(0, $lead->statusHistories()->count());
+    }
+
+    public function test_notes_only_edit_preserves_system_status_without_history_mutation(): void
+    {
+        [$branch, $project, $sales, $coordinator] = $this->context();
+
+        foreach (['utj', 'akad'] as $status) {
+            $lead = $this->lead($sales, $project, [
+                'current_status' => $status,
+                'current_status_changed_at' => now()->subDay(),
+                'customer_name' => 'System '.strtoupper($status),
+            ]);
+            $data = $this->leadData($branch, $project, $sales, [
+                'customer_name' => 'System '.strtoupper($status),
+                'notes' => 'Catatan tambahan '.$status,
+                'expected_updated_at' => app(OptimisticLockService::class)->token($lead),
+            ]);
+            unset($data['current_status']);
+
+            $this->actingAs($coordinator)->putJson(route('sales-leads.update', $lead), $data)
+                ->assertOk()->assertJsonPath('ok', true);
+
+            $fresh = $lead->fresh();
+            $this->assertSame($status, $fresh->current_status->value);
+            $this->assertSame('Catatan tambahan '.$status, $fresh->notes);
+            $this->assertSame(0, $fresh->statusHistories()->count());
+        }
+    }
+
+    public function test_crafted_system_status_update_is_rejected_without_any_mutation(): void
+    {
+        [$branch, $project, $sales, $coordinator] = $this->context();
+        $changedAt = now()->subDay();
+        $lead = $this->lead($sales, $project, ['current_status' => 'site_visit', 'current_status_changed_at' => $changedAt]);
+
+        foreach (['utj', 'akad', 'slik_check'] as $crafted) {
+            $response = $this->actingAs($coordinator)->putJson(route('sales-leads.update', $lead), $this->leadData($branch, $project, $sales, [
+                'notes' => 'Coba ubah status',
+                'current_status' => $crafted,
+                'expected_updated_at' => app(OptimisticLockService::class)->token($lead),
+            ]));
+
+            $this->assertSame(422, $response->getStatusCode(), $response->getContent());
+            $this->assertArrayHasKey('current_status', $response->json('errors'));
+        }
+
+        $fresh = $lead->fresh();
+        $this->assertSame('site_visit', $fresh->current_status->value);
+        $this->assertNull($fresh->notes);
+        $this->assertSame($changedAt->copy()->startOfSecond()->format('Y-m-d H:i:s'), $fresh->current_status_changed_at->format('Y-m-d H:i:s'));
+        $this->assertSame(0, $fresh->statusHistories()->count());
+    }
+
+    public function test_edit_form_keeps_system_status_read_only_and_manual_status_selectable(): void
+    {
+        [$branch, $project, $sales, $coordinator] = $this->context();
+        $systemLead = $this->lead($sales, $project, ['current_status' => 'utj']);
+        $manualLead = $this->lead($sales, $project, ['current_status' => 'discussion']);
+
+        $this->actingAs($coordinator)->get(route('sales-leads.edit', $systemLead))
+            ->assertOk()
+            ->assertSee('status sistem, baca-saja', false)
+            ->assertDontSee('name="current_status"', false);
+
+        $this->actingAs($coordinator)->get(route('sales-leads.edit', $manualLead))
+            ->assertOk()
+            ->assertSee('<select id="edit-lead-status" class="sales-input" name="current_status" required>', false)
+            ->assertDontSee('value="utj"', false);
     }
 
     public function test_coordinator_renders_and_updates_current_team_lead_locally(): void
@@ -148,6 +269,17 @@ class CoordinatorLocalFirstLeadTest extends TestCase
         ]))->assertForbidden();
         $this->actingAs($sales)->post(route('coordinator-leads.sync'))->assertForbidden();
         $this->actingAs($sales)->get(route('coordinator-leads.export'))->assertForbidden();
+    }
+
+    public function test_coordinator_export_action_hides_when_team_export_permission_is_removed(): void
+    {
+        [, , , $coordinator] = $this->context();
+        $coordinator->role->permissions()->detach(Permission::query()->where('slug', 'sales_pocketbook.export_team')->firstOrFail());
+
+        $this->actingAs($coordinator->fresh('role.permissions'))->get(route('sales-pocketbook.index'))
+            ->assertOk()
+            ->assertDontSee('EXPORT LEAD');
+        $this->actingAs($coordinator)->get(route('coordinator-leads.export'))->assertForbidden();
     }
 
     public function test_local_only_hides_coordinator_sync_and_rejects_direct_push_without_service_call(): void

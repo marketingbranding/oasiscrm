@@ -89,7 +89,7 @@ class NavigationServiceTest extends TestCase
         $this->assertNotContains('Maintenance', $this->labels($navigation));
     }
 
-    public function test_sales_fee_report_requires_primary_admin_and_sales_pocketbook_scope(): void
+    public function test_sales_fee_report_requires_primary_admin_or_superadmin_and_sales_pocketbook_export_scope(): void
     {
         Route::get('/test-sales-fee-reports', fn () => null)->name('sales-fee-reports.index');
 
@@ -100,6 +100,7 @@ class NavigationServiceTest extends TestCase
         $supplementalAdmin->roles()->attach(Role::query()->where('slug', 'admin')->firstOrFail());
 
         $adminNavigation = app(NavigationService::class)->forUser($admin, 'sales-fee-reports.index');
+        $superadminNavigation = app(NavigationService::class)->forUser($this->user('superadmin'), 'sales-fee-reports.index');
         $supplementalNavigation = app(NavigationService::class)->forUser($supplementalAdmin->fresh('role.permissions'));
         $reports = collect($adminNavigation)->firstWhere('key', 'reports');
         $feeReport = collect($reports['children'])->firstWhere('label', 'Laporan Fee Sales');
@@ -111,6 +112,7 @@ class NavigationServiceTest extends TestCase
         $this->assertTrue($feeReport['active']);
         $this->assertTrue($reports['active']);
         $this->assertNotContains('Review Laporan', $this->labels($adminNavigation));
+        $this->assertContains('Laporan Fee Sales', $this->labels($superadminNavigation));
         $this->assertNotContains('Laporan Fee Sales', $this->labels($supplementalNavigation));
     }
 

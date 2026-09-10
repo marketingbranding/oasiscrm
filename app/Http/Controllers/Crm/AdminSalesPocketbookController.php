@@ -44,6 +44,10 @@ class AdminSalesPocketbookController extends Controller
             'agenda_status' => ['nullable', Rule::in(ContentItem::STATUSES['agenda'])],
         ]);
 
-        return view('crm.sales-pocketbook.admin-monitoring', $this->monitoring->resolve($request->user(), $filters));
+        $data = $this->monitoring->resolve($request->user(), $filters);
+        $data['canViewFeeReport'] = $request->user()->hasPermission('sales_pocketbook.export')
+            && $request->user()->hasScopedPermission('sales_pocketbook', 'export');
+
+        return view('crm.sales-pocketbook.admin-monitoring', $data);
     }
 }

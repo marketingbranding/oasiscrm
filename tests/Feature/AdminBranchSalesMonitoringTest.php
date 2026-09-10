@@ -6,6 +6,7 @@ use App\Enums\SalesLeadStatus;
 use App\Models\Branch;
 use App\Models\ContentItem;
 use App\Models\LeadMaster;
+use App\Models\Permission;
 use App\Models\Role;
 use App\Models\SalesCoordinatorSales;
 use App\Models\SalesLead;
@@ -103,6 +104,15 @@ class AdminBranchSalesMonitoringTest extends TestCase
             ->assertDontSee('Tambah Lead')->assertDontSee('Edit Lead')->assertDontSee('Hapus Lead')
             ->assertDontSee('Catat Site Visit')->assertDontSee('Konversi Konsumen')->assertDontSee('Ajukan SLIK');
         $response->assertViewHas('leads', fn ($leads) => $leads->first()->latest_activity_status === SalesLeadStatus::SiteVisit);
+    }
+
+    public function test_fee_report_action_hides_when_export_permission_is_removed(): void
+    {
+        $this->admin->role->permissions()->detach(Permission::query()->where('slug', 'sales_pocketbook.export')->firstOrFail());
+        $admin = $this->admin->fresh('role.permissions');
+
+        $this->actingAs($admin)->get($this->url())->assertOk()->assertDontSee('Laporan Fee Sales');
+        $this->actingAs($admin)->get(route('sales-fee-reports.index'))->assertForbidden();
     }
 
     public function test_monitoring_is_own_branch_and_includes_sales_without_coordinator(): void

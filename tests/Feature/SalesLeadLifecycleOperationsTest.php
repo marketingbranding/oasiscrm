@@ -99,9 +99,9 @@ class SalesLeadLifecycleOperationsTest extends TestCase
         $this->assertSame(SalesLeadStatus::Utj, $lead->fresh()->current_status);
         $this->assertNull($lead->fresh()->utj_at);
 
-        $this->actingAs($sales)->postJson(route('sales-leads.site-visits.store', $lead), [
+        $this->actingAs($sales)->from(route('sales-leads.show', $lead))->post(route('sales-leads.site-visits.store', $lead), [
             'completion' => 'isi_nanti', 'branch_id' => $branch->id,
-        ])->assertForbidden();
+        ])->assertRedirect()->assertSessionHasErrors('branch_id');
     }
 
     public function test_consumer_enforces_nik_rules_preserves_leading_zero_and_blocks_branch_duplicate(): void

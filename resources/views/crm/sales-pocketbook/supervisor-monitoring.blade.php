@@ -11,8 +11,10 @@
     <x-crm.page-header variant="canonical" eyebrow="BUKU SAKU SALES" title="Monitoring Tim" description="Pantau Koordinator dan Sales dalam tim Anda.">
         <x-slot:meta><x-crm.status-badge variant="inactive">SUPERVISOR · READ ONLY</x-crm.status-badge></x-slot:meta>
         <x-slot:actions>
-            <x-crm.button variant="secondary" :href="route('sales-pocketbook.supervisor-monitoring.agenda-export', $query())">Export Aktivitas Sales</x-crm.button>
-            <x-crm.button variant="secondary" :href="route('sales-pocketbook.supervisor-monitoring.lead-export', $query())">Export Lead Tim</x-crm.button>
+            @if($canExport)
+                <x-crm.button variant="secondary" :href="route('sales-pocketbook.supervisor-monitoring.agenda-export', $query())">Export Aktivitas Sales</x-crm.button>
+                <x-crm.button variant="secondary" :href="route('sales-pocketbook.supervisor-monitoring.lead-export', $query())">Export Lead Tim</x-crm.button>
+            @endif
         </x-slot:actions>
     </x-crm.page-header>
 

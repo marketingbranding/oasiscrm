@@ -65,8 +65,9 @@ class SalesAgendaController extends Controller
             'agendaInputUrl' => route('sales-agendas.index', ['tab' => 'agenda']).'#agenda-baru',
             'missingResultUrl' => route('sales-agendas.index', ['tab' => 'agenda']).'#agenda-saya',
         ];
+        $canExport = $request->user()->hasPermission('sales_pocketbook.export_own');
 
-        return view('crm.sales-pocketbook.sales-agenda', compact('project', 'agendas', 'leads', 'tab', 'projects', 'defaultProjectId', 'cascadeProjects', 'leadOptionsEndpoint', 'promos', 'dailyReminder'));
+        return view('crm.sales-pocketbook.sales-agenda', compact('project', 'agendas', 'leads', 'tab', 'projects', 'defaultProjectId', 'cascadeProjects', 'leadOptionsEndpoint', 'promos', 'dailyReminder', 'canExport'));
     }
 
     public function store(StoreSalesAgendaRequest $request, SalesAgendaEvidenceUploadService $uploads)

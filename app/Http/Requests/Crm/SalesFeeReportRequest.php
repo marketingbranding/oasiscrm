@@ -8,7 +8,12 @@ class SalesFeeReportRequest extends FormRequest
 {
     public function authorize(): bool
     {
-        return $this->user()?->hasPrimaryRole('admin') === true;
+        $user = $this->user();
+
+        return $user !== null
+            && ($user->hasPrimaryRole('admin') || $user->isSuperadmin())
+            && $user->hasPermission('sales_pocketbook.export')
+            && $user->hasScopedPermission('sales_pocketbook', 'export');
     }
 
     protected function prepareForValidation(): void
@@ -22,6 +27,7 @@ class SalesFeeReportRequest extends FormRequest
     public function rules(): array
     {
         return [
+            'branch_id' => ['nullable', 'integer', 'exists:branches,id'],
             'date_from' => ['required', 'date'],
             'date_to' => ['required', 'date', 'after_or_equal:date_from'],
             'project_id' => ['nullable', 'integer', 'exists:lead_master,id'],

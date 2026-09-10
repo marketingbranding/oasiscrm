@@ -41,19 +41,18 @@
     @can('updateLifecycleStatus', $lead)
         <div class="mt-3 flex flex-wrap gap-2" aria-label="Tindakan siklus lead">
             @if($status->isManual())
-                @foreach([\App\Enums\SalesLeadStatus::NoResponse, \App\Enums\SalesLeadStatus::Discussion] as $manualStatus)
+                @foreach(\App\Enums\SalesLeadStatus::MANUAL as $manualStatus)
                     @if($status !== $manualStatus)
-                    <form method="POST" action="{{ route('sales-leads.lifecycle-status.update', $lead) }}" x-data="{ submitting: false }" @submit="submitting = true">
-                        @csrf @method('PATCH')
-                        <input type="hidden" name="status" value="{{ $manualStatus->value }}">
-                        <x-crm.button type="submit" variant="secondary" size="sm" x-bind:disabled="submitting">{{ $manualStatus->label() }}</x-crm.button>
-                    </form>
+                    <x-crm.button type="button" variant="secondary" size="sm" @click="$dispatch('oasis:modal-open', { name: 'lead-status-confirm-{{ $manualStatus->value }}-{{ $lead->id }}' })">{{ $manualStatus->label() }}</x-crm.button>
                     @endif
                 @endforeach
+                @can('markUtjDirect', $lead)
+                    <x-crm.button type="button" variant="secondary" size="sm" @click="$dispatch('oasis:modal-open', { name: 'lead-utj-confirm-{{ $lead->id }}' })">Tandai UTJ</x-crm.button>
+                @endcan
             @else
                 <span class="text-xs font-bold">Status sistem bersifat baca-saja.</span>
             @endif
-            @can('recordSiteVisit', $lead) @if($siteVisitAvailable)<x-crm.button type="button" variant="secondary" size="sm" @click="$dispatch('oasis:modal-open', { name: 'lead-site-visit-{{ $lead->id }}' })">{{ $latestVisit && !$latestVisit->is_completed ? 'Isi Data Cek Lokasi' : 'Cek Lokasi' }}</x-crm.button>@endif @endcan
+            @can('recordSiteVisit', $lead) @if($siteVisitAvailable)<x-crm.button type="button" variant="secondary" size="sm" @click="$dispatch('oasis:modal-open', { name: 'lead-site-visit-{{ $lead->id }}' })">{{ $latestVisit && !$latestVisit->is_completed ? 'Isi Data Cek Lokasi' : 'Rekam Cek Lokasi' }}</x-crm.button>@endif @endcan
             @can('convertToConsumer', $lead)
                 @if($consumerAvailable && !$normalConsumer && (!$lead->project?->is_nup_eligible || !$nupConsumer))
                     <x-crm.button type="button" variant="secondary" size="sm" @click="$dispatch('oasis:modal-open', { name: 'lead-consumer-{{ $lead->id }}' })">{{ $lead->project?->is_nup_eligible ? 'Proses Konsumen NUP' : 'Proses Menjadi Konsumen' }}</x-crm.button>
@@ -72,6 +71,46 @@
         @endif
     @endcan
 </section>
+
+@can('updateLifecycleStatus', $lead)
+@if($status->isManual())
+@foreach(\App\Enums\SalesLeadStatus::MANUAL as $manualStatus)
+@if($status !== $manualStatus)
+<x-crm.modal name="lead-status-confirm-{{ $manualStatus->value }}-{{ $lead->id }}" title="Ubah Status: {{ $lead->customer_name }}" description="Konfirmasi perubahan status lead.">
+    <form method="POST" action="{{ route('sales-leads.lifecycle-status.update', $lead) }}" x-data="{ submitting: false }" @submit="submitting = true" class="space-y-3" :aria-busy="submitting">
+        @csrf @method('PATCH')
+        <input type="hidden" name="status" value="{{ $manualStatus->value }}">
+        <dl class="grid grid-cols-1 gap-1 text-sm">
+            <div><dt class="font-bold">Status saat ini</dt><dd>{{ $status->label() }}</dd></div>
+            <div><dt class="font-bold">Status baru</dt><dd>{{ $manualStatus->label() }}</dd></div>
+            <div><dt class="font-bold">Tanggal tercatat</dt><dd>{{ now()->format('d/m/Y H:i') }} (otomatis, waktu input)</dd></div>
+        </dl>
+        <p class="text-xs text-gray-600">Tanggal transisi inilah yang dipakai laporan aktivitas untuk menentukan periode.</p>
+        <x-crm.button type="submit" variant="primary" accent="sales" x-bind:disabled="submitting">Ya, Ubah Status</x-crm.button>
+    </form>
+</x-crm.modal>
+@endif
+@endforeach
+@endif
+@endcan
+
+@can('markUtjDirect', $lead)
+@if($status->isManual())
+<x-crm.modal name="lead-utj-confirm-{{ $lead->id }}" title="Tandai UTJ: {{ $lead->customer_name }}" description="Lead langsung ditandai UTJ tanpa mencatat data cek lokasi atau konsumen.">
+    <form method="POST" action="{{ route('sales-leads.utj.store', $lead) }}" x-data="{ submitting: false }" @submit="submitting = true" class="space-y-3" :aria-busy="submitting">
+        @csrf
+        <input type="hidden" name="operation_uuid" value="{{ old('operation_uuid', (string) \Illuminate\Support\Str::uuid()) }}">
+        <dl class="grid grid-cols-1 gap-1 text-sm">
+            <div><dt class="font-bold">Status saat ini</dt><dd>{{ $status->label() }}</dd></div>
+            <div><dt class="font-bold">Status baru</dt><dd>{{ \App\Enums\SalesLeadStatus::Utj->label() }}</dd></div>
+            <div><dt class="font-bold">Tanggal tercatat</dt><dd>{{ now()->format('d/m/Y H:i') }} (otomatis, waktu input)</dd></div>
+        </dl>
+        <p class="text-xs text-gray-600">Tanggal transisi inilah yang dipakai laporan aktivitas untuk menentukan periode. Tindakan ini tidak menulis tab data_ceklok.</p>
+        <x-crm.button type="submit" variant="primary" accent="sales" x-bind:disabled="submitting">Ya, Tandai UTJ</x-crm.button>
+    </form>
+</x-crm.modal>
+@endif
+@endcan
 
 @can('recordSiteVisit', $lead)
 <x-crm.modal name="lead-site-visit-{{ $lead->id }}" title="Cek Lokasi: {{ $lead->customer_name }}" description="Lengkapi kunjungan sekarang atau pilih Isi Nanti agar status tetap terlihat sebagai belum lengkap." size="lg" :initially-open="$autoOpenSiteVisit">

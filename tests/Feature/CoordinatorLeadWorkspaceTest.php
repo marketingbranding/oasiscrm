@@ -85,8 +85,10 @@ class CoordinatorLeadWorkspaceTest extends TestCase
         $this->assertStringNotContainsString('ID Promo', $view);
         $this->assertStringContainsString('Nama Promo', $view);
         $this->assertStringContainsString('(historis)', $view);
-        $this->assertStringContainsString('SalesLeadStatus::cases()', $view);
-        foreach (['Tatap Muka Konsumen', '>Survey<', 'Survey Lokasi', 'status sistem, baca-saja'] as $label) {
+        $this->assertStringContainsString('SalesLeadStatus::MANUAL', $view);
+        $this->assertStringContainsString('status sistem, baca-saja', $view);
+        $this->assertStringNotContainsString('SalesLeadStatus::cases()', $view);
+        foreach (['Tatap Muka Konsumen', '>Survey<', 'Survey Lokasi'] as $label) {
             $this->assertStringNotContainsString($label, $view);
         }
     }

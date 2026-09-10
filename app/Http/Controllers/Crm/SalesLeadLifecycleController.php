@@ -6,6 +6,7 @@ use App\Exceptions\SalesLeadSpreadsheetContractException;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Crm\ConvertSalesLeadConsumerRequest;
 use App\Http\Requests\Crm\ConvertSalesLeadFreelanceRequest;
+use App\Http\Requests\Crm\MarkSalesLeadUtjRequest;
 use App\Http\Requests\Crm\RecordSalesLeadSiteVisitRequest;
 use App\Http\Requests\Crm\RejectSalesLeadSlikRequest;
 use App\Http\Requests\Crm\SubmitSalesLeadSlikRequest;
@@ -33,6 +34,14 @@ class SalesLeadLifecycleController extends Controller
         ));
 
         return $this->respond($request, 'Status lead berhasil diperbarui.', ['status' => $lead->current_status->value, 'operation_uuid' => $operationUuid]);
+    }
+
+    public function markUtj(MarkSalesLeadUtjRequest $request, SalesLead $salesLead): RedirectResponse|Response
+    {
+        $operationUuid = $request->validated('operation_uuid') ?? (string) Str::uuid();
+        $lead = $this->run(fn () => $this->lifecycle->markUtjDirect($salesLead, $request->user(), $operationUuid));
+
+        return $this->respond($request, 'Lead berhasil ditandai UTJ.', ['status' => $lead->current_status->value, 'operation_uuid' => $operationUuid]);
     }
 
     public function siteVisit(RecordSalesLeadSiteVisitRequest $request, SalesLead $salesLead): RedirectResponse|Response

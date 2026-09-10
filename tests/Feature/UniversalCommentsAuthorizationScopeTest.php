@@ -21,10 +21,10 @@ class UniversalCommentsAuthorizationScopeTest extends TestCase
         $user = $this->commentUser('manager', $branch);
         $target = $this->commentPlanner($user, $branch);
 
-        $this->getJson(route('comments.index', ['alias' => 'planner-item', 'id' => $target->id]))->assertRedirect(route('login'));
+        $this->getJson(route('comments.index', ['alias' => 'planner-item', 'id' => $target->id]))->assertUnauthorized();
         $this->postJson(route('comments.store'), [
             'alias' => 'planner-item', 'id' => $target->id, 'body' => 'Unauthenticated',
-        ])->assertRedirect(route('login'));
+        ])->assertUnauthorized();
 
         $this->actingAs($user)->postJson(route('comments.store'), [
             'alias' => 'konsumen-progress', 'id' => 1, 'body' => 'Unsupported',

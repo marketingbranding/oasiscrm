@@ -27,7 +27,7 @@ class PresenceTest extends TestCase
         [$branch, $user] = $this->branchAndUser();
         $payload = $this->payload($branch);
 
-        $this->postJson(route('presence.heartbeat'), $payload)->assertRedirect(route('login'));
+        $this->postJson(route('presence.heartbeat'), $payload)->assertUnauthorized();
         $this->actingAs($user)->postJson(route('presence.heartbeat'), $payload)
             ->assertOk()->assertJsonPath('ok', true);
         $this->assertDatabaseHas('user_presences', ['user_id' => $user->id, 'branch_id' => $branch->id, 'page_key' => 'dashboard']);

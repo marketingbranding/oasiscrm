@@ -7,6 +7,7 @@ use App\Models\SalesLead;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
 use Throwable;
 
 class SalesLeadService
@@ -20,6 +21,7 @@ class SalesLeadService
 
     public function create(array $data, User $actor): SalesLead
     {
+        $this->assertManualStatus($data['current_status'] ?? null);
         $lead = DB::transaction(function () use ($data, $actor): SalesLead {
             $data['id_promo'] = $data['promo_name'] ?? null;
             unset($data['promo_name']);
@@ -59,6 +61,7 @@ class SalesLeadService
 
     public function update(SalesLead $lead, array $data, User $actor): SalesLead
     {
+        $this->assertManualStatus($data['current_status'] ?? null);
         $updated = DB::transaction(function () use ($lead, $data, $actor): SalesLead {
             $locked = SalesLead::query()->lockForUpdate()->findOrFail($lead->id);
             $data['id_promo'] = $data['promo_name'] ?? null;
@@ -196,6 +199,24 @@ class SalesLeadService
                 SalesLead::query()->whereKey($lead->id)->update(['sync_status' => 'sync_failed', 'last_sync_error' => 'Sinkronisasi spreadsheet gagal.', 'delivery_attempted_at' => now()]);
             }
         });
+    }
+
+    private function assertManualStatus(?string $status): void
+    {
+        if (blank($status)) {
+            return;
+        }
+
+        $resolved = SalesLeadStatus::tryFrom(trim($status));
+        if ($resolved === null) {
+            throw ValidationException::withMessages(['current_status' => 'Status lead tidak dikenali.']);
+        }
+
+        if (! $resolved->isManual()) {
+            throw ValidationException::withMessages([
+                'current_status' => 'Status sistem tidak dapat diisi dari data lead. Gunakan aksi siklus lead yang sesuai.',
+            ]);
+        }
     }
 
     private function activityContext(SalesLead $lead): array

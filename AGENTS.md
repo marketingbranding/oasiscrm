@@ -436,7 +436,7 @@ Konsumen Progress required tabs are case-sensitive:
 
 ### Buku Saku Sales lifecycle
 
-Buku Saku Sales 2.1 adds a canonical branch-scoped lifecycle beside the preserved six legacy stage timestamps. `SalesLead.current_status` follows `no_response`, `discussion`, `site_visit`, `utj`, `slik_check`, `slik_rejected`, and `akad` in monotonic primary precedence. `freelance` is an independent conversion flag/history. Only `no_response`, `discussion`, and `site_visit` are manually owned; a system-owned current status is read-only in lead forms.
+Buku Saku Sales 2.1 adds a canonical branch-scoped lifecycle beside the preserved six legacy stage timestamps. `SalesLead.current_status` follows `no_response`, `discussion`, `site_visit`, `utj`, `slik_check`, `slik_rejected`, and `akad` in monotonic primary precedence. `freelance` is an independent conversion flag/history. Only `no_response`, `discussion`, `face_to_face`, and `site_visit` are manually owned; a system-owned current status is read-only in lead forms. The generic `sales-leads.store`/`sales-leads.update` path rejects non-manual statuses in both the FormRequest and `SalesLeadService`, and the edit form renders system statuses as a read-only value instead of a select. Quick status buttons cover all four manual statuses through `sales-leads.lifecycle-status.update` with a confirmation modal stating the auto-stamped input timestamp. `utj` remains system-owned, but the dedicated operator action `sales-leads.utj.store` (`SalesLeadLifecycleService::markUtjDirect`, history source `utj_direct`) can mark UTJ directly while a lead is still on a manual stage, without writing `data_ceklok` or requiring consumer conversion; it is available in every branch including those without a `data_ceklok` capability.
 
 Lead entry now has one operational source field: `sales_leads.source`, canonicalized to the exact active option in the selected branch workbook. New direct and pull-created leads capture that value once in `source_name_snapshot`; later edits and pulls update `source` without rewriting the snapshot or legacy `lead_source_id`. Effective display/filter/export source precedence is `source`, then snapshot, then the legacy relation. `lead_source_id` remains only as historical/admin compatibility data and its query parameter is translated to a name for temporary filter compatibility.
 
@@ -1193,6 +1193,8 @@ Do not state visual/browser verification was completed unless it was actually pe
 ## 17. Known Gotchas and Prohibited Patterns
 
 ### Known gotchas
+
+- Exception rendering for JSON-requesting callers (`Accept: application/json`, AJAX/fetch) returns JSON errors (validation 422, authentication 401) while plain web forms still receive redirects and session errors. This is controlled by `shouldRenderJsonWhen` in `bootstrap/app.php`; do not revert it to `api/*`-only because CRM modal AJAX flows parse 422 JSON inline.
 
 - `canViewAllBranches()` is permission-based and broader than a single module; use target policy/query scope as well.
 - `role:` can see supplemental roles; permission resolution cannot.

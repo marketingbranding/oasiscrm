@@ -58,7 +58,7 @@ class CoordinatorSalesLeadWorkspaceController extends Controller
             ? $this->promoOptions->availableForBranchAndDate((int) $initialProject->branch_id, $request->old('lead_date', today()))
             : collect([PromoOptionService::NO_PROMO]);
         $data['promoOptionsEndpoint'] = route('coordinator-leads.promo-options', ['project' => 'PROJECT_ID']);
-        $data['statuses'] = SalesLeadStatus::cases();
+        $data['statuses'] = SalesLeadStatus::MANUAL;
         $data['canCreate'] = $request->user()->can('create', SalesLead::class);
         $data['canExport'] = $request->user()->hasPermission('sales_pocketbook.export_team')
             && $request->user()->hasPermission('sales_pocketbook.export');

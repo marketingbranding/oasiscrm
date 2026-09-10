@@ -119,6 +119,7 @@ Route::middleware(['auth', 'active', 'verified', 'password.changed', 'operationa
         Route::patch('/buku-saku-sales/leads/{sales_lead}/stage', [SalesLeadStageController::class, 'update'])->name('sales-leads.stage.update');
         Route::patch('/buku-saku-sales/leads/{sales_lead}/lifecycle-status', [SalesLeadLifecycleController::class, 'updateStatus'])->name('sales-leads.lifecycle-status.update');
         Route::post('/buku-saku-sales/leads/{sales_lead}/site-visits', [SalesLeadLifecycleController::class, 'siteVisit'])->name('sales-leads.site-visits.store');
+        Route::post('/buku-saku-sales/leads/{sales_lead}/utj', [SalesLeadLifecycleController::class, 'markUtj'])->name('sales-leads.utj.store');
         Route::patch('/buku-saku-sales/leads/{sales_lead}/site-visits/{site_visit}', [SalesLeadLifecycleController::class, 'updateSiteVisit'])->name('sales-leads.site-visits.update');
         Route::post('/buku-saku-sales/leads/{sales_lead}/consumer', [SalesLeadLifecycleController::class, 'consumer'])->name('sales-leads.consumer.store');
         Route::post('/buku-saku-sales/leads/{sales_lead}/slik', [SalesLeadLifecycleController::class, 'slik'])->name('sales-leads.slik.store');

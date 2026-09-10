@@ -35,6 +35,15 @@ class DatabaseAuthorizationTest extends TestCase
             'formula_columns' => [],
             'column_metadata' => [],
         ]);
+        $google = Mockery::mock(GoogleSheetsApiService::class);
+        $google->shouldNotReceive('sheetTitles');
+        $this->app->instance(GoogleSheetsApiService::class, $google);
+        $writeService = Mockery::mock(DatabaseSheetWriteService::class);
+        $writeService->shouldNotReceive('createRecord');
+        $writeService->shouldNotReceive('updateRecord');
+        $writeService->shouldNotReceive('softDelete');
+        $this->app->instance(DatabaseSheetWriteService::class, $writeService);
+
         $this->actingAs($user)->getJson(route('database.sheet', ['branchId' => $branch->id, 'sheetName' => 'Leads']))->assertNotFound();
         $this->actingAs($user)->putJson(route('database.records.update', 999999), [
             'expected_sync_id' => 'hidden-sync-id',

@@ -7,6 +7,7 @@ use App\Exceptions\SalesLeadSpreadsheetContractException;
 use App\Models\Branch;
 use App\Models\LeadMaster;
 use App\Models\Role;
+use App\Models\SalesCoordinatorSales;
 use App\Models\SalesLead;
 use App\Models\SalesLeadConsumerLink;
 use App\Models\SalesLeadSlikAttempt;
@@ -51,6 +52,7 @@ class SalesLeadLifecycleOperationsTest extends TestCase
         $this->actingAs($sales)->postJson(route('sales-leads.slik.store', $lead), ['tanggal_slik' => '2026-08-05'])->assertForbidden();
         $this->actingAs($sales)->patchJson(route('sales-leads.slik.reject', [$lead, $attempt]), ['hasil_slik' => 'KOL 3', 'keterangan' => 'Ditolak'])->assertForbidden();
         $this->actingAs($sales)->postJson(route('sales-leads.freelance.store', $lead), ['nik_koordinator' => 'KOORD-01'])->assertForbidden();
+        $this->actingAs($sales)->postJson(route('sales-leads.utj.store', $lead))->assertForbidden();
     }
 
     public function test_manual_status_endpoint_accepts_only_three_manual_values_and_rejects_forged_organization_ids(): void
@@ -320,6 +322,77 @@ class SalesLeadLifecycleOperationsTest extends TestCase
         $this->assertSame($firstBranch->id, $first->branch_id);
         $this->assertSame($secondBranch->id, $second->branch_id);
         $this->assertNotSame($first->oasis_sync_id, $second->oasis_sync_id);
+    }
+
+    public function test_utj_direct_marks_utj_from_manual_stage_and_never_creates_site_visit_rows(): void
+    {
+        [, $project, $manager, $lead] = $this->context();
+        $operationUuid = (string) Str::uuid();
+
+        $this->actingAs($manager)->postJson(route('sales-leads.utj.store', $lead), ['operation_uuid' => $operationUuid])
+            ->assertOk()->assertJsonPath('status', 'utj');
+
+        $fresh = $lead->fresh();
+        $this->assertSame(SalesLeadStatus::Utj, $fresh->current_status);
+        $this->assertNull($fresh->utj_at);
+        $this->assertSame(0, $fresh->siteVisits()->count());
+        $this->assertSame(0, $fresh->consumerLinks()->count());
+        $history = $fresh->statusHistories()->where('status', 'utj')->firstOrFail();
+        $this->assertSame('utj_direct', $history->source);
+        $this->assertSame($operationUuid, $history->operation_uuid);
+        $this->assertDatabaseHas('activity_log', [
+            'subject_type' => SalesLead::class, 'subject_id' => $fresh->id, 'event' => 'utj_marked_direct', 'causer_id' => $manager->id,
+        ]);
+
+        $retried = app(SalesLeadLifecycleService::class)->markUtjDirect($fresh, $manager, $operationUuid);
+        $this->assertSame(1, $fresh->statusHistories()->where('status', 'utj')->count());
+        $this->assertSame(SalesLeadStatus::Utj, $retried->current_status);
+
+        $systemLead = $this->lead($manager, $project, 'System Stage Lead');
+        $systemLead->update(['current_status' => SalesLeadStatus::SlikCheck]);
+        $this->actingAs($manager)->from(route('sales-pocketbook.index'))->post(route('sales-leads.utj.store', $systemLead), [
+            'operation_uuid' => (string) Str::uuid(),
+        ])->assertRedirect()->assertSessionHasErrors('status');
+        $this->assertSame(SalesLeadStatus::SlikCheck, $systemLead->fresh()->current_status);
+
+        $owner = $this->user('sales', $lead->branch, 'Owner Sales');
+        $owner->assignedProjects()->attach($project->id, ['is_primary' => true, 'is_active' => true]);
+        $ownLead = $this->lead($owner, $project, 'Owner Lead');
+        $this->assertTrue($owner->can('markUtjDirect', $ownLead));
+        $this->actingAs($owner)->postJson(route('sales-leads.utj.store', $ownLead))->assertOk()->assertJsonPath('status', 'utj');
+
+        [, , $otherManager, $otherLead] = $this->context();
+        $this->assertFalse($manager->can('markUtjDirect', $otherLead));
+        $this->actingAs($manager)->postJson(route('sales-leads.utj.store', $otherLead))->assertForbidden();
+    }
+
+    public function test_leads_view_renders_quick_status_buttons_and_utj_confirmation(): void
+    {
+        [, $project, $manager] = $this->context();
+        $coordinator = $this->user('sales_coordinator', $project->branch, 'Koordinator Tim');
+        $coordinator->update(['supervisor_user_id' => $manager->id]);
+        $sales = $this->user('sales', $project->branch, 'Tim Sales');
+        $sales->assignedProjects()->attach($project->id, ['is_primary' => true, 'is_active' => true]);
+        $sales->update(['supervisor_user_id' => $coordinator->id]);
+        SalesCoordinatorSales::create(['coordinator_user_id' => $coordinator->id, 'sales_user_id' => $sales->id]);
+        $lead = $this->lead($sales, $project, 'Render Lead');
+
+        $response = $this->actingAs($manager)->get(route('sales-pocketbook.index'));
+
+        $response->assertOk()->assertSee($lead->customer_name);
+        foreach ([
+            'Tandai UTJ',
+            'Ya, Ubah Status',
+            'Ya, Tandai UTJ',
+            'otomatis, waktu input',
+            'laporan aktivitas untuk menentukan periode',
+            'lead-utj-confirm-'.$lead->id,
+            'lead-status-confirm-discussion-'.$lead->id,
+            'lead-status-confirm-face_to_face-'.$lead->id,
+            'lead-status-confirm-site_visit-'.$lead->id,
+        ] as $needle) {
+            $response->assertSee($needle);
+        }
     }
 
     private function context(): array

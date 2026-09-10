@@ -55,16 +55,21 @@
         </x-crm.field>
         @php
             $selectedStatus = old('current_status', $lead->current_status?->value);
-            $historicalStatus = filled($selectedStatus) ? \App\Enums\SalesLeadStatus::tryFrom($selectedStatus) : null;
+            $statusManual = $lead->current_status?->isManual() ?? false;
         @endphp
-        <x-crm.field label="Status Lead" for="edit-lead-status" required :error="$errors->first('current_status')">
-            <select id="edit-lead-status" class="sales-input" name="current_status" required>
-                @if(filled($selectedStatus) && !$historicalStatus)<option value="{{ $selectedStatus }}" selected>{{ $selectedStatus }} (historis)</option>@endif
-                @foreach(\App\Enums\SalesLeadStatus::cases() as $status)
-                    <option value="{{ $status->value }}" {{ $selectedStatus === $status->value ? 'selected' : '' }}>{{ $status->label() }}</option>
-                @endforeach
-            </select>
-        </x-crm.field>
+        @if($statusManual)
+            <x-crm.field label="Status Lead" for="edit-lead-status" required :error="$errors->first('current_status')">
+                <select id="edit-lead-status" class="sales-input" name="current_status" required>
+                    @foreach(\App\Enums\SalesLeadStatus::MANUAL as $status)
+                        <option value="{{ $status->value }}" {{ $selectedStatus === $status->value ? 'selected' : '' }}>{{ $status->label() }}</option>
+                    @endforeach
+                </select>
+            </x-crm.field>
+        @else
+            <x-crm.field label="Status Lead" for="edit-lead-status" :error="$errors->first('current_status')">
+                <span id="edit-lead-status" class="block border border-gray-400 bg-gray-100 px-3 py-2 text-sm font-bold">{{ $lead->current_status?->label() ?? '-' }} (status sistem, baca-saja)</span>
+            </x-crm.field>
+        @endif
         <x-crm.field label="Cabang" for="edit-lead-branch" required :error="$errors->first('branch_id')"><select id="edit-lead-branch" class="sales-input" name="branch_id" x-model="branch" @change="branchChanged()" required aria-invalid="{{ $errors->has('branch_id') ? 'true' : 'false' }}" aria-describedby="{{ $errors->has('branch_id') ? 'edit-lead-branch-error' : '' }}">@foreach($branches as $branch)<option value="{{ $branch->id }}">{{ $branch->name }}</option>@endforeach</select></x-crm.field>
         <x-crm.field label="Proyek" for="edit-lead-project" required :error="$errors->first('project_id')"><select id="edit-lead-project" class="sales-input" name="project_id" x-model="project" @change="projectChanged()" required aria-invalid="{{ $errors->has('project_id') ? 'true' : 'false' }}" aria-describedby="{{ $errors->has('project_id') ? 'edit-lead-project-error' : '' }}">@foreach($projects as $project)<option value="{{ $project->id }}" x-show="projectVisible('{{ $project->id }}')" :disabled="!projectVisible('{{ $project->id }}')">{{ $project->project_name }}</option>@endforeach</select></x-crm.field>
         <x-crm.field label="Sales" for="edit-lead-sales" required :error="$errors->first('sales_user_id')">

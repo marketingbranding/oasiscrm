@@ -121,6 +121,23 @@ class SalesLeadPolicy
         return $this->update($user, $lead);
     }
 
+    public function markUtjDirect(User $user, SalesLead $lead): bool
+    {
+        if ($user->isSales()) {
+            return (int) $lead->sales_user_id === (int) $user->id
+                && $user->hasPermission('sales_pocketbook.manage_own')
+                && $this->view($user, $lead);
+        }
+
+        if ($user->hasPrimaryRole('sales_coordinator')) {
+            return $user->hasPermission('sales_pocketbook.manage_team')
+                && app(CoordinatorLeadTeamService::class)->contains($user, $lead->sales_user_id)
+                && app(WorkspaceAccessService::class)->canViewBranch($user, $lead->branch_id);
+        }
+
+        return $this->update($user, $lead);
+    }
+
     public function convertToConsumer(User $user, SalesLead $lead): bool
     {
         return $this->update($user, $lead);

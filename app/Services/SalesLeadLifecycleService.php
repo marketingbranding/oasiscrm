@@ -223,6 +223,42 @@ class SalesLeadLifecycleService
         return $lead->fresh();
     }
 
+    public function markUtjDirect(SalesLead $lead, User $actor, string $operationUuid): SalesLead
+    {
+        return DB::transaction(function () use ($lead, $actor, $operationUuid): SalesLead {
+            $locked = SalesLead::query()->lockForUpdate()->findOrFail($lead->id);
+            $existing = SalesLeadStatusHistory::query()
+                ->where('branch_id', $locked->branch_id)
+                ->where('operation_uuid', $operationUuid)
+                ->first();
+            if ($existing !== null) {
+                if ((int) $existing->sales_lead_id !== (int) $locked->id) {
+                    throw ValidationException::withMessages(['operation_uuid' => 'Identitas operasi sudah digunakan oleh lead lain.']);
+                }
+
+                return $locked;
+            }
+
+            $current = $locked->current_status instanceof SalesLeadStatus
+                ? $locked->current_status
+                : SalesLeadStatus::fromInput($locked->current_status ?? SalesLeadStatus::NoResponse->value);
+            if (! $current->isManual()) {
+                throw ValidationException::withMessages([
+                    'status' => 'Tandai UTJ hanya tersedia untuk lead pada tahap manual (No Respon, Diskusi, Tatap Muka, Cek Lokasi).',
+                ]);
+            }
+
+            $updated = $this->transitionSystemStatus($locked, SalesLeadStatus::Utj, 'utj_direct', (string) $actor->id, $actor, $operationUuid);
+            $updated->logSalesActivity('utj_marked_direct', [
+                'branch_id' => $updated->branch_id,
+                'project_id' => $updated->project_id,
+                'sales_user_id' => $updated->sales_user_id,
+            ]);
+
+            return $updated;
+        });
+    }
+
     public function recordSiteVisit(SalesLead $lead, array $data, User $actor): SalesLeadSiteVisit
     {
         $operationUuid = $this->operationUuid($data);

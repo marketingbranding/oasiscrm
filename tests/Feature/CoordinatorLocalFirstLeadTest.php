@@ -356,6 +356,7 @@ class CoordinatorLocalFirstLeadTest extends TestCase
         });
         $this->app->instance(SalesLeadBridgeService::class, $bridge);
         $this->app->forgetInstance(CoordinatorLeadPushService::class);
+        $this->mockIsolatedWriter();
         $result = app(CoordinatorLeadPushService::class)->push($coordinator);
 
         $this->assertSame(['processed' => 1, 'synced' => 1, 'failed' => 0], $result);
@@ -377,6 +378,7 @@ class CoordinatorLocalFirstLeadTest extends TestCase
             return ['ok' => true, 'status' => 'synced'];
         });
         $this->app->instance(SalesLeadBridgeService::class, $bridge);
+        $this->mockIsolatedWriter();
 
         $result = app(CoordinatorLeadPushService::class)->push($coordinator);
 
@@ -393,6 +395,7 @@ class CoordinatorLocalFirstLeadTest extends TestCase
         $bridge = Mockery::mock(SalesLeadBridgeService::class);
         $bridge->shouldReceive('push')->once()->andThrow(new RuntimeException('remote unavailable'));
         $this->app->instance(SalesLeadBridgeService::class, $bridge);
+        $this->mockIsolatedWriter();
 
         $failed = app(CoordinatorLeadPushService::class)->push($coordinator);
 
@@ -477,6 +480,7 @@ class CoordinatorLocalFirstLeadTest extends TestCase
             return ['ok' => true, 'status' => 'synced'];
         });
         $this->app->instance(SalesLeadBridgeService::class, $bridge);
+        $this->mockIsolatedWriter();
 
         $result = app(CoordinatorLeadPushService::class)->push($coordinator);
 
@@ -593,6 +597,14 @@ class CoordinatorLocalFirstLeadTest extends TestCase
             'enabled_at' => now(),
         ]);
         $branch->unsetRelation('bridgeSetting');
+    }
+
+    private function mockIsolatedWriter(): void
+    {
+        $writer = Mockery::mock(SalesLeadSpreadsheetWriter::class);
+        $writer->shouldNotReceive('append');
+        $writer->shouldNotReceive('updateBySyncId');
+        $this->app->instance(SalesLeadSpreadsheetWriter::class, $writer);
     }
 
     private function writeResult(Branch $branch, string $syncId, string $externalLeadId): SalesLeadSpreadsheetWriteResult

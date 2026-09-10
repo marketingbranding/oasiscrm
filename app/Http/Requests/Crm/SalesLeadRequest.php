@@ -41,7 +41,7 @@ abstract class SalesLeadRequest extends FormRequest
             'platform' => ['required', 'string', 'max:255', $this->masterRule(SalesLeadMasterData::CHANNELS, 'platform')],
             'campaign_id' => ['nullable', 'string', 'max:255'],
             'campaign_name' => ['required', 'string', 'max:255', $this->masterRule(SalesLeadMasterData::ACTIVITIES, 'campaign_name')],
-            'current_status' => ['required', Rule::in(array_map(fn (SalesLeadStatus $status) => $status->value, SalesLeadStatus::cases()))],
+            'current_status' => ['nullable', Rule::in(array_map(fn (SalesLeadStatus $status) => $status->value, SalesLeadStatus::MANUAL))],
             'linked_consumer_reference' => ['nullable', 'string', 'max:255'],
             'expected_updated_at' => ['sometimes', 'required', 'string', 'max:40'],
             'operation_uuid' => [$this->lead() ? 'sometimes' : 'required', 'uuid'],
@@ -66,6 +66,13 @@ abstract class SalesLeadRequest extends FormRequest
     public function messages(): array
     {
         return [
+            'branch_id.required' => 'Cabang wajib dipilih.',
+            'project_id.required' => 'Proyek wajib dipilih.',
+            'sales_user_id.required' => 'Sales wajib dipilih.',
+            'lead_date.required' => 'Tanggal lead wajib diisi.',
+            'customer_name.required' => 'Nama calon konsumen wajib diisi.',
+            'current_status.required' => 'Status lead wajib dipilih.',
+            'current_status.in' => 'Status sistem (UTJ, Cek SLIK, dan seterusnya) tidak dapat diisi dari formulir lead. Gunakan aksi siklus lead yang sesuai.',
             'source.required' => 'Sumber lead wajib dipilih.',
             'platform.required' => 'Kanal masuk wajib dipilih.',
             'campaign_name.required' => 'Aktivitas lead wajib dipilih.',

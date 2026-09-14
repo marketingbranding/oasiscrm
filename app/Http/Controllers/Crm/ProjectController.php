@@ -7,9 +7,12 @@ use App\Http\Requests\Crm\StoreProjectRequest;
 use App\Http\Requests\Crm\UpdateProjectRequest;
 use App\Models\Branch;
 use App\Models\LeadMaster;
+use App\Services\ProjectAdministrationService;
 use App\Services\SalesLeadSheetOptionService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Symfony\Component\HttpFoundation\Response;
+use Throwable;
 
 class ProjectController extends Controller
 {
@@ -55,12 +58,12 @@ class ProjectController extends Controller
         return view('crm.projects.create', compact('branches'));
     }
 
-    public function store(StoreProjectRequest $request)
+    public function store(StoreProjectRequest $request, ProjectAdministrationService $projects)
     {
         $data = $request->validated();
         $data['is_active'] = $request->boolean('is_active', true);
 
-        LeadMaster::create($data);
+        $projects->create($data);
 
         return redirect()->route('projects.index', array_filter($request->only(['branch_id'])))
             ->with('success', 'Proyek berhasil ditambahkan.');
@@ -70,29 +73,43 @@ class ProjectController extends Controller
     {
         $this->ensureSuperadmin();
         $branches = Branch::where('is_active', true)->forDropdown()->get();
-        $projectOptions = $project->branch && filled($project->branch->sheet_id) ? $sheetOptions->forBranch($project->branch)['project'] : [];
+        $projectOptions = [];
+        $sheetOptionsWarning = null;
+        if ($project->branch && filled($project->branch->sheet_id)) {
+            try {
+                $projectOptions = $sheetOptions->forBranch($project->branch)['project'];
+            } catch (Throwable) {
+                $sheetOptionsWarning = 'Opsi proyek spreadsheet sedang tidak tersedia. Identitas spreadsheet saat ini tetap dipertahankan.';
+                if (filled($project->sheet_project_name)) {
+                    $projectOptions = [$project->sheet_project_name];
+                }
+            }
+        }
 
-        return view('crm.projects.edit', compact('project', 'branches', 'projectOptions'));
+        return view('crm.projects.edit', compact('project', 'branches', 'projectOptions', 'sheetOptionsWarning'));
     }
 
-    public function update(UpdateProjectRequest $request, LeadMaster $project)
+    public function update(UpdateProjectRequest $request, LeadMaster $project, ProjectAdministrationService $projects)
     {
-        $data = $request->validated();
-        $data['is_active'] = $request->boolean('is_active', true);
-
-        $project->update($data);
+        $result = $projects->update($request, $project, $request->validated(), $request->user());
+        if ($result instanceof Response) {
+            return $result;
+        }
 
         return redirect()->route('projects.index', array_filter($request->only(['branch_id'])))
             ->with('success', 'Proyek berhasil diperbarui.');
     }
 
-    public function destroy(LeadMaster $project)
+    public function destroy(Request $request, LeadMaster $project, ProjectAdministrationService $projects)
     {
         $this->ensureSuperadmin();
-        $project->delete();
+        $archived = $projects->archive($request, $project, $request->user(), $request->input('expected_updated_at'));
+        if ($archived instanceof Response) {
+            return $archived;
+        }
 
-        return redirect()->route('projects.index', array_filter(request()->only(['branch_id'])))
-            ->with('success', 'Proyek berhasil dihapus.');
+        return redirect()->route('projects.index', array_filter($request->only(['branch_id'])))
+            ->with($archived ? 'success' : 'warning', $archived ? 'Proyek berhasil dinonaktifkan.' : 'Proyek sudah nonaktif.');
     }
 
     public function show(LeadMaster $project)

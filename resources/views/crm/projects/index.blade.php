@@ -58,12 +58,15 @@
                         <div class="flex items-center justify-center gap-1">
                             <a href="{{ route('kavlings.index', ['project' => $p->id]) }}" class="text-xs font-[Helvetica] font-bold underline hover:text-[#5d8e8e]">Kavling</a>
                             <a href="{{ route('projects.edit', $p->id) }}" class="text-xs font-[Helvetica] font-bold underline hover:text-[#5d8e8e]">Edit</a>
-                            <form method="POST" action="{{ route('projects.destroy', ['project' => $p->id]) }}"
-                                  onsubmit="return confirm('Hapus proyek ini?')" class="inline">
-                                @csrf
-                                @method('DELETE')
-                                <button type="submit" class="text-xs font-[Helvetica] font-bold underline hover:text-[#e91d2a]">Hapus</button>
-                            </form>
+                            @if($p->is_active)
+                                <form method="POST" action="{{ route('projects.destroy', ['project' => $p->id]) }}"
+                                       onsubmit="return confirm('Nonaktifkan proyek ini?')" class="inline">
+                                    @csrf
+                                    @method('DELETE')
+                                    <input type="hidden" name="expected_updated_at" value="{{ app(\App\Services\OptimisticLockService::class)->token($p) }}">
+                                     <button type="submit" class="text-xs font-[Helvetica] font-bold underline hover:text-[#e91d2a]">Nonaktifkan</button>
+                                </form>
+                            @endif
                         </div>
                     </td>
                 </tr>

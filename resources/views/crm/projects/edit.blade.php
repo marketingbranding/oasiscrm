@@ -13,6 +13,7 @@
             <form method="POST" action="{{ route('projects.update', ['project' => $project->id]) }}" class="space-y-4">
                 @csrf
                 @method('PUT')
+                <input type="hidden" name="expected_updated_at" value="{{ old('expected_updated_at', app(\App\Services\OptimisticLockService::class)->token($project)) }}">
 
                 <div>
                     <label class="font-[Helvetica] font-bold text-xs uppercase block mb-1">Cabang</label>
@@ -34,16 +35,15 @@
 
                 <div>
                     <label for="sheet-project-name" class="font-[Helvetica] font-bold text-xs uppercase block mb-1">Identitas Proyek Spreadsheet</label>
+                    @if($sheetOptionsWarning)<p class="border border-[#b8860b] bg-[#fff3b0] px-3 py-2 text-xs font-[Helvetica] mb-2">{{ $sheetOptionsWarning }}</p>@endif
                     <select id="sheet-project-name" name="sheet_project_name" class="w-full border-2 border-black px-3 py-2 text-sm bg-white rounded-none"><option value="">Gunakan nama proyek persis</option>@foreach($projectOptions as $option)<option value="{{ $option }}" @selected(old('sheet_project_name', $project->sheet_project_name) === $option)>{{ $option }}</option>@endforeach</select>
                     @error('sheet_project_name') <p class="text-[#e91d2a] text-xs mt-1 font-[Helvetica] font-bold">{{ $message }}</p> @enderror
                 </div>
 
                 <div>
                     <label class="font-[Helvetica] font-bold text-xs uppercase block mb-1">Status</label>
-                    <select name="is_active" class="w-full border-2 border-black px-3 py-2 text-sm font-['Times_New_Roman'] bg-white rounded-none">
-                        <option value="1" {{ old('is_active', $project->is_active) == '1' ? 'selected' : '' }}>Aktif</option>
-                        <option value="0" {{ old('is_active', $project->is_active) === '0' ? 'selected' : '' }}>Nonaktif</option>
-                    </select>
+                    <p class="text-sm font-['Times_New_Roman']">{{ $project->is_active ? 'Aktif' : 'Nonaktif' }}</p>
+                    @if(! $project->is_active)<p class="text-xs font-[Helvetica] mt-1">Proyek nonaktif tetap nonaktif setelah disimpan. Reaktivasi tidak tersedia.</p>@endif
                 </div>
 
                 <div class="flex items-center gap-3 pt-2">
@@ -56,16 +56,19 @@
                 </div>
             </form>
 
+            @if($project->is_active)
             <div class="border-t-2 border-black mt-6 pt-4">
                 <form method="POST" action="{{ route('projects.destroy', ['project' => $project->id]) }}"
-                      onsubmit="return confirm('Hapus proyek ini?')">
+                      onsubmit="return confirm('Nonaktifkan proyek ini?')">
                     @csrf
                     @method('DELETE')
+                    <input type="hidden" name="expected_updated_at" value="{{ app(\App\Services\OptimisticLockService::class)->token($project) }}">
                     <button type="submit" class="bg-[#e91d2a] text-white px-6 py-2 text-sm font-[Helvetica] font-bold border-2 border-black rounded-none hover:bg-red-600">
-                        Hapus Proyek
+                        Nonaktifkan Proyek
                     </button>
                 </form>
             </div>
+            @endif
         </div>
     </div>
 @endsection

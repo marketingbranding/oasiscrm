@@ -13,6 +13,7 @@ use App\Models\SalesLead;
 use App\Services\DashboardConsumerMetricsService;
 use App\Services\KonsumenProgressSyncService;
 use App\Services\OrganizationScopeService;
+use App\Services\ProjectIdentityResolver;
 use App\Services\SalesWeeklyMetricsService;
 use App\Services\WorkspaceAccessService;
 use Illuminate\Http\Request;
@@ -25,6 +26,7 @@ class DashboardController extends Controller
         private readonly OrganizationScopeService $organizationScope,
         private readonly SalesWeeklyMetricsService $weeklyMetrics,
         private readonly DashboardConsumerMetricsService $consumerMetrics,
+        private readonly ProjectIdentityResolver $projectIdentities,
     ) {}
 
     public function index(Request $request)
@@ -60,10 +62,18 @@ class DashboardController extends Controller
                 ->orderBy('project_name')
                 ->get();
 
-        $recentActivity = $this->getRecentActivity($user, $selectedBranchId, $selectedProject);
-        $leadStats = $this->getLeadStats($user, $selectedBranchId, $selectedProject);
-        $danaStats = $this->getDanaTalanganStats($selectedBranchId, $selectedProject);
-        $actionQueue = $this->getActionQueue($user, $selectedBranchId, $selectedProject);
+        $selectedProjectModel = null;
+        if ($selectedProject && $selectedBranchId) {
+            $selectedProjectModel = $this->projectIdentities->resolveExactOrNull((int) $selectedBranchId, $selectedProject);
+        }
+        $selectedProjectId = $selectedProject ? ($selectedProjectModel?->id ?? 0) : null;
+        $selectedProjectLabels = $selectedProject ? ($selectedProjectModel ? $this->projectIdentities->labels($selectedProjectModel) : ['']) : [];
+        $selectedProject = $selectedProjectModel?->project_name ?? $selectedProject;
+
+        $recentActivity = $this->getRecentActivity($user, $selectedBranchId, $selectedProjectId, $selectedProjectLabels);
+        $leadStats = $this->getLeadStats($user, $selectedBranchId, $selectedProjectId);
+        $danaStats = $this->getDanaTalanganStats($user, $selectedBranchId, $selectedProjectLabels);
+        $actionQueue = $this->getActionQueue($user, $selectedBranchId, $selectedProjectId, $selectedProjectLabels);
         $syncHealth = $this->getSyncHealth($selectedBranchId);
         $dashboardSyncStatus = $selectedBranchId ? DatabaseSheetSyncStatus::where('branch_id', $selectedBranchId)->first() : null;
         $canSyncDatabase = $user->hasPermission('database.sync') && $branch && $this->workspaceAccess->canSyncBranch($user, $branch);
@@ -75,8 +85,7 @@ class DashboardController extends Controller
         $salesWeekly = null;
         $salesReminders = null;
         if ($user->isSales()) {
-            $salesProjectId = $selectedProject ? $projects->firstWhere('project_name', $selectedProject)?->id : null;
-            $salesFilters = array_filter(['branch_id' => $selectedBranchId, 'project_id' => $salesProjectId, 'sales_user_id' => $user->id]);
+            $salesFilters = array_filter(['branch_id' => $selectedBranchId, 'project_id' => $selectedProjectId, 'sales_user_id' => $user->id]);
             $salesWeekly = $this->weeklyMetrics->metrics($user, $this->weeklyMetrics->period(), $salesFilters);
             $salesReminders = $this->weeklyMetrics->reminders($user, $salesFilters);
         }
@@ -84,13 +93,13 @@ class DashboardController extends Controller
         return view('crm.dashboard', compact('branches', 'branch', 'selectedBranchId', 'projects', 'selectedProject', 'recentActivity', 'leadStats', 'danaStats', 'actionQueue', 'syncHealth', 'konsumenProgress', 'dashboardSyncStatus', 'canSyncDatabase', 'salesWeekly', 'salesReminders'));
     }
 
-    private function getRecentActivity($user, $branchId = null, $projectName = null)
+    private function getRecentActivity($user, $branchId = null, $projectId = null, array $projectLabels = [])
     {
         $activity = collect();
 
         ContentItem::with('creator')->visibleTo($user)
             ->when($branchId, fn ($q) => $q->where('branch_id', $branchId))
-            ->when($projectName, fn ($q) => $q->where('project_name', $projectName))
+            ->when($projectLabels !== [], fn ($q) => $q->whereIn('project_name', $projectLabels))
             ->latest()->take(5)->get()
             ->each(fn ($i) => $activity->push([
                 'type' => match ($i->item_type) {
@@ -99,7 +108,7 @@ class DashboardController extends Controller
                 'text' => $i->title, 'time' => $i->created_at, 'user' => $i->creator?->name ?? '-',
             ]));
 
-        $this->databaseLeadQuery($user, $branchId, $projectName)
+        $this->databaseLeadQuery($user, $branchId, $projectId)
             ->latest()->take(5)->get()
             ->each(fn ($lead) => $activity->push([
                 'type' => 'Lead', 'color' => '#e6915d',
@@ -107,9 +116,10 @@ class DashboardController extends Controller
                 'time' => $lead->created_at, 'user' => '-',
             ]));
 
-        DanaTalangan::with('creator')
+        DanaTalangan::query()->visibleTo($user)
+            ->with('creator')
             ->when($branchId, fn ($q) => $q->where('branch_id', $branchId))
-            ->when($projectName, fn ($q) => $q->where('project_name', $projectName))
+            ->when($projectLabels !== [], fn ($q) => $q->whereIn('project_name', $projectLabels))
             ->latest()->take(5)->get()
             ->each(fn ($d) => $activity->push([
                 'type' => 'Dana Talangan', 'color' => '#f1c40f',
@@ -120,9 +130,9 @@ class DashboardController extends Controller
         return $activity->sortByDesc('time')->take(10)->values();
     }
 
-    private function getLeadStats($user, $branchId = null, $projectName = null): array
+    private function getLeadStats($user, $branchId = null, $projectId = null): array
     {
-        $query = $this->databaseLeadQuery($user, $branchId, $projectName);
+        $query = $this->databaseLeadQuery($user, $branchId, $projectId);
         $today = now()->toDateString();
         $startOfMonth = now()->startOfMonth()->toDateString();
         $endOfMonth = now()->endOfMonth()->toDateString();
@@ -151,7 +161,7 @@ class DashboardController extends Controller
         return compact('leadToday', 'leadThisMonth', 'topSource', 'latestLeads');
     }
 
-    private function databaseLeadQuery($user, $branchId = null, $projectName = null)
+    private function databaseLeadQuery($user, $branchId = null, $projectId = null)
     {
         $query = SalesLead::query();
         if (! $user->hasPermission('database.view') || ! $user->hasScopedPermission('database')) {
@@ -162,13 +172,14 @@ class DashboardController extends Controller
             ->whereIn('branch_id', $this->organizationScope->branchIds($user, 'database'))
             ->whereIn('project_id', $this->organizationScope->projectIds($user, 'database'))
             ->when($branchId, fn ($query) => $query->where('branch_id', $branchId))
-            ->when($projectName, fn ($query) => $query->whereHas('project', fn ($project) => $project->where('project_name', $projectName)));
+            ->when($projectId !== null, fn ($query) => $query->where('project_id', $projectId));
     }
 
-    private function getDanaTalanganStats($branchId = null, $projectName = null): array
+    private function getDanaTalanganStats($user, $branchId = null, array $projectLabels = []): array
     {
-        $query = DanaTalangan::when($branchId, fn ($q) => $q->where('branch_id', $branchId))
-            ->when($projectName, fn ($q) => $q->where('project_name', $projectName));
+        $query = DanaTalangan::query()->visibleTo($user)
+            ->when($branchId, fn ($q) => $q->where('branch_id', $branchId))
+            ->when($projectLabels !== [], fn ($q) => $q->whereIn('project_name', $projectLabels));
 
         $tidakSanggup = (clone $query)->where('status', 'tidak_sanggup')->count();
         $belumKonfirmasi = (clone $query)->where('konfirmasi_keuangan', false)->count();
@@ -181,14 +192,15 @@ class DashboardController extends Controller
         return compact('tidakSanggup', 'belumKonfirmasi', 'hariIni', 'overdue');
     }
 
-    private function getActionQueue($user, $branchId = null, $projectName = null)
+    private function getActionQueue($user, $branchId = null, $projectId = null, array $projectLabels = [])
     {
         $queue = collect();
 
-        DanaTalangan::whereDate('tgl_komitmen', '<', today())
+        DanaTalangan::query()->visibleTo($user)
+            ->whereDate('tgl_komitmen', '<', today())
             ->where('status', '!=', 'lunas')
             ->when($branchId, fn ($q) => $q->where('branch_id', $branchId))
-            ->when($projectName, fn ($q) => $q->where('project_name', $projectName))
+            ->when($projectLabels !== [], fn ($q) => $q->whereIn('project_name', $projectLabels))
             ->latest('tgl_komitmen')
             ->take(5)
             ->get()
@@ -200,10 +212,11 @@ class DashboardController extends Controller
                 'time' => $d->tgl_komitmen,
             ]));
 
-        DanaTalangan::where('konfirmasi_keuangan', false)
+        DanaTalangan::query()->visibleTo($user)
+            ->where('konfirmasi_keuangan', false)
             ->where('status', '!=', 'lunas')
             ->when($branchId, fn ($q) => $q->where('branch_id', $branchId))
-            ->when($projectName, fn ($q) => $q->where('project_name', $projectName))
+            ->when($projectLabels !== [], fn ($q) => $q->whereIn('project_name', $projectLabels))
             ->latest()
             ->take(5)
             ->get()
@@ -218,7 +231,7 @@ class DashboardController extends Controller
         ContentItem::visibleTo($user)->whereDate('deadline_date', '<', today())
             ->whereNotIn('status', ['completed', 'done', 'cancelled', 'rescheduled', 'uploaded'])
             ->when($branchId, fn ($q) => $q->where('branch_id', $branchId))
-            ->when($projectName, fn ($q) => $q->where('project_name', $projectName))
+            ->when($projectLabels !== [], fn ($q) => $q->whereIn('project_name', $projectLabels))
             ->orderBy('deadline_date')
             ->take(5)
             ->get()
@@ -233,7 +246,7 @@ class DashboardController extends Controller
         ContentItem::visibleTo($user)->whereDate('scheduled_date', today())
             ->whereNotIn('status', ['completed', 'done', 'cancelled', 'rescheduled', 'uploaded'])
             ->when($branchId, fn ($q) => $q->where('branch_id', $branchId))
-            ->when($projectName, fn ($q) => $q->where('project_name', $projectName))
+            ->when($projectLabels !== [], fn ($q) => $q->whereIn('project_name', $projectLabels))
             ->orderBy('scheduled_date')
             ->take(5)
             ->get()
@@ -249,7 +262,7 @@ class DashboardController extends Controller
             SalesLead::query()->visibleTo($user)
                 ->whereDate('lead_date', today())
                 ->when($branchId, fn ($query) => $query->where('branch_id', $branchId))
-                ->when($projectName, fn ($query) => $query->whereHas('project', fn ($project) => $project->where('project_name', $projectName)))
+                ->when($projectId !== null, fn ($query) => $query->where('project_id', $projectId))
                 ->latest()
                 ->take(5)
                 ->get()

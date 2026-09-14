@@ -108,6 +108,17 @@ class ConsumerReadComparisonTest extends TestCase
         ])->get(route('consumer-comparison.index', ['branch_id' => $branch->id, 'project_id' => $project->id]))->assertForbidden();
     }
 
+    public function test_legacy_project_sheet_alias_is_compared_without_fuzzy_matching(): void
+    {
+        [$branch, $project] = $this->context();
+        $project->update(['sheet_project_name' => 'Comparison Sheet Alias']);
+        $this->legacy($branch, 'K-01', ['nama_konsumen' => 'Alias Consumer', 'project_name' => ' comparison   sheet alias ', 'external_id' => 'ALIAS-1'], 'akad');
+
+        $result = app(ConsumerReadComparisonService::class)->compare($branch, $project->fresh());
+
+        $this->assertSame(1, $result->summary['total_legacy']);
+    }
+
     public function test_legacy_rows_from_another_project_are_not_compared(): void
     {
         [$branch, $project] = $this->context();
@@ -118,6 +129,25 @@ class ConsumerReadComparisonTest extends TestCase
         $result = app(ConsumerReadComparisonService::class)->compare($branch, $project);
 
         $this->assertSame(0, $result->summary['total_legacy']);
+        $this->assertSame(0, $result->summary['identity_issues']['project_ambiguous']);
+        $this->assertSame(0, $result->summary['identity_issues']['project_not_found']);
+    }
+
+    public function test_ambiguous_and_unknown_legacy_project_rows_surface_identity_issue_diagnostics(): void
+    {
+        [$branch, $project] = $this->context();
+        $ambiguous = LeadMaster::create(['branch_id' => $branch->id, 'project_name' => 'Ambiguous Project', 'is_active' => true]);
+        LeadMaster::create(['branch_id' => $branch->id, 'project_name' => 'Ambiguous Project', 'is_active' => true]);
+        Kavling::create(['project_id' => $ambiguous->id, 'kavling_code' => 'AMB-01', 'name' => 'AMB-01']);
+        $this->legacy($branch, 'AMB-01', ['nama_konsumen' => 'Ambiguous Consumer', 'project_name' => 'Ambiguous Project', 'external_id' => 'AMB-1'], 'akad');
+        $this->legacy($branch, 'K-01', ['nama_konsumen' => 'Ghost Consumer', 'project_name' => 'Ghost Project', 'external_id' => 'GHOST-1'], 'akad');
+
+        $result = app(ConsumerReadComparisonService::class)->compare($branch, $project);
+
+        $this->assertSame(1, $result->summary['identity_issues']['project_ambiguous']);
+        $this->assertSame(1, $result->summary['identity_issues']['project_not_found']);
+        $this->assertSame(0, $result->summary['total_legacy']);
+        $this->assertSame(0, $result->summary['local_only']);
     }
 
     public function test_bank_selection_uses_latest_submitted_date_and_null_is_oldest(): void

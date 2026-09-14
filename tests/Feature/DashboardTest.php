@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\Branch;
 use App\Models\Changelog;
 use App\Models\ContentItem;
+use App\Models\DanaTalangan;
 use App\Models\DatabaseSheetRecord;
 use App\Models\LeadMaster;
 use App\Models\LeadSource;
@@ -242,6 +243,20 @@ class DashboardTest extends TestCase
             ->assertDontSee('id="dashboard-kpis"', false);
     }
 
+    public function test_dashboard_sheet_alias_resolves_sales_project_id_and_legacy_labels(): void
+    {
+        [$branch, $admin] = $this->dashboardUser('admin');
+        $project = LeadMaster::create(['branch_id' => $branch->id, 'project_name' => 'Canonical Dashboard', 'sheet_project_name' => 'Dashboard Sheet', 'is_active' => true]);
+        SalesLead::create(['branch_id' => $branch->id, 'project_id' => $project->id, 'sales_user_id' => $admin->id, 'lead_date' => today(), 'customer_name' => 'Alias Lead']);
+        DanaTalangan::create(['branch_id' => $branch->id, 'project_id' => $project->id, 'project_name' => 'Dashboard Sheet', 'tanggal' => today(), 'nama_konsumen' => 'Alias Dana', 'status' => 'tidak_sanggup', 'created_by' => $admin->id]);
+
+        $response = $this->actingAs($admin)->get(route('dashboard', ['branch_id' => $branch->id, 'project_name' => ' dashboard   sheet ']))->assertOk();
+
+        $this->assertSame(1, $response->viewData('leadStats')['leadToday']);
+        $this->assertSame(1, $response->viewData('danaStats')['tidakSanggup']);
+        $response->assertSee('Alias Lead')->assertSee('Alias Dana');
+    }
+
     public function test_ambiguous_project_name_is_not_offered_as_dashboard_scope(): void
     {
         [$branch, $superadmin] = $this->dashboardUser('superadmin');
@@ -250,6 +265,21 @@ class DashboardTest extends TestCase
 
         $this->actingAs($superadmin)->get(route('dashboard', ['branch_id' => $branch->id]))->assertOk()
             ->assertDontSee('value="Nama Duplikat"', false);
+    }
+
+    public function test_ambiguous_dashboard_project_alias_hides_data_with_scope_warning(): void
+    {
+        [$branch, $admin] = $this->dashboardUser('admin');
+        $first = LeadMaster::create(['branch_id' => $branch->id, 'project_name' => 'Dup One', 'sheet_project_name' => 'Shared Dash Alias', 'is_active' => true]);
+        $second = LeadMaster::create(['branch_id' => $branch->id, 'project_name' => 'Dup Two', 'sheet_project_name' => 'Shared Dash Alias', 'is_active' => true]);
+        SalesLead::create(['branch_id' => $branch->id, 'project_id' => $first->id, 'sales_user_id' => $admin->id, 'lead_date' => today(), 'customer_name' => 'Ambiguous Alias Lead']);
+        DanaTalangan::create(['branch_id' => $branch->id, 'project_id' => $second->id, 'project_name' => $second->project_name, 'tanggal' => today(), 'nama_konsumen' => 'Ambiguous Alias Dana', 'status' => 'tidak_sanggup', 'created_by' => $admin->id]);
+
+        $response = $this->actingAs($admin)->get(route('dashboard', ['branch_id' => $branch->id, 'project_name' => ' shared dash alias ']))->assertOk();
+
+        $this->assertSame(0, $response->viewData('leadStats')['leadToday']);
+        $this->assertSame(0, $response->viewData('danaStats')['tidakSanggup']);
+        $response->assertSee('id="dashboard-scope-warning"', false);
     }
 
     public function test_assigned_sales_scope_monitoring_action_does_not_forward_generic_dashboard_branch(): void

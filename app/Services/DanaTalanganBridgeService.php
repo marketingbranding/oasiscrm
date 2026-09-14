@@ -29,6 +29,7 @@ class DanaTalanganBridgeService
         private readonly DanaTalanganSpreadsheetContract $contracts,
         private readonly DanaTalanganSpreadsheetWriter $writer,
         private readonly SyncLockService $locks,
+        private readonly ProjectIdentityResolver $projects,
     ) {}
 
     public function preflight(): DanaTalanganBridgeSetting
@@ -366,13 +367,12 @@ class DanaTalanganBridgeService
             if (! hash_equals((string) data_get($item->safe_metadata, 'payload_hash'), $this->payloadHash($payload))) {
                 throw new \DomainException('Baris remote berubah sejak ditinjau.');
             }
-            $projectName = $payload['Proyek'];
-            $projects = LeadMaster::query()->where('is_active', true)->whereNotNull('branch_id')->get()
-                ->filter(fn (LeadMaster $project) => $project->project_name === $projectName || $project->sheet_project_name === $projectName);
-            if ($projects->count() !== 1) {
-                throw new \DomainException('Proyek remote harus cocok tepat dengan satu proyek aktif.');
+            [$project, $projectIssue] = $this->projects->resolveExactAcrossBranchesWithIssue($payload['Proyek']);
+            if ($project === null) {
+                throw new \DomainException($projectIssue === 'project_ambiguous'
+                    ? 'Proyek remote cocok dengan lebih dari satu proyek aktif.'
+                    : 'Proyek remote tidak ditemukan sebagai satu proyek aktif.');
             }
-            $project = $projects->first();
             $attributes = $this->attributesFromPayload($payload, $project, $actor);
             Validator::make($attributes, [
                 'tanggal' => ['required', 'date'],

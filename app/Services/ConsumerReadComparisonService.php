@@ -102,6 +102,7 @@ final class ConsumerReadComparisonService
                 'matched' => $summary['MATCHED'], 'exact_match' => $exact,
                 'mismatch' => $summary['MISMATCH'], 'legacy_only' => $summary['LEGACY_ONLY'],
                 'local_only' => $summary['LOCAL_ONLY'], 'ambiguous' => $summary['AMBIGUOUS'],
+                'identity_issues' => $this->legacy->identityIssues($branch),
             ],
             fieldMismatches: $fieldMismatches,
             coverage: [

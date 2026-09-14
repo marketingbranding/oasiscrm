@@ -48,6 +48,7 @@ class ExpenseController extends Controller
             ->where('is_active', true)
             ->whereNotNull('branch_id')
             ->whereIn('branch_id', $filters['scope_branch_ids'])
+            ->when(isset($filters['scope_project_ids']), fn ($query) => $query->whereIn('id', $filters['scope_project_ids']))
             ->with('branch:id,name')
             ->orderBy('project_name')
             ->get(['id', 'branch_id', 'project_name']);
@@ -108,7 +109,13 @@ class ExpenseController extends Controller
     {
         $this->authorize('create', Expense::class);
         $data = Arr::except($request->validated(), 'submit_action');
-        abort_unless(in_array((int) $data['branch_id'], $this->organizationScope->branchIds($request->user(), 'expenses', 'manage'), true), 403);
+        abort_unless($this->organizationScope->allowsProjectRecord(
+            $request->user(),
+            'expenses',
+            'manage',
+            (int) $data['branch_id'],
+            isset($data['project_id']) ? (int) $data['project_id'] : null,
+        ), 403);
         $data += [
             'status' => Expense::STATUS_ACTIVE,
             'created_by' => $request->user()->id,
@@ -148,7 +155,13 @@ class ExpenseController extends Controller
         $this->authorize('update', $expense);
         $data = Arr::except($request->validated(), 'expected_updated_at');
         abort_unless($request->user()->hasPermission('expenses.manage_all')
-            || in_array((int) $data['branch_id'], $this->organizationScope->branchIds($request->user(), 'expenses', 'manage'), true), 403);
+            || $this->organizationScope->allowsProjectRecord(
+                $request->user(),
+                'expenses',
+                'manage',
+                (int) $data['branch_id'],
+                isset($data['project_id']) ? (int) $data['project_id'] : null,
+            ), 403);
         $result = $this->optimisticLock->execute($request, $expense, $request->input('expected_updated_at'), function (Expense $current) use ($data, $request) {
             $this->authorize('update', $current);
             abort_if($current->status === Expense::STATUS_CANCELLED, 422, 'Pengeluaran yang sudah dibatalkan tidak dapat diubah.');
@@ -208,6 +221,7 @@ class ExpenseController extends Controller
 
         try {
             $projects = LeadMaster::where('branch_id', $data['branch_id'])->where('is_active', true)
+                ->when($this->organizationScope->requiresProjectScope($request->user(), 'expenses'), fn ($query) => $query->whereIn('id', $this->organizationScope->projectIds($request->user(), 'expenses')))
                 ->orderBy('project_name')->get(['id', 'project_name'])
                 ->map(fn (LeadMaster $project) => ['id' => $project->id, 'name' => $project->project_name]);
 
@@ -234,7 +248,9 @@ class ExpenseController extends Controller
             $categories->push($expense->category);
         }
         $projects = filled($branchId)
-            ? LeadMaster::where('branch_id', $branchId)->where('is_active', true)->orderBy('project_name')->get(['id', 'project_name', 'is_active'])
+            ? LeadMaster::where('branch_id', $branchId)->where('is_active', true)
+                ->when($this->organizationScope->requiresProjectScope(request()->user(), 'expenses', 'manage'), fn ($query) => $query->whereIn('id', $this->organizationScope->projectIds(request()->user(), 'expenses', 'manage')))
+                ->orderBy('project_name')->get(['id', 'project_name', 'is_active'])
             : collect();
         if ($expense && (int) $branchId === $expense->branch_id && $expense->project && ! $projects->contains('id', $expense->project_id)) {
             $projects->push($expense->project);
@@ -252,7 +268,11 @@ class ExpenseController extends Controller
         $filters['scope_branch_ids'] = $request->user()->hasPermission("expenses.{$action}_all")
             ? Branch::query()->pluck('id')->map(fn ($id) => (int) $id)->all()
             : $this->organizationScope->branchIds($request->user(), 'expenses', $action);
+        if ($this->organizationScope->requiresProjectScope($request->user(), 'expenses', $action)) {
+            $filters['scope_project_ids'] = $this->organizationScope->projectIds($request->user(), 'expenses', $action);
+        }
         abort_if($filters['branch_id'] > 0 && ! in_array((int) $filters['branch_id'], $filters['scope_branch_ids'], true), 403);
+        abort_if($filters['project_id'] && isset($filters['scope_project_ids']) && ! in_array((int) $filters['project_id'], $filters['scope_project_ids'], true), 403);
 
         return $filters;
     }

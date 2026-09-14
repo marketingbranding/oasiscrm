@@ -13,6 +13,7 @@ use App\Policies\UserPolicy;
 use App\Services\ImpersonationService;
 use App\Services\ModuleMaintenanceService;
 use App\Services\NavigationService;
+use App\Services\OrganizationScopeService;
 use App\Services\WorkPlannerReminderService;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Gate;
@@ -23,7 +24,7 @@ class AppServiceProvider extends ServiceProvider
 {
     public function register(): void
     {
-        //
+        $this->app->scoped(OrganizationScopeService::class);
     }
 
     public function boot(): void
@@ -78,8 +79,6 @@ class AppServiceProvider extends ServiceProvider
                 return;
             }
 
-            $branchScope = fn ($q) => $q->when(! $user->canViewAllBranches() && $user->branch_id, fn ($q2) => $q2->where('branch_id', $user->branch_id));
-
             $plannerReminders = app(WorkPlannerReminderService::class)->forUser($user);
             $overdueItems = $plannerReminders['overdue'];
             $todayItems = $plannerReminders['today'];
@@ -87,9 +86,10 @@ class AppServiceProvider extends ServiceProvider
 
             $needsConfirmation = $user->isSales()
                 ? collect()
-                : DanaTalangan::where('status', '!=', 'lunas')
+                : DanaTalangan::query()
+                    ->visibleTo($user)
+                    ->where('status', '!=', 'lunas')
                     ->where('konfirmasi_keuangan', false)
-                    ->tap($branchScope)
                     ->orderBy('tanggal')
                     ->take(10)
                     ->get();

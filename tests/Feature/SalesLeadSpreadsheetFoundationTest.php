@@ -10,6 +10,7 @@ use App\Models\SalesLead;
 use App\Models\User;
 use App\Services\GoogleSheetsApiService;
 use App\Services\PhoneNormalizationService;
+use App\Services\ProjectIdentityResolver;
 use App\Services\SalesLeadLifecycleService;
 use App\Services\SalesLeadService;
 use App\Services\SalesLeadSheetOptionService;
@@ -269,7 +270,7 @@ class SalesLeadSpreadsheetFoundationTest extends TestCase
         ]);
         $options->shouldReceive('exactOption')->twice()->with(['Sheet Project', 'Canonical OASIS Project'], 'Sheet Project')->andReturn('Sheet Project');
         $options->shouldReceive('exactOption')->once()->with(['Sheet Project', 'Canonical OASIS Project'], 'Canonical OASIS Project')->andReturn('Canonical OASIS Project');
-        $sheetIdentities = new SalesSheetIdentityService($options);
+        $sheetIdentities = new SalesSheetIdentityService($options, app(ProjectIdentityResolver::class));
         $this->app->instance(SalesSheetIdentityService::class, $sheetIdentities);
         $sales->update(['name' => 'Canonical OASIS Sales']);
         $service = new SalesLeadService(

@@ -4,12 +4,34 @@ namespace Tests\Feature;
 
 use App\Http\Controllers\Crm\CoordinatorSalesLeadWorkspaceController;
 use App\Http\Requests\Crm\StoreSalesLeadRequest;
+use App\Models\Role;
+use App\Models\User;
 use App\Support\SalesLeadMasterData;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use ReflectionMethod;
 use Tests\TestCase;
 
 class CoordinatorLeadWorkspaceTest extends TestCase
 {
+    use RefreshDatabase;
+
+    public function test_sales_status_changelog_is_idempotent_and_visible(): void
+    {
+        $title = 'Status Lead Mengikuti Alur Operasional';
+        $migration = require database_path('migrations/2026_09_10_000004_fix_sales_lead_status_ownership_changelog.php');
+
+        $migration->up();
+        $migration->up();
+
+        $this->assertSame(1, DB::table('changelogs')->whereNull('version')->where('title', $title)->count());
+        $actor = User::factory()->create([
+            'role_id' => Role::query()->where('slug', 'superadmin')->value('id'),
+            'password_changed_at' => now(),
+        ]);
+        $this->actingAs($actor)->get(route('changelogs.index'))->assertOk()->assertSeeText($title);
+    }
+
     public function test_controller_exposes_workspace_export_and_push_actions(): void
     {
         foreach (['index', 'export', 'push'] as $method) {

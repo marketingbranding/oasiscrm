@@ -3,6 +3,8 @@
 namespace App\Models;
 
 use App\Models\Traits\LogsActivity;
+use App\Services\OrganizationScopeService;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -59,6 +61,16 @@ class DanaTalangan extends Model
             'delete_pending_at' => 'datetime',
             'last_synced_at' => 'datetime',
         ];
+    }
+
+    public function scopeVisibleTo(Builder $query, User $user, string $action = 'view'): Builder
+    {
+        $scope = app(OrganizationScopeService::class);
+        $query->whereIn('branch_id', $scope->branchIds($user, 'bridge_fund', $action));
+
+        return $scope->requiresProjectScope($user, 'bridge_fund', $action)
+            ? $query->whereIn('project_id', $scope->projectIds($user, 'bridge_fund', $action))
+            : $query;
     }
 
     public function branch(): BelongsTo

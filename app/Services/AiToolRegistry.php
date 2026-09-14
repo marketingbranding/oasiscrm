@@ -21,6 +21,7 @@ class AiToolRegistry
     public function __construct(
         private readonly KonsumenPipelineService $pipelineService,
         private readonly WorkspaceAccessService $workspaceAccess,
+        private readonly OrganizationScopeService $organizationScope,
     ) {}
 
     public function allowedToolNames(): array
@@ -68,6 +69,10 @@ class AiToolRegistry
     {
         if ($error = $this->branchAccessError($arguments, $user)) {
             return ['error' => $error];
+        }
+
+        if ($error = $this->moduleAccessError($name, $user)) {
+            return ['error' => $error, 'source_module' => $this->toolSourceModule($name)];
         }
 
         return match ($name) {
@@ -221,6 +226,48 @@ class AiToolRegistry
         return [];
     }
 
+    private function toolSourceModule(string $name): string
+    {
+        return match ($name) {
+            'count_by_stage' => 'Konsumen Progress',
+            'get_dana_talangan_summary' => 'Dana Talangan',
+            'get_content_schedule' => 'Work Planner',
+            'search_customer', 'get_today_summary', 'get_supported_capabilities' => 'Customer Search',
+            default => 'Customer Search',
+        };
+    }
+
+    /**
+     * Coarse module permission gates for tools that read module-backed data.
+     * Organization scope (branch/project) is applied separately inside each query.
+     */
+    private function moduleAccessError(string $name, User $user): ?string
+    {
+        $module = match ($name) {
+            'count_by_stage' => ['consumer_progress', 'consumer_progress.view', 'Konsumen Progress'],
+            'get_dana_talangan_summary' => ['bridge_fund', 'bridge_fund.view', 'Dana Talangan'],
+            'get_content_schedule' => ['work_planner', null, 'Work Planner'],
+            default => null,
+        };
+
+        if ($module !== null && (($module[1] !== null && ! $user->hasPermission($module[1])) || ! $user->hasScopedPermission($module[0]))) {
+            return 'Anda tidak memiliki izin melihat data '.$module[2].'.';
+        }
+
+        if ($name === 'get_today_summary' && ! $this->todaySummaryAuthorized($user)) {
+            return 'Anda tidak memiliki izin melihat data ringkasan hari ini.';
+        }
+
+        return null;
+    }
+
+    private function todaySummaryAuthorized(User $user): bool
+    {
+        return $user->hasScopedPermission('work_planner')
+            || ($user->hasPermission('bridge_fund.view') && $user->hasScopedPermission('bridge_fund'))
+            || ($user->hasPermission('consumer_progress.view') && $user->hasScopedPermission('consumer_progress'));
+    }
+
     private function tool(string $name, string $description, array $properties, array $required = []): array
     {
         return [
@@ -329,6 +376,9 @@ class AiToolRegistry
         if (! $branch) {
             return ['error' => 'Cabang tidak ditemukan.', 'source_module' => 'Konsumen Progress'];
         }
+        if ($this->organizationScope->requiresProjectScope($user, 'consumer_progress')) {
+            return ['error' => 'Ringkasan stage belum tersedia untuk akses berbasis proyek.', 'source_module' => 'Konsumen Progress'];
+        }
 
         $stageInput = trim((string) ($arguments['stage'] ?? ''));
         $stage = $this->pipelineService->canonicalStage($stageInput);
@@ -369,8 +419,7 @@ class AiToolRegistry
         $end = $this->dateOrNull($arguments['end_date'] ?? null) ?? $start->copy();
         $type = in_array($arguments['item_type'] ?? null, ContentItem::TYPES, true) ? $arguments['item_type'] : null;
 
-        $items = ContentItem::query()
-            ->visibleTo($user)
+        $items = ContentItem::visibleTo($user)
             ->with(['branch:id,name'])
             ->when($branchId, fn (Builder $query) => $query->where('branch_id', $branchId))
             ->when($type, fn (Builder $query) => $query->where('item_type', $type))
@@ -408,6 +457,7 @@ class AiToolRegistry
         $term = trim((string) ($arguments['query'] ?? ''));
 
         $query = DanaTalangan::query()
+            ->visibleTo($user)
             ->with(['branch:id,name'])
             ->when($branchId, fn (Builder $query) => $query->where('branch_id', $branchId))
             ->when($status !== '', fn (Builder $query) => $query->where('status', $status))
@@ -455,44 +505,57 @@ class AiToolRegistry
             ? Branch::whereKey($branchId)->get(['id', 'name'])
             : $this->workspaceAccess->accessibleBranches($user);
 
-        $pipeline = $branches
-            ->flatMap(fn (Branch $branch) => $this->pipelineService->search($branch, $term, 10))
-            ->take(10)
-            ->map(fn (array $row) => [
-                'source_module' => 'Konsumen Progress',
-                'nama_konsumen' => $row['nama_konsumen'],
-                'id_kavling' => $row['id_kavling'],
-                'project_name' => $row['project_name'],
-                'branch' => $row['branch'],
-                'current_stage' => $row['current_stage'],
-                'source_sheet' => $row['source_sheet'],
-            ])
-            ->values();
+        $pipeline = collect();
+        if ($user->hasPermission('consumer_progress.view') && $user->hasScopedPermission('consumer_progress')) {
+            $pipeline = $branches
+                ->flatMap(fn (Branch $branch) => collect($this->pipelineService->search($branch, $term, 10))
+                    ->filter(fn (array $row) => $this->projectAllowed($user, 'consumer_progress', $branch->id, $row['project_name'] ?? null)))
+                ->take(10)
+                ->map(fn (array $row) => [
+                    'source_module' => 'Konsumen Progress',
+                    'nama_konsumen' => $row['nama_konsumen'],
+                    'id_kavling' => $row['id_kavling'],
+                    'project_name' => $row['project_name'],
+                    'branch' => $row['branch'],
+                    'current_stage' => $row['current_stage'],
+                    'source_sheet' => $row['source_sheet'],
+                ])
+                ->values();
+        }
 
-        $database = DatabaseSheetRecord::query()
-            ->when($branchId, fn (Builder $query) => $query->where('branch_id', $branchId))
-            ->whereNull('oasis_deleted_at')
-            ->whereRaw('LOWER(row_data) LIKE ?', ['%'.$term.'%'])
-            ->take(10)
-            ->get()
-            ->map(fn (DatabaseSheetRecord $row) => $this->serializeDatabaseRecord($row))
-            ->values();
+        $database = collect();
+        if ($user->hasPermission('database.view') && $user->hasScopedPermission('database')) {
+            $database = DatabaseSheetRecord::query()
+                ->when($branchId, fn (Builder $query) => $query->where('branch_id', $branchId))
+                ->whereNull('oasis_deleted_at')
+                ->whereRaw('LOWER(row_data) LIKE ?', ['%'.$term.'%'])
+                ->take(50)
+                ->get()
+                ->filter(fn (DatabaseSheetRecord $row) => $this->projectAllowed($user, 'database', $row->branch_id, $this->firstValue($row->row_data ?? [], ['project_name', 'proyek', 'project'])))
+                ->take(10)
+                ->map(fn (DatabaseSheetRecord $row) => $this->serializeDatabaseRecord($row))
+                ->values();
+        }
 
-        $dana = DanaTalangan::query()
-            ->when($branchId, fn (Builder $query) => $query->where('branch_id', $branchId))
-            ->where('nama_konsumen', 'like', '%'.$term.'%')
-            ->limit(10)
-            ->with('branch:id,name')
-            ->get(['id', 'branch_id', 'nama_konsumen', 'kav', 'project_name', 'status', 'tanggal'])
-            ->map(fn (DanaTalangan $row) => [
-                'source_module' => 'Dana Talangan',
-                'nama_konsumen' => $row->nama_konsumen,
-                'id_kavling' => $row->kav,
-                'project_name' => $row->project_name,
-                'branch' => $row->branch?->name,
-                'status' => $row->status,
-                'tanggal' => $row->tanggal?->toDateString(),
-            ]);
+        $dana = collect();
+        if ($user->hasPermission('bridge_fund.view') && $user->hasScopedPermission('bridge_fund')) {
+            $dana = DanaTalangan::query()
+                ->visibleTo($user)
+                ->when($branchId, fn (Builder $query) => $query->where('branch_id', $branchId))
+                ->where('nama_konsumen', 'like', '%'.$term.'%')
+                ->limit(10)
+                ->with('branch:id,name')
+                ->get(['id', 'branch_id', 'nama_konsumen', 'kav', 'project_name', 'status', 'tanggal'])
+                ->map(fn (DanaTalangan $row) => [
+                    'source_module' => 'Dana Talangan',
+                    'nama_konsumen' => $row->nama_konsumen,
+                    'id_kavling' => $row->kav,
+                    'project_name' => $row->project_name,
+                    'branch' => $row->branch?->name,
+                    'status' => $row->status,
+                    'tanggal' => $row->tanggal?->toDateString(),
+                ]);
+        }
 
         return [
             'source_module' => 'Customer Search',
@@ -516,9 +579,15 @@ class AiToolRegistry
         return [
             'branch' => $this->branchName($branchId ?: ($user->canViewAllBranches() ? null : $user->branch_id)),
             'date' => $today,
-            'work_planner' => $this->contentSchedule(['start_date' => $today, 'end_date' => $today, 'branch_id' => $branchId], $user),
-            'dana_talangan' => $this->danaTalanganSummary(['date_from' => $today, 'date_to' => $today, 'branch_id' => $branchId], $user),
-            'pipeline' => $this->countByStage(['date_from' => $today, 'date_to' => $today, 'branch_id' => $branchId], $user),
+            'work_planner' => $user->hasScopedPermission('work_planner')
+                ? $this->contentSchedule(['start_date' => $today, 'end_date' => $today, 'branch_id' => $branchId], $user)
+                : ['error' => 'Anda tidak memiliki izin melihat data Work Planner.'],
+            'dana_talangan' => $user->hasPermission('bridge_fund.view')
+                ? $this->danaTalanganSummary(['date_from' => $today, 'date_to' => $today, 'branch_id' => $branchId], $user)
+                : ['error' => 'Anda tidak memiliki izin melihat data Dana Talangan.'],
+            'pipeline' => $user->hasPermission('consumer_progress.view')
+                ? $this->countByStage(['date_from' => $today, 'date_to' => $today, 'branch_id' => $branchId], $user)
+                : ['error' => 'Anda tidak memiliki izin melihat data Konsumen Progress.'],
         ];
     }
 
@@ -595,6 +664,27 @@ class AiToolRegistry
         }
 
         return null;
+    }
+
+    /**
+     * Branch-aware project gate for sheet-cache rows: the free-text label is
+     * resolved as an exact identity inside the row's own branch, then checked
+     * against that module's scoped project IDs. Unknown labels and rows whose
+     * branch cannot be verified stay hidden for project-scoped users.
+     */
+    private function projectAllowed(User $user, string $module, ?int $branchId, ?string $projectLabel): bool
+    {
+        if (blank($projectLabel) || ! $this->organizationScope->requiresProjectScope($user, $module)) {
+            return true;
+        }
+
+        if ($branchId === null) {
+            return false;
+        }
+
+        $project = app(ProjectIdentityResolver::class)->resolveExactOrNull($branchId, $projectLabel);
+
+        return $project !== null && in_array($project->id, $this->organizationScope->projectIds($user, $module), true);
     }
 
     private function syncMeta(string $module, ?int $branchId): array

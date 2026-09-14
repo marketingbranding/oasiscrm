@@ -5,7 +5,6 @@ namespace App\Policies;
 use App\Models\DanaTalangan;
 use App\Models\User;
 use App\Services\OrganizationScopeService;
-use App\Services\WorkspaceAccessService;
 
 class DanaTalanganPolicy
 {
@@ -24,7 +23,12 @@ class DanaTalanganPolicy
             return true;
         }
 
-        return in_array((int) $danaTalangan->branch_id, app(OrganizationScopeService::class)->branchIds($user, 'bridge_fund'), true)
-            && app(WorkspaceAccessService::class)->canViewBranch($user, $danaTalangan->branch_id);
+        return app(OrganizationScopeService::class)->allowsProjectRecord(
+            $user,
+            'bridge_fund',
+            'view',
+            (int) $danaTalangan->branch_id,
+            $danaTalangan->project_id ? (int) $danaTalangan->project_id : null,
+        );
     }
 }

@@ -3,14 +3,16 @@
 namespace App\Services;
 
 use App\Models\Branch;
-use App\Models\DanaTalangan;
 use App\Models\DatabaseSheetRecord;
 use Illuminate\Support\Facades\Cache;
 use Throwable;
 
 class DanaTalanganOptionService
 {
-    public function __construct(private GoogleSheetsApiService $googleSheets) {}
+    public function __construct(
+        private GoogleSheetsApiService $googleSheets,
+        private readonly ProjectIdentityResolver $projects,
+    ) {}
 
     public function kavlings(Branch $branch, string $projectName): array
     {
@@ -28,41 +30,12 @@ class DanaTalanganOptionService
             }
         }
 
-        $projectKey = $this->normalizeProject($projectName);
-        $matchedGroups = array_keys(array_filter($groups, function ($codes, $dataProject) use ($projectKey) {
-            $dataKey = $this->normalizeProject($dataProject);
-
-            return $dataKey !== '' && ($dataKey === $projectKey || str_contains($dataKey, $projectKey) || str_contains($projectKey, $dataKey));
-        }, ARRAY_FILTER_USE_BOTH));
-
-        if (empty($matchedGroups)) {
-            $knownCodes = DanaTalangan::where('branch_id', $branch->id)
-                ->whereNotNull('kav')
-                ->get(['project_name', 'kav'])
-                ->filter(function ($record) use ($projectKey) {
-                    $recordKey = $this->normalizeProject($record->project_name ?? '');
-
-                    return $recordKey === $projectKey || str_contains($recordKey, $projectKey) || str_contains($projectKey, $recordKey);
-                })
-                ->pluck('kav')
-                ->map(fn ($code) => $this->normalizeCode($code))
-                ->filter()
-                ->unique()
-                ->all();
-            $scores = [];
-            foreach ($groups as $dataProject => $codes) {
-                $normalizedCodes = array_map(fn ($code) => $this->normalizeCode($code), array_keys($codes));
-                $scores[$dataProject] = count(array_intersect($knownCodes, $normalizedCodes));
-            }
-            $bestScore = empty($scores) ? 0 : max($scores);
-            if ($bestScore > 0) {
-                $matchedGroups = array_keys(array_filter($scores, fn ($score) => $score === $bestScore));
-            }
+        $project = $this->projects->resolveExactOrNull($branch, $projectName);
+        if ($project === null) {
+            return [];
         }
-
-        if (empty($matchedGroups) && count($groups) === 1) {
-            $matchedGroups = [array_key_first($groups)];
-        }
+        $projectKeys = array_map(fn (string $label) => $this->normalizeProject($label), $this->projects->labels($project));
+        $matchedGroups = array_keys(array_filter($groups, fn ($codes, $dataProject) => in_array($this->normalizeProject($dataProject), $projectKeys, true), ARRAY_FILTER_USE_BOTH));
 
         $options = [];
         foreach ($matchedGroups as $dataProject) {
@@ -120,10 +93,7 @@ class DanaTalanganOptionService
 
     private function normalizeProject(string $value): string
     {
-        $value = mb_strtolower($value);
-        $value = str_replace(['marison', 'regency'], '', $value);
-
-        return preg_replace('/[^a-z0-9]+/', '', $value);
+        return mb_strtolower(preg_replace('/\s+/u', ' ', trim($value)) ?? '');
     }
 
     private function normalizeCode(string $value): string

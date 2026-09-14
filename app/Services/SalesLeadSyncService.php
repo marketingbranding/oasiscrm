@@ -53,6 +53,7 @@ class SalesLeadSyncService
         private readonly SyncLockService $locks,
         private readonly PhoneNormalizationService $phones,
         private readonly SalesSheetIdentityService $sheetIdentities,
+        private readonly ProjectIdentityResolver $projects,
     ) {}
 
     public function sync(Branch $branch, ?User $actor = null): array
@@ -341,14 +342,7 @@ class SalesLeadSyncService
 
     private function uniqueProject(Branch $branch, string $name): array
     {
-        $projects = LeadMaster::query()->where('branch_id', $branch->id)->where('is_active', true)->get();
-        $normalize = fn (?string $value) => mb_strtolower(preg_replace('/\s+/u', ' ', trim((string) $value)) ?? '');
-        $mapped = $projects->filter(fn (LeadMaster $project) => filled($project->sheet_project_name) && $normalize($project->sheet_project_name) === $normalize($name))->values();
-        $projects = $mapped->isNotEmpty()
-            ? $mapped
-            : $projects->filter(fn (LeadMaster $project) => $normalize($project->project_name) === $normalize($name))->values();
-
-        return $projects->count() === 1 ? [$projects->first(), null] : [null, $projects->isEmpty() ? 'project_not_found' : 'project_ambiguous'];
+        return $this->projects->resolveExactWithIssue($branch, $name);
     }
 
     private function uniqueAssignedSales(LeadMaster $project, string $name): array

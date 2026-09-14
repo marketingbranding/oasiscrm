@@ -12,6 +12,7 @@ use App\Models\User;
 use App\Services\DanaTalanganGoogleService;
 use App\Services\DanaTalanganOptionService;
 use App\Services\GoogleSheetsApiService;
+use App\Services\ProjectIdentityResolver;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Mockery;
 use Tests\TestCase;
@@ -287,7 +288,8 @@ class DanaTalanganGoogleSyncTest extends TestCase
             'formula_columns' => [],
         ]);
 
-        $service = new DanaTalanganOptionService(Mockery::mock(GoogleSheetsApiService::class));
+        LeadMaster::create(['branch_id' => $branch->id, 'project_name' => 'Kuwasen', 'sheet_project_name' => 'Marison Regency Kuwasen', 'is_active' => true]);
+        $service = new DanaTalanganOptionService(Mockery::mock(GoogleSheetsApiService::class), app(ProjectIdentityResolver::class));
 
         $this->assertSame(['D05', 'D12'], $service->kavlings($branch, 'Kuwasen'));
         $this->assertTrue($service->isValidKavling($branch, 'Kuwasen', 'D-12'));

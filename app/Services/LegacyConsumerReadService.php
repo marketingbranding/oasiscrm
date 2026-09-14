@@ -13,7 +13,10 @@ use Illuminate\Support\Str;
 
 class LegacyConsumerReadService
 {
-    public function __construct(private readonly KonsumenPipelineService $pipeline) {}
+    public function __construct(
+        private readonly KonsumenPipelineService $pipeline,
+        private readonly ProjectIdentityResolver $projects,
+    ) {}
 
     /** @return array<int, ConsumerComparisonRecord> */
     public function records(Branch $branch, LeadMaster $project): array
@@ -103,8 +106,34 @@ class LegacyConsumerReadService
 
     private function matchProject(LeadMaster $project, string $name, ?Kavling $kavling): bool
     {
-        return ($name !== '' && Str::lower(trim($name)) === Str::lower($project->project_name))
-            || ($name === '' && $kavling !== null);
+        if ($name === '') {
+            return $kavling !== null;
+        }
+
+        [$resolved, $issue] = $this->projects->resolveExactWithIssue($project->branch_id, $name);
+
+        return $issue === null && $resolved?->is($project) === true;
+    }
+
+    /** @return array{project_ambiguous: int, project_not_found: int} */
+    public function identityIssues(Branch $branch): array
+    {
+        $issues = ['project_ambiguous' => 0, 'project_not_found' => 0];
+        foreach (KonsumenProgressSheetRow::query()
+            ->where('branch_id', $branch->id)
+            ->where('sheet_name', 'data_konsumen')
+            ->get(['row_data']) as $row) {
+            $name = $this->value($this->data($row->row_data), ['project_name', 'proyek', 'project']);
+            if ($name === '') {
+                continue;
+            }
+            $issue = $this->projects->resolveExactWithIssue($branch, $name)[1];
+            if ($issue !== null) {
+                $issues[$issue]++;
+            }
+        }
+
+        return $issues;
     }
 
     private function data(?array $data): array

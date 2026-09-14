@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Crm\Traits;
 
+use App\Services\OrganizationScopeService;
 use App\Services\WorkspaceAccessService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -40,7 +41,9 @@ trait Importable
             $branchId,
             $request->only($this->importPreservedParams),
             $editableBranchIds,
-        );
+            $this->importScopeModule !== ''
+                ? app(OrganizationScopeService::class)->projectIds($user, $this->importScopeModule, 'manage')
+                : [], );
 
         $message = $result['imported'].' data berhasil diimport.';
         if (! empty($result['errors'])) {

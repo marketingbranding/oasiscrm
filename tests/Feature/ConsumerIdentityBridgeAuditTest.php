@@ -145,6 +145,50 @@ class ConsumerIdentityBridgeAuditTest extends TestCase
         $this->assertStringNotContainsString('3308106504650002', $json);
     }
 
+    public function test_blank_project_rows_are_scoped_by_selected_project_kavlings(): void
+    {
+        [$branch, $project] = $this->context();
+        $otherProject = LeadMaster::create(['branch_id' => $branch->id, 'project_name' => 'Other Project', 'is_active' => true]);
+        Kavling::create(['project_id' => $otherProject->id, 'kavling_code' => 'K-02', 'name' => 'K-02']);
+        $this->legacy($branch, ['project_name' => '', 'id_kavling' => 'K-01', 'nama_konsumen' => 'Budi', 'no_hp' => '0812345678']);
+        $this->legacy($branch, ['project_name' => '', 'id_kavling' => 'K-02', 'nama_konsumen' => 'Sari', 'no_hp' => '0812345679']);
+        $this->legacy($branch, ['project_name' => '', 'id_kavling' => '', 'nama_konsumen' => 'Blank Kavling']);
+        $this->legacy($branch, ['project_name' => '', 'id_kavling' => 'UNKNOWN', 'nama_konsumen' => 'Unknown Kavling']);
+        $customer = Customer::create(['name' => 'Budi', 'phone' => '0812345678']);
+        ConsumerApplication::create(['customer_id' => $customer->id, 'branch_id' => $branch->id, 'project_id' => $project->id, 'kavling_id' => Kavling::where('project_id', $project->id)->value('id'), 'application_status' => 'draft']);
+
+        $audit = app(ConsumerIdentityBridgeAuditService::class)->audit($branch, $project);
+        $json = json_encode($audit['candidates'], JSON_THROW_ON_ERROR);
+
+        $this->assertSame(1, $audit['legacy']['total']);
+        $this->assertSame(1, $audit['candidates']['UNIQUE_PHONE_KAVLING']);
+        $this->assertCount(1, $audit['candidates']['rows']);
+        $this->assertStringNotContainsString('Sari', $json);
+        $this->assertStringNotContainsString('Blank Kavling', $json);
+        $this->assertStringNotContainsString('Unknown Kavling', $json);
+    }
+
+    public function test_identity_issues_surface_project_ambiguity_without_pii(): void
+    {
+        [$branch, $project] = $this->context();
+        $ambiguous = LeadMaster::create(['branch_id' => $branch->id, 'project_name' => 'Ambiguous Audit', 'is_active' => true]);
+        LeadMaster::create(['branch_id' => $branch->id, 'project_name' => 'Ambiguous Audit', 'is_active' => true]);
+        Kavling::create(['project_id' => $ambiguous->id, 'kavling_code' => 'AMB-01', 'name' => 'AMB-01']);
+        $this->legacy($branch, ['id_kavling' => 'AMB-01', 'nama_konsumen' => 'Hidden Consumer', 'project_name' => 'Ambiguous Audit']);
+        $this->legacy($branch, ['id_kavling' => 'K-01', 'nama_konsumen' => 'Ghost Consumer', 'project_name' => 'Ghost Project']);
+
+        $audit = app(ConsumerIdentityBridgeAuditService::class)->audit($branch, $project);
+        $json = json_encode($audit, JSON_THROW_ON_ERROR);
+
+        $this->assertSame(1, $audit['legacy']['identity_issues']['project_ambiguous']['count']);
+        $this->assertSame(1, $audit['legacy']['identity_issues']['project_not_found']['count']);
+        $this->assertSame('amb-01', $audit['legacy']['identity_issues']['project_ambiguous']['rows'][0]['kavling']);
+        $this->assertSame('k-01', $audit['legacy']['identity_issues']['project_not_found']['rows'][0]['kavling']);
+        $this->assertSame(0, $audit['legacy']['total']);
+        $this->assertStringNotContainsString('Hidden Consumer', $json);
+        $this->assertStringNotContainsString('Ghost Consumer', $json);
+    }
+
     private function legacy(Branch $branch, array $data): void
     {
         KonsumenProgressSheetRow::create(['branch_id' => $branch->id, 'sheet_id' => $branch->sheet_id, 'sheet_name' => 'data_konsumen', 'row_hash' => Str::uuid(), 'row_data' => ['project_name' => 'Audit Project', ...$data]]);

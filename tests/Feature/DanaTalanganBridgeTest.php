@@ -16,6 +16,7 @@ use App\Services\DanaTalanganService;
 use App\Services\DanaTalanganSpreadsheetContract;
 use App\Services\DanaTalanganSpreadsheetWriter;
 use App\Services\GoogleSheetsApiService;
+use App\Services\ProjectIdentityResolver;
 use App\Services\SyncLockService;
 use App\ValueObjects\DanaTalanganSpreadsheetWriteResult;
 use App\ValueObjects\ResolvedDanaTalanganSpreadsheetContract;
@@ -201,8 +202,10 @@ class DanaTalanganBridgeTest extends TestCase
     public function test_approval_requires_unchanged_row_and_exact_unique_project(): void
     {
         [$existing, $actor] = $this->record();
+        $existing->project->update(['project_name' => 'Canonical Remote Project', 'sheet_project_name' => 'Remote Sheet Alias']);
         $this->enable('bidirectional');
         $row = $this->row($existing);
+        $row['Proyek'] = 'Remote Sheet Alias';
         $row['_row_number'] = 3;
         $row['oasis_sync_id'] = '';
         $row['Nama Konsumen'] = 'Remote Approved';
@@ -236,6 +239,58 @@ class DanaTalanganBridgeTest extends TestCase
         $this->bridge($this->contracts([$changed]))->approveRemoteCreate($other, $actor);
     }
 
+    public function test_remote_create_approval_maps_ambiguous_project_message(): void
+    {
+        [$existing, $actor] = $this->record();
+        $other = Branch::create(['name' => 'Ambiguous Dana Branch', 'code' => 'ADB'.Str::random(4), 'is_active' => true]);
+        LeadMaster::create(['branch_id' => $other->id, 'project_name' => $existing->project_name, 'is_active' => true]);
+        $this->enable('bidirectional');
+        $row = $this->row($existing);
+        $row['_row_number'] = 3;
+        $row['oasis_sync_id'] = '';
+        $row['Nama Konsumen'] = 'Remote Ambiguous';
+        $item = DanaTalanganReconciliationItem::create([
+            'spreadsheet_id' => 'spreadsheet-id',
+            'remote_row_number' => 3,
+            'issue_code' => 'remote_create_pending_review',
+            'safe_metadata' => ['payload_hash' => $this->payloadHash($row)],
+            'identity_key' => hash('sha256', 'ambiguous'),
+            'status' => 'open',
+        ]);
+
+        try {
+            $this->bridge($this->contracts([$row]))->approveRemoteCreate($item, $actor);
+            $this->fail('Ambiguous project must block approval.');
+        } catch (\DomainException $exception) {
+            $this->assertSame('Proyek remote cocok dengan lebih dari satu proyek aktif.', $exception->getMessage());
+        }
+        $this->assertDatabaseHas('dana_talangan_reconciliation_items', ['id' => $item->id, 'status' => 'open']);
+    }
+
+    public function test_dana_service_resolves_normalized_sheet_alias_within_branch_only(): void
+    {
+        [$record] = $this->record();
+        $record->project->update(['project_name' => 'Canonical Dana', 'sheet_project_name' => 'Dana Sheet Alias']);
+        $other = Branch::create(['name' => 'Other Dana', 'code' => 'OD'.Str::random(4), 'is_active' => true]);
+        LeadMaster::create(['branch_id' => $other->id, 'project_name' => 'Other Project', 'sheet_project_name' => 'Dana Sheet Alias', 'is_active' => true]);
+        $service = new DanaTalanganService(app(DanaTalanganBridgeModeService::class), app(ProjectIdentityResolver::class));
+
+        $this->assertSame($record->project_id, $service->resolveProject(' dana   sheet alias ', $record->branch_id)?->id);
+    }
+
+    public function test_dana_service_reports_project_ambiguity_issue_code(): void
+    {
+        [$record] = $this->record();
+        LeadMaster::create(['branch_id' => $record->branch_id, 'project_name' => $record->project_name, 'is_active' => true]);
+        $service = new DanaTalanganService(app(DanaTalanganBridgeModeService::class), app(ProjectIdentityResolver::class));
+
+        [$project, $issue] = $service->resolveProjectWithIssue($record->project_name, $record->branch_id);
+
+        $this->assertNull($project);
+        $this->assertSame('project_ambiguous', $issue);
+        $this->assertSame([null, 'project_not_found'], $service->resolveProjectWithIssue('Missing Dana Project', $record->branch_id));
+    }
+
     public function test_delivered_delete_failure_and_concurrent_edit_preserve_local_record(): void
     {
         [$record, $actor] = $this->record();
@@ -245,7 +300,7 @@ class DanaTalanganBridgeTest extends TestCase
         $bridge->shouldReceive('payloadHash')->andReturnUsing(fn (array $payload) => hash('sha256', json_encode($payload)));
         $bridge->shouldReceive('tombstone')->once()->andThrow(new \RuntimeException('remote down'));
         $this->app->instance(DanaTalanganBridgeService::class, $bridge);
-        $service = new DanaTalanganService(app(DanaTalanganBridgeModeService::class));
+        $service = new DanaTalanganService(app(DanaTalanganBridgeModeService::class), app(ProjectIdentityResolver::class));
         try {
             $service->delete($record, $actor);
             $this->fail('Delete must fail.');
@@ -261,7 +316,7 @@ class DanaTalanganBridgeTest extends TestCase
             DanaTalangan::whereKey($record->id)->update(['nama_konsumen' => 'Concurrent']);
         });
         $this->app->instance(DanaTalanganBridgeService::class, $bridge);
-        $service = new DanaTalanganService(app(DanaTalanganBridgeModeService::class));
+        $service = new DanaTalanganService(app(DanaTalanganBridgeModeService::class), app(ProjectIdentityResolver::class));
         try {
             $service->delete($record->fresh(), $actor);
             $this->fail('Concurrent edit must block delete.');
@@ -393,6 +448,7 @@ class DanaTalanganBridgeTest extends TestCase
             $contracts,
             $writer ?? Mockery::mock(DanaTalanganSpreadsheetWriter::class),
             app(SyncLockService::class),
+            app(ProjectIdentityResolver::class),
         );
     }
 }

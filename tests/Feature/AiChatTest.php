@@ -10,12 +10,15 @@ use App\Models\DatabaseSheetRecord;
 use App\Models\DatabaseSheetSyncStatus;
 use App\Models\KonsumenProgressSheetRow;
 use App\Models\KonsumenProgressSyncStatus;
+use App\Models\LeadMaster;
+use App\Models\Permission;
 use App\Models\Role;
 use App\Models\User;
 use App\Services\AiToolRegistry;
 use App\Services\KonsumenProgressSyncService;
 use App\Services\WorkspaceAccessService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Mockery;
 use Tests\TestCase;
@@ -863,6 +866,394 @@ class AiChatTest extends TestCase
             ->assertDontSee("method: 'DELETE'", false)
             ->assertDontSee('formatMessageTime(value)', false);
         $this->assertDoesNotMatchRegularExpression('/this\.loading = false;\s*this\.scrollDown\(\);\s*this\.focusInput\(\);/', $response->getContent());
+    }
+
+    public function test_cross_module_search_changelog_is_idempotent_and_visible(): void
+    {
+        $title = 'Pencarian Data Mengikuti Cakupan Akses';
+        $migration = require database_path('migrations/2026_09_10_000005_fix_cross_module_search_scope_changelog.php');
+
+        $migration->up();
+        $migration->up();
+
+        $this->assertSame(1, DB::table('changelogs')->whereNull('version')->where('title', $title)->count());
+        [, $actor] = $this->superadminUser();
+        $this->actingAs($actor)->get(route('changelogs.index'))->assertOk()->assertSeeText($title);
+    }
+
+    public function test_count_by_stage_requires_consumer_progress_view_permission(): void
+    {
+        [$branch, $user] = $this->branchAndUserWithoutModulePermissions('Jepara', 'JPR', 'consumer_progress_view_locked');
+
+        $result = app(AiToolRegistry::class)->execute('count_by_stage', ['stage' => 'akad'], $user);
+
+        $this->assertSame('Anda tidak memiliki izin melihat data Konsumen Progress.', $result['error']);
+        $this->assertSame('Konsumen Progress', $result['source_module']);
+        $this->assertArrayNotHasKey('count', $result);
+    }
+
+    public function test_dana_summary_requires_bridge_fund_view_permission(): void
+    {
+        [$branch, $user] = $this->branchAndUserWithoutModulePermissions('Solo', 'SLO', 'bridge_fund_view_locked');
+        DanaTalangan::create([
+            'branch_id' => $branch->id,
+            'created_by' => $user->id,
+            'tanggal' => today(),
+            'nama_konsumen' => 'Locked Out',
+            'kav' => 'A-01',
+            'project_name' => 'Oasis Solo',
+            'status' => 'sanggup',
+        ]);
+
+        $result = app(AiToolRegistry::class)->execute('get_dana_talangan_summary', [], $user);
+
+        $this->assertSame('Anda tidak memiliki izin melihat data Dana Talangan.', $result['error']);
+        $this->assertSame('Dana Talangan', $result['source_module']);
+        $this->assertArrayNotHasKey('count', $result);
+    }
+
+    public function test_search_customer_hides_module_rows_without_coarse_view_permissions(): void
+    {
+        $branch = Branch::create(['name' => 'Jepara', 'code' => 'JPR', 'is_active' => true]);
+        $project = $this->makeProject($branch, 'Oasis Jepara');
+        $role = Role::create(['name' => 'Search Limited', 'slug' => 'search_limited', 'is_active' => true]);
+        $role->permissions()->sync(Permission::whereIn('slug', [
+            'database.view_assigned', 'consumer_progress.view_assigned', 'bridge_fund.view_assigned',
+        ])->pluck('id'));
+        $user = User::factory()->create(['role_id' => $role->id, 'branch_id' => $branch->id, 'password_changed_at' => now()]);
+        DB::table('project_user')->insert([
+            'user_id' => $user->id, 'project_id' => $project->id, 'is_active' => true,
+            'created_at' => now(), 'updated_at' => now(),
+        ]);
+
+        KonsumenProgressSheetRow::create([
+            'branch_id' => $branch->id,
+            'sheet_id' => 'sheet-'.$branch->id,
+            'sheet_name' => 'data_konsumen',
+            'row_hash' => 'konsumen-limited-A-01',
+            'row_data' => ['id_kavling' => 'A-01', 'nama_konsumen' => 'Sengir Budi', 'project_name' => 'Oasis Jepara'],
+        ]);
+        KonsumenProgressSheetRow::create([
+            'branch_id' => $branch->id,
+            'sheet_id' => 'sheet-'.$branch->id,
+            'sheet_name' => 'akad',
+            'row_hash' => 'akad-limited-A-01',
+            'row_data' => ['id_kavling' => 'A-01'],
+        ]);
+        DatabaseSheetRecord::create([
+            'branch_id' => $branch->id,
+            'sheet_id' => 'sheet-'.$branch->id,
+            'sheet_name' => 'leads',
+            'row_number' => 1,
+            'oasis_sync_id' => 'row-search-limited',
+            'headers' => ['nama_konsumen', 'project_name'],
+            'row_data' => ['nama_konsumen' => 'Sengir Budi', 'project_name' => 'Oasis Jepara'],
+            'sync_status' => 'synced',
+            'last_synced_at' => now(),
+        ]);
+        DanaTalangan::create([
+            'branch_id' => $branch->id,
+            'created_by' => $user->id,
+            'tanggal' => today(),
+            'nama_konsumen' => 'Sengir Budi',
+            'kav' => 'A-03',
+            'project_name' => 'Oasis Jepara',
+            'status' => 'sanggup',
+        ]);
+
+        $result = app(AiToolRegistry::class)->execute('search_customer', ['query' => 'Sengir'], $user);
+
+        $this->assertSame([], $result['results']);
+    }
+
+    public function test_search_customer_hides_same_branch_other_project_rows_for_assigned_scope(): void
+    {
+        $branch = Branch::create(['name' => 'Jepara', 'code' => 'JPR', 'is_active' => true]);
+        $other = $this->makeProject($branch, 'Medokan');
+        $assigned = $this->makeProject($branch, 'Oasis Medokan');
+        $role = Role::create(['name' => 'Search Assigned', 'slug' => 'search_assigned', 'is_active' => true]);
+        $role->permissions()->sync(Permission::whereIn('slug', [
+            'database.view', 'consumer_progress.view', 'bridge_fund.view',
+            'database.view_assigned', 'consumer_progress.view_assigned', 'bridge_fund.view_assigned',
+        ])->pluck('id'));
+        $user = User::factory()->create(['role_id' => $role->id, 'branch_id' => $branch->id, 'password_changed_at' => now()]);
+        DB::table('project_user')->insert([
+            'user_id' => $user->id, 'project_id' => $assigned->id, 'is_active' => true,
+            'created_at' => now(), 'updated_at' => now(),
+        ]);
+
+        KonsumenProgressSheetRow::create([
+            'branch_id' => $branch->id,
+            'sheet_id' => 'sheet-'.$branch->id,
+            'sheet_name' => 'data_konsumen',
+            'row_hash' => 'row-konsumen-assigned',
+            'row_data' => ['id_kavling' => 'A-01', 'nama_konsumen' => 'Sengir Assigned', 'project_name' => 'Oasis Medokan'],
+        ]);
+        KonsumenProgressSheetRow::create([
+            'branch_id' => $branch->id,
+            'sheet_id' => 'sheet-'.$branch->id,
+            'sheet_name' => 'akad',
+            'row_hash' => 'row-akad-assigned',
+            'row_data' => ['id_kavling' => 'A-01'],
+        ]);
+        KonsumenProgressSheetRow::create([
+            'branch_id' => $branch->id,
+            'sheet_id' => 'sheet-'.$branch->id,
+            'sheet_name' => 'data_konsumen',
+            'row_hash' => 'row-konsumen-other',
+            'row_data' => ['id_kavling' => 'B-01', 'nama_konsumen' => 'Sengir Other', 'project_name' => 'Medokan'],
+        ]);
+        KonsumenProgressSheetRow::create([
+            'branch_id' => $branch->id,
+            'sheet_id' => 'sheet-'.$branch->id,
+            'sheet_name' => 'bast',
+            'row_hash' => 'row-bast-other',
+            'row_data' => ['id_kavling' => 'B-01'],
+        ]);
+        DatabaseSheetRecord::create([
+            'branch_id' => $branch->id,
+            'sheet_id' => 'sheet-'.$branch->id,
+            'sheet_name' => 'leads',
+            'row_number' => 1,
+            'oasis_sync_id' => 'row-db-other',
+            'headers' => ['nama_konsumen', 'project_name'],
+            'row_data' => ['nama_konsumen' => 'Sengir Database', 'project_name' => 'Medokan'],
+            'sync_status' => 'synced',
+            'last_synced_at' => now(),
+        ]);
+
+        $result = app(AiToolRegistry::class)->execute('search_customer', ['query' => 'Sengir'], $user);
+
+        $projects = collect($result['results'])->pluck('project_name')->unique()->all();
+        $this->assertEquals(['Oasis Medokan'], $projects);
+        $this->assertNotContains('Medokan', $projects);
+    }
+
+    public function test_dana_summary_and_search_hide_same_branch_other_project_rows_for_assigned_scope(): void
+    {
+        $branch = Branch::create(['name' => 'Solo', 'code' => 'SLO', 'is_active' => true]);
+        $assigned = $this->makeProject($branch, 'Oasis Solo');
+        $other = $this->makeProject($branch, 'Oasis Karanganyar');
+        $role = Role::create(['name' => 'Dana Assigned', 'slug' => 'dana_assigned_search', 'is_active' => true]);
+        $role->permissions()->sync(Permission::whereIn('slug', [
+            'bridge_fund.view', 'bridge_fund.view_assigned',
+            'database.view', 'database.view_assigned',
+            'consumer_progress.view', 'consumer_progress.view_assigned',
+        ])->pluck('id'));
+        $user = User::factory()->create(['role_id' => $role->id, 'branch_id' => $branch->id, 'password_changed_at' => now()]);
+        DB::table('project_user')->insert([
+            'user_id' => $user->id, 'project_id' => $assigned->id, 'is_active' => true,
+            'created_at' => now(), 'updated_at' => now(),
+        ]);
+
+        $this->makeDanaTalangan($branch, $user, 'Andre Sutikna', $assigned, 'Oasis Solo');
+        $this->makeDanaTalangan($branch, $user, 'Other Project Row', $other, 'Oasis Karanganyar');
+        DatabaseSheetRecord::create([
+            'branch_id' => $branch->id,
+            'sheet_id' => 'sheet-'.$branch->id,
+            'sheet_name' => 'data_konsumen',
+            'row_number' => 1,
+            'oasis_sync_id' => 'row-assigned-db',
+            'headers' => ['nama_konsumen', 'project_name'],
+            'row_data' => ['nama_konsumen' => 'Andre Sutikna', 'project_name' => 'Oasis Karanganyar'],
+            'sync_status' => 'synced',
+            'last_synced_at' => now(),
+        ]);
+
+        $summary = app(AiToolRegistry::class)->execute('get_dana_talangan_summary', ['query' => 'Andre'], $user);
+        $this->assertSame(1, $summary['count']);
+        $this->assertSame('Andre Sutikna', $summary['records'][0]['nama_konsumen']);
+
+        $search = app(AiToolRegistry::class)->execute('search_customer', ['query' => 'Andre'], $user);
+        $modules = collect($search['results'])->pluck('source_module')->all();
+        $this->assertContains('Dana Talangan', $modules);
+        $this->assertNotContains('Database', $modules);
+        $this->assertNotContains('Oasis Karanganyar', collect($search['results'])->pluck('project_name')->all());
+    }
+
+    public function test_search_customer_requires_scoped_permission_besides_coarse_view(): void
+    {
+        $branch = Branch::create(['name' => 'Jepara', 'code' => 'JPR', 'is_active' => true]);
+        $role = Role::create(['name' => 'Coarse Only', 'slug' => 'coarse_only_search', 'is_active' => true]);
+        $role->permissions()->sync(Permission::whereIn('slug', [
+            'database.view', 'consumer_progress.view', 'bridge_fund.view',
+        ])->pluck('id'));
+        $user = User::factory()->create(['role_id' => $role->id, 'branch_id' => $branch->id, 'password_changed_at' => now()]);
+        DatabaseSheetRecord::create([
+            'branch_id' => $branch->id,
+            'sheet_id' => 'sheet-'.$branch->id,
+            'sheet_name' => 'leads',
+            'row_number' => 1,
+            'oasis_sync_id' => 'row-coarse-only',
+            'headers' => ['nama_konsumen', 'project_name'],
+            'row_data' => ['nama_konsumen' => 'Sengir Coarse', 'project_name' => 'Oasis Jepara'],
+            'sync_status' => 'synced',
+            'last_synced_at' => now(),
+        ]);
+
+        $result = app(AiToolRegistry::class)->execute('search_customer', ['query' => 'Sengir'], $user);
+
+        $this->assertSame([], $result['results']);
+    }
+
+    public function test_search_customer_resolves_project_labels_inside_row_branch(): void
+    {
+        $branchA = Branch::create(['name' => 'Cabang A', 'code' => 'CBA', 'is_active' => true]);
+        $branchB = Branch::create(['name' => 'Cabang B', 'code' => 'CBB', 'is_active' => true]);
+        $projectA = $this->makeProject($branchA, 'Proyek Sama');
+        $this->makeProject($branchB, 'Proyek Sama');
+        $role = Role::create(['name' => 'Assigned Cross Branch', 'slug' => 'assigned_cross_branch', 'is_active' => true]);
+        $role->permissions()->sync(Permission::whereIn('slug', [
+            'database.view', 'database.view_assigned', 'consumer_progress.view', 'consumer_progress.view_assigned',
+        ])->pluck('id'));
+        $user = User::factory()->create(['role_id' => $role->id, 'branch_id' => $branchA->id, 'password_changed_at' => now()]);
+        $user->branches()->attach($branchB->id);
+        DB::table('project_user')->insert([
+            'user_id' => $user->id, 'project_id' => $projectA->id, 'is_active' => true,
+            'created_at' => now(), 'updated_at' => now(),
+        ]);
+        KonsumenProgressSheetRow::create([
+            'branch_id' => $branchA->id,
+            'sheet_id' => 'sheet-'.$branchA->id,
+            'sheet_name' => 'data_konsumen',
+            'row_hash' => 'row-konsumen-a',
+            'row_data' => ['id_kavling' => 'A-01', 'nama_konsumen' => 'Sengir Cabang', 'project_name' => 'Proyek Sama'],
+        ]);
+        KonsumenProgressSheetRow::create([
+            'branch_id' => $branchA->id,
+            'sheet_id' => 'sheet-'.$branchA->id,
+            'sheet_name' => 'akad',
+            'row_hash' => 'row-akad-a',
+            'row_data' => ['id_kavling' => 'A-01'],
+        ]);
+        KonsumenProgressSheetRow::create([
+            'branch_id' => $branchB->id,
+            'sheet_id' => 'sheet-'.$branchB->id,
+            'sheet_name' => 'data_konsumen',
+            'row_hash' => 'row-konsumen-b',
+            'row_data' => ['id_kavling' => 'B-01', 'nama_konsumen' => 'Sengir Cabang', 'project_name' => 'Proyek Sama'],
+        ]);
+        KonsumenProgressSheetRow::create([
+            'branch_id' => $branchB->id,
+            'sheet_id' => 'sheet-'.$branchB->id,
+            'sheet_name' => 'bast',
+            'row_hash' => 'row-bast-b',
+            'row_data' => ['id_kavling' => 'B-01'],
+        ]);
+        DatabaseSheetRecord::create([
+            'branch_id' => $branchB->id,
+            'sheet_id' => 'sheet-'.$branchB->id,
+            'sheet_name' => 'leads',
+            'row_number' => 1,
+            'oasis_sync_id' => 'row-db-cross-branch',
+            'headers' => ['nama_konsumen', 'project_name'],
+            'row_data' => ['nama_konsumen' => 'Sengir Cabang', 'project_name' => 'Proyek Sama'],
+            'sync_status' => 'synced',
+            'last_synced_at' => now(),
+        ]);
+
+        $result = app(AiToolRegistry::class)->execute('search_customer', ['query' => 'Sengir'], $user);
+
+        $branches = collect($result['results'])->pluck('branch')->unique()->all();
+        $this->assertSame(['Cabang A'], $branches);
+    }
+
+    public function test_database_and_pipeline_tools_respect_branch_scope_contract(): void
+    {
+        [$branch, $user] = $this->branchAndUser();
+        $other = Branch::create(['name' => 'Solo', 'code' => 'SLO', 'is_active' => true]);
+        $this->pipelineCustomer($branch, 'A-01', 'Budi Jepara', 'akad');
+        $this->pipelineCustomer($other, 'B-01', 'Budi Solo', 'akad');
+        DatabaseSheetRecord::create([
+            'branch_id' => $other->id,
+            'sheet_id' => 'sheet-'.$other->id,
+            'sheet_name' => 'leads',
+            'row_number' => 1,
+            'oasis_sync_id' => 'row-other-branch',
+            'headers' => ['nama_konsumen', 'project_name'],
+            'row_data' => ['nama_konsumen' => 'Budi Other Branch', 'project_name' => 'Oasis Solo'],
+            'sync_status' => 'synced',
+            'last_synced_at' => now(),
+        ]);
+
+        $result = app(AiToolRegistry::class)->execute('count_by_stage', ['stage' => 'akad'], $user);
+        $this->assertSame(1, $result['count']);
+        $this->assertSame($branch->id, $result['branch_id']);
+
+        $search = app(AiToolRegistry::class)->execute('search_customer', ['query' => 'Budi'], $user);
+        $branches = collect($search['results'])->pluck('branch')->unique()->all();
+        $this->assertSame(['Jepara'], $branches);
+    }
+
+    public function test_today_summary_requires_module_view_permission(): void
+    {
+        [$branch, $user] = $this->branchAndUserWithoutModulePermissions('Jepara', 'JPR', 'planner_locked');
+
+        $result = app(AiToolRegistry::class)->execute('get_today_summary', [], $user);
+
+        $this->assertSame('Anda tidak memiliki izin melihat data ringkasan hari ini.', $result['error']);
+    }
+
+    public function test_today_summary_does_not_read_modules_without_their_view_permission(): void
+    {
+        [$branch, $user] = $this->branchAndUserWithoutModulePermissions('Jepara', 'JPR', 'planner_only');
+        $user->role->permissions()->sync(Permission::where('slug', 'work_planner.view_own')->pluck('id'));
+        DanaTalangan::create([
+            'branch_id' => $branch->id,
+            'created_by' => $user->id,
+            'tanggal' => today(),
+            'nama_konsumen' => 'Data Rahasia',
+            'status' => 'sanggup',
+        ]);
+
+        $result = app(AiToolRegistry::class)->execute('get_today_summary', [], $user->fresh('role.permissions'));
+
+        $this->assertArrayHasKey('items', $result['work_planner']);
+        $this->assertSame('Anda tidak memiliki izin melihat data Dana Talangan.', $result['dana_talangan']['error']);
+        $this->assertSame('Anda tidak memiliki izin melihat data Konsumen Progress.', $result['pipeline']['error']);
+        $this->assertArrayNotHasKey('count', $result['dana_talangan']);
+        $this->assertArrayNotHasKey('count', $result['pipeline']);
+    }
+
+    private function makeProject(Branch $branch, string $name): LeadMaster
+    {
+        LeadMaster::create([
+            'branch_id' => $branch->id,
+            'project_name' => $name,
+            'is_active' => true,
+        ]);
+
+        return LeadMaster::where('branch_id', $branch->id)->where('project_name', $name)->firstOrFail();
+    }
+
+    private function makeDanaTalangan(Branch $branch, User $user, string $name, LeadMaster $project, string $projectLabel): DanaTalangan
+    {
+        DanaTalangan::create([
+            'branch_id' => $branch->id,
+            'project_id' => $project->id,
+            'created_by' => $user->id,
+            'tanggal' => today(),
+            'nama_konsumen' => $name,
+            'kav' => 'A-01',
+            'project_name' => $projectLabel,
+            'status' => 'sanggup',
+            'konfirmasi_keuangan' => true,
+        ]);
+
+        return DanaTalangan::where('nama_konsumen', $name)->firstOrFail();
+    }
+
+    private function branchAndUserWithoutModulePermissions(string $branchName, string $branchCode, string $roleSlug): array
+    {
+        $role = Role::create(['name' => 'Limited '.$branchCode, 'slug' => $roleSlug, 'is_active' => true]);
+        $branch = Branch::create(['name' => $branchName, 'code' => $branchCode, 'is_active' => true]);
+        $user = User::factory()->create([
+            'role_id' => $role->id,
+            'branch_id' => $branch->id,
+            'password_changed_at' => now(),
+        ]);
+
+        return [$branch, $user];
     }
 
     private function branchAndUser(string $branchName = 'Jepara', string $branchCode = 'JPR'): array

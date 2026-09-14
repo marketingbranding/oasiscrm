@@ -2,12 +2,20 @@
 
 namespace Tests\Feature;
 
+use App\Imports\DanaTalanganImport;
 use App\Models\Branch;
 use App\Models\DanaTalangan;
 use App\Models\LeadMaster;
+use App\Models\Permission;
 use App\Models\Role;
 use App\Models\User;
+use App\Services\OptimisticLockService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
+use PhpOffice\PhpSpreadsheet\Cell\DataType;
+use PhpOffice\PhpSpreadsheet\IOFactory;
+use PhpOffice\PhpSpreadsheet\Spreadsheet;
+use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
 use Tests\TestCase;
 
 class DanaTalanganInteractionTest extends TestCase
@@ -56,6 +64,169 @@ class DanaTalanganInteractionTest extends TestCase
         ]);
     }
 
+    public function test_import_rejects_unknown_status_without_mutation(): void
+    {
+        [$branch, $user] = $this->makeBranchAndUser();
+        $project = $this->makeProject($branch);
+        $spreadsheet = new Spreadsheet;
+        $spreadsheet->getActiveSheet()->fromArray([
+            ['No', 'Tanggal', 'Nama Konsumen', 'Kav', 'Proyek', 'Pinjam Nama', 'Pekerjaan', 'Status Kawin', 'Umur', 'Marketing', 'TGL Komitmen', 'Penyelesaian', 'Konfirmasi', 'Status Cicilan'],
+            [1, '2026-08-31', 'Status Tidak Valid', '', 'Proyek Test', 'TIDAK', '', '', '', '', '', '', 'TIDAK', 'unknown'],
+        ]);
+        $path = tempnam(sys_get_temp_dir(), 'dana-import-');
+        (new Xlsx($spreadsheet))->save($path);
+
+        $this->actingAs($user);
+        $result = DanaTalanganImport::import($path, $branch->id, [], [$branch->id], [$project->id]);
+        unlink($path);
+
+        $this->assertSame(0, $result['imported']);
+        $this->assertSame(["Baris 2: Status cicilan tidak valid ('unknown')."], $result['errors']);
+        $this->assertDatabaseCount('dana_talangans', 0);
+    }
+
+    public function test_import_requires_exact_authorized_project_without_mutation(): void
+    {
+        [$branch, $user] = $this->makeBranchAndUser();
+        $project = $this->makeProject($branch);
+        $otherBranch = Branch::create(['name' => 'Cabang Lain Dana', 'code' => 'CLD', 'is_active' => true]);
+        $otherProject = $this->makeProject($otherBranch, 'Proyek Lain');
+        $spreadsheet = new Spreadsheet;
+        $spreadsheet->getActiveSheet()->fromArray([
+            ['No', 'Tanggal', 'Nama Konsumen', 'Kav', 'Proyek', 'Pinjam Nama', 'Pekerjaan', 'Status Kawin', 'Umur', 'Marketing', 'TGL Komitmen', 'Penyelesaian', 'Konfirmasi', 'Status Cicilan'],
+            [1, '2026-08-31', 'Tanpa Proyek', '', '', 'TIDAK', '', '', '', '', '', '', 'TIDAK', 'sanggup'],
+            [2, '2026-08-31', 'Proyek Asing', '', 'Proyek Tak Ada', 'TIDAK', '', '', '', '', '', '', 'TIDAK', 'sanggup'],
+            [3, '2026-08-31', 'Proyek Cabang Lain', '', 'Proyek Lain', 'TIDAK', '', '', '', '', '', '', 'TIDAK', 'sanggup'],
+            [4, '2026-08-31', 'Proyek Di Luar Cakupan', '', 'Proyek Test', 'TIDAK', '', '', '', '', '', '', 'TIDAK', 'sanggup'],
+        ]);
+        $path = tempnam(sys_get_temp_dir(), 'dana-import-');
+        (new Xlsx($spreadsheet))->save($path);
+
+        $this->actingAs($user);
+        $result = DanaTalanganImport::import($path, $branch->id, [], [$branch->id], [$otherProject->id]);
+        unlink($path);
+
+        $this->assertSame(0, $result['imported']);
+        $this->assertSame('Baris 2: Proyek wajib diisi.', $result['errors'][0]);
+        $this->assertSame('Baris 3: Proyek harus cocok tepat dengan satu proyek aktif pada cabang.', $result['errors'][1]);
+        $this->assertSame('Baris 4: Proyek harus cocok tepat dengan satu proyek aktif pada cabang.', $result['errors'][2]);
+        $this->assertSame('Baris 5: Proyek tidak termasuk cakupan pengelolaan Anda.', $result['errors'][3]);
+        $this->assertDatabaseCount('dana_talangans', 0);
+
+        $spreadsheet = new Spreadsheet;
+        $spreadsheet->getActiveSheet()->fromArray([
+            ['No', 'Tanggal', 'Nama Konsumen', 'Kav', 'Proyek', 'Pinjam Nama', 'Pekerjaan', 'Status Kawin', 'Umur', 'Marketing', 'TGL Komitmen', 'Penyelesaian', 'Konfirmasi', 'Status Cicilan'],
+            [1, '2026-08-31', 'Proyek Diizinkan', '', 'proyek   test', 'YA', '', '', '', '', '', '', 'TIDAK', 'lunas'],
+        ]);
+        $path = tempnam(sys_get_temp_dir(), 'dana-import-');
+        (new Xlsx($spreadsheet))->save($path);
+
+        $result = DanaTalanganImport::import($path, $branch->id, [], [$branch->id], [$project->id]);
+        unlink($path);
+
+        $this->assertSame(1, $result['imported'], implode('; ', $result['errors']));
+        $record = DanaTalangan::query()->sole();
+        $this->assertSame($project->id, $record->project_id);
+        $this->assertSame('Proyek Test', $record->project_name);
+        $this->assertSame($branch->id, $record->branch_id);
+    }
+
+    public function test_import_validates_age_booleans_and_commitment_date_without_mutation(): void
+    {
+        [$branch, $user] = $this->makeBranchAndUser();
+        $project = $this->makeProject($branch);
+        $spreadsheet = new Spreadsheet;
+        $spreadsheet->getActiveSheet()->fromArray([
+            ['No', 'Tanggal', 'Nama Konsumen', 'Kav', 'Proyek', 'Pinjam Nama', 'Pekerjaan', 'Status Kawin', 'Umur', 'Marketing', 'TGL Komitmen', 'Penyelesaian', 'Konfirmasi', 'Status Cicilan'],
+            [1, '2026-08-31', 'Umur Huruf', '', 'Proyek Test', 'TIDAK', '', '', 'abc', '', '', '', 'TIDAK', 'sanggup'],
+            [2, '2026-08-31', 'Umur Terlalu Besar', '', 'Proyek Test', 'TIDAK', '', '', 200, '', '', '', 'TIDAK', 'sanggup'],
+            [3, '2026-08-31', 'Pinjam Asing', '', 'Proyek Test', 'MUNGKIN', '', '', '', '', '', '', 'TIDAK', 'sanggup'],
+            [4, '2026-08-31', 'Konfirmasi Asing', '', 'Proyek Test', 'TIDAK', '', '', '', '', '', '', 'MUNGKIN', 'sanggup'],
+            [5, '2026-08-31', 'Komitmen Rusak', '', 'Proyek Test', 'TIDAK', '', '', '', '', 'segera', '', 'TIDAK', 'sanggup'],
+        ]);
+        $path = tempnam(sys_get_temp_dir(), 'dana-import-');
+        (new Xlsx($spreadsheet))->save($path);
+
+        $this->actingAs($user);
+        $result = DanaTalanganImport::import($path, $branch->id, [], [$branch->id], [$project->id]);
+        unlink($path);
+
+        $this->assertSame(0, $result['imported']);
+        $this->assertSame("Baris 2: Umur harus berupa angka ('abc').", $result['errors'][0]);
+        $this->assertSame("Baris 3: Umur harus antara 0 dan 150 ('200').", $result['errors'][1]);
+        $this->assertSame("Baris 4: Pinjam Nama hanya boleh YA atau TIDAK ('MUNGKIN').", $result['errors'][2]);
+        $this->assertSame("Baris 5: Konfirmasi hanya boleh YA atau TIDAK ('MUNGKIN').", $result['errors'][3]);
+        $this->assertSame("Baris 6: TGL Komitmen tidak valid ('segera').", $result['errors'][4]);
+        $this->assertDatabaseCount('dana_talangans', 0);
+
+        $spreadsheet = new Spreadsheet;
+        $spreadsheet->getActiveSheet()->fromArray([
+            ['No', 'Tanggal', 'Nama Konsumen', 'Kav', 'Proyek', 'Pinjam Nama', 'Pekerjaan', 'Status Kawin', 'Umur', 'Marketing', 'TGL Komitmen', 'Penyelesaian', 'Konfirmasi', 'Status Cicilan'],
+            [1, '2026-08-31', 'Baris Valid', '', 'Proyek Test', 'YA', '', '', 45, '', '2026-08-30', '', 'TIDAK', 'sanggup'],
+        ]);
+        $path = tempnam(sys_get_temp_dir(), 'dana-import-');
+        (new Xlsx($spreadsheet))->save($path);
+
+        $result = DanaTalanganImport::import($path, $branch->id, [], [$branch->id], [$project->id]);
+        unlink($path);
+
+        $this->assertSame(1, $result['imported'], implode('; ', $result['errors']));
+        $record = DanaTalangan::query()->sole();
+        $this->assertSame(45, $record->umur);
+        $this->assertTrue($record->pinjam_nama);
+        $this->assertFalse($record->konfirmasi_keuangan);
+        $this->assertSame('2026-08-30', $record->tgl_komitmen->format('Y-m-d'));
+    }
+
+    public function test_import_rejects_decimal_and_scientific_age_without_mutation(): void
+    {
+        [$branch, $user] = $this->makeBranchAndUser();
+        $project = $this->makeProject($branch);
+        $spreadsheet = new Spreadsheet;
+        $spreadsheet->getActiveSheet()->fromArray([
+            ['No', 'Tanggal', 'Nama Konsumen', 'Kav', 'Proyek', 'Pinjam Nama', 'Pekerjaan', 'Status Kawin', 'Umur', 'Marketing', 'TGL Komitmen', 'Penyelesaian', 'Konfirmasi', 'Status Cicilan'],
+            [1, '2026-08-31', 'Umur Desimal', '', 'Proyek Test', 'TIDAK', '', '', 45.9, '', '', '', 'TIDAK', 'sanggup'],
+            [2, '2026-08-31', 'Umur Ilmiah', '', 'Proyek Test', 'TIDAK', '', '', '1e2', '', '', '', 'TIDAK', 'sanggup'],
+        ]);
+        $spreadsheet->getActiveSheet()->getCell('I3')->setValueExplicit('1e2', DataType::TYPE_STRING);
+        $path = tempnam(sys_get_temp_dir(), 'dana-import-');
+        (new Xlsx($spreadsheet))->save($path);
+
+        $this->actingAs($user);
+        $result = DanaTalanganImport::import($path, $branch->id, [], [$branch->id], [$project->id]);
+        unlink($path);
+
+        $this->assertSame(0, $result['imported']);
+        $this->assertSame([
+            "Baris 2: Umur harus berupa angka ('45.9').",
+            "Baris 3: Umur harus berupa angka ('1e2').",
+        ], $result['errors']);
+        $this->assertDatabaseCount('dana_talangans', 0);
+    }
+
+    public function test_import_accepts_integer_and_blank_age(): void
+    {
+        [$branch, $user] = $this->makeBranchAndUser();
+        $project = $this->makeProject($branch);
+        $spreadsheet = new Spreadsheet;
+        $spreadsheet->getActiveSheet()->fromArray([
+            ['No', 'Tanggal', 'Nama Konsumen', 'Kav', 'Proyek', 'Pinjam Nama', 'Pekerjaan', 'Status Kawin', 'Umur', 'Marketing', 'TGL Komitmen', 'Penyelesaian', 'Konfirmasi', 'Status Cicilan'],
+            [1, '2026-08-31', 'Umur Bulat', '', 'Proyek Test', 'TIDAK', '', '', 45, '', '', '', 'TIDAK', 'sanggup'],
+            [2, '2026-08-31', 'Umur Kosong', '', 'Proyek Test', 'TIDAK', '', '', '', '', '', '', 'TIDAK', 'sanggup'],
+        ]);
+        $path = tempnam(sys_get_temp_dir(), 'dana-import-');
+        (new Xlsx($spreadsheet))->save($path);
+
+        $this->actingAs($user);
+        $result = DanaTalanganImport::import($path, $branch->id, [], [$branch->id], [$project->id]);
+        unlink($path);
+
+        $this->assertSame(2, $result['imported'], implode('; ', $result['errors']));
+        $this->assertSame([], $result['errors']);
+        $this->assertSame(45, DanaTalangan::query()->where('nama_konsumen', 'Umur Bulat')->value('umur'));
+        $this->assertNull(DanaTalangan::query()->where('nama_konsumen', 'Umur Kosong')->value('umur'));
+    }
+
     public function test_page_alpine_attribute_is_complete_and_does_not_render_javascript_as_text(): void
     {
         [$branch, $user] = $this->makeBranchAndUser();
@@ -89,6 +260,19 @@ class DanaTalanganInteractionTest extends TestCase
         $this->actingAs($user)->get(route('changelogs.index'))
             ->assertOk()
             ->assertSeeText('Tampilan Dana Talangan Kembali Normal');
+    }
+
+    public function test_import_validation_changelog_is_idempotent_and_visible(): void
+    {
+        $title = 'Validasi Impor Lebih Ketat';
+        $migration = require database_path('migrations/2026_09_10_000006_fix_import_validation_changelog.php');
+
+        $migration->up();
+        $migration->up();
+
+        $this->assertSame(1, DB::table('changelogs')->whereNull('version')->where('title', $title)->count());
+        [, $user] = $this->makeBranchAndUser();
+        $this->actingAs($user)->get(route('changelogs.index'))->assertOk()->assertSeeText($title);
     }
 
     public function test_add_modal_wires_focus_trap_and_escape_close(): void
@@ -245,6 +429,42 @@ class DanaTalanganInteractionTest extends TestCase
         $this->actingAs($user)->post(route('dana-talangan.bulk-update'), [
             'selected_ids' => (string) $record->id,
             'new_status' => 'lunas',
+        ])->assertForbidden();
+    }
+
+    public function test_assigned_scope_blocks_same_branch_other_project_dana_talangan_everywhere(): void
+    {
+        $branch = Branch::create(['name' => 'Assigned Dana Branch', 'code' => 'ADN', 'is_active' => true]);
+        $assignedProject = $this->makeProject($branch, 'Assigned Dana Project');
+        $otherProject = $this->makeProject($branch, 'Other Dana Project');
+        $role = Role::create(['name' => 'Dana Assigned Test', 'slug' => 'dana_assigned_test', 'is_active' => true]);
+        $role->permissions()->sync(Permission::whereIn('slug', [
+            'bridge_fund.view', 'bridge_fund.manage', 'bridge_fund.export',
+            'bridge_fund.view_assigned', 'bridge_fund.manage_assigned', 'bridge_fund.export_assigned',
+        ])->pluck('id'));
+        $user = User::factory()->create(['role_id' => $role->id, 'branch_id' => $branch->id, 'password_changed_at' => now()]);
+        DB::table('project_user')->insert([
+            'user_id' => $user->id, 'project_id' => $assignedProject->id, 'is_primary' => true,
+            'is_active' => true, 'created_at' => now(), 'updated_at' => now(),
+        ]);
+        $allowed = $this->makeRecord($branch, $user);
+        $allowed->update(['project_id' => $assignedProject->id, 'project_name' => $assignedProject->project_name, 'nama_konsumen' => 'Dana Assigned Visible']);
+        $blocked = $this->makeRecord($branch, $user);
+        $blocked->update(['project_id' => $otherProject->id, 'project_name' => $otherProject->project_name, 'nama_konsumen' => 'Dana Other Hidden']);
+        $historical = $this->makeRecord($branch, $user);
+        $historical->update(['project_id' => null, 'nama_konsumen' => 'Dana Historical Hidden']);
+        $this->actingAs($user)->get(route('dana-talangan.index', ['month_from' => '2026-07', 'month_to' => '2026-07', 'filter_mode' => 'month']))
+            ->assertOk()->assertViewHas('records', fn ($records) => $records->pluck('id')->all() === [$allowed->id]);
+        $this->actingAs($user)->getJson(route('dana-talangan.detail', $blocked))->assertForbidden();
+        $response = $this->actingAs($user)->get(route('dana-talangan.export'))->assertOk();
+        $sheet = IOFactory::load($response->baseResponse->getFile()->getPathname())->getActiveSheet();
+        $names = array_column($sheet->rangeToArray('C2:C'.$sheet->getHighestRow()), 0);
+        $this->assertContains($allowed->nama_konsumen, $names);
+        $this->assertNotContains($blocked->nama_konsumen, $names);
+        $this->actingAs($user)->put(route('dana-talangan.update', $blocked), [
+            'tanggal' => '2026-07-07', 'nama_konsumen' => $blocked->nama_konsumen,
+            'project_name' => $blocked->project_name, 'status' => 'sanggup',
+            'expected_updated_at' => app(OptimisticLockService::class)->token($blocked),
         ])->assertForbidden();
     }
 }

@@ -10,7 +10,10 @@ use Illuminate\Validation\ValidationException;
 
 class SalesSheetIdentityService
 {
-    public function __construct(private readonly SalesLeadSheetOptionService $options) {}
+    public function __construct(
+        private readonly SalesLeadSheetOptionService $options,
+        private readonly ProjectIdentityResolver $projects,
+    ) {}
 
     public function salesValue(Branch $branch, User $user, ?array $branchOptions = null): string
     {
@@ -28,7 +31,13 @@ class SalesSheetIdentityService
     {
         $branch = $project->branch()->firstOrFail();
         $values = $branchOptions ?? $this->options->forBranch($branch);
-        $resolved = $this->options->exactOption($values['project'], $project->sheet_project_name ?: $project->project_name);
+        $resolved = null;
+        foreach (array_reverse($this->projects->labels($project)) as $label) {
+            $resolved = $this->options->exactOption($values['project'], $label);
+            if ($resolved !== null) {
+                break;
+            }
+        }
         if ($resolved === null) {
             throw ValidationException::withMessages(['project_id' => 'Proyek belum memiliki identitas yang cocok pada data_kav cabang terpilih.']);
         }

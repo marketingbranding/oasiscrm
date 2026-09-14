@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Imports\ContentItemImport;
 use App\Models\Branch;
 use App\Models\Changelog;
 use App\Models\ContentItem;
@@ -10,11 +11,116 @@ use App\Models\Role;
 use App\Models\User;
 use App\Services\WorkPlannerReminderService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use PhpOffice\PhpSpreadsheet\Spreadsheet;
+use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
 use Tests\TestCase;
 
 class WorkPlannerTest extends TestCase
 {
     use RefreshDatabase;
+
+    public function test_import_rejects_invalid_enums_without_silent_fallback(): void
+    {
+        [$branch, $user] = $this->branchAndUser();
+        $spreadsheet = new Spreadsheet;
+        $spreadsheet->getActiveSheet()->fromArray([
+            ['Cabang', 'Tipe', 'Visibilitas', 'Judul', 'Detail', 'Platform', 'Proyek', 'Mulai', 'Jam Mulai', 'Deadline/Publikasi', 'Jam Selesai', 'Prioritas', 'PIC Eksternal', 'Status', 'Jenis Agenda', 'Lokasi', 'Format Konten', 'Tujuan Konten', 'Catatan'],
+            [$branch->name, 'invalid', 'team', 'Invalid Type', '', '', '', '2026-08-31', '', '2026-08-31', '', 'medium', '', 'todo'],
+            [$branch->name, 'task', 'invalid', 'Invalid Visibility', '', '', '', '2026-08-31', '', '2026-08-31', '', 'medium', '', 'todo'],
+            [$branch->name, 'task', 'team', 'Invalid Priority', '', '', '', '2026-08-31', '', '2026-08-31', '', 'invalid', '', 'todo'],
+            [$branch->name, 'task', 'team', 'Invalid Status', '', '', '', '2026-08-31', '', '2026-08-31', '', 'medium', '', 'planned'],
+        ]);
+        $path = tempnam(sys_get_temp_dir(), 'planner-import-');
+        (new Xlsx($spreadsheet))->save($path);
+
+        $this->actingAs($user);
+        $result = ContentItemImport::import($path, $branch->id, [], [$branch->id]);
+        unlink($path);
+
+        $this->assertSame(0, $result['imported']);
+        $this->assertCount(4, $result['errors']);
+        $this->assertStringContainsString('Tipe item tidak valid', $result['errors'][0]);
+        $this->assertStringContainsString('Visibilitas tidak valid', $result['errors'][1]);
+        $this->assertStringContainsString('Prioritas tidak valid', $result['errors'][2]);
+        $this->assertStringContainsString('Status tidak valid', $result['errors'][3]);
+        $this->assertDatabaseCount('content_items', 0);
+    }
+
+    public function test_import_resolves_project_within_allowed_manage_ids_without_mutation(): void
+    {
+        [$branch, $user] = $this->branchAndUser();
+        $allowed = LeadMaster::create(['branch_id' => $branch->id, 'project_name' => 'Proyek Alpha', 'is_active' => true]);
+        LeadMaster::create(['branch_id' => $branch->id, 'project_name' => 'Proyek Beta', 'is_active' => true]);
+        $otherBranch = Branch::create(['name' => 'Cabang Dua', 'code' => 'CB2', 'is_active' => true]);
+        LeadMaster::create(['branch_id' => $otherBranch->id, 'project_name' => 'Proyek Alpha', 'is_active' => true]);
+        $spreadsheet = new Spreadsheet;
+        $spreadsheet->getActiveSheet()->fromArray([
+            ['Cabang', 'Tipe', 'Visibilitas', 'Judul', 'Detail', 'Platform', 'Proyek', 'Mulai', 'Jam Mulai', 'Deadline/Publikasi', 'Jam Selesai', 'Prioritas', 'PIC Eksternal', 'Status', 'Jenis Agenda', 'Lokasi', 'Format Konten', 'Tujuan Konten', 'Catatan'],
+            [$branch->name, 'task', 'team', 'Task Alpha', '', '', 'proyek   alpha', '2026-08-31', '', '2026-08-31', '', 'medium', '', 'todo', '', '', '', '', ''],
+            [$branch->name, 'task', 'team', 'Task Blocked', '', '', 'Proyek Beta', '2026-08-31', '', '2026-08-31', '', 'medium', '', 'todo', '', '', '', '', ''],
+            [$branch->name, 'task', 'team', 'Task Unknown', '', '', 'Proyek Gamma', '2026-08-31', '', '2026-08-31', '', 'medium', '', 'todo', '', '', '', '', ''],
+        ]);
+        $path = tempnam(sys_get_temp_dir(), 'planner-import-');
+        (new Xlsx($spreadsheet))->save($path);
+
+        $this->actingAs($user);
+        $result = ContentItemImport::import($path, $branch->id, [], [$branch->id], [$allowed->id]);
+        unlink($path);
+
+        $this->assertSame(1, $result['imported']);
+        $this->assertSame('Baris 3: Proyek tidak termasuk cakupan pengelolaan Anda.', $result['errors'][0]);
+        $this->assertSame('Baris 4: Proyek harus cocok tepat dengan satu proyek aktif pada cabang.', $result['errors'][1]);
+        $item = ContentItem::query()->sole();
+        $this->assertSame('Task Alpha', $item->title);
+        $this->assertSame('Proyek Alpha', $item->project_name);
+        $this->assertDatabaseCount('content_items', 1);
+    }
+
+    public function test_import_enforces_agenda_and_content_type_rules_without_mutation(): void
+    {
+        [$branch, $user] = $this->branchAndUser();
+        $spreadsheet = new Spreadsheet;
+        $spreadsheet->getActiveSheet()->fromArray([
+            ['Cabang', 'Tipe', 'Visibilitas', 'Judul', 'Detail', 'Platform', 'Proyek', 'Mulai', 'Jam Mulai', 'Deadline/Publikasi', 'Jam Selesai', 'Prioritas', 'PIC Eksternal', 'Status', 'Jenis Agenda', 'Lokasi', 'Format Konten', 'Tujuan Konten', 'Catatan'],
+            [$branch->name, 'agenda', 'team', 'Agenda Tanpa Jenis', '', '', '', '2026-08-31', '09:00', '2026-08-31', '', 'medium', '', 'planned', '', '', '', '', ''],
+            [$branch->name, 'agenda', 'team', 'Agenda Tanpa Jam', '', '', '', '2026-08-31', '', '2026-08-31', '', 'medium', '', 'planned', 'Survey', '', '', '', ''],
+            [$branch->name, 'agenda', 'team', 'Agenda Tanpa Mulai', '', '', '', '', '09:00', '2026-08-31', '', 'medium', '', 'planned', 'Survey', '', '', '', ''],
+            [$branch->name, 'content', 'team', 'Konten Tanpa Platform', '', '', '', '2026-08-31', '', '', '', 'medium', '', 'idea', '', '', 'Video', 'Edukasi', ''],
+            [$branch->name, 'content', 'team', 'Konten Format Salah', '', 'Sosial Media', '', '2026-08-31', '', '', '', 'medium', '', 'idea', '', '', 'Banner', 'Edukasi', ''],
+            [$branch->name, 'content', 'team', 'Konten Jam Rusak', '', 'Sosial Media', '', '2026-08-31', '9pagi', '', '', 'medium', '', 'idea', '', '', 'Video', 'Edukasi', ''],
+            [$branch->name, 'content', 'personal', 'Konten Valid', '', 'Sosial Media', '', '2026-08-31', '', '', '', 'medium', '', 'idea', '', '', 'Video', 'Edukasi', ''],
+            [$branch->name, 'agenda', 'team', 'Agenda Valid', '', '', '', '2026-08-31', '09:00', '2026-08-31', '11:00', 'medium', '', 'planned', 'Survey', 'Lokasi Proyek', '', '', ''],
+        ]);
+        $path = tempnam(sys_get_temp_dir(), 'planner-import-');
+        (new Xlsx($spreadsheet))->save($path);
+
+        $this->actingAs($user);
+        $result = ContentItemImport::import($path, $branch->id, [], [$branch->id], []);
+        unlink($path);
+
+        $this->assertSame(2, $result['imported'], implode('; ', $result['errors']));
+        $this->assertCount(6, $result['errors']);
+        $this->assertSame('Baris 2: Jenis Agenda wajib diisi untuk agenda.', $result['errors'][0]);
+        $this->assertSame('Baris 3: Jam Mulai wajib diisi untuk agenda.', $result['errors'][1]);
+        $this->assertSame('Baris 4: Tanggal mulai wajib diisi untuk agenda.', $result['errors'][2]);
+        $this->assertSame('Baris 5: Platform wajib diisi untuk konten.', $result['errors'][3]);
+        $this->assertSame("Baris 6: Format Konten wajib dan harus valid untuk konten ('Banner').", $result['errors'][4]);
+        $this->assertSame("Baris 7: Jam Mulai harus berformat HH:MM ('9pagi').", $result['errors'][5]);
+        $this->assertDatabaseCount('content_items', 2);
+
+        $agenda = ContentItem::query()->where('title', 'Agenda Valid')->sole();
+        $this->assertSame('agenda', $agenda->item_type);
+        $this->assertSame('2026-08-31', $agenda->scheduled_date->format('Y-m-d'));
+        $this->assertSame('Survey', $agenda->agenda_type);
+        $this->assertSame('09:00', $agenda->start_time);
+        $this->assertSame('Lokasi Proyek', $agenda->location);
+
+        $content = ContentItem::query()->where('title', 'Konten Valid')->sole();
+        $this->assertSame('content', $content->item_type);
+        $this->assertSame('team', $content->visibility);
+        $this->assertNull($content->deadline_date);
+        $this->assertSame('2026-08-31', $content->scheduled_date->format('Y-m-d'));
+    }
 
     public function test_existing_shape_defaults_to_team_task(): void
     {

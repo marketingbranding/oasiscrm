@@ -10,17 +10,20 @@ use Throwable;
 
 class DanaTalanganService
 {
-    public function __construct(private readonly DanaTalanganBridgeModeService $modes) {}
+    public function __construct(
+        private readonly DanaTalanganBridgeModeService $modes,
+        private readonly ProjectIdentityResolver $projects,
+    ) {}
 
     public function resolveProject(string $projectName, int $branchId): ?LeadMaster
     {
-        $projects = LeadMaster::query()
-            ->where('branch_id', $branchId)
-            ->where('is_active', true)
-            ->get()
-            ->filter(fn (LeadMaster $project) => $project->project_name === $projectName || $project->sheet_project_name === $projectName);
+        return $this->resolveProjectWithIssue($projectName, $branchId)[0];
+    }
 
-        return $projects->count() === 1 ? $projects->first() : null;
+    /** @return array{0: ?LeadMaster, 1: ?string} */
+    public function resolveProjectWithIssue(string $projectName, int $branchId): array
+    {
+        return $this->projects->resolveExactWithIssue($branchId, $projectName);
     }
 
     public function create(array $data, User $actor): DanaTalangan

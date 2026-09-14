@@ -2,9 +2,13 @@
 
 namespace Tests\Feature;
 
+use App\Models\Permission;
+use App\Models\Role;
 use App\Services\OptimisticLockService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Route;
+use PhpOffice\PhpSpreadsheet\IOFactory;
 use Tests\Feature\Concerns\BuildsExpenseFixtures;
 use Tests\TestCase;
 
@@ -173,5 +177,71 @@ class ExpenseAccessTest extends TestCase
         $this->assertTrue(Route::has('dana-talangan.index'));
         $this->assertTrue(Route::has('content-calendar.index'));
         $this->assertTrue(Route::has('sales-pocketbook.index'));
+    }
+
+    public function test_inactive_historical_project_filter_is_preserved_and_scope_authorized(): void
+    {
+        $branch = $this->expenseBranch('Historical Expense Branch');
+        $inactiveProject = $this->expenseProject($branch, 'Inactive Historical Project', false);
+        $category = $this->expenseCategory();
+        $historical = $this->expense([
+            'branch' => $branch, 'project' => $inactiveProject, 'category' => $category,
+            'description' => 'Biaya Proyek Historis Nonaktif',
+        ]);
+
+        $pusat = $this->expenseUser('pusat', $branch);
+        $this->actingAs($pusat)->get(route('expenses.index', ['period_month' => '2026-07', 'project_id' => $inactiveProject->id]))
+            ->assertOk()->assertSee($historical->description);
+
+        $assignedProject = $this->expenseProject($branch, 'Assigned Active Project');
+        $role = Role::create(['name' => 'Expense Historical Test', 'slug' => 'expense_historical_test', 'is_active' => true]);
+        $role->permissions()->sync(Permission::whereIn('slug', [
+            'expenses.view', 'expenses.view_assigned',
+        ])->pluck('id'));
+        $assigned = $this->expenseUser($role->slug, $branch);
+        DB::table('project_user')->insert([
+            'user_id' => $assigned->id, 'project_id' => $assignedProject->id, 'is_primary' => true,
+            'is_active' => true, 'created_at' => now(), 'updated_at' => now(),
+        ]);
+
+        $this->actingAs($assigned)->get(route('expenses.index', ['period_month' => '2026-07', 'project_id' => $inactiveProject->id]))
+            ->assertForbidden();
+        $this->actingAs($assigned)->get(route('expenses.index', ['period_month' => '2026-07', 'project_id' => $assignedProject->id]))
+            ->assertOk();
+    }
+
+    public function test_assigned_scope_blocks_same_branch_other_project_expenses_everywhere(): void
+    {
+        $branch = $this->expenseBranch('Assigned Expense Branch');
+        $assignedProject = $this->expenseProject($branch, 'Assigned Expense Project');
+        $otherProject = $this->expenseProject($branch, 'Other Expense Project');
+        $category = $this->expenseCategory();
+        $role = Role::create(['name' => 'Expense Assigned Test', 'slug' => 'expense_assigned_test', 'is_active' => true]);
+        $role->permissions()->sync(Permission::whereIn('slug', [
+            'expenses.view', 'expenses.update', 'expenses.export',
+            'expenses.view_assigned', 'expenses.manage_assigned', 'expenses.export_assigned',
+        ])->pluck('id'));
+        $user = $this->expenseUser($role->slug, $branch);
+        DB::table('project_user')->insert([
+            'user_id' => $user->id, 'project_id' => $assignedProject->id, 'is_primary' => true,
+            'is_active' => true, 'created_at' => now(), 'updated_at' => now(),
+        ]);
+        $allowed = $this->expense(compact('branch', 'category') + ['project' => $assignedProject, 'creator' => $user, 'description' => 'Expense Assigned Visible']);
+        $blocked = $this->expense(compact('branch', 'category') + ['project' => $otherProject, 'creator' => $user, 'description' => 'Expense Other Hidden']);
+
+        $this->actingAs($user)->get(route('expenses.index', ['period_month' => '2026-07']))
+            ->assertOk()->assertSee($allowed->description)->assertDontSee($blocked->description);
+        $this->actingAs($user)->get(route('expenses.show', $blocked))->assertForbidden();
+        $response = $this->actingAs($user)->get(route('expenses.export', ['period_month' => '2026-07']))->assertOk();
+        $sheet = IOFactory::load($response->baseResponse->getFile()->getPathname())->getSheetByName('DETAIL PENGELUARAN');
+        $descriptions = $sheet->rangeToArray('E2:E'.$sheet->getHighestRow());
+        $this->assertContains($allowed->description, array_column($descriptions, 0));
+        $this->assertNotContains($blocked->description, array_column($descriptions, 0));
+        $this->actingAs($user)->put(route('expenses.update', $blocked), $this->validExpensePayload(
+            $branch,
+            $otherProject,
+            $category,
+            ['expected_updated_at' => app(OptimisticLockService::class)->token($blocked)],
+        ))->assertForbidden();
     }
 }

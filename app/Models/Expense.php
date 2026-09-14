@@ -3,6 +3,8 @@
 namespace App\Models;
 
 use App\Models\Traits\LogsActivity;
+use App\Services\OrganizationScopeService;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\MorphMany;
@@ -53,6 +55,16 @@ class Expense extends Model
             'cancelled_at' => 'datetime',
             'lock_version' => 'integer',
         ];
+    }
+
+    public function scopeVisibleTo(Builder $query, User $user, string $action = 'view'): Builder
+    {
+        $scope = app(OrganizationScopeService::class);
+        $query->whereIn('branch_id', $scope->branchIds($user, 'expenses', $action));
+
+        return $scope->requiresProjectScope($user, 'expenses', $action)
+            ? $query->whereIn('project_id', $scope->projectIds($user, 'expenses', $action))
+            : $query;
     }
 
     public function branch(): BelongsTo

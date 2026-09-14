@@ -59,6 +59,13 @@ class ExpensePolicy
             return true;
         }
 
-        return in_array((int) $expense->branch_id, app(OrganizationScopeService::class)->branchIds($user, 'expenses', $action), true);
+        $scope = app(OrganizationScopeService::class);
+
+        if (! in_array((int) $expense->branch_id, $scope->branchIds($user, 'expenses', $action), true)) {
+            return false;
+        }
+
+        return ! $scope->requiresProjectScope($user, 'expenses', $action)
+            || ($expense->project_id !== null && in_array((int) $expense->project_id, $scope->projectIds($user, 'expenses', $action), true));
     }
 }

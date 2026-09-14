@@ -42,7 +42,9 @@ class ExpenseFilterService
         $periodEnd = $dateTo ?? ($dateFrom?->endOfMonth()->startOfDay() ?? CarbonImmutable::create($year, $month, 1)->endOfMonth()->startOfDay());
 
         $branchId = $this->activeId(Branch::query(), $input['branch_id'] ?? null);
-        $projectId = $this->activeId(
+        // Historical expenses may reference an inactive project; keep that ID
+        // filterable and authorize it in ExpenseController::scopeFilters.
+        $projectId = $this->existingId(
             LeadMaster::query()
                 ->whereNotNull('branch_id')
                 ->when($branchId, fn (Builder $query) => $query->where('branch_id', $branchId)),
@@ -135,6 +137,7 @@ class ExpenseFilterService
     {
         return Expense::query()
             ->when(array_key_exists('scope_branch_ids', $filters), fn (Builder $query) => $query->whereIn('expenses.branch_id', $filters['scope_branch_ids']))
+            ->when(array_key_exists('scope_project_ids', $filters), fn (Builder $query) => $query->whereIn('expenses.project_id', $filters['scope_project_ids']))
             ->when($filters['branch_id'], fn (Builder $query, int $id) => $query->where('expenses.branch_id', $id))
             ->when($filters['project_id'], fn (Builder $query, int $id) => $query->where('expenses.project_id', $id))
             ->when($filters['expense_category_id'], fn (Builder $query, int $id) => $query->where('expenses.expense_category_id', $id))

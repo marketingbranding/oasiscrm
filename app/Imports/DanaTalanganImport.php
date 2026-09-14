@@ -4,14 +4,19 @@ namespace App\Imports;
 
 use App\Imports\Concerns\ParsesImport;
 use App\Models\DanaTalangan;
-use App\Models\LeadMaster;
+use App\Services\ProjectIdentityResolver;
 use Illuminate\Support\Facades\Auth;
 
 class DanaTalanganImport
 {
     use ParsesImport;
 
-    public static function import(string $filePath, ?int $branchId = null, ?array $preservedParams = [], array $allowedBranchIds = []): array
+    private const BOOL_ALIASES = [
+        'YA' => true, 'TIDAK' => false, 'TRUE' => true, 'FALSE' => false,
+        'YES' => true, 'NO' => false, '1' => true, '0' => false, '✓' => true,
+    ];
+
+    public static function import(string $filePath, ?int $branchId = null, ?array $preservedParams = [], array $allowedBranchIds = [], array $allowedProjectIds = []): array
     {
         $imported = 0;
         $errors = [];
@@ -63,12 +68,12 @@ class DanaTalanganImport
             $namaKonsumen = trim($cells[2 + $offset] ?? '');
             $kav = trim($cells[3 + $offset] ?? '');
             $projectName = trim($cells[4 + $offset] ?? '');
-            $pinjamNama = trim($cells[5 + $offset] ?? '');
+            $pinjamNamaRaw = trim($cells[5 + $offset] ?? '');
             $pekerjaan = trim($cells[6 + $offset] ?? '');
             $statusKawin = trim($cells[7 + $offset] ?? '');
             $umurRaw = trim($cells[8 + $offset] ?? '');
             $marketing = trim($cells[9 + $offset] ?? '');
-            $tglKomitmen = trim($cells[10 + $offset] ?? '');
+            $tglKomitmenRaw = trim($cells[10 + $offset] ?? '');
             $penyelesaian = trim($cells[11 + $offset] ?? '');
             $konfirmasiRaw = trim($cells[12 + $offset] ?? '');
             $statusRaw = trim($cells[13 + $offset] ?? '');
@@ -86,8 +91,51 @@ class DanaTalanganImport
                 continue;
             }
 
-            $umur = is_numeric($umurRaw) ? (int) $umurRaw : null;
-            $status = in_array(strtolower($statusRaw), ['lunas', 'sanggup', 'tidak_sanggup']) ? strtolower(str_replace(' ', '_', $statusRaw)) : 'sanggup';
+            $status = str_replace(' ', '_', strtolower($statusRaw));
+            if (! in_array($status, ['lunas', 'sanggup', 'tidak_sanggup'], true)) {
+                $errors[] = "Baris {$rowNum}: Status cicilan tidak valid ('{$statusRaw}').";
+
+                continue;
+            }
+
+            $umur = null;
+            if ($umurRaw !== '') {
+                if (! ctype_digit($umurRaw)) {
+                    $errors[] = "Baris {$rowNum}: Umur harus berupa angka ('{$umurRaw}').";
+
+                    continue;
+                }
+                $umur = (int) $umurRaw;
+                if ($umur < 0 || $umur > 150) {
+                    $errors[] = "Baris {$rowNum}: Umur harus antara 0 dan 150 ('{$umurRaw}').";
+
+                    continue;
+                }
+            }
+
+            $pinjamNama = self::strictBool($pinjamNamaRaw);
+            if ($pinjamNama === null) {
+                $errors[] = "Baris {$rowNum}: Pinjam Nama hanya boleh YA atau TIDAK ('{$pinjamNamaRaw}').";
+
+                continue;
+            }
+
+            $konfirmasiKeuangan = self::strictBool($konfirmasiRaw);
+            if ($konfirmasiKeuangan === null) {
+                $errors[] = "Baris {$rowNum}: Konfirmasi hanya boleh YA atau TIDAK ('{$konfirmasiRaw}').";
+
+                continue;
+            }
+
+            $tglKomitmen = null;
+            if ($tglKomitmenRaw !== '') {
+                $tglKomitmen = self::parseDate($tglKomitmenRaw);
+                if ($tglKomitmen === null) {
+                    $errors[] = "Baris {$rowNum}: TGL Komitmen tidak valid ('{$tglKomitmenRaw}').";
+
+                    continue;
+                }
+            }
 
             $resolvedBranchId = $hasCabang ? $branchFromFile : ($branchId ?? $user->branch_id);
             if (! $resolvedBranchId) {
@@ -101,37 +149,39 @@ class DanaTalanganImport
                 continue;
             }
 
-            $project = null;
-            if ($projectName !== '') {
-                $projects = LeadMaster::query()
-                    ->where('branch_id', $resolvedBranchId)
-                    ->where('is_active', true)
-                    ->get()
-                    ->filter(fn (LeadMaster $item) => $item->project_name === $projectName || $item->sheet_project_name === $projectName);
-                if ($projects->count() !== 1) {
-                    $errors[] = "Baris {$rowNum}: Proyek harus cocok tepat dengan satu proyek aktif pada cabang.";
+            if ($projectName === '') {
+                $errors[] = "Baris {$rowNum}: Proyek wajib diisi.";
 
-                    continue;
-                }
-                $project = $projects->first();
+                continue;
+            }
+            $project = app(ProjectIdentityResolver::class)->resolveExactOrNull($resolvedBranchId, $projectName);
+            if ($project === null) {
+                $errors[] = "Baris {$rowNum}: Proyek harus cocok tepat dengan satu proyek aktif pada cabang.";
+
+                continue;
+            }
+            if (! in_array((int) $project->id, $allowedProjectIds, true)) {
+                $errors[] = "Baris {$rowNum}: Proyek tidak termasuk cakupan pengelolaan Anda.";
+
+                continue;
             }
 
             $data = [
                 'branch_id' => $resolvedBranchId,
-                'project_id' => $project?->id,
+                'project_id' => $project->id,
                 'sync_status' => 'pending_create',
                 'tanggal' => $tanggal,
                 'nama_konsumen' => $namaKonsumen,
                 'kav' => $kav ?: null,
-                'project_name' => $project?->project_name ?? ($projectName ?: null),
-                'pinjam_nama' => self::parseBool((string) $pinjamNama),
+                'project_name' => $project->project_name,
+                'pinjam_nama' => $pinjamNama,
                 'pekerjaan' => $pekerjaan ?: null,
                 'status_perkawinan' => $statusKawin ?: null,
                 'umur' => $umur,
                 'nama_marketing' => $marketing ?: null,
-                'tgl_komitmen' => self::parseDate((string) $tglKomitmen) ?: null,
+                'tgl_komitmen' => $tglKomitmen,
                 'penyelesaian' => $penyelesaian ?: null,
-                'konfirmasi_keuangan' => self::parseBool((string) $konfirmasiRaw),
+                'konfirmasi_keuangan' => $konfirmasiKeuangan,
                 'status' => $status,
                 'created_by' => $user->id,
             ];
@@ -150,5 +200,15 @@ class DanaTalanganImport
             'imported' => $imported,
             'errors' => $errors,
         ];
+    }
+
+    private static function strictBool(string $raw): ?bool
+    {
+        $normalized = strtoupper(trim($raw));
+        if ($normalized === '') {
+            return false;
+        }
+
+        return self::BOOL_ALIASES[$normalized] ?? null;
     }
 }

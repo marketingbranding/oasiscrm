@@ -4,13 +4,14 @@ namespace App\Imports;
 
 use App\Imports\Concerns\ParsesImport;
 use App\Models\ContentItem;
+use App\Services\ProjectIdentityResolver;
 use Illuminate\Support\Facades\Auth;
 
 class ContentItemImport
 {
     use ParsesImport;
 
-    public static function import(string $filePath, ?int $branchId = null, ?array $preservedParams = [], array $allowedBranchIds = []): array
+    public static function import(string $filePath, ?int $branchId = null, ?array $preservedParams = [], array $allowedBranchIds = [], array $allowedProjectIds = []): array
     {
         $imported = 0;
         $errors = [];
@@ -87,6 +88,26 @@ class ContentItemImport
                 $catatan = trim($cells[9 + $offset] ?? '');
             }
 
+            if (! in_array($type, ContentItem::TYPES, true)) {
+                $errors[] = "Baris {$rowNum}: Tipe item tidak valid ('{$type}').";
+
+                continue;
+            }
+            if (! in_array($visibility, ['personal', 'team'], true)) {
+                $errors[] = "Baris {$rowNum}: Visibilitas tidak valid ('{$visibility}').";
+
+                continue;
+            }
+            if (! in_array($priorityRaw, ['low', 'medium', 'high', 'urgent'], true)) {
+                $errors[] = "Baris {$rowNum}: Prioritas tidak valid ('{$priorityRaw}').";
+
+                continue;
+            }
+            if (! in_array($statusRaw, ContentItem::STATUSES[$type], true)) {
+                $errors[] = "Baris {$rowNum}: Status tidak valid untuk tipe {$type} ('{$statusRaw}').";
+
+                continue;
+            }
             if (empty($judul)) {
                 $errors[] = "Baris {$rowNum}: Judul kosong.";
 
@@ -101,10 +122,65 @@ class ContentItemImport
                 continue;
             }
 
-            $type = in_array($type, ContentItem::TYPES, true) ? $type : 'task';
-            $visibility = in_array($visibility, ['personal', 'team'], true) ? $visibility : 'team';
-            $priority = in_array($priorityRaw, ['low', 'medium', 'high', 'urgent'], true) ? $priorityRaw : 'medium';
-            $status = in_array($statusRaw, ContentItem::STATUSES[$type], true) ? $statusRaw : ContentItem::STATUSES[$type][0];
+            if ($type === 'agenda') {
+                if ($agendaType === '') {
+                    $errors[] = "Baris {$rowNum}: Jenis Agenda wajib diisi untuk agenda.";
+
+                    continue;
+                }
+                if (mb_strlen($agendaType) > 50) {
+                    $errors[] = "Baris {$rowNum}: Jenis Agenda maksimal 50 karakter.";
+
+                    continue;
+                }
+                if ($startTime === '') {
+                    $errors[] = "Baris {$rowNum}: Jam Mulai wajib diisi untuk agenda.";
+
+                    continue;
+                }
+            }
+            if ($type === 'content') {
+                if ($platform === '') {
+                    $errors[] = "Baris {$rowNum}: Platform wajib diisi untuk konten.";
+
+                    continue;
+                }
+                if (! in_array($contentFormat, ['Video', 'Gambar', 'Video Karosel', 'Karosel', 'Artikel'], true)) {
+                    $errors[] = "Baris {$rowNum}: Format Konten wajib dan harus valid untuk konten ('{$contentFormat}').";
+
+                    continue;
+                }
+                if (! in_array($tujuanKonten, ['Edukasi', 'Entertainment', 'Inspirasi'], true)) {
+                    $errors[] = "Baris {$rowNum}: Tujuan Konten wajib dan harus valid untuk konten ('{$tujuanKonten}').";
+
+                    continue;
+                }
+            }
+            if (in_array($type, ['agenda', 'content'], true) && $startDate === null) {
+                $errors[] = "Baris {$rowNum}: Tanggal mulai wajib diisi untuk {$type}.";
+
+                continue;
+            }
+            if ($platform !== '' && ! in_array($platform, ['Sosial Media', 'Website'], true)) {
+                $errors[] = "Baris {$rowNum}: Platform tidak valid ('{$platform}').";
+
+                continue;
+            }
+            foreach (['Jam Mulai' => $startTime, 'Jam Selesai' => $endTime] as $timeLabel => $timeValue) {
+                if ($timeValue !== '' && ! preg_match('/^(?:[01]\d|2[0-3]):[0-5]\d$/', $timeValue)) {
+                    $errors[] = "Baris {$rowNum}: {$timeLabel} harus berformat HH:MM ('{$timeValue}').";
+
+                    continue 2;
+                }
+            }
+            if (mb_strlen($location) > 255) {
+                $errors[] = "Baris {$rowNum}: Lokasi maksimal 255 karakter.";
+
+                continue;
+            }
+
+            $priority = $priorityRaw;
+            $status = $statusRaw;
             $picNamesArray = $picNames !== '' ? array_map('trim', explode(',', $picNames)) : [];
 
             $resolvedBranchId = $hasCabang ? $branchFromFile : ($branchId ?? $user->branch_id);
@@ -119,11 +195,28 @@ class ContentItemImport
                 continue;
             }
 
+            $visibility = $type === 'content' ? 'team' : $visibility;
+
+            $project = null;
+            if ($type !== 'content' && $projectName !== '') {
+                $project = app(ProjectIdentityResolver::class)->resolveExactOrNull($resolvedBranchId, $projectName);
+                if ($project === null) {
+                    $errors[] = "Baris {$rowNum}: Proyek harus cocok tepat dengan satu proyek aktif pada cabang.";
+
+                    continue;
+                }
+                if (! in_array((int) $project->id, $allowedProjectIds, true)) {
+                    $errors[] = "Baris {$rowNum}: Proyek tidak termasuk cakupan pengelolaan Anda.";
+
+                    continue;
+                }
+            }
+
             $data = [
                 'branch_id' => $resolvedBranchId,
                 'item_type' => $type,
                 'visibility' => $visibility,
-                'project_name' => $type === 'content' ? null : ($projectName ?: null),
+                'project_name' => $type === 'content' ? null : ($project?->project_name ?? ($projectName ?: null)),
                 'title' => $judul,
                 'task_detail' => $type === 'content' ? null : ($detail ?: null),
                 'platform' => $platform ?: null,
@@ -131,7 +224,7 @@ class ContentItemImport
                 'start_time' => $type === 'content' ? null : ($startTime ?: null),
                 'deadline_date' => $type === 'content' ? null : $deadline,
                 'end_time' => $type === 'content' ? null : ($endTime ?: null),
-                'scheduled_date' => $type === 'content' ? null : ($type === 'agenda' ? ($startDate ?: $deadline) : $deadline),
+                'scheduled_date' => $type === 'task' ? ($deadline ?: null) : $startDate,
                 'agenda_type' => $type === 'content' ? null : ($agendaType ?: null),
                 'location' => $type === 'content' ? null : ($location ?: null),
                 'content_format' => $type === 'content' ? ($contentFormat ?: null) : null,

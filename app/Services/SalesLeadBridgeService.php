@@ -54,6 +54,7 @@ class SalesLeadBridgeService
         private readonly SalesSheetIdentityService $identities,
         private readonly SyncLockService $locks,
         private readonly PhoneNormalizationService $phones,
+        private readonly ProjectIdentityResolver $projects,
     ) {}
 
     public function push(SalesLead $lead, ?User $actor = null, string $operation = 'upsert'): array
@@ -672,11 +673,10 @@ class SalesLeadBridgeService
 
     private function project(Branch $branch, object $contract, string $value): array
     {
-        $options = $contract->validationOptions['proyek'] ?? [];
-        $exact = collect($options)->first(fn (string $option) => mb_strtolower(trim($option)) === mb_strtolower(trim($value)));
-        $projects = LeadMaster::where('branch_id', $branch->id)->where('is_active', true)->get()->filter(fn (LeadMaster $project) => $exact !== null && in_array($exact, [$project->sheet_project_name, $project->project_name], true));
+        $normalize = fn (string $identity) => mb_strtolower(preg_replace('/\s+/u', ' ', trim($identity)) ?? '');
+        $exact = collect($contract->validationOptions['proyek'] ?? [])->first(fn (string $option) => $normalize($option) === $normalize($value));
 
-        return $projects->count() === 1 ? [$projects->first(), null] : [null, $projects->isEmpty() ? 'project_not_found' : 'project_ambiguous'];
+        return $exact === null ? [null, 'project_not_found'] : $this->projects->resolveExactWithIssue($branch, $exact);
     }
 
     private function status(string $value): ?SalesLeadStatus

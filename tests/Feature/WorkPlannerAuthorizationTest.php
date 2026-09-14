@@ -5,14 +5,17 @@ namespace Tests\Feature;
 use App\Models\Branch;
 use App\Models\Changelog;
 use App\Models\ContentItem;
+use App\Models\LeadMaster;
 use App\Models\Permission;
 use App\Models\Role;
 use App\Models\User;
+use App\Services\OptimisticLockService;
 use App\Services\OrganizationScopeService;
 use App\Services\WorkspaceAccessService;
 use App\Support\PermissionCatalog;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
+use PhpOffice\PhpSpreadsheet\IOFactory;
 use Tests\TestCase;
 
 class WorkPlannerAuthorizationTest extends TestCase
@@ -190,6 +193,92 @@ class WorkPlannerAuthorizationTest extends TestCase
 
         $this->actingAs($pusat)->post(route('content-calendar.store'), $this->taskPayload($primary, ['branch_id' => 999999]))
             ->assertSessionHasErrors('branch_id');
+    }
+
+    public function test_assigned_scope_blocks_same_branch_other_project_planner_items_everywhere(): void
+    {
+        $branch = $this->branch('Assigned Planner Branch', 'APL');
+        $assignedProject = LeadMaster::create(['branch_id' => $branch->id, 'project_name' => 'Assigned Planner Project', 'is_active' => true]);
+        $otherProject = LeadMaster::create(['branch_id' => $branch->id, 'project_name' => 'Other Planner Project', 'is_active' => true]);
+        $user = $this->user('supervisor', $branch);
+        $creator = $this->user('staff', $branch);
+        DB::table('project_user')->insert([
+            'user_id' => $user->id, 'project_id' => $assignedProject->id, 'is_primary' => true,
+            'is_active' => true, 'created_at' => now(), 'updated_at' => now(),
+        ]);
+        $allowed = $this->item($branch, $creator);
+        $allowed->update(['title' => 'Planner Assigned Visible', 'item_type' => 'agenda', 'status' => 'planned', 'sales_project_id' => $assignedProject->id]);
+        $blocked = $this->item($branch, $creator);
+        $blocked->update(['title' => 'Planner Other Hidden', 'item_type' => 'agenda', 'status' => 'planned', 'sales_project_id' => $otherProject->id]);
+        $freeText = $this->item($branch, $creator);
+        $freeText->update(['title' => 'Planner Free Text Hidden', 'project_name' => $otherProject->project_name]);
+        $own = $this->item($branch, $user);
+        $own->update(['title' => 'Planner Own Visible', 'project_name' => $otherProject->project_name]);
+
+        $this->actingAs($user)->getJson(route('content-calendar.detail', $blocked))->assertForbidden();
+        $response = $this->actingAs($user)->get(route('content-calendar.export'))->assertOk();
+        $sheet = IOFactory::load($response->baseResponse->getFile()->getPathname())->getActiveSheet();
+        $titles = array_column($sheet->rangeToArray('C2:C'.$sheet->getHighestRow()), 0);
+        $this->assertContains($allowed->title, $titles);
+        $this->assertContains($own->title, $titles);
+        $this->assertNotContains($blocked->title, $titles);
+        $this->actingAs($user)->put(route('content-calendar.update', $blocked), $this->taskPayload($branch, [
+            'title' => 'Blocked update',
+            'expected_updated_at' => app(OptimisticLockService::class)->token($blocked),
+        ]))->assertForbidden();
+    }
+
+    public function test_coordinator_and_manager_update_reachable_team_items_without_manage_scopes(): void
+    {
+        $branch = $this->branch('Tim Planner', 'TPL');
+        $foreignBranch = $this->branch('Cabang Asing Planner', 'CAP');
+        $creator = $this->user('staff', $branch);
+        $manager = $this->user('manager', $branch);
+        $coordinator = $this->user('sales_coordinator', $branch);
+        $item = $this->item($branch, $creator);
+
+        $this->assertFalse($manager->hasPermission('work_planner.manage_all'));
+        $this->assertFalse($manager->hasPermission('work_planner.manage_team'));
+        $this->assertFalse($coordinator->hasPermission('work_planner.manage_team'));
+
+        foreach ([$manager, $coordinator] as $actor) {
+            $this->actingAs($actor)->put(route('content-calendar.update', $item), $this->taskPayload($branch, [
+                'title' => "Diperbarui aktor {$actor->id}",
+                'expected_updated_at' => app(OptimisticLockService::class)->token($item->fresh()),
+            ]))->assertRedirect();
+            $this->assertDatabaseHas('content_items', ['title' => "Diperbarui aktor {$actor->id}"]);
+        }
+
+        $foreignItem = $this->item($foreignBranch, $this->user('staff', $foreignBranch));
+        $this->actingAs($manager)->put(route('content-calendar.update', $foreignItem), $this->taskPayload($foreignBranch, [
+            'title' => 'Diperbarui cabang asing',
+            'expected_updated_at' => app(OptimisticLockService::class)->token($foreignItem),
+        ]))->assertForbidden();
+        $this->assertDatabaseMissing('content_items', ['title' => 'Diperbarui cabang asing']);
+    }
+
+    public function test_project_scoped_user_cannot_submit_unassigned_planner_project_but_keeps_historical_value(): void
+    {
+        $branch = $this->branch('Proyek Planner', 'PRP');
+        $assignedProject = LeadMaster::create(['branch_id' => $branch->id, 'project_name' => 'Assigned Planner Proyek', 'is_active' => true]);
+        $otherProject = LeadMaster::create(['branch_id' => $branch->id, 'project_name' => 'Other Planner Proyek', 'is_active' => true]);
+        $user = $this->user('supervisor', $branch);
+        DB::table('project_user')->insert([
+            'user_id' => $user->id, 'project_id' => $assignedProject->id, 'is_primary' => true,
+            'is_active' => true, 'created_at' => now(), 'updated_at' => now(),
+        ]);
+        $item = $this->item($branch, $user);
+        $item->update(['project_name' => $otherProject->project_name]);
+
+        $this->actingAs($user)->post(route('content-calendar.store'), $this->taskPayload($branch, [
+            'project_name' => $otherProject->project_name,
+        ]))->assertSessionHasErrors('project_name');
+
+        $this->actingAs($user)->put(route('content-calendar.update', $item), $this->taskPayload($branch, [
+            'project_name' => $otherProject->project_name,
+            'expected_updated_at' => app(OptimisticLockService::class)->token($item),
+        ]))->assertRedirect();
+        $this->assertSame($otherProject->project_name, $item->fresh()->project_name);
     }
 
     public function test_corrective_migration_restores_only_required_pusat_work_planner_mappings(): void

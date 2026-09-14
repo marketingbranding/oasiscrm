@@ -52,6 +52,8 @@ class DanaTalanganController extends Controller
 
     protected string $importClass = DanaTalanganImport::class;
 
+    protected string $importScopeModule = 'bridge_fund';
+
     protected array $importPreservedParams = ['branch_id', 'project_name', 'status'];
 
     protected string $importErrorRoute = 'dana-talangan.import';
@@ -83,6 +85,7 @@ class DanaTalanganController extends Controller
     {
         $user = Auth::user();
         $allowedBranchIds = $this->organizationScope->branchIds($user, 'bridge_fund');
+        $allowedProjectIds = $this->organizationScope->projectIds($user, 'bridge_fund');
         $selectedBranchId = $request->filled('branch_id') ? $request->integer('branch_id') : null;
         abort_if($selectedBranchId && ! in_array($selectedBranchId, $allowedBranchIds, true), 403);
         $selectedProject = $request->get('project_name');
@@ -91,19 +94,21 @@ class DanaTalanganController extends Controller
 
         $branches = Branch::where('is_active', true)->whereIn('id', $allowedBranchIds)->orderBy('name')->get();
         $projects = LeadMaster::where('is_active', true)->whereIn('branch_id', $allowedBranchIds)
+            ->when($this->organizationScope->requiresProjectScope($user, 'bridge_fund'), fn ($query) => $query->whereIn('id', $allowedProjectIds))
             ->when($selectedBranchId, fn ($query) => $query->where('branch_id', $selectedBranchId))->orderBy('project_name')->get();
         $formProjects = LeadMaster::where('is_active', true)
             ->whereNotNull('branch_id')
             ->whereIn('branch_id', $allowedBranchIds)
+            ->when($this->organizationScope->requiresProjectScope($user, 'bridge_fund', 'manage'), fn ($query) => $query->whereIn('id', $this->organizationScope->projectIds($user, 'bridge_fund', 'manage')))
             ->orderBy('project_name')
             ->get(['id', 'project_name', 'branch_id']);
-        $syncedProjectNames = DanaTalangan::query()->whereIn('branch_id', $allowedBranchIds)
+        $syncedProjectNames = DanaTalangan::query()->visibleTo($user)
             ->when($selectedBranchId, fn ($query) => $query->where('branch_id', $selectedBranchId))
             ->whereNotNull('project_name')
             ->distinct()
             ->pluck('project_name');
         $projectOptions = $projects->pluck('project_name')->merge($syncedProjectNames)->filter()->unique()->sort()->values();
-        $query = DanaTalangan::with(['branch', 'creator'])->whereIn('branch_id', $allowedBranchIds)
+        $query = DanaTalangan::with(['branch', 'creator'])->visibleTo($user)
             ->withCount('comments')
             ->when($selectedBranchId, fn ($query) => $query->where('branch_id', $selectedBranchId));
 
@@ -119,7 +124,7 @@ class DanaTalanganController extends Controller
         $search = trim((string) $request->get('search'));
         $query->when($search !== '', fn ($q) => $q->whereRaw('LOWER(nama_konsumen) LIKE ?', ['%'.mb_strtolower($search).'%']));
 
-        $statusCounts = DanaTalangan::query()->whereIn('branch_id', $allowedBranchIds)
+        $statusCounts = DanaTalangan::query()->visibleTo($user)
             ->when($selectedBranchId, fn ($q) => $q->where('branch_id', $selectedBranchId))
             ->when($rangeStart, fn ($q) => $q->whereDate('tanggal', '>=', $rangeStart))
             ->when($rangeEnd, fn ($q) => $q->whereDate('tanggal', '<=', $rangeEnd))
@@ -138,7 +143,7 @@ class DanaTalanganController extends Controller
 
         $trackingSummary = collect();
         if ($search !== '') {
-            $trackingRecords = DanaTalangan::query()->whereIn('branch_id', $allowedBranchIds)
+            $trackingRecords = DanaTalangan::query()->visibleTo($user)
                 ->when($selectedBranchId, fn ($query) => $query->where('branch_id', $selectedBranchId))
                 ->whereRaw('LOWER(nama_konsumen) LIKE ?', ['%'.mb_strtolower($search).'%'])
                 ->orderBy('tanggal')
@@ -197,11 +202,14 @@ class DanaTalanganController extends Controller
 
         $projects = LeadMaster::where('is_active', true)
             ->whereIn('branch_id', $allowedBranchIds)
+            ->when($this->organizationScope->requiresProjectScope($user, 'bridge_fund', 'manage'), fn ($query) => $query->whereIn('id', $this->organizationScope->projectIds($user, 'bridge_fund', 'manage')))
             ->orderBy('project_name')->get();
 
         $accessibleBranchIds = $allowedBranchIds;
+        $projectIds = $this->organizationScope->projectIds($user, 'bridge_fund', 'manage');
         $kavlings = Kavling::with('project')
-            ->whereHas('project', fn ($query) => $query->whereIn('branch_id', $accessibleBranchIds))
+            ->whereHas('project', fn ($query) => $query->whereIn('branch_id', $accessibleBranchIds)
+                ->when($this->organizationScope->requiresProjectScope($user, 'bridge_fund', 'manage'), fn ($query) => $query->whereIn('id', $projectIds)))
             ->orderBy('kavling_code')->get();
 
         return view('crm.dana-talangan.create', compact('branches', 'projects', 'kavlings'));
@@ -212,14 +220,14 @@ class DanaTalanganController extends Controller
         $user = Auth::user();
         $data = $request->validated();
         $data['branch_id'] ??= $this->workspaceAccess->resolveRequestedBranch($user, null)?->id;
-        $project = $service->resolveProject($data['project_name'], (int) $data['branch_id']);
+        [$project, $projectIssue] = $service->resolveProjectWithIssue($data['project_name'], (int) $data['branch_id']);
         if ($project === null) {
-            return back()->withInput()->withErrors(['project_name' => 'Proyek tidak terdaftar tepat pada cabang yang dipilih.']);
+            return back()->withInput()->withErrors(['project_name' => $this->projectIssueMessage($projectIssue)]);
         }
         $data['project_id'] = $project->id;
         $data['project_name'] = $project->project_name;
         $branch = Branch::findOrFail($project->branch_id);
-        abort_unless(in_array((int) $branch->id, $this->organizationScope->branchIds($user, 'bridge_fund', 'manage'), true), 403);
+        abort_unless($this->organizationScope->allowsProjectRecord($user, 'bridge_fund', 'manage', (int) $branch->id, (int) $project->id), 403);
         abort_unless($this->workspaceAccess->canEditBranch($user, $branch), 403);
         if (! $optionService->isValidKavling($branch, $data['project_name'], $data['kav'] ?? null)) {
             return back()->withInput()->withErrors(['kav' => 'Kav tidak terdaftar pada Proyek yang dipilih.']);
@@ -236,19 +244,22 @@ class DanaTalanganController extends Controller
     public function edit(DanaTalangan $danaTalangan)
     {
         $user = Auth::user();
-        abort_unless(in_array((int) $danaTalangan->branch_id, $this->organizationScope->branchIds($user, 'bridge_fund', 'manage'), true), 403);
+        abort_unless($this->organizationScope->allowsProjectRecord($user, 'bridge_fund', 'manage', (int) $danaTalangan->branch_id, $danaTalangan->project_id ? (int) $danaTalangan->project_id : null), 403);
         abort_unless($this->workspaceAccess->canEditBranch($user, $danaTalangan->branch_id), 403);
 
         $allowedBranchIds = $this->organizationScope->branchIds($user, 'bridge_fund', 'manage');
         $branches = Branch::where('is_active', true)->whereIn('id', $allowedBranchIds)->orderBy('name')->get();
         $projects = LeadMaster::where('is_active', true)
             ->whereIn('branch_id', $allowedBranchIds)
+            ->when($this->organizationScope->requiresProjectScope($user, 'bridge_fund', 'manage'), fn ($query) => $query->whereIn('id', $this->organizationScope->projectIds($user, 'bridge_fund', 'manage')))
             ->orderBy('project_name')->get();
 
         $record = $danaTalangan;
         $accessibleBranchIds = $allowedBranchIds;
+        $projectIds = $this->organizationScope->projectIds($user, 'bridge_fund', 'manage');
         $kavlings = Kavling::with('project')
-            ->whereHas('project', fn ($query) => $query->whereIn('branch_id', $accessibleBranchIds))
+            ->whereHas('project', fn ($query) => $query->whereIn('branch_id', $accessibleBranchIds)
+                ->when($this->organizationScope->requiresProjectScope($user, 'bridge_fund', 'manage'), fn ($query) => $query->whereIn('id', $projectIds)))
             ->orderBy('kavling_code')->get();
 
         return view('crm.dana-talangan.edit', compact('record', 'branches', 'projects', 'kavlings'));
@@ -257,7 +268,7 @@ class DanaTalanganController extends Controller
     public function update(UpdateDanaTalanganRequest $request, DanaTalangan $danaTalangan, DanaTalanganService $service, DanaTalanganOptionService $optionService)
     {
         $user = Auth::user();
-        abort_unless(in_array((int) $danaTalangan->branch_id, $this->organizationScope->branchIds($user, 'bridge_fund', 'manage'), true), 403);
+        abort_unless($this->organizationScope->allowsProjectRecord($user, 'bridge_fund', 'manage', (int) $danaTalangan->branch_id, $danaTalangan->project_id ? (int) $danaTalangan->project_id : null), 403);
         $data = $request->validated();
         if (! $this->optimisticLock->matches($danaTalangan, $data['expected_updated_at'] ?? null)) {
             return $this->optimisticLock->conflict($request, $danaTalangan, $data['expected_updated_at'] ?? null);
@@ -265,15 +276,15 @@ class DanaTalanganController extends Controller
         unset($data['expected_updated_at']);
         $data['branch_id'] ??= $danaTalangan->branch_id;
 
-        $project = $service->resolveProject($data['project_name'], (int) $data['branch_id']);
+        [$project, $projectIssue] = $service->resolveProjectWithIssue($data['project_name'], (int) $data['branch_id']);
         if ($project === null) {
-            return back()->withInput()->withErrors(['project_name' => 'Proyek tidak terdaftar tepat pada cabang yang dipilih.']);
+            return back()->withInput()->withErrors(['project_name' => $this->projectIssueMessage($projectIssue)]);
         }
         $data['branch_id'] = $project->branch_id;
         $data['project_id'] = $project->id;
         $data['project_name'] = $project->project_name;
         $branch = Branch::findOrFail($project->branch_id);
-        abort_unless(in_array((int) $branch->id, $this->organizationScope->branchIds($user, 'bridge_fund', 'manage'), true), 403);
+        abort_unless($this->organizationScope->allowsProjectRecord($user, 'bridge_fund', 'manage', (int) $branch->id, (int) $project->id), 403);
         abort_unless($this->workspaceAccess->canEditBranch($user, $branch), 403);
         $kavChanged = $this->normalizeKav($data['kav'] ?? null) !== $this->normalizeKav($danaTalangan->kav);
         if ($kavChanged && ! $optionService->isValidKavling($branch, $data['project_name'], $data['kav'] ?? null)) {
@@ -317,7 +328,7 @@ class DanaTalanganController extends Controller
         $allowedBranchIds = $this->organizationScope->branchIds($user, 'bridge_fund', 'export');
         $selectedBranchId = $request->integer('branch_id') ?: null;
         abort_if($selectedBranchId && ! in_array($selectedBranchId, $allowedBranchIds, true), 403);
-        $query = DanaTalangan::with(['branch', 'creator'])->whereIn('branch_id', $allowedBranchIds)
+        $query = DanaTalangan::with(['branch', 'creator'])->visibleTo($user, 'export')
             ->when($selectedBranchId, fn ($query) => $query->where('branch_id', $selectedBranchId));
 
         $query->when($request->get('project_name'), fn ($q, $v) => $q->where('project_name', $v));
@@ -344,8 +355,7 @@ class DanaTalanganController extends Controller
     public function detail(DanaTalangan $danaTalangan)
     {
         $user = Auth::user();
-        abort_unless(in_array((int) $danaTalangan->branch_id, $this->organizationScope->branchIds($user, 'bridge_fund'), true), 403);
-        abort_unless($this->workspaceAccess->canViewBranch($user, $danaTalangan->branch_id), 403);
+        abort_unless($this->organizationScope->allowsProjectRecord($user, 'bridge_fund', 'view', (int) $danaTalangan->branch_id, $danaTalangan->project_id ? (int) $danaTalangan->project_id : null), 403);
 
         $danaTalangan->load('creator')->loadCount('comments');
 
@@ -355,7 +365,7 @@ class DanaTalanganController extends Controller
     public function destroy(DanaTalangan $danaTalangan, DanaTalanganService $service)
     {
         $user = Auth::user();
-        abort_unless(in_array((int) $danaTalangan->branch_id, $this->organizationScope->branchIds($user, 'bridge_fund', 'manage'), true), 403);
+        abort_unless($this->organizationScope->allowsProjectRecord($user, 'bridge_fund', 'manage', (int) $danaTalangan->branch_id, $danaTalangan->project_id ? (int) $danaTalangan->project_id : null), 403);
         abort_unless($this->workspaceAccess->canEditBranch($user, $danaTalangan->branch_id), 403);
 
         try {
@@ -436,9 +446,11 @@ class DanaTalanganController extends Controller
         $branch = Branch::where('is_active', true)->findOrFail($validated['branch_id']);
         abort_unless(in_array((int) $branch->id, $this->organizationScope->branchIds($user, 'bridge_fund'), true), 403);
         abort_unless($this->workspaceAccess->canViewBranch($user, $branch), 403);
-        if ($service->resolveProject($validated['project_name'], $branch->id) === null) {
-            abort(422, 'Proyek tidak terdaftar tepat pada cabang yang dipilih.');
+        [$project, $projectIssue] = $service->resolveProjectWithIssue($validated['project_name'], $branch->id);
+        if ($project === null) {
+            abort(422, $this->projectIssueMessage($projectIssue));
         }
+        abort_unless($this->organizationScope->allowsProjectRecord($user, 'bridge_fund', 'view', (int) $branch->id, (int) $project->id), 403);
 
         return response()->json([
             'options' => $optionService->kavlings($branch, $validated['project_name']),
@@ -485,7 +497,7 @@ class DanaTalanganController extends Controller
     public function retry(DanaTalangan $danaTalangan, DanaTalanganService $service)
     {
         $user = Auth::user();
-        abort_unless(in_array((int) $danaTalangan->branch_id, $this->organizationScope->branchIds($user, 'bridge_fund', 'manage'), true), 403);
+        abort_unless($this->organizationScope->allowsProjectRecord($user, 'bridge_fund', 'manage', (int) $danaTalangan->branch_id, $danaTalangan->project_id ? (int) $danaTalangan->project_id : null), 403);
         abort_unless($this->workspaceAccess->canEditBranch($user, $danaTalangan->branch_id), 403);
         $result = $service->retry($danaTalangan, $user);
 
@@ -523,10 +535,9 @@ class DanaTalanganController extends Controller
         }
 
         $ids = array_values(array_unique(array_map('intval', $ids)));
-        $records = DanaTalangan::whereIn('id', $ids)->get();
+        $records = DanaTalangan::visibleTo(Auth::user(), 'manage')->whereIn('id', $ids)->get();
         abort_unless($records->count() === count($ids), 403);
         foreach ($records as $record) {
-            abort_unless(in_array((int) $record->branch_id, $this->organizationScope->branchIds(Auth::user(), 'bridge_fund', 'manage'), true), 403);
             abort_unless($this->workspaceAccess->canEditBranch(Auth::user(), (int) $record->branch_id), 403);
         }
 
@@ -567,5 +578,12 @@ class DanaTalanganController extends Controller
     private function normalizeKav(?string $value): string
     {
         return mb_strtolower(preg_replace('/[^a-z0-9]+/i', '', trim((string) $value)));
+    }
+
+    private function projectIssueMessage(?string $issue): string
+    {
+        return $issue === 'project_ambiguous'
+            ? 'Nama proyek cocok dengan lebih dari satu proyek pada cabang. Gunakan nama persis salah satu proyek.'
+            : 'Proyek tidak terdaftar tepat pada cabang yang dipilih.';
     }
 }

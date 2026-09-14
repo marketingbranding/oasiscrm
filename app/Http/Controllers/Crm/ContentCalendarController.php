@@ -16,7 +16,9 @@ use App\Models\LeadMaster;
 use App\Models\User;
 use App\Services\CollaborationNotificationService;
 use App\Services\OptimisticLockService;
+use App\Services\OrganizationScopeService;
 use App\Services\PresenceService;
+use App\Services\ProjectIdentityResolver;
 use App\Services\WorkspaceAccessService;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Builder;
@@ -40,6 +42,8 @@ class ContentCalendarController extends Controller
 
     protected string $importClass = ContentItemImport::class;
 
+    protected string $importScopeModule = 'work_planner';
+
     protected array $importPreservedParams = ['view', 'branch_id', 'project_name', 'item_type', 'status', 'priority', 'pic'];
 
     protected string $importErrorRoute = 'content-calendar.import';
@@ -48,6 +52,7 @@ class ContentCalendarController extends Controller
 
     public function __construct(
         private readonly WorkspaceAccessService $workspaceAccess,
+        private readonly OrganizationScopeService $organizationScope,
         private readonly OptimisticLockService $optimisticLock,
         private readonly CollaborationNotificationService $notifications,
         private readonly PresenceService $presence,
@@ -89,7 +94,8 @@ class ContentCalendarController extends Controller
         $projects = $this->resolveBranchProjects($selectedBranchId);
         $filterProjects = LeadMaster::where('is_active', true)
             ->whereNotNull('branch_id')
-            ->whereIn('branch_id', $this->workspaceAccess->accessibleBranchIds($user))
+            ->whereIn('branch_id', $this->organizationScope->branchIds($user, 'work_planner'))
+            ->when($this->organizationScope->requiresProjectScope($user, 'work_planner'), fn ($query) => $query->whereIn('id', $this->organizationScope->projectIds($user, 'work_planner')))
             ->orderBy('project_name')
             ->get(['project_name', 'branch_id']);
         if ($selectedProject && ! $filterProjects->contains('project_name', $selectedProject)) {
@@ -197,6 +203,7 @@ class ContentCalendarController extends Controller
             throw ValidationException::withMessages(['branch_id' => 'Cabang yang dipilih tidak dapat diedit oleh akun ini.']);
         }
         $data['branch_id'] = $branch->id;
+        $this->validateProjectScope($user, $data['project_name'] ?? null, (int) $data['branch_id'], null);
         $this->validateAssignees($assigneeIds, (int) $data['branch_id']);
         $data = $this->normalizePlannerData($data);
         $data['created_by'] = $user->id;
@@ -237,6 +244,7 @@ class ContentCalendarController extends Controller
             throw ValidationException::withMessages(['branch_id' => 'Cabang yang dipilih tidak dapat diedit oleh akun ini.']);
         }
         $data['branch_id'] = $branch->id;
+        $this->validateProjectScope(Auth::user(), $data['project_name'] ?? null, (int) $data['branch_id'], $contentItem);
         $this->validateAssignees($assigneeIds, (int) $data['branch_id']);
         $data['updated_by'] = Auth::id();
         $result = $this->optimisticLock->execute($request, $contentItem, $expected, function (ContentItem $current) use ($data, $assigneeIds) {
@@ -261,7 +269,7 @@ class ContentCalendarController extends Controller
     public function export(Request $request)
     {
         abort_unless($request->user()->hasPermission('work_planner.export'), 403);
-        $query = ContentItem::with(['branch', 'creator', 'assignees'])->visibleTo(Auth::user());
+        $query = ContentItem::with(['branch', 'creator', 'assignees'])->visibleTo(Auth::user(), 'export');
         if ($request->filled('branch_id')) {
             $branch = $this->workspaceAccess->resolveRequestedBranch(Auth::user(), $request->branch_id);
             abort_unless($branch, 403);
@@ -381,7 +389,11 @@ class ContentCalendarController extends Controller
         $accessibleBranchIds = $branches->pluck('id')->map(fn ($id) => (int) $id)->all();
         $projects = LeadMaster::where('is_active', true)
             ->whereIn('branch_id', $accessibleBranchIds)
+            ->when($this->organizationScope->requiresProjectScope($user, 'work_planner', 'manage'), fn ($query) => $query->whereIn('id', $this->organizationScope->projectIds($user, 'work_planner', 'manage')))
             ->orderBy('project_name')->get();
+        if ($item && filled($item->project_name) && ! $projects->contains('project_name', $item->project_name)) {
+            $projects->push((object) ['project_name' => $item->project_name, 'branch_id' => $item->branch_id]);
+        }
         $users = User::where('is_active', true)
             ->where(function ($query) use ($accessibleBranchIds) {
                 $query->whereIn('branch_id', $accessibleBranchIds)
@@ -461,6 +473,20 @@ class ContentCalendarController extends Controller
             })->count();
         if ($validCount !== count(array_unique($ids))) {
             throw ValidationException::withMessages(['assigned_user_ids' => 'PIC akun harus aktif dan berasal dari cabang item.']);
+        }
+    }
+
+    private function validateProjectScope(User $user, ?string $projectName, int $branchId, ?ContentItem $existing): void
+    {
+        if (blank($projectName) || $existing?->project_name === $projectName) {
+            return;
+        }
+        if (! $this->organizationScope->requiresProjectScope($user, 'work_planner', 'manage')) {
+            return;
+        }
+        $project = app(ProjectIdentityResolver::class)->resolveExactOrNull($branchId, $projectName);
+        if ($project === null || ! in_array($project->id, $this->organizationScope->projectIds($user, 'work_planner', 'manage'), true)) {
+            throw ValidationException::withMessages(['project_name' => 'Proyek tidak termasuk lingkup proyek yang dapat Anda kelola.']);
         }
     }
 

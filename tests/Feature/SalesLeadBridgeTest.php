@@ -12,6 +12,7 @@ use App\Models\SalesLeadLifecycleReconciliationItem;
 use App\Models\User;
 use App\Services\GoogleSheetsApiService;
 use App\Services\PhoneNormalizationService;
+use App\Services\ProjectIdentityResolver;
 use App\Services\SalesLeadBridgeModeService;
 use App\Services\SalesLeadBridgeService;
 use App\Services\SalesLeadLifecycleService;
@@ -389,7 +390,7 @@ class SalesLeadBridgeTest extends TestCase
             $identities->shouldReceive('reverseSales')->andReturn([$sales, null]);
         }
 
-        return new SalesLeadBridgeService(app(SalesLeadBridgeModeService::class), $google, $contracts, $writer, $identities, app(SyncLockService::class), new PhoneNormalizationService);
+        return new SalesLeadBridgeService(app(SalesLeadBridgeModeService::class), $google, $contracts, $writer, $identities, app(SyncLockService::class), new PhoneNormalizationService, app(ProjectIdentityResolver::class));
     }
 
     private function pullBridge(Branch $branch, LeadMaster $project, User $sales, array $rows): SalesLeadBridgeService

@@ -11,6 +11,7 @@ use App\Services\PromoOptionService;
 use App\Services\WorkspaceAccessService;
 use App\Support\SalesLeadMasterData;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Http\Exceptions\HttpResponseException;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Validator;
 
@@ -58,9 +59,24 @@ abstract class SalesLeadRequest extends FormRequest
             $data['sales_user_id'] = $this->user()->id;
             $data['branch_id'] = $this->user()->branch_id;
         }
+        if (! $this->lead() && ! $this->exists('current_status')) {
+            $data['current_status'] = SalesLeadStatus::NoResponse->value;
+        }
         if ($data !== []) {
             $this->merge($data);
         }
+    }
+
+    protected function failedValidation(\Illuminate\Contracts\Validation\Validator $validator): void
+    {
+        if (! $this->expectsJson()) {
+            parent::failedValidation($validator);
+        }
+
+        throw new HttpResponseException(response()->json([
+            'message' => $validator->errors()->first(),
+            'errors' => $validator->errors(),
+        ], 422));
     }
 
     public function messages(): array

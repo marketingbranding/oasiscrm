@@ -10,6 +10,8 @@ use Illuminate\Support\Str;
 
 final class ConsumerIdentityBridgeAuditService
 {
+    public function __construct(private readonly ProjectIdentityResolver $projects) {}
+
     public function audit(Branch $branch, LeadMaster $project): array
     {
         $legacy = $this->legacy($branch, $project);
@@ -23,7 +25,7 @@ final class ConsumerIdentityBridgeAuditService
 
     private function legacy(Branch $branch, LeadMaster $project): array
     {
-        $projectKavlings = $project->kavlings()->pluck('kavling_code')->map(fn ($value) => $this->key($value))->all();
+        $projectKavlings = $project->kavlings()->get(['kavling_code', 'name'])->flatMap(fn ($kavling) => [$this->key($kavling->kavling_code), $this->key($kavling->name)])->filter()->unique()->all();
         $records = [];
         $status = [];
         $phones = [];
@@ -32,13 +34,31 @@ final class ConsumerIdentityBridgeAuditService
         $fields = ['external_id', 'external_key', 'id_konsumen', 'id_customer', 'id_lead'];
         $counts = array_fill_keys($fields, 0) + ['phone' => 0, 'kavling' => 0, 'status' => 0, 'nik' => 0];
 
+        $identityIssues = ['project_ambiguous' => ['count' => 0, 'rows' => []], 'project_not_found' => ['count' => 0, 'rows' => []]];
         foreach (KonsumenProgressSheetRow::where('branch_id', $branch->id)->where('sheet_name', 'data_konsumen')->get(['row_data']) as $row) {
             $data = $this->normalized($row->row_data ?? []);
-            if (($data['proyek'] ?? $data['project'] ?? '') !== '' && Str::lower($data['proyek'] ?? $data['project']) !== Str::lower($project->project_name)) {
+            $projectName = $data['project_name'] ?? $data['proyek'] ?? $data['project'] ?? '';
+            if ($projectName !== '') {
+                [$resolvedProject, $projectIssue] = $this->projects->resolveExactWithIssue($branch, $projectName);
+                if ($projectIssue !== null) {
+                    $identityIssues[$projectIssue]['count']++;
+                    $rows = &$identityIssues[$projectIssue]['rows'];
+                    if (count($rows) < 25) {
+                        $rows[] = ['kavling' => $this->value($data, ['id_kavling', 'kavling', 'kav']) ?: '—'];
+                    }
+                    unset($rows);
+
+                    continue;
+                }
+                if ($resolvedProject?->is($project) !== true) {
+                    continue;
+                }
+            }
+            $kavling = $this->value($data, ['id_kavling', 'id kavling', 'kavling', 'kav']);
+            if ($projectName === '' && ! in_array($kavling, $projectKavlings, true)) {
                 continue;
             }
             $phone = $this->phone($this->first($data, ['no_hp', 'phone', 'nomor hp']));
-            $kavling = $this->value($data, ['id_kavling', 'kavling', 'kav']);
             $sourceId = null;
             foreach ($fields as $field) {
                 if (($data[$field] ?? '') !== '') {
@@ -69,7 +89,7 @@ final class ConsumerIdentityBridgeAuditService
             $records[] = ['name' => $this->first($data, ['nama_konsumen', 'nama konsumen', 'nama']), 'phone' => $phone, 'kavling' => $this->key($kavling), 'external_id' => $sourceId, 'nik_hash' => $nik === '' ? null : $this->fingerprint($nik), 'consumer_status' => $this->first($data, ['status_konsumen']) ?: null];
         }
 
-        return ['total' => count($records), 'counts' => $counts, 'status_distribution' => $status, 'duplicates' => $this->duplicates($phones, $kavlings, $phoneKavlings), 'nik_fingerprint_available' => $counts['nik'] > 0, 'records' => $records];
+        return ['total' => count($records), 'identity_issues' => $identityIssues, 'counts' => $counts, 'status_distribution' => $status, 'duplicates' => $this->duplicates($phones, $kavlings, $phoneKavlings), 'nik_fingerprint_available' => $counts['nik'] > 0, 'records' => $records];
     }
 
     private function local(Branch $branch, LeadMaster $project): array

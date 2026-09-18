@@ -47,64 +47,68 @@ return new class extends Migration
             });
         }
 
-        Schema::create('consumer_migration_reconciliations', function (Blueprint $table): void {
-            $table->id();
-            $table->unsignedBigInteger('consumer_application_id');
-            $table->foreign('consumer_application_id', 'cmr_app_fk')->references('id')->on('consumer_applications')->cascadeOnDelete();
-            $table->unsignedBigInteger('branch_id');
-            $table->foreign('branch_id', 'cmr_branch_fk')->references('id')->on('branches')->restrictOnDelete();
-            $table->unsignedBigInteger('project_id');
-            $table->foreign('project_id', 'cmr_project_fk')->references('id')->on('lead_master')->restrictOnDelete();
-            $table->string('source_system', 50);
-            $table->string('source_transaction_id', 150);
-            $table->string('source_customer_ref', 150)->nullable();
-            $table->string('source_current_kavling', 255)->nullable();
-            $table->string('source_transaction_status', 100)->nullable();
-            $table->string('source_bank_status', 100)->nullable();
-            $table->string('source_kavling_status', 100)->nullable();
-            $table->string('source_stage_status', 100)->nullable();
-            $table->string('suggested_decision', 40)->nullable();
-            $table->string('decision', 40)->nullable();
-            $table->unsignedBigInteger('customer_id')->nullable();
-            $table->foreign('customer_id', 'cmr_customer_fk')->references('id')->on('customers')->nullOnDelete();
-            $table->unsignedBigInteger('target_kavling_id')->nullable();
-            $table->foreign('target_kavling_id', 'cmr_kavling_fk')->references('id')->on('kavlings')->nullOnDelete();
-            $table->string('reconciliation_status', 40)->default('PENDING');
-            $table->char('source_payload_hash', 64);
-            $table->unsignedBigInteger('resolved_by')->nullable();
-            $table->foreign('resolved_by', 'cmr_resolved_by_fk')->references('id')->on('users')->nullOnDelete();
-            $table->dateTime('resolved_at')->nullable();
-            $table->timestamps();
-            $table->unique(['source_system', 'branch_id', 'source_transaction_id'], 'consumer_migration_reconciliation_source_unique');
-            $table->unique('consumer_application_id', 'consumer_migration_reconciliation_application_unique');
-            $table->index(['reconciliation_status', 'branch_id'], 'consumer_migration_reconciliation_queue_index');
-        });
+        if (! Schema::hasTable('consumer_migration_reconciliations')) {
+            Schema::create('consumer_migration_reconciliations', function (Blueprint $table): void {
+                $table->id();
+                $table->unsignedBigInteger('consumer_application_id');
+                $table->foreign('consumer_application_id', 'cmr_app_fk')->references('id')->on('consumer_applications')->cascadeOnDelete();
+                $table->unsignedBigInteger('branch_id');
+                $table->foreign('branch_id', 'cmr_branch_fk')->references('id')->on('branches')->restrictOnDelete();
+                $table->unsignedBigInteger('project_id');
+                $table->foreign('project_id', 'cmr_project_fk')->references('id')->on('lead_master')->restrictOnDelete();
+                $table->string('source_system', 50);
+                $table->string('source_transaction_id', 150);
+                $table->string('source_customer_ref', 150)->nullable();
+                $table->string('source_current_kavling', 255)->nullable();
+                $table->string('source_transaction_status', 100)->nullable();
+                $table->string('source_bank_status', 100)->nullable();
+                $table->string('source_kavling_status', 100)->nullable();
+                $table->string('source_stage_status', 100)->nullable();
+                $table->string('suggested_decision', 40)->nullable();
+                $table->string('decision', 40)->nullable();
+                $table->unsignedBigInteger('customer_id')->nullable();
+                $table->foreign('customer_id', 'cmr_customer_fk')->references('id')->on('customers')->nullOnDelete();
+                $table->unsignedBigInteger('target_kavling_id')->nullable();
+                $table->foreign('target_kavling_id', 'cmr_kavling_fk')->references('id')->on('kavlings')->nullOnDelete();
+                $table->string('reconciliation_status', 40)->default('PENDING');
+                $table->char('source_payload_hash', 64);
+                $table->unsignedBigInteger('resolved_by')->nullable();
+                $table->foreign('resolved_by', 'cmr_resolved_by_fk')->references('id')->on('users')->nullOnDelete();
+                $table->dateTime('resolved_at')->nullable();
+                $table->timestamps();
+                $table->unique(['source_system', 'branch_id', 'source_transaction_id'], 'consumer_migration_reconciliation_source_unique');
+                $table->unique('consumer_application_id', 'consumer_migration_reconciliation_application_unique');
+                $table->index(['reconciliation_status', 'branch_id'], 'consumer_migration_reconciliation_queue_index');
+            });
+        }
 
-        Schema::create('marison_import_transactions', function (Blueprint $table): void {
-            $table->id();
-            $table->foreignId('batch_id')->constrained('marison_import_batches')->cascadeOnDelete();
-            $table->string('source_system', 50);
-            $table->string('branch_code', 20);
-            $table->string('source_transaction_id', 150);
-            $table->string('source_customer_ref', 150)->nullable();
-            $table->string('source_project_id', 100);
-            $table->unsignedBigInteger('project_mapping_id')->nullable();
-            $table->foreign('project_mapping_id', 'mit_mapping_fk')->references('id')->on('marison_project_mappings')->nullOnDelete();
-            $table->unsignedBigInteger('resolved_project_id')->nullable();
-            $table->foreign('resolved_project_id', 'mit_project_fk')->references('id')->on('lead_master')->restrictOnDelete();
-            $table->string('outcome', 40);
-            $table->char('payload_hash', 64);
-            $table->json('payload');
-            $table->json('errors')->nullable();
-            $table->unsignedBigInteger('consumer_application_id')->nullable();
-            $table->foreign('consumer_application_id', 'mit_app_fk')->references('id')->on('consumer_applications')->nullOnDelete();
-            $table->unsignedBigInteger('reconciliation_id')->nullable();
-            $table->foreign('reconciliation_id', 'mit_recon_fk')->references('id')->on('consumer_migration_reconciliations')->nullOnDelete();
-            $table->timestamps();
-            $table->unique(['batch_id', 'source_transaction_id'], 'marison_import_transaction_batch_source_unique');
-            $table->index(['source_system', 'branch_code', 'source_transaction_id'], 'marison_import_transaction_identity_index');
-            $table->index(['batch_id', 'outcome'], 'marison_import_transaction_outcome_index');
-        });
+        if (! Schema::hasTable('marison_import_transactions')) {
+            Schema::create('marison_import_transactions', function (Blueprint $table): void {
+                $table->id();
+                $table->foreignId('batch_id')->constrained('marison_import_batches')->cascadeOnDelete();
+                $table->string('source_system', 50);
+                $table->string('branch_code', 20);
+                $table->string('source_transaction_id', 150);
+                $table->string('source_customer_ref', 150)->nullable();
+                $table->string('source_project_id', 100);
+                $table->unsignedBigInteger('project_mapping_id')->nullable();
+                $table->foreign('project_mapping_id', 'mit_mapping_fk')->references('id')->on('marison_project_mappings')->nullOnDelete();
+                $table->unsignedBigInteger('resolved_project_id')->nullable();
+                $table->foreign('resolved_project_id', 'mit_project_fk')->references('id')->on('lead_master')->restrictOnDelete();
+                $table->string('outcome', 40);
+                $table->char('payload_hash', 64);
+                $table->json('payload');
+                $table->json('errors')->nullable();
+                $table->unsignedBigInteger('consumer_application_id')->nullable();
+                $table->foreign('consumer_application_id', 'mit_app_fk')->references('id')->on('consumer_applications')->nullOnDelete();
+                $table->unsignedBigInteger('reconciliation_id')->nullable();
+                $table->foreign('reconciliation_id', 'mit_recon_fk')->references('id')->on('consumer_migration_reconciliations')->nullOnDelete();
+                $table->timestamps();
+                $table->unique(['batch_id', 'source_transaction_id'], 'marison_import_transaction_batch_source_unique');
+                $table->index(['source_system', 'branch_code', 'source_transaction_id'], 'marison_import_transaction_identity_index');
+                $table->index(['batch_id', 'outcome'], 'marison_import_transaction_outcome_index');
+            });
+        }
 
         Schema::create('marison_unlinked_records', function (Blueprint $table): void {
             $table->id();

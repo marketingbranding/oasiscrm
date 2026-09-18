@@ -9,45 +9,52 @@ return new class extends Migration
 {
     public function up(): void
     {
-        Schema::create('marison_project_mappings', function (Blueprint $table): void {
-            $table->id();
-            $table->string('source_system', 50);
-            $table->string('branch_code', 20);
-            $table->string('source_project_id', 100);
-            $table->foreignId('oasis_project_id')->constrained('lead_master')->restrictOnDelete();
-            $table->timestamps();
-            $table->unique(['source_system', 'branch_code', 'source_project_id'], 'marison_project_mapping_source_unique');
-            $table->index('oasis_project_id', 'marison_project_mapping_project_index');
-        });
+        if (! Schema::hasTable('marison_project_mappings')) {
+            Schema::create('marison_project_mappings', function (Blueprint $table): void {
+                $table->id();
+                $table->string('source_system', 50);
+                $table->string('branch_code', 20);
+                $table->string('source_project_id', 100);
+                $table->foreignId('oasis_project_id')->constrained('lead_master')->restrictOnDelete();
+                $table->timestamps();
+                $table->unique(['source_system', 'branch_code', 'source_project_id'], 'marison_project_mapping_source_unique');
+                $table->index('oasis_project_id', 'marison_project_mapping_project_index');
+            });
+        }
 
-        Schema::create('marison_import_batches', function (Blueprint $table): void {
-            $table->id();
-            $table->uuid('public_id')->unique();
-            $table->foreignId('uploaded_by')->nullable()->constrained('users')->nullOnDelete();
-            $table->string('source_system', 50);
-            $table->string('source_branch_code', 20);
-            $table->string('source_spreadsheet_id', 255);
-            $table->string('source_version', 50)->nullable();
-            $table->dateTime('source_exported_at')->nullable();
-            $table->string('contract_version', 20);
-            $table->char('payload_hash', 64);
-            $table->char('preview_hash', 64)->nullable();
-            $table->unsignedInteger('preview_version')->default(1);
-            $table->string('status', 40)->default('uploaded');
-            $table->dateTime('expires_at')->nullable();
-            $table->dateTime('confirmed_at')->nullable();
-            $table->json('counts')->nullable();
-            $table->text('error_summary')->nullable();
-            $table->timestamps();
-            $table->index(['source_system', 'source_branch_code'], 'marison_batches_source_branch_index');
-            $table->index(['status', 'expires_at'], 'marison_batches_status_expiry_index');
-        });
+        if (! Schema::hasTable('marison_import_batches')) {
+            Schema::create('marison_import_batches', function (Blueprint $table): void {
+                $table->id();
+                $table->uuid('public_id')->unique();
+                $table->foreignId('uploaded_by')->nullable()->constrained('users')->nullOnDelete();
+                $table->string('source_system', 50);
+                $table->string('source_branch_code', 20);
+                $table->string('source_spreadsheet_id', 255);
+                $table->string('source_version', 50)->nullable();
+                $table->dateTime('source_exported_at')->nullable();
+                $table->string('contract_version', 20);
+                $table->char('payload_hash', 64);
+                $table->char('preview_hash', 64)->nullable();
+                $table->unsignedInteger('preview_version')->default(1);
+                $table->string('status', 40)->default('uploaded');
+                $table->dateTime('expires_at')->nullable();
+                $table->dateTime('confirmed_at')->nullable();
+                $table->json('counts')->nullable();
+                $table->text('error_summary')->nullable();
+                $table->timestamps();
+                $table->index(['source_system', 'source_branch_code'], 'marison_batches_source_branch_index');
+                $table->index(['status', 'expires_at'], 'marison_batches_status_expiry_index');
+            });
+        }
 
         Schema::create('consumer_migration_reconciliations', function (Blueprint $table): void {
             $table->id();
-            $table->foreignId('consumer_application_id')->constrained('consumer_applications')->cascadeOnDelete();
-            $table->foreignId('branch_id')->constrained('branches')->restrictOnDelete();
-            $table->foreignId('project_id')->constrained('lead_master')->restrictOnDelete();
+            $table->unsignedBigInteger('consumer_application_id');
+            $table->foreign('consumer_application_id', 'cmr_app_fk')->references('id')->on('consumer_applications')->cascadeOnDelete();
+            $table->unsignedBigInteger('branch_id');
+            $table->foreign('branch_id', 'cmr_branch_fk')->references('id')->on('branches')->restrictOnDelete();
+            $table->unsignedBigInteger('project_id');
+            $table->foreign('project_id', 'cmr_project_fk')->references('id')->on('lead_master')->restrictOnDelete();
             $table->string('source_system', 50);
             $table->string('source_transaction_id', 150);
             $table->string('source_customer_ref', 150)->nullable();
@@ -58,11 +65,14 @@ return new class extends Migration
             $table->string('source_stage_status', 100)->nullable();
             $table->string('suggested_decision', 40)->nullable();
             $table->string('decision', 40)->nullable();
-            $table->foreignId('customer_id')->nullable()->constrained('customers')->nullOnDelete();
-            $table->foreignId('target_kavling_id')->nullable()->constrained('kavlings')->nullOnDelete();
+            $table->unsignedBigInteger('customer_id')->nullable();
+            $table->foreign('customer_id', 'cmr_customer_fk')->references('id')->on('customers')->nullOnDelete();
+            $table->unsignedBigInteger('target_kavling_id')->nullable();
+            $table->foreign('target_kavling_id', 'cmr_kavling_fk')->references('id')->on('kavlings')->nullOnDelete();
             $table->string('reconciliation_status', 40)->default('PENDING');
             $table->char('source_payload_hash', 64);
-            $table->foreignId('resolved_by')->nullable()->constrained('users')->nullOnDelete();
+            $table->unsignedBigInteger('resolved_by')->nullable();
+            $table->foreign('resolved_by', 'cmr_resolved_by_fk')->references('id')->on('users')->nullOnDelete();
             $table->dateTime('resolved_at')->nullable();
             $table->timestamps();
             $table->unique(['source_system', 'branch_id', 'source_transaction_id'], 'consumer_migration_reconciliation_source_unique');
@@ -78,14 +88,18 @@ return new class extends Migration
             $table->string('source_transaction_id', 150);
             $table->string('source_customer_ref', 150)->nullable();
             $table->string('source_project_id', 100);
-            $table->foreignId('project_mapping_id')->nullable()->constrained('marison_project_mappings')->nullOnDelete();
-            $table->foreignId('resolved_project_id')->nullable()->constrained('lead_master')->restrictOnDelete();
+            $table->unsignedBigInteger('project_mapping_id')->nullable();
+            $table->foreign('project_mapping_id', 'mit_mapping_fk')->references('id')->on('marison_project_mappings')->nullOnDelete();
+            $table->unsignedBigInteger('resolved_project_id')->nullable();
+            $table->foreign('resolved_project_id', 'mit_project_fk')->references('id')->on('lead_master')->restrictOnDelete();
             $table->string('outcome', 40);
             $table->char('payload_hash', 64);
             $table->json('payload');
             $table->json('errors')->nullable();
-            $table->foreignId('consumer_application_id')->nullable()->constrained('consumer_applications')->nullOnDelete();
-            $table->foreignId('reconciliation_id')->nullable()->constrained('consumer_migration_reconciliations')->nullOnDelete();
+            $table->unsignedBigInteger('consumer_application_id')->nullable();
+            $table->foreign('consumer_application_id', 'mit_app_fk')->references('id')->on('consumer_applications')->nullOnDelete();
+            $table->unsignedBigInteger('reconciliation_id')->nullable();
+            $table->foreign('reconciliation_id', 'mit_recon_fk')->references('id')->on('consumer_migration_reconciliations')->nullOnDelete();
             $table->timestamps();
             $table->unique(['batch_id', 'source_transaction_id'], 'marison_import_transaction_batch_source_unique');
             $table->index(['source_system', 'branch_code', 'source_transaction_id'], 'marison_import_transaction_identity_index');
@@ -108,8 +122,10 @@ return new class extends Migration
 
         Schema::create('consumer_migration_source_records', function (Blueprint $table): void {
             $table->id();
-            $table->foreignId('import_transaction_id')->nullable()->constrained('marison_import_transactions')->nullOnDelete();
-            $table->foreignId('consumer_application_id')->nullable()->constrained('consumer_applications')->cascadeOnDelete();
+            $table->unsignedBigInteger('import_transaction_id')->nullable();
+            $table->foreign('import_transaction_id', 'cmsr_import_fk')->references('id')->on('marison_import_transactions')->nullOnDelete();
+            $table->unsignedBigInteger('consumer_application_id')->nullable();
+            $table->foreign('consumer_application_id', 'cmsr_app_fk')->references('id')->on('consumer_applications')->cascadeOnDelete();
             $table->string('source_system', 50);
             $table->string('branch_code', 20);
             $table->string('source_transaction_id', 150);

@@ -1,0 +1,293 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://internal.marison/schema/marison-v2-oasis-package-1.0.json",
+  "title": "Marison V2 to OASIS Migration Package",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "contract",
+    "contract_version",
+    "source",
+    "manifest",
+    "transactions",
+    "unlinked_records"
+  ],
+  "properties": {
+    "contract": {
+      "const": "marison-v2-to-oasis"
+    },
+    "contract_version": {
+      "const": "1.0"
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "branch_code",
+        "spreadsheet_id",
+        "v2_version",
+        "exported_at"
+      ],
+      "properties": {
+        "branch_code": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 20
+        },
+        "spreadsheet_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "v2_version": {
+          "type": "string",
+          "pattern": "^V?2\\.5\\.50$"
+        },
+        "exported_at": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    },
+    "manifest": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": [
+        "counts"
+      ],
+      "properties": {
+        "counts": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "payload_sha256": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^[a-fA-F0-9]{64}$"
+        }
+      }
+    },
+    "transactions": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/transaction"
+      }
+    },
+    "unlinked_records": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/unlinked"
+      }
+    }
+  },
+  "$defs": {
+    "transaction": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id_transaksi_v2",
+        "id_konsumen_v2",
+        "branch_code",
+        "project_source_id",
+        "current_kavling",
+        "payment",
+        "source_state",
+        "lineage",
+        "process",
+        "history"
+      ],
+      "properties": {
+        "id_transaksi_v2": {
+          "type": "string",
+          "minLength": 1
+        },
+        "id_konsumen_v2": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "branch_code": {
+          "type": "string",
+          "minLength": 1
+        },
+        "project_source_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "current_kavling": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "payment": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "method": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "detail": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          }
+        },
+        "source_state": {
+          "type": "object",
+          "additionalProperties": true
+        },
+        "lineage": {
+          "type": "object",
+          "additionalProperties": true
+        },
+        "process": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "bi_checking",
+            "psjb",
+            "pemberkasan",
+            "bank_attempts",
+            "proses_bank",
+            "ppjb_dev",
+            "akad",
+            "bast"
+          ],
+          "properties": {
+            "bi_checking": {
+              "type": "array",
+              "items": {
+                "type": "object"
+              }
+            },
+            "psjb": {
+              "type": "array",
+              "items": {
+                "type": "object"
+              }
+            },
+            "pemberkasan": {
+              "type": "array",
+              "items": {
+                "type": "object"
+              }
+            },
+            "bank_attempts": {
+              "type": "array",
+              "items": {
+                "type": "object"
+              }
+            },
+            "proses_bank": {
+              "type": "array",
+              "items": {
+                "type": "object"
+              }
+            },
+            "ppjb_dev": {
+              "type": "array",
+              "items": {
+                "type": "object"
+              }
+            },
+            "akad": {
+              "type": "array",
+              "items": {
+                "type": "object"
+              }
+            },
+            "bast": {
+              "type": "array",
+              "items": {
+                "type": "object"
+              }
+            }
+          }
+        },
+        "history": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "kavling",
+            "status"
+          ],
+          "properties": {
+            "kavling": {
+              "type": "array",
+              "items": {
+                "type": "object"
+              }
+            },
+            "status": {
+              "type": "array",
+              "items": {
+                "type": "object"
+              }
+            }
+          }
+        }
+      },
+      "not": {
+        "anyOf": [
+          {
+            "required": [
+              "nama_konsumen"
+            ]
+          },
+          {
+            "required": [
+              "no_ktp"
+            ]
+          },
+          {
+            "required": [
+              "nik"
+            ]
+          },
+          {
+            "required": [
+              "no_hp"
+            ]
+          }
+        ]
+      }
+    },
+    "unlinked": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": [
+        "source_sheet",
+        "reason",
+        "payload"
+      ],
+      "properties": {
+        "source_sheet": {
+          "type": "string"
+        },
+        "source_row": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "reason": {
+          "type": "string"
+        },
+        "payload": {
+          "type": "object"
+        }
+      }
+    }
+  }
+}

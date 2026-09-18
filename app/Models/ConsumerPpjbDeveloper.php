@@ -7,11 +7,11 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class ConsumerPpjbDeveloper extends Model
 {
-    protected $fillable = ['consumer_application_id', 'consumer_stage_event_id', 'tanggal_sp3k', 'tanggal_ttd_ppjb', 'notes'];
+    protected $fillable = ['consumer_application_id', 'consumer_stage_event_id', 'tanggal_sp3k', 'tanggal_ttd_ppjb', 'notes', 'source_system', 'source_branch_code', 'source_id', 'status', 'metadata'];
 
     protected function casts(): array
     {
-        return ['tanggal_sp3k' => 'date', 'tanggal_ttd_ppjb' => 'date'];
+        return ['tanggal_sp3k' => 'date', 'tanggal_ttd_ppjb' => 'date', 'metadata' => 'array'];
     }
 
     public function application(): BelongsTo

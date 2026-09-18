@@ -73,6 +73,9 @@ class NavigationService
                 ! $isSales && $user->hasPermission('users.view')
                     ? $this->item('User', 'admin-users.index', 'users', 'administration', ['admin-users.*'], $routeName, 'users', $moduleMaintenance)
                     : null,
+                ! $isSales && ($user->isSuperadmin() || $user->hasPermission('consumer_progress.manage'))
+                    ? $this->item('Migrasi Marison', $user->isSuperadmin() ? 'admin.marison-migrations.create' : 'admin.marison-migrations.reconciliation.index', 'database', 'administration', ['admin.marison-migrations.*'], $routeName, 'database', $moduleMaintenance)
+                    : null,
                 ! $isSales && $user->hasPermission('system_health.view')
                     ? $this->item('System Health', 'admin.system-health', 'health', 'administration', ['admin.system-health'], $routeName, null, $moduleMaintenance)
                     : null,

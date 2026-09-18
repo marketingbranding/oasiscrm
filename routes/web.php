@@ -11,6 +11,7 @@ use App\Http\Controllers\Crm\CommentModerationController;
 use App\Http\Controllers\Crm\CommentThreadController;
 use App\Http\Controllers\Crm\ConsumerComparisonController;
 use App\Http\Controllers\Crm\ConsumerHistoricalProcessImportController;
+use App\Http\Controllers\Crm\ConsumerMigrationReconciliationController;
 use App\Http\Controllers\Crm\ConsumerPasteImportController;
 use App\Http\Controllers\Crm\ContentCalendarController;
 use App\Http\Controllers\Crm\CoordinatorSalesLeadWorkspaceController;
@@ -25,6 +26,7 @@ use App\Http\Controllers\Crm\ImpersonationController;
 use App\Http\Controllers\Crm\KavlingController;
 use App\Http\Controllers\Crm\KonsumenProgressController;
 use App\Http\Controllers\Crm\LeadSourceController;
+use App\Http\Controllers\Crm\MarisonMigrationController;
 use App\Http\Controllers\Crm\ModuleMaintenanceController;
 use App\Http\Controllers\Crm\NotificationController;
 use App\Http\Controllers\Crm\OperationalMaintenanceController;
@@ -173,6 +175,21 @@ Route::middleware(['auth', 'active', 'verified', 'password.changed', 'operationa
         Route::delete('/database/records/{record}', [DatabaseController::class, 'destroy'])->middleware('permission:database.edit')->name('database.records.destroy');
         Route::post('/database/import/preview', [DatabaseController::class, 'importPreview'])->middleware('permission:database.edit')->name('database.import.preview');
         Route::post('/database/import', [DatabaseController::class, 'importSave'])->middleware('permission:database.edit')->name('database.import.save');
+    });
+
+    Route::prefix('admin/migrations/marison')->name('admin.marison-migrations.')->middleware(['module.maintenance:database', 'can:manageMarisonMigration'])->group(function () {
+        Route::get('/', [MarisonMigrationController::class, 'create'])->name('create');
+        Route::get('/history', [MarisonMigrationController::class, 'history'])->name('history');
+        Route::post('/mappings', [MarisonMigrationController::class, 'storeMapping'])->middleware('not.impersonating')->name('mappings.store');
+        Route::post('/preview', [MarisonMigrationController::class, 'preview'])->middleware('not.impersonating')->name('preview');
+        Route::get('/batches/{marisonImportBatch}', [MarisonMigrationController::class, 'show'])->name('batches.show');
+        Route::post('/batches/{marisonImportBatch}/confirm', [MarisonMigrationController::class, 'confirm'])->middleware('not.impersonating')->name('batches.confirm');
+    });
+
+    Route::prefix('admin/migrations/marison')->name('admin.marison-migrations.')->middleware(['module.maintenance:consumer_progress', 'permission:consumer_progress.manage'])->group(function () {
+        Route::get('/reconciliation', [ConsumerMigrationReconciliationController::class, 'index'])->name('reconciliation.index');
+        Route::get('/reconciliation/{reconciliation}', [ConsumerMigrationReconciliationController::class, 'show'])->name('reconciliation.show');
+        Route::post('/reconciliation/{reconciliation}', [ConsumerMigrationReconciliationController::class, 'resolve'])->middleware('not.impersonating')->name('reconciliation.resolve');
     });
 
     Route::middleware('module.maintenance:consumer_progress')->group(function () {

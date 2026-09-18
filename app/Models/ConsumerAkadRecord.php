@@ -7,7 +7,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class ConsumerAkadRecord extends Model
 {
-    protected $fillable = ['consumer_application_id', 'consumer_stage_event_id', 'tanggal_akad', 'kualitas_akad', 'status_bangunan', 'status_dp_konsumen', 'status_utilitas', 'status_konsumen', 'keterangan_terlambat'];
+    protected $fillable = ['consumer_application_id', 'consumer_stage_event_id', 'source_system', 'source_branch_code', 'tanggal_akad', 'kualitas_akad', 'status_bangunan', 'status_dp_konsumen', 'status_utilitas', 'status_konsumen', 'keterangan_terlambat', 'no_ppjb_akad'];
 
     protected function casts(): array
     {

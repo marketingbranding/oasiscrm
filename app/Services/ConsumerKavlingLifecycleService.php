@@ -25,6 +25,9 @@ final class ConsumerKavlingLifecycleService
         return DB::transaction(function () use ($application, $kavling): ConsumerKavlingAssignment {
             $application = ConsumerApplication::query()->lockForUpdate()->findOrFail($application->id);
             $kavling = Kavling::query()->lockForUpdate()->findOrFail($kavling->id);
+            if ((int) $kavling->project_id !== (int) $application->project_id) {
+                throw new DomainException('Kavling harus berada pada proyek aplikasi.');
+            }
             $current = $this->currentAssignment($application->kavling_id ? $application->kavling : null);
 
             if ($current !== null) {
@@ -66,6 +69,9 @@ final class ConsumerKavlingLifecycleService
         return DB::transaction(function () use ($application, $target): ConsumerKavlingAssignment {
             $application = ConsumerApplication::query()->lockForUpdate()->findOrFail($application->id);
             $target = Kavling::query()->lockForUpdate()->findOrFail($target->id);
+            if ((int) $target->project_id !== (int) $application->project_id) {
+                throw new DomainException('Kavling tujuan harus berada pada proyek aplikasi.');
+            }
             $old = $this->lockCurrentAssignment($application);
             $occupied = $this->currentAssignment($target);
             if ($occupied !== null && (int) $occupied->consumer_application_id !== (int) $application->id) {

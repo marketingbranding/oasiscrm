@@ -80,6 +80,21 @@ class ConsumerApplication extends Model
         return $this->belongsTo(SalesLead::class);
     }
 
+    public function marisonImportTransactions(): HasMany
+    {
+        return $this->hasMany(MarisonImportTransaction::class, 'consumer_application_id');
+    }
+
+    public function migrationReconciliation(): HasOne
+    {
+        return $this->hasOne(ConsumerMigrationReconciliation::class, 'consumer_application_id');
+    }
+
+    public function migrationSourceRecords(): HasMany
+    {
+        return $this->hasMany(ConsumerMigrationSourceRecord::class, 'consumer_application_id');
+    }
+
     public function legacyIdentity(): HasOne
     {
         return $this->hasOne(ConsumerLegacyIdentity::class, 'consumer_application_id');

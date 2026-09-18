@@ -7,7 +7,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class ConsumerBastRecord extends Model
 {
-    protected $fillable = ['consumer_application_id', 'consumer_stage_event_id', 'tanggal_bast'];
+    protected $fillable = ['consumer_application_id', 'consumer_stage_event_id', 'source_system', 'source_branch_code', 'tanggal_bast', 'no_bast', 'status', 'notes'];
 
     protected function casts(): array
     {

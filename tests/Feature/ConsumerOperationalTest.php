@@ -36,6 +36,75 @@ class ConsumerOperationalTest extends TestCase
         $this->assertDatabaseHas('consumer_stage_events', ['stage' => 'PSJB', 'source_id' => $psjb->id_psjb]);
     }
 
+    public function test_imported_bi_can_resume_with_psjb_without_duplicate_history(): void
+    {
+        [$application, , $actor] = $this->imported('bi_checking');
+        $service = app(ConsumerOperationalService::class);
+        $service->recordPsjb($application, ['tanggal_psjb' => '2026-09-01', 'cara_pembayaran' => 'KPR'], $actor);
+        $this->assertSame(1, $application->stageEvents()->where('stage', 'bi_checking')->count());
+        $this->assertSame(1, $application->stageEvents()->where('stage', 'PSJB')->where('source', 'manual')->count());
+    }
+
+    public function test_imported_psjb_can_resume_with_pemberkasan(): void
+    {
+        [$application, , $actor] = $this->imported('PSJB');
+        $service = app(ConsumerOperationalService::class);
+        $service->recordPemberkasan($application, ['tanggal_terima_bank' => '2026-09-02', 'bank_name' => 'BTN'], $actor);
+        $this->assertSame(1, $application->stageEvents()->where('stage', 'PSJB')->count());
+        $this->assertSame('pemberkasan', $application->fresh()->current_stage);
+    }
+
+    public function test_imported_pemberkasan_can_resume_with_proses_bank(): void
+    {
+        [$application, , $actor] = $this->imported('pemberkasan');
+        $service = app(ConsumerOperationalService::class);
+        $service->recordProsesBank($application, ['no_sp3k' => 'SP3K-NEXT', 'response_type' => 'approved'], $actor);
+        $this->assertSame(1, $application->stageEvents()->where('stage', 'pemberkasan')->count());
+        $this->assertSame('proses_bank', $application->fresh()->current_stage);
+    }
+
+    public function test_imported_multiple_bank_attempts_can_resume_with_ppjb(): void
+    {
+        [$application, , $actor] = $this->imported('proses_bank');
+        $application->bankProcesses()->createMany([
+            ['source' => 'marison_v2', 'source_id' => 'ATT-1', 'id_berkas' => 'B-1', 'no_sp3k' => 'SP-1'],
+            ['source' => 'marison_v2', 'source_id' => 'ATT-2', 'id_berkas' => 'B-2', 'no_sp3k' => null],
+        ]);
+        app(ConsumerOperationalService::class)->recordPpjb($application, ['tanggal_ttd_ppjb' => '2026-09-03'], $actor);
+        $this->assertSame(2, $application->fresh()->bankProcesses()->count());
+        $this->assertSame('ppjb_dev', $application->fresh()->current_stage);
+    }
+
+    public function test_imported_proses_bank_can_resume_with_ppjb(): void
+    {
+        [$application, , $actor] = $this->imported('proses_bank');
+        $service = app(ConsumerOperationalService::class);
+        $service->recordPpjb($application, ['tanggal_ttd_ppjb' => '2026-09-03'], $actor);
+        $this->assertSame(1, $application->stageEvents()->where('stage', 'proses_bank')->count());
+        $this->assertSame('ppjb_dev', $application->fresh()->current_stage);
+    }
+
+    public function test_imported_ppjb_with_canonical_sp3k_can_resume_with_akad(): void
+    {
+        [$application, $kavling, $actor] = $this->imported('ppjb_dev');
+        app(ConsumerKavlingLifecycleService::class)->assign($application, $kavling);
+        $service = app(ConsumerOperationalService::class);
+        $service->recordAkad($application, ['tanggal_akad' => '2026-09-04'], $actor, app(ConsumerKavlingLifecycleService::class));
+        $this->assertSame(1, $application->stageEvents()->where('stage', 'ppjb_dev')->count());
+        $this->assertSame('akad', $application->fresh()->current_stage);
+    }
+
+    public function test_imported_akad_can_resume_with_bast_and_bast_application_stays_readable(): void
+    {
+        [$application, $kavling, $actor] = $this->imported('akad');
+        app(ConsumerKavlingLifecycleService::class)->assign($application, $kavling);
+        $service = app(ConsumerOperationalService::class);
+        $service->recordBast($application, ['tanggal_bast' => '2026-09-05'], $actor, app(ConsumerKavlingLifecycleService::class));
+        $this->assertSame(1, $application->stageEvents()->where('stage', 'akad')->count());
+        $this->assertSame('bast', $application->fresh()->current_stage);
+        $this->assertSame('sold', $application->fresh()->kavling?->consumerAssignments()->latest('id')->first()?->assignment_status);
+    }
+
     public function test_completeness_and_process_last_are_computed_from_local_data(): void
     {
         [$application, , $actor] = $this->records();
@@ -72,6 +141,18 @@ class ConsumerOperationalTest extends TestCase
         $this->assertSame('sold', $fresh->kavling?->consumerAssignments()->latest('id')->first()?->assignment_status);
         $this->assertSame(1, ConsumerAkadRecord::where('consumer_application_id', $fresh->id)->count());
         $this->assertSame(1, ConsumerBastRecord::where('consumer_application_id', $fresh->id)->count());
+    }
+
+    private function imported(string $stage): array
+    {
+        [$application, $kavling, $actor] = $this->records();
+        $events = ['bi_checking', 'PSJB', 'pemberkasan', 'proses_bank', 'ppjb_dev', 'akad'];
+        foreach (array_slice($events, 0, array_search($stage, $events, true) + 1) as $index => $current) {
+            $application->stageEvents()->create(['stage' => $current, 'source' => 'marison_v2', 'source_id' => 'IMPORTED-'.$current, 'occurred_at' => now()->subDays(6 - $index), 'status' => 'Selesai']);
+        }
+        $application->update(['current_stage' => $stage]);
+
+        return [$application->fresh(), $kavling, $actor];
     }
 
     private function records(): array

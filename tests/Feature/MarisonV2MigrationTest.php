@@ -41,6 +41,18 @@ class MarisonV2MigrationTest extends TestCase
         $this->admin = User::factory()->create(['role_id' => Role::where('slug', 'superadmin')->value('id'), 'email_verified_at' => now(), 'password_changed_at' => now()]);
     }
 
+    public function test_superadmin_upload_page_renders_without_writes(): void
+    {
+        $before = [MarisonImportBatch::count(), ConsumerApplication::count()];
+        $this->actingAs($this->admin)->get(route('admin.marison-migrations.create'))
+            ->assertOk()
+            ->assertSee('Migrasi Marison V2')
+            ->assertSee('Paket JSON')
+            ->assertSee('Pemetaan Proyek Eksplisit')
+            ->assertSee('Validasi &amp; Preview', false);
+        $this->assertSame($before, [MarisonImportBatch::count(), ConsumerApplication::count()]);
+    }
+
     public function test_valid_preview_and_superadmin_ui_authorization(): void
     {
         $file = $this->file($this->package());

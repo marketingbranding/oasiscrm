@@ -514,7 +514,10 @@ marison_v2 + branch_code + id_transaksi_v2
 
 Process keys:
 
-- BI → `id_kons`
+- BI → `id_transaksi_v2 + id_kons` (transaction-scoped). `id_kons` is a consumer-level
+  legacy reference and may legitimately repeat across different housing transactions.
+  Exact compatibility copies of the same BI fact inside one transaction must be
+  collapsed by the exporter before package generation.
 - PSJB → `id_psjb`
 - bank attempt → `id_bank_attempt`
 - Pemberkasan → `id_berkas`
@@ -526,6 +529,10 @@ Process keys:
 - status history → `event_id`
 
 Also store SHA-256 payload fingerprints.
+
+For BI source-audit records, OASIS stores a transaction-scoped source record identity.
+The raw/pseudonymized `id_kons` remains available in the BI stage metadata; the audit
+identity must not make `id_kons` globally unique across transactions.
 
 Same key + same fingerprint = `ALREADY_IMPORTED`.
 
@@ -564,7 +571,8 @@ Examples:
 - duplicate transaction root inside package;
 - unknown branch;
 - project mapping absent;
-- same document/source ID linked to different transactions;
+- same document/source ID linked to different transactions, except BI `id_kons`
+  whose identity is explicitly transaction-scoped;
 - malformed package/contract version.
 
 ### Unlinked records

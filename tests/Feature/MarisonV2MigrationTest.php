@@ -172,6 +172,36 @@ class MarisonV2MigrationTest extends TestCase
         app(MarisonV2PackageValidator::class)->validate($this->path($this->packageJson($package)));
     }
 
+    public function test_bi_identity_is_scoped_to_transaction_while_document_ids_remain_strict(): void
+    {
+        $package = $this->package();
+        $second = $package['transactions'][0];
+        $second['id_transaksi_v2'] = 'TRX-2';
+        $second['process'] = array_fill_keys(
+            ['bi_checking', 'psjb', 'pemberkasan', 'bank_attempts', 'proses_bank', 'ppjb_dev', 'akad', 'bast'],
+            [],
+        );
+        $second['process']['bi_checking'] = $package['transactions'][0]['process']['bi_checking'];
+        $second['history'] = ['kavling' => [], 'status' => []];
+        $package['transactions'][] = $second;
+        $package['manifest']['counts'] = $this->counts($package);
+
+        $batch = $this->stage($package);
+        $this->assertSame(2, $batch->transactions()->where('outcome', MarisonV2ImportPreviewService::STATUS_READY)->count());
+
+        $result = $this->confirm($batch);
+        $this->assertSame(2, $result['created']);
+        $this->assertSame(2, DB::table('consumer_stage_events')->where('stage', 'bi_checking')->where('source_id', 'KONS-1')->count());
+        $this->assertDatabaseHas('consumer_migration_source_records', [
+            'source_type' => 'bi_checking_event',
+            'source_record_id' => 'TRX-1:KONS-1',
+        ]);
+        $this->assertDatabaseHas('consumer_migration_source_records', [
+            'source_type' => 'bi_checking_event',
+            'source_record_id' => 'TRX-2:KONS-1',
+        ]);
+    }
+
     public function test_stale_preview_rejected_and_transaction_rollback_leaves_no_partial_rows(): void
     {
         $batch = $this->stage();

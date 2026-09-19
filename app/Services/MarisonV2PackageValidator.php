@@ -183,7 +183,11 @@ class MarisonV2PackageValidator
                 }
                 $recordValue = trim((string) $record[$field]);
                 $this->expect(mb_strlen($recordValue) <= 150, "{$path}.{$index}.{$field}", 'ID sumber terlalu panjang.');
-                $key = $group.':'.$field.':'.$recordValue;
+                // id_kons is a consumer-level legacy reference and can legitimately
+                // appear in more than one housing transaction. BI identity is scoped
+                // to id_transaksi_v2; document/process identities remain package-global.
+                $key = ($group === 'bi_checking' ? $transactionId.':' : '')
+                    .$group.':'.$field.':'.$recordValue;
                 if (isset($sourceIds[$key]) && $sourceIds[$key] !== $transactionId) {
                     $this->fail("{$path}.{$index}.{$field}", 'Source ID yang sama tertaut ke transaksi berbeda.');
                 }

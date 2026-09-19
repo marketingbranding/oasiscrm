@@ -188,12 +188,27 @@ final class MarisonV2TransactionImporter
 
     private function source(MarisonImportTransaction $import, ConsumerApplication $application, string $type, string $id, array $row, object $target): void
     {
+        $sourceRecordId = $this->sourceRecordId($import, $type, $id);
+
         ConsumerMigrationSourceRecord::query()->create([
             'import_transaction_id' => $import->id, 'consumer_application_id' => $application->id,
             'source_system' => MarisonV2PackageValidator::SOURCE_SYSTEM, 'branch_code' => $import->branch_code,
-            'source_transaction_id' => $import->source_transaction_id, 'source_type' => $type, 'source_record_id' => mb_substr($id, 0, 150),
+            'source_transaction_id' => $import->source_transaction_id, 'source_type' => $type, 'source_record_id' => $sourceRecordId,
             'payload_hash' => $this->validator->hash($row), 'metadata' => $this->metadata($row), 'target_type' => $target::class, 'target_id' => $target->id,
         ]);
+    }
+
+    private function sourceRecordId(MarisonImportTransaction $import, string $type, string $id): string
+    {
+        if ($type !== 'bi_checking_event') {
+            return mb_substr($id, 0, 150);
+        }
+
+        $scoped = $import->source_transaction_id.':'.$id;
+
+        return mb_strlen($scoped) <= 150
+            ? $scoped
+            : 'BI:'.hash('sha256', $scoped);
     }
 
     private function derivedStage(ConsumerApplication $application): ?string

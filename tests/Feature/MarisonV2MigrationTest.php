@@ -86,6 +86,22 @@ class MarisonV2MigrationTest extends TestCase
         $this->assertSame('BLOCKED', $batch->transactions()->sole()->outcome);
     }
 
+    public function test_consumer_application_nullable_columns_keep_foreign_keys(): void
+    {
+        $application = ConsumerApplication::create([
+            'customer_id' => null,
+            'branch_id' => $this->branch->id,
+            'project_id' => null,
+            'application_status' => 'migration_pending',
+        ]);
+
+        $this->assertNull($application->customer_id);
+        $this->assertNull($application->project_id);
+        $foreignKeys = collect(DB::select("PRAGMA foreign_key_list('consumer_applications')"));
+        $this->assertTrue($foreignKeys->contains(fn ($key) => $key->from === 'customer_id' && $key->table === 'customers'));
+        $this->assertTrue($foreignKeys->contains(fn ($key) => $key->from === 'project_id' && $key->table === 'lead_master'));
+    }
+
     public function test_import_maps_all_processes_without_customer_or_kavling_assignment(): void
     {
         $batch = $this->stage();
@@ -93,6 +109,7 @@ class MarisonV2MigrationTest extends TestCase
         $this->assertSame(1, $result['created']);
         $app = ConsumerApplication::sole();
         $this->assertNull($app->customer_id);
+        $this->assertSame($this->project->id, $app->project_id);
         $this->assertNull($app->kavling_id);
         $this->assertNull($app->nama_konsumen);
         $this->assertNull($app->nik);

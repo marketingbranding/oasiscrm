@@ -97,9 +97,19 @@ class MarisonV2MigrationTest extends TestCase
 
         $this->assertNull($application->customer_id);
         $this->assertNull($application->project_id);
-        $foreignKeys = collect(DB::select("PRAGMA foreign_key_list('consumer_applications')"));
-        $this->assertTrue($foreignKeys->contains(fn ($key) => $key->from === 'customer_id' && $key->table === 'customers'));
-        $this->assertTrue($foreignKeys->contains(fn ($key) => $key->from === 'project_id' && $key->table === 'lead_master'));
+
+        $columns = collect(DB::select("PRAGMA table_info('consumer_applications')"))->keyBy('name');
+        foreach (['customer_id', 'project_id', 'kavling_id'] as $column) {
+            $this->assertSame(0, $columns->get($column)->notnull, $column.' must remain nullable.');
+        }
+
+        $foreignKeys = collect(DB::select("PRAGMA foreign_key_list('consumer_applications')"))->keyBy('from');
+        $this->assertSame('customers', $foreignKeys->get('customer_id')->table);
+        $this->assertSame('SET NULL', $foreignKeys->get('customer_id')->on_delete);
+        $this->assertSame('lead_master', $foreignKeys->get('project_id')->table);
+        $this->assertSame('SET NULL', $foreignKeys->get('project_id')->on_delete);
+        $this->assertSame('kavlings', $foreignKeys->get('kavling_id')->table);
+        $this->assertSame('SET NULL', $foreignKeys->get('kavling_id')->on_delete);
     }
 
     public function test_import_maps_all_processes_without_customer_or_kavling_assignment(): void

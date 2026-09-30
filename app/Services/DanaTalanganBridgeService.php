@@ -754,7 +754,7 @@ class DanaTalanganBridgeService
 
     private function date(string $value): ?CarbonImmutable
     {
-        foreach (['Y-m-d', 'd/m/Y', 'd-m-Y', 'm/d/Y'] as $format) {
+        foreach (['Y-m-d', 'd/m/Y', 'd-m-Y', 'm/d/Y', 'j M Y', 'd M Y', 'j F Y', 'd F Y'] as $format) {
             try {
                 $date = CarbonImmutable::createFromFormat('!'.$format, trim($value));
                 if ($date && $date->format($format) === trim($value)) {

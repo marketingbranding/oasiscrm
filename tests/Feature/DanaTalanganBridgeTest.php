@@ -89,6 +89,16 @@ class DanaTalanganBridgeTest extends TestCase
         (new DanaTalanganSpreadsheetContract($google))->resolve();
     }
 
+    public function test_google_display_dates_are_accepted(): void
+    {
+        $method = new \ReflectionMethod(DanaTalanganBridgeService::class, 'date');
+        $method->setAccessible(true);
+        $service = app(DanaTalanganBridgeService::class);
+
+        $this->assertSame('2026-06-30', $method->invoke($service, '30 Jun 2026')->format('Y-m-d'));
+        $this->assertSame('2026-07-10', $method->invoke($service, '10 Jul 2026')->format('Y-m-d'));
+    }
+
     public function test_formula_leading_text_is_escaped(): void
     {
         $contract = new DanaTalanganSpreadsheetContract(Mockery::mock(GoogleSheetsApiService::class));

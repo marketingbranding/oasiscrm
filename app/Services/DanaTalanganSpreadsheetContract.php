@@ -129,17 +129,18 @@ class DanaTalanganSpreadsheetContract
         }
         $payload['Status Cicilan'] = str_replace(' ', '_', mb_strtolower($payload['Status Cicilan']));
         $payload['Umur'] = $payload['Umur'] === '' ? '' : (string) ((int) $payload['Umur']);
-        $payload['Nominal'] = ($payload['Nominal'] ?? '') === '' ? '' : preg_replace('/[^0-9.-]/', '', (string) $payload['Nominal']);
+        $payload['Nominal'] = $this->money($payload['Nominal'] ?? '');
 
         return $payload;
     }
 
     private function date(string $value): ?string
     {
+        $value = $this->normalizeDateText($value);
         foreach (['Y-m-d', 'd/m/Y', 'd-m-Y', 'm/d/Y', 'j M Y', 'd M Y', 'j F Y', 'd F Y'] as $format) {
             try {
-                $date = CarbonImmutable::createFromFormat('!'.$format, trim($value));
-                if ($date && $date->format($format) === trim($value)) {
+                $date = CarbonImmutable::createFromFormat('!'.$format, $value);
+                if ($date && $date->format($format) === $value) {
                     return $date->format('Y-m-d');
                 }
             } catch (Throwable) {
@@ -147,6 +148,30 @@ class DanaTalanganSpreadsheetContract
         }
 
         return null;
+    }
+
+    private function normalizeDateText(string $value): string
+    {
+        return str_ireplace(
+            ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember', 'Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'],
+            ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'],
+            trim($value),
+        );
+    }
+
+    private function money(string $value): string
+    {
+        $value = trim($value);
+        if ($value === '') {
+            return '';
+        }
+        $value = preg_replace('/[^0-9,.\\-]/', '', $value);
+        if (str_contains($value, ',')) {
+            $value = str_replace('.', '', $value);
+            $value = str_replace(',', '.', $value);
+        }
+
+        return $value;
     }
 
     private function normalize(mixed $value): string

@@ -97,6 +97,12 @@ class DanaTalanganBridgeTest extends TestCase
 
         $this->assertSame('2026-06-30', $method->invoke($service, '30 Jun 2026')->format('Y-m-d'));
         $this->assertSame('2026-07-10', $method->invoke($service, '10 Jul 2026')->format('Y-m-d'));
+        $this->assertSame('2026-08-26', $method->invoke($service, '26 Agu 2026')->format('Y-m-d'));
+        $this->assertSame('2026-09-05', $method->invoke($service, '5 Sep 2026')->format('Y-m-d'));
+
+        $money = new \ReflectionMethod(DanaTalanganBridgeService::class, 'money');
+        $money->setAccessible(true);
+        $this->assertSame('1100000.00', $money->invoke($service, 'Rp1.100.000,00'));
     }
 
     public function test_formula_leading_text_is_escaped(): void

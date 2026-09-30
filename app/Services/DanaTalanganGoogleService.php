@@ -433,7 +433,7 @@ class DanaTalanganGoogleService
             'umur' => is_numeric($cells[9] ?? null) ? (int) $cells[9] : null,
             'nama_marketing' => $this->nullable($cells[10] ?? null),
             'tgl_komitmen' => $this->parseDate($cells[11] ?? null),
-            'nominal' => is_numeric($cells[12] ?? null) ? $cells[12] : null,
+            'nominal' => ($nominal = $this->money($cells[12] ?? '')) === '' ? null : $nominal,
             'penyelesaian' => $this->nullable($cells[13] ?? null),
             'konfirmasi_keuangan' => $this->boolean($cells[14] ?? null),
             'status' => $this->status($cells[15] ?? null),
@@ -595,7 +595,7 @@ class DanaTalanganGoogleService
 
     private function parseDate($value): ?string
     {
-        $value = trim((string) $value);
+        $value = $this->normalizeDateText(trim((string) $value));
         if ($value === '') {
             return null;
         }
@@ -616,11 +616,35 @@ class DanaTalanganGoogleService
         }
     }
 
+    private function normalizeDateText(string $value): string
+    {
+        return str_ireplace(
+            ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember', 'Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'],
+            ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'],
+            trim($value),
+        );
+    }
+
+    private function money(string $value): string
+    {
+        $value = trim($value);
+        if ($value === '') {
+            return '';
+        }
+        $value = preg_replace('/[^0-9,.\\-]/', '', $value);
+        if (str_contains($value, ',')) {
+            $value = str_replace('.', '', $value);
+            $value = str_replace(',', '.', $value);
+        }
+
+        return $value;
+    }
+
     private function dataHash(array $data): string
     {
         return hash('sha256', json_encode(array_intersect_key($data, array_flip([
             'tanggal', 'nama_konsumen', 'kav', 'project_name', 'pinjam_nama', 'pekerjaan',
-            'status_perkawinan', 'umur', 'nama_marketing', 'tgl_komitmen', 'penyelesaian',
+            'status_perkawinan', 'umur', 'nama_marketing', 'tgl_komitmen', 'nominal', 'penyelesaian',
             'konfirmasi_keuangan', 'status', 'branch_id',
         ]))));
     }

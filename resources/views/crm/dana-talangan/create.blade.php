@@ -204,8 +204,14 @@
                 </div>
 
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div>
-                        <label class="font-[Helvetica] font-bold text-xs uppercase block mb-1">Status Cicilan</label>
+                     <div>
+                         <label class="font-[Helvetica] font-bold text-xs uppercase block mb-1">Nominal</label>
+                         <input type="number" name="nominal" value="{{ old('nominal') }}" min="0" step="0.01"
+                                class="w-full border-2 border-black px-3 py-2 text-sm font-['Times_New_Roman'] bg-white rounded-none @error('nominal') border-[#e91d2a] @enderror">
+                         @error('nominal') <p class="text-[#e91d2a] text-xs mt-1 font-[Helvetica] font-bold">{{ $message }}</p> @enderror
+                     </div>
+                     <div>
+                         <label class="font-[Helvetica] font-bold text-xs uppercase block mb-1">Status Cicilan</label>
                         <select name="status" required class="w-full border-2 border-black px-3 py-2 text-sm font-['Times_New_Roman'] bg-white rounded-none @error('status') border-[#e91d2a] @enderror">
                             <option value="sanggup" {{ old('status') === 'sanggup' ? 'selected' : '' }}>Sanggup</option>
                             <option value="tidak_sanggup" {{ old('status') === 'tidak_sanggup' ? 'selected' : '' }}>Tidak Sanggup</option>

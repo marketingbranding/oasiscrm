@@ -35,7 +35,7 @@ class DanaTalanganBridgeTest extends TestCase
         config([
             'services.google_sheets.dana_talangan_bridge_enabled' => true,
             'services.google_sheets.dana_talangan_spreadsheet_id' => 'spreadsheet-id',
-            'services.google_sheets.dana_talangan_sheet_name' => 'Talangan',
+            'services.google_sheets.dana_talangan_sheet_name' => '2026',
         ]);
     }
 
@@ -49,13 +49,13 @@ class DanaTalanganBridgeTest extends TestCase
         $modes->setMode(DanaTalanganBridgeMode::PushOnly);
     }
 
-    public function test_preflight_accepts_exact_a_to_q_without_writes(): void
+    public function test_preflight_accepts_exact_a_to_s_without_writes(): void
     {
         $google = Mockery::mock(GoogleSheetsApiService::class);
-        $google->shouldReceive('sheetIds')->once()->with('spreadsheet-id')->andReturn(['Talangan' => 7]);
-        $google->shouldReceive('quoteSheetName')->once()->with('Talangan')->andReturn("'Talangan'");
-        $google->shouldReceive('batchGetRaw')->once()->with('spreadsheet-id', ["'Talangan'!A1:Q1"], 'FORMATTED_VALUE')->andReturn(['Talangan' => [DanaTalanganSpreadsheetContract::HEADERS]]);
-        $google->shouldReceive('gridMetadata')->once()->with('spreadsheet-id', 'Talangan', 'A:Q')->andReturn(['sheet_id' => 7, 'formulas' => [], 'validations' => []]);
+        $google->shouldReceive('sheetIds')->once()->with('spreadsheet-id')->andReturn(['2026' => 7]);
+        $google->shouldReceive('quoteSheetName')->once()->with('2026')->andReturn("'2026'");
+        $google->shouldReceive('batchGetRaw')->once()->with('spreadsheet-id', ["'2026'!A1:S1"], 'FORMATTED_VALUE')->andReturn(['2026' => [DanaTalanganSpreadsheetContract::HEADERS]]);
+        $google->shouldReceive('gridMetadata')->once()->with('spreadsheet-id', '2026', 'A:S')->andReturn(['sheet_id' => 7, 'formulas' => [], 'validations' => []]);
         $google->shouldNotReceive('updateRange');
         $contract = (new DanaTalanganSpreadsheetContract($google))->resolve();
 
@@ -68,9 +68,9 @@ class DanaTalanganBridgeTest extends TestCase
         $headers = DanaTalanganSpreadsheetContract::HEADERS;
         $headers[14] = 'wrong';
         $google = Mockery::mock(GoogleSheetsApiService::class);
-        $google->shouldReceive('sheetIds')->once()->andReturn(['Talangan' => 7]);
-        $google->shouldReceive('quoteSheetName')->once()->andReturn("'Talangan'");
-        $google->shouldReceive('batchGetRaw')->once()->andReturn(['Talangan' => [$headers]]);
+        $google->shouldReceive('sheetIds')->once()->andReturn(['2026' => 7]);
+        $google->shouldReceive('quoteSheetName')->once()->andReturn("'2026'");
+        $google->shouldReceive('batchGetRaw')->once()->andReturn(['2026' => [$headers]]);
         $google->shouldNotReceive('gridMetadata');
         $google->shouldNotReceive('updateRange');
         try {
@@ -80,9 +80,9 @@ class DanaTalanganBridgeTest extends TestCase
         }
 
         $google = Mockery::mock(GoogleSheetsApiService::class);
-        $google->shouldReceive('sheetIds')->once()->andReturn(['Talangan' => 7]);
-        $google->shouldReceive('quoteSheetName')->once()->andReturn("'Talangan'");
-        $google->shouldReceive('batchGetRaw')->once()->andReturn(['Talangan' => [DanaTalanganSpreadsheetContract::HEADERS]]);
+        $google->shouldReceive('sheetIds')->once()->andReturn(['2026' => 7]);
+        $google->shouldReceive('quoteSheetName')->once()->andReturn("'2026'");
+        $google->shouldReceive('batchGetRaw')->once()->andReturn(['2026' => [DanaTalanganSpreadsheetContract::HEADERS]]);
         $google->shouldReceive('gridMetadata')->once()->andReturn(['sheet_id' => 7, 'formulas' => [['row' => 2, 'column' => 3]], 'validations' => []]);
         $google->shouldNotReceive('updateRange');
         $this->expectException(\RuntimeException::class);
@@ -109,7 +109,7 @@ class DanaTalanganBridgeTest extends TestCase
         $sent = $this->row($record->fresh());
         $contracts = $this->contracts([$baseline]);
         $writer = Mockery::mock(DanaTalanganSpreadsheetWriter::class);
-        $writer->shouldReceive('update')->once()->withArgs(fn (string $uuid, array $fields, bool $lock) => $uuid === $record->oasis_sync_id && $fields[11] === 'Lokal baru' && ! $lock)->andReturn(new DanaTalanganSpreadsheetWriteResult('spreadsheet-id', 'Talangan', 2, $record->oasis_sync_id, $sent));
+        $writer->shouldReceive('update')->once()->withArgs(fn (string $uuid, array $fields, bool $lock) => $uuid === $record->oasis_sync_id && $fields[13] === 'Lokal baru' && ! $lock)->andReturn(new DanaTalanganSpreadsheetWriteResult('spreadsheet-id', '2026', 2, $record->oasis_sync_id, $sent));
 
         $result = $this->bridge($contracts, $writer)->push($record->fresh(), $actor);
 
@@ -218,7 +218,7 @@ class DanaTalanganBridgeTest extends TestCase
             'status' => 'open',
         ]);
         $writer = Mockery::mock(DanaTalanganSpreadsheetWriter::class);
-        $writer->shouldReceive('setSyncId')->once()->withArgs(fn (int $number, string $uuid, bool $lock) => $number === 3 && Str::isUuid($uuid) && ! $lock)->andReturnUsing(fn (int $number, string $uuid) => new DanaTalanganSpreadsheetWriteResult('spreadsheet-id', 'Talangan', $number, $uuid, $row + ['oasis_sync_id' => $uuid]));
+        $writer->shouldReceive('setSyncId')->once()->withArgs(fn (int $number, string $uuid, bool $lock) => $number === 3 && Str::isUuid($uuid) && ! $lock)->andReturnUsing(fn (int $number, string $uuid) => new DanaTalanganSpreadsheetWriteResult('spreadsheet-id', '2026', $number, $uuid, $row + ['oasis_sync_id' => $uuid]));
         $record = $this->bridge($this->contracts([$row]), $writer)->approveRemoteCreate($item, $actor);
 
         $this->assertSame('Remote Approved', $record->nama_konsumen);
@@ -249,6 +249,7 @@ class DanaTalanganBridgeTest extends TestCase
         $row['_row_number'] = 3;
         $row['oasis_sync_id'] = '';
         $row['Nama Konsumen'] = 'Remote Ambiguous';
+        $row['Cabang'] = '';
         $item = DanaTalanganReconciliationItem::create([
             'spreadsheet_id' => 'spreadsheet-id',
             'remote_row_number' => 3,
@@ -402,9 +403,11 @@ class DanaTalanganBridgeTest extends TestCase
             'Umur' => $record->umur === null ? '' : (string) $record->umur,
             'Marketing' => $record->nama_marketing ?? '',
             'TGL Komitmen' => $record->tgl_komitmen?->format('Y-m-d') ?? '',
+            'Nominal' => $record->nominal ?? '',
             'Penyelesaian' => $record->penyelesaian ?? '',
             'Konfirmasi' => $record->konfirmasi_keuangan ? '1' : '0',
             'Status Cicilan' => $record->status,
+            'Cabang' => $record->branch?->name ?? '',
             'oasis_sync_id' => $record->oasis_sync_id,
             'oasis_deleted_at' => '',
             'oasis_deleted_by' => '',
@@ -413,13 +416,13 @@ class DanaTalanganBridgeTest extends TestCase
 
     private function baseline(DanaTalangan $record, array $row): void
     {
-        $fields = array_slice(DanaTalanganSpreadsheetContract::BUSINESS_HEADERS, 0, 14);
+        $fields = array_diff(DanaTalanganSpreadsheetContract::BUSINESS_HEADERS, ['No']);
         $record->update([
             'last_synced_payload_hash' => $this->payloadHash($row),
             'last_remote_payload_hash' => $this->payloadHash($row),
             'last_synced_field_hashes' => collect($fields)->mapWithKeys(fn (string $field) => [$field => hash('sha256', (string) $row[$field])])->all(),
             'last_synced_at' => now(),
-            'sheet_name' => 'Talangan',
+            'sheet_name' => '2026',
             'sheet_row_number' => 2,
         ]);
     }
@@ -433,7 +436,7 @@ class DanaTalanganBridgeTest extends TestCase
 
     private function contracts(array $rows): DanaTalanganSpreadsheetContract
     {
-        $contract = new ResolvedDanaTalanganSpreadsheetContract('spreadsheet-id', 'Talangan', 7, DanaTalanganSpreadsheetContract::HEADERS, [], str_repeat('a', 64));
+        $contract = new ResolvedDanaTalanganSpreadsheetContract('spreadsheet-id', '2026', 7, DanaTalanganSpreadsheetContract::HEADERS, [], str_repeat('a', 64));
         $contracts = Mockery::mock(DanaTalanganSpreadsheetContract::class);
         $contracts->shouldReceive('resolve')->andReturn($contract);
         $contracts->shouldReceive('rows')->andReturn($rows);

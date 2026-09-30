@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Exceptions\DanaTalanganSpreadsheetContractException;
 use App\ValueObjects\DanaTalanganSpreadsheetWriteResult;
+use App\ValueObjects\ResolvedDanaTalanganSpreadsheetContract;
 use Illuminate\Support\Str;
 use Throwable;
 
@@ -65,12 +66,13 @@ class DanaTalanganSpreadsheetWriter
         try {
             if ($rowNumber !== null) {
                 $fields[0] = $rowNumber - 1;
-                $this->googleSheets->updateRange($contract->spreadsheetId, "'Talangan'!A{$rowNumber}:Q{$rowNumber}", [$this->rowValues($fields, $syncId)]);
+                $this->googleSheets->updateRange($contract->spreadsheetId, $this->range($contract, "A{$rowNumber}:S{$rowNumber}"), [$this->rowValues($fields, $syncId)]);
             } else {
-                $append = $this->googleSheets->appendRows($contract->spreadsheetId, "'Talangan'!A:Q", [$this->rowValues($fields, $syncId)]);
+                $append = $this->googleSheets->appendRows($contract->spreadsheetId, $this->range($contract, 'A:S'), [$this->rowValues($fields, $syncId)]);
+
                 $rowNumber = $append->rowNumber;
                 $fields[0] = $rowNumber - 1;
-                $this->googleSheets->updateRange($contract->spreadsheetId, "'Talangan'!A{$rowNumber}", [[$rowNumber - 1]]);
+                $this->googleSheets->updateRange($contract->spreadsheetId, $this->range($contract, "A{$rowNumber}"), [[$rowNumber - 1]]);
             }
         } catch (Throwable $exception) {
             $matches = $this->matches($this->contracts->rows($contract), $syncId);
@@ -97,8 +99,8 @@ class DanaTalanganSpreadsheetWriter
         $fields[0] = $rowNumber - 1;
         $this->googleSheets->updateRange(
             $contract->spreadsheetId,
-            "'Talangan'!A{$rowNumber}:N{$rowNumber}",
-            [array_slice($this->rowValues($fields, $syncId), 0, 14)],
+            $this->range($contract, "A{$rowNumber}:P{$rowNumber}"),
+            [array_slice($this->rowValues($fields, $syncId), 0, count(DanaTalanganSpreadsheetContract::BUSINESS_HEADERS))],
         );
 
         return $this->verify($contract->spreadsheetId, $syncId, $rowNumber, $fields);
@@ -116,7 +118,7 @@ class DanaTalanganSpreadsheetWriter
         if ($row === null || filled($row['oasis_sync_id']) || filled($row['oasis_deleted_at'])) {
             throw new DanaTalanganSpreadsheetContractException('Baris remote Dana Talangan tidak dapat diklaim.');
         }
-        $this->googleSheets->updateRange($contract->spreadsheetId, "'Talangan'!O{$rowNumber}", [[$syncId]]);
+        $this->googleSheets->updateRange($contract->spreadsheetId, $this->range($contract, "Q{$rowNumber}"), [[$syncId]]);
         $verified = collect($this->contracts->rows($contract))->firstWhere('_row_number', $rowNumber);
         if (($verified['oasis_sync_id'] ?? '') !== $syncId) {
             throw new DanaTalanganSpreadsheetContractException('UUID remote Dana Talangan tidak dapat diverifikasi.');
@@ -134,7 +136,7 @@ class DanaTalanganSpreadsheetWriter
             throw new DanaTalanganSpreadsheetContractException('Baris remote Dana Talangan tidak aman untuk ditandai hapus.');
         }
         $rowNumber = $matches[0]['_row_number'];
-        $this->googleSheets->updateRange($contract->spreadsheetId, "'Talangan'!O{$rowNumber}:Q{$rowNumber}", [[
+        $this->googleSheets->updateRange($contract->spreadsheetId, $this->range($contract, "Q{$rowNumber}:S{$rowNumber}"), [[
             $syncId,
             now()->toIso8601String(),
             (string) ($actorId ?? 'system'),
@@ -154,7 +156,7 @@ class DanaTalanganSpreadsheetWriter
         if (count($matches) !== 1 || $matches[0]['_row_number'] !== $rowNumber) {
             throw new DanaTalanganSpreadsheetContractException('Hasil tulis Dana Talangan tidak dapat diverifikasi.');
         }
-        $expected = array_combine(DanaTalanganSpreadsheetContract::BUSINESS_HEADERS, array_pad(array_values($fields), 14, ''));
+        $expected = array_combine(DanaTalanganSpreadsheetContract::BUSINESS_HEADERS, array_pad(array_values($fields), count(DanaTalanganSpreadsheetContract::BUSINESS_HEADERS), ''));
         $expected = $this->contracts->normalizeBusinessPayload($expected);
         $actual = $this->contracts->normalizeBusinessPayload($matches[0]);
         if ($expected !== $actual) {
@@ -167,11 +169,11 @@ class DanaTalanganSpreadsheetWriter
     private function rowValues(array $fields, string $syncId): array
     {
         $values = [];
-        foreach (array_pad(array_values($fields), 14, '') as $value) {
+        foreach (array_pad(array_values($fields), count(DanaTalanganSpreadsheetContract::BUSINESS_HEADERS), '') as $value) {
             $values[] = $this->contracts->valueForWrite($value);
         }
 
-        return [...array_slice($values, 0, 14), $syncId, '', ''];
+        return [...array_slice($values, 0, count(DanaTalanganSpreadsheetContract::BUSINESS_HEADERS)), $syncId, '', ''];
     }
 
     private function matches(array $rows, string $syncId): array
@@ -191,8 +193,13 @@ class DanaTalanganSpreadsheetWriter
         }
     }
 
+    private function range(ResolvedDanaTalanganSpreadsheetContract $contract, string $cells): string
+    {
+        return $this->contracts->sheetRange($contract, $cells);
+    }
+
     private function lockKey(): string
     {
-        return 'dana-talangan-bridge:spreadsheet:'.config('services.google_sheets.dana_talangan_spreadsheet_id').':Talangan';
+        return 'dana-talangan-bridge:spreadsheet:'.config('services.google_sheets.dana_talangan_spreadsheet_id').':'.DanaTalanganSpreadsheetContract::SHEET;
     }
 }

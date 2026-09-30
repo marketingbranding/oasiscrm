@@ -28,6 +28,7 @@ class StoreDanaTalanganRequest extends FormRequest
             'umur' => 'nullable|integer|min:0|max:150',
             'nama_marketing' => 'nullable|string|max:255',
             'tgl_komitmen' => 'nullable|date',
+            'nominal' => 'nullable|numeric|min:0|max:9999999999999.99',
             'penyelesaian' => 'nullable|string',
             'konfirmasi_keuangan' => 'nullable|boolean',
             'status' => 'required|in:sanggup,tidak_sanggup,lunas',

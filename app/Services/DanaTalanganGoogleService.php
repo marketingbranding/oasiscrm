@@ -21,6 +21,7 @@ class DanaTalanganGoogleService
         'Tanggal',
         'Nama Konsumen',
         'Kav',
+        'Cabang',
         'Proyek',
         'Pinjam Nama',
         'Pekerjaan',
@@ -28,6 +29,7 @@ class DanaTalanganGoogleService
         'Umur',
         'Marketing',
         'TGL Komitmen',
+        'Nominal',
         'Penyelesaian',
         'Konfirmasi',
         'Status Cicilan',
@@ -83,7 +85,7 @@ class DanaTalanganGoogleService
                 $this->ensureMetadataColumns($spreadsheetId, $sheetName, $sheetIds[$sheetName]);
             }
 
-            $ranges = [$this->googleSheets->quoteSheetName($sheetName).'!A:Q'];
+            $ranges = [$this->googleSheets->quoteSheetName($sheetName).'!A:S'];
             $legacySheets = array_values(array_filter(array_keys($sheetIds), fn ($name) => $name !== $sheetName));
             foreach ($legacySheets as $legacySheet) {
                 $ranges[] = $this->googleSheets->quoteSheetName($legacySheet).'!A:E';
@@ -103,8 +105,8 @@ class DanaTalanganGoogleService
             foreach (array_slice($rows, 1) as $offset => $cells) {
                 $rowNumber = $offset + 2;
                 $name = trim((string) ($cells[2] ?? ''));
-                $syncId = trim((string) ($cells[14] ?? ''));
-                $deletedAt = trim((string) ($cells[15] ?? ''));
+                $syncId = trim((string) ($cells[16] ?? ''));
+                $deletedAt = trim((string) ($cells[17] ?? ''));
 
                 if ($name === '') {
                     if ($syncId !== '') {
@@ -199,17 +201,17 @@ class DanaTalanganGoogleService
                         $record->fill($data + ['updated_by' => null] + $syncMetadata)->saveQuietly();
                     }
 
-                    if ($metadataStale || ($cells[14] ?? '') === '') {
+                    if ($metadataStale || ($cells[16] ?? '') === '') {
                         $this->googleSheets->updateRange(
                             $spreadsheetId,
-                            $this->googleSheets->quoteSheetName($sheetName)."!O{$rowNumber}:Q{$rowNumber}",
+                            $this->googleSheets->quoteSheetName($sheetName)."!Q{$rowNumber}:S{$rowNumber}",
                             [[$syncId, '', '']]
                         );
                     }
-                    if ($projectInferred && trim((string) ($cells[4] ?? '')) === '') {
+                    if ($projectInferred && trim((string) ($cells[5] ?? '')) === '') {
                         $this->googleSheets->updateRange(
                             $spreadsheetId,
-                            $this->googleSheets->quoteSheetName($sheetName)."!E{$rowNumber}",
+                            $this->googleSheets->quoteSheetName($sheetName)."!F{$rowNumber}",
                             [[$data['project_name']]]
                         );
                     }
@@ -292,7 +294,7 @@ class DanaTalanganGoogleService
             $syncId = $record->oasis_sync_id ?: (string) Str::uuid();
             $rows = $this->googleSheets->batchGetRaw(
                 $spreadsheetId,
-                [$this->googleSheets->quoteSheetName($sheetName).'!A:Q'],
+                [$this->googleSheets->quoteSheetName($sheetName).'!A:S'],
                 'FORMATTED_VALUE'
             )[$sheetName] ?? [];
             $rowNumber = $this->findSyncRow($rows, $syncId) ?? $this->firstAvailableRow($rows);
@@ -302,7 +304,7 @@ class DanaTalanganGoogleService
 
             $this->googleSheets->updateRange(
                 $spreadsheetId,
-                $this->googleSheets->quoteSheetName($sheetName)."!A{$rowNumber}:Q{$rowNumber}",
+                $this->googleSheets->quoteSheetName($sheetName)."!A{$rowNumber}:S{$rowNumber}",
                 [$this->recordToRow($record, $syncId, $rowNumber)]
             );
             $record->forceFill([
@@ -341,7 +343,7 @@ class DanaTalanganGoogleService
 
     public function sheetName(): string
     {
-        return (string) config('services.google_sheets.dana_talangan_sheet_name', 'Talangan');
+        return (string) config('services.google_sheets.dana_talangan_sheet_name', '2026');
     }
 
     public function branchIdForProject(string $project): ?int
@@ -363,10 +365,10 @@ class DanaTalanganGoogleService
     {
         $this->googleSheets->updateRange(
             $spreadsheetId,
-            $this->googleSheets->quoteSheetName($sheetName).'!O1:Q1',
+            $this->googleSheets->quoteSheetName($sheetName).'!Q1:S1',
             [self::META_HEADERS]
         );
-        $this->googleSheets->hideColumns($spreadsheetId, $sheetId, 14, 17);
+        $this->googleSheets->hideColumns($spreadsheetId, $sheetId, 16, 19);
     }
 
     private function clearRecordRow(DanaTalangan $record, ?int $actorId): void
@@ -375,18 +377,18 @@ class DanaTalanganGoogleService
         $sheetName = $this->sheetName();
         $rows = $this->googleSheets->batchGetRaw(
             $spreadsheetId,
-            [$this->googleSheets->quoteSheetName($sheetName).'!A:Q'],
+            [$this->googleSheets->quoteSheetName($sheetName).'!A:S'],
             'FORMATTED_VALUE'
         )[$sheetName] ?? [];
         $rowNumber = $this->findSyncRow($rows, (string) $record->oasis_sync_id) ?? $record->sheet_row_number;
-        $values = array_fill(0, 17, '');
+        $values = array_fill(0, 19, '');
         $values[0] = $rowNumber - 1;
-        $values[14] = $record->oasis_sync_id;
-        $values[15] = now()->toIso8601String();
-        $values[16] = (string) ($actorId ?? 'system');
+        $values[16] = $record->oasis_sync_id;
+        $values[17] = now()->toIso8601String();
+        $values[18] = (string) ($actorId ?? 'system');
         $this->googleSheets->updateRange(
             $spreadsheetId,
-            $this->googleSheets->quoteSheetName($sheetName)."!A{$rowNumber}:Q{$rowNumber}",
+            $this->googleSheets->quoteSheetName($sheetName)."!A{$rowNumber}:S{$rowNumber}",
             [$values]
         );
     }
@@ -395,13 +397,22 @@ class DanaTalanganGoogleService
     {
         $date = $this->parseDate($cells[1] ?? null);
         $name = trim((string) ($cells[2] ?? ''));
-        $project = trim((string) ($cells[4] ?? ''));
+        $branchLabel = trim((string) ($cells[4] ?? ''));
+        $project = trim((string) ($cells[5] ?? ''));
         $inferred = false;
         if ($project === '') {
             $project = $historyProjects[$this->normalize($name)] ?? '';
             $inferred = $project !== '';
         }
-        $branchId = $this->resolveProjectBranch($project, $projectResolver);
+        $branchId = $this->resolveBranch($branchLabel);
+        if ($project === '' && $branchId !== null) {
+            $branchProjects = collect($projectResolver['projects'])->where('branch_id', $branchId);
+            if ($branchProjects->count() === 1) {
+                $project = (string) $branchProjects->first()->project_name;
+                $inferred = true;
+            }
+        }
+        $branchId ??= $this->resolveProjectBranch($project, $projectResolver);
         if (! $date || ! $branchId) {
             return null;
         }
@@ -416,18 +427,35 @@ class DanaTalanganGoogleService
             'nama_konsumen' => $name,
             'kav' => $this->nullable($cells[3] ?? null),
             'project_name' => $project,
-            'pinjam_nama' => $this->boolean($cells[5] ?? null),
-            'pekerjaan' => $this->nullable($cells[6] ?? null),
-            'status_perkawinan' => $this->nullable($cells[7] ?? null),
-            'umur' => is_numeric($cells[8] ?? null) ? (int) $cells[8] : null,
-            'nama_marketing' => $this->nullable($cells[9] ?? null),
-            'tgl_komitmen' => $this->parseDate($cells[10] ?? null),
-            'penyelesaian' => $this->nullable($cells[11] ?? null),
-            'konfirmasi_keuangan' => $this->boolean($cells[12] ?? null),
-            'status' => $this->status($cells[13] ?? null),
+            'pinjam_nama' => $this->boolean($cells[6] ?? null),
+            'pekerjaan' => $this->nullable($cells[7] ?? null),
+            'status_perkawinan' => $this->nullable($cells[8] ?? null),
+            'umur' => is_numeric($cells[9] ?? null) ? (int) $cells[9] : null,
+            'nama_marketing' => $this->nullable($cells[10] ?? null),
+            'tgl_komitmen' => $this->parseDate($cells[11] ?? null),
+            'nominal' => is_numeric($cells[12] ?? null) ? $cells[12] : null,
+            'penyelesaian' => $this->nullable($cells[13] ?? null),
+            'konfirmasi_keuangan' => $this->boolean($cells[14] ?? null),
+            'status' => $this->status($cells[15] ?? null),
             'branch_id' => $branchId,
             'created_by' => $creatorId,
         ], $inferred];
+    }
+
+    private function resolveBranch(string $label): ?int
+    {
+        $normalized = $this->normalize($label);
+        if ($normalized === '') {
+            return null;
+        }
+
+        $branches = Branch::query()->where('is_active', true)->get(['id', 'name', 'code']);
+        $matches = $branches->filter(fn (Branch $branch) => in_array($normalized, [
+            $this->normalize($branch->name),
+            $this->normalize($branch->code),
+        ], true));
+
+        return $matches->count() === 1 ? (int) $matches->first()->id : null;
     }
 
     private function projectResolver(): array
@@ -513,6 +541,7 @@ class DanaTalanganGoogleService
             $record->tanggal?->format('Y-m-d'),
             $record->nama_konsumen,
             $record->kav ?? '',
+            $record->branch?->name ?? '',
             $record->project_name ?? '',
             $record->pinjam_nama ? 'YA' : 'TIDAK',
             $record->pekerjaan ?? '',
@@ -520,6 +549,7 @@ class DanaTalanganGoogleService
             $record->umur ?? '',
             $record->nama_marketing ?? '',
             $record->tgl_komitmen?->format('Y-m-d') ?? '',
+            $record->nominal ?? '',
             $record->penyelesaian ?? '',
             $record->konfirmasi_keuangan,
             $record->status,
@@ -544,7 +574,7 @@ class DanaTalanganGoogleService
             return null;
         }
         foreach (array_slice($rows, 1) as $offset => $cells) {
-            if (($cells[14] ?? '') === $syncId) {
+            if (($cells[16] ?? '') === $syncId) {
                 return $offset + 2;
             }
         }

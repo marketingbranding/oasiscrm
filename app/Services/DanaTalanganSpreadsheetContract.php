@@ -9,11 +9,11 @@ use Throwable;
 
 class DanaTalanganSpreadsheetContract
 {
-    public const SHEET = 'Talangan';
+    public const SHEET = '2026';
 
     public const BUSINESS_HEADERS = [
-        'No', 'Tanggal', 'Nama Konsumen', 'Kav', 'Proyek', 'Pinjam Nama', 'Pekerjaan', 'Status Kawin',
-        'Umur', 'Marketing', 'TGL Komitmen', 'Penyelesaian', 'Konfirmasi', 'Status Cicilan',
+        'No', 'Tanggal', 'Nama Konsumen', 'Kav', 'Cabang', 'Proyek', 'Pinjam Nama', 'Pekerjaan', 'Status Kawin',
+        'Umur', 'Marketing', 'TGL Komitmen', 'Nominal', 'Penyelesaian', 'Konfirmasi', 'Status Cicilan',
     ];
 
     public const META_HEADERS = ['oasis_sync_id', 'oasis_deleted_at', 'oasis_deleted_by'];
@@ -43,22 +43,19 @@ class DanaTalanganSpreadsheetContract
             }
             $rows = $this->googleSheets->batchGetRaw(
                 $spreadsheetId,
-                [$this->googleSheets->quoteSheetName(self::SHEET).'!A1:Q1'],
+                [$this->googleSheets->quoteSheetName(self::SHEET).'!A1:S1'],
                 'FORMATTED_VALUE',
             )[self::SHEET] ?? [];
-            $headers = array_map(fn ($value) => trim((string) $value), array_pad($rows[0] ?? [], 17, ''));
+            $headers = array_map(fn ($value) => trim((string) $value), array_pad($rows[0] ?? [], count(self::HEADERS), ''));
             if (array_map($this->normalize(...), $headers) !== array_map($this->normalize(...), self::HEADERS)) {
-                throw new DanaTalanganSpreadsheetContractException('Header A:Q tab Talangan tidak sesuai kontrak OASIS.');
+                throw new DanaTalanganSpreadsheetContractException('Header A:S tab 2026 tidak sesuai kontrak OASIS.');
             }
-            if (array_slice($headers, 14, 3) !== self::META_HEADERS) {
-                throw new DanaTalanganSpreadsheetContractException('Header metadata O:Q tab Talangan tidak aman.');
+            if (array_slice($headers, count(self::BUSINESS_HEADERS), count(self::META_HEADERS)) !== self::META_HEADERS) {
+                throw new DanaTalanganSpreadsheetContractException('Header metadata Q:S tab 2026 tidak aman.');
             }
-            $metadata = $this->googleSheets->gridMetadata($spreadsheetId, self::SHEET, 'A:Q');
+            $metadata = $this->googleSheets->gridMetadata($spreadsheetId, self::SHEET, 'A:S');
             if (($metadata['formulas'] ?? []) !== []) {
-                throw new DanaTalanganSpreadsheetContractException('Formula ditemukan pada A:Q tab Talangan.');
-            }
-            if (($metadata['validations'] ?? []) !== []) {
-                throw new DanaTalanganSpreadsheetContractException('Validasi data ditemukan pada A:Q tab Talangan.');
+                throw new DanaTalanganSpreadsheetContractException('Formula ditemukan pada A:S tab 2026.');
             }
             $hash = hash('sha256', json_encode([
                 'spreadsheet_id' => $spreadsheetId,
@@ -85,11 +82,16 @@ class DanaTalanganSpreadsheetContract
         }
     }
 
+    public function sheetRange(ResolvedDanaTalanganSpreadsheetContract $contract, string $cells): string
+    {
+        return $this->googleSheets->quoteSheetName($contract->sheetName).'!'.$cells;
+    }
+
     public function rows(ResolvedDanaTalanganSpreadsheetContract $contract): array
     {
         $values = $this->googleSheets->batchGetRaw(
             $contract->spreadsheetId,
-            [$this->googleSheets->quoteSheetName(self::SHEET).'!A:Q'],
+            [$this->googleSheets->quoteSheetName(self::SHEET).'!A:S'],
             'FORMATTED_VALUE',
         )[self::SHEET] ?? [];
         $rows = [];
@@ -127,6 +129,7 @@ class DanaTalanganSpreadsheetContract
         }
         $payload['Status Cicilan'] = str_replace(' ', '_', mb_strtolower($payload['Status Cicilan']));
         $payload['Umur'] = $payload['Umur'] === '' ? '' : (string) ((int) $payload['Umur']);
+        $payload['Nominal'] = ($payload['Nominal'] ?? '') === '' ? '' : preg_replace('/[^0-9.-]/', '', (string) $payload['Nominal']);
 
         return $payload;
     }

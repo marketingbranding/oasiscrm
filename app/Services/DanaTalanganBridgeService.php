@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Enums\DanaTalanganReconciliationStatus;
 use App\Models\ActivityLog;
+use App\Models\Branch;
 use App\Models\DanaTalangan;
 use App\Models\DanaTalanganBridgeSetting;
 use App\Models\DanaTalanganReconciliationItem;
@@ -19,10 +20,15 @@ use Throwable;
 class DanaTalanganBridgeService
 {
     private const OWNED_FIELDS = [
-        'No', 'Tanggal', 'Nama Konsumen', 'Kav', 'Proyek', 'Pinjam Nama', 'Pekerjaan', 'Status Kawin', 'Umur', 'Marketing',
+        'No', 'Tanggal', 'Nama Konsumen', 'Kav', 'Cabang', 'Proyek', 'Pinjam Nama', 'Pekerjaan', 'Status Kawin', 'Umur', 'Marketing', 'Nominal',
     ];
 
     private const SHARED_FIELDS = ['TGL Komitmen', 'Penyelesaian', 'Konfirmasi', 'Status Cicilan'];
+
+    private const REMOTE_FIELDS = [
+        'No', 'Tanggal', 'Nama Konsumen', 'Kav', 'Cabang', 'Proyek', 'Pinjam Nama', 'Pekerjaan', 'Status Kawin',
+        'Umur', 'Marketing', 'TGL Komitmen', 'Nominal', 'Penyelesaian', 'Konfirmasi', 'Status Cicilan',
+    ];
 
     public function __construct(
         private readonly DanaTalanganBridgeModeService $modes,
@@ -367,11 +373,11 @@ class DanaTalanganBridgeService
             if (! hash_equals((string) data_get($item->safe_metadata, 'payload_hash'), $this->payloadHash($payload))) {
                 throw new \DomainException('Baris remote berubah sejak ditinjau.');
             }
-            [$project, $projectIssue] = $this->projects->resolveExactAcrossBranchesWithIssue($payload['Proyek']);
+            [$project, $projectIssue] = $this->resolveRemoteProject($payload);
             if ($project === null) {
                 throw new \DomainException($projectIssue === 'project_ambiguous'
                     ? 'Proyek remote cocok dengan lebih dari satu proyek aktif.'
-                    : 'Proyek remote tidak ditemukan sebagai satu proyek aktif.');
+                    : 'Proyek remote atau cabang remote tidak ditemukan sebagai satu proyek aktif.');
             }
             $attributes = $this->attributesFromPayload($payload, $project, $actor);
             Validator::make($attributes, [
@@ -452,6 +458,7 @@ class DanaTalanganBridgeService
             'Tanggal' => $record->tanggal?->format('Y-m-d'),
             'Nama Konsumen' => $record->nama_konsumen,
             'Kav' => $record->kav,
+            'Cabang' => $record->branch?->name ?? '',
             'Proyek' => $record->project_name,
             'Pinjam Nama' => $record->pinjam_nama ? 'YA' : 'TIDAK',
             'Pekerjaan' => $record->pekerjaan,
@@ -459,6 +466,7 @@ class DanaTalanganBridgeService
             'Umur' => $record->umur,
             'Marketing' => $record->nama_marketing,
             'TGL Komitmen' => $record->tgl_komitmen?->format('Y-m-d'),
+            'Nominal' => $record->nominal,
             'Penyelesaian' => $record->penyelesaian,
             'Konfirmasi' => $record->konfirmasi_keuangan ? 'YA' : 'TIDAK',
             'Status Cicilan' => $record->status,
@@ -467,7 +475,7 @@ class DanaTalanganBridgeService
 
     public function payloadHash(array $payload): string
     {
-        return $this->hash(array_intersect_key($this->normalizeRemote($payload), array_flip(array_diff([...self::OWNED_FIELDS, ...self::SHARED_FIELDS], ['No']))));
+        return $this->hash(array_intersect_key($this->normalizeRemote($payload), array_flip(array_diff(self::REMOTE_FIELDS, ['No']))));
     }
 
     private function threeWay(DanaTalangan $record, array $local, array $remote): array
@@ -517,7 +525,7 @@ class DanaTalanganBridgeService
     private function normalizeRemote(array $row): array
     {
         $payload = [];
-        foreach ([...self::OWNED_FIELDS, ...self::SHARED_FIELDS] as $field) {
+        foreach (self::REMOTE_FIELDS as $field) {
             $payload[$field] = trim((string) ($row[$field] ?? ''));
         }
         foreach (['Tanggal', 'TGL Komitmen'] as $field) {
@@ -529,6 +537,7 @@ class DanaTalanganBridgeService
         }
         $payload['Status Cicilan'] = str_replace(' ', '_', mb_strtolower($payload['Status Cicilan']));
         $payload['Umur'] = $payload['Umur'] === '' ? '' : (string) ((int) $payload['Umur']);
+        $payload['Nominal'] = ($payload['Nominal'] ?? '') === '' ? '' : preg_replace('/[^0-9.-]/', '', (string) $payload['Nominal']);
 
         return $payload;
     }
@@ -555,7 +564,7 @@ class DanaTalanganBridgeService
 
     private function toCells(array $payload): array
     {
-        return array_map(fn (string $field) => $payload[$field] ?? '', [...self::OWNED_FIELDS, ...self::SHARED_FIELDS]);
+        return array_map(fn (string $field) => $payload[$field] ?? '', self::REMOTE_FIELDS);
     }
 
     private function afterWrite(DanaTalangan $record, array $remoteRow, array $sentPayload, ?User $actor): array
@@ -633,11 +642,28 @@ class DanaTalanganBridgeService
         }
     }
 
+    private function resolveRemoteProject(array $payload): array
+    {
+        $branchLabel = mb_strtolower(trim((string) ($payload['Cabang'] ?? '')));
+        $branch = Branch::query()
+            ->where('is_active', true)
+            ->where(function ($query) use ($branchLabel): void {
+                $query->whereRaw('LOWER(name) = ?', [$branchLabel])
+                    ->orWhereRaw('LOWER(code) = ?', [$branchLabel]);
+            })
+            ->first();
+
+        return $branch
+            ? $this->projects->resolveExactWithIssue($branch->id, $payload['Proyek'])
+            : $this->projects->resolveExactAcrossBranchesWithIssue($payload['Proyek']);
+    }
+
     private function attributesFromPayload(array $payload, LeadMaster $project, User $actor): array
     {
         return [
             'project_id' => $project->id,
             'branch_id' => $project->branch_id,
+            'nominal' => ($payload['Nominal'] ?? '') === '' ? null : $payload['Nominal'],
             'tanggal' => $this->date($payload['Tanggal'])?->format('Y-m-d'),
             'nama_konsumen' => $payload['Nama Konsumen'],
             'kav' => $payload['Kav'] ?: null,
@@ -718,7 +744,7 @@ class DanaTalanganBridgeService
     {
         $payload = $this->normalizeRemote($payload);
 
-        return collect(array_diff([...self::OWNED_FIELDS, ...self::SHARED_FIELDS], ['No']))->mapWithKeys(fn (string $field) => [$field => $this->hash($payload[$field])])->all();
+        return collect(array_diff(self::REMOTE_FIELDS, ['No']))->mapWithKeys(fn (string $field) => [$field => $this->hash($payload[$field])])->all();
     }
 
     private function baseline(DanaTalangan $record): ?string

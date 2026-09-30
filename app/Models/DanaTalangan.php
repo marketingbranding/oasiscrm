@@ -39,6 +39,7 @@ class DanaTalangan extends Model
         'umur',
         'nama_marketing',
         'tgl_komitmen',
+        'nominal',
         'penyelesaian',
         'konfirmasi_keuangan',
         'branch_id',
@@ -53,6 +54,7 @@ class DanaTalangan extends Model
         return [
             'tanggal' => 'date',
             'tgl_komitmen' => 'date',
+            'nominal' => 'decimal:2',
             'pinjam_nama' => 'boolean',
             'konfirmasi_keuangan' => 'boolean',
             'umur' => 'integer',

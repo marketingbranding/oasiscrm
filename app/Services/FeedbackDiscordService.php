@@ -9,11 +9,15 @@ use Throwable;
 
 class FeedbackDiscordService
 {
+    public function __construct(private readonly ExternalWriteGuard $externalWrites) {}
+
     public function send(FeedbackReport $report): void
     {
         if (! config('services.feedback_discord.enabled') || blank(config('services.feedback_discord.webhook_url'))) {
             return;
         }
+
+        $this->externalWrites->assertAllowed();
 
         $fields = [
             ['name' => 'Report ID', 'value' => '#'.$report->id, 'inline' => true],

@@ -20,7 +20,7 @@ class GoogleSheetsApiService
 {
     private Sheets $sheets;
 
-    public function __construct()
+    public function __construct(private readonly ExternalWriteGuard $externalWrites)
     {
         $credentialsPath = config('services.google_sheets.credentials_path');
         if (! $credentialsPath || ! file_exists($credentialsPath)) {
@@ -215,6 +215,8 @@ class GoogleSheetsApiService
 
     public function updateRange(string $spreadsheetId, string $range, array $values): void
     {
+        $this->externalWrites->assertAllowed();
+
         $body = new ValueRange(['values' => $values]);
         $this->sheets->spreadsheets_values->update($spreadsheetId, $range, $body, [
             'valueInputOption' => 'USER_ENTERED',
@@ -223,6 +225,8 @@ class GoogleSheetsApiService
 
     public function batchUpdateRanges(string $spreadsheetId, array $ranges, string $valueInputOption = 'USER_ENTERED'): void
     {
+        $this->externalWrites->assertAllowed();
+
         if (empty($ranges)) {
             return;
         }
@@ -260,6 +264,8 @@ class GoogleSheetsApiService
 
     public function appendRange(string $spreadsheetId, string $range, array $values): void
     {
+        $this->externalWrites->assertAllowed();
+
         $body = new ValueRange(['values' => $values]);
         $this->sheets->spreadsheets_values->append($spreadsheetId, $range, $body, [
             'valueInputOption' => 'USER_ENTERED',
@@ -269,6 +275,8 @@ class GoogleSheetsApiService
 
     public function appendRows(string $spreadsheetId, string $range, array $values): GoogleSheetsAppendResult
     {
+        $this->externalWrites->assertAllowed();
+
         $body = new ValueRange(['values' => $values]);
         $response = $this->sheets->spreadsheets_values->append($spreadsheetId, $range, $body, [
             'valueInputOption' => 'USER_ENTERED',
@@ -369,6 +377,8 @@ class GoogleSheetsApiService
 
     public function makeColumnValidationWarningOnly(string $spreadsheetId, string $sheetName, int $sheetId, int $columnIndex): void
     {
+        $this->externalWrites->assertAllowed();
+
         $spreadsheet = $this->sheets->spreadsheets->get($spreadsheetId, [
             'ranges' => [$this->quoteSheetName($sheetName).'!'.$this->columnLetter($columnIndex + 1).'2'],
             'includeGridData' => true,
@@ -398,6 +408,8 @@ class GoogleSheetsApiService
 
     public function hideColumns(string $spreadsheetId, int $sheetId, int $startIndex, int $endIndex): void
     {
+        $this->externalWrites->assertAllowed();
+
         $request = new Request([
             'updateDimensionProperties' => [
                 'range' => [
@@ -418,6 +430,8 @@ class GoogleSheetsApiService
 
     public function copyRowFormulas(string $spreadsheetId, int $sheetId, int $sourceRowNumber, int $destinationRowNumber): void
     {
+        $this->externalWrites->assertAllowed();
+
         if ($sourceRowNumber < 2 || $destinationRowNumber < 2) {
             return;
         }
@@ -446,6 +460,8 @@ class GoogleSheetsApiService
 
     public function copyRowFormat(string $spreadsheetId, int $sheetId, int $sourceRowNumber, int $destinationRowNumber): void
     {
+        $this->externalWrites->assertAllowed();
+
         if ($sourceRowNumber < 2 || $destinationRowNumber < 2) {
             return;
         }
@@ -474,6 +490,8 @@ class GoogleSheetsApiService
 
     public function deleteColumns(string $spreadsheetId, int $sheetId, int $startIndex, int $endIndex): void
     {
+        $this->externalWrites->assertAllowed();
+
         $request = new Request([
             'deleteDimension' => [
                 'range' => [

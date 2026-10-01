@@ -13,7 +13,7 @@ class GoogleScriptService
 
     private int $timeout;
 
-    public function __construct()
+    public function __construct(private readonly ExternalWriteGuard $externalWrites)
     {
         $this->webhookUrl = config('services.google_script.webhook_url');
         $this->timeout = config('services.google_script.timeout', 30);
@@ -21,11 +21,13 @@ class GoogleScriptService
 
     public function sendData(array $data, string $endpoint = ''): array
     {
+        $this->externalWrites->assertAllowed();
+
         $url = $endpoint
-            ? rtrim($this->webhookUrl, '/') . '/' . ltrim($endpoint, '/')
+            ? rtrim($this->webhookUrl, '/').'/'.ltrim($endpoint, '/')
             : $this->webhookUrl;
 
-        if (!$url) {
+        if (! $url) {
             Log::warning('Google Script webhook URL not configured.');
 
             return ['success' => false, 'error' => 'Webhook URL not configured'];
@@ -52,7 +54,7 @@ class GoogleScriptService
                 'status' => $response->status(),
             ];
         } catch (\Exception $e) {
-            Log::error('Google Script connection error: ' . $e->getMessage());
+            Log::error('Google Script connection error: '.$e->getMessage());
 
             return [
                 'success' => false,
@@ -63,11 +65,11 @@ class GoogleScriptService
 
     public function fetchData(array $params = []): array
     {
-        if (!$this->webhookUrl) {
+        if (! $this->webhookUrl) {
             return ['success' => false, 'error' => 'Webhook URL not configured'];
         }
 
-        $cacheKey = 'google_script_' . md5(serialize($params));
+        $cacheKey = 'google_script_'.md5(serialize($params));
 
         return Cache::remember($cacheKey, now()->addMinutes(5), function () use ($params) {
             try {
@@ -101,7 +103,7 @@ class GoogleScriptService
                 'Content-Type' => 'application/json',
             ]);
 
-        if (!config('services.google_script.verify_ssl')) {
+        if (! config('services.google_script.verify_ssl')) {
             $client = $client->withoutVerifying();
         }
 

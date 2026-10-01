@@ -39,7 +39,11 @@ class FeedbackReportTest extends TestCase
     public function test_discord_failure_does_not_fail_or_delete_local_report(): void
     {
         [$branch, $user] = $this->branchAndUser();
-        config(['services.feedback_discord.enabled' => true, 'services.feedback_discord.webhook_url' => 'https://discord.example.invalid/webhook']);
+        config([
+            'services.external_writes.enabled' => true,
+            'services.feedback_discord.enabled' => true,
+            'services.feedback_discord.webhook_url' => 'https://discord.example.invalid/webhook',
+        ]);
         Http::fake(['*' => Http::response('provider body must not be logged', 500)]);
 
         $this->actingAs($user)->postJson(route('feedback-reports.store'), $this->bugPayload($branch))->assertCreated();

@@ -87,12 +87,13 @@ final class ConsumerOperationalService
     public function update(ConsumerApplication $application, array $data, User $actor, ConsumerKavlingLifecycleService $lifecycle): ConsumerApplication
     {
         return DB::transaction(function () use ($application, $data, $actor, $lifecycle): ConsumerApplication {
+            $previousConsumerStatus = $application->consumer_status;
             $application->update([
                 'sales_user_id' => $data['sales_user_id'] ?? null, 'promo_id' => $data['promo_id'] ?? null,
                 'status_cash' => $data['status_cash'] ?? null, 'notes' => $data['notes'] ?? null,
             ]);
             $status = $data['consumer_status'] ?? null;
-            if ($status === 'Mundur' && $application->consumer_status !== 'Mundur') {
+            if ($status === 'Mundur' && $previousConsumerStatus !== 'Mundur') {
                 $lifecycle->mundur($application);
             } elseif ($status === 'Pindah Kavling') {
                 if (empty($data['target_kavling_id'])) {

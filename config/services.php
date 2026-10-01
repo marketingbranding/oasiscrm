@@ -2,6 +2,10 @@
 
 return [
 
+    'external_writes' => [
+        'enabled' => env('OASIS_ALLOW_EXTERNAL_WRITES', false),
+    ],
+
     'postmark' => [
         'token' => env('POSTMARK_TOKEN'),
     ],

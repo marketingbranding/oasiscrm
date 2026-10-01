@@ -93,7 +93,7 @@ final class MarisonV2TransactionImporter
     {
         foreach ($rows as $i => $row) {
             $id = (string) ($row['id_kons'] ?? 'bi-'.$i);
-            $this->event($application, $import, 'bi_checking', $id, $row, $row['tanggal_slik'] ?? null, $row['hasil_slik'] ?? null);
+            $this->event($application, $import, 'bi_checking', $id, $row, $row['tanggal_slik'] ?? null, $row['hasil_slik'] ?? null, $row['keputusan'] ?? $row['decision'] ?? null);
         }
     }
 
@@ -173,12 +173,13 @@ final class MarisonV2TransactionImporter
         }
     }
 
-    private function event(ConsumerApplication $application, MarisonImportTransaction $import, string $stage, string $id, array $row, mixed $date, mixed $status): ConsumerStageEvent
+    private function event(ConsumerApplication $application, MarisonImportTransaction $import, string $stage, string $id, array $row, mixed $date, mixed $status, mixed $decision = null): ConsumerStageEvent
     {
         $event = ConsumerStageEvent::query()->create([
             'consumer_application_id' => $application->id, 'stage' => $stage, 'source_id' => mb_substr($id, 0, 255),
             'source' => $stage === 'status_history' || $stage === 'migration_baseline' ? 'marison_v2_history' : MarisonV2PackageValidator::SOURCE_SYSTEM,
             'event_date' => $this->date($date), 'occurred_at' => $this->dateTime($date), 'status' => is_scalar($status) ? (string) $status : null,
+            'decision' => is_scalar($decision) ? (string) $decision : null,
             'notes' => $row['keterangan'] ?? null, 'metadata' => $this->metadata($row),
         ]);
         $this->source($import, $application, $stage.'_event', $id, $row, $event);

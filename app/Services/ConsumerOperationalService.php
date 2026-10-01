@@ -112,7 +112,8 @@ final class ConsumerOperationalService
             $id = $this->nextId('bi_checking', $date, $application, $data['hasil_slik']);
             $event = $application->stageEvents()->create([
                 'stage' => 'bi_checking', 'source_id' => $id, 'source' => 'manual', 'occurred_at' => $date,
-                'status' => $data['hasil_slik'], 'notes' => $data['keterangan'] ?? null, 'actor_id' => $actor->id,
+                'status' => $data['hasil_slik'], 'decision' => $data['keputusan'] ?? $data['decision'] ?? null,
+                'notes' => $data['keterangan'] ?? null, 'actor_id' => $actor->id,
                 'metadata' => ['id_kavling' => $application->kavling?->kavling_code],
             ]);
             $application->update(['current_stage' => 'bi_checking']);
@@ -151,24 +152,87 @@ final class ConsumerOperationalService
 
     public function recordPemberkasan(ConsumerApplication $application, array $data, User $actor): ConsumerBankProcess
     {
-        return $this->recordBankStage($application, 'pemberkasan', $data, $actor);
+        return $this->recordBankStage($application, 'pemberkasan', $data, $actor, true);
     }
 
     public function recordProsesBank(ConsumerApplication $application, array $data, User $actor): ConsumerBankProcess
     {
-        return $this->recordBankStage($application, 'proses_bank', $data, $actor);
+        return $this->recordBankStage($application, 'proses_bank', $data, $actor, false);
     }
 
-    private function recordBankStage(ConsumerApplication $application, string $stage, array $data, User $actor): ConsumerBankProcess
+    public function recordReady100(ConsumerApplication $application, array $data, User $actor): ConsumerStageEvent
     {
-        return \DB::transaction(function () use ($application, $stage, $data, $actor): ConsumerBankProcess {
+        return \DB::transaction(function () use ($application, $data, $actor): ConsumerStageEvent {
+            $date = CarbonImmutable::parse($data['ready_100_at']);
+
+            return $application->stageEvents()->create([
+                'stage' => 'ready_100',
+                'status' => $data['status'] ?? 'confirmed',
+                'source' => $data['source'] ?? 'manual',
+                'source_id' => $data['source_id'] ?? null,
+                'event_date' => $date->toDateString(),
+                'occurred_at' => $date,
+                'notes' => $data['notes'] ?? null,
+                'actor_id' => $actor->id,
+                'metadata' => $data['metadata'] ?? null,
+            ]);
+        });
+    }
+
+    private function recordBankStage(ConsumerApplication $application, string $stage, array $data, User $actor, bool $startNewAttempt): ConsumerBankProcess
+    {
+        return \DB::transaction(function () use ($application, $stage, $data, $actor, $startNewAttempt): ConsumerBankProcess {
+            $application = ConsumerApplication::query()->lockForUpdate()->findOrFail($application->id);
             $date = $data['tanggal_terima_bank'] ?? now()->toDateString();
             $event = $this->appendEvent($application, $stage, $data['status'] ?? $data['response_type'] ?? null, $data['notes'] ?? null, $date, $actor, $data);
-            $record = $application->bankProcesses()->create($data + ['consumer_stage_event_id' => $event->id, 'source' => 'manual']);
+            $record = $startNewAttempt ? null : $this->resolveBankAttempt($application, $data);
+            $attributes = $this->bankAttributes($data);
+
+            if ($record === null) {
+                $record = $application->bankProcesses()->create($attributes + ['source' => 'manual']);
+            } else {
+                $record->fill($attributes);
+                $record->save();
+            }
             $this->advanceStage($application, $stage, $actor);
 
             return $record;
         });
+    }
+
+    private function resolveBankAttempt(ConsumerApplication $application, array $data): ?ConsumerBankProcess
+    {
+        if (! empty($data['attempt_no'])) {
+            return $application->bankProcesses()->where('attempt_no', $data['attempt_no'])->first();
+        }
+
+        if (filled($data['attempt_key'] ?? null)) {
+            return $application->bankProcesses()->where('attempt_key', $data['attempt_key'])->first();
+        }
+
+        if (filled($data['source_id'] ?? null)) {
+            return $application->bankProcesses()->where('source_id', $data['source_id'])->first();
+        }
+
+        return $application->bankProcesses()
+            ->whereNull('sp3k_at')
+            ->where(function ($query): void {
+                $query->whereNull('status')->orWhereNotIn('status', ['reject', 'rejected', 'ditolak', 'cancelled']);
+            })
+            ->latest('attempt_no')
+            ->latest('id')
+            ->first();
+    }
+
+    private function bankAttributes(array $data): array
+    {
+        $fields = [
+            'tanggal_terima_bank', 'id_berkas', 'no_sp3k', 'bank_name', 'kc_unit', 'request_plafond', 'request_tenor',
+            'approved_plafond', 'approved_tenor', 'response_type', 'status', 'revision_category', 'revision_detail',
+            'obstacle', 'notes', 'submitted_at', 'verified_at', 'sp3k_at', 'rejected_at', 'rejection_reason',
+        ];
+
+        return array_intersect_key($data, array_flip($fields));
     }
 
     public function recordPpjb(ConsumerApplication $application, array $data, User $actor): ConsumerPpjbDeveloper

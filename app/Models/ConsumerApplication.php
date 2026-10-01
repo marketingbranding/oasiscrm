@@ -8,6 +8,8 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Support\Str;
+use LogicException;
 
 class ConsumerApplication extends Model
 {
@@ -34,6 +36,21 @@ class ConsumerApplication extends Model
         'akad_date',
         'notes',
     ];
+
+    protected static function booted(): void
+    {
+        static::creating(function (self $application): void {
+            if (blank($application->id_transaksi)) {
+                $application->id_transaksi = self::generateTransactionIdentity($application->branch_id);
+            }
+        });
+
+        static::updating(function (self $application): void {
+            if ($application->isDirty('id_transaksi')) {
+                throw new LogicException('ID transaksi konsumen bersifat immutable.');
+            }
+        });
+    }
 
     protected function casts(): array
     {
@@ -138,5 +155,25 @@ class ConsumerApplication extends Model
     public function bastRecords(): HasMany
     {
         return $this->hasMany(ConsumerBastRecord::class, 'consumer_application_id');
+    }
+
+    public function ready100Events(): HasMany
+    {
+        return $this->stageEvents()->where('stage', 'ready_100');
+    }
+
+    public function hasReady100(): bool
+    {
+        return $this->ready100Events()->exists();
+    }
+
+    public static function generateTransactionIdentity(?int $branchId): string
+    {
+        $branchCode = $branchId === null
+            ? null
+            : Branch::query()->whereKey($branchId)->value('code');
+        $branchToken = strtoupper(trim((string) preg_replace('/[^A-Za-z0-9]+/', '-', (string) $branchCode), '-'));
+
+        return 'TRX-'.($branchToken !== '' ? $branchToken : 'BRANCH'.($branchId ?? 'UNKNOWN')).'-'.strtoupper((string) Str::ulid());
     }
 }

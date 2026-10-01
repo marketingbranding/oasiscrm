@@ -59,6 +59,25 @@ final class ConsumerApplicationLifecycleService
         return $this->operational->gantiBank($application, $data, $actor);
     }
 
+    public function mundur(ConsumerApplication $application, User $actor): ConsumerApplication
+    {
+        $this->authorize($actor, $application);
+
+        return $this->operational->update($application, ['consumer_status' => 'Mundur'], $actor, $this->kavlingLifecycle);
+    }
+
+    public function pindahKavling(ConsumerApplication $application, Kavling $targetKavling, User $actor): ConsumerApplication
+    {
+        $this->authorize($actor, $application);
+
+        return $this->operational->update(
+            $application,
+            ['consumer_status' => 'Pindah Kavling', 'target_kavling_id' => $targetKavling->id],
+            $actor,
+            $this->kavlingLifecycle,
+        );
+    }
+
     public function recordReady100(ConsumerApplication $application, array $data, User $actor): ConsumerStageEvent
     {
         $this->authorize($actor, $application);

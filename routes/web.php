@@ -11,6 +11,7 @@ use App\Http\Controllers\Crm\CommentModerationController;
 use App\Http\Controllers\Crm\CommentThreadController;
 use App\Http\Controllers\Crm\ConsumerComparisonController;
 use App\Http\Controllers\Crm\ConsumerHistoricalProcessImportController;
+use App\Http\Controllers\Crm\ConsumerLifecycleController;
 use App\Http\Controllers\Crm\ConsumerMigrationReconciliationController;
 use App\Http\Controllers\Crm\ConsumerPasteImportController;
 use App\Http\Controllers\Crm\ContentCalendarController;
@@ -210,6 +211,13 @@ Route::middleware(['auth', 'active', 'verified', 'password.changed', 'operationa
         Route::get('/konsumen-progress/stage', [KonsumenProgressController::class, 'stage'])->middleware('permission:consumer_progress.view')->name('konsumen-progress.stage');
         Route::post('/konsumen-progress/sync', [KonsumenProgressController::class, 'sync'])->middleware('permission:consumer_progress.sync')->name('konsumen-progress.sync');
         Route::get('/konsumen-progress/sync/status', [KonsumenProgressController::class, 'syncStatus'])->middleware('permission:consumer_progress.sync')->name('konsumen-progress.sync-status');
+        Route::post('/konsumen-progress/applications/{consumer_application}/mundur', [ConsumerLifecycleController::class, 'mundur'])->middleware('not.impersonating')->name('consumer-applications.mundur');
+        Route::post('/konsumen-progress/applications/{consumer_application}/pindah-kavling', [ConsumerLifecycleController::class, 'pindahKavling'])->middleware('not.impersonating')->name('consumer-applications.pindah-kavling');
+        Route::post('/konsumen-progress/applications/{consumer_application}/ganti-bank', [ConsumerLifecycleController::class, 'gantiBank'])->middleware('not.impersonating')->name('consumer-applications.ganti-bank');
+        Route::post('/konsumen-progress/applications/{consumer_application}/ganti-konsumen', [ConsumerLifecycleController::class, 'gantiKonsumen'])->middleware('not.impersonating')->name('consumer-applications.ganti-konsumen');
+        Route::post('/konsumen-progress/applications/{consumer_application}/ready100', [ConsumerLifecycleController::class, 'ready100'])->middleware('not.impersonating')->name('consumer-applications.ready100');
+        Route::post('/konsumen-progress/applications/{consumer_application}/akad', [ConsumerLifecycleController::class, 'akad'])->middleware('not.impersonating')->name('consumer-applications.akad');
+        Route::post('/konsumen-progress/applications/{consumer_application}/bast', [ConsumerLifecycleController::class, 'bast'])->middleware('not.impersonating')->name('consumer-applications.bast');
     });
 
     Route::middleware('permission:consumer_progress.view')->group(function () {

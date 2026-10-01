@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Support\ConsumerIdentity;
 use Database\Factories\CustomerFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -12,6 +13,13 @@ class Customer extends Model
 {
     /** @use HasFactory<CustomerFactory> */
     use HasFactory, SoftDeletes;
+
+    protected static function booted(): void
+    {
+        static::saving(function (self $customer): void {
+            $customer->nik_hash = ConsumerIdentity::nikHash($customer->nik_encrypted);
+        });
+    }
 
     protected $fillable = ['name', 'phone', 'email', 'nik_encrypted', 'date_of_birth', 'occupation', 'occupation_detail', 'address', 'kelurahan', 'kecamatan', 'kabupaten_kota', 'emergency_contact_name', 'emergency_contact_phone'];
 

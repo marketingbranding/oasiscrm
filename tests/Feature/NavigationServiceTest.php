@@ -116,18 +116,18 @@ class NavigationServiceTest extends TestCase
         $this->assertNotContains('Laporan Fee Sales', $this->labels($supplementalNavigation));
     }
 
-    public function test_database_is_direct_group_and_sales_keeps_buku_saku_and_konsumen_progress(): void
+    public function test_database_is_direct_group_and_sales_keeps_buku_saku_and_consumer_workspaces(): void
     {
-        $navigation = $this->navigationFor('superadmin', 'konsumen-progress.index');
+        $navigation = $this->navigationFor('superadmin', 'consumer-database.workspace');
         $database = collect($navigation)->firstWhere('key', 'database');
         $sales = collect($navigation)->firstWhere('key', 'sales');
         $labels = array_column($sales['children'], 'label');
 
-        $this->assertSame(['Buku Saku Sales', 'Konsumen Progress'], $labels);
+        $this->assertSame(['Buku Saku Sales', 'Database Konsumen', 'Konsumen Progress'], $labels);
         $this->assertSame('Database', $database['label']);
         $this->assertSame('database', $database['icon']);
         $this->assertTrue($database['direct']);
-        $this->assertTrue(collect($sales['children'])->firstWhere('label', 'Konsumen Progress')['active']);
+        $this->assertTrue(collect($sales['children'])->firstWhere('label', 'Database Konsumen')['active']);
         $this->assertNotContains('Database', $labels);
     }
 

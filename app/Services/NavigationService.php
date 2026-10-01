@@ -40,6 +40,9 @@ class NavigationService
                     ? $this->item('Daily Planning', 'sales-daily-plans.index', 'calendar', 'sales', ['sales-daily-plans.*'], $routeName, null, $moduleMaintenance)
                     : null,
                 ! $isSales && $user->hasPermission('consumer_progress.view') && $user->hasScopedPermission('consumer_progress')
+                    ? $this->item('Database Konsumen', 'consumer-database.workspace', 'customers', 'consumer-progress', ['consumer-database.*'], $routeName, 'consumer_progress', $moduleMaintenance)
+                    : null,
+                ! $isSales && $user->hasPermission('consumer_progress.view') && $user->hasScopedPermission('consumer_progress')
                     ? $this->item('Konsumen Progress', 'konsumen-progress.index', 'customers', 'consumer-progress', ['konsumen-progress.*'], $routeName, 'consumer_progress', $moduleMaintenance)
                     : null,
             ]),

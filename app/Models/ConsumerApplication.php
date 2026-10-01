@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Support\ConsumerIdentity;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -44,6 +45,10 @@ class ConsumerApplication extends Model
             if (blank($application->id_transaksi)) {
                 $application->id_transaksi = self::generateTransactionIdentity($application->branch_id);
             }
+        });
+
+        static::saving(function (self $application): void {
+            $application->nik_hash = ConsumerIdentity::nikHash($application->nik);
         });
 
         static::updating(function (self $application): void {

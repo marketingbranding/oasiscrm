@@ -15,6 +15,7 @@ class LeadMaster extends Model
         'branch_id',
         'project_name',
         'sheet_project_name',
+        'sheet_project_aliases',
         'lead_source',
         'category',
         'is_active',
@@ -26,6 +27,7 @@ class LeadMaster extends Model
         return [
             'is_active' => 'boolean',
             'is_nup_eligible' => 'boolean',
+            'sheet_project_aliases' => 'array',
         ];
     }
 

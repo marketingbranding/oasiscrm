@@ -17,13 +17,14 @@ class ProjectIdentityResolverTest extends TestCase
     {
         $branch = Branch::create(['name' => 'Resolver Branch', 'code' => 'RES', 'is_active' => true]);
         $otherBranch = Branch::create(['name' => 'Other Branch', 'code' => 'OTH', 'is_active' => true]);
-        $project = LeadMaster::create(['branch_id' => $branch->id, 'project_name' => 'Canonical Project', 'sheet_project_name' => 'Sheet Alias', 'is_active' => true]);
+        $project = LeadMaster::create(['branch_id' => $branch->id, 'project_name' => 'Canonical Project', 'sheet_project_name' => 'Sheet Alias', 'sheet_project_aliases' => ['Second Alias'], 'is_active' => true]);
         LeadMaster::create(['branch_id' => $otherBranch->id, 'project_name' => 'Canonical Project', 'sheet_project_name' => 'Sheet Alias', 'is_active' => true]);
         $resolver = app(ProjectIdentityResolver::class);
 
         $this->assertTrue($resolver->resolveExact($branch, ' canonical   PROJECT ')->is($project));
         $this->assertTrue($resolver->resolveExact($branch->id, ' sheet alias ')->is($project));
-        $this->assertSame(['Canonical Project', 'Sheet Alias'], $resolver->labels($project));
+        $this->assertTrue($resolver->resolveExact($branch->id, ' second alias ')->is($project));
+        $this->assertSame(['Canonical Project', 'Sheet Alias', 'Second Alias'], $resolver->labels($project));
     }
 
     public function test_duplicate_identity_is_ambiguous_with_existing_issue_api(): void

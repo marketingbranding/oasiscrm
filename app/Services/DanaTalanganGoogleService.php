@@ -460,10 +460,16 @@ class DanaTalanganGoogleService
 
     private function projectResolver(): array
     {
-        $projects = LeadMaster::where('is_active', true)->whereNotNull('branch_id')->get(['project_name', 'branch_id']);
+        $projects = LeadMaster::where('is_active', true)->whereNotNull('branch_id')->get(['project_name', 'sheet_project_name', 'sheet_project_aliases', 'branch_id']);
         $exact = [];
         foreach ($projects as $project) {
             $exact[$this->normalize($project->project_name)] = (int) $project->branch_id;
+            if (filled($project->sheet_project_name)) {
+                $exact[$this->normalize($project->sheet_project_name)] = (int) $project->branch_id;
+            }
+            foreach ($project->sheet_project_aliases ?? [] as $alias) {
+                $exact[$this->normalize((string) $alias)] = (int) $project->branch_id;
+            }
         }
         $aliases = [];
         foreach (config('services.google_sheets.dana_talangan_project_branches', []) as $project => $branchCode) {

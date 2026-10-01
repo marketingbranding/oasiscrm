@@ -71,7 +71,11 @@ final class ProjectIdentityResolver
 
     public function labels(LeadMaster $project): array
     {
-        $labels = array_filter([$project->project_name, $project->sheet_project_name], fn ($label) => $this->normalize((string) $label) !== '');
+        $labels = array_merge(
+            [$project->project_name, $project->sheet_project_name],
+            is_array($project->sheet_project_aliases) ? $project->sheet_project_aliases : [],
+        );
+        $labels = array_filter($labels, fn ($label) => $this->normalize((string) $label) !== '');
         $seen = [];
 
         return array_values(array_filter($labels, function ($label) use (&$seen): bool {

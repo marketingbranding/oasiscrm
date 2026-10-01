@@ -17,6 +17,7 @@ class ConsumerStageEvent extends Model
         'source',
         'event_date',
         'status',
+        'decision',
         'notes',
         'reason',
         'occurred_at',

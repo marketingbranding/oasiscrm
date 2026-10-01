@@ -99,6 +99,7 @@ class ConsumerOperationalTest extends TestCase
         [$application, $kavling, $actor] = $this->imported('akad');
         app(ConsumerKavlingLifecycleService::class)->assign($application, $kavling);
         $service = app(ConsumerOperationalService::class);
+        $service->recordReady100($application, ['ready_100_at' => '2026-09-04'], $actor);
         $service->recordBast($application, ['tanggal_bast' => '2026-09-05'], $actor, app(ConsumerKavlingLifecycleService::class));
         $this->assertSame(1, $application->stageEvents()->where('stage', 'akad')->count());
         $this->assertSame('bast', $application->fresh()->current_stage);
@@ -133,11 +134,12 @@ class ConsumerOperationalTest extends TestCase
         $service->recordProsesBank($application->fresh(), ['no_sp3k' => 'SP3K-1', 'response_type' => 'approved', 'approved_plafond' => '0'], $actor);
         $service->recordPpjb($application->fresh(), ['tanggal_ttd_ppjb' => '2026-08-03'], $actor);
         $service->recordAkad($application->fresh(), ['tanggal_akad' => '2026-08-04'], $actor, $lifecycle);
+        $service->recordReady100($application->fresh(), ['ready_100_at' => '2026-08-04'], $actor);
         $service->recordBast($application->fresh(), ['tanggal_bast' => '2026-08-05'], $actor, $lifecycle);
 
         $fresh = $application->fresh();
         $this->assertSame('bast', $fresh->current_stage);
-        $this->assertSame(5, $fresh->stageEvents()->count());
+        $this->assertSame(6, $fresh->stageEvents()->count());
         $this->assertSame('sold', $fresh->kavling?->consumerAssignments()->latest('id')->first()?->assignment_status);
         $this->assertSame(1, ConsumerAkadRecord::where('consumer_application_id', $fresh->id)->count());
         $this->assertSame(1, ConsumerBastRecord::where('consumer_application_id', $fresh->id)->count());

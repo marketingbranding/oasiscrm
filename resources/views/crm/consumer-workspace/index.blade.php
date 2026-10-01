@@ -16,6 +16,10 @@
         $workspaceConfig = [
             'detailUrl' => route('consumer-database.workspace.show', ['consumerApplication' => '__ID__']),
         ];
+        $emptyTitle = $activeFilters->isNotEmpty() ? 'Tidak ada hasil' : 'Belum ada data konsumen';
+        $emptyDescription = $activeFilters->isNotEmpty()
+            ? 'Tidak ada konsumen yang sesuai dengan pencarian atau filter aktif.'
+            : 'Belum ada data konsumen dalam lingkup yang dapat Anda akses.';
     @endphp
 
     <div x-data="consumerWorkspace(@js($workspaceConfig))">
@@ -42,7 +46,7 @@
                     <input id="consumer-workspace-search" type="search" name="search" value="{{ $search }}" placeholder="Nama, no HP, NIK 16 digit, transaksi, atau kavling" class="crm-control w-full">
                 </div>
                 @if($showBranchFilter)
-                    <div>
+                    <div class="w-full sm:w-auto">
                     <label for="consumer-workspace-branch" class="crm-type-label">Cabang</label>
                     <select id="consumer-workspace-branch" name="branch_id" class="crm-control">
                         <option value="">Semua cabang</option>
@@ -52,7 +56,7 @@
                     </select>
                     </div>
                 @endif
-                <div>
+                <div class="w-full sm:w-auto">
                     <label for="consumer-workspace-project" class="crm-type-label">Proyek</label>
                     <select id="consumer-workspace-project" name="project_id" class="crm-control">
                         <option value="">Semua proyek</option>
@@ -61,7 +65,7 @@
                         @endforeach
                     </select>
                 </div>
-                <div>
+                <div class="w-full sm:w-auto">
                     <label for="consumer-workspace-status" class="crm-type-label">Status</label>
                     <select id="consumer-workspace-status" name="status" class="crm-control">
                         <option value="">Semua status</option>
@@ -70,7 +74,7 @@
                         @endforeach
                     </select>
                 </div>
-                <div>
+                <div class="w-full sm:w-auto">
                     <label for="consumer-workspace-stage" class="crm-type-label">Tahap</label>
                     <select id="consumer-workspace-stage" name="stage" class="crm-control">
                         <option value="">Semua tahap</option>
@@ -79,7 +83,7 @@
                         @endforeach
                     </select>
                 </div>
-                <div>
+                <div class="w-full sm:w-auto">
                     <label for="consumer-workspace-sales" class="crm-type-label">Sales</label>
                     <select id="consumer-workspace-sales" name="sales_id" class="crm-control">
                         <option value="">Semua Sales</option>
@@ -88,7 +92,7 @@
                         @endforeach
                     </select>
                 </div>
-                <div>
+                <div class="w-full sm:w-auto">
                     <label for="consumer-workspace-bank" class="crm-type-label">Bank</label>
                     <select id="consumer-workspace-bank" name="bank" class="crm-control">
                         <option value="">Semua bank</option>
@@ -117,7 +121,7 @@
         <div class="mb-3 flex items-center justify-between gap-3">
             <div>
                 <h2 class="font-[Helvetica] text-sm font-bold uppercase">Daftar konsumen</h2>
-                <p class="text-sm text-gray-600">Data lokal tidak mengubah Google Sheet pada fase ini.</p>
+                <p class="text-sm text-gray-600">Data ini bersifat baca-saja pada fase ini.</p>
             </div>
             <span class="text-xs text-gray-600">{{ $applications->firstItem() ?? 0 }}–{{ $applications->lastItem() ?? 0 }} dari {{ $applications->total() }}</span>
         </div>
@@ -133,6 +137,7 @@
                         <th scope="col">Kavling</th>
                         <th scope="col">Sales</th>
                         <th scope="col">Tahap</th>
+                        <th scope="col">Bank Saat Ini</th>
                         <th scope="col">Status</th>
                         <th scope="col">Aksi</th>
                     </tr>
@@ -143,6 +148,7 @@
                             $stage = $stageOptions[$application->current_stage] ?? $application->current_stage;
                             $status = $application->consumer_status ?: $application->application_status;
                             $statusLabel = $statusOptions[$status] ?? $status;
+                            $bank = $application->bankProcesses->sortByDesc('attempt_no')->first()?->bank_name;
                             $kavling = $application->kavling?->kavling_code ?: $application->kavling?->name ?: $application->id_kavling;
                         @endphp
                         <tr>
@@ -155,11 +161,12 @@
                             <td>{{ $kavling ?: '—' }}</td>
                             <td>{{ $application->sales?->name ?: '—' }}</td>
                             <td>{{ $stage ?: 'Belum ditentukan' }}</td>
+                            <td>{{ $bank ?: 'Belum ada' }}</td>
                             <td><x-crm.status-badge variant="{{ in_array($status, ['Mundur', 'REPLACED'], true) ? 'danger' : ($status === 'Lanjut' || $status === 'active' ? 'success' : 'neutral') }}">{{ $statusLabel ?: 'Belum ditentukan' }}</x-crm.status-badge></td>
                             <td><button type="button" class="font-bold text-[#0000ee] underline" @click="openDetail({{ $application->id }}, $el)">Buka detail</button></td>
                         </tr>
                     @empty
-                        <tr><td colspan="8"><x-crm.empty-state title="Belum ada konsumen" description="Tidak ada data konsumen sesuai lingkup dan filter aktif." /></td></tr>
+                        <tr><td colspan="9"><x-crm.empty-state :title="$emptyTitle" :description="$emptyDescription" /></td></tr>
                     @endforelse
                 </tbody>
             </table>
@@ -171,6 +178,7 @@
                     $stage = $stageOptions[$application->current_stage] ?? $application->current_stage;
                     $status = $application->consumer_status ?: $application->application_status;
                     $statusLabel = $statusOptions[$status] ?? $status;
+                    $bank = $application->bankProcesses->sortByDesc('attempt_no')->first()?->bank_name;
                     $kavling = $application->kavling?->kavling_code ?: $application->kavling?->name ?: $application->id_kavling;
                 @endphp
                 <article class="border-2 border-black bg-white p-3">
@@ -185,12 +193,13 @@
                         <div><dt class="crm-type-label">Proyek</dt><dd>{{ $application->project?->project_name ?: '—' }}</dd></div>
                         <div><dt class="crm-type-label">Kavling</dt><dd>{{ $kavling ?: '—' }}</dd></div>
                         <div><dt class="crm-type-label">Tahap</dt><dd>{{ $stage ?: 'Belum ditentukan' }}</dd></div>
+                        <div><dt class="crm-type-label">Bank</dt><dd>{{ $bank ?: 'Belum ada' }}</dd></div>
                         <div><dt class="crm-type-label">Sales</dt><dd>{{ $application->sales?->name ?: '—' }}</dd></div>
                     </dl>
                     <button type="button" class="mt-3 w-full border-2 border-black bg-white px-3 py-2 text-sm font-bold" @click="openDetail({{ $application->id }}, $el)">Buka detail</button>
                 </article>
             @empty
-                <x-crm.empty-state title="Belum ada konsumen" description="Tidak ada data konsumen sesuai lingkup dan filter aktif." />
+                <x-crm.empty-state :title="$emptyTitle" :description="$emptyDescription" />
             @endforelse
         </div>
 
@@ -222,9 +231,10 @@
                             <section id="consumer-overview-panel" x-show="activeTab === 'overview'" role="tabpanel" aria-labelledby="consumer-overview-tab">
                                 <dl class="grid grid-cols-1 gap-3 sm:grid-cols-2">
                                     <template x-for="field in [
-                                        ['ID Transaksi', detail.overview.id_transaksi], ['Cabang', detail.overview.branch], ['Proyek', detail.overview.project], ['Kavling', detail.overview.kavling],
-                                        ['Sales', detail.overview.sales], ['No. HP', detail.overview.phone], ['Tahap', detail.overview.current_stage], ['Status Aplikasi', detail.overview.application_status],
-                                        ['Status Konsumen', detail.overview.consumer_status], ['Tanggal Booking', formatDate(detail.overview.booking_date)], ['Tanggal Akad', formatDate(detail.overview.akad_date)]
+                                        ['Transaksi Konsumen', detail.overview.id_transaksi], ['Cabang', detail.overview.branch], ['Proyek', detail.overview.project], ['Kavling', detail.overview.kavling],
+                                        ['Sales', detail.overview.sales], ['No. HP', detail.overview.phone], ['Proses Saat Ini', detail.overview.current_stage], ['Bank Saat Ini', detail.overview.bank_current],
+                                        ['Pengajuan Bank', detail.overview.bank_attempts ? detail.overview.bank_attempts + ' percobaan' : 'Belum ada'], ['Status Aplikasi', detail.overview.application_status],
+                                        ['Status Konsumen', detail.overview.consumer_status], ['Tanggal Booking', formatDate(detail.overview.booking_date)], ['Tanggal Akad', formatDate(detail.overview.akad_date)], ['Terakhir Diperbarui', formatDateTime(detail.overview.updated_at)]
                                     ]" :key="field[0]">
                                         <div class="border-b border-gray-300 pb-2"><dt class="crm-type-label" x-text="field[0]"></dt><dd class="mt-1 text-sm" x-text="formatValue(field[1])"></dd></div>
                                     </template>

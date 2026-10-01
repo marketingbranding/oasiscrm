@@ -77,7 +77,7 @@ final class ConsumerDatabaseWorkspaceService
                 'Pindah Kavling' => 'Pindah Kavling',
                 'REPLACED' => 'Diganti',
             ],
-            'stageOptions' => $this->pipeline->stages(),
+            'stageOptions' => $this->pipeline->stages() + ['ready_100' => 'Rumah Siap 100%'],
         ];
     }
 
@@ -100,7 +100,8 @@ final class ConsumerDatabaseWorkspaceService
             'bastRecords:id,consumer_application_id,consumer_stage_event_id,tanggal_bast,no_bast,status,notes',
         ]);
 
-        $stageLabels = $this->pipeline->stages() + ['ready_100' => 'Ready100'];
+        $stageLabels = $this->pipeline->stages() + ['ready_100' => 'Rumah Siap 100%'];
+        $latestBank = $application->bankProcesses->sortByDesc('attempt_no')->first();
         $psjbByEvent = $application->psjbs->keyBy('consumer_stage_event_id');
         $ppjbByEvent = $application->ppjbDevelopers->keyBy('consumer_stage_event_id');
         $akadByEvent = $application->akadRecords->keyBy('consumer_stage_event_id');
@@ -131,12 +132,15 @@ final class ConsumerDatabaseWorkspaceService
                 'branch' => $application->branch?->name,
                 'project' => $application->project?->project_name,
                 'sales' => $application->sales?->name,
+                'bank_current' => $latestBank?->bank_name,
+                'bank_attempts' => $application->bankProcesses->count(),
                 'kavling' => $application->kavling?->kavling_code ?: $application->kavling?->name ?: $application->id_kavling,
                 'application_status' => $this->valueLabel($application->application_status),
                 'consumer_status' => $this->valueLabel($application->consumer_status),
                 'current_stage' => $stageLabels[$application->current_stage] ?? $application->current_stage,
                 'booking_date' => $application->booking_date?->toDateString(),
                 'akad_date' => $application->akad_date?->toDateString(),
+                'updated_at' => $application->updated_at?->toIso8601String(),
             ],
             'process' => $application->stageEvents->sortByDesc('occurred_at')->map(function (ConsumerStageEvent $event) use ($stageLabels, $psjbByEvent, $ppjbByEvent, $akadByEvent, $bastByEvent): array {
                 $summary = match ($event->stage) {
@@ -144,7 +148,7 @@ final class ConsumerDatabaseWorkspaceService
                     'ppjb_dev' => $ppjbByEvent->get($event->id)?->tanggal_ttd_ppjb?->format('d M Y') ? 'PPJB ditandatangani '.$ppjbByEvent->get($event->id)->tanggal_ttd_ppjb->format('d M Y') : null,
                     'akad' => $akadByEvent->get($event->id)?->tanggal_akad?->format('d M Y') ? 'Akad '.$akadByEvent->get($event->id)->tanggal_akad->format('d M Y') : null,
                     'bast' => $bastByEvent->get($event->id)?->no_bast ? 'No. BAST: '.$bastByEvent->get($event->id)->no_bast : null,
-                    'ready_100' => 'Ready100 tercatat',
+                    'ready_100' => 'Rumah siap 100% tercatat',
                     default => null,
                 };
 
@@ -192,6 +196,7 @@ final class ConsumerDatabaseWorkspaceService
                 'customer:id,name,phone',
                 'sales:id,name',
                 'kavling:id,project_id,name,kavling_code',
+                'bankProcesses:id,consumer_application_id,attempt_no,bank_name,status,response_type',
             ])
             ->withCount(['stageEvents', 'bankProcesses', 'documents']);
 
@@ -280,7 +285,7 @@ final class ConsumerDatabaseWorkspaceService
             'consumer_bank_attempt_updated' => 'Percobaan bank diperbarui',
             'consumer_ppjb_recorded' => 'PPJB Developer dicatat',
             'consumer_akad_recorded' => 'Akad dicatat',
-            'consumer_ready_100_recorded' => 'Ready100 dicatat',
+            'consumer_ready_100_recorded' => 'Rumah Siap 100% dicatat',
             'consumer_bast_recorded' => 'BAST dicatat',
             'consumer_ganti_konsumen' => 'Konsumen diganti',
             'consumer_kavling_moved' => 'Kavling dipindahkan',

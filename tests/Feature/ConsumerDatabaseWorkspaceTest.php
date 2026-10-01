@@ -31,7 +31,9 @@ class ConsumerDatabaseWorkspaceTest extends TestCase
             ->assertSee('Konsumen Terlihat')
             ->assertDontSee('Konsumen Rahasia')
             ->assertSee($visible->id_transaksi)
-            ->assertDontSee('id="consumer-workspace-branch"');
+            ->assertDontSee('id="consumer-workspace-branch"')
+            ->assertSee('Bank Saat Ini')
+            ->assertDontSee('ConsumerApplication');
 
         $this->actingAs($user)
             ->get(route('consumer-database.workspace', ['search' => 'Konsumen Terlihat']))
@@ -136,9 +138,9 @@ class ConsumerDatabaseWorkspaceTest extends TestCase
         $this->actingAs($user)
             ->getJson(route('consumer-database.workspace.show', $application))
             ->assertOk()
-            ->assertJsonPath('data.process.0.stage', 'Ready100')
+            ->assertJsonPath('data.process.0.stage', 'Rumah Siap 100%')
             ->assertJsonPath('data.process.0.status', 'Dikonfirmasi')
-            ->assertJsonPath('data.activity.0.description', $user->name.' - Ready100 dicatat')
+            ->assertJsonPath('data.activity.0.description', $user->name.' - Rumah Siap 100% dicatat')
             ->assertJsonPath('data.activity.0.source', 'Manual')
             ->assertJsonMissingPath('data.activity.0.properties');
     }

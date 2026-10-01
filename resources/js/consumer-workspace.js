@@ -32,12 +32,14 @@ export default function registerConsumerWorkspace(Alpine) {
                 });
                 const payload = await response.json();
                 if (!response.ok || !payload.ok) {
-                    throw new Error(payload.message || 'Detail konsumen belum dapat dimuat.');
+                    throw new Error(response.status === 403 ? 'Kamu tidak memiliki akses ke data ini.' : 'Detail konsumen belum dapat dimuat.');
                 }
                 this.detail = payload.data;
             } catch (exception) {
                 if (exception.name !== 'AbortError') {
-                    this.error = exception.message || 'Detail konsumen belum dapat dimuat.';
+                    this.error = exception.message === 'Kamu tidak memiliki akses ke data ini.'
+                        ? exception.message
+                        : 'Detail konsumen belum dapat dimuat. Silakan coba lagi.';
                 }
             } finally {
                 this.loading = false;

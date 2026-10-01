@@ -135,6 +135,15 @@ Your Laravel `public/` folder must be the web root.
 - Edit `.env` directly via FTP or hPanel File Manager
 - Never commit `.env` to Git (already in `.gitignore`)
 
+### External Write Safety
+`OASIS_ALLOW_EXTERNAL_WRITES=false` is the safe default and must remain the default in repository configuration and local/test environments. Google Sheets, Google Script, and configured webhook writes remain blocked until production is explicitly configured with:
+
+```dotenv
+OASIS_ALLOW_EXTERNAL_WRITES=true
+```
+
+Set this only in the production environment after verifying the required external credentials and integration settings. Do not hard-code the production value or commit a populated `.env` file.
+
 ### Cron Jobs (Task Scheduling)
 In hPanel → **Cron Jobs**, add:
 ```

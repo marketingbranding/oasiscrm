@@ -64,6 +64,22 @@ final class ConsumerKavlingLifecycleService
         });
     }
 
+    public function releaseForReplacement(ConsumerApplication $application): void
+    {
+        DB::transaction(function () use ($application): void {
+            $application = ConsumerApplication::query()->lockForUpdate()->findOrFail($application->id);
+            $assignment = $this->lockCurrentAssignment($application);
+            if ($assignment !== null) {
+                $assignment->update([
+                    'assignment_status' => 'released',
+                    'released_at' => now(),
+                    'release_reason' => 'ganti_konsumen',
+                ]);
+            }
+            $application->update(['kavling_id' => null]);
+        });
+    }
+
     public function pindahKavling(ConsumerApplication $application, Kavling $target): ConsumerKavlingAssignment
     {
         return DB::transaction(function () use ($application, $target): ConsumerKavlingAssignment {

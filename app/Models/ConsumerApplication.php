@@ -27,6 +27,7 @@ class ConsumerApplication extends Model
         'nama_konsumen',
         'nik',
         'application_status',
+        'replacement_application_id',
         'consumer_status',
         'current_stage',
         'source_last_process',
@@ -95,6 +96,16 @@ class ConsumerApplication extends Model
     public function salesLead(): BelongsTo
     {
         return $this->belongsTo(SalesLead::class);
+    }
+
+    public function replacementApplication(): BelongsTo
+    {
+        return $this->belongsTo(self::class, 'replacement_application_id');
+    }
+
+    public function replacedApplication(): HasOne
+    {
+        return $this->hasOne(self::class, 'replacement_application_id');
     }
 
     public function marisonImportTransactions(): HasMany

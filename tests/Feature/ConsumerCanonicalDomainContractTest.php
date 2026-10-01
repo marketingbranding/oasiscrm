@@ -66,7 +66,7 @@ class ConsumerCanonicalDomainContractTest extends TestCase
         $this->assertSame($newKavling->id, $application->fresh()->kavling_id);
     }
 
-    public function test_native_bank_process_reuses_an_attempt_and_new_pemberkasan_starts_another(): void
+    public function test_native_bank_process_reuses_an_attempt_and_ganti_bank_starts_another(): void
     {
         $application = ConsumerApplication::factory()->create();
         $actor = User::factory()->create(['branch_id' => $application->branch_id]);
@@ -74,7 +74,7 @@ class ConsumerCanonicalDomainContractTest extends TestCase
 
         $first = $service->recordPemberkasan($application, ['tanggal_terima_bank' => '2026-10-01', 'bank_name' => 'BTN'], $actor);
         $progressed = $service->recordProsesBank($application->fresh(), ['no_sp3k' => 'SP3K-1', 'status' => 'approved'], $actor);
-        $second = $service->recordPemberkasan($application->fresh(), ['tanggal_terima_bank' => '2026-10-02', 'bank_name' => 'BSN'], $actor);
+        $second = $service->gantiBank($application->fresh(), ['tanggal_terima_bank' => '2026-10-02', 'bank_name' => 'BSN'], $actor);
 
         $this->assertSame($first->id, $progressed->id);
         $this->assertSame(1, $first->attempt_no);

@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\ActivityLog;
 use App\Models\ConsumerAkadRecord;
 use App\Models\ConsumerApplication;
 use App\Models\ConsumerBankProcess;
@@ -14,11 +15,15 @@ use App\Models\User;
 use Carbon\CarbonImmutable;
 use DomainException;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
 final class ConsumerOperationalService
 {
     private const CONSUMER_STATUSES = ['Lanjut', 'Mundur', 'Pindah Kavling', 'Reject'];
+
+    private const TERMINAL_STATUSES = ['replaced', 'mundur', 'reject', 'rejected', 'cancelled', 'withdrawn', 'completed', 'selesai', 'closed', 'bast'];
 
     private const REQUIRED_FIELDS = [
         'customer.name' => 'Nama Konsumen', 'customer.phone' => 'No HP', 'customer.date_of_birth' => 'Tanggal Lahir',
@@ -63,7 +68,7 @@ final class ConsumerOperationalService
 
     public function create(array $data, User $actor, ConsumerKavlingLifecycleService $lifecycle): ConsumerApplication
     {
-        return \DB::transaction(function () use ($data, $actor, $lifecycle): ConsumerApplication {
+        return DB::transaction(function () use ($data, $actor, $lifecycle): ConsumerApplication {
             $application = ConsumerApplication::create([
                 'customer_id' => $data['customer_id'], 'branch_id' => $data['branch_id'], 'project_id' => $data['project_id'],
                 'sales_user_id' => $data['sales_user_id'] ?? null, 'promo_id' => $data['promo_id'] ?? null,
@@ -81,7 +86,7 @@ final class ConsumerOperationalService
 
     public function update(ConsumerApplication $application, array $data, User $actor, ConsumerKavlingLifecycleService $lifecycle): ConsumerApplication
     {
-        return \DB::transaction(function () use ($application, $data, $actor, $lifecycle): ConsumerApplication {
+        return DB::transaction(function () use ($application, $data, $actor, $lifecycle): ConsumerApplication {
             $application->update([
                 'sales_user_id' => $data['sales_user_id'] ?? null, 'promo_id' => $data['promo_id'] ?? null,
                 'status_cash' => $data['status_cash'] ?? null, 'notes' => $data['notes'] ?? null,
@@ -107,7 +112,8 @@ final class ConsumerOperationalService
 
     public function recordBiChecking(ConsumerApplication $application, array $data, User $actor): ConsumerStageEvent
     {
-        return \DB::transaction(function () use ($application, $data, $actor): ConsumerStageEvent {
+        return DB::transaction(function () use ($application, $data, $actor): ConsumerStageEvent {
+            $before = $this->snapshot($application->fresh());
             $date = CarbonImmutable::parse($data['tanggal_slik']);
             $id = $this->nextId('bi_checking', $date, $application, $data['hasil_slik']);
             $event = $application->stageEvents()->create([
@@ -118,6 +124,7 @@ final class ConsumerOperationalService
             ]);
             $application->update(['current_stage' => 'bi_checking']);
             $this->refreshDerived($application->fresh(['customer', 'stageEvents']), $actor);
+            $this->audit($actor, $application, 'consumer_slik_recorded', $before, $this->snapshot($application->fresh()), 'manual');
 
             return $event;
         });
@@ -125,7 +132,8 @@ final class ConsumerOperationalService
 
     public function recordPsjb(ConsumerApplication $application, array $data, User $actor): ConsumerPsjb
     {
-        return \DB::transaction(function () use ($application, $data, $actor): ConsumerPsjb {
+        return DB::transaction(function () use ($application, $data, $actor): ConsumerPsjb {
+            $before = $this->snapshot($application->fresh());
             $bi = $application->stageEvents()->where('stage', 'bi_checking')->latest('occurred_at')->latest('id')->first();
             if ($bi === null) {
                 throw new DomainException('BI Checking wajib diinput sebelum PSJB.');
@@ -145,6 +153,7 @@ final class ConsumerOperationalService
             ]);
             $application->update(['current_stage' => 'PSJB']);
             $this->refreshDerived($application->fresh(['customer', 'stageEvents']), $actor);
+            $this->audit($actor, $application, 'consumer_psjb_recorded', $before, $this->snapshot($application->fresh()), 'manual');
 
             return $psjb;
         });
@@ -152,20 +161,26 @@ final class ConsumerOperationalService
 
     public function recordPemberkasan(ConsumerApplication $application, array $data, User $actor): ConsumerBankProcess
     {
-        return $this->recordBankStage($application, 'pemberkasan', $data, $actor, true);
+        return $this->recordBankStage($application, 'pemberkasan', $data, $actor, false, true);
     }
 
     public function recordProsesBank(ConsumerApplication $application, array $data, User $actor): ConsumerBankProcess
     {
-        return $this->recordBankStage($application, 'proses_bank', $data, $actor, false);
+        return $this->recordBankStage($application, 'proses_bank', $data, $actor, false, false);
+    }
+
+    public function gantiBank(ConsumerApplication $application, array $data, User $actor): ConsumerBankProcess
+    {
+        return $this->recordBankStage($application, 'pemberkasan', $data, $actor, true, false);
     }
 
     public function recordReady100(ConsumerApplication $application, array $data, User $actor): ConsumerStageEvent
     {
-        return \DB::transaction(function () use ($application, $data, $actor): ConsumerStageEvent {
+        return DB::transaction(function () use ($application, $data, $actor): ConsumerStageEvent {
             $date = CarbonImmutable::parse($data['ready_100_at']);
+            $before = $this->snapshot($application->fresh());
 
-            return $application->stageEvents()->create([
+            $event = $application->stageEvents()->create([
                 'stage' => 'ready_100',
                 'status' => $data['status'] ?? 'confirmed',
                 'source' => $data['source'] ?? 'manual',
@@ -176,31 +191,63 @@ final class ConsumerOperationalService
                 'actor_id' => $actor->id,
                 'metadata' => $data['metadata'] ?? null,
             ]);
+
+            $this->audit($actor, $application, 'consumer_ready_100_recorded', $before, $this->snapshot($application->fresh()), $data['source'] ?? 'manual');
+
+            return $event;
         });
     }
 
-    private function recordBankStage(ConsumerApplication $application, string $stage, array $data, User $actor, bool $startNewAttempt): ConsumerBankProcess
+    private function recordBankStage(ConsumerApplication $application, string $stage, array $data, User $actor, bool $startNewAttempt, bool $reuseLatestAttempt): ConsumerBankProcess
     {
-        return \DB::transaction(function () use ($application, $stage, $data, $actor, $startNewAttempt): ConsumerBankProcess {
+        return DB::transaction(function () use ($application, $stage, $data, $actor, $startNewAttempt, $reuseLatestAttempt): ConsumerBankProcess {
             $application = ConsumerApplication::query()->lockForUpdate()->findOrFail($application->id);
+            $existingByKey = filled($data['attempt_key'] ?? null)
+                ? $application->bankProcesses()->where('attempt_key', $data['attempt_key'])->first()
+                : null;
+            if ($startNewAttempt && $existingByKey !== null) {
+                return $existingByKey;
+            }
+
+            $before = $this->snapshot($application);
             $date = $data['tanggal_terima_bank'] ?? now()->toDateString();
             $event = $this->appendEvent($application, $stage, $data['status'] ?? $data['response_type'] ?? null, $data['notes'] ?? null, $date, $actor, $data);
-            $record = $startNewAttempt ? null : $this->resolveBankAttempt($application, $data);
+            $record = $startNewAttempt ? null : $this->resolveBankAttempt($application, $data, $reuseLatestAttempt);
             $attributes = $this->bankAttributes($data);
 
             if ($record === null) {
+                $hasImportedPemberkasan = ! $application->bankProcesses()->exists()
+                    && $application->stageEvents()->where('stage', 'pemberkasan')->exists();
+                if (! $startNewAttempt && ! $reuseLatestAttempt && ! $hasImportedPemberkasan) {
+                    throw new DomainException('Pemberkasan wajib dibuat sebelum Proses Bank.');
+                }
+                if (filled($data['attempt_key'] ?? null)) {
+                    $attributes['attempt_key'] = $data['attempt_key'];
+                }
                 $record = $application->bankProcesses()->create($attributes + ['source' => 'manual']);
+                $event->update(['metadata' => [...($event->metadata ?? []), 'attempt_key' => $record->attempt_key, 'attempt_no' => $record->attempt_no]]);
             } else {
+                $beforeRecord = $this->snapshot($record);
                 $record->fill($attributes);
                 $record->save();
+                $event->update(['metadata' => [...($event->metadata ?? []), 'attempt_key' => $record->attempt_key, 'attempt_no' => $record->attempt_no]]);
+                $this->audit($actor, $application, 'consumer_bank_attempt_updated', $beforeRecord, $this->snapshot($record->fresh()), 'manual');
             }
             $this->advanceStage($application, $stage, $actor);
+            $this->audit(
+                $actor,
+                $application,
+                $startNewAttempt ? 'consumer_bank_attempt_created' : 'consumer_bank_stage_recorded',
+                $before,
+                $this->snapshot($application->fresh()),
+                $startNewAttempt ? 'ganti_bank' : 'manual',
+            );
 
             return $record;
         });
     }
 
-    private function resolveBankAttempt(ConsumerApplication $application, array $data): ?ConsumerBankProcess
+    private function resolveBankAttempt(ConsumerApplication $application, array $data, bool $includeClosedAttempts = false): ?ConsumerBankProcess
     {
         if (! empty($data['attempt_no'])) {
             return $application->bankProcesses()->where('attempt_no', $data['attempt_no'])->first();
@@ -214,14 +261,15 @@ final class ConsumerOperationalService
             return $application->bankProcesses()->where('source_id', $data['source_id'])->first();
         }
 
-        return $application->bankProcesses()
-            ->whereNull('sp3k_at')
-            ->where(function ($query): void {
-                $query->whereNull('status')->orWhereNotIn('status', ['reject', 'rejected', 'ditolak', 'cancelled']);
-            })
-            ->latest('attempt_no')
-            ->latest('id')
-            ->first();
+        $query = $application->bankProcesses();
+        if (! $includeClosedAttempts) {
+            $query->whereNull('sp3k_at')
+                ->where(function ($query): void {
+                    $query->whereNull('status')->orWhereNotIn('status', ['reject', 'rejected', 'ditolak', 'cancelled']);
+                });
+        }
+
+        return $query->latest('attempt_no')->latest('id')->first();
     }
 
     private function bankAttributes(array $data): array
@@ -237,11 +285,13 @@ final class ConsumerOperationalService
 
     public function recordPpjb(ConsumerApplication $application, array $data, User $actor): ConsumerPpjbDeveloper
     {
-        return \DB::transaction(function () use ($application, $data, $actor): ConsumerPpjbDeveloper {
+        return DB::transaction(function () use ($application, $data, $actor): ConsumerPpjbDeveloper {
+            $before = $this->snapshot($application->fresh());
             $date = $data['tanggal_ttd_ppjb'] ?? $data['tanggal_sp3k'] ?? now()->toDateString();
             $event = $this->appendEvent($application, 'ppjb_dev', null, $data['notes'] ?? null, $date, $actor, $data);
             $record = $application->ppjbDevelopers()->create($data + ['consumer_stage_event_id' => $event->id]);
             $this->advanceStage($application, 'ppjb_dev', $actor);
+            $this->audit($actor, $application, 'consumer_ppjb_recorded', $before, $this->snapshot($application->fresh()), 'manual');
 
             return $record;
         });
@@ -249,12 +299,14 @@ final class ConsumerOperationalService
 
     public function recordAkad(ConsumerApplication $application, array $data, User $actor, ConsumerKavlingLifecycleService $lifecycle): ConsumerAkadRecord
     {
-        return \DB::transaction(function () use ($application, $data, $actor, $lifecycle): ConsumerAkadRecord {
+        return DB::transaction(function () use ($application, $data, $actor, $lifecycle): ConsumerAkadRecord {
+            $before = $this->snapshot($application->fresh());
             $event = $this->appendEvent($application, 'akad', $data['status_konsumen'] ?? null, $data['keterangan_terlambat'] ?? null, $data['tanggal_akad'] ?? now()->toDateString(), $actor, $data);
             $record = $application->akadRecords()->create($data + ['consumer_stage_event_id' => $event->id]);
             $application->update(['akad_date' => $data['tanggal_akad'] ?? now()->toDateString()]);
             $lifecycle->ensureSold($application);
             $this->advanceStage($application, 'akad', $actor);
+            $this->audit($actor, $application, 'consumer_akad_recorded', $before, $this->snapshot($application->fresh()), 'manual');
 
             return $record;
         });
@@ -262,14 +314,67 @@ final class ConsumerOperationalService
 
     public function recordBast(ConsumerApplication $application, array $data, User $actor, ConsumerKavlingLifecycleService $lifecycle): ConsumerBastRecord
     {
-        return \DB::transaction(function () use ($application, $data, $actor, $lifecycle): ConsumerBastRecord {
+        return DB::transaction(function () use ($application, $data, $actor, $lifecycle): ConsumerBastRecord {
+            $application = ConsumerApplication::query()->lockForUpdate()->findOrFail($application->id);
+            $this->assertBastReady($application);
+            if ($this->isTerminal($application)) {
+                throw new DomainException('Transaksi terminal tidak dapat diproses menjadi BAST.');
+            }
+
+            $before = $this->snapshot($application);
             $event = $this->appendEvent($application, 'bast', null, null, $data['tanggal_bast'] ?? now()->toDateString(), $actor, $data);
             $record = $application->bastRecords()->create($data + ['consumer_stage_event_id' => $event->id]);
             $lifecycle->ensureSold($application);
             $this->advanceStage($application, 'bast', $actor);
+            $this->audit($actor, $application, 'consumer_bast_recorded', $before, $this->snapshot($application->fresh()), 'manual');
 
             return $record;
         });
+    }
+
+    public function bastReadiness(ConsumerApplication $application): array
+    {
+        $akad = $application->akadRecords()
+            ->orderByDesc('tanggal_akad')
+            ->orderByDesc('id')
+            ->first();
+        $akadEvent = $application->stageEvents()
+            ->where('stage', 'akad')
+            ->orderByDesc('event_date')
+            ->orderByDesc('occurred_at')
+            ->orderByDesc('id')
+            ->first();
+        $ready100 = $application->ready100Events()
+            ->orderByDesc('event_date')
+            ->orderByDesc('occurred_at')
+            ->orderByDesc('id')
+            ->first();
+        $akadDate = $akad?->tanggal_akad?->toDateString()
+            ?? $application->akad_date?->toDateString()
+            ?? $akadEvent?->event_date?->toDateString()
+            ?? $akadEvent?->occurred_at?->toDateString();
+        $ready100Date = $ready100?->event_date?->toDateString() ?? $ready100?->occurred_at?->toDateString();
+        $ready = $akadDate !== null && $ready100Date !== null;
+        $anchor = $ready ? max($akadDate, $ready100Date) : null;
+        $terminal = $this->isTerminal($application);
+
+        return [
+            'ready' => $ready,
+            'has_akad' => $akadDate !== null,
+            'has_ready_100' => $ready100Date !== null,
+            'akad_date' => $akadDate,
+            'ready_100_date' => $ready100Date,
+            'sla_anchor' => $terminal ? null : $anchor,
+            'sla_active' => $ready && ! $terminal,
+            'terminal' => $terminal,
+        ];
+    }
+
+    public function assertBastReady(ConsumerApplication $application): void
+    {
+        if (! $this->bastReadiness($application)['ready']) {
+            throw new DomainException('BAST hanya dapat dibuat setelah Akad dan Ready100 tersedia.');
+        }
     }
 
     private function appendEvent(ConsumerApplication $application, string $stage, ?string $status, ?string $notes, string $date, User $actor, array $metadata): ConsumerStageEvent
@@ -301,5 +406,42 @@ final class ConsumerOperationalService
     {
         $completeness = $this->completeness($application);
         $application->update(['source_completeness_status' => $completeness['status'], 'source_last_process' => $this->processLast($application)]);
+    }
+
+    private function isTerminal(ConsumerApplication $application): bool
+    {
+        return collect([
+            $application->application_status,
+            $application->consumer_status,
+            $application->current_stage,
+        ])->filter()->map(fn (string $status): string => Str::lower($status))->contains(fn (string $status): bool => in_array($status, self::TERMINAL_STATUSES, true));
+    }
+
+    private function snapshot(?Model $model): ?array
+    {
+        if ($model === null) {
+            return null;
+        }
+
+        return collect($model->getAttributes())->map(function (mixed $value): mixed {
+            return $value instanceof \DateTimeInterface ? $value->format(DATE_ATOM) : $value;
+        })->all();
+    }
+
+    private function audit(User $actor, ConsumerApplication $application, string $event, ?array $before, ?array $after, string $source): void
+    {
+        ActivityLog::query()->create([
+            'causer_id' => $actor->id,
+            'subject_type' => ConsumerApplication::class,
+            'subject_id' => $application->id,
+            'event' => $event,
+            'description' => 'Perubahan lifecycle aplikasi konsumen: '.$event.'.',
+            'properties' => [
+                'action' => $event,
+                'source' => $source,
+                'before' => $before,
+                'after' => $after,
+            ],
+        ]);
     }
 }

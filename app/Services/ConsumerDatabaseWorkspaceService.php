@@ -386,6 +386,10 @@ final class ConsumerDatabaseWorkspaceService
 
     private function selectedBranch(User $user, Request $request, array $branchIds): ?Branch
     {
+        if (! $request->filled('branch_id') && $this->organizationScope->hasScope($user, 'consumer_progress', 'view', 'all')) {
+            return null;
+        }
+
         $selectedBranch = $this->workspaceAccess->resolveRequestedBranch($user, $request->input('branch_id'));
         if ($request->filled('branch_id') && (! $selectedBranch || ! in_array((int) $selectedBranch->id, $branchIds, true))) {
             abort(Response::HTTP_FORBIDDEN);

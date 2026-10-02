@@ -19,6 +19,9 @@
         </div>
     </div>
     <div class="workspace-v2-mobile-backdrop" data-mobile-backdrop hidden></div>
+    @if(session('success'))
+        <div class="workspace-v2-flash" role="status">{{ session('success') }}</div>
+    @endif
     @stack('scripts')
 </body>
 </html>

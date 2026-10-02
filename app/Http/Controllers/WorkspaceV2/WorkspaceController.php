@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\WorkspaceV2;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\ConsumerEntryRequest;
 use App\Models\ActivityLog;
 use App\Models\ConsumerApplication;
 use App\Models\ConsumerIssue;
@@ -10,6 +11,7 @@ use App\Models\ConsumerWarranty;
 use App\Models\SalesLead;
 use App\Models\UserNotification;
 use App\Services\ConsumerDatabaseWorkspaceService;
+use App\Services\ConsumerEntryService;
 use App\Services\ConsumerNupService;
 use App\Services\ConsumerOperationalService;
 use App\Services\ConsumerProcessService;
@@ -17,6 +19,7 @@ use App\Services\OrganizationScopeService;
 use App\Services\WorkspaceAccessService;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
 use Illuminate\View\View;
@@ -55,6 +58,7 @@ final class WorkspaceController extends Controller
 
     public function __construct(
         private readonly ConsumerDatabaseWorkspaceService $consumerWorkspace,
+        private readonly ConsumerEntryService $consumerEntry,
         private readonly ConsumerOperationalService $consumerOperations,
         private readonly ConsumerProcessService $consumerProcesses,
         private readonly ConsumerNupService $nups,
@@ -125,12 +129,28 @@ final class WorkspaceController extends Controller
             'process' => 'data-konsumen',
             'title' => 'Data Konsumen',
             'description' => 'Catat identitas konsumen dan konteks transaksi sesuai field spreadsheet.',
-            'action' => route('consumer-database.workspace.store'),
+            'action' => route('workspace-v2.transactions.data-konsumen.store'),
             'method' => 'POST',
             'fields' => $this->consumerFields(),
             'branches' => $this->workspaceAccess->accessibleBranches($request->user()),
             'projects' => $this->workspaceAccess->accessibleProjects($request->user()),
         ]);
+    }
+
+    public function storeConsumer(ConsumerEntryRequest $request): RedirectResponse|JsonResponse
+    {
+        $application = $this->consumerEntry->create($request->validated(), $request->user());
+
+        if ($request->expectsJson()) {
+            return response()->json([
+                'ok' => true,
+                'data' => $this->consumerWorkspace->detail($request->user(), $application),
+            ], Response::HTTP_CREATED);
+        }
+
+        return redirect()
+            ->route('workspace-v2.transactions.data-konsumen')
+            ->with('success', 'Data konsumen berhasil disimpan.');
     }
 
     public function processForm(Request $request, ConsumerApplication $consumerApplication, string $process): View

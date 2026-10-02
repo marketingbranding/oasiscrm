@@ -83,6 +83,7 @@ Route::middleware(['auth', 'active', 'verified', 'password.changed', 'operationa
         Route::get('/nup', [WorkspaceController::class, 'nup'])->name('nup');
         Route::get('/transaksi', [WorkspaceController::class, 'transactions'])->name('transactions');
         Route::get('/transaksi/data-konsumen', [WorkspaceController::class, 'transactions'])->defaults('view', 'data-konsumen')->name('transactions.data-konsumen');
+        Route::post('/transaksi/data-konsumen', [WorkspaceController::class, 'storeConsumer'])->middleware('not.impersonating')->name('transactions.data-konsumen.store');
         Route::get('/transaksi/psjb', [WorkspaceController::class, 'transactions'])->defaults('view', 'psjb')->name('transactions.psjb');
         Route::get('/transaksi/bi-checking', [WorkspaceController::class, 'transactions'])->defaults('view', 'bi-checking')->name('transactions.bi-checking');
         Route::get('/transaksi/pemberkasan', [WorkspaceController::class, 'transactions'])->defaults('view', 'pemberkasan')->name('transactions.pemberkasan');

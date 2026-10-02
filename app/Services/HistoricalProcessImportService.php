@@ -394,6 +394,10 @@ class HistoricalProcessImportService
                 'id_kavling' => $normalized['id_kavling'],
                 'nama_konsumen' => $normalized['nama_konsumen'],
                 'nik' => $nik,
+                'entry_mode' => 'historical',
+                'acquisition_source' => 'import',
+                'current_process' => 'slik',
+                'current_process_source' => 'import',
             ])->id;
             ConsumerLegacyIdentity::create(['consumer_application_id' => $application, 'id_kons' => $idKons, 'legacy_source' => 'historical_import']);
 

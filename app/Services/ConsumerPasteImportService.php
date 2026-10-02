@@ -200,7 +200,7 @@ class ConsumerPasteImportService
         }
         $customer = $this->resolveCustomer($data, $sensitiveData);
         $customerCreated = $customer->wasRecentlyCreated;
-        $application = ConsumerApplication::create(['customer_id' => $customer->id, 'branch_id' => $batch->branch_id, 'project_id' => $batch->project_id, 'sales_user_id' => $data['sales_user_id'] ?? null, 'kavling_id' => $data['kavling_id'] ?? null, 'promo_id' => $data['promo_id'] ?? null, 'application_status' => 'draft', 'consumer_status' => $data['consumer_status'] ?? null, 'status_cash' => $data['status_cash'] ?? null, 'current_stage' => $data['current_stage'] ?? null, 'source_last_process' => $data['source_last_process'] ?? null, 'source_completeness_status' => $data['source_completeness_status'] ?? null, 'booking_date' => $data['booking_date'] ?? null, 'akad_date' => $data['akad_date'] ?? null, 'notes' => $data['notes'] ?? null, 'sales_lead_id' => $data['sales_lead_id'] ?? null]);
+        $application = ConsumerApplication::create(['customer_id' => $customer->id, 'branch_id' => $batch->branch_id, 'project_id' => $batch->project_id, 'sales_user_id' => $data['sales_user_id'] ?? null, 'kavling_id' => $data['kavling_id'] ?? null, 'promo_id' => $data['promo_id'] ?? null, 'application_status' => 'draft', 'consumer_status' => $data['consumer_status'] ?? null, 'transaction_status' => $data['transaction_status'] ?? null, 'payment_method' => $data['payment_method'] ?? (isset($data['status_cash']) ? ((bool) $data['status_cash'] ? 'cash' : 'kpr') : null), 'entry_mode' => 'historical', 'acquisition_source' => 'import', 'status_cash' => $data['status_cash'] ?? null, 'current_stage' => $data['current_stage'] ?? null, 'current_process' => $data['current_process'] ?? $this->canonicalProcess($data['current_stage'] ?? null), 'current_process_source' => 'import', 'source_last_process' => $data['source_last_process'] ?? null, 'source_completeness_status' => $data['source_completeness_status'] ?? null, 'booking_date' => $data['booking_date'] ?? null, 'akad_date' => $data['akad_date'] ?? null, 'notes' => $data['notes'] ?? null, 'sales_lead_id' => $data['sales_lead_id'] ?? null]);
         ConsumerLegacyIdentity::create(['consumer_application_id' => $application->id, 'customer_id' => $customer->id, 'legacy_source' => self::SOURCE, 'spreadsheet_id' => 'manual-paste', 'sheet_name' => (string) $batch->project_id, 'external_key' => $data['external_key'], 'source_payload_hash' => hash('sha256', json_encode($data)), 'first_seen_at' => now(), 'last_seen_at' => now(), 'mapping_status' => 'imported']);
         if (! empty($data['current_stage'])) {
             ConsumerStageEvent::create(['consumer_application_id' => $application->id, 'stage' => $data['current_stage'], 'status' => 'current', 'source' => self::SOURCE, 'source_id' => $data['external_key']]);
@@ -226,6 +226,23 @@ class ConsumerPasteImportService
         }
 
         return Customer::create(['name' => $data['name'], 'phone' => $phone ?: ($data['phone'] ?? null), ...$this->customerProfile($data, $sensitiveData)]);
+    }
+
+    private function canonicalProcess(?string $stage): string
+    {
+        return match (strtolower((string) $stage)) {
+            'bi_checking', 'slik' => 'slik',
+            'psjb' => 'psjb',
+            'pemberkasan' => 'pemberkasan',
+            'proses_bank' => 'proses_bank',
+            'sp3k' => 'sp3k',
+            'ppjb_dev', 'ppjb' => 'ppjb',
+            'akad' => 'akad',
+            'bast' => 'bast',
+            'garansi' => 'garansi',
+            'selesai' => 'selesai',
+            default => 'data_konsumen',
+        };
     }
 
     private function customerProfile(array $data, array $sensitiveData): array

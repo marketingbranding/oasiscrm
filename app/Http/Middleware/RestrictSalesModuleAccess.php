@@ -22,6 +22,7 @@ class RestrictSalesModuleAccess
         'feedback-reports.store',
         'feedback-reports.history',
         'feedback-reports.screenshot',
+        'workspace-v2.*',
     ];
 
     public function handle(Request $request, Closure $next): Response

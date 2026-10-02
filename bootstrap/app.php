@@ -8,6 +8,7 @@ use App\Http\Middleware\EnforceModuleMaintenance;
 use App\Http\Middleware\EnforceOperationalMaintenance;
 use App\Http\Middleware\EnsurePasswordChanged;
 use App\Http\Middleware\EnsureUserIsActive;
+use App\Http\Middleware\EnsureWorkspaceV2Enabled;
 use App\Http\Middleware\PermissionMiddleware;
 use App\Http\Middleware\RejectImpersonatedRequest;
 use App\Http\Middleware\RestrictSalesModuleAccess;
@@ -36,6 +37,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'permissions.all' => AllPermissionsMiddleware::class,
             'not.impersonating' => RejectImpersonatedRequest::class,
             'sales.access' => RestrictSalesModuleAccess::class,
+            'workspace.v2' => EnsureWorkspaceV2Enabled::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {

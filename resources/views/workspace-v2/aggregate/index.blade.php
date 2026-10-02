@@ -1,0 +1,17 @@
+@extends('workspace-v2.layouts.app')
+@section('title', $title.' | Workspace OASIS')
+@section('content')
+    @include('workspace-v2.components.page-header', ['eyebrow' => 'PENJUALAN / AGGREGATE WORKSPACE', 'title' => $title, 'description' => match ($workspace) { 'mundur' => 'Transaksi dengan status Mundur, tetap merujuk pada transaksi canonical.', 'kendala' => 'Kendala lintas proses dalam area kerja Anda.', 'garansi' => 'Pekerjaan after-sales setelah BAST.', default => 'Transaksi yang sudah menyelesaikan lifecycle operasional.' }])
+    <form method="GET" class="workspace-v2-toolbar"><label class="workspace-v2-search"><span>⌕</span><input type="search" name="search" placeholder="Cari nama atau ID transaksi..." aria-label="Cari data"></label><button class="workspace-v2-button workspace-v2-button--secondary">Cari</button></form>
+    <section class="workspace-v2-table-panel">
+        @if($records->count())
+            <div class="workspace-v2-table-wrap"><table class="workspace-v2-table"><thead><tr>@if($workspace === 'kendala')<th>Konsumen</th><th>Proses</th><th>Kategori</th><th>Kendala</th><th>PIC</th><th>Status</th>@elseif($workspace === 'garansi')<th>Konsumen</th><th>Kavling</th><th>Status Komplain</th><th>Detail</th><th>Status Garansi</th><th>Selesai</th>@else<th>Konsumen</th><th>ID Transaksi</th><th>Proyek / Kavling</th><th>Sales</th><th>Status</th><th>Diperbarui</th>@endif</tr></thead><tbody>
+                @foreach($records as $record)
+                    @if($workspace === 'kendala')<tr><td><strong>{{ $record->application?->customer?->name ?: 'Konsumen' }}</strong><small>{{ $record->application?->id_transaksi }}</small></td><td>{{ $record->process_key }}</td><td>{{ $record->category ?: 'Umum' }}</td><td>{{ $record->description }}</td><td>{{ $record->pic?->name ?: 'Belum ditetapkan' }}</td><td>@include('workspace-v2.components.status', ['value' => $record->status])</td></tr>
+                    @elseif($workspace === 'garansi')<tr><td><strong>{{ $record->application?->customer?->name ?: 'Konsumen' }}</strong><small>{{ $record->application?->id_transaksi }}</small></td><td>{{ $record->application?->kavling?->kavling_code ?: 'Belum diisi' }}</td><td>{{ $record->status_komplain }}</td><td>{{ \Illuminate\Support\Str::limit($record->detail_garansi ?: 'Tidak ada detail', 90) }}</td><td>@include('workspace-v2.components.status', ['value' => $record->status_garansi])</td><td>{{ $record->tanggal_selesai?->format('d/m/Y') ?: 'Belum selesai' }}</td></tr>
+                    @else<tr><td><strong>{{ $record->customer?->name ?: $record->nama_konsumen ?: 'Konsumen' }}</strong><small>{{ $record->id_transaksi }}</small></td><td class="workspace-v2-mono">{{ $record->id_transaksi }}</td><td>{{ $record->project?->project_name ?: 'Tanpa proyek' }} / {{ $record->kavling?->kavling_code ?: $record->id_kavling ?: 'Tanpa kavling' }}</td><td>{{ $record->sales?->name ?: 'Belum ditetapkan' }}</td><td>@include('workspace-v2.components.status', ['value' => $workspace === 'mundur' ? 'Mundur' : ($record->transaction_status ?: 'Selesai')])</td><td>{{ $record->updated_at?->format('d/m/Y H:i') }}</td></tr>@endif
+                @endforeach
+            </tbody></table></div><div class="workspace-v2-pagination">{{ $records->links() }}</div>
+        @else @include('workspace-v2.components.empty', ['title' => 'Belum ada data '.$title, 'description' => 'Workspace aggregate ini memakai data lifecycle canonical, tanpa storage duplikat.']) @endif
+    </section>
+@endsection

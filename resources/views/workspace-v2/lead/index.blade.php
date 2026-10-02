@@ -1,0 +1,13 @@
+@extends('workspace-v2.layouts.app')
+@section('title', 'Lead | Workspace OASIS')
+@section('content')
+    @include('workspace-v2.components.page-header', ['eyebrow' => 'PENJUALAN', 'title' => 'Lead', 'description' => 'Follow-up lead dan konversi konsumen tetap menggunakan lifecycle Buku Saku Sales existing.', 'action' => '<a class="workspace-v2-button workspace-v2-button--primary" href="'.route('sales-leads.create').'">+ Lead baru</a>'])
+    <form method="GET" class="workspace-v2-toolbar"><label class="workspace-v2-search"><span>⌕</span><input type="search" name="search" value="{{ $search }}" placeholder="Cari nama, no HP, source, atau Lead ID..." aria-label="Cari lead"></label><button class="workspace-v2-button workspace-v2-button--secondary">Cari</button></form>
+    <section class="workspace-v2-table-panel">
+        @if($leads->count())
+            <div class="workspace-v2-table-wrap"><table class="workspace-v2-table"><thead><tr><th>Nama</th><th>Lead ID / Source</th><th>Proyek</th><th>Sales</th><th>Status</th><th>Diperbarui</th><th><span class="sr-only">Aksi</span></th></tr></thead><tbody>
+                @foreach($leads as $lead)<tr><td><strong>{{ $lead->customer_name }}</strong><small>{{ $lead->phone ?: 'No HP belum diisi' }}</small></td><td class="workspace-v2-mono">{{ $lead->external_lead_id ?: 'Lead #'.$lead->id }}<small>{{ $lead->effective_source ?: 'Source belum diisi' }}</small></td><td>{{ $lead->project?->project_name ?: 'Tanpa proyek' }}</td><td>{{ $lead->sales?->name ?: 'Belum ditetapkan' }}</td><td>@include('workspace-v2.components.status', ['value' => $lead->current_status?->label() ?: $lead->current_status ?: $lead->current_stage_label])</td><td class="workspace-v2-date">{{ $lead->updated_at?->format('d/m/Y H:i') }}</td><td><a class="workspace-v2-row-action" href="{{ route('sales-leads.show', $lead) }}">Buka</a></td></tr><tr class="workspace-v2-mobile-card-row"><td colspan="7"><article class="workspace-v2-mobile-card"><div><strong>{{ $lead->customer_name }}</strong>@include('workspace-v2.components.status', ['value' => $lead->current_status?->label() ?: $lead->current_status ?: $lead->current_stage_label])</div><span>{{ $lead->phone ?: 'No HP belum diisi' }}</span><small>{{ $lead->project?->project_name ?: 'Tanpa proyek' }} · {{ $lead->sales?->name ?: 'Sales belum ditetapkan' }}</small><a class="workspace-v2-row-action" href="{{ route('sales-leads.show', $lead) }}">Buka lead</a></article></td></tr>@endforeach
+            </tbody></table></div><div class="workspace-v2-pagination">{{ $leads->links() }}</div>
+        @else @include('workspace-v2.components.empty', ['title' => 'Belum ada lead', 'description' => 'Lead dalam area kerja Anda akan muncul di sini.']) @endif
+    </section>
+@endsection

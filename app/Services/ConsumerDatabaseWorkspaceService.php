@@ -71,6 +71,7 @@ final class ConsumerDatabaseWorkspaceService
             'selectedStatus' => $request->string('status')->toString(),
             'selectedStage' => $request->string('stage')->toString(),
             'selectedSort' => $this->sortValue($request),
+            'selectedPaymentMethod' => $request->string('payment_method')->toString(),
             'statusOptions' => [
                 'active' => 'Aktif',
                 'draft' => 'Draft',
@@ -79,6 +80,7 @@ final class ConsumerDatabaseWorkspaceService
                 'Pindah Kavling' => 'Pindah Kavling',
                 'REPLACED' => 'Diganti',
             ],
+            'paymentOptions' => ['kpr' => 'KPR', 'cash' => 'Cash', 'cash_bertahap' => 'Cash Bertahap', 'other' => 'Lainnya'],
             'stageOptions' => [
                 'data_konsumen' => 'Data Konsumen', 'psjb' => 'PSJB', 'slik' => 'SLIK',
                 'pemberkasan' => 'Pemberkasan', 'proses_bank' => 'Proses Bank', 'sp3k' => 'SP3K',
@@ -247,6 +249,7 @@ final class ConsumerDatabaseWorkspaceService
         $stage = $request->string('stage')->toString();
         $salesId = $request->integer('sales_id');
         $bank = trim($request->string('bank')->toString());
+        $paymentMethod = trim($request->string('payment_method')->toString());
 
         $sort = $this->sortValue($request);
 
@@ -259,6 +262,7 @@ final class ConsumerDatabaseWorkspaceService
                 : $stageQuery->where('current_process', $stage)->orWhere('current_stage', $stage)))
             ->when($salesId > 0, fn (Builder $builder): Builder => $builder->where('sales_user_id', $salesId))
             ->when($bank !== '', fn (Builder $builder): Builder => $builder->whereHas('bankProcesses', fn (Builder $bankQuery): Builder => $bankQuery->where('bank_name', $bank)))
+            ->when($paymentMethod !== '', fn (Builder $builder): Builder => $builder->where('payment_method', $paymentMethod))
             ->when($sort === 'name', fn (Builder $builder): Builder => $builder->orderBy(Customer::select('name')->whereColumn('customers.id', 'consumer_applications.customer_id')))
             ->when($sort === 'process', fn (Builder $builder): Builder => $builder->orderBy('current_process')->orderBy('current_stage'))
             ->when($sort === 'sales', fn (Builder $builder): Builder => $builder->orderBy(User::select('name')->whereColumn('users.id', 'consumer_applications.sales_user_id')))

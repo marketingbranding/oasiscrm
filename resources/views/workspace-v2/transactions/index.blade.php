@@ -32,10 +32,9 @@
             </div>
         </details>
         <details class="workspace-v2-popover workspace-v2-sort-popover">
-            <summary class="workspace-v2-button workspace-v2-button--quiet">Urutkan <span>{{ $sortLabels[$selectedSort] }}</span></summary>
+            <summary class="workspace-v2-button workspace-v2-button--quiet">Urutkan: <span>{{ $sortLabels[$selectedSort] }}</span></summary>
             <div class="workspace-v2-popover-panel workspace-v2-sort-panel"><label><span>Urutkan berdasarkan</span><select name="sort"><option value="updated" @selected($selectedSort === 'updated')>Terakhir diperbarui</option><option value="name" @selected($selectedSort === 'name')>Nama</option><option value="process" @selected($selectedSort === 'process')>Tanggal proses</option><option value="sales" @selected($selectedSort === 'sales')>Sales</option></select></label><button type="submit" class="workspace-v2-button workspace-v2-button--secondary">Terapkan</button></div>
         </details>
-        <a class="workspace-v2-button workspace-v2-button--primary" href="{{ route('workspace-v2.transactions.data-konsumen.create') }}">+ Data Konsumen</a>
     </form>
     <div class="workspace-v2-filter-summary"><span>{{ $applications->total() }} transaksi dalam view ini</span>@if($activeFilters->count())<div class="workspace-v2-filter-chips">@foreach($activeFilters as $key => $value)<span class="workspace-v2-filter-chip">{{ $value }} <a href="{{ request()->fullUrlWithQuery([$key => null, 'page' => null]) }}" aria-label="Hapus filter {{ $value }}">×</a></span>@endforeach<a href="{{ url()->current() }}" class="workspace-v2-clear-filters">Hapus semua</a></div>@endif</div>
     @php($processLabels = ['data_konsumen' => 'Data Konsumen', 'PSJB' => 'PSJB', 'psjb' => 'PSJB', 'bi_checking' => 'BI Checking', 'slik' => 'BI Checking', 'pemberkasan' => 'Pemberkasan', 'proses_bank' => 'Proses Bank', 'sp3k' => 'Proses Bank', 'ppjb_dev' => 'PPJB Dev', 'ppjb' => 'PPJB Dev', 'akad' => 'Akad', 'bast' => 'BAST', 'garansi' => 'Garansi', 'selesai' => 'Selesai'])

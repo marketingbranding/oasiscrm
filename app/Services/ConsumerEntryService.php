@@ -115,7 +115,7 @@ class ConsumerEntryService
 
     private function markCashNotApplicable(ConsumerApplication $application, User $actor): void
     {
-        foreach (['proses_bank', 'sp3k'] as $process) {
+        foreach (['bi_checking', 'pemberkasan', 'proses_bank', 'sp3k'] as $process) {
             ConsumerProcessApplicability::updateOrCreate(
                 ['consumer_application_id' => $application->id, 'process_key' => $process],
                 ['applicability' => 'not_applicable', 'reason' => 'Cara pembayaran Cash tidak melalui proses bank.', 'source' => 'manual', 'source_id' => (string) $actor->id],

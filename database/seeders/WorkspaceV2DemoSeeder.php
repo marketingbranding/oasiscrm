@@ -262,6 +262,17 @@ final class WorkspaceV2DemoSeeder extends Seeder
         }
 
         ConsumerProcessApplicability::create(['consumer_application_id' => $application->id, 'process_key' => 'garansi', 'applicability' => 'required', 'source' => 'workspace_v2_demo']);
+        if ($scenario['payment'] === 'cash') {
+            foreach (['bi_checking', 'pemberkasan', 'proses_bank', 'sp3k'] as $process) {
+                ConsumerProcessApplicability::create([
+                    'consumer_application_id' => $application->id,
+                    'process_key' => $process,
+                    'applicability' => 'not_applicable',
+                    'reason' => 'Cara pembayaran Cash tidak melalui proses bank.',
+                    'source' => 'workspace_v2_demo',
+                ]);
+            }
+        }
         if ($currentIndex >= 1) {
             ConsumerPsjb::create(['consumer_application_id' => $application->id, 'consumer_stage_event_id' => $events['psjb']->id ?? null, 'id_kavling' => $kavling->kavling_code, 'id_kons' => 'W2-KONS-'.$application->id, 'id_psjb' => 'W2-PSJB-'.$application->id, 'tanggal_psjb' => now()->subDays(35), 'harga_unit' => 450000000, 'cara_pembayaran' => $scenario['payment'], 'status' => 'completed']);
         }

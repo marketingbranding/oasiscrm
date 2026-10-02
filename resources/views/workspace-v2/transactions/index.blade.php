@@ -32,7 +32,7 @@
             </div>
         </details>
         <details class="workspace-v2-popover workspace-v2-sort-popover">
-            <summary class="workspace-v2-button workspace-v2-button--quiet">Urutkan: <span>{{ $sortLabels[$selectedSort] }}</span></summary>
+            <summary class="workspace-v2-button workspace-v2-button--quiet">Urutkan:<span class="workspace-v2-sort-value">&nbsp;{{ $sortLabels[$selectedSort] }}</span></summary>
             <div class="workspace-v2-popover-panel workspace-v2-sort-panel"><label><span>Urutkan berdasarkan</span><select name="sort"><option value="updated" @selected($selectedSort === 'updated')>Terakhir diperbarui</option><option value="name" @selected($selectedSort === 'name')>Nama</option><option value="process" @selected($selectedSort === 'process')>Tanggal proses</option><option value="sales" @selected($selectedSort === 'sales')>Sales</option></select></label><button type="submit" class="workspace-v2-button workspace-v2-button--secondary">Terapkan</button></div>
         </details>
     </form>
@@ -58,12 +58,46 @@
                             <td class="workspace-v2-date">{{ $application->updated_at?->format('d/m/Y H:i') }}</td>
                             <td><a class="workspace-v2-row-action" href="{{ route('workspace-v2.transaction.detail', $application) }}" data-detail-url="{{ route('workspace-v2.transaction.detail', $application) }}">Detail</a></td>
                         </tr>
-                        <tr class="workspace-v2-mobile-card-row"><td colspan="9"><article class="workspace-v2-mobile-card" data-detail-url="{{ route('workspace-v2.transaction.detail', $application) }}"><div><strong>{{ $application->customer?->name ?: $application->nama_konsumen ?: 'Tanpa nama' }}</strong>@include('workspace-v2.components.status', ['value' => $application->consumer_status ?: $application->transaction_status ?: $application->application_status])</div><span>{{ $application->id_transaksi }}</span><div><span>{{ $application->kavling?->kavling_code ?: $application->id_kavling ?: 'Kavling belum diisi' }}</span><span>{{ $process }}</span></div><small>{{ $bank?->bank_name ?: ($application->payment_method ? \Illuminate\Support\Str::headline($application->payment_method) : 'Pembayaran belum diisi') }} · {{ $application->sales?->name ?: 'Sales belum ditetapkan' }}</small></article></td></tr>
                     @endforeach
                     </tbody>
                 </table>
             </div>
-            <div class="workspace-v2-pagination">{{ $applications->links() }}</div>
+            <div class="workspace-v2-mobile-cards" aria-label="Daftar transaksi versi mobile">
+                @foreach($applications as $application)
+                    @php($bank = $application->bankProcesses->sortByDesc('attempt_no')->first())
+                    @php($process = $processLabels[$application->current_process ?: $application->current_stage] ?? \Illuminate\Support\Str::headline((string) ($application->current_process ?: $application->current_stage ?: 'data_konsumen')))
+                    <article class="workspace-v2-mobile-card" data-detail-url="{{ route('workspace-v2.transaction.detail', $application) }}" tabindex="0" role="button" aria-label="Buka detail {{ $application->customer?->name ?: $application->nama_konsumen ?: 'Tanpa nama' }}">
+                        <div><strong>{{ $application->customer?->name ?: $application->nama_konsumen ?: 'Tanpa nama' }}</strong>@include('workspace-v2.components.status', ['value' => $application->consumer_status ?: $application->transaction_status ?: $application->application_status])</div>
+                        <span>{{ $application->id_transaksi }}</span>
+                        <div><span>{{ $application->kavling?->kavling_code ?: $application->id_kavling ?: 'Kavling belum diisi' }}</span><span>{{ $process }}</span></div>
+                        <small>{{ $bank?->bank_name ?: ($application->payment_method ? \Illuminate\Support\Str::headline($application->payment_method) : 'Pembayaran belum diisi') }} · {{ $application->sales?->name ?: 'Sales belum ditetapkan' }}</small>
+                    </article>
+                @endforeach
+            </div>
+            <div class="workspace-v2-pagination" data-workspace-pagination>
+                <span class="workspace-v2-pagination-summary">{{ $applications->firstItem() }}–{{ $applications->lastItem() }} dari {{ $applications->total() }}</span>
+                @if($applications->hasPages())
+                    <nav aria-label="Navigasi halaman transaksi">
+                        @if($applications->onFirstPage())
+                            <span class="workspace-v2-pagination-disabled" aria-disabled="true">Sebelumnya</span>
+                        @else
+                            <a href="{{ $applications->previousPageUrl() }}" aria-label="Halaman sebelumnya">Sebelumnya</a>
+                        @endif
+                        @foreach($applications->getUrlRange(1, $applications->lastPage()) as $page => $url)
+                            @if($page == $applications->currentPage())
+                                <span aria-current="page">{{ $page }}</span>
+                            @else
+                                <a href="{{ $url }}" aria-label="Halaman {{ $page }}">{{ $page }}</a>
+                            @endif
+                        @endforeach
+                        @if($applications->hasMorePages())
+                            <a href="{{ $applications->nextPageUrl() }}" aria-label="Halaman berikutnya">Berikutnya</a>
+                        @else
+                            <span class="workspace-v2-pagination-disabled" aria-disabled="true">Berikutnya</span>
+                        @endif
+                    </nav>
+                @endif
+            </div>
         @else
             @include('workspace-v2.components.empty', ['title' => 'Belum ada transaksi pada view ini', 'description' => 'Coba ubah pencarian atau filter, atau mulai dengan mencatat Data Konsumen.'])
         @endif

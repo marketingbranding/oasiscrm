@@ -131,6 +131,8 @@ class WorkspaceV2FrontendTest extends TestCase
             ->assertSeeText('UAT Proses Bank');
         $this->assertSame(1, substr_count($allTransactions->getContent(), '+ Data Konsumen'));
         $allTransactions->assertSeeText('Urutkan: Terakhir diperbarui');
+        $allTransactions->assertSee('workspace-v2-mobile-cards', false)
+            ->assertDontSeeText('Showing');
 
         $this->actingAs($user)
             ->get(route('workspace-v2.transactions.data-konsumen'))
@@ -170,6 +172,23 @@ class WorkspaceV2FrontendTest extends TestCase
         $this->followRedirects($response)
             ->assertSeeText('UAT Manual Consumer')
             ->assertSeeText('Data konsumen berhasil disimpan.');
+    }
+
+    public function test_workspace_does_not_expose_a_standalone_sp3k_destination_and_keeps_contextual_drawer_contract(): void
+    {
+        config(['app.workspace_v2_enabled' => true]);
+
+        $response = $this->actingAs($this->superadmin())->get(route('workspace-v2.transactions.proses-bank'));
+        $script = file_get_contents(resource_path('js/workspace-v2/app.js'));
+        $styles = file_get_contents(resource_path('css/workspace-v2.css'));
+
+        $response->assertDontSeeText('SP3K');
+        $this->assertFalse(Route::has('workspace-v2.transactions.sp3k'));
+        $this->assertStringContainsString('Lanjutkan Proses', $script);
+        $this->assertStringContainsString('Tindakan', $script);
+        $this->assertStringContainsString('@media (min-width: 768px)', $styles);
+        $this->assertStringContainsString('.workspace-v2-sidebar-close { display: none !important; }', $styles);
+        $this->assertDatabaseHas('changelogs', ['version' => null, 'title' => 'Penyempurnaan UAT Workspace V2']);
     }
 
     private function superadmin(): User

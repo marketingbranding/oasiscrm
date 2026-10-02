@@ -18,7 +18,7 @@
                 @php($processLabel = match ($process->process_key) { 'data_konsumen' => 'Data Konsumen', 'bi_checking', 'slik' => 'BI Checking', 'proses_bank', 'sp3k' => 'Proses Bank', 'ppjb_dev', 'ppjb' => 'PPJB Dev', default => \Illuminate\Support\Str::headline((string) $process->process_key) })
                 <div class="workspace-v2-progress-row"><span>{{ $processLabel }}</span><strong>{{ $process->total }}</strong><div class="workspace-v2-progress"><i style="width: {{ min(100, $process->total * 10) }}%"></i></div></div>
             @empty
-                @include('workspace-v2.components.empty', ['title' => 'Belum ada transaksi', 'description' => 'Data transaksi yang dapat Anda lihat akan menjadi ringkasan di sini.'])
+                @include('workspace-v2.components.empty', ['compact' => true, 'title' => 'Belum ada transaksi', 'description' => 'Data transaksi yang dapat Anda lihat akan menjadi ringkasan di sini.'])
             @endforelse
         </section>
         <section class="workspace-v2-panel">
@@ -26,7 +26,7 @@
             @forelse($attentionItems as $issue)
                 <a class="workspace-v2-attention-row" href="{{ route('workspace-v2.transaction.detail', $issue->application) }}" data-detail-url="{{ route('workspace-v2.transaction.detail', $issue->application) }}"><span class="workspace-v2-alert-mark">!</span><span><strong>{{ $issue->application?->customer?->name ?: 'Konsumen' }}</strong><small>{{ $issue->description }}</small></span></a>
             @empty
-                @include('workspace-v2.components.empty', ['title' => 'Tidak ada antrian kritis', 'description' => 'Kendala dan garansi aktif akan muncul saat perlu tindakan.'])
+                @include('workspace-v2.components.empty', ['compact' => true, 'title' => 'Tidak ada antrian kritis', 'description' => 'Kendala dan garansi aktif akan muncul saat perlu tindakan.'])
             @endforelse
         </section>
     </div>

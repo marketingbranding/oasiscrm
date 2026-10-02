@@ -38,11 +38,25 @@ const openDetail = async (url, drawer) => {
 };
 
 document.addEventListener('DOMContentLoaded', () => {
+    const shell = document.querySelector('[data-workspace-shell]');
     const sidebar = document.querySelector('[data-sidebar]');
     const backdrop = document.querySelector('[data-mobile-backdrop]');
     const drawer = document.querySelector('[data-detail-drawer]');
+    const isMobile = () => window.matchMedia('(max-width: 767px)').matches;
     const closeSidebar = () => { sidebar?.classList.remove('is-open'); if (backdrop) backdrop.hidden = true; };
-    document.querySelector('[data-sidebar-open]')?.addEventListener('click', () => { sidebar?.classList.add('is-open'); if (backdrop) backdrop.hidden = false; });
+    const setCollapsed = (collapsed) => {
+        shell?.classList.toggle('is-sidebar-collapsed', collapsed);
+        window.localStorage.setItem('oasis.workspace-v2.sidebar-collapsed', collapsed ? 'true' : 'false');
+    };
+    if (!isMobile() && window.localStorage.getItem('oasis.workspace-v2.sidebar-collapsed') === 'true') setCollapsed(true);
+    document.querySelector('[data-sidebar-open]')?.addEventListener('click', () => {
+        if (isMobile()) {
+            sidebar?.classList.add('is-open');
+            if (backdrop) backdrop.hidden = false;
+            return;
+        }
+        setCollapsed(!shell?.classList.contains('is-sidebar-collapsed'));
+    });
     document.querySelector('[data-sidebar-close]')?.addEventListener('click', closeSidebar);
     backdrop?.addEventListener('click', closeSidebar);
     document.querySelectorAll('.workspace-v2-nav-child, .workspace-v2-nav-link:not([data-process-toggle])').forEach((link) => link.addEventListener('click', closeSidebar));

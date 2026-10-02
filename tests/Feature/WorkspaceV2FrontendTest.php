@@ -14,6 +14,7 @@ class WorkspaceV2FrontendTest extends TestCase
 
     public function test_workspace_routes_return_not_found_when_feature_flag_is_disabled(): void
     {
+        config(['app.workspace_v2_enabled' => false]);
         $user = $this->superadmin();
 
         $this->actingAs($user)

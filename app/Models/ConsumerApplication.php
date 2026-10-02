@@ -24,13 +24,22 @@ class ConsumerApplication extends Model
         'kavling_id',
         'promo_id',
         'sales_lead_id',
+        'source_nup_id',
         'id_kavling',
         'nama_konsumen',
         'nik',
         'application_status',
         'replacement_application_id',
         'consumer_status',
+        'transaction_status',
         'current_stage',
+        'current_process',
+        'current_process_source',
+        'entry_mode',
+        'acquisition_source',
+        'payment_method',
+        'historical_entered_at',
+        'historical_entered_by',
         'source_last_process',
         'source_completeness_status',
         'status_cash',
@@ -65,6 +74,7 @@ class ConsumerApplication extends Model
             'status_cash' => 'boolean',
             'booking_date' => 'date',
             'akad_date' => 'date',
+            'historical_entered_at' => 'datetime',
         ];
     }
 
@@ -101,6 +111,16 @@ class ConsumerApplication extends Model
     public function salesLead(): BelongsTo
     {
         return $this->belongsTo(SalesLead::class);
+    }
+
+    public function sourceNup(): BelongsTo
+    {
+        return $this->belongsTo(ConsumerNup::class, 'source_nup_id');
+    }
+
+    public function historicalEnteredBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'historical_entered_by');
     }
 
     public function replacementApplication(): BelongsTo
@@ -171,6 +191,21 @@ class ConsumerApplication extends Model
     public function bastRecords(): HasMany
     {
         return $this->hasMany(ConsumerBastRecord::class, 'consumer_application_id');
+    }
+
+    public function warranties(): HasMany
+    {
+        return $this->hasMany(ConsumerWarranty::class, 'consumer_application_id');
+    }
+
+    public function issues(): HasMany
+    {
+        return $this->hasMany(ConsumerIssue::class, 'consumer_application_id');
+    }
+
+    public function processApplicabilities(): HasMany
+    {
+        return $this->hasMany(ConsumerProcessApplicability::class, 'consumer_application_id');
     }
 
     public function ready100Events(): HasMany

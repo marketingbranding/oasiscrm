@@ -9,6 +9,11 @@
                 "artisan",
                 "boost:mcp"
             ]
+        },
+        "context7": {
+            "type": "remote",
+            "enabled": true,
+            "url": "https://mcp.context7.com/mcp"
         }
     }
 }

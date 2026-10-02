@@ -60,7 +60,7 @@ final class ConsumerKavlingLifecycleService
             if ($assignment !== null) {
                 $assignment->update(['assignment_status' => 'released', 'released_at' => now(), 'release_reason' => 'mundur']);
             }
-            $application->update(['consumer_status' => 'Mundur', 'kavling_id' => null]);
+            $application->update(['consumer_status' => 'Mundur', 'transaction_status' => 'MUNDUR', 'kavling_id' => null]);
         });
     }
 
@@ -105,7 +105,7 @@ final class ConsumerKavlingLifecycleService
                 'assigned_at' => now(),
                 'assignment_status' => 'active',
             ]);
-            $application->update(['kavling_id' => $target->id, 'consumer_status' => 'Pindah Kavling']);
+            $application->update(['kavling_id' => $target->id, 'consumer_status' => 'Pindah Kavling', 'transaction_status' => 'LANJUT']);
 
             return $assignment;
         });

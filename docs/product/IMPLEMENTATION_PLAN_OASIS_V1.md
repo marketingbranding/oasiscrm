@@ -4,7 +4,7 @@
 **Repository:** `marketingbranding/oasiscrm`  
 **Primary Reference:** `PRD_OASIS_CRM_Consumer_Database_Platform.md`  
 **Delivery Strategy:** Consumer Database First, End-to-End Architecture  
-**Product Architecture:** Lead → UTJ → Customer → Consumer Application → SLIK → PSJB → Pemberkasan → Bank/SP3K → PPJB → Akad → BAST  
+**Product Architecture (V2):** Lead → Data Konsumen → PSJB/SLIK → Pemberkasan → Proses Bank → SP3K → PPJB → Akad → BAST → Form Garansi → Selesai
 **Target Platform:** Responsive Web Application / PWA  
 **Implementation Principle:** Audit first, reuse existing code, migration-safe, no big-bang rewrite  
 **Verified repository baseline when this plan was prepared:** `main` at commit `4c3e945a0f84cc112f98596b87adefa53a16f251` on 1 October 2026.  
@@ -24,6 +24,8 @@ Tujuan milestone pertama bukan menyelesaikan seluruh CRM OASIS. Tujuan milestone
 4. Business rules penting dari Database Master V3 dipertahankan jika masih relevan.
 5. Google Sheets tetap hidup sebagai compatibility layer selama masa transisi.
 6. Existing OASIS yang sudah benar tidak ditulis ulang hanya demi menyesuaikan nama atau bentuk PRD.
+
+> **V2 supersedes the former UTJ-first assumption.** UTJ is a transaction fact recorded in PSJB/early process. Lead conversion is the explicit `Jadikan Konsumen` handoff, NUP is a separate waiting-list domain, and historical data may set its current position without fabricated milestones.
 
 ---
 

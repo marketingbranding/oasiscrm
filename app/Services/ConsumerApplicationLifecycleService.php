@@ -52,6 +52,13 @@ final class ConsumerApplicationLifecycleService
         return $this->operational->recordProsesBank($application, $data, $actor);
     }
 
+    public function recordSp3k(ConsumerApplication $application, array $data, User $actor): ConsumerBankProcess
+    {
+        $this->authorize($actor, $application);
+
+        return $this->operational->recordSp3k($application, $data, $actor);
+    }
+
     public function gantiBank(ConsumerApplication $application, array $data, User $actor): ConsumerBankProcess
     {
         $this->authorize($actor, $application);
@@ -63,19 +70,27 @@ final class ConsumerApplicationLifecycleService
     {
         $this->authorize($actor, $application);
 
-        return $this->operational->update($application, ['consumer_status' => 'Mundur'], $actor, $this->kavlingLifecycle);
+        $before = $this->snapshot($application->fresh());
+        $result = $this->operational->update($application, ['consumer_status' => 'Mundur'], $actor, $this->kavlingLifecycle);
+        $this->audit($actor, $result, $before, $this->snapshot($result->fresh()), 'consumer_mundur', 'mundur');
+
+        return $result;
     }
 
     public function pindahKavling(ConsumerApplication $application, Kavling $targetKavling, User $actor): ConsumerApplication
     {
         $this->authorize($actor, $application);
 
-        return $this->operational->update(
+        $before = $this->snapshot($application->fresh());
+        $result = $this->operational->update(
             $application,
             ['consumer_status' => 'Pindah Kavling', 'target_kavling_id' => $targetKavling->id],
             $actor,
             $this->kavlingLifecycle,
         );
+        $this->audit($actor, $result, $before, $this->snapshot($result->fresh()), 'consumer_kavling_moved', 'pindah_kavling');
+
+        return $result;
     }
 
     public function recordReady100(ConsumerApplication $application, array $data, User $actor): ConsumerStageEvent
@@ -150,6 +165,7 @@ final class ConsumerApplicationLifecycleService
 
             $oldApplication->update([
                 'application_status' => 'REPLACED',
+                'transaction_status' => 'DIGANTI_KONSUMEN',
                 'replacement_application_id' => $replacement->id,
                 'kavling_id' => null,
             ]);

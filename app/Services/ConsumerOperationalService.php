@@ -23,7 +23,7 @@ final class ConsumerOperationalService
 {
     private const CONSUMER_STATUSES = ['Lanjut', 'Mundur', 'Pindah Kavling', 'Reject'];
 
-    private const TERMINAL_STATUSES = ['replaced', 'mundur', 'reject', 'rejected', 'cancelled', 'withdrawn', 'completed', 'selesai', 'closed', 'bast'];
+    private const TERMINAL_STATUSES = ['replaced', 'mundur', 'reject', 'rejected', 'cancelled', 'withdrawn', 'completed', 'selesai', 'closed', 'diganti_konsumen'];
 
     private const REQUIRED_FIELDS = [
         'customer.name' => 'Nama Konsumen', 'customer.phone' => 'No HP', 'customer.date_of_birth' => 'Tanggal Lahir',
@@ -59,7 +59,7 @@ final class ConsumerOperationalService
 
     public function processLast(ConsumerApplication $application): ?string
     {
-        $order = ['bi_checking' => 'BI Checking', 'PSJB' => 'PSJB', 'pemberkasan' => 'Pemberkasan', 'proses_bank' => 'Proses Bank', 'ppjb_dev' => 'PPJB Developer', 'akad' => 'Akad', 'bast' => 'BAST'];
+        $order = ['PSJB' => 'PSJB', 'bi_checking' => 'BI Checking', 'pemberkasan' => 'Pemberkasan', 'proses_bank' => 'Proses Bank', 'sp3k' => 'SP3K', 'ppjb_dev' => 'PPJB', 'akad' => 'Akad', 'bast' => 'BAST', 'garansi' => 'Form Garansi'];
         $rank = array_flip(array_keys($order));
         $stage = $application->stageEvents->sortByDesc(fn ($event) => [$rank[$event->stage] ?? -1, $event->occurred_at?->timestamp ?? 0, $event->id])->first()?->stage;
 
@@ -74,6 +74,16 @@ final class ConsumerOperationalService
                 'sales_user_id' => $data['sales_user_id'] ?? null, 'promo_id' => $data['promo_id'] ?? null,
                 'application_status' => 'draft', 'status_cash' => $data['status_cash'] ?? null,
                 'consumer_status' => $data['consumer_status'] ?? 'Lanjut', 'notes' => $data['notes'] ?? null,
+                'transaction_status' => $data['transaction_status'] ?? 'LANJUT',
+                'payment_method' => $data['payment_method'] ?? (($data['status_cash'] ?? false) ? 'cash' : null),
+                'current_process' => $data['current_process'] ?? 'data_konsumen',
+                'current_process_source' => $data['current_process_source'] ?? 'operational',
+                'entry_mode' => $data['entry_mode'] ?? 'new',
+                'acquisition_source' => $data['acquisition_source'] ?? null,
+                'historical_entered_at' => $data['historical_entered_at'] ?? null,
+                'historical_entered_by' => $data['historical_entered_by'] ?? null,
+                'sales_lead_id' => $data['sales_lead_id'] ?? null,
+                'source_nup_id' => $data['source_nup_id'] ?? null,
             ]);
             if (! empty($data['kavling_id'])) {
                 $lifecycle->assign($application, Kavling::query()->findOrFail($data['kavling_id']));
@@ -88,10 +98,7 @@ final class ConsumerOperationalService
     {
         return DB::transaction(function () use ($application, $data, $actor, $lifecycle): ConsumerApplication {
             $previousConsumerStatus = $application->consumer_status;
-            $application->update([
-                'sales_user_id' => $data['sales_user_id'] ?? null, 'promo_id' => $data['promo_id'] ?? null,
-                'status_cash' => $data['status_cash'] ?? null, 'notes' => $data['notes'] ?? null,
-            ]);
+            $application->update(array_intersect_key($data, array_flip(['sales_user_id', 'promo_id', 'status_cash', 'notes', 'payment_method'])));
             $status = $data['consumer_status'] ?? null;
             if ($status === 'Mundur' && $previousConsumerStatus !== 'Mundur') {
                 $lifecycle->mundur($application);
@@ -123,7 +130,7 @@ final class ConsumerOperationalService
                 'notes' => $data['keterangan'] ?? null, 'actor_id' => $actor->id,
                 'metadata' => ['id_kavling' => $application->kavling?->kavling_code],
             ]);
-            $application->update(['current_stage' => 'bi_checking']);
+            $application->update(['current_stage' => 'bi_checking', 'current_process' => 'slik', 'current_process_source' => 'operational']);
             $this->refreshDerived($application->fresh(['customer', 'stageEvents']), $actor);
             $this->audit($actor, $application, 'consumer_slik_recorded', $before, $this->snapshot($application->fresh()), 'manual');
 
@@ -136,23 +143,20 @@ final class ConsumerOperationalService
         return DB::transaction(function () use ($application, $data, $actor): ConsumerPsjb {
             $before = $this->snapshot($application->fresh());
             $bi = $application->stageEvents()->where('stage', 'bi_checking')->latest('occurred_at')->latest('id')->first();
-            if ($bi === null) {
-                throw new DomainException('BI Checking wajib diinput sebelum PSJB.');
-            }
             $date = CarbonImmutable::parse($data['tanggal_psjb']);
             $id = $this->nextId('PSJB', $date, $application, $data['cara_pembayaran'] ?? '');
             $event = $application->stageEvents()->create([
                 'stage' => 'PSJB', 'source_id' => $id, 'source' => 'manual', 'occurred_at' => $date,
                 'status' => $data['status'] ?? null, 'notes' => $data['keterangan'] ?? null, 'actor_id' => $actor->id,
-                'metadata' => ['id_kons' => $bi->source_id],
+                'metadata' => ['id_kons' => $bi?->source_id ?? $application->id_transaksi],
             ]);
             $psjb = $application->psjbs()->create($data + [
                 'consumer_stage_event_id' => $event->id, 'id_kavling' => $application->kavling?->kavling_code,
-                'id_kons' => $bi->source_id, 'id_psjb' => $id,
+                'id_kons' => $bi?->source_id ?? $application->id_transaksi, 'id_psjb' => $id,
                 'nama_koordinator' => $application->sales?->currentSalesCoordinators()->first()?->name,
                 'nama_sales' => $application->sales?->name, 'promo_id' => $application->promo_id,
             ]);
-            $application->update(['current_stage' => 'PSJB']);
+            $application->update(['current_stage' => 'PSJB', 'current_process' => 'psjb', 'current_process_source' => 'operational']);
             $this->refreshDerived($application->fresh(['customer', 'stageEvents']), $actor);
             $this->audit($actor, $application, 'consumer_psjb_recorded', $before, $this->snapshot($application->fresh()), 'manual');
 
@@ -168,6 +172,11 @@ final class ConsumerOperationalService
     public function recordProsesBank(ConsumerApplication $application, array $data, User $actor): ConsumerBankProcess
     {
         return $this->recordBankStage($application, 'proses_bank', $data, $actor, false, false);
+    }
+
+    public function recordSp3k(ConsumerApplication $application, array $data, User $actor): ConsumerBankProcess
+    {
+        return $this->recordBankStage($application, 'sp3k', $data, $actor, false, false);
     }
 
     public function gantiBank(ConsumerApplication $application, array $data, User $actor): ConsumerBankProcess
@@ -203,6 +212,9 @@ final class ConsumerOperationalService
     {
         return DB::transaction(function () use ($application, $stage, $data, $actor, $startNewAttempt, $reuseLatestAttempt): ConsumerBankProcess {
             $application = ConsumerApplication::query()->lockForUpdate()->findOrFail($application->id);
+            if (in_array($application->payment_method, ['cash', 'cash_bertahap'], true) && in_array($stage, ['proses_bank', 'sp3k'], true)) {
+                throw new DomainException('Proses Bank dan SP3K tidak berlaku untuk transaksi Cash.');
+            }
             $existingByKey = filled($data['attempt_key'] ?? null)
                 ? $application->bankProcesses()->where('attempt_key', $data['attempt_key'])->first()
                 : null;
@@ -304,7 +316,7 @@ final class ConsumerOperationalService
             $before = $this->snapshot($application->fresh());
             $event = $this->appendEvent($application, 'akad', $data['status_konsumen'] ?? null, $data['keterangan_terlambat'] ?? null, $data['tanggal_akad'] ?? now()->toDateString(), $actor, $data);
             $record = $application->akadRecords()->create($data + ['consumer_stage_event_id' => $event->id]);
-            $application->update(['akad_date' => $data['tanggal_akad'] ?? now()->toDateString()]);
+            $application->update(['akad_date' => $data['tanggal_akad'] ?? now()->toDateString(), 'current_process' => 'akad', 'current_process_source' => 'operational']);
             $lifecycle->ensureSold($application);
             $this->advanceStage($application, 'akad', $actor);
             $this->audit($actor, $application, 'consumer_akad_recorded', $before, $this->snapshot($application->fresh()), 'manual');
@@ -326,6 +338,7 @@ final class ConsumerOperationalService
             $event = $this->appendEvent($application, 'bast', null, null, $data['tanggal_bast'] ?? now()->toDateString(), $actor, $data);
             $record = $application->bastRecords()->create($data + ['consumer_stage_event_id' => $event->id]);
             $lifecycle->ensureSold($application);
+            $application->update(['current_process' => 'bast', 'current_process_source' => 'operational']);
             $this->advanceStage($application, 'bast', $actor);
             $this->audit($actor, $application, 'consumer_bast_recorded', $before, $this->snapshot($application->fresh()), 'manual');
 
@@ -385,10 +398,14 @@ final class ConsumerOperationalService
 
     private function advanceStage(ConsumerApplication $application, string $stage, User $actor): void
     {
-        $order = array_flip(['bi_checking', 'PSJB', 'pemberkasan', 'proses_bank', 'ppjb_dev', 'akad', 'bast']);
+        $order = array_flip(['data_konsumen', 'PSJB', 'bi_checking', 'pemberkasan', 'proses_bank', 'sp3k', 'ppjb_dev', 'akad', 'bast', 'garansi', 'selesai']);
         $current = $application->current_stage;
         if ($current === null || ($order[$stage] ?? -1) >= ($order[$current] ?? -1)) {
-            $application->update(['current_stage' => $stage]);
+            $application->update([
+                'current_stage' => $stage,
+                'current_process' => $this->canonicalProcess($stage),
+                'current_process_source' => 'operational',
+            ]);
         }
         $this->refreshDerived($application->fresh(['customer', 'stageEvents']), $actor);
     }
@@ -406,7 +423,11 @@ final class ConsumerOperationalService
     private function refreshDerived(ConsumerApplication $application, User $actor): void
     {
         $completeness = $this->completeness($application);
-        $application->update(['source_completeness_status' => $completeness['status'], 'source_last_process' => $this->processLast($application)]);
+        $updates = ['source_completeness_status' => $completeness['status'], 'source_last_process' => $this->processLast($application)];
+        if ($application->current_process === null && $application->current_stage !== null) {
+            $updates['current_process'] = $this->canonicalProcess($application->current_stage);
+        }
+        $application->update($updates);
     }
 
     private function isTerminal(ConsumerApplication $application): bool
@@ -414,8 +435,26 @@ final class ConsumerOperationalService
         return collect([
             $application->application_status,
             $application->consumer_status,
+            $application->transaction_status,
             $application->current_stage,
         ])->filter()->map(fn (string $status): string => Str::lower($status))->contains(fn (string $status): bool => in_array($status, self::TERMINAL_STATUSES, true));
+    }
+
+    private function canonicalProcess(string $stage): string
+    {
+        return match (Str::lower($stage)) {
+            'bi_checking', 'slik' => 'slik',
+            'psjb' => 'psjb',
+            'pemberkasan' => 'pemberkasan',
+            'proses_bank' => 'proses_bank',
+            'sp3k' => 'sp3k',
+            'ppjb_dev', 'ppjb' => 'ppjb',
+            'akad' => 'akad',
+            'bast' => 'bast',
+            'garansi' => 'garansi',
+            'selesai' => 'selesai',
+            default => 'data_konsumen',
+        };
     }
 
     private function snapshot(?Model $model): ?array

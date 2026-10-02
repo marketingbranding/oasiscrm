@@ -102,7 +102,7 @@ final class ConsumerDatabaseWorkspaceService
             'sales:id,name',
             'kavling:id,project_id,name,kavling_code',
             'stageEvents:id,consumer_application_id,stage,event_date,status,decision,occurred_at,completed_at,notes,reason',
-            'bankProcesses:id,consumer_application_id,attempt_no,bank_name,status,response_type,approved_plafond,approved_tenor,sp3k_at,rejected_at,rejection_reason,submitted_at,verified_at',
+            'bankProcesses:id,consumer_application_id,attempt_no,bank_name,status,response_type,no_sp3k,approved_plafond,approved_tenor,sp3k_at,rejected_at,rejection_reason,submitted_at,verified_at',
             'psjbs:id,consumer_application_id,consumer_stage_event_id,id_psjb,tanggal_psjb,status',
             'ppjbDevelopers:id,consumer_application_id,consumer_stage_event_id,tanggal_sp3k,tanggal_ttd_ppjb,status',
             'akadRecords:id,consumer_application_id,consumer_stage_event_id,tanggal_akad,status_konsumen',
@@ -154,7 +154,9 @@ final class ConsumerDatabaseWorkspaceService
                 'application_status' => $this->valueLabel($application->application_status),
                 'consumer_status' => $this->valueLabel($application->consumer_status),
                 'transaction_status' => $this->valueLabel($application->transaction_status ?: $application->consumer_status),
+                'payment_method_key' => $application->payment_method,
                 'payment_method' => $this->paymentLabel($application->payment_method),
+                'current_process_key' => $application->current_process ?: $application->current_stage,
                 'current_stage' => $stageLabels[$application->current_process ?: $application->current_stage] ?? $stageLabels[$application->current_stage] ?? $application->current_process ?: $application->current_stage,
                 'booking_date' => $application->booking_date?->toDateString(),
                 'akad_date' => $application->akad_date?->toDateString(),
@@ -186,6 +188,7 @@ final class ConsumerDatabaseWorkspaceService
                 'bank_name' => $attempt->bank_name,
                 'status' => $this->valueLabel($attempt->status),
                 'response_type' => $this->valueLabel($attempt->response_type),
+                'no_sp3k' => $attempt->no_sp3k,
                 'approved_plafond' => $attempt->approved_plafond,
                 'approved_tenor' => $attempt->approved_tenor,
                 'sp3k_at' => $attempt->sp3k_at?->toIso8601String(),
@@ -202,6 +205,13 @@ final class ConsumerDatabaseWorkspaceService
                 'warranty' => $application->warranties->count(),
                 'issues' => $application->issues->count(),
             ],
+            'process_applicability' => $application->processApplicabilities
+                ->keyBy('process_key')
+                ->map(fn ($item): array => [
+                    'applicability' => $item->applicability,
+                    'reason' => $item->reason,
+                ])
+                ->all(),
             'activity' => $activities,
             'warranty' => $application->warranties->map(fn ($warranty): array => ['status_komplain' => $warranty->status_komplain, 'status_garansi' => $warranty->status_garansi, 'tanggal_selesai' => $warranty->tanggal_selesai?->toDateString(), 'detail_garansi' => $warranty->detail_garansi])->values()->all(),
             'issues' => $application->issues->map(fn ($issue): array => ['process' => $issue->process_key, 'category' => $issue->category, 'description' => $issue->description, 'status' => $issue->status, 'opened_at' => $issue->opened_at?->toIso8601String(), 'resolution' => $issue->resolution])->values()->all(),

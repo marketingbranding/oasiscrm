@@ -76,6 +76,9 @@ class ConsumerV2ProcessTest extends TestCase
         ], $actor);
 
         $this->assertDatabaseHas('consumer_process_applicabilities', ['consumer_application_id' => $created->id, 'process_key' => 'proses_bank', 'applicability' => 'not_applicable']);
+        $this->assertDatabaseHas('consumer_process_applicabilities', ['consumer_application_id' => $created->id, 'process_key' => 'bi_checking', 'applicability' => 'not_applicable']);
+        $this->assertDatabaseHas('consumer_process_applicabilities', ['consumer_application_id' => $created->id, 'process_key' => 'pemberkasan', 'applicability' => 'not_applicable']);
+        $this->assertDatabaseHas('consumer_process_applicabilities', ['consumer_application_id' => $created->id, 'process_key' => 'sp3k', 'applicability' => 'not_applicable']);
         $this->expectException(\DomainException::class);
         app(ConsumerOperationalService::class)->recordProsesBank($created, ['bank_name' => 'BTN'], $actor);
     }

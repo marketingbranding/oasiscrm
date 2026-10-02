@@ -1,5 +1,5 @@
 <header class="workspace-v2-topbar">
-    <button type="button" class="workspace-v2-icon-button workspace-v2-menu-button" data-sidebar-open aria-label="Buka navigasi">☰</button>
+    <button type="button" class="workspace-v2-icon-button workspace-v2-menu-button" data-sidebar-open aria-label="Buka atau ciutkan navigasi" title="Buka atau ciutkan navigasi">☰</button>
     <div class="workspace-v2-topbar-spacer" aria-hidden="true"></div>
     <div class="workspace-v2-topbar-actions">
         <a href="{{ route('notifications.index') }}" class="workspace-v2-topbar-link">Notifikasi</a>

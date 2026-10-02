@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use Database\Seeders\WorkspaceV2DemoSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
 class WorkspaceV2DemoSeederTest extends TestCase
@@ -33,5 +34,17 @@ class WorkspaceV2DemoSeederTest extends TestCase
         $this->assertDatabaseHas('consumer_warranties', [
             'status_garansi' => 'Proses',
         ]);
+        $this->assertDatabaseHas('consumer_process_applicabilities', [
+            'consumer_application_id' => $this->demoApplicationId('cash'),
+            'process_key' => 'pemberkasan',
+            'applicability' => 'not_applicable',
+        ]);
+    }
+
+    private function demoApplicationId(string $key): int
+    {
+        return (int) DB::table('consumer_applications')
+            ->where('notes', 'like', '[W2-DEMO] '.$key.'%')
+            ->value('id');
     }
 }

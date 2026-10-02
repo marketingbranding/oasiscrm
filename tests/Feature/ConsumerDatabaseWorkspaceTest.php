@@ -102,6 +102,9 @@ class ConsumerDatabaseWorkspaceTest extends TestCase
         $application->bankProcesses()->create([
             'bank_name' => 'Bank Contoh',
             'status' => 'approved',
+            'response_type' => 'SP3K',
+            'no_sp3k' => 'SP3K-TEST-001',
+            'sp3k_at' => now(),
             'approved_plafond' => 250000000,
         ]);
 
@@ -111,6 +114,7 @@ class ConsumerDatabaseWorkspaceTest extends TestCase
             ->assertJsonPath('data.overview.customer_name', 'Detail Konsumen')
             ->assertJsonPath('data.process.0.stage', 'PSJB')
             ->assertJsonPath('data.payment.0.bank_name', 'Bank Contoh')
+            ->assertJsonPath('data.payment.0.no_sp3k', 'SP3K-TEST-001')
             ->assertJsonPath('data.counts.process', 1)
             ->assertJsonPath('data.counts.payment', 1)
             ->assertJsonMissingPath('data.overview.nik');

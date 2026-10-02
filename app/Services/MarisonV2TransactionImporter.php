@@ -37,6 +37,10 @@ final class MarisonV2TransactionImporter
             'application_status' => 'migration_pending',
             'consumer_status' => null,
             'status_cash' => mb_strtoupper((string) data_get($transaction, 'payment.method')) === 'CASH',
+            'transaction_status' => data_get($transaction, 'source_state.status_transaksi'),
+            'payment_method' => mb_strtoupper((string) data_get($transaction, 'payment.method')) === 'CASH' ? 'cash' : 'kpr',
+            'entry_mode' => 'migration',
+            'acquisition_source' => 'marison_v2',
             'source_completeness_status' => 'Menunggu Rekonsiliasi',
             'notes' => 'Impor Marison V2; identitas konsumen dan kavling belum direkonsiliasi.',
         ]);
@@ -65,6 +69,8 @@ final class MarisonV2TransactionImporter
         $stage = $this->derivedStage($application);
         $application->update([
             'current_stage' => $stage,
+            'current_process' => $this->canonicalProcess($stage),
+            'current_process_source' => 'migration',
             'source_last_process' => $stage,
             'akad_date' => $application->akadRecords()->max('tanggal_akad'),
         ]);
@@ -222,6 +228,23 @@ final class MarisonV2TransactionImporter
         }
 
         return null;
+    }
+
+    private function canonicalProcess(?string $stage): string
+    {
+        return match (strtolower((string) $stage)) {
+            'bi_checking', 'slik' => 'slik',
+            'psjb' => 'psjb',
+            'pemberkasan' => 'pemberkasan',
+            'proses_bank' => 'proses_bank',
+            'sp3k' => 'sp3k',
+            'ppjb_dev', 'ppjb' => 'ppjb',
+            'akad' => 'akad',
+            'bast' => 'bast',
+            'garansi' => 'garansi',
+            'selesai' => 'selesai',
+            default => 'data_konsumen',
+        };
     }
 
     private function suggestedDecision(array $transaction): string

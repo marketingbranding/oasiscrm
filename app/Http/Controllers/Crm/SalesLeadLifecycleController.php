@@ -63,7 +63,13 @@ class SalesLeadLifecycleController extends Controller
     {
         $link = $this->run(fn () => $this->lifecycle->convertToConsumer($salesLead, $request->validated(), $request->user()));
 
-        return $this->respond($request, 'Lead berhasil dikonversi menjadi konsumen.', ['consumer_link_id' => $link->id, 'sheet_type' => $link->sheet_type, 'operation_uuid' => $link->operation_uuid]);
+        return $this->respond($request, 'Lead berhasil dikonversi menjadi konsumen.', [
+            'consumer_link_id' => $link->id,
+            'consumer_application_id' => $link->consumer_application_id,
+            'consumer_url' => $link->consumer_application_id === null ? null : route('consumer-database.workspace.show', $link->consumer_application_id),
+            'sheet_type' => $link->sheet_type,
+            'operation_uuid' => $link->operation_uuid,
+        ]);
     }
 
     public function slik(SubmitSalesLeadSlikRequest $request, SalesLead $salesLead): RedirectResponse|Response

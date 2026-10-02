@@ -21,6 +21,7 @@ class SalesLeadLifecycleService
 {
     public function __construct(
         private readonly WorkspaceAccessService $workspaceAccess,
+        private readonly ConsumerHandoffService $consumerHandoff,
         private readonly ?SalesLeadBridgeModeService $bridgeModes = null,
         private readonly ?SalesLeadBridgeService $bridge = null,
     ) {}
@@ -400,10 +401,15 @@ class SalesLeadLifecycleService
                 'nama_konsumen' => $locked->customer_name,
                 'no_hp' => $locked->phone,
             ];
+            $application = null;
+            if ($sheetName === 'data_konsumen') {
+                $application = $this->consumerHandoff->createFromLead($locked, $data, $actor);
+            }
             $result = $this->syncEnabled() ? $this->writer()->append($locked, $sheetName, $fields, $operationUuid) : null;
 
             $link = SalesLeadConsumerLink::query()->create([
                 'sales_lead_id' => $locked->id,
+                'consumer_application_id' => $application?->id,
                 'branch_id' => $locked->branch_id,
                 'actor_id' => $actor->id,
                 'operation_uuid' => $operationUuid,

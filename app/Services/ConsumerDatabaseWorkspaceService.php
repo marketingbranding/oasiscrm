@@ -77,7 +77,12 @@ final class ConsumerDatabaseWorkspaceService
                 'Pindah Kavling' => 'Pindah Kavling',
                 'REPLACED' => 'Diganti',
             ],
-            'stageOptions' => $this->pipeline->stages() + ['ready_100' => 'Rumah Siap 100%'],
+            'stageOptions' => [
+                'data_konsumen' => 'Data Konsumen', 'psjb' => 'PSJB', 'slik' => 'SLIK',
+                'pemberkasan' => 'Pemberkasan', 'proses_bank' => 'Proses Bank', 'sp3k' => 'SP3K',
+                'ppjb' => 'PPJB', 'akad' => 'Akad', 'bast' => 'BAST', 'garansi' => 'Form Garansi',
+                'selesai' => 'Selesai', 'ready_100' => 'Rumah Siap 100%',
+            ] + $this->pipeline->stages(),
         ];
     }
 
@@ -98,9 +103,16 @@ final class ConsumerDatabaseWorkspaceService
             'ppjbDevelopers:id,consumer_application_id,consumer_stage_event_id,tanggal_sp3k,tanggal_ttd_ppjb,status',
             'akadRecords:id,consumer_application_id,consumer_stage_event_id,tanggal_akad,status_konsumen',
             'bastRecords:id,consumer_application_id,consumer_stage_event_id,tanggal_bast,no_bast,status,notes',
+            'warranties:id,consumer_application_id,consumer_bast_record_id,status_komplain,tanggal_selesai,status_garansi,detail_garansi',
+            'issues:id,consumer_application_id,process_key,category,description,status,opened_at,resolution,resolved_at,pic_user_id',
+            'processApplicabilities:id,consumer_application_id,process_key,applicability,reason',
         ]);
 
-        $stageLabels = $this->pipeline->stages() + ['ready_100' => 'Rumah Siap 100%'];
+        $stageLabels = [
+            'data_konsumen' => 'Data Konsumen', 'psjb' => 'PSJB', 'slik' => 'SLIK', 'pemberkasan' => 'Pemberkasan',
+            'proses_bank' => 'Proses Bank', 'sp3k' => 'SP3K', 'ppjb' => 'PPJB', 'akad' => 'Akad', 'bast' => 'BAST',
+            'garansi' => 'Form Garansi', 'selesai' => 'Selesai', 'ready_100' => 'Rumah Siap 100%',
+        ] + $this->pipeline->stages();
         $latestBank = $application->bankProcesses->sortByDesc('attempt_no')->first();
         $psjbByEvent = $application->psjbs->keyBy('consumer_stage_event_id');
         $ppjbByEvent = $application->ppjbDevelopers->keyBy('consumer_stage_event_id');
@@ -137,7 +149,9 @@ final class ConsumerDatabaseWorkspaceService
                 'kavling' => $application->kavling?->kavling_code ?: $application->kavling?->name ?: $application->id_kavling,
                 'application_status' => $this->valueLabel($application->application_status),
                 'consumer_status' => $this->valueLabel($application->consumer_status),
-                'current_stage' => $stageLabels[$application->current_stage] ?? $application->current_stage,
+                'transaction_status' => $this->valueLabel($application->transaction_status ?: $application->consumer_status),
+                'payment_method' => $this->paymentLabel($application->payment_method),
+                'current_stage' => $stageLabels[$application->current_process ?: $application->current_stage] ?? $stageLabels[$application->current_stage] ?? $application->current_process ?: $application->current_stage,
                 'booking_date' => $application->booking_date?->toDateString(),
                 'akad_date' => $application->akad_date?->toDateString(),
                 'updated_at' => $application->updated_at?->toIso8601String(),
@@ -181,8 +195,12 @@ final class ConsumerDatabaseWorkspaceService
                 'payment' => $application->bankProcesses->count(),
                 'files' => $application->documents()->count(),
                 'activity' => count($activities),
+                'warranty' => $application->warranties->count(),
+                'issues' => $application->issues->count(),
             ],
             'activity' => $activities,
+            'warranty' => $application->warranties->map(fn ($warranty): array => ['status_komplain' => $warranty->status_komplain, 'status_garansi' => $warranty->status_garansi, 'tanggal_selesai' => $warranty->tanggal_selesai?->toDateString(), 'detail_garansi' => $warranty->detail_garansi])->values()->all(),
+            'issues' => $application->issues->map(fn ($issue): array => ['process' => $issue->process_key, 'category' => $issue->category, 'description' => $issue->description, 'status' => $issue->status, 'opened_at' => $issue->opened_at?->toIso8601String(), 'resolution' => $issue->resolution])->values()->all(),
         ];
     }
 
@@ -207,6 +225,7 @@ final class ConsumerDatabaseWorkspaceService
                     ->where('id_transaksi', 'like', "%{$search}%")
                     ->orWhere('id_kavling', 'like', "%{$search}%")
                     ->orWhere('consumer_status', 'like', "%{$search}%")
+                    ->orWhere('sales_lead_id', is_numeric($search) ? (int) $search : 0)
                     ->when(preg_match('/^\d{16}$/', $search) === 1, fn (Builder $searchQuery): Builder => $searchQuery
                         ->orWhere('nik_hash', ConsumerIdentity::nikHash($search))
                         ->orWhereHas('customer', fn (Builder $customer): Builder => $customer->where('nik_hash', ConsumerIdentity::nikHash($search))))
@@ -214,6 +233,8 @@ final class ConsumerDatabaseWorkspaceService
                         ->where('name', 'like', "%{$search}%")
                         ->orWhere('phone', 'like', "%{$search}%"))
                     ->orWhereHas('project', fn (Builder $project): Builder => $project->where('project_name', 'like', "%{$search}%"))
+                    ->orWhereHas('sales', fn (Builder $sales): Builder => $sales->where('name', 'like', "%{$search}%"))
+                    ->orWhereHas('sourceNup', fn (Builder $nup): Builder => $nup->where('nup_number', 'like', "%{$search}%"))
                     ->orWhereHas('kavling', fn (Builder $kavling): Builder => $kavling
                         ->where('kavling_code', 'like', "%{$search}%")
                         ->orWhere('name', 'like', "%{$search}%"));
@@ -229,7 +250,7 @@ final class ConsumerDatabaseWorkspaceService
             ->when($status !== '', fn (Builder $builder): Builder => $builder->where(fn (Builder $statusQuery): Builder => $statusQuery
                 ->where('consumer_status', $status)
                 ->orWhere('application_status', $status)))
-            ->when($stage !== '', fn (Builder $builder): Builder => $builder->where('current_stage', $stage))
+            ->when($stage !== '', fn (Builder $builder): Builder => $builder->where(fn (Builder $stageQuery): Builder => $stageQuery->where('current_process', $stage)->orWhere('current_stage', $stage)))
             ->when($salesId > 0, fn (Builder $builder): Builder => $builder->where('sales_user_id', $salesId))
             ->when($bank !== '', fn (Builder $builder): Builder => $builder->whereHas('bankProcesses', fn (Builder $bankQuery): Builder => $bankQuery->where('bank_name', $bank)))
             ->orderByDesc('updated_at')
@@ -329,6 +350,17 @@ final class ConsumerDatabaseWorkspaceService
             'pindah kavling' => 'Pindah Kavling',
             'replaced' => 'Diganti',
             default => Str::headline((string) $value),
+        };
+    }
+
+    private function paymentLabel(?string $value): ?string
+    {
+        return match ($value) {
+            'cash' => 'Cash',
+            'cash_bertahap' => 'Cash Bertahap',
+            'kpr' => 'KPR',
+            'other' => 'Lainnya',
+            default => $value ? Str::headline($value) : null,
         };
     }
 

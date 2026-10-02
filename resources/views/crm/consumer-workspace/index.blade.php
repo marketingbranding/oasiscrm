@@ -15,6 +15,16 @@
         ])->filter()->values();
         $workspaceConfig = [
             'detailUrl' => route('consumer-database.workspace.show', ['consumerApplication' => '__ID__']),
+            'processUrls' => [
+                'slik' => route('consumer-process.slik', ['consumerApplication' => '__ID__']),
+                'psjb' => route('consumer-process.psjb', ['consumerApplication' => '__ID__']),
+                'pemberkasan' => route('consumer-process.pemberkasan', ['consumerApplication' => '__ID__']),
+                'bank' => route('consumer-process.bank', ['consumerApplication' => '__ID__']),
+                'sp3k' => route('consumer-process.sp3k', ['consumerApplication' => '__ID__']),
+                'ppjb' => route('consumer-process.ppjb', ['consumerApplication' => '__ID__']),
+                'garansi' => route('consumer-process.garansi', ['consumerApplication' => '__ID__']),
+                'kendala' => route('consumer-process.kendala', ['consumerApplication' => '__ID__']),
+            ],
         ];
         $emptyTitle = $activeFilters->isNotEmpty() ? 'Tidak ada hasil' : 'Belum ada data konsumen';
         $emptyDescription = $activeFilters->isNotEmpty()
@@ -26,11 +36,14 @@
         <x-crm.page-header
             variant="canonical"
             eyebrow="Sales"
-            title="Database Konsumen"
-            description="Satu ruang kerja baca-saja untuk data konsumen lokal sesuai cabang dan proyek yang dapat Anda akses."
+            title="{{ $processTitle ? 'Proses '.($stageOptions[$processTitle] ?? ucfirst(str_replace('_', ' ', $processTitle))) : 'Database Konsumen' }}"
+            description="Kelola perjalanan konsumen dari Data Konsumen sampai Form Garansi sesuai cabang dan proyek yang dapat Anda akses."
         >
             <x-slot:actions>
                 <x-crm.status-badge variant="info">{{ $applications->total() }} konsumen</x-crm.status-badge>
+                @if(auth()->user()->hasPermission('consumer_progress.manage') || auth()->user()->hasScopedPermission('consumer_progress', 'manage'))
+                    <a href="{{ route('consumer-database.workspace.create') }}" class="crm-button crm-button--primary">+ Data Konsumen</a>
+                @endif
                 @if($selectedBranch)
                     <x-crm.status-badge variant="neutral">{{ $selectedBranch->name }}</x-crm.status-badge>
                 @endif
@@ -121,7 +134,7 @@
         <div class="mb-3 flex items-center justify-between gap-3">
             <div>
                 <h2 class="font-[Helvetica] text-sm font-bold uppercase">Daftar konsumen</h2>
-                <p class="text-sm text-gray-600">Data ini bersifat baca-saja pada fase ini.</p>
+                <p class="text-sm text-gray-600">Buka detail untuk melihat proses, pembayaran, riwayat, dan tindakan operasional.</p>
             </div>
             <span class="text-xs text-gray-600">{{ $applications->firstItem() ?? 0 }}–{{ $applications->lastItem() ?? 0 }} dari {{ $applications->total() }}</span>
         </div>
@@ -145,8 +158,8 @@
                 <tbody>
                     @forelse($applications as $application)
                         @php
-                            $stage = $stageOptions[$application->current_stage] ?? $application->current_stage;
-                            $status = $application->consumer_status ?: $application->application_status;
+                            $stage = $stageOptions[$application->current_process ?: $application->current_stage] ?? $stageOptions[$application->current_stage] ?? $application->current_process ?: $application->current_stage;
+                            $status = $application->transaction_status ?: ($application->consumer_status ?: $application->application_status);
                             $statusLabel = $statusOptions[$status] ?? $status;
                             $bank = $application->bankProcesses->sortByDesc('attempt_no')->first()?->bank_name;
                             $kavling = $application->kavling?->kavling_code ?: $application->kavling?->name ?: $application->id_kavling;
@@ -175,8 +188,8 @@
         <div class="grid gap-3 md:hidden">
             @forelse($applications as $application)
                 @php
-                    $stage = $stageOptions[$application->current_stage] ?? $application->current_stage;
-                    $status = $application->consumer_status ?: $application->application_status;
+                            $stage = $stageOptions[$application->current_process ?: $application->current_stage] ?? $stageOptions[$application->current_stage] ?? $application->current_process ?: $application->current_stage;
+                            $status = $application->transaction_status ?: ($application->consumer_status ?: $application->application_status);
                     $statusLabel = $statusOptions[$status] ?? $status;
                     $bank = $application->bankProcesses->sortByDesc('attempt_no')->first()?->bank_name;
                     $kavling = $application->kavling?->kavling_code ?: $application->kavling?->name ?: $application->id_kavling;
@@ -224,7 +237,7 @@
                     <template x-if="detail && !loading && !error">
                         <div>
                             <nav class="mb-4 flex gap-1 overflow-x-auto border-b-2 border-black" aria-label="Bagian detail konsumen" role="tablist">
-                                @foreach(['overview' => 'Ringkasan', 'process' => 'Proses', 'payment' => 'Pembayaran', 'files' => 'Berkas', 'activity' => 'Riwayat', 'comments' => 'Komentar'] as $tab => $label)
+                                 @foreach(['overview' => 'Ringkasan', 'process' => 'Proses', 'payment' => 'Pembayaran', 'actions' => 'Tindakan', 'files' => 'Berkas', 'activity' => 'Riwayat', 'comments' => 'Komentar'] as $tab => $label)
                                     <button id="consumer-{{ $tab }}-tab" type="button" role="tab" class="shrink-0 border-2 border-b-0 border-black px-3 py-2 text-xs font-bold uppercase" :class="activeTab === '{{ $tab }}' ? 'bg-[#fcc20f]' : 'bg-white'" @click="activeTab = '{{ $tab }}'" :aria-selected="activeTab === '{{ $tab }}'" aria-controls="consumer-{{ $tab }}-panel">{{ $label }}</button>
                                 @endforeach
                             </nav>
@@ -237,13 +250,26 @@
                                         ['Status Konsumen', detail.overview.consumer_status], ['Tanggal Booking', formatDate(detail.overview.booking_date)], ['Tanggal Akad', formatDate(detail.overview.akad_date)], ['Terakhir Diperbarui', formatDateTime(detail.overview.updated_at)]
                                     ]" :key="field[0]">
                                         <div class="border-b border-gray-300 pb-2"><dt class="crm-type-label" x-text="field[0]"></dt><dd class="mt-1 text-sm" x-text="formatValue(field[1])"></dd></div>
-                                    </template>
-                                </dl>
-                            </section>
+                                     </template>
+                                 </dl>
+                             </section>
+                             <section id="consumer-actions-panel" x-show="activeTab === 'actions'" x-cloak role="tabpanel" aria-labelledby="consumer-actions-tab" class="grid gap-3">
+                                 <div class="border-2 border-black bg-[#fff9df] p-3 text-sm"><strong x-text="detail.overview.customer_name"></strong><p class="mt-1 text-gray-700"><span x-text="detail.overview.id_transaksi"></span> · <span x-text="detail.overview.project"></span> · <span x-text="detail.overview.kavling || 'Kavling belum dipilih'"></span></p><p class="mt-1 text-xs text-gray-600">Input hanya fakta baru. Identitas, Sales, Proyek, dan transaksi dibawa otomatis.</p></div>
+                                 <details class="border border-gray-400 p-3"><summary class="cursor-pointer font-bold">Catat SLIK</summary><form method="POST" :action="processUrl('slik')" class="mt-3 grid gap-2 sm:grid-cols-2">@csrf<input name="tanggal_slik" type="date" required class="crm-control" aria-label="Tanggal SLIK"><input name="hasil_slik" required placeholder="Hasil SLIK" class="crm-control"><input name="keputusan" placeholder="Keputusan" class="crm-control"><input name="keterangan" placeholder="Keterangan" class="crm-control"><button class="crm-button crm-button--primary sm:col-span-2">Simpan SLIK</button></form></details>
+                                 <details class="border border-gray-400 p-3"><summary class="cursor-pointer font-bold">Catat PSJB</summary><form method="POST" :action="processUrl('psjb')" class="mt-3 grid gap-2 sm:grid-cols-2">@csrf<input name="tanggal_psjb" type="date" required class="crm-control" aria-label="Tanggal PSJB"><input name="harga_unit" type="number" step="0.01" placeholder="Harga Unit" class="crm-control"><input name="tanggal_utj" type="date" aria-label="Tanggal UTJ" class="crm-control"><input name="utj" type="number" step="0.01" placeholder="Nominal UTJ" class="crm-control"><input name="tanggal_dp_klt" type="date" aria-label="Tanggal DP KLT" class="crm-control"><input name="dp_all_in" type="number" step="0.01" placeholder="DP All In" class="crm-control"><input name="nominal_cicilan" type="number" step="0.01" placeholder="Nominal Cicilan" class="crm-control"><input name="jumlah_cicilan" type="number" placeholder="Jumlah Cicilan" class="crm-control"><input name="luas_klt" type="number" step="0.01" placeholder="Luas KLT" class="crm-control"><input name="harga_klt_m" type="number" step="0.01" placeholder="Harga KLT/m" class="crm-control"><input name="harga_klt_total" type="number" step="0.01" placeholder="Harga KLT Total" class="crm-control"><input name="cara_pembayaran" placeholder="Cara Pembayaran" class="crm-control"><input name="nama_promo" placeholder="Nama Promo" class="crm-control"><button class="crm-button crm-button--primary sm:col-span-2">Simpan PSJB</button></form></details>
+                                 <details class="border border-gray-400 p-3"><summary class="cursor-pointer font-bold">Catat Pemberkasan</summary><form method="POST" :action="processUrl('pemberkasan')" class="mt-3 grid gap-2 sm:grid-cols-2">@csrf<input name="tanggal_terima_bank" type="date" aria-label="Tanggal Terima Bank" class="crm-control"><input name="bank_name" required placeholder="Bank" class="crm-control"><input name="kc_unit" placeholder="KC / Unit" class="crm-control"><input name="request_plafond" type="number" step="0.01" placeholder="Request Plafond" class="crm-control"><input name="request_tenor" type="number" placeholder="Request Tenor" class="crm-control"><input name="tipe_pemberkasan" placeholder="Tipe Pemberkasan" class="crm-control"><button class="crm-button crm-button--primary sm:col-span-2">Simpan Pemberkasan</button></form></details>
+                                 <details class="border border-gray-400 p-3"><summary class="cursor-pointer font-bold">Perbarui Proses Bank</summary><form method="POST" :action="processUrl('bank')" class="mt-3 grid gap-2 sm:grid-cols-2">@csrf<input name="bank_name" required placeholder="Bank aktif" class="crm-control"><input name="response_type" placeholder="Jenis Respon" class="crm-control"><input name="approved_plafond" type="number" step="0.01" placeholder="Approved Plafond" class="crm-control"><input name="approved_tenor" type="number" placeholder="Approved Tenor" class="crm-control"><input name="revision_category" placeholder="Kategori Revisi" class="crm-control"><textarea name="revision_detail" placeholder="Detail Revisi" class="crm-control sm:col-span-2"></textarea><textarea name="obstacle" placeholder="Kendala" class="crm-control sm:col-span-2"></textarea><button class="crm-button crm-button--primary sm:col-span-2">Simpan Proses Bank</button></form></details>
+                                 <details class="border border-gray-400 p-3"><summary class="cursor-pointer font-bold">Catat SP3K</summary><form method="POST" :action="processUrl('sp3k')" class="mt-3 grid gap-2 sm:grid-cols-2">@csrf<input name="no_sp3k" required placeholder="No. SP3K" class="crm-control"><input name="sp3k_at" type="date" required aria-label="Tanggal SP3K" class="crm-control"><input name="approved_plafond" type="number" step="0.01" placeholder="Approved Plafond" class="crm-control"><input name="approved_tenor" type="number" placeholder="Approved Tenor" class="crm-control"><textarea name="notes" placeholder="Catatan" class="crm-control sm:col-span-2"></textarea><button class="crm-button crm-button--primary sm:col-span-2">Simpan SP3K</button></form></details>
+                                 <details class="border border-gray-400 p-3"><summary class="cursor-pointer font-bold">Catat PPJB</summary><form method="POST" :action="processUrl('ppjb')" class="mt-3 grid gap-2 sm:grid-cols-2">@csrf<input name="tanggal_ttd_ppjb" type="date" required aria-label="Tanggal TTD PPJB" class="crm-control"><input name="notes" placeholder="Catatan" class="crm-control"><button class="crm-button crm-button--primary sm:col-span-2">Simpan PPJB</button></form></details>
+                                 <details class="border border-gray-400 p-3"><summary class="cursor-pointer font-bold">Form Garansi</summary><form method="POST" :action="processUrl('garansi')" class="mt-3 grid gap-2 sm:grid-cols-2">@csrf<select name="status_komplain" required class="crm-control"><option>Belum Dipilih</option><option>Ada Komplain</option><option>Tidak Ada Komplain</option></select><select name="status_garansi" required class="crm-control"><option>Belum Dipilih</option><option>Proses</option><option>Tidak Ada Komplain</option><option>Selesai</option></select><input name="tgl_sales_ke_sam" type="date" aria-label="Tanggal Sales ke SAM" class="crm-control"><input name="tgl_sam_ke_sat" type="date" aria-label="Tanggal SAM ke SAT" class="crm-control"><input name="tgl_sat_ke_sam" type="date" aria-label="Tanggal SAT ke SAM" class="crm-control"><input name="tgl_sam_ke_sales" type="date" aria-label="Tanggal SAM ke Sales" class="crm-control"><input name="tgl_sales_ke_kons" type="date" aria-label="Tanggal Sales ke Konsumen" class="crm-control"><input name="tanggal_selesai" type="date" aria-label="Tanggal Selesai" class="crm-control"><textarea name="detail_garansi" placeholder="Detail Garansi" class="crm-control sm:col-span-2"></textarea><button class="crm-button crm-button--primary sm:col-span-2">Simpan Form Garansi</button></form></details>
+                                 <details class="border border-gray-400 p-3"><summary class="cursor-pointer font-bold">Catat Kendala</summary><form method="POST" :action="processUrl('kendala')" class="mt-3 grid gap-2 sm:grid-cols-2">@csrf<select name="process_key" required class="crm-control"><option value="proses_bank">Proses Bank</option><option value="akad">Akad</option><option value="bast">BAST</option><option value="garansi">Garansi</option><option value="other">Proses lain</option></select><input name="category" placeholder="Kategori" class="crm-control"><textarea name="description" required placeholder="Deskripsi kendala" class="crm-control sm:col-span-2"></textarea><button class="crm-button crm-button--primary sm:col-span-2">Simpan Kendala</button></form></details>
+                             </section>
                             <section id="consumer-process-panel" x-show="activeTab === 'process'" x-cloak role="tabpanel" aria-labelledby="consumer-process-tab">
-                                <template x-if="detail.process.length > 0"><ol class="grid gap-3" aria-label="Linimasa proses konsumen"><template x-for="event in detail.process" :key="event.stage + event.occurred_at"><li class="border border-gray-400 p-3"><div class="flex items-center justify-between gap-2"><strong x-text="event.stage || 'Tahap proses'"></strong><span class="text-xs text-gray-600" x-text="formatDate(event.event_date || event.occurred_at)"></span></div><p x-show="event.summary" class="mt-1 text-sm font-bold" x-text="event.summary"></p><p x-show="event.status || event.decision" class="mt-1 text-sm" x-text="formatValue(event.status || event.decision)"></p><p x-show="event.notes" class="mt-1 text-sm text-gray-600" x-text="event.notes"></p></li></template></ol></template>
-                                <p x-show="detail.process.length === 0" class="text-sm text-gray-600">Belum ada riwayat proses lokal.</p>
-                            </section>
+                                 <template x-if="detail.process.length > 0"><ol class="grid gap-3" aria-label="Linimasa proses konsumen"><template x-for="event in detail.process" :key="event.stage + event.occurred_at"><li class="border border-gray-400 p-3"><div class="flex items-center justify-between gap-2"><strong x-text="event.stage || 'Tahap proses'"></strong><span class="text-xs text-gray-600" x-text="formatDate(event.event_date || event.occurred_at)"></span></div><p x-show="event.summary" class="mt-1 text-sm font-bold" x-text="event.summary"></p><p x-show="event.status || event.decision" class="mt-1 text-sm" x-text="formatValue(event.status || event.decision)"></p><p x-show="event.notes" class="mt-1 text-sm text-gray-600" x-text="event.notes"></p></li></template></ol></template>
+                                 <p x-show="detail.process.length === 0" class="text-sm text-gray-600">Belum ada riwayat proses lokal.</p>
+                                 <div x-show="detail.warranty.length > 0" class="mt-4 grid gap-2"><h3 class="font-bold">Riwayat Garansi</h3><template x-for="warranty in detail.warranty" :key="warranty.status_garansi + warranty.tanggal_selesai"><article class="border border-gray-400 p-3 text-sm"><strong x-text="warranty.status_garansi || 'Belum Dipilih'"></strong><span class="ml-2 text-gray-600" x-text="warranty.tanggal_selesai ? formatDate(warranty.tanggal_selesai) : 'Belum selesai'"></span><p x-show="warranty.detail_garansi" class="mt-1 text-gray-600" x-text="warranty.detail_garansi"></p></article></template></div>
+                                 <div x-show="detail.issues.length > 0" class="mt-4 grid gap-2"><h3 class="font-bold">Kendala</h3><template x-for="issue in detail.issues" :key="issue.process + issue.opened_at"><article class="border border-gray-400 p-3 text-sm"><strong x-text="issue.process"></strong><span class="ml-2 text-gray-600" x-text="issue.status"></span><p class="mt-1" x-text="issue.description"></p><p x-show="issue.resolution" class="mt-1 text-gray-600" x-text="issue.resolution"></p></article></template></div>
+                             </section>
                             <section id="consumer-payment-panel" x-show="activeTab === 'payment'" x-cloak role="tabpanel" aria-labelledby="consumer-payment-tab">
                                 <template x-if="detail.payment.length > 0"><div class="grid gap-3"><template x-for="attempt in detail.payment" :key="attempt.attempt_no + (attempt.bank_name || '')"><article class="border border-gray-400 p-3"><div class="flex items-center justify-between gap-2"><strong x-text="'Percobaan ' + attempt.attempt_no + ' · ' + (attempt.bank_name || 'Bank belum dipilih')"></strong><span class="text-xs font-bold" x-text="formatValue(attempt.status || attempt.response_type)"></span></div><p class="mt-1 text-sm" x-text="attempt.sp3k_at ? 'SP3K: ' + formatDate(attempt.sp3k_at) : (attempt.rejected_at ? 'Ditolak: ' + formatDate(attempt.rejected_at) : 'Belum ada keputusan akhir')"></p></article></template></div></template>
                                 <p x-show="detail.payment.length === 0" class="text-sm text-gray-600">Belum ada percobaan bank lokal.</p>

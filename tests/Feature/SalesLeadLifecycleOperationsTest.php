@@ -134,6 +134,12 @@ class SalesLeadLifecycleOperationsTest extends TestCase
         ])->assertOk()->assertJsonPath('sheet_type', 'data_konsumen');
 
         $this->assertSame($nik, SalesLeadConsumerLink::firstOrFail()->nik);
+        $this->assertDatabaseHas('consumer_applications', [
+            'sales_lead_id' => $lead->id,
+            'branch_id' => $lead->branch_id,
+            'project_id' => $lead->project_id,
+            'entry_mode' => 'new',
+        ]);
         $this->assertSame(SalesLeadStatus::Utj, $lead->fresh()->current_status);
         $this->assertNotNull($lead->fresh()->consumer_converted_at);
 

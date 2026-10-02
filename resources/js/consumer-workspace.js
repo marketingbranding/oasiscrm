@@ -57,12 +57,16 @@ export default function registerConsumerWorkspace(Alpine) {
             this.$nextTick(() => this.trigger?.focus());
         },
 
-        retry() {
+         retry() {
             const id = this.recordId;
             if (id) {
                 this.openDetail(id, this.trigger);
             }
-        },
+         },
+
+         processUrl(process) {
+             return (config.processUrls?.[process] || '').replace('__ID__', encodeURIComponent(this.recordId));
+         },
 
         handleKeydown(event) {
             if (event.key === 'Escape') {

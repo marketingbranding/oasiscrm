@@ -14,7 +14,9 @@ use App\Http\Controllers\Crm\ConsumerDatabaseController;
 use App\Http\Controllers\Crm\ConsumerHistoricalProcessImportController;
 use App\Http\Controllers\Crm\ConsumerLifecycleController;
 use App\Http\Controllers\Crm\ConsumerMigrationReconciliationController;
+use App\Http\Controllers\Crm\ConsumerNupController;
 use App\Http\Controllers\Crm\ConsumerPasteImportController;
+use App\Http\Controllers\Crm\ConsumerProcessController;
 use App\Http\Controllers\Crm\ContentCalendarController;
 use App\Http\Controllers\Crm\CoordinatorSalesLeadWorkspaceController;
 use App\Http\Controllers\Crm\DanaTalanganController;
@@ -196,7 +198,24 @@ Route::middleware(['auth', 'active', 'verified', 'password.changed', 'operationa
 
     Route::middleware('module.maintenance:consumer_progress')->group(function () {
         Route::get('/consumer-workspace', [ConsumerDatabaseController::class, 'index'])->middleware('permission:consumer_progress.view')->name('consumer-database.workspace');
+        Route::get('/consumer-workspace/create', [ConsumerDatabaseController::class, 'create'])->middleware('permission:consumer_progress.view')->name('consumer-database.workspace.create');
+        Route::post('/consumer-workspace', [ConsumerDatabaseController::class, 'store'])->middleware('not.impersonating')->name('consumer-database.workspace.store');
         Route::get('/consumer-workspace/{consumerApplication}', [ConsumerDatabaseController::class, 'show'])->middleware('permission:consumer_progress.view')->name('consumer-database.workspace.show');
+        Route::get('/nups', [ConsumerNupController::class, 'index'])->middleware('permission:consumer_progress.view')->name('consumer-nups.index');
+        Route::get('/nups/create', [ConsumerNupController::class, 'create'])->middleware('permission:consumer_progress.view')->name('consumer-nups.create');
+        Route::post('/nups', [ConsumerNupController::class, 'store'])->middleware('not.impersonating')->name('consumer-nups.store');
+        Route::post('/nups/{consumerNup}/convert', [ConsumerNupController::class, 'convert'])->middleware('not.impersonating')->name('consumer-nups.convert');
+        Route::get('/consumer-process/selesai', [ConsumerProcessController::class, 'selesai'])->middleware('permission:consumer_progress.view')->name('consumer-process.selesai');
+        Route::get('/consumer-process/{process}', [ConsumerProcessController::class, 'index'])->middleware('permission:consumer_progress.view')->name('consumer-process.index');
+        Route::post('/consumer-process/applications/{consumerApplication}/slik', [ConsumerProcessController::class, 'slik'])->middleware('not.impersonating')->name('consumer-process.slik');
+        Route::post('/consumer-process/applications/{consumerApplication}/psjb', [ConsumerProcessController::class, 'psjb'])->middleware('not.impersonating')->name('consumer-process.psjb');
+        Route::post('/consumer-process/applications/{consumerApplication}/pemberkasan', [ConsumerProcessController::class, 'pemberkasan'])->middleware('not.impersonating')->name('consumer-process.pemberkasan');
+        Route::post('/consumer-process/applications/{consumerApplication}/bank', [ConsumerProcessController::class, 'bank'])->middleware('not.impersonating')->name('consumer-process.bank');
+        Route::post('/consumer-process/applications/{consumerApplication}/sp3k', [ConsumerProcessController::class, 'sp3k'])->middleware('not.impersonating')->name('consumer-process.sp3k');
+        Route::post('/consumer-process/applications/{consumerApplication}/ppjb', [ConsumerProcessController::class, 'ppjb'])->middleware('not.impersonating')->name('consumer-process.ppjb');
+        Route::post('/consumer-process/applications/{consumerApplication}/garansi', [ConsumerProcessController::class, 'warranty'])->middleware('not.impersonating')->name('consumer-process.garansi');
+        Route::post('/consumer-process/applications/{consumerApplication}/kendala', [ConsumerProcessController::class, 'issue'])->middleware('not.impersonating')->name('consumer-process.kendala');
+        Route::patch('/consumer-process/issues/{consumerIssue}/resolve', [ConsumerProcessController::class, 'resolveIssue'])->middleware('not.impersonating')->name('consumer-issues.resolve');
         Route::get('/consumer-comparison', [ConsumerComparisonController::class, 'index'])->middleware('not.impersonating')->name('consumer-comparison.index');
         Route::get('/consumer-import', [ConsumerPasteImportController::class, 'create'])->middleware('not.impersonating')->name('consumer-import.create');
         Route::get('/consumer-import/projects', [ConsumerPasteImportController::class, 'projects'])->middleware('not.impersonating')->name('consumer-import.projects');

@@ -37,7 +37,13 @@ class NavigationService
                     ? $this->item('Database Konsumen', 'consumer-database.workspace', 'customers', 'consumer-progress', ['consumer-database.*'], $routeName, 'consumer_progress', $moduleMaintenance)
                     : null,
                 ! $isSales && $user->hasPermission('consumer_progress.view') && $user->hasScopedPermission('consumer_progress')
+                    ? $this->item('NUP / Waiting List', 'consumer-nups.index', 'customers', 'consumer-progress', ['consumer-nups.*'], $routeName, 'consumer_progress', $moduleMaintenance)
+                    : null,
+                ! $isSales && $user->hasPermission('consumer_progress.view') && $user->hasScopedPermission('consumer_progress')
                     ? $this->item('Konsumen Progress', 'konsumen-progress.index', 'customers', 'consumer-progress', ['konsumen-progress.*'], $routeName, 'consumer_progress', $moduleMaintenance)
+                    : null,
+                ! $isSales && $user->hasPermission('consumer_progress.view') && $user->hasScopedPermission('consumer_progress')
+                    ? $this->item('Selesai', 'consumer-process.selesai', 'check', 'consumer-progress', ['consumer-process.selesai'], $routeName, 'consumer_progress', $moduleMaintenance)
                     : null,
             ]),
             $this->group('operations', 'Operasional', 'operations', [

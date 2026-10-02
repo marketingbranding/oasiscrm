@@ -123,7 +123,7 @@ class NavigationServiceTest extends TestCase
         $sales = collect($navigation)->firstWhere('key', 'sales');
         $labels = array_column($sales['children'], 'label');
 
-        $this->assertSame(['Buku Saku Sales', 'Database Konsumen', 'Konsumen Progress'], $labels);
+        $this->assertSame(['Buku Saku Sales', 'Database Konsumen', 'NUP / Waiting List', 'Konsumen Progress', 'Selesai'], $labels);
         $this->assertSame('Database', $database['label']);
         $this->assertSame('database', $database['icon']);
         $this->assertTrue($database['direct']);

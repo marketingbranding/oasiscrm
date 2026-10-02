@@ -28,27 +28,25 @@ If the PRD and current code differ, do not blindly rewrite the current implement
 Deliver a production-safe **Consumer Database V1** while preserving the end-to-end architecture:
 
 ```text
-Lead
+Lead / NUP / Direct Entry
 ↓
-UTJ
+Data Konsumen
 ↓
-Customer
-↓
-Consumer Application
-↓
-SLIK
-↓
-PSJB
+PSJB / SLIK
 ↓
 Pemberkasan
 ↓
-Bank / SP3K
+Proses Bank / SP3K
 ↓
 PPJB
 ↓
 Akad
 ↓
 BAST
+↓
+Form Garansi
+↓
+Selesai
 ```
 
 The delivery priority is:
@@ -58,7 +56,7 @@ The delivery priority is:
 The minimum Lead work required is a correct, idempotent:
 
 ```text
-SalesLead → UTJ → Customer → ConsumerApplication
+SalesLead → Jadikan Konsumen → Customer → ConsumerApplication
 ```
 
 handoff.
@@ -143,15 +141,15 @@ Do not enforce one Customer = one Application.
 
 ---
 
-## 4.2 UTJ Creates the Consumer Journey
+## 4.2 Explicit Handoff Creates the Consumer Journey
 
-Before UTJ:
+Before the explicit handoff:
 
 ```text
 SalesLead domain
 ```
 
-At UTJ:
+At `Jadikan Konsumen`:
 
 ```text
 resolve/create Customer
@@ -160,7 +158,7 @@ link Lead
 record UTJ
 ```
 
-UTJ must be a business transaction, not only a lead status label.
+UTJ is a business fact recorded in the early sales process; it is not the lifecycle start.
 
 The operation must be idempotent.
 

@@ -7,6 +7,7 @@ use App\Models\Branch;
 use App\Models\ConsumerApplication;
 use App\Models\ConsumerBankProcess;
 use App\Models\ConsumerStageEvent;
+use App\Models\Customer;
 use App\Models\LeadMaster;
 use App\Models\User;
 use App\Support\ConsumerIdentity;
@@ -69,6 +70,7 @@ final class ConsumerDatabaseWorkspaceService
             'search' => trim($request->string('search')->toString()),
             'selectedStatus' => $request->string('status')->toString(),
             'selectedStage' => $request->string('stage')->toString(),
+            'selectedSort' => $this->sortValue($request),
             'statusOptions' => [
                 'active' => 'Aktif',
                 'draft' => 'Draft',
@@ -246,15 +248,29 @@ final class ConsumerDatabaseWorkspaceService
         $salesId = $request->integer('sales_id');
         $bank = trim($request->string('bank')->toString());
 
+        $sort = $this->sortValue($request);
+
         return $query
             ->when($status !== '', fn (Builder $builder): Builder => $builder->where(fn (Builder $statusQuery): Builder => $statusQuery
                 ->where('consumer_status', $status)
                 ->orWhere('application_status', $status)))
-            ->when($stage !== '', fn (Builder $builder): Builder => $builder->where(fn (Builder $stageQuery): Builder => $stageQuery->where('current_process', $stage)->orWhere('current_stage', $stage)))
+            ->when($stage !== '', fn (Builder $builder): Builder => $builder->where(fn (Builder $stageQuery): Builder => $stage === 'proses_bank'
+                ? $stageQuery->whereIn('current_process', ['proses_bank', 'sp3k'])->orWhereIn('current_stage', ['proses_bank', 'sp3k'])
+                : $stageQuery->where('current_process', $stage)->orWhere('current_stage', $stage)))
             ->when($salesId > 0, fn (Builder $builder): Builder => $builder->where('sales_user_id', $salesId))
             ->when($bank !== '', fn (Builder $builder): Builder => $builder->whereHas('bankProcesses', fn (Builder $bankQuery): Builder => $bankQuery->where('bank_name', $bank)))
-            ->orderByDesc('updated_at')
+            ->when($sort === 'name', fn (Builder $builder): Builder => $builder->orderBy(Customer::select('name')->whereColumn('customers.id', 'consumer_applications.customer_id')))
+            ->when($sort === 'process', fn (Builder $builder): Builder => $builder->orderBy('current_process')->orderBy('current_stage'))
+            ->when($sort === 'sales', fn (Builder $builder): Builder => $builder->orderBy(User::select('name')->whereColumn('users.id', 'consumer_applications.sales_user_id')))
+            ->when($sort === 'updated', fn (Builder $builder): Builder => $builder->orderByDesc('updated_at'))
             ->orderByDesc('id');
+    }
+
+    private function sortValue(Request $request): string
+    {
+        $sort = $request->string('sort')->toString();
+
+        return in_array($sort, ['updated', 'name', 'process', 'sales'], true) ? $sort : 'updated';
     }
 
     /** @return Builder<ConsumerApplication> */

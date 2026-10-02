@@ -8,10 +8,25 @@
     "src": "resources/css/app.css",
     "isEntry": true
   },
+  "resources/css/workspace-v2.css": {
+    "file": "assets/workspace-v2-BuCjKF76.css",
+    "name": "workspace-v2",
+    "names": [
+      "workspace-v2.css"
+    ],
+    "src": "resources/css/workspace-v2.css",
+    "isEntry": true
+  },
   "resources/js/app.js": {
     "file": "assets/app-CFZph85F.js",
     "name": "app",
     "src": "resources/js/app.js",
+    "isEntry": true
+  },
+  "resources/js/workspace-v2/app.js": {
+    "file": "assets/app-B-6NdcT0.js",
+    "name": "app",
+    "src": "resources/js/workspace-v2/app.js",
     "isEntry": true
   }
 }

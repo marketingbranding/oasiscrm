@@ -56,6 +56,8 @@ return [
 
     'version' => env('APP_COMMIT_SHA', env('APP_VERSION')),
 
+    'workspace_v2_enabled' => (bool) env('OASIS_NEW_WORKSPACE_ENABLED', false),
+
     /*
     |--------------------------------------------------------------------------
     | Application Timezone

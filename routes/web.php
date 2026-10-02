@@ -54,6 +54,7 @@ use App\Http\Controllers\Crm\SalesSheetIdentityController;
 use App\Http\Controllers\Crm\SupervisorSalesPocketbookController;
 use App\Http\Controllers\Crm\SystemHealthController;
 use App\Http\Controllers\ProfileController;
+use App\Http\Controllers\WorkspaceV2\WorkspaceController;
 use App\Models\Comment;
 use App\Models\ContentItem;
 use App\Models\DanaTalangan;
@@ -75,6 +76,33 @@ Route::middleware(['auth', 'active', 'verified'])->group(function () {
 Route::middleware(['auth', 'active', 'verified', 'password.changed', 'operational.maintenance', 'sales.access'])->group(function () {
     Route::bind('comment', fn ($value) => Comment::withTrashed()->findOrFail($value));
     Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
+
+    Route::prefix('workspace')->name('workspace-v2.')->middleware('workspace.v2')->group(function () {
+        Route::get('/', [WorkspaceController::class, 'dashboard'])->name('dashboard');
+        Route::get('/lead', [WorkspaceController::class, 'lead'])->name('lead');
+        Route::get('/nup', [WorkspaceController::class, 'nup'])->name('nup');
+        Route::get('/transaksi', [WorkspaceController::class, 'transactions'])->name('transactions');
+        Route::get('/transaksi/data-konsumen', [WorkspaceController::class, 'transactions'])->defaults('view', 'data-konsumen')->name('transactions.data-konsumen');
+        Route::get('/transaksi/psjb', [WorkspaceController::class, 'transactions'])->defaults('view', 'psjb')->name('transactions.psjb');
+        Route::get('/transaksi/bi-checking', [WorkspaceController::class, 'transactions'])->defaults('view', 'bi-checking')->name('transactions.bi-checking');
+        Route::get('/transaksi/pemberkasan', [WorkspaceController::class, 'transactions'])->defaults('view', 'pemberkasan')->name('transactions.pemberkasan');
+        Route::get('/transaksi/proses-bank', [WorkspaceController::class, 'transactions'])->defaults('view', 'proses-bank')->name('transactions.proses-bank');
+        Route::get('/transaksi/ppjb-dev', [WorkspaceController::class, 'transactions'])->defaults('view', 'ppjb-dev')->name('transactions.ppjb-dev');
+        Route::get('/transaksi/akad', [WorkspaceController::class, 'transactions'])->defaults('view', 'akad')->name('transactions.akad');
+        Route::get('/transaksi/bast', [WorkspaceController::class, 'transactions'])->defaults('view', 'bast')->name('transactions.bast');
+        Route::get('/transaksi/data-konsumen/create', [WorkspaceController::class, 'consumerForm'])->name('transactions.data-konsumen.create');
+        Route::get('/transaksi/{consumerApplication}/input/{process}', [WorkspaceController::class, 'processForm'])->name('transactions.process-form');
+        Route::get('/transaksi/{consumerApplication}', [WorkspaceController::class, 'transactionDetail'])->name('transaction.detail');
+        Route::get('/mundur', [WorkspaceController::class, 'aggregate'])->defaults('workspace', 'mundur')->name('mundur');
+        Route::get('/kendala', [WorkspaceController::class, 'aggregate'])->defaults('workspace', 'kendala')->name('kendala');
+        Route::get('/garansi', [WorkspaceController::class, 'aggregate'])->defaults('workspace', 'garansi')->name('garansi');
+        Route::get('/selesai', [WorkspaceController::class, 'aggregate'])->defaults('workspace', 'selesai')->name('selesai');
+        Route::get('/aktivitas', [WorkspaceController::class, 'activity'])->name('activity');
+        Route::get('/tugas', [WorkspaceController::class, 'activity'])->name('tasks');
+        Route::get('/notifikasi', [WorkspaceController::class, 'activity'])->name('notifications');
+        Route::get('/laporan', [WorkspaceController::class, 'reports'])->name('reports');
+        Route::get('/pengaturan', [WorkspaceController::class, 'settings'])->name('settings');
+    });
 
     Route::get('/comments', [CommentController::class, 'index'])->middleware(['permission:comments.view', 'throttle:120,1'])->name('comments.index');
     Route::post('/comments', [CommentController::class, 'store'])->middleware(['permission:comments.view', 'throttle:30,1'])->name('comments.store');

@@ -9,6 +9,7 @@ use App\Models\ConsumerApplication;
 use App\Models\ConsumerIssue;
 use App\Models\ConsumerWarranty;
 use App\Models\SalesLead;
+use App\Models\User;
 use App\Models\UserNotification;
 use App\Services\ConsumerDatabaseWorkspaceService;
 use App\Services\ConsumerEntryService;
@@ -68,6 +69,7 @@ final class WorkspaceController extends Controller
 
     public function dashboard(Request $request): View
     {
+        $this->authorizeWorkspace($request->user());
         $applications = $this->scopedApplications($request);
         $issues = ConsumerIssue::query()
             ->whereIn('consumer_application_id', $applications->clone()->select('consumer_applications.id'))
@@ -101,6 +103,7 @@ final class WorkspaceController extends Controller
 
     public function transactions(Request $request, string $view = 'semua'): View
     {
+        $this->authorizeConsumerView($request->user());
         abort_unless(array_key_exists($view, self::PROCESS_VIEWS), Response::HTTP_NOT_FOUND);
 
         if (isset(self::PROCESS_STAGES[$view])) {
@@ -120,11 +123,15 @@ final class WorkspaceController extends Controller
 
     public function transactionDetail(Request $request, ConsumerApplication $consumerApplication): JsonResponse
     {
+        $this->authorizeConsumerView($request->user());
+
         return response()->json(['ok' => true, 'data' => $this->consumerWorkspace->detail($request->user(), $consumerApplication)]);
     }
 
     public function consumerForm(Request $request): View
     {
+        $this->authorizeConsumerManage($request->user());
+
         return view('workspace-v2.transactions.form', [
             'process' => 'data-konsumen',
             'title' => 'Data Konsumen',
@@ -155,6 +162,7 @@ final class WorkspaceController extends Controller
 
     public function processForm(Request $request, ConsumerApplication $consumerApplication, string $process): View
     {
+        $this->authorizeConsumerManage($request->user());
         abort_unless(array_key_exists($process, self::PROCESS_STAGES) || in_array($process, ['garansi', 'kendala'], true), Response::HTTP_NOT_FOUND);
         $this->consumerWorkspace->detail($request->user(), $consumerApplication);
 
@@ -175,6 +183,7 @@ final class WorkspaceController extends Controller
 
     public function lead(Request $request): View
     {
+        $this->authorizeSalesView($request->user());
         $search = trim($request->string('search')->toString());
         $query = SalesLead::query()->visibleTo($request->user())->with(['branch', 'project', 'sales']);
         $query->when($search !== '', fn (Builder $builder): Builder => $builder->where(function (Builder $nested) use ($search): void {
@@ -192,6 +201,7 @@ final class WorkspaceController extends Controller
 
     public function nup(Request $request): View
     {
+        $this->authorizeConsumerView($request->user());
         $search = trim($request->string('search')->toString());
         $query = $this->nups->visibleQuery($request->user())->with(['customer', 'branch', 'project', 'convertedApplication']);
         $query->when($search !== '', fn (Builder $builder): Builder => $builder->where(function (Builder $nested) use ($search): void {
@@ -207,6 +217,7 @@ final class WorkspaceController extends Controller
 
     public function aggregate(Request $request, string $workspace): View
     {
+        $this->authorizeConsumerView($request->user());
         $allowed = ['mundur', 'kendala', 'garansi', 'selesai'];
         abort_unless(in_array($workspace, $allowed, true), Response::HTTP_NOT_FOUND);
         $applications = $this->scopedApplications($request);
@@ -227,6 +238,8 @@ final class WorkspaceController extends Controller
 
     public function activity(Request $request): View
     {
+        $this->authorizeWorkspace($request->user());
+
         return view('workspace-v2.activity.index', [
             'notifications' => UserNotification::query()->where('user_id', $request->user()->id)->latest()->paginate(20)->withQueryString(),
             'activities' => ActivityLog::query()->with('causer:id,name')->where('causer_id', $request->user()->id)->latest()->limit(30)->get(),
@@ -235,6 +248,7 @@ final class WorkspaceController extends Controller
 
     public function reports(Request $request): View
     {
+        $this->authorizeConsumerView($request->user());
         $applications = $this->scopedApplications($request);
 
         return view('workspace-v2.reports.index', [
@@ -245,9 +259,42 @@ final class WorkspaceController extends Controller
         ]);
     }
 
-    public function settings(): View
+    public function settings(Request $request): View
     {
+        $this->authorizeWorkspace($request->user());
+
         return view('workspace-v2.settings.index');
+    }
+
+    private function authorizeWorkspace(User $user): void
+    {
+        abort_unless(
+            $user->hasScopedPermission('sales_pocketbook')
+                || $user->hasScopedPermission('consumer_progress')
+                || $user->hasScopedPermission('work_planner'),
+            Response::HTTP_FORBIDDEN,
+        );
+    }
+
+    private function authorizeSalesView(User $user): void
+    {
+        abort_unless($user->hasScopedPermission('sales_pocketbook'), Response::HTTP_FORBIDDEN);
+    }
+
+    private function authorizeConsumerView(User $user): void
+    {
+        abort_unless(
+            $user->hasPermission('consumer_progress.view') && $user->hasScopedPermission('consumer_progress'),
+            Response::HTTP_FORBIDDEN,
+        );
+    }
+
+    private function authorizeConsumerManage(User $user): void
+    {
+        abort_unless(
+            $user->hasPermission('consumer_progress.manage') && $user->hasScopedPermission('consumer_progress', 'manage'),
+            Response::HTTP_FORBIDDEN,
+        );
     }
 
     /** @return Builder<ConsumerApplication> */

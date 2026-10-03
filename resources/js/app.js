@@ -21,6 +21,7 @@ import registerDanaTalangan from './dana-talangan';
 import registerHorizontalTabs from './horizontal-tabs';
 import registerAdminUserCreation from './admin-user-creation';
 import registerConsumerWorkspace from './consumer-workspace';
+import organizationWorkspace from './organization-workspace';
 
 window.Alpine = Alpine;
 window.Sortable = Sortable;
@@ -41,5 +42,6 @@ registerDanaTalangan(Alpine);
 registerHorizontalTabs();
 registerAdminUserCreation(Alpine);
 registerConsumerWorkspace(Alpine);
+Alpine.data('organizationWorkspace', organizationWorkspace);
 
 Alpine.start();

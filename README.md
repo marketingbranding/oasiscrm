@@ -48,6 +48,7 @@ The application is a Laravel server-rendered application:
 - Policies, middleware, permissions, workspace access, and organization scope protect routes and records.
 - Local notifications and polling provide collaboration features; there is no realtime server requirement.
 - Changelog entries are inserted by idempotent migrations into `changelogs`.
+- RBAC and the additive organization graph transition are documented in `docs/RBAC_ORGANIZATION_ARCHITECTURE.md`.
 
 ### Local data versus mirrors
 
@@ -101,10 +102,11 @@ Protected CRM routes generally require `auth`, `active`, `verified`, `password.c
 
 - `WorkspaceAccessService`: accessible active branches/projects and branch view/edit/sync/member rights.
 - `OrganizationScopeService`: visible IDs, branch/project/team/assigned/own/all scope intersections for supported modules.
-- `ReportingHierarchyService`: managerial reporting relationships, descendants, authority, and cycle prevention.
-- `SalesTeamScopeService`: current operational Sales team resolution. Coordinator → Sales membership comes from current `sales_coordinator_sales` rows with active dates and valid primary roles.
+- `ReportingHierarchyService`: compatibility facade for the configurable `OrganizationGraphService` and legacy-mode reads.
+- `OrganizationGraphService`: canonical historical reporting assignments, configurable role rules, cycle prevention, transactional moves, and audit projections.
+- `SalesTeamScopeService`: operational Sales team facade that can resolve Coordinator → Sales from the canonical graph in canonical mode.
 
-Do not use generic reporting descendants as a substitute for Coordinator operational membership. `users.supervisor_user_id` describes organizational/managerial hierarchy where applicable; `sales_coordinator_sales` is the operational Coordinator → Sales authority.
+During the transition, `users.supervisor_user_id` and `sales_coordinator_sales` remain compatibility projections. Do not enable canonical mode until `organization:backfill --dry-run` and shadow parity reports have no unexplained conflicts.
 
 ## Local Development Setup
 

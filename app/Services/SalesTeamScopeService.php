@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Enums\AccountStatus;
+use App\Models\OrganizationAssignment;
 use App\Models\SalesCoordinatorSales;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Builder;
@@ -10,6 +11,8 @@ use Illuminate\Support\Collection;
 
 class SalesTeamScopeService
 {
+    public function __construct(private readonly OrganizationGraphService $graph) {}
+
     public function for(User $actor): array
     {
         $empty = [
@@ -23,6 +26,10 @@ class SalesTeamScopeService
 
         if ($role === 'sales') {
             return [...$empty, 'sales' => collect([$actor])];
+        }
+
+        if (config('organization.graph_mode') === 'canonical') {
+            return $this->canonicalFor($actor, $empty);
         }
 
         if (! in_array($role, ['sales_coordinator', 'supervisor', 'manager', 'branch_manager'], true)) {
@@ -131,6 +138,17 @@ class SalesTeamScopeService
             return User::query()->whereKey(0);
         }
 
+        if (config('organization.graph_mode') === 'canonical') {
+            return User::query()
+                ->where('users.account_status', AccountStatus::Active->value)
+                ->where('users.is_active', true)
+                ->whereHas('role', fn (Builder $query) => $query->where('slug', 'sales'))
+                ->whereIn('users.id', OrganizationAssignment::query()
+                    ->current()
+                    ->where('parent_user_id', $coordinator->id)
+                    ->pluck('user_id'));
+        }
+
         $ambiguousSalesIds = SalesCoordinatorSales::query()
             ->current()
             ->withValidRoles()
@@ -172,5 +190,38 @@ class SalesTeamScopeService
     private function isRole(User $user, string $role): bool
     {
         return $user->role?->slug === $role;
+    }
+
+    private function canonicalFor(User $actor, array $empty): array
+    {
+        $role = $actor->role?->slug;
+        if (! in_array($role, ['sales_coordinator', 'supervisor', 'manager', 'branch_manager'], true)) {
+            return $empty;
+        }
+
+        $people = collect([$actor, ...$this->graph->descendants($actor)])->keyBy('id');
+        $supervisors = $role === 'supervisor'
+            ? collect([$actor])
+            : $people->filter(fn (User $user) => $this->isRole($user, 'supervisor'))->values();
+        $coordinators = $role === 'sales_coordinator'
+            ? collect([$actor])
+            : $people->filter(fn (User $user) => $this->isRole($user, 'sales_coordinator'))->values();
+        $sales = $people->filter(fn (User $user) => $this->isRole($user, 'sales'))->values();
+        $assignments = OrganizationAssignment::query()->current()
+            ->whereIn('user_id', $people->keys())
+            ->get(['user_id', 'parent_user_id'])
+            ->keyBy('user_id');
+        $salesIdsByCoordinator = $sales->groupBy(fn (User $user) => $assignments->get($user->id)?->parent_user_id)
+            ->map(fn (Collection $items) => $items->pluck('id')->map(fn ($id) => (int) $id)->values());
+        $coordinatorIdsBySupervisor = $coordinators->groupBy(fn (User $user) => $assignments->get($user->id)?->parent_user_id)
+            ->map(fn (Collection $items) => $items->pluck('id')->map(fn ($id) => (int) $id)->values());
+
+        return [
+            'supervisors' => $supervisors,
+            'coordinators' => $coordinators,
+            'sales' => $sales,
+            'sales_ids_by_coordinator' => $salesIdsByCoordinator,
+            'coordinator_ids_by_supervisor' => $coordinatorIdsBySupervisor,
+        ];
     }
 }

@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Role extends Model
 {
@@ -13,6 +14,7 @@ class Role extends Model
         'description',
         'is_superadmin',
         'is_active',
+        'authority_level',
     ];
 
     protected function casts(): array
@@ -20,6 +22,7 @@ class Role extends Model
         return [
             'is_superadmin' => 'boolean',
             'is_active' => 'boolean',
+            'authority_level' => 'integer',
         ];
     }
 
@@ -32,5 +35,15 @@ class Role extends Model
     public function permissions(): BelongsToMany
     {
         return $this->belongsToMany(Permission::class, 'role_permission')->withTimestamps();
+    }
+
+    public function parentReportingRules(): HasMany
+    {
+        return $this->hasMany(RoleReportingRule::class, 'parent_role_id');
+    }
+
+    public function childReportingRules(): HasMany
+    {
+        return $this->hasMany(RoleReportingRule::class, 'child_role_id');
     }
 }

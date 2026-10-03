@@ -8,7 +8,7 @@ class PermissionCatalog
         'sales_pocketbook' => ['Buku Saku Sales', ['own', 'team', 'assigned', 'branch', 'all'], true],
         'work_planner' => ['Work Planner', ['own', 'team', 'assigned', 'branch', 'all'], true],
         'database' => ['Database', ['assigned', 'branch', 'all'], true],
-        'consumer_progress' => ['Progress Konsumen', ['assigned', 'branch', 'all'], true],
+        'consumer_progress' => ['Progress Konsumen', ['team', 'assigned', 'branch', 'all'], true],
         'bridge_fund' => ['Dana Talangan', ['assigned', 'branch', 'all'], true],
         'expenses' => ['Pengeluaran', ['assigned', 'branch', 'all'], true],
     ];

@@ -5,13 +5,16 @@ namespace Tests\Feature;
 use App\Enums\AccountStatus;
 use App\Exceptions\OrganizationAssignmentConflictException;
 use App\Models\Branch;
+use App\Models\ContentItem;
 use App\Models\LeadMaster;
 use App\Models\OrganizationAssignment;
+use App\Models\Permission;
 use App\Models\Role;
 use App\Models\SalesCoordinatorSales;
 use App\Models\SalesLead;
 use App\Models\User;
 use App\Policies\SalesLeadPolicy;
+use App\Services\CoordinatorSalesMonitoringService;
 use App\Services\OrganizationBackfillService;
 use App\Services\OrganizationGraphService;
 use App\Services\OrganizationScopeService;
@@ -414,6 +417,15 @@ class OrganizationGraphTest extends TestCase
         $graph->assign($salesD, $coordinatorTwo);
         $leadA = SalesLead::create(['branch_id' => $branch->id, 'project_id' => $project->id, 'sales_user_id' => $salesA->id, 'lead_date' => today(), 'customer_name' => 'Sales A', 'created_by' => $salesA->id]);
         $leadB = SalesLead::create(['branch_id' => $branch->id, 'project_id' => $project->id, 'sales_user_id' => $salesB->id, 'lead_date' => today(), 'customer_name' => 'Sales B', 'created_by' => $salesB->id]);
+        $agendaA = ContentItem::create(['branch_id' => $branch->id, 'sales_project_id' => $project->id, 'item_type' => 'agenda', 'agenda_type' => ContentItem::SALES_AGENDA_TYPE, 'visibility' => 'team', 'title' => 'Agenda Sales A', 'scheduled_date' => today(), 'status' => 'planned', 'owner_user_id' => $salesA->id, 'created_by' => $salesA->id]);
+        $agendaB = ContentItem::create(['branch_id' => $branch->id, 'sales_project_id' => $project->id, 'item_type' => 'agenda', 'agenda_type' => ContentItem::SALES_AGENDA_TYPE, 'visibility' => 'team', 'title' => 'Agenda Sales B', 'scheduled_date' => today(), 'status' => 'planned', 'owner_user_id' => $salesB->id, 'created_by' => $salesB->id]);
+        $consumerTeamPermissions = Permission::query()->whereIn('slug', ['consumer_progress.view', 'consumer_progress.view_team'])->pluck('id', 'slug');
+        $this->assertCount(2, $consumerTeamPermissions);
+        $coordinatorOne->role->permissions()->syncWithoutDetaching($consumerTeamPermissions->values()->all());
+        $coordinatorTwo->role->permissions()->syncWithoutDetaching($consumerTeamPermissions->values()->all());
+        $this->assertDatabaseHas('role_permission', ['role_id' => $coordinatorOne->role_id, 'permission_id' => $consumerTeamPermissions['consumer_progress.view_team']]);
+        $coordinatorOne->unsetRelation('role');
+        $coordinatorTwo->unsetRelation('role');
         $roleId = $salesA->role_id;
         $permissionSlugs = $salesA->role->permissions()->pluck('slug')->sort()->values()->all();
 
@@ -437,6 +449,14 @@ class OrganizationGraphTest extends TestCase
         $this->assertTrue(app(SalesLeadPolicy::class)->update($coordinatorOne, $leadB));
         $this->assertFalse(app(SalesLeadPolicy::class)->update($coordinatorOne, $leadA));
         $this->assertTrue(app(SalesLeadPolicy::class)->update($coordinatorTwo, $leadA));
+        $agendaScope = app(CoordinatorSalesMonitoringService::class);
+        $this->assertTrue($agendaScope->canViewAgenda($coordinatorOne, $agendaB));
+        $this->assertFalse($agendaScope->canViewAgenda($coordinatorOne, $agendaA));
+        $this->assertTrue($agendaScope->canViewAgenda($coordinatorTwo, $agendaA));
+        $this->assertTrue($coordinatorOne->hasPermission('consumer_progress.view_team'));
+        $this->assertContains($salesB->id, $canonicalScope->teamIds($coordinatorOne));
+        $this->assertEqualsCanonicalizing([$salesB->id, $salesC->id], app(OrganizationScopeService::class)->visibleUserIds($coordinatorOne, 'consumer_progress'));
+        $this->assertEqualsCanonicalizing([$salesA->id, $salesD->id], app(OrganizationScopeService::class)->visibleUserIds($coordinatorTwo, 'consumer_progress'));
 
         $this->assertSame($roleId, $salesA->fresh()->role_id);
         $this->assertSame($permissionSlugs, $salesA->fresh()->role->permissions()->pluck('slug')->sort()->values()->all());

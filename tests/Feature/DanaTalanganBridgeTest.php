@@ -93,7 +93,13 @@ class DanaTalanganBridgeTest extends TestCase
     {
         $method = new \ReflectionMethod(DanaTalanganBridgeService::class, 'date');
         $method->setAccessible(true);
-        $service = app(DanaTalanganBridgeService::class);
+        $service = new DanaTalanganBridgeService(
+            Mockery::mock(DanaTalanganBridgeModeService::class),
+            Mockery::mock(DanaTalanganSpreadsheetContract::class),
+            Mockery::mock(DanaTalanganSpreadsheetWriter::class),
+            Mockery::mock(SyncLockService::class),
+            new ProjectIdentityResolver,
+        );
 
         $this->assertSame('2026-06-30', $method->invoke($service, '30 Jun 2026')->format('Y-m-d'));
         $this->assertSame('2026-07-10', $method->invoke($service, '10 Jul 2026')->format('Y-m-d'));

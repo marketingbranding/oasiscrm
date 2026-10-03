@@ -22,6 +22,12 @@ class ProjectManagementTest extends TestCase
 {
     use RefreshDatabase;
 
+    protected function setUp(): void
+    {
+        parent::setUp();
+        $this->fakeGoogleSheets();
+    }
+
     public function test_project_access_changelog_is_idempotent_and_visible(): void
     {
         $title = 'Pengaturan Proyek dan Akses Lebih Aman';
@@ -504,6 +510,7 @@ class ProjectManagementTest extends TestCase
     {
         $branch = $this->branch('Solo');
         $this->project($branch, 'Proyek Utama', 'ALIAS-LAIN');
+        $this->mock(SalesLeadSheetOptionService::class);
         $service = $this->app->make(ProjectAdministrationService::class);
 
         try {

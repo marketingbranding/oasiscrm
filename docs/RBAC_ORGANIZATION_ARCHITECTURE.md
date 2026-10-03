@@ -69,3 +69,7 @@ Each graph change records `organization_assignment_changed` in `activity_log` wi
 ## Remaining Cutover Prerequisites
 
 Before setting canonical mode in a deployment, run the dry-run and shadow comparisons for every active branch, resolve all ambiguity reports, align policy and export consumers, add role/rule administration screens, and complete direct-route authorization regression tests. Do not drop legacy columns or tables as part of this phase.
+
+## Deferred Frontend Dependency Advisories
+
+The full `npm audit` currently reports five high-severity advisories in the Tailwind CSS 3 development/build chain: `tailwindcss@3.4.19` through `chokidar@3.6.0`/`braces@3.0.3`, `fast-glob@3.3.3`/`micromatch@4.0.8`, and their shared `braces` dependency. `npm audit --omit=dev` is clean, so these packages are not runtime production dependencies. The available remediation is a Tailwind 4 migration, which is intentionally deferred to a separate scoped project and is not silently treated as fixed in this branch.

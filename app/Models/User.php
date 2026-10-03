@@ -118,6 +118,16 @@ class User extends Authenticatable implements MustVerifyEmail
         return $this->hasMany(self::class, 'supervisor_user_id');
     }
 
+    public function organizationAssignments(): HasMany
+    {
+        return $this->hasMany(OrganizationAssignment::class);
+    }
+
+    public function organizationParentAssignments(): HasMany
+    {
+        return $this->hasMany(OrganizationAssignment::class, 'parent_user_id');
+    }
+
     public function invitations(): HasMany
     {
         return $this->hasMany(UserInvitation::class);

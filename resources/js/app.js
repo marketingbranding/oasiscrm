@@ -20,6 +20,7 @@ import registerPwa from './pwa';
 import registerDanaTalangan from './dana-talangan';
 import registerHorizontalTabs from './horizontal-tabs';
 import registerConsumerWorkspace from './consumer-workspace';
+import organizationWorkspace from './organization-workspace';
 
 window.Alpine = Alpine;
 window.Sortable = Sortable;
@@ -39,5 +40,6 @@ registerPwa(Alpine);
 registerDanaTalangan(Alpine);
 registerHorizontalTabs();
 registerConsumerWorkspace(Alpine);
+Alpine.data('organizationWorkspace', organizationWorkspace);
 
 Alpine.start();

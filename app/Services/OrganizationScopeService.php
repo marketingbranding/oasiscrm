@@ -18,6 +18,7 @@ class OrganizationScopeService
     public function __construct(
         private WorkspaceAccessService $workspaceAccess,
         private ReportingHierarchyService $hierarchy,
+        private OrganizationGraphService $graph,
     ) {}
 
     private array $scopeCache = [];
@@ -158,6 +159,14 @@ class OrganizationScopeService
     {
         return $this->cached('hierarchy:'.$viewer->id, function () use ($viewer): array {
             $ids = $this->hierarchy->descendantIds($viewer);
+            if (config('organization.graph_mode') === 'canonical') {
+                return collect([...$ids, ...$this->graph->ancestors($viewer)->pluck('id')->all()])
+                    ->map(fn ($id) => (int) $id)
+                    ->unique()
+                    ->values()
+                    ->all();
+            }
+
             $supervisorId = $viewer->supervisor_user_id;
             while ($supervisorId) {
                 if (in_array((int) $supervisorId, $ids, true)) {

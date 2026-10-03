@@ -26,6 +26,40 @@ class WorkspaceV2FrontendTest extends TestCase
             ->assertNotFound();
     }
 
+    public function test_workspace_backend_routes_require_matching_module_scope(): void
+    {
+        config(['app.workspace_v2_enabled' => true]);
+        $denied = User::factory()->create([
+            'password_changed_at' => now(),
+        ]);
+
+        $this->actingAs($denied)->get(route('workspace-v2.dashboard'))->assertForbidden();
+        $this->actingAs($denied)->get(route('workspace-v2.lead'))->assertForbidden();
+        $this->actingAs($denied)->get(route('workspace-v2.transactions'))->assertForbidden();
+        $this->actingAs($denied)->getJson(route('workspace-v2.transactions'))->assertForbidden();
+    }
+
+    public function test_workspace_transaction_json_is_allowed_for_scoped_user(): void
+    {
+        config(['app.workspace_v2_enabled' => true]);
+        $branch = Branch::query()->create(['name' => 'JSON Branch', 'code' => 'JSN', 'is_active' => true]);
+        $project = LeadMaster::query()->create(['branch_id' => $branch->id, 'project_name' => 'JSON Project', 'is_active' => true]);
+        $customer = Customer::factory()->create(['name' => 'JSON Customer']);
+        $application = ConsumerApplication::query()->create([
+            'customer_id' => $customer->id,
+            'branch_id' => $branch->id,
+            'project_id' => $project->id,
+            'application_status' => 'draft',
+            'consumer_status' => 'Lanjut',
+            'current_process' => 'data_konsumen',
+        ]);
+
+        $this->actingAs($this->superadmin())
+            ->getJson(route('workspace-v2.transaction.detail', $application))
+            ->assertOk()
+            ->assertJsonPath('ok', true);
+    }
+
     public function test_workspace_renders_required_navigation_without_standalone_sp3k_entry(): void
     {
         config(['app.workspace_v2_enabled' => true]);

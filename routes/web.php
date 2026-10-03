@@ -34,10 +34,12 @@ use App\Http\Controllers\Crm\MarisonMigrationController;
 use App\Http\Controllers\Crm\ModuleMaintenanceController;
 use App\Http\Controllers\Crm\NotificationController;
 use App\Http\Controllers\Crm\OperationalMaintenanceController;
+use App\Http\Controllers\Crm\OrganizationWorkspaceController;
 use App\Http\Controllers\Crm\PresenceController;
 use App\Http\Controllers\Crm\ProjectController;
 use App\Http\Controllers\Crm\PromoController;
 use App\Http\Controllers\Crm\PromoImportController;
+use App\Http\Controllers\Crm\RoleAdministrationController;
 use App\Http\Controllers\Crm\SalesAgendaController;
 use App\Http\Controllers\Crm\SalesAgendaEvidenceArchiveController;
 use App\Http\Controllers\Crm\SalesAgendaEvidenceController;
@@ -77,27 +79,42 @@ Route::middleware(['auth', 'active', 'verified', 'password.changed', 'operationa
     Route::bind('comment', fn ($value) => Comment::withTrashed()->findOrFail($value));
     Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
 
+    Route::prefix('admin/roles')->name('roles.')->middleware('permission:roles.view')->group(function () {
+        Route::get('/', [RoleAdministrationController::class, 'index'])->name('index');
+        Route::post('/', [RoleAdministrationController::class, 'store'])->middleware('permission:roles.create')->name('store');
+        Route::put('/{role}', [RoleAdministrationController::class, 'update'])->middleware('permission:roles.update')->name('update');
+        Route::put('/{role}/permissions', [RoleAdministrationController::class, 'updatePermissions'])->middleware('permission:roles.assign_permissions')->name('permissions.update');
+        Route::patch('/reporting-rules', [RoleAdministrationController::class, 'updateReportingRules'])->middleware('permission:organization.configure_rules')->name('reporting-rules.update');
+    });
+
+    Route::middleware('permission:organization.view')->group(function () {
+        Route::get('/organization', [OrganizationWorkspaceController::class, 'index'])->name('organization.index');
+        Route::patch('/organization/users/{user}/move', [OrganizationWorkspaceController::class, 'move'])
+            ->middleware(['permission:organization.move_user', 'not.impersonating'])
+            ->name('organization.move');
+    });
+
     Route::prefix('workspace')->name('workspace-v2.')->middleware('workspace.v2')->group(function () {
         Route::get('/', [WorkspaceController::class, 'dashboard'])->name('dashboard');
         Route::get('/lead', [WorkspaceController::class, 'lead'])->name('lead');
         Route::get('/nup', [WorkspaceController::class, 'nup'])->name('nup');
-        Route::get('/transaksi', [WorkspaceController::class, 'transactions'])->name('transactions');
-        Route::get('/transaksi/data-konsumen', [WorkspaceController::class, 'transactions'])->defaults('view', 'data-konsumen')->name('transactions.data-konsumen');
-        Route::post('/transaksi/data-konsumen', [WorkspaceController::class, 'storeConsumer'])->middleware('not.impersonating')->name('transactions.data-konsumen.store');
-        Route::get('/transaksi/psjb', [WorkspaceController::class, 'transactions'])->defaults('view', 'psjb')->name('transactions.psjb');
-        Route::get('/transaksi/bi-checking', [WorkspaceController::class, 'transactions'])->defaults('view', 'bi-checking')->name('transactions.bi-checking');
-        Route::get('/transaksi/pemberkasan', [WorkspaceController::class, 'transactions'])->defaults('view', 'pemberkasan')->name('transactions.pemberkasan');
-        Route::get('/transaksi/proses-bank', [WorkspaceController::class, 'transactions'])->defaults('view', 'proses-bank')->name('transactions.proses-bank');
-        Route::get('/transaksi/ppjb-dev', [WorkspaceController::class, 'transactions'])->defaults('view', 'ppjb-dev')->name('transactions.ppjb-dev');
-        Route::get('/transaksi/akad', [WorkspaceController::class, 'transactions'])->defaults('view', 'akad')->name('transactions.akad');
-        Route::get('/transaksi/bast', [WorkspaceController::class, 'transactions'])->defaults('view', 'bast')->name('transactions.bast');
-        Route::get('/transaksi/data-konsumen/create', [WorkspaceController::class, 'consumerForm'])->name('transactions.data-konsumen.create');
-        Route::get('/transaksi/{consumerApplication}/input/{process}', [WorkspaceController::class, 'processForm'])->name('transactions.process-form');
-        Route::get('/transaksi/{consumerApplication}', [WorkspaceController::class, 'transactionDetail'])->name('transaction.detail');
-        Route::get('/mundur', [WorkspaceController::class, 'aggregate'])->defaults('workspace', 'mundur')->name('mundur');
-        Route::get('/kendala', [WorkspaceController::class, 'aggregate'])->defaults('workspace', 'kendala')->name('kendala');
-        Route::get('/garansi', [WorkspaceController::class, 'aggregate'])->defaults('workspace', 'garansi')->name('garansi');
-        Route::get('/selesai', [WorkspaceController::class, 'aggregate'])->defaults('workspace', 'selesai')->name('selesai');
+        Route::get('/transaksi', [WorkspaceController::class, 'transactions'])->middleware('permission:consumer_progress.view')->name('transactions');
+        Route::get('/transaksi/data-konsumen', [WorkspaceController::class, 'transactions'])->middleware('permission:consumer_progress.view')->defaults('view', 'data-konsumen')->name('transactions.data-konsumen');
+        Route::post('/transaksi/data-konsumen', [WorkspaceController::class, 'storeConsumer'])->middleware(['permission:consumer_progress.manage', 'not.impersonating'])->name('transactions.data-konsumen.store');
+        Route::get('/transaksi/psjb', [WorkspaceController::class, 'transactions'])->middleware('permission:consumer_progress.view')->defaults('view', 'psjb')->name('transactions.psjb');
+        Route::get('/transaksi/bi-checking', [WorkspaceController::class, 'transactions'])->middleware('permission:consumer_progress.view')->defaults('view', 'bi-checking')->name('transactions.bi-checking');
+        Route::get('/transaksi/pemberkasan', [WorkspaceController::class, 'transactions'])->middleware('permission:consumer_progress.view')->defaults('view', 'pemberkasan')->name('transactions.pemberkasan');
+        Route::get('/transaksi/proses-bank', [WorkspaceController::class, 'transactions'])->middleware('permission:consumer_progress.view')->defaults('view', 'proses-bank')->name('transactions.proses-bank');
+        Route::get('/transaksi/ppjb-dev', [WorkspaceController::class, 'transactions'])->middleware('permission:consumer_progress.view')->defaults('view', 'ppjb-dev')->name('transactions.ppjb-dev');
+        Route::get('/transaksi/akad', [WorkspaceController::class, 'transactions'])->middleware('permission:consumer_progress.view')->defaults('view', 'akad')->name('transactions.akad');
+        Route::get('/transaksi/bast', [WorkspaceController::class, 'transactions'])->middleware('permission:consumer_progress.view')->defaults('view', 'bast')->name('transactions.bast');
+        Route::get('/transaksi/data-konsumen/create', [WorkspaceController::class, 'consumerForm'])->middleware('permission:consumer_progress.manage')->name('transactions.data-konsumen.create');
+        Route::get('/transaksi/{consumerApplication}/input/{process}', [WorkspaceController::class, 'processForm'])->middleware('permission:consumer_progress.manage')->name('transactions.process-form');
+        Route::get('/transaksi/{consumerApplication}', [WorkspaceController::class, 'transactionDetail'])->middleware('permission:consumer_progress.view')->name('transaction.detail');
+        Route::get('/mundur', [WorkspaceController::class, 'aggregate'])->middleware('permission:consumer_progress.view')->defaults('workspace', 'mundur')->name('mundur');
+        Route::get('/kendala', [WorkspaceController::class, 'aggregate'])->middleware('permission:consumer_progress.view')->defaults('workspace', 'kendala')->name('kendala');
+        Route::get('/garansi', [WorkspaceController::class, 'aggregate'])->middleware('permission:consumer_progress.view')->defaults('workspace', 'garansi')->name('garansi');
+        Route::get('/selesai', [WorkspaceController::class, 'aggregate'])->middleware('permission:consumer_progress.view')->defaults('workspace', 'selesai')->name('selesai');
         Route::get('/aktivitas', [WorkspaceController::class, 'activity'])->name('activity');
         Route::get('/tugas', [WorkspaceController::class, 'activity'])->name('tasks');
         Route::get('/notifikasi', [WorkspaceController::class, 'activity'])->name('notifications');

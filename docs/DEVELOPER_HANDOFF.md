@@ -43,11 +43,12 @@ Recommended direction, not implemented: migrate remaining Google mirror/snapshot
 
 - `WorkspaceAccessService`: active accessible branches/projects, branch rights, project assignment windows, requested workspace resolution.
 - `OrganizationScopeService`: module-specific own/team/assigned/branch/all intersections and visible user/branch/project IDs.
-- `ReportingHierarchyService`: managerial supervisor hierarchy, rank/authority, descendants, and cycle prevention.
-- `SalesTeamScopeService`: operational Sales team. `sales_coordinator_sales` rows are filtered by `is_active`, `started_at`, `ended_at`, and valid primary roles.
+- `ReportingHierarchyService`: compatibility facade for `OrganizationGraphService`; legacy reads are retained while `ORGANIZATION_GRAPH_MODE=legacy`.
+- `OrganizationGraphService`: canonical historical `reports_to` assignments, configurable role rules, cycle prevention, transactional moves, and audit projections.
+- `SalesTeamScopeService`: operational Sales team facade; canonical mode resolves Coordinator → Sales through organization assignments.
 - `CoordinatorLeadTeamService`: Coordinator role/workspace checks used by Coordinator monitoring.
 
-Critical distinction: `users.supervisor_user_id` is an organizational/reporting relationship. It is not the canonical operational Coordinator → Sales relationship. Coordinator Sales membership must use `sales_coordinator_sales` through `SalesTeamScopeService`. Reusing generic organization team IDs for this purpose can create a monitoring/private-endpoint authorization mismatch.
+During the compatibility period, `users.supervisor_user_id` and `sales_coordinator_sales` are preserved projections of organization operations. `organization_assignments` is the canonical historical source for reporting edges; branch/project memberships remain separate workspace authorization data. Reusing a graph descendant without the workspace intersection can create a monitoring/private-endpoint authorization mismatch.
 
 Primary role permissions come from `users.role_id` and the registered Permission Catalog. Supplemental roles do not grant permissions. `pusat` receives explicit operational mappings, not automatic system administration. Superadmin wildcard behavior applies to registered permission slugs only.
 

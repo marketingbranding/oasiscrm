@@ -14,6 +14,7 @@ use App\Models\Role;
 use App\Models\RoleReportingRule;
 use App\Models\User;
 use App\Services\AccountAuditService;
+use App\Support\PermissionCatalog;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
@@ -26,7 +27,12 @@ class RoleAdministrationController extends Controller
         $permissions = Permission::query()->orderBy('group_name')->orderBy('name')->get()->groupBy('group_name');
         $rules = RoleReportingRule::query()->get()->keyBy(fn (RoleReportingRule $rule) => "{$rule->parent_role_id}:{$rule->child_role_id}");
 
-        return view('crm.roles.index', compact('roles', 'permissions', 'rules'));
+        return view('crm.roles.index', [
+            'roles' => $roles,
+            'permissions' => $permissions,
+            'permissionGroupDescriptions' => PermissionCatalog::groupDescriptions(),
+            'rules' => $rules,
+        ]);
     }
 
     public function store(RoleStoreRequest $request): RedirectResponse

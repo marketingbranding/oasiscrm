@@ -45,6 +45,7 @@ class OrganizationWorkspaceController extends Controller
             'nodes' => $nodes,
             'flatNodes' => collect($nodes)->flatMap(fn (array $node) => $this->flatten($node))->values(),
             'branches' => $this->workspace->accessibleBranches($actor),
+            'canMove' => $actor->hasPermission('organization.move_user'),
             'selectedBranchId' => $selectedBranchId,
         ]);
     }

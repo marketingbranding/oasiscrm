@@ -146,6 +146,131 @@
     letter-spacing: 0.04em;
 }
 
+.org-workspace {
+    width: 100%;
+    min-width: 0;
+}
+
+.org-canvas {
+    isolation: isolate;
+    overscroll-behavior: contain;
+    touch-action: none;
+    background: #f5f0df;
+    height: clamp(28rem, calc(100vh - 18rem), 46rem);
+}
+
+.org-canvas:fullscreen {
+    background: #f5f0df;
+}
+
+.org-graph {
+    backface-visibility: hidden;
+    contain: layout style;
+    transform-style: flat;
+    will-change: transform;
+}
+
+.org-node-card {
+    cursor: grab;
+    touch-action: none;
+    transition: background-color var(--oasis-duration-standard) var(--oasis-ease-standard), box-shadow var(--oasis-duration-standard) var(--oasis-ease-standard);
+}
+
+.org-node-card:active {
+    cursor: grabbing;
+}
+
+.org-socket {
+    position: absolute;
+    top: 50%;
+    z-index: 20;
+    width: 14px;
+    height: 14px;
+    border: 2px solid #111;
+    border-radius: 999px;
+    background: #fff;
+    cursor: crosshair;
+    transform: translateY(-50%);
+    transition: background-color var(--oasis-duration-fast) var(--oasis-ease-standard),
+        border-color var(--oasis-duration-fast) var(--oasis-ease-standard),
+        box-shadow var(--oasis-duration-fast) var(--oasis-ease-standard),
+        transform var(--oasis-duration-fast) var(--oasis-ease-standard);
+}
+
+.org-socket-input {
+    left: -7px;
+    border-radius: 2px;
+    background: #8c9ae0;
+}
+
+.org-socket-output {
+    right: -7px;
+    border-radius: 999px;
+    background: var(--oasis-yellow);
+}
+
+.org-socket:hover,
+.org-socket:focus-visible,
+.org-socket-source,
+.org-socket-target {
+    border-color: #111;
+    background: var(--oasis-yellow);
+    box-shadow: 0 0 0 4px rgba(252, 194, 15, 0.35);
+    transform: translateY(-50%) scale(1.25);
+}
+
+.org-socket-target {
+    background: #7bc47f;
+    box-shadow: 0 0 0 5px rgba(123, 196, 127, 0.35);
+}
+
+.org-context-card {
+    max-height: calc(100vh - 24px);
+    overflow-y: auto;
+    animation: oasis-context-in var(--oasis-duration-fast) var(--oasis-ease-standard);
+}
+
+.crm-choice-chip {
+    display: inline-flex;
+    min-height: 2.75rem;
+    align-items: center;
+    gap: var(--oasis-space-2);
+    border: 1px solid var(--oasis-border-strong);
+    background: var(--oasis-surface);
+    padding: var(--oasis-space-2) var(--oasis-space-3);
+    font-family: var(--oasis-font-data);
+    font-size: var(--oasis-type-body-size);
+    cursor: pointer;
+}
+
+.crm-choice-chip:has(input:checked) {
+    background: var(--oasis-surface-selected);
+    box-shadow: inset 0 -3px 0 var(--oasis-text);
+}
+
+.crm-choice-chip input {
+    width: 1rem;
+    height: 1rem;
+    accent-color: var(--oasis-text);
+}
+
+.crm-choice-chip small {
+    color: var(--oasis-text-muted);
+    font-family: var(--oasis-font-controls);
+    font-size: var(--oasis-type-caption-size);
+    font-weight: 700;
+    text-transform: uppercase;
+}
+
+@keyframes oasis-context-in {
+    from { opacity: 0; transform: translateY(-3px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .org-context-card { animation: none; }
+}
+
 .crm-focus-ring:focus-visible {
     outline: var(--oasis-focus-width) solid var(--oasis-focus);
     outline-offset: var(--oasis-focus-offset);

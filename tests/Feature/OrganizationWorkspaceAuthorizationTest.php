@@ -22,8 +22,29 @@ class OrganizationWorkspaceAuthorizationTest extends TestCase
         $denied = $this->user('sales', $branch);
         $allowed = $this->user('superadmin', $branch);
 
+        $this->assertSame(1, \DB::table('changelogs')->where('title', 'Penyempurnaan Workspace Organisasi')->count());
+
         $this->actingAs($denied)->get(route('organization.index'))->assertForbidden();
-        $this->actingAs($allowed)->get(route('organization.index'))->assertOk()->assertSeeText('Struktur Organisasi');
+        $response = $this->actingAs($allowed)->get(route('organization.index'))
+            ->assertOk()
+            ->assertSeeText('Struktur Organisasi')
+            ->assertSeeText('Fit view')
+            ->assertSeeText('Pindahkan garis pelaporan')
+            ->assertSeeText('Pindahkan node terpilih')
+            ->assertSee('data-org-socket')
+            ->assertSee('Tarik socket Atasan')
+            ->assertSee('Tarik socket Bawahan')
+            ->assertSee('org-node-item')
+            ->assertSee('data-org-node');
+
+        $script = file_get_contents(resource_path('js/organization-workspace.js'));
+        $this->assertStringContainsString("this.context = null;\n            this.confirmation = true;", $script);
+        foreach (['pointerToGraph', 'visibleGraphBounds', 'positionContextCard', 'connectorPath', 'startConnection', 'connectionPreviewPath', 'commitConnection', 'buildLayout', 'applyLocalParentChange', 'Math.min(1.8'] as $contract) {
+            $this->assertStringContainsString($contract, $script);
+        }
+        $this->assertStringNotContainsString('window.location.reload()', $script);
+
+        $this->assertStringContainsString('org-workspace', $response->getContent());
     }
 
     public function test_stale_organization_move_returns_conflict(): void
@@ -95,7 +116,12 @@ class OrganizationWorkspaceAuthorizationTest extends TestCase
         $admin = $this->user('superadmin', $branch);
 
         $this->actingAs($denied)->get(route('roles.index'))->assertForbidden();
-        $this->actingAs($admin)->get(route('roles.index'))->assertOk()->assertSeeText('Role reporting rules');
+        $this->actingAs($admin)->get(route('roles.index'))
+            ->assertOk()
+            ->assertSeeText('Aturan hubungan atasan dan bawahan')
+            ->assertSeeText('Izin akses peran')
+            ->assertSeeText('Lihat kode sistem')
+            ->assertSeeText('Mengelola cabang');
         $this->actingAs($admin)->post(route('roles.store'), [
             'name' => 'Reviewer Operasional',
             'slug' => 'reviewer_operasional',

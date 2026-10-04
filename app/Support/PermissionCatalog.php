@@ -4,6 +4,19 @@ namespace App\Support;
 
 class PermissionCatalog
 {
+    private const GROUP_DESCRIPTIONS = [
+        'Pengguna' => 'Aksi untuk mengelola akun, akses, dan penugasan pengguna.',
+        'Buku Saku Sales' => 'Akses data dan alur kerja lead serta aktivitas sales.',
+        'Work Planner' => 'Akses tugas, agenda, dan konten pekerjaan.',
+        'Database' => 'Akses data operasional yang tersimpan dari Database.',
+        'Progress Konsumen' => 'Akses tahapan dan data proses konsumen.',
+        'Dana Talangan' => 'Akses data dan proses Dana Talangan.',
+        'Pengeluaran' => 'Akses pencatatan dan laporan Pengeluaran.',
+        'Komentar' => 'Akses komentar pada data yang dapat dilihat.',
+        'Administrasi Sistem' => 'Pengaturan teknis dan konfigurasi utama OASIS.',
+        'Organisasi' => 'Akses struktur organisasi, peran, dan hubungan atasan-bawahan.',
+    ];
+
     private const MODULES = [
         'sales_pocketbook' => ['Buku Saku Sales', ['own', 'team', 'assigned', 'branch', 'all'], true],
         'work_planner' => ['Work Planner', ['own', 'team', 'assigned', 'branch', 'all'], true],
@@ -27,6 +40,12 @@ class PermissionCatalog
         'branch' => 'data cabang',
         'all' => 'semua data',
     ];
+
+    /** @return array<string, string> */
+    public static function groupDescriptions(): array
+    {
+        return self::GROUP_DESCRIPTIONS;
+    }
 
     public static function permissions(): array
     {

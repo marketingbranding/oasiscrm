@@ -62,6 +62,22 @@ class AdminUserOnboardingTest extends TestCase
             ->assertOk()->assertSee($visible->email)->assertDontSee($hidden->email);
     }
 
+    public function test_user_assignment_forms_render_searchable_role_aware_workspace_controls(): void
+    {
+        $actor = $this->user('superadmin');
+        $this->branch('SLO');
+
+        $this->actingAs($actor)->get(route('admin-users.create'))
+            ->assertOk()
+            ->assertSee('data-slug="sales"', false)
+            ->assertSee('Cari cabang')
+            ->assertSee('Cari proyek atau cabang')
+            ->assertSee('crm-choice-chip', false)
+            ->assertSee('primaryBranchId', false)
+            ->assertSee('projectMatchesBranch', false)
+            ->assertSee('workspaceLabel', false);
+    }
+
     public function test_suspend_revokes_sessions_and_reactivate_is_audited(): void
     {
         $actor = $this->user('superadmin');

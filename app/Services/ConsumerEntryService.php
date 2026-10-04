@@ -3,13 +3,17 @@
 namespace App\Services;
 
 use App\Models\ConsumerApplication;
+use App\Models\ConsumerNup;
 use App\Models\ConsumerProcessApplicability;
 use App\Models\Customer;
 use App\Models\LeadMaster;
+use App\Models\Promo;
+use App\Models\SalesLead;
 use App\Models\User;
 use App\Support\ConsumerIdentity;
 use DomainException;
 use Illuminate\Auth\Access\AuthorizationException;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\DB;
 
 class ConsumerEntryService
@@ -29,6 +33,7 @@ class ConsumerEntryService
         if ($project === null) {
             throw new DomainException('Proyek konsumen tidak valid untuk cabang yang dipilih.');
         }
+        $this->assertRelatedRecordsScope($data, (int) $data['branch_id'], (int) $data['project_id']);
 
         return DB::transaction(function () use ($data, $actor): ConsumerApplication {
             $customer = $this->resolveOrCreateCustomer($data);
@@ -110,6 +115,51 @@ class ConsumerEntryService
             || $actor->hasScopedPermission('consumer_progress', 'manage');
         if (! $hasManage || ! $this->scope->allowsProjectRecord($actor, 'consumer_progress', 'manage', $branchId, $projectId)) {
             throw new AuthorizationException('Anda tidak berwenang mengelola data konsumen ini.');
+        }
+    }
+
+    private function assertRelatedRecordsScope(array $data, int $branchId, int $projectId): void
+    {
+        if (filled($data['sales_user_id'] ?? null) && ! User::query()
+            ->whereKey((int) $data['sales_user_id'])
+            ->where('is_active', true)
+            ->whereHas('assignedProjects', function (Builder $query) use ($projectId): void {
+                $query->whereKey($projectId)
+                    ->where('project_user.is_active', true)
+                    ->where(fn (Builder $dates): Builder => $dates
+                        ->whereNull('project_user.assignment_start_date')
+                        ->orWhereDate('project_user.assignment_start_date', '<=', today()->toDateString()))
+                    ->where(fn (Builder $dates): Builder => $dates
+                        ->whereNull('project_user.assignment_end_date')
+                        ->orWhereDate('project_user.assignment_end_date', '>=', today()->toDateString()));
+            })
+            ->exists()) {
+            throw new AuthorizationException('Sales PIC harus merupakan pengguna aktif yang ditugaskan pada proyek tersebut.');
+        }
+
+        if (filled($data['promo_id'] ?? null) && ! Promo::query()
+            ->whereKey((int) $data['promo_id'])
+            ->where('branch_id', $branchId)
+            ->exists()) {
+            throw new AuthorizationException('Promo harus berasal dari cabang transaksi.');
+        }
+
+        if (filled($data['sales_lead_id'] ?? null) && ! SalesLead::query()
+            ->whereKey((int) $data['sales_lead_id'])
+            ->where('branch_id', $branchId)
+            ->where('project_id', $projectId)
+            ->exists()) {
+            throw new AuthorizationException('Lead sumber harus berada pada cabang dan proyek transaksi.');
+        }
+
+        if (filled($data['source_nup_id'] ?? null) && ! ConsumerNup::query()
+            ->whereKey((int) $data['source_nup_id'])
+            ->where('branch_id', $branchId)
+            ->where(fn (Builder $query): Builder => $query
+                ->whereNull('project_id')
+                ->orWhere('project_id', $projectId))
+            ->exists()) {
+            throw new AuthorizationException('NUP sumber harus berada pada cabang dan proyek transaksi.');
         }
     }
 

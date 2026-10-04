@@ -11,6 +11,7 @@ use DomainException;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 
 class ConsumerProcessService
 {
@@ -35,6 +36,11 @@ class ConsumerProcessService
         return DB::transaction(function () use ($application, $data, $actor): ConsumerWarranty {
             $application = ConsumerApplication::query()->lockForUpdate()->findOrFail($application->id);
             $data['consumer_bast_record_id'] ??= $application->bastRecords()->latest('tanggal_bast')->latest('id')->value('id');
+            if (! $application->bastRecords()->whereKey($data['consumer_bast_record_id'])->exists()) {
+                throw ValidationException::withMessages([
+                    'consumer_bast_record_id' => 'BAST harus berasal dari aplikasi konsumen yang sama.',
+                ]);
+            }
             $warranty = $application->warranties()->create([
                 ...array_intersect_key($data, array_flip([
                     'consumer_bast_record_id', 'status_komplain', 'tgl_sales_ke_sam', 'tgl_sam_ke_sat',
@@ -70,6 +76,7 @@ class ConsumerProcessService
     public function createIssue(ConsumerApplication $application, array $data, User $actor): ConsumerIssue
     {
         $this->authorize($actor, $application);
+        $this->assertPicScope($application, $data, $actor);
 
         return DB::transaction(function () use ($application, $data, $actor): ConsumerIssue {
             $issue = $application->issues()->create([
@@ -116,6 +123,40 @@ class ConsumerProcessService
         $hasManage = $actor->hasPermission('consumer_progress.manage') || $actor->hasScopedPermission('consumer_progress', 'manage');
         if (! $hasManage || ! $this->scope->allowsProjectRecord($actor, 'consumer_progress', 'manage', (int) $application->branch_id, $application->project_id)) {
             throw new AuthorizationException('Anda tidak berwenang melakukan tindakan pada transaksi ini.');
+        }
+    }
+
+    private function assertPicScope(ConsumerApplication $application, array $data, User $actor): void
+    {
+        if (! filled($data['pic_user_id'] ?? null)) {
+            return;
+        }
+
+        $picId = (int) $data['pic_user_id'];
+        $visibleUserIds = $this->scope->visibleUserIds($actor, 'consumer_progress', 'manage');
+        $isInWorkspace = User::query()
+            ->whereKey($picId)
+            ->where('is_active', true)
+            ->where(function (Builder $query) use ($application): void {
+                $query->where('branch_id', $application->branch_id)
+                    ->orWhereHas('branches', fn (Builder $branch): Builder => $branch
+                        ->whereKey($application->branch_id)
+                        ->where('branch_user.can_view', true))
+                    ->orWhereHas('assignedProjects', function (Builder $project) use ($application): void {
+                        $project->whereKey($application->project_id)
+                            ->where('project_user.is_active', true)
+                            ->where(fn (Builder $dates): Builder => $dates
+                                ->whereNull('project_user.assignment_start_date')
+                                ->orWhereDate('project_user.assignment_start_date', '<=', today()->toDateString()))
+                            ->where(fn (Builder $dates): Builder => $dates
+                                ->whereNull('project_user.assignment_end_date')
+                                ->orWhereDate('project_user.assignment_end_date', '>=', today()->toDateString()));
+                    });
+            })
+            ->exists();
+
+        if (! $isInWorkspace || ! in_array($picId, $visibleUserIds, true)) {
+            throw new AuthorizationException('PIC kendala harus berada dalam lingkup cabang atau proyek transaksi.');
         }
     }
 

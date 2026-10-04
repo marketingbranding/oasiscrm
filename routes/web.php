@@ -81,10 +81,12 @@ Route::middleware(['auth', 'active', 'verified', 'password.changed', 'operationa
 
     Route::prefix('admin/roles')->name('roles.')->middleware('permission:roles.view')->group(function () {
         Route::get('/', [RoleAdministrationController::class, 'index'])->name('index');
-        Route::post('/', [RoleAdministrationController::class, 'store'])->middleware('permission:roles.create')->name('store');
-        Route::put('/{role}', [RoleAdministrationController::class, 'update'])->middleware('permission:roles.update')->name('update');
-        Route::put('/{role}/permissions', [RoleAdministrationController::class, 'updatePermissions'])->middleware('permission:roles.assign_permissions')->name('permissions.update');
-        Route::patch('/reporting-rules', [RoleAdministrationController::class, 'updateReportingRules'])->middleware('permission:organization.configure_rules')->name('reporting-rules.update');
+        Route::middleware('not.impersonating')->group(function () {
+            Route::post('/', [RoleAdministrationController::class, 'store'])->middleware('permission:roles.create')->name('store');
+            Route::put('/{role}', [RoleAdministrationController::class, 'update'])->middleware('permission:roles.update')->name('update');
+            Route::put('/{role}/permissions', [RoleAdministrationController::class, 'updatePermissions'])->middleware('permission:roles.assign_permissions')->name('permissions.update');
+            Route::patch('/reporting-rules', [RoleAdministrationController::class, 'updateReportingRules'])->middleware('permission:organization.configure_rules')->name('reporting-rules.update');
+        });
     });
 
     Route::middleware('permission:organization.view')->group(function () {

@@ -298,6 +298,10 @@ class ImpersonationTest extends TestCase
             'promos.toggle' => 'PATCH',
             'promos.import.preview' => 'POST',
             'promos.import.confirm' => 'POST',
+            'roles.store' => 'POST',
+            'roles.update' => 'PUT',
+            'roles.permissions.update' => 'PUT',
+            'roles.reporting-rules.update' => 'PATCH',
         ];
 
         foreach ($contracts as $name => $method) {

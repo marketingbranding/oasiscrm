@@ -1,6 +1,5 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss";
+@config "../../tailwind.config.js";
 
 :root {
     /* Color and surface foundations */
@@ -176,21 +175,63 @@
     transition: background-color var(--oasis-duration-standard) var(--oasis-ease-standard), box-shadow var(--oasis-duration-standard) var(--oasis-ease-standard);
 }
 
+.org-node-card-user {
+    min-height: 132px;
+    padding-left: 3.5rem;
+    padding-right: 4.5rem;
+}
+
+.org-node-card-unit {
+    min-height: 132px;
+    padding-left: 3.5rem;
+    padding-right: 0.75rem;
+}
+
 .org-node-card:active {
     cursor: grabbing;
 }
 
+.org-unit-drop-target {
+    background: var(--oasis-yellow);
+    box-shadow: 0 0 0 5px rgba(252, 194, 15, 0.35), 4px 4px 0 #000;
+}
+
+.org-unit-zone {
+    min-height: 17rem;
+    border: 2px solid #111;
+    padding: 1rem;
+}
+
+.org-unit-zone-central {
+    background: #ecebfa;
+}
+
+.org-unit-zone-branch {
+    background: #e8eddc;
+}
+
+.org-unit-zone-unassigned {
+    background: #f1f1f1;
+}
+
+.org-zone-user-card {
+    cursor: grab;
+    min-height: 6.5rem;
+}
+
+.org-zone-user-card:active {
+    cursor: grabbing;
+}
+
 .org-socket {
-    position: absolute;
-    top: 50%;
     z-index: 20;
+    flex: 0 0 auto;
     width: 14px;
     height: 14px;
     border: 2px solid #111;
     border-radius: 999px;
     background: #fff;
     cursor: crosshair;
-    transform: translateY(-50%);
     transition: background-color var(--oasis-duration-fast) var(--oasis-ease-standard),
         border-color var(--oasis-duration-fast) var(--oasis-ease-standard),
         box-shadow var(--oasis-duration-fast) var(--oasis-ease-standard),
@@ -198,13 +239,11 @@
 }
 
 .org-socket-input {
-    left: -7px;
     border-radius: 2px;
     background: #8c9ae0;
 }
 
 .org-socket-output {
-    right: -7px;
     border-radius: 999px;
     background: var(--oasis-yellow);
 }
@@ -216,12 +255,111 @@
     border-color: #111;
     background: var(--oasis-yellow);
     box-shadow: 0 0 0 4px rgba(252, 194, 15, 0.35);
-    transform: translateY(-50%) scale(1.25);
+    transform: scale(1.25);
+}
+
+.org-unit-socket {
+    z-index: 25;
+    flex: 0 0 auto;
+    width: 16px;
+    height: 16px;
+    border: 2px solid #111;
+    cursor: crosshair;
+    transition: background-color var(--oasis-duration-fast) var(--oasis-ease-standard),
+        box-shadow var(--oasis-duration-fast) var(--oasis-ease-standard),
+        transform var(--oasis-duration-fast) var(--oasis-ease-standard);
+}
+
+.org-unit-socket-source {
+    border-radius: 999px;
+    background: #8c9ae0;
+}
+
+.org-unit-socket-target {
+    border-radius: 2px;
+}
+
+.org-unit-socket-central {
+    background: #8c9ae0;
+}
+
+.org-unit-socket-branch {
+    background: #b3bd95;
+}
+
+.org-unit-socket:hover,
+.org-unit-socket:focus-visible,
+.org-unit-socket-active {
+    background: var(--oasis-yellow);
+    box-shadow: 0 0 0 5px rgba(252, 194, 15, 0.35);
+    transform: scale(1.25);
+}
+
+.org-unit-socket-source:hover,
+.org-unit-socket-source:focus-visible,
+.org-unit-socket-source.org-unit-socket-active {
+    transform: scale(1.25);
 }
 
 .org-socket-target {
     background: #7bc47f;
     box-shadow: 0 0 0 5px rgba(123, 196, 127, 0.35);
+}
+
+.org-socket-row {
+    position: absolute;
+    z-index: 25;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    height: 24px;
+    font-family: Helvetica, Arial, sans-serif;
+    font-size: 10px;
+    font-weight: 700;
+    line-height: 1;
+    text-transform: uppercase;
+    white-space: nowrap;
+}
+
+.org-socket-row-input {
+    left: -8px;
+}
+
+.org-socket-row-output {
+    right: -8px;
+}
+
+.org-socket-row-center {
+    top: 50%;
+    transform: translateY(-50%);
+}
+
+.org-socket-row-atasan,
+.org-socket-row-anggota {
+    top: 50%;
+    transform: translateY(-50%);
+}
+
+.org-socket-row-bawahan {
+    top: 24px;
+}
+
+.org-socket-row-unit {
+    top: 58px;
+}
+
+.org-socket-label {
+    pointer-events: none;
+    color: #374151;
+    text-shadow: 0 1px 0 #fff;
+}
+
+.org-socket-row-input .org-socket-label {
+    padding-right: 4px;
+}
+
+.org-socket-row-output .org-socket-label {
+    padding-left: 4px;
 }
 
 .org-context-card {

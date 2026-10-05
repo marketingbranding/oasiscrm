@@ -72,7 +72,7 @@ class OrganizationBackfillService
                 $message = collect($exception->errors())->flatten()->first() ?? 'Validasi assignment gagal.';
                 if (str_contains($message, 'siklus')) {
                     $report['cycles']++;
-                } elseif (str_contains($message, 'Relasi peran')) {
+                } elseif (str_contains($message, 'Relasi peran') || str_contains($message, 'Tingkat kewenangan')) {
                     $report['invalid_role_relationships']++;
                 } elseif (str_contains($message, 'cabang atau proyek')) {
                     $report['cross_scope_anomalies']++;

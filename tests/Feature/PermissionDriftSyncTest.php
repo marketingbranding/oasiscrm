@@ -20,6 +20,23 @@ class PermissionDriftSyncTest extends TestCase
         }
     }
 
+    public function test_retired_organization_permissions_are_not_registered_or_mapped(): void
+    {
+        $retired = ['organization.manage', 'organization.configure_rules'];
+
+        $this->assertEmpty(array_intersect($retired, collect(PermissionCatalog::permissions())->pluck('slug')->all()));
+        $this->assertSame([], DB::table('permissions')->whereIn('slug', $retired)->pluck('slug')->all());
+        $this->assertSame([], DB::table('role_permission')->join('permissions', 'permissions.id', '=', 'role_permission.permission_id')->whereIn('permissions.slug', $retired)->pluck('permissions.slug')->all());
+    }
+
+    public function test_permission_retirement_has_one_changelog_entry(): void
+    {
+        $this->assertSame(1, DB::table('changelogs')
+            ->whereNull('version')
+            ->where('title', 'Permission Organisasi Legacy Dihentikan')
+            ->count());
+    }
+
     public function test_anonymize_and_release_email_mapped_to_superadmin_and_pusat_only(): void
     {
         $permissionIds = DB::table('permissions')->whereIn('slug', ['users.anonymize', 'users.release_email'])->pluck('id');

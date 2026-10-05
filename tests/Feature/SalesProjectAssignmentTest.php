@@ -173,7 +173,8 @@ class SalesProjectAssignmentTest extends TestCase
             'branch_ids' => [$branch->id],
             'assigned_project_ids' => $projectIds,
             'primary_project_id' => $primaryProjectId,
-            'submit_action' => 'draft',
+            'temporary_password' => 'Initial123',
+            'temporary_password_confirmation' => 'Initial123',
         ];
     }
 }

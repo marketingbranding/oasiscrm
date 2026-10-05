@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
+use Illuminate\Support\Facades\Schema;
 
 class Branch extends Model
 {
@@ -27,6 +28,31 @@ class Branch extends Model
         ];
     }
 
+    protected static function booted(): void
+    {
+        static::saved(function (Branch $branch): void {
+            if (! Schema::hasTable('organization_units')) {
+                return;
+            }
+
+            $central = OrganizationUnit::query()->where('code', 'pusat')->first();
+            if ($central === null) {
+                return;
+            }
+
+            OrganizationUnit::query()->updateOrCreate(
+                ['branch_id' => $branch->id],
+                [
+                    'parent_id' => $central->id,
+                    'code' => 'branch-'.$branch->id,
+                    'name' => $branch->name,
+                    'unit_type' => 'branch',
+                    'is_active' => $branch->is_active ?? true,
+                ],
+            );
+        });
+    }
+
     public function scopeForDropdown(Builder $query): Builder
     {
         return $query
@@ -44,6 +70,11 @@ class Branch extends Model
     public function primaryUsers(): HasMany
     {
         return $this->hasMany(User::class, 'branch_id');
+    }
+
+    public function organizationUnit(): HasOne
+    {
+        return $this->hasOne(OrganizationUnit::class);
     }
 
     public function contentItems(): HasMany

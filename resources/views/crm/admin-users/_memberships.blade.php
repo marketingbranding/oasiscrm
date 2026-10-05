@@ -6,7 +6,7 @@
     </div>
     <div class="mt-3 flex flex-wrap gap-2">
         @foreach($branches as $branch)
-            <label data-search="{{ strtolower($branch->name.' '.$branch->code) }}" x-show="matchesOption($el.dataset.search, branchSearch)" class="crm-choice-chip"><input type="checkbox" name="branch_ids[]" value="{{ $branch->id }}" x-model="selectedBranchIds" @checked(in_array((int) $branch->id, $selectedBranchIds, true))><span>{{ $branch->name }} <small>({{ $branch->code }})</small></span></label>
+            <label data-search="{{ strtolower($branch->name.' '.$branch->code) }}" x-show="matchesOption($el.dataset.search, branchSearch)" class="crm-choice-chip"><input type="checkbox" name="branch_ids[]" value="{{ $branch->id }}" x-model="selectedBranchIds" @change="syncProjectSelection()" @checked(in_array((int) $branch->id, $selectedBranchIds, true))><span>{{ $branch->name }} <small>({{ $branch->code }})</small></span></label>
         @endforeach
     </div>
     <p class="mt-2 text-xs text-gray-600"><span x-text="selectedBranchIds.length"></span> cabang dipilih</p>

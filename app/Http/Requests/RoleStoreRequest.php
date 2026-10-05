@@ -15,9 +15,9 @@ class RoleStoreRequest extends FormRequest
     {
         return [
             'name' => ['required', 'string', 'max:120'],
-            'slug' => ['required', 'string', 'alpha_dash', 'max:80', 'unique:roles,slug'],
+            'slug' => ['nullable', 'string', 'alpha_dash', 'max:80', 'unique:roles,slug'],
             'description' => ['nullable', 'string', 'max:1000'],
-            'authority_level' => ['required', 'integer', 'min:0', 'max:1000'],
+            'authority_level' => ['required', 'integer', 'min:1', 'max:100'],
         ];
     }
 }

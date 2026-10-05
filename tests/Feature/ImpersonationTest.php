@@ -301,7 +301,6 @@ class ImpersonationTest extends TestCase
             'roles.store' => 'POST',
             'roles.update' => 'PUT',
             'roles.permissions.update' => 'PUT',
-            'roles.reporting-rules.update' => 'PATCH',
         ];
 
         foreach ($contracts as $name => $method) {

@@ -93,48 +93,27 @@ class AdminUserController extends Controller
         $this->administration->assertCanAssignRole($actor, $role);
         $this->assertAssignmentPermissions($actor, $branchIds, $projectIds, $data['supervisor_user_id'] ?? null);
 
-        $direct = $data['provisioning_mode'] === 'direct';
-        abort_if($direct && ! $actor->isSuperadmin(), 403);
-
-        $user = DB::transaction(function () use ($actor, $data, $branchIds, $projectIds, $direct) {
+        $user = DB::transaction(function () use ($actor, $data, $branchIds, $projectIds) {
             $attributes = [
                 'name' => $data['name'], 'email' => $data['email'], 'phone' => $data['phone'] ?? null,
                 'role_id' => $data['role_id'],
             ];
-            $user = $direct
-                ? $this->provisioning->createDirectlyActivated($attributes, $data['temporary_password'], $actor)
-                : $this->invitations->createDraft($attributes, $actor);
+            $user = $this->provisioning->createDirectlyActivated($attributes, $data['temporary_password'], $actor);
             $this->branches->assign($user, $branchIds, (int) $data['branch_id'], $actor);
             $this->projects->assign($user, $projectIds, $this->nullableInt($data['primary_project_id'] ?? null), $actor);
             $this->hierarchy->assignSupervisor($user, $this->nullableInt($data['supervisor_user_id'] ?? null), $actor);
             $this->audit->log('user_created', $user, $actor);
-            if ($direct) {
-                $this->audit->log('user_directly_activated', $user, $actor, [], [
-                    'role_id' => $data['role_id'],
-                    'branch_ids' => $branchIds,
-                    'project_ids' => $projectIds,
-                    'provisioning_mode' => 'direct',
-                ]);
-            }
+            $this->audit->log('user_directly_activated', $user, $actor, [], [
+                'role_id' => $data['role_id'],
+                'branch_ids' => $branchIds,
+                'project_ids' => $projectIds,
+                'provisioning_mode' => 'direct',
+            ]);
 
             return $user;
         });
 
-        if ($direct) {
-            return redirect()->route('admin-users.show', $user)->with('success', 'Akun berhasil dibuat dan diaktifkan. Pengguna wajib mengganti password saat login pertama.');
-        }
-
-        if ($data['submit_action'] === 'send' || ($data['send_immediately'] ?? false)) {
-            try {
-                $this->invitations->send($user, $actor);
-            } catch (Throwable $exception) {
-                return redirect()->route('admin-users.show', $user)->with('warning', $exception->getMessage());
-            }
-
-            return redirect()->route('admin-users.show', $user)->with('success', 'Akun dibuat dan undangan berhasil dikirim.');
-        }
-
-        return redirect()->route('admin-users.show', $user)->with('success', 'Draft akun berhasil disimpan.');
+        return redirect()->route('admin-users.show', $user)->with('success', 'Akun berhasil dibuat dan diaktifkan. Pengguna wajib mengganti password saat login pertama.');
     }
 
     public function show(User $admin_user): View

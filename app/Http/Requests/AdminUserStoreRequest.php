@@ -17,14 +17,13 @@ class AdminUserStoreRequest extends FormRequest
         $actor = $this->user();
 
         return ($actor?->can('create', User::class) ?? false)
-            && ($this->input('provisioning_mode', 'invitation') !== 'direct' || $actor->isSuperadmin());
+            && $actor->hasPermission('users.create');
     }
 
     protected function prepareForValidation(): void
     {
         $this->merge([
             'email' => mb_strtolower(trim((string) $this->email)),
-            'provisioning_mode' => $this->input('provisioning_mode', 'invitation'),
         ]);
     }
 
@@ -42,13 +41,7 @@ class AdminUserStoreRequest extends FormRequest
             'assigned_project_ids' => ['nullable', 'array'],
             'assigned_project_ids.*' => ['integer', 'distinct', Rule::exists(LeadMaster::class, 'id')->where('is_active', true)],
             'supervisor_user_id' => ['nullable', 'integer', Rule::exists(User::class, 'id')],
-            'provisioning_mode' => ['required', Rule::in(['invitation', 'direct'])],
-            'temporary_password' => ['exclude_unless:provisioning_mode,direct', 'required_if:provisioning_mode,direct', 'nullable', 'confirmed', Password::min(8)->letters()->numbers()],
-            'send_immediately' => ['nullable', 'boolean', Rule::prohibitedIf(fn () => $this->input('provisioning_mode') === 'direct')],
-            'submit_action' => [
-                'required',
-                Rule::when($this->input('provisioning_mode') === 'direct', Rule::in(['activate']), Rule::in(['draft', 'send'])),
-            ],
+            'temporary_password' => ['required', 'confirmed', Password::min(8)->letters()->numbers()],
         ];
     }
 

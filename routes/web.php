@@ -85,7 +85,6 @@ Route::middleware(['auth', 'active', 'verified', 'password.changed', 'operationa
             Route::post('/', [RoleAdministrationController::class, 'store'])->middleware('permission:roles.create')->name('store');
             Route::put('/{role}', [RoleAdministrationController::class, 'update'])->middleware('permission:roles.update')->name('update');
             Route::put('/{role}/permissions', [RoleAdministrationController::class, 'updatePermissions'])->middleware('permission:roles.assign_permissions')->name('permissions.update');
-            Route::patch('/reporting-rules', [RoleAdministrationController::class, 'updateReportingRules'])->middleware('permission:organization.configure_rules')->name('reporting-rules.update');
         });
     });
 
@@ -94,6 +93,12 @@ Route::middleware(['auth', 'active', 'verified', 'password.changed', 'operationa
         Route::patch('/organization/users/{user}/move', [OrganizationWorkspaceController::class, 'move'])
             ->middleware(['permission:organization.move_user', 'not.impersonating'])
             ->name('organization.move');
+        Route::patch('/organization/users/{user}/unit', [OrganizationWorkspaceController::class, 'moveToUnit'])
+            ->middleware(['permission:organization.move_user', 'not.impersonating'])
+            ->name('organization.move-unit');
+        Route::delete('/organization/users/{user}/structure', [OrganizationWorkspaceController::class, 'removeFromStructure'])
+            ->middleware(['permission:organization.move_user', 'not.impersonating'])
+            ->name('organization.remove-structure');
     });
 
     Route::prefix('workspace')->name('workspace-v2.')->middleware('workspace.v2')->group(function () {

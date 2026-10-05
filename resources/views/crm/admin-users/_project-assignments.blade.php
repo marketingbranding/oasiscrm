@@ -10,7 +10,7 @@
     </div>
     <div class="mt-3">
     <label class="font-[Helvetica] font-bold text-xs uppercase block mb-1">Proyek Utama</label>
-    <select name="primary_project_id" class="w-full border-2 border-black px-3 py-2 text-sm bg-white rounded-none">
+    <select name="primary_project_id" x-model="primaryProjectId" class="w-full border-2 border-black px-3 py-2 text-sm bg-white rounded-none">
         <option value="">Tidak ada</option>
         @foreach($projects as $project)<option value="{{ $project->id }}" @selected((int) $primaryProject === (int) $project->id)>{{ $project->project_name }} - {{ $project->branch?->name }}</option>@endforeach
     </select>

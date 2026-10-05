@@ -51,7 +51,14 @@ class ReportingHierarchyService
             throw ValidationException::withMessages(['supervisor_user_id' => 'Atasan harus memiliki tingkat kewenangan yang setara atau lebih tinggi.']);
         }
 
-        $user->forceFill(['supervisor_user_id' => $supervisor->id])->save();
+        try {
+            $this->graph->assign($user, $supervisor, $actor, source: 'legacy_reporting_hierarchy');
+        } catch (ValidationException $exception) {
+            throw ValidationException::withMessages([
+                'supervisor_user_id' => collect($exception->errors())->flatten()->first() ?? 'Penugasan atasan onboarding tidak valid.',
+            ]);
+        }
+
         app(AccountAuditService::class)->logBulkUser('user_supervisor_linked_bulk', $user, $actor, $batch, $rowId);
 
         return $user->refresh();

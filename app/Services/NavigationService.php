@@ -86,7 +86,7 @@ class NavigationService
                     ? $this->item('Struktur Organisasi', 'organization.index', 'organization', 'administration', ['organization.*'], $routeName, 'users', $moduleMaintenance)
                     : null,
                 ! $isSales && $user->hasPermission('roles.view')
-                    ? $this->item('Peran dan Rules', 'roles.index', 'organization', 'administration', ['roles.*'], $routeName, 'users', $moduleMaintenance)
+                    ? $this->item('Peran dan Izin', 'roles.index', 'organization', 'administration', ['roles.*'], $routeName, 'users', $moduleMaintenance)
                     : null,
                 ! $isSales && ($user->isSuperadmin() || $user->hasPermission('consumer_progress.manage'))
                     ? $this->item('Migrasi Marison', $user->isSuperadmin() ? 'admin.marison-migrations.create' : 'admin.marison-migrations.reconciliation.index', 'database', 'administration', ['admin.marison-migrations.*'], $routeName, 'database', $moduleMaintenance)

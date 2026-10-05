@@ -18,8 +18,8 @@ class UserProvisioningService
 
     public function createDirectlyActivated(array $attributes, string $temporaryPassword, User $actor): User
     {
-        if (! $actor->isSuperadmin()) {
-            throw new \DomainException('Hanya Super Admin yang dapat mengaktifkan pengguna secara langsung.');
+        if (! $actor->hasPermission('users.create')) {
+            throw new \DomainException('Anda tidak memiliki izin untuk membuat pengguna.');
         }
 
         $user = new User;

@@ -11,6 +11,7 @@ class OrganizationAssignment extends Model
     protected $fillable = [
         'user_id',
         'parent_user_id',
+        'organization_unit_id',
         'relationship_type',
         'branch_id',
         'project_id',
@@ -43,6 +44,11 @@ class OrganizationAssignment extends Model
     public function parent(): BelongsTo
     {
         return $this->belongsTo(User::class, 'parent_user_id');
+    }
+
+    public function organizationUnit(): BelongsTo
+    {
+        return $this->belongsTo(OrganizationUnit::class);
     }
 
     public function changedBy(): BelongsTo

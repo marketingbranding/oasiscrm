@@ -7,9 +7,7 @@ use App\Models\Branch;
 use App\Models\Permission;
 use App\Models\Role;
 use App\Models\User;
-use App\Notifications\UserInvitationNotification;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Facades\Route;
 use Tests\TestCase;
 
@@ -17,9 +15,8 @@ class AdminUserOnboardingTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_superadmin_creates_pending_account_without_admin_password_and_can_send_invitation(): void
+    public function test_superadmin_creates_active_account_with_admin_password_without_invitation(): void
     {
-        Notification::fake();
         $actor = $this->user('superadmin');
         $role = Role::where('slug', 'staff')->firstOrFail();
         $branch = $this->branch('SLO');
@@ -27,13 +24,13 @@ class AdminUserOnboardingTest extends TestCase
         $this->actingAs($actor)->post(route('admin-users.store'), [
             'name' => 'Pengguna Baru', 'email' => ' New.User@Example.com ', 'phone' => '08123',
             'role_id' => $role->id, 'branch_id' => $branch->id, 'branch_ids' => [$branch->id],
-            'submit_action' => 'send',
+            'temporary_password' => 'Initial123', 'temporary_password_confirmation' => 'Initial123',
         ])->assertRedirect();
 
         $user = User::where('email', 'new.user@example.com')->firstOrFail();
-        $this->assertSame(AccountStatus::Invited, $user->account_status);
-        $this->assertNotSame('password', $user->password);
-        Notification::assertSentTo($user, UserInvitationNotification::class);
+        $this->assertSame(AccountStatus::Active, $user->account_status);
+        $this->assertTrue($user->must_change_password);
+        $this->assertDatabaseMissing('user_invitations', ['user_id' => $user->id]);
     }
 
     public function test_pusat_cannot_create_or_manage_superadmin_and_user_cannot_edit_self(): void
@@ -44,7 +41,8 @@ class AdminUserOnboardingTest extends TestCase
 
         $this->actingAs($pusat)->post(route('admin-users.store'), [
             'name' => 'Illegal', 'email' => 'illegal@example.com', 'role_id' => $superadmin->role_id,
-            'branch_id' => $branch->id, 'branch_ids' => [$branch->id], 'submit_action' => 'draft',
+            'branch_id' => $branch->id, 'branch_ids' => [$branch->id],
+            'temporary_password' => 'Initial123', 'temporary_password_confirmation' => 'Initial123',
         ])->assertForbidden();
         $this->actingAs($pusat)->get(route('admin-users.edit', $superadmin))->assertForbidden();
         $this->actingAs($pusat)->get(route('admin-users.edit', $pusat))->assertForbidden();

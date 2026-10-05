@@ -30,7 +30,7 @@ Every move closes the previous row and creates a new row. It does not change `us
 
 ## Roles and Reporting Rules
 
-`roles.authority_level` is configurable metadata for IAM delegation. It is not a reporting graph. `role_reporting_rules` explicitly determines allowed parent-role to child-role relationships. Numeric authority no longer defines the permanent reporting structure.
+`roles.authority_level` is configurable metadata for IAM delegation and the simple parent-child guard. Valid levels are 1-100; a parent must have an equal or higher level than the child. Role names and technical keys are not used as reporting rules, so management may rename a role without changing its permissions or organization history.
 
 Role and parent are separate concepts:
 
@@ -50,6 +50,8 @@ The transition is controlled by `ORGANIZATION_GRAPH_MODE`:
 - `shadow`: reserved for parity comparison before reader cutover.
 - `canonical`: reporting and Sales team readers use `OrganizationGraphService`.
 
+The canonical tree has a virtual `Pusat` root and one `organization_unit` per branch. Each user has one active organization unit/tree; branch and project memberships remain separate operational access records. A central user may parent a branch user, while a branch user cannot be moved directly into another branch tree through a reporting-line move.
+
 `php artisan organization:backfill --dry-run` reports proposals, already migrated rows, conflicting legacy sources, multiple active Coordinator assignments, cycles, invalid role rules, inactive parents, missing users, and cross-scope anomalies. The write command is idempotent and never deletes legacy rows.
 
 Ambiguous legacy data is reported, not guessed. `users.supervisor_user_id` and `sales_coordinator_sales` remain until parity is proven and a separate removal plan is approved.
@@ -68,7 +70,7 @@ Each graph change records `organization_assignment_changed` in `activity_log` wi
 
 ## Remaining Cutover Prerequisites
 
-Before setting canonical mode in a deployment, run the dry-run and shadow comparisons for every active branch, resolve all ambiguity reports, align policy and export consumers, add role/rule administration screens, and complete direct-route authorization regression tests. Do not drop legacy columns or tables as part of this phase.
+Before setting canonical mode in a deployment, run the dry-run and shadow comparisons for every active branch, resolve all ambiguity reports, verify the Pusat and branch unit backfill, align policy and export consumers, and complete direct-route authorization regression tests. Do not drop legacy columns, tables, or the historical role-rule migration as part of this phase.
 
 ## Deferred Frontend Dependency Advisories
 

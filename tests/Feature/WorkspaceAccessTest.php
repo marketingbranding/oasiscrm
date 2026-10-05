@@ -87,11 +87,12 @@ class WorkspaceAccessTest extends TestCase
             'role_id' => $role->id,
             'branch_id' => $pusat->id,
             'branch_ids' => [$magelang->id],
+            'temporary_password' => 'Initial123',
+            'temporary_password_confirmation' => 'Initial123',
             'membership_permissions' => [
                 $pusat->id => ['can_edit' => 1, 'can_sync' => 1],
                 $magelang->id => ['can_sync' => 1],
             ],
-            'submit_action' => 'draft',
         ])->assertRedirect();
 
         $robby = User::where('email', 'robby@example.com')->firstOrFail();
@@ -135,7 +136,8 @@ class WorkspaceAccessTest extends TestCase
             'role_id' => $role->id,
             'branch_id' => $inactive->id,
             'branch_ids' => [$inactive->id],
-            'submit_action' => 'draft',
+            'temporary_password' => 'Initial123',
+            'temporary_password_confirmation' => 'Initial123',
         ])->assertSessionHasErrors(['branch_id', 'branch_ids.0']);
 
         $this->assertDatabaseMissing('users', ['email' => 'invalid@example.com']);

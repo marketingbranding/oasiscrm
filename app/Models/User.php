@@ -24,6 +24,7 @@ use Illuminate\Support\Facades\Schema;
     'password',
     'role_id',
     'branch_id',
+    'organization_unit_id',
     'phone',
     'is_active',
     'account_status',
@@ -59,6 +60,13 @@ class User extends Authenticatable implements MustVerifyEmail
                 $user->account_status = $user->is_active
                     ? AccountStatus::Active
                     : AccountStatus::Inactive;
+            }
+
+            if (Schema::hasTable('organization_units') && Schema::hasColumn('users', 'organization_unit_id')
+                && $user->isDirty('branch_id')) {
+                $user->organization_unit_id = $user->branch_id === null
+                    ? DB::table('organization_units')->where('code', 'pusat')->value('id')
+                    : DB::table('organization_units')->where('branch_id', $user->branch_id)->value('id');
             }
         });
 
@@ -106,6 +114,11 @@ class User extends Authenticatable implements MustVerifyEmail
     public function branch(): BelongsTo
     {
         return $this->belongsTo(Branch::class);
+    }
+
+    public function organizationUnit(): BelongsTo
+    {
+        return $this->belongsTo(OrganizationUnit::class);
     }
 
     public function supervisor(): BelongsTo

@@ -21,11 +21,8 @@
             <label class="flex flex-col gap-1 font-[Helvetica] text-xs font-bold uppercase">Nama peran
                 <input name="name" required placeholder="Contoh: Koordinator Lapangan" class="border-2 border-black px-3 py-2 text-sm font-normal">
             </label>
-            <label class="flex flex-col gap-1 font-[Helvetica] text-xs font-bold uppercase">Kode teknis peran
-                <input name="slug" required placeholder="koordinator_lapangan" class="border-2 border-black px-3 py-2 text-sm font-normal">
-            </label>
             <label class="flex flex-col gap-1 font-[Helvetica] text-xs font-bold uppercase">Tingkat kewenangan
-                <input name="authority_level" required type="number" min="0" max="1000" value="0" class="border-2 border-black px-3 py-2 text-sm font-normal">
+                <input name="authority_level" required type="number" min="1" max="100" value="1" class="border-2 border-black px-3 py-2 text-sm font-normal">
             </label>
             <label class="flex flex-col gap-1 font-[Helvetica] text-xs font-bold uppercase">Deskripsi singkat
                 <input name="description" placeholder="Contoh: Mengatur tim sales di cabang." class="border-2 border-black px-3 py-2 text-sm font-normal">
@@ -56,7 +53,7 @@
                             <input name="description" value="{{ $role->description }}" aria-label="Deskripsi {{ $role->name }}" class="border border-black px-2 py-1 font-normal">
                         </label>
                         <label class="flex flex-col gap-1 font-bold uppercase">Tingkat kewenangan
-                            <input name="authority_level" type="number" min="0" max="1000" value="{{ $role->authority_level }}" aria-label="Tingkat kewenangan {{ $role->name }}" class="border border-black px-2 py-1 font-normal">
+                            <input name="authority_level" type="number" min="1" max="100" value="{{ $role->authority_level }}" aria-label="Tingkat kewenangan {{ $role->name }}" class="border border-black px-2 py-1 font-normal">
                         </label>
                         <input type="hidden" name="is_active" value="{{ $role->is_active ? 1 : 0 }}">
                         <button class="border border-black px-2 py-1 font-bold hover:bg-[var(--oasis-yellow)]">Simpan perubahan peran</button>
@@ -111,31 +108,9 @@
         @endforeach
     </section>
 
-    <section class="overflow-x-auto border-2 border-black bg-white p-4">
-        @php($allowedRuleCount = $rules->filter(fn ($rule) => $rule->is_allowed)->count())
+    <section class="border-2 border-black bg-white p-4">
         <h2 class="font-[Helvetica] text-sm font-bold uppercase">Aturan hubungan atasan dan bawahan</h2>
-        <p class="mt-1 max-w-3xl text-sm text-gray-700">Tentukan peran mana yang boleh menjadi atasan bagi peran lain. Aturan ini dipakai saat menyusun Struktur Organisasi; aturan ini tidak memberikan izin akses data.</p>
-        <p class="mt-2 font-[Helvetica] text-xs font-bold uppercase text-gray-600">{{ $allowedRuleCount }} hubungan saat ini diizinkan</p>
-        <form method="POST" action="{{ route('roles.reporting-rules.update') }}" class="mt-3 min-w-[48rem]">
-            @csrf @method('PATCH')
-            <table class="w-full border-collapse text-left text-sm"><thead class="bg-black text-white"><tr><th class="p-2">Peran atasan</th><th class="p-2">Peran bawahan</th><th class="p-2">Hubungan diizinkan</th></tr></thead><tbody>
-            @php($ruleIndex = 0)
-            @foreach($roles as $parent)
-                @foreach($roles as $child)
-                    @if($parent->id === $child->id)
-                        @continue
-                    @endif
-                    @php($key = "{$parent->id}:{$child->id}")
-                    @php($rule = $rules->get($key))
-                    <tr class="border-b border-gray-300"><td class="p-2">{{ $parent->name }}</td><td class="p-2">{{ $child->name }}</td><td class="p-2">
-                        <label class="inline-flex min-h-11 items-center gap-2 font-[Helvetica] text-xs font-bold"><input type="hidden" name="rules[{{ $ruleIndex }}][parent_role_id]" value="{{ $parent->id }}"><input type="hidden" name="rules[{{ $ruleIndex }}][child_role_id]" value="{{ $child->id }}"><input type="hidden" name="rules[{{ $ruleIndex }}][is_allowed]" value="0"><input type="checkbox" name="rules[{{ $ruleIndex }}][is_allowed]" value="1" @checked($rule?->is_allowed) aria-label="Izinkan {{ $parent->name }} membawahi {{ $child->name }}"><span>Boleh membawahi</span></label>
-                    </td></tr>
-                    @php($ruleIndex++)
-                @endforeach
-            @endforeach
-            </tbody></table>
-            <button class="mt-3 border-2 border-black bg-[var(--oasis-yellow)] px-3 py-2 font-[Helvetica] text-xs font-bold">Simpan aturan hubungan</button>
-        </form>
+        <p class="mt-1 max-w-3xl text-sm text-gray-700">Hubungan organisasi menggunakan tingkat kewenangan 1-100. Atasan harus memiliki tingkat yang lebih tinggi atau sama dengan bawahannya. Nama role dapat diubah tanpa mengubah struktur atau izin akses.</p>
     </section>
 </div>
 @endsection

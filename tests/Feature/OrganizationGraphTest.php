@@ -8,11 +8,14 @@ use App\Models\Branch;
 use App\Models\ContentItem;
 use App\Models\LeadMaster;
 use App\Models\OrganizationAssignment;
+use App\Models\OrganizationUnit;
 use App\Models\Permission;
 use App\Models\Role;
 use App\Models\SalesCoordinatorSales;
 use App\Models\SalesLead;
 use App\Models\User;
+use App\Models\UserImportBatch;
+use App\Models\UserImportRow;
 use App\Policies\SalesLeadPolicy;
 use App\Services\CoordinatorSalesMonitoringService;
 use App\Services\OrganizationBackfillService;
@@ -77,7 +80,7 @@ class OrganizationGraphTest extends TestCase
         $graph->move($actor, $first, $third);
     }
 
-    public function test_graph_rejects_self_parent_and_unregistered_role_pair(): void
+    public function test_graph_rejects_self_parent_and_lower_authority_parent(): void
     {
         $branch = $this->branch('BDG');
         $actor = $this->user('superadmin', $branch);
@@ -94,6 +97,121 @@ class OrganizationGraphTest extends TestCase
 
         $this->expectException(ValidationException::class);
         $graph->move($actor, $coordinator, $sales);
+    }
+
+    public function test_onboarding_supervisor_creates_canonical_assignment_for_pending_users(): void
+    {
+        $branch = $this->branch('ONB');
+        $actor = $this->user('superadmin', $branch);
+        $parent = $this->user('supervisor', $branch);
+        $child = $this->user('sales', $branch);
+        $parent->forceFill(['account_status' => AccountStatus::PendingInvitation])->save();
+        $child->forceFill(['account_status' => AccountStatus::PendingInvitation])->save();
+        $batch = UserImportBatch::create([
+            'original_filename' => 'onboarding.xlsx',
+            'uploaded_by' => $actor->id,
+            'status' => UserImportBatch::STATUS_PROCESSING,
+        ]);
+        $parentRow = UserImportRow::create([
+            'batch_id' => $batch->id,
+            'row_number' => 1,
+            'raw_data' => [],
+            'normalized_data' => [],
+            'validation_status' => UserImportRow::VALIDATION_VALID,
+            'created_user_id' => $parent->id,
+        ]);
+        UserImportRow::create([
+            'batch_id' => $batch->id,
+            'row_number' => 2,
+            'raw_data' => [],
+            'normalized_data' => [],
+            'validation_status' => UserImportRow::VALIDATION_VALID,
+            'created_user_id' => $child->id,
+        ]);
+
+        app(ReportingHierarchyService::class)->assignOnboardingSupervisor($child, $parent, $batch, $actor, $parentRow->id);
+
+        $this->assertSame($parent->id, $child->fresh()->supervisor_user_id);
+        $this->assertDatabaseHas('organization_assignments', [
+            'user_id' => $child->id,
+            'parent_user_id' => $parent->id,
+            'organization_unit_id' => $child->fresh()->organization_unit_id,
+            'is_active' => true,
+        ]);
+    }
+
+    public function test_central_user_can_parent_a_branch_user_without_moving_the_branch_tree(): void
+    {
+        $branch = $this->branch('CTR');
+        $actor = $this->user('superadmin', $branch);
+        $central = User::factory()->create([
+            'role_id' => Role::query()->where('slug', 'pusat')->value('id'),
+            'branch_id' => null,
+            'is_active' => true,
+            'account_status' => AccountStatus::Active,
+            'email_verified_at' => now(),
+            'password_changed_at' => now(),
+        ]);
+        $branchUser = $this->user('sales', $branch);
+
+        app(OrganizationGraphService::class)->move($actor, $branchUser, $central);
+
+        $this->assertSame($central->id, app(OrganizationGraphService::class)->currentParent($branchUser)?->id);
+        $this->assertSame($branch->id, $branchUser->fresh()->branch_id);
+        $this->assertSame($branchUser->fresh()->organization_unit_id, OrganizationAssignment::query()->where('user_id', $branchUser->id)->current()->value('organization_unit_id'));
+    }
+
+    public function test_moving_user_to_branch_unit_adds_membership_and_makes_it_primary(): void
+    {
+        $firstBranch = $this->branch('U1A');
+        $targetBranch = $this->branch('U1B');
+        $actor = $this->user('superadmin', $firstBranch);
+        $user = $this->user('staff', $firstBranch);
+        $targetUnit = OrganizationUnit::query()->where('branch_id', $targetBranch->id)->firstOrFail();
+
+        app(OrganizationGraphService::class)->moveToUnit($actor, $user, $targetUnit->id, $user->organization_unit_id);
+
+        $user->refresh();
+        $this->assertSame($targetBranch->id, $user->branch_id);
+        $this->assertSame($targetUnit->id, $user->organization_unit_id);
+        $this->assertTrue($user->branches()->whereKey($targetBranch->id)->exists());
+        $this->assertDatabaseHas('activity_log', ['subject_id' => $user->id, 'event' => 'organization_unit_changed']);
+    }
+
+    public function test_moving_user_to_pusat_preserves_operational_branch_access(): void
+    {
+        $branch = $this->branch('U2A');
+        $actor = $this->user('superadmin', $branch);
+        $user = $this->user('staff', $branch);
+        $centralUnit = OrganizationUnit::query()->where('unit_type', 'central')->firstOrFail();
+
+        app(OrganizationGraphService::class)->moveToUnit($actor, $user, $centralUnit->id, $user->organization_unit_id);
+
+        $user->refresh();
+        $this->assertSame($branch->id, $user->branch_id);
+        $this->assertSame($centralUnit->id, $user->organization_unit_id);
+        $this->assertTrue($user->branches()->whereKey($branch->id)->exists());
+    }
+
+    public function test_removing_user_from_structure_keeps_account_access_and_closes_assignment(): void
+    {
+        $branch = $this->branch('U3A');
+        $actor = $this->user('superadmin', $branch);
+        $parent = $this->user('supervisor', $branch);
+        $user = $this->user('staff', $branch);
+        $graph = app(OrganizationGraphService::class);
+        $assignment = $graph->assign($user, $parent);
+
+        $result = $graph->removeFromStructure($actor, $user, $user->organization_unit_id, $assignment->id, $assignment->lock_version);
+
+        $user->refresh();
+        $this->assertNull($user->organization_unit_id);
+        $this->assertNull($user->supervisor_user_id);
+        $this->assertSame(AccountStatus::Active, $user->account_status);
+        $this->assertTrue($user->branches()->whereKey($branch->id)->exists());
+        $this->assertFalse(OrganizationAssignment::query()->current()->where('user_id', $user->id)->exists());
+        $this->assertSame($user->id, $result->id);
+        $this->assertDatabaseHas('activity_log', ['subject_id' => $user->id, 'event' => 'organization_user_removed']);
     }
 
     public function test_graph_rejects_stale_moves_with_conflict_and_no_duplicate_active_assignment(): void

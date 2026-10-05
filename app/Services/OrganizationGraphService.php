@@ -5,7 +5,7 @@ namespace App\Services;
 use App\Enums\AccountStatus;
 use App\Exceptions\OrganizationAssignmentConflictException;
 use App\Models\OrganizationAssignment;
-use App\Models\RoleReportingRule;
+use App\Models\OrganizationUnit;
 use App\Models\SalesCoordinatorSales;
 use App\Models\User;
 use Carbon\CarbonImmutable;
@@ -169,6 +169,109 @@ class OrganizationGraphService
         );
     }
 
+    public function moveToUnit(
+        User $actor,
+        User $user,
+        int $organizationUnitId,
+        ?int $expectedOrganizationUnitId = null,
+        ?string $reason = null,
+    ): User {
+        $unit = OrganizationUnit::query()->with('branch')->where('is_active', true)->findOrFail($organizationUnitId);
+        $this->assertCanMoveToUnit($actor, $user, $unit);
+
+        return DB::transaction(function () use ($actor, $expectedOrganizationUnitId, $reason, $unit, $user): User {
+            $lockedUser = User::query()->with(['branches', 'organizationUnit'])->lockForUpdate()->findOrFail($user->id);
+            if ($expectedOrganizationUnitId !== null && $lockedUser->organization_unit_id !== $expectedOrganizationUnitId) {
+                throw new OrganizationAssignmentConflictException($this->currentAssignment($lockedUser));
+            }
+
+            if ($lockedUser->organization_unit_id === $unit->id) {
+                return $lockedUser;
+            }
+
+            $old = [
+                'organization_unit_id' => $lockedUser->organization_unit_id,
+                'branch_id' => $lockedUser->branch_id,
+                'branch_ids' => $lockedUser->branches->pluck('id')->map(fn ($id) => (int) $id)->all(),
+            ];
+
+            if ($unit->branch_id !== null) {
+                $branchIds = $lockedUser->branches->pluck('id')->map(fn ($id) => (int) $id)->push($unit->branch_id)->unique()->all();
+                app(BranchAssignmentService::class)->assign($lockedUser, $branchIds, (int) $unit->branch_id, $actor);
+                $lockedUser->refresh();
+            }
+
+            $current = OrganizationAssignment::query()->where('user_id', $lockedUser->id)->current()->lockForUpdate()->first();
+            if ($current !== null) {
+                $current->forceFill([
+                    'organization_unit_id' => $unit->id,
+                    'branch_id' => $unit->branch_id,
+                    'lock_version' => $current->lock_version + 1,
+                ])->save();
+            }
+
+            $lockedUser->forceFill(['organization_unit_id' => $unit->id])->saveQuietly();
+            $this->audit->log('organization_unit_changed', $lockedUser, $actor, $old, [
+                'organization_unit_id' => $unit->id,
+                'branch_id' => $lockedUser->branch_id,
+                'reason' => $reason,
+            ]);
+
+            return $lockedUser->fresh(['organizationUnit.branch']);
+        }, attempts: 3);
+    }
+
+    public function removeFromStructure(
+        User $actor,
+        User $user,
+        ?int $expectedOrganizationUnitId = null,
+        ?int $expectedAssignmentId = null,
+        ?int $expectedVersion = null,
+        ?string $reason = null,
+    ): User {
+        $this->assertCanRemoveFromStructure($actor, $user);
+
+        return DB::transaction(function () use ($actor, $expectedAssignmentId, $expectedOrganizationUnitId, $expectedVersion, $reason, $user): User {
+            $lockedUser = User::query()->lockForUpdate()->findOrFail($user->id);
+            $current = OrganizationAssignment::query()->where('user_id', $lockedUser->id)->current()->lockForUpdate()->first();
+
+            if ($expectedOrganizationUnitId !== null && $lockedUser->organization_unit_id !== $expectedOrganizationUnitId) {
+                throw new OrganizationAssignmentConflictException($current);
+            }
+            if ($expectedAssignmentId !== null && $current?->id !== $expectedAssignmentId) {
+                throw new OrganizationAssignmentConflictException($current);
+            }
+            if ($expectedVersion !== null && $current?->lock_version !== $expectedVersion) {
+                throw new OrganizationAssignmentConflictException($current);
+            }
+
+            $old = [
+                'organization_unit_id' => $lockedUser->organization_unit_id,
+                'supervisor_user_id' => $lockedUser->supervisor_user_id,
+                'assignment_id' => $current?->id,
+            ];
+
+            if ($current !== null) {
+                $current->forceFill([
+                    'is_active' => false,
+                    'ended_at' => today(),
+                    'lock_version' => $current->lock_version + 1,
+                ])->save();
+            }
+
+            $lockedUser->forceFill([
+                'organization_unit_id' => null,
+                'supervisor_user_id' => null,
+            ])->saveQuietly();
+
+            $this->audit->log('organization_user_removed', $lockedUser, $actor, $old, [
+                'reason' => $reason,
+            ]);
+
+            return $lockedUser->fresh(['organizationUnit', 'branch']);
+        }, attempts: 3);
+    }
+
     public function assign(
         User $user,
         User|int|null $newParent,
@@ -239,6 +342,7 @@ class OrganizationGraphService
             $assignment = $lockedParent === null ? null : OrganizationAssignment::create([
                 'user_id' => $lockedUser->id,
                 'parent_user_id' => $lockedParent->id,
+                'organization_unit_id' => $lockedUser->organization_unit_id,
                 'relationship_type' => self::REPORTS_TO,
                 'branch_id' => $lockedUser->branch_id,
                 'started_at' => $effectiveDate->toDateString(),
@@ -303,6 +407,30 @@ class OrganizationGraphService
         }
     }
 
+    private function assertCanMoveToUnit(User $actor, User $user, OrganizationUnit $unit): void
+    {
+        abort_unless($actor->hasPermission('organization.move_user'), 403);
+        abort_if($actor->is($user), 403, 'Anda tidak dapat memindahkan akun sendiri.');
+        abort_unless($this->canManageInScope($actor, $user), 403);
+        abort_if(! $user->isAccountActive() || ! $user->is_active, 422, 'Pengguna yang dipindahkan harus aktif.');
+
+        if ($unit->unit_type === 'central') {
+            abort_unless($actor->isSuperadmin() || $actor->hasPrimaryRole('pusat'), 403);
+
+            return;
+        }
+
+        abort_unless($unit->branch_id !== null && in_array($unit->branch_id, $this->workspaceAccess->accessibleBranchIds($actor), true), 403);
+    }
+
+    private function assertCanRemoveFromStructure(User $actor, User $user): void
+    {
+        abort_unless($actor->hasPermission('organization.move_user'), 403);
+        abort_if($actor->is($user), 403, 'Anda tidak dapat mengubah struktur akun sendiri.');
+        abort_unless($this->canManageInScope($actor, $user), 403);
+        abort_if(! $user->isAccountActive() || ! $user->is_active, 422, 'Pengguna yang dikeluarkan harus aktif.');
+    }
+
     private function assertTargetAndParent(?User $user, ?User $parent, bool $allowInactiveTarget = false): void
     {
         if ($user === null || (! $allowInactiveTarget && (! $user->isAccountActive() || ! $user->is_active))) {
@@ -311,7 +439,7 @@ class OrganizationGraphService
         if ($parent === null) {
             return;
         }
-        if (! $parent->isAccountActive() || ! $parent->is_active) {
+        if (! $allowInactiveTarget && (! $parent->isAccountActive() || ! $parent->is_active)) {
             throw ValidationException::withMessages(['parent_user_id' => 'Atasan baru harus merupakan pengguna aktif.']);
         }
         if ($user->is($parent)) {
@@ -321,18 +449,26 @@ class OrganizationGraphService
 
     private function assertRoleRelationship(User $parent, User $user): void
     {
-        $allowed = RoleReportingRule::query()
-            ->where('parent_role_id', $parent->role_id)
-            ->where('child_role_id', $user->role_id)
-            ->where('is_allowed', true)
-            ->exists();
-        if (! $allowed) {
-            throw ValidationException::withMessages(['parent_user_id' => 'Relasi peran parent-child tidak diizinkan oleh aturan organisasi.']);
+        $parentLevel = (int) ($parent->role?->authority_level ?? 0);
+        $childLevel = (int) ($user->role?->authority_level ?? 0);
+        if ($parentLevel < 1 || $childLevel < 1 || $parentLevel < $childLevel) {
+            throw ValidationException::withMessages(['parent_user_id' => 'Tingkat kewenangan atasan harus lebih tinggi atau sama dengan bawahan.']);
         }
     }
 
     private function assertSharedWorkspace(User $user, User $parent): void
     {
+        $userUnit = $this->organizationUnit($user);
+        $parentUnit = $this->organizationUnit($parent);
+
+        if ($userUnit !== null && $parentUnit !== null) {
+            if ($userUnit->is($parentUnit) || $parentUnit->unit_type === 'central') {
+                return;
+            }
+
+            throw ValidationException::withMessages(['parent_user_id' => 'Atasan dan pengguna harus berada dalam tree organisasi yang sama.']);
+        }
+
         if (array_intersect($this->workspaceAccess->accessibleBranchIds($user), $this->workspaceAccess->accessibleBranchIds($parent)) !== []) {
             return;
         }
@@ -342,6 +478,21 @@ class OrganizationGraphService
         }
 
         throw ValidationException::withMessages(['parent_user_id' => 'Atasan dan pengguna harus memiliki cabang atau proyek kerja yang sama.']);
+    }
+
+    private function organizationUnit(User $user): ?OrganizationUnit
+    {
+        if ($user->relationLoaded('organizationUnit')) {
+            return $user->organizationUnit;
+        }
+
+        if ($user->organization_unit_id !== null) {
+            return OrganizationUnit::query()->find($user->organization_unit_id);
+        }
+
+        return $user->branch_id === null
+            ? OrganizationUnit::query()->where('code', 'pusat')->first()
+            : OrganizationUnit::query()->where('branch_id', $user->branch_id)->first();
     }
 
     private function canManageInScope(User $actor, User $target): bool

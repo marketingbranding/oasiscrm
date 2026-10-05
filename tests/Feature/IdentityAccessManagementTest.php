@@ -12,7 +12,6 @@ use App\Models\UserInvitation;
 use App\Services\UserAdministrationService;
 use App\Support\PermissionCatalog;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Notifications\ChannelManager;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Notification;
@@ -76,9 +75,8 @@ class IdentityAccessManagementTest extends TestCase
         $this->assertFalse(Route::has('register'));
     }
 
-    public function test_superadmin_and_pusat_can_create_drafts_and_send_invitations_but_staff_cannot(): void
+    public function test_superadmin_and_pusat_can_create_active_users_but_staff_cannot(): void
     {
-        Notification::fake();
         $branch = $this->branch('SLO');
         $staffRole = Role::where('slug', 'staff')->firstOrFail();
 
@@ -91,22 +89,23 @@ class IdentityAccessManagementTest extends TestCase
                 'role_id' => $staffRole->id,
                 'branch_id' => $branch->id,
                 'branch_ids' => [$branch->id],
-                'submit_action' => $role === 'superadmin' ? 'draft' : 'send',
+                'temporary_password' => 'Initial123',
+                'temporary_password_confirmation' => 'Initial123',
             ])->assertRedirect();
 
-            $expected = $role === 'superadmin' ? AccountStatus::PendingInvitation : AccountStatus::Invited;
-            $this->assertSame($expected, User::where('email', $email)->firstOrFail()->account_status);
+            $this->assertSame(AccountStatus::Active, User::where('email', $email)->firstOrFail()->account_status);
         }
 
         $unauthorized = $this->user('staff', $branch);
         $this->actingAs($unauthorized)->post(route('admin-users.store'), [
             'name' => 'Tidak Sah', 'email' => 'unauthorized@example.com', 'role_id' => $staffRole->id,
-            'branch_id' => $branch->id, 'branch_ids' => [$branch->id], 'submit_action' => 'send',
+            'branch_id' => $branch->id, 'branch_ids' => [$branch->id],
+            'temporary_password' => 'Initial123', 'temporary_password_confirmation' => 'Initial123',
         ])->assertForbidden();
         $this->assertDatabaseMissing('users', ['email' => 'unauthorized@example.com']);
     }
 
-    public function test_duplicate_email_is_rejected_and_mail_failure_leaves_a_recoverable_invited_account(): void
+    public function test_duplicate_email_is_rejected_and_valid_account_is_created_active(): void
     {
         $actor = $this->user('superadmin');
         $branch = $this->branch('JKT');
@@ -114,26 +113,21 @@ class IdentityAccessManagementTest extends TestCase
         $existing = $this->user('staff', email: 'duplicate@example.com');
         $payload = [
             'name' => 'Duplikat', 'email' => strtoupper($existing->email), 'role_id' => $role->id,
-            'branch_id' => $branch->id, 'branch_ids' => [$branch->id], 'submit_action' => 'draft',
+            'branch_id' => $branch->id, 'branch_ids' => [$branch->id],
+            'temporary_password' => 'Initial123', 'temporary_password_confirmation' => 'Initial123',
         ];
 
         $this->actingAs($actor)->post(route('admin-users.store'), $payload)
             ->assertSessionHasErrors('email');
         $this->assertSame(1, User::where('email', $existing->email)->count());
 
-        $this->mock(ChannelManager::class, function ($mock) {
-            $mock->shouldReceive('send')->once()->andThrow(new \RuntimeException('mail transport unavailable'));
-        });
         $payload['email'] = 'recoverable@example.com';
-        $payload['submit_action'] = 'send';
         $this->actingAs($actor)->post(route('admin-users.store'), $payload)
-            ->assertRedirect()->assertSessionHas('warning');
+            ->assertRedirect()->assertSessionHas('success');
 
         $recoverable = User::where('email', 'recoverable@example.com')->firstOrFail();
-        $this->assertSame(AccountStatus::Invited, $recoverable->account_status);
-        $this->assertDatabaseHas('user_invitations', [
-            'user_id' => $recoverable->id, 'sent_at' => null, 'accepted_at' => null, 'revoked_at' => null,
-        ]);
+        $this->assertSame(AccountStatus::Active, $recoverable->account_status);
+        $this->assertDatabaseMissing('user_invitations', ['user_id' => $recoverable->id]);
     }
 
     public function test_revoked_invitation_cannot_be_used_and_invitation_expiry_is_72_hours(): void
@@ -229,7 +223,8 @@ class IdentityAccessManagementTest extends TestCase
 
         $this->actingAs($branchManager)->post(route('admin-users.store'), [
             'name' => 'Terlalu Tinggi', 'email' => 'higher@example.com', 'role_id' => $pusatRole->id,
-            'branch_id' => $branch->id, 'branch_ids' => [$branch->id], 'submit_action' => 'draft',
+            'branch_id' => $branch->id, 'branch_ids' => [$branch->id],
+            'temporary_password' => 'Initial123', 'temporary_password_confirmation' => 'Initial123',
         ])->assertForbidden();
         $this->actingAs($branchManager)->get(route('admin-users.edit', $branchManager))->assertForbidden();
 

@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Enums\AccountStatus;
 use App\Models\ActivityLog;
+use App\Models\Permission;
 use App\Models\Role;
 use App\Models\User;
 use App\Models\UserInvitation;
@@ -59,17 +60,19 @@ class UserProvisioningServiceTest extends TestCase
         $this->assertStringNotContainsString($temporaryPassword, ActivityLog::where('subject_id', $user->id)->get()->toJson());
     }
 
-    public function test_non_superadmin_cannot_directly_activate_user(): void
+    public function test_authorized_non_superadmin_can_directly_activate_user(): void
     {
         $role = Role::firstOrCreate(['slug' => 'admin'], ['name' => 'Admin', 'is_superadmin' => false]);
+        $role->permissions()->syncWithoutDetaching([Permission::where('slug', 'users.create')->value('id')]);
         $actor = User::factory()->create(['role_id' => $role->id]);
 
-        $this->expectException(\DomainException::class);
-
-        app(UserProvisioningService::class)->createDirectlyActivated([
+        $user = app(UserProvisioningService::class)->createDirectlyActivated([
             'name' => 'Ditolak',
             'email' => 'denied@example.test',
             'role_id' => $role->id,
         ], 'Temporary-Secret-123!', $actor);
+
+        $this->assertSame(AccountStatus::Active, $user->account_status);
+        $this->assertTrue($user->must_change_password);
     }
 }

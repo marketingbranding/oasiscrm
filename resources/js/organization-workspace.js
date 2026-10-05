@@ -1,14 +1,22 @@
-export default function organizationWorkspace(nodes, moveUrl, canMove = false) {
+export default function organizationWorkspace(nodes, moveUrl, unitMoveUrl, removeStructureUrl, movableUnitIds, canMove = false) {
     return {
         nodes,
         moveUrl,
+        unitMoveUrl,
+        removeStructureUrl,
+        movableUnitIds,
         canMove,
+        viewMode: 'zones',
+        showUnitLinks: false,
         search: '',
         selected: null,
         context: null,
         contextStyle: '',
         newParentId: '',
         confirmation: false,
+        unitConfirmation: false,
+        removeConfirmation: false,
+        unitMoveTarget: null,
         saving: false,
         scale: 1,
         offsetX: 0,
@@ -17,8 +25,10 @@ export default function organizationWorkspace(nodes, moveUrl, canMove = false) {
         panStart: null,
         visualDrag: null,
         activeConnection: null,
+        activeUnitConnection: null,
         connectionTargetId: null,
         connectionTargetSocketType: null,
+        unitConnectionTargetId: null,
         suppressClick: false,
         visualOffsets: {},
         layoutPositions: {},
@@ -50,15 +60,33 @@ export default function organizationWorkspace(nodes, moveUrl, canMove = false) {
         },
 
         get moveTargets() {
-            if (!this.selected) return [];
+            if (!this.selected || this.selected.kind !== 'user') return [];
 
             const blocked = new Set(this.descendants(this.selected.id).map((node) => String(node.id)));
 
-            return this.nodes.filter((node) => String(node.id) !== String(this.selected.id) && !blocked.has(String(node.id)));
+            return this.nodes.filter((node) => node.kind === 'user'
+                && String(node.id) !== String(this.selected.id)
+                && !blocked.has(String(node.id)));
         },
 
         get parentName() {
             return this.moveTargets.find((node) => String(node.id) === String(this.newParentId))?.name || 'tanpa atasan';
+        },
+
+        get unitTargets() {
+            return this.nodes.filter((node) => node.kind === 'unit' && this.movableUnitIds.includes(Number(node.unit_id)));
+        },
+
+        get zones() {
+            return this.nodes
+                .filter((node) => node.kind === 'unit')
+                .map((unit) => ({
+                    ...unit,
+                    users: this.nodes.filter((node) => node.kind === 'user'
+                        && String(node.unit_id) === String(unit.id)
+                        && this.matches(node.id)),
+                }))
+                .filter((zone) => zone.users.length > 0 || this.matches(zone.id));
         },
 
         connectionSocketClass(id, type) {
@@ -71,6 +99,14 @@ export default function organizationWorkspace(nodes, moveUrl, canMove = false) {
             ].filter(Boolean).join(' ');
         },
 
+        unitSocketClass(id, target = false) {
+            const active = target
+                ? this.unitConnectionTargetId === id
+                : this.activeUnitConnection?.nodeId === id;
+
+            return active ? 'org-unit-socket-active' : '';
+        },
+
         matches(id) {
             if (!this.search.trim()) return true;
 
@@ -81,7 +117,7 @@ export default function organizationWorkspace(nodes, moveUrl, canMove = false) {
 
         select(id) {
             this.selected = this.nodes.find((node) => String(node.id) === String(id)) || null;
-            this.newParentId = this.selected?.parent_id ? String(this.selected.parent_id) : '';
+            this.newParentId = this.selected?.parent_user_id ? String(this.selected.parent_user_id) : '';
         },
 
         openContext(event, id) {
@@ -146,9 +182,9 @@ export default function organizationWorkspace(nodes, moveUrl, canMove = false) {
         },
 
         openMove() {
-            if (!this.selected) return;
+            if (!this.selected || this.selected.kind !== 'user') return;
 
-            this.newParentId = this.selected.parent_id ? String(this.selected.parent_id) : '';
+            this.newParentId = this.selected.parent_user_id ? String(this.selected.parent_user_id) : '';
             this.context = null;
             this.confirmation = true;
         },
@@ -156,7 +192,7 @@ export default function organizationWorkspace(nodes, moveUrl, canMove = false) {
         descendants(id) {
             const result = [];
             const visit = (parentId) => this.nodes
-                .filter((node) => String(node.parent_id) === String(parentId))
+                .filter((node) => String(this.treeParent(node)) === String(parentId))
                 .forEach((node) => {
                     result.push(node);
                     visit(node.id);
@@ -165,6 +201,10 @@ export default function organizationWorkspace(nodes, moveUrl, canMove = false) {
             visit(id);
 
             return result;
+        },
+
+        treeParent(node) {
+            return node?.tree_parent_id || null;
         },
 
         nodeStyle(id) {
@@ -180,22 +220,22 @@ export default function organizationWorkspace(nodes, moveUrl, canMove = false) {
 
         buildLayout() {
             const byId = new Map(this.nodes.map((node) => [String(node.id), node]));
-            const columnWidth = 280;
-            const nodeHeight = 96;
-            const nodeGap = 44;
+            const columnWidth = 340;
+            const nodeHeight = 132;
+            const nodeGap = 64;
             const rowHeight = nodeHeight + nodeGap;
             const positions = {};
             const childrenByParent = new Map();
 
             this.nodes.forEach((node) => {
-                const parentId = String(node.parent_id || '');
+                const parentId = String(this.treeParent(node) || '');
                 if (!parentId || !byId.has(parentId)) return;
                 if (!childrenByParent.has(parentId)) childrenByParent.set(parentId, []);
                 childrenByParent.get(parentId).push(node);
             });
 
             const roots = this.nodes.filter((node) => {
-                const parentId = String(node.parent_id || '');
+                const parentId = String(this.treeParent(node) || '');
 
                 return !parentId || !byId.has(parentId);
             });
@@ -222,7 +262,7 @@ export default function organizationWorkspace(nodes, moveUrl, canMove = false) {
                 return height;
             };
 
-            const placeTree = (node, depth, top, trail = new Set()) => {
+            const placeTree = (node, depth, top, left = 0, trail = new Set()) => {
                 const id = String(node.id);
                 if (trail.has(id)) return;
                 const children = childrenByParent.get(id) || [];
@@ -230,13 +270,13 @@ export default function organizationWorkspace(nodes, moveUrl, canMove = false) {
 
                 maxDepth = Math.max(maxDepth, depth);
                 if (children.length === 0) {
-                    positions[node.id] = { x: depth * columnWidth, y: top };
+                    positions[node.id] = { x: left + depth * columnWidth, y: top };
                     return;
                 }
 
                 let childTop = top;
                 children.forEach((child) => {
-                    placeTree(child, depth + 1, childTop, nextTrail);
+                    placeTree(child, depth + 1, childTop, left, nextTrail);
                     childTop += subtreeHeight(child, nextTrail) + nodeGap;
                 });
 
@@ -244,16 +284,30 @@ export default function organizationWorkspace(nodes, moveUrl, canMove = false) {
                 const lastChild = positions[children[children.length - 1].id];
                 const childCenter = (firstChild.y + lastChild.y + nodeHeight) / 2;
                 positions[node.id] = {
-                    x: depth * columnWidth,
+                    x: left + depth * columnWidth,
                     y: Math.max(top, childCenter - nodeHeight / 2),
                 };
                 maxDepth = Math.max(maxDepth, depth);
             };
 
+            const treeDepth = (node, trail = new Set()) => {
+                const id = String(node.id);
+                if (trail.has(id)) return 0;
+
+                const children = childrenByParent.get(id) || [];
+                if (children.length === 0) return 0;
+
+                const nextTrail = new Set(trail).add(id);
+
+                return 1 + Math.max(...children.map((child) => treeDepth(child, nextTrail)));
+            };
+
+            let connectedWidth = 0;
             let connectedHeight = 0;
             connectedRoots.forEach((root) => {
-                placeTree(root, 0, connectedHeight);
-                connectedHeight += subtreeHeight(root) + nodeGap;
+                placeTree(root, 0, 0, connectedWidth);
+                connectedWidth += (treeDepth(root) + 1) * columnWidth + nodeGap;
+                connectedHeight = Math.max(connectedHeight, subtreeHeight(root));
             });
 
             const isolatedTop = connectedRoots.length > 0 ? connectedHeight + nodeGap : 0;
@@ -266,7 +320,7 @@ export default function organizationWorkspace(nodes, moveUrl, canMove = false) {
             });
 
             this.layoutPositions = positions;
-            this.graphWidth = Math.max(960, (Math.max(maxDepth + 1, isolatedColumns) * columnWidth) + 80);
+            this.graphWidth = Math.max(960, connectedWidth + 80, (Math.max(maxDepth + 1, isolatedColumns) * columnWidth) + 80);
             this.graphHeight = Math.max(
                 560,
                 isolatedTop + Math.ceil(isolatedRoots.length / isolatedColumns) * rowHeight + 80,
@@ -274,8 +328,8 @@ export default function organizationWorkspace(nodes, moveUrl, canMove = false) {
             );
         },
 
-        connectorPath() {
-            return this.connectors.map((connector) => {
+        connectorPath(kind = 'hierarchy') {
+            return this.connectors.filter((connector) => connector.kind === kind).map((connector) => {
                 if (connector.orientation === 'horizontal') {
                     const middleX = (connector.x1 + connector.x2) / 2;
 
@@ -306,8 +360,30 @@ export default function organizationWorkspace(nodes, moveUrl, canMove = false) {
             return `M ${startX} ${startY} C ${middleX} ${startY}, ${middleX} ${pointer.y}, ${pointer.x} ${pointer.y}`;
         },
 
+        unitConnectionPreviewPath() {
+            if (!this.activeUnitConnection?.pointer) return '';
+
+            const socket = this.unitSocketElement(this.activeUnitConnection.nodeId, true);
+            const graph = this.$refs.graph;
+
+            if (!socket || !graph) return '';
+
+            const graphRect = graph.getBoundingClientRect();
+            const socketRect = socket.getBoundingClientRect();
+            const startX = (socketRect.left - graphRect.left + socketRect.width / 2) / this.scale;
+            const startY = (socketRect.top - graphRect.top + socketRect.height / 2) / this.scale;
+            const pointer = this.pointerToGraph(this.activeUnitConnection.pointer);
+            const middleX = (startX + pointer.x) / 2;
+
+            return `M ${startX} ${startY} C ${middleX} ${startY}, ${middleX} ${pointer.y}, ${pointer.x} ${pointer.y}`;
+        },
+
         socketElement(nodeId, type) {
             return this.$refs.graph?.querySelector(`[data-org-socket-node="${nodeId}"][data-org-socket-type="${type}"]`);
+        },
+
+        unitSocketElement(nodeId, source) {
+            return this.$refs.graph?.querySelector(`[data-org-unit-${source ? 'source' : 'target'}="${nodeId}"]`);
         },
 
         startConnection(event, nodeId, type) {
@@ -326,6 +402,17 @@ export default function organizationWorkspace(nodes, moveUrl, canMove = false) {
             event.currentTarget.setPointerCapture?.(event.pointerId);
         },
 
+        startUnitConnection(event, nodeId) {
+            if (!this.canMove || event.button !== 0 || this.saving) return;
+
+            event.preventDefault();
+            this.visualDrag = null;
+            this.panning = false;
+            this.unitConnectionTargetId = null;
+            this.activeUnitConnection = { nodeId, pointer: event };
+            event.currentTarget.setPointerCapture?.(event.pointerId);
+        },
+
         connectionTarget(event) {
             const socket = document.elementFromPoint(event.clientX, event.clientY)?.closest('[data-org-socket]');
 
@@ -339,6 +426,16 @@ export default function organizationWorkspace(nodes, moveUrl, canMove = false) {
             return { nodeId, type };
         },
 
+        unitConnectionTarget(event) {
+            const socket = document.elementFromPoint(event.clientX, event.clientY)?.closest('[data-org-unit-target]');
+            if (!socket || !this.activeUnitConnection) return null;
+
+            const nodeId = socket.dataset.orgUnitTarget;
+            if (nodeId === this.nodes.find((node) => String(node.id) === String(this.activeUnitConnection.nodeId))?.unit_id) return null;
+
+            return nodeId;
+        },
+
         resolveConnection(target) {
             if (!target || !this.activeConnection) return null;
 
@@ -349,8 +446,10 @@ export default function organizationWorkspace(nodes, moveUrl, canMove = false) {
 
         cancelConnection() {
             this.activeConnection = null;
+            this.activeUnitConnection = null;
             this.connectionTargetId = null;
             this.connectionTargetSocketType = null;
+            this.unitConnectionTargetId = null;
         },
 
         pointerToGraph(event) {
@@ -367,6 +466,9 @@ export default function organizationWorkspace(nodes, moveUrl, canMove = false) {
 
         startVisualDrag(event, id) {
             if (event.button !== 0) return;
+
+            const draggedNode = this.nodes.find((item) => String(item.id) === String(id));
+            if (!draggedNode || draggedNode.kind !== 'user') return;
 
             const node = event.currentTarget;
             const graph = this.$refs.graph;
@@ -388,6 +490,7 @@ export default function organizationWorkspace(nodes, moveUrl, canMove = false) {
                 grabX: pointer.x - nodePosition.x,
                 grabY: pointer.y - nodePosition.y,
                 moved: false,
+                unitTargetId: null,
             };
             node.setPointerCapture?.(event.pointerId);
         },
@@ -402,6 +505,13 @@ export default function organizationWorkspace(nodes, moveUrl, canMove = false) {
                 return;
             }
 
+            if (this.activeUnitConnection) {
+                this.activeUnitConnection.pointer = event;
+                this.unitConnectionTargetId = this.unitConnectionTarget(event);
+
+                return;
+            }
+
             if (this.visualDrag) {
                 const drag = this.visualDrag;
                 const pointer = this.pointerToGraph(event);
@@ -411,6 +521,11 @@ export default function organizationWorkspace(nodes, moveUrl, canMove = false) {
                 if (Math.abs(event.clientX - drag.startX) > 4 || Math.abs(event.clientY - drag.startY) > 4) {
                     drag.moved = true;
                 }
+
+                const unitTarget = document.elementFromPoint(event.clientX, event.clientY)?.closest('[data-org-unit-drop]');
+                const targetId = unitTarget?.dataset.orgUnitDrop || null;
+                const draggedNode = this.nodes.find((item) => String(item.id) === String(drag.id));
+                drag.unitTargetId = targetId && String(targetId) !== String(draggedNode?.unit_id || '') ? targetId : null;
 
                 this.visualOffsets = { ...this.visualOffsets, [drag.id]: { x, y } };
                 this.$nextTick(() => this.refreshConnectors());
@@ -433,9 +548,29 @@ export default function organizationWorkspace(nodes, moveUrl, canMove = false) {
                 return;
             }
 
+            if (this.activeUnitConnection) {
+                const source = this.nodes.find((node) => String(node.id) === String(this.activeUnitConnection.nodeId));
+                const target = this.nodes.find((node) => String(node.id) === String(this.unitConnectionTargetId));
+                this.cancelConnection();
+
+                if (source && target && target.kind === 'unit' && target.unit_id !== null && this.movableUnitIds.includes(Number(target.unit_id))) {
+                    this.unitMoveTarget = { user: source, unitId: target.unit_id };
+                    this.unitConfirmation = true;
+                }
+
+                return;
+            }
+
             if (this.visualDrag?.moved) {
+                const draggedNode = this.nodes.find((item) => String(item.id) === String(this.visualDrag.id));
+                const targetUnit = this.nodes.find((item) => String(item.id) === String(this.visualDrag.unitTargetId));
                 this.suppressClick = true;
                 window.setTimeout(() => { this.suppressClick = false; }, 0);
+
+                if (draggedNode && targetUnit) {
+                    this.unitMoveTarget = { user: draggedNode, unitId: targetUnit.unit_id };
+                    this.unitConfirmation = true;
+                }
             }
 
             this.visualDrag = null;
@@ -543,12 +678,19 @@ export default function organizationWorkspace(nodes, moveUrl, canMove = false) {
 
             const graphRect = graph.getBoundingClientRect();
             this.connectors = this.nodes
-                .filter((node) => node.parent_id && this.matches(node.id) && this.matches(node.parent_id))
+                .filter((node) => {
+                    const parentId = this.treeParent(node);
+                    const parent = this.nodes.find((candidate) => String(candidate.id) === String(parentId));
+
+                    return parentId && parent && this.matches(node.id) && this.matches(parentId);
+                })
                 .map((node) => {
+                    const parentId = this.treeParent(node);
+                    const parentNode = this.nodes.find((candidate) => String(candidate.id) === String(parentId));
                     const child = graph.querySelector(`[data-org-node="${node.id}"]`);
-                    const parent = graph.querySelector(`[data-org-node="${node.parent_id}"]`);
+                    const parent = graph.querySelector(`[data-org-node="${parentId}"]`);
                     const childSocket = this.socketElement(node.id, 'input');
-                    const parentSocket = this.socketElement(node.parent_id, 'output');
+                    const parentSocket = this.socketElement(parentId, 'output');
 
                     if (!child || !parent || !child.getClientRects().length || !parent.getClientRects().length) return null;
 
@@ -558,12 +700,13 @@ export default function organizationWorkspace(nodes, moveUrl, canMove = false) {
                     const parentSocketRect = parentSocket?.getBoundingClientRect();
 
                     return {
-                        id: `${node.parent_id}-${node.id}`,
+                        id: `${parentId}-${node.id}`,
                         x1: ((parentSocketRect?.left ?? parentRect.right) - graphRect.left + (parentSocketRect?.width ?? 0) / 2) / this.scale,
                         y1: ((parentSocketRect?.top ?? parentRect.bottom) - graphRect.top + (parentSocketRect?.height ?? 0) / 2) / this.scale,
                         x2: ((childSocketRect?.left ?? childRect.left) - graphRect.left + (childSocketRect?.width ?? 0) / 2) / this.scale,
                         y2: ((childSocketRect?.top ?? childRect.top) - graphRect.top + (childSocketRect?.height ?? 0) / 2) / this.scale,
                         orientation: parentSocketRect && childSocketRect ? 'horizontal' : 'vertical',
+                        kind: parentNode?.kind === 'unit' ? 'unit' : 'hierarchy',
                     };
                 })
                 .filter(Boolean);
@@ -583,8 +726,124 @@ export default function organizationWorkspace(nodes, moveUrl, canMove = false) {
             await this.commitParentChange(this.selected, this.newParentId || null);
         },
 
+        async commitUnitMove() {
+            if (!this.unitMoveTarget?.user || !this.unitMoveTarget?.unitId) return;
+
+            const targetUnit = this.unitTargets.find((unit) => String(unit.unit_id) === String(this.unitMoveTarget.unitId));
+            if (!targetUnit) return;
+
+            this.saving = true;
+
+            try {
+                const response = await fetch(this.unitMoveUrl.replace('__USER__', this.unitMoveTarget.user.id), {
+                    method: 'PATCH',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json',
+                        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
+                    },
+                    body: JSON.stringify({
+                        organization_unit_id: targetUnit.unit_id,
+                        expected_organization_unit_id: this.unitMoveTarget.user.unit_id?.replace?.('unit:', '') || null,
+                    }),
+                });
+
+                if (response.status === 409) {
+                    window.oasisToast?.('Struktur organisasi telah berubah. Muat ulang lalu coba lagi.', 'error');
+                    return;
+                }
+
+                if (!response.ok) {
+                    const payload = await response.json().catch(() => null);
+                    window.oasisToast?.(payload?.message || 'Pemindahan unit tidak diizinkan.', 'error');
+                    return;
+                }
+
+                window.oasisToast?.('Pengguna berhasil dipindahkan ke unit organisasi.', 'success');
+                window.setTimeout(() => window.location.reload(), 250);
+            } finally {
+                this.saving = false;
+                this.unitConfirmation = false;
+                this.unitMoveTarget = null;
+            }
+        },
+
+        openUnitMove() {
+            if (!this.selected || this.selected.kind !== 'user') return;
+
+            this.unitMoveTarget = { user: this.selected, unitId: null };
+            this.unitConfirmation = true;
+        },
+
+        startZoneDrag(event, id) {
+            const node = this.nodes.find((item) => String(item.id) === String(id));
+            if (!node || node.kind !== 'user' || !this.canMove) return;
+
+            event.dataTransfer.effectAllowed = 'move';
+            event.dataTransfer.setData('text/plain', String(id));
+            this.select(id);
+        },
+
+        dropZone(event, unitId) {
+            event.preventDefault();
+            const id = event.dataTransfer.getData('text/plain');
+            const user = this.nodes.find((node) => String(node.id) === String(id) && node.kind === 'user');
+            const unit = this.nodes.find((node) => String(node.id) === String(unitId) && node.kind === 'unit');
+            if (!user || !unit || !this.movableUnitIds.includes(Number(unit.unit_id)) || String(user.unit_id) === String(unit.id)) return;
+
+            this.unitMoveTarget = { user, unitId: unit.unit_id };
+            this.unitConfirmation = true;
+        },
+
+        requestRemoveSelected() {
+            if (!this.canMove || !this.selected || this.selected.kind !== 'user') return;
+            if (['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement?.tagName)) return;
+
+            this.context = null;
+            this.removeConfirmation = true;
+        },
+
+        async commitRemove() {
+            if (!this.selected || this.selected.kind !== 'user') return;
+
+            this.saving = true;
+
+            try {
+                const response = await fetch(this.removeStructureUrl.replace('__USER__', this.selected.id), {
+                    method: 'DELETE',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json',
+                        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
+                    },
+                    body: JSON.stringify({
+                        expected_organization_unit_id: String(this.selected.unit_id || '').replace('unit:', '') || null,
+                        expected_assignment_id: this.selected.assignment_id,
+                        expected_version: this.selected.assignment_version,
+                    }),
+                });
+
+                if (response.status === 409) {
+                    window.oasisToast?.('Struktur organisasi telah berubah. Muat ulang lalu coba lagi.', 'error');
+                    return;
+                }
+
+                if (!response.ok) {
+                    const payload = await response.json().catch(() => null);
+                    window.oasisToast?.(payload?.message || 'Pengguna tidak dapat dikeluarkan dari struktur.', 'error');
+                    return;
+                }
+
+                window.oasisToast?.('Pengguna dikeluarkan dari struktur organisasi.', 'success');
+                window.setTimeout(() => window.location.reload(), 250);
+            } finally {
+                this.saving = false;
+                this.removeConfirmation = false;
+            }
+        },
+
         async commitParentChange(child, parentId) {
-            if (!child || String(parentId || '') === String(child.parent_id || '')) return;
+            if (!child || child.kind !== 'user' || String(parentId || '') === String(child.parent_user_id || '')) return;
 
             this.saving = true;
 
@@ -625,16 +884,18 @@ export default function organizationWorkspace(nodes, moveUrl, canMove = false) {
         },
 
         applyLocalParentChange(child, parentId, assignment = null) {
-            const previousParent = this.nodes.find((node) => String(node.id) === String(child.parent_id));
-            const nextParent = this.nodes.find((node) => String(node.id) === String(parentId));
+            const previousParent = this.nodes.find((node) => String(node.id) === String(this.treeParent(child)));
+            const nextParent = this.nodes.find((node) => String(node.id) === String(parentId || child.unit_id));
 
             if (previousParent) previousParent.direct_reports = Math.max(0, previousParent.direct_reports - 1);
             if (nextParent) nextParent.direct_reports += 1;
 
             child.parent_id = parentId || null;
+            child.parent_user_id = parentId || null;
+            child.tree_parent_id = parentId || child.unit_id;
             child.assignment_id = assignment?.id || null;
             child.assignment_version = assignment?.lock_version || null;
-            this.newParentId = child.parent_id ? String(child.parent_id) : '';
+            this.newParentId = child.parent_user_id ? String(child.parent_user_id) : '';
             this.$nextTick(() => this.refreshConnectors());
         },
     };

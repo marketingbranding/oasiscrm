@@ -55,6 +55,7 @@ return [
     'url' => env('APP_URL', 'http://localhost'),
 
     'version' => env('APP_COMMIT_SHA', env('APP_VERSION')),
+    'read_only' => (bool) env('OASIS_READ_ONLY', false),
 
     /*
     |--------------------------------------------------------------------------

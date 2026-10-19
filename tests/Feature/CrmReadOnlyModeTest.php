@@ -2,7 +2,10 @@
 
 namespace Tests\Feature;
 
+use App\Models\Branch;
+use App\Models\LeadMaster;
 use App\Models\Role;
+use App\Models\SalesLead;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -51,6 +54,31 @@ class CrmReadOnlyModeTest extends TestCase
             ->assertStatus(423)
             ->assertJsonPath('read_only', true);
         $this->actingAs($user)->postJson(route('sales-agendas.store'), [])
+            ->assertStatus(423)
+            ->assertJsonPath('read_only', true);
+    }
+
+    public function test_read_only_mode_blocks_lead_update_delete_and_follow_up_endpoints(): void
+    {
+        $user = $this->user('superadmin');
+        $branch = Branch::query()->create(['name' => 'Branch Read Only', 'code' => 'RO-01', 'is_active' => true]);
+        $project = LeadMaster::query()->create(['branch_id' => $branch->id, 'project_name' => 'Project Read Only', 'is_active' => true]);
+        $lead = SalesLead::query()->create([
+            'branch_id' => $branch->id,
+            'project_id' => $project->id,
+            'sales_user_id' => $user->id,
+            'lead_date' => '2026-10-19',
+            'customer_name' => 'Read Only Lead',
+        ]);
+        config(['app.read_only' => true]);
+
+        $this->actingAs($user)->putJson(route('sales-leads.update', ['sales_lead' => $lead]), [])
+            ->assertStatus(423)
+            ->assertJsonPath('read_only', true);
+        $this->actingAs($user)->deleteJson(route('sales-leads.destroy', ['sales_lead' => $lead]))
+            ->assertStatus(423)
+            ->assertJsonPath('read_only', true);
+        $this->actingAs($user)->patchJson(route('sales-leads.lifecycle-status.update', ['sales_lead' => $lead]), [])
             ->assertStatus(423)
             ->assertJsonPath('read_only', true);
     }

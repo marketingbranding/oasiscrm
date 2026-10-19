@@ -144,6 +144,20 @@ OASIS_ALLOW_EXTERNAL_WRITES=true
 
 Set this only in the production environment after verifying the required external credentials and integration settings. Do not hard-code the production value or commit a populated `.env` file.
 
+### Legacy CRM Read-Only Preparation
+
+`OASIS_READ_ONLY=false` is the safe default. When an approved cutover is ready,
+setting it to `true` enables the server-enforced historical read-only middleware
+for the operational CRM route group. GET/HEAD/OPTIONS requests, login, profile
+security flows, and notification/presence infrastructure remain available;
+business POST/PUT/PATCH/DELETE requests return HTTP 423 for JSON clients or
+redirect back with a clear warning for browser forms. The banner is rendered
+only while the flag is true.
+
+This flag has not been enabled in production. Test it locally and verify the
+actual deployment environment loads the new cached configuration before any
+future freeze window.
+
 ### Cron Jobs (Task Scheduling)
 In hPanel → **Cron Jobs**, add:
 ```

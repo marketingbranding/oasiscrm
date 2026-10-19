@@ -75,7 +75,7 @@ Route::middleware(['auth', 'active', 'verified'])->group(function () {
     Route::post('/impersonation/stop', [ImpersonationController::class, 'stop'])->name('impersonation.stop');
 });
 
-Route::middleware(['auth', 'active', 'verified', 'password.changed', 'operational.maintenance', 'sales.access'])->group(function () {
+Route::middleware(['auth', 'active', 'verified', 'password.changed', 'operational.maintenance', 'crm.read-only', 'sales.access'])->group(function () {
     Route::bind('comment', fn ($value) => Comment::withTrashed()->findOrFail($value));
     Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
 

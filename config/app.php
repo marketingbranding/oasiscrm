@@ -59,6 +59,8 @@ return [
 
     'workspace_v2_enabled' => (bool) env('OASIS_NEW_WORKSPACE_ENABLED', false),
 
+    'read_only' => (bool) env('OASIS_READ_ONLY', false),
+
     /*
     |--------------------------------------------------------------------------
     | Application Timezone

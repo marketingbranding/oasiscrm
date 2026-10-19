@@ -131,6 +131,13 @@
 
         <main id="crm-main" class="crm-main flex-1 overflow-x-hidden">
             <div class="crm-page-shell">
+                @if(config('app.read_only'))
+                    <x-crm.alert variant="warning" title="OASIS CRM TELAH DIBEKUKAN" role="alert" class="mb-4">
+                        <p>Data lama masih dapat dilihat, tetapi penambahan dan perubahan data sudah ditutup.</p>
+                        <p>Gunakan OASIS Next untuk aktivitas operasional baru.</p>
+                    </x-crm.alert>
+                @endif
+
                 @if($moduleMaintenanceContext)
                     <x-crm.alert variant="warning" title="MODE MAINTENANCE MODUL AKTIF — {{ $moduleMaintenanceContext['module_label'] }}" role="alert" class="mb-4">
                         <p>User lain tidak dapat mengakses modul ini.</p>

@@ -9,6 +9,12 @@ use Mockery\MockInterface;
 
 abstract class TestCase extends BaseTestCase
 {
+    protected function setUp(): void
+    {
+        parent::setUp();
+        $this->fakeGoogleSheets();
+    }
+
     protected function fakeGoogleSheets(array $sheetTitles = []): MockInterface
     {
         $googleSheets = Mockery::mock(GoogleSheetsApiService::class);

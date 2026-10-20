@@ -10,7 +10,7 @@ metadata:
 
 ## Documentation
 
-Use `search-docs` for detailed Tailwind CSS v3 patterns and documentation.
+Use current Tailwind CSS v4 documentation for framework-specific patterns.
 
 ## Basic Usage
 
@@ -18,18 +18,22 @@ Use `search-docs` for detailed Tailwind CSS v3 patterns and documentation.
 - Offer to extract repeated patterns into components that match the project's conventions (e.g., Blade, JSX, Vue).
 - Consider class placement, order, priority, and defaults. Remove redundant classes, add classes to parent or child elements carefully to reduce repetition, and group elements logically.
 
-## Tailwind CSS v3 Specifics
+## Tailwind CSS v4 Project Conventions
 
-- Always use Tailwind CSS v3 and verify you're using only classes it supports.
-- Configuration is done in the `tailwind.config.js` file.
-- Import using `@tailwind` directives:
+- OASIS uses Tailwind CSS v4 through `@tailwindcss/vite` in `vite.config.js`.
+- Keep Tailwind configuration CSS-first in `resources/css/app.css`; do not add a legacy `tailwind.config.js` file for new work.
+- Import Tailwind and register project plugins with CSS directives:
 
-<!-- v3 Import Syntax -->
+<!-- v4 CSS-first setup -->
 ```css
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss";
+@plugin "@tailwindcss/forms";
+@source "../../vendor/laravel/framework/src/Illuminate/Pagination/resources/views/*.blade.php";
 ```
+
+- Preserve the OASIS `@theme` font tokens and custom CSS below the Tailwind directives.
+- Tailwind v4 automatically detects repository sources; use `@source` only for ignored or external Blade sources that the build must scan.
+- Keep dynamic classes complete in Blade/JavaScript strings or provide an explicit source/safelist strategy; do not construct utility names from fragments.
 
 ## Spacing
 

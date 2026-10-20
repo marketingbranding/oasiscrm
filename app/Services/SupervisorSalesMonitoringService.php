@@ -223,7 +223,10 @@ class SupervisorSalesMonitoringService
             ->where('agenda_type', ContentItem::SALES_AGENDA_TYPE)
             ->whereIn('owner_user_id', $salesIds)
             ->whereIn('branch_id', $scope['branch_ids'])
-            ->whereIn('sales_project_id', $scope['project_ids'])
+            ->where(function (Builder $query) use ($scope) {
+                $query->whereIn('sales_project_id', $scope['project_ids'])
+                    ->orWhereNull('sales_project_id');
+            })
             ->whereDate('scheduled_date', '>=', $period['from']->toDateString())
             ->whereDate('scheduled_date', '<=', $period['to']->toDateString());
     }

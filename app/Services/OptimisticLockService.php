@@ -6,6 +6,7 @@ use App\Models\ContentItem;
 use App\Models\DanaTalangan;
 use App\Models\DatabaseSheetRecord;
 use App\Models\Expense;
+use App\Models\SalesDailyPlan;
 use App\Models\SalesLead;
 use App\Models\User;
 use Carbon\Carbon;
@@ -27,7 +28,9 @@ class OptimisticLockService
     {
         $timestamp = $model->updated_at?->copy()->utc()->format('Y-m-d H:i:s') ?? '';
 
-        return $model instanceof Expense ? $timestamp.'|'.($model->lock_version ?? 0) : $timestamp;
+        return ($model instanceof Expense || $model instanceof SalesDailyPlan)
+            ? $timestamp.'|'.($model->lock_version ?? 0)
+            : $timestamp;
     }
 
     public function matches(Model $model, mixed $expected): bool
@@ -37,7 +40,7 @@ class OptimisticLockService
         }
 
         $expectedValue = trim($expected);
-        if ($model instanceof Expense) {
+        if ($model instanceof Expense || $model instanceof SalesDailyPlan) {
             [$expectedValue, $expectedVersion] = array_pad(explode('|', $expectedValue, 2), 2, null);
             if (! ctype_digit((string) $expectedVersion) || (int) $expectedVersion !== $model->lock_version) {
                 return false;
@@ -128,6 +131,7 @@ class OptimisticLockService
             $model instanceof DatabaseSheetRecord => 'database_sheet_record',
             $model instanceof SalesLead => 'sales_lead',
             $model instanceof Expense => 'expense',
+            $model instanceof SalesDailyPlan => 'sales_daily_plan',
             $model instanceof User => 'user',
             default => class_basename($model),
         };
@@ -145,6 +149,7 @@ class OptimisticLockService
             ]),
             $model instanceof SalesLead => route('sales-pocketbook.index'),
             $model instanceof Expense => route('expenses.edit', $model),
+            $model instanceof SalesDailyPlan => route('sales-daily-plans.index', ['date' => $model->plan_date?->toDateString()]),
             $model instanceof User => route('admin-users.edit', $model),
             default => null,
         };

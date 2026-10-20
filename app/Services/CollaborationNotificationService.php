@@ -7,6 +7,7 @@ use App\Models\DanaTalangan;
 use App\Models\DatabaseSheetRecord;
 use App\Models\Expense;
 use App\Models\FeedbackReport;
+use App\Models\SalesDailyPlan;
 use App\Models\SalesLead;
 use App\Models\User;
 use App\Models\UserNotification;
@@ -180,6 +181,7 @@ class CollaborationNotificationService
             $record instanceof ContentItem => 'content_item',
             $record instanceof DatabaseSheetRecord => 'database_sheet_record',
             $record instanceof SalesLead => 'sales_lead',
+            $record instanceof SalesDailyPlan => 'sales_daily_plan',
             $record instanceof Expense => 'expense',
             $record instanceof User => 'user',
             default => class_basename($record),
@@ -193,6 +195,7 @@ class CollaborationNotificationService
             $record instanceof ContentItem => 'Work Planner "'.($record->title ?: 'tanpa judul').'"',
             $record instanceof DatabaseSheetRecord => 'baris Database '.$record->sheet_name,
             $record instanceof SalesLead => 'lead Buku Saku',
+            $record instanceof SalesDailyPlan => 'Daily Plan tanggal '.($record->plan_date?->format('d/m/Y') ?: 'tanpa tanggal'),
             default => 'data',
         };
     }

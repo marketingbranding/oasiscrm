@@ -141,9 +141,11 @@ class RbacPolicyFoundationTest extends TestCase
 
         $this->assertSame($sasPermissions, $samPermissions);
         $this->assertSame([
+            'sales_daily_plans.view_branch',
             'sales_pocketbook.export',
             'sales_pocketbook.export_branch',
             'sales_pocketbook.view_branch',
+            'sales_targets.view_branch',
         ], $sasPermissions);
         $this->assertFalse($sas->permissions()->whereIn('slug', ['users.assign_roles', 'roles.manage', 'permissions.manage'])->exists());
         $this->assertSame(1, DB::table('changelogs')->whereNull('version')->where('title', 'Fondasi Kebijakan RBAC CRM')->count());

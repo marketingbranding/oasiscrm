@@ -155,6 +155,13 @@ class CrmAuthorizationService
 
     public function canUpdateSalesAgenda(User $actor, ContentItem $agenda): bool
     {
+        if ($agenda->daily_plan_id && $agenda->dailyPlan?->status === 'submitted') {
+            return $this->can($actor, 'sales_pocketbook.view_own')
+                && $actor->isSales()
+                && (int) $agenda->owner_user_id === (int) $actor->id
+                && $this->canViewSalesAgenda($actor, $agenda);
+        }
+
         return $this->can($actor, 'sales_pocketbook.manage_own')
             && $actor->isSales()
             && (int) $agenda->owner_user_id === (int) $actor->id

@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\Comment;
 use App\Models\Permission;
 use App\Models\Role;
+use App\Models\SalesCoordinatorSales;
 use App\Services\CommentableAccessService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
@@ -76,12 +77,16 @@ class UniversalCommentsAuthorizationScopeTest extends TestCase
         $otherProject = $this->commentProject($branch, 'Other Project');
         $foreignProject = $this->commentProject($otherBranch, 'Foreign Project');
         $coordinator = $this->commentUser('sales_coordinator', $branch);
-        $sales = $this->commentUser('sales', $branch, ['supervisor_user_id' => $coordinator->id]);
+        $sales = $this->commentUser('sales', $branch);
         $peer = $this->commentUser('sales', $branch);
         $foreignSales = $this->commentUser('sales', $otherBranch);
         foreach ([[$coordinator, $project], [$sales, $project], [$peer, $otherProject], [$foreignSales, $foreignProject]] as [$user, $assignedProject]) {
             $this->assignCommentProject($user, $assignedProject);
         }
+        SalesCoordinatorSales::create([
+            'coordinator_user_id' => $coordinator->id,
+            'sales_user_id' => $sales->id,
+        ]);
 
         $ownLead = $this->commentLead($sales, $project, 'Own lead');
         $peerLead = $this->commentLead($peer, $otherProject, 'Peer lead');

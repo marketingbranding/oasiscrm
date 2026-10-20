@@ -6,19 +6,18 @@ use App\Models\ContentItem;
 use App\Models\SalesAgendaEvidenceArchive;
 use App\Models\User;
 use App\Support\SalesAgendaEvidenceRules;
+use Illuminate\Support\Facades\Gate;
 
 class SalesAgendaEvidenceAuthorizationService
 {
     public function __construct(
-        private readonly CommentableAccessService $agendaAccess,
-        private readonly CoordinatorSalesMonitoringService $coordinatorMonitoring,
         private readonly WorkspaceAccessService $workspaceAccess,
     ) {}
 
     public function canMutate(User $user, ContentItem $agenda): bool
     {
         return SalesAgendaEvidenceRules::isSalesAgenda($agenda) && SalesAgendaEvidenceRules::isMutable($agenda)
-            && $user->hasPrimaryRole('sales') && (int) $agenda->owner_user_id === (int) $user->id;
+            && Gate::forUser($user)->allows('updateSalesAgenda', $agenda);
     }
 
     public function canView(User $user, ContentItem $agenda): bool
@@ -26,23 +25,8 @@ class SalesAgendaEvidenceAuthorizationService
         if (! SalesAgendaEvidenceRules::isSalesAgenda($agenda)) {
             return false;
         }
-        if ($user->hasPrimaryRole('sales')) {
-            return (int) $agenda->owner_user_id === (int) $user->id;
-        }
-        if ($user->hasPrimaryRole('superadmin')) {
-            return true;
-        }
-        if ($user->hasPrimaryRole('admin')) {
-            return (int) $agenda->branch_id === (int) $user->branch_id
-                && $this->workspaceAccess->canViewBranch($user, (int) $agenda->branch_id);
-        }
 
-        if ($user->hasPrimaryRole('sales_coordinator')) {
-            return $this->coordinatorMonitoring->canViewAgenda($user, $agenda);
-        }
-
-        return $user->hasPrimaryRole('supervisor')
-            && $this->agendaAccess->canView($user, $agenda);
+        return Gate::forUser($user)->allows('view', $agenda);
     }
 
     public function canManageArchives(User $user): bool

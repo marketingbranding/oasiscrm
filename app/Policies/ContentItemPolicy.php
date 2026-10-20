@@ -10,6 +10,8 @@ use App\Services\WorkspaceAccessService;
 
 class ContentItemPolicy
 {
+    public function __construct(private readonly SalesAgendaPolicy $salesAgenda) {}
+
     public function viewAny(User $user): bool
     {
         return $user->hasScopedPermission('work_planner');
@@ -17,6 +19,10 @@ class ContentItemPolicy
 
     public function view(User $user, ContentItem $item): bool
     {
+        if ($this->isSalesAgenda($item)) {
+            return $this->salesAgenda->view($user, $item);
+        }
+
         if (! $this->viewAny($user)) {
             return false;
         }
@@ -26,6 +32,10 @@ class ContentItemPolicy
 
     public function update(User $user, ContentItem $item): bool
     {
+        if ($this->isSalesAgenda($item)) {
+            return $this->salesAgenda->update($user, $item);
+        }
+
         if (! $user->hasPermission('work_planner.update')) {
             return false;
         }
@@ -43,6 +53,21 @@ class ContentItemPolicy
     public function delete(User $user, ContentItem $item): bool
     {
         return $this->update($user, $item);
+    }
+
+    public function createSalesAgenda(User $user): bool
+    {
+        return $this->salesAgenda->create($user);
+    }
+
+    public function updateSalesAgenda(User $user, ContentItem $item): bool
+    {
+        return $this->salesAgenda->update($user, $item);
+    }
+
+    private function isSalesAgenda(ContentItem $item): bool
+    {
+        return $item->item_type === 'agenda' && $item->agenda_type === ContentItem::SALES_AGENDA_TYPE;
     }
 
     private function withinScope(User $user, ContentItem $item, string $action): bool

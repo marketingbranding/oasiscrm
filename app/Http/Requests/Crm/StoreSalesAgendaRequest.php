@@ -11,7 +11,7 @@ class StoreSalesAgendaRequest extends FormRequest
 {
     public function authorize(): bool
     {
-        return $this->user()?->isSales() === true;
+        return $this->user()?->can('createSalesAgenda', ContentItem::class) ?? false;
     }
 
     public function rules(): array

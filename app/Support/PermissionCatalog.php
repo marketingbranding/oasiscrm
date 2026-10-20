@@ -5,12 +5,12 @@ namespace App\Support;
 class PermissionCatalog
 {
     private const MODULES = [
-        'sales_pocketbook' => ['Buku Saku Sales', ['own', 'team', 'assigned', 'branch', 'all'], true],
-        'work_planner' => ['Work Planner', ['own', 'team', 'assigned', 'branch', 'all'], true],
-        'database' => ['Database', ['assigned', 'branch', 'all'], true],
-        'consumer_progress' => ['Progress Konsumen', ['assigned', 'branch', 'all'], true],
-        'bridge_fund' => ['Dana Talangan', ['assigned', 'branch', 'all'], true],
-        'expenses' => ['Pengeluaran', ['assigned', 'branch', 'all'], true],
+        'sales_pocketbook' => ['Buku Saku Sales', ['own', 'team', 'assigned', 'project', 'branch', 'all'], true],
+        'work_planner' => ['Work Planner', ['own', 'team', 'assigned', 'project', 'branch', 'all'], true],
+        'database' => ['Database', ['assigned', 'project', 'branch', 'all'], true],
+        'consumer_progress' => ['Progress Konsumen', ['assigned', 'project', 'branch', 'all'], true],
+        'bridge_fund' => ['Dana Talangan', ['assigned', 'project', 'branch', 'all'], true],
+        'expenses' => ['Pengeluaran', ['assigned', 'project', 'branch', 'all'], true],
     ];
 
     private const ACTION_LABELS = [
@@ -24,6 +24,7 @@ class PermissionCatalog
         'own' => 'data sendiri',
         'team' => 'data tim',
         'assigned' => 'data penugasan',
+        'project' => 'data proyek',
         'branch' => 'data cabang',
         'all' => 'semua data',
     ];
@@ -140,6 +141,7 @@ class PermissionCatalog
             ],
             'supervisor' => [
                 ...$scoped(['sales_pocketbook'], ['team', 'assigned'], ['view', 'export']),
+                'sales_pocketbook.view_branch', 'sales_pocketbook.export_branch',
                 ...$scoped(['work_planner'], ['own', 'team', 'assigned'], ['view', 'manage', 'export']),
                 ...$scoped($operations, ['assigned'], ['view', 'manage', 'export']),
                 ...$scoped(['database', 'consumer_progress', 'bridge_fund'], ['assigned'], ['sync']),
@@ -184,6 +186,12 @@ class PermissionCatalog
                 ...$scoped($allModules, ['all'], ['view', 'manage', 'export']),
                 ...$scoped(['database', 'consumer_progress', 'bridge_fund'], ['all'], ['sync']),
                 ...$comments, 'comments.view_history',
+            ],
+            'sas' => [
+                'sales_pocketbook.view_branch', 'sales_pocketbook.export_branch', 'sales_pocketbook.export',
+            ],
+            'sam' => [
+                'sales_pocketbook.view_branch', 'sales_pocketbook.export_branch', 'sales_pocketbook.export',
             ],
             'admin' => [
                 'users.view', 'users.create', 'users.invite', 'users.update', 'users.reset_password',

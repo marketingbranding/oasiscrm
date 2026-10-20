@@ -73,6 +73,10 @@ return new class extends Migration
 
         foreach ($mappings as $roleSlug => $permissionSlugs) {
             $roleId = DB::table('roles')->where('slug', $roleSlug)->value('id');
+            if (! $roleId) {
+                continue;
+            }
+
             DB::table('role_permission')->where('role_id', $roleId)->delete();
             DB::table('role_permission')->insert(collect($permissionSlugs)->map(fn (string $slug) => [
                 'permission_id' => $permissionIds[$slug],

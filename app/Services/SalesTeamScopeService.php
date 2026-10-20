@@ -69,6 +69,10 @@ class SalesTeamScopeService
             ->whereIn('coordinator_user_id', $coordinators->keys())
             ->get(['coordinator_user_id', 'sales_user_id']);
         $mappings = $mappings->filter(fn (SalesCoordinatorSales $mapping) => $users->has($mapping->sales_user_id));
+        $mappings = $mappings
+            ->groupBy(fn (SalesCoordinatorSales $mapping): string => $mapping->coordinator_user_id.':'.$mapping->sales_user_id)
+            ->filter(fn (Collection $rows): bool => $rows->count() === 1)
+            ->flatten(1);
         $salesIdsByCoordinator = $mappings
             ->groupBy('coordinator_user_id')
             ->map(fn (Collection $rows) => $rows->pluck('sales_user_id')->map(fn ($id) => (int) $id)->unique()->values());
@@ -123,6 +127,18 @@ class SalesTeamScopeService
 
     public function currentSalesQuery(User $coordinator): Builder
     {
+        if (! $coordinator->hasPrimaryRole('sales_coordinator') || ! $coordinator->isAccountActive() || ! $coordinator->is_active) {
+            return User::query()->whereKey(0);
+        }
+
+        $ambiguousSalesIds = SalesCoordinatorSales::query()
+            ->current()
+            ->withValidRoles()
+            ->where('coordinator_user_id', $coordinator->id)
+            ->select('sales_user_id')
+            ->groupBy('sales_user_id')
+            ->havingRaw('COUNT(*) > 1');
+
         return User::query()
             ->where('users.account_status', AccountStatus::Active->value)
             ->where('users.is_active', true)
@@ -131,7 +147,8 @@ class SalesTeamScopeService
                 ->select('sales_user_id')
                 ->where('coordinator_user_id', $coordinator->id)
                 ->current()
-                ->withValidRoles());
+                ->withValidRoles())
+            ->whereNotIn('users.id', $ambiguousSalesIds);
     }
 
     public function currentSales(User $coordinator): Collection

@@ -15,6 +15,8 @@ class RoleSeeder extends Seeder
             ['slug' => 'supervisor', 'name' => 'Supervisor', 'description' => 'Supervisor dengan akses tim dan penugasan operasional.'],
             ['slug' => 'manager', 'name' => 'Manager', 'description' => 'Manager dengan akses pemantauan berdasarkan penugasan.'],
             ['slug' => 'branch_manager', 'name' => 'Branch Manager', 'description' => 'Pimpinan cabang dengan akses operasional tingkat cabang.'],
+            ['slug' => 'sas', 'name' => 'Staff Admin Sales', 'description' => 'Administrasi Sales tingkat cabang dengan akses monitoring.'],
+            ['slug' => 'sam', 'name' => 'Staff Admin Marketing', 'description' => 'Administrasi Marketing tingkat cabang dengan akses monitoring.'],
             ['slug' => 'pusat', 'name' => 'Tim Pusat', 'description' => 'Tim pusat dengan akses operasional lintas cabang.'],
             ['slug' => 'superadmin', 'name' => 'Super Admin', 'description' => 'Administrator sistem dengan seluruh izin.'],
             ['slug' => 'admin', 'name' => 'Admin', 'description' => 'Peran lama untuk administrasi operasional cabang.'],

@@ -18,6 +18,7 @@ class OrganizationScopeService
     public function __construct(
         private WorkspaceAccessService $workspaceAccess,
         private ReportingHierarchyService $hierarchy,
+        private SalesTeamScopeService $salesTeamScope,
     ) {}
 
     private array $scopeCache = [];
@@ -44,13 +45,17 @@ class OrganizationScopeService
 
             $ids = in_array('own', $scopes, true) ? [(int) $viewer->id] : [];
             if (in_array('team', $scopes, true)) {
-                $ids = [...$ids, ...$this->teamIds($viewer)];
+                $ids = [...$ids, ...$this->teamIds($viewer, $module)];
             }
             if (in_array('branch', $scopes, true)) {
                 $branchIds = $this->branchIds($viewer, $module, $action);
                 $ids = [...$ids, ...$this->authorizedUserIdsForBranches($branchIds)];
             }
             if (in_array('assigned', $scopes, true)) {
+                $projectIds = $this->projectIds($viewer, $module, $action);
+                $ids = [...$ids, ...$this->currentUserIdsForProjects($projectIds)];
+            }
+            if (in_array('project', $scopes, true)) {
                 $projectIds = $this->projectIds($viewer, $module, $action);
                 $ids = [...$ids, ...$this->currentUserIdsForProjects($projectIds)];
             }
@@ -84,7 +89,7 @@ class OrganizationScopeService
             if (array_intersect($scopes, ['own', 'team', 'branch']) !== []) {
                 $ids = $workspaceBranchIds;
             }
-            if (in_array('assigned', $scopes, true)) {
+            if (array_intersect($scopes, ['assigned', 'project']) !== []) {
                 $ids = [...$ids, ...LeadMaster::query()->whereIn('id', $this->currentAssignedProjectIds($viewer, $workspaceBranchIds))->pluck('branch_id')->all()];
             }
 
@@ -110,11 +115,11 @@ class OrganizationScopeService
                     ->whereIn('branch_id', $workspaceBranchIds)
                     ->pluck('id')->all();
             }
-            if (array_intersect($scopes, ['own', 'assigned']) !== []) {
+            if (array_intersect($scopes, ['own', 'assigned', 'project']) !== []) {
                 $ids = [...$ids, ...$this->currentAssignedProjectIds($viewer, $workspaceBranchIds)];
             }
             if (in_array('team', $scopes, true)) {
-                $teamProjectIds = $this->currentProjectIdsForUsers($this->teamIds($viewer));
+                $teamProjectIds = $this->currentProjectIdsForUsers($this->teamIds($viewer, $module));
                 $assignedProjectIds = $this->currentAssignedProjectIds($viewer, $workspaceBranchIds);
                 $authorizedProjectIds = LeadMaster::query()
                     ->where('is_active', true)
@@ -135,7 +140,7 @@ class OrganizationScopeService
         $scopes = $this->scopes($viewer, $module, $action);
 
         return array_intersect($scopes, ['all', 'branch']) === []
-            && array_intersect($scopes, ['own', 'team', 'assigned']) !== [];
+            && array_intersect($scopes, ['own', 'team', 'assigned', 'project']) !== [];
     }
 
     public function hasScope(User $viewer, string $module, string $action, string $scope): bool
@@ -172,9 +177,17 @@ class OrganizationScopeService
     }
 
     /** @return array<int> */
-    public function teamIds(User $viewer): array
+    public function teamIds(User $viewer, ?string $module = null): array
     {
-        return $this->cached('team:'.$viewer->id, function () use ($viewer): array {
+        return $this->cached('team:'.$viewer->id.':'.$module, function () use ($viewer, $module): array {
+            if ($module === 'sales_pocketbook' && $viewer->hasPrimaryRole('sales_coordinator')) {
+                return $this->salesTeamScope->currentSalesQuery($viewer)
+                    ->pluck('users.id')
+                    ->map(fn ($id) => (int) $id)
+                    ->values()
+                    ->all();
+            }
+
             $descendantIds = $this->hierarchy->descendantIds($viewer);
             if ($descendantIds === []) {
                 return [];
@@ -211,7 +224,7 @@ class OrganizationScopeService
 
         $modules = $module ? [$module] : self::MODULES;
 
-        return collect(['all', 'branch', 'assigned', 'team', 'own'])
+        return collect(['all', 'branch', 'assigned', 'project', 'team', 'own'])
             ->filter(fn (string $scope) => collect($modules)->contains(
                 fn (string $candidate) => $viewer->hasPermission("{$candidate}.{$action}_{$scope}"),
             ))

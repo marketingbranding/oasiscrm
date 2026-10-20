@@ -113,10 +113,10 @@ class SalesAgendaController extends Controller
 
     public function update(CompleteSalesAgendaRequest $request, ContentItem $agenda)
     {
-        $this->authorizeAgenda($request, $agenda);
+        $this->authorizeAgenda($agenda);
         $data = $request->validated();
         $result = $this->optimisticLock->execute($request, $agenda, $data['expected_updated_at'], function (ContentItem $current) use ($request, $data) {
-            $this->authorizeAgenda($request, $current);
+            $this->authorizeAgenda($current);
             abort_if(in_array($current->status, ['cancelled', 'rescheduled'], true), 422, 'Agenda ini tidak dapat diselesaikan.');
             $current->update([
                 'activity_result' => $data['activity_result'],
@@ -136,13 +136,13 @@ class SalesAgendaController extends Controller
 
     public function reschedule(RescheduleSalesAgendaRequest $request, ContentItem $agenda)
     {
-        $this->authorizeAgenda($request, $agenda);
+        $this->authorizeAgenda($agenda);
         abort(403);
     }
 
-    private function authorizeAgenda(Request $request, ContentItem $agenda): void
+    private function authorizeAgenda(ContentItem $agenda): void
     {
         abort_unless($agenda->item_type === 'agenda' && $agenda->agenda_type === ContentItem::SALES_AGENDA_TYPE, 404);
-        abort_unless($request->user()->isSales() && (int) $agenda->owner_user_id === (int) $request->user()->id, 403);
+        $this->authorize('updateSalesAgenda', $agenda);
     }
 }

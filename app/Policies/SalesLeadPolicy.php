@@ -5,71 +5,54 @@ namespace App\Policies;
 use App\Models\SalesLead;
 use App\Models\User;
 use App\Services\CoordinatorLeadTeamService;
-use App\Services\OrganizationScopeService;
-use App\Services\WorkspaceAccessService;
+use App\Services\CrmAuthorizationService;
 
 class SalesLeadPolicy
 {
+    public function __construct(
+        private readonly CrmAuthorizationService $authorization,
+        private readonly CoordinatorLeadTeamService $coordinatorTeam,
+    ) {}
+
     public function viewAny(User $user): bool
     {
-        return $user->hasScopedPermission('sales_pocketbook');
+        return $this->authorization->hasAnyScope($user, 'sales_pocketbook');
     }
 
     public function view(User $user, SalesLead $lead): bool
     {
-        if (! $user->hasScopedPermission('sales_pocketbook')) {
-            return false;
-        }
-
-        if ($user->hasPermission('sales_pocketbook.view_all')) {
-            return true;
-        }
-
-        if ($user->isSales()) {
-            return (int) $lead->sales_user_id === (int) $user->id
-                && app(WorkspaceAccessService::class)->canViewBranch($user, $lead->branch_id);
-        }
-
-        $scope = app(OrganizationScopeService::class);
-
-        return in_array((int) $lead->branch_id, $scope->branchIds($user, 'sales_pocketbook'), true)
-            && in_array((int) $lead->project_id, $scope->projectIds($user, 'sales_pocketbook'), true)
-            && app(WorkspaceAccessService::class)->canViewBranch($user, $lead->branch_id);
+        return $this->authorization->canViewSalesLead($user, $lead);
     }
 
     public function create(User $user): bool
     {
-        if ($user->hasPrimaryRole('supervisor')) {
-            return false;
+        if (! $this->authorization->can($user, 'sales_pocketbook.manage_own')
+            && ! $this->authorization->can($user, 'sales_pocketbook.manage_all')) {
+            return $this->authorization->can($user, 'sales_pocketbook.manage_team')
+                && $user->hasPrimaryRole('sales_coordinator');
         }
 
-        if ($user->hasPrimaryRole('sales_coordinator')) {
-            return true;
-        }
-
-        return $user->hasAnyPermission([
-            'sales_pocketbook.manage_own',
-            'sales_pocketbook.manage_all',
-        ]);
+        return ! $user->hasPrimaryRole('supervisor');
     }
 
     public function update(User $user, SalesLead $lead): bool
     {
-        if ($user->hasPrimaryRole('supervisor') || $user->isSales()) {
+        if (! $this->authorization->canViewSalesLead($user, $lead)) {
+            return false;
+        }
+
+        if ($user->isSales() || $user->hasPrimaryRole('supervisor')) {
             return false;
         }
 
         if ($user->hasPrimaryRole('sales_coordinator')) {
-            return app(CoordinatorLeadTeamService::class)->contains($user, $lead->sales_user_id)
-                && app(WorkspaceAccessService::class)->canViewBranch($user, $lead->branch_id);
+            return $this->authorization->can($user, 'sales_pocketbook.manage_team')
+                && $this->coordinatorTeam->contains($user, (int) $lead->sales_user_id);
         }
 
-        if (! $user->hasScopedPermission('sales_pocketbook', 'manage') || ! $this->view($user, $lead)) {
-            return false;
-        }
-
-        return $user->hasPermission('sales_pocketbook.manage_all')
-            || app(WorkspaceAccessService::class)->canEditBranch($user, $lead->branch_id);
+        return $this->authorization->can($user, 'sales_pocketbook.manage_all')
+            || ($this->authorization->hasAnyScope($user, 'sales_pocketbook', 'manage')
+                && $this->authorization->canEditBranch($user, (int) $lead->branch_id));
     }
 
     public function delete(User $user, SalesLead $lead): bool
@@ -94,28 +77,23 @@ class SalesLeadPolicy
 
     public function viewSiteVisit(User $user, SalesLead $lead): bool
     {
-        if (! $this->view($user, $lead)) {
-            return false;
-        }
-
-        return ! $user->hasPrimaryRole('sales_coordinator')
-            || app(CoordinatorLeadTeamService::class)->contains($user, $lead->sales_user_id);
+        return $this->view($user, $lead)
+            && (! $user->hasPrimaryRole('sales_coordinator')
+                || $this->coordinatorTeam->contains($user, (int) $lead->sales_user_id));
     }
 
     public function recordSiteVisit(User $user, SalesLead $lead): bool
     {
         if ($user->isSales()) {
-            return (int) $lead->sales_user_id === (int) $user->id
-                && $user->hasPermission('sales_pocketbook.manage_own')
-                && $this->view($user, $lead)
-                && app(WorkspaceAccessService::class)->canAccessProject($user, $lead->project_id);
+            return $this->authorization->can($user, 'sales_pocketbook.manage_own')
+                && (int) $lead->sales_user_id === (int) $user->id
+                && $this->view($user, $lead);
         }
 
         if ($user->hasPrimaryRole('sales_coordinator')) {
-            return $user->hasPermission('sales_pocketbook.manage_team')
-                && app(CoordinatorLeadTeamService::class)->contains($user, $lead->sales_user_id)
-                && $this->view($user, $lead)
-                && app(WorkspaceAccessService::class)->canAccessProject($user, $lead->project_id);
+            return $this->authorization->can($user, 'sales_pocketbook.manage_team')
+                && $this->coordinatorTeam->contains($user, (int) $lead->sales_user_id)
+                && $this->view($user, $lead);
         }
 
         return $this->update($user, $lead);
@@ -124,15 +102,15 @@ class SalesLeadPolicy
     public function markUtjDirect(User $user, SalesLead $lead): bool
     {
         if ($user->isSales()) {
-            return (int) $lead->sales_user_id === (int) $user->id
-                && $user->hasPermission('sales_pocketbook.manage_own')
+            return $this->authorization->can($user, 'sales_pocketbook.manage_own')
+                && (int) $lead->sales_user_id === (int) $user->id
                 && $this->view($user, $lead);
         }
 
         if ($user->hasPrimaryRole('sales_coordinator')) {
-            return $user->hasPermission('sales_pocketbook.manage_team')
-                && app(CoordinatorLeadTeamService::class)->contains($user, $lead->sales_user_id)
-                && app(WorkspaceAccessService::class)->canViewBranch($user, $lead->branch_id);
+            return $this->authorization->can($user, 'sales_pocketbook.manage_team')
+                && $this->coordinatorTeam->contains($user, (int) $lead->sales_user_id)
+                && $this->view($user, $lead);
         }
 
         return $this->update($user, $lead);

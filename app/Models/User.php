@@ -283,7 +283,7 @@ class User extends Authenticatable implements MustVerifyEmail
 
     public function hasScopedPermission(string $module, string $action = 'view'): bool
     {
-        return $this->hasAnyPermission(collect(['own', 'team', 'assigned', 'branch', 'all'])
+        return $this->hasAnyPermission(collect(['own', 'team', 'assigned', 'project', 'branch', 'all'])
             ->map(fn (string $scope) => "{$module}.{$action}_{$scope}")
             ->all());
     }

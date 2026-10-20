@@ -3,8 +3,7 @@
 namespace App\Models;
 
 use App\Enums\SalesLeadStatus;
-use App\Services\OrganizationScopeService;
-use App\Services\WorkspaceAccessService;
+use App\Services\CrmAuthorizationService;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -211,19 +210,7 @@ class SalesLead extends Model
 
     public function scopeVisibleTo(Builder $query, User $user): Builder
     {
-        if ($user->hasPermission('sales_pocketbook.view_all')) {
-            return $query;
-        }
-
-        if ($user->isSales()) {
-            return $query->where('sales_user_id', $user->id)
-                ->whereIn('branch_id', app(WorkspaceAccessService::class)->accessibleBranchIds($user));
-        }
-
-        $scope = app(OrganizationScopeService::class);
-
-        return $query->whereIn('branch_id', $scope->branchIds($user, 'sales_pocketbook'))
-            ->whereIn('project_id', $scope->projectIds($user, 'sales_pocketbook'));
+        return app(CrmAuthorizationService::class)->salesLeadQuery($query, $user);
     }
 
     public function currentStage(): ?string

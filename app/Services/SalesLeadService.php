@@ -5,6 +5,8 @@ namespace App\Services;
 use App\Enums\SalesLeadStatus;
 use App\Models\SalesLead;
 use App\Models\User;
+use Carbon\CarbonImmutable;
+use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
@@ -12,6 +14,12 @@ use Throwable;
 
 class SalesLeadService
 {
+    private const CREATE_IDENTITY_INDEX = 'sales_leads_branch_sync_unique';
+
+    private const CREATE_RETRY_CONFLICT_MESSAGE = 'Permintaan ini sudah pernah diproses dengan data berbeda. Muat ulang formulir lalu coba kembali.';
+
+    private const CREATE_RETRY_DELETED_MESSAGE = 'Permintaan ini sudah pernah diproses, tetapi Lead tersebut sudah dihapus. Muat ulang formulir lalu coba kembali dengan identitas operasi baru.';
+
     public function __construct(
         private readonly PhoneNormalizationService $phones,
         private readonly SalesLeadLifecycleService $lifecycle,
@@ -22,40 +30,181 @@ class SalesLeadService
     public function create(array $data, User $actor): SalesLead
     {
         $this->assertManualStatus($data['current_status'] ?? null);
-        $lead = DB::transaction(function () use ($data, $actor): SalesLead {
-            $data['id_promo'] = $data['promo_name'] ?? null;
-            unset($data['promo_name']);
-            $data['normalized_phone'] = $this->phones->normalize($data['phone'] ?? null);
-            unset($data['lead_source_id']);
-            $data['lead_source_id'] = null;
-            $data['source_name_snapshot'] = $data['source'];
-            $data['current_status_changed_at'] = now();
-            $data['current_status_source'] = 'manual';
-            $data['current_status_source_id'] = (string) $actor->id;
-            $data['external_sync_id'] = $data['operation_uuid'] ?? (string) Str::uuid();
-            unset($data['operation_uuid']);
-            $data['sync_status'] = 'pending_create';
-            $data['last_synced_at'] = null;
-            $data['last_sync_error'] = null;
-            $data['created_by'] = $actor->id;
-            $data['updated_by'] = $actor->id;
-            $lead = SalesLead::create($data);
-            $this->lifecycle->recordStatusHistory(
-                $lead,
-                $lead->current_status,
-                'manual',
-                (string) $actor->id,
-                $actor,
-                $lead->current_status_changed_at,
-                operationUuid: $lead->external_sync_id,
-            );
-            $lead->logSalesActivity('created', $this->activityContext($lead));
+        $data = $this->prepareCreateData($data, $actor);
+        $existing = $this->findCreateIdentity($data);
+        if ($existing !== null) {
+            return $this->resolveCreateRetry($existing, $data);
+        }
 
-            return $lead->fresh();
-        });
+        try {
+            $lead = DB::transaction(function () use ($data, $actor): SalesLead {
+                $lead = SalesLead::create($data);
+                $this->lifecycle->recordStatusHistory(
+                    $lead,
+                    $lead->current_status,
+                    'manual',
+                    (string) $actor->id,
+                    $actor,
+                    $lead->current_status_changed_at,
+                    operationUuid: $lead->external_sync_id,
+                );
+                $lead->logSalesActivity('created', $this->activityContext($lead));
+
+                return $lead->fresh();
+            });
+        } catch (UniqueConstraintViolationException $exception) {
+            if (! $this->isCreateIdentityViolation($exception)) {
+                throw $exception;
+            }
+
+            $existing = $this->findCreateIdentity($data);
+            if ($existing === null) {
+                throw $exception;
+            }
+
+            return $this->resolveCreateRetry($existing, $data);
+        }
+
         $this->schedulePush($lead, $actor);
 
         return $lead;
+    }
+
+    /**
+     * Normalize the request fields that define a create operation before the
+     * idempotency lookup and before persistence.
+     *
+     * @param  array<string, mixed>  $data
+     * @return array<string, mixed>
+     */
+    private function prepareCreateData(array $data, User $actor): array
+    {
+        $data['id_promo'] = $data['promo_name'] ?? null;
+        unset($data['promo_name']);
+        $data['normalized_phone'] = $this->phones->normalize($data['phone'] ?? null);
+        unset($data['lead_source_id']);
+        $data['lead_source_id'] = null;
+        $data['source_name_snapshot'] = $data['source'];
+        $data['current_status'] ??= SalesLeadStatus::NoResponse->value;
+        $data['current_status_changed_at'] = now();
+        $data['current_status_source'] = 'manual';
+        $data['current_status_source_id'] = (string) $actor->id;
+        $data['external_sync_id'] = $data['operation_uuid'] ?? (string) Str::uuid();
+        unset($data['operation_uuid']);
+        $data['sync_status'] = 'pending_create';
+        $data['last_synced_at'] = null;
+        $data['last_sync_error'] = null;
+        $data['created_by'] = $actor->id;
+        $data['updated_by'] = $actor->id;
+
+        return $data;
+    }
+
+    /**
+     * Find a create operation in both active and soft-deleted records.
+     *
+     * @param  array<string, mixed>  $data
+     */
+    private function findCreateIdentity(array $data): ?SalesLead
+    {
+        return SalesLead::withTrashed()
+            ->where('branch_id', (int) $data['branch_id'])
+            ->where('external_sync_id', (string) $data['external_sync_id'])
+            ->first();
+    }
+
+    /**
+     * Resolve an existing create operation without repeating its side effects.
+     *
+     * @param  array<string, mixed>  $data
+     */
+    private function resolveCreateRetry(SalesLead $existing, array $data): SalesLead
+    {
+        if ($existing->trashed()) {
+            throw ValidationException::withMessages([
+                'operation_uuid' => self::CREATE_RETRY_DELETED_MESSAGE,
+            ]);
+        }
+
+        if (! $this->createPayloadMatches($existing, $data)) {
+            throw ValidationException::withMessages([
+                'operation_uuid' => self::CREATE_RETRY_CONFLICT_MESSAGE,
+            ]);
+        }
+
+        return $existing->fresh();
+    }
+
+    /**
+     * Compare only canonical business values from the original create.
+     * Retry metadata, timestamps, database IDs, and sync delivery state are
+     * intentionally excluded.
+     *
+     * @param  array<string, mixed>  $data
+     */
+    private function createPayloadMatches(SalesLead $existing, array $data): bool
+    {
+        return $this->createPayload($existing) === $this->createPayload($data);
+    }
+
+    /**
+     * @param  SalesLead|array<string, mixed>  $value
+     * @return array<string, mixed>
+     */
+    private function createPayload(SalesLead|array $value): array
+    {
+        if ($value instanceof SalesLead) {
+            return [
+                'branch_id' => (int) $value->branch_id,
+                'project_id' => (int) $value->project_id,
+                'sales_user_id' => (int) $value->sales_user_id,
+                'lead_date' => $value->lead_date?->toDateString(),
+                'customer_name' => (string) $value->customer_name,
+                'normalized_phone' => $value->normalized_phone,
+                'source' => $value->source,
+                'platform' => $value->platform,
+                'campaign_id' => $value->campaign_id,
+                'campaign_name' => $value->campaign_name,
+                'id_promo' => $value->id_promo,
+                'notes' => $value->notes,
+                'linked_consumer_reference' => $value->linked_consumer_reference,
+                'current_status' => $value->current_status?->value,
+            ];
+        }
+
+        return [
+            'branch_id' => (int) $value['branch_id'],
+            'project_id' => (int) $value['project_id'],
+            'sales_user_id' => (int) $value['sales_user_id'],
+            'lead_date' => CarbonImmutable::parse((string) $value['lead_date'])->toDateString(),
+            'customer_name' => (string) $value['customer_name'],
+            'normalized_phone' => $value['normalized_phone'],
+            'source' => $value['source'],
+            'platform' => $value['platform'],
+            'campaign_id' => $value['campaign_id'] ?? null,
+            'campaign_name' => $value['campaign_name'],
+            'id_promo' => $value['id_promo'] ?? null,
+            'notes' => $value['notes'] ?? null,
+            'linked_consumer_reference' => $value['linked_consumer_reference'] ?? null,
+            'current_status' => $value['current_status'] instanceof SalesLeadStatus
+                ? $value['current_status']->value
+                : SalesLeadStatus::fromInput((string) $value['current_status'])->value,
+        ];
+    }
+
+    private function isCreateIdentityViolation(UniqueConstraintViolationException $exception): bool
+    {
+        if ($exception->index === self::CREATE_IDENTITY_INDEX) {
+            return true;
+        }
+
+        $columns = array_map(
+            static fn (string $column): string => Str::afterLast($column, '.'),
+            $exception->columns,
+        );
+        sort($columns);
+
+        return $columns === ['branch_id', 'external_sync_id'];
     }
 
     public function update(SalesLead $lead, array $data, User $actor): SalesLead

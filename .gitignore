@@ -3,6 +3,7 @@
 .env
 .env.backup
 .env.production
+/.env.before-oasis-cutover-*
 .phpactor.json
 .phpunit.result.cache
 /.codex
@@ -21,6 +22,8 @@
 /public/fonts-manifest.dev.json
 /public/hot
 /public/storage
+/public/database-default.php.bak
+/public/database/
 /storage/*.key
 /storage/app/google/*.json
 /storage/pail

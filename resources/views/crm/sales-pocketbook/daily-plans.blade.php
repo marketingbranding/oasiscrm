@@ -114,7 +114,7 @@
                         </table>
                     </div>
 
-                    @if($plan->status === 'draft' && auth()->user()->can('update', $plan) && count($agendaIds) > 1)
+                    @if(in_array($plan->status, ['draft', 'submitted'], true) && auth()->user()->can('update', $plan) && count($agendaIds) > 1)
                         <div class="mt-3 flex flex-wrap items-center gap-2 border border-gray-400 bg-white p-3">
                             <span class="text-xs font-bold uppercase">Ubah urutan</span>
                             @foreach($agendaIds as $agendaIndex => $agendaId)

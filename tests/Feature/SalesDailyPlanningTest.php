@@ -79,6 +79,31 @@ class SalesDailyPlanningTest extends TestCase
         $this->actingAs($coordinator)->post(route('sales-daily-plans.store'), ['plan_date' => '2026-10-21'])->assertForbidden();
     }
 
+    public function test_coordinator_can_reorder_submitted_team_planning_without_changing_the_total(): void
+    {
+        [$branch, $project, $sales] = $this->context();
+        $coordinator = $this->user('sales_coordinator', $branch, 'Coordinator');
+        SalesCoordinatorSales::create(['coordinator_user_id' => $coordinator->id, 'sales_user_id' => $sales->id, 'is_active' => true]);
+        $plan = SalesDailyPlan::create(['branch_id' => $branch->id, 'sales_user_id' => $sales->id, 'plan_date' => '2026-10-20', 'status' => 'submitted', 'lock_version' => 0]);
+        $first = ContentItem::create(['branch_id' => $branch->id, 'sales_project_id' => $project->id, 'item_type' => 'agenda', 'agenda_type' => ContentItem::SALES_AGENDA_TYPE, 'visibility' => 'personal', 'title' => 'Agenda Satu', 'task_detail' => 'Detail Satu', 'scheduled_date' => '2026-10-20', 'status' => 'planned', 'duration_minutes' => 120, 'sort_order' => 1, 'owner_user_id' => $sales->id, 'daily_plan_id' => $plan->id, 'created_by' => $sales->id]);
+        $second = ContentItem::create(['branch_id' => $branch->id, 'sales_project_id' => $project->id, 'item_type' => 'agenda', 'agenda_type' => ContentItem::SALES_AGENDA_TYPE, 'visibility' => 'personal', 'title' => 'Agenda Dua', 'task_detail' => 'Detail Dua', 'scheduled_date' => '2026-10-20', 'status' => 'planned', 'duration_minutes' => 300, 'sort_order' => 2, 'owner_user_id' => $sales->id, 'daily_plan_id' => $plan->id, 'created_by' => $sales->id]);
+        app(SalesDailyPlanService::class)->recalculate($plan, $sales);
+        $plan->refresh();
+
+        $this->actingAs($coordinator)->get(route('sales-daily-plans.index', ['date' => '2026-10-20']))
+            ->assertSee('Ubah urutan');
+        $this->actingAs($coordinator)->post(route('sales-daily-plans.agendas.reorder', $plan), [
+            'agenda_ids' => [$second->id, $first->id],
+            'expected_updated_at' => app(OptimisticLockService::class)->token($plan),
+        ])->assertRedirect();
+
+        $plan->refresh();
+        $this->assertSame('submitted', $plan->status);
+        $this->assertSame(420, (int) $plan->agendas()->sum('duration_minutes'));
+        $this->assertSame(1, (int) $second->fresh()->sort_order);
+        $this->assertSame(2, (int) $first->fresh()->sort_order);
+    }
+
     public function test_target_achievement_uses_sales_owner_and_missing_target_is_unset(): void
     {
         [$branch, $project, $sales] = $this->context();

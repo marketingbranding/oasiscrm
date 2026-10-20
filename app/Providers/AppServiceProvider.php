@@ -7,12 +7,16 @@ use App\Models\Comment;
 use App\Models\ContentItem;
 use App\Models\DanaTalangan;
 use App\Models\Permission;
+use App\Models\SalesDailyPlan;
 use App\Models\SalesLead;
+use App\Models\SalesLeadTarget;
 use App\Models\User;
 use App\Policies\CommentPolicy;
 use App\Policies\ContentItemPolicy;
 use App\Policies\DanaTalanganPolicy;
+use App\Policies\SalesDailyPlanPolicy;
 use App\Policies\SalesLeadPolicy;
+use App\Policies\SalesLeadTargetPolicy;
 use App\Policies\UserPolicy;
 use App\Services\CrmAuthorizationService;
 use App\Services\ImpersonationService;
@@ -42,6 +46,8 @@ class AppServiceProvider extends ServiceProvider
         Gate::policy(DanaTalangan::class, DanaTalanganPolicy::class);
         Gate::policy(ContentItem::class, ContentItemPolicy::class);
         Gate::policy(SalesLead::class, SalesLeadPolicy::class);
+        Gate::policy(SalesDailyPlan::class, SalesDailyPlanPolicy::class);
+        Gate::policy(SalesLeadTarget::class, SalesLeadTargetPolicy::class);
         Gate::define('viewDesignSystem', fn (User $user): bool => $user->isSuperadmin());
         Gate::define('manageMarisonMigration', fn (User $user): bool => $user->isSuperadmin());
         Gate::before(function (User $user, string $ability): ?bool {

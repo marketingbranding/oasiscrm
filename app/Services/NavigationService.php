@@ -33,6 +33,12 @@ class NavigationService
                 $user->hasScopedPermission('sales_pocketbook')
                     ? $this->item('Buku Saku Sales', 'sales-pocketbook.index', 'sales', 'sales', ['sales-pocketbook.*', 'sales-leads.*', 'sales-agendas.*', 'sales-reminders.*'], $routeName, 'sales_pocketbook', $moduleMaintenance)
                     : null,
+                $user->hasPermission('sales_daily_plans.view_own')
+                    || $user->hasPermission('sales_daily_plans.view_team')
+                    || $user->hasPermission('sales_daily_plans.view_branch')
+                    || $user->hasPermission('sales_daily_plans.view_all')
+                    ? $this->item('Daily Planning', 'sales-daily-plans.index', 'calendar', 'sales', ['sales-daily-plans.*'], $routeName, null, $moduleMaintenance)
+                    : null,
                 ! $isSales && $user->hasPermission('consumer_progress.view') && $user->hasScopedPermission('consumer_progress')
                     ? $this->item('Konsumen Progress', 'konsumen-progress.index', 'customers', 'consumer-progress', ['konsumen-progress.*'], $routeName, 'consumer_progress', $moduleMaintenance)
                     : null,

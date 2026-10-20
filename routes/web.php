@@ -38,6 +38,7 @@ use App\Http\Controllers\Crm\SalesAgendaController;
 use App\Http\Controllers\Crm\SalesAgendaEvidenceArchiveController;
 use App\Http\Controllers\Crm\SalesAgendaEvidenceController;
 use App\Http\Controllers\Crm\SalesAgendaExportController;
+use App\Http\Controllers\Crm\SalesDailyPlanController;
 use App\Http\Controllers\Crm\SalesDailyReminderController;
 use App\Http\Controllers\Crm\SalesFeeReportController;
 use App\Http\Controllers\Crm\SalesLeadController;
@@ -128,6 +129,14 @@ Route::middleware(['auth', 'active', 'verified', 'password.changed', 'operationa
         Route::patch('/buku-saku-sales/leads/{sales_lead}/slik/{slik_attempt}/reject', [SalesLeadLifecycleController::class, 'rejectSlik'])->name('sales-leads.slik.reject');
         Route::post('/buku-saku-sales/leads/{sales_lead}/freelance', [SalesLeadLifecycleController::class, 'freelance'])->name('sales-leads.freelance.store');
         Route::post('/sales-reminders/dismiss', [SalesDailyReminderController::class, 'dismiss'])->name('sales-reminders.dismiss');
+        Route::get('/buku-saku-sales/daily-plans', [SalesDailyPlanController::class, 'index'])->name('sales-daily-plans.index');
+        Route::post('/buku-saku-sales/daily-plans', [SalesDailyPlanController::class, 'store'])->middleware('permission:sales_daily_plans.manage_own')->name('sales-daily-plans.store');
+        Route::post('/buku-saku-sales/daily-plans/targets', [SalesDailyPlanController::class, 'storeTarget'])->middleware('permission:sales_targets.manage_all')->name('sales-daily-plans.targets.store');
+        Route::post('/buku-saku-sales/daily-plans/{daily_plan}/submit', [SalesDailyPlanController::class, 'submit'])->middleware('permission:sales_daily_plans.submit_own')->name('sales-daily-plans.submit');
+        Route::post('/buku-saku-sales/daily-plans/{daily_plan}/agendas', [SalesDailyPlanController::class, 'storeAgenda'])->name('sales-daily-plans.agendas.store');
+        Route::patch('/buku-saku-sales/daily-plans/{daily_plan}/agendas/{agenda}', [SalesDailyPlanController::class, 'updateAgenda'])->name('sales-daily-plans.agendas.update');
+        Route::delete('/buku-saku-sales/daily-plans/{daily_plan}/agendas/{agenda}', [SalesDailyPlanController::class, 'destroyAgenda'])->name('sales-daily-plans.agendas.destroy');
+        Route::post('/buku-saku-sales/daily-plans/{daily_plan}/agendas/reorder', [SalesDailyPlanController::class, 'reorder'])->name('sales-daily-plans.agendas.reorder');
     });
 
     Route::post('/presence/heartbeat', [PresenceController::class, 'heartbeat'])->middleware('throttle:180,1')->name('presence.heartbeat');

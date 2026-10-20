@@ -316,6 +316,16 @@ class User extends Authenticatable implements MustVerifyEmail
         return $this->hasMany(ContentItem::class, 'owner_user_id');
     }
 
+    public function salesDailyPlans(): HasMany
+    {
+        return $this->hasMany(SalesDailyPlan::class, 'sales_user_id');
+    }
+
+    public function salesLeadTargets(): HasMany
+    {
+        return $this->hasMany(SalesLeadTarget::class, 'sales_user_id');
+    }
+
     public function collaborationNotifications(): HasMany
     {
         return $this->hasMany(UserNotification::class);

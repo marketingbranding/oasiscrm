@@ -65,6 +65,8 @@ class ContentItem extends Model
         'completed_at',
         'activity_result',
         'duration_minutes',
+        'daily_plan_id',
+        'sort_order',
         'sales_activity_category',
         'owner_user_id',
         'sales_project_id',
@@ -83,6 +85,7 @@ class ContentItem extends Model
             'pic_names' => 'array',
             'completed_at' => 'datetime',
             'duration_minutes' => 'integer',
+            'sort_order' => 'integer',
         ];
     }
 
@@ -134,6 +137,11 @@ class ContentItem extends Model
     public function evidence(): HasMany
     {
         return $this->hasMany(SalesAgendaEvidence::class);
+    }
+
+    public function dailyPlan(): BelongsTo
+    {
+        return $this->belongsTo(SalesDailyPlan::class, 'daily_plan_id');
     }
 
     public function scopeVisibleTo(Builder $query, User $user, string $action = 'view'): Builder

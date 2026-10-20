@@ -51,6 +51,18 @@ class PermissionCatalog
             ['name' => 'Mengekspor Buku Saku Sales', 'slug' => 'sales_pocketbook.export', 'description' => 'Mengekspor data Buku Saku Sales sesuai lingkup akses.', 'group_name' => 'Buku Saku Sales'],
             ['name' => 'Menyinkronkan lead tim Buku Saku Sales', 'slug' => 'sales_pocketbook.sync', 'description' => 'Mendorong lead tim Buku Saku Sales ke spreadsheet cabang sesuai lingkup akses.', 'group_name' => 'Buku Saku Sales'],
             ['name' => 'Merekonsiliasi siklus lead Buku Saku Sales', 'slug' => 'sales_pocketbook.reconcile', 'description' => 'Melihat masalah rekonsiliasi siklus lead sesuai lingkup akses.', 'group_name' => 'Buku Saku Sales'],
+            ['name' => 'Melihat target lead sendiri', 'slug' => 'sales_targets.view_own', 'description' => 'Melihat target lead dan pencapaian sendiri.', 'group_name' => 'Target Lead Sales'],
+            ['name' => 'Melihat target lead tim', 'slug' => 'sales_targets.view_team', 'description' => 'Melihat target lead dan pencapaian Sales dalam TEAM yang dipetakan.', 'group_name' => 'Target Lead Sales'],
+            ['name' => 'Melihat target lead cabang', 'slug' => 'sales_targets.view_branch', 'description' => 'Melihat target lead dan pencapaian Sales dalam cabang yang diizinkan.', 'group_name' => 'Target Lead Sales'],
+            ['name' => 'Melihat seluruh target lead', 'slug' => 'sales_targets.view_all', 'description' => 'Melihat seluruh target lead yang terdaftar.', 'group_name' => 'Target Lead Sales'],
+            ['name' => 'Mengelola target lead seluruh Sales', 'slug' => 'sales_targets.manage_all', 'description' => 'Membuat dan memperbarui target lead bulanan seluruh Sales.', 'group_name' => 'Target Lead Sales'],
+            ['name' => 'Melihat Daily Plan sendiri', 'slug' => 'sales_daily_plans.view_own', 'description' => 'Melihat Daily Plan dan Agenda sendiri.', 'group_name' => 'Daily Plan Sales'],
+            ['name' => 'Melihat Daily Plan tim', 'slug' => 'sales_daily_plans.view_team', 'description' => 'Melihat Daily Plan dan Agenda TEAM yang dipetakan.', 'group_name' => 'Daily Plan Sales'],
+            ['name' => 'Melihat Daily Plan cabang', 'slug' => 'sales_daily_plans.view_branch', 'description' => 'Melihat Daily Plan dan Agenda dalam cabang yang diizinkan.', 'group_name' => 'Daily Plan Sales'],
+            ['name' => 'Melihat seluruh Daily Plan', 'slug' => 'sales_daily_plans.view_all', 'description' => 'Melihat seluruh Daily Plan yang terdaftar.', 'group_name' => 'Daily Plan Sales'],
+            ['name' => 'Mengelola Daily Plan sendiri', 'slug' => 'sales_daily_plans.manage_own', 'description' => 'Membuat dan mengubah Daily Plan sendiri sebelum dikirim.', 'group_name' => 'Daily Plan Sales'],
+            ['name' => 'Mengelola Daily Plan tim', 'slug' => 'sales_daily_plans.manage_team', 'description' => 'Mengubah planning Daily Plan TEAM yang sudah dikirim.', 'group_name' => 'Daily Plan Sales'],
+            ['name' => 'Mengirim Daily Plan sendiri', 'slug' => 'sales_daily_plans.submit_own', 'description' => 'Mengirim Daily Plan sendiri setelah total efektif tepat 420 menit.', 'group_name' => 'Daily Plan Sales'],
             ['name' => 'Membuat Work Planner', 'slug' => 'work_planner.create', 'description' => 'Membuat item Work Planner.', 'group_name' => 'Work Planner'],
             ['name' => 'Memperbarui Work Planner', 'slug' => 'work_planner.update', 'description' => 'Memperbarui item Work Planner sesuai lingkup akses.', 'group_name' => 'Work Planner'],
             ['name' => 'Menetapkan Work Planner', 'slug' => 'work_planner.assign', 'description' => 'Menetapkan item Work Planner kepada pengguna lain.', 'group_name' => 'Work Planner'],
@@ -129,6 +141,7 @@ class PermissionCatalog
             'sales' => [
                 'sales_pocketbook.view_own', 'sales_pocketbook.manage_own', 'sales_pocketbook.export_own', 'work_planner.view_own',
                 'sales_pocketbook.export', 'work_planner.create', 'work_planner.update',
+                'sales_targets.view_own', 'sales_daily_plans.view_own', 'sales_daily_plans.manage_own', 'sales_daily_plans.submit_own',
                 ...$comments,
             ],
             'sales_coordinator' => [
@@ -137,6 +150,7 @@ class PermissionCatalog
                 'sales_pocketbook.manage_team', 'sales_pocketbook.export_team', 'sales_pocketbook.export',
                 'sales_pocketbook.sync', 'work_planner.view_own',
                 'work_planner.view_team', 'work_planner.create', 'work_planner.update', 'work_planner.assign',
+                'sales_targets.view_team', 'sales_daily_plans.view_team', 'sales_daily_plans.manage_team',
                 ...$comments,
             ],
             'supervisor' => [
@@ -150,6 +164,7 @@ class PermissionCatalog
                 'consumer_progress.view', 'consumer_progress.sync',
                 'bridge_fund.view', 'bridge_fund.manage', 'bridge_fund.export',
                 'expenses.view', 'expenses.create', 'expenses.update', 'expenses.cancel', 'expenses.export',
+                'sales_targets.view_branch', 'sales_daily_plans.view_branch',
                 ...$comments,
             ],
             'manager' => [
@@ -158,6 +173,7 @@ class PermissionCatalog
                 'sales_pocketbook.export', 'work_planner.create', 'work_planner.update', 'work_planner.assign',
                 'sales_pocketbook.sync', 'sales_pocketbook.reconcile',
                 'work_planner.export', 'database.view', 'consumer_progress.view', 'bridge_fund.view', 'bridge_fund.export',
+                'sales_targets.view_branch', 'sales_daily_plans.view_branch',
                 ...$comments,
             ],
             'branch_manager' => [
@@ -168,6 +184,7 @@ class PermissionCatalog
                 'work_planner.export', 'database.view', 'database.edit', 'database.sync',
                 'consumer_progress.view', 'consumer_progress.sync', 'consumer_progress.reveal_nik', 'bridge_fund.view', 'bridge_fund.manage', 'bridge_fund.export',
                 'expenses.view', 'expenses.create', 'expenses.update', 'expenses.cancel', 'expenses.export',
+                'sales_targets.view_branch', 'sales_daily_plans.view_branch',
                 ...$scoped($allModules, ['branch'], ['view', 'manage', 'export']),
                 ...$scoped(['database', 'consumer_progress', 'bridge_fund'], ['branch'], ['sync']),
                 ...$comments,
@@ -189,9 +206,11 @@ class PermissionCatalog
             ],
             'sas' => [
                 'sales_pocketbook.view_branch', 'sales_pocketbook.export_branch', 'sales_pocketbook.export',
+                'sales_targets.view_branch', 'sales_daily_plans.view_branch',
             ],
             'sam' => [
                 'sales_pocketbook.view_branch', 'sales_pocketbook.export_branch', 'sales_pocketbook.export',
+                'sales_targets.view_branch', 'sales_daily_plans.view_branch',
             ],
             'admin' => [
                 'users.view', 'users.create', 'users.invite', 'users.update', 'users.reset_password',

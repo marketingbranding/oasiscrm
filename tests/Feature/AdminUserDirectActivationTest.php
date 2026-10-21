@@ -182,7 +182,7 @@ class AdminUserDirectActivationTest extends TestCase
 
     private function payload(Role $role, Branch $branch, array $overrides = []): array
     {
-        return array_merge([
+        $payload = array_merge([
             'name' => 'Forged Direct',
             'email' => 'forged-direct@example.test',
             'role_id' => $role->id,
@@ -193,5 +193,18 @@ class AdminUserDirectActivationTest extends TestCase
             'temporary_password_confirmation' => 'Temporary123',
             'submit_action' => 'activate',
         ], $overrides);
+
+        if ($role->slug === 'sales' && ! isset($payload['coordinator_user_id'])) {
+            $coordinator = User::factory()->create([
+                'role_id' => Role::where('slug', 'sales_coordinator')->value('id'),
+                'branch_id' => $branch->id,
+                'account_status' => AccountStatus::Active,
+                'is_active' => true,
+                'password_changed_at' => now(),
+            ]);
+            $payload['coordinator_user_id'] = $coordinator->id;
+        }
+
+        return $payload;
     }
 }

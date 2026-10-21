@@ -24,7 +24,10 @@ return new class extends Migration
                 ['content_item_id', 'recipient_id', 'notification_type', 'occurrence_key'],
                 'sales_agenda_notification_delivery_unique',
             );
-            $table->index(['notification_type', 'sent_at']);
+            $table->index(
+                ['notification_type', 'sent_at'],
+                'sales_agenda_notif_type_sent_idx',
+            );
         });
     }
 

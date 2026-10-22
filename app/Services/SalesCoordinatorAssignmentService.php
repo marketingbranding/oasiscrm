@@ -31,6 +31,18 @@ class SalesCoordinatorAssignmentService
             ]);
         }
 
+        if (! $coordinator->is_active || ! $coordinator->isAccountActive()) {
+            throw ValidationException::withMessages([
+                'coordinator_user_id' => 'Sales dan Koordinator Tim harus merupakan pengguna aktif.',
+            ]);
+        }
+
+        if (blank($sales->branch_id) || blank($coordinator->branch_id) || (int) $sales->branch_id !== (int) $coordinator->branch_id) {
+            throw ValidationException::withMessages([
+                'coordinator_user_id' => 'Sales dan Koordinator Tim harus berada pada cabang utama yang sama.',
+            ]);
+        }
+
         $current = SalesCoordinatorSales::query()->where('sales_user_id', $sales->id)->current()->get();
         $same = $current->firstWhere('coordinator_user_id', $coordinator->id);
 

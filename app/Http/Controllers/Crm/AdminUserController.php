@@ -30,6 +30,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Password;
+use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
 use Throwable;
 
@@ -90,6 +91,7 @@ class AdminUserController extends Controller
         $role = Role::findOrFail($data['role_id']);
         $branchIds = $this->branchIds($data);
         $projectIds = $this->projectIds($data);
+        $this->coordinatorForCreation($actor, $role, $data['coordinator_user_id'] ?? null, $data['branch_id'] ?? null);
         $this->administration->assertCanAssignRole($actor, $role);
         $this->assertAssignmentPermissions($actor, $branchIds, $projectIds, $data['supervisor_user_id'] ?? null);
 
@@ -104,9 +106,18 @@ class AdminUserController extends Controller
             $user = $direct
                 ? $this->provisioning->createDirectlyActivated($attributes, $data['temporary_password'], $actor)
                 : $this->invitations->createDraft($attributes, $actor);
-            $this->branches->assign($user, $branchIds, (int) $data['branch_id'], $actor);
-            $this->projects->assign($user, $projectIds, $this->nullableInt($data['primary_project_id'] ?? null), $actor);
-            $this->hierarchy->assignSupervisor($user, $this->nullableInt($data['supervisor_user_id'] ?? null), $actor);
+            if ($branchIds !== []) {
+                $this->branches->assign($user, $branchIds, $this->nullableInt($data['branch_id'] ?? null), $actor);
+            }
+            if ($projectIds !== [] || $user->isSales()) {
+                $this->projects->assign($user, $projectIds, $this->nullableInt($data['primary_project_id'] ?? null), $actor);
+            }
+            if (filled($data['supervisor_user_id'] ?? null)) {
+                $this->hierarchy->assignSupervisor($user, $this->nullableInt($data['supervisor_user_id']), $actor);
+            }
+            if (filled($data['coordinator_user_id'] ?? null)) {
+                $this->salesCoordinators->assign($user, User::query()->findOrFail((int) $data['coordinator_user_id']));
+            }
             $this->audit->log('user_created', $user, $actor);
             if ($direct) {
                 $this->audit->log('user_directly_activated', $user, $actor, [], [
@@ -339,8 +350,15 @@ class AdminUserController extends Controller
         $branches = Branch::where('is_active', true)->whereIn('id', $branchIds)->forDropdown()->get();
         $projects = LeadMaster::with('branch')->where('is_active', true)->whereIn('branch_id', $branchIds)->orderBy('project_name')->get();
         $supervisors = $this->administration->visibleQuery($actor)->where('account_status', AccountStatus::Active->value)->with('role')->orderBy('name')->get();
+        $coordinators = $this->administration->visibleQuery($actor)
+            ->where('account_status', AccountStatus::Active->value)
+            ->where('is_active', true)
+            ->whereHas('role', fn (Builder $query) => $query->where('slug', 'sales_coordinator'))
+            ->with(['branch:id,name', 'currentCoordinatorSales:id,name,branch_id'])
+            ->orderBy('name')
+            ->get(['id', 'name', 'branch_id', 'role_id']);
 
-        return ['roles' => $this->administration->availableRoles($actor), 'branches' => $branches, 'projects' => $projects, 'projectsByBranch' => $projects->groupBy('branch_id'), 'supervisors' => $supervisors];
+        return ['roles' => $this->administration->availableRoles($actor), 'branches' => $branches, 'projects' => $projects, 'projectsByBranch' => $projects->groupBy('branch_id'), 'supervisors' => $supervisors, 'coordinators' => $coordinators];
     }
 
     private function manageableSales(User $actor): Builder
@@ -353,12 +371,42 @@ class AdminUserController extends Controller
 
     private function branchIds(array $data): array
     {
-        return collect([...(array) ($data['branch_ids'] ?? []), $data['branch_id']])->filter()->map(fn ($id) => (int) $id)->unique()->values()->all();
+        return collect([...(array) ($data['branch_ids'] ?? []), $data['branch_id'] ?? null])->filter()->map(fn ($id) => (int) $id)->unique()->values()->all();
     }
 
     private function projectIds(array $data): array
     {
         return collect([...(array) ($data['assigned_project_ids'] ?? []), $data['primary_project_id'] ?? null])->filter()->map(fn ($id) => (int) $id)->unique()->values()->all();
+    }
+
+    private function coordinatorForCreation(User $actor, Role $role, mixed $coordinatorId, mixed $branchId): ?User
+    {
+        if (blank($coordinatorId)) {
+            if ($role->slug === 'sales') {
+                throw ValidationException::withMessages(['coordinator_user_id' => 'Sales harus ditempatkan dalam Team melalui Koordinator Tim.']);
+            }
+
+            return null;
+        }
+
+        if ($role->slug !== 'sales') {
+            throw ValidationException::withMessages(['coordinator_user_id' => 'Koordinator Tim hanya berlaku untuk user Sales.']);
+        }
+
+        $coordinator = $this->administration->visibleQuery($actor)
+            ->with('role')
+            ->whereKey($coordinatorId)
+            ->first();
+
+        if ($coordinator === null || ! $coordinator->is_active || ! $coordinator->isAccountActive() || ! $coordinator->hasPrimaryRole('sales_coordinator')) {
+            throw ValidationException::withMessages(['coordinator_user_id' => 'Koordinator Tim yang dipilih tidak aktif atau tidak dapat diakses.']);
+        }
+
+        if (blank($branchId) || (int) $coordinator->branch_id !== (int) $branchId) {
+            abort(403, 'Koordinator Tim harus berasal dari cabang utama yang dipilih.');
+        }
+
+        return $coordinator;
     }
 
     private function nullableInt(mixed $value): ?int

@@ -15,7 +15,7 @@
         "laravel-vite-plugin": "^3.1",
         "postcss": "^8.5.31",
         "tailwindcss": "^4.3.3",
-        "vite": "^8.0.0"
+        "vite": "^8.3.5"
     },
     "dependencies": {
         "sortablejs": "^1.15.7"

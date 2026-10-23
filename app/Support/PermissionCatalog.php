@@ -82,6 +82,7 @@ class PermissionCatalog
             ['name' => 'Mengelola Daily Plan sendiri', 'slug' => 'sales_daily_plans.manage_own', 'description' => 'Membuat dan mengubah Daily Plan sendiri sebelum dikirim.', 'group_name' => 'Daily Plan Sales'],
             ['name' => 'Mengelola Daily Plan tim', 'slug' => 'sales_daily_plans.manage_team', 'description' => 'Mengubah planning Daily Plan TEAM yang sudah dikirim.', 'group_name' => 'Daily Plan Sales'],
             ['name' => 'Mengirim Daily Plan sendiri', 'slug' => 'sales_daily_plans.submit_own', 'description' => 'Mengirim Daily Plan sendiri setelah total efektif tepat 420 menit.', 'group_name' => 'Daily Plan Sales'],
+            ['name' => 'Mengatur target Lead Sales', 'slug' => 'sales_pocketbook.targets_manage', 'description' => 'Menetapkan target Lead bulanan per Sales.', 'group_name' => 'Buku Saku Sales'],
             ['name' => 'Membuat Work Planner', 'slug' => 'work_planner.create', 'description' => 'Membuat item Work Planner.', 'group_name' => 'Work Planner'],
             ['name' => 'Memperbarui Work Planner', 'slug' => 'work_planner.update', 'description' => 'Memperbarui item Work Planner sesuai lingkup akses.', 'group_name' => 'Work Planner'],
             ['name' => 'Menetapkan Work Planner', 'slug' => 'work_planner.assign', 'description' => 'Menetapkan item Work Planner kepada pengguna lain.', 'group_name' => 'Work Planner'],

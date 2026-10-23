@@ -52,6 +52,7 @@ use App\Http\Controllers\Crm\SalesLeadLifecycleController;
 use App\Http\Controllers\Crm\SalesLeadLifecycleSyncController;
 use App\Http\Controllers\Crm\SalesLeadOptionController;
 use App\Http\Controllers\Crm\SalesLeadStageController;
+use App\Http\Controllers\Crm\SalesLeadTargetController;
 use App\Http\Controllers\Crm\SalesPocketbookController;
 use App\Http\Controllers\Crm\SalesSheetIdentityController;
 use App\Http\Controllers\Crm\SupervisorSalesPocketbookController;
@@ -88,6 +89,13 @@ Route::middleware(['auth', 'active', 'verified', 'password.changed', 'operationa
             Route::put('/{role}/permissions', [RoleAdministrationController::class, 'updatePermissions'])->middleware('permission:roles.assign_permissions')->name('permissions.update');
         });
     });
+
+    Route::get('/admin/sales-lead-targets', [SalesLeadTargetController::class, 'index'])
+        ->middleware('permission:sales_pocketbook.targets_manage')
+        ->name('sales-lead-targets.index');
+    Route::post('/admin/sales-lead-targets', [SalesLeadTargetController::class, 'store'])
+        ->middleware(['permission:sales_pocketbook.targets_manage', 'not.impersonating'])
+        ->name('sales-lead-targets.store');
 
     Route::middleware('permission:organization.view')->group(function () {
         Route::get('/organization', [OrganizationWorkspaceController::class, 'index'])->name('organization.index');
@@ -155,6 +163,8 @@ Route::middleware(['auth', 'active', 'verified', 'password.changed', 'operationa
         Route::get('/buku-saku-sales/agendas/workspace', [SalesAgendaController::class, 'index'])->middleware('permission:sales_pocketbook.view_own')->name('sales-agendas.index');
         Route::get('/buku-saku-sales/agendas/export', SalesAgendaExportController::class)->middleware('permission:sales_pocketbook.export_own')->name('sales-agendas.export');
         Route::post('/buku-saku-sales/agendas', [SalesAgendaController::class, 'store'])->name('sales-agendas.store');
+        Route::patch('/buku-saku-sales/daily-plan-items/{item}/complete', [SalesDailyPlanController::class, 'complete'])->name('sales-daily-plan-items.complete');
+        Route::put('/buku-saku-sales/daily-plans/{plan}/revision', [SalesDailyPlanController::class, 'revise'])->middleware('permission:sales_pocketbook.manage_team')->name('sales-daily-plans.revise');
         Route::patch('/buku-saku-sales/agendas/{agenda}', [SalesAgendaController::class, 'update'])->name('sales-agendas.update');
         Route::post('/buku-saku-sales/agendas/{agenda}/reschedule', [SalesAgendaController::class, 'reschedule'])->name('sales-agendas.reschedule');
         Route::post('/buku-saku-sales/agendas/{agenda}/evidence', [SalesAgendaEvidenceController::class, 'store'])->name('sales-agendas.evidence.store');
@@ -189,7 +199,7 @@ Route::middleware(['auth', 'active', 'verified', 'password.changed', 'operationa
         Route::get('/buku-saku-sales/daily-plans', [SalesDailyPlanController::class, 'index'])->name('sales-daily-plans.index');
         Route::post('/buku-saku-sales/daily-plans', [SalesDailyPlanController::class, 'store'])->middleware('permission:sales_daily_plans.manage_own')->name('sales-daily-plans.store');
         Route::post('/buku-saku-sales/daily-plans/targets', [SalesDailyPlanController::class, 'storeTarget'])->middleware('permission:sales_targets.manage_all')->name('sales-daily-plans.targets.store');
-        Route::post('/buku-saku-sales/daily-plans/{daily_plan}/submit', [SalesDailyPlanController::class, 'submit'])->middleware('permission:sales_daily_plans.submit_own')->name('sales-daily-plans.submit');
+        Route::post('/buku-saku-sales/daily-plans/{daily_plan?}/submit', [SalesDailyPlanController::class, 'submit'])->middleware('permission:sales_daily_plans.submit_own')->name('sales-daily-plans.submit');
         Route::post('/buku-saku-sales/daily-plans/{daily_plan}/agendas', [SalesDailyPlanController::class, 'storeAgenda'])->name('sales-daily-plans.agendas.store');
         Route::patch('/buku-saku-sales/daily-plans/{daily_plan}/agendas/{agenda}', [SalesDailyPlanController::class, 'updateAgenda'])->name('sales-daily-plans.agendas.update');
         Route::delete('/buku-saku-sales/daily-plans/{daily_plan}/agendas/{agenda}', [SalesDailyPlanController::class, 'destroyAgenda'])->name('sales-daily-plans.agendas.destroy');

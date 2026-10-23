@@ -18,6 +18,8 @@ class SalesLeadTarget extends Model
         'period_year',
         'period_month',
         'lead_target',
+        'target_month',
+        'target_leads',
         'created_by',
         'updated_by',
     ];
@@ -28,6 +30,8 @@ class SalesLeadTarget extends Model
             'period_year' => 'integer',
             'period_month' => 'integer',
             'lead_target' => 'integer',
+            'target_month' => 'date',
+            'target_leads' => 'integer',
         ];
     }
 
@@ -48,6 +52,7 @@ class SalesLeadTarget extends Model
 
     protected function activityLabel(): string
     {
-        return 'Target lead '.$this->period_year.'-'.$this->period_month;
+        return $this->target_month?->format('Y-m')
+            ?? sprintf('%04d-%02d', $this->period_year, $this->period_month);
     }
 }

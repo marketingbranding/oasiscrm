@@ -15,6 +15,7 @@ use App\Services\OrganizationScopeService;
 use App\Services\SalesDailyReminderService;
 use App\Services\SalesLeadSheetOptionService;
 use App\Services\SalesLeadSyncService;
+use App\Services\SalesLeadTargetService;
 use App\Services\SalesTeamScopeService;
 use App\Services\SalesWeeklyMetricsService;
 use App\Services\WorkspaceAccessService;
@@ -31,6 +32,7 @@ class SalesPocketbookController extends Controller
         private readonly WorkspaceAccessService $workspaceAccess,
         private readonly SalesWeeklyMetricsService $weeklyMetrics,
         private readonly SalesDailyReminderService $dailyReminder,
+        private readonly SalesLeadTargetService $leadTargets,
         private readonly OrganizationScopeService $organizationScope,
         private readonly SalesTeamScopeService $salesTeamScope,
     ) {}
@@ -70,6 +72,7 @@ class SalesPocketbookController extends Controller
         $request->validate(array_merge($this->filterRules(), [
             'sort' => ['nullable', 'in:sales,branch,project,lead_new,contacted,met,surveyed,utj,documents_completed,akad,agenda_completed,last_input'],
             'direction' => ['nullable', 'in:asc,desc'],
+            'target_month' => ['nullable', 'date_format:Y-m'],
         ]));
         $tab = in_array($request->query('tab'), ['leads', 'agenda', 'report'], true) ? $request->query('tab') : 'leads';
         $monitoring = ! $user->isSales();
@@ -126,6 +129,9 @@ class SalesPocketbookController extends Controller
             abort(403);
         }
         $selectedSalesId = $monitoring && $request->filled('sales_user_id') ? $request->integer('sales_user_id') : ($user->isSales() ? $user->id : null);
+        $targetMonthValue = $request->query('target_month', now(config('app.timezone'))->format('Y-m'));
+        $targetMonth = CarbonImmutable::createFromFormat('Y-m-d', $targetMonthValue.'-01', config('app.timezone'));
+        $targetSummaries = $salesUsers->mapWithKeys(fn (User $sales) => [$sales->id => $this->leadTargets->summary($sales, $targetMonth)]);
         $this->validateFilterScope($selectedBranchId, $selectedProjectId, $selectedSalesId, $projects, $salesUsers);
         $leadSourceFilter = $this->leadSourceFilter($request);
 
@@ -323,6 +329,8 @@ class SalesPocketbookController extends Controller
             'defaultProject' => $defaultProject,
             'selectedBranchId' => $selectedBranchId,
             'selectedProjectId' => $selectedProjectId,
+            'targetMonth' => $targetMonth,
+            'targetSummaries' => $targetSummaries,
             'canCreate' => $user->can('create', SalesLead::class),
             'reportPeriod' => $reportPeriod,
             'reportSummary' => $reportSummary,

@@ -3,11 +3,14 @@
 namespace App\Http\Controllers\Crm;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Crm\CompleteSalesDailyPlanItemRequest;
 use App\Http\Requests\Crm\ReorderSalesDailyPlanRequest;
+use App\Http\Requests\Crm\ReviseSalesDailyPlanRequest;
 use App\Http\Requests\Crm\StoreSalesDailyPlanAgendaRequest;
 use App\Http\Requests\Crm\UpdateSalesDailyPlanAgendaRequest;
 use App\Models\ContentItem;
 use App\Models\SalesDailyPlan;
+use App\Models\SalesDailyPlanItem;
 use App\Models\SalesLeadTarget;
 use App\Models\User;
 use App\Services\OptimisticLockService;
@@ -60,6 +63,21 @@ class SalesDailyPlanController extends Controller
 
     public function store(Request $request): Response
     {
+        if ($request->has('work_date') || $request->has('activities')) {
+            abort_unless($request->user()?->isSales(), 403);
+            $data = $request->validate([
+                'work_date' => ['required', 'date_format:Y-m-d'],
+                'activities' => ['required', 'array', 'min:1'],
+                'activities.*.activity' => ['required', 'string', 'max:255'],
+                'activities.*.detail' => ['nullable', 'string', 'max:5000'],
+                'activities.*.duration_minutes' => ['required', 'integer', 'min:1', 'max:420'],
+            ]);
+            $date = CarbonImmutable::createFromFormat('Y-m-d', $data['work_date'], config('app.timezone'));
+            $this->plans->saveDraft($request->user(), $date, $data['activities']);
+
+            return to_route('sales-agendas.index', ['tab' => 'agenda', 'work_date' => $data['work_date']])->with('success', 'Draft Daily Plan berhasil disimpan.');
+        }
+
         $this->authorize('create', SalesDailyPlan::class);
         $data = $request->validate(['plan_date' => ['required', 'date_format:Y-m-d']]);
         try {
@@ -68,7 +86,7 @@ class SalesDailyPlanController extends Controller
             throw ValidationException::withMessages(['plan_date' => $exception->getMessage()]);
         }
 
-        return redirect()->route('sales-daily-plans.index', ['date' => $plan->plan_date->toDateString()])->with('success', 'Daily Plan siap diisi.');
+        return redirect()->route('sales-daily-plans.index', ['date' => ($plan->plan_date ?? $plan->work_date)->toDateString()])->with('success', 'Daily Plan siap diisi.');
     }
 
     public function storeAgenda(StoreSalesDailyPlanAgendaRequest $request, SalesDailyPlan $dailyPlan): Response
@@ -78,7 +96,7 @@ class SalesDailyPlanController extends Controller
 
         return $result instanceof Response
             ? $result
-            : redirect()->route('sales-daily-plans.index', ['date' => $dailyPlan->plan_date->toDateString()])->with('success', 'Agenda planning ditambahkan.');
+            : redirect()->route('sales-daily-plans.index', ['date' => ($dailyPlan->plan_date ?? $dailyPlan->work_date)->toDateString()])->with('success', 'Agenda planning ditambahkan.');
     }
 
     public function updateAgenda(UpdateSalesDailyPlanAgendaRequest $request, SalesDailyPlan $dailyPlan, ContentItem $agenda): Response
@@ -88,7 +106,7 @@ class SalesDailyPlanController extends Controller
 
         return $result instanceof Response
             ? $result
-            : redirect()->route('sales-daily-plans.index', ['date' => $dailyPlan->plan_date->toDateString()])->with('success', 'Planning Agenda diperbarui.');
+            : redirect()->route('sales-daily-plans.index', ['date' => ($dailyPlan->plan_date ?? $dailyPlan->work_date)->toDateString()])->with('success', 'Planning Agenda diperbarui.');
     }
 
     public function destroyAgenda(Request $request, SalesDailyPlan $dailyPlan, ContentItem $agenda): Response
@@ -99,7 +117,7 @@ class SalesDailyPlanController extends Controller
 
         return $result instanceof Response
             ? $result
-            : redirect()->route('sales-daily-plans.index', ['date' => $dailyPlan->plan_date->toDateString()])->with('success', 'Agenda planning dihapus.');
+            : redirect()->route('sales-daily-plans.index', ['date' => ($dailyPlan->plan_date ?? $dailyPlan->work_date)->toDateString()])->with('success', 'Agenda planning dihapus.');
     }
 
     public function reorder(ReorderSalesDailyPlanRequest $request, SalesDailyPlan $dailyPlan): Response
@@ -109,18 +127,42 @@ class SalesDailyPlanController extends Controller
 
         return $result instanceof Response
             ? $result
-            : redirect()->route('sales-daily-plans.index', ['date' => $dailyPlan->plan_date->toDateString()])->with('success', 'Urutan Agenda diperbarui.');
+            : redirect()->route('sales-daily-plans.index', ['date' => ($dailyPlan->plan_date ?? $dailyPlan->work_date)->toDateString()])->with('success', 'Urutan Agenda diperbarui.');
     }
 
-    public function submit(Request $request, SalesDailyPlan $dailyPlan): Response
+    public function submit(Request $request, ?SalesDailyPlan $dailyPlan = null): Response
     {
+        if ($request->has('work_date')) {
+            abort_unless($request->user()?->isSales(), 403);
+            $data = $request->validate(['work_date' => ['required', 'date_format:Y-m-d']]);
+            $date = CarbonImmutable::createFromFormat('Y-m-d', $data['work_date'], config('app.timezone'));
+            $this->plans->submit($request->user(), $date);
+
+            return to_route('sales-agendas.index', ['tab' => 'agenda', 'work_date' => $data['work_date']])->with('success', 'Daily Plan berhasil disubmit dan dikunci.');
+        }
+
+        abort_unless($dailyPlan, 404);
         $this->authorize('submit', $dailyPlan);
         $data = $request->validate(['expected_updated_at' => ['required', 'string', 'max:60']]);
         $result = $this->mutate($request, $dailyPlan, $data['expected_updated_at'], fn (SalesDailyPlan $plan) => $this->plans->submit($plan, $request->user()));
 
         return $result instanceof Response
             ? $result
-            : redirect()->route('sales-daily-plans.index', ['date' => $dailyPlan->plan_date->toDateString()])->with('success', 'Daily Plan dikirim dengan total 420 menit.');
+            : redirect()->route('sales-daily-plans.index', ['date' => ($dailyPlan->plan_date ?? $dailyPlan->work_date)->toDateString()])->with('success', 'Daily Plan dikirim dengan total 420 menit.');
+    }
+
+    public function complete(CompleteSalesDailyPlanItemRequest $request, SalesDailyPlanItem $item): Response
+    {
+        $this->plans->completeItem($request->user(), $item, $request->validated('activity_result'));
+
+        return back()->with('success', 'Hasil aktivitas berhasil disimpan.');
+    }
+
+    public function revise(ReviseSalesDailyPlanRequest $request, SalesDailyPlan $plan): Response
+    {
+        $this->plans->revise($request->user(), $plan, $request->validated('activities'));
+
+        return back()->with('success', 'Planning anggota Team berhasil direvisi dan Sales akan menerima pemberitahuan.');
     }
 
     public function storeTarget(Request $request): Response

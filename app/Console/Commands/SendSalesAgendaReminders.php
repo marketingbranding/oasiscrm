@@ -4,6 +4,7 @@ namespace App\Console\Commands;
 
 use App\Models\ContentItem;
 use App\Services\CollaborationNotificationService;
+use App\Services\SalesAgendaReminderService;
 use Carbon\CarbonImmutable;
 use Carbon\CarbonInterface;
 use Illuminate\Console\Command;
@@ -20,7 +21,7 @@ class SendSalesAgendaReminders extends Command
         parent::__construct();
     }
 
-    public function handle(): int
+    public function handle(SalesAgendaReminderService $dailyPlanReminders): int
     {
         $now = now();
         $sent = 0;
@@ -51,6 +52,7 @@ class SendSalesAgendaReminders extends Command
                 }
             });
 
+        $sent += $dailyPlanReminders->sendAt(CarbonImmutable::now(config('app.timezone')));
         $this->info("{$sent} pengingat dikirim.");
 
         return self::SUCCESS;

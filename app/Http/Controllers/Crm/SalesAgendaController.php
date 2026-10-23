@@ -8,6 +8,7 @@ use App\Http\Requests\Crm\RescheduleSalesAgendaRequest;
 use App\Http\Requests\Crm\StoreSalesAgendaRequest;
 use App\Models\ContentItem;
 use App\Models\LeadMaster;
+use App\Models\SalesDailyPlan;
 use App\Models\SalesLead;
 use App\Services\OptimisticLockService;
 use App\Services\PromoOptionService;
@@ -15,6 +16,7 @@ use App\Services\SalesAgendaEvidenceUploadService;
 use App\Services\SalesAgendaProjectResolver;
 use App\Services\SalesDailyReminderService;
 use App\Services\WorkspaceAccessService;
+use Carbon\CarbonImmutable;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Symfony\Component\HttpFoundation\Response;
@@ -34,6 +36,13 @@ class SalesAgendaController extends Controller
         abort_unless($request->user()->isSales(), 403);
         $project = $this->projectResolver->resolve($request->user());
         $tab = $request->query('tab') === 'leads' ? 'leads' : 'agenda';
+        $request->validate(['work_date' => ['nullable', 'date_format:Y-m-d']]);
+        $dailyPlanDate = CarbonImmutable::createFromFormat('Y-m-d', $request->query('work_date', today()->toDateString()), config('app.timezone'));
+        $dailyPlan = SalesDailyPlan::query()
+            ->with('items')
+            ->where('sales_user_id', $request->user()->id)
+            ->whereDate('work_date', $dailyPlanDate->toDateString())
+            ->first();
         $agendas = ContentItem::query()
             ->with(['branch', 'salesProject', 'evidence'])
             ->where('item_type', 'agenda')
@@ -67,7 +76,7 @@ class SalesAgendaController extends Controller
         ];
         $canExport = $request->user()->hasPermission('sales_pocketbook.export_own');
 
-        return view('crm.sales-pocketbook.sales-agenda', compact('project', 'agendas', 'leads', 'tab', 'projects', 'defaultProjectId', 'cascadeProjects', 'leadOptionsEndpoint', 'promos', 'dailyReminder', 'canExport'));
+        return view('crm.sales-pocketbook.sales-agenda', compact('project', 'agendas', 'leads', 'tab', 'projects', 'defaultProjectId', 'cascadeProjects', 'leadOptionsEndpoint', 'promos', 'dailyReminder', 'canExport', 'dailyPlan', 'dailyPlanDate'));
     }
 
     public function store(StoreSalesAgendaRequest $request, SalesAgendaEvidenceUploadService $uploads)

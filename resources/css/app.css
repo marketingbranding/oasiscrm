@@ -1,7 +1,6 @@
 @import "tailwindcss";
 @plugin "@tailwindcss/forms";
 @source "../../vendor/laravel/framework/src/Illuminate/Pagination/resources/views/*.blade.php";
-@config "../../tailwind.config.js";
 
 @theme {
     --font-sans: Figtree, ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
@@ -2380,3 +2379,275 @@
 
 .crm-status-success { color: var(--oasis-success); font-weight: 700; }
 .crm-status-error { color: var(--oasis-danger); font-weight: 700; }
+
+/* ============================================================
+   Kertas Agenda Harian (Sales daily paper)
+   ============================================================ */
+.sales-agenda-paper {
+    border: 2px solid #000;
+    background: #fffdf5;
+    background-image: linear-gradient(#f6e7c1 1px, transparent 1px);
+    background-size: 100% 28px;
+    box-shadow: 5px 5px 0 0 #000;
+}
+
+.sales-agenda-paper-header {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    padding: 0.75rem 1rem;
+    border-bottom: 2px solid #000;
+    background: #fcc20f;
+}
+
+.sales-agenda-paper-nav {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    font-family: Helvetica, Arial, sans-serif;
+}
+
+.sales-agenda-paper-nav-link {
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    color: #000;
+    text-decoration: underline;
+}
+
+.sales-agenda-paper-date {
+    font-family: 'Times New Roman', Times, serif;
+    font-size: 1rem;
+    font-weight: 700;
+}
+
+.sales-agenda-paper-form {
+    padding: 0.75rem 1rem;
+}
+
+.sales-agenda-paper-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    gap: 0.5rem;
+}
+
+.sales-agenda-paper-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.75rem;
+    padding: 0.5rem 0.75rem;
+    border: 1px solid rgba(0, 0, 0, 0.25);
+    background: rgba(255, 255, 255, 0.86);
+    position: relative;
+}
+
+.sales-agenda-paper-index {
+    flex: none;
+    width: 1.75rem;
+    height: 1.75rem;
+    display: grid;
+    place-items: center;
+    border: 2px solid #000;
+    background: #fcc20f;
+    font-family: Helvetica, Arial, sans-serif;
+    font-size: 0.75rem;
+    font-weight: 700;
+}
+
+.sales-agenda-paper-item-main {
+    flex: 1;
+    min-width: 0;
+}
+
+.sales-agenda-paper-time {
+    display: block;
+    font-family: Helvetica, Arial, sans-serif;
+    font-size: 0.7rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+
+.sales-agenda-paper-item-main h3 {
+    margin: 0.15rem 0 0;
+    font-family: 'Times New Roman', Times, serif;
+    font-size: 1rem;
+    font-weight: 700;
+    line-height: 1.2;
+}
+
+.sales-agenda-paper-detail {
+    margin: 0.25rem 0 0;
+    font-size: 0.875rem;
+    color: #444;
+}
+
+.sales-agenda-paper-result {
+    margin: 0.35rem 0 0;
+    font-size: 0.875rem;
+    white-space: pre-line;
+}
+
+.sales-agenda-paper-duration {
+    flex: none;
+    font-family: Helvetica, Arial, sans-serif;
+    font-size: 0.7rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    color: #444;
+}
+
+.sales-agenda-paper-remove {
+    flex: none;
+    border: 1px solid #000;
+    background: #fff;
+    width: 1.75rem;
+    height: 1.75rem;
+    font-size: 1rem;
+    font-weight: 700;
+    line-height: 1;
+    cursor: pointer;
+}
+
+.sales-agenda-paper-empty {
+    padding: 1.5rem 1rem;
+    text-align: center;
+    font-style: italic;
+    color: #555;
+    border: 1px dashed rgba(0, 0, 0, 0.35);
+}
+
+.sales-agenda-paper-footer {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    margin-top: 0.75rem;
+    padding-top: 0.75rem;
+    border-top: 2px dashed #000;
+}
+
+.sales-agenda-paper-total {
+    font-family: Helvetica, Arial, sans-serif;
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-transform: uppercase;
+}
+
+.sales-agenda-paper-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+
+.sales-agenda-paper-add {
+    border: 2px solid #000;
+    background: #fff;
+    padding: 0.5rem 0.75rem;
+    font-family: Helvetica, Arial, sans-serif;
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    cursor: pointer;
+}
+
+.sales-agenda-paper-add:hover {
+    background: #fcc20f;
+}
+
+.sales-agenda-paper-submit {
+    padding: 0 1rem 0.75rem;
+}
+
+.sales-agenda-paper-preview {
+    border: 1px solid #000;
+    background: #fff3b0;
+    padding: 0.5rem 0.75rem;
+    font-size: 0.875rem;
+}
+
+.sales-agenda-paper-modal-error {
+    color: var(--oasis-danger, #c0392b);
+    font-size: 0.875rem;
+    font-weight: 700;
+}
+
+.sales-agenda-paper-locked {
+    margin: 0.75rem 1rem;
+    border: 2px solid #000;
+    background: #f7f3e8;
+    padding: 0.75rem 1rem;
+    font-size: 0.875rem;
+}
+
+.sales-agenda-paper-group {
+    margin: 0.75rem 1rem 0;
+}
+
+.sales-agenda-paper-group-title {
+    margin: 0 0 0.5rem;
+    padding: 0.4rem 0.75rem;
+    border: 2px solid #000;
+    background: #000;
+    color: #fcc20f;
+    font-family: Helvetica, Arial, sans-serif;
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.sales-agenda-paper-group .sales-agenda-paper-item {
+    margin-bottom: 0.5rem;
+}
+
+.sales-agenda-paper-group .sales-agenda-paper-complete {
+    flex: none;
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+}
+
+.sales-agenda-paper-item.is-completed {
+    opacity: 0.72;
+    background: rgba(255, 255, 255, 0.6);
+    clip-path: polygon(0 0, 100% 0, 100% calc(100% - 8px), 94% 100%, 87% calc(100% - 8px), 80% 100%, 73% calc(100% - 8px), 66% 100%, 59% calc(100% - 8px), 52% 100%, 45% calc(100% - 8px), 38% 100%, 31% calc(100% - 8px), 24% 100%, 17% calc(100% - 8px), 10% 100%, 3% calc(100% - 8px), 0 100%);
+}
+
+.sales-agenda-paper-item.is-completed .sales-agenda-paper-item-main h3 {
+    text-decoration: line-through;
+}
+
+.sales-agenda-paper-item.is-completed .sales-agenda-paper-index {
+    background: #22c55e;
+    color: #fff;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .sales-agenda-paper * {
+        transition: none !important;
+        animation: none !important;
+    }
+}
+
+@media (max-width: 767px) {
+    .sales-agenda-paper-item {
+        flex-wrap: wrap;
+    }
+    .sales-agenda-paper-remove {
+        margin-left: auto;
+    }
+    .sales-agenda-paper-duration {
+        margin-left: auto;
+    }
+    .sales-agenda-paper-group .sales-agenda-paper-complete {
+        width: 100%;
+        flex-direction: column;
+        align-items: stretch;
+    }
+}

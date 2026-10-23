@@ -13,7 +13,7 @@ return new class extends Migration
     {
         Schema::create('sales_daily_plans', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('branch_id')->constrained()->restrictOnDelete();
+            $table->foreignId('branch_id')->nullable()->constrained()->restrictOnDelete();
             $table->foreignId('sales_user_id')->constrained('users')->restrictOnDelete();
             $table->date('plan_date');
             $table->string('status', 20)->default('draft');

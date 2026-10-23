@@ -43,6 +43,18 @@ class SalesPocketbookTest extends TestCase
             ->assertSee('value="'.$branch->id.'"', false);
     }
 
+    public function test_sales_agenda_uses_a_daily_paper_and_modal_for_adding_plan_items(): void
+    {
+        [, , $sales] = $this->salesContext();
+
+        $this->actingAs($sales)->get(route('sales-agendas.index'))
+            ->assertOk()
+            ->assertSee('sales-agenda-paper', false)
+            ->assertSee('+ Tambah Agenda')
+            ->assertSee('crm-modal-tambah-agenda', false)
+            ->assertDontSee('name="activities[0][activity]"', false);
+    }
+
     public function test_sales_pocketbook_always_delegates_to_canonical_workspace(): void
     {
         [, , $sales] = $this->salesContext();

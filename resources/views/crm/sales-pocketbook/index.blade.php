@@ -92,6 +92,28 @@
         <div><span>Proyek</span><strong>{{ $selectedProject?->project_name ?? 'Semua dalam akses' }}</strong></div>
         <div><span>Sales</span><strong>{{ $monitoring ? ($selectedSales?->name ?? 'Semua dalam akses') : Auth::user()->name }}</strong></div>
     </div>
+    @if($targetSummaries->isNotEmpty())
+        <x-crm.section id="sales-lead-target-progress" title="Target Lead {{ $targetMonth->translatedFormat('F Y') }}" description="Actual dihitung berdasarkan PIC Sales, bukan pengguna yang menginput lead.">
+            <div class="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                @foreach($targetSummaries as $salesId => $summary)
+                    @php
+                        $targetSales = $salesUsers->firstWhere('id', $salesId);
+                        $achievementWidth = $summary['achievement'] === null ? 0 : min(100, $summary['achievement']);
+                    @endphp
+                    <div class="border-2 border-black bg-white p-3">
+                        <div class="flex items-start justify-between gap-3">
+                            <strong>{{ $targetSales?->name }}</strong>
+                            <span class="text-xs font-bold uppercase">{{ $summary['target'] === null ? 'Belum ditetapkan' : $summary['achievement'].'%' }}</span>
+                        </div>
+                        <div class="mt-2 flex items-baseline gap-2"><strong class="text-2xl">{{ $summary['actual'] }}</strong><span class="text-xs uppercase">actual / {{ $summary['target'] ?? '—' }} target</span></div>
+                        <div class="mt-2 h-2 border border-black bg-gray-100" role="progressbar" aria-label="Pencapaian {{ $targetSales?->name }}" aria-valuemin="0" aria-valuemax="100" aria-valuenow="{{ $summary['achievement'] === null ? '' : $achievementWidth }}">
+                            <div class="h-full bg-[#fcc20f]" style="width: {{ $achievementWidth }}%"></div>
+                        </div>
+                    </div>
+                @endforeach
+            </div>
+        </x-crm.section>
+    @endif
     @if($managerHierarchy)
         <x-crm.section id="manager-sales-hierarchy" title="Hierarki Tim Sales" description="Tim canonical dalam tanggung jawab Anda. Data operasional tetap dibatasi akses cabang dan proyek.">
             <div class="grid gap-3 md:grid-cols-3">
@@ -258,8 +280,8 @@
             <p id="quick-lead-required-note" class="sales-pocketbook-required-note md:col-span-2 xl:col-span-4"><span aria-hidden="true">*</span> Wajib diisi</p>
             <x-crm.field label="Tanggal Lead" for="quick-lead-date" required :error="$errors->first('lead_date')"><x-crm.date-field id="quick-lead-date" name="lead_date" :value="old('lead_date', request('lead_date', now()->toDateString()))" required :aria-invalid="$errors->has('lead_date') ? 'true' : 'false'" :aria-describedby="$errors->has('lead_date') ? 'quick-lead-date-error' : null" /></x-crm.field>
             <x-crm.field label="Nama Calon Konsumen" for="quick-lead-customer-name" required :error="$errors->first('customer_name')"><input id="quick-lead-customer-name" class="sales-input" name="customer_name" value="{{ old('customer_name') }}" required aria-invalid="{{ $errors->has('customer_name') ? 'true' : 'false' }}" @if($errors->has('customer_name')) aria-describedby="quick-lead-customer-name-error" @endif></x-crm.field>
-            <x-crm.field label="No. WhatsApp / Telepon" for="quick-lead-phone" hint="Pemeriksaan duplikat hanya berupa peringatan dan tidak mencegah penyimpanan." :error="$errors->first('phone')">
-                <input id="quick-lead-phone" class="sales-input" name="phone" value="{{ old('phone') }}" @blur="checkPhone($event.target.value)" x-bind:aria-busy="duplicatePending" aria-invalid="{{ $errors->has('phone') ? 'true' : 'false' }}" aria-describedby="quick-lead-phone-hint{{ $errors->has('phone') ? ' quick-lead-phone-error' : '' }} quick-lead-duplicate-status">
+            <x-crm.field label="No. WhatsApp / Telepon" for="quick-lead-phone" required hint="Pemeriksaan duplikat hanya berupa peringatan dan tidak mencegah penyimpanan." :error="$errors->first('phone')">
+                <input id="quick-lead-phone" class="sales-input" name="phone" value="{{ old('phone') }}" required @blur="checkPhone($event.target.value)" x-bind:aria-busy="duplicatePending" aria-invalid="{{ $errors->has('phone') ? 'true' : 'false' }}" aria-describedby="quick-lead-phone-hint{{ $errors->has('phone') ? ' quick-lead-phone-error' : '' }} quick-lead-duplicate-status">
                 <div id="quick-lead-duplicate-status" class="sales-pocketbook-duplicate-status" aria-live="polite" aria-atomic="true">
                     <p x-show="duplicatePending" x-cloak>Memeriksa nomor duplikat...</p>
                     <div x-show="!duplicatePending && duplicates.length" x-cloak class="sales-pocketbook-duplicate-result"><strong>Peringatan duplikat, lead tetap dapat disimpan.</strong><template x-for="item in duplicates" :key="item.id"><div x-text="`${item.sales} / ${item.branch} / ${item.project} / ${item.date}`"></div></template></div>
@@ -378,7 +400,7 @@
                 <input type="hidden" name="expected_updated_at" x-model="edit.token"><input type="hidden" name="presence_session_key">
                 <x-crm.field label="Tanggal Lead" for="modal-lead-date" required><x-crm.date-field id="modal-lead-date" name="lead_date" x-ref="leadEditDate" x-model="edit.lead_date" required /></x-crm.field>
                 <x-crm.field label="Nama Calon Konsumen" for="modal-lead-name" required><input id="modal-lead-name" x-ref="leadEditName" class="sales-input" name="customer_name" x-model="edit.customer_name" required></x-crm.field>
-                <x-crm.field label="No. WhatsApp / Telepon" for="modal-lead-phone" hint="Peringatan duplikat tidak mencegah penyimpanan."><input id="modal-lead-phone" class="sales-input" name="phone" x-model="edit.phone" @blur="checkPhone($event.target.value, edit.id)" x-bind:aria-busy="duplicatePending" aria-describedby="modal-lead-phone-hint modal-lead-duplicate-status"><div id="modal-lead-duplicate-status" class="sales-pocketbook-duplicate-status" aria-live="polite" aria-atomic="true"><p x-show="duplicatePending" x-cloak>Memeriksa nomor duplikat...</p><div x-show="!duplicatePending && duplicates.length" x-cloak class="sales-pocketbook-duplicate-result"><strong>Peringatan duplikat, lead tetap dapat disimpan.</strong><template x-for="item in duplicates" :key="item.id"><div x-text="`${item.sales} / ${item.branch} / ${item.project} / ${item.date}`"></div></template></div></div></x-crm.field>
+                <x-crm.field label="No. WhatsApp / Telepon" for="modal-lead-phone" required hint="Peringatan duplikat tidak mencegah penyimpanan."><input id="modal-lead-phone" class="sales-input" name="phone" x-model="edit.phone" required @blur="checkPhone($event.target.value, edit.id)" x-bind:aria-busy="duplicatePending" aria-describedby="modal-lead-phone-hint modal-lead-duplicate-status"><div id="modal-lead-duplicate-status" class="sales-pocketbook-duplicate-status" aria-live="polite" aria-atomic="true"><p x-show="duplicatePending" x-cloak>Memeriksa nomor duplikat...</p><div x-show="!duplicatePending && duplicates.length" x-cloak class="sales-pocketbook-duplicate-result"><strong>Peringatan duplikat, lead tetap dapat disimpan.</strong><template x-for="item in duplicates" :key="item.id"><div x-text="`${item.sales} / ${item.branch} / ${item.project} / ${item.date}`"></div></template></div></div></x-crm.field>
                 <x-crm.field label="Sumber Lead" for="modal-lead-source" required><select id="modal-lead-source" class="sales-input" name="source" x-model="edit.source" required><option value="">Pilih sumber</option><template x-for="option in leadOptions.source" :key="option"><option :value="option" x-text="option"></option></template></select><p x-show="edit.historical_source" x-cloak class="mt-1 text-xs text-amber-800">Nilai sebelumnya “<span x-text="edit.historical_source"></span>” tidak tersedia lagi. Pilih sumber aktif sebelum menyimpan.</p></x-crm.field>
                 <x-crm.field label="Kanal Masuk" for="modal-lead-platform" required><select id="modal-lead-platform" class="sales-input" name="platform" x-model="edit.platform" required><template x-for="option in leadOptions.channel" :key="option"><option :value="option" x-text="option"></option></template></select></x-crm.field>
                 <x-crm.field label="Aktivitas Lead" for="modal-lead-campaign" required><select id="modal-lead-campaign" class="sales-input" name="campaign_name" x-model="edit.campaign_name" required><template x-for="option in leadOptions.activity" :key="option"><option :value="option" x-text="option"></option></template></select></x-crm.field>

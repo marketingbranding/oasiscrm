@@ -76,6 +76,9 @@ class NavigationService
                     : null,
             ]),
             $this->group('administration', 'Administrasi', 'administration', [
+                ! $isSales && $user->isSuperadmin() && $user->hasPermission('sales_pocketbook.targets_manage')
+                    ? $this->item('Target Lead Sales', 'sales-lead-targets.index', 'target', 'administration', ['sales-lead-targets.*'], $routeName, 'sales_pocketbook', $moduleMaintenance)
+                    : null,
                 ! $isSales && $user->can('viewAny', Promo::class)
                     ? $this->item('Promo', 'promos.index', 'sales', 'administration', ['promos.*'], $routeName, 'promo', $moduleMaintenance)
                     : null,

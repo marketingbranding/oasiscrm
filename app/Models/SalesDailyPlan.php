@@ -18,14 +18,19 @@ class SalesDailyPlan extends Model
 
     public const REQUIRED_WORK_MINUTES = 420;
 
+    public const TOTAL_WORK_MINUTES = self::REQUIRED_WORK_MINUTES;
+
     protected $fillable = [
         'branch_id',
         'sales_user_id',
         'plan_date',
+        'work_date',
         'status',
         'submitted_at',
         'submitted_by',
         'last_modified_by',
+        'revised_at',
+        'revised_by',
         'lock_version',
     ];
 
@@ -33,9 +38,26 @@ class SalesDailyPlan extends Model
     {
         return [
             'plan_date' => 'date',
+            'work_date' => 'date',
             'submitted_at' => 'datetime',
+            'revised_at' => 'datetime',
             'lock_version' => 'integer',
         ];
+    }
+
+    protected static function booted(): void
+    {
+        static::creating(function (self $plan): void {
+            if (! $plan->branch_id && $plan->sales_user_id) {
+                $plan->branch_id = User::query()->whereKey($plan->sales_user_id)->value('branch_id');
+            }
+            if (! $plan->plan_date && $plan->work_date) {
+                $plan->plan_date = $plan->work_date;
+            }
+            if (! $plan->work_date && $plan->plan_date) {
+                $plan->work_date = $plan->plan_date;
+            }
+        });
     }
 
     public function branch(): BelongsTo
@@ -53,6 +75,11 @@ class SalesDailyPlan extends Model
         return $this->belongsTo(User::class, 'submitted_by');
     }
 
+    public function submitter(): BelongsTo
+    {
+        return $this->submittedBy();
+    }
+
     public function lastModifiedBy(): BelongsTo
     {
         return $this->belongsTo(User::class, 'last_modified_by');
@@ -61,6 +88,11 @@ class SalesDailyPlan extends Model
     public function updatedBy(): BelongsTo
     {
         return $this->lastModifiedBy();
+    }
+
+    public function reviser(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'revised_by');
     }
 
     public function agendas(): HasMany
@@ -73,13 +105,28 @@ class SalesDailyPlan extends Model
             ->orderBy('id');
     }
 
+    public function items(): HasMany
+    {
+        return $this->hasMany(SalesDailyPlanItem::class)->orderBy('position');
+    }
+
+    public function revisions(): HasMany
+    {
+        return $this->hasMany(SalesDailyPlanRevision::class);
+    }
+
+    public function totalDurationMinutes(): int
+    {
+        return (int) $this->items()->sum('duration_minutes');
+    }
+
     public function isWeekday(): bool
     {
-        return $this->plan_date->isWeekday();
+        return ($this->plan_date ?? $this->work_date)->isWeekday();
     }
 
     protected function activityLabel(): string
     {
-        return 'Daily Plan '.$this->plan_date?->toDateString();
+        return 'Daily Plan '.($this->plan_date ?? $this->work_date)?->toDateString();
     }
 }

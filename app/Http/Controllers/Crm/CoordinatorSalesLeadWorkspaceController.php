@@ -6,13 +6,17 @@ use App\Enums\SalesLeadStatus;
 use App\Exports\CoordinatorSalesLeadExport;
 use App\Http\Controllers\Controller;
 use App\Models\LeadMaster;
+use App\Models\SalesDailyPlan;
 use App\Models\SalesLead;
+use App\Models\User;
 use App\Services\CoordinatorLeadPushService;
 use App\Services\CoordinatorLeadTeamService;
 use App\Services\CoordinatorSalesMonitoringService;
 use App\Services\PromoOptionService;
+use App\Services\SalesLeadTargetService;
 use App\Services\WorkspaceAccessService;
 use App\Support\SalesLeadMasterData;
+use Carbon\CarbonImmutable;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -27,6 +31,7 @@ class CoordinatorSalesLeadWorkspaceController extends Controller
         private readonly CoordinatorSalesMonitoringService $monitoring,
         private readonly PromoOptionService $promoOptions,
         private readonly WorkspaceAccessService $workspaceAccess,
+        private readonly SalesLeadTargetService $leadTargets,
     ) {}
 
     public function index(Request $request): View
@@ -37,11 +42,24 @@ class CoordinatorSalesLeadWorkspaceController extends Controller
             'date_from' => ['nullable', 'required_if:period,custom', 'date'],
             'date_to' => ['nullable', 'required_if:period,custom', 'date', 'after_or_equal:date_from'],
             'sales_id' => ['nullable', 'integer'],
+            'target_month' => ['nullable', 'date_format:Y-m'],
         ]);
         $tab = $filters['tab'] ?? 'lead';
         unset($filters['tab']);
 
         $data = $this->monitoring->resolve($request->user(), $filters);
+        $targetMonthValue = $request->query('target_month', now(config('app.timezone'))->format('Y-m'));
+        $targetMonth = CarbonImmutable::createFromFormat('Y-m-d', $targetMonthValue.'-01', config('app.timezone'));
+        $data['targetMonth'] = $targetMonth;
+        $data['targetSummaries'] = $data['salesUsers']->mapWithKeys(fn (User $sales) => [$sales->id => $this->leadTargets->summary($sales, $targetMonth)]);
+        $dailyPlanDate = CarbonImmutable::createFromFormat('Y-m-d', $request->query('work_date', $data['period']['from']->toDateString()), config('app.timezone'));
+        $data['dailyPlanDate'] = $dailyPlanDate;
+        $data['dailyPlans'] = SalesDailyPlan::query()
+            ->with(['sales:id,name', 'items'])
+            ->whereIn('sales_user_id', $data['salesUsers']->pluck('id'))
+            ->whereDate('work_date', $dailyPlanDate->toDateString())
+            ->orderBy('sales_user_id')
+            ->get();
         $data['projectsBySales'] = $data['salesUsers']->mapWithKeys(fn ($sales) => [
             (string) $sales->id => $sales->assignedProjects->map(fn ($project) => [
                 'id' => (string) $project->id,

@@ -69,6 +69,7 @@ class PermissionCatalog
             ['name' => 'Mengekspor Buku Saku Sales', 'slug' => 'sales_pocketbook.export', 'description' => 'Mengekspor data Buku Saku Sales sesuai lingkup akses.', 'group_name' => 'Buku Saku Sales'],
             ['name' => 'Menyinkronkan lead tim Buku Saku Sales', 'slug' => 'sales_pocketbook.sync', 'description' => 'Mendorong lead tim Buku Saku Sales ke spreadsheet cabang sesuai lingkup akses.', 'group_name' => 'Buku Saku Sales'],
             ['name' => 'Merekonsiliasi siklus lead Buku Saku Sales', 'slug' => 'sales_pocketbook.reconcile', 'description' => 'Melihat masalah rekonsiliasi siklus lead sesuai lingkup akses.', 'group_name' => 'Buku Saku Sales'],
+            ['name' => 'Mengatur target Lead Sales', 'slug' => 'sales_pocketbook.targets_manage', 'description' => 'Menetapkan target Lead bulanan per Sales.', 'group_name' => 'Buku Saku Sales'],
             ['name' => 'Membuat Work Planner', 'slug' => 'work_planner.create', 'description' => 'Membuat item Work Planner.', 'group_name' => 'Work Planner'],
             ['name' => 'Memperbarui Work Planner', 'slug' => 'work_planner.update', 'description' => 'Memperbarui item Work Planner sesuai lingkup akses.', 'group_name' => 'Work Planner'],
             ['name' => 'Menetapkan Work Planner', 'slug' => 'work_planner.assign', 'description' => 'Menetapkan item Work Planner kepada pengguna lain.', 'group_name' => 'Work Planner'],

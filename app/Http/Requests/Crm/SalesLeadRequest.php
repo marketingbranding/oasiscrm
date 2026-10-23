@@ -25,7 +25,7 @@ abstract class SalesLeadRequest extends FormRequest
             'sales_user_id' => ['required', 'integer', 'exists:users,id'],
             'lead_date' => ['required', 'date'],
             'customer_name' => ['required', 'string', 'max:255'],
-            'phone' => ['nullable', 'string', 'max:50'],
+            'phone' => ['required', 'string', 'max:50'],
             'notes' => ['nullable', 'string', 'max:5000'],
             'promo_name' => ['nullable', 'string', 'max:255', function (string $attribute, mixed $value, \Closure $fail): void {
                 $project = LeadMaster::find($this->integer('project_id'));
@@ -87,6 +87,7 @@ abstract class SalesLeadRequest extends FormRequest
             'sales_user_id.required' => 'Sales wajib dipilih.',
             'lead_date.required' => 'Tanggal lead wajib diisi.',
             'customer_name.required' => 'Nama calon konsumen wajib diisi.',
+            'phone.required' => 'Nomor HP/WA wajib diisi.',
             'current_status.required' => 'Status lead wajib dipilih.',
             'current_status.in' => 'Status sistem (UTJ, Cek SLIK, dan seterusnya) tidak dapat diisi dari formulir lead. Gunakan aksi siklus lead yang sesuai.',
             'source.required' => 'Sumber lead wajib dipilih.',

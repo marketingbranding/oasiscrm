@@ -194,6 +194,16 @@ class User extends Authenticatable implements MustVerifyEmail
         return $this->hasMany(SalesSheetIdentity::class);
     }
 
+    public function salesLeadTargets(): HasMany
+    {
+        return $this->hasMany(SalesLeadTarget::class, 'sales_user_id');
+    }
+
+    public function dailyPlans(): HasMany
+    {
+        return $this->hasMany(SalesDailyPlan::class, 'sales_user_id');
+    }
+
     public function coordinatorSalesAssignments(): HasMany
     {
         return $this->hasMany(SalesCoordinatorSales::class, 'coordinator_user_id');

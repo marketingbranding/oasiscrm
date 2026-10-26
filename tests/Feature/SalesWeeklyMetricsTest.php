@@ -143,7 +143,7 @@ class SalesWeeklyMetricsTest extends TestCase
         $this->actingAs($sales)->get(route('dashboard'))->assertForbidden();
         $this->actingAs($sales)->get('/')->assertRedirect(route('sales-pocketbook.index'));
         $this->actingAs($sales)->get(route('sales-pocketbook.index'))->assertOk()
-            ->assertSee('Agenda Saya')
+            ->assertSee('Buku Saku Saya')
             ->assertSee('Input Lead')
             ->assertSee('tab=leads', false)
             ->assertDontSee('Ringkasan periode')

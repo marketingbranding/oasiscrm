@@ -45,6 +45,7 @@ use App\Http\Controllers\Crm\SalesAgendaEvidenceArchiveController;
 use App\Http\Controllers\Crm\SalesAgendaEvidenceController;
 use App\Http\Controllers\Crm\SalesAgendaExportController;
 use App\Http\Controllers\Crm\SalesDailyPlanController;
+use App\Http\Controllers\Crm\SalesDailyPlanItemEvidenceController;
 use App\Http\Controllers\Crm\SalesDailyReminderController;
 use App\Http\Controllers\Crm\SalesFeeReportController;
 use App\Http\Controllers\Crm\SalesLeadController;
@@ -164,6 +165,9 @@ Route::middleware(['auth', 'active', 'verified', 'password.changed', 'operationa
         Route::get('/buku-saku-sales/agendas/export', SalesAgendaExportController::class)->middleware('permission:sales_pocketbook.export_own')->name('sales-agendas.export');
         Route::post('/buku-saku-sales/agendas', [SalesAgendaController::class, 'store'])->name('sales-agendas.store');
         Route::patch('/buku-saku-sales/daily-plan-items/{item}/complete', [SalesDailyPlanController::class, 'complete'])->name('sales-daily-plan-items.complete');
+        Route::post('/buku-saku-sales/daily-plan-items/{item}/reschedule', [SalesDailyPlanController::class, 'reschedule'])->name('sales-daily-plan-items.reschedule');
+        Route::post('/buku-saku-sales/daily-plan-items/{item}/evidence', [SalesDailyPlanItemEvidenceController::class, 'store'])->name('sales-daily-plan-items.evidence.store');
+        Route::get('/buku-saku-sales/daily-plan-items/{item}/evidence/{evidence}', [SalesDailyPlanItemEvidenceController::class, 'show'])->name('sales-daily-plan-items.evidence.show');
         Route::put('/buku-saku-sales/daily-plans/{plan}/revision', [SalesDailyPlanController::class, 'revise'])->middleware('permission:sales_pocketbook.manage_team')->name('sales-daily-plans.revise');
         Route::patch('/buku-saku-sales/agendas/{agenda}', [SalesAgendaController::class, 'update'])->name('sales-agendas.update');
         Route::post('/buku-saku-sales/agendas/{agenda}/reschedule', [SalesAgendaController::class, 'reschedule'])->name('sales-agendas.reschedule');

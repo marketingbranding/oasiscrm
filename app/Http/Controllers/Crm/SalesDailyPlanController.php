@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Crm;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Crm\CompleteSalesDailyPlanItemRequest;
 use App\Http\Requests\Crm\ReorderSalesDailyPlanRequest;
+use App\Http\Requests\Crm\RescheduleSalesDailyPlanItemRequest;
 use App\Http\Requests\Crm\ReviseSalesDailyPlanRequest;
 use App\Http\Requests\Crm\StoreSalesDailyPlanAgendaRequest;
 use App\Http\Requests\Crm\UpdateSalesDailyPlanAgendaRequest;
@@ -21,6 +22,7 @@ use App\Services\SalesTeamScopeService;
 use App\Services\WorkspaceAccessService;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
 use Illuminate\Validation\ValidationException;
@@ -151,7 +153,17 @@ class SalesDailyPlanController extends Controller
             : redirect()->route('sales-daily-plans.index', ['date' => ($dailyPlan->plan_date ?? $dailyPlan->work_date)->toDateString()])->with('success', 'Daily Plan dikirim dengan total 420 menit.');
     }
 
-    public function complete(CompleteSalesDailyPlanItemRequest $request, SalesDailyPlanItem $item): Response
+    public function reschedule(RescheduleSalesDailyPlanItemRequest $request, SalesDailyPlanItem $item): RedirectResponse
+    {
+        $result = $this->plans->rescheduleItem($request->user(), $item, $request->validated('reason'));
+        $sourceDate = $result['source']->plan->work_date->toDateString();
+        $targetDate = $result['target']->plan->work_date->locale('id')->translatedFormat('l, d F Y');
+
+        return to_route('sales-agendas.index', ['tab' => 'agenda', 'work_date' => $sourceDate])
+            ->with('success', "Agenda berhasil dijadwalkan ulang ke {$targetDate}.");
+    }
+
+    public function complete(CompleteSalesDailyPlanItemRequest $request, SalesDailyPlanItem $item): RedirectResponse
     {
         $this->plans->completeItem($request->user(), $item, $request->validated('activity_result'));
 

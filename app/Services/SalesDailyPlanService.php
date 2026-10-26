@@ -2,11 +2,13 @@
 
 namespace App\Services;
 
+use App\Models\ActivityLog;
 use App\Models\ContentItem;
 use App\Models\LeadMaster;
 use App\Models\SalesCoordinatorSales;
 use App\Models\SalesDailyPlan;
 use App\Models\SalesDailyPlanItem;
+use App\Models\SalesDailyPlanItemReschedule;
 use App\Models\User;
 use App\Policies\SalesDailyPlanPolicy;
 use Carbon\CarbonImmutable;
@@ -195,13 +197,93 @@ class SalesDailyPlanService
                 throw new AccessDeniedHttpException('Daily Plan yang sudah disubmit tidak dapat diubah oleh Sales.');
             }
 
+            $preserveExisting = $plan->exists;
             $plan->status = 'draft';
             $plan->plan_date ??= $workDate;
             $plan->work_date = $workDate;
             $plan->save();
-            $this->replaceItems($plan, $normalized, $workDate);
+            $this->replaceItems($plan, $normalized, $workDate, $preserveExisting);
 
             return $plan->fresh('items');
+        });
+    }
+
+    /**
+     * @return array{source: SalesDailyPlanItem, target: SalesDailyPlanItem}
+     */
+    public function rescheduleItem(User $sales, SalesDailyPlanItem $item, string $reason): array
+    {
+        $reason = trim($reason);
+        if ($reason === '' || mb_strlen($reason) > 1000) {
+            throw ValidationException::withMessages(['reason' => 'Alasan penjadwalan ulang wajib diisi dan maksimal 1000 karakter.']);
+        }
+
+        return DB::transaction(function () use ($sales, $item, $reason): array {
+            $source = SalesDailyPlanItem::query()
+                ->with('plan')
+                ->lockForUpdate()
+                ->findOrFail($item->id);
+            $this->assertItemOwner($sales, $source);
+            if ($source->plan->status !== 'submitted' || in_array($source->status, ['completed', 'rescheduled'], true)) {
+                throw new AccessDeniedHttpException('Aktivitas ini tidak dapat dijadwalkan ulang.');
+            }
+
+            $sourceDate = CarbonImmutable::parse($source->plan->work_date->toDateString(), config('app.timezone'));
+            [$targetPlan, $targetDate] = $this->findRescheduleTargetPlan($sales, $sourceDate, $source->duration_minutes);
+            $targetItems = $targetPlan->items()->orderBy('position')->get();
+            $targetSchedule = $this->allocateSchedule($targetItems->map(fn (SalesDailyPlanItem $target): array => [
+                'duration_minutes' => $target->duration_minutes,
+            ])->push([
+                'duration_minutes' => $source->duration_minutes,
+            ])->all(), $targetDate);
+            $target = $targetPlan->items()->create([
+                'position' => ((int) $targetItems->max('position')) + 1,
+                'sales_activity_category' => $source->sales_activity_category,
+                'activity' => $source->activity,
+                'location' => $source->location,
+                'detail' => $source->detail,
+                'duration_minutes' => $source->duration_minutes,
+                'start_time' => $targetSchedule[array_key_last($targetSchedule)]['start_time'],
+                'end_time' => $targetSchedule[array_key_last($targetSchedule)]['end_time'],
+                'status' => 'planned',
+            ]);
+
+            $source->forceFill(['status' => 'rescheduled'])->save();
+            SalesDailyPlanItemReschedule::create([
+                'source_item_id' => $source->id,
+                'target_item_id' => $target->id,
+                'actor_user_id' => $sales->id,
+                'source_work_date' => $source->plan->work_date->toDateString(),
+                'target_work_date' => $targetDate->toDateString(),
+                'reason' => $reason,
+            ]);
+            ActivityLog::create([
+                'causer_id' => $sales->id,
+                'subject_type' => SalesDailyPlanItem::class,
+                'subject_id' => $source->id,
+                'event' => 'sales_daily_plan_item_rescheduled',
+                'description' => 'Aktivitas Daily Plan dijadwalkan ulang.',
+                'properties' => [
+                    'source_item_id' => $source->id,
+                    'target_item_id' => $target->id,
+                    'source_work_date' => $source->plan->work_date->toDateString(),
+                    'target_work_date' => $targetDate->toDateString(),
+                    'reason' => $reason,
+                ],
+            ]);
+            ActivityLog::create([
+                'causer_id' => $sales->id,
+                'subject_type' => SalesDailyPlanItem::class,
+                'subject_id' => $target->id,
+                'event' => 'sales_daily_plan_item_rescheduled_copy_created',
+                'description' => 'Salinan aktivitas Daily Plan dibuat pada hari kerja berikutnya.',
+                'properties' => ['source_item_id' => $source->id, 'target_item_id' => $target->id],
+            ]);
+
+            return [
+                'source' => $source->fresh(['plan', 'rescheduleTo']),
+                'target' => $target->fresh(['plan', 'rescheduleFrom']),
+            ];
         });
     }
 
@@ -245,25 +327,51 @@ class SalesDailyPlanService
 
     public function completeItem(User $sales, SalesDailyPlanItem $item, string $activityResult): SalesDailyPlanItem
     {
+        return DB::transaction(function () use ($sales, $item, $activityResult): SalesDailyPlanItem {
+            $item = SalesDailyPlanItem::query()->with('plan')->lockForUpdate()->findOrFail($item->id);
+            $this->assertItemWritable($sales, $item);
+            $item->forceFill([
+                'activity_result' => $activityResult,
+                'status' => 'completed',
+                'completed_at' => now(),
+                'completed_by' => $sales->id,
+            ])->save();
+            ActivityLog::create([
+                'causer_id' => $sales->id,
+                'subject_type' => SalesDailyPlanItem::class,
+                'subject_id' => $item->id,
+                'event' => 'sales_daily_plan_item_completed',
+                'description' => 'Aktivitas Daily Plan diselesaikan dengan hasil.',
+                'properties' => ['daily_plan_item_id' => $item->id],
+            ]);
+
+            return $item->fresh();
+        });
+    }
+
+    public function assertItemOwner(User $sales, SalesDailyPlanItem $item): void
+    {
         $item->loadMissing('plan');
-        if ($item->plan->sales_user_id !== $sales->id || $item->plan->status !== 'submitted') {
+        if (! $item->plan || $item->plan->sales_user_id !== $sales->id) {
             throw new AccessDeniedHttpException('Aktivitas ini bukan milik Sales yang sedang masuk.');
         }
+    }
 
-        $item->forceFill([
-            'activity_result' => $activityResult,
-            'status' => 'completed',
-            'completed_at' => now(),
-            'completed_by' => $sales->id,
-        ])->save();
-
-        return $item->fresh();
+    public function assertItemWritable(User $sales, SalesDailyPlanItem $item): void
+    {
+        $this->assertItemOwner($sales, $item);
+        if ($item->plan->status !== 'submitted' || in_array($item->status, ['completed', 'rescheduled'], true)) {
+            throw new AccessDeniedHttpException('Aktivitas ini tidak dapat diubah lagi.');
+        }
     }
 
     public function itemState(SalesDailyPlanItem $item, CarbonImmutable $now): string
     {
         if ($item->status === 'completed') {
             return 'completed';
+        }
+        if ($item->status === 'rescheduled') {
+            return 'rescheduled';
         }
 
         $item->loadMissing('plan');
@@ -385,7 +493,11 @@ class SalesDailyPlanService
 
             return [
                 'id' => isset($activity['id']) ? (int) $activity['id'] : null,
+                'sales_activity_category' => filled($activity['sales_activity_category'] ?? null)
+                    ? trim((string) $activity['sales_activity_category'])
+                    : null,
                 'activity' => trim((string) $activity['activity']),
+                'location' => filled($activity['location'] ?? null) ? trim((string) $activity['location']) : null,
                 'detail' => filled($activity['detail'] ?? null) ? trim((string) $activity['detail']) : null,
                 'duration_minutes' => $duration,
             ];
@@ -406,6 +518,45 @@ class SalesDailyPlanService
         }
     }
 
+    /**
+     * @return array{0: SalesDailyPlan, 1: CarbonImmutable}
+     */
+    private function findRescheduleTargetPlan(User $sales, CarbonImmutable $sourceDate, int $duration): array
+    {
+        $targetDate = $sourceDate->addDay();
+
+        while (true) {
+            if (! $targetDate->isWeekday()) {
+                $targetDate = $targetDate->addDay();
+
+                continue;
+            }
+
+            $plan = SalesDailyPlan::query()
+                ->where('sales_user_id', $sales->id)
+                ->whereDate('work_date', $targetDate->toDateString())
+                ->lockForUpdate()
+                ->first();
+
+            if (! $plan) {
+                $plan = SalesDailyPlan::query()->firstOrCreate(
+                    [
+                        'sales_user_id' => $sales->id,
+                        'work_date' => $targetDate->toDateString(),
+                    ],
+                    ['status' => 'draft'],
+                );
+                $plan = SalesDailyPlan::query()->lockForUpdate()->findOrFail($plan->id);
+            }
+
+            if ($plan->status === 'draft' && $plan->totalDurationMinutes() + $duration <= self::TOTAL_WORK_MINUTES) {
+                return [$plan, $targetDate];
+            }
+
+            $targetDate = $targetDate->addDay();
+        }
+    }
+
     private function replaceItems(SalesDailyPlan $plan, array $activities, CarbonImmutable $workDate, bool $preserveExisting = false): void
     {
         $schedule = $this->allocateSchedule($activities, $workDate);
@@ -413,6 +564,24 @@ class SalesDailyPlanService
         $requestedIds = collect($activities)->pluck('id')->filter()->map(fn (int $id) => $id)->all();
 
         if ($preserveExisting) {
+            $existingIds = collect($existing->keys());
+            $protectedIds = SalesDailyPlanItemReschedule::query()
+                ->where(function ($query) use ($existing): void {
+                    $query->whereIn('source_item_id', $existing->keys()->all())
+                        ->orWhereIn('target_item_id', $existing->keys()->all());
+                })
+                ->get(['source_item_id', 'target_item_id'])
+                ->flatMap(fn (SalesDailyPlanItemReschedule $reschedule) => [$reschedule->source_item_id, $reschedule->target_item_id])
+                ->filter()
+                ->filter(fn (int $id): bool => $existingIds->contains($id))
+                ->unique()
+                ->all();
+            $removedProtectedIds = collect($protectedIds)->diff($requestedIds);
+            if ($removedProtectedIds->isNotEmpty()) {
+                throw ValidationException::withMessages([
+                    'activities' => 'Aktivitas yang memiliki riwayat penjadwalan ulang tidak dapat dihapus dari Daily Plan.',
+                ]);
+            }
             $existing->except($requestedIds)->each->delete();
             $existing->each(function (SalesDailyPlanItem $item): void {
                 $item->update(['position' => $item->position + 10000]);
@@ -429,7 +598,9 @@ class SalesDailyPlanService
             }
             $attributes = [
                 'position' => $position,
+                'sales_activity_category' => $activity['sales_activity_category'],
                 'activity' => $activity['activity'],
+                'location' => $activity['location'],
                 'detail' => $activity['detail'],
                 'duration_minutes' => $activity['duration_minutes'],
                 'start_time' => $itemData['start_time'],
@@ -497,7 +668,9 @@ class SalesDailyPlanService
         return $plan->items()->get()->map(fn (SalesDailyPlanItem $item): array => [
             'id' => $item->id,
             'position' => $item->position,
+            'sales_activity_category' => $item->sales_activity_category,
             'activity' => $item->activity,
+            'location' => $item->location,
             'detail' => $item->detail,
             'duration_minutes' => $item->duration_minutes,
             'start_time' => $item->start_time,

@@ -204,7 +204,6 @@ class SalesLeadService
         );
         sort($columns);
 
-        return $columns === ['branch_id', 'external_sync_id'];
     }
 
     public function update(SalesLead $lead, array $data, User $actor): SalesLead

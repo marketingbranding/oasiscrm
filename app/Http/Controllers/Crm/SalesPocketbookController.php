@@ -40,6 +40,7 @@ class SalesPocketbookController extends Controller
     public function index(Request $request)
     {
         $user = $request->user();
+        $this->authorize('viewAny', SalesLead::class);
 
         if ($user->isSales()) {
             return app(SalesAgendaController::class)->index($request);

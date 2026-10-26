@@ -100,6 +100,30 @@ export default function registerSalesPocketbook(Alpine) {
         },
     }));
 
+    Alpine.data('salesLeadSubmit', () => ({
+        submitting: false,
+
+        beginSubmit(event) {
+            if (this.submitting) {
+                event.preventDefault();
+
+                return;
+            }
+
+            const submitter = event.submitter;
+            if (submitter?.name && submitter.value) {
+                const preserved = document.createElement('input');
+                preserved.type = 'hidden';
+                preserved.name = submitter.name;
+                preserved.value = submitter.value;
+                preserved.dataset.submitActionPreserved = 'true';
+                this.$root.appendChild(preserved);
+            }
+
+            this.submitting = true;
+        },
+    }));
+
     Alpine.data('salesDuplicatePhone', (endpoint, exceptId = null) => ({
         duplicates: [],
         duplicatePending: false,

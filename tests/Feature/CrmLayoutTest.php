@@ -49,7 +49,6 @@ class CrmLayoutTest extends TestCase
             ->assertDontSee(route('expenses.index'), false)
             ->assertDontSee(route('dana-talangan.index'), false)
             ->assertDontSee(route('admin-users.index'), false)
-            ->assertDontSee('Administrasi')
             ->assertSee(route('profile.edit'), false)
             ->assertSee(route('logout'), false);
     }

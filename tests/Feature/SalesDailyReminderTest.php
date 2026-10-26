@@ -28,7 +28,7 @@ class SalesDailyReminderTest extends TestCase
         [, , $sales] = $this->salesContext();
 
         $this->actingAs($sales)->get(route('sales-pocketbook.index'))->assertOk()
-            ->assertSee('Agenda Saya')
+            ->assertSee('Buku Saku Saya')
             ->assertSee('Input Lead')
             ->assertSee('Belum ada lead yang dicatat hari ini.')
             ->assertSee('tab=leads', false)

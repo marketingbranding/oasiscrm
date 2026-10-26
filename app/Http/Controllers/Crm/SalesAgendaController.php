@@ -38,8 +38,11 @@ class SalesAgendaController extends Controller
         $tab = $request->query('tab') === 'leads' ? 'leads' : 'agenda';
         $request->validate(['work_date' => ['nullable', 'date_format:Y-m-d']]);
         $dailyPlanDate = CarbonImmutable::createFromFormat('Y-m-d', $request->query('work_date', today()->toDateString()), config('app.timezone'));
+        while ($dailyPlanDate->isWeekend()) {
+            $dailyPlanDate = $dailyPlanDate->addDay();
+        }
         $dailyPlan = SalesDailyPlan::query()
-            ->with('items')
+            ->with(['items.evidence', 'items.rescheduleTo.targetItem.plan', 'items.rescheduleFrom.sourceItem.plan'])
             ->where('sales_user_id', $request->user()->id)
             ->whereDate('work_date', $dailyPlanDate->toDateString())
             ->first();
@@ -71,8 +74,8 @@ class SalesAgendaController extends Controller
         $dailyReminder = $this->dailyReminder->state($request->user()) + [
             'leadInputUrl' => route('sales-agendas.index', ['tab' => 'leads']).'#lead-saya',
             'dismissUrl' => route('sales-reminders.dismiss'),
-            'agendaInputUrl' => route('sales-agendas.index', ['tab' => 'agenda']).'#agenda-baru',
-            'missingResultUrl' => route('sales-agendas.index', ['tab' => 'agenda']).'#agenda-saya',
+            'agendaInputUrl' => route('sales-agendas.index', ['tab' => 'agenda']).'#daily-plan',
+            'missingResultUrl' => route('sales-agendas.index', ['tab' => 'agenda']).'#daily-plan',
         ];
         $canExport = $request->user()->hasPermission('sales_pocketbook.export_own');
 

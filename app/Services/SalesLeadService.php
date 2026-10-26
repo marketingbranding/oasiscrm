@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Enums\SalesLeadStatus;
 use App\Models\SalesLead;
 use App\Models\User;
+use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
@@ -22,40 +23,94 @@ class SalesLeadService
     public function create(array $data, User $actor): SalesLead
     {
         $this->assertManualStatus($data['current_status'] ?? null);
-        $lead = DB::transaction(function () use ($data, $actor): SalesLead {
-            $data['id_promo'] = $data['promo_name'] ?? null;
-            unset($data['promo_name']);
-            $data['normalized_phone'] = $this->phones->normalize($data['phone'] ?? null);
-            unset($data['lead_source_id']);
-            $data['lead_source_id'] = null;
-            $data['source_name_snapshot'] = $data['source'];
-            $data['current_status_changed_at'] = now();
-            $data['current_status_source'] = 'manual';
-            $data['current_status_source_id'] = (string) $actor->id;
-            $data['external_sync_id'] = $data['operation_uuid'] ?? (string) Str::uuid();
-            unset($data['operation_uuid']);
-            $data['sync_status'] = 'pending_create';
-            $data['last_synced_at'] = null;
-            $data['last_sync_error'] = null;
-            $data['created_by'] = $actor->id;
-            $data['updated_by'] = $actor->id;
-            $lead = SalesLead::create($data);
-            $this->lifecycle->recordStatusHistory(
-                $lead,
-                $lead->current_status,
-                'manual',
-                (string) $actor->id,
-                $actor,
-                $lead->current_status_changed_at,
-                operationUuid: $lead->external_sync_id,
-            );
-            $lead->logSalesActivity('created', $this->activityContext($lead));
+        $operationUuid = $data['operation_uuid'] ?? (string) Str::uuid();
+        $created = false;
 
-            return $lead->fresh();
-        });
-        $this->schedulePush($lead, $actor);
+        try {
+            $lead = DB::transaction(function () use ($data, $actor, $operationUuid, &$created): SalesLead {
+                $existing = SalesLead::query()
+                    ->where('branch_id', $data['branch_id'])
+                    ->where('external_sync_id', $operationUuid)
+                    ->lockForUpdate()
+                    ->first();
+                if ($existing !== null) {
+                    $this->assertCreateOperationOwner($existing, $data, $actor);
+
+                    return $existing->fresh();
+                }
+
+                $data['id_promo'] = $data['promo_name'] ?? null;
+                unset($data['promo_name']);
+                $data['normalized_phone'] = $this->phones->normalize($data['phone'] ?? null);
+                unset($data['lead_source_id']);
+                $data['lead_source_id'] = null;
+                $data['source_name_snapshot'] = $data['source'];
+                $data['current_status_changed_at'] = now();
+                $data['current_status_source'] = 'manual';
+                $data['current_status_source_id'] = (string) $actor->id;
+                $data['external_sync_id'] = $operationUuid;
+                unset($data['operation_uuid']);
+                $data['sync_status'] = 'pending_create';
+                $data['last_synced_at'] = null;
+                $data['last_sync_error'] = null;
+                $data['created_by'] = $actor->id;
+                $data['updated_by'] = $actor->id;
+                $lead = SalesLead::create($data);
+                $created = true;
+                $this->lifecycle->recordStatusHistory(
+                    $lead,
+                    $lead->current_status,
+                    'manual',
+                    (string) $actor->id,
+                    $actor,
+                    $lead->current_status_changed_at,
+                    operationUuid: $lead->external_sync_id,
+                );
+                $lead->logSalesActivity('created', $this->activityContext($lead));
+
+                return $lead->fresh();
+            });
+        } catch (QueryException $exception) {
+            if (! $this->isExternalSyncIdCollision($exception)) {
+                throw $exception;
+            }
+
+            $lead = SalesLead::query()
+                ->where('branch_id', $data['branch_id'])
+                ->where('external_sync_id', $operationUuid)
+                ->first();
+            if ($lead === null) {
+                throw $exception;
+            }
+            $this->assertCreateOperationOwner($lead, $data, $actor);
+        }
+        if ($created) {
+            $this->schedulePush($lead, $actor);
+        }
 
         return $lead;
+    }
+
+    private function assertCreateOperationOwner(SalesLead $lead, array $data, User $actor): void
+    {
+        if ((int) $lead->created_by !== (int) $actor->id || (int) $lead->sales_user_id !== (int) $data['sales_user_id']) {
+            throw ValidationException::withMessages([
+                'operation_uuid' => 'Identitas operasi sudah digunakan oleh operasi lain.',
+            ]);
+        }
+    }
+
+    private function isExternalSyncIdCollision(QueryException $exception): bool
+    {
+        $message = strtolower($exception->getMessage());
+        $sqlState = $exception->errorInfo[0] ?? null;
+
+        if (! in_array($sqlState, ['23000', '23505'], true)) {
+            return false;
+        }
+
+        return str_contains($message, 'sales_leads_branch_sync_unique')
+            || str_contains($message, 'unique constraint failed: sales_leads.branch_id, sales_leads.external_sync_id');
     }
 
     public function update(SalesLead $lead, array $data, User $actor): SalesLead

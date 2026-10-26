@@ -1,8 +1,9 @@
 export default function registerSalesDailyPlan(Alpine) {
     Alpine.data('salesDailyPlan', (initialActivities = []) => ({
         activities: initialActivities.length ? initialActivities : [],
-        draft: { activity: '', detail: '', duration_minutes: '' },
+        draft: { sales_activity_category: '', activity: '', location: '', detail: '', duration_minutes: '' },
         modalError: '',
+        submitting: false,
 
         init() {
             this.$watch('draft.duration_minutes', () => {
@@ -15,7 +16,7 @@ export default function registerSalesDailyPlan(Alpine) {
         },
 
         add() {
-            this.activities.push({ activity: '', detail: '', duration_minutes: '' });
+            this.activities.push({ sales_activity_category: '', activity: '', location: '', detail: '', duration_minutes: '' });
         },
 
         remove(index) {
@@ -36,6 +37,9 @@ export default function registerSalesDailyPlan(Alpine) {
                 const start = cursor;
                 let remaining = Number(activity.duration_minutes) || 0;
                 while (remaining > 0) {
+                    if (cursor >= 1020) {
+                        break;
+                    }
                     if (cursor >= 720 && cursor < 780) cursor = 780;
                     const blockEnd = cursor < 720 ? 720 : 1020;
                     const consumed = Math.min(remaining, blockEnd - cursor);
@@ -54,13 +58,46 @@ export default function registerSalesDailyPlan(Alpine) {
         },
 
         openAddModal() {
-            this.draft = { activity: '', detail: '', duration_minutes: '' };
+            this.draft = { sales_activity_category: '', activity: '', location: '', detail: '', duration_minutes: '' };
             this.modalError = '';
             window.dispatchEvent(new CustomEvent('oasis:modal-open', { detail: { name: 'tambah-agenda' } }));
         },
 
         closeAddModal() {
             window.dispatchEvent(new CustomEvent('oasis:modal-close', { detail: { name: 'tambah-agenda' } }));
+        },
+
+        submitPlan(event) {
+            if (this.submitting) return;
+
+            const form = event.currentTarget;
+            const submit = () => HTMLFormElement.prototype.submit.call(form);
+            const reducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+
+            this.submitting = true;
+            if (reducedMotion) {
+                submit();
+                return;
+            }
+
+            const paper = form.closest('.sales-agenda-paper');
+            if (!paper) {
+                submit();
+                return;
+            }
+
+            paper.classList.add('is-tearing');
+            let finished = false;
+            const finish = () => {
+                if (finished) return;
+                finished = true;
+                submit();
+            };
+
+            paper.addEventListener('animationend', (animationEvent) => {
+                if (animationEvent.animationName === 'sales-paper-tear') finish();
+            }, { once: true });
+            window.setTimeout(finish, 760);
         },
 
         draftSchedule() {
@@ -72,7 +109,12 @@ export default function registerSalesDailyPlan(Alpine) {
 
         addFromModal() {
             const duration = Number(this.draft.duration_minutes) || 0;
+            const category = (this.draft.sales_activity_category || '').trim();
             const activity = (this.draft.activity || '').trim();
+            if (!category) {
+                this.modalError = 'Kategori aktivitas wajib dipilih.';
+                return;
+            }
             if (!activity) {
                 this.modalError = 'Judul agenda wajib diisi.';
                 return;
@@ -87,7 +129,9 @@ export default function registerSalesDailyPlan(Alpine) {
             }
 
             this.activities.push({
+                sales_activity_category: category,
                 activity,
+                location: (this.draft.location || '').trim(),
                 detail: (this.draft.detail || '').trim(),
                 duration_minutes: duration,
             });

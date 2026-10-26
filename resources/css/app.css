@@ -1092,6 +1092,159 @@
     }
 }
 
+/* ============================================================
+   Sales workspace UX: grouped lead entry and secondary agendas
+   ============================================================ */
+.sales-lead-entry-heading {
+    display: grid;
+    gap: var(--oasis-space-1);
+    margin-bottom: var(--oasis-space-3);
+    border-bottom: 2px solid #000;
+    background: #000;
+    padding: var(--oasis-space-2) var(--oasis-space-3);
+    color: #fff;
+    font-family: var(--oasis-font-controls);
+}
+
+.sales-lead-entry-heading strong {
+    color: var(--oasis-accent-sales);
+    font-size: var(--oasis-type-compact-size);
+    text-transform: uppercase;
+}
+
+.sales-lead-entry-heading span {
+    color: #fff;
+    font-size: var(--oasis-type-caption-size);
+    font-weight: 400;
+}
+
+.sales-lead-entry-form {
+    display: grid;
+    gap: var(--oasis-space-3);
+    margin-bottom: var(--oasis-space-4);
+    border: 2px solid #000;
+    background: #fff;
+    padding: var(--oasis-space-4);
+}
+
+.sales-lead-form-group {
+    display: grid;
+    gap: var(--oasis-space-2);
+    border: 1px solid var(--oasis-border-subtle);
+    background: var(--oasis-surface-muted);
+    padding: var(--oasis-space-3);
+}
+
+.sales-lead-form-group legend {
+    border: 1px solid #000;
+    background: #000;
+    padding: 4px 8px;
+    color: var(--oasis-accent-sales);
+    font: 700 var(--oasis-type-caption-size)/1.2 var(--oasis-font-controls);
+    text-transform: uppercase;
+}
+
+.sales-lead-form-group legend span {
+    color: #fff;
+    font-weight: 400;
+    text-transform: none;
+}
+
+.sales-lead-form-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--oasis-space-3);
+}
+
+.sales-lead-form-group label {
+    display: grid;
+    gap: var(--oasis-space-1);
+    color: var(--oasis-text);
+    font: 700 var(--oasis-type-caption-size)/1.3 var(--oasis-font-controls);
+    text-transform: uppercase;
+}
+
+.sales-lead-form-group input,
+.sales-lead-form-group select,
+.sales-lead-form-group textarea {
+    width: 100%;
+    border: 2px solid #000;
+    border-radius: 0;
+    background: #fff;
+    padding: 8px 10px;
+    color: var(--oasis-text);
+    font: var(--oasis-type-compact-size)/1.4 var(--oasis-font-data);
+    text-transform: none;
+}
+
+.sales-lead-form-group textarea {
+    min-height: 5rem;
+    resize: vertical;
+}
+
+.sales-lead-form-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--oasis-space-2);
+}
+
+.sales-agenda-legacy {
+    border: 2px solid var(--oasis-border-strong);
+    background: var(--oasis-surface-flat);
+}
+
+.sales-agenda-legacy-summary {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 2px var(--oasis-space-3);
+    cursor: pointer;
+    list-style: none;
+    padding: var(--oasis-space-3) var(--oasis-space-4);
+}
+
+.sales-agenda-legacy-summary::-webkit-details-marker { display: none; }
+.sales-agenda-legacy-summary::after { grid-column: 2; grid-row: 1 / span 2; align-self: center; content: '+'; font: 900 1.25rem/1 var(--oasis-font-controls); }
+.sales-agenda-legacy[open] > .sales-agenda-legacy-summary::after { content: '−'; }
+.sales-agenda-legacy-title { font: 900 var(--oasis-type-section-title-size)/1.2 var(--oasis-font-display); text-transform: uppercase; }
+.sales-agenda-legacy-description { color: var(--oasis-text-muted); font: var(--oasis-type-caption-size)/1.3 var(--oasis-font-controls); }
+.sales-agenda-legacy-count { grid-column: 2; grid-row: 1 / span 2; align-self: center; margin-right: 1.75rem; color: var(--oasis-text-muted); font: 700 var(--oasis-type-caption-size)/1.2 var(--oasis-font-controls); text-transform: uppercase; }
+.sales-agenda-legacy-body { border-top: 2px solid var(--oasis-border-strong); padding: var(--oasis-space-3); }
+.sales-agenda-legacy-body > .crm-section { border: 0; padding: 0; }
+.sales-agenda-legacy-body > .crm-section + .crm-section { margin-top: var(--oasis-space-5); border-top: 2px dashed var(--oasis-border-strong); padding-top: var(--oasis-space-5); }
+
+.sales-lead-mobile-list {
+    display: grid;
+    gap: var(--oasis-space-2);
+}
+
+.sales-lead-mobile-card {
+    display: grid;
+    gap: var(--oasis-space-2);
+    border: 2px solid #000;
+    background: #fff;
+    padding: var(--oasis-space-3);
+}
+
+.sales-lead-mobile-card:nth-child(even) { background: var(--oasis-surface-muted); }
+.sales-lead-mobile-card-header { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--oasis-space-2); }
+.sales-lead-mobile-card-header div { display: grid; gap: 2px; }
+.sales-lead-mobile-card-header span,
+.sales-lead-mobile-card dt { color: var(--oasis-text-muted); font: 700 var(--oasis-type-caption-size)/1.2 var(--oasis-font-controls); text-transform: uppercase; }
+.sales-lead-mobile-card-header strong { font: var(--oasis-type-compact-size)/1.3 var(--oasis-font-data); }
+.sales-lead-mobile-card h3 { overflow-wrap: anywhere; font: 700 1.1rem/1.25 var(--oasis-font-data); }
+.sales-lead-mobile-card dl { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--oasis-space-2); }
+.sales-lead-mobile-card dd { overflow-wrap: anywhere; font: var(--oasis-type-compact-size)/1.35 var(--oasis-font-data); }
+
+@media (max-width: 639px) {
+    .sales-lead-entry-form { padding: var(--oasis-space-3); }
+    .sales-lead-form-grid { grid-template-columns: minmax(0, 1fr); }
+    .sales-lead-form-actions { display: grid; }
+    .sales-lead-form-actions .crm-button { width: 100%; }
+    .sales-agenda-legacy-summary { padding-inline: var(--oasis-space-3); }
+    .sales-agenda-legacy-count { display: none; }
+    .sales-agenda-legacy-body { padding: var(--oasis-space-2); }
+}
+
 @media (max-width: 767px) {
     .crm-filter-chip { min-height: var(--oasis-control-height); }
     .crm-filter-chip-remove { width: var(--oasis-control-height); height: var(--oasis-control-height); }
@@ -2458,6 +2611,24 @@
     min-width: 0;
 }
 
+.sales-agenda-paper-category {
+    display: inline-block;
+    margin-top: 0.2rem;
+    padding: 0.15rem 0.35rem;
+    border: 1px solid #000;
+    background: #fff3b0;
+    font-family: Helvetica, Arial, sans-serif;
+    font-size: 0.65rem;
+    font-weight: 700;
+    text-transform: uppercase;
+}
+
+.sales-agenda-paper-location {
+    margin: 0.2rem 0 0;
+    font-size: 0.8rem;
+    color: #444;
+}
+
 .sales-agenda-paper-time {
     display: block;
     font-family: Helvetica, Arial, sans-serif;
@@ -2559,6 +2730,30 @@
     padding: 0 1rem 0.75rem;
 }
 
+.sales-agenda-paper.is-tearing {
+    animation: sales-paper-tear 760ms cubic-bezier(0.22, 0.8, 0.3, 1) forwards;
+    transform-origin: 50% 0;
+    pointer-events: none;
+}
+
+@keyframes sales-paper-tear {
+    0% {
+        opacity: 1;
+        transform: translateY(0) rotate(0deg) scale(1);
+        clip-path: polygon(0 0, 100% 0, 100% 100%, 0 100%);
+    }
+    35% {
+        opacity: 1;
+        transform: translateY(4px) rotate(-1deg) scale(1.01);
+        clip-path: polygon(0 0, 100% 0, 100% 96%, 96% 100%, 91% 96%, 86% 100%, 80% 96%, 74% 100%, 68% 96%, 62% 100%, 56% 96%, 50% 100%, 44% 96%, 38% 100%, 32% 96%, 26% 100%, 20% 96%, 14% 100%, 8% 96%, 0 100%);
+    }
+    100% {
+        opacity: 0;
+        transform: translateY(180px) rotate(4deg) scale(0.98);
+        clip-path: polygon(0 0, 100% 0, 100% 86%, 96% 92%, 91% 87%, 86% 94%, 80% 88%, 74% 93%, 68% 87%, 62% 94%, 56% 88%, 50% 93%, 44% 87%, 38% 94%, 32% 88%, 26% 93%, 20% 87%, 14% 94%, 8% 88%, 0 93%);
+    }
+}
+
 .sales-agenda-paper-preview {
     border: 1px solid #000;
     background: #fff3b0;
@@ -2580,6 +2775,35 @@
     font-size: 0.875rem;
 }
 
+.sales-agenda-paper-reschedule {
+    margin-top: 0.75rem;
+    border: 1px solid #000;
+    background: #f7f3e8;
+}
+
+.sales-agenda-paper-reschedule > summary {
+    cursor: pointer;
+    padding: 0.5rem 0.75rem;
+    font-family: Helvetica, Arial, sans-serif;
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-decoration: underline;
+}
+
+.sales-agenda-paper-reschedule-form {
+    display: grid;
+    gap: 0.5rem;
+    padding: 0 0.75rem 0.75rem;
+}
+
+.sales-agenda-paper-reschedule-note {
+    border: 1px solid #000;
+    background: #eef1ff;
+    padding: 0.5rem 0.75rem;
+    font-size: 0.875rem;
+    font-weight: 700;
+}
+
 .sales-agenda-paper-group {
     margin: 0.75rem 1rem 0;
 }
@@ -2598,7 +2822,67 @@
 }
 
 .sales-agenda-paper-group .sales-agenda-paper-item {
+    display: block;
     margin-bottom: 0.5rem;
+}
+
+.sales-agenda-paper-item-summary {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.75rem;
+    cursor: pointer;
+    list-style: none;
+}
+
+.sales-agenda-paper-item-summary::-webkit-details-marker {
+    display: none;
+}
+
+.sales-agenda-paper-item-summary::after {
+    flex: none;
+    content: '+';
+    width: 1.5rem;
+    height: 1.5rem;
+    border: 1px solid #000;
+    background: #fff;
+    font-family: Helvetica, Arial, sans-serif;
+    font-size: 1rem;
+    font-weight: 700;
+    line-height: 1.35rem;
+    text-align: center;
+}
+
+.sales-agenda-paper-item[open] .sales-agenda-paper-item-summary::after {
+    content: '−';
+    background: #fcc20f;
+}
+
+.sales-agenda-paper-item-details {
+    margin: 0.75rem 0 0 2.5rem;
+    padding-top: 0.75rem;
+    border-top: 1px dashed #000;
+}
+
+.sales-agenda-paper-evidence {
+    display: grid;
+    gap: 0.35rem;
+    margin-top: 0.65rem;
+    font-size: 0.8rem;
+}
+
+.sales-agenda-paper-completion-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.75rem;
+    margin-top: 0.75rem;
+}
+
+.sales-agenda-paper-evidence-form,
+.sales-agenda-paper-complete {
+    display: grid;
+    align-content: start;
+    gap: 0.5rem;
+    min-width: 0;
 }
 
 .sales-agenda-paper-group .sales-agenda-paper-complete {
@@ -2634,15 +2918,23 @@
     .sales-agenda-paper-item {
         flex-wrap: wrap;
     }
+    .sales-agenda-paper-item-summary {
+        flex-wrap: wrap;
+    }
+    .sales-agenda-paper-item-summary .sales-agenda-paper-item-main {
+        flex-basis: calc(100% - 3rem);
+    }
+    .sales-agenda-paper-item-details {
+        margin-left: 0;
+    }
+    .sales-agenda-paper-completion-grid {
+        grid-template-columns: minmax(0, 1fr);
+    }
     .sales-agenda-paper-remove {
         margin-left: auto;
     }
     .sales-agenda-paper-duration {
         margin-left: auto;
     }
-    .sales-agenda-paper-group .sales-agenda-paper-complete {
-        width: 100%;
-        flex-direction: column;
-        align-items: stretch;
-    }
+    .sales-agenda-paper-group .sales-agenda-paper-complete { width: 100%; }
 }

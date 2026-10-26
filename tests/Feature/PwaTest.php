@@ -62,9 +62,9 @@ class PwaTest extends TestCase
 
         $html = $this->actingAs($user)->get(route('dashboard'))->getContent();
 
-        $this->assertStringContainsString('rel="manifest" href="http://localhost/manifest.webmanifest"', $html);
+        $this->assertStringContainsString('rel="manifest" href="'.asset('manifest.webmanifest').'"', $html);
         $this->assertStringContainsString('name="theme-color" content="#000000"', $html);
-        $this->assertStringContainsString('rel="apple-touch-icon" href="http://localhost/apple-touch-icon.png"', $html);
+        $this->assertStringContainsString('rel="apple-touch-icon" href="'.asset('apple-touch-icon.png').'"', $html);
         $this->assertStringContainsString('name="mobile-web-app-capable" content="yes"', $html);
         $this->assertStringContainsString('x-data="oasisPwa()"', $html);
         $this->assertStringContainsString('Pasang OASIS', $html);
@@ -75,7 +75,7 @@ class PwaTest extends TestCase
     {
         $html = $this->get(route('login'))->getContent();
 
-        $this->assertStringContainsString('rel="manifest" href="http://localhost/manifest.webmanifest"', $html);
+        $this->assertStringContainsString('rel="manifest" href="'.asset('manifest.webmanifest').'"', $html);
         $this->assertStringContainsString('name="theme-color" content="#000000"', $html);
         $this->assertStringContainsString('x-data="oasisPwa()"', $html);
     }

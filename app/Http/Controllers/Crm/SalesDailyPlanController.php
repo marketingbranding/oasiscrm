@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Crm;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Crm\CompleteSalesDailyPlanItemRequest;
+use App\Http\Requests\Crm\RescheduleSalesDailyPlanItemRequest;
 use App\Http\Requests\Crm\ReviseSalesDailyPlanRequest;
 use App\Http\Requests\Crm\StoreSalesDailyPlanRequest;
 use App\Http\Requests\Crm\SubmitSalesDailyPlanRequest;
@@ -33,6 +34,16 @@ class SalesDailyPlanController extends Controller
         $this->plans->submit($request->user(), $date);
 
         return to_route('sales-agendas.index', ['tab' => 'agenda', 'work_date' => $data['work_date']])->with('success', 'Daily Plan berhasil disubmit dan dikunci.');
+    }
+
+    public function reschedule(RescheduleSalesDailyPlanItemRequest $request, SalesDailyPlanItem $item): RedirectResponse
+    {
+        $result = $this->plans->rescheduleItem($request->user(), $item, $request->validated('reason'));
+        $sourceDate = $result['source']->plan->work_date->toDateString();
+        $targetDate = $result['target']->plan->work_date->locale('id')->translatedFormat('l, d F Y');
+
+        return to_route('sales-agendas.index', ['tab' => 'agenda', 'work_date' => $sourceDate])
+            ->with('success', "Agenda berhasil dijadwalkan ulang ke {$targetDate}.");
     }
 
     public function complete(CompleteSalesDailyPlanItemRequest $request, SalesDailyPlanItem $item): RedirectResponse

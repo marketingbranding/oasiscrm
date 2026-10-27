@@ -107,6 +107,19 @@ class RoleModuleAccessMatrixTest extends TestCase
         $this->assertFalse($policy->review($reviewer, $otherBranchReport));
     }
 
+    public function test_supplemental_pusat_role_does_not_grant_feedback_review(): void
+    {
+        $branch = Branch::create(['name' => 'Solo', 'code' => 'SLO', 'is_active' => true]);
+        $user = $this->user('admin', $branch);
+        $user->roles()->attach(Role::where('slug', 'pusat')->firstOrFail());
+        $report = FeedbackReport::create($this->reportPayload($branch, $user));
+
+        $this->assertTrue($user->fresh()->hasRole('pusat'));
+        $this->assertFalse($user->fresh()->hasPermission('feedback_reports.review'));
+        $this->assertFalse((new FeedbackReportPolicy)->review($user->fresh(), $report));
+        $this->actingAs($user)->get(route('feedback-reports.show', $report))->assertForbidden();
+    }
+
     private function user(string $roleSlug, ?Branch $branch = null): User
     {
         return User::factory()->create([

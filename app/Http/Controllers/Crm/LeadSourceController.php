@@ -63,6 +63,13 @@ class LeadSourceController extends Controller
         return view('crm.lead-sources.edit', compact('leadSource'));
     }
 
+    public function show(LeadSource $leadSource)
+    {
+        $this->authorizeManagement();
+
+        return redirect()->route($this->showEditRoute, [$this->showEditParam => $leadSource->id]);
+    }
+
     public function update(Request $request, LeadSource $leadSource)
     {
         $this->authorizeManagement();

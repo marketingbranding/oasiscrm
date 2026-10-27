@@ -114,6 +114,22 @@ class PromoManagementTest extends TestCase
         $this->actingAs($user)->post(route('promos.store'), $this->data($branch, 'denied', 'Denied'))->assertForbidden();
     }
 
+    public function test_admin_and_branch_manager_use_promo_permission_without_buku_saku_mutation(): void
+    {
+        [$branch] = $this->branches();
+        $admin = $this->user('admin', $branch, true);
+        $branchManager = $this->user('branch_manager', $branch, true);
+
+        foreach ([$admin, $branchManager] as $user) {
+            $this->assertTrue($user->hasPermission('promo.manage'));
+            $this->assertFalse($user->hasPermission('sales_pocketbook.manage_branch'));
+
+            $this->actingAs($user)->get(route('promos.index'))->assertOk();
+            $this->actingAs($user)->post(route('promos.store'), $this->data($branch, 'new-'.$user->id, 'New Promo'))
+                ->assertRedirect();
+        }
+    }
+
     public function test_promo_options_cover_open_periods_boundaries_visibility_and_historical_value(): void
     {
         [$branch, $other] = $this->branches();

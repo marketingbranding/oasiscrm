@@ -7,6 +7,7 @@ use App\Models\FeedbackReport;
 use App\Models\Role;
 use App\Models\User;
 use App\Models\UserNotification;
+use App\Policies\FeedbackReportPolicy;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Http;
@@ -105,9 +106,16 @@ class FeedbackReportTest extends TestCase
         $otherBranch = Branch::create(['name' => 'Pati', 'code' => 'PTI', 'is_active' => true]);
         $report = FeedbackReport::create($this->modelPayload($branch, $reporter));
         $pusatRole = Role::firstOrCreate(['slug' => 'pusat'], ['name' => 'Tim Pusat', 'is_superadmin' => false]);
-        $pusat = User::factory()->create(['role_id' => $pusatRole->id, 'branch_id' => $otherBranch->id, 'password_changed_at' => now()]);
+        $pusat = User::factory()->create([
+            'role_id' => Role::where('slug', 'admin')->firstOrFail()->id,
+            'branch_id' => $otherBranch->id,
+            'password_changed_at' => now(),
+        ]);
+        $pusat->roles()->attach($pusatRole);
 
         $this->actingAs($this->superadmin())->get(route('feedback-reports.show', $report))->assertOk();
+        $this->assertTrue($pusat->fresh()->hasRole('pusat'));
+        $this->assertFalse((new FeedbackReportPolicy)->review($pusat->fresh(), $report));
         $this->actingAs($pusat)->get(route('feedback-reports.show', $report))->assertForbidden();
     }
 

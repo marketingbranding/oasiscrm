@@ -2,8 +2,10 @@
 
 namespace Tests\Feature;
 
+use App\Http\Middleware\PermissionMiddleware;
 use App\Models\Branch;
 use App\Models\Changelog;
+use App\Models\LeadSource;
 use App\Models\Role;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -101,6 +103,18 @@ class ModulePermissionAccessTest extends TestCase
         $this->actingAs($branchManager)->get(route('expenses.index'))->assertForbidden();
         $this->actingAs($branchManager)->get(route('expenses.show', $hidden))->assertForbidden();
         $this->actingAs($branchManager)->get(route('expense-categories.index'))->assertForbidden();
+    }
+
+    public function test_lead_source_show_keeps_redirect_behavior_and_controller_guard(): void
+    {
+        $source = LeadSource::create(['name' => 'Instagram', 'is_active' => true]);
+        $admin = $this->user('admin');
+        $superadmin = $this->user('superadmin');
+
+        $this->withoutMiddleware(PermissionMiddleware::class);
+        $this->actingAs($admin)->get(route('lead-sources.show', $source))->assertForbidden();
+        $this->actingAs($superadmin)->get(route('lead-sources.show', $source))
+            ->assertRedirect(route('lead-sources.edit', $source));
     }
 
     public function test_permission_access_changelog_is_idempotent_and_visible(): void

@@ -120,7 +120,7 @@ class SalesPocketbookController extends Controller
         $salesUsers = User::query()->where('is_active', true)
             ->whereIn('id', $visibleSalesIds)
             ->whereHas('role', fn (Builder $query) => $query->where('slug', 'sales'))
-            ->when(! $user->canViewAllBranches(), function (Builder $query) use ($user) {
+            ->when($this->requiresCurrentBranchScope($user), function (Builder $query) use ($user) {
                 $branchIds = $this->workspaceAccess->accessibleBranchIds($user);
                 $query->whereHas('assignedProjects', fn (Builder $projects) => $projects->whereIn('branch_id', $branchIds));
             })
@@ -187,7 +187,7 @@ class SalesPocketbookController extends Controller
                 ->orWhere(fn (Builder $historical) => $historical->whereNull('daily_plan_id')->whereIn('branch_id', $allowedBranchIds)))
             ->whereIn('owner_user_id', $visibleSalesIds)
             ->when($user->isSales(), fn (Builder $query) => $query->where('owner_user_id', $user->id))
-            ->when(! $user->canViewAllBranches() && ! $user->isSales(), fn (Builder $query) => $query->whereIn('branch_id', $this->workspaceAccess->accessibleBranchIds($user)))
+            ->when($this->requiresCurrentBranchScope($user) && ! $user->isSales(), fn (Builder $query) => $query->whereIn('branch_id', $this->workspaceAccess->accessibleBranchIds($user)))
             ->when($selectedBranchId, fn (Builder $query) => $query->where('branch_id', $selectedBranchId))
             ->when($selectedProjectId, fn (Builder $query) => $query->where('sales_project_id', $selectedProjectId))
             ->when($monitoring && $request->filled('sales_user_id'), fn (Builder $query) => $query->where('owner_user_id', $request->integer('sales_user_id')))
@@ -398,7 +398,7 @@ class SalesPocketbookController extends Controller
             ->where('is_active', true)
             ->whereIn('id', $visibleSalesIds)
             ->whereHas('role', fn (Builder $query) => $query->where('slug', 'sales'))
-            ->when(! $user->canViewAllBranches(), function (Builder $query) use ($user) {
+            ->when($this->requiresCurrentBranchScope($user), function (Builder $query) use ($user) {
                 $branchIds = $this->workspaceAccess->accessibleBranchIds($user);
                 $query->whereHas('assignedProjects', fn (Builder $projects) => $projects->whereIn('branch_id', $branchIds));
             })
@@ -506,6 +506,11 @@ class SalesPocketbookController extends Controller
         $metrics['last_input'] = $lastInput ? CarbonImmutable::parse($lastInput, config('app.timezone')) : null;
 
         return $metrics;
+    }
+
+    private function requiresCurrentBranchScope(User $user): bool
+    {
+        return $this->workspaceAccess->isBranchScopedOperator($user) || ! $user->canViewAllBranches();
     }
 
     private function filterRules(): array

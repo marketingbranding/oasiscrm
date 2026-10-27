@@ -38,7 +38,7 @@ class OrganizationScopeService
     {
         $workspaceBranchIds = $this->workspaceBranchIds($viewer);
 
-        return $this->cached('users:'.$viewer->id.':'.$module.':'.$action.':'.implode(',', $workspaceBranchIds), function () use ($viewer, $module, $action): array {
+        return $this->cached('users:'.$viewer->id.':'.$module.':'.$action.':'.implode(',', $workspaceBranchIds), function () use ($viewer, $module, $action, $workspaceBranchIds): array {
             $scopes = $this->scopes($viewer, $module, $action);
             if (in_array('all', $scopes, true) && ! $this->workspaceAccess->isBranchScopedOperator($viewer)) {
                 return User::query()->where('is_active', true)->pluck('id')->map(fn ($id) => (int) $id)->all();

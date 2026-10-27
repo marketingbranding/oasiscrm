@@ -6,6 +6,7 @@ use App\Enums\SalesLeadStatus;
 use App\Models\Branch;
 use App\Models\ContentItem;
 use App\Models\DanaTalangan;
+use App\Models\DanaTalanganReconciliationItem;
 use App\Models\LeadMaster;
 use App\Models\Permission;
 use App\Models\Role;
@@ -17,6 +18,7 @@ use App\Services\GoogleSheetsApiService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Mockery;
+use PhpOffice\PhpSpreadsheet\IOFactory;
 use Tests\TestCase;
 
 class AdminBranchSalesMonitoringTest extends TestCase
@@ -287,12 +289,113 @@ class AdminBranchSalesMonitoringTest extends TestCase
         foreach (['admin', 'branch_manager'] as $role) {
             $operator = $this->user($role, $this->branch, ucfirst($role).' Scope');
             $operator->role->permissions()->attach(Permission::query()
-                ->whereIn('slug', ['sales_pocketbook.view_all', 'bridge_fund.view_all'])
+                ->whereIn('slug', ['sales_pocketbook.view_all', 'sales_pocketbook.export_all', 'bridge_fund.view_all', 'bridge_fund.manage_all'])
                 ->pluck('id'));
             $operator = $operator->fresh('role.permissions');
 
             $this->assertFalse(app(SalesLeadPolicy::class)->view($operator, $foreignLead), $role);
             $this->actingAs($operator)->get(route('dana-talangan.index', ['branch_id' => $this->foreignBranch->id]))->assertForbidden();
+        }
+    }
+
+    public function test_stale_global_grants_do_not_leak_foreign_owner_records_from_buku_saku_list_or_export(): void
+    {
+        $this->lead($this->sales, $this->project, 'LEAD_CURRENT_BRANCH_OWNER');
+        $crossBranchLead = $this->lead($this->sales, $this->foreignProject, 'LEAD_CROSS_BRANCH_OWNER');
+        $crossBranchAgenda = ContentItem::create([
+            'branch_id' => $this->foreignBranch->id,
+            'project_name' => $this->project->project_name,
+            'item_type' => 'agenda',
+            'agenda_type' => ContentItem::SALES_AGENDA_TYPE,
+            'visibility' => 'personal',
+            'title' => 'AGENDA_CROSS_BRANCH_OWNER',
+            'scheduled_date' => '2026-08-10',
+            'status' => 'done',
+            'owner_user_id' => $this->sales->id,
+            'created_by' => $this->sales->id,
+        ]);
+
+        foreach (['admin', 'branch_manager'] as $role) {
+            $operator = $this->user($role, $this->branch, ucfirst($role).' Query Scope');
+            if ($role === 'branch_manager') {
+                $this->coordinator->update(['supervisor_user_id' => $operator->id]);
+            }
+            $operator->role->permissions()->attach(Permission::query()
+                ->whereIn('slug', ['sales_pocketbook.view_all', 'sales_pocketbook.export_all'])
+                ->pluck('id'));
+            $operator = $operator->fresh('role.permissions');
+
+            $list = $this->actingAs($operator)->get($this->url([
+                'period_type' => 'custom',
+                'date_from' => '2026-08-01',
+                'date_to' => '2026-08-31',
+            ]));
+            $list->assertOk();
+            $list->assertDontSee($crossBranchLead->customer_name)->assertDontSee($crossBranchAgenda->title);
+
+            $response = $this->actingAs($operator)->get(route('sales-pocketbook.export', [
+                'period_type' => 'custom',
+                'date_from' => '2026-08-01',
+                'date_to' => '2026-08-31',
+            ]));
+            $response->assertOk();
+            $workbook = IOFactory::load($response->baseResponse->getFile()->getPathname());
+            $values = collect($workbook->getSheetByName('LEAD HARIAN')->toArray())->flatten()->implode('|');
+            $this->assertStringNotContainsString($crossBranchLead->customer_name, $values, $role);
+            $workbook->disconnectWorksheets();
+        }
+    }
+
+    public function test_stale_global_work_planner_grant_cannot_open_foreign_detail_url(): void
+    {
+        $item = ContentItem::create([
+            'branch_id' => $this->foreignBranch->id,
+            'item_type' => 'task',
+            'visibility' => 'personal',
+            'title' => 'TASK_FOREIGN_GLOBAL_SCOPE',
+            'scheduled_date' => '2026-08-10',
+            'status' => 'todo',
+            'created_by' => $this->admin->id,
+        ]);
+        $this->admin->role->permissions()->attach(Permission::query()->where('slug', 'work_planner.view_all')->firstOrFail());
+        $admin = $this->admin->fresh('role.permissions');
+
+        $this->actingAs($admin)->get(route('content-calendar.detail', $item))->assertForbidden();
+    }
+
+    public function test_stale_global_dana_actions_remain_dormant_or_forbidden_for_branch_roles(): void
+    {
+        config(['oasis.spreadsheet_sync_enabled' => false]);
+        $item = DanaTalanganReconciliationItem::create([
+            'spreadsheet_id' => 'sheet-test',
+            'remote_row_number' => 4,
+            'issue_code' => 'remote_create_pending_review',
+            'safe_metadata' => ['payload_hash' => str_repeat('a', 64)],
+            'status' => 'open',
+            'identity_key' => 'remote-row-4',
+        ]);
+
+        foreach (['admin', 'branch_manager'] as $role) {
+            $operator = $this->user($role, $this->branch, ucfirst($role).' Dana Scope');
+            $operator->role->permissions()->syncWithoutDetaching(Permission::query()->where('slug', 'bridge_fund.manage_all')->pluck('id')->all());
+            $operator = $operator->fresh('role.permissions');
+
+            $this->actingAs($operator)->postJson(route('dana-talangan.sync'))->assertNotFound();
+            $this->actingAs($operator)->getJson(route('dana-talangan.sync-status'))->assertNotFound();
+            $this->actingAs($operator)->get(route('dana-talangan.reconciliation'))->assertNotFound();
+            $this->actingAs($operator)->post(route('dana-talangan.reconciliation.approve', $item))->assertNotFound();
+        }
+
+        config(['oasis.spreadsheet_sync_enabled' => true]);
+        foreach (['admin', 'branch_manager'] as $role) {
+            $operator = $this->user($role, $this->branch, ucfirst($role).' Dana Active Scope');
+            $operator->role->permissions()->syncWithoutDetaching(Permission::query()->where('slug', 'bridge_fund.manage_all')->pluck('id')->all());
+            $operator = $operator->fresh('role.permissions');
+
+            $this->actingAs($operator)->postJson(route('dana-talangan.sync'))->assertForbidden();
+            $this->actingAs($operator)->getJson(route('dana-talangan.sync-status'))->assertForbidden();
+            $this->actingAs($operator)->get(route('dana-talangan.reconciliation'))->assertForbidden();
+            $this->actingAs($operator)->post(route('dana-talangan.reconciliation.approve', $item))->assertForbidden();
         }
     }
 

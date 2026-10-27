@@ -58,4 +58,11 @@ class DanaTalanganPolicy
     {
         return $this->update($user, $danaTalangan);
     }
+
+    public function manageAll(User $user): bool
+    {
+        return $user->hasPermission('bridge_fund.manage_all')
+            && ! app(WorkspaceAccessService::class)->isBranchScopedOperator($user)
+            && $user->canViewAllBranches();
+    }
 }

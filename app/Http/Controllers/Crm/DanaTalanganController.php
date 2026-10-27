@@ -186,7 +186,7 @@ class DanaTalanganController extends Controller
         $spreadsheetId = config('services.google_sheets.dana_talangan_spreadsheet_id');
         $syncStatus = DanaTalanganSyncStatus::where('spreadsheet_id', $spreadsheetId)->first();
         $bridgeSetting = DanaTalanganBridgeSetting::where('spreadsheet_id', $spreadsheetId)->first();
-        $canReview = $user->hasPermission('bridge_fund.manage_all');
+        $canReview = $user->can('manageAll', DanaTalangan::class);
         $canSync = $canReview && config('oasis.spreadsheet_sync_enabled') && config('services.google_sheets.dana_talangan_bridge_enabled') && $bridgeSetting?->mode?->pullEnabled();
         $canManage = $user->hasPermission('bridge_fund.manage');
         $canExport = $user->hasPermission('bridge_fund.export');
@@ -390,7 +390,7 @@ class DanaTalanganController extends Controller
     public function sync(Request $request)
     {
         $user = Auth::user();
-        abort_unless($user->hasPermission('bridge_fund.manage_all'), 403);
+        abort_unless($user->can('manageAll', DanaTalangan::class), 403);
         try {
             $result = app(DanaTalanganBridgeService::class)->pull($user);
         } catch (Throwable $exception) {
@@ -435,7 +435,7 @@ class DanaTalanganController extends Controller
     public function syncStatus(Request $request)
     {
         $user = $request->user();
-        abort_unless($user->hasPermission('bridge_fund.manage_all'), 403);
+        abort_unless($user->can('manageAll', DanaTalangan::class), 403);
         $status = DanaTalanganSyncStatus::with('initiator')->where('spreadsheet_id', config('services.google_sheets.dana_talangan_spreadsheet_id'))->first();
         $payload = $this->syncResponses->make('dana-talangan', ['type' => 'global', 'id' => null, 'name' => 'Global'], $status);
         $payload['status_url'] = route('dana-talangan.sync-status');
@@ -514,7 +514,7 @@ class DanaTalanganController extends Controller
 
     public function reconciliation(Request $request)
     {
-        abort_unless($request->user()->hasPermission('bridge_fund.manage_all'), 403);
+        abort_unless($request->user()->can('manageAll', DanaTalangan::class), 403);
         $items = DanaTalanganReconciliationItem::query()->where('status', 'open')->latest()->paginate(30);
 
         return view('crm.dana-talangan.reconciliation', compact('items'));
@@ -523,7 +523,7 @@ class DanaTalanganController extends Controller
     public function approveReconciliation(DanaTalanganReconciliationItem $reconciliationItem, DanaTalanganBridgeService $bridge)
     {
         $user = Auth::user();
-        abort_unless($user->hasPermission('bridge_fund.manage_all'), 403);
+        abort_unless($user->can('manageAll', DanaTalangan::class), 403);
         try {
             $bridge->approveRemoteCreate($reconciliationItem, $user);
         } catch (Throwable $exception) {

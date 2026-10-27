@@ -76,7 +76,8 @@ class ContentItemPolicy
 
     private function withinScope(User $user, ContentItem $item, string $action): bool
     {
-        if ($user->hasPermission("work_planner.{$action}_all")) {
+        if ($user->hasPermission("work_planner.{$action}_all")
+            && ! app(WorkspaceAccessService::class)->isBranchScopedOperator($user)) {
             return true;
         }
 

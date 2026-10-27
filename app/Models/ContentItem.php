@@ -147,7 +147,8 @@ class ContentItem extends Model
 
     public function scopeVisibleTo(Builder $query, User $user, string $action = 'view'): Builder
     {
-        if ($user->hasPermission("work_planner.{$action}_all")) {
+        if ($user->hasPermission("work_planner.{$action}_all")
+            && ! app(WorkspaceAccessService::class)->isBranchScopedOperator($user)) {
             return $query;
         }
 

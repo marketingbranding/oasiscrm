@@ -174,6 +174,10 @@ class DanaTalanganBridgeService
 
     public function pull(?User $actor = null, bool $dryRun = false): array
     {
+        if (! $this->canManageAll($actor)) {
+            return ['ok' => false, 'status' => 'forbidden', 'summary' => $this->emptySummary()];
+        }
+
         if (! $this->modes->isPullEnabled()) {
             return ['ok' => false, 'status' => 'disabled', 'summary' => $this->emptySummary()];
         }
@@ -356,7 +360,7 @@ class DanaTalanganBridgeService
 
     public function approveRemoteCreate(DanaTalanganReconciliationItem $item, User $actor): DanaTalangan
     {
-        if (! $actor->hasPermission('bridge_fund.manage_all') || $item->issue_code !== 'remote_create_pending_review' || $item->status !== DanaTalanganReconciliationStatus::Open) {
+        if (! $this->canManageAll($actor) || $item->issue_code !== 'remote_create_pending_review' || $item->status !== DanaTalanganReconciliationStatus::Open) {
             throw new \DomainException('Item rekonsiliasi tidak dapat disetujui.');
         }
         if (! $this->modes->isPullEnabled()) {
@@ -800,6 +804,14 @@ class DanaTalanganBridgeService
     private function hash(string|array $value): string
     {
         return hash('sha256', is_array($value) ? json_encode($value, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR) : $value);
+    }
+
+    private function canManageAll(?User $actor): bool
+    {
+        return $actor === null
+            || ($actor->hasPermission('bridge_fund.manage_all')
+                && ! app(WorkspaceAccessService::class)->isBranchScopedOperator($actor)
+                && $actor->canViewAllBranches());
     }
 
     private function lockKey(): string

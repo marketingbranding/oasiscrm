@@ -175,7 +175,8 @@ class CrmAuthorizationService
             return $query->whereKey(0);
         }
 
-        if ($this->hasScope($actor, 'sales_pocketbook', $action, 'all')) {
+        if ($this->hasScope($actor, 'sales_pocketbook', $action, 'all')
+            && ! $this->workspaceAccess->isBranchScopedOperator($actor)) {
             return $query;
         }
 

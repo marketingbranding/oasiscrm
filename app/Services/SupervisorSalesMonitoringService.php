@@ -28,13 +28,12 @@ class SupervisorSalesMonitoringService
         $period = $this->period($filters);
         $scope = $this->scope($actor);
         $team = $this->team($actor, $scope, includeHistorical: true);
-        $currentTeam = $this->team($actor, $scope);
         $coordinatorId = filled($filters['coordinator_id'] ?? null) ? (int) $filters['coordinator_id'] : null;
         $salesId = filled($filters['sales_id'] ?? null) ? (int) $filters['sales_id'] : null;
 
-        abort_if($coordinatorId && ! $currentTeam['coordinators']->contains('id', $coordinatorId), 403);
-        abort_if($salesId && ! isset($currentTeam['coordinator_names_by_sales_id'][$salesId]), 403);
-        abort_if($coordinatorId && $salesId && ! isset($currentTeam['sales_ids_by_coordinator'][$coordinatorId][$salesId]), 403);
+        abort_if($coordinatorId && ! $team['coordinators']->contains('id', $coordinatorId), 403);
+        abort_if($salesId && ! isset($team['coordinator_names_by_sales_id'][$salesId]), 403);
+        abort_if($coordinatorId && $salesId && ! isset($team['sales_ids_by_coordinator'][$coordinatorId][$salesId]), 403);
 
         $sales = $team['sales'];
         if ($coordinatorId) {
@@ -158,26 +157,16 @@ class SupervisorSalesMonitoringService
             $this->organizationScope->branchIds($actor, 'sales_pocketbook', 'view'),
             $this->workspaceAccess->accessibleBranchIds($actor),
         ));
+        $organizationProjectIds = $this->organizationScope->projectIds($actor, 'sales_pocketbook', 'view');
         $workspaceProjectIds = LeadMaster::query()
             ->whereIn('branch_id', $branchIds)
-            ->whereIn('id', $this->workspaceAccess->accessibleProjectIds($actor))
+            ->whereIn('id', array_intersect($organizationProjectIds, $this->workspaceAccess->accessibleProjectIds($actor)))
             ->where('is_active', true)
             ->pluck('id')->map(fn ($id) => (int) $id)->all();
-        $salesIds = $this->salesTeamScope->forWorkspace($actor, $branchIds, $workspaceProjectIds, includeHistorical: true)['sales']->pluck('id');
-        $today = today()->toDateString();
 
         return [
             'branch_ids' => $branchIds,
-            'project_ids' => LeadMaster::query()
-                ->whereIn('branch_id', $branchIds)
-                ->whereIn('id', $workspaceProjectIds)
-                ->where('is_active', true)
-                ->whereHas('assignedUsers', fn ($query) => $query
-                    ->whereIn('users.id', $salesIds)
-                    ->where('project_user.is_active', true)
-                    ->where(fn ($query) => $query->whereNull('project_user.assignment_start_date')->orWhereDate('project_user.assignment_start_date', '<=', $today))
-                    ->where(fn ($query) => $query->whereNull('project_user.assignment_end_date')->orWhereDate('project_user.assignment_end_date', '>=', $today)))
-                ->pluck('id')->map(fn ($id) => (int) $id)->all(),
+            'project_ids' => $workspaceProjectIds,
         ];
     }
 

@@ -136,6 +136,47 @@ class SupervisorSalesPocketbookTest extends TestCase
         $this->assertArrayNotHasKey($outsideProjectSales->id, $data['coordinatorNamesBySalesId']);
     }
 
+    public function test_supervisor_excludes_same_branch_sales_assigned_only_to_unrelated_project_from_monitoring_export_and_detail(): void
+    {
+        $unrelatedProject = LeadMaster::create([
+            'branch_id' => $this->branch->id,
+            'project_name' => 'Proyek Solo Tidak Terkait',
+            'is_active' => true,
+        ]);
+        $unrelatedSales = $this->user('sales', 'Sales Proyek Solo Lain', $this->branch, $this->coordinatorA);
+        $unrelatedSales->assignedProjects()->attach($unrelatedProject, ['is_primary' => true, 'is_active' => true]);
+        $unrelatedCoordinator = $this->user('sales_coordinator', 'Koordinator Proyek Solo Lain', $this->branch, $this->supervisor);
+        $unrelatedCoordinator->assignedProjects()->attach($unrelatedProject, ['is_primary' => true, 'is_active' => true]);
+        SalesCoordinatorSales::create([
+            'coordinator_user_id' => $this->coordinatorA->id,
+            'sales_user_id' => $unrelatedSales->id,
+        ]);
+        $unrelatedLead = $this->lead($unrelatedSales, 'LEAD_PROYEK_SOLO_LAIN', '2026-08-10', 'synced');
+        $unrelatedLead->update(['project_id' => $unrelatedProject->id]);
+
+        $organizationScope = $this->mock(OrganizationScopeService::class);
+        $organizationScope->shouldReceive('branchIds')->andReturn([$this->branch->id]);
+        $organizationScope->shouldReceive('projectIds')->andReturn([$this->project->id]);
+
+        $data = app(SupervisorSalesMonitoringService::class)->resolve($this->supervisor, ['period' => 'today'], false);
+
+        $this->assertNotContains($unrelatedSales->id, $data['salesUsers']->pluck('id')->all());
+        $this->assertNotContains($unrelatedCoordinator->id, $data['coordinators']->pluck('id')->all());
+        $this->assertNotContains($unrelatedLead->id, $data['leads']->pluck('id')->all());
+
+        $response = $this->actingAs($this->supervisor)->get(route('sales-pocketbook.supervisor-monitoring.lead-export', ['period' => 'today']));
+        $path = $response->baseResponse->getFile()->getPathname();
+        $sheet = IOFactory::load($path)->getActiveSheet();
+        $values = collect($sheet->toArray())->flatten()->implode('|');
+
+        $this->assertStringNotContainsString($unrelatedLead->customer_name, $values);
+        @unlink($path);
+
+        $this->actingAs($this->supervisor)
+            ->get(route('sales-leads.show', $unrelatedLead))
+            ->assertForbidden();
+    }
+
     public function test_supervisor_cannot_view_a_lead_with_a_forged_workspace_combination(): void
     {
         $outsideProjectSales = $this->user('sales', 'Sales Proyek Lain', $this->branch, $this->coordinatorA);
@@ -165,6 +206,24 @@ class SupervisorSalesPocketbookTest extends TestCase
         $lead = $this->lead($unrelatedSales, 'LEAD_UNRELATED_OWNER', '2026-08-10', 'synced');
 
         $this->actingAs($this->supervisor)
+            ->get(route('sales-leads.show', $lead))
+            ->assertForbidden();
+    }
+
+    public function test_supervisor_with_empty_project_scope_cannot_view_a_team_lead_in_an_accessible_branch_project(): void
+    {
+        $emptyScopeSupervisor = $this->user('supervisor', 'SPV Tanpa Proyek', $this->branch);
+        $coordinator = $this->user('sales_coordinator', 'Koordinator Tanpa Proyek', $this->branch, $emptyScopeSupervisor);
+        $sales = $this->user('sales', 'Sales Tanpa Proyek', $this->branch, $coordinator);
+        SalesCoordinatorSales::create([
+            'coordinator_user_id' => $coordinator->id,
+            'sales_user_id' => $sales->id,
+        ]);
+        $lead = $this->lead($sales, 'LEAD_SCOPE_PROYEK_KOSONG', '2026-08-10', 'synced');
+
+        $this->assertSame([], app(OrganizationScopeService::class)->projectIds($emptyScopeSupervisor, 'sales_pocketbook'));
+
+        $this->actingAs($emptyScopeSupervisor)
             ->get(route('sales-leads.show', $lead))
             ->assertForbidden();
     }
@@ -208,6 +267,45 @@ class SupervisorSalesPocketbookTest extends TestCase
 
         $this->assertStringContainsString($historicalLead->customer_name, $values);
         $this->assertStringNotContainsString($unrelatedLead->customer_name, $values);
+        @unlink($path);
+    }
+
+    public function test_supervisor_can_filter_historical_sales_without_a_current_project_assignment(): void
+    {
+        $this->supervisor->assignedProjects()->attach($this->project, ['is_primary' => true, 'is_active' => true]);
+        $historicalSales = $this->user('sales', 'Sales Historis Tanpa Proyek', $this->branch, $this->coordinatorA);
+        SalesCoordinatorSales::create([
+            'coordinator_user_id' => $this->coordinatorA->id,
+            'sales_user_id' => $historicalSales->id,
+            'is_active' => false,
+            'started_at' => today()->subMonth(),
+            'ended_at' => today()->subDay(),
+        ]);
+        $historicalLead = $this->lead($historicalSales, 'LEAD_HISTORIS_TANPA_PROYEK', '2026-08-10', 'synced');
+
+        $data = app(SupervisorSalesMonitoringService::class)->resolve($this->supervisor, [
+            'period' => 'today',
+            'sales_id' => $historicalSales->id,
+        ], false);
+
+        $this->assertContains($historicalSales->id, $data['salesUsers']->pluck('id')->all());
+        $this->assertSame([$historicalSales->id], $data['salesRows']->pluck('id')->all());
+        $this->assertSame([$historicalLead->id], $data['leads']->pluck('id')->all());
+
+        $this->actingAs($this->supervisor)
+            ->get(route('sales-pocketbook.index', ['period' => 'today', 'sales_id' => $historicalSales->id]))
+            ->assertOk()
+            ->assertSee($historicalLead->customer_name);
+
+        $response = $this->actingAs($this->supervisor)->get(route('sales-pocketbook.supervisor-monitoring.lead-export', [
+            'period' => 'today',
+            'sales_id' => $historicalSales->id,
+        ]));
+        $path = $response->baseResponse->getFile()->getPathname();
+        $sheet = IOFactory::load($path)->getActiveSheet();
+        $values = collect($sheet->toArray())->flatten()->implode('|');
+
+        $this->assertStringContainsString($historicalLead->customer_name, $values);
         @unlink($path);
     }
 

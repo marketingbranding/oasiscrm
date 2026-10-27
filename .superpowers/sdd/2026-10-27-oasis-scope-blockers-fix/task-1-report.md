@@ -49,3 +49,62 @@ Implemented and verified. The change is limited to Supervisor read/monitoring sc
 ## Concerns
 
 - The repository already contained unrelated untracked `.playwright-mcp/` and `docs/superpowers/` paths. They were not modified or staged.
+
+## Round 1 Reviewer Fix
+
+Addressed all six reviewer findings without changing the `for()` result shape, Supervisor read-only policy, current-team boundaries, dormant gates, routes, or the existing Task 1 changelog.
+
+- Monitoring/export project IDs now intersect `OrganizationScopeService::projectIds()` with workspace-accessible active projects.
+- Supervisor direct-detail access no longer widens an empty organization project scope to every accessible branch project.
+- Historical monitoring uses the workspace project scope independently of current Sales project assignment, so ended mappings without a current project assignment remain visible only when their lead is in scope.
+- `forWorkspace()` applies the same project-aware assignment predicate to Supervisors and Coordinators, including historical assignment semantics.
+- Monitoring filter authorization now validates Coordinator/Sales selections against the already workspace-filtered historical team.
+- Added regressions for same-branch unrelated projects, empty project scope, project-aware Coordinator filtering, historical Sales without current project assignment, monitoring, export, and direct-detail denial.
+- Updated the existing hierarchy fixture to explicitly assign the Supervisor to its authorized project, matching the now-enforced organization project-scope contract.
+
+### Exact verification commands and output
+
+RED baseline:
+
+```text
+$ php artisan test --compact tests/Feature/SupervisorSalesPocketbookTest.php
+failed: tests 20, passed 17, assertions 103, failures 2, errors 1
+```
+
+Focused reviewer regression suite:
+
+```text
+$ php artisan test --compact tests/Feature/SupervisorSalesPocketbookTest.php tests/Feature/SalesPocketbookScopeMatrixTest.php
+passed: tests 31, assertions 169
+```
+
+Affected hierarchy regression suite:
+
+```text
+$ php artisan test --compact tests/Feature/SalesRoleWorkspaceScopeTest.php
+passed: tests 3, assertions 49
+```
+
+Full suite:
+
+```text
+$ php artisan test --compact
+passed: tests 1436, assertions 10503
+```
+
+Formatting and whitespace:
+
+```text
+$ vendor/bin/pint --dirty --format agent
+passed
+
+$ git diff --check
+passed (no output)
+```
+
+Graph refresh:
+
+```text
+$ graphify . --update --no-viz --code-only
+[graphify extract] wrote graphify-out/graph.json: 9277 nodes, 24136 edges, 782 communities
+```

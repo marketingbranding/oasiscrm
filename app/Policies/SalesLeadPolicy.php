@@ -2,7 +2,6 @@
 
 namespace App\Policies;
 
-use App\Models\LeadMaster;
 use App\Models\SalesLead;
 use App\Models\User;
 use App\Services\CoordinatorLeadTeamService;
@@ -40,13 +39,6 @@ class SalesLeadPolicy
                 $organizationScope->projectIds($user, 'sales_pocketbook'),
                 $workspaceAccess->accessibleProjectIds($user),
             ));
-            if ($projectIds === []) {
-                $projectIds = LeadMaster::query()
-                    ->whereIn('branch_id', $branchIds)
-                    ->whereIn('id', $workspaceAccess->accessibleProjectIds($user))
-                    ->where('is_active', true)
-                    ->pluck('id')->map(fn ($id) => (int) $id)->all();
-            }
             $team = app(SalesTeamScopeService::class)->forWorkspace($user, $branchIds, $projectIds);
 
             return $team['sales']->contains('id', $lead->sales_user_id)

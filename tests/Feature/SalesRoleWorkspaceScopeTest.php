@@ -101,6 +101,7 @@ class SalesRoleWorkspaceScopeTest extends TestCase
         $project = LeadMaster::create(['branch_id' => $branch->id, 'project_name' => 'Magelang Residence', 'is_active' => true]);
         $manager = $this->user('manager', 'Manager Magelang', $branch);
         $supervisor = $this->user('supervisor', 'SPV Magelang', $branch, $manager);
+        $supervisor->assignedProjects()->attach($project, ['is_primary' => true, 'is_active' => true]);
         $coordinatorA = $this->user('sales_coordinator', 'Koordinator A', $branch, $supervisor);
         $coordinatorB = $this->user('sales_coordinator', 'Koordinator B', $branch, $supervisor);
         $sales1 = $this->user('sales', 'Sales 1', $branch);

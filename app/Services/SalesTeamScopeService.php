@@ -152,14 +152,14 @@ class SalesTeamScopeService
         $salesIds = $team['sales']->pluck('id')->unique();
         $allowedHierarchyIds = User::query()
             ->whereIn('id', $hierarchyIds)
-            ->whereIn('branch_id', $branchIds)
+            ->where(function (Builder $query) use ($branchIds, $projectIds, $includeHistorical): void {
+                $this->workspacePeople($query, $branchIds, $projectIds, $includeHistorical);
+            })
             ->pluck('id');
         $allowedSalesIds = User::query()
             ->whereIn('id', $salesIds)
-            ->whereIn('branch_id', $branchIds)
-            ->where(function (Builder $query) use ($projectIds): void {
-                $query->whereDoesntHave('assignedProjects', fn (Builder $projects) => $this->currentProjectAssignment($projects))
-                    ->orWhereHas('assignedProjects', fn (Builder $projects) => $this->currentProjectAssignment($projects)->whereIn('lead_master.id', $projectIds));
+            ->where(function (Builder $query) use ($branchIds, $projectIds, $includeHistorical): void {
+                $this->workspacePeople($query, $branchIds, $projectIds, $includeHistorical);
             })
             ->pluck('id');
         $keepHierarchy = fn (Collection $users): Collection => $users->whereIn('id', $allowedHierarchyIds)->values();
@@ -238,13 +238,22 @@ class SalesTeamScopeService
         return $user->role?->slug === $role;
     }
 
-    private function currentProjectAssignment(Builder $query): Builder
+    private function workspacePeople(Builder $query, array $branchIds, array $projectIds, bool $includeHistorical): void
+    {
+        $query->whereIn('branch_id', $branchIds)
+            ->where(function (Builder $scope) use ($projectIds, $includeHistorical): void {
+                $scope->whereDoesntHave('assignedProjects', fn (Builder $projects) => $this->workspaceProjectAssignment($projects, $includeHistorical))
+                    ->orWhereHas('assignedProjects', fn (Builder $projects) => $this->workspaceProjectAssignment($projects, $includeHistorical)->whereIn('lead_master.id', $projectIds));
+            });
+    }
+
+    private function workspaceProjectAssignment(Builder $query, bool $includeHistorical): Builder
     {
         return $query
             ->where('lead_master.is_active', true)
             ->where('project_user.is_active', true)
             ->where(fn (Builder $dates) => $dates->whereNull('project_user.assignment_start_date')->orWhereDate('project_user.assignment_start_date', '<=', today()->toDateString()))
-            ->where(fn (Builder $dates) => $dates->whereNull('project_user.assignment_end_date')->orWhereDate('project_user.assignment_end_date', '>=', today()->toDateString()));
+            ->when(! $includeHistorical, fn (Builder $dates) => $dates->where(fn (Builder $endDate) => $endDate->whereNull('project_user.assignment_end_date')->orWhereDate('project_user.assignment_end_date', '>=', today()->toDateString())));
     }
 
     private function canonicalFor(User $actor, array $empty, bool $includeHistorical = false): array

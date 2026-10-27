@@ -68,6 +68,22 @@ class OperationalModuleAvailabilityTest extends TestCase
         $this->actingAs($user)->getJson(route('database.sync-status', ['branch_id' => 1]))->assertNotFound();
         $this->actingAs($user)->postJson(route('konsumen-progress.sync'), ['branch_id' => 1])->assertNotFound();
         $this->actingAs($user)->getJson(route('konsumen-progress.sync-status', ['branch_id' => 1]))->assertNotFound();
+        $this->actingAs($user)->postJson(route('database.records.store'), [
+            'branch_id' => 1,
+            'sheet_name' => 'data_konsumen',
+        ])->assertNotFound();
+    }
+
+    public function test_dormant_spreadsheet_sync_hides_the_entire_dana_talangan_sync_surface(): void
+    {
+        config(['oasis.spreadsheet_sync_enabled' => false]);
+        $user = $this->user('superadmin');
+
+        $this->actingAs($user)
+            ->get(route('dana-talangan.index'))
+            ->assertOk()
+            ->assertDontSee('Klik Sync Sekarang')
+            ->assertDontSee('Rekonsiliasi');
     }
 
     public function test_navigation_and_dashboard_do_not_expose_dormant_database_or_sync_controls(): void
@@ -99,7 +115,9 @@ class OperationalModuleAvailabilityTest extends TestCase
         $user = $this->user('superadmin');
 
         $this->assertSame(1, \DB::table('changelogs')->whereNull('version')->where('title', 'Gate rollout modul operasional OASIS')->count());
+        $this->assertSame(1, \DB::table('changelogs')->whereNull('version')->where('title', 'Pengamanan gate rollout dan sinkronisasi OASIS')->count());
         $this->actingAs($user)->get(route('changelogs.index'))->assertOk()->assertSee('Gate rollout modul operasional OASIS');
+        $this->actingAs($user)->get(route('changelogs.index'))->assertSee('Pengamanan gate rollout dan sinkronisasi OASIS');
     }
 
     private function user(string $role): User

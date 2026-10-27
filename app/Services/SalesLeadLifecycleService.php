@@ -603,7 +603,8 @@ class SalesLeadLifecycleService
 
     private function syncEnabled(): bool
     {
-        return (bool) config('services.google_sheets.sales_lead_sync_enabled');
+        return (bool) config('services.google_sheets.sales_lead_sync_enabled')
+            && (bool) config('oasis.spreadsheet_sync_enabled');
     }
 
     private function writer(): SalesLeadSpreadsheetWriter

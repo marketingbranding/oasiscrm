@@ -11,6 +11,7 @@
     $sheetCapabilities = $lifecycleCapabilitiesByBranch[$lead->branch_id] ?? [];
     $siteVisitAvailable = ($sheetCapabilities['data_ceklok'] ?? false) === true;
     $consumerSheet = $lead->project?->is_nup_eligible ? 'data_konsumen_nup' : 'data_konsumen';
+    $consumerOperationalEnabled = (bool) config('oasis.consumer_progress_operational_enabled');
     $consumerAvailable = ($sheetCapabilities[$consumerSheet] ?? false) === true;
     $slikAvailable = ($sheetCapabilities['bi_checking'] ?? false) === true;
     $freelanceAvailable = ($sheetCapabilities['data_sales'] ?? false) === true;
@@ -54,8 +55,10 @@
             @endif
             @can('recordSiteVisit', $lead) @if($siteVisitAvailable)<x-crm.button type="button" variant="secondary" size="sm" @click="$dispatch('oasis:modal-open', { name: 'lead-site-visit-{{ $lead->id }}' })">{{ $latestVisit && !$latestVisit->is_completed ? 'Isi Data Cek Lokasi' : 'Rekam Cek Lokasi' }}</x-crm.button>@endif @endcan
             @can('convertToConsumer', $lead)
+                @if($consumerOperationalEnabled)
                 @if($consumerAvailable && !$normalConsumer && (!$lead->project?->is_nup_eligible || !$nupConsumer))
                     <x-crm.button type="button" variant="secondary" size="sm" @click="$dispatch('oasis:modal-open', { name: 'lead-consumer-{{ $lead->id }}' })">{{ $lead->project?->is_nup_eligible ? 'Proses Konsumen NUP' : 'Proses Menjadi Konsumen' }}</x-crm.button>
+                @endif
                 @endif
             @endcan
             @can('submitToSlik', $lead) @if($slikAvailable && $normalConsumer && !$activeSlik)<x-crm.button type="button" variant="secondary" size="sm" @click="$dispatch('oasis:modal-open', { name: 'lead-slik-{{ $lead->id }}' })">Kirim ke Cek SLIK</x-crm.button>@endif @endcan
@@ -126,6 +129,7 @@
 @endcan
 
 @can('convertToConsumer', $lead)
+@if($consumerOperationalEnabled)
 <x-crm.modal name="lead-consumer-{{ $lead->id }}" title="{{ $lead->project?->is_nup_eligible ? 'Input Konsumen NUP' : 'Jadikan Konsumen' }}" description="{{ $lead->project?->is_nup_eligible ? 'Data masuk ke data_konsumen_nup dan belum mengubah status menjadi UTJ.' : 'Data konsumen normal membutuhkan NIK dan ID kavling.' }}" size="lg">
     <form method="POST" action="{{ route('sales-leads.consumer.store', $lead) }}" x-data="{ submitting: false }" @submit="submitting = true" class="grid grid-cols-1 gap-3 sm:grid-cols-2" :aria-busy="submitting">
         @csrf <input type="hidden" name="operation_uuid" value="{{ old('operation_uuid', (string) \Illuminate\Support\Str::uuid()) }}"><input type="hidden" name="project_id" value="{{ $lead->project_id }}">
@@ -137,6 +141,7 @@
         <div class="sm:col-span-2"><x-crm.button type="submit" variant="primary" accent="sales" x-bind:disabled="submitting">Simpan {{ $lead->project?->is_nup_eligible ? 'NUP' : 'Konsumen' }}</x-crm.button></div>
     </form>
 </x-crm.modal>
+@endif
 @endcan
 
 @can('submitToSlik', $lead)

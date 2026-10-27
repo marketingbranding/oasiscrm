@@ -13,6 +13,10 @@ class DatabaseSheetWriteService
 
     public function updateRecord(DatabaseSheetRecord $record, array $input): bool
     {
+        if (! config('oasis.spreadsheet_sync_enabled')) {
+            return false;
+        }
+
         $headers = $record->headers;
         $formulaColumns = $record->formula_columns ?? [];
         $rowData = $record->row_data;
@@ -61,6 +65,10 @@ class DatabaseSheetWriteService
 
     public function createRecord(Branch $branch, string $sheetName, array $input): bool
     {
+        if (! config('oasis.spreadsheet_sync_enabled')) {
+            return false;
+        }
+
         $template = DatabaseSheetRecord::where('branch_id', $branch->id)
             ->where('sheet_name', $sheetName)
             ->orderByDesc('row_number')
@@ -120,6 +128,10 @@ class DatabaseSheetWriteService
 
     public function softDelete(DatabaseSheetRecord $record, int $userId): bool
     {
+        if (! config('oasis.spreadsheet_sync_enabled')) {
+            return false;
+        }
+
         $deletedAt = now()->toDateTimeString();
         $rowData = $record->row_data;
         $rowData['oasis_deleted_at'] = $deletedAt;

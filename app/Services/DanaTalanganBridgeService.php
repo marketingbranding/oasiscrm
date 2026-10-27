@@ -432,7 +432,7 @@ class DanaTalanganBridgeService
 
     public function tombstone(DanaTalangan $record, ?User $actor = null): void
     {
-        if (! config('services.google_sheets.dana_talangan_bridge_enabled')) {
+        if (! config('oasis.spreadsheet_sync_enabled') || ! config('services.google_sheets.dana_talangan_bridge_enabled')) {
             throw new \DomainException('Bridge Dana Talangan sedang dinonaktifkan; data remote belum aman dihapus.');
         }
 

@@ -197,7 +197,7 @@ Route::middleware(['auth', 'active', 'verified', 'password.changed', 'operationa
         Route::post('/buku-saku-sales/leads/{sales_lead}/site-visits', [SalesLeadLifecycleController::class, 'siteVisit'])->name('sales-leads.site-visits.store');
         Route::post('/buku-saku-sales/leads/{sales_lead}/utj', [SalesLeadLifecycleController::class, 'markUtj'])->name('sales-leads.utj.store');
         Route::patch('/buku-saku-sales/leads/{sales_lead}/site-visits/{site_visit}', [SalesLeadLifecycleController::class, 'updateSiteVisit'])->name('sales-leads.site-visits.update');
-        Route::post('/buku-saku-sales/leads/{sales_lead}/consumer', [SalesLeadLifecycleController::class, 'consumer'])->name('sales-leads.consumer.store');
+        Route::post('/buku-saku-sales/leads/{sales_lead}/consumer', [SalesLeadLifecycleController::class, 'consumer'])->middleware('operational.module:consumer_progress')->name('sales-leads.consumer.store');
         Route::post('/buku-saku-sales/leads/{sales_lead}/slik', [SalesLeadLifecycleController::class, 'slik'])->name('sales-leads.slik.store');
         Route::patch('/buku-saku-sales/leads/{sales_lead}/slik/{slik_attempt}/reject', [SalesLeadLifecycleController::class, 'rejectSlik'])->name('sales-leads.slik.reject');
         Route::post('/buku-saku-sales/leads/{sales_lead}/freelance', [SalesLeadLifecycleController::class, 'freelance'])->name('sales-leads.freelance.store');
@@ -252,11 +252,11 @@ Route::middleware(['auth', 'active', 'verified', 'password.changed', 'operationa
         Route::get('/database/sheet/{branchId}/{sheetName}', [DatabaseController::class, 'sheetData'])->middleware('permission:database.view')->name('database.sheet');
         Route::post('/database/sync', [DatabaseController::class, 'sync'])->middleware(['operational.module:spreadsheet_sync', 'permission:database.sync'])->name('database.sync');
         Route::get('/database/sync/status', [DatabaseController::class, 'syncStatus'])->middleware(['operational.module:spreadsheet_sync', 'permission:database.sync'])->name('database.sync-status');
-        Route::post('/database/records', [DatabaseController::class, 'store'])->middleware('permission:database.edit')->name('database.records.store');
-        Route::put('/database/records/{record}', [DatabaseController::class, 'update'])->middleware('permission:database.edit')->name('database.records.update');
-        Route::delete('/database/records/{record}', [DatabaseController::class, 'destroy'])->middleware('permission:database.edit')->name('database.records.destroy');
-        Route::post('/database/import/preview', [DatabaseController::class, 'importPreview'])->middleware('permission:database.edit')->name('database.import.preview');
-        Route::post('/database/import', [DatabaseController::class, 'importSave'])->middleware('permission:database.edit')->name('database.import.save');
+        Route::post('/database/records', [DatabaseController::class, 'store'])->middleware(['operational.module:spreadsheet_sync', 'permission:database.edit'])->name('database.records.store');
+        Route::put('/database/records/{record}', [DatabaseController::class, 'update'])->middleware(['operational.module:spreadsheet_sync', 'permission:database.edit'])->name('database.records.update');
+        Route::delete('/database/records/{record}', [DatabaseController::class, 'destroy'])->middleware(['operational.module:spreadsheet_sync', 'permission:database.edit'])->name('database.records.destroy');
+        Route::post('/database/import/preview', [DatabaseController::class, 'importPreview'])->middleware(['operational.module:spreadsheet_sync', 'permission:database.edit'])->name('database.import.preview');
+        Route::post('/database/import', [DatabaseController::class, 'importSave'])->middleware(['operational.module:spreadsheet_sync', 'permission:database.edit'])->name('database.import.save');
     });
 
     Route::prefix('admin/migrations/marison')->name('admin.marison-migrations.')->middleware(['module.maintenance:database', 'operational.module:database', 'can:manageMarisonMigration'])->group(function () {

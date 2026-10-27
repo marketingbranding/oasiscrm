@@ -270,7 +270,7 @@
             $databaseBadgeVariant = match ($databaseState) { 'pass' => 'success', 'fail' => 'danger', default => 'warning' };
         @endphp
         <x-dashboard.section id="dashboard-system-status" eyebrow="Kesiapan area kerja" title="Status Data & Sistem" description="Status yang tersedia dari integrasi dan pemeriksaan sistem OASIS saat ini.">
-            @if($canViewDatabase && isset($syncHealth))
+            @if(config('oasis.spreadsheet_sync_enabled') && $canViewDatabase && isset($syncHealth))
                 <div class="dashboard-status-row">
                     <div>
                         <div class="dashboard-status-label">Google Database Sync</div>

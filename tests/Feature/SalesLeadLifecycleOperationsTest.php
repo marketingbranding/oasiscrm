@@ -151,6 +151,57 @@ class SalesLeadLifecycleOperationsTest extends TestCase
         ])->assertRedirect()->assertSessionHasErrors('nik');
     }
 
+    public function test_consumer_conversion_returns_not_found_and_hides_consumer_action_when_module_is_dormant(): void
+    {
+        config(['oasis.consumer_progress_operational_enabled' => false]);
+        [, $project, $sales, $lead] = $this->context();
+        $writer = Mockery::mock(SalesLeadSpreadsheetWriter::class);
+        $writer->shouldReceive('append')->andReturn(new SalesLeadSpreadsheetWriteResult(
+            'spreadsheet-id',
+            'data_konsumen',
+            2,
+            (string) Str::uuid(),
+        ));
+        $this->app->instance(SalesLeadSpreadsheetWriter::class, $writer);
+
+        $this->actingAs($sales)->postJson(route('sales-leads.consumer.store', $lead), [
+            'project_id' => $project->id,
+            'nik' => '0123456789012345',
+            'id_kavling' => 'A-1',
+        ])->assertNotFound();
+
+        $this->actingAs($sales)
+            ->get(route('sales-pocketbook.index'))
+            ->assertOk()
+            ->assertDontSee('lead-consumer-'.$lead->id);
+
+        $source = file_get_contents(resource_path('views/crm/sales-pocketbook/_lead-lifecycle.blade.php'));
+        $this->assertStringContainsString("config('oasis.consumer_progress_operational_enabled')", $source);
+    }
+
+    public function test_lifecycle_writes_stay_local_when_spreadsheet_sync_is_dormant(): void
+    {
+        config(['oasis.spreadsheet_sync_enabled' => false]);
+        [, $project, $sales, $lead] = $this->context();
+        $writer = Mockery::mock(SalesLeadSpreadsheetWriter::class);
+        $writer->shouldReceive('append')->andReturn(new SalesLeadSpreadsheetWriteResult(
+            'spreadsheet-id',
+            'data_konsumen',
+            2,
+            (string) Str::uuid(),
+        ));
+        $this->app->instance(SalesLeadSpreadsheetWriter::class, $writer);
+
+        $link = app(SalesLeadLifecycleService::class)->convertToConsumer($lead, [
+            'project_id' => $project->id,
+            'nik' => '0123456789012345',
+            'id_kavling' => 'A-1',
+        ], $sales);
+
+        $this->assertSame('data_konsumen', $link->sheet_type);
+        $this->assertNull($link->oasis_sync_id);
+    }
+
     public function test_consumer_uses_nup_sheet_and_remote_failure_never_advances_status(): void
     {
         [, $project, $sales, $lead] = $this->context();

@@ -54,6 +54,29 @@ class DatabaseAuthorizationTest extends TestCase
         $this->actingAs($user)->postJson(route('database.records.store'), ['branch_id' => $branch->id, 'sheet_name' => 'Leads'])->assertUnprocessable();
     }
 
+    public function test_database_write_service_does_not_call_google_when_spreadsheet_sync_is_dormant(): void
+    {
+        config(['oasis.spreadsheet_sync_enabled' => false]);
+        $branch = Branch::query()->create(['name' => 'Magelang', 'code' => 'MGL', 'is_active' => true, 'sheet_id' => 'sheet-mgl']);
+        $record = DatabaseSheetRecord::query()->create([
+            'branch_id' => $branch->id,
+            'sheet_id' => $branch->sheet_id,
+            'sheet_name' => 'data_konsumen',
+            'row_number' => 2,
+            'oasis_sync_id' => 'sync-id',
+            'headers' => ['nama_konsumen'],
+            'row_data' => ['nama_konsumen' => 'Lokal'],
+            'formula_columns' => [],
+            'column_metadata' => [],
+        ]);
+        $google = Mockery::mock(GoogleSheetsApiService::class);
+        $google->shouldNotReceive('batchUpdateRanges');
+        $this->app->instance(GoogleSheetsApiService::class, $google);
+
+        $this->assertFalse(app(DatabaseSheetWriteService::class)->updateRecord($record, ['nama_konsumen' => 'Tidak Ditulis']));
+        $this->assertSame('Lokal', $record->fresh()->row_data['nama_konsumen']);
+    }
+
     public function test_explicit_unauthorized_branch_is_denied_across_database_endpoints(): void
     {
         $authorized = Branch::query()->create(['name' => 'Magelang', 'code' => 'MGL', 'is_active' => true, 'sheet_id' => 'sheet-mgl']);

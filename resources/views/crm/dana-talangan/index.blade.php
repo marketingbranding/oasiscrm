@@ -71,6 +71,7 @@
     </x-crm.page-header>
     <x-crm.page-presence page-key="dana-talangan" :branch-id="$selectedBranchId" />
 
+    @if(config('oasis.spreadsheet_sync_enabled'))
     <x-crm.sync-status-panel module-key="dana-talangan" scope-name="Global" :status="$syncStatus">
         <div class="flex flex-wrap items-center gap-2">
             <x-crm.status-badge :variant="$bridgeSetting?->mode?->value === 'bidirectional' ? 'success' : ($bridgeSetting?->mode?->value === 'push_only' ? 'info' : 'neutral')">
@@ -84,6 +85,7 @@
             @endif
         </div>
     </x-crm.sync-status-panel>
+    @endif
 
     <div class="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <x-crm.card padding="sm">        <div class="font-[Helvetica] text-[10px] font-bold uppercase">Total Record Filter</div><div class="mt-1 text-xl font-bold">{{ number_format($summary['total']) }}</div></x-crm.card>

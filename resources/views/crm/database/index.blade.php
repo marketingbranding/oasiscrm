@@ -55,7 +55,7 @@
         @endif
     </x-crm.toolbar>
 
-    @if($selectedBranch)
+    @if(config('oasis.spreadsheet_sync_enabled') && $selectedBranch)
     <x-crm.section
         id="database-sync-state"
         title="Status Sinkronisasi"

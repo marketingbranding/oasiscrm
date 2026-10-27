@@ -31,12 +31,16 @@ class DanaTalanganBridgeModeService
 
     public function isPushEnabled(): bool
     {
-        return config('services.google_sheets.dana_talangan_bridge_enabled') && $this->mode()->pushEnabled();
+        return config('oasis.spreadsheet_sync_enabled')
+            && config('services.google_sheets.dana_talangan_bridge_enabled')
+            && $this->mode()->pushEnabled();
     }
 
     public function isPullEnabled(): bool
     {
-        return config('services.google_sheets.dana_talangan_bridge_enabled') && $this->mode()->pullEnabled();
+        return config('oasis.spreadsheet_sync_enabled')
+            && config('services.google_sheets.dana_talangan_bridge_enabled')
+            && $this->mode()->pullEnabled();
     }
 
     public function setting(): ?DanaTalanganBridgeSetting
@@ -46,7 +50,7 @@ class DanaTalanganBridgeModeService
 
     public function setMode(DanaTalanganBridgeMode $mode, ?User $actor = null): DanaTalanganBridgeSetting
     {
-        if ($mode !== DanaTalanganBridgeMode::Off && ! config('services.google_sheets.dana_talangan_bridge_enabled')) {
+        if ($mode !== DanaTalanganBridgeMode::Off && (! config('oasis.spreadsheet_sync_enabled') || ! config('services.google_sheets.dana_talangan_bridge_enabled'))) {
             throw new \DomainException('Bridge Dana Talangan sedang dinonaktifkan.');
         }
         $setting = $this->setting();

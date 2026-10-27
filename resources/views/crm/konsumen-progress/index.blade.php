@@ -38,7 +38,7 @@
         </x-slot:actions>
     </x-crm.toolbar>
 
-    @if($selectedBranch)
+    @if(config('oasis.spreadsheet_sync_enabled') && $selectedBranch)
     <x-crm.sync-status-panel module-key="konsumen-progress" :scope-name="$selectedBranch->name" :branch-id="$selectedBranchId" :status="$syncStatus" :is-stale="$isStale" />
     @endif
 

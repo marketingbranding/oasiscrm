@@ -96,10 +96,13 @@ class SalesLeadController extends Controller
         $historicalOwnerEdit = $this->salesLeadPolicy->canEditHistoricalOwnedLead($user, $salesLead);
         $salesLead->loadCount('comments');
         $salesLead->load(['branch', 'project', 'sales', 'leadSource']);
-        $salesUsers = User::query()->where('is_active', true)
+        $salesUsers = User::query()
             ->whereHas('role', fn (Builder $query) => $query->where('slug', 'sales'))
             ->where(function (Builder $query) use ($branchIds, $historicalOwnerEdit, $salesLead): void {
-                $query->whereHas('assignedProjects', fn (Builder $assignedProjects) => $assignedProjects->whereIn('branch_id', $branchIds));
+                $query->where(function (Builder $activeSales) use ($branchIds): void {
+                    $activeSales->where('is_active', true)
+                        ->whereHas('assignedProjects', fn (Builder $assignedProjects) => $assignedProjects->whereIn('branch_id', $branchIds));
+                });
                 if ($historicalOwnerEdit) {
                     $query->orWhereKey($salesLead->sales_user_id);
                 }

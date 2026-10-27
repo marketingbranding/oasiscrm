@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Enums\AccountStatus;
 use App\Models\Branch;
 use App\Models\ContentItem;
 use App\Models\LeadMaster;
@@ -168,6 +169,7 @@ class BranchTransferHistoricalAccessTest extends TestCase
                 ->assertSee('id="edit-lead-branch"', false)
                 ->assertSee('id="edit-lead-project"', false)
                 ->assertSee('id="edit-lead-sales"', false)
+                ->assertSee('pemilik historis', false)
                 ->assertSee('lead historis, baca-saja', false)
                 ->assertSee('name="branch_id" value="'.$oldBranch->id.'"', false)
                 ->assertSee('name="project_id" value="'.$lead->project_id.'"', false)
@@ -192,6 +194,23 @@ class BranchTransferHistoricalAccessTest extends TestCase
             $this->assertSame($sales->id, $lead->sales_user_id);
             $this->assertSame("Lead Historis Diperbarui {$role}", $lead->customer_name);
         }
+    }
+
+    public function test_historical_edit_shows_inactive_owner_as_labeled_read_only_value_without_offering_other_inactive_sales(): void
+    {
+        [$sales, $oldBranch, , $lead] = $this->transferredSalesLead();
+        $oldProject = LeadMaster::query()->where('branch_id', $oldBranch->id)->firstOrFail();
+        $inactiveAlternative = $this->user('sales', $oldBranch);
+        $inactiveAlternative->assignedProjects()->attach($oldProject->id, ['is_primary' => true, 'is_active' => true]);
+        $inactiveAlternative->forceFill(['name' => 'Sales Tidak Aktif Lain', 'account_status' => AccountStatus::Inactive, 'is_active' => false])->saveQuietly();
+        $sales->forceFill(['name' => 'Pemilik Historis Nonaktif', 'account_status' => AccountStatus::Inactive, 'is_active' => false])->saveQuietly();
+        $operator = $this->user('admin', $oldBranch);
+
+        $this->actingAs($operator)->get(route('sales-leads.edit', $lead))
+            ->assertSee('Pemilik Historis Nonaktif')
+            ->assertSee('pemilik historis, nonaktif', false)
+            ->assertSee('name="sales_user_id" value="'.$sales->id.'"', false)
+            ->assertDontSee('Sales Tidak Aktif Lain');
     }
 
     public function test_historical_http_edit_rejects_reassignment_to_a_new_sales_owner(): void

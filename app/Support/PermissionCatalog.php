@@ -63,6 +63,8 @@ class PermissionCatalog
             ['name' => 'Menghapus permanen pengguna', 'slug' => 'users.delete_permanently', 'description' => 'Menghapus akun pengguna secara permanen.', 'group_name' => 'Pengguna'],
             ['name' => 'Menganonimkan pengguna', 'slug' => 'users.anonymize', 'description' => 'Menganonimkan akun pengguna dengan melepas data pribadi.', 'group_name' => 'Pengguna'],
             ['name' => 'Melepas email pengguna', 'slug' => 'users.release_email', 'description' => 'Melepas alamat email akun pengguna agar dapat dipakai ulang.', 'group_name' => 'Pengguna'],
+            ['name' => 'Mengusulkan Sales', 'slug' => 'users.propose_sales', 'description' => 'Mengusulkan onboarding pengguna Sales dalam lingkup KC/KCP.', 'group_name' => 'Pengguna'],
+            ['name' => 'Menyetujui onboarding Sales', 'slug' => 'users.approve_sales', 'description' => 'Menyetujui atau menolak proposal onboarding pengguna Sales.', 'group_name' => 'Pengguna'],
             ['name' => 'Menetapkan peran pengguna', 'slug' => 'users.assign_roles', 'description' => 'Menetapkan peran organisasi pengguna sesuai kewenangan.', 'group_name' => 'Pengguna'],
             ['name' => 'Menetapkan cabang pengguna', 'slug' => 'users.assign_branches', 'description' => 'Menetapkan cabang utama dan tambahan pengguna.', 'group_name' => 'Pengguna'],
             ['name' => 'Menetapkan proyek pengguna', 'slug' => 'users.assign_projects', 'description' => 'Menetapkan proyek utama dan tambahan pengguna.', 'group_name' => 'Pengguna'],
@@ -246,7 +248,7 @@ class PermissionCatalog
                 'sales_targets.view_branch', 'sales_daily_plans.view_branch',
             ],
             'admin' => [
-                'users.view', 'users.create', 'users.invite', 'users.update', 'users.reset_password',
+                'users.view', 'users.create', 'users.invite', 'users.update', 'users.reset_password', 'users.propose_sales',
                 'users.assign_branches', 'users.assign_projects', 'users.assign_supervisor',
                 'sales_pocketbook.export', 'work_planner.create', 'work_planner.update', 'work_planner.assign', 'work_planner.export',
                 'sales_pocketbook.sync', 'sales_pocketbook.reconcile',

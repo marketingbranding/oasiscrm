@@ -1,0 +1,8 @@
+@extends('layouts.crm')
+@section('title', 'Proposal Onboarding Sales - Oasis CRM')
+@section('content')
+<x-crm.page-header color="#fcc20f" title="Proposal Onboarding Sales" />
+<div class="mb-4 flex flex-wrap gap-2"><a href="{{ route('admin-users.index') }}" class="border-2 border-black bg-white px-4 py-2 text-xs font-bold">KEMBALI</a></div>
+<div class="crm-table-scroll"><table class="crm-data-table"><thead><tr><th>Nama</th><th>Email</th><th>KC/KCP</th><th>Proyek</th><th>Koordinator</th><th>Status</th><th>Aksi</th></tr></thead><tbody>@forelse($proposals as $proposal)<tr><td>{{ $proposal->name }}</td><td>{{ $proposal->email }}</td><td>{{ $proposal->branch?->name }}</td><td>{{ $proposal->project?->project_name }}</td><td>{{ $proposal->coordinator?->name }}</td><td>{{ strtoupper($proposal->status) }}</td><td>@if($proposal->status === \App\Models\SalesOnboardingProposal::STATUS_PENDING)<form method="POST" action="{{ route('admin-users.sales-proposals.approve', $proposal) }}" class="inline">@csrf<input type="hidden" name="decision_token" value="{{ $proposal->decision_token }}"><button class="font-bold text-[#0000ee] underline">SETUJUI</button></form> <form method="POST" action="{{ route('admin-users.sales-proposals.reject', $proposal) }}" class="inline">@csrf<input type="hidden" name="decision_token" value="{{ $proposal->decision_token }}"><button class="font-bold text-[#c0392b] underline">TOLAK</button></form>@else-@endif</td></tr>@empty<tr><td colspan="7" class="text-center">Belum ada proposal.</td></tr>@endforelse</tbody></table></div>
+<div class="mt-4">{{ $proposals->links() }}</div>
+@endsection

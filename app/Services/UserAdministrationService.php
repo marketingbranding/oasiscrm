@@ -42,6 +42,9 @@ class UserAdministrationService
     public function assertCanAssignRole(User $actor, Role $role, ?User $target = null): void
     {
         $role->loadMissing('permissions');
+        $canCreate = $actor->isSuperadmin()
+            || ($actor->hasPrimaryRole('pusat') && ! in_array($role->slug, ['sales', 'sales_coordinator', 'admin', 'branch_manager'], true));
+        abort_unless($target !== null || $canCreate, 403, 'Pembuatan akun hanya dapat dilakukan Superadmin.');
         abort_unless($actor->hasPermission('users.assign_roles') || ($target === null && $actor->hasPermission('users.create')), 403);
         abort_if(! $actor->isSuperadmin() && $role->is_superadmin, 403);
         abort_if(! $actor->isSuperadmin() && $role->permissions->contains(fn ($permission) => in_array($permission->slug, ['roles.manage', 'permissions.manage'], true)), 403);

@@ -80,6 +80,7 @@ class AdminUserController extends Controller
     public function create(): View
     {
         $this->authorize('create', User::class);
+        abort_unless(request()->user()->isSuperadmin() || request()->user()->hasPrimaryRole('pusat'), 403, 'Pembuatan akun langsung hanya dapat dilakukan Superadmin atau Pusat.');
 
         return view('crm.admin-users.create', $this->options(request()->user()));
     }

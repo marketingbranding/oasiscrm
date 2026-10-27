@@ -17,6 +17,8 @@ class AdminUserStoreRequest extends FormRequest
         $actor = $this->user();
 
         return ($actor?->can('create', User::class) ?? false)
+            && $actor->hasPermission('users.create')
+            && ($actor->isSuperadmin() || $actor->hasPrimaryRole('pusat'))
             && ($this->input('provisioning_mode', 'invitation') !== 'direct' || $actor->isSuperadmin());
     }
 

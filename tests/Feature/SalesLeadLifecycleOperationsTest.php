@@ -327,7 +327,7 @@ class SalesLeadLifecycleOperationsTest extends TestCase
 
         $admin = $this->user('admin', $lead->branch, 'Admin Cabang');
         $this->assertTrue($sales->can('markSlikRejected', $lead));
-        $this->assertTrue($admin->can('markSlikRejected', $lead));
+        $this->assertFalse($admin->can('markSlikRejected', $lead));
 
         [, , $otherSales] = $this->context();
         $this->assertFalse($otherSales->can('markSlikRejected', $lead));

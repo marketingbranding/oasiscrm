@@ -18,7 +18,7 @@ class SupervisorSalesPocketbookController extends Controller
     {
         $this->authorizeSupervisor($request);
         $data = $this->monitoring->resolve($request->user(), $this->validatedFilters($request));
-        $data['canExport'] = $request->user()->hasPermission('sales_pocketbook.export');
+        $data['canExport'] = $request->user()->hasPermission('sales_pocketbook.export_team');
 
         return view('crm.sales-pocketbook.supervisor-monitoring', $data);
     }
@@ -26,7 +26,7 @@ class SupervisorSalesPocketbookController extends Controller
     public function agendaExport(Request $request): BinaryFileResponse
     {
         $this->authorizeSupervisor($request);
-        abort_unless($request->user()->hasPermission('sales_pocketbook.export'), 403);
+        abort_unless($request->user()->hasPermission('sales_pocketbook.export_team'), 403);
         $data = $this->monitoring->exportData($request->user(), $this->validatedFilters($request));
 
         return SupervisorSalesAgendaExport::toBrowser($data['agendas'], $data['coordinatorNamesBySalesId'], $this->filename('agenda', $data));
@@ -35,7 +35,7 @@ class SupervisorSalesPocketbookController extends Controller
     public function leadExport(Request $request): BinaryFileResponse
     {
         $this->authorizeSupervisor($request);
-        abort_unless($request->user()->hasPermission('sales_pocketbook.export'), 403);
+        abort_unless($request->user()->hasPermission('sales_pocketbook.export_team'), 403);
         $data = $this->monitoring->exportData($request->user(), $this->validatedFilters($request));
 
         return SupervisorSalesLeadExport::toBrowser($data['leads'], $data['coordinatorNamesBySalesId'], $this->filename('lead', $data));

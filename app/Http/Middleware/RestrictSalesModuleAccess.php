@@ -16,7 +16,6 @@ class RestrictSalesModuleAccess
         'sales-daily-plans.*',
         'sales-daily-plan-items.*',
         'sales-reminders.*',
-        'content-calendar.*',
         'presence.*',
         'notifications.*',
         'comments.*',

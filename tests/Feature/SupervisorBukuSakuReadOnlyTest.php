@@ -89,7 +89,7 @@ class SupervisorBukuSakuReadOnlyTest extends TestCase
 
     public function test_supervisor_export_actions_hide_when_export_permission_is_removed(): void
     {
-        $this->supervisor->role->permissions()->detach(Permission::query()->where('slug', 'sales_pocketbook.export')->firstOrFail());
+        $this->supervisor->role->permissions()->detach(Permission::query()->where('slug', 'sales_pocketbook.export_team')->firstOrFail());
         $supervisor = $this->supervisor->fresh('role.permissions');
 
         $this->actingAs($supervisor)->get(route('sales-pocketbook.index'))

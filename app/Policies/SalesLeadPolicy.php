@@ -32,6 +32,10 @@ class SalesLeadPolicy
                 && $user->hasPrimaryRole('sales_coordinator');
         }
 
+        if ($user->hasPrimaryRole('sales_coordinator')) {
+            return $this->authorization->can($user, 'sales_pocketbook.manage_team');
+        }
+
         return ! $user->hasPrimaryRole('supervisor');
     }
 

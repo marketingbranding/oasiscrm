@@ -171,15 +171,14 @@ class PermissionCatalog
 
         return [
             'sales' => [
-                'sales_pocketbook.view_own', 'sales_pocketbook.manage_own', 'sales_pocketbook.export_own', 'work_planner.view_own',
-                'sales_pocketbook.export', 'work_planner.create', 'work_planner.update',
+                'sales_pocketbook.view_own', 'sales_pocketbook.manage_own', 'sales_pocketbook.export_own',
                 'sales_targets.view_own', 'sales_daily_plans.view_own', 'sales_daily_plans.manage_own', 'sales_daily_plans.submit_own',
                 ...$comments,
             ],
             'sales_coordinator' => [
                 'consumer_progress.manage_assigned',
                 'sales_pocketbook.view_own', 'sales_pocketbook.view_team', 'sales_pocketbook.manage_own',
-                'sales_pocketbook.manage_team', 'sales_pocketbook.export_team', 'sales_pocketbook.export',
+                'sales_pocketbook.manage_team', 'sales_pocketbook.export_team',
                 'sales_pocketbook.sync', 'work_planner.view_own',
                 'work_planner.view_team', 'work_planner.create', 'work_planner.update', 'work_planner.assign',
                 'sales_targets.view_team', 'sales_daily_plans.view_team', 'sales_daily_plans.manage_team',
@@ -192,7 +191,7 @@ class PermissionCatalog
                 ...$scoped($operations, ['assigned'], ['view', 'manage', 'export']),
                 ...$scoped(['database', 'consumer_progress', 'bridge_fund'], ['assigned'], ['sync']),
                 'work_planner.create', 'work_planner.update', 'work_planner.assign', 'work_planner.export',
-                'sales_pocketbook.export', 'database.view', 'database.edit', 'database.sync',
+                'database.view', 'database.edit', 'database.sync',
                 'consumer_progress.view', 'consumer_progress.sync',
                 'bridge_fund.view', 'bridge_fund.manage', 'bridge_fund.export',
                 'expenses.view', 'expenses.create', 'expenses.update', 'expenses.cancel', 'expenses.export',

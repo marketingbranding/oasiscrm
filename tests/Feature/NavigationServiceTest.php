@@ -18,8 +18,8 @@ class NavigationServiceTest extends TestCase
     {
         $navigation = $this->navigationFor('sales', 'sales-pocketbook.index');
 
-        $this->assertSame(['activities', 'sales'], array_column($navigation, 'key'));
-        $this->assertSame(['Work Planner', 'Buku Saku Sales', 'Daily Planning'], $this->labels($navigation));
+        $this->assertSame(['sales'], array_column($navigation, 'key'));
+        $this->assertSame(['Buku Saku Sales', 'Daily Planning'], $this->labels($navigation));
         $this->assertNotContains('Dashboard', $this->labels($navigation));
         $this->assertNotContains('Database', $this->labels($navigation));
         $this->assertNotContains('Pengeluaran', $this->labels($navigation));
@@ -84,7 +84,7 @@ class NavigationServiceTest extends TestCase
 
         $navigation = app(NavigationService::class)->forUser($user->fresh('role.permissions'));
 
-        $this->assertSame(['activities', 'sales'], array_column($navigation, 'key'));
+        $this->assertSame(['sales'], array_column($navigation, 'key'));
         $this->assertNotContains('Administrasi', array_column($navigation, 'label'));
         $this->assertNotContains('Maintenance', $this->labels($navigation));
     }

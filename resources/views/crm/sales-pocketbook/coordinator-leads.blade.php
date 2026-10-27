@@ -34,9 +34,6 @@
             <x-slot:actions>
                 @if($canCreate)<x-crm.button variant="primary" accent="sales" href="#coordinator-lead-input">INPUT LEAD</x-crm.button>@endif
                 @if($canExport)<x-crm.button variant="secondary" :href="route('coordinator-leads.export', $filters)">EXPORT LEAD</x-crm.button>@endif
-                @if(config('oasis.spreadsheet_sync_enabled') && $canSync)
-                    <form method="POST" action="{{ route('coordinator-leads.sync') }}">@csrf<x-crm.button type="submit" variant="secondary">SYNC KE SPREADSHEET</x-crm.button></form>
-                @endif
             </x-slot:actions>
         @endif
     </x-crm.page-header>

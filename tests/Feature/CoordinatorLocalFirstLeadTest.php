@@ -331,7 +331,7 @@ class CoordinatorLocalFirstLeadTest extends TestCase
             ->assertJsonPath('message', 'Sinkronisasi Google Sheets Lead Sales sedang dinonaktifkan.');
     }
 
-    public function test_enabled_mode_shows_coordinator_sync_and_calls_push_service(): void
+    public function test_enabled_mode_keeps_coordinator_sync_backend_available_without_rendering_control(): void
     {
         config()->set('services.google_sheets.sales_lead_sync_enabled', true);
         [, , , $coordinator] = $this->context();
@@ -342,7 +342,7 @@ class CoordinatorLocalFirstLeadTest extends TestCase
 
         $this->actingAs($coordinator)->get(route('sales-pocketbook.index'))
             ->assertOk()
-            ->assertSee('SYNC KE SPREADSHEET');
+            ->assertDontSee('SYNC KE SPREADSHEET');
         $this->actingAs($coordinator)->post(route('coordinator-leads.sync'))
             ->assertRedirect()
             ->assertSessionHas('success', '1 lead tersinkron.');

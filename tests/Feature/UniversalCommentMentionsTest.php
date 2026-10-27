@@ -60,10 +60,10 @@ class UniversalCommentMentionsTest extends TestCase
         $otherBranch = Branch::create(['name' => 'Other Branch', 'code' => 'OB']);
         $project = LeadMaster::create(['branch_id' => $branch->id, 'project_name' => 'Project Alpha', 'is_active' => true]);
         $supervisor = $this->user('supervisor', $branch, 'Direct Supervisor');
-        $viewer = $this->user('sales', $branch, 'Viewer Sales', $supervisor);
-        $report = $this->user('sales', $branch, 'Direct Report', $viewer);
-        $descendant = $this->user('sales', $branch, 'Deep Descendant', $report);
-        $projectPeer = $this->user('sales', $branch, 'Project Peer');
+        $viewer = $this->user('manager', $branch, 'Viewer Manager', $supervisor);
+        $report = $this->user('manager', $branch, 'Direct Report', $viewer);
+        $descendant = $this->user('manager', $branch, 'Deep Descendant', $report);
+        $projectPeer = $this->user('manager', $branch, 'Project Peer');
         $outsider = $this->user('sales', $otherBranch, 'Branch Outsider');
         foreach ([$viewer, $projectPeer] as $user) {
             $user->assignedProjects()->attach($project->id, ['is_primary' => true, 'is_active' => true]);

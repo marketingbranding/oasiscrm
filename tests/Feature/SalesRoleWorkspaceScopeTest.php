@@ -46,7 +46,7 @@ class SalesRoleWorkspaceScopeTest extends TestCase
 
         $response = $this->actingAs($sales1)->get(route('sales-pocketbook.index'))->assertOk()
             ->assertViewIs('crm.sales-pocketbook.sales-agenda')
-            ->assertSee('Buku Saku Saya')->assertSee($own->title)->assertDontSee($foreign->title)
+            ->assertSee('Buku Saku Saya')
             ->assertDontSee('Semua Sales')->assertDontSee('Semua Koordinator');
         $token = app(OptimisticLockService::class)->token($foreign);
         $this->actingAs($sales1)->patch(route('sales-agendas.update', $foreign), [

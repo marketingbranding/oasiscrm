@@ -78,8 +78,7 @@ class CoordinatorSalesLeadWorkspaceController extends Controller
         $data['promoOptionsEndpoint'] = route('coordinator-leads.promo-options', ['project' => 'PROJECT_ID']);
         $data['statuses'] = SalesLeadStatus::MANUAL;
         $data['canCreate'] = $request->user()->can('create', SalesLead::class);
-        $data['canExport'] = $request->user()->hasPermission('sales_pocketbook.export_team')
-            && $request->user()->hasPermission('sales_pocketbook.export');
+        $data['canExport'] = $request->user()->hasPermission('sales_pocketbook.export_team');
         $data['canSync'] = config('oasis.spreadsheet_sync_enabled')
             && config('services.google_sheets.sales_lead_sync_enabled')
             && $request->user()->hasPermission('sales_pocketbook.sync');
@@ -118,7 +117,7 @@ class CoordinatorSalesLeadWorkspaceController extends Controller
     {
         $user = $request->user();
         abort_unless($this->teams->isCoordinator($user), 403);
-        abort_unless($user->hasPermission('sales_pocketbook.export'), 403);
+        abort_unless($user->hasPermission('sales_pocketbook.export_team'), 403);
 
         $filters = $request->validate([
             'period' => ['nullable', 'in:today,week,month,custom'],

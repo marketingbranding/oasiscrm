@@ -60,7 +60,7 @@ class SalesAgendaEvidenceAuthorizationTest extends TestCase
     public function test_archive_page_exposes_only_backend_authorized_ready_downloads(): void
     {
         $branch = Branch::create(['name' => 'Solo', 'code' => 'SO', 'is_active' => true]);
-        $admin = $this->user('admin', $branch);
+        $admin = $this->user('superadmin', $branch);
         $ready = SalesAgendaEvidenceArchive::create([
             'branch_id' => $branch->id,
             'week_start' => '2026-08-03',
@@ -78,7 +78,7 @@ class SalesAgendaEvidenceAuthorizationTest extends TestCase
             ->assertSee('Bangun ZIP')
             ->assertSee(route('sales-agendas.evidence-archives.download', $ready), false)
             ->assertDontSee(route('sales-agendas.evidence-archives.download', $failed), false)
-            ->assertDontSee('PURGE FILE LOKAL');
+            ->assertSee('PURGE FILE LOKAL');
     }
 
     public function test_coordinator_private_stream_uses_current_operational_assignment_and_monitoring_scope(): void

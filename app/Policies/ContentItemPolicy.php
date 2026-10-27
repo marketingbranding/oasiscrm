@@ -14,7 +14,7 @@ class ContentItemPolicy
 
     public function viewAny(User $user): bool
     {
-        return $user->hasScopedPermission('work_planner');
+        return ! $user->isSales() && $user->hasScopedPermission('work_planner');
     }
 
     public function view(User $user, ContentItem $item): bool

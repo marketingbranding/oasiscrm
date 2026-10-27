@@ -3,7 +3,6 @@
 namespace Tests\Feature;
 
 use App\Models\Branch;
-use App\Models\ContentItem;
 use App\Models\LeadMaster;
 use App\Models\Role;
 use App\Models\User;
@@ -26,7 +25,6 @@ class SalesAccessRestrictionTest extends TestCase
         [$branch, , $sales] = $this->salesContext();
 
         $this->actingAs($sales)->get(route('sales-pocketbook.index'))->assertOk();
-        $this->actingAs($sales)->get(route('content-calendar.index'))->assertOk();
         $this->actingAs($sales)->get(route('profile.edit'))->assertOk();
         $this->actingAs($sales)->getJson(route('notifications.index'))->assertOk();
         $this->actingAs($sales)->getJson(route('presence.index', [
@@ -73,7 +71,6 @@ class SalesAccessRestrictionTest extends TestCase
         $response = $this->actingAs($sales)->get(route('sales-pocketbook.index'))->assertOk();
 
         $response->assertSee(route('sales-pocketbook.index'), false)
-            ->assertSee(route('content-calendar.index'), false)
             ->assertSee(route('profile.edit'), false)
             ->assertSee(route('logout'), false)
             ->assertDontSee(route('dashboard'), false)
@@ -166,21 +163,11 @@ class SalesAccessRestrictionTest extends TestCase
         $this->assertNotNull($feedback->fresh()->read_at);
     }
 
-    public function test_sales_work_planner_edit_scope_is_creator_or_assignee_only(): void
+    public function test_sales_work_planner_routes_are_forbidden(): void
     {
-        [$branch, , $sales] = $this->salesContext();
-        $other = $this->user('sales', $branch, 'Other Sales');
-        $teamItem = $this->item($branch, $other, ['visibility' => 'team', 'title' => 'Team Visible']);
-        $assignedItem = $this->item($branch, $other, ['visibility' => 'personal', 'title' => 'Assigned']);
-        $assignedItem->assignees()->attach($sales);
-        $otherBranch = Branch::create(['name' => 'Pati', 'code' => 'PTI', 'is_active' => true]);
-        $crossBranch = $this->item($otherBranch, $other, ['visibility' => 'team', 'title' => 'Cross Branch']);
+        [, , $sales] = $this->salesContext();
 
-        $this->actingAs($sales)->getJson(route('content-calendar.detail', $teamItem))->assertOk();
-        $this->actingAs($sales)->getJson(route('content-calendar.detail', $crossBranch))->assertForbidden();
-        $this->actingAs($sales)->get(route('content-calendar.edit', $teamItem))->assertForbidden();
-        $this->actingAs($sales)->delete(route('content-calendar.destroy', $teamItem))->assertForbidden();
-        $this->actingAs($sales)->get(route('content-calendar.edit', $assignedItem))->assertOk();
+        $this->actingAs($sales)->get(route('content-calendar.index'))->assertForbidden();
     }
 
     private function salesContext(): array
@@ -203,19 +190,5 @@ class SalesAccessRestrictionTest extends TestCase
             'branch_id' => $branch?->id,
             'password_changed_at' => now(),
         ]);
-    }
-
-    private function item(Branch $branch, User $creator, array $overrides = []): ContentItem
-    {
-        return ContentItem::create(array_merge([
-            'branch_id' => $branch->id,
-            'item_type' => 'task',
-            'visibility' => 'personal',
-            'title' => 'Planner Item',
-            'scheduled_date' => today(),
-            'deadline_date' => today(),
-            'status' => 'todo',
-            'created_by' => $creator->id,
-        ], $overrides));
     }
 }

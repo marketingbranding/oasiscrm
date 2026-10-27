@@ -51,7 +51,7 @@ class RolePermissionTest extends TestCase
         $manager = Role::query()->where('slug', 'manager')->firstOrFail();
 
         $this->assertTrue($sales->permissions()->where('slug', 'sales_pocketbook.view_own')->exists());
-        $this->assertTrue($sales->permissions()->where('slug', 'work_planner.create')->exists());
+        $this->assertFalse($sales->permissions()->where('slug', 'work_planner.create')->exists());
         $this->assertFalse($sales->permissions()->where('slug', 'sales_pocketbook.view_team')->exists());
         $this->assertTrue($coordinator->permissions()->where('slug', 'sales_pocketbook.view_team')->exists());
         $this->assertTrue($manager->permissions()->where('slug', 'database.export_assigned')->exists());

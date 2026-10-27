@@ -4,11 +4,14 @@ namespace Tests\Feature;
 
 use App\Models\Branch;
 use App\Models\ContentItem;
+use App\Models\LeadMaster;
 use App\Models\Role;
+use App\Models\SalesLead;
 use App\Models\User;
 use App\Models\UserNotification;
 use App\Services\CommentNotificationService;
 use App\Services\CommentService;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Mail;
@@ -183,20 +186,34 @@ class UniversalCommentNotificationTest extends TestCase
         $this->assertLessThanOrEqual(12, $queryCount);
     }
 
-    /** @return array{User, ContentItem, Branch} */
+    /** @return array{User, Model, Branch} */
     private function fixture(string $role = 'manager'): array
     {
         $branch = Branch::create(['name' => 'Notification Branch', 'code' => uniqid('NB')]);
         $actor = $this->user($role, $branch, 'Actor');
-        $target = ContentItem::create([
-            'branch_id' => $branch->id,
-            'title' => 'Notification target',
-            'item_type' => 'task',
-            'visibility' => 'team',
-            'scheduled_date' => today(),
-            'status' => 'todo',
-            'created_by' => $actor->id,
-        ]);
+        if ($role === 'sales') {
+            $project = LeadMaster::create(['branch_id' => $branch->id, 'project_name' => 'Notification Project', 'is_active' => true]);
+            $actor->assignedProjects()->attach($project->id, ['is_primary' => true, 'is_active' => true]);
+            $target = SalesLead::create([
+                'branch_id' => $branch->id,
+                'project_id' => $project->id,
+                'sales_user_id' => $actor->id,
+                'lead_date' => today(),
+                'customer_name' => 'Notification target',
+                'created_by' => $actor->id,
+                'updated_by' => $actor->id,
+            ]);
+        } else {
+            $target = ContentItem::create([
+                'branch_id' => $branch->id,
+                'title' => 'Notification target',
+                'item_type' => 'task',
+                'visibility' => 'team',
+                'scheduled_date' => today(),
+                'status' => 'todo',
+                'created_by' => $actor->id,
+            ]);
+        }
 
         return [$actor, $target, $branch];
     }

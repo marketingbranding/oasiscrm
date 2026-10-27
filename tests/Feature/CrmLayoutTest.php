@@ -46,6 +46,7 @@ class CrmLayoutTest extends TestCase
             ->assertSee('Buku Saku Sales')
             ->assertDontSee('Dashboard', false)
             ->assertDontSee(route('database.index'), false)
+            ->assertDontSee(route('content-calendar.index'), false)
             ->assertDontSee(route('expenses.index'), false)
             ->assertDontSee(route('dana-talangan.index'), false)
             ->assertDontSee(route('admin-users.index'), false)

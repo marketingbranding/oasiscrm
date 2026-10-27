@@ -19,7 +19,6 @@ class SupervisorBukuSakuPermissionTest extends TestCase
         'sales_pocketbook.view_assigned',
         'sales_pocketbook.export_team',
         'sales_pocketbook.export_assigned',
-        'sales_pocketbook.export',
     ];
 
     private const FORBIDDEN = [

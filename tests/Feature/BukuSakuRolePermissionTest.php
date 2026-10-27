@@ -26,16 +26,16 @@ class BukuSakuRolePermissionTest extends TestCase
             'sales_pocketbook.view_own',
             'sales_pocketbook.manage_own',
             'sales_pocketbook.export_own',
-            'sales_pocketbook.export',
         ]));
         $this->assertFalse($sales->hasPermission('sales_pocketbook.sync'));
         $this->assertFalse($sales->hasPermission('sales_pocketbook.view_team'));
+        $this->assertFalse($sales->hasPermission('work_planner.view_own'));
+        $this->assertFalse($sales->hasPermission('work_planner.create'));
 
         $this->assertTrue($coordinator->hasAllPermissions([
             'sales_pocketbook.view_team',
             'sales_pocketbook.manage_team',
             'sales_pocketbook.export_team',
-            'sales_pocketbook.export',
             'sales_pocketbook.sync',
         ]));
         $this->assertFalse($coordinator->hasPermission('sales_pocketbook.reconcile'));
@@ -84,7 +84,7 @@ class BukuSakuRolePermissionTest extends TestCase
             $route = Route::getRoutes()->getByName($name);
 
             $this->assertNotNull($route);
-            $this->assertContains('permission:sales_pocketbook.export', $route->gatherMiddleware());
+            $this->assertContains('permission:sales_pocketbook.export_team', $route->gatherMiddleware());
         }
     }
 
@@ -116,5 +116,33 @@ class BukuSakuRolePermissionTest extends TestCase
             ->where('category', 'changed')
             ->whereNull('created_by')
             ->count());
+    }
+
+    public function test_sales_scope_migration_removes_legacy_buku_saku_grants_idempotently(): void
+    {
+        $migration = require database_path('migrations/2026_10_27_120000_align_sales_pocketbook_scopes.php');
+
+        $migration->up();
+        $migration->up();
+
+        $this->assertSame(1, DB::table('changelogs')->whereNull('version')->where('title', 'Pembatasan Lingkup Buku Saku Sales')->count());
+        $this->assertSame(0, DB::table('role_permission')
+            ->join('roles', 'roles.id', '=', 'role_permission.role_id')
+            ->join('permissions', 'permissions.id', '=', 'role_permission.permission_id')
+            ->where('roles.slug', 'sales')
+            ->where('permissions.slug', 'like', 'work_planner.%')
+            ->count());
+        $this->assertSame(0, DB::table('role_permission')
+            ->join('roles', 'roles.id', '=', 'role_permission.role_id')
+            ->join('permissions', 'permissions.id', '=', 'role_permission.permission_id')
+            ->whereIn('roles.slug', ['sales_coordinator', 'supervisor'])
+            ->where('permissions.slug', 'sales_pocketbook.export')
+            ->count());
+
+        $actor = User::factory()->create([
+            'role_id' => Role::query()->where('slug', 'superadmin')->value('id'),
+            'password_changed_at' => now(),
+        ]);
+        $this->actingAs($actor)->get(route('changelogs.index'))->assertOk()->assertSeeText('Pembatasan Lingkup Buku Saku Sales');
     }
 }

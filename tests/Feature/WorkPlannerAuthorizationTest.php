@@ -147,18 +147,18 @@ class WorkPlannerAuthorizationTest extends TestCase
 
         $this->actingAs($sales)->post(route('content-calendar.store'), $this->taskPayload($branch, [
             'title' => 'Task Sales sendiri',
-        ]))->assertRedirect();
-        $this->assertDatabaseHas('content_items', ['title' => 'Task Sales sendiri', 'created_by' => $sales->id]);
+        ]))->assertForbidden();
+        $this->assertDatabaseMissing('content_items', ['title' => 'Task Sales sendiri']);
 
         $this->actingAs($sales)->post(route('content-calendar.store'), $this->taskPayload($branch, [
             'title' => 'Task Sales untuk orang lain',
             'assigned_user_ids' => [$assignee->id],
-        ]))->assertSessionHasErrors(['assigned_user_ids' => 'Anda tidak memiliki izin menugaskan task kepada pengguna lain.']);
+        ]))->assertForbidden();
         $this->assertDatabaseMissing('content_items', ['title' => 'Task Sales untuk orang lain']);
 
         $this->actingAs($sales)->post(route('content-calendar.store'), $this->taskPayload($foreignBranch, [
             'title' => 'Task Sales cabang asing',
-        ]))->assertSessionHasErrors('branch_id');
+        ]))->assertForbidden();
         $this->assertDatabaseMissing('content_items', ['title' => 'Task Sales cabang asing']);
     }
 

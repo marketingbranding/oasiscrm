@@ -25,7 +25,7 @@ class NavigationService
                     : null,
             ], direct: true),
             $this->group('activities', 'Aktivitas', 'calendar', [
-                $user->hasScopedPermission('work_planner')
+                ! $isSales && $user->hasScopedPermission('work_planner')
                     ? $this->item('Work Planner', 'content-calendar.index', 'calendar', 'planner', ['content-calendar.*'], $routeName, 'work_planner', $moduleMaintenance)
                     : null,
             ]),

@@ -179,6 +179,7 @@ class SalesLeadSiteVisitResultsTest extends TestCase
         SalesCoordinatorSales::create(['coordinator_user_id' => $coordinator->id, 'sales_user_id' => $sales->id]);
         $historical = $this->user('sales_coordinator', $lead->branch);
         $supervisor = $this->user('supervisor', $lead->branch);
+        $coordinator->update(['supervisor_user_id' => $supervisor->id]);
         $management = collect(['manager', 'pusat', 'superadmin'])
             ->map(fn (string $role) => $this->user($role, $lead->branch));
         foreach (collect([$coordinator, $supervisor])->merge($management) as $viewer) {

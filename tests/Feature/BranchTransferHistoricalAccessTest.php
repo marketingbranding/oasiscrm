@@ -15,6 +15,7 @@ use App\Services\OrganizationScopeService;
 use App\Services\WorkspaceAccessService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 use Tests\TestCase;
 
 class BranchTransferHistoricalAccessTest extends TestCase
@@ -151,6 +152,66 @@ class BranchTransferHistoricalAccessTest extends TestCase
         }
 
         $this->assertSame($sales->id, $lead->fresh()->sales_user_id);
+    }
+
+    public function test_original_branch_admin_and_branch_manager_can_update_historical_lead_through_http_without_reassigning_owner(): void
+    {
+        [$sales, $oldBranch, , $lead] = $this->transferredSalesLead();
+        $oldProject = LeadMaster::query()->where('branch_id', $oldBranch->id)->firstOrFail();
+
+        foreach (['admin', 'branch_manager'] as $role) {
+            $operator = $this->user($role, $oldBranch);
+            $response = $this->actingAs($operator)->get(route('sales-leads.edit', $lead));
+            $response->assertSee($sales->name)->assertSee('id="edit-lead-sales"', false)->assertSee('disabled', false);
+
+            $this->actingAs($operator)->put(route('sales-leads.update', $lead), [
+                'branch_id' => $oldBranch->id,
+                'project_id' => $oldProject->id,
+                'sales_user_id' => $sales->id,
+                'lead_date' => $lead->lead_date->toDateString(),
+                'customer_name' => "Lead Historis Diperbarui {$role}",
+                'phone' => $lead->phone,
+                'source' => 'Referral',
+                'platform' => 'WhatsApp',
+                'campaign_name' => 'Follow Up Data Lama',
+                'current_status' => 'no_response',
+                'operation_uuid' => (string) Str::uuid(),
+                'expected_updated_at' => app(OptimisticLockService::class)->token($lead),
+            ])->assertRedirect()->assertSessionHasNoErrors();
+
+            $lead->refresh();
+            $this->assertSame($sales->id, $lead->sales_user_id);
+        }
+    }
+
+    public function test_historical_http_edit_rejects_reassignment_to_a_new_sales_owner(): void
+    {
+        [$sales, $oldBranch, , $lead] = $this->transferredSalesLead();
+        $oldProject = LeadMaster::query()->where('branch_id', $oldBranch->id)->firstOrFail();
+        $newOwner = $this->user('sales', $oldBranch);
+        $newOwner->assignedProjects()->attach($oldProject->id, ['is_primary' => true, 'is_active' => true]);
+        $operator = $this->user('admin', $oldBranch);
+
+        $this->actingAs($operator)->put(route('sales-leads.update', $lead), [
+            'branch_id' => $oldBranch->id,
+            'project_id' => $oldProject->id,
+            'sales_user_id' => $newOwner->id,
+            'lead_date' => $lead->lead_date->toDateString(),
+            'customer_name' => 'Tidak Boleh Dipindahkan',
+            'phone' => $lead->phone,
+            'source' => 'Referral',
+            'platform' => 'WhatsApp',
+            'campaign_name' => 'Follow Up Data Lama',
+            'current_status' => 'no_response',
+            'operation_uuid' => (string) Str::uuid(),
+            'expected_updated_at' => app(OptimisticLockService::class)->token($lead),
+        ])->assertSessionHasErrors('sales_user_id');
+
+        $this->assertDatabaseHas('sales_leads', [
+            'id' => $lead->id,
+            'sales_user_id' => $sales->id,
+            'customer_name' => 'Konsumen Lama',
+        ]);
     }
 
     public function test_original_branch_admin_and_branch_manager_cannot_run_historical_lifecycle_mutations(): void

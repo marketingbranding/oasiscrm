@@ -8,6 +8,7 @@ use App\Http\Requests\Crm\StoreSalesLeadRequest;
 use App\Http\Requests\Crm\UpdateSalesLeadRequest;
 use App\Models\SalesLead;
 use App\Models\User;
+use App\Policies\SalesLeadPolicy;
 use App\Services\CollaborationNotificationService;
 use App\Services\OptimisticLockService;
 use App\Services\PresenceService;
@@ -30,6 +31,7 @@ class SalesLeadController extends Controller
         private readonly PresenceService $presence,
         private readonly WorkspaceAccessService $workspaceAccess,
         private readonly PromoOptionService $promoOptions,
+        private readonly SalesLeadPolicy $salesLeadPolicy,
     ) {}
 
     public function create(Request $request)
@@ -91,17 +93,30 @@ class SalesLeadController extends Controller
         $this->authorize('update', $salesLead);
         $user = request()->user();
         $branchIds = $this->workspaceAccess->accessibleBranchIds($user);
+        $historicalOwnerEdit = $this->salesLeadPolicy->canEditHistoricalOwnedLead($user, $salesLead);
         $salesLead->loadCount('comments');
+        $salesLead->load(['branch', 'project', 'sales', 'leadSource']);
+        $salesUsers = User::query()->where('is_active', true)
+            ->whereHas('role', fn (Builder $query) => $query->where('slug', 'sales'))
+            ->where(function (Builder $query) use ($branchIds, $historicalOwnerEdit, $salesLead): void {
+                $query->whereHas('assignedProjects', fn (Builder $assignedProjects) => $assignedProjects->whereIn('branch_id', $branchIds));
+                if ($historicalOwnerEdit) {
+                    $query->orWhereKey($salesLead->sales_user_id);
+                }
+            })
+            ->when($user->isSales(), fn (Builder $query) => $query->whereKey($user->id))
+            ->with('assignedProjects:id,branch_id')->orderBy('name')->get(['id', 'name', 'branch_id']);
+        if ($historicalOwnerEdit) {
+            $historicalOwner = $salesUsers->firstWhere('id', $salesLead->sales_user_id);
+            $historicalOwner?->setRelation('assignedProjects', collect([$salesLead->project]));
+        }
 
         return view('crm.sales-pocketbook.edit', [
-            'lead' => $salesLead->load(['branch', 'project', 'sales', 'leadSource']),
+            'lead' => $salesLead,
             'branches' => $this->workspaceAccess->accessibleBranches($user),
             'projects' => $this->workspaceAccess->accessibleProjects($user)->load('assignedUsers:id'),
-            'salesUsers' => User::query()->where('is_active', true)
-                ->whereHas('role', fn (Builder $query) => $query->where('slug', 'sales'))
-                ->whereHas('assignedProjects', fn (Builder $query) => $query->whereIn('branch_id', $branchIds))
-                ->when($user->isSales(), fn (Builder $query) => $query->whereKey($user->id))
-                ->with('assignedProjects:id,branch_id')->orderBy('name')->get(['id', 'name', 'branch_id']),
+            'salesUsers' => $salesUsers,
+            'historicalOwnerEdit' => $historicalOwnerEdit,
             'optimisticToken' => $this->optimisticLock->token($salesLead),
             'sources' => SalesLeadMasterData::SOURCES,
             'channels' => SalesLeadMasterData::CHANNELS,

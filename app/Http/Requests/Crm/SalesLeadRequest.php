@@ -6,6 +6,7 @@ use App\Enums\SalesLeadStatus;
 use App\Models\LeadMaster;
 use App\Models\SalesLead;
 use App\Models\User;
+use App\Policies\SalesLeadPolicy;
 use App\Services\CoordinatorLeadTeamService;
 use App\Services\PromoOptionService;
 use App\Services\WorkspaceAccessService;
@@ -110,6 +111,8 @@ abstract class SalesLeadRequest extends FormRequest
             $branchId = (int) $this->input('branch_id');
             $project = LeadMaster::find($this->integer('project_id'));
             $owner = User::with('role')->find($this->integer('sales_user_id'));
+            $historicalOwnerEdit = $this->lead() !== null
+                && app(SalesLeadPolicy::class)->canEditHistoricalOwnedLead($user, $this->lead());
 
             if (! $access->canViewBranch($user, $branchId)) {
                 $validator->errors()->add('branch_id', 'Cabang tidak dapat diakses.');
@@ -117,8 +120,14 @@ abstract class SalesLeadRequest extends FormRequest
             if (! $project || ! $project->is_active || (int) $project->branch_id !== $branchId || ! $access->canAccessProject($user, $project)) {
                 $validator->errors()->add('project_id', 'Proyek aktif harus berada di cabang yang dipilih dan dapat diakses.');
             }
-            if (! $owner || ! $owner->is_active || ! $owner->isSales() || ! $access->canViewBranch($owner, $branchId)) {
+            $ownerCanViewBranch = $owner && ($access->canViewBranch($owner, $branchId)
+                || ($historicalOwnerEdit && $access->canViewHistoricalBranch($owner, $branchId)));
+            if (! $owner || ! $owner->is_active || ! $owner->isSales() || ! $ownerCanViewBranch) {
                 $validator->errors()->add('sales_user_id', 'Sales aktif harus berada di cabang yang dipilih.');
+            } elseif ($historicalOwnerEdit && (int) $owner->id !== (int) $this->lead()->sales_user_id) {
+                $validator->errors()->add('sales_user_id', 'Lead historis hanya dapat diedit tanpa mengganti Sales pemilik.');
+            } elseif ($historicalOwnerEdit) {
+                return;
             } elseif (! $owner->assignedProjects()
                 ->whereKey($this->integer('project_id'))
                 ->wherePivot('is_active', true)

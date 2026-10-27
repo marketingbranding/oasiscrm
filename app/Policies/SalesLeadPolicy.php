@@ -6,6 +6,7 @@ use App\Models\SalesLead;
 use App\Models\User;
 use App\Services\CoordinatorLeadTeamService;
 use App\Services\CrmAuthorizationService;
+use App\Services\SalesTeamScopeService;
 use App\Services\WorkspaceAccessService;
 
 class SalesLeadPolicy
@@ -22,6 +23,11 @@ class SalesLeadPolicy
 
     public function view(User $user, SalesLead $lead): bool
     {
+        if ($user->hasPrimaryRole('supervisor')
+            && ! app(SalesTeamScopeService::class)->for($user, includeHistorical: true)['sales']->contains('id', $lead->sales_user_id)) {
+            return false;
+        }
+
         return $this->authorization->canViewSalesLead($user, $lead);
     }
 
@@ -169,7 +175,7 @@ class SalesLeadPolicy
             && $this->update($user, $lead);
     }
 
-    private function canEditHistoricalOwnedLead(User $user, SalesLead $lead): bool
+    public function canEditHistoricalOwnedLead(User $user, SalesLead $lead): bool
     {
         return $user->hasPrimaryRole(['admin', 'branch_manager'])
             && app(WorkspaceAccessService::class)->canEditBranch($user, $lead->branch_id)

@@ -13,7 +13,7 @@ class SalesTeamScopeService
 {
     public function __construct(private readonly OrganizationGraphService $graph) {}
 
-    public function for(User $actor): array
+    public function for(User $actor, bool $includeHistorical = false): array
     {
         $empty = [
             'supervisors' => collect(),
@@ -29,7 +29,7 @@ class SalesTeamScopeService
         }
 
         if (config('organization.graph_mode') === 'canonical') {
-            return $this->canonicalFor($actor, $empty);
+            return $this->canonicalFor($actor, $empty, $includeHistorical);
         }
 
         if (! in_array($role, ['sales_coordinator', 'supervisor', 'manager', 'branch_manager'], true)) {
@@ -71,10 +71,21 @@ class SalesTeamScopeService
         }
 
         $mappings = SalesCoordinatorSales::query()
-            ->current()
+            ->when($includeHistorical, fn (Builder $query) => $query->currentOrHistorical(), fn (Builder $query) => $query->current())
             ->withValidRoles()
             ->whereIn('coordinator_user_id', $coordinators->keys())
             ->get(['coordinator_user_id', 'sales_user_id']);
+        if ($includeHistorical) {
+            $currentMappings = SalesCoordinatorSales::query()
+                ->current()
+                ->withValidRoles()
+                ->whereIn('coordinator_user_id', $coordinators->keys())
+                ->get(['coordinator_user_id', 'sales_user_id'])
+                ->mapWithKeys(fn (SalesCoordinatorSales $mapping) => ["{$mapping->coordinator_user_id}:{$mapping->sales_user_id}" => true]);
+            $currentSalesIds = $currentMappings->keys()->map(fn (string $key) => (int) explode(':', $key, 2)[1])->unique();
+            $mappings = $mappings->filter(fn (SalesCoordinatorSales $mapping) => $currentMappings->has("{$mapping->coordinator_user_id}:{$mapping->sales_user_id}")
+                || ! $currentSalesIds->contains((int) $mapping->sales_user_id));
+        }
         $mappings = $mappings->filter(fn (SalesCoordinatorSales $mapping) => $users->has($mapping->sales_user_id));
         $mappings = $mappings
             ->groupBy(fn (SalesCoordinatorSales $mapping): string => $mapping->coordinator_user_id.':'.$mapping->sales_user_id)
@@ -100,9 +111,9 @@ class SalesTeamScopeService
         ];
     }
 
-    public function displayedFor(User $actor, array $branchIds, array $projectIds): array
+    public function displayedFor(User $actor, array $branchIds, array $projectIds, bool $includeHistorical = false): array
     {
-        $team = $this->for($actor);
+        $team = $this->for($actor, $includeHistorical);
         $personIds = collect([$team['supervisors'], $team['coordinators'], $team['sales']])
             ->flatten(1)->pluck('id')->unique();
         $today = today()->toDateString();
@@ -192,7 +203,7 @@ class SalesTeamScopeService
         return $user->role?->slug === $role;
     }
 
-    private function canonicalFor(User $actor, array $empty): array
+    private function canonicalFor(User $actor, array $empty, bool $includeHistorical = false): array
     {
         $role = $actor->role?->slug;
         if (! in_array($role, ['sales_coordinator', 'supervisor', 'manager', 'branch_manager'], true)) {
@@ -213,6 +224,33 @@ class SalesTeamScopeService
             ->keyBy('user_id');
         $salesIdsByCoordinator = $sales->groupBy(fn (User $user) => $assignments->get($user->id)?->parent_user_id)
             ->map(fn (Collection $items) => $items->pluck('id')->map(fn ($id) => (int) $id)->values());
+        if ($includeHistorical) {
+            $historicalMappings = SalesCoordinatorSales::query()
+                ->currentOrHistorical()
+                ->withValidRoles()
+                ->whereIn('coordinator_user_id', $coordinators->pluck('id'))
+                ->get(['coordinator_user_id', 'sales_user_id']);
+            $historicalSales = User::query()->with('role:id,slug')
+                ->whereIn('id', $historicalMappings->pluck('sales_user_id')->unique())
+                ->where('account_status', AccountStatus::Active->value)
+                ->where('is_active', true)
+                ->get();
+            $sales = $sales->merge($historicalSales)->unique('id')->values();
+            $historicalByCoordinator = $historicalMappings
+                ->groupBy('coordinator_user_id')
+                ->map(fn (Collection $items) => $items->pluck('sales_user_id')->map(fn ($id) => (int) $id)->reject(
+                    fn (int $id) => $salesIdsByCoordinator->flatten()->contains($id),
+                )->unique()->values());
+            $historicalByCoordinator->each(function (Collection $historicalSalesIds, int|string $coordinatorId) use (&$salesIdsByCoordinator): void {
+                $salesIdsByCoordinator->put(
+                    $coordinatorId,
+                    collect($salesIdsByCoordinator->get($coordinatorId, []))
+                        ->merge($historicalSalesIds)
+                        ->unique()
+                        ->values(),
+                );
+            });
+        }
         $coordinatorIdsBySupervisor = $coordinators->groupBy(fn (User $user) => $assignments->get($user->id)?->parent_user_id)
             ->map(fn (Collection $items) => $items->pluck('id')->map(fn ($id) => (int) $id)->values());
 

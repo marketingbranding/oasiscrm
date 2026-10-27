@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Enums\SalesLeadStatus;
 use App\Models\SalesLead;
 use App\Models\User;
+use App\Policies\SalesLeadPolicy;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Facades\DB;
@@ -25,6 +26,7 @@ class SalesLeadService
         private readonly SalesLeadLifecycleService $lifecycle,
         private readonly ?SalesLeadBridgeModeService $bridgeModes = null,
         private readonly ?SalesLeadBridgeService $bridge = null,
+        private readonly ?SalesLeadPolicy $salesLeadPolicy = null,
     ) {}
 
     public function create(array $data, User $actor): SalesLead
@@ -211,6 +213,12 @@ class SalesLeadService
         $this->assertManualStatus($data['current_status'] ?? null);
         $updated = DB::transaction(function () use ($lead, $data, $actor): SalesLead {
             $locked = SalesLead::query()->lockForUpdate()->findOrFail($lead->id);
+            if ($this->salesLeadPolicy?->canEditHistoricalOwnedLead($actor, $locked)
+                && (int) ($data['sales_user_id'] ?? $locked->sales_user_id) !== (int) $locked->sales_user_id) {
+                throw ValidationException::withMessages([
+                    'sales_user_id' => 'Lead historis hanya dapat diedit tanpa mengganti Sales pemilik.',
+                ]);
+            }
             $data['id_promo'] = $data['promo_name'] ?? null;
             unset($data['promo_name']);
             if (blank($data['current_status'] ?? null)) {

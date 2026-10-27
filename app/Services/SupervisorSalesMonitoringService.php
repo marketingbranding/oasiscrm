@@ -27,13 +27,14 @@ class SupervisorSalesMonitoringService
     {
         $period = $this->period($filters);
         $scope = $this->scope($actor);
-        $team = $this->team($actor, $scope);
+        $team = $this->team($actor, $scope, includeHistorical: true);
+        $currentTeam = $this->team($actor, $scope);
         $coordinatorId = filled($filters['coordinator_id'] ?? null) ? (int) $filters['coordinator_id'] : null;
         $salesId = filled($filters['sales_id'] ?? null) ? (int) $filters['sales_id'] : null;
 
-        abort_if($coordinatorId && ! $team['coordinators']->contains('id', $coordinatorId), 403);
-        abort_if($salesId && ! isset($team['coordinator_names_by_sales_id'][$salesId]), 403);
-        abort_if($coordinatorId && $salesId && ! isset($team['sales_ids_by_coordinator'][$coordinatorId][$salesId]), 403);
+        abort_if($coordinatorId && ! $currentTeam['coordinators']->contains('id', $coordinatorId), 403);
+        abort_if($salesId && ! isset($currentTeam['coordinator_names_by_sales_id'][$salesId]), 403);
+        abort_if($coordinatorId && $salesId && ! isset($currentTeam['sales_ids_by_coordinator'][$coordinatorId][$salesId]), 403);
 
         $sales = $team['sales'];
         if ($coordinatorId) {
@@ -175,9 +176,9 @@ class SupervisorSalesMonitoringService
         ];
     }
 
-    private function team(User $actor, array $scope): array
+    private function team(User $actor, array $scope, bool $includeHistorical = false): array
     {
-        $canonical = $this->salesTeamScope->displayedFor($actor, $scope['branch_ids'], $scope['project_ids']);
+        $canonical = $this->salesTeamScope->displayedFor($actor, $scope['branch_ids'], $scope['project_ids'], includeHistorical: $includeHistorical);
         $coordinators = $canonical['coordinators']->sortBy('name')->values();
         $salesIdsByCoordinator = $canonical['sales_ids_by_coordinator']->map(
             fn ($ids) => $ids->mapWithKeys(fn ($id) => [(int) $id => true])->all()

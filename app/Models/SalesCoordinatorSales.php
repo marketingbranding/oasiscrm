@@ -45,6 +45,16 @@ class SalesCoordinatorSales extends Model
             ->where(fn (Builder $query) => $query->whereNull('ended_at')->orWhereDate('ended_at', '>=', today()));
     }
 
+    public function scopeCurrentOrHistorical(Builder $query): Builder
+    {
+        return $query->where(function (Builder $query): void {
+            $query->current()
+                ->orWhere(fn (Builder $historical) => $historical
+                    ->whereNotNull('ended_at')
+                    ->whereDate('ended_at', '<', today()));
+        });
+    }
+
     public function scopeWithValidRoles(Builder $query): Builder
     {
         return $query

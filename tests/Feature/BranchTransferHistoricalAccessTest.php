@@ -355,6 +355,45 @@ class BranchTransferHistoricalAccessTest extends TestCase
         }
     }
 
+    public function test_historical_service_rejects_lifecycle_field_changes_after_locking(): void
+    {
+        [$sales, $oldBranch, , $lead] = $this->transferredSalesLead();
+        $oldProject = LeadMaster::query()->where('branch_id', $oldBranch->id)->firstOrFail();
+        $operator = $this->user('admin', $oldBranch);
+        $service = app(SalesLeadService::class);
+        $lifecycleFields = [
+            'contacted_at' => now()->addDay()->toDateTimeString(),
+            'met_at' => now()->addDay()->toDateTimeString(),
+            'surveyed_at' => now()->addDay()->toDateTimeString(),
+            'utj_at' => now()->addDay()->toDateTimeString(),
+            'documents_completed_at' => now()->addDay()->toDateTimeString(),
+            'akad_at' => now()->addDay()->toDateTimeString(),
+            'consumer_converted_at' => now()->addDay()->toDateTimeString(),
+            'freelance_converted_at' => now()->addDay()->toDateTimeString(),
+            'consumer_external_id' => 'consumer-forged',
+            'freelance_external_id' => 'freelance-forged',
+            'slik_external_id' => 'slik-forged',
+            'akad_external_id' => 'akad-forged',
+            'current_status_changed_at' => now()->addDay()->toDateTimeString(),
+            'current_status_source' => 'forged',
+            'current_status_source_id' => 'forged',
+        ];
+
+        foreach ($lifecycleFields as $field => $value) {
+            try {
+                $service->update($lead->fresh(), array_replace(
+                    $this->historicalLeadPayload($lead, $sales, $oldBranch, $oldProject),
+                    [$field => $value],
+                ), $operator);
+                $this->fail("Historical lifecycle field [{$field}] was changed through the service.");
+            } catch (ValidationException $exception) {
+                $this->assertArrayHasKey($field, $exception->errors());
+            }
+
+            $this->assertNull($lead->fresh()->getRawOriginal($field), $field);
+        }
+    }
+
     public function test_original_branch_admin_and_branch_manager_cannot_run_historical_lifecycle_mutations(): void
     {
         [, $oldBranch, , $lead] = $this->transferredSalesLead();

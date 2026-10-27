@@ -6,6 +6,7 @@ use App\Enums\SalesLeadStatus;
 use App\Models\SalesLead;
 use App\Models\User;
 use App\Policies\SalesLeadPolicy;
+use Carbon\Carbon;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Facades\DB;
@@ -20,6 +21,40 @@ class SalesLeadService
     private const CREATE_RETRY_CONFLICT_MESSAGE = 'Permintaan ini sudah pernah diproses dengan data berbeda. Muat ulang formulir lalu coba kembali.';
 
     private const CREATE_RETRY_DELETED_MESSAGE = 'Permintaan ini sudah pernah diproses, tetapi Lead tersebut sudah dihapus. Muat ulang formulir lalu coba kembali dengan identitas operasi baru.';
+
+    /** @var array<string, string> */
+    private const HISTORICAL_LIFECYCLE_FIELDS = [
+        'contacted_at' => 'Lead historis tidak dapat mengubah tahapan melalui formulir edit.',
+        'met_at' => 'Lead historis tidak dapat mengubah tahapan melalui formulir edit.',
+        'surveyed_at' => 'Lead historis tidak dapat mengubah tahapan melalui formulir edit.',
+        'utj_at' => 'Lead historis tidak dapat mengubah tahapan melalui formulir edit.',
+        'documents_completed_at' => 'Lead historis tidak dapat mengubah tahapan melalui formulir edit.',
+        'akad_at' => 'Lead historis tidak dapat mengubah tahapan melalui formulir edit.',
+        'current_status' => 'Lead historis tidak dapat mengubah status melalui formulir edit.',
+        'current_status_changed_at' => 'Lead historis tidak dapat mengubah metadata status melalui formulir edit.',
+        'current_status_source' => 'Lead historis tidak dapat mengubah metadata status melalui formulir edit.',
+        'current_status_source_id' => 'Lead historis tidak dapat mengubah metadata status melalui formulir edit.',
+        'consumer_converted_at' => 'Lead historis tidak dapat mengubah konversi konsumen melalui formulir edit.',
+        'consumer_external_id' => 'Lead historis tidak dapat mengubah konversi konsumen melalui formulir edit.',
+        'linked_consumer_reference' => 'Lead historis tidak dapat mengubah konversi konsumen melalui formulir edit.',
+        'freelance_converted_at' => 'Lead historis tidak dapat mengubah konversi freelance melalui formulir edit.',
+        'freelance_external_id' => 'Lead historis tidak dapat mengubah konversi freelance melalui formulir edit.',
+        'slik_external_id' => 'Lead historis tidak dapat mengubah proses SLIK melalui formulir edit.',
+        'akad_external_id' => 'Lead historis tidak dapat mengubah proses Akad melalui formulir edit.',
+    ];
+
+    /** @var list<string> */
+    private const HISTORICAL_LIFECYCLE_DATE_FIELDS = [
+        'contacted_at',
+        'met_at',
+        'surveyed_at',
+        'utj_at',
+        'documents_completed_at',
+        'akad_at',
+        'current_status_changed_at',
+        'consumer_converted_at',
+        'freelance_converted_at',
+    ];
 
     public function __construct(
         private readonly PhoneNormalizationService $phones,
@@ -206,6 +241,7 @@ class SalesLeadService
         );
         sort($columns);
 
+        return $columns === ['branch_id', 'external_sync_id'];
     }
 
     public function update(SalesLead $lead, array $data, User $actor): SalesLead
@@ -278,21 +314,30 @@ class SalesLeadService
             }
         }
 
-        if (! array_key_exists('current_status', $data) || blank($data['current_status'])) {
-            return;
+        foreach (self::HISTORICAL_LIFECYCLE_FIELDS as $field => $message) {
+            if (array_key_exists($field, $data) && $this->historicalFieldChanged($lead, $field, $data[$field])) {
+                throw ValidationException::withMessages([$field => $message]);
+            }
+        }
+    }
+
+    private function historicalFieldChanged(SalesLead $lead, string $field, mixed $submittedValue): bool
+    {
+        if ($field === 'current_status') {
+            return ! blank($submittedValue)
+                && SalesLeadStatus::fromInput((string) $submittedValue) !== $lead->current_status;
         }
 
-        try {
-            $submittedStatus = SalesLeadStatus::fromInput($data['current_status']);
-        } catch (\ValueError) {
-            return;
+        $originalValue = $lead->getRawOriginal($field);
+        if ($originalValue === null || blank($submittedValue)) {
+            return $originalValue !== null || filled($submittedValue);
         }
 
-        if ($submittedStatus !== $lead->current_status) {
-            throw ValidationException::withMessages([
-                'current_status' => 'Lead historis tidak dapat mengubah status melalui formulir edit.',
-            ]);
+        if (in_array($field, self::HISTORICAL_LIFECYCLE_DATE_FIELDS, true)) {
+            return ! Carbon::parse($submittedValue)->equalTo($lead->{$field});
         }
+
+        return (string) $originalValue !== (string) $submittedValue;
     }
 
     public function delete(SalesLead $lead, User $actor): void

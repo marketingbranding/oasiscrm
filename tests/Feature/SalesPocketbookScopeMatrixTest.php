@@ -86,7 +86,7 @@ class SalesPocketbookScopeMatrixTest extends TestCase
     {
         $context = $this->context();
 
-        $this->actingAs($context['coordinator'])
+        $this->followingRedirects()->actingAs($context['coordinator'])
             ->post(route('sales-agendas.store'), [
                 'sales_user_id' => $context['sales']->id,
                 'project_id' => $context['project']->id,
@@ -95,7 +95,9 @@ class SalesPocketbookScopeMatrixTest extends TestCase
                 'title' => 'Agenda Tim Baru',
                 'location' => 'Lokasi Tim',
             ])
-            ->assertRedirect();
+            ->assertOk()
+            ->assertViewIs('crm.sales-pocketbook.coordinator-leads')
+            ->assertSee('Agenda Sales Tim');
 
         $agenda = ContentItem::query()->where('title', 'Agenda Tim Baru')->sole();
         $this->assertSame($context['sales']->id, $agenda->owner_user_id);
@@ -113,12 +115,14 @@ class SalesPocketbookScopeMatrixTest extends TestCase
 
         $this->assertDatabaseMissing('content_items', ['title' => 'Agenda Luar Tim']);
 
-        $this->actingAs($context['coordinator'])
+        $this->followingRedirects()->actingAs($context['coordinator'])
             ->patch(route('sales-agendas.update', $agenda), [
                 'activity_result' => 'Hasil agenda tim',
                 'expected_updated_at' => app(OptimisticLockService::class)->token($agenda),
             ])
-            ->assertRedirect();
+            ->assertOk()
+            ->assertViewIs('crm.sales-pocketbook.coordinator-leads')
+            ->assertSee('Agenda Sales Tim');
 
         $this->assertSame('done', $agenda->fresh()->status);
         $this->assertSame('Hasil agenda tim', $agenda->fresh()->activity_result);

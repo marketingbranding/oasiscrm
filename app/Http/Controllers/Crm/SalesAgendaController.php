@@ -20,6 +20,7 @@ use App\Services\SalesAgendaProjectResolver;
 use App\Services\SalesDailyReminderService;
 use App\Services\WorkspaceAccessService;
 use Carbon\CarbonImmutable;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Symfony\Component\HttpFoundation\Response;
@@ -126,7 +127,7 @@ class SalesAgendaController extends Controller
             throw $exception;
         }
 
-        return redirect()->route('sales-agendas.index')->with('success', 'Agenda sales berhasil ditambahkan.');
+        return $this->successRedirect($request, 'Agenda sales berhasil ditambahkan.');
     }
 
     public function update(CompleteSalesAgendaRequest $request, ContentItem $agenda)
@@ -149,7 +150,7 @@ class SalesAgendaController extends Controller
 
         return $result instanceof Response
             ? $result
-            : redirect()->route('sales-agendas.index')->with('success', 'Hasil agenda berhasil disimpan.');
+            : $this->successRedirect($request, 'Hasil agenda berhasil disimpan.');
     }
 
     public function reschedule(RescheduleSalesAgendaRequest $request, ContentItem $agenda)
@@ -195,5 +196,14 @@ class SalesAgendaController extends Controller
         }
 
         return $this->projectResolver->resolve($owner, $data['scheduled_date']);
+    }
+
+    private function successRedirect(Request $request, string $message): RedirectResponse
+    {
+        if ($request->user()->hasPrimaryRole('sales_coordinator')) {
+            return redirect()->route('sales-pocketbook.index', ['tab' => 'agenda'])->with('success', $message);
+        }
+
+        return redirect()->route('sales-agendas.index')->with('success', $message);
     }
 }

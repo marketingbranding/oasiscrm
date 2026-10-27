@@ -130,4 +130,21 @@ class RolePermissionTest extends TestCase
         $this->assertSame(1, Changelog::query()->whereNull('version')->where('title', $title)->count());
         $this->actingAs($user)->get(route('changelogs.index'))->assertOk()->assertSeeText($title);
     }
+
+    public function test_scope_blockers_changelog_is_idempotent_and_rendered(): void
+    {
+        $title = 'Penguatan Scope Supervisor dan Lead Historis';
+        $migration = require database_path('migrations/2026_10_27_150000_add_scope_blockers_fix_changelog.php');
+        $migration->up();
+        $migration->up();
+        $user = User::factory()->create([
+            'role_id' => Role::query()->where('slug', 'superadmin')->value('id'),
+            'password_changed_at' => now(),
+        ]);
+
+        $this->assertSame(1, Changelog::query()->whereNull('version')->where('title', $title)->count());
+        $this->assertSame('fixed', Changelog::query()->whereNull('version')->where('title', $title)->value('category'));
+        $this->assertNull(Changelog::query()->whereNull('version')->where('title', $title)->value('created_by'));
+        $this->actingAs($user)->get(route('changelogs.index'))->assertOk()->assertSeeText($title);
+    }
 }

@@ -105,6 +105,16 @@ class ModulePermissionAccessTest extends TestCase
         $this->actingAs($branchManager)->get(route('expense-categories.index'))->assertForbidden();
     }
 
+    public function test_admin_expense_routes_stay_forbidden(): void
+    {
+        $branch = $this->expenseBranch('Admin Expense Branch');
+        $admin = $this->expenseUser('admin', $branch);
+
+        foreach (['expenses.index', 'expenses.create', 'expenses.export', 'expense-categories.index'] as $routeName) {
+            $this->actingAs($admin)->get(route($routeName))->assertForbidden();
+        }
+    }
+
     public function test_lead_source_show_keeps_redirect_behavior_and_controller_guard(): void
     {
         $source = LeadSource::create(['name' => 'Instagram', 'is_active' => true]);

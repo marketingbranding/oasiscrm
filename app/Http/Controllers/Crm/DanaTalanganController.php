@@ -84,6 +84,7 @@ class DanaTalanganController extends Controller
     public function index(Request $request)
     {
         $user = Auth::user();
+        abort_unless($user->can('viewAny', DanaTalangan::class), 403);
         $allowedBranchIds = $this->organizationScope->branchIds($user, 'bridge_fund');
         $allowedProjectIds = $this->organizationScope->projectIds($user, 'bridge_fund');
         $selectedBranchId = $request->filled('branch_id') ? $request->integer('branch_id') : null;
@@ -197,6 +198,7 @@ class DanaTalanganController extends Controller
     public function create()
     {
         $user = Auth::user();
+        abort_unless($user->can('create', DanaTalangan::class), 403);
         $allowedBranchIds = $this->organizationScope->branchIds($user, 'bridge_fund', 'manage');
         $branches = Branch::where('is_active', true)->whereIn('id', $allowedBranchIds)->orderBy('name')->get();
 
@@ -218,6 +220,7 @@ class DanaTalanganController extends Controller
     public function store(StoreDanaTalanganRequest $request, DanaTalanganService $service, DanaTalanganOptionService $optionService)
     {
         $user = Auth::user();
+        abort_unless($user->can('create', DanaTalangan::class), 403);
         $data = $request->validated();
         $data['branch_id'] ??= $this->workspaceAccess->resolveRequestedBranch($user, null)?->id;
         [$project, $projectIssue] = $service->resolveProjectWithIssue($data['project_name'], (int) $data['branch_id']);
@@ -244,6 +247,7 @@ class DanaTalanganController extends Controller
     public function edit(DanaTalangan $danaTalangan)
     {
         $user = Auth::user();
+        abort_unless($user->can('update', $danaTalangan), 403);
         abort_unless($this->organizationScope->allowsProjectRecord($user, 'bridge_fund', 'manage', (int) $danaTalangan->branch_id, $danaTalangan->project_id ? (int) $danaTalangan->project_id : null), 403);
         abort_unless($this->workspaceAccess->canEditBranch($user, $danaTalangan->branch_id), 403);
 
@@ -268,6 +272,7 @@ class DanaTalanganController extends Controller
     public function update(UpdateDanaTalanganRequest $request, DanaTalangan $danaTalangan, DanaTalanganService $service, DanaTalanganOptionService $optionService)
     {
         $user = Auth::user();
+        abort_unless($user->can('update', $danaTalangan), 403);
         abort_unless($this->organizationScope->allowsProjectRecord($user, 'bridge_fund', 'manage', (int) $danaTalangan->branch_id, $danaTalangan->project_id ? (int) $danaTalangan->project_id : null), 403);
         $data = $request->validated();
         if (! $this->optimisticLock->matches($danaTalangan, $data['expected_updated_at'] ?? null)) {
@@ -355,6 +360,7 @@ class DanaTalanganController extends Controller
     public function detail(DanaTalangan $danaTalangan)
     {
         $user = Auth::user();
+        abort_unless($user->can('view', $danaTalangan), 403);
         abort_unless($this->organizationScope->allowsProjectRecord($user, 'bridge_fund', 'view', (int) $danaTalangan->branch_id, $danaTalangan->project_id ? (int) $danaTalangan->project_id : null), 403);
 
         $danaTalangan->load('creator')->loadCount('comments');
@@ -365,6 +371,7 @@ class DanaTalanganController extends Controller
     public function destroy(DanaTalangan $danaTalangan, DanaTalanganService $service)
     {
         $user = Auth::user();
+        abort_unless($user->can('delete', $danaTalangan), 403);
         abort_unless($this->organizationScope->allowsProjectRecord($user, 'bridge_fund', 'manage', (int) $danaTalangan->branch_id, $danaTalangan->project_id ? (int) $danaTalangan->project_id : null), 403);
         abort_unless($this->workspaceAccess->canEditBranch($user, $danaTalangan->branch_id), 403);
 
@@ -497,6 +504,7 @@ class DanaTalanganController extends Controller
     public function retry(DanaTalangan $danaTalangan, DanaTalanganService $service)
     {
         $user = Auth::user();
+        abort_unless($user->can('update', $danaTalangan), 403);
         abort_unless($this->organizationScope->allowsProjectRecord($user, 'bridge_fund', 'manage', (int) $danaTalangan->branch_id, $danaTalangan->project_id ? (int) $danaTalangan->project_id : null), 403);
         abort_unless($this->workspaceAccess->canEditBranch($user, $danaTalangan->branch_id), 403);
         $result = $service->retry($danaTalangan, $user);

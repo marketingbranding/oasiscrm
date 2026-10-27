@@ -154,9 +154,12 @@ class SalesFeeReportService
         abort_if(! $actor->isSuperadmin() && isset($filters['branch_id']) && (int) $filters['branch_id'] !== $branchId, 403);
         abort_unless(in_array($branchId, $branchIds, true), 403);
         $projectIds = LeadMaster::query()->where('branch_id', $branchId)->where('is_active', true)
-            ->whereIn('id', array_intersect($this->scope->projectIds($actor, 'sales_pocketbook'), $this->workspace->accessibleProjectIds($actor)))
+            ->whereIn('id', array_intersect(
+                $this->scope->projectIds($actor, 'sales_pocketbook', 'export'),
+                $this->workspace->accessibleProjectIds($actor),
+            ))
             ->pluck('id')->map(fn ($id) => (int) $id)->all();
-        $visibleUserIds = $this->scope->visibleUserIds($actor, 'sales_pocketbook');
+        $visibleUserIds = $this->scope->visibleUserIds($actor, 'sales_pocketbook', 'export');
         $salesIds = User::query()->where('branch_id', $branchId)->where('is_active', true)->whereIn('id', $visibleUserIds)
             ->whereHas('role', fn ($query) => $query->where('slug', 'sales')->where('is_active', true))
             ->pluck('id')->map(fn ($id) => (int) $id)->all();

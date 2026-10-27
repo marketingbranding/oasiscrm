@@ -40,8 +40,12 @@ class OrganizationScopeService
 
         return $this->cached('users:'.$viewer->id.':'.$module.':'.$action.':'.implode(',', $workspaceBranchIds), function () use ($viewer, $module, $action): array {
             $scopes = $this->scopes($viewer, $module, $action);
-            if (in_array('all', $scopes, true)) {
+            if (in_array('all', $scopes, true) && ! $this->workspaceAccess->isBranchScopedOperator($viewer)) {
                 return User::query()->where('is_active', true)->pluck('id')->map(fn ($id) => (int) $id)->all();
+            }
+
+            if (in_array('all', $scopes, true)) {
+                return $this->authorizedUserIdsForBranches($workspaceBranchIds);
             }
 
             $ids = in_array('own', $scopes, true) ? [(int) $viewer->id] : [];
@@ -82,7 +86,7 @@ class OrganizationScopeService
 
         return $this->cached('branch:'.$viewer->id.':'.$module.':'.$action.':'.implode(',', $workspaceBranchIds), function () use ($viewer, $module, $action, $workspaceBranchIds): array {
             $scopes = $this->scopes($viewer, $module, $action);
-            if (in_array('all', $scopes, true)) {
+            if (in_array('all', $scopes, true) && ! $this->workspaceAccess->isBranchScopedOperator($viewer)) {
                 return Branch::query()->where('is_active', true)->pluck('id')->map(fn ($id) => (int) $id)->all();
             }
 
@@ -108,8 +112,15 @@ class OrganizationScopeService
 
         return $this->cached('project:'.$viewer->id.':'.$module.':'.$action.':'.implode(',', $workspaceBranchIds), function () use ($viewer, $module, $action, $workspaceBranchIds): array {
             $scopes = $this->scopes($viewer, $module, $action);
-            if (in_array('all', $scopes, true)) {
+            if (in_array('all', $scopes, true) && ! $this->workspaceAccess->isBranchScopedOperator($viewer)) {
                 return LeadMaster::query()->where('is_active', true)->pluck('id')->map(fn ($id) => (int) $id)->all();
+            }
+
+            if (in_array('all', $scopes, true)) {
+                return LeadMaster::query()
+                    ->where('is_active', true)
+                    ->whereIn('branch_id', $workspaceBranchIds)
+                    ->pluck('id')->map(fn ($id) => (int) $id)->all();
             }
 
             $ids = [];

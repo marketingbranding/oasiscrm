@@ -27,6 +27,10 @@ class SalesLeadPolicy
 
     public function create(User $user): bool
     {
+        if ($user->hasPrimaryRole(['admin', 'branch_manager', 'supervisor'])) {
+            return false;
+        }
+
         if (! $this->authorization->can($user, 'sales_pocketbook.manage_own')
             && ! $this->authorization->can($user, 'sales_pocketbook.manage_all')) {
             return $this->authorization->can($user, 'sales_pocketbook.manage_team')
@@ -48,6 +52,10 @@ class SalesLeadPolicy
 
         if ($user->isSales() || $user->hasPrimaryRole('supervisor')) {
             return false;
+        }
+
+        if (app(WorkspaceAccessService::class)->isBranchScopedOperator($user)) {
+            return $this->canEditHistoricalOwnedLead($user, $lead);
         }
 
         if ($this->canEditHistoricalOwnedLead($user, $lead)) {

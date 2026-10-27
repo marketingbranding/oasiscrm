@@ -157,13 +157,13 @@ class WorkspaceAccessService
             ? $branch->is_active
             : Branch::whereKey($branchId)->where('is_active', true)->exists();
 
-        return $active && ($user->hasPermission("{$module}.manage_all")
+        return $active && ((! $this->isBranchScopedOperator($user) && $user->hasPermission("{$module}.manage_all"))
             || $this->hasPermission($user, $branch, 'can_edit', true, false));
     }
 
     public function editableBranches(User $user, string $module): Collection
     {
-        if ($user->hasPermission("{$module}.manage_all")) {
+        if (! $this->isBranchScopedOperator($user) && $user->hasPermission("{$module}.manage_all")) {
             return Branch::where('is_active', true)->forDropdown()->get();
         }
 
@@ -219,6 +219,11 @@ class WorkspaceAccessService
         return $this->accessibleBranches($user)->first();
     }
 
+    public function isBranchScopedOperator(User $user): bool
+    {
+        return $user->hasPrimaryRole(['admin', 'branch_manager']);
+    }
+
     private function hasPermission(
         User $user,
         int|Branch $branch,
@@ -251,6 +256,6 @@ class WorkspaceAccessService
     private function hasGlobalCompatibilityAccess(User $user): bool
     {
         // Transitional compatibility: pusat keeps the existing global behavior while new branch-scoped code uses memberships.
-        return $user->canViewAllBranches();
+        return ! $this->isBranchScopedOperator($user) && $user->canViewAllBranches();
     }
 }

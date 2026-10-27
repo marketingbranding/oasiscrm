@@ -5,12 +5,14 @@ namespace Tests\Feature;
 use App\Enums\SalesLeadStatus;
 use App\Models\Branch;
 use App\Models\ContentItem;
+use App\Models\DanaTalangan;
 use App\Models\LeadMaster;
 use App\Models\Permission;
 use App\Models\Role;
 use App\Models\SalesCoordinatorSales;
 use App\Models\SalesLead;
 use App\Models\User;
+use App\Policies\SalesLeadPolicy;
 use App\Services\GoogleSheetsApiService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
@@ -196,6 +198,39 @@ class AdminBranchSalesMonitoringTest extends TestCase
         }
     }
 
+    public function test_fee_detail_and_print_reject_foreign_branch_records(): void
+    {
+        $this->actingAs($this->admin)->get(route('sales-fee-reports.show', [
+            $this->foreignSales,
+            $this->foreignProject,
+            'date_from' => '2026-08-01',
+            'date_to' => '2026-08-31',
+        ]))->assertForbidden();
+
+        $this->actingAs($this->admin)->get(route('sales-fee-reports.print', [
+            $this->foreignSales,
+            $this->foreignProject,
+            'date_from' => '2026-08-01',
+            'date_to' => '2026-08-31',
+        ]))->assertForbidden();
+    }
+
+    public function test_branch_manager_monitoring_rejects_foreign_branch_filters(): void
+    {
+        $branchManager = $this->user('branch_manager', $this->branch, 'Branch Manager Cabang');
+
+        $this->actingAs($branchManager)->get($this->url([
+            'branch_id' => $this->foreignBranch->id,
+            'period_type' => 'custom',
+        ]))->assertForbidden();
+        $this->actingAs($branchManager)->get(route('sales-fee-reports.index', [
+            'branch_id' => $this->foreignBranch->id,
+            'period' => '2026-08',
+            'date_from' => '2026-08-01',
+            'date_to' => '2026-08-31',
+        ]))->assertForbidden();
+    }
+
     public function test_report_tab_redirects_to_fee_report_preserving_dates_and_fee_report_remains_available(): void
     {
         $this->actingAs($this->admin)->get($this->url([
@@ -234,6 +269,46 @@ class AdminBranchSalesMonitoringTest extends TestCase
             ->assertSee('class="print-sheet"', false)
             ->assertSee('@page { size: A4 portrait; margin: 0; }', false)
             ->assertSee('.print-sheet { width: 210mm; min-height: auto; margin: 0; padding: 12mm; box-shadow: none; }', false);
+    }
+
+    public function test_branch_roles_cannot_widen_buku_saku_or_dana_talangan_with_global_scope_permissions(): void
+    {
+        $foreignLead = $this->lead($this->foreignSales, $this->foreignProject, 'LEAD_GLOBAL_SCOPE');
+        DanaTalangan::create([
+            'branch_id' => $this->foreignBranch->id,
+            'project_id' => $this->foreignProject->id,
+            'project_name' => $this->foreignProject->project_name,
+            'tanggal' => '2026-08-10',
+            'nama_konsumen' => 'Dana Global Scope',
+            'status' => 'sanggup',
+            'created_by' => $this->foreignSales->id,
+        ]);
+
+        foreach (['admin', 'branch_manager'] as $role) {
+            $operator = $this->user($role, $this->branch, ucfirst($role).' Scope');
+            $operator->role->permissions()->attach(Permission::query()
+                ->whereIn('slug', ['sales_pocketbook.view_all', 'bridge_fund.view_all'])
+                ->pluck('id'));
+            $operator = $operator->fresh('role.permissions');
+
+            $this->assertFalse(app(SalesLeadPolicy::class)->view($operator, $foreignLead), $role);
+            $this->actingAs($operator)->get(route('dana-talangan.index', ['branch_id' => $this->foreignBranch->id]))->assertForbidden();
+        }
+    }
+
+    public function test_branch_roles_cannot_mutate_current_buku_saku_records_with_stale_manage_permission(): void
+    {
+        $lead = $this->lead($this->sales, $this->project, 'LEAD_MUTATION_BOUNDARY');
+
+        foreach (['admin', 'branch_manager'] as $role) {
+            $operator = $this->user($role, $this->branch, ucfirst($role).' Mutation');
+            $operator->branches()->updateExistingPivot($this->branch->id, ['can_edit' => true]);
+            $operator->role->permissions()->attach(Permission::query()->where('slug', 'sales_pocketbook.manage_branch')->firstOrFail());
+            $operator = $operator->fresh('role.permissions');
+
+            $this->assertFalse(app(SalesLeadPolicy::class)->update($operator, $lead), $role);
+            $this->assertFalse(app(SalesLeadPolicy::class)->create($operator), $role);
+        }
     }
 
     private function url(array $query = []): string

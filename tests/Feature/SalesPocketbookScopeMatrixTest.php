@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\Branch;
+use App\Models\ContentItem;
 use App\Models\LeadMaster;
 use App\Models\Role;
 use App\Models\SalesCoordinatorSales;
@@ -81,6 +82,57 @@ class SalesPocketbookScopeMatrixTest extends TestCase
             ->assertOk();
     }
 
+    public function test_coordinator_can_create_and_complete_a_current_team_agenda_but_not_an_out_of_team_agenda(): void
+    {
+        $context = $this->context();
+
+        $this->actingAs($context['coordinator'])
+            ->post(route('sales-agendas.store'), [
+                'sales_user_id' => $context['sales']->id,
+                'project_id' => $context['project']->id,
+                'scheduled_date' => today()->toDateString(),
+                'sales_activity_category' => 'Cek Lokasi',
+                'title' => 'Agenda Tim Baru',
+                'location' => 'Lokasi Tim',
+            ])
+            ->assertRedirect();
+
+        $agenda = ContentItem::query()->where('title', 'Agenda Tim Baru')->sole();
+        $this->assertSame($context['sales']->id, $agenda->owner_user_id);
+        $this->assertSame($context['project']->id, $agenda->sales_project_id);
+
+        $this->actingAs($context['coordinator'])
+            ->post(route('sales-agendas.store'), [
+                'sales_user_id' => $context['foreignSales']->id,
+                'project_id' => $context['project']->id,
+                'scheduled_date' => today()->toDateString(),
+                'sales_activity_category' => 'Cek Lokasi',
+                'title' => 'Agenda Luar Tim',
+            ])
+            ->assertForbidden();
+
+        $this->assertDatabaseMissing('content_items', ['title' => 'Agenda Luar Tim']);
+
+        $this->actingAs($context['coordinator'])
+            ->patch(route('sales-agendas.update', $agenda), [
+                'activity_result' => 'Hasil agenda tim',
+                'expected_updated_at' => app(OptimisticLockService::class)->token($agenda),
+            ])
+            ->assertRedirect();
+
+        $this->assertSame('done', $agenda->fresh()->status);
+        $this->assertSame('Hasil agenda tim', $agenda->fresh()->activity_result);
+
+        $this->actingAs($context['coordinator'])
+            ->patch(route('sales-agendas.update', $context['foreignAgenda']), [
+                'activity_result' => 'Tidak boleh',
+                'expected_updated_at' => app(OptimisticLockService::class)->token($context['foreignAgenda']),
+            ])
+            ->assertForbidden();
+
+        $this->assertSame('planned', $context['foreignAgenda']->fresh()->status);
+    }
+
     public function test_buku_saku_does_not_render_manual_spreadsheet_sync_controls(): void
     {
         $context = $this->context();
@@ -91,6 +143,21 @@ class SalesPocketbookScopeMatrixTest extends TestCase
             ->assertDontSee('SYNC KE SPREADSHEET')
             ->assertDontSee('Sinkronisasi Lead')
             ->assertDontSee('Rekonsiliasi');
+    }
+
+    public function test_coordinator_supervisor_admin_and_branch_manager_have_monitoring_views_without_sync_controls(): void
+    {
+        $context = $this->context();
+
+        foreach ([$context['coordinator'], $context['supervisor'], $context['admin'], $context['branchManager']] as $actor) {
+            $this->actingAs($actor)
+                ->get(route('sales-pocketbook.index', ['tab' => 'agenda']))
+                ->assertOk()
+                ->assertSee('Buku Saku Sales')
+                ->assertDontSee('SYNC KE SPREADSHEET')
+                ->assertDontSee('Sinkronisasi Lead')
+                ->assertDontSee('Rekonsiliasi');
+        }
     }
 
     public function test_coordinator_cannot_edit_a_lead_outside_current_team(): void
@@ -148,6 +215,22 @@ class SalesPocketbookScopeMatrixTest extends TestCase
         }
     }
 
+    public function test_supervisor_admin_and_branch_manager_cannot_update_sales_agendas(): void
+    {
+        $context = $this->context();
+
+        foreach ([$context['supervisor'], $context['admin'], $context['branchManager']] as $actor) {
+            $this->actingAs($actor)
+                ->patch(route('sales-agendas.update', $context['foreignAgenda']), [
+                    'activity_result' => 'Tidak boleh',
+                    'expected_updated_at' => app(OptimisticLockService::class)->token($context['foreignAgenda']),
+                ])
+                ->assertForbidden();
+        }
+
+        $this->assertSame('planned', $context['foreignAgenda']->fresh()->status);
+    }
+
     /** @return array<string, mixed> */
     private function context(): array
     {
@@ -169,6 +252,8 @@ class SalesPocketbookScopeMatrixTest extends TestCase
             'sales_user_id' => $sales->id,
         ]);
 
+        $foreignAgenda = $this->agenda($foreignSales, $project, 'Agenda Sales Lain');
+
         return [
             'branch' => $branch,
             'project' => $project,
@@ -180,6 +265,7 @@ class SalesPocketbookScopeMatrixTest extends TestCase
             'branchManager' => $branchManager,
             'lead' => $this->lead($sales, $project, 'Lead Tim'),
             'foreignLead' => $this->lead($foreignSales, $project, 'Lead Sales Lain'),
+            'foreignAgenda' => $foreignAgenda,
         ];
     }
 
@@ -206,6 +292,23 @@ class SalesPocketbookScopeMatrixTest extends TestCase
             'platform' => 'WhatsApp',
             'campaign_name' => 'Follow-up',
             'current_status' => 'no_response',
+            'created_by' => $sales->id,
+        ]);
+    }
+
+    private function agenda(User $sales, LeadMaster $project, string $title): ContentItem
+    {
+        return ContentItem::create([
+            'branch_id' => $project->branch_id,
+            'project_name' => $project->project_name,
+            'sales_project_id' => $project->id,
+            'item_type' => 'agenda',
+            'agenda_type' => ContentItem::SALES_AGENDA_TYPE,
+            'visibility' => 'personal',
+            'title' => $title,
+            'scheduled_date' => today(),
+            'status' => 'planned',
+            'owner_user_id' => $sales->id,
             'created_by' => $sales->id,
         ]);
     }

@@ -68,7 +68,7 @@ class SalesRoleWorkspaceScopeTest extends TestCase
         @unlink($path);
     }
 
-    public function test_role_views_keep_exact_labels_canonical_dates_and_read_only_team_agendas(): void
+    public function test_coordinator_can_update_team_agendas_while_supervisor_remains_read_only(): void
     {
         [, $supervisor, $coordinator, , $sales] = $this->hierarchy();
         $agenda = $this->agenda($sales, 'AGENDA_READ_ONLY');
@@ -77,12 +77,15 @@ class SalesRoleWorkspaceScopeTest extends TestCase
             ->assertSee('Buku Saku Sales')->assertSee('date-wrapper', false);
         $supervisorPage = $this->actingAs($supervisor)->get(route('sales-pocketbook.index'))->assertOk()
             ->assertSee('Monitoring Tim')->assertSee('date-wrapper', false);
-        foreach ([$coordinator, $supervisor] as $viewer) {
-            $this->actingAs($viewer)->patch(route('sales-agendas.update', $agenda), [
-                'activity_result' => 'Tidak boleh',
-                'expected_updated_at' => app(OptimisticLockService::class)->token($agenda),
-            ])->assertForbidden();
-        }
+        $this->actingAs($coordinator)->patch(route('sales-agendas.update', $agenda), [
+            'activity_result' => 'Hasil tim',
+            'expected_updated_at' => app(OptimisticLockService::class)->token($agenda),
+        ])->assertRedirect();
+
+        $this->actingAs($supervisor)->patch(route('sales-agendas.update', $agenda), [
+            'activity_result' => 'Tidak boleh',
+            'expected_updated_at' => app(OptimisticLockService::class)->token($agenda),
+        ])->assertForbidden();
 
         foreach (['coordinator-leads.blade.php', 'supervisor-monitoring.blade.php'] as $view) {
             $source = file_get_contents(resource_path("views/crm/sales-pocketbook/{$view}"));

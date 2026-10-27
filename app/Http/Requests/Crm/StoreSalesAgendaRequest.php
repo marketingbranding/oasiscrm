@@ -11,12 +11,19 @@ class StoreSalesAgendaRequest extends FormRequest
 {
     public function authorize(): bool
     {
-        return $this->user()?->can('createSalesAgenda', ContentItem::class) ?? false;
+        if ($this->user()?->isSales() === true) {
+            return $this->user()->can('createSalesAgenda', ContentItem::class);
+        }
+
+        return $this->user()?->hasPrimaryRole('sales_coordinator') === true
+            && $this->user()->hasPermission('sales_pocketbook.manage_team');
     }
 
     public function rules(): array
     {
         return [
+            'sales_user_id' => [Rule::requiredIf(fn (): bool => $this->user()?->hasPrimaryRole('sales_coordinator') === true), 'nullable', 'integer', 'exists:users,id'],
+            'project_id' => [Rule::requiredIf(fn (): bool => $this->user()?->hasPrimaryRole('sales_coordinator') === true), 'nullable', 'integer', 'exists:lead_master,id'],
             'scheduled_date' => ['required', 'date'],
             'sales_activity_category' => ['required', 'string', Rule::in(ContentItem::SALES_ACTIVITY_CATEGORIES)],
             'title' => ['required', 'string', 'max:255'],

@@ -190,8 +190,13 @@ class SalesAgendaEvidenceCleanupTest extends TestCase
             $contents = file_get_contents(resource_path("views/crm/sales-pocketbook/{$view}"));
             $this->assertStringContainsString("route('sales-agendas.evidence.show'", $contents);
             $this->assertStringContainsString('Bukti foto telah dipindahkan ke arsip.', $contents);
-            $this->assertStringNotContainsString("route('sales-agendas.store')", $contents);
-            $this->assertStringNotContainsString("route('sales-agendas.update')", $contents);
+            if ($view === 'coordinator-leads.blade.php') {
+                $this->assertStringContainsString("route('sales-agendas.store')", $contents);
+                $this->assertStringContainsString('route(\'sales-agendas.update\', $agenda)', $contents);
+            } else {
+                $this->assertStringNotContainsString("route('sales-agendas.store')", $contents);
+                $this->assertStringNotContainsString("route('sales-agendas.update')", $contents);
+            }
             $this->assertStringNotContainsString("route('sales-agendas.evidence.destroy')", $contents);
             $this->assertStringNotContainsString("route('sales-agendas.cleanup')", $contents);
         }

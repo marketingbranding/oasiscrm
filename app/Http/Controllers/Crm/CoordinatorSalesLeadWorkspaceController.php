@@ -78,6 +78,7 @@ class CoordinatorSalesLeadWorkspaceController extends Controller
         $data['promoOptionsEndpoint'] = route('coordinator-leads.promo-options', ['project' => 'PROJECT_ID']);
         $data['statuses'] = SalesLeadStatus::MANUAL;
         $data['canCreate'] = $request->user()->can('create', SalesLead::class);
+        $data['canManageAgenda'] = $request->user()->hasPermission('sales_pocketbook.manage_team');
         $data['canExport'] = $request->user()->hasPermission('sales_pocketbook.export_team');
         $data['canSync'] = config('oasis.spreadsheet_sync_enabled')
             && config('services.google_sheets.sales_lead_sync_enabled')

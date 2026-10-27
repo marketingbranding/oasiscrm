@@ -10,6 +10,9 @@ use App\Models\ContentItem;
 use App\Models\LeadMaster;
 use App\Models\SalesDailyPlan;
 use App\Models\SalesLead;
+use App\Models\User;
+use App\Services\CoordinatorLeadTeamService;
+use App\Services\CoordinatorSalesMonitoringService;
 use App\Services\OptimisticLockService;
 use App\Services\PromoOptionService;
 use App\Services\SalesAgendaEvidenceUploadService;
@@ -25,6 +28,8 @@ class SalesAgendaController extends Controller
 {
     public function __construct(
         private readonly SalesAgendaProjectResolver $projectResolver,
+        private readonly CoordinatorLeadTeamService $coordinatorTeams,
+        private readonly CoordinatorSalesMonitoringService $coordinatorMonitoring,
         private readonly OptimisticLockService $optimisticLock,
         private readonly WorkspaceAccessService $workspaceAccess,
         private readonly PromoOptionService $promoOptions,
@@ -85,13 +90,14 @@ class SalesAgendaController extends Controller
     public function store(StoreSalesAgendaRequest $request, SalesAgendaEvidenceUploadService $uploads)
     {
         $data = $request->validated();
-        $project = $this->projectResolver->resolve($request->user(), $data['scheduled_date']);
+        $owner = $this->agendaOwner($request, $data);
+        $project = $this->agendaProject($request, $owner, $data);
         abort_unless($project, 422, 'Proyek utama belum ditentukan. Hubungi admin untuk menetapkan proyek utama.');
         $prepared = $uploads->prepare($request->file('photos', []), 'photos');
         $result = filled($data['activity_result'] ?? null) ? $data['activity_result'] : null;
 
         try {
-            DB::transaction(function () use ($request, $project, $data, $result, $prepared, $uploads) {
+            DB::transaction(function () use ($request, $owner, $project, $data, $result, $prepared, $uploads) {
                 $agenda = ContentItem::create([
                     'branch_id' => $project->branch_id,
                     'project_name' => $project->project_name,
@@ -106,10 +112,10 @@ class SalesAgendaController extends Controller
                     'status' => $result ? 'done' : 'planned',
                     'completed_at' => $result ? now() : null,
                     'activity_result' => $result,
-                    'owner_user_id' => $request->user()->id,
+                    'owner_user_id' => $owner->id,
                     'created_by' => $request->user()->id,
                 ]);
-                $agenda->assignees()->sync([$request->user()->id]);
+                $agenda->assignees()->sync([$owner->id]);
                 if ($result) {
                     $agenda->logActivity('agenda_result_recorded', ['status' => 'done']);
                 }
@@ -125,10 +131,10 @@ class SalesAgendaController extends Controller
 
     public function update(CompleteSalesAgendaRequest $request, ContentItem $agenda)
     {
-        $this->authorizeAgenda($agenda);
+        $this->authorizeAgenda($request, $agenda);
         $data = $request->validated();
         $result = $this->optimisticLock->execute($request, $agenda, $data['expected_updated_at'], function (ContentItem $current) use ($request, $data) {
-            $this->authorizeAgenda($current);
+            $this->authorizeAgenda($request, $current);
             abort_if(in_array($current->status, ['cancelled', 'rescheduled'], true), 422, 'Agenda ini tidak dapat diselesaikan.');
             $current->update([
                 'activity_result' => $data['activity_result'],
@@ -148,13 +154,46 @@ class SalesAgendaController extends Controller
 
     public function reschedule(RescheduleSalesAgendaRequest $request, ContentItem $agenda)
     {
-        $this->authorizeAgenda($agenda);
+        $this->authorizeAgenda($request, $agenda);
         abort(403);
     }
 
-    private function authorizeAgenda(ContentItem $agenda): void
+    private function authorizeAgenda(Request $request, ContentItem $agenda): void
     {
         abort_unless($agenda->item_type === 'agenda' && $agenda->agenda_type === ContentItem::SALES_AGENDA_TYPE, 404);
-        $this->authorize('updateSalesAgenda', $agenda);
+
+        if ($request->user()->isSales()) {
+            $this->authorize('updateSalesAgenda', $agenda);
+
+            return;
+        }
+
+        abort_unless($request->user()->hasPrimaryRole('sales_coordinator')
+            && $this->coordinatorMonitoring->canManageAgenda($request->user(), $agenda), 403);
+    }
+
+    private function agendaOwner(Request $request, array $data): User
+    {
+        if ($request->user()->isSales()) {
+            return $request->user();
+        }
+
+        $owner = User::query()->findOrFail((int) $data['sales_user_id']);
+        abort_unless($request->user()->hasPrimaryRole('sales_coordinator')
+            && $this->coordinatorTeams->contains($request->user(), $owner), 403);
+
+        return $owner;
+    }
+
+    private function agendaProject(Request $request, User $owner, array $data): ?LeadMaster
+    {
+        if ($request->user()->hasPrimaryRole('sales_coordinator')) {
+            $project = $this->projectResolver->resolveAssigned($owner, (int) $data['project_id'], $data['scheduled_date']);
+            abort_unless($project && $this->workspaceAccess->canAccessProject($request->user(), $project), 403);
+
+            return $project;
+        }
+
+        return $this->projectResolver->resolve($owner, $data['scheduled_date']);
     }
 }

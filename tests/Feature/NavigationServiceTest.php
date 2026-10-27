@@ -43,6 +43,17 @@ class NavigationServiceTest extends TestCase
         $this->assertNotContains('System Health', $this->labels($pusat));
     }
 
+    public function test_buku_saku_destination_is_present_without_manual_sync_destinations_for_monitoring_roles(): void
+    {
+        foreach (['sales_coordinator', 'supervisor', 'admin', 'branch_manager'] as $role) {
+            $navigation = $this->navigationFor($role, 'sales-pocketbook.index');
+            $items = collect($navigation)->flatMap(fn (array $group) => $group['children']);
+
+            $this->assertTrue($items->contains('route', 'sales-pocketbook.index'), "{$role} should retain Buku Saku navigation.");
+            $this->assertFalse($items->contains(fn (array $item): bool => str_contains($item['route'], 'sync') || str_contains($item['route'], 'reconcile')), "{$role} should not receive a manual sync navigation destination.");
+        }
+    }
+
     public function test_superadmin_receives_every_safe_registered_destination_without_empty_groups(): void
     {
         $navigation = $this->navigationFor('superadmin');

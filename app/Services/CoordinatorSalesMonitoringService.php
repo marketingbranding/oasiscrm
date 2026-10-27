@@ -33,6 +33,12 @@ class CoordinatorSalesMonitoringService
         return $this->salesTeamScope->contains($actor, (int) $agenda->owner_user_id);
     }
 
+    public function canManageAgenda(User $actor, ContentItem $agenda): bool
+    {
+        return $actor->hasPermission('sales_pocketbook.manage_team')
+            && $this->canViewAgenda($actor, $agenda);
+    }
+
     public function resolve(User $actor, array $filters, bool $paginate = true): array
     {
         abort_unless($this->coordinatorTeam->isCoordinator($actor), 403);

@@ -8,7 +8,7 @@ return new class extends Migration
     private const CHANGELOG_TITLE = 'Pembatasan Lingkup Buku Saku Sales';
 
     private const REMOVED_GRANTS = [
-        'sales' => ['work_planner.%', 'sales_pocketbook.export'],
+        'sales' => ['work_planner.view_own', 'work_planner.create', 'work_planner.update', 'sales_pocketbook.export'],
         'sales_coordinator' => ['sales_pocketbook.export'],
         'supervisor' => ['sales_pocketbook.export'],
     ];
@@ -24,13 +24,7 @@ return new class extends Migration
             DB::table('role_permission')
                 ->where('role_id', $roleId)
                 ->whereIn('permission_id', DB::table('permissions')
-                    ->where(function ($query) use ($permissionPatterns): void {
-                        foreach ($permissionPatterns as $pattern) {
-                            str_ends_with($pattern, '%')
-                                ? $query->orWhere('slug', 'like', $pattern)
-                                : $query->orWhere('slug', $pattern);
-                        }
-                    })
+                    ->whereIn('slug', $permissionPatterns)
                     ->pluck('id'))
                 ->delete();
         }
@@ -56,13 +50,7 @@ return new class extends Migration
             }
 
             $permissionIds = DB::table('permissions')
-                ->where(function ($query) use ($permissionPatterns): void {
-                    foreach ($permissionPatterns as $pattern) {
-                        str_ends_with($pattern, '%')
-                            ? $query->orWhere('slug', 'like', $pattern)
-                            : $query->orWhere('slug', $pattern);
-                    }
-                })
+                ->whereIn('slug', $permissionPatterns)
                 ->pluck('id');
 
             foreach ($permissionIds as $permissionId) {

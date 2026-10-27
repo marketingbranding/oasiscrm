@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Http\Controllers\Crm\SupervisorSalesPocketbookController;
 use App\Models\Changelog;
+use App\Models\Permission;
 use App\Models\Role;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -144,5 +145,27 @@ class BukuSakuRolePermissionTest extends TestCase
             'password_changed_at' => now(),
         ]);
         $this->actingAs($actor)->get(route('changelogs.index'))->assertOk()->assertSeeText('Pembatasan Lingkup Buku Saku Sales');
+    }
+
+    public function test_sales_scope_migration_down_restores_only_the_exact_removed_grants(): void
+    {
+        $migration = require database_path('migrations/2026_10_27_120000_align_sales_pocketbook_scopes.php');
+
+        $sales = Role::query()->where('slug', 'sales')->firstOrFail();
+        $before = $sales->permissions()->where('slug', 'like', 'work_planner.%')->orderBy('slug')->pluck('slug')->all();
+
+        $migration->up();
+        $migration->down();
+
+        $workPlannerPermissions = $sales->permissions()->where('slug', 'like', 'work_planner.%')->orderBy('slug')->pluck('slug')->all();
+
+        $this->assertSame([
+            ...$before,
+            'work_planner.create',
+            'work_planner.update',
+            'work_planner.view_own',
+        ], $workPlannerPermissions);
+        $this->assertFalse($sales->permissions()->where('slug', 'work_planner.manage_all')->exists());
+        $this->assertTrue(Permission::query()->where('slug', 'work_planner.manage_all')->exists());
     }
 }

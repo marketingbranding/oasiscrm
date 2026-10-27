@@ -62,23 +62,26 @@ class SalesAgendaRoleWorkspaceTest extends TestCase
         $this->assertNull(app(SalesAgendaProjectResolver::class)->resolve($sales, '2026-08-10'));
     }
 
-    public function test_store_request_accepts_primary_sales_only_and_exposes_simple_fields(): void
+    public function test_store_request_accepts_sales_and_coordinator_team_agenda_fields(): void
     {
         [$sales] = $this->context();
         $request = new StoreSalesAgendaRequest;
         $request->setUserResolver(fn () => $sales);
 
         $this->assertTrue($request->authorize());
-        $this->assertSame(['scheduled_date', 'sales_activity_category', 'title', 'location', 'activity_result', 'photos', 'photos.*'], array_keys($request->rules()));
+        $this->assertSame(['sales_user_id', 'project_id', 'scheduled_date', 'sales_activity_category', 'title', 'location', 'activity_result', 'photos', 'photos.*'], array_keys($request->rules()));
         $this->assertSame(['nullable', 'array', 'max:2'], $request->rules()['photos']);
         $this->assertSame(['required', 'file', 'max:10240'], $request->rules()['photos.*']);
         $this->assertSame(['required', 'string'], array_slice($request->rules()['sales_activity_category'], 0, 2));
         $this->assertSame('in:"'.implode('","', ContentItem::SALES_ACTIVITY_CATEGORIES).'"', (string) $request->rules()['sales_activity_category'][2]);
 
-        foreach (['manager', 'branch_manager', 'supervisor', 'sales_coordinator', 'admin', 'pusat', 'superadmin'] as $role) {
+        foreach (['manager', 'branch_manager', 'supervisor', 'admin', 'pusat', 'superadmin'] as $role) {
             $request->setUserResolver(fn () => $this->user($role));
             $this->assertFalse($request->authorize(), "Primary {$role} must not create Sales Agenda.");
         }
+
+        $request->setUserResolver(fn () => $this->user('sales_coordinator'));
+        $this->assertTrue($request->authorize());
 
         $manager = $this->user('manager');
         $manager->roles()->attach(Role::where('slug', 'sales')->value('id'));
@@ -88,7 +91,7 @@ class SalesAgendaRoleWorkspaceTest extends TestCase
 
     public function test_non_sales_roles_cannot_post_sales_agenda(): void
     {
-        foreach (['manager', 'branch_manager', 'supervisor', 'sales_coordinator', 'admin', 'pusat', 'superadmin'] as $role) {
+        foreach (['manager', 'branch_manager', 'supervisor', 'admin', 'pusat', 'superadmin'] as $role) {
             $this->actingAs($this->user($role))->post(route('sales-agendas.store'), [
                 'scheduled_date' => '2026-08-10',
                 'sales_activity_category' => 'Cek Lokasi',

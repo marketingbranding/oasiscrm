@@ -143,6 +143,41 @@ class SalesTeamScopeService
         return $team;
     }
 
+    public function forWorkspace(User $actor, array $branchIds, array $projectIds, bool $includeHistorical = false): array
+    {
+        $team = $this->displayedFor($actor, $branchIds, $projectIds, $includeHistorical);
+        $branchIds = collect($branchIds)->map(fn ($id) => (int) $id)->values()->all();
+        $projectIds = collect($projectIds)->map(fn ($id) => (int) $id)->values()->all();
+        $hierarchyIds = collect([$team['supervisors'], $team['coordinators']])->flatten(1)->pluck('id')->unique();
+        $salesIds = $team['sales']->pluck('id')->unique();
+        $allowedHierarchyIds = User::query()
+            ->whereIn('id', $hierarchyIds)
+            ->whereIn('branch_id', $branchIds)
+            ->pluck('id');
+        $allowedSalesIds = User::query()
+            ->whereIn('id', $salesIds)
+            ->whereIn('branch_id', $branchIds)
+            ->where(function (Builder $query) use ($projectIds): void {
+                $query->whereDoesntHave('assignedProjects', fn (Builder $projects) => $this->currentProjectAssignment($projects))
+                    ->orWhereHas('assignedProjects', fn (Builder $projects) => $this->currentProjectAssignment($projects)->whereIn('lead_master.id', $projectIds));
+            })
+            ->pluck('id');
+        $keepHierarchy = fn (Collection $users): Collection => $users->whereIn('id', $allowedHierarchyIds)->values();
+        $team['supervisors'] = $keepHierarchy($team['supervisors']);
+        $team['coordinators'] = $keepHierarchy($team['coordinators']);
+        $team['sales'] = $team['sales']->whereIn('id', $allowedSalesIds)->values();
+        $coordinatorIds = $team['coordinators']->pluck('id');
+        $filteredSalesIds = $team['sales']->pluck('id');
+        $team['sales_ids_by_coordinator'] = $team['sales_ids_by_coordinator']
+            ->only($coordinatorIds->all())
+            ->map(fn (Collection $ids): Collection => $ids->intersect($filteredSalesIds)->values());
+        $team['coordinator_ids_by_supervisor'] = $team['coordinator_ids_by_supervisor']
+            ->only($team['supervisors']->pluck('id')->all())
+            ->map(fn (Collection $ids): Collection => $ids->intersect($coordinatorIds)->values());
+
+        return $team;
+    }
+
     public function currentSalesQuery(User $coordinator): Builder
     {
         if (! $coordinator->hasPrimaryRole('sales_coordinator') || ! $coordinator->isAccountActive() || ! $coordinator->is_active) {
@@ -201,6 +236,15 @@ class SalesTeamScopeService
     private function isRole(User $user, string $role): bool
     {
         return $user->role?->slug === $role;
+    }
+
+    private function currentProjectAssignment(Builder $query): Builder
+    {
+        return $query
+            ->where('lead_master.is_active', true)
+            ->where('project_user.is_active', true)
+            ->where(fn (Builder $dates) => $dates->whereNull('project_user.assignment_start_date')->orWhereDate('project_user.assignment_start_date', '<=', today()->toDateString()))
+            ->where(fn (Builder $dates) => $dates->whereNull('project_user.assignment_end_date')->orWhereDate('project_user.assignment_end_date', '>=', today()->toDateString()));
     }
 
     private function canonicalFor(User $actor, array $empty, bool $includeHistorical = false): array

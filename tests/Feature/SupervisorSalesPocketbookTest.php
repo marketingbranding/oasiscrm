@@ -121,6 +121,36 @@ class SupervisorSalesPocketbookTest extends TestCase
         $this->assertNull($data['salesRows']->firstWhere('id', $outsideHierarchySales->id));
     }
 
+    public function test_supervisor_hierarchy_excludes_sales_assigned_only_to_an_outside_project(): void
+    {
+        $outsideProjectSales = $this->user('sales', 'Sales Proyek Lain', $this->branch, $this->coordinatorA);
+        $outsideProjectSales->assignedProjects()->attach($this->outsideProject, ['is_primary' => true, 'is_active' => true]);
+        SalesCoordinatorSales::create([
+            'coordinator_user_id' => $this->coordinatorA->id,
+            'sales_user_id' => $outsideProjectSales->id,
+        ]);
+
+        $data = $this->resolve([]);
+
+        $this->assertNotContains($outsideProjectSales->id, $data['salesUsers']->pluck('id')->all());
+        $this->assertArrayNotHasKey($outsideProjectSales->id, $data['coordinatorNamesBySalesId']);
+    }
+
+    public function test_supervisor_cannot_view_a_lead_with_a_forged_workspace_combination(): void
+    {
+        $outsideProjectSales = $this->user('sales', 'Sales Proyek Lain', $this->branch, $this->coordinatorA);
+        $outsideProjectSales->assignedProjects()->attach($this->outsideProject, ['is_primary' => true, 'is_active' => true]);
+        SalesCoordinatorSales::create([
+            'coordinator_user_id' => $this->coordinatorA->id,
+            'sales_user_id' => $outsideProjectSales->id,
+        ]);
+        $forgedLead = $this->lead($outsideProjectSales, 'LEAD_FORGED_WORKSPACE', '2026-08-10', 'synced');
+
+        $this->actingAs($this->supervisor)
+            ->get(route('sales-leads.show', $forgedLead))
+            ->assertForbidden();
+    }
+
     public function test_forged_coordinator_and_sales_filters_return_403(): void
     {
         $this->actingAs($this->supervisor)->get(route('sales-pocketbook.index', ['coordinator_id' => $this->otherCoordinator->id]))->assertForbidden();
@@ -178,6 +208,34 @@ class SupervisorSalesPocketbookTest extends TestCase
 
         $this->assertStringContainsString($historicalLead->customer_name, $values);
         $this->assertStringNotContainsString($unrelatedLead->customer_name, $values);
+        @unlink($path);
+    }
+
+    public function test_supervisor_historical_monitoring_excludes_ended_mapping_outside_workspace(): void
+    {
+        $outsideHistoricalSales = $this->user('sales', 'Sales Historis Proyek Lain', $this->branch, $this->coordinatorA);
+        $outsideHistoricalSales->assignedProjects()->attach($this->outsideProject, ['is_primary' => true, 'is_active' => true]);
+        SalesCoordinatorSales::create([
+            'coordinator_user_id' => $this->coordinatorA->id,
+            'sales_user_id' => $outsideHistoricalSales->id,
+            'is_active' => false,
+            'started_at' => today()->subMonth(),
+            'ended_at' => today()->subDay(),
+        ]);
+        $outsideHistoricalLead = $this->lead($outsideHistoricalSales, 'LEAD_HISTORIS_PROYEK_LAIN', '2026-08-10', 'synced');
+        $outsideHistoricalLead->update(['project_id' => $this->outsideProject->id]);
+
+        $data = app(SupervisorSalesMonitoringService::class)->resolve($this->supervisor, ['period' => 'today'], false);
+
+        $this->assertNotContains($outsideHistoricalSales->id, $data['salesUsers']->pluck('id')->all());
+        $this->assertNotContains($outsideHistoricalLead->id, $data['leads']->pluck('id')->all());
+
+        $response = $this->actingAs($this->supervisor)->get(route('sales-pocketbook.supervisor-monitoring.lead-export', ['period' => 'today']));
+        $path = $response->baseResponse->getFile()->getPathname();
+        $sheet = IOFactory::load($path)->getActiveSheet();
+        $values = collect($sheet->toArray())->flatten()->implode('|');
+
+        $this->assertStringNotContainsString($outsideHistoricalLead->customer_name, $values);
         @unlink($path);
     }
 

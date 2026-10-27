@@ -2,10 +2,12 @@
 
 namespace App\Policies;
 
+use App\Models\LeadMaster;
 use App\Models\SalesLead;
 use App\Models\User;
 use App\Services\CoordinatorLeadTeamService;
 use App\Services\CrmAuthorizationService;
+use App\Services\OrganizationScopeService;
 use App\Services\SalesTeamScopeService;
 use App\Services\WorkspaceAccessService;
 
@@ -23,9 +25,39 @@ class SalesLeadPolicy
 
     public function view(User $user, SalesLead $lead): bool
     {
-        if ($user->hasPrimaryRole('supervisor')
-            && ! app(SalesTeamScopeService::class)->for($user, includeHistorical: true)['sales']->contains('id', $lead->sales_user_id)) {
+        if (! $this->authorization->hasAnyScope($user, 'sales_pocketbook')) {
             return false;
+        }
+
+        if ($user->hasPrimaryRole('supervisor')) {
+            $organizationScope = app(OrganizationScopeService::class);
+            $workspaceAccess = app(WorkspaceAccessService::class);
+            $branchIds = array_values(array_intersect(
+                $organizationScope->branchIds($user, 'sales_pocketbook'),
+                $workspaceAccess->accessibleBranchIds($user),
+            ));
+            $projectIds = array_values(array_intersect(
+                $organizationScope->projectIds($user, 'sales_pocketbook'),
+                $workspaceAccess->accessibleProjectIds($user),
+            ));
+            if ($projectIds === []) {
+                $projectIds = LeadMaster::query()
+                    ->whereIn('branch_id', $branchIds)
+                    ->whereIn('id', $workspaceAccess->accessibleProjectIds($user))
+                    ->where('is_active', true)
+                    ->pluck('id')->map(fn ($id) => (int) $id)->all();
+            }
+            $team = app(SalesTeamScopeService::class)->forWorkspace($user, $branchIds, $projectIds);
+
+            return $team['sales']->contains('id', $lead->sales_user_id)
+                && in_array((int) $lead->branch_id, $branchIds, true)
+                && in_array((int) $lead->project_id, $projectIds, true)
+                && $workspaceAccess->canViewBranch($user, $lead->branch_id);
+        }
+
+        if ($user->hasPermission('sales_pocketbook.view_all')
+            && ! app(WorkspaceAccessService::class)->isBranchScopedOperator($user)) {
+            return true;
         }
 
         return $this->authorization->canViewSalesLead($user, $lead);

@@ -158,14 +158,19 @@ class SupervisorSalesMonitoringService
             $this->organizationScope->branchIds($actor, 'sales_pocketbook', 'view'),
             $this->workspaceAccess->accessibleBranchIds($actor),
         ));
-        $salesIds = $this->salesTeamScope->for($actor)['sales']->pluck('id');
+        $workspaceProjectIds = LeadMaster::query()
+            ->whereIn('branch_id', $branchIds)
+            ->whereIn('id', $this->workspaceAccess->accessibleProjectIds($actor))
+            ->where('is_active', true)
+            ->pluck('id')->map(fn ($id) => (int) $id)->all();
+        $salesIds = $this->salesTeamScope->forWorkspace($actor, $branchIds, $workspaceProjectIds, includeHistorical: true)['sales']->pluck('id');
         $today = today()->toDateString();
 
         return [
             'branch_ids' => $branchIds,
             'project_ids' => LeadMaster::query()
                 ->whereIn('branch_id', $branchIds)
-                ->whereIn('id', $this->workspaceAccess->accessibleProjectIds($actor))
+                ->whereIn('id', $workspaceProjectIds)
                 ->where('is_active', true)
                 ->whereHas('assignedUsers', fn ($query) => $query
                     ->whereIn('users.id', $salesIds)
@@ -178,7 +183,7 @@ class SupervisorSalesMonitoringService
 
     private function team(User $actor, array $scope, bool $includeHistorical = false): array
     {
-        $canonical = $this->salesTeamScope->displayedFor($actor, $scope['branch_ids'], $scope['project_ids'], includeHistorical: $includeHistorical);
+        $canonical = $this->salesTeamScope->forWorkspace($actor, $scope['branch_ids'], $scope['project_ids'], includeHistorical: $includeHistorical);
         $coordinators = $canonical['coordinators']->sortBy('name')->values();
         $salesIdsByCoordinator = $canonical['sales_ids_by_coordinator']->map(
             fn ($ids) => $ids->mapWithKeys(fn ($id) => [(int) $id => true])->all()

@@ -156,7 +156,7 @@ class SalesLeadBridgeService
     public function tombstone(SalesLead $lead, ?User $actor = null): SalesLeadSpreadsheetWriteResult
     {
         $lead->loadMissing('branch');
-        if (! config('services.google_sheets.sales_lead_sync_enabled')) {
+        if (! config('oasis.spreadsheet_sync_enabled') || ! config('services.google_sheets.sales_lead_sync_enabled')) {
             throw new \DomainException('Sinkronisasi Google Sheets Lead Sales sedang dinonaktifkan.');
         }
         if (! $lead->external_sync_id || ($lead->remote_target_branch_id === null && $lead->delivery_attempted_at === null && $lead->last_synced_at === null)) {

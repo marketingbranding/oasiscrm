@@ -72,6 +72,7 @@ class OperationalModuleAvailabilityTest extends TestCase
             'branch_id' => 1,
             'sheet_name' => 'data_konsumen',
         ])->assertNotFound();
+        $this->actingAs($user)->getJson(route('sales-pocketbook.lifecycle-reconciliations.index', ['branch_id' => 1]))->assertNotFound();
     }
 
     public function test_dormant_spreadsheet_sync_hides_the_entire_dana_talangan_sync_surface(): void
@@ -116,8 +117,10 @@ class OperationalModuleAvailabilityTest extends TestCase
 
         $this->assertSame(1, \DB::table('changelogs')->whereNull('version')->where('title', 'Gate rollout modul operasional OASIS')->count());
         $this->assertSame(1, \DB::table('changelogs')->whereNull('version')->where('title', 'Pengamanan gate rollout dan sinkronisasi OASIS')->count());
+        $this->assertSame(1, \DB::table('changelogs')->whereNull('version')->where('title', 'Penutupan bridge dan rekonsiliasi dorman')->count());
         $this->actingAs($user)->get(route('changelogs.index'))->assertOk()->assertSee('Gate rollout modul operasional OASIS');
         $this->actingAs($user)->get(route('changelogs.index'))->assertSee('Pengamanan gate rollout dan sinkronisasi OASIS');
+        $this->actingAs($user)->get(route('changelogs.index'))->assertSee('Penutupan bridge dan rekonsiliasi dorman');
     }
 
     private function user(string $role): User

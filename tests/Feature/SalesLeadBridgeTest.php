@@ -53,6 +53,59 @@ class SalesLeadBridgeTest extends TestCase
         $this->assertFalse($modes->isPushEnabled($branch->fresh()));
     }
 
+    public function test_spreadsheet_rollout_gate_blocks_sales_bridge_and_automatic_update_pushes(): void
+    {
+        config(['oasis.spreadsheet_sync_enabled' => false]);
+        [$branch, $project, $sales, $lead] = $this->context('Dormant');
+        $this->enable($branch, 'push_only');
+        $writer = Mockery::mock(SalesLeadSpreadsheetWriter::class);
+        $writer->shouldNotReceive('append');
+        $writer->shouldNotReceive('updateBySyncId');
+        $bridge = $this->bridge(Mockery::mock(GoogleSheetsApiService::class), $writer, $this->contract($branch, $project, $sales));
+
+        $this->assertSame('disabled', $bridge->push($lead)['status']);
+
+        $updated = (new SalesLeadService(
+            app(PhoneNormalizationService::class),
+            app(SalesLeadLifecycleService::class),
+            app(SalesLeadBridgeModeService::class),
+            $bridge,
+        ))->update($lead, [
+            'branch_id' => $branch->id,
+            'project_id' => $project->id,
+            'sales_user_id' => $sales->id,
+            'lead_date' => '2026-08-31',
+            'customer_name' => 'Dormant Update',
+            'phone' => '08123456789',
+            'source' => 'Referral',
+            'platform' => 'WhatsApp',
+            'campaign_name' => 'Follow Up',
+            'current_status' => 'no_response',
+        ], $sales);
+
+        $this->assertSame('pending_create', $updated->sync_status);
+        $this->assertNull($updated->fresh()->delivery_attempted_at);
+    }
+
+    public function test_spreadsheet_rollout_gate_blocks_sales_bridge_tombstones_before_writer(): void
+    {
+        config(['oasis.spreadsheet_sync_enabled' => false]);
+        [$branch, $project, $sales, $lead] = $this->context('DormantDelete');
+        $this->enable($branch, 'push_only');
+        $lead->update([
+            'external_sync_id' => (string) Str::uuid(),
+            'remote_target_branch_id' => $branch->id,
+            'last_synced_at' => now(),
+            'sync_status' => 'synced',
+        ]);
+        $writer = Mockery::mock(SalesLeadSpreadsheetWriter::class);
+        $writer->shouldNotReceive('tombstoneBySyncId');
+        $bridge = $this->bridge(Mockery::mock(GoogleSheetsApiService::class), $writer, $this->contract($branch, $project, $sales));
+
+        $this->expectException(\DomainException::class);
+        $bridge->tombstone($lead, $sales);
+    }
+
     public function test_push_appends_updates_is_idempotent_and_binds_target_on_failure(): void
     {
         [$branch, $project, $sales, $lead] = $this->context('Push');

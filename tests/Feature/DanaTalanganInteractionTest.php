@@ -64,6 +64,23 @@ class DanaTalanganInteractionTest extends TestCase
         ]);
     }
 
+    public function test_dormant_spreadsheet_sync_hides_and_blocks_dana_retry(): void
+    {
+        config(['oasis.spreadsheet_sync_enabled' => false]);
+        [$branch, $user] = $this->makeBranchAndUser();
+        $record = $this->makeRecord($branch, $user);
+        $record->update(['sync_status' => 'sync_failed']);
+
+        $this->actingAs($user)
+            ->get(route('dana-talangan.index'))
+            ->assertOk()
+            ->assertDontSee('Kirim Ulang');
+
+        $this->actingAs($user)
+            ->postJson(route('dana-talangan.retry', $record))
+            ->assertNotFound();
+    }
+
     public function test_import_rejects_unknown_status_without_mutation(): void
     {
         [$branch, $user] = $this->makeBranchAndUser();

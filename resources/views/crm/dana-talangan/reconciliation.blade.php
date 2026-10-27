@@ -33,7 +33,7 @@
                 <td>{{ $item->field_names ? implode(', ', $item->field_names) : '—' }}</td>
                 <td><x-crm.status-badge variant="warning">PERLU TINJAUAN</x-crm.status-badge></td>
                 <td class="crm-actions">
-                    @if($item->issue_code === 'remote_create_pending_review')
+                    @if(config('oasis.spreadsheet_sync_enabled') && $item->issue_code === 'remote_create_pending_review')
                     <form method="POST" action="{{ route('dana-talangan.reconciliation.approve', $item) }}">
                         @csrf
                         <button class="font-[Helvetica] text-xs font-bold underline text-[#0000ee]">Setujui Baris</button>

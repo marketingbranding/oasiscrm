@@ -260,7 +260,7 @@
                         <a href="{{ route('comments.thread', ['alias' => 'bridge-fund', 'id' => $r->id]) }}" class="font-[Helvetica] font-bold underline" style="font-size:11px;color:#0000ee;">Komentar ({{ $r->comments_count }})</a>
                         @endif
                         @if($canManage)
-                        @if(in_array($r->sync_status, ['pending_create', 'pending_update', 'sync_failed', 'failed']))
+                        @if(config('oasis.spreadsheet_sync_enabled') && in_array($r->sync_status, ['pending_create', 'pending_update', 'sync_failed', 'failed']))
                         <form method="POST" action="{{ route('dana-talangan.retry', $r) }}" class="inline">
                             @csrf
                             <button class="font-[Helvetica] font-bold underline" style="font-size:11px;color:#0000ee;">Kirim Ulang</button>

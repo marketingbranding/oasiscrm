@@ -375,6 +375,26 @@ class DanaTalanganBridgeTest extends TestCase
         $this->actingAs($superadmin)->get(route('dana-talangan.reconciliation'))->assertOk()->assertSee('remote conflict');
     }
 
+    public function test_dormant_spreadsheet_sync_blocks_dana_reconciliation_routes_and_controls(): void
+    {
+        config(['oasis.spreadsheet_sync_enabled' => false]);
+        [$record, $actor] = $this->record();
+        $item = DanaTalanganReconciliationItem::create([
+            'dana_talangan_id' => $record->id,
+            'spreadsheet_id' => 'spreadsheet-id',
+            'remote_row_number' => 2,
+            'issue_code' => 'remote_create_pending_review',
+            'identity_key' => hash('sha256', 'dormant-item'),
+            'status' => 'open',
+        ]);
+
+        $this->actingAs($actor)->get(route('dana-talangan.reconciliation'))->assertNotFound();
+        $this->actingAs($actor)->postJson(route('dana-talangan.reconciliation.approve', $item))->assertNotFound();
+
+        $source = file_get_contents(resource_path('views/crm/dana-talangan/reconciliation.blade.php'));
+        $this->assertStringContainsString("config('oasis.spreadsheet_sync_enabled')", $source);
+    }
+
     private function record(): array
     {
         $branch = Branch::create(['name' => 'Cabang Test', 'code' => 'TEST'.Str::random(4), 'is_active' => true]);

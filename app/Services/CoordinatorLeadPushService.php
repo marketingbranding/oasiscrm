@@ -28,6 +28,10 @@ class CoordinatorLeadPushService
             throw new \DomainException('Cabang tidak dapat diakses.');
         }
 
+        if (! config('oasis.spreadsheet_sync_enabled') || ! config('services.google_sheets.sales_lead_sync_enabled')) {
+            return ['processed' => 0, 'synced' => 0, 'failed' => 0];
+        }
+
         $salesIds = $this->teams->currentSales($coordinator)->pluck('id');
         $query = SalesLead::query()
             ->whereIn('sales_user_id', $salesIds)

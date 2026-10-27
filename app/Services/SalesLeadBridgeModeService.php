@@ -21,17 +21,21 @@ class SalesLeadBridgeModeService
 
     public function isPushEnabled(Branch $branch): bool
     {
-        return config('services.google_sheets.sales_lead_sync_enabled') && $this->mode($branch)->pushEnabled();
+        return config('oasis.spreadsheet_sync_enabled')
+            && config('services.google_sheets.sales_lead_sync_enabled')
+            && $this->mode($branch)->pushEnabled();
     }
 
     public function isPullEnabled(Branch $branch): bool
     {
-        return config('services.google_sheets.sales_lead_sync_enabled') && $this->mode($branch)->pullEnabled();
+        return config('oasis.spreadsheet_sync_enabled')
+            && config('services.google_sheets.sales_lead_sync_enabled')
+            && $this->mode($branch)->pullEnabled();
     }
 
     public function setMode(Branch $branch, SalesLeadBridgeMode $mode, ?User $actor = null): SalesLeadBridgeSetting
     {
-        if ($mode !== SalesLeadBridgeMode::Off && ! config('services.google_sheets.sales_lead_sync_enabled')) {
+        if ($mode !== SalesLeadBridgeMode::Off && (! config('oasis.spreadsheet_sync_enabled') || ! config('services.google_sheets.sales_lead_sync_enabled'))) {
             throw new \DomainException('Sinkronisasi Google Sheets Lead Sales sedang dinonaktifkan.');
         }
 

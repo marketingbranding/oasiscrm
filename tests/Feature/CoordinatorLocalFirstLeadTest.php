@@ -55,6 +55,26 @@ class CoordinatorLocalFirstLeadTest extends TestCase
         $this->assertSame($sales->id, $lead->sales_user_id);
     }
 
+    public function test_coordinator_push_stays_local_when_spreadsheet_rollout_is_dormant(): void
+    {
+        config([
+            'oasis.spreadsheet_sync_enabled' => false,
+            'services.google_sheets.sales_lead_sync_enabled' => true,
+        ]);
+        [$branch, $project, $sales, $coordinator] = $this->context();
+        $lead = $this->lead($sales, $project);
+        $this->enablePush($branch);
+        $this->mockIsolatedWriter();
+        $bridge = Mockery::mock(SalesLeadBridgeService::class);
+        $bridge->shouldNotReceive('push');
+        $this->app->instance(SalesLeadBridgeService::class, $bridge);
+
+        $result = app(CoordinatorLeadPushService::class)->push($coordinator);
+
+        $this->assertSame(['processed' => 0, 'synced' => 0, 'failed' => 0], $result);
+        $this->assertSame('pending_create', $lead->fresh()->sync_status);
+    }
+
     public function test_generic_create_defaults_status_and_rejects_system_status_without_history_mutation(): void
     {
         [$branch, $project, $sales, $coordinator] = $this->context();

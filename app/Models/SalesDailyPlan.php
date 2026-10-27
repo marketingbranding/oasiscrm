@@ -10,6 +10,7 @@ class SalesDailyPlan extends Model
 {
     protected $fillable = [
         'sales_user_id',
+        'branch_id',
         'work_date',
         'status',
         'submitted_at',

@@ -16,7 +16,7 @@ class ReviseSalesDailyPlanRequest extends FormRequest
     {
         return [
             'activities' => ['required', 'array', 'min:1'],
-            'activities.*.id' => ['nullable', 'integer'],
+            'activities.*.id' => ['nullable', 'integer', 'distinct'],
             'activities.*.sales_activity_category' => ['required', 'string', 'in:'.implode(',', ContentItem::SALES_ACTIVITY_CATEGORIES)],
             'activities.*.activity' => ['required', 'string', 'max:255'],
             'activities.*.location' => ['nullable', 'string', 'max:5000'],

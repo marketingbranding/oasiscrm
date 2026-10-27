@@ -6,6 +6,7 @@ use App\Models\ActivityLog;
 use App\Models\SalesCoordinatorSales;
 use App\Models\SalesDailyPlan;
 use App\Models\SalesDailyPlanItem;
+use App\Models\SalesDailyPlanItemEvidence;
 use App\Models\SalesDailyPlanItemReschedule;
 use App\Models\User;
 use Carbon\CarbonImmutable;
@@ -17,7 +18,10 @@ class SalesDailyPlanService
 {
     public const TOTAL_WORK_MINUTES = 420;
 
-    public function __construct(private readonly CollaborationNotificationService $notifications) {}
+    public function __construct(
+        private readonly CollaborationNotificationService $notifications,
+        private readonly SyncLockService $locks,
+    ) {}
 
     public function saveDraft(User $sales, CarbonImmutable $workDate, array $activities): SalesDailyPlan
     {
@@ -25,57 +29,66 @@ class SalesDailyPlanService
         $normalized = $this->normalizeActivities($activities);
         $this->assertTotalWithinLimit($normalized);
 
-        return DB::transaction(function () use ($sales, $workDate, $normalized): SalesDailyPlan {
-            $plan = SalesDailyPlan::query()
-                ->where('sales_user_id', $sales->id)
-                ->whereDate('work_date', $workDate->toDateString())
-                ->first() ?? new SalesDailyPlan([
-                    'sales_user_id' => $sales->id,
-                    'work_date' => $workDate->toDateString(),
-                ]);
-            if ($plan->exists && $plan->status === 'submitted') {
-                throw new AccessDeniedHttpException('Daily Plan yang sudah disubmit tidak dapat diubah oleh Sales.');
-            }
+        return $this->locks->runOrThrow($this->planLockKey($sales, $workDate), function () use ($sales, $workDate, $normalized): SalesDailyPlan {
+            return DB::transaction(function () use ($sales, $workDate, $normalized): SalesDailyPlan {
+                $plan = SalesDailyPlan::query()
+                    ->where('sales_user_id', $sales->id)
+                    ->whereDate('work_date', $workDate->toDateString())
+                    ->lockForUpdate()
+                    ->first() ?? new SalesDailyPlan([
+                        'sales_user_id' => $sales->id,
+                        'branch_id' => $sales->branch_id,
+                        'work_date' => $workDate->toDateString(),
+                    ]);
+                $this->assertBranchSnapshot($plan);
+                if ($plan->exists && $plan->status === 'submitted') {
+                    throw new AccessDeniedHttpException('Daily Plan yang sudah disubmit tidak dapat diubah oleh Sales.');
+                }
 
-            $preserveExisting = $plan->exists;
-            $plan->status = 'draft';
-            $plan->save();
-            $this->replaceItems($plan, $normalized, $workDate, $preserveExisting);
+                $preserveExisting = $plan->exists;
+                $plan->status = 'draft';
+                $plan->save();
+                $this->replaceItems($plan, $normalized, $workDate, $preserveExisting);
 
-            return $plan->fresh('items');
-        });
+                return $plan->fresh('items');
+            });
+        }, 120);
     }
 
     public function submit(User $sales, CarbonImmutable $workDate): SalesDailyPlan
     {
         $this->assertWorkDate($workDate);
 
-        return DB::transaction(function () use ($sales, $workDate): SalesDailyPlan {
-            $plan = SalesDailyPlan::query()
-                ->where('sales_user_id', $sales->id)
-                ->whereDate('work_date', $workDate->toDateString())
-                ->first();
-            if (! $plan) {
-                throw ValidationException::withMessages(['daily_plan' => 'Daily Plan belum dibuat.']);
-            }
-            if ($plan->status === 'submitted') {
+        return $this->locks->runOrThrow($this->planLockKey($sales, $workDate), function () use ($sales, $workDate): SalesDailyPlan {
+            return DB::transaction(function () use ($sales, $workDate): SalesDailyPlan {
+                $plan = SalesDailyPlan::query()
+                    ->where('sales_user_id', $sales->id)
+                    ->whereDate('work_date', $workDate->toDateString())
+                    ->lockForUpdate()
+                    ->first();
+                if (! $plan) {
+                    throw ValidationException::withMessages(['daily_plan' => 'Daily Plan belum dibuat.']);
+                }
+                $this->assertBranchSnapshot($plan);
+                if ($plan->status === 'submitted') {
+                    return $plan->fresh('items');
+                }
+                if ($plan->totalDurationMinutes() !== self::TOTAL_WORK_MINUTES) {
+                    throw ValidationException::withMessages([
+                        'duration_minutes' => 'Daily Plan hanya dapat disubmit jika total durasi tepat 420 menit.',
+                    ]);
+                }
+
+                $plan->forceFill([
+                    'status' => 'submitted',
+                    'submitted_at' => now(),
+                    'submitted_by' => $sales->id,
+                    'lock_version' => $plan->lock_version + 1,
+                ])->save();
+
                 return $plan->fresh('items');
-            }
-            if ($plan->totalDurationMinutes() !== self::TOTAL_WORK_MINUTES) {
-                throw ValidationException::withMessages([
-                    'duration_minutes' => 'Daily Plan hanya dapat disubmit jika total durasi tepat 420 menit.',
-                ]);
-            }
-
-            $plan->forceFill([
-                'status' => 'submitted',
-                'submitted_at' => now(),
-                'submitted_by' => $sales->id,
-                'lock_version' => $plan->lock_version + 1,
-            ])->save();
-
-            return $plan->fresh('items');
-        });
+            });
+        }, 120);
     }
 
     /**
@@ -171,6 +184,11 @@ class SalesDailyPlanService
             }
             $before = $this->snapshot($plan);
             $this->replaceItems($plan, $normalized, $workDate, true);
+            if ($plan->items()->sum('duration_minutes') !== self::TOTAL_WORK_MINUTES) {
+                throw ValidationException::withMessages([
+                    'duration_minutes' => 'Total durasi revisi harus tetap tepat 420 menit setelah disimpan.',
+                ]);
+            }
             $plan->forceFill([
                 'revised_at' => now(),
                 'revised_by' => $coordinator->id,
@@ -268,13 +286,29 @@ class SalesDailyPlanService
         }
     }
 
+    private function planLockKey(User $sales, CarbonImmutable $workDate): string
+    {
+        return 'sales-daily-plan:'.$sales->id.':'.$workDate->toDateString();
+    }
+
     private function normalizeActivities(array $activities): array
     {
         if ($activities === []) {
             throw ValidationException::withMessages(['activities' => 'Minimal satu aktivitas harus diisi.']);
         }
 
-        return collect($activities)->values()->map(function (array $activity, int $position): array {
+        $seenIds = [];
+
+        return collect($activities)->values()->map(function (array $activity, int $position) use (&$seenIds): array {
+            $id = isset($activity['id']) ? (int) $activity['id'] : null;
+            if ($id !== null && isset($seenIds[$id])) {
+                throw ValidationException::withMessages([
+                    "activities.{$position}.id" => 'Aktivitas yang sama tidak boleh dikirim lebih dari satu kali.',
+                ]);
+            }
+            if ($id !== null) {
+                $seenIds[$id] = true;
+            }
             $duration = filter_var($activity['duration_minutes'] ?? null, FILTER_VALIDATE_INT);
             if (! is_int($duration) || $duration < 1 || $duration > self::TOTAL_WORK_MINUTES) {
                 throw ValidationException::withMessages([
@@ -288,7 +322,7 @@ class SalesDailyPlanService
             }
 
             return [
-                'id' => isset($activity['id']) ? (int) $activity['id'] : null,
+                'id' => $id,
                 'sales_activity_category' => filled($activity['sales_activity_category'] ?? null)
                     ? trim((string) $activity['sales_activity_category'])
                     : null,
@@ -304,6 +338,13 @@ class SalesDailyPlanService
     {
         if (collect($activities)->sum('duration_minutes') > self::TOTAL_WORK_MINUTES) {
             throw ValidationException::withMessages(['duration_minutes' => 'Total durasi Daily Plan tidak boleh lebih dari 420 menit.']);
+        }
+    }
+
+    private function assertBranchSnapshot(SalesDailyPlan $plan): void
+    {
+        if ($plan->branch_id === null) {
+            throw ValidationException::withMessages(['branch_id' => 'Daily Plan belum memiliki snapshot cabang historis dan harus dipulihkan secara eksplisit.']);
         }
     }
 
@@ -340,9 +381,12 @@ class SalesDailyPlanService
                         'sales_user_id' => $sales->id,
                         'work_date' => $targetDate->toDateString(),
                     ],
-                    ['status' => 'draft'],
+                    ['branch_id' => $sales->branch_id, 'status' => 'draft'],
                 );
                 $plan = SalesDailyPlan::query()->lockForUpdate()->findOrFail($plan->id);
+            }
+            if ($plan->branch_id === null) {
+                throw ValidationException::withMessages(['branch_id' => 'Daily Plan lama belum memiliki snapshot cabang historis dan tidak dapat dipindahkan otomatis.']);
             }
 
             if ($plan->status === 'draft' && $plan->totalDurationMinutes() + $duration <= self::TOTAL_WORK_MINUTES) {
@@ -370,12 +414,13 @@ class SalesDailyPlanService
                 ->flatMap(fn (SalesDailyPlanItemReschedule $reschedule) => [$reschedule->source_item_id, $reschedule->target_item_id])
                 ->filter()
                 ->filter(fn (int $id): bool => $existingIds->contains($id))
+                ->merge(SalesDailyPlanItemEvidence::query()->whereIn('sales_daily_plan_item_id', $existingIds->all())->pluck('sales_daily_plan_item_id'))
                 ->unique()
                 ->all();
             $removedProtectedIds = collect($protectedIds)->diff($requestedIds);
             if ($removedProtectedIds->isNotEmpty()) {
                 throw ValidationException::withMessages([
-                    'activities' => 'Aktivitas yang memiliki riwayat penjadwalan ulang tidak dapat dihapus dari Daily Plan.',
+                    'activities' => 'Aktivitas yang memiliki riwayat penjadwalan ulang atau bukti foto tidak dapat dihapus dari Daily Plan.',
                 ]);
             }
             $existing->except($requestedIds)->each->delete();

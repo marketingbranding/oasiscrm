@@ -342,9 +342,11 @@ Route::middleware(['auth', 'active', 'verified', 'password.changed', 'operationa
         Route::patch('promos/{promo}/toggle', [PromoController::class, 'toggle'])->middleware('not.impersonating')->name('promos.toggle');
     });
 
-    Route::post('lead-sources/bulk-delete', [LeadSourceController::class, 'bulkDestroy'])->name('lead-sources.bulk-destroy');
-    Route::post('lead-sources/{leadSource}/toggle-active', [LeadSourceController::class, 'toggleActive'])->name('lead-sources.toggle-active');
-    Route::resource('lead-sources', LeadSourceController::class);
+    Route::middleware('permission:lead_sources.manage')->group(function () {
+        Route::post('lead-sources/bulk-delete', [LeadSourceController::class, 'bulkDestroy'])->name('lead-sources.bulk-destroy');
+        Route::post('lead-sources/{leadSource}/toggle-active', [LeadSourceController::class, 'toggleActive'])->name('lead-sources.toggle-active');
+        Route::resource('lead-sources', LeadSourceController::class);
+    });
 
     Route::bind('dana_talangan', fn ($v) => DanaTalangan::findOrFail($v));
     Route::middleware('module.maintenance:dana_talangan')->group(function () {
@@ -371,9 +373,9 @@ Route::middleware(['auth', 'active', 'verified', 'password.changed', 'operationa
         Route::post('feedback-reports', [FeedbackReportController::class, 'store'])->middleware('throttle:10,1')->name('feedback-reports.store');
         Route::get('feedback-reports/history', [FeedbackReportController::class, 'history'])->name('feedback-reports.history');
         Route::get('feedback-reports/{feedbackReport}/screenshot', [FeedbackReportController::class, 'screenshot'])->name('feedback-reports.screenshot');
-        Route::get('feedback-reports', [FeedbackReportController::class, 'index'])->name('feedback-reports.index');
-        Route::get('feedback-reports/{feedbackReport}', [FeedbackReportController::class, 'show'])->name('feedback-reports.show');
-        Route::patch('feedback-reports/{feedbackReport}', [FeedbackReportController::class, 'review'])->name('feedback-reports.review');
+        Route::get('feedback-reports', [FeedbackReportController::class, 'index'])->middleware('permission:feedback_reports.review')->name('feedback-reports.index');
+        Route::get('feedback-reports/{feedbackReport}', [FeedbackReportController::class, 'show'])->middleware('permission:feedback_reports.review')->name('feedback-reports.show');
+        Route::patch('feedback-reports/{feedbackReport}', [FeedbackReportController::class, 'review'])->middleware('permission:feedback_reports.review')->name('feedback-reports.review');
     });
 
     Route::middleware('permission:expenses.manage_categories')->group(function () {

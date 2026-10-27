@@ -15,11 +15,14 @@ class FeedbackReportPolicy
 
     public function review(User $user, FeedbackReport $report): bool
     {
+        if (! $user->hasPermission('feedback_reports.review')) {
+            return false;
+        }
+
         if ($user->isSuperadmin()) {
             return true;
         }
 
-        return $user->hasRole('pusat')
-            && app(WorkspaceAccessService::class)->canViewBranch($user, (int) $report->branch_id);
+        return app(WorkspaceAccessService::class)->canViewBranch($user, (int) $report->branch_id);
     }
 }

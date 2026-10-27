@@ -14,6 +14,7 @@ class LeadSourceController extends Controller
     use RedirectsShowToEdit;
 
     protected string $showEditRoute = 'lead-sources.edit';
+
     protected string $showEditParam = 'lead_source';
 
     private function resolveRedirect(Request $request): string
@@ -23,17 +24,22 @@ class LeadSourceController extends Controller
 
     public function index()
     {
+        $this->authorizeManagement();
         $sources = LeadSource::latest()->get();
+
         return view('crm.lead-sources.index', compact('sources'));
     }
 
     public function create()
     {
+        $this->authorizeManagement();
+
         return view('crm.lead-sources.create');
     }
 
     public function store(Request $request)
     {
+        $this->authorizeManagement();
         $data = $request->validate([
             'name' => 'required|string|max:255|unique:lead_sources,name',
             'is_active' => 'boolean',
@@ -52,11 +58,14 @@ class LeadSourceController extends Controller
 
     public function edit(LeadSource $leadSource)
     {
+        $this->authorizeManagement();
+
         return view('crm.lead-sources.edit', compact('leadSource'));
     }
 
     public function update(Request $request, LeadSource $leadSource)
     {
+        $this->authorizeManagement();
         $data = $request->validate([
             'name' => ['required', 'string', 'max:255', Rule::unique('lead_sources', 'name')->ignore($leadSource->id)],
             'is_active' => 'boolean',
@@ -71,6 +80,7 @@ class LeadSourceController extends Controller
 
     public function destroy(Request $request, LeadSource $leadSource)
     {
+        $this->authorizeManagement();
         $leadSource->delete();
 
         if ($request->wantsJson()) {
@@ -83,6 +93,7 @@ class LeadSourceController extends Controller
 
     public function bulkDestroy(Request $request)
     {
+        $this->authorizeManagement();
         $ids = array_filter(explode(',', $request->input('selected_ids', '')));
         if (empty($ids)) {
             return back()->with('error', 'Tidak ada data yang dipilih.');
@@ -96,11 +107,17 @@ class LeadSourceController extends Controller
 
     public function toggleActive(Request $request, LeadSource $leadSource)
     {
+        $this->authorizeManagement();
         $leadSource->update([
-            'is_active' => !$leadSource->is_active,
+            'is_active' => ! $leadSource->is_active,
         ]);
 
         return redirect($this->resolveRedirect($request))
             ->with('success', 'Status sumber lead berhasil diperbarui.');
+    }
+
+    private function authorizeManagement(): void
+    {
+        abort_unless(Auth::user()?->hasPermission('lead_sources.manage'), 403);
     }
 }

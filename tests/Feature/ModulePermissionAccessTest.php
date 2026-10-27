@@ -36,6 +36,18 @@ class ModulePermissionAccessTest extends TestCase
             'expenses.cancel' => 'expenses.cancel',
             'expenses.export' => 'expenses.export',
             'expense-categories.index' => 'expenses.manage_categories',
+            'lead-sources.index' => 'lead_sources.manage',
+            'lead-sources.create' => 'lead_sources.manage',
+            'lead-sources.store' => 'lead_sources.manage',
+            'lead-sources.show' => 'lead_sources.manage',
+            'lead-sources.edit' => 'lead_sources.manage',
+            'lead-sources.update' => 'lead_sources.manage',
+            'lead-sources.destroy' => 'lead_sources.manage',
+            'lead-sources.bulk-destroy' => 'lead_sources.manage',
+            'lead-sources.toggle-active' => 'lead_sources.manage',
+            'feedback-reports.index' => 'feedback_reports.review',
+            'feedback-reports.show' => 'feedback_reports.review',
+            'feedback-reports.review' => 'feedback_reports.review',
             'branches.index' => 'branches.manage',
             'projects.index' => 'projects.manage',
             'admin.system-health' => 'system_health.view',
@@ -77,18 +89,16 @@ class ModulePermissionAccessTest extends TestCase
         $this->actingAs($sales)->get(route('expenses.index'))->assertForbidden();
     }
 
-    public function test_branch_manager_expenses_are_branch_scoped_and_categories_stay_forbidden(): void
+    public function test_branch_manager_expenses_and_categories_stay_forbidden(): void
     {
         $branch = $this->expenseBranch('Solo');
         $otherBranch = $this->expenseBranch('Pati');
         $category = $this->expenseCategory();
         $branchManager = $this->expenseUser('branch_manager', $branch);
         $otherCreator = $this->expenseUser('pusat', $otherBranch);
-        $visible = $this->expense(['branch' => $branch, 'category' => $category, 'creator' => $branchManager, 'description' => 'Biaya cabang sendiri']);
         $hidden = $this->expense(['branch' => $otherBranch, 'category' => $category, 'creator' => $otherCreator, 'description' => 'Biaya cabang lain']);
 
-        $response = $this->actingAs($branchManager)->get(route('expenses.index', ['period_month' => $visible->expense_date->format('Y-m')]))->assertOk();
-        $response->assertSee('Biaya cabang sendiri')->assertDontSee('Biaya cabang lain');
+        $this->actingAs($branchManager)->get(route('expenses.index'))->assertForbidden();
         $this->actingAs($branchManager)->get(route('expenses.show', $hidden))->assertForbidden();
         $this->actingAs($branchManager)->get(route('expense-categories.index'))->assertForbidden();
     }

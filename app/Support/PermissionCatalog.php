@@ -67,6 +67,8 @@ class PermissionCatalog
             ['name' => 'Menetapkan cabang pengguna', 'slug' => 'users.assign_branches', 'description' => 'Menetapkan cabang utama dan tambahan pengguna.', 'group_name' => 'Pengguna'],
             ['name' => 'Menetapkan proyek pengguna', 'slug' => 'users.assign_projects', 'description' => 'Menetapkan proyek utama dan tambahan pengguna.', 'group_name' => 'Pengguna'],
             ['name' => 'Menetapkan atasan pengguna', 'slug' => 'users.assign_supervisor', 'description' => 'Menetapkan atasan langsung pengguna.', 'group_name' => 'Pengguna'],
+            ['name' => 'Mengelola sumber lead', 'slug' => 'lead_sources.manage', 'description' => 'Mengelola daftar sumber lead yang tersedia di OASIS.', 'group_name' => 'Administrasi Sistem'],
+            ['name' => 'Meninjau laporan feedback', 'slug' => 'feedback_reports.review', 'description' => 'Meninjau dan memperbarui laporan feedback pengguna sesuai lingkup cabang.', 'group_name' => 'Administrasi Sistem'],
             ['name' => 'Mengekspor Buku Saku Sales', 'slug' => 'sales_pocketbook.export', 'description' => 'Mengekspor data Buku Saku Sales sesuai lingkup akses.', 'group_name' => 'Buku Saku Sales'],
             ['name' => 'Menyinkronkan lead tim Buku Saku Sales', 'slug' => 'sales_pocketbook.sync', 'description' => 'Mendorong lead tim Buku Saku Sales ke spreadsheet cabang sesuai lingkup akses.', 'group_name' => 'Buku Saku Sales'],
             ['name' => 'Merekonsiliasi siklus lead Buku Saku Sales', 'slug' => 'sales_pocketbook.reconcile', 'description' => 'Melihat masalah rekonsiliasi siklus lead sesuai lingkup akses.', 'group_name' => 'Buku Saku Sales'],
@@ -162,6 +164,8 @@ class PermissionCatalog
         $salesModules = ['sales_pocketbook', 'work_planner'];
         $operations = ['database', 'consumer_progress', 'bridge_fund', 'expenses'];
         $allModules = [...$salesModules, ...$operations];
+        $branchMonitoringModules = ['sales_pocketbook'];
+        $branchMutableModules = ['work_planner', 'database', 'consumer_progress', 'bridge_fund'];
         $comments = ['comments.view', 'comments.create', 'comments.reply', 'comments.update_own', 'comments.delete_own', 'comments.mention'];
 
         return [
@@ -210,10 +214,9 @@ class PermissionCatalog
                 'sales_pocketbook.sync', 'sales_pocketbook.reconcile',
                 'work_planner.export', 'database.view', 'database.edit', 'database.sync',
                 'consumer_progress.view', 'consumer_progress.sync', 'consumer_progress.reveal_nik', 'bridge_fund.view', 'bridge_fund.manage', 'bridge_fund.export',
-                'expenses.view', 'expenses.create', 'expenses.update', 'expenses.cancel', 'expenses.export',
-                'sales_targets.view_branch', 'sales_daily_plans.view_branch',
                 'organization.view', 'organization.move_user', 'organization.view_history',
-                ...$scoped($allModules, ['branch'], ['view', 'manage', 'export']),
+                ...$scoped($branchMonitoringModules, ['branch'], ['view', 'export']),
+                ...$scoped($branchMutableModules, ['branch'], ['view', 'manage', 'export']),
                 ...$scoped(['database', 'consumer_progress', 'bridge_fund'], ['branch'], ['sync']),
                 ...$comments,
             ],
@@ -248,7 +251,8 @@ class PermissionCatalog
                 'sales_pocketbook.sync', 'sales_pocketbook.reconcile',
                 'database.view', 'database.edit', 'database.sync', 'consumer_progress.view',
                 'consumer_progress.sync', 'bridge_fund.view', 'bridge_fund.manage', 'bridge_fund.export',
-                ...$scoped($allModules, ['branch'], ['view', 'manage', 'export']),
+                ...$scoped($branchMonitoringModules, ['branch'], ['view', 'export']),
+                ...$scoped($branchMutableModules, ['branch'], ['view', 'manage', 'export']),
                 ...$scoped(['database', 'consumer_progress', 'bridge_fund'], ['branch'], ['sync']),
                 ...$comments,
             ],

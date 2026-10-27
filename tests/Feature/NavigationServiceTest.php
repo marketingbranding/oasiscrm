@@ -35,11 +35,11 @@ class NavigationServiceTest extends TestCase
 
         $this->assertSame(['Dashboard', 'Work Planner', 'Buku Saku Sales', 'Daily Planning', 'Changelog'], $this->labels($coordinator));
         $this->assertContains('Database', $this->labels($branchManager));
-        $this->assertContains('Pengeluaran', $this->labels($branchManager));
+        $this->assertNotContains('Pengeluaran', $this->labels($branchManager));
         $this->assertContains('User', $this->labels($branchManager));
         $this->assertNotContains('Cabang', $this->labels($branchManager));
         $this->assertNotContains('Proyek', $this->labels($branchManager));
-        $this->assertContains('Review Laporan', $this->labels($pusat));
+        $this->assertNotContains('Review Laporan', $this->labels($pusat));
         $this->assertNotContains('System Health', $this->labels($pusat));
     }
 

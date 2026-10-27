@@ -99,7 +99,7 @@ class FeedbackReportTest extends TestCase
         $this->assertSame('reviewing', $report->fresh()->status);
     }
 
-    public function test_superadmin_can_review_branch_report_and_pusat_scope_is_unchanged(): void
+    public function test_superadmin_can_review_branch_report_but_supplemental_pusat_cannot_review(): void
     {
         [$branch, $reporter] = $this->branchAndUser();
         $otherBranch = Branch::create(['name' => 'Pati', 'code' => 'PTI', 'is_active' => true]);
@@ -108,7 +108,7 @@ class FeedbackReportTest extends TestCase
         $pusat = User::factory()->create(['role_id' => $pusatRole->id, 'branch_id' => $otherBranch->id, 'password_changed_at' => now()]);
 
         $this->actingAs($this->superadmin())->get(route('feedback-reports.show', $report))->assertOk();
-        $this->actingAs($pusat)->get(route('feedback-reports.show', $report))->assertOk();
+        $this->actingAs($pusat)->get(route('feedback-reports.show', $report))->assertForbidden();
     }
 
     public function test_status_and_assignment_changes_create_private_notifications(): void

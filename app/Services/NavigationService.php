@@ -66,7 +66,7 @@ class NavigationService
                     : null,
             ]),
             $this->group('reports', 'Laporan', 'reports', [
-                ! $isSales && ($user->isSuperadmin() || $user->hasPrimaryRole('pusat'))
+                ! $isSales && $user->hasPermission('feedback_reports.review')
                     ? $this->item('Review Laporan', 'feedback-reports.index', 'report', 'reports', ['feedback-reports.index', 'feedback-reports.show', 'feedback-reports.review'], $routeName, 'feedback_reports', $moduleMaintenance)
                     : null,
                 ($user->hasPrimaryRole('admin') || $user->isSuperadmin())

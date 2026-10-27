@@ -223,6 +223,6 @@ class FeedbackReportController extends Controller
 
     private function ensureReviewer(User $user): void
     {
-        abort_unless($user->isSuperadmin() || $user->hasRole('pusat'), 403);
+        abort_unless($user->hasPermission('feedback_reports.review'), 403);
     }
 }

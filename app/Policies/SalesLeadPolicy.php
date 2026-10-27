@@ -50,9 +50,7 @@ class SalesLeadPolicy
             return false;
         }
 
-        if ($user->hasPrimaryRole(['admin', 'branch_manager'])
-            && app(WorkspaceAccessService::class)->canEditBranch($user, $lead->branch_id)
-            && app(WorkspaceAccessService::class)->canViewHistoricalBranch($lead->sales, $lead->branch_id)) {
+        if ($this->canEditHistoricalOwnedLead($user, $lead)) {
             return true;
         }
 
@@ -73,17 +71,21 @@ class SalesLeadPolicy
 
     public function updateStage(User $user, SalesLead $lead): bool
     {
-        return $this->update($user, $lead);
+        return ! $this->canEditHistoricalOwnedLead($user, $lead)
+            && $this->update($user, $lead);
     }
 
     public function reverseStage(User $user, SalesLead $lead): bool
     {
-        return ! $user->isSales() && $this->update($user, $lead);
+        return ! $user->isSales()
+            && ! $this->canEditHistoricalOwnedLead($user, $lead)
+            && $this->update($user, $lead);
     }
 
     public function updateLifecycleStatus(User $user, SalesLead $lead): bool
     {
-        return $this->update($user, $lead);
+        return ! $this->canEditHistoricalOwnedLead($user, $lead)
+            && $this->update($user, $lead);
     }
 
     public function viewSiteVisit(User $user, SalesLead $lead): bool
@@ -95,6 +97,10 @@ class SalesLeadPolicy
 
     public function recordSiteVisit(User $user, SalesLead $lead): bool
     {
+        if ($this->canEditHistoricalOwnedLead($user, $lead)) {
+            return false;
+        }
+
         if ($user->isSales()) {
             return $this->authorization->can($user, 'sales_pocketbook.manage_own')
                 && (int) $lead->sales_user_id === (int) $user->id
@@ -112,6 +118,10 @@ class SalesLeadPolicy
 
     public function markUtjDirect(User $user, SalesLead $lead): bool
     {
+        if ($this->canEditHistoricalOwnedLead($user, $lead)) {
+            return false;
+        }
+
         if ($user->isSales()) {
             return $this->authorization->can($user, 'sales_pocketbook.manage_own')
                 && (int) $lead->sales_user_id === (int) $user->id
@@ -129,21 +139,33 @@ class SalesLeadPolicy
 
     public function convertToConsumer(User $user, SalesLead $lead): bool
     {
-        return $this->update($user, $lead);
+        return ! $this->canEditHistoricalOwnedLead($user, $lead)
+            && $this->update($user, $lead);
     }
 
     public function submitToSlik(User $user, SalesLead $lead): bool
     {
-        return $this->update($user, $lead);
+        return ! $this->canEditHistoricalOwnedLead($user, $lead)
+            && $this->update($user, $lead);
     }
 
     public function markSlikRejected(User $user, SalesLead $lead): bool
     {
-        return $this->update($user, $lead);
+        return ! $this->canEditHistoricalOwnedLead($user, $lead)
+            && $this->update($user, $lead);
     }
 
     public function convertToFreelance(User $user, SalesLead $lead): bool
     {
-        return $this->update($user, $lead);
+        return ! $this->canEditHistoricalOwnedLead($user, $lead)
+            && $this->update($user, $lead);
+    }
+
+    private function canEditHistoricalOwnedLead(User $user, SalesLead $lead): bool
+    {
+        return $user->hasPrimaryRole(['admin', 'branch_manager'])
+            && app(WorkspaceAccessService::class)->canEditBranch($user, $lead->branch_id)
+            && $lead->sales !== null
+            && app(WorkspaceAccessService::class)->canViewHistoricalBranch($lead->sales, $lead->branch_id);
     }
 }

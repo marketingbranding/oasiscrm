@@ -66,6 +66,45 @@ class BranchTransferHistoricalAccessTest extends TestCase
         $this->assertDatabaseHas('activity_log', ['subject_id' => $sales->id, 'event' => 'branch_assignments_changed']);
     }
 
+    public function test_transfer_preserves_an_omitted_secondary_membership_as_historical(): void
+    {
+        $oldBranch = $this->branch('OLD');
+        $secondaryBranch = $this->branch('SEC');
+        $newBranch = $this->branch('NEW');
+        $sales = $this->user('sales', $oldBranch);
+        $superadmin = $this->user('superadmin');
+        $oldProject = LeadMaster::create(['branch_id' => $oldBranch->id, 'project_name' => 'Proyek Lama', 'is_active' => true]);
+        $newProject = LeadMaster::create(['branch_id' => $newBranch->id, 'project_name' => 'Proyek Baru', 'is_active' => true]);
+        $sales->assignedProjects()->attach($oldProject->id, ['is_primary' => true, 'is_active' => true]);
+        $sales->branches()->attach($secondaryBranch->id, [
+            'is_current' => true,
+            'can_view' => true,
+            'can_edit' => true,
+            'can_sync' => true,
+            'can_manage_members' => true,
+        ]);
+
+        $this->actingAs($superadmin)->put(route('admin-users.update', $sales), [
+            'name' => $sales->name,
+            'email' => $sales->email,
+            'role_id' => $sales->role_id,
+            'branch_id' => $newBranch->id,
+            'branch_ids' => [$newBranch->id],
+            'primary_project_id' => $newProject->id,
+            'assigned_project_ids' => [$newProject->id],
+            'expected_updated_at' => app(OptimisticLockService::class)->token($sales),
+        ])->assertRedirect()->assertSessionHasNoErrors();
+
+        $membership = DB::table('branch_user')->where('user_id', $sales->id)->where('branch_id', $secondaryBranch->id)->first();
+
+        $this->assertNotNull($membership);
+        $this->assertFalse((bool) $membership->is_current);
+        $this->assertTrue((bool) $membership->can_view);
+        $this->assertFalse((bool) $membership->can_edit);
+        $this->assertFalse((bool) $membership->can_sync);
+        $this->assertFalse((bool) $membership->can_manage_members);
+    }
+
     public function test_non_superadmin_cannot_transfer_a_user_between_branches(): void
     {
         $oldBranch = $this->branch('OLD');
@@ -114,6 +153,26 @@ class BranchTransferHistoricalAccessTest extends TestCase
         $this->assertSame($sales->id, $lead->fresh()->sales_user_id);
     }
 
+    public function test_original_branch_admin_and_branch_manager_cannot_run_historical_lifecycle_mutations(): void
+    {
+        [, $oldBranch, , $lead] = $this->transferredSalesLead();
+        $policy = app(SalesLeadPolicy::class);
+
+        foreach (['admin', 'branch_manager'] as $role) {
+            $operator = $this->user($role, $oldBranch);
+
+            $this->assertFalse($policy->updateStage($operator, $lead), $role.' updateStage');
+            $this->assertFalse($policy->reverseStage($operator, $lead), $role.' reverseStage');
+            $this->assertFalse($policy->updateLifecycleStatus($operator, $lead), $role.' updateLifecycleStatus');
+            $this->assertFalse($policy->recordSiteVisit($operator, $lead), $role.' recordSiteVisit');
+            $this->assertFalse($policy->markUtjDirect($operator, $lead), $role.' markUtjDirect');
+            $this->assertFalse($policy->convertToConsumer($operator, $lead), $role.' convertToConsumer');
+            $this->assertFalse($policy->submitToSlik($operator, $lead), $role.' submitToSlik');
+            $this->assertFalse($policy->markSlikRejected($operator, $lead), $role.' markSlikRejected');
+            $this->assertFalse($policy->convertToFreelance($operator, $lead), $role.' convertToFreelance');
+        }
+    }
+
     public function test_historical_content_owned_by_transferred_user_is_view_only(): void
     {
         $oldBranch = $this->branch('OLD');
@@ -145,6 +204,73 @@ class BranchTransferHistoricalAccessTest extends TestCase
 
         $this->assertTrue($policy->view($owner->fresh(), $item));
         $this->assertFalse($policy->update($owner->fresh(), $item));
+    }
+
+    public function test_historical_team_content_is_not_visible_when_transferred_user_does_not_own_it(): void
+    {
+        $oldBranch = $this->branch('OLD');
+        $newBranch = $this->branch('NEW');
+        $owner = $this->user('staff', $oldBranch);
+        $transferred = $this->user('staff', $oldBranch);
+        $superadmin = $this->user('superadmin');
+        $item = ContentItem::create([
+            'branch_id' => $oldBranch->id,
+            'item_type' => 'task',
+            'visibility' => 'team',
+            'title' => 'Konten tim historis',
+            'scheduled_date' => today(),
+            'deadline_date' => today(),
+            'priority' => 'medium',
+            'status' => 'todo',
+            'created_by' => $owner->id,
+        ]);
+
+        $this->actingAs($superadmin)->put(route('admin-users.update', $transferred), [
+            'name' => $transferred->name,
+            'email' => $transferred->email,
+            'role_id' => $transferred->role_id,
+            'branch_id' => $newBranch->id,
+            'branch_ids' => [$newBranch->id],
+            'expected_updated_at' => app(OptimisticLockService::class)->token($transferred),
+        ])->assertRedirect();
+
+        $this->assertFalse(app(ContentItemPolicy::class)->view($transferred->fresh(), $item));
+        $this->assertSame(0, ContentItem::query()->visibleTo($transferred->fresh())->whereKey($item)->count());
+    }
+
+    public function test_manage_user_scope_excludes_users_with_only_historical_branch_memberships(): void
+    {
+        $oldBranch = $this->branch('OLD');
+        $newBranch = $this->branch('NEW');
+        $transferred = $this->user('staff', $oldBranch);
+        $manager = $this->user('branch_manager', $oldBranch);
+        $superadmin = $this->user('superadmin');
+
+        $this->actingAs($superadmin)->put(route('admin-users.update', $transferred), [
+            'name' => $transferred->name,
+            'email' => $transferred->email,
+            'role_id' => $transferred->role_id,
+            'branch_id' => $newBranch->id,
+            'branch_ids' => [$newBranch->id],
+            'expected_updated_at' => app(OptimisticLockService::class)->token($transferred),
+        ])->assertRedirect();
+
+        $visibleIds = app(OrganizationScopeService::class)->visibleUserIds($manager, 'work_planner', 'manage');
+
+        $this->assertNotContains($transferred->id, $visibleIds);
+    }
+
+    public function test_current_state_migration_preserves_existing_membership_count_and_current_flags(): void
+    {
+        $first = $this->branch('ONE');
+        $second = $this->branch('TWO');
+        $user = $this->user('staff', $first);
+        $user->branches()->attach($second->id, ['can_view' => true, 'can_edit' => true]);
+
+        $memberships = DB::table('branch_user')->where('user_id', $user->id)->orderBy('branch_id')->get();
+
+        $this->assertCount(2, $memberships);
+        $this->assertTrue($memberships->every(fn (object $membership): bool => (bool) $membership->is_current));
     }
 
     public function test_returning_to_historical_branch_does_not_restore_sales_edit_access(): void

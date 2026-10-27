@@ -81,13 +81,13 @@ class ContentItemPolicy
         }
 
         $scope = app(OrganizationScopeService::class);
-        $related = $item->visibility === 'team'
-            || $item->created_by === $user->id
+        $owned = $item->created_by === $user->id
             || $item->assignees()->where('users.id', $user->id)->exists();
-        $historicalView = $action === 'view'
-            && $related
-            && app(WorkspaceAccessService::class)->canViewHistoricalBranch($user, (int) $item->branch_id);
-        if (! $related || (! $historicalView && ! in_array((int) $item->branch_id, $scope->branchIds($user, 'work_planner', $action), true))) {
+        $related = $owned || $item->visibility === 'team';
+        $historicalBranch = app(WorkspaceAccessService::class)->canViewHistoricalBranch($user, (int) $item->branch_id);
+        $historicalView = $action === 'view' && $owned && $historicalBranch;
+        if (! $related || ($historicalBranch && ! $historicalView)
+            || (! $historicalBranch && ! in_array((int) $item->branch_id, $scope->branchIds($user, 'work_planner', $action), true))) {
             return false;
         }
         if (! $scope->requiresProjectScope($user, 'work_planner', $action)) {

@@ -301,6 +301,7 @@ class OrganizationScopeService
         $membershipIds = DB::table('branch_user')
             ->join('users', 'users.id', '=', 'branch_user.user_id')
             ->whereIn('branch_user.branch_id', $branchIds)
+            ->where('branch_user.is_current', true)
             ->where('branch_user.can_view', true)
             ->where('users.is_active', true)
             ->pluck('branch_user.user_id');

@@ -55,7 +55,7 @@ class BranchAssignmentService
             foreach ($existing as $branchId => $values) {
                 $branch = Branch::find($branchId);
                 $preserve = ! ($branch?->is_active ?? true) || ! $values['is_current'];
-                if ($isTransfer && (int) $branchId === (int) $previousPrimaryBranchId) {
+                if ($isTransfer && ! array_key_exists($branchId, $next)) {
                     $preserve = true;
                     $values = $this->historicalPivot($values);
                 }

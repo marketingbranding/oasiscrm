@@ -5,6 +5,7 @@ namespace App\Models;
 use App\Models\Traits\LogsActivity;
 use App\Services\OrganizationScopeService;
 use App\Services\ProjectIdentityResolver;
+use App\Services\WorkspaceAccessService;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -151,11 +152,23 @@ class ContentItem extends Model
         }
 
         $scope = app(OrganizationScopeService::class);
+        $historicalBranchIds = app(WorkspaceAccessService::class)->historicalBranchIds($user);
         $query->whereIn('branch_id', $scope->branchIds($user, 'work_planner', $action))
-            ->where(function (Builder $query) use ($user) {
-                $query->where('visibility', 'team')
-                    ->orWhere('created_by', $user->id)
-                    ->orWhereHas('assignees', fn (Builder $assigned) => $assigned->where('users.id', $user->id));
+            ->where(function (Builder $query) use ($user, $historicalBranchIds) {
+                $query->where(function (Builder $historical) use ($user, $historicalBranchIds) {
+                    $historical->whereIn('branch_id', $historicalBranchIds)
+                        ->where(function (Builder $owned) use ($user) {
+                            $owned->where('created_by', $user->id)
+                                ->orWhereHas('assignees', fn (Builder $assigned) => $assigned->where('users.id', $user->id));
+                        });
+                })->orWhere(function (Builder $current) use ($user, $historicalBranchIds) {
+                    $current->whereNotIn('branch_id', $historicalBranchIds)
+                        ->where(function (Builder $related) use ($user) {
+                            $related->where('visibility', 'team')
+                                ->orWhere('created_by', $user->id)
+                                ->orWhereHas('assignees', fn (Builder $assigned) => $assigned->where('users.id', $user->id));
+                        });
+                });
             });
 
         if ($scope->requiresProjectScope($user, 'work_planner', $action)) {

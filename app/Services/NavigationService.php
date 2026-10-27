@@ -20,7 +20,7 @@ class NavigationService
                 ! $isSales ? $this->item('Dashboard', 'dashboard', 'dashboard', 'dashboard', ['dashboard'], $routeName, null, $moduleMaintenance) : null,
             ], direct: true),
             $this->group('database', 'Database', 'database', [
-                ! $isSales && $user->hasPermission('database.view') && $user->hasScopedPermission('database')
+                ! $isSales && config('oasis.database_operational_enabled') && $user->hasPermission('database.view') && $user->hasScopedPermission('database')
                     ? $this->item('Database', 'database.index', 'database', 'database', ['database.*'], $routeName, 'database', $moduleMaintenance)
                     : null,
             ], direct: true),
@@ -39,16 +39,16 @@ class NavigationService
                     || $user->hasPermission('sales_daily_plans.view_all')
                     ? $this->item('Daily Planning', 'sales-daily-plans.index', 'calendar', 'sales', ['sales-daily-plans.*'], $routeName, null, $moduleMaintenance)
                     : null,
-                ! $isSales && $user->hasPermission('consumer_progress.view') && $user->hasScopedPermission('consumer_progress')
+                ! $isSales && config('oasis.consumer_progress_operational_enabled') && $user->hasPermission('consumer_progress.view') && $user->hasScopedPermission('consumer_progress')
                     ? $this->item('Database Konsumen', 'consumer-database.workspace', 'customers', 'consumer-progress', ['consumer-database.*'], $routeName, 'consumer_progress', $moduleMaintenance)
                     : null,
-                ! $isSales && $user->hasPermission('consumer_progress.view') && $user->hasScopedPermission('consumer_progress')
+                ! $isSales && config('oasis.consumer_progress_operational_enabled') && $user->hasPermission('consumer_progress.view') && $user->hasScopedPermission('consumer_progress')
                     ? $this->item('NUP / Waiting List', 'consumer-nups.index', 'customers', 'consumer-progress', ['consumer-nups.*'], $routeName, 'consumer_progress', $moduleMaintenance)
                     : null,
-                ! $isSales && $user->hasPermission('consumer_progress.view') && $user->hasScopedPermission('consumer_progress')
+                ! $isSales && config('oasis.consumer_progress_operational_enabled') && $user->hasPermission('consumer_progress.view') && $user->hasScopedPermission('consumer_progress')
                     ? $this->item('Konsumen Progress', 'konsumen-progress.index', 'customers', 'consumer-progress', ['konsumen-progress.*'], $routeName, 'consumer_progress', $moduleMaintenance)
                     : null,
-                ! $isSales && $user->hasPermission('consumer_progress.view') && $user->hasScopedPermission('consumer_progress')
+                ! $isSales && config('oasis.consumer_progress_operational_enabled') && $user->hasPermission('consumer_progress.view') && $user->hasScopedPermission('consumer_progress')
                     ? $this->item('Selesai', 'consumer-process.selesai', 'check', 'consumer-progress', ['consumer-process.selesai'], $routeName, 'consumer_progress', $moduleMaintenance)
                     : null,
             ]),
@@ -97,7 +97,9 @@ class NavigationService
                 ! $isSales && $user->hasPermission('roles.view')
                     ? $this->item('Peran dan Izin', 'roles.index', 'organization', 'administration', ['roles.*'], $routeName, 'users', $moduleMaintenance)
                     : null,
-                ! $isSales && ($user->isSuperadmin() || $user->hasPermission('consumer_progress.manage'))
+                ! $isSales
+                    && ($user->isSuperadmin() ? config('oasis.database_operational_enabled') : config('oasis.consumer_progress_operational_enabled'))
+                    && ($user->isSuperadmin() || $user->hasPermission('consumer_progress.manage'))
                     ? $this->item('Migrasi Marison', $user->isSuperadmin() ? 'admin.marison-migrations.create' : 'admin.marison-migrations.reconciliation.index', 'database', 'administration', ['admin.marison-migrations.*'], $routeName, 'database', $moduleMaintenance)
                     : null,
                 ! $isSales && $user->hasPermission('system_health.view')

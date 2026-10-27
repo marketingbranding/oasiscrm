@@ -6,6 +6,7 @@ use App\Http\Middleware\CheckRole;
 use App\Http\Middleware\EnforceCrmReadOnly;
 use App\Http\Middleware\EnforceModuleMaintenance;
 use App\Http\Middleware\EnforceOperationalMaintenance;
+use App\Http\Middleware\EnsureOperationalModuleEnabled;
 use App\Http\Middleware\EnsurePasswordChanged;
 use App\Http\Middleware\EnsureUserIsActive;
 use App\Http\Middleware\EnsureWorkspaceV2Enabled;
@@ -38,6 +39,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'not.impersonating' => RejectImpersonatedRequest::class,
             'sales.access' => RestrictSalesModuleAccess::class,
             'workspace.v2' => EnsureWorkspaceV2Enabled::class,
+            'operational.module' => EnsureOperationalModuleEnabled::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {

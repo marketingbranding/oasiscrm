@@ -248,7 +248,8 @@ class SalesPocketbookController extends Controller
         $syncBranch = ($selectedBranchId ? $branches->firstWhere('id', $selectedBranchId) : null)
             ?? ($user->isSales() ? $branches->firstWhere('id', $defaultProject?->branch_id ?? $user->branch_id) : null);
         $manageBranchIds = $this->organizationScope->branchIds($user, 'sales_pocketbook', 'manage');
-        $canLifecycleSync = config('services.google_sheets.sales_lead_sync_enabled')
+        $canLifecycleSync = config('oasis.spreadsheet_sync_enabled')
+            && config('services.google_sheets.sales_lead_sync_enabled')
             && $syncBranch !== null
             && $user->hasPermission('sales_pocketbook.sync')
             && in_array((int) $syncBranch->id, $manageBranchIds, true)
@@ -306,7 +307,7 @@ class SalesPocketbookController extends Controller
                 ->distinct()
                 ->pluck('lead_sources.name'))
             ->filter()->unique()->values();
-        if (config('services.google_sheets.sales_lead_sync_enabled') && $selectedBranchId) {
+        if (config('oasis.spreadsheet_sync_enabled') && config('services.google_sheets.sales_lead_sync_enabled') && $selectedBranchId) {
             try {
                 $workbookSources = app(SalesLeadSheetOptionService::class)->forBranch($branches->firstWhere('id', $selectedBranchId))['source'];
                 $leadSourceOptions = $leadSourceOptions->merge($workbookSources)->filter()->unique()->sort()->values();

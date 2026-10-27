@@ -32,7 +32,9 @@
         <span class="font-[Helvetica] text-sm font-bold uppercase">Cabang: {{ $selectedBranch->code }} — {{ $selectedBranch->name }}</span>
         @endif
         <x-slot:actions>
-            <x-crm.sync-control module-key="konsumen-progress" module-name="Sinkronisasi Konsumen Progress" :scope-name="$selectedBranch?->name ?? ''" :sync-url="route('konsumen-progress.sync')" :status-url="route('konsumen-progress.sync-status', ['branch_id' => $selectedBranchId])" :status="$syncStatus" :branch-id="$selectedBranchId" :can-sync="$canSync" />
+            @if(config('oasis.spreadsheet_sync_enabled'))
+                <x-crm.sync-control module-key="konsumen-progress" module-name="Sinkronisasi Konsumen Progress" :scope-name="$selectedBranch?->name ?? ''" :sync-url="route('konsumen-progress.sync')" :status-url="route('konsumen-progress.sync-status', ['branch_id' => $selectedBranchId])" :status="$syncStatus" :branch-id="$selectedBranchId" :can-sync="$canSync" />
+            @endif
         </x-slot:actions>
     </x-crm.toolbar>
 

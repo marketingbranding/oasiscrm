@@ -60,7 +60,7 @@ class KonsumenProgressController extends Controller
             }
         }
 
-        $canSync = $user->hasPermission('consumer_progress.sync') && $selectedBranch && $this->workspaceAccess->canSyncBranch($user, $selectedBranch);
+        $canSync = config('oasis.spreadsheet_sync_enabled') && $user->hasPermission('consumer_progress.sync') && $selectedBranch && $this->workspaceAccess->canSyncBranch($user, $selectedBranch);
 
         return view('crm.konsumen-progress.index', compact('branches', 'selectedBranch', 'selectedBranchId', 'pipeline', 'errors', 'syncStatus', 'isStale', 'canSync', 'readSource', 'fallbackUsed'));
     }

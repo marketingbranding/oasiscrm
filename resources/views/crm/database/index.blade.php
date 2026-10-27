@@ -48,7 +48,9 @@
 
         @if($selectedBranch)
             <x-slot:actions>
-                <x-crm.sync-control module-key="database" module-name="Sinkronisasi Database" :scope-name="$selectedBranch->name" :sync-url="route('database.sync')" :status-url="route('database.sync-status', ['branch_id' => $selectedBranchId])" :status="$syncStatus" :branch-id="$selectedBranchId" :can-sync="$canSync" />
+                @if(config('oasis.spreadsheet_sync_enabled'))
+                    <x-crm.sync-control module-key="database" module-name="Sinkronisasi Database" :scope-name="$selectedBranch->name" :sync-url="route('database.sync')" :status-url="route('database.sync-status', ['branch_id' => $selectedBranchId])" :status="$syncStatus" :branch-id="$selectedBranchId" :can-sync="$canSync" />
+                @endif
             </x-slot:actions>
         @endif
     </x-crm.toolbar>

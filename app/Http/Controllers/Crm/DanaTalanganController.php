@@ -186,7 +186,7 @@ class DanaTalanganController extends Controller
         $syncStatus = DanaTalanganSyncStatus::where('spreadsheet_id', $spreadsheetId)->first();
         $bridgeSetting = DanaTalanganBridgeSetting::where('spreadsheet_id', $spreadsheetId)->first();
         $canReview = $user->hasPermission('bridge_fund.manage_all');
-        $canSync = $canReview && config('services.google_sheets.dana_talangan_bridge_enabled') && $bridgeSetting?->mode?->pullEnabled();
+        $canSync = $canReview && config('oasis.spreadsheet_sync_enabled') && config('services.google_sheets.dana_talangan_bridge_enabled') && $bridgeSetting?->mode?->pullEnabled();
         $canManage = $user->hasPermission('bridge_fund.manage');
         $canExport = $user->hasPermission('bridge_fund.export');
         $openReconciliationCount = $canReview ? DanaTalanganReconciliationItem::where('status', 'open')->count() : 0;

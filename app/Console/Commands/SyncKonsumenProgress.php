@@ -11,8 +11,14 @@ class SyncKonsumenProgress extends Command
 
     protected $description = 'Sinkronkan cache lokal Konsumen Progress dari Google Sheets API';
 
-    public function handle(KonsumenProgressSyncService $syncService): int
+    public function handle(): int
     {
+        if (! config('oasis.spreadsheet_sync_enabled')) {
+            $this->warn('Sinkronisasi spreadsheet OASIS berstatus dormant dan dilewati.');
+
+            return self::SUCCESS;
+        }
+        $syncService = app(KonsumenProgressSyncService::class);
         $branchId = $this->option('branch') ? (int) $this->option('branch') : null;
         $results = $syncService->syncAll($branchId);
 
@@ -26,10 +32,10 @@ class SyncKonsumenProgress extends Command
         foreach ($results as $result) {
             $totalRows = array_sum($result['summary'] ?? []);
             if ($result['ok']) {
-                $this->info($result['branch'] . ': OK, ' . count($result['summary']) . ' sheets, ' . $totalRows . ' rows');
+                $this->info($result['branch'].': OK, '.count($result['summary']).' sheets, '.$totalRows.' rows');
             } else {
                 $failed = true;
-                $this->error($result['branch'] . ': FAILED, ' . $result['message']);
+                $this->error($result['branch'].': FAILED, '.$result['message']);
             }
         }
 

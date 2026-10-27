@@ -11,10 +11,10 @@
     $currentDate = now()->locale('id')->isoFormat('dddd, D MMMM Y');
 
     $canViewPlanner = $user->hasScopedPermission('work_planner');
-    $canAccessDatabase = $user->hasPermission('database.view') && $user->hasScopedPermission('database');
+    $canAccessDatabase = config('oasis.database_operational_enabled') && $user->hasPermission('database.view') && $user->hasScopedPermission('database');
     $canAccessSalesPocketbook = $user->hasScopedPermission('sales_pocketbook');
     $canAccessBridgeFund = $user->hasPermission('bridge_fund.view') && $user->hasScopedPermission('bridge_fund');
-    $canAccessConsumerProgress = $user->hasPermission('consumer_progress.view') && $user->hasScopedPermission('consumer_progress');
+    $canAccessConsumerProgress = config('oasis.consumer_progress_operational_enabled') && $user->hasPermission('consumer_progress.view') && $user->hasScopedPermission('consumer_progress');
     $canViewDatabase = $canAccessDatabase && $user->hasAnyPermission(['database.view_branch', 'database.view_all']);
     $canViewBridgeFund = $canAccessBridgeFund && $user->hasAnyPermission(['bridge_fund.view_branch', 'bridge_fund.view_all']);
     $canViewConsumerProgress = $canAccessConsumerProgress && $user->hasAnyPermission(['consumer_progress.view_branch', 'consumer_progress.view_all']);
@@ -280,7 +280,9 @@
                 </div>
                 <div class="mt-3" data-testid="dashboard-database-sync">
                     <x-crm.sync-status-panel module-key="database" :scope-name="$branch?->name ?? ''" :branch-id="$selectedBranchId" :status="$dashboardSyncStatus" :is-stale="$syncHealth['isStale']">
-                        <x-crm.sync-control module-key="database" module-name="Sinkronisasi Database" :scope-name="$branch?->name ?? ''" :sync-url="route('database.sync')" :status-url="route('database.sync-status', ['branch_id' => $selectedBranchId])" :status="$dashboardSyncStatus" :branch-id="$selectedBranchId" :can-sync="$canSyncDatabase" button-class="bg-white text-black px-3 py-1.5 text-xs font-[Helvetica] font-bold border border-black" />
+                        @if(config('oasis.spreadsheet_sync_enabled'))
+                            <x-crm.sync-control module-key="database" module-name="Sinkronisasi Database" :scope-name="$branch?->name ?? ''" :sync-url="route('database.sync')" :status-url="route('database.sync-status', ['branch_id' => $selectedBranchId])" :status="$dashboardSyncStatus" :branch-id="$selectedBranchId" :can-sync="$canSyncDatabase" button-class="bg-white text-black px-3 py-1.5 text-xs font-[Helvetica] font-bold border border-black" />
+                        @endif
                     </x-crm.sync-status-panel>
                 </div>
             @endif

@@ -13,6 +13,11 @@ class SyncDanaTalangan extends Command
 
     public function handle(): int
     {
+        if (! config('oasis.spreadsheet_sync_enabled')) {
+            $this->warn('Sinkronisasi spreadsheet OASIS berstatus dormant dan dilewati.');
+
+            return self::SUCCESS;
+        }
         if (! config('services.google_sheets.dana_talangan_bridge_enabled')) {
             $this->warn('Bridge Dana Talangan sedang dinonaktifkan.');
 

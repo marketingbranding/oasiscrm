@@ -14,6 +14,11 @@ class SyncSalesLeadLifecycle extends Command
 
     public function handle(): int
     {
+        if (! config('oasis.spreadsheet_sync_enabled')) {
+            $this->warn('Sinkronisasi spreadsheet OASIS berstatus dormant dan dilewati.');
+
+            return self::SUCCESS;
+        }
         if (! config('services.google_sheets.sales_lead_sync_enabled')) {
             $this->warn('Sinkronisasi Google Sheets Lead Sales sedang dinonaktifkan.');
 

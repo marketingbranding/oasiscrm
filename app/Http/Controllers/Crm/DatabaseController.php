@@ -96,7 +96,7 @@ class DatabaseController extends Controller
         $requestSheet = self::isSalesProcessSheet($requestSheet) ? $requestSheet : null;
         $requestAdd = $requestSheet !== null && $request->boolean('add');
 
-        $canSync = $user->hasPermission('database.sync') && $selectedBranch && $this->workspaceAccess->canSyncBranch($user, $selectedBranch);
+        $canSync = config('oasis.spreadsheet_sync_enabled') && $user->hasPermission('database.sync') && $selectedBranch && $this->workspaceAccess->canSyncBranch($user, $selectedBranch);
         $currentState = ['counts' => [], 'eligible_kavlings' => []];
 
         if ($selectedBranch) {

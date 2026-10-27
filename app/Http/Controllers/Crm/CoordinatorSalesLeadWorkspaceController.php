@@ -80,7 +80,8 @@ class CoordinatorSalesLeadWorkspaceController extends Controller
         $data['canCreate'] = $request->user()->can('create', SalesLead::class);
         $data['canExport'] = $request->user()->hasPermission('sales_pocketbook.export_team')
             && $request->user()->hasPermission('sales_pocketbook.export');
-        $data['canSync'] = config('services.google_sheets.sales_lead_sync_enabled')
+        $data['canSync'] = config('oasis.spreadsheet_sync_enabled')
+            && config('services.google_sheets.sales_lead_sync_enabled')
             && $request->user()->hasPermission('sales_pocketbook.sync');
         $data['tab'] = $tab;
 

@@ -13,6 +13,12 @@ abstract class TestCase extends BaseTestCase
     {
         parent::setUp();
         $this->fakeGoogleSheets();
+
+        config([
+            'oasis.database_operational_enabled' => true,
+            'oasis.consumer_progress_operational_enabled' => true,
+            'oasis.spreadsheet_sync_enabled' => true,
+        ]);
     }
 
     protected function fakeGoogleSheets(array $sheetTitles = []): MockInterface

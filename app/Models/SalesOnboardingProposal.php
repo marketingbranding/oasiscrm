@@ -24,11 +24,31 @@ class SalesOnboardingProposal extends Model
         'status' => self::STATUS_PENDING,
     ];
 
+    protected $hidden = [
+        'pending_email',
+    ];
+
     protected static function booted(): void
     {
         static::creating(function (SalesOnboardingProposal $proposal): void {
             $proposal->decision_token ??= Str::uuid()->toString();
+            $proposal->pending_email = $proposal->status === self::STATUS_PENDING
+                ? self::normalizeEmail($proposal->email)
+                : null;
         });
+
+        static::updating(function (SalesOnboardingProposal $proposal): void {
+            if ($proposal->isDirty(['email', 'status'])) {
+                $proposal->pending_email = $proposal->status === self::STATUS_PENDING
+                    ? self::normalizeEmail($proposal->email)
+                    : null;
+            }
+        });
+    }
+
+    private static function normalizeEmail(?string $email): string
+    {
+        return mb_strtolower(trim((string) $email));
     }
 
     protected function casts(): array

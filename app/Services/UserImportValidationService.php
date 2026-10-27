@@ -72,6 +72,8 @@ class UserImportValidationService
                 $errors[] = 'Role harus salah satu dari enam role aktif yang diizinkan.';
             } elseif ($role->is_superadmin || ! in_array((int) $role->id, $allowedRoleIds, true)) {
                 $errors[] = 'Anda tidak berwenang menetapkan role tersebut.';
+            } elseif (! $this->administration->canImportRole($actor, $role)) {
+                $errors[] = 'Role tersebut hanya dapat diprovisikan melalui Superadmin atau proposal onboarding.';
             }
 
             $primaryBranch = $this->branchLabels->resolve($raw['primary_branch'], $branches);
@@ -174,6 +176,7 @@ class UserImportValidationService
                 'preflight_valid' => $role?->is_active
                     && in_array((int) $role?->id, $allowedRoleIds, true)
                     && $primaryBranch?->is_active
+                    && ($role === null || $this->administration->canImportRole($actor, $role))
                     && $branchIds !== []
                     && array_diff($branchIds, $allowedBranchIds) === []
                     && array_diff($projectIds, $allowedProjectIds) === []

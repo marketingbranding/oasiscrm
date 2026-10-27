@@ -10,6 +10,10 @@ use Illuminate\Validation\ValidationException;
 
 class UserAdministrationService
 {
+    private const DIRECT_SUPERADMIN_ONLY_PROVISIONING_ROLES = ['sales', 'sales_coordinator', 'admin', 'branch_manager'];
+
+    private const IMPORT_SUPERADMIN_ONLY_PROVISIONING_ROLES = ['sales_coordinator', 'admin', 'branch_manager'];
+
     public function __construct(
         private readonly OrganizationScopeService $scope,
         private readonly ReportingHierarchyService $hierarchy,
@@ -43,7 +47,7 @@ class UserAdministrationService
     {
         $role->loadMissing('permissions');
         $canCreate = $actor->isSuperadmin()
-            || ($actor->hasPrimaryRole('pusat') && ! in_array($role->slug, ['sales', 'sales_coordinator', 'admin', 'branch_manager'], true));
+            || ($actor->hasPrimaryRole('pusat') && $this->canCreateDirectRole($actor, $role));
         abort_unless($target !== null || $canCreate, 403, 'Pembuatan akun hanya dapat dilakukan Superadmin.');
         abort_unless($actor->hasPermission('users.assign_roles') || ($target === null && $actor->hasPermission('users.create')), 403);
         abort_if(! $actor->isSuperadmin() && $role->is_superadmin, 403);
@@ -53,6 +57,19 @@ class UserAdministrationService
         if ($target) {
             $this->assertCanManage($actor, $target, 'users.update');
         }
+    }
+
+    public function canCreateDirectRole(User $actor, Role $role): bool
+    {
+        return $actor->isSuperadmin()
+            || ! in_array($role->slug, self::DIRECT_SUPERADMIN_ONLY_PROVISIONING_ROLES, true);
+    }
+
+    public function canImportRole(User $actor, Role $role): bool
+    {
+        return $actor->isSuperadmin()
+            || (! in_array($role->slug, self::IMPORT_SUPERADMIN_ONLY_PROVISIONING_ROLES, true)
+                && ! ($actor->hasPrimaryRole('admin') && $role->slug === 'sales'));
     }
 
     public function assertCanTransferBranch(User $actor, User $target, int $branchId): void

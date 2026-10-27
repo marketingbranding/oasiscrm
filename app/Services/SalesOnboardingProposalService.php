@@ -8,6 +8,7 @@ use App\Models\LeadMaster;
 use App\Models\Role;
 use App\Models\SalesOnboardingProposal;
 use App\Models\User;
+use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
@@ -30,6 +31,8 @@ class SalesOnboardingProposalService
     {
         abort_unless($actor->hasPrimaryRole('admin') && $actor->hasPermission('users.propose_sales'), 403);
 
+        $email = mb_strtolower(trim((string) $data['email']));
+
         $role = Role::query()->whereKey((int) $data['role_id'])->where('is_active', true)->first();
         $branch = Branch::query()->whereKey((int) $data['branch_id'])->where('is_active', true)->first();
         $project = LeadMaster::query()->whereKey((int) $data['project_id'])->where('is_active', true)->first();
@@ -41,43 +44,58 @@ class SalesOnboardingProposalService
             && (int) $project->branch_id === (int) $branch->id
             && $this->workspace->accessibleProjectsQuery($actor)->whereKey($project->id)->exists(), 403);
         abort_unless($this->coordinatorIsInScope($actor, $coordinator, $branch), 403);
+        if (SalesOnboardingProposal::query()->where('status', SalesOnboardingProposal::STATUS_PENDING)->where('pending_email', $email)->exists()) {
+            throw ValidationException::withMessages(['proposal' => 'Email tersebut sudah memiliki proposal onboarding yang masih menunggu keputusan.']);
+        }
 
-        return DB::transaction(function () use ($actor, $data, $branch, $project, $coordinator, $role): SalesOnboardingProposal {
-            $proposal = SalesOnboardingProposal::create([
-                'name' => $data['name'],
-                'email' => mb_strtolower(trim((string) $data['email'])),
-                'phone' => $data['phone'] ?? null,
-                'role_id' => $role->id,
-                'branch_id' => $branch->id,
-                'project_id' => $project->id,
-                'coordinator_user_id' => $coordinator->id,
-                'submitted_by' => $actor->id,
-                'submitted_scope' => [
+        try {
+            return DB::transaction(function () use ($actor, $data, $branch, $project, $coordinator, $role, $email): SalesOnboardingProposal {
+                $proposal = SalesOnboardingProposal::create([
+                    'name' => $data['name'],
+                    'email' => $email,
+                    'phone' => $data['phone'] ?? null,
+                    'role_id' => $role->id,
                     'branch_id' => $branch->id,
                     'project_id' => $project->id,
                     'coordinator_user_id' => $coordinator->id,
-                ],
-                'submitted_at' => now(),
-            ]);
+                    'submitted_by' => $actor->id,
+                    'submitted_scope' => [
+                        'branch_id' => $branch->id,
+                        'project_id' => $project->id,
+                        'coordinator_user_id' => $coordinator->id,
+                    ],
+                    'submitted_at' => now(),
+                ]);
 
-            $this->logProposal($proposal, 'sales_onboarding_proposed', $actor, [
-                'status' => SalesOnboardingProposal::STATUS_PENDING,
-                'branch_id' => $branch->id,
-                'project_id' => $project->id,
-                'coordinator_user_id' => $coordinator->id,
-            ]);
+                $this->logProposal($proposal, 'sales_onboarding_proposed', $actor, [
+                    'status' => SalesOnboardingProposal::STATUS_PENDING,
+                    'branch_id' => $branch->id,
+                    'project_id' => $project->id,
+                    'coordinator_user_id' => $coordinator->id,
+                ]);
 
-            return $proposal;
-        });
+                return $proposal;
+            });
+        } catch (QueryException $exception) {
+            if (SalesOnboardingProposal::query()->where('status', SalesOnboardingProposal::STATUS_PENDING)->where('pending_email', $email)->exists()) {
+                throw ValidationException::withMessages(['proposal' => 'Email tersebut sudah memiliki proposal onboarding yang masih menunggu keputusan.']);
+            }
+
+            throw $exception;
+        }
     }
 
-    public function approve(SalesOnboardingProposal $proposal, User $actor, ?string $decisionToken = null): User
+    public function approve(SalesOnboardingProposal $proposal, User $actor, string $decisionToken): User
     {
         abort_unless($actor->isSuperadmin() && $actor->hasPermission('users.approve_sales'), 403);
 
         return DB::transaction(function () use ($proposal, $actor, $decisionToken): User {
             $proposal = SalesOnboardingProposal::query()->lockForUpdate()->findOrFail($proposal->id);
             $this->assertPendingDecision($proposal, $decisionToken);
+            $salesRole = Role::query()->whereKey($proposal->role_id)->where('slug', 'sales')->where('is_active', true)->first();
+            if ($salesRole === null) {
+                throw ValidationException::withMessages(['proposal' => 'Role Sales proposal tidak lagi aktif atau telah berubah.']);
+            }
             if (User::query()->where('email', $proposal->email)->exists()) {
                 throw ValidationException::withMessages(['proposal' => 'Email proposal sudah digunakan oleh akun lain.']);
             }
@@ -86,7 +104,7 @@ class SalesOnboardingProposalService
                 'name' => $proposal->name,
                 'email' => $proposal->email,
                 'phone' => $proposal->phone,
-                'role_id' => $proposal->role_id,
+                'role_id' => $salesRole->id,
                 'branch_id' => $proposal->branch_id,
             ], 'Marison123', $actor);
             $this->branches->assign($sales, [$proposal->branch_id], $proposal->branch_id, $actor);
@@ -121,7 +139,7 @@ class SalesOnboardingProposalService
         });
     }
 
-    public function reject(SalesOnboardingProposal $proposal, User $actor, ?string $decisionToken = null, ?string $reason = null): SalesOnboardingProposal
+    public function reject(SalesOnboardingProposal $proposal, User $actor, string $decisionToken, ?string $reason = null): SalesOnboardingProposal
     {
         abort_unless($actor->isSuperadmin() && $actor->hasPermission('users.approve_sales'), 403);
 
@@ -158,10 +176,10 @@ class SalesOnboardingProposalService
             && $this->workspace->canViewBranch($coordinator, $branch);
     }
 
-    private function assertPendingDecision(SalesOnboardingProposal $proposal, ?string $decisionToken): void
+    private function assertPendingDecision(SalesOnboardingProposal $proposal, string $decisionToken): void
     {
         abort_if($proposal->status !== SalesOnboardingProposal::STATUS_PENDING, 409, 'Proposal sudah diputuskan.');
-        if ($decisionToken !== null && ! hash_equals($proposal->decision_token, $decisionToken)) {
+        if (! is_string($proposal->decision_token) || $decisionToken === '' || ! hash_equals($proposal->decision_token, $decisionToken)) {
             abort(409, 'Proposal telah berubah. Muat ulang daftar proposal.');
         }
     }

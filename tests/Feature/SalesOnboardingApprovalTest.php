@@ -8,6 +8,8 @@ use App\Models\LeadMaster;
 use App\Models\Role;
 use App\Models\SalesOnboardingProposal;
 use App\Models\User;
+use App\Services\SalesOnboardingProposalService;
+use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
@@ -132,6 +134,151 @@ class SalesOnboardingApprovalTest extends TestCase
         ])->assertForbidden();
 
         $this->assertDatabaseMissing('users', ['email' => 'bypassed.sales@example.test']);
+    }
+
+    public function test_pending_sales_proposal_cannot_be_duplicated_for_the_same_email(): void
+    {
+        [$admin, $branch, $project, $coordinator] = $this->proposalContext();
+        $payload = [
+            ...$this->proposalPayload($branch, $project, $coordinator),
+            'email' => 'duplicate.sales@example.test',
+        ];
+
+        $this->actingAs($admin)->post(route('admin-users.sales-proposals.store'), $payload)->assertRedirect();
+        $this->actingAs($admin)->post(route('admin-users.sales-proposals.store'), $payload)
+            ->assertSessionHasErrors('proposal');
+
+        $this->assertSame(1, SalesOnboardingProposal::where('email', $payload['email'])->where('status', SalesOnboardingProposal::STATUS_PENDING)->count());
+        $this->assertDatabaseMissing('users', ['email' => $payload['email']]);
+    }
+
+    public function test_rejected_sales_proposal_email_can_be_submitted_again(): void
+    {
+        [$admin, $branch, $project, $coordinator] = $this->proposalContext();
+        $payload = [
+            ...$this->proposalPayload($branch, $project, $coordinator),
+            'email' => 'reusable.sales@example.test',
+        ];
+
+        $this->actingAs($admin)->post(route('admin-users.sales-proposals.store'), $payload)->assertRedirect();
+        $proposal = SalesOnboardingProposal::firstOrFail();
+        $superadmin = $this->user('superadmin', null, 'Superadmin');
+
+        $this->actingAs($superadmin)->post(route('admin-users.sales-proposals.reject', $proposal), [
+            'decision_token' => $proposal->decision_token,
+            'reason' => 'Data belum lengkap.',
+        ])->assertRedirect();
+
+        $this->actingAs($admin)->post(route('admin-users.sales-proposals.store'), $payload)->assertRedirect();
+
+        $this->assertSame(1, SalesOnboardingProposal::where('email', $payload['email'])->where('status', SalesOnboardingProposal::STATUS_REJECTED)->count());
+        $this->assertSame(1, SalesOnboardingProposal::where('email', $payload['email'])->where('status', SalesOnboardingProposal::STATUS_PENDING)->count());
+    }
+
+    public function test_database_pending_email_constraint_rejects_a_competing_pending_row(): void
+    {
+        [$admin, $branch, $project, $coordinator] = $this->proposalContext();
+        $this->actingAs($admin)->post(route('admin-users.sales-proposals.store'), [
+            ...$this->proposalPayload($branch, $project, $coordinator),
+            'email' => 'concurrent.sales@example.test',
+        ])->assertRedirect();
+
+        $this->expectException(QueryException::class);
+        SalesOnboardingProposal::create([
+            ...$this->proposalPayload($branch, $project, $coordinator),
+            'email' => 'concurrent.sales@example.test',
+            'role_id' => Role::where('slug', 'sales')->value('id'),
+            'submitted_by' => $admin->id,
+            'submitted_scope' => [
+                'branch_id' => $branch->id,
+                'project_id' => $project->id,
+                'coordinator_user_id' => $coordinator->id,
+            ],
+            'submitted_at' => now(),
+        ]);
+    }
+
+    public function test_approval_rejects_when_the_canonical_sales_role_is_deactivated(): void
+    {
+        [$admin, $branch, $project, $coordinator] = $this->proposalContext();
+        $this->actingAs($admin)->post(route('admin-users.sales-proposals.store'), [
+            ...$this->proposalPayload($branch, $project, $coordinator),
+            'email' => 'stale.sales@example.test',
+        ])->assertRedirect();
+        $proposal = SalesOnboardingProposal::firstOrFail();
+        Role::where('slug', 'sales')->update(['is_active' => false]);
+
+        $this->actingAs($this->user('superadmin', null, 'Stale Role Superadmin'))
+            ->post(route('admin-users.sales-proposals.approve', $proposal), ['decision_token' => $proposal->decision_token])
+            ->assertSessionHasErrors('proposal');
+
+        $this->assertDatabaseMissing('users', ['email' => 'stale.sales@example.test']);
+        $this->assertSame(SalesOnboardingProposal::STATUS_PENDING, $proposal->fresh()->status);
+    }
+
+    public function test_approval_rejects_when_the_stored_proposal_role_is_changed(): void
+    {
+        [$admin, $branch, $project, $coordinator] = $this->proposalContext();
+        $this->actingAs($admin)->post(route('admin-users.sales-proposals.store'), [
+            ...$this->proposalPayload($branch, $project, $coordinator),
+            'email' => 'changed.sales@example.test',
+        ])->assertRedirect();
+        $proposal = SalesOnboardingProposal::firstOrFail();
+        $proposal->update(['role_id' => Role::where('slug', 'manager')->value('id')]);
+
+        $this->actingAs($this->user('superadmin', null, 'Changed Role Superadmin'))
+            ->post(route('admin-users.sales-proposals.approve', $proposal), ['decision_token' => $proposal->decision_token])
+            ->assertSessionHasErrors('proposal');
+
+        $this->assertDatabaseMissing('users', ['email' => 'changed.sales@example.test']);
+        $this->assertSame(SalesOnboardingProposal::STATUS_PENDING, $proposal->fresh()->status);
+    }
+
+    public function test_approval_requires_a_decision_token_at_the_http_boundary(): void
+    {
+        [$admin, $branch, $project, $coordinator] = $this->proposalContext();
+        $this->actingAs($admin)->post(route('admin-users.sales-proposals.store'), [
+            ...$this->proposalPayload($branch, $project, $coordinator),
+            'email' => 'missing-token.sales@example.test',
+        ])->assertRedirect();
+        $proposal = SalesOnboardingProposal::firstOrFail();
+
+        $this->actingAs($this->user('superadmin', null, 'Missing Token Superadmin'))
+            ->post(route('admin-users.sales-proposals.approve', $proposal), [])
+            ->assertSessionHasErrors('decision_token');
+
+        $this->assertSame(SalesOnboardingProposal::STATUS_PENDING, $proposal->fresh()->status);
+    }
+
+    public function test_stale_decision_token_cannot_approve_a_pending_sales_proposal(): void
+    {
+        [$admin, $branch, $project, $coordinator] = $this->proposalContext();
+        $this->actingAs($admin)->post(route('admin-users.sales-proposals.store'), [
+            ...$this->proposalPayload($branch, $project, $coordinator),
+            'email' => 'stale-token.sales@example.test',
+        ])->assertRedirect();
+        $proposal = SalesOnboardingProposal::firstOrFail();
+
+        $this->actingAs($this->user('superadmin', null, 'Stale Token Superadmin'))
+            ->post(route('admin-users.sales-proposals.approve', $proposal), ['decision_token' => str()->uuid()->toString()])
+            ->assertStatus(409);
+
+        $this->assertDatabaseMissing('users', ['email' => 'stale-token.sales@example.test']);
+        $this->assertSame(SalesOnboardingProposal::STATUS_PENDING, $proposal->fresh()->status);
+    }
+
+    public function test_service_rejects_a_null_decision_token(): void
+    {
+        [$admin, $branch, $project, $coordinator] = $this->proposalContext();
+        $this->actingAs($admin)->post(route('admin-users.sales-proposals.store'), [
+            ...$this->proposalPayload($branch, $project, $coordinator),
+            'email' => 'service-token.sales@example.test',
+        ])->assertRedirect();
+        $proposal = SalesOnboardingProposal::firstOrFail();
+        $superadmin = $this->user('superadmin', null, 'Service Token Superadmin');
+
+        $this->expectException(\TypeError::class);
+        app(SalesOnboardingProposalService::class)->approve($proposal, $superadmin, null);
     }
 
     public function test_superadmin_approval_provisions_sales_with_assignments_and_without_exposing_password(): void

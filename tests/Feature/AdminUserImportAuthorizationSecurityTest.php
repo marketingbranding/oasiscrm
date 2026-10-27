@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\Branch;
+use App\Models\LeadMaster;
 use App\Models\Permission;
 use App\Models\Role;
 use App\Models\User;
@@ -138,6 +139,52 @@ class AdminUserImportAuthorizationSecurityTest extends TestCase
         $this->confirm($actor, $batch->fresh(), $batch->fresh()->updated_at->toISOString())->assertSessionHasErrors('batch_id');
         $this->assertDatabaseMissing('users', ['email' => 'safe@example.test']);
         $this->assertSame(UserImportRow::VALIDATION_ERROR, $row->fresh()->validation_status);
+    }
+
+    public function test_admin_import_of_sales_is_rejected_in_preview_and_confirmation_cannot_bypass_it(): void
+    {
+        Role::where('slug', 'admin')->firstOrFail()->permissions()->sync(Permission::whereIn('slug', UserImportBatchPolicy::REQUIRED_PERMISSIONS)->pluck('id'));
+        $actor = $this->importActor('admin');
+        $branch = Branch::create(['name' => 'Solo', 'code' => 'SLO', 'is_active' => true]);
+        $project = LeadMaster::create(['branch_id' => $branch->id, 'project_name' => 'Oasis Solo', 'is_active' => true]);
+        $actor->forceFill(['branch_id' => $branch->id])->save();
+
+        $this->uploadImport($actor, [['Sales', 'import.sales@example.test', 'sales', 'Solo', '', 'Oasis Solo', '', '', 'pending_invitation', '']])
+            ->assertRedirect();
+        $batch = UserImportBatch::firstOrFail();
+        $row = $batch->rows()->firstOrFail();
+
+        $this->assertSame(UserImportBatch::STATUS_VALIDATION_FAILED, $batch->status);
+        $this->assertContains('Role tersebut hanya dapat diprovisikan melalui Superadmin atau proposal onboarding.', $row->errors);
+        $this->actingAs($actor)->post(route('admin-users.import-confirm'), [
+            'batch_id' => $batch->id,
+            'expected_updated_at' => $batch->updated_at->toISOString(),
+            'activation_mode' => UserImportBatch::ACTIVATION_MODE_DIRECT,
+        ])->assertForbidden();
+        $this->confirm($actor, $batch, $batch->updated_at->toISOString())->assertSessionHasErrors('batch_id');
+        $this->assertDatabaseMissing('users', ['email' => 'import.sales@example.test']);
+    }
+
+    public function test_non_superadmin_cannot_import_sales_coordinator_or_branch_manager(): void
+    {
+        $role = Role::where('slug', 'pusat')->firstOrFail();
+        $role->permissions()->sync(Permission::whereIn('slug', UserImportBatchPolicy::REQUIRED_PERMISSIONS)->pluck('id'));
+        $actor = $this->importActor('pusat');
+        Branch::create(['name' => 'Solo', 'code' => 'SLO', 'is_active' => true]);
+
+        foreach ([
+            ['sales_coordinator', 'import.coordinator@example.test'],
+            ['branch_manager', 'import.branch-manager@example.test'],
+        ] as [$roleSlug, $email]) {
+            $this->uploadImport($actor, [['Restricted', $email, $roleSlug, 'Solo', '', '', '', '', 'pending_invitation', '']])
+                ->assertRedirect();
+            $batch = UserImportBatch::latest('id')->firstOrFail();
+            $row = $batch->rows()->firstOrFail();
+
+            $this->assertSame(UserImportBatch::STATUS_VALIDATION_FAILED, $batch->status);
+            $this->assertContains('Role tersebut hanya dapat diprovisikan melalui Superadmin atau proposal onboarding.', $row->errors);
+            $this->assertDatabaseMissing('users', ['email' => $email]);
+        }
     }
 
     private function confirm(User $actor, UserImportBatch $batch, string $timestamp)

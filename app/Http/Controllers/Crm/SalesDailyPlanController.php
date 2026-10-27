@@ -70,6 +70,7 @@ class SalesDailyPlanController extends Controller
             $data = $request->validate([
                 'work_date' => ['required', 'date_format:Y-m-d'],
                 'activities' => ['required', 'array', 'min:1'],
+                'activities.*.sales_activity_category' => ['required', 'string', 'max:255'],
                 'activities.*.activity' => ['required', 'string', 'max:255'],
                 'activities.*.detail' => ['nullable', 'string', 'max:5000'],
                 'activities.*.duration_minutes' => ['required', 'integer', 'min:1', 'max:420'],

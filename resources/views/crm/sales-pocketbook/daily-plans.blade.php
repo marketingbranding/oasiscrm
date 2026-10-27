@@ -142,7 +142,7 @@
                             <div class="md:col-span-4"><x-crm.button type="submit" variant="primary" accent="sales">Tambah Agenda</x-crm.button></div>
                         </form>
                         <div class="mt-3 flex flex-wrap gap-2">
-                            <form method="POST" action="{{ route('sales-daily-plans.submit', $plan) }}">@csrf<input type="hidden" name="expected_updated_at" value="{{ app(\App\Services\OptimisticLockService::class)->token($plan) }}"><x-crm.button type="submit" variant="primary" :disabled="$schedule['total_minutes'] !== 420">Kirim Daily Plan</x-crm.button></form>
+                            <form method="POST" action="{{ route('sales-daily-plans.submit', ['daily_plan' => $plan]) }}">@csrf<input type="hidden" name="expected_updated_at" value="{{ app(\App\Services\OptimisticLockService::class)->token($plan) }}"><x-crm.button type="submit" variant="primary" :disabled="$schedule['total_minutes'] !== 420">Kirim Daily Plan</x-crm.button></form>
                             <span class="self-center text-sm">Submit hanya tersedia saat total tepat 420 menit.</span>
                         </div>
                     @elseif($plan->status === 'submitted' && auth()->user()->can('update', $plan))

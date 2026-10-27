@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Models\Branch;
 use App\Models\Role;
 use App\Models\User;
 use App\Models\UserNotification;
@@ -44,10 +45,12 @@ class SalesAgendaReminderTest extends TestCase
     private function sales(): User
     {
         $role = Role::firstOrCreate(['slug' => 'sales'], ['name' => 'Sales']);
+        $branch = Branch::firstOrCreate(['code' => 'REM'], ['name' => 'Reminder', 'is_active' => true]);
 
         return User::factory()->create([
             'name' => 'Solo Sales',
             'role_id' => $role->id,
+            'branch_id' => $branch->id,
             'password_changed_at' => now(),
         ]);
     }

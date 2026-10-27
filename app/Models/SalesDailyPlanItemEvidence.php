@@ -21,13 +21,17 @@ class SalesDailyPlanItemEvidence extends Model
         'size_bytes',
         'sha256',
         'checksum',
+        'archive_id',
+        'archive_entry_path',
         'archive_status',
+        'archived_at',
         'purged_at',
     ];
 
     protected function casts(): array
     {
         return [
+            'archived_at' => 'datetime',
             'purged_at' => 'datetime',
         ];
     }
@@ -40,5 +44,10 @@ class SalesDailyPlanItemEvidence extends Model
     public function uploader(): BelongsTo
     {
         return $this->belongsTo(User::class, 'uploaded_by_user_id');
+    }
+
+    public function archive(): BelongsTo
+    {
+        return $this->belongsTo(SalesAgendaEvidenceArchive::class, 'archive_id');
     }
 }

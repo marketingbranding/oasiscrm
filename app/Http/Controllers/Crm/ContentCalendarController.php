@@ -20,11 +20,13 @@ use App\Services\OrganizationScopeService;
 use App\Services\PresenceService;
 use App\Services\ProjectIdentityResolver;
 use App\Services\WorkspaceAccessService;
+use App\Support\SalesAgendaEvidenceRules;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 use Symfony\Component\HttpFoundation\Response;
 
@@ -323,8 +325,12 @@ class ContentCalendarController extends Controller
 
     public function destroy(ContentItem $contentItem)
     {
-        $this->authorize('delete', $contentItem);
-        $contentItem->delete();
+        DB::transaction(function () use ($contentItem): void {
+            $locked = ContentItem::query()->lockForUpdate()->findOrFail($contentItem->id);
+            $this->authorize('delete', $locked);
+            $this->guardSalesAgendaEvidence($locked);
+            $locked->delete();
+        });
 
         return back()->with('success', 'Item Work Planner berhasil dihapus.');
     }
@@ -375,10 +381,27 @@ class ContentCalendarController extends Controller
         abort_unless($items->count() === count(array_unique($ids)), 403);
         foreach ($items as $item) {
             $this->authorize('delete', $item);
-            $item->delete();
+            $this->guardSalesAgendaEvidence($item);
         }
+        DB::transaction(function () use ($items): void {
+            foreach ($items as $item) {
+                $locked = ContentItem::query()->lockForUpdate()->findOrFail($item->id);
+                $this->authorize('delete', $locked);
+                $this->guardSalesAgendaEvidence($locked);
+                $locked->delete();
+            }
+        });
 
         return back()->with('success', $items->count().' item berhasil dihapus.');
+    }
+
+    private function guardSalesAgendaEvidence(ContentItem $contentItem): void
+    {
+        abort_unless(
+            ! SalesAgendaEvidenceRules::isSalesAgenda($contentItem) || ! $contentItem->evidence()->exists(),
+            409,
+            'Agenda Sales dengan bukti foto harus dikelola melalui alur retensi Agenda Sales.',
+        );
     }
 
     private function formData(?ContentItem $item = null, string $defaultType = 'task'): array

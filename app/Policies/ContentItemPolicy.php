@@ -52,6 +52,10 @@ class ContentItemPolicy
 
     public function delete(User $user, ContentItem $item): bool
     {
+        if ($this->isSalesAgenda($item) && $user->hasPermission('work_planner.manage_all')) {
+            return true;
+        }
+
         return $this->update($user, $item);
     }
 

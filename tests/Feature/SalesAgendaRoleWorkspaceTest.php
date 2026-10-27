@@ -99,6 +99,20 @@ class SalesAgendaRoleWorkspaceTest extends TestCase
         $this->assertDatabaseCount('content_items', 0);
     }
 
+    public function test_sales_agenda_store_requires_manage_own_permission(): void
+    {
+        [$sales, $project] = $this->context();
+        $sales->assignedProjects()->attach($project->id, $this->assignment(true));
+        $permissionId = DB::table('permissions')->where('slug', 'sales_pocketbook.manage_own')->value('id');
+        DB::table('role_permission')->where('role_id', $sales->role_id)->where('permission_id', $permissionId)->delete();
+
+        $this->actingAs($sales)->post(route('sales-agendas.store'), [
+            'scheduled_date' => '2026-08-10',
+            'sales_activity_category' => 'Cek Lokasi',
+            'title' => 'Agenda tanpa izin',
+        ])->assertForbidden();
+    }
+
     private function context(): array
     {
         $branch = Branch::create(['name' => 'Kudus', 'code' => 'KDS', 'is_active' => true]);

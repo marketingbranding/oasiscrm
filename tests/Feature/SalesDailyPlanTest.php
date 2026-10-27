@@ -13,12 +13,14 @@ use App\Models\SalesDailyPlanItemEvidence;
 use App\Models\SalesDailyPlanItemReschedule;
 use App\Models\User;
 use App\Services\SalesDailyPlanService;
+use App\Services\SyncLockService;
 use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\ValidationException;
+use Mockery;
 use Symfony\Component\HttpKernel\Exception\AccessDeniedHttpException;
 use Tests\TestCase;
 
@@ -195,6 +197,108 @@ class SalesDailyPlanTest extends TestCase
             ]);
     }
 
+    public function test_daily_plan_mutations_require_manage_own_permission(): void
+    {
+        [, , $sales] = $this->context();
+        $item = $this->submittedItem($sales);
+        $permissionId = DB::table('permissions')->where('slug', 'sales_pocketbook.manage_own')->value('id');
+        DB::table('role_permission')->where('role_id', $sales->role_id)->where('permission_id', $permissionId)->delete();
+        $sales->forceFill(['email_verified_at' => now()])->save();
+
+        $routes = [
+            fn () => $this->post(route('sales-daily-plans.store'), [
+                'work_date' => '2026-10-27',
+                'activities' => [['sales_activity_category' => 'Canvassing', 'activity' => 'Prospek', 'duration_minutes' => 420]],
+            ]),
+            fn () => $this->post(route('sales-daily-plans.submit'), ['work_date' => '2026-10-26']),
+            fn () => $this->patch(route('sales-daily-plan-items.complete', $item), ['activity_result' => 'Hasil']),
+            fn () => $this->post(route('sales-daily-plan-items.reschedule', $item), ['reason' => 'Alasan']),
+            fn () => $this->post(route('sales-daily-plan-items.evidence.store', $item), [
+                'photo' => UploadedFile::fake()->image('proof.jpg'),
+            ]),
+        ];
+
+        foreach ($routes as $request) {
+            $this->actingAs($sales);
+            $request()->assertForbidden();
+        }
+    }
+
+    public function test_daily_plan_save_and_submit_use_the_same_scope_lock(): void
+    {
+        [, , $sales] = $this->context();
+        $keys = [];
+        $locks = Mockery::mock(SyncLockService::class);
+        $locks->shouldReceive('runOrThrow')->twice()->andReturnUsing(function (string $key, callable $callback, int $seconds) use (&$keys): mixed {
+            $keys[] = $key;
+
+            return $callback();
+        });
+        $this->app->instance(SyncLockService::class, $locks);
+        $service = app(SalesDailyPlanService::class);
+
+        $service->saveDraft($sales, CarbonImmutable::parse('2026-10-26'), [
+            ['activity' => 'Prospek', 'duration_minutes' => 420],
+        ]);
+        $service->submit($sales, CarbonImmutable::parse('2026-10-26'));
+
+        $this->assertSame($keys[0], $keys[1]);
+    }
+
+    public function test_legacy_daily_plan_without_branch_snapshot_is_fail_closed(): void
+    {
+        [, , $sales] = $this->context();
+        $plan = SalesDailyPlan::create([
+            'sales_user_id' => $sales->id,
+            'work_date' => '2026-10-26',
+            'status' => 'draft',
+        ]);
+
+        try {
+            app(SalesDailyPlanService::class)->saveDraft($sales, CarbonImmutable::parse('2026-10-26'), [
+                ['activity' => 'Legacy', 'duration_minutes' => 420],
+            ]);
+            $this->fail('A Daily Plan without historical branch context must not be reassigned implicitly.');
+        } catch (ValidationException $exception) {
+            $this->assertArrayHasKey('branch_id', $exception->errors());
+        }
+
+        try {
+            app(SalesDailyPlanService::class)->submit($sales, CarbonImmutable::parse('2026-10-26'));
+            $this->fail('A Daily Plan without historical branch context must not be submitted.');
+        } catch (ValidationException $exception) {
+            $this->assertArrayHasKey('branch_id', $exception->errors());
+        }
+
+        $this->assertNull($plan->fresh()->branch_id);
+    }
+
+    public function test_daily_plan_evidence_view_requires_view_own_permission(): void
+    {
+        Storage::fake('agenda_evidence');
+        [, , $sales] = $this->context();
+        $item = $this->submittedItem($sales);
+        $evidence = SalesDailyPlanItemEvidence::create([
+            'sales_daily_plan_item_id' => $item->id,
+            'uploaded_by_user_id' => $sales->id,
+            'storage_path' => 'sales-daily-plan-evidence/proof.webp',
+            'original_name' => 'proof.webp',
+            'mime_type' => 'image/webp',
+            'width' => 100,
+            'height' => 100,
+            'size_bytes' => 5,
+            'sha256' => hash('sha256', 'proof'),
+        ]);
+        Storage::disk('agenda_evidence')->put($evidence->storage_path, 'proof');
+        $permissionId = DB::table('permissions')->where('slug', 'sales_pocketbook.view_own')->value('id');
+        DB::table('role_permission')->where('role_id', $sales->role_id)->where('permission_id', $permissionId)->delete();
+        $sales->forceFill(['email_verified_at' => now()])->save();
+
+        $this->actingAs($sales)
+            ->get(route('sales-daily-plan-items.evidence.show', [$item, $evidence]))
+            ->assertForbidden();
+    }
+
     public function test_coordinator_cannot_revise_a_plan_with_an_item_from_another_plan(): void
     {
         [$branch, , $sales] = $this->context();
@@ -226,6 +330,79 @@ class SalesDailyPlanTest extends TestCase
         }
 
         $this->assertDatabaseHas('sales_daily_plan_items', ['id' => $itemA->id, 'activity' => 'Plan A']);
+    }
+
+    public function test_coordinator_cannot_submit_duplicate_item_ids_in_a_revision(): void
+    {
+        [$branch, , $sales] = $this->context();
+        $coordinator = $this->user('sales_coordinator', $branch, 'Koordinator Duplikat');
+        SalesCoordinatorSales::create([
+            'coordinator_user_id' => $coordinator->id,
+            'sales_user_id' => $sales->id,
+            'is_active' => true,
+        ]);
+        $service = app(SalesDailyPlanService::class);
+        $service->saveDraft($sales, CarbonImmutable::parse('2026-10-26'), [
+            ['activity' => 'Aktivitas pertama', 'duration_minutes' => 210],
+            ['activity' => 'Aktivitas kedua', 'duration_minutes' => 210],
+        ]);
+        $plan = $service->submit($sales, CarbonImmutable::parse('2026-10-26'));
+        $items = $plan->items()->orderBy('position')->get();
+
+        try {
+            $service->revise($coordinator, $plan, [
+                ['id' => $items[0]->id, 'activity' => 'Duplikat pertama', 'duration_minutes' => 210],
+                ['id' => $items[0]->id, 'activity' => 'Duplikat kedua', 'duration_minutes' => 210],
+            ]);
+            $this->fail('A revision must reject duplicate item IDs.');
+        } catch (ValidationException $exception) {
+            $this->assertArrayHasKey('activities.1.id', $exception->errors());
+        }
+
+        $this->assertSame(2, $plan->items()->count());
+        $this->assertSame(420, $plan->totalDurationMinutes());
+    }
+
+    public function test_revision_cannot_delete_an_item_that_has_evidence(): void
+    {
+        [$branch, , $sales] = $this->context();
+        $coordinator = $this->user('sales_coordinator', $branch, 'Koordinator Bukti');
+        SalesCoordinatorSales::create([
+            'coordinator_user_id' => $coordinator->id,
+            'sales_user_id' => $sales->id,
+            'is_active' => true,
+        ]);
+        $service = app(SalesDailyPlanService::class);
+        $service->saveDraft($sales, CarbonImmutable::parse('2026-10-26'), [
+            ['activity' => 'Aktivitas berbukti', 'duration_minutes' => 60],
+            ['activity' => 'Aktivitas tetap', 'duration_minutes' => 360],
+        ]);
+        $plan = $service->submit($sales, CarbonImmutable::parse('2026-10-26'));
+        $items = $plan->items()->orderBy('position')->get();
+        SalesDailyPlanItemEvidence::create([
+            'sales_daily_plan_item_id' => $items[0]->id,
+            'uploaded_by_user_id' => $sales->id,
+            'storage_path' => 'sales-daily-plan-evidence/proof.webp',
+            'original_name' => 'proof.webp',
+            'mime_type' => 'image/webp',
+            'width' => 10,
+            'height' => 10,
+            'size_bytes' => 5,
+            'sha256' => hash('sha256', 'proof'),
+        ]);
+
+        try {
+            $service->revise($coordinator, $plan, [
+                ['id' => $items[1]->id, 'activity' => 'Aktivitas tetap', 'duration_minutes' => 360],
+                ['activity' => 'Aktivitas baru', 'duration_minutes' => 60],
+            ]);
+            $this->fail('A revision must preserve items that have evidence.');
+        } catch (ValidationException $exception) {
+            $this->assertArrayHasKey('activities', $exception->errors());
+        }
+
+        $this->assertDatabaseHas('sales_daily_plan_item_evidences', ['sales_daily_plan_item_id' => $items[0]->id]);
+        $this->assertSame(2, $plan->items()->count());
     }
 
     public function test_owner_can_upload_two_daily_plan_item_evidence_files_and_audit_each_upload(): void
@@ -388,6 +565,7 @@ class SalesDailyPlanTest extends TestCase
         $targetItems = $target->plan->items()->orderBy('position')->get();
 
         $this->assertSame('rescheduled', $source->status);
+        $this->assertSame($sales->branch_id, $target->plan->branch_id);
         $this->assertSame('09:00', substr($source->start_time, 0, 5));
         $this->assertSame('10:00', substr($source->end_time, 0, 5));
         $this->assertSame('10:00', substr($laterItems[1]->start_time, 0, 5));
@@ -517,6 +695,7 @@ class SalesDailyPlanTest extends TestCase
         $result = $service->rescheduleItem($sales, $sourceItem, 'Pekerjaan lapangan tertunda.');
 
         $this->assertSame('2026-11-03', $result['target']->plan->work_date->toDateString());
+        $this->assertSame($sales->branch_id, $result['target']->plan->branch_id);
         $this->assertSame('draft', $result['target']->plan->status);
         $this->assertSame(420, $result['target']->duration_minutes);
     }

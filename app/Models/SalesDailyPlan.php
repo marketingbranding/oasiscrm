@@ -48,9 +48,6 @@ class SalesDailyPlan extends Model
     protected static function booted(): void
     {
         static::creating(function (self $plan): void {
-            if (! $plan->branch_id && $plan->sales_user_id) {
-                $plan->branch_id = User::query()->whereKey($plan->sales_user_id)->value('branch_id');
-            }
             if (! $plan->plan_date && $plan->work_date) {
                 $plan->plan_date = $plan->work_date;
             }

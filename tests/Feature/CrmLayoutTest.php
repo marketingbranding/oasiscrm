@@ -46,6 +46,7 @@ class CrmLayoutTest extends TestCase
             ->assertSee('Buku Saku Sales')
             ->assertDontSee('Dashboard', false)
             ->assertDontSee(route('database.index'), false)
+            ->assertDontSee(route('konsumen-progress.index'), false)
             ->assertDontSee(route('content-calendar.index'), false)
             ->assertDontSee(route('expenses.index'), false)
             ->assertDontSee(route('dana-talangan.index'), false)
@@ -113,6 +114,14 @@ class CrmLayoutTest extends TestCase
 
         $this->assertSame(1, Changelog::query()->whereNull('version')->where('title', $title)->count());
         $this->actingAs($user)->get(route('changelogs.index'))->assertOk()->assertSee($title);
+    }
+
+    public function test_access_matrix_changelog_renders_in_the_administration_destination(): void
+    {
+        $this->actingAs($this->user('superadmin'))
+            ->get(route('changelogs.index'))
+            ->assertOk()
+            ->assertSeeText('Matriks Akses Operasional OASIS');
     }
 
     private function user(string $role): User

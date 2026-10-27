@@ -116,4 +116,18 @@ class RolePermissionTest extends TestCase
         $this->assertSame(1, Changelog::query()->whereNull('version')->where('title', $title)->count());
         $this->actingAs($user)->get(route('changelogs.index'))->assertOk()->assertSee($title);
     }
+
+    public function test_access_matrix_changelog_is_idempotent_and_rendered(): void
+    {
+        $title = 'Matriks Akses Operasional OASIS';
+        $migration = require database_path('migrations/2026_10_27_135038_add_access_matrix_changelog.php');
+        $migration->up();
+        $user = User::factory()->create([
+            'role_id' => Role::query()->where('slug', 'superadmin')->value('id'),
+            'password_changed_at' => now(),
+        ]);
+
+        $this->assertSame(1, Changelog::query()->whereNull('version')->where('title', $title)->count());
+        $this->actingAs($user)->get(route('changelogs.index'))->assertOk()->assertSeeText($title);
+    }
 }

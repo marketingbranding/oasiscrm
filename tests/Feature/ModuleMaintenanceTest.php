@@ -151,7 +151,10 @@ class ModuleMaintenanceTest extends TestCase
 
         $this->assertTrue($service->status('database')['is_enabled']);
         $this->assertTrue($service->status('promo')['is_enabled']);
-        $this->actingAs($this->user('staff'))->get(route('changelogs.index'))->assertOk();
+        $this->actingAs($this->user('staff'))
+            ->get(route('changelogs.index'))
+            ->assertOk()
+            ->assertSeeText('Matriks Akses Operasional OASIS');
 
         $service->disable('database', $superadmin);
         $this->assertFalse($service->status('database')['is_enabled']);

@@ -213,12 +213,7 @@ class SalesLeadService
         $this->assertManualStatus($data['current_status'] ?? null);
         $updated = DB::transaction(function () use ($lead, $data, $actor): SalesLead {
             $locked = SalesLead::query()->lockForUpdate()->findOrFail($lead->id);
-            if ($this->salesLeadPolicy?->canEditHistoricalOwnedLead($actor, $locked)
-                && (int) ($data['sales_user_id'] ?? $locked->sales_user_id) !== (int) $locked->sales_user_id) {
-                throw ValidationException::withMessages([
-                    'sales_user_id' => 'Lead historis hanya dapat diedit tanpa mengganti Sales pemilik.',
-                ]);
-            }
+            $this->assertHistoricalImmutableFields($locked, $data, $actor);
             $data['id_promo'] = $data['promo_name'] ?? null;
             unset($data['promo_name']);
             if (blank($data['current_status'] ?? null)) {
@@ -262,6 +257,42 @@ class SalesLeadService
         $this->schedulePush($updated, $actor);
 
         return $updated;
+    }
+
+    private function assertHistoricalImmutableFields(SalesLead $lead, array $data, User $actor): void
+    {
+        $policy = $this->salesLeadPolicy ?? app(SalesLeadPolicy::class);
+        if (! $policy->canEditHistoricalOwnedLead($actor, $lead)) {
+            return;
+        }
+
+        $immutableFields = [
+            'branch_id' => [(int) $lead->branch_id, 'Lead historis hanya dapat diedit pada cabang asal.'],
+            'project_id' => [(int) $lead->project_id, 'Lead historis hanya dapat diedit pada proyek asal.'],
+            'sales_user_id' => [(int) $lead->sales_user_id, 'Lead historis hanya dapat diedit tanpa mengganti Sales pemilik.'],
+        ];
+
+        foreach ($immutableFields as $field => [$originalValue, $message]) {
+            if (array_key_exists($field, $data) && (int) $data[$field] !== $originalValue) {
+                throw ValidationException::withMessages([$field => $message]);
+            }
+        }
+
+        if (! array_key_exists('current_status', $data) || blank($data['current_status'])) {
+            return;
+        }
+
+        try {
+            $submittedStatus = SalesLeadStatus::fromInput($data['current_status']);
+        } catch (\ValueError) {
+            return;
+        }
+
+        if ($submittedStatus !== $lead->current_status) {
+            throw ValidationException::withMessages([
+                'current_status' => 'Lead historis tidak dapat mengubah status melalui formulir edit.',
+            ]);
+        }
     }
 
     public function delete(SalesLead $lead, User $actor): void

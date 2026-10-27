@@ -110,11 +110,15 @@ class SalesLeadController extends Controller
             $historicalOwner = $salesUsers->firstWhere('id', $salesLead->sales_user_id);
             $historicalOwner?->setRelation('assignedProjects', collect([$salesLead->project]));
         }
+        $projects = $this->workspaceAccess->accessibleProjects($user);
+        if ($historicalOwnerEdit && $salesLead->project !== null && ! $projects->contains('id', $salesLead->project_id)) {
+            $projects->prepend($salesLead->project);
+        }
 
         return view('crm.sales-pocketbook.edit', [
             'lead' => $salesLead,
             'branches' => $this->workspaceAccess->accessibleBranches($user),
-            'projects' => $this->workspaceAccess->accessibleProjects($user)->load('assignedUsers:id'),
+            'projects' => $projects->load('assignedUsers:id'),
             'salesUsers' => $salesUsers,
             'historicalOwnerEdit' => $historicalOwnerEdit,
             'optimisticToken' => $this->optimisticLock->token($salesLead),

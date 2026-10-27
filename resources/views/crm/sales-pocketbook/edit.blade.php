@@ -20,7 +20,7 @@
 
 <x-crm.section id="sales-lead-edit" title="Data Lead" description="Bidang bertanda bintang wajib diisi." class="sales-pocketbook-edit-section">
     <x-crm.card padding="none">
-    <form method="POST" action="{{ route('sales-leads.update', $lead) }}" x-data="salesCascade(@js($projects->map(fn ($project) => ['id' => (string) $project->id, 'branch_id' => (string) $project->branch_id, 'sales_ids' => $project->assignedUsers->pluck('id')->map(fn ($id) => (string) $id)->all()])), @js($salesUsers->map(fn ($sales) => ['id' => (string) $sales->id, 'project_ids' => $sales->assignedProjects->pluck('id')->map(fn ($id) => (string) $id)->all()])), @js(['branch' => old('branch_id', $lead->branch_id), 'project' => old('project_id', $lead->project_id), 'sales' => old('sales_user_id', $lead->sales_user_id), 'promoOptionsEndpoint' => $promoOptionsEndpoint ?? null, 'leadDate' => old('lead_date', $lead->lead_date->toDateString()), 'promos' => $promos->values(), 'promo' => old('promo_name', $lead->id_promo)]))" @submit="setSubmitting()" class="sales-pocketbook-edit-form" data-conflict-form :aria-busy="submitting">
+    <form method="POST" action="{{ route('sales-leads.update', $lead) }}" x-data="salesCascade(@js($projects->map(fn ($project) => ['id' => (string) $project->id, 'branch_id' => (string) $project->branch_id, 'sales_ids' => $project->assignedUsers->pluck('id')->map(fn ($id) => (string) $id)->all()])), @js($salesUsers->map(fn ($sales) => ['id' => (string) $sales->id, 'project_ids' => $sales->assignedProjects->pluck('id')->map(fn ($id) => (string) $id)->all()])), @js(['branch' => ($historicalOwnerEdit ?? false) ? (string) $lead->branch_id : old('branch_id', $lead->branch_id), 'project' => ($historicalOwnerEdit ?? false) ? (string) $lead->project_id : old('project_id', $lead->project_id), 'sales' => ($historicalOwnerEdit ?? false) ? (string) $lead->sales_user_id : old('sales_user_id', $lead->sales_user_id), 'promoOptionsEndpoint' => $promoOptionsEndpoint ?? null, 'leadDate' => old('lead_date', $lead->lead_date->toDateString()), 'promos' => $promos->values(), 'promo' => old('promo_name', $lead->id_promo)]))" @submit="setSubmitting()" class="sales-pocketbook-edit-form" data-conflict-form :aria-busy="submitting">
         @csrf
         @method('PUT')
         <input type="hidden" name="expected_updated_at" value="{{ old('expected_updated_at', $optimisticToken) }}">
@@ -57,7 +57,7 @@
             $statusIsManual = $lead->current_status?->isManual() ?? true;
             $selectedStatus = old('current_status', $lead->current_status?->value);
         @endphp
-        @if($statusIsManual)
+         @if($statusIsManual && !($historicalOwnerEdit ?? false))
             <x-crm.field label="Status Lead" for="edit-lead-status" required :error="$errors->first('current_status')">
                 <select id="edit-lead-status" class="sales-input" name="current_status" required>
                     @foreach(\App\Enums\SalesLeadStatus::MANUAL as $status)
@@ -65,14 +65,17 @@
                     @endforeach
                 </select>
             </x-crm.field>
-        @else
-            <div class="crm-field">
-                <span id="edit-lead-status-label" class="crm-field-label">Status Lead</span>
-                <div class="crm-field-control"><span class="block border border-gray-400 bg-gray-100 px-3 py-2 text-sm font-bold" aria-labelledby="edit-lead-status-label">{{ $lead->current_status->label() }} (status sistem, baca-saja)</span></div>
-            </div>
-        @endif
-        <x-crm.field label="Cabang" for="edit-lead-branch" required :error="$errors->first('branch_id')"><select id="edit-lead-branch" class="sales-input" name="branch_id" x-model="branch" @change="branchChanged()" required aria-invalid="{{ $errors->has('branch_id') ? 'true' : 'false' }}" aria-describedby="{{ $errors->has('branch_id') ? 'edit-lead-branch-error' : '' }}">@foreach($branches as $branch)<option value="{{ $branch->id }}">{{ $branch->name }}</option>@endforeach</select></x-crm.field>
-        <x-crm.field label="Proyek" for="edit-lead-project" required :error="$errors->first('project_id')"><select id="edit-lead-project" class="sales-input" name="project_id" x-model="project" @change="projectChanged()" required aria-invalid="{{ $errors->has('project_id') ? 'true' : 'false' }}" aria-describedby="{{ $errors->has('project_id') ? 'edit-lead-project-error' : '' }}">@foreach($projects as $project)<option value="{{ $project->id }}" x-show="projectVisible('{{ $project->id }}')" :disabled="!projectVisible('{{ $project->id }}')">{{ $project->project_name }}</option>@endforeach</select></x-crm.field>
+         @else
+             <div class="crm-field">
+                 <span id="edit-lead-status-label" class="crm-field-label">Status Lead</span>
+                 <div class="crm-field-control"><span class="block border border-gray-400 bg-gray-100 px-3 py-2 text-sm font-bold" aria-labelledby="edit-lead-status-label">{{ $lead->current_status->label() }} ({{ $historicalOwnerEdit ?? false ? 'lead historis, baca-saja' : 'status sistem, baca-saja' }})</span></div>
+                 @if(($historicalOwnerEdit ?? false) && $statusIsManual)
+                     <input type="hidden" name="current_status" value="{{ $lead->current_status->value }}">
+                 @endif
+             </div>
+         @endif
+         <x-crm.field label="Cabang" for="edit-lead-branch" required :error="$errors->first('branch_id')"><select id="edit-lead-branch" class="sales-input" name="branch_id" x-model="branch" @change="branchChanged()" required @disabled($historicalOwnerEdit ?? false) aria-invalid="{{ $errors->has('branch_id') ? 'true' : 'false' }}" aria-describedby="{{ $errors->has('branch_id') ? 'edit-lead-branch-error' : '' }}">@foreach($branches as $branch)<option value="{{ $branch->id }}">{{ $branch->name }}</option>@endforeach</select>@if($historicalOwnerEdit ?? false)<input type="hidden" name="branch_id" value="{{ $lead->branch_id }}">@endif</x-crm.field>
+         <x-crm.field label="Proyek" for="edit-lead-project" required :error="$errors->first('project_id')"><select id="edit-lead-project" class="sales-input" name="project_id" x-model="project" @change="projectChanged()" required @disabled($historicalOwnerEdit ?? false) aria-invalid="{{ $errors->has('project_id') ? 'true' : 'false' }}" aria-describedby="{{ $errors->has('project_id') ? 'edit-lead-project-error' : '' }}">@foreach($projects as $project)<option value="{{ $project->id }}" x-show="projectVisible('{{ $project->id }}')" :disabled="!projectVisible('{{ $project->id }}')">{{ $project->project_name }}</option>@endforeach</select>@if($historicalOwnerEdit ?? false)<input type="hidden" name="project_id" value="{{ $lead->project_id }}">@endif</x-crm.field>
         <x-crm.field label="Sales" for="edit-lead-sales" required :error="$errors->first('sales_user_id')">
             <select id="edit-lead-sales" class="sales-input" name="sales_user_id" x-model="sales" required {{ Auth::user()->isSales() || ($historicalOwnerEdit ?? false) ? 'disabled' : '' }} aria-invalid="{{ $errors->has('sales_user_id') ? 'true' : 'false' }}" aria-describedby="{{ $errors->has('sales_user_id') ? 'edit-lead-sales-error' : '' }}">@foreach($salesUsers as $sales)<option value="{{ $sales->id }}" x-show="salesVisible('{{ $sales->id }}')" :disabled="!salesVisible('{{ $sales->id }}')">{{ $sales->name }}</option>@endforeach</select>
             @if(Auth::user()->isSales() || ($historicalOwnerEdit ?? false))

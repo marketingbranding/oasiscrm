@@ -114,6 +114,12 @@ abstract class SalesLeadRequest extends FormRequest
             $historicalOwnerEdit = $this->lead() !== null
                 && app(SalesLeadPolicy::class)->canEditHistoricalOwnedLead($user, $this->lead());
 
+            if ($historicalOwnerEdit) {
+                $this->validateHistoricalImmutableFields($validator, $this->lead());
+
+                return;
+            }
+
             if (! $access->canViewBranch($user, $branchId)) {
                 $validator->errors()->add('branch_id', 'Cabang tidak dapat diakses.');
             }
@@ -124,10 +130,6 @@ abstract class SalesLeadRequest extends FormRequest
                 || ($historicalOwnerEdit && $access->canViewHistoricalBranch($owner, $branchId)));
             if (! $owner || ! $owner->is_active || ! $owner->isSales() || ! $ownerCanViewBranch) {
                 $validator->errors()->add('sales_user_id', 'Sales aktif harus berada di cabang yang dipilih.');
-            } elseif ($historicalOwnerEdit && (int) $owner->id !== (int) $this->lead()->sales_user_id) {
-                $validator->errors()->add('sales_user_id', 'Lead historis hanya dapat diedit tanpa mengganti Sales pemilik.');
-            } elseif ($historicalOwnerEdit) {
-                return;
             } elseif (! $owner->assignedProjects()
                 ->whereKey($this->integer('project_id'))
                 ->wherePivot('is_active', true)
@@ -146,6 +148,35 @@ abstract class SalesLeadRequest extends FormRequest
             }
 
         }];
+    }
+
+    private function validateHistoricalImmutableFields(Validator $validator, SalesLead $lead): void
+    {
+        $immutableFields = [
+            'branch_id' => [(int) $lead->branch_id, 'Lead historis hanya dapat diedit pada cabang asal.'],
+            'project_id' => [(int) $lead->project_id, 'Lead historis hanya dapat diedit pada proyek asal.'],
+            'sales_user_id' => [(int) $lead->sales_user_id, 'Lead historis hanya dapat diedit tanpa mengganti Sales pemilik.'],
+        ];
+
+        foreach ($immutableFields as $field => [$originalValue, $message]) {
+            if ($this->exists($field) && (int) $this->input($field) !== $originalValue) {
+                $validator->errors()->add($field, $message);
+            }
+        }
+
+        if (! $this->exists('current_status') || blank($this->input('current_status')) || $validator->errors()->has('current_status')) {
+            return;
+        }
+
+        try {
+            $submittedStatus = SalesLeadStatus::fromInput((string) $this->input('current_status'));
+        } catch (\ValueError) {
+            return;
+        }
+
+        if ($submittedStatus !== $lead->current_status) {
+            $validator->errors()->add('current_status', 'Lead historis tidak dapat mengubah status melalui formulir edit.');
+        }
     }
 
     private function masterRule(array $values, string $field): mixed

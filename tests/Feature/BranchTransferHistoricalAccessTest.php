@@ -12,10 +12,12 @@ use App\Policies\ContentItemPolicy;
 use App\Policies\SalesLeadPolicy;
 use App\Services\OptimisticLockService;
 use App\Services\OrganizationScopeService;
+use App\Services\SalesLeadService;
 use App\Services\WorkspaceAccessService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
 use Tests\TestCase;
 
 class BranchTransferHistoricalAccessTest extends TestCase
@@ -162,7 +164,14 @@ class BranchTransferHistoricalAccessTest extends TestCase
         foreach (['admin', 'branch_manager'] as $role) {
             $operator = $this->user($role, $oldBranch);
             $response = $this->actingAs($operator)->get(route('sales-leads.edit', $lead));
-            $response->assertSee($sales->name)->assertSee('id="edit-lead-sales"', false)->assertSee('disabled', false);
+            $response->assertSee($sales->name)
+                ->assertSee('id="edit-lead-branch"', false)
+                ->assertSee('id="edit-lead-project"', false)
+                ->assertSee('id="edit-lead-sales"', false)
+                ->assertSee('lead historis, baca-saja', false)
+                ->assertSee('name="branch_id" value="'.$oldBranch->id.'"', false)
+                ->assertSee('name="project_id" value="'.$lead->project_id.'"', false)
+                ->assertSee('disabled', false);
 
             $this->actingAs($operator)->put(route('sales-leads.update', $lead), [
                 'branch_id' => $oldBranch->id,
@@ -181,6 +190,7 @@ class BranchTransferHistoricalAccessTest extends TestCase
 
             $lead->refresh();
             $this->assertSame($sales->id, $lead->sales_user_id);
+            $this->assertSame("Lead Historis Diperbarui {$role}", $lead->customer_name);
         }
     }
 
@@ -212,6 +222,118 @@ class BranchTransferHistoricalAccessTest extends TestCase
             'sales_user_id' => $sales->id,
             'customer_name' => 'Konsumen Lama',
         ]);
+    }
+
+    public function test_historical_http_edit_rejects_reassignment_to_a_new_branch(): void
+    {
+        [$sales, $oldBranch, $newBranch, $lead] = $this->transferredSalesLead();
+        $oldProject = LeadMaster::query()->where('branch_id', $oldBranch->id)->firstOrFail();
+        $operator = $this->user('admin', $oldBranch);
+
+        $payload = $this->historicalLeadPayload($lead, $sales, $oldBranch, $oldProject);
+        $payload['branch_id'] = $newBranch->id;
+
+        $this->actingAs($operator)->put(route('sales-leads.update', $lead), $payload)
+            ->assertSessionHasErrors('branch_id');
+
+        $this->assertDatabaseHas('sales_leads', [
+            'id' => $lead->id,
+            'branch_id' => $oldBranch->id,
+            'project_id' => $oldProject->id,
+            'sales_user_id' => $sales->id,
+            'customer_name' => 'Konsumen Lama',
+            'current_status' => 'no_response',
+        ]);
+    }
+
+    public function test_historical_http_edit_rejects_reassignment_to_a_new_project(): void
+    {
+        [$sales, $oldBranch, , $lead] = $this->transferredSalesLead();
+        $oldProject = LeadMaster::query()->where('branch_id', $oldBranch->id)->firstOrFail();
+        $newProject = LeadMaster::create([
+            'branch_id' => $oldBranch->id,
+            'project_name' => 'Proyek Lama Lainnya',
+            'is_active' => true,
+        ]);
+        $operator = $this->user('branch_manager', $oldBranch);
+
+        $payload = $this->historicalLeadPayload($lead, $sales, $oldBranch, $oldProject);
+        $payload['project_id'] = $newProject->id;
+
+        $this->actingAs($operator)->put(route('sales-leads.update', $lead), $payload)
+            ->assertSessionHasErrors('project_id');
+
+        $this->assertDatabaseHas('sales_leads', [
+            'id' => $lead->id,
+            'branch_id' => $oldBranch->id,
+            'project_id' => $oldProject->id,
+            'sales_user_id' => $sales->id,
+            'customer_name' => 'Konsumen Lama',
+            'current_status' => 'no_response',
+        ]);
+    }
+
+    public function test_historical_http_edit_rejects_a_lifecycle_status_change(): void
+    {
+        [$sales, $oldBranch, , $lead] = $this->transferredSalesLead();
+        $oldProject = LeadMaster::query()->where('branch_id', $oldBranch->id)->firstOrFail();
+        $operator = $this->user('admin', $oldBranch);
+
+        $payload = $this->historicalLeadPayload($lead, $sales, $oldBranch, $oldProject);
+        $payload['current_status'] = 'discussion';
+
+        $this->actingAs($operator)->put(route('sales-leads.update', $lead), $payload)
+            ->assertSessionHasErrors('current_status');
+
+        $this->assertDatabaseHas('sales_leads', [
+            'id' => $lead->id,
+            'branch_id' => $oldBranch->id,
+            'project_id' => $oldProject->id,
+            'sales_user_id' => $sales->id,
+            'customer_name' => 'Konsumen Lama',
+            'current_status' => 'no_response',
+        ]);
+    }
+
+    public function test_historical_service_rejects_forged_identity_and_status_changes_after_locking(): void
+    {
+        [$sales, $oldBranch, $newBranch, $lead] = $this->transferredSalesLead();
+        $oldProject = LeadMaster::query()->where('branch_id', $oldBranch->id)->firstOrFail();
+        $newProject = LeadMaster::create([
+            'branch_id' => $oldBranch->id,
+            'project_name' => 'Proyek Lama Lainnya',
+            'is_active' => true,
+        ]);
+        $newOwner = $this->user('sales', $oldBranch);
+        $newOwner->assignedProjects()->attach($oldProject->id, ['is_primary' => true, 'is_active' => true]);
+        $operator = $this->user('admin', $oldBranch);
+        $service = app(SalesLeadService::class);
+        $payload = $this->historicalLeadPayload($lead, $sales, $oldBranch, $oldProject);
+
+        foreach ([
+            ['field' => 'branch_id', 'value' => $newBranch->id],
+            ['field' => 'project_id', 'value' => $newProject->id],
+            ['field' => 'sales_user_id', 'value' => $newOwner->id],
+            ['field' => 'current_status', 'value' => 'discussion'],
+        ] as $forged) {
+            try {
+                $service->update($lead->fresh(), array_replace($payload, [
+                    $forged['field'] => $forged['value'],
+                ]), $operator);
+                $this->fail('Historical lead identity was changed through the service.');
+            } catch (ValidationException $exception) {
+                $this->assertArrayHasKey($forged['field'], $exception->errors());
+            }
+
+            $this->assertDatabaseHas('sales_leads', [
+                'id' => $lead->id,
+                'branch_id' => $oldBranch->id,
+                'project_id' => $oldProject->id,
+                'sales_user_id' => $sales->id,
+                'customer_name' => 'Konsumen Lama',
+                'current_status' => 'no_response',
+            ]);
+        }
     }
 
     public function test_original_branch_admin_and_branch_manager_cannot_run_historical_lifecycle_mutations(): void
@@ -407,5 +529,24 @@ class BranchTransferHistoricalAccessTest extends TestCase
     private function branch(string $code): Branch
     {
         return Branch::create(['name' => "Cabang {$code}", 'code' => $code, 'is_active' => true]);
+    }
+
+    /** @return array<string, mixed> */
+    private function historicalLeadPayload(SalesLead $lead, User $sales, Branch $branch, LeadMaster $project): array
+    {
+        return [
+            'branch_id' => $branch->id,
+            'project_id' => $project->id,
+            'sales_user_id' => $sales->id,
+            'lead_date' => $lead->lead_date->toDateString(),
+            'customer_name' => 'Konsumen Lama',
+            'phone' => $lead->phone,
+            'source' => 'Referral',
+            'platform' => 'WhatsApp',
+            'campaign_name' => 'Follow Up Data Lama',
+            'current_status' => 'no_response',
+            'operation_uuid' => (string) Str::uuid(),
+            'expected_updated_at' => app(OptimisticLockService::class)->token($lead),
+        ];
     }
 }

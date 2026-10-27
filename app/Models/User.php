@@ -75,7 +75,7 @@ class User extends Authenticatable implements MustVerifyEmail
                 return;
             }
 
-            DB::table('branch_user')->insertOrIgnore([
+            $membership = [
                 'user_id' => $user->id,
                 'branch_id' => $user->branch_id,
                 'can_view' => true,
@@ -84,7 +84,12 @@ class User extends Authenticatable implements MustVerifyEmail
                 'can_manage_members' => false,
                 'created_at' => now(),
                 'updated_at' => now(),
-            ]);
+            ];
+            if (Schema::hasColumn('branch_user', 'is_current')) {
+                $membership['is_current'] = true;
+            }
+
+            DB::table('branch_user')->insertOrIgnore($membership);
         });
     }
 
@@ -249,7 +254,7 @@ class User extends Authenticatable implements MustVerifyEmail
     public function branches(): BelongsToMany
     {
         return $this->belongsToMany(Branch::class)
-            ->withPivot(['membership_role', 'can_view', 'can_edit', 'can_sync', 'can_manage_members'])
+            ->withPivot(['membership_role', 'is_current', 'can_view', 'can_edit', 'can_sync', 'can_manage_members'])
             ->withTimestamps();
     }
 

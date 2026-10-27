@@ -84,7 +84,10 @@ class ContentItemPolicy
         $related = $item->visibility === 'team'
             || $item->created_by === $user->id
             || $item->assignees()->where('users.id', $user->id)->exists();
-        if (! $related || ! in_array((int) $item->branch_id, $scope->branchIds($user, 'work_planner', $action), true)) {
+        $historicalView = $action === 'view'
+            && $related
+            && app(WorkspaceAccessService::class)->canViewHistoricalBranch($user, (int) $item->branch_id);
+        if (! $related || (! $historicalView && ! in_array((int) $item->branch_id, $scope->branchIds($user, 'work_planner', $action), true))) {
             return false;
         }
         if (! $scope->requiresProjectScope($user, 'work_planner', $action)) {

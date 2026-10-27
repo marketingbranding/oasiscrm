@@ -90,6 +90,9 @@ class OrganizationScopeService
             if (array_intersect($scopes, ['own', 'team', 'branch']) !== []) {
                 $ids = $workspaceBranchIds;
             }
+            if ($action === 'view' && in_array('own', $scopes, true)) {
+                $ids = [...$ids, ...$this->workspaceAccess->historicalBranchIds($viewer)];
+            }
             if (array_intersect($scopes, ['assigned', 'project']) !== []) {
                 $ids = [...$ids, ...LeadMaster::query()->whereIn('id', $this->currentAssignedProjectIds($viewer, $workspaceBranchIds))->pluck('branch_id')->all()];
             }
@@ -115,6 +118,12 @@ class OrganizationScopeService
                     ->where('is_active', true)
                     ->whereIn('branch_id', $workspaceBranchIds)
                     ->pluck('id')->all();
+            }
+            if ($action === 'view' && in_array('own', $scopes, true)) {
+                $ids = [...$ids, ...LeadMaster::query()
+                    ->where('is_active', true)
+                    ->whereIn('branch_id', $this->workspaceAccess->historicalBranchIds($viewer))
+                    ->pluck('id')->all()];
             }
             if (array_intersect($scopes, ['own', 'assigned', 'project']) !== []) {
                 $ids = [...$ids, ...$this->currentAssignedProjectIds($viewer, $workspaceBranchIds)];

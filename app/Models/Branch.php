@@ -63,7 +63,7 @@ class Branch extends Model
     public function users(): BelongsToMany
     {
         return $this->belongsToMany(User::class)
-            ->withPivot(['membership_role', 'can_view', 'can_edit', 'can_sync', 'can_manage_members'])
+            ->withPivot(['membership_role', 'is_current', 'can_view', 'can_edit', 'can_sync', 'can_manage_members'])
             ->withTimestamps();
     }
 

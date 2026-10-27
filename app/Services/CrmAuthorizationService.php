@@ -115,7 +115,8 @@ class CrmAuthorizationService
         if ($actor->isSales()) {
             return $this->can($actor, 'sales_pocketbook.view_own')
                 && (int) $lead->sales_user_id === (int) $actor->id
-                && $this->allowsRecord($actor, 'sales_pocketbook', 'view', (int) $lead->branch_id, (int) $lead->project_id, (int) $lead->sales_user_id);
+                && ($this->allowsRecord($actor, 'sales_pocketbook', 'view', (int) $lead->branch_id, (int) $lead->project_id, (int) $lead->sales_user_id)
+                    || $this->workspaceAccess->canViewHistoricalBranch($actor, (int) $lead->branch_id));
         }
 
         if ($actor->hasPrimaryRole('sales_coordinator')) {
@@ -176,6 +177,25 @@ class CrmAuthorizationService
 
         if ($this->hasScope($actor, 'sales_pocketbook', $action, 'all')) {
             return $query;
+        }
+
+        if ($actor->isSales() && $action === 'view') {
+            $historicalBranchIds = $this->workspaceAccess->historicalBranchIds($actor);
+
+            return $query
+                ->where('sales_user_id', $actor->id)
+                ->where(function (Builder $scoped) use ($actor, $historicalBranchIds): void {
+                    $scoped->whereIn('branch_id', $historicalBranchIds)
+                        ->orWhere(function (Builder $current) use ($actor): void {
+                            $current
+                                ->whereIn('sales_user_id', $this->visibleUserIds($actor, 'sales_pocketbook', 'view'))
+                                ->whereIn('branch_id', $this->visibleBranchIds($actor, 'sales_pocketbook', 'view'))
+                                ->when(
+                                    $this->organizationScope->requiresProjectScope($actor, 'sales_pocketbook', 'view'),
+                                    fn (Builder $scopedQuery): Builder => $scopedQuery->whereIn('project_id', $this->visibleProjectIds($actor, 'sales_pocketbook', 'view')),
+                                );
+                        });
+                });
         }
 
         return $query

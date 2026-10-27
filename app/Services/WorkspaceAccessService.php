@@ -19,6 +19,7 @@ class WorkspaceAccessService
 
         $branches = $user->branches()
             ->where('branches.is_active', true)
+            ->wherePivot('is_current', true)
             ->wherePivot('can_view', true)
             ->forDropdown()
             ->get();
@@ -38,6 +39,27 @@ class WorkspaceAccessService
     public function accessibleBranchIds(User $user): array
     {
         return $this->accessibleBranches($user)->pluck('id')->map(fn ($id) => (int) $id)->all();
+    }
+
+    public function historicalBranches(User $user): Collection
+    {
+        return $user->branches()
+            ->wherePivot('is_current', false)
+            ->wherePivot('can_view', true)
+            ->forDropdown()
+            ->get();
+    }
+
+    public function historicalBranchIds(User $user): array
+    {
+        return $this->historicalBranches($user)->pluck('id')->map(fn ($id) => (int) $id)->all();
+    }
+
+    public function canViewHistoricalBranch(User $user, int|Branch $branch): bool
+    {
+        $branchId = $branch instanceof Branch ? $branch->id : (int) $branch;
+
+        return in_array($branchId, $this->historicalBranchIds($user), true);
     }
 
     public function accessibleProjectsQuery(User $user, bool $activeOnly = true): Builder
@@ -216,6 +238,10 @@ class WorkspaceAccessService
 
         $membership = $user->branches()->whereKey($branchId)->first()?->pivot;
         if ($membership) {
+            if (! (bool) $membership->is_current) {
+                return false;
+            }
+
             return (bool) $membership->{$permission};
         }
 

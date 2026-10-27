@@ -52,6 +52,15 @@ class UserAdministrationService
         }
     }
 
+    public function assertCanTransferBranch(User $actor, User $target, int $branchId): void
+    {
+        if ((int) $target->branch_id === $branchId) {
+            return;
+        }
+
+        abort_unless($actor->isSuperadmin(), 403, 'Pemindahan pengguna antar cabang hanya dapat dilakukan Superadmin.');
+    }
+
     public function assertAssignmentsInScope(User $actor, array $branchIds, array $projectIds): void
     {
         if ($actor->isSuperadmin() || $actor->hasPrimaryRole('pusat')) {

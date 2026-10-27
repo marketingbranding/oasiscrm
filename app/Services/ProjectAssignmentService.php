@@ -39,7 +39,8 @@ class ProjectAssignmentService
         }
 
         $branchIds = $this->workspaceAccess->accessibleBranchIds($user);
-        if ($projects->contains(fn (LeadMaster $project) => ! in_array((int) $project->branch_id, $branchIds, true))) {
+        $historicalBranchIds = $this->workspaceAccess->historicalBranchIds($user);
+        if ($projects->contains(fn (LeadMaster $project) => ! in_array((int) $project->branch_id, [...$branchIds, ...$historicalBranchIds], true))) {
             throw ValidationException::withMessages([
                 'assigned_project_ids' => 'Proyek harus berada pada cabang yang dapat diakses pengguna.',
             ]);

@@ -22,11 +22,12 @@ class OrganizationAssignmentServiceTest extends TestCase
         $first = $this->branch('SLO');
         $second = $this->branch('MGL');
         $user = $this->user('manager', $first);
+        $superadmin = $this->user('superadmin', $first);
 
         app(BranchAssignmentService::class)->assign($user, [
             $first->id => ['can_view' => true, 'can_edit' => true, 'can_sync' => false],
             $second->id => ['can_view' => false, 'can_edit' => false, 'can_sync' => true, 'can_manage_members' => true],
-        ], $second->id);
+        ], $second->id, $superadmin);
 
         $user = $user->fresh();
         $this->assertSame($second->id, $user->branch_id);

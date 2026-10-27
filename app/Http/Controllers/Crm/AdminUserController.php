@@ -181,6 +181,7 @@ class AdminUserController extends Controller
         $branchIds = $this->branchIds($data);
         $projectIds = $this->projectIds($data);
         $this->administration->assertCanManage($actor, $admin_user, 'users.update');
+        $this->administration->assertCanTransferBranch($actor, $admin_user, (int) $data['branch_id']);
         if ($admin_user->role_id !== $role->id) {
             $this->administration->assertCanAssignRole($actor, $role, $admin_user);
             if ($admin_user->isSuperadmin() && ! $role->is_superadmin) {
@@ -195,10 +196,12 @@ class AdminUserController extends Controller
             if ($user->isDirty('email')) {
                 $user->email_verified_at = null;
             }
-            $user->save();
             $this->branches->assign($user, $branchIds, (int) $data['branch_id'], $actor);
             $this->projects->assign($user, $projectIds, $this->nullableInt($data['primary_project_id'] ?? null), $actor);
-            $this->hierarchy->assignSupervisor($user, $this->nullableInt($data['supervisor_user_id'] ?? null), $actor);
+            $supervisorId = $this->nullableInt($data['supervisor_user_id'] ?? null);
+            if ((int) $user->supervisor_user_id !== (int) $supervisorId) {
+                $this->hierarchy->assignSupervisor($user, $supervisorId, $actor);
+            }
             $this->salesCoordinators->sync($user, (array) ($data['coordinator_sales_ids'] ?? []));
             $this->audit->log('user_updated', $user, $actor, $old, $user->only(['name', 'email', 'phone', 'role_id']));
 

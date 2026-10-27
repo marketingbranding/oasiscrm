@@ -6,6 +6,7 @@ use App\Models\SalesLead;
 use App\Models\User;
 use App\Services\CoordinatorLeadTeamService;
 use App\Services\CrmAuthorizationService;
+use App\Services\WorkspaceAccessService;
 
 class SalesLeadPolicy
 {
@@ -47,6 +48,12 @@ class SalesLeadPolicy
 
         if ($user->isSales() || $user->hasPrimaryRole('supervisor')) {
             return false;
+        }
+
+        if ($user->hasPrimaryRole(['admin', 'branch_manager'])
+            && app(WorkspaceAccessService::class)->canEditBranch($user, $lead->branch_id)
+            && app(WorkspaceAccessService::class)->canViewHistoricalBranch($lead->sales, $lead->branch_id)) {
+            return true;
         }
 
         if ($user->hasPrimaryRole('sales_coordinator')) {

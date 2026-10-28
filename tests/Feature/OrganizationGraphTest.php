@@ -468,6 +468,25 @@ class OrganizationGraphTest extends TestCase
         $this->assertTrue(app(SalesTeamScopeService::class)->contains($coordinator, $sales));
     }
 
+    public function test_canonical_manager_scope_excludes_sales_with_inactive_account_status(): void
+    {
+        config(['organization.graph_mode' => 'canonical']);
+        $branch = $this->branch('JPA');
+        $manager = $this->user('manager', $branch);
+        $activeSales = $this->user('sales', $branch);
+        $inactiveSales = $this->user('sales', $branch);
+        $graph = app(OrganizationGraphService::class);
+
+        $graph->assign($activeSales, $manager);
+        $graph->assign($inactiveSales, $manager);
+        $inactiveSales->forceFill(['account_status' => AccountStatus::Inactive])->saveQuietly();
+
+        $salesIds = app(SalesTeamScopeService::class)->for($manager)['sales']->pluck('id')->all();
+
+        $this->assertContains($activeSales->id, $salesIds);
+        $this->assertNotContains($inactiveSales->id, $salesIds);
+    }
+
     public function test_canonical_hierarchy_scope_does_not_read_legacy_supervisor_chain(): void
     {
         config(['organization.graph_mode' => 'canonical']);

@@ -228,6 +228,20 @@ class OrganizationWorkspaceAuthorizationTest extends TestCase
         ])->assertConflict();
     }
 
+    public function test_remove_from_structure_accepts_unassigned_user_with_null_unit_precondition(): void
+    {
+        $branch = Branch::create(['name' => 'UNA', 'code' => 'UNA', 'is_active' => true]);
+        $actor = $this->user('superadmin', $branch);
+        $target = $this->user('staff', $branch);
+        $target->forceFill(['organization_unit_id' => null, 'supervisor_user_id' => null])->saveQuietly();
+
+        $this->actingAs($actor)->deleteJson(route('organization.remove-structure', $target), [
+            'expected_organization_unit_id' => null,
+        ])->assertOk();
+
+        $this->assertDatabaseHas('activity_log', ['subject_id' => $target->id, 'event' => 'organization_user_removed']);
+    }
+
     public function test_role_administration_is_superadmin_gated_and_accepts_registered_permissions_only(): void
     {
         $branch = Branch::create(['name' => 'BDG', 'code' => 'BDG', 'is_active' => true]);

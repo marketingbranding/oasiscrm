@@ -60,19 +60,24 @@ class UserProvisioningServiceTest extends TestCase
         $this->assertStringNotContainsString($temporaryPassword, ActivityLog::where('subject_id', $user->id)->get()->toJson());
     }
 
-    public function test_authorized_non_superadmin_can_directly_activate_user(): void
+    public function test_non_superadmin_cannot_directly_activate_user(): void
     {
         $role = Role::firstOrCreate(['slug' => 'admin'], ['name' => 'Admin', 'is_superadmin' => false]);
         $role->permissions()->syncWithoutDetaching([Permission::where('slug', 'users.create')->value('id')]);
         $actor = User::factory()->create(['role_id' => $role->id]);
 
-        $user = app(UserProvisioningService::class)->createDirectlyActivated([
-            'name' => 'Ditolak',
-            'email' => 'denied@example.test',
-            'role_id' => $role->id,
-        ], 'Temporary-Secret-123!', $actor);
+        try {
+            app(UserProvisioningService::class)->createDirectlyActivated([
+                'name' => 'Ditolak',
+                'email' => 'denied@example.test',
+                'role_id' => $role->id,
+            ], 'Temporary-Secret-123!', $actor);
 
-        $this->assertSame(AccountStatus::Active, $user->account_status);
-        $this->assertTrue($user->must_change_password);
+            $this->fail('Non-Superadmin direct provisioning should be rejected.');
+        } catch (\DomainException $exception) {
+            $this->assertSame('Hanya Super Admin yang dapat mengaktifkan pengguna secara langsung.', $exception->getMessage());
+        }
+
+        $this->assertDatabaseMissing('users', ['email' => 'denied@example.test']);
     }
 }

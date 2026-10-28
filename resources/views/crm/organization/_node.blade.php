@@ -11,12 +11,14 @@
                 <span class="org-socket-label">Atasan</span>
             </div>
         @endif
-        <button type="button" data-org-node="{{ $node['id'] }}" @if($node['kind'] === 'unit') data-org-unit-drop="{{ $node['id'] }}" @endif
+        <button type="button" data-org-node="{{ $node['id'] }}"
+                @if($node['kind'] === 'user') data-org-node-draggable="true" data-org-drop-target="user" data-org-user-drop="{{ $node['id'] }}" @endif
+                @if($node['kind'] === 'unit') data-org-drop-target="unit" data-org-unit-drop="{{ $node['id'] }}" @endif
                 @pointerdown.stop="startVisualDrag($event, @js($node['id']))"
                 @click.stop="if (!suppressClick) select(@js($node['id']))"
                 @contextmenu.prevent.stop="openContext($event, @js($node['id']))"
                 class="org-node-card {{ $node['kind'] === 'user' ? 'org-node-card-user' : 'org-node-card-unit' }} w-72 border-2 border-black bg-white p-3 text-left shadow-[4px_4px_0_#000] hover:bg-[var(--oasis-yellow)]"
-                :class="[selected?.id === @js($node['id']) ? 'ring-4 ring-[var(--oasis-focus)] ring-offset-2' : '', unitMoveTarget?.unitId === @js($node['unit_id'] ?? null) ? 'org-unit-drop-target' : '']"
+                :class="[selected?.id === @js($node['id']) ? 'ring-4 ring-[var(--oasis-focus)] ring-offset-2' : '', unitMoveTarget?.unitId === @js($node['unit_id'] ?? null) ? 'org-unit-drop-target' : '', nodeDropTargetClass(@js($node['id']))]"
                 aria-label="Pilih {{ $node['name'] }}. Klik kanan untuk tindakan.">
             <span class="block truncate font-[Helvetica] text-xs font-bold uppercase" title="{{ $node['name'] }}">{{ $node['name'] }}</span>
             <span class="mt-1 block text-xs text-gray-700">{{ $node['role'] }}</span>

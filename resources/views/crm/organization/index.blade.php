@@ -3,7 +3,7 @@
 @section('title', 'Struktur Organisasi')
 
 @section('content')
-<div x-data="organizationWorkspace(@js($flatNodes), @js(route('organization.move', ['user' => '__USER__'])), @js($unitMoveUrl), @js($removeStructureUrl), @js($movableUnitIds), @js($canMove))" class="space-y-5 p-4 md:p-6" @keydown.escape.window="context = null; confirmation = false; unitConfirmation = false; removeConfirmation = false; cancelConnection()" @keydown.delete.window="requestRemoveSelected()">
+<div x-data="organizationWorkspace(@js($flatNodes), @js(route('organization.move', ['user' => '__USER__'])), @js($unitMoveUrl), @js($removeStructureUrl), @js($movableUnitIds), @js($canMove))" data-org-default-view="graph" class="space-y-5 p-4 md:p-6" @keydown.escape.window="context = null; confirmation = false; unitConfirmation = false; removeConfirmation = false; conflictOpen = false; cancelConnection()" @keydown.delete.window="requestRemoveSelected()">
     <div class="flex flex-wrap items-start justify-between gap-4 border-b-2 border-black pb-4">
         <div>
             <p class="font-[Helvetica] text-xs font-bold uppercase tracking-[0.16em] text-gray-600">Administrasi / Organisasi</p>
@@ -39,7 +39,7 @@
             <button type="button" x-show="viewMode === 'graph'" x-cloak @click="toggleFullscreen()" class="min-h-11 border-2 border-black bg-white px-3 py-2">Fullscreen</button>
             <button type="button" x-show="viewMode === 'graph'" x-cloak @click="showUnitLinks = !showUnitLinks" class="min-h-11 border-2 border-black px-3 py-2" :class="showUnitLinks ? 'bg-[#e8eddc]' : 'bg-white'" x-text="showUnitLinks ? 'Sembunyikan relasi unit' : 'Tampilkan relasi unit'"></button>
         </div>
-        <p class="w-full font-[Helvetica] text-xs text-gray-600">Tarik kartu pengguna ke area Pusat atau Cabang untuk memindahkan unit. Tekan <strong>Delete</strong> untuk mengeluarkan pengguna dari struktur tanpa menghapus akun.</p>
+        <p data-org-drop-instructions class="w-full font-[Helvetica] text-xs text-gray-600">Tarik kartu pengguna ke kartu user lain untuk menetapkan atasan, atau ke area Pusat/Cabang untuk memindahkan unit. Gunakan socket atau tindakan keyboard sebagai alternatif drag. Tekan <strong>Delete</strong> untuk mengeluarkan pengguna dari struktur tanpa menghapus akun.</p>
     </div>
 
     <div class="org-workspace">
@@ -175,6 +175,18 @@
             <div class="mt-5 flex justify-end gap-2">
                 <button type="button" @click="unitConfirmation = false; unitMoveTarget = null" class="border-2 border-black bg-white px-3 py-2 font-bold">Batal</button>
                 <button type="button" @click="commitUnitMove()" class="border-2 border-black bg-[var(--oasis-yellow)] px-3 py-2 font-bold" :disabled="saving || !unitMoveTarget?.unitId">Pindahkan</button>
+            </div>
+        </div>
+    </div>
+
+    <div x-show="conflictOpen" x-cloak class="fixed inset-0 z-[70] flex items-center justify-center bg-black/60 p-4" role="dialog" aria-modal="true" aria-labelledby="organization-conflict-title">
+        <div class="w-full max-w-md border-2 border-black bg-white p-5 shadow-[6px_6px_0_#000]">
+            <h2 id="organization-conflict-title" class="text-xl font-bold">Struktur organisasi berubah</h2>
+            <p class="mt-3 text-sm" x-text="conflictMessage"></p>
+            <p class="mt-2 border-2 border-[#d6a500] bg-[#fff8d8] p-3 text-xs">Perubahan lokal tidak ditimpa otomatis. Muat ulang struktur untuk mengambil data terbaru.</p>
+            <div class="mt-5 flex justify-end gap-2 font-[Helvetica] text-sm">
+                <button type="button" @click="conflictOpen = false" class="min-h-11 border-2 border-black bg-white px-3 py-2 font-bold">Tutup</button>
+                <button type="button" @click="reloadOrganization()" class="min-h-11 border-2 border-black bg-black px-3 py-2 font-bold text-white">Muat ulang struktur</button>
             </div>
         </div>
     </div>

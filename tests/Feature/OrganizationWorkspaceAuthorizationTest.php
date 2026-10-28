@@ -46,6 +46,11 @@ class OrganizationWorkspaceAuthorizationTest extends TestCase
             ->assertSee('Tarik socket Bawahan')
             ->assertSee('org-node-item')
             ->assertSee('data-org-node')
+            ->assertSee('data-org-node-draggable', false)
+            ->assertSee('data-org-user-drop', false)
+            ->assertSee('data-org-unit-drop', false)
+            ->assertSeeText('Gunakan socket atau tindakan keyboard sebagai alternatif drag.')
+            ->assertSeeText('Muat ulang struktur')
             ->assertSee('parent_user_id');
 
         $script = file_get_contents(resource_path('js/organization-workspace.js'));

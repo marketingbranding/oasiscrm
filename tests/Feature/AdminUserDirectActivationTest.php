@@ -32,8 +32,10 @@ class AdminUserDirectActivationTest extends TestCase
             'role_id' => $role->id,
             'branch_id' => $branch->id,
             'branch_ids' => [$branch->id],
+            'provisioning_mode' => 'direct',
             'temporary_password' => $password,
             'temporary_password_confirmation' => $password,
+            'submit_action' => 'activate',
         ])->assertRedirect()->assertSessionHas('success', 'Akun berhasil dibuat dan diaktifkan. Pengguna wajib mengganti password saat login pertama.');
 
         $user = User::where('email', 'direct-controller@example.test')->firstOrFail();
@@ -184,8 +186,10 @@ class AdminUserDirectActivationTest extends TestCase
             'role_id' => $role->id,
             'branch_id' => $branch->id,
             'branch_ids' => [$branch->id],
+            'provisioning_mode' => 'direct',
             'temporary_password' => 'Temporary123',
             'temporary_password_confirmation' => 'Temporary123',
+            'submit_action' => 'activate',
         ], $overrides);
 
         if ($role->slug === 'sales' && ! isset($payload['coordinator_user_id'])) {

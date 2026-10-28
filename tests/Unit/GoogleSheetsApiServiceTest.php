@@ -2,6 +2,7 @@
 
 namespace Tests\Unit;
 
+use App\Services\ExternalWriteGuard;
 use App\Services\GoogleSheetsApiService;
 use RuntimeException;
 use Tests\TestCase;
@@ -16,6 +17,6 @@ class GoogleSheetsApiServiceTest extends TestCase
         $this->expectException(RuntimeException::class);
         $this->expectExceptionMessage('Google Sheets credentials file tidak ditemukan: '.$missingCredentialsPath);
 
-        new GoogleSheetsApiService;
+        new GoogleSheetsApiService(new ExternalWriteGuard);
     }
 }

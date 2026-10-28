@@ -127,6 +127,14 @@ class RbacPolicyFoundationTest extends TestCase
 
         foreach (['supervisor', 'branch_manager', 'manager', 'sas', 'sam'] as $role) {
             $viewer = $this->user($role, $branch);
+            if ($role === 'supervisor') {
+                $coordinator = $this->user('sales_coordinator', $branch, true, $viewer);
+                $this->assign($coordinator, $project);
+                SalesCoordinatorSales::create([
+                    'coordinator_user_id' => $coordinator->id,
+                    'sales_user_id' => $sales->id,
+                ]);
+            }
             $this->assertTrue(Gate::forUser($viewer)->allows('view', $localLead), $role.' should see local branch data');
             $this->assertFalse(Gate::forUser($viewer)->allows('view', $foreignLead), $role.' should not see another branch');
         }

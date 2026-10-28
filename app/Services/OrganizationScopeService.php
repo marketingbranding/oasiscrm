@@ -124,7 +124,8 @@ class OrganizationScopeService
             }
 
             $ids = [];
-            if (in_array('branch', $scopes, true)) {
+            $branchScopeApplies = ! ($viewer->hasPrimaryRole('supervisor') && $module === 'sales_pocketbook');
+            if ($branchScopeApplies && in_array('branch', $scopes, true)) {
                 $ids = LeadMaster::query()
                     ->where('is_active', true)
                     ->whereIn('branch_id', $workspaceBranchIds)

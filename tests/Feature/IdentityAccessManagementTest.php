@@ -89,18 +89,21 @@ class IdentityAccessManagementTest extends TestCase
                 'role_id' => $staffRole->id,
                 'branch_id' => $branch->id,
                 'branch_ids' => [$branch->id],
+                'provisioning_mode' => $role === 'superadmin' ? 'direct' : 'invitation',
                 'temporary_password' => 'Initial123',
                 'temporary_password_confirmation' => 'Initial123',
+                'submit_action' => $role === 'superadmin' ? 'activate' : 'draft',
             ])->assertRedirect();
 
-            $this->assertSame(AccountStatus::Active, User::where('email', $email)->firstOrFail()->account_status);
+            $expectedStatus = $role === 'superadmin' ? AccountStatus::Active : AccountStatus::PendingInvitation;
+            $this->assertSame($expectedStatus, User::where('email', $email)->firstOrFail()->account_status);
         }
 
         $unauthorized = $this->user('staff', $branch);
         $this->actingAs($unauthorized)->post(route('admin-users.store'), [
             'name' => 'Tidak Sah', 'email' => 'unauthorized@example.com', 'role_id' => $staffRole->id,
             'branch_id' => $branch->id, 'branch_ids' => [$branch->id],
-            'temporary_password' => 'Initial123', 'temporary_password_confirmation' => 'Initial123',
+            'submit_action' => 'draft',
         ])->assertForbidden();
         $this->assertDatabaseMissing('users', ['email' => 'unauthorized@example.com']);
     }
@@ -114,7 +117,8 @@ class IdentityAccessManagementTest extends TestCase
         $payload = [
             'name' => 'Duplikat', 'email' => strtoupper($existing->email), 'role_id' => $role->id,
             'branch_id' => $branch->id, 'branch_ids' => [$branch->id],
-            'temporary_password' => 'Initial123', 'temporary_password_confirmation' => 'Initial123',
+            'provisioning_mode' => 'direct', 'temporary_password' => 'Initial123',
+            'temporary_password_confirmation' => 'Initial123', 'submit_action' => 'activate',
         ];
 
         $this->actingAs($actor)->post(route('admin-users.store'), $payload)

@@ -24,7 +24,8 @@ class AdminUserOnboardingTest extends TestCase
         $this->actingAs($actor)->post(route('admin-users.store'), [
             'name' => 'Pengguna Baru', 'email' => ' New.User@Example.com ', 'phone' => '08123',
             'role_id' => $role->id, 'branch_id' => $branch->id, 'branch_ids' => [$branch->id],
-            'temporary_password' => 'Initial123', 'temporary_password_confirmation' => 'Initial123',
+            'provisioning_mode' => 'direct', 'temporary_password' => 'Initial123',
+            'temporary_password_confirmation' => 'Initial123', 'submit_action' => 'activate',
         ])->assertRedirect();
 
         $user = User::where('email', 'new.user@example.com')->firstOrFail();
@@ -41,8 +42,7 @@ class AdminUserOnboardingTest extends TestCase
 
         $this->actingAs($pusat)->post(route('admin-users.store'), [
             'name' => 'Illegal', 'email' => 'illegal@example.com', 'role_id' => $superadmin->role_id,
-            'branch_id' => $branch->id, 'branch_ids' => [$branch->id],
-            'temporary_password' => 'Initial123', 'temporary_password_confirmation' => 'Initial123',
+            'branch_id' => $branch->id, 'branch_ids' => [$branch->id], 'submit_action' => 'draft',
         ])->assertForbidden();
         $this->actingAs($pusat)->get(route('admin-users.edit', $superadmin))->assertForbidden();
         $this->actingAs($pusat)->get(route('admin-users.edit', $pusat))->assertForbidden();
@@ -67,13 +67,14 @@ class AdminUserOnboardingTest extends TestCase
 
         $this->actingAs($actor)->get(route('admin-users.create'))
             ->assertOk()
-            ->assertSee('data-slug="sales"', false)
+            ->assertSee('\\u0022slug\\u0022:\\u0022sales\\u0022', false)
             ->assertSee('Cari cabang')
-            ->assertSee('Cari proyek atau cabang')
-            ->assertSee('crm-choice-chip', false)
+            ->assertSee('Cari proyek tambahan')
+            ->assertSee('crm-filter-chip', false)
             ->assertSee('primaryBranchId', false)
-            ->assertSee('projectMatchesBranch', false)
-            ->assertSee('workspaceLabel', false);
+            ->assertSee('filteredPrimaryProjects', false)
+            ->assertSee('filteredAdditionalProjects', false)
+            ->assertSee('reviewScope', false);
     }
 
     public function test_suspend_revokes_sessions_and_reactivate_is_audited(): void

@@ -242,8 +242,10 @@ class SalesProjectAssignmentTest extends TestCase
             'branch_ids' => [$branch->id],
             'assigned_project_ids' => $projectIds,
             'primary_project_id' => $primaryProjectId,
+            'provisioning_mode' => 'invitation',
             'temporary_password' => 'Initial123',
             'temporary_password_confirmation' => 'Initial123',
+            'submit_action' => 'draft',
         ];
 
         if ($role->slug === 'sales') {

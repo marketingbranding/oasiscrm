@@ -157,6 +157,7 @@ class SupervisorSalesPocketbookTest extends TestCase
         $organizationScope = $this->mock(OrganizationScopeService::class);
         $organizationScope->shouldReceive('branchIds')->andReturn([$this->branch->id]);
         $organizationScope->shouldReceive('projectIds')->andReturn([$this->project->id]);
+        $organizationScope->shouldReceive('hasScope')->andReturn(true);
 
         $data = app(SupervisorSalesMonitoringService::class)->resolve($this->supervisor, ['period' => 'today'], false);
 

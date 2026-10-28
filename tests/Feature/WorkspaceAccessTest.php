@@ -87,8 +87,10 @@ class WorkspaceAccessTest extends TestCase
             'role_id' => $role->id,
             'branch_id' => $pusat->id,
             'branch_ids' => [$magelang->id],
+            'provisioning_mode' => 'direct',
             'temporary_password' => 'Initial123',
             'temporary_password_confirmation' => 'Initial123',
+            'submit_action' => 'activate',
             'membership_permissions' => [
                 $pusat->id => ['can_edit' => 1, 'can_sync' => 1],
                 $magelang->id => ['can_sync' => 1],
@@ -136,8 +138,7 @@ class WorkspaceAccessTest extends TestCase
             'role_id' => $role->id,
             'branch_id' => $inactive->id,
             'branch_ids' => [$inactive->id],
-            'temporary_password' => 'Initial123',
-            'temporary_password_confirmation' => 'Initial123',
+            'submit_action' => 'draft',
         ])->assertSessionHasErrors(['branch_id', 'branch_ids.0']);
 
         $this->assertDatabaseMissing('users', ['email' => 'invalid@example.com']);

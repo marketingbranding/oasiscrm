@@ -119,6 +119,7 @@ class OrganizationWorkspaceController extends Controller
                 $request->integer('expected_assignment_id') ?: null,
                 $request->integer('expected_version') ?: null,
                 $request->validated('reason'),
+                $request->exists('expected_organization_unit_id'),
             );
         } catch (OrganizationAssignmentConflictException $exception) {
             return response()->json(['message' => $exception->getMessage()], 409);

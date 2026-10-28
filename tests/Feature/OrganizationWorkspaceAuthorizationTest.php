@@ -108,6 +108,8 @@ class OrganizationWorkspaceAuthorizationTest extends TestCase
             'trapOrganizationConflictFocus',
             'closeOrganizationConflict',
             'organizationConflictReload',
+            'expectedRemovalOrganizationUnitValue',
+            'this.$refs.canvas',
         ] as $contract) {
             $this->assertStringContainsString($contract, $script.$this->getOrganizationWorkspaceMarkup());
         }
@@ -212,6 +214,18 @@ class OrganizationWorkspaceAuthorizationTest extends TestCase
 
         $this->assertDatabaseHas('users', ['id' => $target->id, 'account_status' => AccountStatus::Active->value]);
         $this->assertDatabaseHas('activity_log', ['subject_id' => $target->id, 'event' => 'organization_user_removed']);
+    }
+
+    public function test_remove_from_structure_rejects_stale_explicit_null_unit_precondition(): void
+    {
+        $branch = Branch::create(['name' => 'STA', 'code' => 'STA', 'is_active' => true]);
+        $actor = $this->user('superadmin', $branch);
+        $target = $this->user('staff', $branch);
+        $target->forceFill(['organization_unit_id' => OrganizationUnit::query()->where('branch_id', $branch->id)->firstOrFail()->id])->saveQuietly();
+
+        $this->actingAs($actor)->deleteJson(route('organization.remove-structure', $target), [
+            'expected_organization_unit_id' => null,
+        ])->assertConflict();
     }
 
     public function test_role_administration_is_superadmin_gated_and_accepts_registered_permissions_only(): void

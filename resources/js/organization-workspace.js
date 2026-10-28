@@ -869,6 +869,10 @@ export default function organizationWorkspace(nodes, moveUrl, unitMoveUrl, remov
             this.saving = true;
 
             try {
+                const expectedRemovalOrganizationUnitValue = String(this.selected.unit_id || '').replace(/^unit:/, '');
+                const expectedRemovalOrganizationUnitId = /^\d+$/.test(expectedRemovalOrganizationUnitValue)
+                    ? expectedRemovalOrganizationUnitValue
+                    : null;
                 const response = await fetch(this.removeStructureUrl.replace('__USER__', this.selected.id), {
                     method: 'DELETE',
                     headers: {
@@ -877,7 +881,7 @@ export default function organizationWorkspace(nodes, moveUrl, unitMoveUrl, remov
                         'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
                     },
                     body: JSON.stringify({
-                        expected_organization_unit_id: String(this.selected.unit_id || '').replace('unit:', '') || null,
+                        expected_organization_unit_id: expectedRemovalOrganizationUnitId,
                         expected_assignment_id: this.selected.assignment_id,
                         expected_version: this.selected.assignment_version,
                     }),
@@ -980,7 +984,9 @@ export default function organizationWorkspace(nodes, moveUrl, unitMoveUrl, remov
         },
 
         showOrganizationConflict(message = null) {
-            this.conflictPreviousFocus = document.activeElement;
+            const activeElement = document.activeElement;
+            const hiddenWithMoveModal = activeElement?.closest('[x-show="confirmation"], [x-show="unitConfirmation"], [x-show="removeConfirmation"]');
+            this.conflictPreviousFocus = hiddenWithMoveModal ? this.$refs.canvas : activeElement;
             this.conflictMessage = message || 'Struktur organisasi telah berubah. Muat ulang lalu coba lagi.';
             this.conflictOpen = true;
             this.$nextTick(() => this.$refs.organizationConflictReload?.focus());

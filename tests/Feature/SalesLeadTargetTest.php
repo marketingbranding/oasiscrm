@@ -239,6 +239,11 @@ class SalesLeadTargetTest extends TestCase
             ->assertOk()
             ->assertDontSee('Inactive Status Sales');
 
+        $this->actingAs($superadmin)
+            ->get(route('sales-pocketbook.index', ['target_month' => '2026-10']))
+            ->assertOk()
+            ->assertDontSee('Inactive Status Sales');
+
         $this->actingAs($superadmin)->post(route('sales-lead-targets.store'), [
             'sales_user_id' => $inactiveSales->id,
             'month' => '2026-10',

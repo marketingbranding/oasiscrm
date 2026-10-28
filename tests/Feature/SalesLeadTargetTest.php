@@ -194,6 +194,17 @@ class SalesLeadTargetTest extends TestCase
             ->assertSee('Target bulan ini yang sudah ada akan ditimpa.');
     }
 
+    public function test_bulk_target_changelog_is_registered_once(): void
+    {
+        $this->assertSame(
+            1,
+            \DB::table('changelogs')
+                ->whereNull('version')
+                ->where('title', 'Penerapan Target Lead Massal')
+                ->count(),
+        );
+    }
+
     public function test_target_administration_is_only_available_to_superadmin(): void
     {
         [$branch, , $sales] = $this->context();

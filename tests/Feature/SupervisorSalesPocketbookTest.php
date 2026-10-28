@@ -261,6 +261,19 @@ class SupervisorSalesPocketbookTest extends TestCase
         ));
     }
 
+    public function test_supervisor_generic_lead_query_excludes_unmapped_active_reporting_descendant(): void
+    {
+        $unmappedSales = $this->user('sales', 'Sales Belum Terpetakan', $this->branch, $this->coordinatorA);
+        $unmappedSales->assignedProjects()->attach($this->project, ['is_primary' => true, 'is_active' => true]);
+        $unmappedLead = $this->lead($unmappedSales, 'LEAD_QUERY_SALES_TANPA_PETA', '2026-08-10', 'synced');
+        $mappedLead = $this->lead($this->sales1, 'LEAD_QUERY_SALES_TERPETAKAN', '2026-08-10', 'synced');
+
+        $visibleIds = SalesLead::query()->visibleTo($this->supervisor)->pluck('id')->all();
+
+        $this->assertContains($mappedLead->id, $visibleIds);
+        $this->assertNotContains($unmappedLead->id, $visibleIds);
+    }
+
     public function test_supervisor_with_empty_project_scope_cannot_view_a_team_lead_in_an_accessible_branch_project(): void
     {
         $emptyScopeSupervisor = $this->user('supervisor', 'SPV Tanpa Proyek', $this->branch);

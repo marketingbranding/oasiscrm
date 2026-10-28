@@ -231,6 +231,23 @@ class OrganizationScopeService
                     ->all();
             }
 
+            if ($this->isSupervisorSalesScope($viewer, $module)) {
+                $team = $this->salesTeamScope->forWorkspace(
+                    $viewer,
+                    $this->workspaceBranchIds($viewer),
+                    $this->workspaceAccess->accessibleProjectIds($viewer),
+                    includeHistorical: false,
+                );
+
+                return collect([$team['coordinators'], $team['sales']])
+                    ->flatten(1)
+                    ->pluck('id')
+                    ->map(fn ($id) => (int) $id)
+                    ->unique()
+                    ->values()
+                    ->all();
+            }
+
             $descendantIds = $this->hierarchy->descendantIds($viewer);
             if ($descendantIds === []) {
                 return [];

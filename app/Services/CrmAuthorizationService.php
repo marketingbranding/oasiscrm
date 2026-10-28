@@ -87,7 +87,8 @@ class CrmAuthorizationService
             return false;
         }
 
-        if ($this->hasScope($actor, $module, $action, 'branch')) {
+        if ($this->hasScope($actor, $module, $action, 'branch')
+            && ! $this->organizationScope->requiresProjectScope($actor, $module, $action)) {
             return true;
         }
 

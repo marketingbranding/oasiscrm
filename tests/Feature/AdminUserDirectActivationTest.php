@@ -175,6 +175,13 @@ class AdminUserDirectActivationTest extends TestCase
             'temporary_password_confirmation' => 'different123',
         ]))->assertSessionHasErrors(['temporary_password']);
 
+        $this->actingAs($actor)->post(route('admin-users.store'), $this->payload($role, $branch, [
+            'temporary_password' => 'Temporary123',
+            'temporary_password_confirmation' => 'Temporary123',
+            'submit_action' => 'draft',
+            'send_immediately' => true,
+        ]))->assertSessionHasErrors(['submit_action', 'send_immediately']);
+
         $this->assertDatabaseMissing('users', ['email' => 'forged-direct@example.test']);
     }
 

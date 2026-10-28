@@ -9,6 +9,7 @@ use App\Models\Role;
 use App\Models\SalesCoordinatorSales;
 use App\Models\SalesLead;
 use App\Models\User;
+use App\Services\CrmAuthorizationService;
 use App\Services\OrganizationScopeService;
 use App\Services\SupervisorSalesMonitoringService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -209,6 +210,55 @@ class SupervisorSalesPocketbookTest extends TestCase
         $this->actingAs($this->supervisor)
             ->get(route('sales-leads.show', $lead))
             ->assertForbidden();
+    }
+
+    public function test_supervisor_generic_lead_query_matches_team_and_workspace_scope(): void
+    {
+        $unrelatedSales = $this->user('sales', 'Sales Bukan Tim', $this->branch);
+        $unrelatedSales->assignedProjects()->attach($this->project, ['is_primary' => true, 'is_active' => true]);
+        $unrelatedOwnerLead = $this->lead($unrelatedSales, 'LEAD_QUERY_OWNER_LAIN', '2026-08-10', 'synced');
+
+        $unrelatedProject = LeadMaster::create([
+            'branch_id' => $this->branch->id,
+            'project_name' => 'Proyek Query Tidak Diizinkan',
+            'is_active' => true,
+        ]);
+        $unrelatedProjectLead = $this->lead($this->sales1, 'LEAD_QUERY_PROYEK_LAIN', '2026-08-10', 'synced');
+        $unrelatedProjectLead->update(['project_id' => $unrelatedProject->id]);
+        $allowedLead = $this->lead($this->sales1, 'LEAD_QUERY_DIIZINKAN', '2026-08-10', 'synced');
+
+        $visibleIds = SalesLead::query()->visibleTo($this->supervisor)->pluck('id')->all();
+
+        $this->assertContains($allowedLead->id, $visibleIds);
+        $this->assertNotContains($unrelatedOwnerLead->id, $visibleIds);
+        $this->assertNotContains($unrelatedProjectLead->id, $visibleIds);
+
+        $authorization = app(CrmAuthorizationService::class);
+
+        $this->assertTrue($authorization->allowsRecord(
+            $this->supervisor,
+            'sales_pocketbook',
+            'view',
+            (int) $allowedLead->branch_id,
+            (int) $allowedLead->project_id,
+            (int) $allowedLead->sales_user_id,
+        ));
+        $this->assertFalse($authorization->allowsRecord(
+            $this->supervisor,
+            'sales_pocketbook',
+            'view',
+            (int) $unrelatedOwnerLead->branch_id,
+            (int) $unrelatedOwnerLead->project_id,
+            (int) $unrelatedOwnerLead->sales_user_id,
+        ));
+        $this->assertFalse($authorization->allowsRecord(
+            $this->supervisor,
+            'sales_pocketbook',
+            'view',
+            (int) $unrelatedProjectLead->branch_id,
+            (int) $unrelatedProjectLead->project_id,
+            (int) $unrelatedProjectLead->sales_user_id,
+        ));
     }
 
     public function test_supervisor_with_empty_project_scope_cannot_view_a_team_lead_in_an_accessible_branch_project(): void

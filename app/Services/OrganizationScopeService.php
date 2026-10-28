@@ -48,6 +48,15 @@ class OrganizationScopeService
                 return $this->authorizedUserIdsForBranches($workspaceBranchIds);
             }
 
+            if ($this->isSupervisorSalesScope($viewer, $module)) {
+                $ids = in_array('own', $scopes, true) ? [(int) $viewer->id] : [];
+                if (in_array('team', $scopes, true)) {
+                    $ids = [...$ids, ...$this->teamIds($viewer, $module)];
+                }
+
+                return collect($ids)->map(fn ($id) => (int) $id)->unique()->values()->all();
+            }
+
             $ids = in_array('own', $scopes, true) ? [(int) $viewer->id] : [];
             if (in_array('team', $scopes, true)) {
                 $ids = [...$ids, ...$this->teamIds($viewer, $module)];
@@ -124,7 +133,7 @@ class OrganizationScopeService
             }
 
             $ids = [];
-            $branchScopeApplies = ! ($viewer->hasPrimaryRole('supervisor') && $module === 'sales_pocketbook');
+            $branchScopeApplies = ! $this->isSupervisorSalesScope($viewer, $module);
             if ($branchScopeApplies && in_array('branch', $scopes, true)) {
                 $ids = LeadMaster::query()
                     ->where('is_active', true)
@@ -160,6 +169,10 @@ class OrganizationScopeService
     public function requiresProjectScope(User $viewer, string $module, string $action = 'view'): bool
     {
         $scopes = $this->scopes($viewer, $module, $action);
+
+        if ($this->isSupervisorSalesScope($viewer, $module)) {
+            return true;
+        }
 
         return array_intersect($scopes, ['all', 'branch']) === []
             && array_intersect($scopes, ['own', 'team', 'assigned', 'project']) !== [];
@@ -244,6 +257,11 @@ class OrganizationScopeService
     private function workspaceBranchIds(User $user): array
     {
         return $this->cached('workspace:'.$user->id, fn () => $this->workspaceAccess->accessibleBranchIds($user));
+    }
+
+    private function isSupervisorSalesScope(User $viewer, ?string $module): bool
+    {
+        return $module === 'sales_pocketbook' && $viewer->hasPrimaryRole('supervisor');
     }
 
     private function scopes(User $viewer, ?string $module, string $action): array

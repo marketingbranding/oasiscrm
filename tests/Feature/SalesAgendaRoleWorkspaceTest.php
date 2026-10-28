@@ -10,6 +10,7 @@ use App\Models\LeadMaster;
 use App\Models\Role;
 use App\Models\User;
 use App\Services\SalesAgendaProjectResolver;
+use App\Services\SalesPocketbookOnboardingService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
@@ -46,7 +47,7 @@ class SalesAgendaRoleWorkspaceTest extends TestCase
 
         $this->assertNull(app(SalesAgendaProjectResolver::class)->resolve($sales, '2026-08-10'));
         $this->actingAs($sales)->get(route('sales-pocketbook.index'))->assertOk()
-            ->assertSee('Proyek utama belum ditentukan. Hubungi admin untuk menetapkan proyek utama.')
+            ->assertSee('Proyek utama belum ditentukan. Hubungi admin untuk menetapkan proyek sebelum membuat agenda.')
             ->assertDontSee('name="scheduled_date"', false);
     }
 
@@ -69,7 +70,7 @@ class SalesAgendaRoleWorkspaceTest extends TestCase
         $request->setUserResolver(fn () => $sales);
 
         $this->assertTrue($request->authorize());
-        $this->assertSame(['sales_user_id', 'project_id', 'scheduled_date', 'sales_activity_category', 'title', 'location', 'activity_result', 'photos', 'photos.*'], array_keys($request->rules()));
+        $this->assertSame(['sales_user_id', 'project_id', 'scheduled_date', 'start_time', 'end_time', 'sales_activity_category', 'title', 'location', 'activity_result', 'photos', 'photos.*'], array_keys($request->rules()));
         $this->assertSame(['nullable', 'array', 'max:2'], $request->rules()['photos']);
         $this->assertSame(['required', 'file', 'max:10240'], $request->rules()['photos.*']);
         $this->assertSame(['required', 'string'], array_slice($request->rules()['sales_activity_category'], 0, 2));
@@ -120,8 +121,11 @@ class SalesAgendaRoleWorkspaceTest extends TestCase
     {
         $branch = Branch::create(['name' => 'Kudus', 'code' => 'KDS', 'is_active' => true]);
 
+        $sales = $this->user('sales', $branch);
+        app(SalesPocketbookOnboardingService::class)->skip($sales);
+
         return [
-            $this->user('sales', $branch),
+            $sales,
             LeadMaster::create(['branch_id' => $branch->id, 'project_name' => 'Oasis A', 'is_active' => true]),
             LeadMaster::create(['branch_id' => $branch->id, 'project_name' => 'Oasis B', 'is_active' => true]),
         ];

@@ -1,3 +1,6 @@
+/* Hallmark · v2.0.0 · redesign: full · scope: app · theme: OASIS paper · hero: four-step visual sequence · built: the project
+ * critique: preserve the paper-and-tear idea from the reference while replacing the generic placeholder illustration with one concrete visual per step.
+ */
 @import "tailwindcss";
 @plugin "@tailwindcss/forms";
 @source "../../vendor/laravel/framework/src/Illuminate/Pagination/resources/views/*.blade.php";
@@ -102,6 +105,24 @@
     --oasis-accent-expenses: #b3bd95;
     --oasis-accent-reports: #d77a7a;
     --oasis-accent-administration: #8c9ae0;
+
+    /* Buku Saku Sales onboarding redesign tokens */
+    --oasis-onboarding-paper: #fbf7ee;
+    --oasis-onboarding-ink: #11110f;
+    --oasis-onboarding-muted: #68655c;
+    --oasis-onboarding-line: #11110f;
+    --oasis-onboarding-soft: #e7e2d6;
+    --oasis-onboarding-yellow: var(--oasis-yellow);
+    --oasis-onboarding-shadow: 6px 6px 0 var(--oasis-onboarding-ink);
+
+    /* Buku Saku Sales full workflow redesign tokens */
+    --oasis-sales-paper: #fffdf5;
+    --oasis-sales-paper-soft: #f7f3e8;
+    --oasis-sales-ink: #11110f;
+    --oasis-sales-rule: #c9c4b8;
+    --oasis-sales-muted: #716d64;
+    --oasis-sales-selected: #fff3b0;
+    --oasis-sales-shadow: 4px 4px 0 rgb(17 17 15 / 14%);
 }
 
 .crm-type-display,
@@ -1155,6 +1176,30 @@
     padding: var(--oasis-space-4);
 }
 
+.sales-lead-status-tabs {
+    display: flex;
+    gap: 0.5rem;
+    overflow-x: auto;
+    margin-bottom: var(--oasis-space-3);
+    border-bottom: 2px solid #000;
+}
+
+.sales-lead-status-tabs a {
+    min-height: 2.75rem;
+    display: inline-flex;
+    align-items: center;
+    padding: 0.5rem 0.75rem;
+    color: #000;
+    font: 700 var(--oasis-type-caption-size)/1.2 var(--oasis-font-controls);
+    text-decoration: none;
+    white-space: nowrap;
+}
+
+.sales-lead-status-tabs a.is-active,
+.sales-lead-status-tabs a:hover {
+    background: var(--oasis-accent-sales);
+}
+
 .sales-lead-form-group {
     display: grid;
     gap: var(--oasis-space-2);
@@ -1176,6 +1221,29 @@
     color: #fff;
     font-weight: 400;
     text-transform: none;
+}
+
+.sales-lead-optional-fields > summary {
+    cursor: pointer;
+    list-style: none;
+    border: 1px solid #000;
+    background: #000;
+    padding: 4px 8px;
+    color: var(--oasis-accent-sales);
+    font: 700 var(--oasis-type-caption-size)/1.2 var(--oasis-font-controls);
+    text-transform: uppercase;
+}
+
+.sales-lead-optional-fields > summary::-webkit-details-marker { display: none; }
+.sales-lead-optional-fields > summary::after { float: right; content: '+'; color: #fff; }
+.sales-lead-optional-fields[open] > summary::after { content: '−'; }
+.sales-lead-optional-fields > summary span { color: #fff; font-weight: 400; text-transform: none; }
+
+.sales-lead-server-context {
+    border: 1px dashed #000;
+    background: #fff3b0;
+    padding: 0.65rem 0.75rem;
+    font: var(--oasis-type-compact-size)/1.4 var(--oasis-font-data);
 }
 
 .sales-lead-form-grid {
@@ -1262,6 +1330,620 @@
 .sales-lead-mobile-card h3 { overflow-wrap: anywhere; font: 700 1.1rem/1.25 var(--oasis-font-data); }
 .sales-lead-mobile-card dl { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--oasis-space-2); }
 .sales-lead-mobile-card dd { overflow-wrap: anywhere; font: var(--oasis-type-compact-size)/1.35 var(--oasis-font-data); }
+.sales-lead-mobile-card.is-completed { border-color: var(--oasis-success); }
+
+.sales-lead-status-history {
+    display: grid;
+    gap: 0.35rem;
+}
+
+.sales-lead-status-history li {
+    display: flex;
+    justify-content: space-between;
+    gap: 0.75rem;
+    border-left: 3px solid var(--oasis-accent-sales);
+    padding: 0.35rem 0.5rem;
+    background: var(--oasis-surface-muted);
+}
+
+.sales-lead-status-history span {
+    color: var(--oasis-text-muted);
+    font-size: 0.8rem;
+}
+
+.sales-lead-completed-note {
+    border: 1px solid var(--oasis-success);
+    background: #eef8ef;
+    padding: 0.65rem 0.75rem;
+    font-weight: 700;
+}
+
+.sales-pocketbook-help-link {
+    min-height: 2.75rem;
+    color: #0000ee;
+    font: 700 var(--oasis-type-caption-size)/1.2 var(--oasis-font-controls);
+    text-decoration: underline;
+}
+
+body.sales-pocketbook-onboarding-shell {
+    overflow-x: clip;
+    background: var(--oasis-page-bg);
+}
+
+body.sales-pocketbook-onboarding-shell > header,
+body.sales-pocketbook-onboarding-shell .crm-sidebar,
+body.sales-pocketbook-onboarding-shell .crm-main > footer,
+body.sales-pocketbook-onboarding-shell > .fixed,
+body.sales-pocketbook-onboarding-shell .crm-global-toasts,
+body.sales-pocketbook-onboarding-shell .crm-global-conflict,
+body.sales-pocketbook-onboarding-shell > [x-data="oasisPwa()"] {
+    display: none;
+}
+
+body.sales-pocketbook-onboarding-shell {
+    overflow-x: clip;
+}
+
+body.sales-pocketbook-onboarding-shell .crm-shell-frame {
+    min-height: 100vh;
+    padding-top: 0;
+}
+
+body.sales-pocketbook-onboarding-shell .crm-main {
+    margin-left: 0;
+}
+
+body.sales-pocketbook-onboarding-shell .crm-page-shell,
+body.sales-pocketbook-onboarding-shell .crm-page-body {
+    padding: 0;
+}
+
+.sales-pocketbook-onboarding {
+    display: grid;
+    grid-template-rows: auto auto minmax(0, 1fr) auto;
+    width: min(100%, 64rem);
+    min-height: 100svh;
+    gap: clamp(var(--oasis-space-4), 3vw, var(--oasis-space-8));
+    margin: 0 auto;
+    background: var(--oasis-onboarding-paper);
+    padding: clamp(var(--oasis-space-4), 4vw, var(--oasis-space-8));
+    color: var(--oasis-onboarding-ink);
+}
+
+.sales-pocketbook-onboarding-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--oasis-space-4);
+}
+
+.sales-pocketbook-onboarding-brand {
+    font: 900 clamp(1rem, 2.5vw, 1.35rem)/1 var(--oasis-font-display);
+    letter-spacing: 0.03em;
+}
+
+.sales-pocketbook-onboarding-skip {
+    min-height: var(--oasis-control-height);
+    border: 0;
+    background: transparent;
+    padding: var(--oasis-space-2) 0;
+    color: var(--oasis-onboarding-muted);
+    font: 700 var(--oasis-type-body-size)/1.2 var(--oasis-font-controls);
+    text-decoration: underline;
+    text-underline-offset: 0.2em;
+}
+
+.sales-pocketbook-onboarding-progress {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: var(--oasis-space-2) var(--oasis-space-4);
+    align-items: center;
+    color: var(--oasis-onboarding-muted);
+    font: 700 var(--oasis-type-compact-size)/1.2 var(--oasis-font-controls);
+}
+
+.sales-pocketbook-onboarding-progress strong {
+    color: var(--oasis-onboarding-ink);
+    font-variant-numeric: tabular-nums;
+}
+
+.sales-pocketbook-onboarding-dots {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-column: 1 / -1;
+    gap: var(--oasis-space-1);
+}
+
+.sales-pocketbook-onboarding-dots span {
+    height: 0.35rem;
+    background: var(--oasis-onboarding-soft);
+}
+
+.sales-pocketbook-onboarding-dots span.is-active {
+    background: var(--oasis-onboarding-ink);
+}
+
+.sales-pocketbook-onboarding-stage {
+    display: grid;
+    min-height: 0;
+    align-items: center;
+    justify-items: center;
+}
+
+.sales-pocketbook-onboarding-slide {
+    display: grid;
+    grid-template-columns: minmax(0, 1.1fr) minmax(16rem, 0.9fr);
+    align-items: center;
+    gap: clamp(var(--oasis-space-6), 5vw, var(--oasis-space-12));
+    width: min(100%, 56rem);
+}
+
+.sales-pocketbook-onboarding-slide[hidden] {
+    display: none;
+}
+
+.sales-pocketbook-onboarding-visual {
+    position: relative;
+    display: grid;
+    min-width: 0;
+    min-height: clamp(16rem, 42vw, 25rem);
+    align-content: center;
+    overflow: visible;
+}
+
+.sales-pocketbook-onboarding-visual--book {
+    align-items: center;
+}
+
+.sales-pocketbook-onboarding-sheet,
+.sales-pocketbook-onboarding-agenda-card,
+.sales-pocketbook-onboarding-receipt,
+.sales-pocketbook-onboarding-lead-card {
+    border: var(--oasis-border-width-strong) solid var(--oasis-onboarding-line);
+}
+
+.sales-pocketbook-onboarding-sheet {
+    position: absolute;
+    display: grid;
+    gap: var(--oasis-space-3);
+    width: min(78%, 22rem);
+    padding: clamp(var(--oasis-space-4), 4vw, var(--oasis-space-6));
+    font: 700 clamp(0.8rem, 2vw, 1rem)/1.2 var(--oasis-font-controls);
+}
+
+.sales-pocketbook-onboarding-sheet strong {
+    font: 900 clamp(1.5rem, 5vw, 2.75rem)/1 var(--oasis-font-display);
+}
+
+.sales-pocketbook-onboarding-sheet span {
+    display: grid;
+    grid-template-columns: 1.25rem minmax(0, 1fr);
+    gap: var(--oasis-space-2);
+    align-items: start;
+}
+
+.sales-pocketbook-onboarding-sheet span::before {
+    width: 1.05rem;
+    height: 1.05rem;
+    border: var(--oasis-border-width-strong) solid currentColor;
+    content: '';
+}
+
+.sales-pocketbook-onboarding-sheet span.is-checked::before {
+    background: var(--oasis-onboarding-ink);
+}
+
+.sales-pocketbook-onboarding-sheet small {
+    display: block;
+    grid-column: 2;
+    color: var(--oasis-onboarding-yellow);
+    font-size: 0.75em;
+}
+
+.sales-pocketbook-onboarding-sheet--agenda {
+    top: 8%;
+    left: 2%;
+    z-index: 1;
+    min-height: 74%;
+    transform: rotate(-4deg);
+    background: var(--oasis-onboarding-yellow);
+}
+
+.sales-pocketbook-onboarding-sheet--leads {
+    right: 0;
+    bottom: 0;
+    z-index: 2;
+    min-height: 70%;
+    transform: rotate(3deg);
+    background: var(--oasis-onboarding-ink);
+    color: var(--oasis-onboarding-paper);
+    box-shadow: var(--oasis-onboarding-shadow);
+}
+
+.sales-pocketbook-onboarding-sheet--leads span {
+    display: block;
+    font-size: clamp(0.9rem, 2vw, 1.2rem);
+}
+
+.sales-pocketbook-onboarding-sheet--leads span::before {
+    display: none;
+}
+
+.sales-pocketbook-onboarding-visual--agenda {
+    gap: var(--oasis-space-3);
+}
+
+.sales-pocketbook-onboarding-agenda-row {
+    display: grid;
+    grid-template-columns: 5rem minmax(0, 1fr);
+    gap: var(--oasis-space-3);
+    align-items: start;
+}
+
+.sales-pocketbook-onboarding-agenda-row > strong {
+    padding-top: var(--oasis-space-3);
+    color: var(--oasis-onboarding-muted);
+    font: 700 var(--oasis-type-body-size)/1.15 var(--oasis-font-controls);
+}
+
+.sales-pocketbook-onboarding-agenda-row.is-today > strong {
+    color: var(--oasis-onboarding-ink);
+}
+
+.sales-pocketbook-onboarding-agenda-card {
+    display: grid;
+    gap: var(--oasis-space-2);
+    min-width: 0;
+    padding: var(--oasis-space-4);
+    background: var(--oasis-surface);
+    font: 700 var(--oasis-type-body-size)/1.2 var(--oasis-font-controls);
+}
+
+.sales-pocketbook-onboarding-agenda-row.is-today .sales-pocketbook-onboarding-agenda-card {
+    background: var(--oasis-onboarding-yellow);
+}
+
+.sales-pocketbook-onboarding-agenda-card small {
+    color: var(--oasis-danger);
+}
+
+.sales-pocketbook-onboarding-agenda-card em {
+    display: grid;
+    grid-template-columns: 1rem minmax(0, 1fr);
+    gap: var(--oasis-space-2);
+    align-items: start;
+    font-style: normal;
+    font-weight: 700;
+}
+
+.sales-pocketbook-onboarding-agenda-card em::before {
+    width: 1rem;
+    height: 1rem;
+    border: var(--oasis-border-width-strong) solid currentColor;
+    content: '';
+}
+
+.sales-pocketbook-onboarding-agenda-card small:last-child {
+    border: var(--oasis-border-width-strong) dashed currentColor;
+    padding: var(--oasis-space-2);
+    color: var(--oasis-onboarding-ink);
+    text-align: center;
+}
+
+.sales-pocketbook-onboarding-visual--tear {
+    align-items: center;
+    justify-items: center;
+    gap: var(--oasis-space-3);
+}
+
+.sales-pocketbook-onboarding-handoff {
+    position: relative;
+    z-index: 2;
+    display: inline-flex;
+    min-height: var(--oasis-control-height);
+    align-items: center;
+    background: var(--oasis-onboarding-ink);
+    padding: var(--oasis-space-2) var(--oasis-space-4);
+    color: var(--oasis-onboarding-yellow);
+    font: 700 var(--oasis-type-body-size)/1.2 var(--oasis-font-controls);
+}
+
+.sales-pocketbook-onboarding-handoff::after {
+    position: absolute;
+    bottom: -2.4rem;
+    left: 50%;
+    width: 0.2rem;
+    height: 2.4rem;
+    background: var(--oasis-onboarding-ink);
+    content: '';
+    transform: translateX(-50%);
+}
+
+.sales-pocketbook-onboarding-receipt {
+    position: relative;
+    display: grid;
+    gap: var(--oasis-space-3);
+    width: min(90%, 26rem);
+    padding: var(--oasis-space-6) var(--oasis-space-5) var(--oasis-space-8);
+    background: var(--oasis-onboarding-paper);
+    box-shadow: var(--oasis-onboarding-shadow);
+    font: var(--oasis-type-body-size)/1.25 var(--oasis-font-system);
+    transform: rotate(-3deg);
+}
+
+.sales-pocketbook-onboarding-receipt strong {
+    border-bottom: var(--oasis-border-width-standard) solid var(--oasis-onboarding-line);
+    padding-bottom: var(--oasis-space-3);
+    font-size: clamp(1rem, 2.5vw, 1.35rem);
+    text-align: center;
+}
+
+.sales-pocketbook-onboarding-receipt small {
+    border-top: var(--oasis-border-width-standard) solid var(--oasis-onboarding-line);
+    padding-top: var(--oasis-space-3);
+    color: var(--oasis-onboarding-muted);
+    font-family: var(--oasis-font-controls);
+}
+
+.sales-pocketbook-onboarding-tear {
+    position: absolute;
+    right: 0;
+    bottom: -0.55rem;
+    left: 0;
+    height: 0.75rem;
+    background: var(--oasis-onboarding-paper);
+    clip-path: polygon(0 0, 5% 70%, 10% 15%, 15% 80%, 20% 20%, 25% 75%, 30% 10%, 35% 80%, 40% 20%, 45% 75%, 50% 10%, 55% 80%, 60% 20%, 65% 75%, 70% 10%, 75% 80%, 80% 20%, 85% 75%, 90% 10%, 95% 80%, 100% 0);
+}
+
+.sales-pocketbook-onboarding-visual--lead {
+    align-items: center;
+}
+
+.sales-pocketbook-onboarding-lead-card {
+    display: grid;
+    gap: var(--oasis-space-5);
+    width: 100%;
+    padding: clamp(var(--oasis-space-4), 4vw, var(--oasis-space-6));
+    background: var(--oasis-surface);
+    box-shadow: var(--oasis-onboarding-shadow);
+}
+
+.sales-pocketbook-onboarding-lead-heading {
+    display: flex;
+    align-items: start;
+    justify-content: space-between;
+    gap: var(--oasis-space-3);
+}
+
+.sales-pocketbook-onboarding-lead-heading > span {
+    display: grid;
+    gap: var(--oasis-space-1);
+    min-width: 0;
+}
+
+.sales-pocketbook-onboarding-lead-heading strong {
+    font: 900 clamp(1.2rem, 4vw, 2rem)/1 var(--oasis-font-display);
+}
+
+.sales-pocketbook-onboarding-lead-heading small {
+    color: var(--oasis-onboarding-muted);
+    font: 700 var(--oasis-type-body-size)/1.2 var(--oasis-font-controls);
+}
+
+.sales-pocketbook-onboarding-lead-heading > b {
+    flex: 0 0 auto;
+    border: var(--oasis-border-width-strong) solid var(--oasis-onboarding-line);
+    background: var(--oasis-onboarding-yellow);
+    padding: var(--oasis-space-2);
+    font: 700 var(--oasis-type-compact-size)/1.1 var(--oasis-font-controls);
+}
+
+.sales-pocketbook-onboarding-lead-progress {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: var(--oasis-space-2);
+}
+
+.sales-pocketbook-onboarding-lead-progress span {
+    display: grid;
+    gap: var(--oasis-space-2);
+    min-width: 0;
+    font: 700 var(--oasis-type-compact-size)/1.1 var(--oasis-font-controls);
+    text-align: center;
+}
+
+.sales-pocketbook-onboarding-lead-progress span::before {
+    height: 0.9rem;
+    border: var(--oasis-border-width-strong) solid var(--oasis-onboarding-line);
+    background: var(--oasis-onboarding-yellow);
+    content: '';
+}
+
+.sales-pocketbook-onboarding-lead-progress span:last-child::before {
+    background: var(--oasis-onboarding-soft);
+}
+
+.sales-pocketbook-onboarding-lead-action {
+    display: flex;
+    min-height: var(--oasis-control-height);
+    align-items: center;
+    justify-content: center;
+    background: var(--oasis-onboarding-ink);
+    color: var(--oasis-onboarding-yellow);
+    font: 700 var(--oasis-type-body-size)/1.2 var(--oasis-font-controls);
+}
+
+.sales-pocketbook-onboarding-kicker {
+    margin: 0;
+    color: var(--oasis-onboarding-muted);
+    font: 700 var(--oasis-type-compact-size)/1.2 var(--oasis-font-controls);
+}
+
+.sales-pocketbook-onboarding-slide h1 {
+    max-width: 25rem;
+    margin: var(--oasis-space-3) 0 0;
+    overflow-wrap: break-word;
+    font: 900 clamp(2rem, 5vw, 3.8rem)/0.98 var(--oasis-font-display);
+}
+
+.sales-pocketbook-onboarding-slide > p:last-child {
+    max-width: 30rem;
+    margin: var(--oasis-space-4) 0 0;
+    color: var(--oasis-onboarding-muted);
+    font: var(--oasis-type-body-size)/1.55 var(--oasis-font-controls);
+}
+
+.sales-pocketbook-onboarding-actions {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: var(--oasis-space-2);
+    min-height: var(--oasis-control-height);
+    border-top: var(--oasis-border-width-standard) solid var(--oasis-onboarding-soft);
+    padding-top: var(--oasis-space-4);
+}
+
+.sales-pocketbook-onboarding-actions form {
+    margin: 0;
+}
+
+.sales-pocketbook-onboarding-actions .crm-button {
+    min-width: 8.5rem;
+}
+
+.sales-pocketbook-onboarding button:focus-visible {
+    outline: var(--oasis-focus-width) solid var(--oasis-focus);
+    outline-offset: var(--oasis-focus-offset);
+}
+
+.sales-pocketbook-onboarding .crm-button {
+    transition: background-color var(--oasis-duration-fast) var(--oasis-ease-standard), color var(--oasis-duration-fast) var(--oasis-ease-standard), transform var(--oasis-duration-fast) var(--oasis-ease-standard);
+}
+
+.sales-pocketbook-onboarding .crm-button:hover {
+    transform: translateY(-2px);
+}
+
+.sales-pocketbook-onboarding .crm-button:active {
+    transform: translateY(1px);
+}
+
+@media (max-width: 767px) {
+    .sales-pocketbook-onboarding {
+        gap: var(--oasis-space-4);
+        padding: var(--oasis-space-4);
+    }
+
+    .sales-pocketbook-onboarding-stage {
+        align-items: start;
+        padding-block: var(--oasis-space-4);
+    }
+
+    .sales-pocketbook-onboarding-slide {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr);
+        gap: var(--oasis-space-3);
+    }
+
+    .sales-pocketbook-onboarding-visual {
+        min-height: clamp(15rem, 72vw, 22rem);
+        order: -1;
+    }
+
+    .sales-pocketbook-onboarding-slide h1 {
+        max-width: none;
+        font-size: clamp(2rem, 11vw, 3.2rem);
+    }
+
+    .sales-pocketbook-onboarding-slide > p:last-child {
+        margin-top: var(--oasis-space-2);
+    }
+
+    .sales-pocketbook-onboarding-actions {
+        position: sticky;
+        bottom: 0;
+        z-index: 3;
+        min-height: calc(var(--oasis-control-height) + var(--oasis-space-4));
+        background: var(--oasis-onboarding-paper);
+        padding-bottom: var(--oasis-space-2);
+    }
+
+    .sales-pocketbook-onboarding-actions .crm-button {
+        flex: 1 1 0;
+    }
+}
+
+@media (max-width: 430px) {
+    .sales-pocketbook-onboarding {
+        padding: var(--oasis-space-3);
+    }
+
+    .sales-pocketbook-onboarding-sheet {
+        width: min(82%, 19rem);
+        padding: var(--oasis-space-3);
+    }
+
+    .sales-pocketbook-onboarding-sheet--agenda {
+        left: 0;
+    }
+
+    .sales-pocketbook-onboarding-sheet--leads {
+        right: -0.25rem;
+    }
+
+    .sales-pocketbook-onboarding-agenda-row {
+        grid-template-columns: 4.25rem minmax(0, 1fr);
+        gap: var(--oasis-space-2);
+    }
+
+    .sales-pocketbook-onboarding-agenda-card,
+    .sales-pocketbook-onboarding-lead-card {
+        padding: var(--oasis-space-3);
+    }
+
+    .sales-pocketbook-onboarding-receipt {
+        width: 94%;
+        padding: var(--oasis-space-4) var(--oasis-space-3) var(--oasis-space-6);
+        font-size: var(--oasis-type-compact-size);
+    }
+
+    .sales-pocketbook-onboarding-lead-heading {
+        display: grid;
+    }
+
+    .sales-pocketbook-onboarding-lead-heading > b {
+        justify-self: start;
+    }
+
+    .sales-pocketbook-onboarding-lead-progress {
+        gap: var(--oasis-space-1);
+    }
+
+    .sales-pocketbook-onboarding-lead-progress span {
+        font-size: var(--oasis-type-caption-size);
+    }
+
+    .sales-pocketbook-onboarding-actions {
+        gap: var(--oasis-space-1);
+    }
+
+    .sales-pocketbook-onboarding-actions .crm-button {
+        min-width: 0;
+        padding-inline: var(--oasis-space-2);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .sales-pocketbook-onboarding-slide,
+    .sales-pocketbook-onboarding .crm-button {
+        transition: none;
+    }
+
+    .sales-pocketbook-onboarding .crm-button:hover,
+    .sales-pocketbook-onboarding .crm-button:active {
+        transform: none;
+    }
+}
 
 @media (max-width: 639px) {
     .sales-lead-entry-form { padding: var(--oasis-space-3); }
@@ -2603,6 +3285,39 @@
     padding: 0.75rem 1rem;
 }
 
+.sales-agenda-day-switcher {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.5rem;
+    margin-bottom: 1rem;
+}
+
+.sales-agenda-day-switcher-link {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    min-height: 2.75rem;
+    padding: 0.5rem 0.65rem;
+    border: 2px solid #000;
+    background: #fff;
+    color: #000;
+    font-family: Helvetica, Arial, sans-serif;
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-transform: uppercase;
+}
+
+.sales-agenda-day-switcher-link.is-active,
+.sales-agenda-day-switcher-link:hover {
+    background: #fcc20f;
+}
+
+.sales-agenda-day-switcher-link strong {
+    min-width: 1.5rem;
+    text-align: right;
+}
+
 .sales-agenda-paper-list {
     list-style: none;
     margin: 0;
@@ -2693,6 +3408,15 @@
     font-weight: 700;
     text-transform: uppercase;
     color: #444;
+}
+
+.sales-agenda-paper-detail-link {
+    flex: none;
+    color: #0000ee;
+    font-family: Helvetica, Arial, sans-serif;
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-decoration: underline;
 }
 
 .sales-agenda-paper-remove {
@@ -2943,6 +3667,11 @@
 }
 
 @media (max-width: 767px) {
+    .sales-agenda-day-switcher {
+        position: sticky;
+        top: 0.5rem;
+        z-index: 2;
+    }
     .sales-agenda-paper-item {
         flex-wrap: wrap;
     }
@@ -2964,5 +3693,436 @@
     .sales-agenda-paper-duration {
         margin-left: auto;
     }
+    .sales-agenda-paper-detail-link {
+        width: 100%;
+        min-height: 2.75rem;
+        display: inline-flex;
+        align-items: center;
+    }
     .sales-agenda-paper-group .sales-agenda-paper-complete { width: 100%; }
+}
+
+.sales-agenda-detail-summary {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 0.5rem;
+}
+
+.sales-agenda-detail-summary > div {
+    display: grid;
+    gap: 0.2rem;
+    min-width: 0;
+    border: 1px solid #999;
+    background: #fffdf5;
+    padding: 0.7rem;
+}
+
+.sales-agenda-detail-summary span,
+.sales-agenda-task-add label,
+.sales-agenda-completion-form label,
+.sales-agenda-detail form label {
+    font-family: Helvetica, Arial, sans-serif;
+    font-size: 0.7rem;
+    font-weight: 700;
+    text-transform: uppercase;
+}
+
+.sales-agenda-task-list {
+    display: grid;
+    gap: 0.5rem;
+}
+
+.sales-agenda-task-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    border-bottom: 1px solid #ddd;
+    padding: 0.35rem 0;
+}
+
+.sales-agenda-task-toggle,
+.sales-agenda-task-delete {
+    min-height: 2.75rem;
+    font-weight: 700;
+}
+
+.sales-agenda-task-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    text-align: left;
+}
+
+.sales-agenda-task-toggle span:first-child {
+    font-size: 1.25rem;
+}
+
+.sales-agenda-task-delete {
+    color: var(--oasis-danger, #c0392b);
+    text-decoration: underline;
+}
+
+.sales-agenda-task-add {
+    display: grid;
+    gap: 0.5rem;
+    margin-top: 1rem;
+    border-top: 1px dashed #000;
+    padding-top: 1rem;
+}
+
+.sales-agenda-photo-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.75rem;
+}
+
+.sales-agenda-photo-card {
+    display: grid;
+    gap: 0.35rem;
+    color: #0000ee;
+    font-size: 0.8rem;
+    font-weight: 700;
+    text-decoration: underline;
+}
+
+.sales-agenda-photo-card img {
+    aspect-ratio: 4 / 3;
+    width: 100%;
+    border: 1px solid #000;
+    object-fit: cover;
+}
+
+.sales-agenda-result-readonly {
+    white-space: pre-line;
+}
+
+.sales-agenda-completion-form {
+    display: grid;
+    gap: 0.5rem;
+}
+
+.sales-agenda-sticky-action {
+    position: sticky;
+    bottom: 0.5rem;
+    z-index: 2;
+    display: flex;
+    justify-content: flex-end;
+    margin-top: 0.5rem;
+    background: rgba(255, 253, 245, 0.94);
+    padding-top: 0.5rem;
+}
+
+@media (max-width: 767px) {
+    .sales-agenda-detail-summary {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .sales-agenda-photo-grid {
+        grid-template-columns: minmax(0, 1fr);
+    }
+}
+
+@media (max-width: 390px) {
+    .sales-agenda-paper-form {
+        padding-inline: 0.5rem;
+    }
+
+    .sales-agenda-day-switcher-link {
+        display: grid;
+        justify-content: center;
+        text-align: center;
+    }
+}
+
+/* ============================================================
+ Buku Saku Sales 2.2 workflow composition
+ ============================================================ */
+
+.sales-pocketbook-workspace {
+    --sales-panel-padding: clamp(var(--oasis-space-3), 2vw, var(--oasis-space-5));
+    min-width: 0;
+    color: var(--oasis-sales-ink);
+}
+
+.sales-pocketbook-workspace .crm-page-header,
+.sales-pocketbook-workspace .crm-page-header.sales-pocketbook-detail-hero {
+    align-items: flex-end;
+    border-left: var(--oasis-border-width-emphasis) solid var(--oasis-accent-sales);
+    background: var(--oasis-sales-paper);
+    padding: var(--oasis-space-4) var(--oasis-space-5);
+    box-shadow: var(--oasis-sales-shadow);
+}
+
+.sales-pocketbook-workspace .crm-page-header-title,
+.sales-pocketbook-workspace .crm-section-title {
+    overflow-wrap: break-word;
+    min-width: 0;
+}
+
+.sales-pocketbook-context-strip {
+    border: var(--oasis-border-width-standard) solid var(--oasis-sales-rule);
+    border-left: var(--oasis-border-width-emphasis) solid var(--oasis-accent-sales);
+    background: var(--oasis-sales-paper);
+    padding-inline: var(--sales-panel-padding);
+}
+
+.sales-pocketbook-context-strip > div {
+    min-height: 3.5rem;
+    align-content: center;
+    border-right: var(--oasis-border-width-subtle) solid var(--oasis-sales-rule);
+    padding-right: var(--oasis-space-3);
+}
+
+.sales-pocketbook-context-strip > div:last-child { border-right: 0; }
+
+.sales-pocketbook-context-strip span {
+    color: var(--oasis-sales-muted);
+    font: var(--oasis-type-caption-size)/1.25 var(--oasis-font-controls);
+}
+
+.sales-pocketbook-context-strip strong {
+    color: var(--oasis-sales-ink);
+    font: 700 var(--oasis-type-compact-size)/1.35 var(--oasis-font-data);
+}
+
+.sales-pocketbook-workspace .sales-pocketbook-tabs {
+    border-bottom-color: var(--oasis-sales-ink);
+    background: var(--oasis-sales-paper-soft);
+}
+
+.sales-pocketbook-workspace .sales-pocketbook-tab {
+    border-color: var(--oasis-sales-ink);
+    background: var(--oasis-sales-paper);
+    color: var(--oasis-sales-ink);
+    font: 700 var(--oasis-type-compact-size)/1.2 var(--oasis-font-controls);
+    text-transform: none;
+}
+
+.sales-pocketbook-workspace .sales-pocketbook-tab:hover:not(.active),
+.sales-pocketbook-workspace .sales-pocketbook-tab:focus-visible {
+    background: var(--oasis-sales-selected);
+}
+
+.sales-pocketbook-workspace .sales-pocketbook-tab.active {
+    background: var(--oasis-accent-sales);
+}
+
+.sales-pocketbook-workspace .sales-pocketbook-tab:focus-visible,
+.sales-pocketbook-focus-ring:focus-visible,
+.sales-pocketbook-workspace a:focus-visible,
+.sales-pocketbook-workspace button:focus-visible {
+    outline: var(--oasis-focus-width) solid var(--oasis-focus);
+    outline-offset: var(--oasis-focus-offset);
+}
+
+.sales-pocketbook-screen-section {
+    min-width: 0;
+    border: var(--oasis-border-width-standard) solid var(--oasis-sales-rule);
+    background: var(--oasis-sales-paper);
+    box-shadow: var(--oasis-sales-shadow);
+    padding: var(--sales-panel-padding);
+}
+
+.sales-pocketbook-screen-section > .crm-section-header {
+    align-items: end;
+    margin-bottom: var(--oasis-space-3);
+    border-bottom: var(--oasis-border-width-standard) solid var(--oasis-sales-rule);
+    padding-bottom: var(--oasis-space-3);
+}
+
+.sales-pocketbook-screen-section > .crm-section-body { min-width: 0; padding: 0; }
+
+.sales-pocketbook-screen-section .crm-section-title {
+    color: var(--oasis-sales-ink);
+    font: 900 var(--oasis-type-section-title-size)/1.2 var(--oasis-font-display);
+    text-transform: none;
+}
+
+.sales-pocketbook-screen-section .crm-section-description {
+    color: var(--oasis-sales-muted);
+}
+
+.sales-pocketbook-composer {
+    border-left: var(--oasis-border-width-emphasis) solid var(--oasis-accent-sales);
+    background: var(--oasis-sales-paper);
+}
+
+.sales-pocketbook-composer > form,
+.sales-pocketbook-composer.sales-lead-entry-form,
+.sales-pocketbook-composer .crm-section-body > form,
+.sales-pocketbook-composer .sales-pocketbook-quick-form {
+    background: var(--oasis-sales-paper-soft);
+}
+
+.sales-pocketbook-composer fieldset,
+.sales-pocketbook-composer .sales-lead-form-group {
+    border-color: var(--oasis-sales-rule);
+}
+
+.sales-pocketbook-composer :is(input, select, textarea, .date-display, .time-display) {
+    border-color: var(--oasis-sales-ink);
+    background: var(--oasis-sales-paper);
+}
+
+.sales-pocketbook-composer :is(input, select, textarea, .date-display, .time-display):focus {
+    outline: var(--oasis-focus-width) solid var(--oasis-focus);
+    outline-offset: var(--oasis-focus-offset);
+}
+
+.sales-pocketbook-workspace .sales-agenda-monitor,
+.sales-pocketbook-workspace .sales-agenda-detail-summary {
+    border-color: var(--oasis-sales-ink);
+    background: var(--oasis-sales-paper);
+    box-shadow: var(--oasis-sales-shadow);
+}
+
+.sales-pocketbook-workspace .sales-agenda-monitor-header {
+    background: var(--oasis-sales-ink);
+    color: var(--oasis-sales-paper);
+}
+
+.sales-pocketbook-workspace .sales-agenda-item {
+    background: var(--oasis-sales-paper);
+    padding: var(--sales-panel-padding);
+}
+
+.sales-pocketbook-workspace .sales-agenda-item:nth-child(even) { background: var(--oasis-sales-paper-soft); }
+
+.sales-pocketbook-record {
+    display: grid;
+    min-width: 0;
+    gap: var(--oasis-space-3);
+    border: var(--oasis-border-width-standard) solid var(--oasis-sales-rule);
+    background: var(--oasis-sales-paper);
+    padding: var(--sales-panel-padding);
+}
+
+.sales-pocketbook-record + .sales-pocketbook-record { border-top: 0; }
+
+.sales-pocketbook-detail-hero {
+    position: relative;
+}
+
+.sales-pocketbook-detail-hero::after {
+    position: absolute;
+    right: var(--oasis-space-5);
+    bottom: calc(var(--oasis-space-3) * -1);
+    width: 4rem;
+    height: var(--oasis-border-width-standard);
+    background: var(--oasis-accent-sales);
+    content: '';
+}
+
+.sales-pocketbook-workspace .sales-agenda-detail-summary {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    border-left: var(--oasis-border-width-emphasis) solid var(--oasis-accent-sales);
+    padding: var(--sales-panel-padding);
+}
+
+.sales-pocketbook-workspace .sales-agenda-detail-summary > div {
+    border: 0;
+    border-right: var(--oasis-border-width-subtle) solid var(--oasis-sales-rule);
+    background: transparent;
+    padding: var(--oasis-space-2) var(--oasis-space-3) var(--oasis-space-2) 0;
+}
+
+.sales-pocketbook-workspace .sales-agenda-detail-summary > div:last-child { border-right: 0; }
+
+.sales-pocketbook-workspace .sales-agenda-task-row,
+.sales-pocketbook-workspace .sales-agenda-photo-card,
+.sales-pocketbook-workspace .sales-lead-status-history li {
+    border-color: var(--oasis-sales-rule);
+}
+
+.sales-pocketbook-workspace .sales-agenda-photo-card {
+    background: var(--oasis-sales-paper-soft);
+    padding: var(--oasis-space-2);
+}
+
+.sales-pocketbook-workspace .sales-agenda-sticky-action {
+    background: color-mix(in srgb, var(--oasis-sales-paper) 94%, transparent);
+}
+
+.sales-pocketbook-workspace .sales-lead-completed-note,
+.sales-pocketbook-workspace .sales-lead-status-history {
+    border-color: var(--oasis-sales-rule);
+}
+
+.sales-pocketbook-workspace .sales-lead-status-history li {
+    background: var(--oasis-sales-paper-soft);
+}
+
+.sales-pocketbook-workspace :is(.crm-table-scroll, .sales-lead-mobile-card) {
+    border-color: var(--oasis-sales-ink);
+}
+
+.sales-pocketbook-workspace .sales-lead-mobile-card {
+    background: var(--oasis-sales-paper);
+    box-shadow: var(--oasis-sales-shadow);
+}
+
+.sales-pocketbook-workspace .crm-data-table thead th {
+    background: var(--oasis-sales-ink);
+}
+
+.sales-pocketbook-workspace .crm-data-table tbody tr:nth-child(even) { background: var(--oasis-sales-paper-soft); }
+.sales-pocketbook-workspace .crm-data-table tbody tr:hover { background: var(--oasis-sales-selected); }
+
+.sales-pocketbook-workspace .crm-button--primary[data-accent='sales'],
+.sales-pocketbook-workspace [data-accent='sales'].crm-button--primary {
+    box-shadow: var(--oasis-sales-shadow);
+}
+
+@media (max-width: 767px) {
+    .sales-pocketbook-workspace .crm-page-header,
+    .sales-pocketbook-workspace .crm-page-header.sales-pocketbook-detail-hero {
+        align-items: stretch;
+        padding: var(--oasis-space-3);
+    }
+
+    .sales-pocketbook-context-strip {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 0;
+    }
+
+    .sales-pocketbook-context-strip > div {
+        min-height: 3.75rem;
+        border-bottom: var(--oasis-border-width-subtle) solid var(--oasis-sales-rule);
+        padding: var(--oasis-space-2);
+    }
+
+    .sales-pocketbook-context-strip > div:nth-child(2n) { border-right: 0; }
+    .sales-pocketbook-context-strip > div:nth-last-child(-n + 2) { border-bottom: 0; }
+
+    .sales-pocketbook-workspace .sales-agenda-detail-summary {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .sales-pocketbook-workspace .sales-agenda-detail-summary > div:nth-child(2n) { border-right: 0; }
+    .sales-pocketbook-workspace .sales-agenda-detail-summary > div:nth-last-child(-n + 2) { padding-bottom: 0; }
+    .sales-pocketbook-workspace .sales-agenda-detail-summary > div:nth-child(odd) { border-right: var(--oasis-border-width-subtle) solid var(--oasis-sales-rule); }
+
+    .sales-pocketbook-screen-section > .crm-section-header { align-items: stretch; flex-direction: column; }
+    .sales-pocketbook-workspace .sales-agenda-item { padding: var(--oasis-space-3); }
+    .sales-pocketbook-workspace .sales-pocketbook-composer .sales-pocketbook-form-actions { display: grid; }
+    .sales-pocketbook-workspace .sales-pocketbook-composer .sales-pocketbook-form-actions .crm-button { width: 100%; }
+}
+
+@media (max-width: 390px) {
+    .sales-pocketbook-workspace .crm-page-header,
+    .sales-pocketbook-workspace .crm-page-header.sales-pocketbook-detail-hero,
+    .sales-pocketbook-screen-section { padding: var(--oasis-space-3); }
+
+    .sales-pocketbook-context-strip strong { overflow-wrap: anywhere; white-space: normal; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .sales-pocketbook-workspace,
+    .sales-pocketbook-workspace * {
+        scroll-behavior: auto !important;
+        transition-duration: 1ms !important;
+        animation-duration: 1ms !important;
+        animation-iteration-count: 1 !important;
+    }
 }

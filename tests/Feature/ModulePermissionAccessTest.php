@@ -8,6 +8,7 @@ use App\Models\Changelog;
 use App\Models\LeadSource;
 use App\Models\Role;
 use App\Models\User;
+use App\Services\SalesPocketbookOnboardingService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Route;
 use Tests\Feature\Concerns\BuildsExpenseFixtures;
@@ -138,10 +139,16 @@ class ModulePermissionAccessTest extends TestCase
 
     private function user(string $role, ?Branch $branch = null): User
     {
-        return User::factory()->create([
+        $user = User::factory()->create([
             'role_id' => Role::query()->where('slug', $role)->value('id'),
             'branch_id' => $branch?->id,
             'password_changed_at' => now(),
         ]);
+
+        if ($role === 'sales') {
+            app(SalesPocketbookOnboardingService::class)->skip($user);
+        }
+
+        return $user;
     }
 }

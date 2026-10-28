@@ -64,7 +64,7 @@
         && Auth::user()->hasScopedPermission('sales_pocketbook', 'manage');
     $leadOptionsEndpoint = route('sales-leads.options', ['branch' => 'BRANCH_ID']);
 @endphp
-<div class="space-y-4" x-data="salesPocketbook()" @oasis-sync-updated.window="handleLifecycleSync($event.detail)">
+<div class="sales-pocketbook-workspace space-y-4" x-data="salesPocketbook()" @oasis-sync-updated.window="handleLifecycleSync($event.detail)">
     <x-crm.page-header
         variant="canonical"
         class="sales-pocketbook-page-header"
@@ -86,14 +86,14 @@
         @endif
     </x-crm.page-header>
 
-    <div class="sales-pocketbook-scope" aria-label="Konteks Buku Saku Sales aktif">
+    <div class="sales-pocketbook-context-strip sales-pocketbook-scope" aria-label="Konteks Buku Saku Sales aktif">
         <div><span>Mode</span><strong>{{ $monitoring ? 'Monitoring' : 'Pribadi' }}</strong></div>
         <div><span>Cabang</span><strong>{{ $selectedBranch?->name ?? ($monitoring ? 'Semua dalam akses' : $personalBranchName) }}</strong></div>
         <div><span>Proyek</span><strong>{{ $selectedProject?->project_name ?? 'Semua dalam akses' }}</strong></div>
         <div><span>Sales</span><strong>{{ $monitoring ? ($selectedSales?->name ?? 'Semua dalam akses') : Auth::user()->name }}</strong></div>
     </div>
     @if($targetSummaries->isNotEmpty())
-        <x-crm.section id="sales-lead-target-progress" title="Target Lead {{ $targetMonth->translatedFormat('F Y') }}" description="Actual dihitung berdasarkan PIC Sales, bukan pengguna yang menginput lead.">
+        <x-crm.section id="sales-lead-target-progress" title="Target Lead {{ $targetMonth->translatedFormat('F Y') }}" description="Actual dihitung berdasarkan PIC Sales, bukan pengguna yang menginput lead." class="sales-pocketbook-screen-section">
             <div class="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
                 @foreach($targetSummaries as $salesId => $summary)
                     @php
@@ -115,7 +115,7 @@
         </x-crm.section>
     @endif
     @if($managerHierarchy)
-        <x-crm.section id="manager-sales-hierarchy" title="Hierarki Tim Sales" description="Tim canonical dalam tanggung jawab Anda. Data operasional tetap dibatasi akses cabang dan proyek.">
+        <x-crm.section id="manager-sales-hierarchy" title="Hierarki Tim Sales" description="Tim canonical dalam tanggung jawab Anda. Data operasional tetap dibatasi akses cabang dan proyek." class="sales-pocketbook-screen-section">
             <div class="grid gap-3 md:grid-cols-3">
                 <div><strong class="block text-sm">Supervisor</strong><span>{{ $managerHierarchy['supervisors']->pluck('name')->join(', ') ?: 'Belum ada' }}</span></div>
                 <div><strong class="block text-sm">Koordinator</strong><span>{{ $managerHierarchy['coordinators']->pluck('name')->join(', ') ?: 'Belum ada' }}</span></div>
@@ -164,7 +164,7 @@
     @if($tab === 'report')
         @include('crm.sales-pocketbook._report')
     @elseif($tab === 'agenda')
-    <x-crm.toolbar label="Filter agenda" class="sales-agenda-toolbar">
+    <x-crm.toolbar label="Filter agenda" class="sales-pocketbook-screen-section sales-agenda-toolbar">
         <div class="sales-agenda-filter-summary">
             <strong>Daftar agenda</strong>
             <span>{{ $agendas->total() }} agenda ditemukan{{ $activeAgendaFilterCount ? ' dengan '.$activeAgendaFilterCount.' filter aktif' : ' pada minggu berjalan' }}</span>
@@ -195,7 +195,7 @@
         <div class="sales-agenda-filter-actions"><x-crm.button type="submit" variant="primary" accent="sales">Terapkan Filter</x-crm.button>@if($hasAgendaFilters)<x-crm.button variant="secondary" :href="$agendaResetUrl">Hapus semua filter</x-crm.button>@endif</div>
     </form>
 
-    <section class="sales-agenda-monitor">
+    <section class="sales-pocketbook-screen-section sales-agenda-monitor">
         <header class="sales-agenda-monitor-header"><h2>{{ $monitoring ? 'Monitoring Agenda' : 'Agenda Saya' }}</h2><span>{{ $agendas->total() }} agenda</span></header>
         <div class="sales-agenda-list">
             @forelse($agendas as $agenda)
@@ -214,7 +214,7 @@
                     default => ['Terjadwal / Terlewat', 'warning'],
                 };
             @endphp
-            <article class="sales-agenda-item">
+            <article class="sales-pocketbook-record sales-agenda-item">
                 <div class="sales-agenda-identity"><div><span class="sales-agenda-kicker">{{ $agenda->sales_activity_category ?: 'Aktivitas Sales' }}</span><h3>{{ $agenda->title }}</h3></div><x-crm.status-badge :variant="$agendaStatusVariant">{{ $agendaStatusLabel }}</x-crm.status-badge></div>
                 <dl class="sales-agenda-facts">
                     <div><dt>Jadwal</dt><dd>{{ $agenda->scheduled_date->format('d/m/Y') }}, {{ substr($agenda->start_time, 0, 5) }}@if($agenda->end_time) - {{ substr($agenda->end_time, 0, 5) }}@endif</dd></div>
@@ -261,7 +261,7 @@
         $quickBranchId = old('branch_id', $defaultProject?->branch_id ?? Auth::user()->branch_id);
         $quickSalesId = old('sales_user_id', Auth::user()->isSales() ? Auth::id() : null);
     @endphp
-    <section id="quick-lead-input" class="border-2 border-black bg-white">
+    <section id="quick-lead-input" class="sales-pocketbook-screen-section sales-pocketbook-composer border-2 border-black bg-white">
         <div class="bg-black text-[#fcc20f] px-4 py-2 font-[Helvetica] font-bold text-xs uppercase">+ Input Lead Hari Ini</div>
         <form method="POST" action="{{ route('sales-leads.store') }}" x-data="salesCascade(@js($cascadeProjects), @js($cascadeSales), @js(['branch' => $quickBranchId ?? null, 'project' => $quickProjectId ?? null, 'sales' => $quickSalesId ?? null, 'optionsEndpoint' => $leadOptionsEndpoint, 'source' => old('source'), 'platform' => old('platform'), 'campaignName' => old('campaign_name'), 'promo' => old('id_promo')]))" @submit="setSubmitting()" class="sales-pocketbook-quick-form p-4 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3" aria-describedby="quick-lead-required-note">
             @csrf
@@ -296,7 +296,7 @@
     @endif
 
     @if($monitoring)
-    <x-crm.toolbar label="Filter monitoring lead" class="sales-lead-toolbar">
+    <x-crm.toolbar label="Filter monitoring lead" class="sales-pocketbook-screen-section sales-lead-toolbar">
         <div class="sales-lead-filter-summary">
             <strong>Filter monitoring</strong>
             <span>{{ $activeLeadFilterCount ? $activeLeadFilterCount.' filter aktif' : 'Menampilkan seluruh lead dalam akses Anda' }}</span>

@@ -9,6 +9,7 @@ use App\Models\User;
 use App\Policies\SalesLeadPolicy;
 use App\Services\CoordinatorLeadTeamService;
 use App\Services\PromoOptionService;
+use App\Services\SalesAgendaProjectResolver;
 use App\Services\WorkspaceAccessService;
 use App\Support\SalesLeadMasterData;
 use Illuminate\Foundation\Http\FormRequest;
@@ -39,10 +40,10 @@ abstract class SalesLeadRequest extends FormRequest
                     $fail('Promo tidak tersedia untuk proyek dan tanggal lead yang dipilih.');
                 }
             }],
-            'source' => ['required', 'string', 'max:255', $this->masterRule(SalesLeadMasterData::SOURCES, 'source')],
-            'platform' => ['required', 'string', 'max:255', $this->masterRule(SalesLeadMasterData::CHANNELS, 'platform')],
+            'source' => [Rule::requiredIf(fn (): bool => ! $this->isQuickSalesCreate()), 'nullable', 'string', 'max:255', $this->masterRule(SalesLeadMasterData::SOURCES, 'source')],
+            'platform' => [Rule::requiredIf(fn (): bool => ! $this->isQuickSalesCreate()), 'nullable', 'string', 'max:255', $this->masterRule(SalesLeadMasterData::CHANNELS, 'platform')],
             'campaign_id' => ['nullable', 'string', 'max:255'],
-            'campaign_name' => ['required', 'string', 'max:255', $this->masterRule(SalesLeadMasterData::ACTIVITIES, 'campaign_name')],
+            'campaign_name' => [Rule::requiredIf(fn (): bool => ! $this->isQuickSalesCreate()), 'nullable', 'string', 'max:255', $this->masterRule(SalesLeadMasterData::ACTIVITIES, 'campaign_name')],
             'current_status' => ['nullable', Rule::in(array_map(fn (SalesLeadStatus $status) => $status->value, SalesLeadStatus::MANUAL))],
             'linked_consumer_reference' => ['nullable', 'string', 'max:255'],
             'expected_updated_at' => ['sometimes', 'required', 'string', 'max:40'],
@@ -59,6 +60,9 @@ abstract class SalesLeadRequest extends FormRequest
         if ($this->user()?->isSales()) {
             $data['sales_user_id'] = $this->user()->id;
             $data['branch_id'] = $this->user()->branch_id;
+            $data['lead_date'] = today()->toDateString();
+            $project = app(SalesAgendaProjectResolver::class)->resolve($this->user(), $data['lead_date']);
+            $data['project_id'] = $project?->id;
         }
         if (! $this->lead() && ! $this->exists('current_status')) {
             $data['current_status'] = SalesLeadStatus::NoResponse->value;
@@ -184,6 +188,11 @@ abstract class SalesLeadRequest extends FormRequest
         $current = $this->lead()?->{$field};
 
         return $this->lead() && $this->input($field) === $current ? Rule::in([$current]) : Rule::in($values);
+    }
+
+    private function isQuickSalesCreate(): bool
+    {
+        return $this->lead() === null && $this->user()?->isSales() === true;
     }
 
     protected function lead(): ?SalesLead

@@ -121,7 +121,7 @@ class SalesLeadService
         $data['normalized_phone'] = $this->phones->normalize($data['phone'] ?? null);
         unset($data['lead_source_id']);
         $data['lead_source_id'] = null;
-        $data['source_name_snapshot'] = $data['source'];
+        $data['source_name_snapshot'] = $data['source'] ?? null;
         $data['current_status'] ??= SalesLeadStatus::NoResponse->value;
         $data['current_status_changed_at'] = now();
         $data['current_status_source'] = 'manual';

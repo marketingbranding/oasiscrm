@@ -44,10 +44,10 @@ use App\Http\Controllers\Crm\SalesAgendaController;
 use App\Http\Controllers\Crm\SalesAgendaEvidenceArchiveController;
 use App\Http\Controllers\Crm\SalesAgendaEvidenceController;
 use App\Http\Controllers\Crm\SalesAgendaExportController;
-use App\Http\Controllers\Crm\SalesDailyPlanController;
-use App\Http\Controllers\Crm\SalesDailyPlanItemEvidenceController;
+use App\Http\Controllers\Crm\SalesAgendaTaskController;
 use App\Http\Controllers\Crm\SalesDailyReminderController;
 use App\Http\Controllers\Crm\SalesFeeReportController;
+use App\Http\Controllers\Crm\SalesLeadCompletionController;
 use App\Http\Controllers\Crm\SalesLeadController;
 use App\Http\Controllers\Crm\SalesLeadLifecycleController;
 use App\Http\Controllers\Crm\SalesLeadLifecycleSyncController;
@@ -56,6 +56,7 @@ use App\Http\Controllers\Crm\SalesLeadStageController;
 use App\Http\Controllers\Crm\SalesLeadTargetController;
 use App\Http\Controllers\Crm\SalesOnboardingProposalController;
 use App\Http\Controllers\Crm\SalesPocketbookController;
+use App\Http\Controllers\Crm\SalesPocketbookOnboardingController;
 use App\Http\Controllers\Crm\SalesSheetIdentityController;
 use App\Http\Controllers\Crm\SupervisorSalesPocketbookController;
 use App\Http\Controllers\Crm\SystemHealthController;
@@ -156,6 +157,10 @@ Route::middleware(['auth', 'active', 'verified', 'password.changed', 'operationa
     Route::post('/comments/{comment}/moderate', [CommentModerationController::class, 'store'])->middleware(['permission:comments.moderate', 'throttle:60,1'])->name('comments.moderate');
 
     Route::middleware('module.maintenance:sales_pocketbook')->group(function () {
+        Route::get('/buku-saku-sales/onboarding', [SalesPocketbookOnboardingController::class, 'show'])->middleware('permission:sales_pocketbook.view_own')->name('sales-pocketbook.onboarding.show');
+        Route::post('/buku-saku-sales/onboarding/skip', [SalesPocketbookOnboardingController::class, 'skip'])->middleware('permission:sales_pocketbook.view_own')->name('sales-pocketbook.onboarding.skip');
+        Route::post('/buku-saku-sales/onboarding/complete', [SalesPocketbookOnboardingController::class, 'complete'])->middleware('permission:sales_pocketbook.view_own')->name('sales-pocketbook.onboarding.complete');
+        Route::post('/buku-saku-sales/onboarding/replay', [SalesPocketbookOnboardingController::class, 'replay'])->middleware('permission:sales_pocketbook.view_own')->name('sales-pocketbook.onboarding.replay');
         Route::get('/buku-saku-sales', [SalesPocketbookController::class, 'index'])->name('sales-pocketbook.index');
         Route::get('/sales-fee-reports', [SalesFeeReportController::class, 'index'])->middleware('permission:sales_pocketbook.export')->name('sales-fee-reports.index');
         Route::get('/sales-fee-reports/{salesUser}/{project}', [SalesFeeReportController::class, 'show'])->middleware('permission:sales_pocketbook.export')->name('sales-fee-reports.show');
@@ -169,13 +174,12 @@ Route::middleware(['auth', 'active', 'verified', 'password.changed', 'operationa
         Route::get('/buku-saku-sales/lifecycle-reconciliations', [SalesLeadLifecycleSyncController::class, 'reconciliations'])->middleware(['operational.module:spreadsheet_sync', 'permission:sales_pocketbook.reconcile'])->name('sales-pocketbook.lifecycle-reconciliations.index');
         Route::get('/buku-saku-sales/agendas/workspace', [SalesAgendaController::class, 'index'])->middleware('permission:sales_pocketbook.view_own')->name('sales-agendas.index');
         Route::get('/buku-saku-sales/agendas/export', SalesAgendaExportController::class)->middleware('permission:sales_pocketbook.export_own')->name('sales-agendas.export');
+        Route::get('/buku-saku-sales/agendas/{agenda}', [SalesAgendaController::class, 'show'])->middleware('permission:sales_pocketbook.view_own')->name('sales-agendas.show');
         Route::post('/buku-saku-sales/agendas', [SalesAgendaController::class, 'store'])->middleware('permission:sales_pocketbook.manage_own')->name('sales-agendas.store');
-        Route::patch('/buku-saku-sales/daily-plan-items/{item}/complete', [SalesDailyPlanController::class, 'complete'])->middleware('permission:sales_pocketbook.manage_own')->name('sales-daily-plan-items.complete');
-        Route::post('/buku-saku-sales/daily-plan-items/{item}/reschedule', [SalesDailyPlanController::class, 'reschedule'])->middleware('permission:sales_pocketbook.manage_own')->name('sales-daily-plan-items.reschedule');
-        Route::post('/buku-saku-sales/daily-plan-items/{item}/evidence', [SalesDailyPlanItemEvidenceController::class, 'store'])->middleware('permission:sales_pocketbook.manage_own')->name('sales-daily-plan-items.evidence.store');
-        Route::get('/buku-saku-sales/daily-plan-items/{item}/evidence/{evidence}', [SalesDailyPlanItemEvidenceController::class, 'show'])->middleware('permission:sales_pocketbook.view_own')->name('sales-daily-plan-items.evidence.show');
-        Route::put('/buku-saku-sales/daily-plans/{plan}/revision', [SalesDailyPlanController::class, 'revise'])->middleware('permission:sales_pocketbook.manage_team')->name('sales-daily-plans.revise');
         Route::patch('/buku-saku-sales/agendas/{agenda}', [SalesAgendaController::class, 'update'])->middleware('permission:sales_pocketbook.manage_own')->name('sales-agendas.update');
+        Route::post('/buku-saku-sales/agendas/{agenda}/tasks', [SalesAgendaTaskController::class, 'store'])->middleware('permission:sales_pocketbook.manage_own')->name('sales-agendas.tasks.store');
+        Route::patch('/buku-saku-sales/agendas/{agenda}/tasks/{task}', [SalesAgendaTaskController::class, 'update'])->middleware('permission:sales_pocketbook.manage_own')->name('sales-agendas.tasks.update');
+        Route::delete('/buku-saku-sales/agendas/{agenda}/tasks/{task}', [SalesAgendaTaskController::class, 'destroy'])->middleware('permission:sales_pocketbook.manage_own')->name('sales-agendas.tasks.destroy');
         Route::post('/buku-saku-sales/agendas/{agenda}/reschedule', [SalesAgendaController::class, 'reschedule'])->middleware('permission:sales_pocketbook.manage_own')->name('sales-agendas.reschedule');
         Route::post('/buku-saku-sales/agendas/{agenda}/evidence', [SalesAgendaEvidenceController::class, 'store'])->middleware('permission:sales_pocketbook.manage_own')->name('sales-agendas.evidence.store');
         Route::get('/buku-saku-sales/agendas/{agenda}/evidence/{evidence}', [SalesAgendaEvidenceController::class, 'show'])->name('sales-agendas.evidence.show');
@@ -193,6 +197,7 @@ Route::middleware(['auth', 'active', 'verified', 'password.changed', 'operationa
         Route::post('/buku-saku-sales/leads/sync', [CoordinatorSalesLeadWorkspaceController::class, 'push'])->middleware(['operational.module:spreadsheet_sync', 'permission:sales_pocketbook.sync'])->name('coordinator-leads.sync');
         Route::post('/buku-saku-sales/leads', [SalesLeadController::class, 'store'])->name('sales-leads.store');
         Route::get('/buku-saku-sales/leads/{sales_lead}', [SalesLeadController::class, 'show'])->name('sales-leads.show');
+        Route::patch('/buku-saku-sales/leads/{sales_lead}/complete', SalesLeadCompletionController::class)->middleware('permission:sales_pocketbook.manage_own')->name('sales-leads.complete');
         Route::get('/buku-saku-sales/leads/{sales_lead}/edit', [SalesLeadController::class, 'edit'])->name('sales-leads.edit');
         Route::put('/buku-saku-sales/leads/{sales_lead}', [SalesLeadController::class, 'update'])->name('sales-leads.update');
         Route::delete('/buku-saku-sales/leads/{sales_lead}', [SalesLeadController::class, 'destroy'])->middleware('not.impersonating')->name('sales-leads.destroy');
@@ -206,14 +211,6 @@ Route::middleware(['auth', 'active', 'verified', 'password.changed', 'operationa
         Route::patch('/buku-saku-sales/leads/{sales_lead}/slik/{slik_attempt}/reject', [SalesLeadLifecycleController::class, 'rejectSlik'])->name('sales-leads.slik.reject');
         Route::post('/buku-saku-sales/leads/{sales_lead}/freelance', [SalesLeadLifecycleController::class, 'freelance'])->name('sales-leads.freelance.store');
         Route::post('/sales-reminders/dismiss', [SalesDailyReminderController::class, 'dismiss'])->name('sales-reminders.dismiss');
-        Route::get('/buku-saku-sales/daily-plans', [SalesDailyPlanController::class, 'index'])->name('sales-daily-plans.index');
-        Route::post('/buku-saku-sales/daily-plans', [SalesDailyPlanController::class, 'store'])->middleware('permissions.all:sales_daily_plans.manage_own,sales_pocketbook.manage_own')->name('sales-daily-plans.store');
-        Route::post('/buku-saku-sales/daily-plans/targets', [SalesDailyPlanController::class, 'storeTarget'])->middleware('permission:sales_targets.manage_all')->name('sales-daily-plans.targets.store');
-        Route::post('/buku-saku-sales/daily-plans/submit/{daily_plan?}', [SalesDailyPlanController::class, 'submit'])->middleware('permissions.all:sales_daily_plans.submit_own,sales_pocketbook.manage_own')->name('sales-daily-plans.submit');
-        Route::post('/buku-saku-sales/daily-plans/{daily_plan}/agendas', [SalesDailyPlanController::class, 'storeAgenda'])->name('sales-daily-plans.agendas.store');
-        Route::patch('/buku-saku-sales/daily-plans/{daily_plan}/agendas/{agenda}', [SalesDailyPlanController::class, 'updateAgenda'])->name('sales-daily-plans.agendas.update');
-        Route::delete('/buku-saku-sales/daily-plans/{daily_plan}/agendas/{agenda}', [SalesDailyPlanController::class, 'destroyAgenda'])->name('sales-daily-plans.agendas.destroy');
-        Route::post('/buku-saku-sales/daily-plans/{daily_plan}/agendas/reorder', [SalesDailyPlanController::class, 'reorder'])->name('sales-daily-plans.agendas.reorder');
     });
 
     Route::post('/presence/heartbeat', [PresenceController::class, 'heartbeat'])->middleware('throttle:180,1')->name('presence.heartbeat');

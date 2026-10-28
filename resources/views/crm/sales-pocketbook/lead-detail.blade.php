@@ -6,11 +6,13 @@
 @php
     $latestVisit = $lead->siteVisits->first();
     $canRecord = Auth::user()->can('recordSiteVisit', $lead);
+    $canComplete = Auth::user()->isSales() && (int) $lead->sales_user_id === (int) Auth::id() && Auth::user()->hasPermission('sales_pocketbook.manage_own');
     $statusVariant = $lead->current_status === \App\Enums\SalesLeadStatus::Akad ? 'success' : 'neutral';
 @endphp
-<div class="space-y-4">
-    <x-crm.page-header variant="canonical" eyebrow="Buku Saku Sales" :title="$lead->customer_name" description="Detail read only Lead dan hasil cek lokasi.">
-        <x-slot:actions><div class="flex flex-wrap items-center gap-2"><x-crm.status-badge :variant="$statusVariant">{{ $lead->current_status->label() }}</x-crm.status-badge>@if(Auth::user()->isSuperadmin())<form method="POST" action="{{ route('sales-leads.destroy', $lead) }}" onsubmit="return confirm('Hapus lead ini? Lead tidak akan lagi muncul di data operasional.')">@csrf @method('DELETE')<x-crm.button type="submit" variant="danger">Hapus Lead</x-crm.button></form>@endif</div></x-slot:actions>
+<div class="sales-pocketbook-workspace space-y-4">
+    <nav aria-label="Breadcrumb" class="text-sm font-bold"><a href="{{ route('sales-agendas.index', ['tab' => 'leads']) }}" class="text-[#0000ee] underline">Lead Saya</a><span aria-hidden="true"> / </span><span>Detail Lead</span></nav>
+    <x-crm.page-header variant="canonical" class="sales-pocketbook-detail-hero" eyebrow="Buku Saku Sales" :title="$lead->customer_name" description="Detail lead, progres status, dan hasil aktivitas.">
+        <x-slot:actions><div class="flex flex-wrap items-center gap-2"><x-crm.status-badge :variant="$lead->completed_at ? 'success' : $statusVariant">{{ $lead->completed_at ? 'Selesai' : $lead->current_status->label() }}</x-crm.status-badge>@if(Auth::user()->isSuperadmin())<form method="POST" action="{{ route('sales-leads.destroy', $lead) }}" onsubmit="return confirm('Hapus lead ini? Lead tidak akan lagi muncul di data operasional.')">@csrf @method('DELETE')<x-crm.button type="submit" variant="danger">Hapus Lead</x-crm.button></form>@endif</div></x-slot:actions>
     </x-crm.page-header>
 
     <nav class="sales-pocketbook-tabs crm-horizontal-tabs" aria-label="Detail Lead">
@@ -18,7 +20,7 @@
         @if($lead->shouldShowSiteVisitResults())<a href="#hasil-cek-lokasi" class="sales-pocketbook-tab">Hasil Cek Lokasi</a>@endif
     </nav>
 
-    <x-crm.section id="informasi-lead" title="Informasi Lead">
+    <x-crm.section id="informasi-lead" title="Informasi Lead" class="sales-pocketbook-screen-section">
         <dl class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             <div><dt class="text-xs font-bold uppercase">Tanggal Lead</dt><dd>{{ $lead->lead_date->format('d/m/Y') }}</dd></div>
             <div><dt class="text-xs font-bold uppercase">Sales</dt><dd>{{ $lead->sales?->name ?: '-' }}</dd></div>
@@ -27,10 +29,29 @@
             <div><dt class="text-xs font-bold uppercase">Sumber</dt><dd>{{ $lead->effective_source ?: '-' }}</dd></div>
             <div><dt class="text-xs font-bold uppercase">Catatan</dt><dd>{{ $lead->notes ?: '-' }}</dd></div>
         </dl>
+        <div class="mt-5 border-t border-black/20 pt-4">
+            <h3 class="text-xs font-bold uppercase">Progres status</h3>
+            <ol class="sales-lead-status-history mt-2">
+                @forelse($lead->statusHistories as $history)
+                    <li><strong>{{ $history->status instanceof \App\Enums\SalesLeadStatus ? $history->status->label() : ucfirst(str_replace('_', ' ', (string) $history->status)) }}</strong><span>{{ $history->changed_at?->format('d/m/Y H:i') }}</span></li>
+                @empty
+                    <li><span>Belum ada riwayat status.</span></li>
+                @endforelse
+            </ol>
+        </div>
+        @if($lead->completed_at)
+            <p class="mt-4 sales-lead-completed-note">Lead ditandai selesai pada {{ $lead->completed_at->format('d/m/Y H:i') }}.</p>
+        @elseif($canComplete)
+            <form method="POST" action="{{ route('sales-leads.complete', $lead) }}" class="mt-4">
+                @csrf @method('PATCH')
+                <input type="hidden" name="expected_updated_at" value="{{ app(\App\Services\OptimisticLockService::class)->token($lead) }}">
+                <x-crm.button type="submit" variant="primary" accent="sales">Tandai selesai</x-crm.button>
+            </form>
+        @endif
     </x-crm.section>
 
     @if($lead->shouldShowSiteVisitResults())
-        <x-crm.section id="hasil-cek-lokasi" title="Hasil Cek Lokasi">
+        <x-crm.section id="hasil-cek-lokasi" title="Hasil Cek Lokasi" class="sales-pocketbook-screen-section sales-pocketbook-composer">
             @if(!$latestVisit)
                 <x-crm.empty-state title="Hasil cek lokasi belum diisi." />
                 @if($canRecord)

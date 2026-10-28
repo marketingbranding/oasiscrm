@@ -8,11 +8,10 @@ use App\Models\LeadMaster;
 use App\Models\Permission;
 use App\Models\Role;
 use App\Models\SalesCoordinatorSales;
-use App\Models\SalesDailyPlan;
-use App\Models\SalesDailyPlanItem;
 use App\Models\SalesLead;
 use App\Models\User;
 use App\Services\OptimisticLockService;
+use App\Services\SalesPocketbookOnboardingService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -45,127 +44,6 @@ class SalesPocketbookTest extends TestCase
             ->assertSee('name="sales_user_id" value="'.$sales->id.'"', false)
             ->assertSee('value="'.$project->id.'"', false)
             ->assertSee('value="'.$branch->id.'"', false);
-    }
-
-    public function test_sales_agenda_uses_a_daily_paper_and_one_modal_for_adding_plan_items(): void
-    {
-        [, , $sales] = $this->salesContext();
-
-        $this->actingAs($sales)->get(route('sales-agendas.index'))
-            ->assertOk()
-            ->assertSee('sales-agenda-paper', false)
-            ->assertSee('+ Tambah Agenda')
-            ->assertSee('crm-modal-tambah-agenda', false)
-            ->assertSee('Kategori Aktivitas')
-            ->assertSee('Judul / Aktivitas')
-            ->assertSee('Lokasi')
-            ->assertSee('Detail')
-            ->assertSee('Durasi (menit)')
-            ->assertDontSee('id="agenda-tambahan"', false)
-            ->assertDontSee('Agenda Tambahan')
-            ->assertSee('x-bind:disabled="activities.length === 0 || total() === 0"', false)
-            ->assertDontSee('name="activities[0][activity]"', false);
-    }
-
-    public function test_submitted_daily_plan_exposes_duration_based_reschedule_action(): void
-    {
-        $view = file_get_contents(resource_path('views/crm/sales-pocketbook/sales-agenda.blade.php'));
-
-        $this->assertStringContainsString("route('sales-daily-plan-items.reschedule', ".'$entry->item'.')', $view);
-        $this->assertStringContainsString('Jadwalkan Ulang', $view);
-        $this->assertStringContainsString('name="reason"', $view);
-        $this->assertStringContainsString('Dijadwalkan ulang', $view);
-        $this->assertStringNotContainsString('name="start_time"', $view);
-        $this->assertStringNotContainsString('name="end_time"', $view);
-    }
-
-    public function test_rescheduled_daily_plan_item_is_read_only_in_the_submitted_paper(): void
-    {
-        [, , $sales] = $this->salesContext();
-        $plan = SalesDailyPlan::create([
-            'sales_user_id' => $sales->id,
-            'work_date' => '2026-10-26',
-            'status' => 'submitted',
-        ]);
-        SalesDailyPlanItem::create([
-            'sales_daily_plan_id' => $plan->id,
-            'position' => 0,
-            'activity' => 'Agenda dipindahkan',
-            'duration_minutes' => 60,
-            'start_time' => '09:00:00',
-            'end_time' => '10:00:00',
-            'status' => 'rescheduled',
-        ]);
-
-        $this->actingAs($sales)
-            ->get(route('sales-agendas.index', ['tab' => 'agenda', 'work_date' => '2026-10-26']))
-            ->assertOk()
-            ->assertSee('Dijadwalkan ulang')
-            ->assertDontSee('name="activity_result"', false)
-            ->assertDontSee('Jadwalkan Ulang');
-    }
-
-    public function test_sales_agenda_uses_workday_navigation_without_legacy_agenda_workspace(): void
-    {
-        [, , $sales] = $this->salesContext();
-
-        $this->actingAs($sales)->get(route('sales-agendas.index', ['work_date' => '2026-10-26']))
-            ->assertOk()
-            ->assertSee('work_date=2026-10-23', false)
-            ->assertSee('work_date=2026-10-27', false)
-            ->assertDontSee('Agenda lama dan agenda di luar Kertas Agenda Harian', false)
-            ->assertDontSee('Riwayat Agenda Tambahan')
-            ->assertDontSee('href="#agenda-baru"', false);
-    }
-
-    public function test_sales_agenda_normalizes_weekend_urls_to_the_next_workday(): void
-    {
-        [, , $sales] = $this->salesContext();
-
-        foreach (['2026-10-24', '2026-10-25'] as $weekendDate) {
-            $this->actingAs($sales)->get(route('sales-agendas.index', ['work_date' => $weekendDate]))
-                ->assertOk()
-                ->assertSee('Senin, 26 Oktober 2026')
-                ->assertSee('work_date=2026-10-23', false)
-                ->assertSee('work_date=2026-10-27', false);
-        }
-    }
-
-    public function test_daily_plan_preview_scheduler_stops_at_end_of_workday_for_over_capacity_drafts(): void
-    {
-        $source = file_get_contents(resource_path('js/sales-daily-plan.js'));
-
-        $this->assertStringContainsString('if (cursor >= 1020)', $source);
-        $this->assertStringContainsString('break;', $source);
-    }
-
-    public function test_daily_plan_submit_preserves_the_paper_tear_transition_before_navigation(): void
-    {
-        $view = file_get_contents(resource_path('views/crm/sales-pocketbook/sales-agenda.blade.php'));
-        $script = file_get_contents(resource_path('js/sales-daily-plan.js'));
-        $styles = file_get_contents(resource_path('css/app.css'));
-
-        $this->assertStringContainsString('@submit.prevent="submitPlan($event)"', $view);
-        $this->assertStringContainsString('submitPlan(event)', $script);
-        $this->assertStringContainsString('animationend', $script);
-        $this->assertStringContainsString('prefers-reduced-motion', $script);
-        $this->assertStringContainsString('.sales-agenda-paper.is-tearing', $styles);
-    }
-
-    public function test_empty_daily_plan_cannot_render_an_enabled_submit_action(): void
-    {
-        [, , $sales] = $this->salesContext();
-        SalesDailyPlan::create([
-            'sales_user_id' => $sales->id,
-            'work_date' => '2026-10-26',
-            'status' => 'draft',
-        ]);
-
-        $html = $this->actingAs($sales)->get(route('sales-agendas.index', ['work_date' => '2026-10-26']))->assertOk()->getContent();
-
-        $this->assertSame(1, substr_count($html, 'x-bind:disabled="activities.length === 0 || total() === 0"'));
-        $this->assertStringContainsString('x-bind:disabled="submitting || activities.length === 0 || total() !== 420"', $html);
-        $this->assertStringContainsString('Submit Kertas (0/420 menit)', $html);
     }
 
     public function test_sales_lead_input_is_grouped_for_quick_scanning_and_mobile_summary(): void
@@ -219,7 +97,7 @@ class SalesPocketbookTest extends TestCase
             ->assertSee('Buku Saku Saya')
             ->assertSee('Agenda 23 Okt 2026')
             ->assertSee('Agenda 27 Okt 2026')
-            ->assertSee('Agenda masih kosong')
+            ->assertSee('Belum ada agenda')
             ->assertDontSee('Catat dan selesaikan agenda sales Anda.')
             ->assertDontSee('Satu kertas untuk satu hari kerja.')
             ->assertDontSee('Hari kerja sebelumnya')
@@ -321,17 +199,19 @@ class SalesPocketbookTest extends TestCase
             static fn (string $category): string => 'value="'.$category.'"',
             ContentItem::SALES_ACTIVITY_CATEGORIES,
         ), false)->assertDontSee('value="Survey Lokasi"', false)
-            ->assertSee('Kertas Agenda Harian')
-            ->assertDontSee('class="sales-agenda-list"', false);
+            ->assertSee('Agenda Saya')
+            ->assertSee('sales-agenda-paper', false)
+            ->assertDontSee('Daily Planning');
     }
 
     public function test_sales_without_project_sees_exact_blocking_message_and_no_form(): void
     {
         $branch = Branch::create(['name' => 'Solo', 'code' => 'SLO', 'is_active' => true]);
         $sales = $this->user('sales', $branch);
+        app(SalesPocketbookOnboardingService::class)->skip($sales);
 
         $this->actingAs($sales)->get(route('sales-pocketbook.index'))->assertOk()
-            ->assertSee('Proyek utama belum ditentukan. Hubungi admin untuk menetapkan proyek utama.')
+            ->assertSee('Proyek utama belum ditentukan. Hubungi admin untuk menetapkan proyek sebelum membuat agenda.')
             ->assertDontSee('name="scheduled_date"', false);
     }
 
@@ -488,7 +368,10 @@ class SalesPocketbookTest extends TestCase
         $branch = Branch::create(['name' => 'Solo', 'code' => 'SLO', 'is_active' => true]);
         $project = LeadMaster::create(['branch_id' => $branch->id, 'project_name' => 'Solo Project', 'is_active' => true]);
 
-        return [$branch, $project, $this->sales($branch, $project, 'Solo Sales')];
+        $sales = $this->sales($branch, $project, 'Solo Sales');
+        app(SalesPocketbookOnboardingService::class)->skip($sales);
+
+        return [$branch, $project, $sales];
     }
 
     private function sales(Branch $branch, LeadMaster $project, string $name): User

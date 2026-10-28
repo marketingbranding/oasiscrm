@@ -7,6 +7,7 @@ use App\Models\Changelog;
 use App\Models\Role;
 use App\Models\User;
 use App\Services\GoogleSheetsApiService;
+use App\Services\SalesPocketbookOnboardingService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Mockery;
 use Tests\TestCase;
@@ -128,10 +129,16 @@ class CrmLayoutTest extends TestCase
     {
         $branch = Branch::firstOrCreate(['code' => 'SLO'], ['name' => 'Solo', 'is_active' => true]);
 
-        return User::factory()->create([
+        $user = User::factory()->create([
             'role_id' => Role::query()->where('slug', $role)->value('id'),
             'branch_id' => $branch->id,
             'password_changed_at' => now(),
         ]);
+
+        if ($role === 'sales') {
+            app(SalesPocketbookOnboardingService::class)->skip($user);
+        }
+
+        return $user;
     }
 }

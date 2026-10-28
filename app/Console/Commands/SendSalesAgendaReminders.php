@@ -4,7 +4,6 @@ namespace App\Console\Commands;
 
 use App\Models\ContentItem;
 use App\Services\CollaborationNotificationService;
-use App\Services\SalesAgendaReminderService;
 use Carbon\CarbonImmutable;
 use Carbon\CarbonInterface;
 use Illuminate\Console\Command;
@@ -14,25 +13,24 @@ class SendSalesAgendaReminders extends Command
 {
     protected $signature = 'oasis:sales-agenda-reminders';
 
-    protected $description = 'Mengirim pengingat Agenda Daily Plan Buku Saku Sales.';
+    protected $description = 'Mengirim pengingat Agenda Buku Saku Sales.';
 
     public function __construct(private readonly CollaborationNotificationService $notifications)
     {
         parent::__construct();
     }
 
-    public function handle(SalesAgendaReminderService $dailyPlanReminders): int
+    public function handle(): int
     {
         $now = now();
         $sent = 0;
-        ContentItem::query()->whereNotNull('daily_plan_id')
+        ContentItem::query()
             ->where('item_type', 'agenda')
             ->where('agenda_type', ContentItem::SALES_AGENDA_TYPE)
             ->whereNotIn('status', ['done', 'cancelled', 'rescheduled'])
             ->whereDate('scheduled_date', $now->toDateString())
             ->whereNotNull('start_time')->whereNotNull('end_time')
-            ->whereHas('dailyPlan', fn ($query) => $query->where('status', 'submitted'))
-            ->with(['owner', 'dailyPlan'])
+            ->with('owner')
             ->each(function (ContentItem $agenda) use ($now, &$sent): void {
                 $events = $this->events($agenda, $now);
                 foreach ($events as [$type, $target]) {
@@ -52,7 +50,6 @@ class SendSalesAgendaReminders extends Command
                 }
             });
 
-        $sent += $dailyPlanReminders->sendAt(CarbonImmutable::now(config('app.timezone')));
         $this->info("{$sent} pengingat dikirim.");
 
         return self::SUCCESS;
@@ -104,7 +101,7 @@ class SendSalesAgendaReminders extends Command
                 'sales_agenda_ending_soon' => ['Agenda segera berakhir', 'Agenda "'.$agenda->title.'" berakhir 15 menit lagi.'],
                 'sales_agenda_overdue' => ['Agenda melewati waktu', 'Agenda "'.$agenda->title.'" belum selesai dan melewati waktu 15 menit.'],
             ];
-            $this->notifications->create($recipient, $type, $labels[$type][0], $labels[$type][1], route('sales-daily-plans.index', ['date' => $agenda->scheduled_date->toDateString()]), $agenda->dailyPlan);
+            $this->notifications->create($recipient, $type, $labels[$type][0], $labels[$type][1], route('sales-agendas.index', ['tab' => 'agenda', 'work_date' => $agenda->scheduled_date->toDateString()]), $agenda);
 
             return 1;
         });

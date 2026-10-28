@@ -28,6 +28,7 @@
     ], fn ($value) => filled($value));
     $tabUrl = fn (string $target) => route('sales-pocketbook.index', array_merge($tabParams, ['tab' => $target]));
 @endphp
+<div class="sales-pocketbook-workspace">
 <div class="space-y-4" x-data="{ sales: @js($initialSalesId), project: @js($initialProjectId), branch: @js((string) old('branch_id', $initialProjects->count() === 1 ? $initialProjects->first()['branch_id'] : '')), leadDate: @js(old('lead_date', now()->toDateString())), promo: @js(old('promo_name', 'No Promo')), promos: @js($promos), promoEndpoint: @js($promoOptionsEndpoint), projectsBySales: @js($projectsBySales), get projects() { return this.projectsBySales[this.sales] || [] }, salesChanged() { this.project = this.projects.length === 1 ? this.projects[0].id : ''; this.projectChanged() }, agendaSalesChanged() { this.project = this.projects.length === 1 ? this.projects[0].id : '' }, projectChanged() { this.branch = this.projects.find(item => item.id === this.project)?.branch_id || ''; this.loadPromos() }, async loadPromos() { if (!this.project || !this.leadDate) { this.promos = ['No Promo']; this.promo = 'No Promo'; return } const url = new URL(this.promoEndpoint.replace('PROJECT_ID', this.project), window.location.origin); url.searchParams.set('date', this.leadDate); const response = await fetch(url, { headers: { Accept: 'application/json' } }); if (!response.ok) { this.promos = ['No Promo']; this.promo = 'No Promo'; return } this.promos = (await response.json()).options; if (!this.promos.includes(this.promo)) this.promo = 'No Promo' } }">
     <x-crm.page-header variant="canonical" eyebrow="Koordinator Sales" title="Buku Saku Sales" description="Kelola Lead tim, pantau Agenda Sales, dan tinjau laporan performa.">
         @if($tab === 'lead')
@@ -40,9 +41,9 @@
 
     @if($errors->any())<x-crm.alert variant="error" title="Data belum tersimpan">{{ $errors->first() }}</x-crm.alert>@endif
 
-    <x-crm.section id="coordinator-team" title="Tim Sales Saya" :description="$salesUsers->isEmpty() ? 'Belum ada Sales aktif dalam Tim Sales Saya.' : $salesUsers->count().' Sales: '.$salesUsers->pluck('name')->join(', ')" />
+    <x-crm.section id="coordinator-team" title="Tim Sales Saya" :description="$salesUsers->isEmpty() ? 'Belum ada Sales aktif dalam Tim Sales Saya.' : $salesUsers->count().' Sales: '.$salesUsers->pluck('name')->join(', ')" class="sales-pocketbook-screen-section" />
     @if($targetSummaries->isNotEmpty())
-        <x-crm.section id="coordinator-sales-lead-target-progress" title="Target Lead {{ $targetMonth->translatedFormat('F Y') }}" description="Actual dihitung berdasarkan PIC Sales. Target yang belum diatur ditampilkan sebagai Belum ditetapkan.">
+        <x-crm.section id="coordinator-sales-lead-target-progress" title="Target Lead {{ $targetMonth->translatedFormat('F Y') }}" description="Actual dihitung berdasarkan PIC Sales. Target yang belum diatur ditampilkan sebagai Belum ditetapkan." class="sales-pocketbook-screen-section">
             <div class="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
                 @foreach($targetSummaries as $salesId => $summary)
                     @php
@@ -63,7 +64,7 @@
         @endforeach
     </nav>
 
-    <x-crm.section id="coordinator-filters" title="Filter Tim & Periode" :description="$period['from']->format('d/m/Y').' - '.$period['to']->format('d/m/Y')">
+    <x-crm.section id="coordinator-filters" title="Filter Tim & Periode" :description="$period['from']->format('d/m/Y').' - '.$period['to']->format('d/m/Y')" class="sales-pocketbook-screen-section">
         <x-crm.toolbar label="Filter periode koordinator">
             <form method="GET" class="grid w-full gap-3 md:grid-cols-4" x-data="{ period: @js($filters['period']) }">
                 <input type="hidden" name="tab" value="{{ $tab }}">
@@ -83,7 +84,7 @@
 
     @if($tab === 'lead')
         @if($canCreate && $salesUsers->isNotEmpty())
-            <x-crm.section id="coordinator-lead-input" title="Input Lead Tim">
+            <x-crm.section id="coordinator-lead-input" title="Input Lead Tim" class="sales-pocketbook-screen-section sales-pocketbook-composer">
                 <form method="POST" action="{{ route('sales-leads.store') }}" class="grid grid-cols-1 gap-3 p-4 md:grid-cols-2 xl:grid-cols-4">@csrf
                     <input type="hidden" name="operation_uuid" value="{{ old('operation_uuid', (string) Illuminate\Support\Str::uuid()) }}"><input type="hidden" name="branch_id" x-model="branch">
                     <x-crm.field label="Sales PIC" for="coordinator-lead-sales" required><select id="coordinator-lead-sales" class="sales-input" name="sales_user_id" x-model="sales" @change="salesChanged()" required><option value="">Pilih Sales</option>@foreach($salesUsers as $sales)<option value="{{ $sales->id }}">{{ $sales->name }}</option>@endforeach</select></x-crm.field>
@@ -105,37 +106,15 @@
             </x-crm.section>
         @endif
 
-        <x-crm.section id="coordinator-team-leads" title="Lead Tim" description="Lead yang dicatat untuk Sales aktif dalam tim Anda.">
+        <x-crm.section id="coordinator-team-leads" title="Lead Tim" description="Lead yang dicatat untuk Sales aktif dalam tim Anda." class="sales-pocketbook-screen-section">
             <x-slot:actions><x-crm.status-badge variant="neutral">{{ $leads->total() }} Lead</x-crm.status-badge></x-slot:actions>
             <div class="crm-table-scroll"><table class="crm-data-table"><thead><tr><th>Tanggal</th><th>Konsumen</th><th>Sales PIC</th><th>Cabang</th><th>Proyek</th><th>Promo</th><th>Status Lead</th><th>Status Sync</th><th>Aksi</th></tr></thead><tbody>@forelse($leads as $lead)@php([$syncStatusLabel, $syncStatusVariant] = $syncStatuses[$lead->sync_status] ?? [ucfirst(str_replace('_', ' ', $lead->sync_status)), 'neutral'])<tr><td>{{ $lead->lead_date->format('d/m/Y') }}</td><td>{{ $lead->customer_name }}</td><td>{{ $lead->sales?->name }}</td><td>{{ $lead->branch?->name }}</td><td>{{ $lead->project?->project_name }}</td><td>{{ $lead->id_promo ?: '-' }}</td><td>{{ $lead->current_status->label() }}</td><td><x-crm.status-badge :variant="$syncStatusVariant">{{ $syncStatusLabel }}</x-crm.status-badge>@if($lead->sync_status === 'sync_failed' && filled($lead->last_sync_error))<span class="mt-1 block text-xs text-gray-700">Sinkronisasi gagal. Silakan coba lagi.</span>@endif</td><td><div class="flex gap-2">@can('viewSiteVisit', $lead)<x-crm.button variant="text" size="sm" :href="route('sales-leads.show', $lead)">Detail</x-crm.button>@endcan @can('update', $lead)<x-crm.button variant="text" size="sm" :href="route('sales-leads.edit', $lead)">Edit</x-crm.button>@endcan @can('markUtjDirect', $lead) @if($lead->current_status->isManual())<x-crm.button type="button" variant="text" size="sm" @click="$dispatch('oasis:modal-open', { name: 'coordinator-utj-{{ $lead->id }}' })">Tandai UTJ</x-crm.button><x-crm.modal name="coordinator-utj-{{ $lead->id }}" title="Tandai UTJ: {{ $lead->customer_name }}" description="Lead langsung ditandai UTJ tanpa mencatat data cek lokasi atau konsumen."><form method="POST" action="{{ route('sales-leads.utj.store', $lead) }}" x-data="{ submitting: false }" @submit="submitting = true" class="space-y-3" :aria-busy="submitting">@csrf<input type="hidden" name="operation_uuid" value="{{ Illuminate\Support\Str::uuid() }}"><p class="text-sm">Tanggal tercatat otomatis: {{ now()->format('d/m/Y H:i') }} (waktu input). Tanggal ini menentukan periode laporan aktivitas.</p><x-crm.button type="submit" variant="primary" accent="sales" x-bind:disabled="submitting">Ya, Tandai UTJ</x-crm.button></form></x-crm.modal>@endif @endcan</div></td></tr>@empty<tr><td colspan="9"><x-crm.empty-state title="Belum ada lead tim" description="Lead anggota aktif tim pada periode ini akan muncul di sini." /></td></tr>@endforelse</tbody></table></div>
             <x-crm.pagination :collection="$leads" :show-per-page="false" />
         </x-crm.section>
     @elseif($tab === 'agenda')
-        <x-crm.section id="coordinator-daily-plans" title="Daily Plan Sales Tim" description="Coordinator dapat merevisi urutan dan detail planning yang sudah disubmit. Total revisi wajib tetap 420 menit; tidak ada proses approve/reject.">
-            <form method="GET" class="mb-4 flex flex-wrap items-end gap-2">
-                <input type="hidden" name="tab" value="agenda">
-                <x-crm.field label="Hari kerja" for="coordinator-plan-date"><x-crm.date-field id="coordinator-plan-date" name="work_date" :value="$dailyPlanDate->toDateString()" required /></x-crm.field>
-                <x-crm.button type="submit" variant="secondary" size="sm">Tampilkan</x-crm.button>
-            </form>
-            <div class="grid gap-4">
-                @forelse($dailyPlans as $plan)
-                    <article class="border-2 border-black bg-[#f7f3e8] p-3" x-data="salesDailyPlan(@js($plan->items->map(fn ($item) => ['id' => $item->id, 'sales_activity_category' => $item->sales_activity_category, 'activity' => $item->activity, 'location' => $item->location, 'detail' => $item->detail, 'duration_minutes' => $item->duration_minutes])->values()->all()))">
-                        <div class="mb-3 flex flex-wrap items-center justify-between gap-2"><h3 class="font-bold">{{ $plan->sales?->name }} · {{ $plan->work_date->format('d/m/Y') }}</h3><x-crm.status-badge variant="success">{{ $plan->status === 'submitted' ? 'Submitted' : ucfirst($plan->status) }}</x-crm.status-badge></div>
-                        @if($plan->status === 'submitted')
-                            <form method="POST" action="{{ route('sales-daily-plans.revise', $plan) }}" class="space-y-3">@csrf @method('PUT')
-                                <template x-for="(activity, index) in activities" :key="activity.id || index"><div class="grid gap-2 border-2 border-black bg-white p-3 md:grid-cols-[1.2fr_1.5fr_1.3fr_1.8fr_110px_110px_80px] md:items-end"><input type="hidden" :name="`activities[${index}][id]`" x-model="activity.id"><label class="grid gap-1 text-xs font-bold uppercase">Kategori<select :name="`activities[${index}][sales_activity_category]`" x-model="activity.sales_activity_category" class="sales-input" required><option value="">Pilih kategori</option>@foreach(\App\Models\ContentItem::SALES_ACTIVITY_CATEGORIES as $category)<option value="{{ $category }}">{{ $category }}</option>@endforeach</select></label><label class="grid gap-1 text-xs font-bold uppercase">Aktivitas<input :name="`activities[${index}][activity]`" x-model="activity.activity" class="sales-input" required></label><label class="grid gap-1 text-xs font-bold uppercase">Lokasi<input :name="`activities[${index}][location]`" x-model="activity.location" class="sales-input"></label><label class="grid gap-1 text-xs font-bold uppercase">Detail<textarea :name="`activities[${index}][detail]`" x-model="activity.detail" class="sales-input" rows="1"></textarea></label><label class="grid gap-1 text-xs font-bold uppercase">Menit<input type="number" min="1" max="420" :name="`activities[${index}][duration_minutes]`" x-model.number="activity.duration_minutes" class="sales-input" required></label><div class="text-xs font-bold"><span x-text="schedule(index).start"></span>–<span x-text="schedule(index).end"></span></div><div class="flex gap-1"><button type="button" class="border border-black px-2 py-1" @click="move(index, -1)" :disabled="index === 0" aria-label="Naikkan aktivitas">↑</button><button type="button" class="border border-black px-2 py-1" @click="move(index, 1)" :disabled="index === activities.length - 1" aria-label="Turunkan aktivitas">↓</button></div></div></template>
-                                <div class="flex flex-wrap items-center justify-between gap-2"><strong class="text-xs uppercase">Total: <span x-text="total()"></span> / 420 menit</strong><x-crm.button type="submit" variant="secondary" size="sm">Simpan Revisi &amp; Beri Tahu Sales</x-crm.button></div>
-                            </form>
-                        @endif
-                    </article>
-                @empty
-                    <x-crm.empty-state title="Belum ada Daily Plan" description="Belum ada submission Sales untuk tanggal yang dipilih." />
-                @endforelse
-            </div>
-        </x-crm.section>
-        <x-crm.section id="coordinator-team-agenda" title="Agenda Sales Tim" description="Agenda Sales aktif dalam tim dan periode terpilih.">
+            <x-crm.section id="coordinator-team-agenda" title="Agenda Sales Tim" description="Agenda Sales aktif dalam tim dan periode terpilih." class="sales-pocketbook-screen-section">
             @if($canManageAgenda && $salesUsers->isNotEmpty())
-                <x-crm.section id="coordinator-agenda-input" title="Tambah Agenda Tim" description="Buat agenda untuk Sales aktif dalam tim Anda.">
+                <x-crm.section id="coordinator-agenda-input" title="Tambah Agenda Tim" description="Buat agenda untuk Sales aktif dalam tim Anda." class="sales-pocketbook-screen-section sales-pocketbook-composer">
                     <form method="POST" action="{{ route('sales-agendas.store') }}" class="grid grid-cols-1 gap-3 p-4 md:grid-cols-2 xl:grid-cols-4">@csrf
                         <x-crm.field label="Sales PIC" for="coordinator-agenda-sales" required><select id="coordinator-agenda-sales" class="sales-input" name="sales_user_id" x-model="sales" @change="agendaSalesChanged()" required><option value="">Pilih Sales</option>@foreach($salesUsers as $sales)<option value="{{ $sales->id }}">{{ $sales->name }}</option>@endforeach</select></x-crm.field>
                         <x-crm.field label="Proyek" for="coordinator-agenda-project" required><select id="coordinator-agenda-project" class="sales-input" name="project_id" x-model="project" required><option value="">Pilih proyek</option><template x-for="item in projects" :key="item.id"><option :value="item.id" x-text="item.name"></option></template></select></x-crm.field>
@@ -150,7 +129,7 @@
             <!-- <th>Lokasi</th><th>Hasil</th><th>Status</th> legacy table contract -->
             <div class="crm-table-scroll"><table class="crm-data-table"><thead><tr><th>Tanggal</th><th>Sales PIC</th><th>Cabang</th><th>Proyek</th><th>Kategori</th><th>Agenda</th><th>Lokasi</th><th>Hasil</th><th>Bukti</th><th>Status</th></tr></thead><tbody>@forelse($agendas as $agenda)@php([$agendaStatusLabel, $agendaStatusVariant] = $agendaStatuses[$agenda->status] ?? [ucfirst(str_replace('_', ' ', $agenda->status)), 'neutral'])<tr><td>{{ $agenda->scheduled_date->format('d/m/Y') }}</td><td>{{ $agenda->owner?->name }}</td><td>{{ $agenda->branch?->name }}</td><td>{{ $agenda->salesProject?->project_name }}</td><td>{{ $agenda->sales_activity_category ?: '-' }}</td><td>{{ $agenda->title }}</td><td>{{ $agenda->location ?: '-' }}</td><td>{{ $agenda->activity_result ?: '-' }}</td><td>@forelse($agenda->evidence as $evidence)@if($evidence->purged_at)<span>Bukti foto telah dipindahkan ke arsip.</span>@else<a class="font-bold underline" href="{{ route('sales-agendas.evidence.show', [$agenda, $evidence]) }}">{{ $evidence->original_name }}</a>@endif<br>@empty-@endforelse</td><td><x-crm.status-badge :variant="$agendaStatusVariant">{{ $agendaStatusLabel }}</x-crm.status-badge></td></tr>@empty<tr><td colspan="10"><x-crm.empty-state title="Belum ada agenda tim" description="Agenda Sales pada periode terpilih akan tampil di sini." /></td></tr>@endforelse</tbody></table></div>
             @if($canManageAgenda)
-                <x-crm.section id="coordinator-agenda-updates" title="Perbarui Hasil Agenda" description="Koordinator dapat menandai agenda Sales tim sebagai selesai.">
+                <x-crm.section id="coordinator-agenda-updates" title="Perbarui Hasil Agenda" description="Koordinator dapat menandai agenda Sales tim sebagai selesai." class="sales-pocketbook-screen-section">
                     <div class="grid gap-3 p-4 md:grid-cols-2">
                         @foreach($agendas as $agenda)
                             @if(!in_array($agenda->status, ['done', 'cancelled', 'rescheduled'], true))
@@ -163,16 +142,17 @@
             <x-crm.pagination :collection="$agendas" :show-per-page="false" />
         </x-crm.section>
     @else
-        <x-crm.section id="coordinator-report-summary" title="Ringkasan Periode" :description="$period['from']->format('d/m/Y').' - '.$period['to']->format('d/m/Y')">
+        <x-crm.section id="coordinator-report-summary" title="Ringkasan Periode" :description="$period['from']->format('d/m/Y').' - '.$period['to']->format('d/m/Y')" class="sales-pocketbook-screen-section">
             <div class="grid grid-cols-2 gap-3 p-4 lg:grid-cols-4">@foreach(['Lead Baru' => $kpi['lead_new'], 'Tatap Muka' => $kpi['face_to_face'], 'Cek Lokasi' => $kpi['site_visit'], 'UTJ' => $kpi['utj']] as $label => $count)<x-crm.card><div class="text-xs font-bold uppercase">{{ $label }}</div><strong class="text-xl">{{ $count }}</strong></x-crm.card>@endforeach</div>
             @if(array_sum($kpi) === 0)
                 <div class="px-4 pb-4"><x-crm.empty-state title="Belum ada aktivitas pada periode ini." description="Metrik akan terisi setelah lead atau aktivitas terkait tercatat dalam scope dan periode yang dipilih." /></div>
             @endif
         </x-crm.section>
 
-        <x-crm.section id="coordinator-performance" title="Performa Sales" description="Perbandingan funnel Lead untuk setiap Sales aktif dalam tim Anda.">
+        <x-crm.section id="coordinator-performance" title="Performa Sales" description="Perbandingan funnel Lead untuk setiap Sales aktif dalam tim Anda." class="sales-pocketbook-screen-section">
             <div class="crm-table-scroll"><table class="crm-data-table"><thead><tr><th>Sales</th><th>Cabang</th><th>Proyek</th><th>Lead Baru</th><th>Tatap Muka</th><th>Cek Lokasi</th><th>UTJ</th></tr></thead><tbody>@forelse($salesRows as $row)<tr><td>{{ $row->name }}</td><td>{{ $row->branch_name ?: '-' }}</td><td>{{ $row->project_name ?: '-' }}</td><td>{{ $row->lead_new }}</td><td>{{ $row->face_to_face }}</td><td>{{ $row->site_visit }}</td><td>{{ $row->utj }}</td></tr>@empty<tr><td colspan="7"><x-crm.empty-state title="Belum ada Sales pada cakupan ini." /></td></tr>@endforelse</tbody></table></div>
         </x-crm.section>
     @endif
+</div>
 </div>
 @endsection

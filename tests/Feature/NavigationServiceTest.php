@@ -19,7 +19,7 @@ class NavigationServiceTest extends TestCase
         $navigation = $this->navigationFor('sales', 'sales-pocketbook.index');
 
         $this->assertSame(['sales'], array_column($navigation, 'key'));
-        $this->assertSame(['Buku Saku Sales', 'Daily Planning'], $this->labels($navigation));
+        $this->assertSame(['Buku Saku Sales'], $this->labels($navigation));
         $this->assertNotContains('Dashboard', $this->labels($navigation));
         $this->assertNotContains('Database', $this->labels($navigation));
         $this->assertNotContains('Pengeluaran', $this->labels($navigation));
@@ -33,7 +33,7 @@ class NavigationServiceTest extends TestCase
         $branchManager = $this->navigationFor('branch_manager');
         $pusat = $this->navigationFor('pusat');
 
-        $this->assertSame(['Dashboard', 'Work Planner', 'Buku Saku Sales', 'Daily Planning', 'Changelog'], $this->labels($coordinator));
+        $this->assertSame(['Dashboard', 'Work Planner', 'Buku Saku Sales', 'Changelog'], $this->labels($coordinator));
         $this->assertContains('Database', $this->labels($branchManager));
         $this->assertNotContains('Pengeluaran', $this->labels($branchManager));
         $this->assertContains('User', $this->labels($branchManager));
@@ -134,7 +134,7 @@ class NavigationServiceTest extends TestCase
         $sales = collect($navigation)->firstWhere('key', 'sales');
         $labels = array_column($sales['children'], 'label');
 
-        $this->assertSame(['Buku Saku Sales', 'Daily Planning', 'Database Konsumen', 'NUP / Waiting List', 'Konsumen Progress', 'Selesai'], $labels);
+        $this->assertSame(['Buku Saku Sales', 'Database Konsumen', 'NUP / Waiting List', 'Konsumen Progress', 'Selesai'], $labels);
         $this->assertSame('Database', $database['label']);
         $this->assertSame('database', $database['icon']);
         $this->assertTrue($database['direct']);

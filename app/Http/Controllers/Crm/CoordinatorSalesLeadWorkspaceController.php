@@ -6,7 +6,6 @@ use App\Enums\SalesLeadStatus;
 use App\Exports\CoordinatorSalesLeadExport;
 use App\Http\Controllers\Controller;
 use App\Models\LeadMaster;
-use App\Models\SalesDailyPlan;
 use App\Models\SalesLead;
 use App\Models\User;
 use App\Services\CoordinatorLeadPushService;
@@ -52,14 +51,6 @@ class CoordinatorSalesLeadWorkspaceController extends Controller
         $targetMonth = CarbonImmutable::createFromFormat('Y-m-d', $targetMonthValue.'-01', config('app.timezone'));
         $data['targetMonth'] = $targetMonth;
         $data['targetSummaries'] = $data['salesUsers']->mapWithKeys(fn (User $sales) => [$sales->id => $this->leadTargets->summary($sales, $targetMonth)]);
-        $dailyPlanDate = CarbonImmutable::createFromFormat('Y-m-d', $request->query('work_date', $data['period']['from']->toDateString()), config('app.timezone'));
-        $data['dailyPlanDate'] = $dailyPlanDate;
-        $data['dailyPlans'] = SalesDailyPlan::query()
-            ->with(['sales:id,name', 'items'])
-            ->whereIn('sales_user_id', $data['salesUsers']->pluck('id'))
-            ->whereDate('work_date', $dailyPlanDate->toDateString())
-            ->orderBy('sales_user_id')
-            ->get();
         $data['projectsBySales'] = $data['salesUsers']->mapWithKeys(fn ($sales) => [
             (string) $sales->id => $sales->assignedProjects->map(fn ($project) => [
                 'id' => (string) $project->id,

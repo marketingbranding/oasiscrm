@@ -9,6 +9,7 @@ use App\Models\Role;
 use App\Models\SalesCoordinatorSales;
 use App\Models\User;
 use App\Services\OptimisticLockService;
+use App\Services\SalesPocketbookOnboardingService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use PhpOffice\PhpSpreadsheet\IOFactory;
 use Tests\TestCase;
@@ -110,6 +111,7 @@ class SalesRoleWorkspaceScopeTest extends TestCase
 
         foreach ([$sales1, $sales2, $sales3] as $sales) {
             $sales->assignedProjects()->attach($project, ['is_primary' => true, 'is_active' => true]);
+            app(SalesPocketbookOnboardingService::class)->skip($sales);
         }
         foreach ([[$coordinatorA, $sales1], [$coordinatorA, $sales2], [$coordinatorB, $sales3]] as [$coordinator, $sales]) {
             SalesCoordinatorSales::create(['coordinator_user_id' => $coordinator->id, 'sales_user_id' => $sales->id]);

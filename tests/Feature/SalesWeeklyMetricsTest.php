@@ -8,6 +8,7 @@ use App\Models\LeadMaster;
 use App\Models\Role;
 use App\Models\SalesLead;
 use App\Models\User;
+use App\Services\SalesPocketbookOnboardingService;
 use App\Services\SalesWeeklyMetricsService;
 use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -172,6 +173,7 @@ class SalesWeeklyMetricsTest extends TestCase
     {
         $sales = $this->user('sales', $branch, $name);
         $sales->assignedProjects()->attach($project, ['is_primary' => true]);
+        app(SalesPocketbookOnboardingService::class)->skip($sales);
 
         return $sales;
     }

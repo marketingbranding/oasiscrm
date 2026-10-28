@@ -11,6 +11,7 @@ use App\Models\SalesLead;
 use App\Models\User;
 use App\Services\CrmAuthorizationService;
 use App\Services\OrganizationScopeService;
+use App\Services\SalesPocketbookOnboardingService;
 use App\Services\SupervisorSalesMonitoringService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
@@ -586,6 +587,10 @@ class SupervisorSalesPocketbookTest extends TestCase
             'password_changed_at' => now(),
         ]);
         $user->branches()->syncWithoutDetaching([$branch->id => ['can_view' => true, 'can_edit' => false, 'can_sync' => false]]);
+
+        if ($role === 'sales') {
+            app(SalesPocketbookOnboardingService::class)->skip($user);
+        }
 
         return $user;
     }

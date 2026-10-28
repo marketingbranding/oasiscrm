@@ -1,6 +1,6 @@
 @props(['initial' => null])
 
-<div x-data="crmConflict({ initial: @js($initial) })"
+<div class="crm-global-conflict" x-data="crmConflict({ initial: @js($initial) })"
      @oasis-conflict.window="handleConflict($event.detail.response, $event.detail.context || {})"
      @oasis-submit-conflict.window="submitForm($event.detail.form, $event.detail.context || {})"
      @keydown.escape.window="if (open) { $event.preventDefault(); closeConflict() }">

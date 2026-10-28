@@ -36,7 +36,7 @@
         }
     </style>
 </head>
-<body class="flex min-h-screen flex-col bg-[var(--oasis-page-bg)] font-['Times_New_Roman'] antialiased"
+<body class="flex min-h-screen flex-col bg-[var(--oasis-page-bg)] font-['Times_New_Roman'] antialiased @yield('body-class')"
       x-data="crmShell(@js(['activeGroups' => collect($navigation)->where('active', true)->pluck('key')->values()]))">
     @if(request()->boolean('reminder_dismiss_failed'))
         <script>history.replaceState(null, '', new URL(location.href).pathname + new URL(location.href).search.replace(/([?&])reminder_dismiss_failed=1(&|$)/, '$1').replace(/[?&]$/, '') + location.hash)</script>
@@ -117,7 +117,7 @@
                  ['type' => 'error', 'message' => session('error')],
                  ['type' => 'warning', 'message' => session('warning')],
              ]))" @oasis:toast.window="push($event.detail)"
-             class="fixed right-4 top-16 z-[999] flex max-w-sm flex-col gap-2 pointer-events-none" aria-live="polite" aria-atomic="false">
+             class="crm-global-toasts fixed right-4 top-16 z-[999] flex max-w-sm flex-col gap-2 pointer-events-none" aria-live="polite" aria-atomic="false">
             <template x-for="toast in toasts" :key="toast.id">
                 <div x-show="toast.show" x-transition:leave="transition ease-out duration-500" x-transition:leave-start="opacity-100 translate-x-0" x-transition:leave-end="opacity-0 translate-x-4"
                      :class="{ 'crm-toast--success': toast.type === 'success', 'crm-toast--error': toast.type === 'error', 'crm-toast--warning': toast.type === 'warning' }"

@@ -14,7 +14,7 @@
             <button type="button" @click="close()" class="sales-daily-reminder-close" aria-label="Tutup pengingat">&times;</button>
         </div>
         <div class="sales-daily-reminder-body">
-            <p id="sales-daily-reminder-description">Jangan lupa mengisi lead hari ini serta planning atau agenda kerja Anda di Buku Saku Sales.</p>
+            <p id="sales-daily-reminder-description">Jangan lupa mengisi lead hari ini serta agenda kerja Anda di Buku Saku Sales.</p>
             <div class="sales-daily-reminder-status" aria-label="Aktivitas yang perlu diperhatikan">
                 @unless($dailyReminder['hasAssignedProject'])
                     <p class="sales-daily-reminder-status-item sales-daily-reminder-status-item--danger"><strong>Proyek belum tersedia</strong><span>Anda belum ditugaskan ke proyek. Hubungi admin pusat.</span></p>
@@ -23,7 +23,7 @@
                     <p class="sales-daily-reminder-status-item"><strong>Lead hari ini</strong><span>Belum ada lead yang dicatat hari ini.</span></p>
                 @endif
                 @if($dailyReminder['todayAgendaCount'] === 0)
-                    <p class="sales-daily-reminder-status-item"><strong>Agenda hari ini</strong><span>Belum ada planning atau agenda hari ini.</span></p>
+                    <p class="sales-daily-reminder-status-item"><strong>Agenda hari ini</strong><span>Belum ada agenda hari ini.</span></p>
                 @endif
                 @if($dailyReminder['missingAgendaResultCount'] > 0)
                     <p class="sales-daily-reminder-status-item sales-daily-reminder-status-item--warning"><strong>Hasil belum lengkap</strong><span>Ada {{ $dailyReminder['missingAgendaResultCount'] }} agenda selesai yang belum memiliki hasil.</span></p>

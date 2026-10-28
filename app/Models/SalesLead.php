@@ -44,6 +44,7 @@ class SalesLead extends Model
         'external_lead_id', 'external_sync_id', 'remote_target_branch_id', 'sync_status', 'last_synced_at', 'last_synced_payload_hash', 'last_remote_payload_hash', 'last_synced_field_hashes', 'delivery_attempted_at', 'delete_pending_at', 'last_sync_error',
         'id_promo', 'source', 'platform', 'campaign_id', 'campaign_name',
         'current_status', 'current_status_changed_at', 'current_status_source', 'current_status_source_id',
+        'completed_at', 'completed_by_user_id',
         'consumer_converted_at', 'freelance_converted_at', 'consumer_external_id',
         'freelance_external_id', 'slik_external_id', 'akad_external_id',
     ];
@@ -60,6 +61,7 @@ class SalesLead extends Model
             'akad_at' => 'datetime',
             'current_status' => SalesLeadStatus::class,
             'current_status_changed_at' => 'datetime',
+            'completed_at' => 'datetime',
             'consumer_converted_at' => 'datetime',
             'freelance_converted_at' => 'datetime',
             'last_synced_at' => 'datetime',
@@ -97,6 +99,11 @@ class SalesLead extends Model
     public function updatedBy(): BelongsTo
     {
         return $this->belongsTo(User::class, 'updated_by');
+    }
+
+    public function completedBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'completed_by_user_id');
     }
 
     public function comments(): MorphMany
@@ -257,6 +264,7 @@ class SalesLead extends Model
                 'updated' => 'Lead Buku Saku diperbarui',
                 'stage_updated' => 'Progres lead diperbarui',
                 'stage_reversed' => 'Progres lead dibatalkan',
+                'completed' => 'Lead Buku Saku ditandai selesai',
                 'deleted' => 'Lead Buku Saku dihapus',
                 default => 'Lead Buku Saku diperbarui',
             },

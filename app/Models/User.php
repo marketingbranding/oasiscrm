@@ -151,6 +151,11 @@ class User extends Authenticatable implements MustVerifyEmail
         return $this->hasMany(UserInvitation::class);
     }
 
+    public function onboardingProgress(): HasMany
+    {
+        return $this->hasMany(UserOnboardingProgress::class);
+    }
+
     public function userImportBatches(): HasMany
     {
         return $this->hasMany(UserImportBatch::class, 'uploaded_by');

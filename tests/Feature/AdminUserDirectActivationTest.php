@@ -121,6 +121,12 @@ class AdminUserDirectActivationTest extends TestCase
             $newPassword = "Changed123{$role->id}";
             $this->put(route('password.change.update'), ['password' => $newPassword, 'password_confirmation' => $newPassword])
                 ->assertRedirect(route($user->landingRouteName()));
+            if ($slug === 'sales') {
+                $this->get(route($user->landingRouteName()))
+                    ->assertRedirect(route('sales-pocketbook.onboarding.show'));
+                $this->post(route('sales-pocketbook.onboarding.skip'))
+                    ->assertRedirect(route('sales-agendas.index'));
+            }
             $this->get(route($user->landingRouteName()))->assertOk();
 
             $user->refresh();

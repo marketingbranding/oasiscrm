@@ -13,8 +13,6 @@ class RestrictSalesModuleAccess
         'sales-pocketbook.*',
         'sales-leads.*',
         'sales-agendas.*',
-        'sales-daily-plans.*',
-        'sales-daily-plan-items.*',
         'sales-reminders.*',
         'presence.*',
         'notifications.*',

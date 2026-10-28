@@ -8,6 +8,7 @@ use App\Models\ExpenseCategory;
 use App\Models\LeadMaster;
 use App\Models\Role;
 use App\Models\User;
+use App\Services\SalesPocketbookOnboardingService;
 
 trait BuildsExpenseFixtures
 {
@@ -32,6 +33,10 @@ trait BuildsExpenseFixtures
             'is_active' => true,
             'password_changed_at' => now(),
         ])->save();
+
+        if ($roleSlug === 'sales') {
+            app(SalesPocketbookOnboardingService::class)->skip($user);
+        }
 
         return $user;
     }

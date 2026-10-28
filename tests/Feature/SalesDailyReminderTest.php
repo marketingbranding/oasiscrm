@@ -8,6 +8,7 @@ use App\Models\LeadMaster;
 use App\Models\Role;
 use App\Models\User;
 use App\Services\SalesDailyReminderService;
+use App\Services\SalesPocketbookOnboardingService;
 use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -96,9 +97,10 @@ class SalesDailyReminderTest extends TestCase
     {
         $branch = Branch::create(['name' => 'Solo', 'code' => 'SLO', 'is_active' => true]);
         $sales = $this->user('sales', $branch);
+        app(SalesPocketbookOnboardingService::class)->skip($sales);
 
         $this->actingAs($sales)->get(route('sales-pocketbook.index'))->assertOk()
-            ->assertSee('Proyek utama belum ditentukan. Hubungi admin untuk menetapkan proyek utama.')
+            ->assertSee('Proyek utama belum ditentukan. Hubungi admin untuk menetapkan proyek sebelum membuat agenda.')
             ->assertDontSee('name="scheduled_date"', false);
     }
 
@@ -114,6 +116,7 @@ class SalesDailyReminderTest extends TestCase
     {
         $sales = $this->user('sales', $branch, $name);
         $sales->assignedProjects()->attach($project, ['is_primary' => true]);
+        app(SalesPocketbookOnboardingService::class)->skip($sales);
 
         return $sales;
     }

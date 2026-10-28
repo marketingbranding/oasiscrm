@@ -8,7 +8,6 @@ use App\Http\Requests\Crm\RescheduleSalesAgendaRequest;
 use App\Http\Requests\Crm\StoreSalesAgendaRequest;
 use App\Models\ContentItem;
 use App\Models\LeadMaster;
-use App\Models\SalesDailyPlan;
 use App\Models\SalesLead;
 use App\Models\User;
 use App\Services\CoordinatorLeadTeamService;
@@ -18,11 +17,13 @@ use App\Services\PromoOptionService;
 use App\Services\SalesAgendaEvidenceUploadService;
 use App\Services\SalesAgendaProjectResolver;
 use App\Services\SalesDailyReminderService;
+use App\Services\SalesPocketbookOnboardingService;
 use App\Services\WorkspaceAccessService;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\Rule;
 use Symfony\Component\HttpFoundation\Response;
 
 class SalesAgendaController extends Controller
@@ -35,38 +36,70 @@ class SalesAgendaController extends Controller
         private readonly WorkspaceAccessService $workspaceAccess,
         private readonly PromoOptionService $promoOptions,
         private readonly SalesDailyReminderService $dailyReminder,
+        private readonly SalesPocketbookOnboardingService $onboarding,
     ) {}
 
     public function index(Request $request)
     {
         abort_unless($request->user()->isSales(), 403);
+        if ($this->onboarding->shouldShow($request->user())) {
+            return redirect()->route('sales-pocketbook.onboarding.show');
+        }
         $project = $this->projectResolver->resolve($request->user());
         $tab = $request->query('tab') === 'leads' ? 'leads' : 'agenda';
-        $request->validate(['work_date' => ['nullable', 'date_format:Y-m-d']]);
-        $dailyPlanDate = CarbonImmutable::createFromFormat('Y-m-d', $request->query('work_date', today()->toDateString()), config('app.timezone'));
-        while ($dailyPlanDate->isWeekend()) {
-            $dailyPlanDate = $dailyPlanDate->addDay();
+        $request->validate([
+            'work_date' => ['nullable', 'date_format:Y-m-d'],
+            'lead_status' => ['nullable', Rule::in(['open', 'completed'])],
+        ]);
+        $agendaDate = CarbonImmutable::createFromFormat('Y-m-d', $request->query('work_date', today()->toDateString()), config('app.timezone'));
+        while ($agendaDate->isWeekend()) {
+            $agendaDate = $agendaDate->addDay();
         }
-        $dailyPlan = SalesDailyPlan::query()
-            ->with(['items.evidence', 'items.rescheduleTo.targetItem.plan', 'items.rescheduleFrom.sourceItem.plan'])
-            ->where('sales_user_id', $request->user()->id)
-            ->whereDate('work_date', $dailyPlanDate->toDateString())
-            ->first();
         $agendas = ContentItem::query()
             ->with(['branch', 'salesProject', 'evidence'])
             ->where('item_type', 'agenda')
             ->where('agenda_type', ContentItem::SALES_AGENDA_TYPE)
             ->where('owner_user_id', $request->user()->id)
-            ->latest('scheduled_date')
+            ->whereDate('scheduled_date', $agendaDate->toDateString())
+            ->orderBy('start_time')
             ->latest('id')
             ->paginate(20, ['*'], 'agenda_page');
-        $leads = SalesLead::query()
+        $contextToday = CarbonImmutable::today(config('app.timezone'));
+        $agendaGroups = collect([
+            'yesterday' => ['label' => 'Kemarin', 'date' => $contextToday->subDay()],
+            'today' => ['label' => 'Hari ini', 'date' => $contextToday],
+            'planned' => ['label' => 'Rencana', 'date' => null],
+        ])->mapWithKeys(function (array $context, string $key) use ($request, $contextToday): array {
+            $query = ContentItem::query()
+                ->with(['branch', 'salesProject', 'evidence'])
+                ->where('item_type', 'agenda')
+                ->where('agenda_type', ContentItem::SALES_AGENDA_TYPE)
+                ->where('owner_user_id', $request->user()->id);
+
+            if ($context['date']) {
+                $query->whereDate('scheduled_date', $context['date']->toDateString());
+            } else {
+                $query->whereDate('scheduled_date', '>', $contextToday->toDateString());
+            }
+
+            return [$key => [
+                'label' => $context['label'],
+                'items' => $query->orderBy('scheduled_date')->orderBy('start_time')->latest('id')->limit(20)->get(),
+            ]];
+        });
+        $leadStatus = $request->query('lead_status', 'open');
+        $leadQuery = SalesLead::query()
             ->visibleTo($request->user())
             ->where('sales_user_id', $request->user()->id)
-            ->with(['branch:id,name', 'project:id,project_name'])
+            ->with(['branch:id,name', 'project:id,project_name']);
+        $openLeadCount = (clone $leadQuery)->whereNull('completed_at')->count();
+        $completedLeadCount = (clone $leadQuery)->whereNotNull('completed_at')->count();
+        $leads = $leadQuery
+            ->when($leadStatus === 'completed', fn ($query) => $query->whereNotNull('completed_at'), fn ($query) => $query->whereNull('completed_at'))
             ->latest('lead_date')
             ->latest('id')
-            ->paginate(20, ['*'], 'lead_page');
+            ->paginate(20, ['*'], 'lead_page')
+            ->withQueryString();
         $projects = $this->workspaceAccess->accessibleProjects($request->user())->where('is_active', true)->values();
         $defaultProjectId = old('project_id', $request->query('project_id', $project?->id));
         $cascadeProjects = $projects->map(fn (LeadMaster $item) => [
@@ -80,12 +113,20 @@ class SalesAgendaController extends Controller
         $dailyReminder = $this->dailyReminder->state($request->user()) + [
             'leadInputUrl' => route('sales-agendas.index', ['tab' => 'leads']).'#lead-saya',
             'dismissUrl' => route('sales-reminders.dismiss'),
-            'agendaInputUrl' => route('sales-agendas.index', ['tab' => 'agenda']).'#daily-plan',
-            'missingResultUrl' => route('sales-agendas.index', ['tab' => 'agenda']).'#daily-plan',
+            'agendaInputUrl' => route('sales-agendas.index', ['tab' => 'agenda']).'#agenda-input',
+            'missingResultUrl' => route('sales-agendas.index', ['tab' => 'agenda']).'#agenda-list',
         ];
         $canExport = $request->user()->hasPermission('sales_pocketbook.export_own');
 
-        return view('crm.sales-pocketbook.sales-agenda', compact('project', 'agendas', 'leads', 'tab', 'projects', 'defaultProjectId', 'cascadeProjects', 'leadOptionsEndpoint', 'promos', 'dailyReminder', 'canExport', 'dailyPlan', 'dailyPlanDate'));
+        return view('crm.sales-pocketbook.sales-agenda', compact('project', 'agendas', 'agendaGroups', 'leads', 'leadStatus', 'openLeadCount', 'completedLeadCount', 'tab', 'projects', 'defaultProjectId', 'cascadeProjects', 'leadOptionsEndpoint', 'promos', 'dailyReminder', 'canExport', 'agendaDate'));
+    }
+
+    public function show(Request $request, ContentItem $agenda)
+    {
+        $this->authorize('view', $agenda);
+        $agenda->load(['branch', 'salesProject', 'evidence', 'tasks.creator']);
+
+        return view('crm.sales-pocketbook.sales-agenda-detail', compact('agenda'));
     }
 
     public function store(StoreSalesAgendaRequest $request, SalesAgendaEvidenceUploadService $uploads)
@@ -110,6 +151,9 @@ class SalesAgendaController extends Controller
                     'sales_activity_category' => $data['sales_activity_category'],
                     'location' => $data['location'] ?? null,
                     'scheduled_date' => $data['scheduled_date'],
+                    'start_time' => $data['start_time'] ?? null,
+                    'end_time' => $data['end_time'] ?? null,
+                    'duration_minutes' => $this->durationMinutes($data['start_time'] ?? null, $data['end_time'] ?? null),
                     'status' => $result ? 'done' : 'planned',
                     'completed_at' => $result ? now() : null,
                     'activity_result' => $result,
@@ -205,5 +249,17 @@ class SalesAgendaController extends Controller
         }
 
         return redirect()->route('sales-agendas.index')->with('success', $message);
+    }
+
+    private function durationMinutes(?string $startTime, ?string $endTime): ?int
+    {
+        if (blank($startTime) || blank($endTime)) {
+            return null;
+        }
+
+        $start = CarbonImmutable::createFromFormat('H:i', $startTime);
+        $end = CarbonImmutable::createFromFormat('H:i', $endTime);
+
+        return $start->diffInMinutes($end);
     }
 }

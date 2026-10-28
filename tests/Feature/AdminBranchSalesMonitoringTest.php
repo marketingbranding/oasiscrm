@@ -15,6 +15,7 @@ use App\Models\SalesLead;
 use App\Models\User;
 use App\Policies\SalesLeadPolicy;
 use App\Services\GoogleSheetsApiService;
+use App\Services\SalesPocketbookOnboardingService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Mockery;
@@ -250,6 +251,7 @@ class AdminBranchSalesMonitoringTest extends TestCase
     {
         $sales = $this->user('sales', $this->branch, 'Dispatch Sales');
         $this->assign($sales, $this->project);
+        app(SalesPocketbookOnboardingService::class)->skip($sales);
         $coordinator = $this->user('sales_coordinator', $this->branch, 'Dispatch Coordinator');
         $supervisor = $this->user('supervisor', $this->branch, 'Dispatch Supervisor');
         $manager = $this->user('manager', $this->branch, 'Dispatch Manager');

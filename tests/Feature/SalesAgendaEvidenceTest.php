@@ -10,6 +10,7 @@ use App\Models\Role;
 use App\Models\SalesAgendaEvidence;
 use App\Models\User;
 use App\Services\OptimisticLockService;
+use App\Services\SalesPocketbookOnboardingService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
@@ -28,6 +29,7 @@ class SalesAgendaEvidenceTest extends TestCase
         $role = Role::firstOrCreate(['slug' => 'sales'], ['name' => 'Sales']);
         $sales = User::factory()->create(['role_id' => $role->id, 'branch_id' => $branch->id, 'password_changed_at' => now()]);
         $sales->assignedProjects()->attach($project->id, ['is_primary' => true, 'is_active' => true]);
+        app(SalesPocketbookOnboardingService::class)->skip($sales);
 
         foreach ([0, 1, 2] as $count) {
             $photos = [];
@@ -64,6 +66,7 @@ class SalesAgendaEvidenceTest extends TestCase
         $role = Role::firstOrCreate(['slug' => 'sales'], ['name' => 'Sales']);
         $sales = User::factory()->create(['role_id' => $role->id, 'branch_id' => $branch->id, 'password_changed_at' => now()]);
         $sales->assignedProjects()->attach($project->id, ['is_primary' => true, 'is_active' => true]);
+        app(SalesPocketbookOnboardingService::class)->skip($sales);
         $data = ['scheduled_date' => '2026-08-24', 'sales_activity_category' => 'Cek Lokasi', 'title' => 'Agenda gagal'];
 
         $this->actingAs($sales)->post(route('sales-agendas.store'), $data + ['photos' => [
@@ -125,18 +128,19 @@ class SalesAgendaEvidenceTest extends TestCase
         $this->assertSame([], Storage::disk('agenda_evidence')->allFiles());
     }
 
-    public function test_sales_agenda_workspace_no_longer_renders_legacy_creation_form(): void
+    public function test_sales_agenda_workspace_renders_the_direct_creation_form(): void
     {
         $branch = Branch::create(['name' => 'Solo', 'code' => 'SO', 'is_active' => true]);
         $project = LeadMaster::create(['branch_id' => $branch->id, 'project_name' => 'Oasis Solo', 'is_active' => true]);
         $role = Role::firstOrCreate(['slug' => 'sales'], ['name' => 'Sales']);
         $sales = User::factory()->create(['role_id' => $role->id, 'branch_id' => $branch->id, 'password_changed_at' => now()]);
         $sales->assignedProjects()->attach($project->id, ['is_primary' => true, 'is_active' => true]);
+        app(SalesPocketbookOnboardingService::class)->skip($sales);
 
         $this->actingAs($sales)->get(route('sales-agendas.index'))->assertOk()
-            ->assertSee('+ Tambah Agenda')
-            ->assertDontSee('action="'.route('sales-agendas.store').'"', false)
-            ->assertDontSee('name="photos[]"', false)
+            ->assertSee('Tambah Agenda')
+            ->assertSee('action="'.route('sales-agendas.store').'"', false)
+            ->assertSee('name="scheduled_date"', false)
             ->assertDontSee('Buat Agenda Tambahan');
     }
 
@@ -176,13 +180,14 @@ class SalesAgendaEvidenceTest extends TestCase
         $this->assertCount(2, $agenda->evidence);
     }
 
-    public function test_legacy_agenda_records_are_preserved_but_not_rendered_in_daily_plan_workspace(): void
+    public function test_agenda_records_and_evidence_are_preserved_in_the_direct_workspace(): void
     {
         $branch = Branch::create(['name' => 'Solo', 'code' => 'SO', 'is_active' => true]);
         $project = LeadMaster::create(['branch_id' => $branch->id, 'project_name' => 'Oasis Solo', 'is_active' => true]);
         $role = Role::firstOrCreate(['slug' => 'sales'], ['name' => 'Sales']);
         $sales = User::factory()->create(['role_id' => $role->id, 'branch_id' => $branch->id, 'password_changed_at' => now()]);
         $sales->assignedProjects()->attach($project->id, ['is_primary' => true, 'is_active' => true]);
+        app(SalesPocketbookOnboardingService::class)->skip($sales);
         $available = ContentItem::create(['branch_id' => $branch->id, 'sales_project_id' => $project->id, 'item_type' => 'agenda', 'agenda_type' => ContentItem::SALES_AGENDA_TYPE, 'title' => 'Upload tersedia', 'scheduled_date' => now(), 'status' => 'planned', 'owner_user_id' => $sales->id, 'created_by' => $sales->id]);
         $full = ContentItem::create(['branch_id' => $branch->id, 'sales_project_id' => $project->id, 'item_type' => 'agenda', 'agenda_type' => ContentItem::SALES_AGENDA_TYPE, 'title' => 'Upload penuh', 'scheduled_date' => now(), 'status' => 'planned', 'owner_user_id' => $sales->id, 'created_by' => $sales->id]);
         $finished = ContentItem::create(['branch_id' => $branch->id, 'sales_project_id' => $project->id, 'item_type' => 'agenda', 'agenda_type' => ContentItem::SALES_AGENDA_TYPE, 'title' => 'Agenda selesai', 'scheduled_date' => now(), 'status' => 'done', 'owner_user_id' => $sales->id, 'created_by' => $sales->id]);
@@ -193,11 +198,11 @@ class SalesAgendaEvidenceTest extends TestCase
         $response = $this->actingAs($sales)->get(route('sales-agendas.index'));
 
         $response->assertOk()
+            ->assertSee($available->title)
+            ->assertSee($full->title)
+            ->assertSee($finished->title)
+            ->assertSee(route('sales-agendas.evidence.show', [$full, $full->evidence()->first()]), false)
             ->assertSee('sales-agenda-paper', false)
-            ->assertDontSee('class="sales-agenda-list"', false)
-            ->assertDontSee('action="'.route('sales-agendas.evidence.store', $available).'"', false)
-            ->assertDontSee('action="'.route('sales-agendas.evidence.store', $full).'"', false)
-            ->assertDontSee('action="'.route('sales-agendas.evidence.store', $finished).'"', false)
             ->assertDontSee('Riwayat Agenda Tambahan');
 
         $this->assertModelExists($available);

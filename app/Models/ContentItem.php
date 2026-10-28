@@ -140,6 +140,11 @@ class ContentItem extends Model
         return $this->hasMany(SalesAgendaEvidence::class);
     }
 
+    public function tasks(): HasMany
+    {
+        return $this->hasMany(SalesAgendaTask::class)->orderBy('sort_order')->orderBy('id');
+    }
+
     public function dailyPlan(): BelongsTo
     {
         return $this->belongsTo(SalesDailyPlan::class, 'daily_plan_id');

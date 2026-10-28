@@ -7,6 +7,7 @@ use App\Models\LeadMaster;
 use App\Models\Role;
 use App\Models\User;
 use App\Models\UserNotification;
+use App\Services\SalesPocketbookOnboardingService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -176,6 +177,7 @@ class SalesAccessRestrictionTest extends TestCase
         $project = LeadMaster::create(['branch_id' => $branch->id, 'project_name' => 'Solo Project', 'is_active' => true]);
         $sales = $this->user('sales', $branch, 'Solo Sales');
         $sales->assignedProjects()->attach($project, ['is_primary' => true]);
+        app(SalesPocketbookOnboardingService::class)->skip($sales);
 
         return [$branch, $project, $sales];
     }

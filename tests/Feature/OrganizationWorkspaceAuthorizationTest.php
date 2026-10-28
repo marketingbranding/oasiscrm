@@ -84,6 +84,29 @@ class OrganizationWorkspaceAuthorizationTest extends TestCase
         $this->assertSame(2, OrganizationAssignment::query()->where('user_id', $sales->id)->count());
     }
 
+    public function test_organization_workspace_exposes_direct_drag_and_conflict_recovery_contracts(): void
+    {
+        $script = file_get_contents(resource_path('js/organization-workspace.js'));
+
+        foreach ([
+            "viewMode: 'graph'",
+            'startNodeDrag',
+            'nodeDropTarget',
+            'openNodeDropConfirmation',
+            'data-org-user-drop',
+            'data-org-unit-drop',
+            'expected_assignment_id',
+            'expected_version',
+            'expected_organization_unit_id',
+            'conflictOpen',
+            'reloadOrganization',
+            'org-node-drop-target-user',
+            'org-node-drop-target-unit',
+        ] as $contract) {
+            $this->assertStringContainsString($contract, $script.$this->getOrganizationWorkspaceMarkup());
+        }
+    }
+
     public function test_organization_move_backend_rejects_unauthorized_json_and_invalid_scope_or_graph_targets(): void
     {
         $branch = Branch::create(['name' => 'SEC', 'code' => 'SEC', 'is_active' => true]);
@@ -231,5 +254,11 @@ class OrganizationWorkspaceAuthorizationTest extends TestCase
             'email_verified_at' => now(),
             'password_changed_at' => now(),
         ]);
+    }
+
+    private function getOrganizationWorkspaceMarkup(): string
+    {
+        return file_get_contents(resource_path('views/crm/organization/index.blade.php'))
+            .file_get_contents(resource_path('views/crm/organization/_node.blade.php'));
     }
 }

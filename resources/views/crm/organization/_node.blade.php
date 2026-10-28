@@ -14,7 +14,7 @@
         <button type="button" data-org-node="{{ $node['id'] }}"
                 @if($node['kind'] === 'user') data-org-node-draggable="true" data-org-drop-target="user" data-org-user-drop="{{ $node['id'] }}" @endif
                 @if($node['kind'] === 'unit') data-org-drop-target="unit" data-org-unit-drop="{{ $node['id'] }}" @endif
-                @pointerdown.stop="startVisualDrag($event, @js($node['id']))"
+                @pointerdown.stop="startNodeDrag($event, @js($node['id']))"
                 @click.stop="if (!suppressClick) select(@js($node['id']))"
                 @contextmenu.prevent.stop="openContext($event, @js($node['id']))"
                 class="org-node-card {{ $node['kind'] === 'user' ? 'org-node-card-user' : 'org-node-card-unit' }} w-72 border-2 border-black bg-white p-3 text-left shadow-[4px_4px_0_#000] hover:bg-[var(--oasis-yellow)]"

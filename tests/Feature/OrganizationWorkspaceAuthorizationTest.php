@@ -99,10 +99,15 @@ class OrganizationWorkspaceAuthorizationTest extends TestCase
             'expected_assignment_id',
             'expected_version',
             'expected_organization_unit_id',
+            'expectedOrganizationUnitId',
+            '/^\\d+$/.test',
             'conflictOpen',
             'reloadOrganization',
             'org-node-drop-target-user',
             'org-node-drop-target-unit',
+            'trapOrganizationConflictFocus',
+            'closeOrganizationConflict',
+            'organizationConflictReload',
         ] as $contract) {
             $this->assertStringContainsString($contract, $script.$this->getOrganizationWorkspaceMarkup());
         }

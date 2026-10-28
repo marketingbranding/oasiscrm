@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Crm;
 
+use App\Enums\AccountStatus;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Crm\BulkStoreSalesLeadTargetRequest;
 use App\Http\Requests\Crm\StoreSalesLeadTargetRequest;
@@ -25,12 +26,18 @@ class SalesLeadTargetController extends Controller
         $month = CarbonImmutable::createFromFormat('Y-m-d', $monthValue.'-01', config('app.timezone'));
         $salesUsers = User::query()
             ->with('role:id,slug')
+            ->where('account_status', AccountStatus::Active->value)
             ->where('is_active', true)
             ->whereHas('role', fn ($query) => $query->where('slug', 'sales'))
             ->orderBy('name')
             ->get(['id', 'name', 'branch_id']);
         $targets = SalesLeadTarget::query()
-            ->whereDate('target_month', $month->toDateString())
+            ->where(function ($query) use ($month): void {
+                $query->whereDate('target_month', $month->toDateString())
+                    ->orWhere(function ($legacy) use ($month): void {
+                        $legacy->where('period_year', $month->year)->where('period_month', $month->month);
+                    });
+            })
             ->whereIn('sales_user_id', $salesUsers->pluck('id'))
             ->get()
             ->keyBy('sales_user_id');

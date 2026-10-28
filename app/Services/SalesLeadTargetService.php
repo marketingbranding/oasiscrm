@@ -81,12 +81,18 @@ class SalesLeadTargetService
         $month = $second->startOfMonth();
         $target = SalesLeadTarget::query()
             ->where('sales_user_id', $first->id)
-            ->whereDate('target_month', $month->toDateString())
+            ->where(function (Builder $query) use ($month): void {
+                $query->whereDate('target_month', $month->toDateString())
+                    ->orWhere(function (Builder $legacy) use ($month): void {
+                        $legacy->where('period_year', $month->year)->where('period_month', $month->month);
+                    });
+            })
             ->first() ?? new SalesLeadTarget([
                 'sales_user_id' => $first->id,
                 'target_month' => $month->toDateString(),
             ]);
         $target->fill([
+            'target_month' => $month->toDateString(),
             'target_leads' => $third,
             'period_year' => $month->year,
             'period_month' => $month->month,

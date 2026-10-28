@@ -19,6 +19,7 @@ export default function organizationWorkspace(nodes, moveUrl, unitMoveUrl, remov
         unitMoveTarget: null,
         conflictOpen: false,
         conflictMessage: '',
+        conflictPreviousFocus: null,
         saving: false,
         scale: 1,
         offsetX: 0,
@@ -788,7 +789,10 @@ export default function organizationWorkspace(nodes, moveUrl, unitMoveUrl, remov
             this.saving = true;
 
             try {
-                const expectedOrganizationUnitId = String(this.unitMoveTarget.user.unit_id || '').replace(/^unit:/, '') || null;
+                const expectedOrganizationUnitValue = String(this.unitMoveTarget.user.unit_id || '').replace(/^unit:/, '');
+                const expectedOrganizationUnitId = /^\d+$/.test(expectedOrganizationUnitValue)
+                    ? expectedOrganizationUnitValue
+                    : null;
                 const response = await fetch(this.unitMoveUrl.replace('__USER__', this.unitMoveTarget.user.id), {
                     method: 'PATCH',
                     headers: {
@@ -976,8 +980,35 @@ export default function organizationWorkspace(nodes, moveUrl, unitMoveUrl, remov
         },
 
         showOrganizationConflict(message = null) {
+            this.conflictPreviousFocus = document.activeElement;
             this.conflictMessage = message || 'Struktur organisasi telah berubah. Muat ulang lalu coba lagi.';
             this.conflictOpen = true;
+            this.$nextTick(() => this.$refs.organizationConflictReload?.focus());
+        },
+
+        closeOrganizationConflict() {
+            this.conflictOpen = false;
+            this.conflictPreviousFocus?.focus?.();
+            this.conflictPreviousFocus = null;
+        },
+
+        trapOrganizationConflictFocus(event) {
+            const dialog = this.$refs.organizationConflictDialog;
+            if (!dialog) return;
+
+            const focusable = [...dialog.querySelectorAll('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])')]
+                .filter((element) => !element.disabled && element.offsetParent !== null);
+            if (focusable.length === 0) return;
+
+            const first = focusable[0];
+            const last = focusable[focusable.length - 1];
+            if (event.shiftKey && document.activeElement === first) {
+                event.preventDefault();
+                last.focus();
+            } else if (!event.shiftKey && document.activeElement === last) {
+                event.preventDefault();
+                first.focus();
+            }
         },
 
         reloadOrganization() {

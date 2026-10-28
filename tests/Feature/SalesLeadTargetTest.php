@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Enums\AccountStatus;
 use App\Models\Branch;
 use App\Models\LeadMaster;
 use App\Models\Role;
@@ -84,6 +85,38 @@ class SalesLeadTargetTest extends TestCase
             'lead_target' => 12,
             'target_leads' => 12,
         ]);
+    }
+
+    public function test_bulk_target_overwrites_legacy_period_row_without_creating_a_duplicate(): void
+    {
+        [$branch, , $sales] = $this->context();
+        $superadmin = $this->user('superadmin', $branch, 'Superadmin');
+        SalesLeadTarget::create([
+            'sales_user_id' => $sales->id,
+            'period_year' => 2026,
+            'period_month' => 10,
+            'target_month' => null,
+            'target_leads' => 4,
+            'lead_target' => 4,
+            'created_by' => $superadmin->id,
+            'updated_by' => $superadmin->id,
+        ]);
+
+        app(SalesLeadTargetService::class)->applyToAllActiveSales(
+            $superadmin,
+            CarbonImmutable::parse('2026-10-01'),
+            12,
+        );
+
+        $this->assertSame(1, SalesLeadTarget::query()->where('sales_user_id', $sales->id)->count());
+        $this->assertDatabaseHas('sales_lead_targets', [
+            'sales_user_id' => $sales->id,
+            'period_year' => 2026,
+            'period_month' => 10,
+            'lead_target' => 12,
+            'target_leads' => 12,
+        ]);
+        $this->assertSame('2026-10-01', SalesLeadTarget::query()->where('sales_user_id', $sales->id)->firstOrFail()->target_month->toDateString());
     }
 
     public function test_bulk_target_excludes_inactive_and_non_sales_users(): void
@@ -192,6 +225,25 @@ class SalesLeadTargetTest extends TestCase
             ->assertOk()
             ->assertSee('Terapkan ke semua Sales')
             ->assertSee('Target bulan ini yang sudah ada akan ditimpa.');
+    }
+
+    public function test_target_administration_uses_account_status_and_is_active_for_sales_selection(): void
+    {
+        [$branch] = $this->context();
+        $inactiveSales = $this->user('sales', $branch, 'Inactive Status Sales');
+        $inactiveSales->forceFill(['account_status' => AccountStatus::Inactive])->saveQuietly();
+        $superadmin = $this->user('superadmin', $branch, 'Superadmin');
+
+        $this->actingAs($superadmin)
+            ->get(route('sales-lead-targets.index', ['month' => '2026-10']))
+            ->assertOk()
+            ->assertDontSee('Inactive Status Sales');
+
+        $this->actingAs($superadmin)->post(route('sales-lead-targets.store'), [
+            'sales_user_id' => $inactiveSales->id,
+            'month' => '2026-10',
+            'target_leads' => 12,
+        ])->assertSessionHasErrors('sales_user_id');
     }
 
     public function test_bulk_target_changelog_is_registered_once(): void

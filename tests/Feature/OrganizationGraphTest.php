@@ -193,6 +193,27 @@ class OrganizationGraphTest extends TestCase
         $this->assertTrue($user->branches()->whereKey($branch->id)->exists());
     }
 
+    public function test_explicit_null_unit_precondition_is_checked_for_unassigned_users(): void
+    {
+        $branch = $this->branch('U2B');
+        $targetBranch = $this->branch('U2C');
+        $actor = $this->user('superadmin', $branch);
+        $user = $this->user('staff', $branch);
+        $targetUnit = OrganizationUnit::query()->where('branch_id', $targetBranch->id)->firstOrFail();
+        $user->forceFill(['organization_unit_id' => $targetUnit->id])->saveQuietly();
+
+        $this->expectException(OrganizationAssignmentConflictException::class);
+
+        app(OrganizationGraphService::class)->moveToUnit(
+            $actor,
+            $user,
+            OrganizationUnit::query()->where('unit_type', 'central')->firstOrFail()->id,
+            null,
+            null,
+            true,
+        );
+    }
+
     public function test_removing_user_from_structure_keeps_account_access_and_closes_assignment(): void
     {
         $branch = $this->branch('U3A');

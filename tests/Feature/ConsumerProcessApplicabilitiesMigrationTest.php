@@ -33,4 +33,14 @@ class ConsumerProcessApplicabilitiesMigrationTest extends TestCase
             $migration,
         );
     }
+
+    public function test_sales_daily_plan_evidence_indexes_use_mysql_safe_names(): void
+    {
+        $migration = file_get_contents(database_path('migrations/2026_10_26_125541_create_sales_daily_plan_item_evidences_table.php'));
+
+        $this->assertStringContainsString(
+            "\$table->index(['sales_daily_plan_item_id', 'purged_at'], 'daily_plan_evidence_item_purge_idx');",
+            $migration,
+        );
+    }
 }

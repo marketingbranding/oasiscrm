@@ -28,7 +28,7 @@ return new class extends Migration
             $table->timestamp('purged_at')->nullable();
             $table->timestamps();
 
-            $table->index(['sales_daily_plan_item_id', 'purged_at']);
+            $table->index(['sales_daily_plan_item_id', 'purged_at'], 'daily_plan_evidence_item_purge_idx');
         });
     }
 

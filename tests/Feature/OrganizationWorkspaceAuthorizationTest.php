@@ -110,6 +110,7 @@ class OrganizationWorkspaceAuthorizationTest extends TestCase
             'organizationConflictReload',
             'expectedRemovalOrganizationUnitValue',
             'this.$refs.canvas',
+            'class="relative w-72"',
         ] as $contract) {
             $this->assertStringContainsString($contract, $script.$this->getOrganizationWorkspaceMarkup());
         }

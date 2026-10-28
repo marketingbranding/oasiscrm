@@ -1,5 +1,5 @@
 <div class="org-node-item absolute" x-show="matches(@js($node['id']))" :style="nodeStyle(@js($node['id']))">
-    <div class="relative w-48">
+    <div class="relative w-72">
         @if($canMove && $node['kind'] === 'user')
             <div class="org-socket-row org-socket-row-input org-socket-row-atasan">
                 <button type="button" data-org-socket data-org-socket-node="{{ $node['id'] }}" data-org-socket-type="input"

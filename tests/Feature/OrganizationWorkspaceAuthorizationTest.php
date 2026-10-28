@@ -25,6 +25,7 @@ class OrganizationWorkspaceAuthorizationTest extends TestCase
         $allowed = $this->user('superadmin', $branch);
 
         $this->assertSame(1, \DB::table('changelogs')->where('title', 'Penyempurnaan Workspace Organisasi')->count());
+        $this->assertSame(1, \DB::table('changelogs')->whereNull('version')->where('title', 'Editor Graph Organisasi Drag-and-Drop')->count());
 
         $this->actingAs($denied)->get(route('organization.index'))->assertForbidden();
         $response = $this->actingAs($allowed)->get(route('organization.index'))

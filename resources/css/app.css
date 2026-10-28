@@ -1830,8 +1830,12 @@ body.sales-pocketbook-onboarding-shell .crm-page-body {
 
 @media (max-width: 767px) {
     .sales-pocketbook-onboarding {
+        height: 100svh;
+        max-height: 100svh;
         gap: var(--oasis-space-4);
+        overflow-y: auto;
         padding: var(--oasis-space-4);
+        padding-bottom: calc(var(--oasis-space-3) + var(--oasis-control-height) + var(--oasis-space-4) + env(safe-area-inset-bottom));
     }
 
     .sales-pocketbook-onboarding-stage {
@@ -1860,12 +1864,14 @@ body.sales-pocketbook-onboarding-shell .crm-page-body {
     }
 
     .sales-pocketbook-onboarding-actions {
-        position: sticky;
+        position: fixed;
+        right: 0;
         bottom: 0;
+        left: 0;
         z-index: 3;
         min-height: calc(var(--oasis-control-height) + var(--oasis-space-4));
         background: var(--oasis-onboarding-paper);
-        padding-bottom: var(--oasis-space-2);
+        padding: var(--oasis-space-2) var(--oasis-space-4) calc(var(--oasis-space-2) + env(safe-area-inset-bottom));
     }
 
     .sales-pocketbook-onboarding-actions .crm-button {

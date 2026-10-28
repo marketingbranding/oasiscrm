@@ -333,6 +333,16 @@ class SalesPocketbookMobileContractTest extends TestCase
         $this->assertStringContainsString('[x-data="oasisPwa()"]', $source);
     }
 
+    public function test_onboarding_mobile_actions_remain_visible_in_the_viewport(): void
+    {
+        $source = file_get_contents(resource_path('css/app.css'));
+
+        $this->assertMatchesRegularExpression(
+            '/\.sales-pocketbook-onboarding-actions\s*\{\s*position: fixed;[^}]*bottom: 0;/s',
+            $source,
+        );
+    }
+
     public function test_full_workflow_redesign_exposes_shared_screen_compositions(): void
     {
         $source = file_get_contents(resource_path('css/app.css'));

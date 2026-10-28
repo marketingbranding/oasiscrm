@@ -22,7 +22,7 @@ return new class extends Migration
             $table->json('metadata')->nullable();
             $table->timestamps();
 
-            $table->unique(['consumer_application_id', 'process_key']);
+            $table->unique(['consumer_application_id', 'process_key'], 'consumer_process_app_unique');
         });
     }
 

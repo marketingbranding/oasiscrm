@@ -29,9 +29,9 @@ return new class extends Migration
             $table->json('metadata')->nullable();
             $table->timestamps();
 
-            $table->index(['consumer_application_id', 'status_garansi']);
-            $table->index(['consumer_application_id', 'tanggal_selesai']);
-            $table->index(['source', 'source_id']);
+            $table->index(['consumer_application_id', 'status_garansi'], 'consumer_warranties_app_status_idx');
+            $table->index(['consumer_application_id', 'tanggal_selesai'], 'consumer_warranties_app_finish_idx');
+            $table->index(['source', 'source_id'], 'consumer_warranties_source_idx');
         });
     }
 

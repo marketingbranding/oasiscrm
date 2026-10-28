@@ -13,7 +13,7 @@ return new class extends Migration
             ['version' => null, 'title' => self::TITLE],
             [
                 'category' => 'fixed',
-                'description' => 'Memperbaiki nama index unik applicability proses konsumen agar kompatibel dengan batas identifier MySQL tanpa mengubah data proses yang sudah ada.',
+                'description' => 'Memperbaiki nama index proses konsumen agar kompatibel dengan batas identifier MySQL tanpa mengubah data proses yang sudah ada.',
                 'created_by' => null,
                 'created_at' => now(),
                 'updated_at' => now(),

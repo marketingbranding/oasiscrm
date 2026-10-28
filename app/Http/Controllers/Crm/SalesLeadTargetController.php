@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Crm;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Crm\BulkStoreSalesLeadTargetRequest;
 use App\Http\Requests\Crm\StoreSalesLeadTargetRequest;
 use App\Models\SalesLeadTarget;
 use App\Models\User;
@@ -46,5 +47,15 @@ class SalesLeadTargetController extends Controller
         $this->targets->upsert($sales, $month, (int) $data['target_leads'], $request->user());
 
         return to_route('sales-lead-targets.index', ['month' => $data['month']])->with('success', 'Target Lead berhasil disimpan.');
+    }
+
+    public function bulkStore(BulkStoreSalesLeadTargetRequest $request): RedirectResponse
+    {
+        $data = $request->validated();
+        $month = CarbonImmutable::createFromFormat('Y-m-d', $data['month'].'-01', config('app.timezone'));
+        $count = $this->targets->applyToAllActiveSales($request->user(), $month, (int) $data['target_leads']);
+
+        return to_route('sales-lead-targets.index', ['month' => $data['month']])
+            ->with('success', "Target Lead diterapkan ke {$count} Sales aktif.");
     }
 }

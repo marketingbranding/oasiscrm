@@ -136,6 +136,64 @@ class SalesLeadTargetTest extends TestCase
         $this->assertDatabaseMissing('sales_lead_targets', ['sales_user_id' => $secondSales->id]);
     }
 
+    public function test_bulk_target_route_is_superadmin_only_and_not_available_during_impersonation(): void
+    {
+        [$branch, , $sales] = $this->context();
+        $superadmin = $this->user('superadmin', $branch, 'Superadmin');
+
+        $this->actingAs($sales)->post('/admin/sales-lead-targets/bulk', [
+            'month' => '2026-10',
+            'target_leads' => 12,
+        ])->assertForbidden();
+
+        $this->actingAs($superadmin)
+            ->withSession([
+                'impersonation.original_user_id' => $superadmin->id,
+                'impersonation.target_user_id' => $sales->id,
+                'impersonation.started_at' => now()->timestamp,
+            ])
+            ->post('/admin/sales-lead-targets/bulk', [
+                'month' => '2026-10',
+                'target_leads' => 12,
+            ])->assertForbidden();
+    }
+
+    public function test_bulk_target_route_validates_month_and_target_before_writing(): void
+    {
+        [$branch] = $this->context();
+        $superadmin = $this->user('superadmin', $branch, 'Superadmin');
+
+        $this->actingAs($superadmin)->post('/admin/sales-lead-targets/bulk', [
+            'month' => 'October 2026',
+            'target_leads' => 0,
+        ])->assertSessionHasErrors(['month', 'target_leads']);
+
+        $this->assertDatabaseCount('sales_lead_targets', 0);
+    }
+
+    public function test_bulk_target_route_redirects_with_updated_count(): void
+    {
+        [$branch] = $this->context();
+        $superadmin = $this->user('superadmin', $branch, 'Superadmin');
+
+        $this->actingAs($superadmin)->post('/admin/sales-lead-targets/bulk', [
+            'month' => '2026-10',
+            'target_leads' => 12,
+        ])->assertRedirect(route('sales-lead-targets.index', ['month' => '2026-10']))
+            ->assertSessionHas('success', 'Target Lead diterapkan ke 1 Sales aktif.');
+
+        $this->assertDatabaseHas('sales_lead_targets', [
+            'period_year' => 2026,
+            'period_month' => 10,
+            'lead_target' => 12,
+        ]);
+
+        $this->actingAs($superadmin)->get(route('sales-lead-targets.index', ['month' => '2026-10']))
+            ->assertOk()
+            ->assertSee('Terapkan ke semua Sales')
+            ->assertSee('Target bulan ini yang sudah ada akan ditimpa.');
+    }
+
     public function test_target_administration_is_only_available_to_superadmin(): void
     {
         [$branch, , $sales] = $this->context();

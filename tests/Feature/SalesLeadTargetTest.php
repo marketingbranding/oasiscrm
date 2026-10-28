@@ -6,10 +6,12 @@ use App\Models\Branch;
 use App\Models\LeadMaster;
 use App\Models\Role;
 use App\Models\SalesLead;
+use App\Models\SalesLeadTarget;
 use App\Models\User;
 use App\Services\SalesLeadTargetService;
 use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use RuntimeException;
 use Symfony\Component\HttpKernel\Exception\AccessDeniedHttpException;
 use Tests\TestCase;
 
@@ -53,6 +55,85 @@ class SalesLeadTargetTest extends TestCase
 
         $this->expectException(AccessDeniedHttpException::class);
         app(SalesLeadTargetService::class)->upsert($sales, CarbonImmutable::parse('2026-10-01'), 4, $sales);
+    }
+
+    public function test_bulk_target_overwrites_existing_target_for_every_active_sales_user(): void
+    {
+        [$branch, , $firstSales] = $this->context();
+        $secondSales = $this->user('sales', $branch, 'Second Sales');
+        $superadmin = $this->user('superadmin', $branch, 'Superadmin');
+        $service = app(SalesLeadTargetService::class);
+        $month = CarbonImmutable::parse('2026-10-01');
+
+        $service->upsert($firstSales, $month, 4, $superadmin);
+
+        $count = $service->applyToAllActiveSales($superadmin, $month, 12);
+
+        $this->assertSame(2, $count);
+        $this->assertDatabaseHas('sales_lead_targets', [
+            'sales_user_id' => $firstSales->id,
+            'period_year' => 2026,
+            'period_month' => 10,
+            'lead_target' => 12,
+            'target_leads' => 12,
+        ]);
+        $this->assertDatabaseHas('sales_lead_targets', [
+            'sales_user_id' => $secondSales->id,
+            'period_year' => 2026,
+            'period_month' => 10,
+            'lead_target' => 12,
+            'target_leads' => 12,
+        ]);
+    }
+
+    public function test_bulk_target_excludes_inactive_and_non_sales_users(): void
+    {
+        [$branch, , $activeSales] = $this->context();
+        $inactiveSales = $this->user('sales', $branch, 'Inactive Sales');
+        $inactiveSales->forceFill(['is_active' => false])->saveQuietly();
+        $coordinator = $this->user('sales_coordinator', $branch, 'Coordinator');
+        $superadmin = $this->user('superadmin', $branch, 'Superadmin');
+
+        $count = app(SalesLeadTargetService::class)->applyToAllActiveSales(
+            $superadmin,
+            CarbonImmutable::parse('2026-10-01'),
+            12,
+        );
+
+        $this->assertSame(1, $count);
+        $this->assertDatabaseHas('sales_lead_targets', ['sales_user_id' => $activeSales->id]);
+        $this->assertDatabaseMissing('sales_lead_targets', ['sales_user_id' => $inactiveSales->id]);
+        $this->assertDatabaseMissing('sales_lead_targets', ['sales_user_id' => $coordinator->id]);
+    }
+
+    public function test_bulk_target_rolls_back_all_writes_when_one_target_save_fails(): void
+    {
+        [$branch, , $firstSales] = $this->context();
+        $secondSales = $this->user('sales', $branch, 'Second Sales');
+        $superadmin = $this->user('superadmin', $branch, 'Superadmin');
+        $dispatcher = SalesLeadTarget::getEventDispatcher();
+
+        SalesLeadTarget::saving(function (SalesLeadTarget $target) use ($secondSales): void {
+            if ((int) $target->sales_user_id === (int) $secondSales->id) {
+                throw new RuntimeException('forced target failure');
+            }
+        });
+
+        try {
+            app(SalesLeadTargetService::class)->applyToAllActiveSales(
+                $superadmin,
+                CarbonImmutable::parse('2026-10-01'),
+                12,
+            );
+            $this->fail('Expected the bulk target transaction to fail.');
+        } catch (RuntimeException $exception) {
+            $this->assertSame('forced target failure', $exception->getMessage());
+        } finally {
+            SalesLeadTarget::setEventDispatcher($dispatcher);
+        }
+
+        $this->assertDatabaseMissing('sales_lead_targets', ['sales_user_id' => $firstSales->id]);
+        $this->assertDatabaseMissing('sales_lead_targets', ['sales_user_id' => $secondSales->id]);
     }
 
     public function test_target_administration_is_only_available_to_superadmin(): void

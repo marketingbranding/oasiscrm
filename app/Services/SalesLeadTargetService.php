@@ -9,6 +9,7 @@ use App\Models\User;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 use InvalidArgumentException;
 use Symfony\Component\HttpKernel\Exception\AccessDeniedHttpException;
 
@@ -149,5 +150,27 @@ class SalesLeadTargetService
         $target->save();
 
         return $target;
+    }
+
+    public function applyToAllActiveSales(User $actor, CarbonImmutable $month, int $targetLeads): int
+    {
+        if (! $actor->isSuperadmin()) {
+            throw new AccessDeniedHttpException('Hanya Superadmin yang dapat mengatur target Lead.');
+        }
+
+        return DB::transaction(function () use ($actor, $month, $targetLeads): int {
+            $salesUsers = User::query()
+                ->where('account_status', AccountStatus::Active->value)
+                ->where('is_active', true)
+                ->whereHas('role', fn (Builder $role): Builder => $role->where('slug', 'sales'))
+                ->orderBy('id')
+                ->get();
+
+            foreach ($salesUsers as $sales) {
+                $this->upsert($sales, $month, $targetLeads, $actor);
+            }
+
+            return $salesUsers->count();
+        });
     }
 }

@@ -173,6 +173,7 @@ class OrganizationWorkspaceController extends Controller
                 'kind' => 'user',
                 'unit_id' => $unitNodeId,
                 'parent_id' => $parentUserId,
+                'parent_user_id' => $parentUserId,
                 'tree_parent_id' => $treeParentId,
                 'assignment_id' => $assignment?->id,
                 'assignment_version' => $assignment?->lock_version,

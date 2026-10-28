@@ -20,6 +20,7 @@ class OrganizationWorkspaceAuthorizationTest extends TestCase
     public function test_organization_workspace_is_permission_gated_and_renders_for_authorized_user(): void
     {
         $branch = Branch::create(['name' => 'SLO', 'code' => 'SLO', 'is_active' => true]);
+        Branch::create(['name' => 'MGL', 'code' => 'MGL', 'is_active' => true]);
         $denied = $this->user('sales', $branch);
         $allowed = $this->user('superadmin', $branch);
 
@@ -31,6 +32,7 @@ class OrganizationWorkspaceAuthorizationTest extends TestCase
             ->assertSeeText('Struktur Organisasi')
             ->assertSeeText('Pusat')
             ->assertSeeText('SLO')
+            ->assertSeeText('MGL')
             ->assertSeeText('Fit view')
             ->assertSeeText('Pindahkan garis pelaporan')
             ->assertSeeText('Pindahkan unit')
@@ -43,7 +45,8 @@ class OrganizationWorkspaceAuthorizationTest extends TestCase
             ->assertSee('Tarik socket Atasan')
             ->assertSee('Tarik socket Bawahan')
             ->assertSee('org-node-item')
-            ->assertSee('data-org-node');
+            ->assertSee('data-org-node')
+            ->assertSee('parent_user_id');
 
         $script = file_get_contents(resource_path('js/organization-workspace.js'));
         $this->assertStringContainsString("this.context = null;\n            this.confirmation = true;", $script);

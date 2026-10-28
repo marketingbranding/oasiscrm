@@ -97,6 +97,7 @@ class OrganizationWorkspaceController extends Controller
                 $request->integer('organization_unit_id'),
                 $request->integer('expected_organization_unit_id') ?: null,
                 $request->validated('reason'),
+                $request->exists('expected_organization_unit_id'),
             );
         } catch (OrganizationAssignmentConflictException $exception) {
             return response()->json(['message' => $exception->getMessage()], 409);
@@ -118,6 +119,7 @@ class OrganizationWorkspaceController extends Controller
                 $request->integer('expected_assignment_id') ?: null,
                 $request->integer('expected_version') ?: null,
                 $request->validated('reason'),
+                $request->exists('expected_organization_unit_id'),
             );
         } catch (OrganizationAssignmentConflictException $exception) {
             return response()->json(['message' => $exception->getMessage()], 409);
@@ -173,6 +175,7 @@ class OrganizationWorkspaceController extends Controller
                 'kind' => 'user',
                 'unit_id' => $unitNodeId,
                 'parent_id' => $parentUserId,
+                'parent_user_id' => $parentUserId,
                 'tree_parent_id' => $treeParentId,
                 'assignment_id' => $assignment?->id,
                 'assignment_version' => $assignment?->lock_version,

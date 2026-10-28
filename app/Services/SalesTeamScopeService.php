@@ -270,7 +270,9 @@ class SalesTeamScopeService
         $coordinators = $role === 'sales_coordinator'
             ? collect([$actor])
             : $people->filter(fn (User $user) => $this->isRole($user, 'sales_coordinator'))->values();
-        $sales = $people->filter(fn (User $user) => $this->isRole($user, 'sales'))->values();
+        $sales = $people->filter(fn (User $user) => $this->isRole($user, 'sales')
+            && $user->isAccountActive()
+            && $user->is_active)->values();
         $assignments = OrganizationAssignment::query()->current()
             ->whereIn('user_id', $people->keys())
             ->get(['user_id', 'parent_user_id'])

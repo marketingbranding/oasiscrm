@@ -6,7 +6,7 @@ export default function organizationWorkspace(nodes, moveUrl, unitMoveUrl, remov
         removeStructureUrl,
         movableUnitIds,
         canMove,
-        viewMode: 'zones',
+        viewMode: 'graph',
         showUnitLinks: false,
         search: '',
         selected: null,
@@ -17,6 +17,9 @@ export default function organizationWorkspace(nodes, moveUrl, unitMoveUrl, remov
         unitConfirmation: false,
         removeConfirmation: false,
         unitMoveTarget: null,
+        conflictOpen: false,
+        conflictMessage: '',
+        conflictPreviousFocus: null,
         saving: false,
         scale: 1,
         offsetX: 0,
@@ -105,6 +108,13 @@ export default function organizationWorkspace(nodes, moveUrl, unitMoveUrl, remov
                 : this.activeUnitConnection?.nodeId === id;
 
             return active ? 'org-unit-socket-active' : '';
+        },
+
+        nodeDropTargetClass(id) {
+            const target = this.visualDrag?.target;
+            if (!target || String(target.node.id) !== String(id)) return '';
+
+            return target.kind === 'user' ? 'org-node-drop-target-user' : 'org-node-drop-target-unit';
         },
 
         matches(id) {
@@ -464,12 +474,13 @@ export default function organizationWorkspace(nodes, moveUrl, unitMoveUrl, remov
             };
         },
 
-        startVisualDrag(event, id) {
-            if (event.button !== 0) return;
+        startNodeDrag(event, id) {
+            if (!this.canMove || event.button !== 0 || this.saving) return;
 
             const draggedNode = this.nodes.find((item) => String(item.id) === String(id));
             if (!draggedNode || draggedNode.kind !== 'user') return;
 
+            event.preventDefault();
             const node = event.currentTarget;
             const graph = this.$refs.graph;
             const graphRect = graph.getBoundingClientRect();
@@ -490,9 +501,58 @@ export default function organizationWorkspace(nodes, moveUrl, unitMoveUrl, remov
                 grabX: pointer.x - nodePosition.x,
                 grabY: pointer.y - nodePosition.y,
                 moved: false,
-                unitTargetId: null,
+                target: null,
             };
             node.setPointerCapture?.(event.pointerId);
+        },
+
+        startVisualDrag(event, id) {
+            this.startNodeDrag(event, id);
+        },
+
+        nodeDropTarget(event) {
+            if (!this.visualDrag) return null;
+
+            const targetElement = document.elementFromPoint(event.clientX, event.clientY)?.closest('[data-org-drop-target]');
+            if (!targetElement) return null;
+
+            const targetNode = this.nodes.find((node) => String(node.id) === String(targetElement.dataset.orgNode));
+            const draggedNode = this.nodes.find((node) => String(node.id) === String(this.visualDrag.id));
+            if (!targetNode || !draggedNode || targetNode.id === draggedNode.id) return null;
+
+            if (targetElement.dataset.orgDropTarget === 'user') {
+                const blocked = new Set(this.descendants(draggedNode.id).map((node) => String(node.id)));
+                if (targetNode.kind !== 'user' || blocked.has(String(targetNode.id))) return null;
+
+                return { kind: 'user', node: targetNode };
+            }
+
+            if (targetElement.dataset.orgDropTarget === 'unit'
+                && targetNode.kind === 'unit'
+                && targetNode.unit_id !== null
+                && this.movableUnitIds.includes(Number(targetNode.unit_id))
+                && String(draggedNode.unit_id) !== String(targetNode.id)) {
+                return { kind: 'unit', node: targetNode };
+            }
+
+            return null;
+        },
+
+        openNodeDropConfirmation(target) {
+            const draggedNode = this.nodes.find((node) => String(node.id) === String(this.visualDrag?.id));
+            if (!draggedNode || !target) return;
+
+            this.select(draggedNode.id);
+            this.context = null;
+
+            if (target.kind === 'user') {
+                this.newParentId = String(target.node.id);
+                this.confirmation = true;
+                return;
+            }
+
+            this.unitMoveTarget = { user: draggedNode, unitId: target.node.unit_id };
+            this.unitConfirmation = true;
         },
 
         handlePointerMove(event) {
@@ -522,10 +582,7 @@ export default function organizationWorkspace(nodes, moveUrl, unitMoveUrl, remov
                     drag.moved = true;
                 }
 
-                const unitTarget = document.elementFromPoint(event.clientX, event.clientY)?.closest('[data-org-unit-drop]');
-                const targetId = unitTarget?.dataset.orgUnitDrop || null;
-                const draggedNode = this.nodes.find((item) => String(item.id) === String(drag.id));
-                drag.unitTargetId = targetId && String(targetId) !== String(draggedNode?.unit_id || '') ? targetId : null;
+                drag.target = this.nodeDropTarget(event);
 
                 this.visualOffsets = { ...this.visualOffsets, [drag.id]: { x, y } };
                 this.$nextTick(() => this.refreshConnectors());
@@ -562,15 +619,12 @@ export default function organizationWorkspace(nodes, moveUrl, unitMoveUrl, remov
             }
 
             if (this.visualDrag?.moved) {
-                const draggedNode = this.nodes.find((item) => String(item.id) === String(this.visualDrag.id));
-                const targetUnit = this.nodes.find((item) => String(item.id) === String(this.visualDrag.unitTargetId));
                 this.suppressClick = true;
                 window.setTimeout(() => { this.suppressClick = false; }, 0);
 
-                if (draggedNode && targetUnit) {
-                    this.unitMoveTarget = { user: draggedNode, unitId: targetUnit.unit_id };
-                    this.unitConfirmation = true;
-                }
+                this.openNodeDropConfirmation(this.visualDrag.target);
+                const { [this.visualDrag.id]: _, ...remainingOffsets } = this.visualOffsets;
+                this.visualOffsets = remainingOffsets;
             }
 
             this.visualDrag = null;
@@ -735,6 +789,10 @@ export default function organizationWorkspace(nodes, moveUrl, unitMoveUrl, remov
             this.saving = true;
 
             try {
+                const expectedOrganizationUnitValue = String(this.unitMoveTarget.user.unit_id || '').replace(/^unit:/, '');
+                const expectedOrganizationUnitId = /^\d+$/.test(expectedOrganizationUnitValue)
+                    ? expectedOrganizationUnitValue
+                    : null;
                 const response = await fetch(this.unitMoveUrl.replace('__USER__', this.unitMoveTarget.user.id), {
                     method: 'PATCH',
                     headers: {
@@ -744,12 +802,13 @@ export default function organizationWorkspace(nodes, moveUrl, unitMoveUrl, remov
                     },
                     body: JSON.stringify({
                         organization_unit_id: targetUnit.unit_id,
-                        expected_organization_unit_id: this.unitMoveTarget.user.unit_id?.replace?.('unit:', '') || null,
+                        expected_organization_unit_id: expectedOrganizationUnitId,
                     }),
                 });
 
                 if (response.status === 409) {
-                    window.oasisToast?.('Struktur organisasi telah berubah. Muat ulang lalu coba lagi.', 'error');
+                    const payload = await response.json().catch(() => null);
+                    this.showOrganizationConflict(payload?.message);
                     return;
                 }
 
@@ -759,8 +818,9 @@ export default function organizationWorkspace(nodes, moveUrl, unitMoveUrl, remov
                     return;
                 }
 
+                const payload = await response.json().catch(() => ({}));
+                this.applyLocalUnitMove(this.unitMoveTarget.user, targetUnit, payload.user);
                 window.oasisToast?.('Pengguna berhasil dipindahkan ke unit organisasi.', 'success');
-                window.setTimeout(() => window.location.reload(), 250);
             } finally {
                 this.saving = false;
                 this.unitConfirmation = false;
@@ -809,6 +869,10 @@ export default function organizationWorkspace(nodes, moveUrl, unitMoveUrl, remov
             this.saving = true;
 
             try {
+                const expectedRemovalOrganizationUnitValue = String(this.selected.unit_id || '').replace(/^unit:/, '');
+                const expectedRemovalOrganizationUnitId = /^\d+$/.test(expectedRemovalOrganizationUnitValue)
+                    ? expectedRemovalOrganizationUnitValue
+                    : null;
                 const response = await fetch(this.removeStructureUrl.replace('__USER__', this.selected.id), {
                     method: 'DELETE',
                     headers: {
@@ -817,14 +881,15 @@ export default function organizationWorkspace(nodes, moveUrl, unitMoveUrl, remov
                         'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
                     },
                     body: JSON.stringify({
-                        expected_organization_unit_id: String(this.selected.unit_id || '').replace('unit:', '') || null,
+                        expected_organization_unit_id: expectedRemovalOrganizationUnitId,
                         expected_assignment_id: this.selected.assignment_id,
                         expected_version: this.selected.assignment_version,
                     }),
                 });
 
                 if (response.status === 409) {
-                    window.oasisToast?.('Struktur organisasi telah berubah. Muat ulang lalu coba lagi.', 'error');
+                    const payload = await response.json().catch(() => null);
+                    this.showOrganizationConflict(payload?.message);
                     return;
                 }
 
@@ -863,7 +928,8 @@ export default function organizationWorkspace(nodes, moveUrl, unitMoveUrl, remov
                 });
 
                 if (response.status === 409) {
-                    window.oasisToast?.('Struktur organisasi telah berubah. Muat ulang lalu coba lagi.', 'error');
+                    const payload = await response.json().catch(() => null);
+                    this.showOrganizationConflict(payload?.message);
                     return;
                 }
 
@@ -897,6 +963,62 @@ export default function organizationWorkspace(nodes, moveUrl, unitMoveUrl, remov
             child.assignment_version = assignment?.lock_version || null;
             this.newParentId = child.parent_user_id ? String(child.parent_user_id) : '';
             this.$nextTick(() => this.refreshConnectors());
+        },
+
+        applyLocalUnitMove(user, targetUnit, payloadUser = null) {
+            const oldUnit = this.nodes.find((node) => node.kind === 'unit' && String(node.id) === String(user.unit_id));
+
+            if (oldUnit) oldUnit.member_count = Math.max(0, oldUnit.member_count - 1);
+            targetUnit.member_count += 1;
+            user.unit_id = targetUnit.id;
+            user.branch = payloadUser?.branch?.name || targetUnit.branch || null;
+            user.assignment_version = user.assignment_version === null
+                ? null
+                : Number(user.assignment_version || 0) + 1;
+            if (!user.parent_user_id) user.tree_parent_id = user.unit_id;
+            this.buildLayout();
+            this.$nextTick(() => {
+                this.fitView();
+                this.refreshConnectors();
+            });
+        },
+
+        showOrganizationConflict(message = null) {
+            const activeElement = document.activeElement;
+            const hiddenWithMoveModal = activeElement?.closest('[x-show="confirmation"], [x-show="unitConfirmation"], [x-show="removeConfirmation"]');
+            this.conflictPreviousFocus = hiddenWithMoveModal ? this.$refs.canvas : activeElement;
+            this.conflictMessage = message || 'Struktur organisasi telah berubah. Muat ulang lalu coba lagi.';
+            this.conflictOpen = true;
+            this.$nextTick(() => this.$refs.organizationConflictReload?.focus());
+        },
+
+        closeOrganizationConflict() {
+            this.conflictOpen = false;
+            this.conflictPreviousFocus?.focus?.();
+            this.conflictPreviousFocus = null;
+        },
+
+        trapOrganizationConflictFocus(event) {
+            const dialog = this.$refs.organizationConflictDialog;
+            if (!dialog) return;
+
+            const focusable = [...dialog.querySelectorAll('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])')]
+                .filter((element) => !element.disabled && element.offsetParent !== null);
+            if (focusable.length === 0) return;
+
+            const first = focusable[0];
+            const last = focusable[focusable.length - 1];
+            if (event.shiftKey && document.activeElement === first) {
+                event.preventDefault();
+                last.focus();
+            } else if (!event.shiftKey && document.activeElement === last) {
+                event.preventDefault();
+                first.focus();
+            }
+        },
+
+        reloadOrganization() {
+            window.location.reload();
         },
     };
 }

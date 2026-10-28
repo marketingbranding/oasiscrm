@@ -20,10 +20,12 @@ class OrganizationWorkspaceAuthorizationTest extends TestCase
     public function test_organization_workspace_is_permission_gated_and_renders_for_authorized_user(): void
     {
         $branch = Branch::create(['name' => 'SLO', 'code' => 'SLO', 'is_active' => true]);
+        Branch::create(['name' => 'MGL', 'code' => 'MGL', 'is_active' => true]);
         $denied = $this->user('sales', $branch);
         $allowed = $this->user('superadmin', $branch);
 
         $this->assertSame(1, \DB::table('changelogs')->where('title', 'Penyempurnaan Workspace Organisasi')->count());
+        $this->assertSame(1, \DB::table('changelogs')->whereNull('version')->where('title', 'Editor Graph Organisasi Drag-and-Drop')->count());
 
         $this->actingAs($denied)->get(route('organization.index'))->assertForbidden();
         $response = $this->actingAs($allowed)->get(route('organization.index'))
@@ -31,6 +33,7 @@ class OrganizationWorkspaceAuthorizationTest extends TestCase
             ->assertSeeText('Struktur Organisasi')
             ->assertSeeText('Pusat')
             ->assertSeeText('SLO')
+            ->assertSeeText('MGL')
             ->assertSeeText('Fit view')
             ->assertSeeText('Pindahkan garis pelaporan')
             ->assertSeeText('Pindahkan unit')
@@ -43,7 +46,13 @@ class OrganizationWorkspaceAuthorizationTest extends TestCase
             ->assertSee('Tarik socket Atasan')
             ->assertSee('Tarik socket Bawahan')
             ->assertSee('org-node-item')
-            ->assertSee('data-org-node');
+            ->assertSee('data-org-node')
+            ->assertSee('data-org-node-draggable', false)
+            ->assertSee('data-org-user-drop', false)
+            ->assertSee('data-org-unit-drop', false)
+            ->assertSeeText('Gunakan socket atau tindakan keyboard sebagai alternatif drag.')
+            ->assertSeeText('Muat ulang struktur')
+            ->assertSee('parent_user_id');
 
         $script = file_get_contents(resource_path('js/organization-workspace.js'));
         $this->assertStringContainsString("this.context = null;\n            this.confirmation = true;", $script);
@@ -74,6 +83,41 @@ class OrganizationWorkspaceAuthorizationTest extends TestCase
 
         $this->assertSame(1, OrganizationAssignment::query()->current()->where('user_id', $sales->id)->count());
         $this->assertSame(2, OrganizationAssignment::query()->where('user_id', $sales->id)->count());
+    }
+
+    public function test_organization_workspace_exposes_direct_drag_and_conflict_recovery_contracts(): void
+    {
+        $script = file_get_contents(resource_path('js/organization-workspace.js'));
+        $styles = file_get_contents(resource_path('css/app.css'));
+
+        foreach ([
+            "viewMode: 'graph'",
+            'startNodeDrag',
+            'nodeDropTarget',
+            'openNodeDropConfirmation',
+            'data-org-user-drop',
+            'data-org-unit-drop',
+            'expected_assignment_id',
+            'expected_version',
+            'expected_organization_unit_id',
+            'expectedOrganizationUnitId',
+            '/^\\d+$/.test',
+            'conflictOpen',
+            'reloadOrganization',
+            'org-node-drop-target-user',
+            'org-node-drop-target-unit',
+            'trapOrganizationConflictFocus',
+            'closeOrganizationConflict',
+            'organizationConflictReload',
+            'expectedRemovalOrganizationUnitValue',
+            'this.$refs.canvas',
+            'class="relative w-72"',
+        ] as $contract) {
+            $this->assertStringContainsString($contract, $script.$this->getOrganizationWorkspaceMarkup().$styles);
+        }
+
+        $this->assertStringContainsString('.org-socket-row-input .org-socket-label', $styles);
+        $this->assertStringContainsString('right: calc(100% + 4px)', $styles);
     }
 
     public function test_organization_move_backend_rejects_unauthorized_json_and_invalid_scope_or_graph_targets(): void
@@ -177,6 +221,32 @@ class OrganizationWorkspaceAuthorizationTest extends TestCase
         $this->assertDatabaseHas('activity_log', ['subject_id' => $target->id, 'event' => 'organization_user_removed']);
     }
 
+    public function test_remove_from_structure_rejects_stale_explicit_null_unit_precondition(): void
+    {
+        $branch = Branch::create(['name' => 'STA', 'code' => 'STA', 'is_active' => true]);
+        $actor = $this->user('superadmin', $branch);
+        $target = $this->user('staff', $branch);
+        $target->forceFill(['organization_unit_id' => OrganizationUnit::query()->where('branch_id', $branch->id)->firstOrFail()->id])->saveQuietly();
+
+        $this->actingAs($actor)->deleteJson(route('organization.remove-structure', $target), [
+            'expected_organization_unit_id' => null,
+        ])->assertConflict();
+    }
+
+    public function test_remove_from_structure_accepts_unassigned_user_with_null_unit_precondition(): void
+    {
+        $branch = Branch::create(['name' => 'UNA', 'code' => 'UNA', 'is_active' => true]);
+        $actor = $this->user('superadmin', $branch);
+        $target = $this->user('staff', $branch);
+        $target->forceFill(['organization_unit_id' => null, 'supervisor_user_id' => null])->saveQuietly();
+
+        $this->actingAs($actor)->deleteJson(route('organization.remove-structure', $target), [
+            'expected_organization_unit_id' => null,
+        ])->assertOk();
+
+        $this->assertDatabaseHas('activity_log', ['subject_id' => $target->id, 'event' => 'organization_user_removed']);
+    }
+
     public function test_role_administration_is_superadmin_gated_and_accepts_registered_permissions_only(): void
     {
         $branch = Branch::create(['name' => 'BDG', 'code' => 'BDG', 'is_active' => true]);
@@ -223,5 +293,11 @@ class OrganizationWorkspaceAuthorizationTest extends TestCase
             'email_verified_at' => now(),
             'password_changed_at' => now(),
         ]);
+    }
+
+    private function getOrganizationWorkspaceMarkup(): string
+    {
+        return file_get_contents(resource_path('views/crm/organization/index.blade.php'))
+            .file_get_contents(resource_path('views/crm/organization/_node.blade.php'));
     }
 }

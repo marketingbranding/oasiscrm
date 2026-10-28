@@ -201,6 +201,24 @@
     box-shadow: 0 0 0 5px rgba(252, 194, 15, 0.35), 4px 4px 0 #000;
 }
 
+.org-node-drop-target-user {
+    background: #dfe8ff;
+    box-shadow: 0 0 0 5px rgba(140, 154, 224, 0.45), 4px 4px 0 #000;
+}
+
+.org-node-drop-target-unit {
+    background: var(--oasis-yellow);
+    box-shadow: 0 0 0 5px rgba(252, 194, 15, 0.35), 4px 4px 0 #000;
+}
+
+.org-node-card[data-org-node-draggable="true"] {
+    cursor: grab;
+}
+
+.org-node-card[data-org-node-draggable="true"]:active {
+    cursor: grabbing;
+}
+
 .org-unit-zone {
     min-height: 17rem;
     border: 2px solid #111;
@@ -328,6 +346,11 @@
 
 .org-socket-row-input {
     left: -8px;
+}
+
+.org-socket-row-input .org-socket-label {
+    position: absolute;
+    right: calc(100% + 4px);
 }
 
 .org-socket-row-output {

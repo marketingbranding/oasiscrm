@@ -193,6 +193,27 @@ class OrganizationGraphTest extends TestCase
         $this->assertTrue($user->branches()->whereKey($branch->id)->exists());
     }
 
+    public function test_explicit_null_unit_precondition_is_checked_for_unassigned_users(): void
+    {
+        $branch = $this->branch('U2B');
+        $targetBranch = $this->branch('U2C');
+        $actor = $this->user('superadmin', $branch);
+        $user = $this->user('staff', $branch);
+        $targetUnit = OrganizationUnit::query()->where('branch_id', $targetBranch->id)->firstOrFail();
+        $user->forceFill(['organization_unit_id' => $targetUnit->id])->saveQuietly();
+
+        $this->expectException(OrganizationAssignmentConflictException::class);
+
+        app(OrganizationGraphService::class)->moveToUnit(
+            $actor,
+            $user,
+            OrganizationUnit::query()->where('unit_type', 'central')->firstOrFail()->id,
+            null,
+            null,
+            true,
+        );
+    }
+
     public function test_removing_user_from_structure_keeps_account_access_and_closes_assignment(): void
     {
         $branch = $this->branch('U3A');
@@ -445,6 +466,25 @@ class OrganizationGraphTest extends TestCase
 
         $this->assertContains($sales->id, app(OrganizationScopeService::class)->teamIds($supervisor));
         $this->assertTrue(app(SalesTeamScopeService::class)->contains($coordinator, $sales));
+    }
+
+    public function test_canonical_manager_scope_excludes_sales_with_inactive_account_status(): void
+    {
+        config(['organization.graph_mode' => 'canonical']);
+        $branch = $this->branch('JPA');
+        $manager = $this->user('manager', $branch);
+        $activeSales = $this->user('sales', $branch);
+        $inactiveSales = $this->user('sales', $branch);
+        $graph = app(OrganizationGraphService::class);
+
+        $graph->assign($activeSales, $manager);
+        $graph->assign($inactiveSales, $manager);
+        $inactiveSales->forceFill(['account_status' => AccountStatus::Inactive])->saveQuietly();
+
+        $salesIds = app(SalesTeamScopeService::class)->for($manager)['sales']->pluck('id')->all();
+
+        $this->assertContains($activeSales->id, $salesIds);
+        $this->assertNotContains($inactiveSales->id, $salesIds);
     }
 
     public function test_canonical_hierarchy_scope_does_not_read_legacy_supervisor_chain(): void

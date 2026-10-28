@@ -14,6 +14,28 @@
             <x-crm.button type="submit" variant="secondary">Tampilkan</x-crm.button>
         </form>
     </x-crm.section>
+    <x-crm.section id="sales-lead-target-bulk" title="Terapkan target massal" description="Atur nilai yang sama untuk seluruh Sales aktif lintas cabang pada bulan terpilih.">
+        <div class="flex flex-col gap-3 border-2 border-black bg-[#fff8d8] p-3 sm:flex-row sm:items-end sm:justify-between">
+            <div class="text-sm">
+                <p class="font-bold">{{ $salesUsers->count() }} Sales aktif akan diperbarui.</p>
+                <p class="mt-1 text-xs text-gray-700">Target yang sudah ada untuk bulan {{ $month->format('m/Y') }} juga akan ditimpa.</p>
+            </div>
+            <form id="bulk-sales-target-form" method="POST" action="{{ route('sales-lead-targets.bulk-store') }}" class="flex flex-wrap items-end gap-2">
+                @csrf
+                <input type="hidden" name="month" value="{{ $month->format('Y-m') }}">
+                <label class="grid gap-1 text-xs font-bold uppercase">Target semua Sales<input type="number" min="1" max="100000" name="target_leads" value="{{ old('target_leads') }}" class="w-36 border-2 border-black bg-white px-2 py-2" required></label>
+                <x-crm.button type="button" variant="primary" accent="sales" @click="$dispatch('oasis:modal-open', { name: 'bulk-sales-target-confirm', trigger: $el })">Terapkan ke semua Sales</x-crm.button>
+            </form>
+        </div>
+    </x-crm.section>
+    <x-crm.modal name="bulk-sales-target-confirm" title="Terapkan target ke semua Sales" description="Konfirmasi perubahan target Lead bulanan.">
+        <p class="text-sm">Nilai target baru akan diterapkan ke <strong>{{ $salesUsers->count() }} Sales aktif</strong> untuk bulan <strong>{{ $month->format('m/Y') }}</strong>.</p>
+        <p class="mt-3 border-2 border-[#d6a500] bg-[#fff8d8] p-3 text-sm font-bold">Target bulan ini yang sudah ada akan ditimpa.</p>
+        <x-slot:footer>
+            <x-crm.button type="button" variant="secondary" @click="$dispatch('oasis:modal-close', { name: 'bulk-sales-target-confirm' })">Batal</x-crm.button>
+            <x-crm.button type="submit" form="bulk-sales-target-form" variant="primary" accent="sales">Terapkan sekarang</x-crm.button>
+        </x-slot:footer>
+    </x-crm.modal>
     <div class="crm-table-scroll">
         <table class="crm-data-table min-w-[760px]">
             <thead><tr><th>Sales</th><th>Actual Lead</th><th>Target</th><th>Pencapaian</th><th>Aksi</th></tr></thead>

@@ -98,6 +98,9 @@ Route::middleware(['auth', 'active', 'verified', 'password.changed', 'operationa
     Route::post('/admin/sales-lead-targets', [SalesLeadTargetController::class, 'store'])
         ->middleware(['permission:sales_pocketbook.targets_manage', 'not.impersonating'])
         ->name('sales-lead-targets.store');
+    Route::post('/admin/sales-lead-targets/bulk', [SalesLeadTargetController::class, 'bulkStore'])
+        ->middleware(['permission:sales_pocketbook.targets_manage', 'not.impersonating'])
+        ->name('sales-lead-targets.bulk-store');
 
     Route::middleware('permission:organization.view')->group(function () {
         Route::get('/organization', [OrganizationWorkspaceController::class, 'index'])->name('organization.index');

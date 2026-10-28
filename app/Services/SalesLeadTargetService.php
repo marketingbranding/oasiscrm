@@ -9,6 +9,7 @@ use App\Models\User;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 use InvalidArgumentException;
 use Symfony\Component\HttpKernel\Exception\AccessDeniedHttpException;
 
@@ -80,12 +81,18 @@ class SalesLeadTargetService
         $month = $second->startOfMonth();
         $target = SalesLeadTarget::query()
             ->where('sales_user_id', $first->id)
-            ->whereDate('target_month', $month->toDateString())
+            ->where(function (Builder $query) use ($month): void {
+                $query->whereDate('target_month', $month->toDateString())
+                    ->orWhere(function (Builder $legacy) use ($month): void {
+                        $legacy->where('period_year', $month->year)->where('period_month', $month->month);
+                    });
+            })
             ->first() ?? new SalesLeadTarget([
                 'sales_user_id' => $first->id,
                 'target_month' => $month->toDateString(),
             ]);
         $target->fill([
+            'target_month' => $month->toDateString(),
             'target_leads' => $third,
             'period_year' => $month->year,
             'period_month' => $month->month,
@@ -149,5 +156,27 @@ class SalesLeadTargetService
         $target->save();
 
         return $target;
+    }
+
+    public function applyToAllActiveSales(User $actor, CarbonImmutable $month, int $targetLeads): int
+    {
+        if (! $actor->isSuperadmin()) {
+            throw new AccessDeniedHttpException('Hanya Superadmin yang dapat mengatur target Lead.');
+        }
+
+        return DB::transaction(function () use ($actor, $month, $targetLeads): int {
+            $salesUsers = User::query()
+                ->where('account_status', AccountStatus::Active->value)
+                ->where('is_active', true)
+                ->whereHas('role', fn (Builder $role): Builder => $role->where('slug', 'sales'))
+                ->orderBy('id')
+                ->get();
+
+            foreach ($salesUsers as $sales) {
+                $this->upsert($sales, $month, $targetLeads, $actor);
+            }
+
+            return $salesUsers->count();
+        });
     }
 }

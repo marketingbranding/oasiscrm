@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Crm;
 
+use App\Enums\AccountStatus;
 use App\Exports\SalesPocketbookExport;
 use App\Http\Controllers\Controller;
 use App\Models\ContentItem;
@@ -117,7 +118,7 @@ class SalesPocketbookController extends Controller
             abort(403);
         }
 
-        $salesUsers = User::query()->where('is_active', true)
+        $salesUsers = User::query()->where('account_status', AccountStatus::Active->value)->where('is_active', true)
             ->whereIn('id', $visibleSalesIds)
             ->whereHas('role', fn (Builder $query) => $query->where('slug', 'sales'))
             ->when($this->requiresCurrentBranchScope($user), function (Builder $query) use ($user) {
@@ -395,6 +396,7 @@ class SalesPocketbookController extends Controller
         }
 
         $salesUsers = User::query()
+            ->where('account_status', AccountStatus::Active->value)
             ->where('is_active', true)
             ->whereIn('id', $visibleSalesIds)
             ->whereHas('role', fn (Builder $query) => $query->where('slug', 'sales'))

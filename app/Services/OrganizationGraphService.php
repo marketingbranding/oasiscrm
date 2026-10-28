@@ -175,13 +175,15 @@ class OrganizationGraphService
         int $organizationUnitId,
         ?int $expectedOrganizationUnitId = null,
         ?string $reason = null,
+        bool $enforceExpectedOrganizationUnit = false,
     ): User {
         $unit = OrganizationUnit::query()->with('branch')->where('is_active', true)->findOrFail($organizationUnitId);
         $this->assertCanMoveToUnit($actor, $user, $unit);
 
-        return DB::transaction(function () use ($actor, $expectedOrganizationUnitId, $reason, $unit, $user): User {
+        return DB::transaction(function () use ($actor, $expectedOrganizationUnitId, $reason, $unit, $user, $enforceExpectedOrganizationUnit): User {
             $lockedUser = User::query()->with(['branches', 'organizationUnit'])->lockForUpdate()->findOrFail($user->id);
-            if ($expectedOrganizationUnitId !== null && $lockedUser->organization_unit_id !== $expectedOrganizationUnitId) {
+            if (($enforceExpectedOrganizationUnit || $expectedOrganizationUnitId !== null)
+                && $lockedUser->organization_unit_id !== $expectedOrganizationUnitId) {
                 throw new OrganizationAssignmentConflictException($this->currentAssignment($lockedUser));
             }
 
@@ -228,14 +230,16 @@ class OrganizationGraphService
         ?int $expectedAssignmentId = null,
         ?int $expectedVersion = null,
         ?string $reason = null,
+        bool $enforceExpectedOrganizationUnit = false,
     ): User {
         $this->assertCanRemoveFromStructure($actor, $user);
 
-        return DB::transaction(function () use ($actor, $expectedAssignmentId, $expectedOrganizationUnitId, $expectedVersion, $reason, $user): User {
+        return DB::transaction(function () use ($actor, $expectedAssignmentId, $expectedOrganizationUnitId, $expectedVersion, $reason, $user, $enforceExpectedOrganizationUnit): User {
             $lockedUser = User::query()->lockForUpdate()->findOrFail($user->id);
             $current = OrganizationAssignment::query()->where('user_id', $lockedUser->id)->current()->lockForUpdate()->first();
 
-            if ($expectedOrganizationUnitId !== null && $lockedUser->organization_unit_id !== $expectedOrganizationUnitId) {
+            if (($enforceExpectedOrganizationUnit || $expectedOrganizationUnitId !== null)
+                && $lockedUser->organization_unit_id !== $expectedOrganizationUnitId) {
                 throw new OrganizationAssignmentConflictException($current);
             }
             if ($expectedAssignmentId !== null && $current?->id !== $expectedAssignmentId) {

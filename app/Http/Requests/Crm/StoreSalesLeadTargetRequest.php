@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests\Crm;
 
+use App\Enums\AccountStatus;
 use App\Models\Role;
 use App\Models\User;
 use Illuminate\Foundation\Http\FormRequest;
@@ -21,6 +22,7 @@ class StoreSalesLeadTargetRequest extends FormRequest
                 'required',
                 'integer',
                 Rule::exists(User::class, 'id')
+                    ->where('account_status', AccountStatus::Active->value)
                     ->where('is_active', true)
                     ->whereIn('role_id', Role::query()->where('slug', 'sales')->pluck('id')->all()),
             ],

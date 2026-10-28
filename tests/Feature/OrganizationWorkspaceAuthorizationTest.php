@@ -88,6 +88,7 @@ class OrganizationWorkspaceAuthorizationTest extends TestCase
     public function test_organization_workspace_exposes_direct_drag_and_conflict_recovery_contracts(): void
     {
         $script = file_get_contents(resource_path('js/organization-workspace.js'));
+        $styles = file_get_contents(resource_path('css/app.css'));
 
         foreach ([
             "viewMode: 'graph'",
@@ -112,8 +113,11 @@ class OrganizationWorkspaceAuthorizationTest extends TestCase
             'this.$refs.canvas',
             'class="relative w-72"',
         ] as $contract) {
-            $this->assertStringContainsString($contract, $script.$this->getOrganizationWorkspaceMarkup());
+            $this->assertStringContainsString($contract, $script.$this->getOrganizationWorkspaceMarkup().$styles);
         }
+
+        $this->assertStringContainsString('.org-socket-row-input .org-socket-label', $styles);
+        $this->assertStringContainsString('right: calc(100% + 4px)', $styles);
     }
 
     public function test_organization_move_backend_rejects_unauthorized_json_and_invalid_scope_or_graph_targets(): void

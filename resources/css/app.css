@@ -348,6 +348,11 @@
     left: -8px;
 }
 
+.org-socket-row-input .org-socket-label {
+    position: absolute;
+    right: calc(100% + 4px);
+}
+
 .org-socket-row-output {
     right: -8px;
 }

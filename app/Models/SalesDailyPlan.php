@@ -25,6 +25,7 @@ class SalesDailyPlan extends Model
         'sales_user_id',
         'plan_date',
         'work_date',
+        'is_weekend',
         'status',
         'submitted_at',
         'submitted_by',
@@ -39,6 +40,7 @@ class SalesDailyPlan extends Model
         return [
             'plan_date' => 'date',
             'work_date' => 'date',
+            'is_weekend' => 'boolean',
             'submitted_at' => 'datetime',
             'revised_at' => 'datetime',
             'lock_version' => 'integer',
@@ -120,6 +122,11 @@ class SalesDailyPlan extends Model
     public function isWeekday(): bool
     {
         return ($this->plan_date ?? $this->work_date)->isWeekday();
+    }
+
+    public function isWeekend(): bool
+    {
+        return (bool) $this->is_weekend;
     }
 
     protected function activityLabel(): string

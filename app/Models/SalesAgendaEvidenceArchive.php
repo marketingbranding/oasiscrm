@@ -26,9 +26,4 @@ class SalesAgendaEvidenceArchive extends Model
     {
         return $this->hasMany(SalesAgendaEvidence::class, 'archive_id');
     }
-
-    public function dailyPlanEvidence(): HasMany
-    {
-        return $this->hasMany(SalesDailyPlanItemEvidence::class, 'archive_id');
-    }
 }

@@ -5,8 +5,6 @@ namespace App\Services;
 use App\Models\ActivityLog;
 use App\Models\ContentItem;
 use App\Models\SalesAgendaEvidence;
-use App\Models\SalesDailyPlanItem;
-use App\Models\SalesDailyPlanItemEvidence;
 use App\Models\User;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
@@ -53,31 +51,6 @@ class SalesAgendaEvidenceUploadService
                     'properties' => ['agenda_id' => $agenda->id, 'evidence_id' => $item->id],
                 ]);
                 $evidence[] = $item;
-            }
-        } catch (\Throwable $exception) {
-            $this->cleanup($prepared);
-            throw $exception;
-        }
-
-        return $evidence;
-    }
-
-    public function persistDailyPlanItem(SalesDailyPlanItem $item, array $prepared, User $actor): array
-    {
-        $evidence = [];
-
-        try {
-            foreach ($prepared as $metadata) {
-                $evidenceItem = $item->evidence()->create($metadata + ['uploaded_by_user_id' => $actor->id]);
-                ActivityLog::create([
-                    'causer_id' => $actor->id,
-                    'subject_type' => SalesDailyPlanItemEvidence::class,
-                    'subject_id' => $evidenceItem->id,
-                    'event' => 'sales_daily_plan_item_evidence_uploaded',
-                    'description' => 'Bukti foto aktivitas Daily Plan diunggah.',
-                    'properties' => ['daily_plan_item_id' => $item->id, 'evidence_id' => $evidenceItem->id],
-                ]);
-                $evidence[] = $evidenceItem;
             }
         } catch (\Throwable $exception) {
             $this->cleanup($prepared);

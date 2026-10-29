@@ -10,7 +10,6 @@ use App\Models\Role;
 use App\Models\SalesAgendaEvidence;
 use App\Models\User;
 use App\Services\OptimisticLockService;
-use App\Services\SalesPocketbookOnboardingService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
@@ -29,7 +28,6 @@ class SalesAgendaEvidenceTest extends TestCase
         $role = Role::firstOrCreate(['slug' => 'sales'], ['name' => 'Sales']);
         $sales = User::factory()->create(['role_id' => $role->id, 'branch_id' => $branch->id, 'password_changed_at' => now()]);
         $sales->assignedProjects()->attach($project->id, ['is_primary' => true, 'is_active' => true]);
-        app(SalesPocketbookOnboardingService::class)->skip($sales);
 
         foreach ([0, 1, 2] as $count) {
             $photos = [];
@@ -66,7 +64,6 @@ class SalesAgendaEvidenceTest extends TestCase
         $role = Role::firstOrCreate(['slug' => 'sales'], ['name' => 'Sales']);
         $sales = User::factory()->create(['role_id' => $role->id, 'branch_id' => $branch->id, 'password_changed_at' => now()]);
         $sales->assignedProjects()->attach($project->id, ['is_primary' => true, 'is_active' => true]);
-        app(SalesPocketbookOnboardingService::class)->skip($sales);
         $data = ['scheduled_date' => '2026-08-24', 'sales_activity_category' => 'Cek Lokasi', 'title' => 'Agenda gagal'];
 
         $this->actingAs($sales)->post(route('sales-agendas.store'), $data + ['photos' => [
@@ -128,20 +125,23 @@ class SalesAgendaEvidenceTest extends TestCase
         $this->assertSame([], Storage::disk('agenda_evidence')->allFiles());
     }
 
-    public function test_sales_agenda_workspace_renders_the_direct_creation_form(): void
+    public function test_creation_form_exposes_mobile_safe_multi_photo_contract(): void
     {
         $branch = Branch::create(['name' => 'Solo', 'code' => 'SO', 'is_active' => true]);
         $project = LeadMaster::create(['branch_id' => $branch->id, 'project_name' => 'Oasis Solo', 'is_active' => true]);
         $role = Role::firstOrCreate(['slug' => 'sales'], ['name' => 'Sales']);
         $sales = User::factory()->create(['role_id' => $role->id, 'branch_id' => $branch->id, 'password_changed_at' => now()]);
         $sales->assignedProjects()->attach($project->id, ['is_primary' => true, 'is_active' => true]);
-        app(SalesPocketbookOnboardingService::class)->skip($sales);
 
         $this->actingAs($sales)->get(route('sales-agendas.index'))->assertOk()
-            ->assertSee('Tambah Agenda')
-            ->assertSee('action="'.route('sales-agendas.store').'"', false)
-            ->assertSee('name="scheduled_date"', false)
-            ->assertDontSee('Buat Agenda Tambahan');
+            ->assertSee('method="POST" enctype="multipart/form-data" action="'.route('sales-agendas.store').'"', false)
+            ->assertSee('name="photos[]"', false)
+            ->assertSee('accept="image/jpeg,image/png,image/webp"', false)
+            ->assertSee('multiple', false)
+            ->assertSee('Maksimal 2 foto JPEG, PNG, atau WebP; masing-masing maksimal 10 MB.');
+
+        $view = file_get_contents(resource_path('views/crm/sales-pocketbook/sales-agenda.blade.php'));
+        $this->assertStringContainsString("\$errors->first('photos') ?: \$errors->first('photos.*')", $view);
     }
 
     public function test_create_photo_changelog_is_unique_and_rendered(): void
@@ -180,14 +180,13 @@ class SalesAgendaEvidenceTest extends TestCase
         $this->assertCount(2, $agenda->evidence);
     }
 
-    public function test_agenda_records_and_evidence_are_preserved_in_the_direct_workspace(): void
+    public function test_sales_agenda_uploader_uses_responsive_cards_and_respects_photo_limit_and_finished_state(): void
     {
         $branch = Branch::create(['name' => 'Solo', 'code' => 'SO', 'is_active' => true]);
         $project = LeadMaster::create(['branch_id' => $branch->id, 'project_name' => 'Oasis Solo', 'is_active' => true]);
         $role = Role::firstOrCreate(['slug' => 'sales'], ['name' => 'Sales']);
         $sales = User::factory()->create(['role_id' => $role->id, 'branch_id' => $branch->id, 'password_changed_at' => now()]);
         $sales->assignedProjects()->attach($project->id, ['is_primary' => true, 'is_active' => true]);
-        app(SalesPocketbookOnboardingService::class)->skip($sales);
         $available = ContentItem::create(['branch_id' => $branch->id, 'sales_project_id' => $project->id, 'item_type' => 'agenda', 'agenda_type' => ContentItem::SALES_AGENDA_TYPE, 'title' => 'Upload tersedia', 'scheduled_date' => now(), 'status' => 'planned', 'owner_user_id' => $sales->id, 'created_by' => $sales->id]);
         $full = ContentItem::create(['branch_id' => $branch->id, 'sales_project_id' => $project->id, 'item_type' => 'agenda', 'agenda_type' => ContentItem::SALES_AGENDA_TYPE, 'title' => 'Upload penuh', 'scheduled_date' => now(), 'status' => 'planned', 'owner_user_id' => $sales->id, 'created_by' => $sales->id]);
         $finished = ContentItem::create(['branch_id' => $branch->id, 'sales_project_id' => $project->id, 'item_type' => 'agenda', 'agenda_type' => ContentItem::SALES_AGENDA_TYPE, 'title' => 'Agenda selesai', 'scheduled_date' => now(), 'status' => 'done', 'owner_user_id' => $sales->id, 'created_by' => $sales->id]);
@@ -198,16 +197,17 @@ class SalesAgendaEvidenceTest extends TestCase
         $response = $this->actingAs($sales)->get(route('sales-agendas.index'));
 
         $response->assertOk()
-            ->assertSee($available->title)
-            ->assertSee($full->title)
-            ->assertSee($finished->title)
-            ->assertSee(route('sales-agendas.evidence.show', [$full, $full->evidence()->first()]), false)
-            ->assertSee('sales-agenda-paper', false)
-            ->assertDontSee('Riwayat Agenda Tambahan');
-
-        $this->assertModelExists($available);
-        $this->assertModelExists($full);
-        $this->assertModelExists($finished);
+            ->assertSee('class="sales-agenda-list"', false)
+            ->assertSee('class="sales-agenda-item"', false)
+            ->assertSee('class="sales-agenda-action-grid"', false)
+            ->assertSee('action="'.route('sales-agendas.evidence.store', $available).'"', false)
+            ->assertSee('name="photo"', false)
+            ->assertSee('accept="image/jpeg,image/png,image/webp"', false)
+            ->assertSee('required', false)
+            ->assertSee('Maksimal 2 foto telah terunggah.')
+            ->assertDontSee('action="'.route('sales-agendas.evidence.store', $full).'"', false)
+            ->assertDontSee('action="'.route('sales-agendas.evidence.store', $finished).'"', false)
+            ->assertDontSee('<table class="crm-data-table">', false);
     }
 
     public function test_owner_can_view_and_delete_before_done_but_not_after_done(): void

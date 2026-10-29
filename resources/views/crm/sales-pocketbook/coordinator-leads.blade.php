@@ -113,32 +113,8 @@
         </x-crm.section>
     @elseif($tab === 'agenda')
             <x-crm.section id="coordinator-team-agenda" title="Agenda Sales Tim" description="Agenda Sales aktif dalam tim dan periode terpilih." class="sales-pocketbook-screen-section">
-            @if($canManageAgenda && $salesUsers->isNotEmpty())
-                <x-crm.section id="coordinator-agenda-input" title="Tambah Agenda Tim" description="Buat agenda untuk Sales aktif dalam tim Anda." class="sales-pocketbook-screen-section sales-pocketbook-composer">
-                    <form method="POST" action="{{ route('sales-agendas.store') }}" class="grid grid-cols-1 gap-3 p-4 md:grid-cols-2 xl:grid-cols-4">@csrf
-                        <x-crm.field label="Sales PIC" for="coordinator-agenda-sales" required><select id="coordinator-agenda-sales" class="sales-input" name="sales_user_id" x-model="sales" @change="agendaSalesChanged()" required><option value="">Pilih Sales</option>@foreach($salesUsers as $sales)<option value="{{ $sales->id }}">{{ $sales->name }}</option>@endforeach</select></x-crm.field>
-                        <x-crm.field label="Proyek" for="coordinator-agenda-project" required><select id="coordinator-agenda-project" class="sales-input" name="project_id" x-model="project" required><option value="">Pilih proyek</option><template x-for="item in projects" :key="item.id"><option :value="item.id" x-text="item.name"></option></template></select></x-crm.field>
-                        <x-crm.field label="Tanggal" for="coordinator-agenda-date" required><x-crm.date-field id="coordinator-agenda-date" name="scheduled_date" :value="old('scheduled_date', now()->toDateString())" required /></x-crm.field>
-                        <x-crm.field label="Kategori" for="coordinator-agenda-category" required><select id="coordinator-agenda-category" class="sales-input" name="sales_activity_category" required><option value="">Pilih kategori</option>@foreach(\App\Models\ContentItem::SALES_ACTIVITY_CATEGORIES as $category)<option value="{{ $category }}" @selected(old('sales_activity_category') === $category)>{{ $category }}</option>@endforeach</select></x-crm.field>
-                        <x-crm.field label="Judul Agenda" for="coordinator-agenda-title" required><input id="coordinator-agenda-title" class="sales-input" name="title" value="{{ old('title') }}" required></x-crm.field>
-                        <x-crm.field label="Lokasi" for="coordinator-agenda-location"><input id="coordinator-agenda-location" class="sales-input" name="location" value="{{ old('location') }}"></x-crm.field>
-                        <div class="flex items-end md:col-span-2 xl:col-span-2"><x-crm.button type="submit" variant="primary" accent="sales">Tambah Agenda</x-crm.button></div>
-                    </form>
-                </x-crm.section>
-            @endif
             <!-- <th>Lokasi</th><th>Hasil</th><th>Status</th> legacy table contract -->
             <div class="crm-table-scroll"><table class="crm-data-table"><thead><tr><th>Tanggal</th><th>Sales PIC</th><th>Cabang</th><th>Proyek</th><th>Kategori</th><th>Agenda</th><th>Lokasi</th><th>Hasil</th><th>Bukti</th><th>Status</th></tr></thead><tbody>@forelse($agendas as $agenda)@php([$agendaStatusLabel, $agendaStatusVariant] = $agendaStatuses[$agenda->status] ?? [ucfirst(str_replace('_', ' ', $agenda->status)), 'neutral'])<tr><td>{{ $agenda->scheduled_date->format('d/m/Y') }}</td><td>{{ $agenda->owner?->name }}</td><td>{{ $agenda->branch?->name }}</td><td>{{ $agenda->salesProject?->project_name }}</td><td>{{ $agenda->sales_activity_category ?: '-' }}</td><td>{{ $agenda->title }}</td><td>{{ $agenda->location ?: '-' }}</td><td>{{ $agenda->activity_result ?: '-' }}</td><td>@forelse($agenda->evidence as $evidence)@if($evidence->purged_at)<span>Bukti foto telah dipindahkan ke arsip.</span>@else<a class="font-bold underline" href="{{ route('sales-agendas.evidence.show', [$agenda, $evidence]) }}">{{ $evidence->original_name }}</a>@endif<br>@empty-@endforelse</td><td><x-crm.status-badge :variant="$agendaStatusVariant">{{ $agendaStatusLabel }}</x-crm.status-badge></td></tr>@empty<tr><td colspan="10"><x-crm.empty-state title="Belum ada agenda tim" description="Agenda Sales pada periode terpilih akan tampil di sini." /></td></tr>@endforelse</tbody></table></div>
-            @if($canManageAgenda)
-                <x-crm.section id="coordinator-agenda-updates" title="Perbarui Hasil Agenda" description="Koordinator dapat menandai agenda Sales tim sebagai selesai." class="sales-pocketbook-screen-section">
-                    <div class="grid gap-3 p-4 md:grid-cols-2">
-                        @foreach($agendas as $agenda)
-                            @if(!in_array($agenda->status, ['done', 'cancelled', 'rescheduled'], true))
-                                <form method="POST" action="{{ route('sales-agendas.update', $agenda) }}" class="border-2 border-black bg-white p-3">@csrf @method('PATCH')<input type="hidden" name="expected_updated_at" value="{{ app(\App\Services\OptimisticLockService::class)->token($agenda) }}"><strong class="block">{{ $agenda->owner?->name }} · {{ $agenda->title }}</strong><x-crm.field label="Hasil Aktivitas" for="coordinator-agenda-result-{{ $agenda->id }}" required><textarea id="coordinator-agenda-result-{{ $agenda->id }}" class="sales-input" name="activity_result" rows="2" required></textarea></x-crm.field><x-crm.button type="submit" variant="primary" accent="sales" size="sm">Tandai Selesai</x-crm.button></form>
-                            @endif
-                        @endforeach
-                    </div>
-                </x-crm.section>
-            @endif
             <x-crm.pagination :collection="$agendas" :show-per-page="false" />
         </x-crm.section>
     @else

@@ -4132,3 +4132,108 @@ body.sales-pocketbook-onboarding-shell .crm-page-body {
         animation-iteration-count: 1 !important;
     }
 }
+
+/* ============================================================
+   Buku Saku Sales v2 embedded coachmarks
+   ============================================================ */
+
+.sales-pocketbook-tour-layer {
+    position: fixed;
+    inset: 0;
+    z-index: 1200;
+    display: grid;
+    place-items: center;
+    padding: var(--oasis-space-4);
+}
+
+.sales-pocketbook-tour-backdrop {
+    position: absolute;
+    inset: 0;
+    background: rgb(0 0 0 / 68%);
+}
+
+.sales-pocketbook-tour-card {
+    position: relative;
+    width: min(100%, 30rem);
+    max-width: 30rem;
+    border: var(--oasis-border-width-emphasis) solid var(--oasis-sales-ink);
+    background: var(--oasis-sales-paper);
+    box-shadow: var(--oasis-sales-shadow);
+    padding: var(--oasis-space-5);
+}
+
+.sales-pocketbook-tour-card-header,
+.sales-pocketbook-tour-actions {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--oasis-space-2);
+}
+
+.sales-pocketbook-tour-card-header {
+    color: var(--oasis-sales-muted);
+    font: 700 var(--oasis-type-caption-size)/1.2 var(--oasis-font-controls);
+    text-transform: uppercase;
+}
+
+.sales-pocketbook-tour-kicker,
+.sales-pocketbook-tour-mark {
+    color: var(--oasis-sales-muted);
+    font: 700 var(--oasis-type-caption-size)/1.2 var(--oasis-font-controls);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+.sales-pocketbook-tour-mark {
+    display: inline-block;
+    margin-block: var(--oasis-space-5) var(--oasis-space-2);
+    border-bottom: var(--oasis-border-width-standard) solid var(--oasis-accent-sales);
+    padding-bottom: var(--oasis-space-1);
+}
+
+.sales-pocketbook-tour-card h2 {
+    margin: 0;
+    color: var(--oasis-sales-ink);
+    font: 900 clamp(1.4rem, 4vw, 2rem)/1.05 Arial Black, Helvetica, sans-serif;
+}
+
+.sales-pocketbook-tour-card > p:not(.sales-pocketbook-tour-mark) {
+    margin-block: var(--oasis-space-3) var(--oasis-space-5);
+    color: var(--oasis-sales-ink);
+    font: 1rem/1.5 var(--oasis-font-data);
+}
+
+.sales-pocketbook-tour-actions {
+    justify-content: flex-end;
+    flex-wrap: wrap;
+}
+
+[data-tour-active] {
+    position: relative;
+    z-index: 1201;
+    outline: var(--oasis-border-width-emphasis) solid var(--oasis-accent-sales);
+    outline-offset: 4px;
+    background-color: var(--oasis-sales-selected);
+}
+
+.sales-pocketbook-help-link:focus-visible,
+.sales-pocketbook-tour-card button:focus-visible {
+    outline: var(--oasis-border-width-emphasis) solid var(--oasis-focus);
+    outline-offset: 2px;
+}
+
+@media (max-width: 480px) {
+    .sales-pocketbook-tour-card {
+        align-self: end;
+        padding: var(--oasis-space-4);
+    }
+
+    .sales-pocketbook-tour-actions {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .sales-pocketbook-tour-actions .crm-button {
+        width: 100%;
+    }
+}

@@ -16,13 +16,8 @@ class SalesPocketbookOnboardingController extends Controller
     public function show(Request $request): View|RedirectResponse
     {
         $this->authorizeAccess($request);
-        if (! $this->onboarding->shouldShow($request->user())) {
-            return redirect()->route('sales-agendas.index');
-        }
 
-        return view('crm.sales-pocketbook.onboarding', [
-            'steps' => SalesPocketbookOnboardingService::STEPS,
-        ]);
+        return redirect()->route('sales-agendas.index', ['tour' => 1]);
     }
 
     public function skip(Request $request): RedirectResponse
@@ -46,7 +41,7 @@ class SalesPocketbookOnboardingController extends Controller
         $this->authorizeAccess($request);
         $this->onboarding->replay($request->user());
 
-        return redirect()->route('sales-pocketbook.onboarding.show');
+        return redirect()->route('sales-agendas.index', ['tour' => 1]);
     }
 
     private function authorizeAccess(Request $request): void

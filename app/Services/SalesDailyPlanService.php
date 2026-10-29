@@ -32,9 +32,6 @@ class SalesDailyPlanService
     public function create(User $actor, string $date): SalesDailyPlan
     {
         $planDate = CarbonImmutable::parse($date);
-        if (! $planDate->isWeekday()) {
-            throw new InvalidArgumentException('Daily Plan hanya dapat dibuat pada hari kerja Senin sampai Jumat.');
-        }
         if (! $actor->isSales() || ! $actor->branch_id) {
             throw new InvalidArgumentException('Daily Plan hanya dapat dibuat oleh Sales aktif yang memiliki cabang.');
         }
@@ -44,6 +41,7 @@ class SalesDailyPlanService
             [
                 'branch_id' => $actor->branch_id,
                 'work_date' => $planDate->toDateString(),
+                'is_weekend' => $planDate->isWeekend(),
                 'status' => 'draft',
                 'last_modified_by' => $actor->id,
                 'lock_version' => 0,
@@ -68,9 +66,11 @@ class SalesDailyPlanService
             'agenda_type' => ContentItem::SALES_AGENDA_TYPE,
             'daily_plan_id' => $plan->id,
             'visibility' => 'personal',
-            'title' => $data['title'] ?? $data['sales_activity_category'],
-            'task_detail' => $data['task_detail'],
+            'title' => $data['title'],
+            'task_detail' => $data['task_detail'] ?? null,
+            'location' => $data['location'] ?? null,
             'scheduled_date' => ($plan->plan_date ?? $plan->work_date)->toDateString(),
+            'start_time' => $data['start_time'] ?? null,
             'status' => 'planned',
             'duration_minutes' => (int) $data['duration_minutes'],
             'sort_order' => $nextOrder,
@@ -90,8 +90,10 @@ class SalesDailyPlanService
         $this->assertAgendaBelongs($plan, $agenda);
         $this->assertPlanMutationAllowed($plan, $actor);
         $agenda->update([
-            'title' => $data['title'] ?? $data['sales_activity_category'],
-            'task_detail' => $data['task_detail'],
+            'title' => $data['title'],
+            'task_detail' => $data['task_detail'] ?? null,
+            'location' => $data['location'] ?? null,
+            'start_time' => $data['start_time'] ?? $agenda->start_time,
             'duration_minutes' => (int) $data['duration_minutes'],
             'sales_activity_category' => $data['sales_activity_category'],
             'updated_by' => $actor->id,
@@ -181,7 +183,6 @@ class SalesDailyPlanService
 
     public function saveDraft(User $sales, CarbonImmutable $workDate, array $activities): SalesDailyPlan
     {
-        $this->assertWorkDate($workDate);
         $normalized = $this->normalizeActivities($activities);
         $this->assertTotalWithinLimit($normalized);
 
@@ -429,8 +430,6 @@ class SalesDailyPlanService
 
     private function submitActivityPlan(User $sales, CarbonImmutable $workDate): SalesDailyPlan
     {
-        $this->assertWorkDate($workDate);
-
         return $this->locks->runOrThrow($this->planLockKey($sales, $workDate), function () use ($sales, $workDate): SalesDailyPlan {
             return DB::transaction(function () use ($sales, $workDate): SalesDailyPlan {
                 $plan = SalesDailyPlan::query()
@@ -474,13 +473,6 @@ class SalesDailyPlanService
             || $agenda->item_type !== 'agenda'
             || $agenda->agenda_type !== ContentItem::SALES_AGENDA_TYPE) {
             throw (new ModelNotFoundException)->setModel(ContentItem::class, [$agenda->id]);
-        }
-    }
-
-    private function assertWorkDate(CarbonImmutable $workDate): void
-    {
-        if (! $workDate->isWeekday()) {
-            throw ValidationException::withMessages(['work_date' => 'Daily Plan hanya dapat dibuat pada hari kerja Senin sampai Jumat.']);
         }
     }
 

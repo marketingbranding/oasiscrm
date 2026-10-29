@@ -8,7 +8,6 @@ use App\Models\LeadMaster;
 use App\Models\Role;
 use App\Models\SalesLead;
 use App\Models\User;
-use App\Services\SalesPocketbookOnboardingService;
 use App\Services\SalesWeeklyMetricsService;
 use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -144,7 +143,7 @@ class SalesWeeklyMetricsTest extends TestCase
         $this->actingAs($sales)->get(route('dashboard'))->assertForbidden();
         $this->actingAs($sales)->get('/')->assertRedirect(route('sales-pocketbook.index'));
         $this->actingAs($sales)->get(route('sales-pocketbook.index'))->assertOk()
-            ->assertSee('Buku Saku Saya')
+            ->assertSee('Agenda Saya')
             ->assertSee('Input Lead')
             ->assertSee('tab=leads', false)
             ->assertDontSee('Ringkasan periode')
@@ -173,7 +172,6 @@ class SalesWeeklyMetricsTest extends TestCase
     {
         $sales = $this->user('sales', $branch, $name);
         $sales->assignedProjects()->attach($project, ['is_primary' => true]);
-        app(SalesPocketbookOnboardingService::class)->skip($sales);
 
         return $sales;
     }

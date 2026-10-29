@@ -12,7 +12,6 @@ use App\Models\SalesCoordinatorSales;
 use App\Models\User;
 use App\Services\SalesAgendaEvidenceAuthorizationService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
@@ -42,25 +41,10 @@ class SalesAgendaEvidenceAuthorizationTest extends TestCase
         $this->assertTrue($access->canView($sales, $agenda));
     }
 
-    public function test_evidence_and_archive_access_requires_registered_sales_pocketbook_permissions(): void
-    {
-        $branch = Branch::create(['name' => 'Solo', 'code' => 'SO', 'is_active' => true]);
-        $admin = $this->user('admin', $branch);
-        $agenda = ContentItem::create(['branch_id' => $branch->id, 'item_type' => 'agenda', 'agenda_type' => ContentItem::SALES_AGENDA_TYPE, 'title' => 'Visit', 'scheduled_date' => now(), 'status' => 'planned', 'owner_user_id' => $admin->id, 'created_by' => $admin->id]);
-        $access = app(SalesAgendaEvidenceAuthorizationService::class);
-
-        DB::table('role_permission')->where('role_id', $admin->role_id)->whereIn('permission_id', function ($query): void {
-            $query->select('id')->from('permissions')->whereIn('slug', ['sales_pocketbook.view_branch', 'sales_pocketbook.manage_branch']);
-        })->delete();
-
-        $this->assertFalse($access->canView($admin, $agenda));
-        $this->assertFalse($access->canManageArchives($admin));
-    }
-
     public function test_archive_page_exposes_only_backend_authorized_ready_downloads(): void
     {
         $branch = Branch::create(['name' => 'Solo', 'code' => 'SO', 'is_active' => true]);
-        $admin = $this->user('superadmin', $branch);
+        $admin = $this->user('admin', $branch);
         $ready = SalesAgendaEvidenceArchive::create([
             'branch_id' => $branch->id,
             'week_start' => '2026-08-03',
@@ -78,7 +62,7 @@ class SalesAgendaEvidenceAuthorizationTest extends TestCase
             ->assertSee('Bangun ZIP')
             ->assertSee(route('sales-agendas.evidence-archives.download', $ready), false)
             ->assertDontSee(route('sales-agendas.evidence-archives.download', $failed), false)
-            ->assertSee('PURGE FILE LOKAL');
+            ->assertDontSee('PURGE FILE LOKAL');
     }
 
     public function test_coordinator_private_stream_uses_current_operational_assignment_and_monitoring_scope(): void

@@ -1,46 +1,117 @@
 import { lockBodyScroll, unlockBodyScroll } from './body-scroll-lock';
 
 export default function registerSalesPocketbookOnboarding(Alpine) {
-    Alpine.data('salesPocketbookOnboarding', totalSteps => ({
+    Alpine.data('salesPocketbookTour', (steps, initiallyOpen = false) => ({
+        steps,
         step: 1,
-        totalSteps,
-        bodyLockOwner: 'sales-pocketbook-onboarding',
+        open: initiallyOpen,
+        targetFound: false,
+        previousFocus: null,
+        bodyLockOwner: 'sales-pocketbook-tour',
 
         init() {
-            lockBodyScroll(this.bodyLockOwner);
-            this.$nextTick(() => this.focusStep());
+            if (this.open) {
+                this.start();
+            }
         },
 
         destroy() {
+            this.close();
+        },
+
+        get current() {
+            return this.steps[this.step - 1] || this.steps[0] || {};
+        },
+
+        start() {
+            this.previousFocus = document.activeElement;
+            lockBodyScroll(this.bodyLockOwner);
+            this.$nextTick(() => this.focusCard());
+            this.highlightTarget();
+        },
+
+        close() {
+            document.querySelectorAll('[data-tour-active]').forEach((element) => element.removeAttribute('data-tour-active'));
             unlockBodyScroll(this.bodyLockOwner);
+            this.previousFocus?.focus?.({ preventScroll: true });
         },
 
         next() {
-            if (this.step < this.totalSteps) {
-                this.step += 1;
-                this.$nextTick(() => this.focusStep());
+            if (this.step >= this.steps.length) {
+                return;
             }
+
+            this.step += 1;
+            this.$nextTick(() => {
+                this.highlightTarget();
+                this.focusCard();
+            });
         },
 
         previous() {
-            if (this.step > 1) {
-                this.step -= 1;
-                this.$nextTick(() => this.focusStep());
+            if (this.step <= 1) {
+                return;
             }
+
+            this.step -= 1;
+            this.$nextTick(() => {
+                this.highlightTarget();
+                this.focusCard();
+            });
         },
 
-        focusStep() {
-            const activeStep = this.$refs.step?.querySelector(`[data-onboarding-step="${this.step}"]`);
+        skip() {
+            this.open = false;
+            this.$refs.skipForm?.submit();
+        },
 
-            activeStep?.querySelector('h1, button, a')?.focus({ preventScroll: true });
+        complete() {
+            this.open = false;
+            this.$refs.completeForm?.submit();
+        },
+
+        highlightTarget() {
+            document.querySelectorAll('[data-tour-active]').forEach((element) => element.removeAttribute('data-tour-active'));
+            const target = this.current.target ? document.querySelector(this.current.target) : null;
+            this.targetFound = Boolean(target);
+
+            if (!target) {
+                return;
+            }
+
+            target.setAttribute('data-tour-active', 'true');
+            target.scrollIntoView({ behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: 'center', inline: 'nearest' });
+        },
+
+        focusCard() {
+            this.$refs.card?.querySelector('button')?.focus({ preventScroll: true });
+        },
+
+        trapFocus(event) {
+            const focusable = [...this.$refs.card.querySelectorAll('button:not([disabled])')];
+            if (focusable.length === 0) {
+                return;
+            }
+
+            const first = focusable[0];
+            const last = focusable[focusable.length - 1];
+            if (event.shiftKey && document.activeElement === first) {
+                event.preventDefault();
+                last.focus();
+            } else if (!event.shiftKey && document.activeElement === last) {
+                event.preventDefault();
+                first.focus();
+            }
         },
 
         handleKeydown(event) {
-            if (event.key === 'ArrowRight') {
+            if (event.key === 'Escape') {
+                event.preventDefault();
+                this.skip();
+            } else if (event.key === 'ArrowRight') {
                 event.preventDefault();
                 this.next();
-            }
-            if (event.key === 'ArrowLeft') {
+            } else if (event.key === 'ArrowLeft') {
                 event.preventDefault();
                 this.previous();
             }

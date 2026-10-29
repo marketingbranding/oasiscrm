@@ -10,7 +10,6 @@ use App\Models\Role;
 use App\Models\SalesCoordinatorSales;
 use App\Models\SalesLead;
 use App\Models\User;
-use App\Services\SalesPocketbookOnboardingService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use PhpOffice\PhpSpreadsheet\IOFactory;
 use Tests\TestCase;
@@ -101,7 +100,6 @@ class SalesPocketbookExportTest extends TestCase
         $project = LeadMaster::create(['branch_id' => $branch->id, 'project_name' => 'Solo Project', 'is_active' => true]);
         $sales = $this->user('sales', $branch, 'Solo Sales');
         $sales->assignedProjects()->attach($project, ['is_primary' => true]);
-        app(SalesPocketbookOnboardingService::class)->skip($sales);
 
         return [$branch, $project, $sales];
     }

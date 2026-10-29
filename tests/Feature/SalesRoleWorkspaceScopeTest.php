@@ -9,7 +9,6 @@ use App\Models\Role;
 use App\Models\SalesCoordinatorSales;
 use App\Models\User;
 use App\Services\OptimisticLockService;
-use App\Services\SalesPocketbookOnboardingService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use PhpOffice\PhpSpreadsheet\IOFactory;
 use Tests\TestCase;
@@ -47,8 +46,10 @@ class SalesRoleWorkspaceScopeTest extends TestCase
 
         $response = $this->actingAs($sales1)->get(route('sales-pocketbook.index'))->assertOk()
             ->assertViewIs('crm.sales-pocketbook.sales-agenda')
-            ->assertSee('Buku Saku Saya')
+            ->assertSee('Agenda Saya')->assertSee($own->title)->assertDontSee($foreign->title)
             ->assertDontSee('Semua Sales')->assertDontSee('Semua Koordinator');
+        $response->assertSee('crm-pagination', false);
+
         $token = app(OptimisticLockService::class)->token($foreign);
         $this->actingAs($sales1)->patch(route('sales-agendas.update', $foreign), [
             'activity_result' => 'Tidak boleh',
@@ -69,7 +70,7 @@ class SalesRoleWorkspaceScopeTest extends TestCase
         @unlink($path);
     }
 
-    public function test_coordinator_can_update_team_agendas_while_supervisor_remains_read_only(): void
+    public function test_role_views_keep_exact_labels_canonical_dates_and_read_only_team_agendas(): void
     {
         [, $supervisor, $coordinator, , $sales] = $this->hierarchy();
         $agenda = $this->agenda($sales, 'AGENDA_READ_ONLY');
@@ -78,15 +79,12 @@ class SalesRoleWorkspaceScopeTest extends TestCase
             ->assertSee('Buku Saku Sales')->assertSee('date-wrapper', false);
         $supervisorPage = $this->actingAs($supervisor)->get(route('sales-pocketbook.index'))->assertOk()
             ->assertSee('Monitoring Tim')->assertSee('date-wrapper', false);
-        $this->actingAs($coordinator)->patch(route('sales-agendas.update', $agenda), [
-            'activity_result' => 'Hasil tim',
-            'expected_updated_at' => app(OptimisticLockService::class)->token($agenda),
-        ])->assertRedirect();
-
-        $this->actingAs($supervisor)->patch(route('sales-agendas.update', $agenda), [
-            'activity_result' => 'Tidak boleh',
-            'expected_updated_at' => app(OptimisticLockService::class)->token($agenda),
-        ])->assertForbidden();
+        foreach ([$coordinator, $supervisor] as $viewer) {
+            $this->actingAs($viewer)->patch(route('sales-agendas.update', $agenda), [
+                'activity_result' => 'Tidak boleh',
+                'expected_updated_at' => app(OptimisticLockService::class)->token($agenda),
+            ])->assertForbidden();
+        }
 
         foreach (['coordinator-leads.blade.php', 'supervisor-monitoring.blade.php'] as $view) {
             $source = file_get_contents(resource_path("views/crm/sales-pocketbook/{$view}"));
@@ -102,7 +100,6 @@ class SalesRoleWorkspaceScopeTest extends TestCase
         $project = LeadMaster::create(['branch_id' => $branch->id, 'project_name' => 'Magelang Residence', 'is_active' => true]);
         $manager = $this->user('manager', 'Manager Magelang', $branch);
         $supervisor = $this->user('supervisor', 'SPV Magelang', $branch, $manager);
-        $supervisor->assignedProjects()->attach($project, ['is_primary' => true, 'is_active' => true]);
         $coordinatorA = $this->user('sales_coordinator', 'Koordinator A', $branch, $supervisor);
         $coordinatorB = $this->user('sales_coordinator', 'Koordinator B', $branch, $supervisor);
         $sales1 = $this->user('sales', 'Sales 1', $branch);
@@ -111,7 +108,6 @@ class SalesRoleWorkspaceScopeTest extends TestCase
 
         foreach ([$sales1, $sales2, $sales3] as $sales) {
             $sales->assignedProjects()->attach($project, ['is_primary' => true, 'is_active' => true]);
-            app(SalesPocketbookOnboardingService::class)->skip($sales);
         }
         foreach ([[$coordinatorA, $sales1], [$coordinatorA, $sales2], [$coordinatorB, $sales3]] as [$coordinator, $sales]) {
             SalesCoordinatorSales::create(['coordinator_user_id' => $coordinator->id, 'sales_user_id' => $sales->id]);

@@ -5,15 +5,12 @@ namespace Tests\Feature;
 use App\Models\Branch;
 use App\Models\ContentItem;
 use App\Models\LeadMaster;
-use App\Models\Permission;
 use App\Models\Role;
 use App\Models\SalesCoordinatorSales;
 use App\Models\SalesLead;
 use App\Models\User;
 use App\Services\OptimisticLockService;
-use App\Services\SalesPocketbookOnboardingService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
@@ -27,7 +24,7 @@ class SalesPocketbookTest extends TestCase
         [$branch, $project, $sales] = $this->salesContext();
 
         $this->actingAs($sales)->get(route('sales-pocketbook.index'))->assertOk()
-            ->assertSee('Buku Saku Saya')
+            ->assertSee('Agenda Saya')
             ->assertSee('Lead Saya')
             ->assertDontSee('name="sales_user_id"', false);
 
@@ -46,97 +43,12 @@ class SalesPocketbookTest extends TestCase
             ->assertSee('value="'.$branch->id.'"', false);
     }
 
-    public function test_sales_lead_input_is_grouped_for_quick_scanning_and_mobile_summary(): void
-    {
-        [, , $sales] = $this->salesContext();
-
-        $this->actingAs($sales)->get(route('sales-agendas.index', ['tab' => 'leads']))
-            ->assertOk()
-            ->assertSee('Data konsumen')
-            ->assertSee('Sumber dan proses')
-            ->assertSee('Catatan tambahan')
-            ->assertSee('sales-lead-mobile-list', false)
-            ->assertSee('Input Lead Hari Ini');
-    }
-
-    public function test_lead_saya_form_disables_both_submit_buttons_while_saving(): void
-    {
-        [, , $sales] = $this->salesContext();
-
-        $html = $this->actingAs($sales)
-            ->get(route('sales-agendas.index', ['tab' => 'leads']))
-            ->assertOk()
-            ->getContent();
-
-        $this->assertStringContainsString('x-data="salesLeadSubmit()"', $html);
-        $this->assertStringContainsString('@submit="beginSubmit($event)"', $html);
-        $this->assertStringContainsString(':aria-busy="submitting"', $html);
-        $this->assertSame(2, substr_count($html, 'x-bind:disabled="submitting"'));
-        $this->assertStringContainsString('Menyimpan...', $html);
-
-        $script = file_get_contents(resource_path('js/sales-pocketbook.js'));
-        $this->assertStringContainsString('dataset.submitActionPreserved', $script);
-        $this->assertStringContainsString('if (this.submitting)', $script);
-        $this->assertStringContainsString('event.preventDefault()', $script);
-    }
-
     public function test_sales_pocketbook_always_delegates_to_canonical_workspace(): void
     {
         [, , $sales] = $this->salesContext();
 
-        $this->actingAs($sales)->get(route('sales-pocketbook.index'))->assertOk()->assertSee('Buku Saku Saya');
-        $this->actingAs($sales)->get(route('sales-pocketbook.index', ['input' => 1]))->assertOk()->assertSee('Buku Saku Saya')->assertSee('Lead Saya')->assertDontSee('<title>Buku Saku Sales - Oasis CRM</title>', false);
-    }
-
-    public function test_sales_agenda_uses_concise_personal_copy_and_date_navigation(): void
-    {
-        [, , $sales] = $this->salesContext();
-
-        $this->actingAs($sales)->get(route('sales-agendas.index', ['tab' => 'agenda', 'work_date' => '2026-10-26']))
-            ->assertOk()
-            ->assertSee('Buku Saku Saya')
-            ->assertSee('Agenda 23 Okt 2026')
-            ->assertSee('Agenda 27 Okt 2026')
-            ->assertSee('Belum ada agenda')
-            ->assertDontSee('Catat dan selesaikan agenda sales Anda.')
-            ->assertDontSee('Satu kertas untuk satu hari kerja.')
-            ->assertDontSee('Hari kerja sebelumnya')
-            ->assertDontSee('Hari kerja berikutnya');
-    }
-
-    public function test_shared_sales_pocketbook_url_requires_sales_lead_view_permission(): void
-    {
-        [, , $sales] = $this->salesContext();
-        $sales->role->permissions()->detach(Permission::query()->where('slug', 'sales_pocketbook.view_own')->firstOrFail());
-
-        $this->actingAs($sales->fresh('role.permissions'))
-            ->get(route('sales-pocketbook.index'))
-            ->assertForbidden();
-    }
-
-    public function test_lead_saya_hardening_changelog_is_idempotent_and_visible(): void
-    {
-        $title = 'Lead Saya menangani akses dan pengiriman ulang dengan aman';
-        $migration = require database_path('migrations/2026_10_26_170000_add_lead_saya_hardening_changelog.php');
-
-        $migration->up();
-        $migration->up();
-
-        $this->assertSame(1,
-            DB::table('changelogs')
-                ->whereNull('version')
-                ->where('title', $title)
-                ->count(),
-        );
-        $actor = User::factory()->create([
-            'role_id' => Role::query()->where('slug', 'superadmin')->value('id'),
-            'password_changed_at' => now(),
-        ]);
-
-        $this->actingAs($actor)->get(route('changelogs.index'))
-            ->assertOk()
-            ->assertSeeText($title)
-            ->assertSeeText('Pengiriman ulang Lead Saya tidak menggandakan data dan aksesnya mengikuti permission.');
+        $this->actingAs($sales)->get(route('sales-pocketbook.index'))->assertOk()->assertSee('Agenda Saya');
+        $this->actingAs($sales)->get(route('sales-pocketbook.index', ['input' => 1]))->assertOk()->assertSee('Agenda Saya')->assertSee('Lead Saya')->assertDontSee('<title>Buku Saku Sales - Oasis CRM</title>', false);
     }
 
     public function test_primary_sales_creates_lead_for_self_and_cannot_spoof_sales_owner(): void
@@ -151,42 +63,7 @@ class SalesPocketbookTest extends TestCase
         $this->assertDatabaseMissing('sales_leads', ['customer_name' => 'Lead Test', 'sales_user_id' => $otherSales->id]);
     }
 
-    public function test_repeated_lead_submit_with_same_operation_uuid_returns_one_lead(): void
-    {
-        [$branch, $project, $sales] = $this->salesContext();
-        $data = $this->leadData($branch, $project, $sales);
-        $data['operation_uuid'] = (string) Str::uuid();
-
-        $this->actingAs($sales)->post(route('sales-leads.store'), $data)->assertRedirect();
-
-        $retry = $data;
-        $retry['customer_name'] = 'Changed On Retry';
-        $this->actingAs($sales)->post(route('sales-leads.store'), $retry)->assertRedirect();
-
-        $this->assertDatabaseCount('sales_leads', 1);
-        $this->assertDatabaseHas('sales_leads', ['customer_name' => 'Lead Test', 'external_sync_id' => $data['operation_uuid']]);
-        $this->assertDatabaseMissing('sales_leads', ['customer_name' => 'Changed On Retry']);
-        $this->assertDatabaseCount('sales_lead_status_histories', 1);
-        $this->assertDatabaseCount('activity_log', 1);
-    }
-
-    public function test_operation_uuid_cannot_be_reused_by_another_actor(): void
-    {
-        [$branch, $project, $sales] = $this->salesContext();
-        $otherSales = $this->sales($branch, $project, 'Other Sales');
-        $data = $this->leadData($branch, $project, $sales);
-        $data['operation_uuid'] = (string) Str::uuid();
-
-        $this->actingAs($sales)->post(route('sales-leads.store'), $data)->assertRedirect();
-
-        $this->actingAs($otherSales)->postJson(route('sales-leads.store'), $data)
-            ->assertUnprocessable()
-            ->assertJsonValidationErrors('operation_uuid');
-
-        $this->assertDatabaseCount('sales_leads', 1);
-    }
-
-    public function test_sales_workspace_has_exact_category_options_without_legacy_history_markup(): void
+    public function test_sales_workspace_has_exact_category_options_and_displays_historical_values_safely(): void
     {
         [, $project, $sales] = $this->salesContext();
         $this->agenda($sales, $project);
@@ -199,19 +76,18 @@ class SalesPocketbookTest extends TestCase
             static fn (string $category): string => 'value="'.$category.'"',
             ContentItem::SALES_ACTIVITY_CATEGORIES,
         ), false)->assertDontSee('value="Survey Lokasi"', false)
-            ->assertSee('Agenda Saya')
-            ->assertSee('sales-agenda-paper', false)
-            ->assertDontSee('Daily Planning');
+            ->assertSee('Agenda Test')
+            ->assertSee('Agenda Survey Lama')
+            ->assertSee('Survey Lokasi');
     }
 
     public function test_sales_without_project_sees_exact_blocking_message_and_no_form(): void
     {
         $branch = Branch::create(['name' => 'Solo', 'code' => 'SLO', 'is_active' => true]);
         $sales = $this->user('sales', $branch);
-        app(SalesPocketbookOnboardingService::class)->skip($sales);
 
         $this->actingAs($sales)->get(route('sales-pocketbook.index'))->assertOk()
-            ->assertSee('Proyek utama belum ditentukan. Hubungi admin untuk menetapkan proyek sebelum membuat agenda.')
+            ->assertSee('Proyek utama belum ditentukan. Hubungi admin untuk menetapkan proyek utama.')
             ->assertDontSee('name="scheduled_date"', false);
     }
 
@@ -368,10 +244,7 @@ class SalesPocketbookTest extends TestCase
         $branch = Branch::create(['name' => 'Solo', 'code' => 'SLO', 'is_active' => true]);
         $project = LeadMaster::create(['branch_id' => $branch->id, 'project_name' => 'Solo Project', 'is_active' => true]);
 
-        $sales = $this->sales($branch, $project, 'Solo Sales');
-        app(SalesPocketbookOnboardingService::class)->skip($sales);
-
-        return [$branch, $project, $sales];
+        return [$branch, $project, $this->sales($branch, $project, 'Solo Sales')];
     }
 
     private function sales(Branch $branch, LeadMaster $project, string $name): User

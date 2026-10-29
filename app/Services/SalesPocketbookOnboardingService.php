@@ -11,14 +11,15 @@ class SalesPocketbookOnboardingService
 {
     public const FLOW_KEY = 'sales_pocketbook';
 
-    public const VERSION = '1';
+    public const VERSION = '2';
 
-    /** @var array<int, array{title: string, description: string, mark: string}> */
+    /** @var array<int, array{title: string, description: string, mark: string, target: string}> */
     public const STEPS = [
-        ['title' => 'Satu buku saku untuk kerjamu', 'description' => 'Agenda dan Lead Saya berada di satu tempat yang mudah dibuka dari ponsel.', 'mark' => 'Buku'],
-        ['title' => 'Hari kemarin, hari ini, dan rencana', 'description' => 'Agenda langsung terlihat. Buka agenda untuk tugas, foto, dan hasil aktivitas.', 'mark' => 'Agenda'],
-        ['title' => 'Tulis di struk, lalu sobek', 'description' => 'Selesaikan agenda untuk mengirim hasil aktivitas ke Koordinator Sales dan menampilkannya di daftar.', 'mark' => 'Kirim'],
-        ['title' => 'Lead selesai saat kamu bilang selesai', 'description' => 'Status funnel dapat diperbarui, tetapi lead belum selesai sebelum Anda memilih Tandai selesai.', 'mark' => 'Selesai'],
+        ['title' => 'Selamat datang di Agenda Sales', 'description' => 'Ini adalah ruang kerja harianmu untuk mencatat rencana, hasil, bukti, dan lead.', 'mark' => 'Mulai', 'target' => '[data-tour-target="workspace"]'],
+        ['title' => 'Target kerja 420 menit', 'description' => 'Hari kerja mengikuti 420 menit efektif. Waktu istirahat tidak dihitung sebagai agenda.', 'mark' => '420 menit', 'target' => '[data-tour-target="work-hours"]'],
+        ['title' => 'Tambah rencana hari ini', 'description' => 'Gunakan + Tambah rencana hari ini untuk mencatat kategori, judul, lokasi, dan waktu kegiatan.', 'mark' => 'Rencana', 'target' => '[data-tour-target="today-plan"]'],
+        ['title' => 'Lengkapi hasil dan bukti', 'description' => 'Setelah kegiatan, isi hasil aktivitas dan unggah satu sampai dua foto bukti sebelum menyelesaikan agenda.', 'mark' => 'Bukti', 'target' => '[data-tour-target="agenda-result"]'],
+        ['title' => 'Lead Saya selalu dekat', 'description' => 'Buka Lead Saya untuk menambah lead, melihat progres, dan menandai lead yang sudah selesai.', 'mark' => 'Lead', 'target' => '[data-tour-target="lead-tab"]'],
     ];
 
     public function canAccess(User $user): bool
@@ -37,7 +38,7 @@ class SalesPocketbookOnboardingService
 
         $progress = $this->existingProgress($user);
 
-        return $progress === null || ($progress->completed_at === null && $progress->skipped_at === null);
+        return $progress === null || ! $progress->isFinished();
     }
 
     public function skip(User $user): UserOnboardingProgress
@@ -58,7 +59,7 @@ class SalesPocketbookOnboardingService
         return DB::transaction(function () use ($user, $step): UserOnboardingProgress {
             $progress = $this->progress($user);
             $progress->forceFill([
-                'current_step' => max(1, min($step, 4)),
+                'current_step' => max(1, min($step, count(self::STEPS))),
                 'completed_at' => $progress->completed_at ?? now(),
                 'skipped_at' => null,
             ])->save();

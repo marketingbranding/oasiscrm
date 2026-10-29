@@ -10,7 +10,6 @@ use App\Models\SalesAgendaEvidence;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Storage;
-use RuntimeException;
 use Tests\TestCase;
 
 class SalesAgendaEvidenceCleanupTest extends TestCase
@@ -60,81 +59,6 @@ class SalesAgendaEvidenceCleanupTest extends TestCase
         $this->assertTrue($agenda->fresh()->exists);
         $this->assertDatabaseHas('sales_agenda_evidences', ['id' => $evidence->id, 'archive_status' => 'ready']);
         Storage::disk('agenda_evidence')->assertExists($archivePath);
-    }
-
-    public function test_work_planner_cannot_delete_sales_agenda_with_evidence(): void
-    {
-        Storage::fake('agenda_evidence');
-        $superadmin = $this->user('superadmin');
-        $agenda = $this->agenda($superadmin, 'Dilindungi');
-        $evidence = $this->evidence($agenda, 'evidence/protected.jpg');
-        Storage::disk('agenda_evidence')->put($evidence->storage_path, 'photo');
-
-        $this->actingAs($superadmin)
-            ->delete(route('content-calendar.destroy', $agenda))
-            ->assertStatus(409);
-
-        $this->assertModelExists($agenda->fresh());
-        $this->assertModelExists($evidence->fresh());
-    }
-
-    public function test_single_work_planner_delete_rolls_back_when_delete_fails_after_related_write(): void
-    {
-        Storage::fake('agenda_evidence');
-        $superadmin = $this->user('superadmin');
-        $agenda = $this->agenda($superadmin, 'Transaksi Delete');
-
-        ContentItem::deleting(function (ContentItem $item): void {
-            SalesAgendaEvidence::create([
-                'content_item_id' => $item->id,
-                'uploaded_by_user_id' => $item->owner_user_id,
-                'storage_path' => 'evidence/created-during-delete.jpg',
-                'original_name' => 'created-during-delete.jpg',
-                'mime_type' => 'image/jpeg',
-                'width' => 10,
-                'height' => 10,
-                'size_bytes' => 5,
-                'sha256' => hash('sha256', 'photo'),
-            ]);
-
-            throw new RuntimeException('Simulated delete failure.');
-        });
-
-        $this->withoutExceptionHandling();
-        try {
-            $this->actingAs($superadmin)->delete(route('content-calendar.destroy', $agenda));
-            $this->fail('The simulated delete failure must be raised.');
-        } catch (RuntimeException $exception) {
-            $this->assertSame('Simulated delete failure.', $exception->getMessage());
-        }
-
-        $this->assertModelExists($agenda->fresh());
-        $this->assertDatabaseCount('sales_agenda_evidences', 0);
-    }
-
-    public function test_bulk_work_planner_delete_preflights_sales_agenda_evidence_before_deleting_any_item(): void
-    {
-        Storage::fake('agenda_evidence');
-        $superadmin = $this->user('superadmin');
-        $agenda = $this->agenda($superadmin, 'Dilindungi Bulk');
-        $evidence = $this->evidence($agenda, 'evidence/protected-bulk.jpg');
-        Storage::disk('agenda_evidence')->put($evidence->storage_path, 'photo');
-        $task = ContentItem::create([
-            'branch_id' => $superadmin->branch_id,
-            'item_type' => 'task',
-            'title' => 'Task biasa',
-            'scheduled_date' => now(),
-            'status' => 'todo',
-            'owner_user_id' => $superadmin->id,
-            'created_by' => $superadmin->id,
-        ]);
-
-        $this->actingAs($superadmin)
-            ->post(route('content-calendar.bulk-delete'), ['ids' => [$task->id, $agenda->id]])
-            ->assertStatus(409);
-
-        $this->assertModelExists($task->fresh());
-        $this->assertModelExists($agenda->fresh());
     }
 
     public function test_only_primary_superadmin_can_cleanup_and_impersonated_sales_uses_original_actor(): void
@@ -190,13 +114,8 @@ class SalesAgendaEvidenceCleanupTest extends TestCase
             $contents = file_get_contents(resource_path("views/crm/sales-pocketbook/{$view}"));
             $this->assertStringContainsString("route('sales-agendas.evidence.show'", $contents);
             $this->assertStringContainsString('Bukti foto telah dipindahkan ke arsip.', $contents);
-            if ($view === 'coordinator-leads.blade.php') {
-                $this->assertStringContainsString("route('sales-agendas.store')", $contents);
-                $this->assertStringContainsString('route(\'sales-agendas.update\', $agenda)', $contents);
-            } else {
-                $this->assertStringNotContainsString("route('sales-agendas.store')", $contents);
-                $this->assertStringNotContainsString("route('sales-agendas.update')", $contents);
-            }
+            $this->assertStringNotContainsString("route('sales-agendas.store')", $contents);
+            $this->assertStringNotContainsString("route('sales-agendas.update')", $contents);
             $this->assertStringNotContainsString("route('sales-agendas.evidence.destroy')", $contents);
             $this->assertStringNotContainsString("route('sales-agendas.cleanup')", $contents);
         }

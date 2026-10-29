@@ -29,4 +29,9 @@ class UserOnboardingProgress extends Model
     {
         return $this->belongsTo(User::class);
     }
+
+    public function isFinished(): bool
+    {
+        return $this->completed_at !== null || $this->skipped_at !== null;
+    }
 }

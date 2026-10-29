@@ -10,7 +10,6 @@ use App\Models\LeadMaster;
 use App\Models\Role;
 use App\Models\User;
 use App\Services\SalesAgendaProjectResolver;
-use App\Services\SalesPocketbookOnboardingService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
@@ -47,7 +46,7 @@ class SalesAgendaRoleWorkspaceTest extends TestCase
 
         $this->assertNull(app(SalesAgendaProjectResolver::class)->resolve($sales, '2026-08-10'));
         $this->actingAs($sales)->get(route('sales-pocketbook.index'))->assertOk()
-            ->assertSee('Proyek utama belum ditentukan. Hubungi admin untuk menetapkan proyek sebelum membuat agenda.')
+            ->assertSee('Proyek utama belum ditentukan. Hubungi admin untuk menetapkan proyek utama.')
             ->assertDontSee('name="scheduled_date"', false);
     }
 
@@ -63,26 +62,23 @@ class SalesAgendaRoleWorkspaceTest extends TestCase
         $this->assertNull(app(SalesAgendaProjectResolver::class)->resolve($sales, '2026-08-10'));
     }
 
-    public function test_store_request_accepts_sales_and_coordinator_team_agenda_fields(): void
+    public function test_store_request_accepts_primary_sales_only_and_exposes_simple_fields(): void
     {
         [$sales] = $this->context();
         $request = new StoreSalesAgendaRequest;
         $request->setUserResolver(fn () => $sales);
 
         $this->assertTrue($request->authorize());
-        $this->assertSame(['sales_user_id', 'project_id', 'scheduled_date', 'start_time', 'end_time', 'sales_activity_category', 'title', 'location', 'activity_result', 'photos', 'photos.*'], array_keys($request->rules()));
+        $this->assertSame(['scheduled_date', 'sales_activity_category', 'title', 'location', 'activity_result', 'photos', 'photos.*'], array_keys($request->rules()));
         $this->assertSame(['nullable', 'array', 'max:2'], $request->rules()['photos']);
         $this->assertSame(['required', 'file', 'max:10240'], $request->rules()['photos.*']);
         $this->assertSame(['required', 'string'], array_slice($request->rules()['sales_activity_category'], 0, 2));
         $this->assertSame('in:"'.implode('","', ContentItem::SALES_ACTIVITY_CATEGORIES).'"', (string) $request->rules()['sales_activity_category'][2]);
 
-        foreach (['manager', 'branch_manager', 'supervisor', 'admin', 'pusat', 'superadmin'] as $role) {
+        foreach (['manager', 'branch_manager', 'supervisor', 'sales_coordinator', 'admin', 'pusat', 'superadmin'] as $role) {
             $request->setUserResolver(fn () => $this->user($role));
             $this->assertFalse($request->authorize(), "Primary {$role} must not create Sales Agenda.");
         }
-
-        $request->setUserResolver(fn () => $this->user('sales_coordinator'));
-        $this->assertTrue($request->authorize());
 
         $manager = $this->user('manager');
         $manager->roles()->attach(Role::where('slug', 'sales')->value('id'));
@@ -92,7 +88,7 @@ class SalesAgendaRoleWorkspaceTest extends TestCase
 
     public function test_non_sales_roles_cannot_post_sales_agenda(): void
     {
-        foreach (['manager', 'branch_manager', 'supervisor', 'admin', 'pusat', 'superadmin'] as $role) {
+        foreach (['manager', 'branch_manager', 'supervisor', 'sales_coordinator', 'admin', 'pusat', 'superadmin'] as $role) {
             $this->actingAs($this->user($role))->post(route('sales-agendas.store'), [
                 'scheduled_date' => '2026-08-10',
                 'sales_activity_category' => 'Cek Lokasi',
@@ -103,29 +99,12 @@ class SalesAgendaRoleWorkspaceTest extends TestCase
         $this->assertDatabaseCount('content_items', 0);
     }
 
-    public function test_sales_agenda_store_requires_manage_own_permission(): void
-    {
-        [$sales, $project] = $this->context();
-        $sales->assignedProjects()->attach($project->id, $this->assignment(true));
-        $permissionId = DB::table('permissions')->where('slug', 'sales_pocketbook.manage_own')->value('id');
-        DB::table('role_permission')->where('role_id', $sales->role_id)->where('permission_id', $permissionId)->delete();
-
-        $this->actingAs($sales)->post(route('sales-agendas.store'), [
-            'scheduled_date' => '2026-08-10',
-            'sales_activity_category' => 'Cek Lokasi',
-            'title' => 'Agenda tanpa izin',
-        ])->assertForbidden();
-    }
-
     private function context(): array
     {
         $branch = Branch::create(['name' => 'Kudus', 'code' => 'KDS', 'is_active' => true]);
 
-        $sales = $this->user('sales', $branch);
-        app(SalesPocketbookOnboardingService::class)->skip($sales);
-
         return [
-            $sales,
+            $this->user('sales', $branch),
             LeadMaster::create(['branch_id' => $branch->id, 'project_name' => 'Oasis A', 'is_active' => true]),
             LeadMaster::create(['branch_id' => $branch->id, 'project_name' => 'Oasis B', 'is_active' => true]),
         ];

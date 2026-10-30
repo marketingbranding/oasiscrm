@@ -8,6 +8,8 @@ use App\Models\OrganizationAssignment;
 use App\Models\Role;
 use App\Models\User;
 use App\Services\OrganizationGraphService;
+use App\Services\SalesCoordinatorAssignmentService;
+use App\Services\SalesTeamScopeService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Validation\ValidationException;
 use Tests\TestCase;
@@ -87,6 +89,57 @@ class OrganizationRelationshipSemanticsTest extends TestCase
 
         $this->expectException(ValidationException::class);
         $graph->assignSalesTeamMember($sales, $inactiveCoordinator);
+    }
+
+    public function test_compatibility_writer_dual_writes_and_changes_only_sales_team_parent(): void
+    {
+        $branch = $this->branch('DWS');
+        $supervisor = $this->user('supervisor', $branch);
+        $firstCoordinator = $this->user('sales_coordinator', $branch);
+        $secondCoordinator = $this->user('sales_coordinator', $branch);
+        $sales = $this->user('sales', $branch);
+        $graph = app(OrganizationGraphService::class);
+        $graph->assign($sales, $supervisor);
+        $assignments = app(SalesCoordinatorAssignmentService::class);
+
+        $assignments->assign($sales, $firstCoordinator);
+        $assignments->assign($sales, $secondCoordinator);
+
+        $this->assertSame($supervisor->id, $graph->currentParent($sales->fresh())?->id);
+        $this->assertSame($secondCoordinator->id, $graph->currentSalesTeamCoordinator($sales->fresh())?->id);
+        $this->assertDatabaseHas('sales_coordinator_sales', [
+            'coordinator_user_id' => $secondCoordinator->id,
+            'sales_user_id' => $sales->id,
+            'is_active' => true,
+        ]);
+        $this->assertSame(1, OrganizationAssignment::query()->currentSalesTeam()->where('user_id', $sales->id)->count());
+        $this->assertSame(2, OrganizationAssignment::query()->salesTeamMemberOf()->where('user_id', $sales->id)->count());
+    }
+
+    public function test_canonical_sales_team_scope_reads_typed_edge_without_reporting_parent(): void
+    {
+        config(['organization.graph_mode' => 'canonical']);
+        $branch = $this->branch('CAN');
+        $coordinator = $this->user('sales_coordinator', $branch);
+        $sales = $this->user('sales', $branch);
+
+        app(OrganizationGraphService::class)->assignSalesTeamMember($sales, $coordinator);
+
+        $this->assertTrue(app(SalesTeamScopeService::class)->contains($coordinator, $sales));
+        $this->assertSame([$sales->id], app(SalesTeamScopeService::class)->currentSales($coordinator)->pluck('id')->all());
+    }
+
+    public function test_legacy_sales_team_scope_does_not_read_typed_edge_without_legacy_mapping(): void
+    {
+        config(['organization.graph_mode' => 'legacy']);
+        $branch = $this->branch('LEG');
+        $coordinator = $this->user('sales_coordinator', $branch);
+        $sales = $this->user('sales', $branch);
+
+        app(OrganizationGraphService::class)->assignSalesTeamMember($sales, $coordinator);
+
+        $this->assertFalse(app(SalesTeamScopeService::class)->contains($coordinator, $sales));
+        $this->assertSame([], app(SalesTeamScopeService::class)->currentSales($coordinator)->pluck('id')->all());
     }
 
     private function branch(string $code): Branch

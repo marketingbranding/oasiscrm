@@ -190,7 +190,7 @@ class SalesTeamScopeService
                 ->where('users.is_active', true)
                 ->whereHas('role', fn (Builder $query) => $query->where('slug', 'sales'))
                 ->whereIn('users.id', OrganizationAssignment::query()
-                    ->current()
+                    ->currentSalesTeam()
                     ->where('parent_user_id', $coordinator->id)
                     ->pluck('user_id'));
         }
@@ -273,29 +273,41 @@ class SalesTeamScopeService
         $sales = $people->filter(fn (User $user) => $this->isRole($user, 'sales')
             && $user->isAccountActive()
             && $user->is_active)->values();
-        $assignments = OrganizationAssignment::query()->current()
+        $reportingAssignments = OrganizationAssignment::query()->current()
             ->whereIn('user_id', $people->keys())
             ->get(['user_id', 'parent_user_id'])
             ->keyBy('user_id');
-        $salesIdsByCoordinator = $sales->groupBy(fn (User $user) => $assignments->get($user->id)?->parent_user_id)
-            ->map(fn (Collection $items) => $items->pluck('id')->map(fn ($id) => (int) $id)->values());
+        $salesTeamAssignments = OrganizationAssignment::query()
+            ->currentSalesTeam()
+            ->whereIn('parent_user_id', $coordinators->pluck('id'))
+            ->get(['user_id', 'parent_user_id']);
+        $mappedSales = User::query()->with('role:id,slug')
+            ->whereIn('id', $salesTeamAssignments->pluck('user_id')->unique())
+            ->where('account_status', AccountStatus::Active->value)
+            ->where('is_active', true)
+            ->get()
+            ->filter(fn (User $user): bool => $this->isRole($user, 'sales'));
+        $sales = $sales->merge($mappedSales)->unique('id')->values();
+        $salesIdsByCoordinator = $salesTeamAssignments
+            ->groupBy('parent_user_id')
+            ->map(fn (Collection $items) => $items->pluck('user_id')->map(fn ($id) => (int) $id)->unique()->values());
         if ($includeHistorical) {
-            $historicalMappings = SalesCoordinatorSales::query()
-                ->currentOrHistorical()
-                ->withValidRoles()
-                ->whereIn('coordinator_user_id', $coordinators->pluck('id'))
-                ->get(['coordinator_user_id', 'sales_user_id']);
+            $historicalMappings = OrganizationAssignment::query()
+                ->salesTeamMemberOf()
+                ->whereDate('started_at', '<=', today())
+                ->whereIn('parent_user_id', $coordinators->pluck('id'))
+                ->get(['parent_user_id', 'user_id']);
             $historicalSales = User::query()->with('role:id,slug')
-                ->whereIn('id', $historicalMappings->pluck('sales_user_id')->unique())
+                ->whereIn('id', $historicalMappings->pluck('user_id')->unique())
                 ->where('account_status', AccountStatus::Active->value)
                 ->where('is_active', true)
                 ->get();
-            $sales = $sales->merge($historicalSales)->unique('id')->values();
             $historicalByCoordinator = $historicalMappings
-                ->groupBy('coordinator_user_id')
-                ->map(fn (Collection $items) => $items->pluck('sales_user_id')->map(fn ($id) => (int) $id)->reject(
+                ->groupBy('parent_user_id')
+                ->map(fn (Collection $items) => $items->pluck('user_id')->map(fn ($id) => (int) $id)->reject(
                     fn (int $id) => $salesIdsByCoordinator->flatten()->contains($id),
                 )->unique()->values());
+            $sales = $sales->merge($historicalSales)->unique('id')->values();
             $historicalByCoordinator->each(function (Collection $historicalSalesIds, int|string $coordinatorId) use (&$salesIdsByCoordinator): void {
                 $salesIdsByCoordinator->put(
                     $coordinatorId,
@@ -306,7 +318,7 @@ class SalesTeamScopeService
                 );
             });
         }
-        $coordinatorIdsBySupervisor = $coordinators->groupBy(fn (User $user) => $assignments->get($user->id)?->parent_user_id)
+        $coordinatorIdsBySupervisor = $coordinators->groupBy(fn (User $user) => $reportingAssignments->get($user->id)?->parent_user_id)
             ->map(fn (Collection $items) => $items->pluck('id')->map(fn ($id) => (int) $id)->values());
 
         return [

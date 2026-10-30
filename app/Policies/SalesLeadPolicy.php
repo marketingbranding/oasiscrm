@@ -80,7 +80,16 @@ class SalesLeadPolicy
             return false;
         }
 
-        if ($user->isSales() || $user->hasPrimaryRole('supervisor')) {
+        if ($user->isSales()) {
+            $workspaceAccess = app(WorkspaceAccessService::class);
+
+            return (int) $lead->sales_user_id === $user->id
+                && $this->authorization->can($user, 'sales_pocketbook.manage_own')
+                && $workspaceAccess->canEditBranch($user, (int) $lead->branch_id)
+                && $workspaceAccess->canAccessProject($user, (int) $lead->project_id);
+        }
+
+        if ($user->hasPrimaryRole('supervisor')) {
             return false;
         }
 

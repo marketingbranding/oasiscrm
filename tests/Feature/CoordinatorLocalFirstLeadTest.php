@@ -17,6 +17,7 @@ use App\Services\SalesLeadService;
 use App\Services\SalesLeadSheetOptionService;
 use App\Services\SalesLeadSpreadsheetWriter;
 use App\Services\SalesLeadSyncService;
+use App\Services\SalesPocketbookOnboardingService;
 use App\ValueObjects\SalesLeadSpreadsheetWriteResult;
 use Illuminate\Foundation\Http\Middleware\ValidateCsrfToken;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -276,17 +277,26 @@ class CoordinatorLocalFirstLeadTest extends TestCase
         $this->assertDatabaseCount('sales_leads', 0);
     }
 
-    public function test_primary_sales_can_store_but_cannot_edit_update_push_or_export(): void
+    public function test_primary_sales_can_store_and_update_owned_lead_but_cannot_push_or_export(): void
     {
         [$branch, $project, $sales] = $this->context();
         $lead = $this->lead($sales, $project);
         $this->app->instance(SalesLeadSpreadsheetWriter::class, Mockery::mock(SalesLeadSpreadsheetWriter::class));
 
         $this->actingAs($sales)->post(route('sales-leads.store'), $this->leadData($branch, $project, $sales))->assertRedirect();
-        $this->actingAs($sales)->get(route('sales-leads.edit', $lead))->assertForbidden();
+        $this->actingAs($sales)->get(route('sales-leads.edit', $lead))->assertOk();
         $this->actingAs($sales)->put(route('sales-leads.update', $lead), $this->leadData($branch, $project, $sales, [
+            'customer_name' => 'Lead Diperbarui Sales',
             'expected_updated_at' => app(OptimisticLockService::class)->token($lead),
-        ]))->assertForbidden();
+        ]))->assertRedirect();
+        $this->assertDatabaseHas('sales_leads', [
+            'id' => $lead->id,
+            'customer_name' => 'Lead Diperbarui Sales',
+        ]);
+        app(SalesPocketbookOnboardingService::class)->skip($sales);
+        $this->actingAs($sales)->get(route('sales-agendas.index', ['tab' => 'leads']))
+            ->assertOk()
+            ->assertSee(route('sales-leads.edit', $lead), false);
         $this->actingAs($sales)->post(route('coordinator-leads.sync'))->assertForbidden();
         $this->actingAs($sales)->get(route('coordinator-leads.export'))->assertForbidden();
     }

@@ -168,7 +168,7 @@ class DanaTalanganController extends Controller
 
         $sortField = $request->get('sort', 'tanggal');
         $sortDir = $request->get('dir', 'desc');
-        $allowedSorts = ['tanggal', 'nama_konsumen', 'kav', 'project_name', 'pekerjaan', 'status_perkawinan', 'umur', 'nama_marketing', 'tgl_komitmen', 'status'];
+        $allowedSorts = ['tanggal', 'nama_konsumen', 'kav', 'project_name', 'nominal', 'pekerjaan', 'status_perkawinan', 'umur', 'nama_marketing', 'tgl_komitmen', 'status'];
         if (! in_array($sortField, $allowedSorts)) {
             $sortField = 'tanggal';
         }

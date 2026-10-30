@@ -14,8 +14,9 @@
         'pekerjaan' => old('pekerjaan'),
         'status_perkawinan' => old('status_perkawinan'),
         'umur' => old('umur'),
-        'nama_marketing' => old('nama_marketing'),
-        'tgl_komitmen' => old('tgl_komitmen'),
+         'nama_marketing' => old('nama_marketing'),
+         'tgl_komitmen' => old('tgl_komitmen'),
+         'nominal' => old('nominal'),
         'penyelesaian' => old('penyelesaian'),
         'konfirmasi_keuangan' => old('konfirmasi_keuangan', false),
         'branch_id' => old('branch_id'),
@@ -199,6 +200,7 @@
                     <x-crm.click-sort-th field="tanggal" route="dana-talangan.index" label="Tanggal" :currentSort="$sortField" :currentDir="$sortDir" />
                     <x-crm.click-sort-th field="kav" route="dana-talangan.index" label="Kav" :currentSort="$sortField" :currentDir="$sortDir" />
                     <x-crm.click-sort-th field="project_name" route="dana-talangan.index" label="Proyek" :currentSort="$sortField" :currentDir="$sortDir" />
+                    <x-crm.click-sort-th field="nominal" route="dana-talangan.index" label="Nominal" :currentSort="$sortField" :currentDir="$sortDir" align="right" />
                     <th>Pinjam Nama</th>
                     <x-crm.click-sort-th field="pekerjaan" route="dana-talangan.index" label="Pekerjaan" :currentSort="$sortField" :currentDir="$sortDir" />
                     <x-crm.click-sort-th field="status_perkawinan" route="dana-talangan.index" label="Status Kawin" :currentSort="$sortField" :currentDir="$sortDir" />
@@ -221,6 +223,7 @@
                     <td title="{{ $r->tanggal->format('d M Y') }}">{{ $r->tanggal->format('d M Y') }}</td>
                     <td title="{{ $r->kav ?? '' }}">{{ $r->kav ?? '—' }}</td>
                     <td title="{{ $r->project_name ?? '' }}">{{ $r->project_name ?? '—' }}</td>
+                    <td class="text-right font-bold" title="{{ $r->nominal ?? '' }}">{{ $r->formattedNominal() }}</td>
                     <td class="text-center"><span class="crm-boolean-box {{ $r->pinjam_nama ? 'is-checked' : '' }}">{{ $r->pinjam_nama ? '✓' : '' }}</span></td>
                     <td title="{{ $r->pekerjaan ?? '' }}">{{ $r->pekerjaan ?? '—' }}</td>
                     <td title="{{ $r->status_perkawinan ?? '' }}">{{ $r->status_perkawinan ?? '—' }}</td>
@@ -272,7 +275,8 @@
                                 "tanggal" => $r->tanggal?->format("Y-m-d"),
                                 "nama_konsumen" => $r->nama_konsumen,
                                 "kav" => $r->kav,
-                                "project_name" => $r->project_name,
+                                 "project_name" => $r->project_name,
+                                 "nominal" => $r->nominal,
                                 "pinjam_nama" => $r->pinjam_nama,
                                 "pekerjaan" => $r->pekerjaan,
                                 "status_perkawinan" => $r->status_perkawinan,
@@ -389,6 +393,10 @@
                         </div>
                     </div>
                     <div>
+                        <label class="font-[Helvetica] font-bold text-xs uppercase block mb-1">Nominal</label>
+                        <input type="number" name="nominal" value="{{ old('nominal') }}" min="0" step="0.01" inputmode="decimal" class="w-full border-2 border-black px-3 py-2 text-sm font-['Times_New_Roman'] bg-white">
+                    </div>
+                    <div>
                         <label class="font-[Helvetica] font-bold text-xs uppercase block mb-1">Status Cicilan</label>
                         <select name="status" required class="w-full border-2 border-black px-3 py-2 text-sm font-['Times_New_Roman'] bg-white">
                             <option value="sanggup">Sanggup</option><option value="tidak_sanggup">Tidak Sanggup</option><option value="lunas">Lunas</option>
@@ -435,7 +443,8 @@
                     <div><label class="font-[Helvetica] font-bold text-xs uppercase block mb-1">Pekerjaan</label><input name="pekerjaan" x-model="editingRecord.pekerjaan" class="w-full border-2 border-black px-3 py-2 text-sm font-['Times_New_Roman']"></div>
                     <div><label class="font-[Helvetica] font-bold text-xs uppercase block mb-1">Status Kawin</label><input name="status_perkawinan" x-model="editingRecord.status_perkawinan" class="w-full border-2 border-black px-3 py-2 text-sm font-['Times_New_Roman']"></div>
                     <div><label class="font-[Helvetica] font-bold text-xs uppercase block mb-1">Umur</label><input type="number" name="umur" x-model="editingRecord.umur" min="0" max="150" class="w-full border-2 border-black px-3 py-2 text-sm font-['Times_New_Roman']"></div>
-                    <div><label class="font-[Helvetica] font-bold text-xs uppercase block mb-1">TGL Komitmen</label><div class="date-wrapper" data-accent="#f1c40f" style="position:relative"><div class="date-display w-full border-2 border-black px-3 py-2 text-sm font-['Times_New_Roman'] bg-white cursor-pointer select-none flex items-center justify-between" tabindex="0"><span class="date-text">— Pilih Tanggal —</span><span class="date-arrow">▼</span></div><input type="date" name="tgl_komitmen" x-model="editingRecord.tgl_komitmen" style="position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0"></div></div>
+                     <div><label class="font-[Helvetica] font-bold text-xs uppercase block mb-1">TGL Komitmen</label><div class="date-wrapper" data-accent="#f1c40f" style="position:relative"><div class="date-display w-full border-2 border-black px-3 py-2 text-sm font-['Times_New_Roman'] bg-white cursor-pointer select-none flex items-center justify-between" tabindex="0"><span class="date-text">— Pilih Tanggal —</span><span class="date-arrow">▼</span></div><input type="date" name="tgl_komitmen" x-model="editingRecord.tgl_komitmen" style="position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0"></div></div>
+                     <div><label class="font-[Helvetica] font-bold text-xs uppercase block mb-1">Nominal</label><input type="number" name="nominal" x-model="editingRecord.nominal" min="0" step="0.01" inputmode="decimal" class="w-full border-2 border-black px-3 py-2 text-sm font-['Times_New_Roman']"></div>
                     <div><label class="font-[Helvetica] font-bold text-xs uppercase block mb-1">Status Cicilan</label><select name="status" x-model="editingRecord.status" required class="w-full border-2 border-black px-3 py-2 text-sm font-['Times_New_Roman'] bg-white"><option value="sanggup">Sanggup</option><option value="tidak_sanggup">Tidak Sanggup</option><option value="lunas">Lunas</option></select></div>
                     <div class="flex items-center gap-6 pt-5"><label class="flex items-center gap-2 text-sm font-['Times_New_Roman']"><input type="hidden" name="pinjam_nama" value="0"><input type="checkbox" name="pinjam_nama" value="1" x-model="editingRecord.pinjam_nama" class="w-5 h-5 accent-[#f1c40f]"> Pinjam Nama</label><label class="flex items-center gap-2 text-sm font-['Times_New_Roman']"><input type="hidden" name="konfirmasi_keuangan" value="0"><input type="checkbox" name="konfirmasi_keuangan" value="1" x-model="editingRecord.konfirmasi_keuangan" class="w-5 h-5 accent-[#f1c40f]"> Konfirmasi</label></div>
                     <div class="sm:col-span-2"><label class="font-[Helvetica] font-bold text-xs uppercase block mb-1">Penyelesaian</label><textarea name="penyelesaian" x-model="editingRecord.penyelesaian" rows="3" class="w-full border-2 border-black px-3 py-2 text-sm font-['Times_New_Roman']"></textarea></div>
@@ -472,9 +481,10 @@
         ['key' => 'pekerjaan', 'label' => 'Pekerjaan'],
         ['key' => 'status_perkawinan', 'label' => 'Status Kawin'],
         ['key' => 'umur', 'label' => 'Umur'],
-        ['key' => 'nama_marketing', 'label' => 'Marketing', 'colspan' => 2],
-        ['key' => 'tgl_komitmen', 'label' => 'TGL Komitmen', 'type' => 'date'],
-        ['key' => 'konfirmasi_keuangan', 'label' => 'Konfirmasi Keuangan', 'type' => 'boolean'],
+         ['key' => 'nama_marketing', 'label' => 'Marketing', 'colspan' => 2],
+         ['key' => 'tgl_komitmen', 'label' => 'TGL Komitmen', 'type' => 'date'],
+         ['key' => 'nominal', 'label' => 'Nominal'],
+         ['key' => 'konfirmasi_keuangan', 'label' => 'Konfirmasi Keuangan', 'type' => 'boolean'],
         ['key' => 'status', 'label' => 'Status Cicilan', 'type' => 'badge'],
     ]"
     status-colors='{"sanggup":"#9ab6c8","tidak_sanggup":"#d77a7a","lunas":"#b3bd95"}'

@@ -12,6 +12,7 @@ use App\Models\User;
 use App\Services\OptimisticLockService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
+use PhpOffice\PhpSpreadsheet\Cell\Coordinate;
 use PhpOffice\PhpSpreadsheet\Cell\DataType;
 use PhpOffice\PhpSpreadsheet\IOFactory;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
@@ -295,6 +296,45 @@ class DanaTalanganInteractionTest extends TestCase
         $this->assertStringNotContainsString('modalFocusSelector:', $visibleText);
         $this->assertStringNotContainsString('lockModalScroll()', $visibleText);
         $this->assertStringNotContainsString('async loadEditKavlings', $visibleText);
+    }
+
+    public function test_nominal_is_available_in_forms_list_detail_export_and_template(): void
+    {
+        [$branch, $user] = $this->makeBranchAndUser();
+        $project = $this->makeProject($branch);
+        $record = $this->makeRecord($branch, $user);
+        $record->update([
+            'project_id' => $project->id,
+            'nominal' => '9876543210.99',
+        ]);
+
+        $this->assertSame('Rp9.876.543.210,99', $record->fresh()->formattedNominal());
+
+        $create = $this->actingAs($user)->get(route('dana-talangan.create'));
+        $create->assertOk()->assertSee('name="nominal"', false)->assertSee('step="0.01"', false);
+
+        $edit = $this->actingAs($user)->get(route('dana-talangan.edit', $record));
+        $edit->assertOk()->assertSee('name="nominal"', false)->assertSee('9876543210.99', false);
+
+        $index = $this->actingAs($user)->get(route('dana-talangan.index'));
+        $index->assertOk()->assertSee('Nominal')->assertSee('Rp9.876.543.210,99');
+
+        $detail = $this->actingAs($user)->getJson(route('dana-talangan.detail', $record));
+        $detail->assertOk()->assertJsonPath('nominal', '9876543210.99');
+
+        $export = $this->actingAs($user)->get(route('dana-talangan.export'));
+        $sheet = IOFactory::load($export->baseResponse->getFile()->getPathname())->getActiveSheet();
+        $headers = $sheet->rangeToArray('A1:Z1')[0];
+        $nominalColumn = array_search('Nominal', $headers, true);
+        $this->assertNotFalse($nominalColumn);
+        $nominalCell = Coordinate::stringFromColumnIndex($nominalColumn + 1).'2';
+        $this->assertSame('9876543210.99', (string) $sheet->getCell($nominalCell)->getValue());
+
+        $template = $this->actingAs($user)->get(route('dana-talangan.export-template'));
+        $templateSheet = IOFactory::load($template->baseResponse->getFile()->getPathname())->getActiveSheet();
+        $templateHeaders = $templateSheet->rangeToArray('A1:Z1')[0];
+        $this->assertContains('Nominal', $templateHeaders);
+        $this->assertSame('"belum_ditentukan,sanggup,tidak_sanggup,lunas"', $templateSheet->getCell('P2')->getDataValidation()->getFormula1());
     }
 
     public function test_rendering_fix_changelog_is_unique_and_visible(): void

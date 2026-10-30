@@ -8,6 +8,7 @@ use App\Models\Kavling;
 use App\Models\LeadMaster;
 use Illuminate\Support\Collection;
 use PhpOffice\PhpSpreadsheet\Cell\Coordinate;
+use PhpOffice\PhpSpreadsheet\Cell\DataType;
 use PhpOffice\PhpSpreadsheet\Cell\DataValidation;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
 use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
@@ -23,7 +24,7 @@ class DanaTalanganExport
         return [
             'No', 'Tanggal', 'Nama Konsumen', 'Kav', 'Proyek',
             'Pinjam Nama', 'Pekerjaan', 'Status Kawin', 'Umur',
-            'Marketing', 'TGL Komitmen', 'Penyelesaian', 'Konfirmasi', 'Status Cicilan',
+            'Marketing', 'TGL Komitmen', 'Nominal', 'Penyelesaian', 'Konfirmasi', 'Status Cicilan',
         ];
     }
 
@@ -37,7 +38,7 @@ class DanaTalanganExport
         return [
             'A' => 5, 'B' => 14, 'C' => 30, 'D' => 10, 'E' => 25,
             'F' => 14, 'G' => 20, 'H' => 15, 'I' => 7,
-            'J' => 20, 'K' => 14, 'L' => 30, 'M' => 14, 'N' => 10,
+            'J' => 20, 'K' => 14, 'L' => 16, 'M' => 30, 'N' => 14, 'O' => 15,
         ];
     }
 
@@ -46,7 +47,7 @@ class DanaTalanganExport
         return [
             'A' => 22, 'B' => 5, 'C' => 14, 'D' => 30, 'E' => 10, 'F' => 25,
             'G' => 14, 'H' => 20, 'I' => 15, 'J' => 7,
-            'K' => 20, 'L' => 14, 'M' => 30, 'N' => 14, 'O' => 10,
+            'K' => 20, 'L' => 14, 'M' => 16, 'N' => 30, 'O' => 14, 'P' => 15,
         ];
     }
 
@@ -72,13 +73,20 @@ class DanaTalanganExport
             $sheet->setCellValue(self::cell(9, $row), $r->umur ?? '—');
             $sheet->setCellValue(self::cell(10, $row), $r->nama_marketing ?? '—');
             $sheet->setCellValue(self::cell(11, $row), $r->tgl_komitmen ? $r->tgl_komitmen->format('d M Y') : '—');
-            $sheet->setCellValue(self::cell(12, $row), $r->penyelesaian ?? '—');
-            $sheet->setCellValue(self::cell(13, $row), $r->konfirmasi_keuangan ? '✓' : '—');
-            $sheet->setCellValue(self::cell(14, $row), strtoupper($r->status));
+            $nominal = (string) ($r->nominal ?? '');
+            if ($nominal === '') {
+                $sheet->setCellValue(self::cell(12, $row), '');
+            } else {
+                $sheet->setCellValueExplicit(self::cell(12, $row), $nominal, DataType::TYPE_NUMERIC);
+            }
+            $sheet->setCellValue(self::cell(13, $row), $r->penyelesaian ?? '—');
+            $sheet->setCellValue(self::cell(14, $row), $r->konfirmasi_keuangan ? '✓' : '—');
+            $sheet->setCellValue(self::cell(15, $row), strtoupper($r->status));
         }
 
         $rowCount = $records->count() + 1;
         self::applyStyles($spreadsheet, $headers, $rowCount, self::exportWidths());
+        $sheet->getStyle('L2:L'.$rowCount)->getNumberFormat()->setFormatCode('#,##0.00');
         self::addAutoFilter($sheet, $headers, $rowCount);
 
         $writer = new Xlsx($spreadsheet);
@@ -127,6 +135,7 @@ class DanaTalanganExport
 
         // --- C:Tanggal date format ---
         self::dateColumnStyle($sheet, 'C2:C'.$maxRow, date('Y-m-d'));
+        $sheet->getStyle('M2:M'.$maxRow)->getNumberFormat()->setFormatCode('#,##0.00');
 
         // --- A:Cabang dropdown ---
         $branches = Branch::where('is_active', true)->whereIn('id', $branchIds)->forDropdown()->pluck('name')->toArray();
@@ -155,11 +164,11 @@ class DanaTalanganExport
         // --- G:Pinjam Nama dropdown ---
         $sheet->setDataValidation('G2:G'.$maxRow, self::listValidation(['YA', 'TIDAK']));
 
-        // --- N:Konfirmasi dropdown ---
-        $sheet->setDataValidation('N2:N'.$maxRow, self::listValidation(['YA', 'TIDAK']));
+        // --- O:Konfirmasi dropdown ---
+        $sheet->setDataValidation('O2:O'.$maxRow, self::listValidation(['YA', 'TIDAK']));
 
-        // --- O:Status dropdown ---
-        $sheet->setDataValidation('O2:O'.$maxRow, self::listValidation(['sanggup', 'tidak_sanggup', 'lunas']));
+        // --- P:Status dropdown ---
+        $sheet->setDataValidation('P2:P'.$maxRow, self::listValidation(['belum_ditentukan', 'sanggup', 'tidak_sanggup', 'lunas']));
 
         self::applyStyles($spreadsheet, $headers, $maxRow, self::templateWidths());
 

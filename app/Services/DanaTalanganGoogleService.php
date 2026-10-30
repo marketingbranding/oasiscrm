@@ -7,6 +7,7 @@ use App\Models\DanaTalangan;
 use App\Models\DanaTalanganSyncStatus;
 use App\Models\LeadMaster;
 use App\Models\User;
+use App\Support\DanaTalanganMoney;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -645,6 +646,11 @@ class DanaTalanganGoogleService
         $value = str_replace(' ', '_', mb_strtolower(trim((string) $value)));
 
         return in_array($value, ['belum_ditentukan', 'sanggup', 'tidak_sanggup', 'lunas'], true) ? $value : 'belum_ditentukan';
+    }
+
+    private function money(string $value): string
+    {
+        return DanaTalanganMoney::normalize($value) ?? '';
     }
 
     private function boolean($value): bool

@@ -122,10 +122,14 @@ The command remains dry-run capable and no production/global write backfill was 
 incorrectly represented as a single unresolved parent conflict in backfill evidence.
 
 **After Phase 2.6 implementation:** parity compares reporting and Sales-team dimensions
-independently. The four cases are no longer treated as a single parent-choice conflict;
-missing typed edges remain separate diagnostic mismatches until an approved repair or
-controlled migration is performed. Exact final diagnostic counts are recorded in the
-verification update below after the required commands run.
+independently. The final diagnostic scan covered 19 viewers and 133 comparisons: 129
+equivalent, 4 different, 0 unknown, 0 expansion, and 4 access-loss differences. The
+four reported dimensions were `sales_team_membership`, `team_members`,
+`reporting_descendants`, and `supervisor_coordinator_membership`; they represent missing
+typed canonical population, not an instruction to choose Coordinator over Supervisor.
+The backfill evidence separately produced 10 typed proposals for the existing SOL
+fixture: two relationship proposals for each of Sales users 11, 21, 22, and 23, plus
+the existing Coordinator/reporting proposals, with no conflict inference.
 
 ## L. Cutover Gate Result
 
@@ -167,9 +171,21 @@ Task-level verification completed:
 - parity/remediation suite: 30 tests, 144 assertions;
 - module access-separation suite: 93 tests, 594 assertions.
 
-The full verification commands required by the Phase 2.6 completion checklist remain
-to be recorded after the final suite, cache/view compilation, Pint, diff check, Vite
-build, parity diagnostic, and two dry-run executions.
+- full PHPUnit: **1,542 passed, 11,559 assertions, 0 failures**;
+- `php artisan optimize:clear`: passed;
+- `php artisan view:cache`: passed;
+- `php artisan migrate --force`: passed, including the Phase 2.6 Changelog migration;
+- Phase 2.6 documentation and migration idempotency: 7 tests, 159 assertions, passed;
+- `vendor/bin/pint --dirty --test`: passed;
+- `npm run build`: passed;
+- `git diff --check`: passed;
+- `php artisan config:show organization.graph_mode`: `legacy`;
+- `organization:parity --only-differences --json`: 19 viewers, 133 comparisons, 4
+  differences, 129 equivalent, 0 unknown, 0 expansion, 4 access loss, gate `BLOCKED`,
+  `production_cutover_performed=false`;
+- `organization:backfill --dry-run` run 1 and run 2: identical output —
+  `users_scanned=19`, `assignments_proposed=10`, `created=0`, `already_migrated=1`,
+  `conflicts=0`; no graph rows were written.
 
 ## P. Remaining Business Ambiguities
 

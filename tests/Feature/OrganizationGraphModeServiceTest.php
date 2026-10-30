@@ -30,6 +30,7 @@ class OrganizationGraphModeServiceTest extends TestCase
         config(['organization.graph_mode' => 'invalid']);
         $this->assertSame('legacy', $resolver->configuredMode());
         $this->assertSame('legacy', $resolver->modeFor($viewer));
+        $this->assertSame('invalid_mode', $resolver->activationDiagnostics($viewer)['reason']);
     }
 
     public function test_shadow_is_global_in_safe_environments_and_legacy_remains_explicit(): void

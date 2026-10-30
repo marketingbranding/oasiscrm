@@ -59,6 +59,7 @@ final class OrganizationGraphModeService
     /** @return array<string, mixed> */
     public function activationDiagnostics(User $viewer, ?int $branchId = null): array
     {
+        $rawConfiguredMode = strtolower(trim((string) config('organization.graph_mode', 'legacy')));
         $configured = $this->configuredMode();
         $userAllowlist = $this->parseAllowlist(config('organization.graph_user_ids', ''));
         $branchAllowlist = $this->parseAllowlist(config('organization.graph_branch_ids', ''));
@@ -67,6 +68,7 @@ final class OrganizationGraphModeService
         $branchMatched = $allowlistValid && $branchId !== null && in_array($branchId, $branchAllowlist['ids'], true);
         $matchedBy = $userMatched ? 'user_allowlist' : ($branchMatched ? 'branch_allowlist' : null);
         $reason = match (true) {
+            ! in_array($rawConfiguredMode, ['legacy', 'shadow', 'graph', 'canonical'], true) => 'invalid_mode',
             ! $allowlistValid => 'invalid_allowlist',
             ! $this->safeEnvironment() && $configured !== 'legacy' => 'unsafe_environment',
             $configured === 'legacy' => 'configured_legacy',
@@ -79,6 +81,8 @@ final class OrganizationGraphModeService
 
         return [
             'configured_mode' => $configured,
+            'raw_configured_mode' => $rawConfiguredMode,
+            'mode_valid' => in_array($rawConfiguredMode, ['legacy', 'shadow', 'graph', 'canonical'], true),
             'effective_mode' => $this->modeForWithoutDiagnostics($viewer, $branchId),
             'environment' => app()->environment(),
             'safe_environment' => $this->safeEnvironment(),

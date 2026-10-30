@@ -173,6 +173,8 @@ final class OrganizationCutoverHealthService
             'parity_sales_team_conflict' => $parity['sales_team_conflicts'] > 0,
             'backfill_proposals' => ($backfill['assignments_proposed'] ?? 0) > 0,
             'backfill_conflicts' => ($backfill['conflicts'] ?? 0) > 0,
+            'backfill_inactive_parents' => ($backfill['inactive_parents'] ?? 0) > 0,
+            'backfill_cross_scope_anomalies' => ($backfill['cross_scope_anomalies'] ?? 0) > 0,
             'integrity_unknown_edges' => $integrity['unknown_edges'] > 0,
             'integrity_ambiguous_edges' => $integrity['ambiguous_edges'] > 0,
             'integrity_stale_edges' => $integrity['stale_edges'] > 0,
@@ -206,6 +208,8 @@ final class OrganizationCutoverHealthService
                 str_starts_with($code, 'parity_') => $this->parityReasonCount($code, $parity),
                 $code === 'backfill_proposals' => (int) ($backfill['assignments_proposed'] ?? 0),
                 $code === 'backfill_conflicts' => (int) ($backfill['conflicts'] ?? 0),
+                $code === 'backfill_inactive_parents' => (int) ($backfill['inactive_parents'] ?? 0),
+                $code === 'backfill_cross_scope_anomalies' => (int) ($backfill['cross_scope_anomalies'] ?? 0),
                 str_starts_with($code, 'integrity_') => (int) ($integrity[substr($code, 10)] ?? 1),
                 default => 1,
             },
@@ -302,7 +306,7 @@ final class OrganizationCutoverHealthService
                 || ! $parent->isAccountActive()
                 || ! $user->is_active
                 || ! $parent->is_active
-                || ($assignment->branch_id !== null && (int) $assignment->branch_id !== (int) $user->branch_id)
+                || ($user->branch_id !== null && ($assignment->branch_id === null || (int) $assignment->branch_id !== (int) $user->branch_id))
                 || ($user->branch_id !== null && $parent->branch_id !== null && (int) $user->branch_id !== (int) $parent->branch_id);
         })->count();
 

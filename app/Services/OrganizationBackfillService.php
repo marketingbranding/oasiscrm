@@ -158,12 +158,16 @@ class OrganizationBackfillService
             ->when($userIds !== null, fn ($query) => $query->whereIn('id', $userIds))
             ->orderBy('id')
             ->get();
+        $legacySourceUsers = $userIds === null
+            ? $users
+            : User::query()->with('role')->orderBy('id')->get();
+        $legacyParents = $this->legacySupervisors($legacySourceUsers);
+        $cycleUsers = $this->legacyCycleUsers($legacyParents);
         $coordinatorAssignments = SalesCoordinatorSales::query()
             ->current()
             ->with(['coordinator.role', 'sales.role'])
             ->get()
             ->groupBy('sales_user_id');
-        $legacyParents = $this->legacySupervisors($users);
         $report = [
             'dry_run' => $dryRun,
             'users_scanned' => $users->count(),
@@ -181,8 +185,6 @@ class OrganizationBackfillService
             'details' => [],
             'proposals' => [],
         ];
-        $cycleUsers = $this->legacyCycleUsers($legacyParents);
-
         $process = function () use ($users, $legacyParents, $cycleUsers, $coordinatorAssignments, &$report, $dryRun, $strictWrite): void {
             foreach ($users as $user) {
                 $this->backfillReporting(

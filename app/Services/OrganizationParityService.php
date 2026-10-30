@@ -46,6 +46,13 @@ final class OrganizationParityService
         $reportedComparisons = $reportedComparisons->filter(fn (array $comparison): bool => $this->matchesFilter($comparison, $filter));
         $summary = $this->summary($allComparisons, $differences);
         $gate = $this->gate($allComparisons, $summary);
+        if ($filter->userId !== null && $viewers->isEmpty()) {
+            $gate = [
+                'status' => 'BLOCKED',
+                'failures' => ['invalid_user_selection' => 1],
+                'diagnostic_only' => true,
+            ];
+        }
 
         return [
             'meta' => [
@@ -69,6 +76,7 @@ final class OrganizationParityService
                     'only_conflicts' => $filter->onlyConflicts,
                 ],
                 'viewers_scanned' => $viewers->count(),
+                'invalid_user_selection' => $filter->userId !== null && $viewers->isEmpty(),
             ],
             'comparisons' => $reportedComparisons->values()->all(),
             'summary' => $summary,

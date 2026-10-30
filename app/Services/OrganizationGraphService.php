@@ -391,7 +391,8 @@ class OrganizationGraphService
                 if (! $assignment->user instanceof User || ! $assignment->parent instanceof User) {
                     return false;
                 }
-                if ($assignment->branch_id !== null && (int) $assignment->branch_id !== (int) $assignment->user->branch_id) {
+                if ($assignment->user->branch_id !== null
+                    && ($assignment->branch_id === null || (int) $assignment->branch_id !== (int) $assignment->user->branch_id)) {
                     return false;
                 }
 

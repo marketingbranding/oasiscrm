@@ -132,6 +132,17 @@ class OrganizationParityServiceTest extends TestCase
         $this->assertSame([], $report['comparisons']);
     }
 
+    public function test_unknown_user_filter_is_blocked_in_the_service_report(): void
+    {
+        $report = app(OrganizationParityService::class)->report(
+            new OrganizationParityFilter(userId: 999999999),
+        );
+
+        $this->assertSame(0, $report['meta']['viewers_scanned']);
+        $this->assertTrue($report['meta']['invalid_user_selection']);
+        $this->assertSame('BLOCKED', $report['gate']['status']);
+    }
+
     public function test_all_seeded_primary_roles_are_supported_by_the_parity_report(): void
     {
         $branch = $this->branch('ROL');

@@ -116,7 +116,7 @@ class OrganizationGraphModeReadsTest extends TestCase
             'user_id' => $child->id,
             'parent_user_id' => $invalidParent->id,
             'relationship_type' => OrganizationAssignment::REPORTS_TO,
-            'branch_id' => $branch->id,
+            'branch_id' => null,
             'started_at' => today()->toDateString(),
             'is_active' => true,
             'is_primary' => true,

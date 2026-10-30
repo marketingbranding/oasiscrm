@@ -53,10 +53,15 @@ class OrganizationBackfill extends Command
                 if ($branch === null) {
                     throw new InvalidArgumentException('Opsi --branch harus menunjuk cabang aktif.');
                 }
-                if ($userIds->isNotEmpty() && User::query()->whereIn('id', $userIds)->where('branch_id', '!=', $branch->id)->exists()) {
-                    throw new InvalidArgumentException('Opsi --user harus berada pada cabang yang dipilih.');
+                if ($userIds->isNotEmpty()) {
+                    if (User::query()->whereIn('id', $userIds)->where(function ($query) use ($branch): void {
+                        $query->whereNull('branch_id')->orWhere('branch_id', '!=', $branch->id);
+                    })->exists()) {
+                        throw new InvalidArgumentException('Opsi --user harus berada pada cabang yang dipilih.');
+                    }
+                } else {
+                    $userIds = User::query()->where('branch_id', $branch->id)->pluck('id');
                 }
-                $userIds = $userIds->merge(User::query()->where('branch_id', $branch->id)->pluck('id'));
             }
         } catch (InvalidArgumentException $exception) {
             $this->error($exception->getMessage());

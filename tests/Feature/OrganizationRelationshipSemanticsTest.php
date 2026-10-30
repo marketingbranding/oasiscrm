@@ -8,6 +8,7 @@ use App\Models\OrganizationAssignment;
 use App\Models\Role;
 use App\Models\User;
 use App\Services\OrganizationGraphService;
+use App\Services\OrganizationScopeService;
 use App\Services\SalesCoordinatorAssignmentService;
 use App\Services\SalesTeamScopeService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -140,6 +141,61 @@ class OrganizationRelationshipSemanticsTest extends TestCase
 
         $this->assertFalse(app(SalesTeamScopeService::class)->contains($coordinator, $sales));
         $this->assertSame([], app(SalesTeamScopeService::class)->currentSales($coordinator)->pluck('id')->all());
+    }
+
+    public function test_only_coordinator_and_only_supervisor_relationships_have_separate_access_effects(): void
+    {
+        config(['organization.graph_mode' => 'canonical']);
+        $branch = $this->branch('SEP');
+        $supervisor = $this->user('supervisor', $branch);
+        $coordinator = $this->user('sales_coordinator', $branch);
+        $coordinatorOnlySales = $this->user('sales', $branch);
+        $supervisorOnlySales = $this->user('sales', $branch);
+        $unassignedSales = $this->user('sales', $branch);
+        $graph = app(OrganizationGraphService::class);
+        $salesTeam = app(SalesTeamScopeService::class);
+        $scope = app(OrganizationScopeService::class);
+
+        $graph->assignSalesTeamMember($coordinatorOnlySales, $coordinator);
+        $graph->assign($supervisorOnlySales, $supervisor);
+
+        $this->assertTrue($salesTeam->contains($coordinator, $coordinatorOnlySales));
+        $this->assertNotContains($coordinatorOnlySales->id, $graph->descendantIds($coordinator));
+        $this->assertContains($supervisorOnlySales->id, $graph->descendantIds($supervisor));
+        $this->assertFalse($salesTeam->contains($coordinator, $supervisorOnlySales));
+        $this->assertSame([], $scope->teamIds($unassignedSales));
+        $this->assertFalse($coordinatorOnlySales->fresh()->hasPermission('consumer_progress.manage'));
+        $this->assertFalse($coordinatorOnlySales->fresh()->hasPermission('expenses.manage'));
+    }
+
+    public function test_changing_one_relationship_does_not_move_the_other_or_grant_historical_access(): void
+    {
+        config(['organization.graph_mode' => 'canonical']);
+        $branch = $this->branch('MOV');
+        $firstSupervisor = $this->user('supervisor', $branch);
+        $secondSupervisor = $this->user('supervisor', $branch);
+        $firstCoordinator = $this->user('sales_coordinator', $branch);
+        $secondCoordinator = $this->user('sales_coordinator', $branch);
+        $sales = $this->user('sales', $branch);
+        $graph = app(OrganizationGraphService::class);
+
+        $reporting = $graph->assign($sales, $firstSupervisor);
+        $graph->assignSalesTeamMember($sales, $firstCoordinator);
+        $graph->move($this->user('superadmin', $branch), $sales, $secondSupervisor, expectedAssignmentId: $reporting->id, expectedVersion: 1);
+
+        $this->assertSame($secondSupervisor->id, $graph->currentParent($sales->fresh())?->id);
+        $this->assertSame($firstCoordinator->id, $graph->currentSalesTeamCoordinator($sales->fresh())?->id);
+        $this->assertContains($sales->id, $graph->salesTeamMemberIds($firstCoordinator, includeHistorical: true));
+        $this->assertContains($sales->id, $graph->salesTeamMemberIds($firstCoordinator));
+
+        $graph->assignSalesTeamMember($sales, $secondCoordinator);
+
+        $this->assertSame($secondSupervisor->id, $graph->currentParent($sales->fresh())?->id);
+        $this->assertSame($secondCoordinator->id, $graph->currentSalesTeamCoordinator($sales->fresh())?->id);
+        $this->assertContains($sales->id, $graph->salesTeamMemberIds($firstCoordinator, includeHistorical: true));
+        $this->assertNotContains($sales->id, $graph->salesTeamMemberIds($firstCoordinator));
+        $this->assertContains($sales->id, $graph->salesTeamMemberIds($secondCoordinator));
+        $this->assertSame(2, $graph->historicalAssignments($sales->fresh())->count());
     }
 
     private function branch(string $code): Branch

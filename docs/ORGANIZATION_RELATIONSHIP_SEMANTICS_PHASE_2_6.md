@@ -1,7 +1,7 @@
 # Phase 2.6 — Organization Relationship Semantics Evidence
 
-**Status:** NOT READY for graph cutover.  
-**Production read mode:** `graph_mode=legacy`.  
+**Status:** NOT READY for graph cutover.
+**Production read mode:** `graph_mode=legacy`.
 **Safety boundary:** Do not execute graph cutover, do not begin Phase 3, and do not run a global/write backfill.
 
 This report records the bounded Phase 2.6 decision and additive implementation. It

@@ -20,6 +20,8 @@ class OrganizationScopeService
         private ReportingHierarchyService $hierarchy,
         private SalesTeamScopeService $salesTeamScope,
         private OrganizationGraphService $graph,
+        private OrganizationGraphModeService $mode,
+        private OrganizationGraphShadowService $shadow,
     ) {}
 
     private array $scopeCache = [];
@@ -198,25 +200,39 @@ class OrganizationScopeService
     {
         return $this->cached('hierarchy:'.$viewer->id, function () use ($viewer): array {
             $ids = $this->hierarchy->descendantIds($viewer);
-            if (config('organization.graph_mode') === 'canonical') {
-                return collect([...$ids, ...$this->graph->ancestors($viewer)->pluck('id')->all()])
-                    ->map(fn ($id) => (int) $id)
-                    ->unique()
-                    ->values()
-                    ->all();
+            $effectiveMode = $this->mode->modeFor($viewer, $viewer->branch_id);
+            $canonical = collect([...$ids, ...$this->graph->ancestors($viewer)->pluck('id')->all()])
+                ->map(fn ($id) => (int) $id)
+                ->unique()
+                ->values()
+                ->all();
+            if ($effectiveMode === 'graph') {
+                return $canonical;
+            }
+            if ($effectiveMode === 'shadow') {
+                $legacy = $this->legacyHierarchyIds($viewer, $ids);
+                $this->shadow->record('hierarchy_ids', $legacy === $canonical);
+
+                return $legacy;
             }
 
-            $supervisorId = $viewer->supervisor_user_id;
-            while ($supervisorId) {
-                if (in_array((int) $supervisorId, $ids, true)) {
-                    break;
-                }
-                $ids[] = (int) $supervisorId;
-                $supervisorId = User::query()->whereKey($supervisorId)->value('supervisor_user_id');
-            }
-
-            return collect($ids)->unique()->values()->all();
+            return $this->legacyHierarchyIds($viewer, $ids);
         });
+    }
+
+    /** @param array<int> $ids @return array<int> */
+    private function legacyHierarchyIds(User $viewer, array $ids): array
+    {
+        $supervisorId = $viewer->supervisor_user_id;
+        while ($supervisorId) {
+            if (in_array((int) $supervisorId, $ids, true)) {
+                break;
+            }
+            $ids[] = (int) $supervisorId;
+            $supervisorId = User::query()->whereKey($supervisorId)->value('supervisor_user_id');
+        }
+
+        return collect($ids)->unique()->values()->all();
     }
 
     /** @return array<int> */

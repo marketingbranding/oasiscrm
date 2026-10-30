@@ -10,7 +10,11 @@ use Illuminate\Validation\ValidationException;
 
 class ReportingHierarchyService
 {
-    public function __construct(private readonly OrganizationGraphService $graph) {}
+    public function __construct(
+        private readonly OrganizationGraphService $graph,
+        private readonly OrganizationGraphModeService $mode,
+        private readonly OrganizationGraphShadowService $shadow,
+    ) {}
 
     public function roleRank(User|string $userOrRole): int
     {
@@ -68,19 +72,14 @@ class ReportingHierarchyService
     public function descendantIds(User $supervisor, int $depthLimit = 100): array
     {
         $legacy = $this->legacyDescendantIds($supervisor, $depthLimit);
-        if (config('organization.graph_mode') === 'shadow') {
+        $effectiveMode = $this->mode->modeFor($supervisor, $supervisor->branch_id);
+        if ($effectiveMode === 'shadow') {
             $canonical = $this->graph->descendantIds($supervisor);
-            if ($this->normalized($legacy) !== $this->normalized($canonical)) {
-                logger()->warning('organization_graph_shadow_mismatch', [
-                    'user_id' => $supervisor->id,
-                    'legacy_ids' => $legacy,
-                    'canonical_ids' => $canonical,
-                ]);
-            }
+            $this->shadow->record('reporting_descendants', $this->normalized($legacy) === $this->normalized($canonical));
 
             return $legacy;
         }
-        if (config('organization.graph_mode') !== 'canonical') {
+        if ($effectiveMode !== 'graph') {
             return $legacy;
         }
 

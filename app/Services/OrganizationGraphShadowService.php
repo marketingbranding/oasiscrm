@@ -5,24 +5,24 @@ namespace App\Services;
 final class OrganizationGraphShadowService
 {
     /** @var array<string, int> */
-    private array $counters = [];
+    private static array $counters = [];
 
     public function record(string $dimension, bool $equivalent): void
     {
         $key = $equivalent ? "{$dimension}.equivalent" : "{$dimension}.mismatch";
-        $this->counters[$key] = ($this->counters[$key] ?? 0) + 1;
+        self::$counters[$key] = (self::$counters[$key] ?? 0) + 1;
     }
 
     /** @return array<string, int> */
     public function snapshot(): array
     {
-        ksort($this->counters);
+        ksort(self::$counters);
 
-        return $this->counters;
+        return self::$counters;
     }
 
     public function reset(): void
     {
-        $this->counters = [];
+        self::$counters = [];
     }
 }

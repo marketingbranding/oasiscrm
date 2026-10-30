@@ -11,7 +11,11 @@ use Illuminate\Support\Collection;
 
 class SalesTeamScopeService
 {
-    public function __construct(private readonly OrganizationGraphService $graph) {}
+    public function __construct(
+        private readonly OrganizationGraphService $graph,
+        private readonly OrganizationGraphModeService $mode,
+        private readonly OrganizationGraphShadowService $shadow,
+    ) {}
 
     public function for(User $actor, bool $includeHistorical = false): array
     {
@@ -28,10 +32,22 @@ class SalesTeamScopeService
             return [...$empty, 'sales' => collect([$actor])];
         }
 
-        if (config('organization.graph_mode') === 'canonical') {
+        $effectiveMode = $this->mode->modeFor($actor, $actor->branch_id);
+        if ($effectiveMode === 'graph') {
             return $this->canonicalFor($actor, $empty, $includeHistorical);
         }
 
+        $legacy = $this->legacyFor($actor, $empty, $includeHistorical, $role);
+        if ($effectiveMode === 'shadow') {
+            $canonical = $this->canonicalFor($actor, $empty, $includeHistorical);
+            $this->shadow->record('sales_team_scope', $this->normalizedTeam($legacy) === $this->normalizedTeam($canonical));
+        }
+
+        return $legacy;
+    }
+
+    private function legacyFor(User $actor, array $empty, bool $includeHistorical, ?string $role): array
+    {
         if (! in_array($role, ['sales_coordinator', 'supervisor', 'manager', 'branch_manager'], true)) {
             return $empty;
         }
@@ -184,7 +200,7 @@ class SalesTeamScopeService
             return User::query()->whereKey(0);
         }
 
-        if (config('organization.graph_mode') === 'canonical') {
+        if ($this->mode->isGraph($coordinator, $coordinator->branch_id)) {
             return User::query()
                 ->where('users.account_status', AccountStatus::Active->value)
                 ->where('users.is_active', true)
@@ -233,6 +249,16 @@ class SalesTeamScopeService
     private function isRole(User $user, string $role): bool
     {
         return $user->role?->slug === $role;
+    }
+
+    /** @return array<string, array<int>> */
+    private function normalizedTeam(array $team): array
+    {
+        return [
+            'supervisors' => $team['supervisors']->pluck('id')->map(fn ($id): int => (int) $id)->sort()->values()->all(),
+            'coordinators' => $team['coordinators']->pluck('id')->map(fn ($id): int => (int) $id)->sort()->values()->all(),
+            'sales' => $team['sales']->pluck('id')->map(fn ($id): int => (int) $id)->sort()->values()->all(),
+        ];
     }
 
     private function workspacePeople(Builder $query, array $branchIds, array $projectIds, bool $includeHistorical): void

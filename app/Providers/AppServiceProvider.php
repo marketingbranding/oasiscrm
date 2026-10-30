@@ -22,6 +22,7 @@ use App\Services\CrmAuthorizationService;
 use App\Services\ImpersonationService;
 use App\Services\ModuleMaintenanceService;
 use App\Services\NavigationService;
+use App\Services\OrganizationGraphShadowService;
 use App\Services\OrganizationScopeService;
 use App\Services\WorkPlannerReminderService;
 use Illuminate\Support\Facades\Auth;
@@ -35,6 +36,7 @@ class AppServiceProvider extends ServiceProvider
     {
         $this->app->scoped(OrganizationScopeService::class);
         $this->app->scoped(CrmAuthorizationService::class);
+        $this->app->singleton(OrganizationGraphShadowService::class);
     }
 
     public function boot(): void

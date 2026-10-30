@@ -189,7 +189,8 @@ final class OrganizationCutoverHealthService
             'code' => $code,
             'count' => match (true) {
                 str_starts_with($code, 'parity_') => $this->parityReasonCount($code, $parity),
-                str_starts_with($code, 'backfill_') => (int) ($backfill[substr($code, 9)] ?? 1),
+                $code === 'backfill_proposals' => (int) ($backfill['assignments_proposed'] ?? 0),
+                $code === 'backfill_conflicts' => (int) ($backfill['conflicts'] ?? 0),
                 str_starts_with($code, 'integrity_') => (int) ($integrity[substr($code, 10)] ?? 1),
                 default => 1,
             },

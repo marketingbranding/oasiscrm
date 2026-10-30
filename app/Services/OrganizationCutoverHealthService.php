@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\OrganizationAssignment;
 use App\Models\User;
 use App\Support\OrganizationParityFilter;
 use Illuminate\Support\Collection;
@@ -19,6 +20,7 @@ final class OrganizationCutoverHealthService
     public function check(?array $userIds = null, bool $controlledEvidence = false): array
     {
         $selectedUserIds = $this->normalizeUserIds($userIds);
+        $missingUsers = $this->missingUserCount($selectedUserIds);
         $parityReports = $this->parityReports($selectedUserIds);
         $parity = $this->aggregateParity($parityReports);
         $backfill = $selectedUserIds === []
@@ -30,13 +32,20 @@ final class OrganizationCutoverHealthService
             && ($backfill['assignments_proposed'] ?? 0) === 0
             && ($backfill['conflicts'] ?? 0) === 0
             && $parity['mismatches'] === 0;
-        $integrity = $this->integrity($parity, $backfill);
+        $edgeIntegrity = $this->edgeIntegrity($selectedUserIds);
+        $integrity = $this->integrity($parity, $backfill, $missingUsers, $edgeIntegrity);
+        $writerEvidenceAvailable = $controlledEvidence && $selectedUserIds !== [];
         $writers = [
+            'evidence_available' => $writerEvidenceAvailable,
             'compatibility_writer_sync_failures' => 0,
             'transaction_failures' => 0,
         ];
         $mode = $this->modeDiagnostics($selectedUserIds);
-        $shadow = $this->shadow->snapshot();
+        $shadowCounters = $this->shadow->snapshot();
+        $shadow = [
+            'evidence_available' => $shadowCounters !== [],
+            'counters' => $shadowCounters,
+        ];
         $blockers = $this->blockers($parity, $backfill, $integrity, $writers, $mode, $shadow, $evidenceComplete);
 
         return [
@@ -108,12 +117,13 @@ final class OrganizationCutoverHealthService
     }
 
     /** @return array<string, int> */
-    private function integrity(array $parity, array $backfill): array
+    private function integrity(array $parity, array $backfill, int $missingUsers, array $edgeIntegrity): array
     {
         return [
+            'missing_users' => $missingUsers,
             'unknown_edges' => $parity['unknown'],
-            'ambiguous_edges' => (int) ($backfill['multiple_active_coordinator_assignments'] ?? 0),
-            'stale_edges' => 0,
+            'ambiguous_edges' => max((int) ($backfill['multiple_active_coordinator_assignments'] ?? 0), $edgeIntegrity['ambiguous_edges']),
+            'stale_edges' => $edgeIntegrity['stale_edges'],
             'invalid_edges' => (int) ($backfill['invalid_role_relationships'] ?? 0),
             'cycle_failures' => $parity['cycles'] + (int) ($backfill['cycles'] ?? 0),
         ];
@@ -165,10 +175,14 @@ final class OrganizationCutoverHealthService
             'backfill_conflicts' => ($backfill['conflicts'] ?? 0) > 0,
             'integrity_unknown_edges' => $integrity['unknown_edges'] > 0,
             'integrity_ambiguous_edges' => $integrity['ambiguous_edges'] > 0,
+            'integrity_stale_edges' => $integrity['stale_edges'] > 0,
             'integrity_invalid_edges' => $integrity['invalid_edges'] > 0,
             'integrity_cycle_failures' => $integrity['cycle_failures'] > 0,
+            'invalid_user_selection' => $integrity['missing_users'] > 0,
             'writer_sync_failure' => $writers['compatibility_writer_sync_failures'] > 0,
-            'shadow_mismatch' => collect($shadow)->filter(fn (int $count, string $key): bool => str_ends_with($key, '.mismatch') && $count > 0)->isNotEmpty(),
+            'writer_evidence_incomplete' => ! $writers['evidence_available'],
+            'transaction_evidence_incomplete' => ! $writers['evidence_available'],
+            'shadow_mismatch' => collect($shadow['counters'] ?? [])->filter(fn (int $count, string $key): bool => str_ends_with($key, '.mismatch') && $count > 0)->isNotEmpty(),
             'controlled_evidence_incomplete' => ! $evidenceComplete,
             'mode_invalid' => ($mode['mode_valid'] ?? true) === false,
         ];
@@ -210,5 +224,49 @@ final class OrganizationCutoverHealthService
             'parity_sales_team_conflict' => $parity['sales_team_conflicts'],
             default => 1,
         };
+    }
+
+    /** @param array<int> $userIds */
+    private function missingUserCount(array $userIds): int
+    {
+        if ($userIds === []) {
+            return 0;
+        }
+
+        return count($userIds) - User::query()->whereIn('id', $userIds)->count();
+    }
+
+    /** @param array<int> $userIds @return array{ambiguous_edges: int, stale_edges: int} */
+    private function edgeIntegrity(array $userIds): array
+    {
+        $reporting = OrganizationAssignment::query()
+            ->current()
+            ->with(['user', 'parent'])
+            ->when($userIds !== [], fn ($query) => $query->whereIn('user_id', $userIds))
+            ->get();
+        $salesTeam = OrganizationAssignment::query()
+            ->currentSalesTeam()
+            ->with(['user', 'parent'])
+            ->when($userIds !== [], fn ($query) => $query->whereIn('user_id', $userIds))
+            ->get();
+        $all = $reporting->concat($salesTeam);
+        $ambiguous = $all->groupBy(fn (OrganizationAssignment $assignment): string => $assignment->relationship_type.':'.$assignment->user_id)
+            ->filter(fn (Collection $assignments): bool => $assignments->count() > 1)
+            ->count();
+        $stale = $all->filter(function (OrganizationAssignment $assignment): bool {
+            $user = $assignment->user;
+            $parent = $assignment->parent;
+
+            return ! $user instanceof User
+                || ! $parent instanceof User
+                || ! $user->isAccountActive()
+                || ! $parent->isAccountActive()
+                || ! $user->is_active
+                || ! $parent->is_active
+                || ($assignment->branch_id !== null && (int) $assignment->branch_id !== (int) $user->branch_id)
+                || ($user->branch_id !== null && $parent->branch_id !== null && (int) $user->branch_id !== (int) $parent->branch_id);
+        })->count();
+
+        return ['ambiguous_edges' => $ambiguous, 'stale_edges' => $stale];
     }
 }

@@ -283,7 +283,21 @@ class OrganizationGraphService
     {
         $assignments = OrganizationAssignment::query()
             ->current()
-            ->get(['user_id', 'parent_user_id']);
+            ->with(['user.role', 'parent.role'])
+            ->get();
+        $assignments = $assignments->filter(function (OrganizationAssignment $assignment): bool {
+            if (! $assignment->user instanceof User || ! $assignment->parent instanceof User) {
+                return false;
+            }
+
+            try {
+                $this->validateParent($assignment->user, $assignment->parent);
+            } catch (Throwable) {
+                return false;
+            }
+
+            return true;
+        });
         $childrenByParent = $assignments->groupBy('parent_user_id');
         $visited = [(int) $root->id => true];
         $frontier = [(int) $root->id];

@@ -98,6 +98,21 @@ class OrganizationGraphModeServiceTest extends TestCase
         $this->assertSame('graph', $resolver->modeFor($viewer));
     }
 
+    public function test_testing_environment_still_fails_closed_for_malformed_allowlists(): void
+    {
+        $viewer = $this->user();
+        $resolver = app(OrganizationGraphModeService::class);
+        config([
+            'app.env' => 'testing',
+            'organization.graph_mode' => 'graph',
+            'organization.graph_user_ids' => 'not-an-id',
+            'organization.graph_branch_ids' => '',
+        ]);
+
+        $this->assertSame('legacy', $resolver->modeFor($viewer));
+        $this->assertSame('invalid_allowlist', $resolver->activationDiagnostics($viewer)['reason']);
+    }
+
     public function test_role_changes_do_not_change_effective_mode(): void
     {
         $viewer = $this->user();

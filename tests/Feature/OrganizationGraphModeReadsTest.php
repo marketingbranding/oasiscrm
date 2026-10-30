@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\Branch;
+use App\Models\OrganizationAssignment;
 use App\Models\Role;
 use App\Models\User;
 use App\Services\OrganizationGraphShadowService;
@@ -86,6 +87,50 @@ class OrganizationGraphModeReadsTest extends TestCase
         ]);
 
         $this->assertSame([], app(OrganizationScopeService::class)->hierarchyIds($viewer));
+    }
+
+    public function test_branch_activation_does_not_cross_activate_another_read_context(): void
+    {
+        $allowedBranch = $this->branch('BAL');
+        $otherBranch = $this->branch('BOT');
+        $supervisor = $this->user('supervisor', $allowedBranch);
+        $child = $this->user('sales_coordinator', $allowedBranch);
+        $child->forceFill(['supervisor_user_id' => $supervisor->id])->saveQuietly();
+        config([
+            'app.env' => 'local',
+            'organization.graph_mode' => 'graph',
+            'organization.graph_user_ids' => '',
+            'organization.graph_branch_ids' => (string) $allowedBranch->id,
+        ]);
+
+        $this->assertSame([$child->id], app(ReportingHierarchyService::class)->descendantIds($supervisor, 100, $otherBranch->id));
+        $this->assertSame([], app(ReportingHierarchyService::class)->descendantIds($supervisor, 100, $allowedBranch->id));
+    }
+
+    public function test_graph_reads_exclude_active_edges_that_fail_role_or_branch_integrity(): void
+    {
+        $branch = $this->branch('GIN');
+        $invalidParent = $this->user('sales', $branch);
+        $child = $this->user('manager', $branch);
+        OrganizationAssignment::query()->create([
+            'user_id' => $child->id,
+            'parent_user_id' => $invalidParent->id,
+            'relationship_type' => OrganizationAssignment::REPORTS_TO,
+            'branch_id' => $branch->id,
+            'started_at' => today()->toDateString(),
+            'is_active' => true,
+            'is_primary' => true,
+            'source' => 'integrity_fixture',
+            'lock_version' => 1,
+        ]);
+        config([
+            'app.env' => 'local',
+            'organization.graph_mode' => 'graph',
+            'organization.graph_user_ids' => (string) $invalidParent->id,
+            'organization.graph_branch_ids' => '',
+        ]);
+
+        $this->assertSame([], app(ReportingHierarchyService::class)->descendantIds($invalidParent));
     }
 
     private function branch(string $code): Branch

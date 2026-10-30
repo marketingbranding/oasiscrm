@@ -17,7 +17,7 @@ class SalesTeamScopeService
         private readonly OrganizationGraphShadowService $shadow,
     ) {}
 
-    public function for(User $actor, bool $includeHistorical = false): array
+    public function for(User $actor, bool $includeHistorical = false, ?int $branchId = null): array
     {
         $empty = [
             'supervisors' => collect(),
@@ -32,7 +32,7 @@ class SalesTeamScopeService
             return [...$empty, 'sales' => collect([$actor])];
         }
 
-        $effectiveMode = $this->mode->modeFor($actor, $actor->branch_id);
+        $effectiveMode = $this->mode->modeFor($actor, $branchId);
         if ($effectiveMode === 'graph') {
             return $this->canonicalFor($actor, $empty, $includeHistorical);
         }
@@ -194,13 +194,13 @@ class SalesTeamScopeService
         return $team;
     }
 
-    public function currentSalesQuery(User $coordinator): Builder
+    public function currentSalesQuery(User $coordinator, ?int $branchId = null): Builder
     {
         if (! $coordinator->hasPrimaryRole('sales_coordinator') || ! $coordinator->isAccountActive() || ! $coordinator->is_active) {
             return User::query()->whereKey(0);
         }
 
-        if ($this->mode->isGraph($coordinator, $coordinator->branch_id)) {
+        if ($this->mode->isGraph($coordinator, $branchId)) {
             return User::query()
                 ->where('users.account_status', AccountStatus::Active->value)
                 ->where('users.is_active', true)
@@ -228,17 +228,17 @@ class SalesTeamScopeService
             ->whereNotIn('users.id', $ambiguousSalesIds);
     }
 
-    public function currentSales(User $coordinator): Collection
+    public function currentSales(User $coordinator, ?int $branchId = null): Collection
     {
         return $coordinator->hasPrimaryRole('sales_coordinator')
-            ? $this->currentSalesQuery($coordinator)->get()
+            ? $this->currentSalesQuery($coordinator, $branchId)->get()
             : collect();
     }
 
-    public function contains(User $coordinator, int|User $sales): bool
+    public function contains(User $coordinator, int|User $sales, ?int $branchId = null): bool
     {
         return $coordinator->hasPrimaryRole('sales_coordinator')
-            && $this->currentSalesQuery($coordinator)->whereKey($sales instanceof User ? $sales->id : $sales)->exists();
+            && $this->currentSalesQuery($coordinator, $branchId)->whereKey($sales instanceof User ? $sales->id : $sales)->exists();
     }
 
     private function roleUsers(Collection $users, string $role): Collection

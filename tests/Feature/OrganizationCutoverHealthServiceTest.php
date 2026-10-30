@@ -68,6 +68,15 @@ class OrganizationCutoverHealthServiceTest extends TestCase
         $this->assertStringNotContainsString($viewer->email, $json);
     }
 
+    public function test_nonexistent_selected_user_blocks_health_instead_of_reporting_ready(): void
+    {
+        $health = app(OrganizationCutoverHealthService::class)->check([999999999], true);
+
+        $this->assertSame('BLOCKED', $health['status']);
+        $this->assertContains('invalid_user_selection', $health['blockers']);
+        $this->assertSame(1, $health['integrity']['missing_users']);
+    }
+
     private function branch(string $code): Branch
     {
         return Branch::query()->create(['name' => $code, 'code' => $code, 'is_active' => true]);

@@ -36,8 +36,8 @@ class OrganizationBackfillService
         if ($write && ! in_array((string) config('app.env'), ['local', 'testing'], true)) {
             $reasons[] = 'unsafe_environment';
         }
-        if ($write && (string) config('database.default') === 'production') {
-            $reasons[] = 'production_database';
+        if ($write && ! $this->hasSafeDatabaseIdentity()) {
+            $reasons[] = 'production_database_identity';
         }
 
         $beforeCount = OrganizationAssignment::query()->count();
@@ -145,6 +145,28 @@ class OrganizationBackfillService
         return $report;
     }
 
+    private function hasSafeDatabaseIdentity(): bool
+    {
+        if ((string) config('app.env') === 'testing') {
+            return config('database.default') === 'sqlite'
+                && (string) config('database.connections.sqlite.database') === ':memory:';
+        }
+
+        $expected = trim((string) config('organization.backfill_database_identity', ''));
+        if ($expected === '') {
+            return false;
+        }
+
+        $connection = DB::connection();
+        $actual = implode('|', [
+            (string) $connection->getConfig('driver'),
+            (string) $connection->getConfig('host'),
+            (string) $connection->getConfig('database'),
+        ]);
+
+        return hash_equals($expected, $actual);
+    }
+
     /** @return array<int, User|false|null> */
     private function legacySupervisors(Collection $users): array
     {
@@ -182,6 +204,16 @@ class OrganizationBackfillService
 
             return;
         }
+
+        $freshUser = $user->fresh(['role', 'branch']);
+        $freshParent = $parent->fresh(['role', 'branch']);
+        if (! $freshUser instanceof User || ! $freshParent instanceof User || (int) $freshUser->supervisor_user_id !== (int) $freshParent->id) {
+            $this->conflict($report, $user, 'legacy_reporting_source_changed_during_backfill', $parent, OrganizationAssignment::REPORTS_TO);
+
+            return;
+        }
+        $user = $freshUser;
+        $parent = $freshParent;
 
         if (isset($cycleUsers[$user->id]) || isset($cycleUsers[$parent->id])) {
             $report['cycles']++;
@@ -236,6 +268,32 @@ class OrganizationBackfillService
         if ($assignments->isEmpty()) {
             return;
         }
+
+        $sales = $sales->fresh(['role', 'branch']);
+        $freshAssignments = SalesCoordinatorSales::query()
+            ->current()
+            ->where('sales_user_id', $sales->id)
+            ->with(['coordinator.role', 'coordinator.branch', 'sales.role', 'sales.branch'])
+            ->get();
+        if ($freshAssignments->count() !== $assignments->count()
+            || $freshAssignments->pluck('coordinator_user_id')->sort()->values()->all() !== $assignments->pluck('coordinator_user_id')->sort()->values()->all()) {
+            $coordinator = $assignments->first()?->coordinator;
+            if ($coordinator instanceof User) {
+                $this->conflict($report, $sales, 'legacy_sales_source_changed_during_backfill', $coordinator, OrganizationAssignment::SALES_TEAM_MEMBER_OF);
+            } else {
+                $report['conflicts']++;
+                $this->detail($report, $sales, 'legacy_sales_source_changed_during_backfill', null, [
+                    'relationship_type' => OrganizationAssignment::SALES_TEAM_MEMBER_OF,
+                    'classification' => 'LEGACY_SOURCE_CHANGED',
+                    'severity' => 'STRUCTURAL',
+                    'confidence' => 'UNKNOWN',
+                    'remediation_status' => 'UNRESOLVED',
+                ]);
+            }
+
+            return;
+        }
+        $assignments = $freshAssignments;
 
         if (! $sales->hasPrimaryRole('sales')) {
             $report['invalid_role_relationships']++;

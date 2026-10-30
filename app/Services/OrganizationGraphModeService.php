@@ -28,6 +28,12 @@ final class OrganizationGraphModeService
             return 'legacy';
         }
 
+        $userAllowlist = $this->parseAllowlist(config('organization.graph_user_ids', ''));
+        $branchAllowlist = $this->parseAllowlist(config('organization.graph_branch_ids', ''));
+        if (! $userAllowlist['valid'] || ! $branchAllowlist['valid']) {
+            return 'legacy';
+        }
+
         if ($configured === 'shadow') {
             return 'shadow';
         }
@@ -100,14 +106,13 @@ final class OrganizationGraphModeService
         if ($configured === 'legacy' || ! $this->safeEnvironment()) {
             return 'legacy';
         }
-        if ($configured === 'shadow' || $this->environment() === 'testing') {
-            return $configured === 'shadow' ? 'shadow' : 'graph';
-        }
-
         $userAllowlist = $this->parseAllowlist(config('organization.graph_user_ids', ''));
         $branchAllowlist = $this->parseAllowlist(config('organization.graph_branch_ids', ''));
         if (! $userAllowlist['valid'] || ! $branchAllowlist['valid']) {
             return 'legacy';
+        }
+        if ($configured === 'shadow' || $this->environment() === 'testing') {
+            return $configured === 'shadow' ? 'shadow' : 'graph';
         }
 
         return in_array((int) $viewer->id, $userAllowlist['ids'], true)

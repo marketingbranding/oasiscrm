@@ -267,6 +267,25 @@ class OrganizationBackfillTest extends TestCase
         $this->assertDatabaseCount('organization_assignments', 0);
     }
 
+    public function test_controlled_backfill_requires_a_non_production_database_identity(): void
+    {
+        $branch = $this->branch('DBI');
+        $parent = $this->user('supervisor', $branch);
+        $child = $this->user('staff', $branch);
+        $child->forceFill(['supervisor_user_id' => $parent->id])->saveQuietly();
+        config([
+            'app.env' => 'local',
+            'organization.backfill_isolated' => true,
+            'organization.backfill_database_identity' => '',
+        ]);
+
+        $report = app(OrganizationBackfillService::class)->runControlled([$child->id], true, true);
+
+        $this->assertFalse($report['safety']['allowed']);
+        $this->assertContains('production_database_identity', $report['safety']['reasons']);
+        $this->assertDatabaseCount('organization_assignments', 0);
+    }
+
     private function branch(string $code): Branch
     {
         return Branch::query()->create(['name' => $code, 'code' => $code, 'is_active' => true]);

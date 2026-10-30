@@ -69,10 +69,10 @@ class ReportingHierarchyService
     }
 
     /** @return array<int> */
-    public function descendantIds(User $supervisor, int $depthLimit = 100): array
+    public function descendantIds(User $supervisor, int $depthLimit = 100, ?int $branchId = null): array
     {
         $legacy = $this->legacyDescendantIds($supervisor, $depthLimit);
-        $effectiveMode = $this->mode->modeFor($supervisor, $supervisor->branch_id);
+        $effectiveMode = $this->mode->modeFor($supervisor, $branchId ?? $supervisor->branch_id);
         if ($effectiveMode === 'shadow') {
             $canonical = $this->graph->descendantIds($supervisor);
             $this->shadow->record('reporting_descendants', $this->normalized($legacy) === $this->normalized($canonical));

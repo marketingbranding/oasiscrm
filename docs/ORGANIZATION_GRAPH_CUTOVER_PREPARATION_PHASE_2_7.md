@@ -41,7 +41,7 @@ The proposal source remains the legacy projection (`supervisor_user_id` and `sal
 The guarded command and service were proven in isolated PHPUnit SQLite transactions. The direct evidence run against the current workspace was dry-run only:
 
 - `organization:backfill --dry-run`: 19 users scanned, 10 proposals, 0 created, 1 already migrated, 0 conflicts.
-- Controlled writes require `--write`, `--confirm-isolated`, explicit `--user` and/or `--branch`, local/testing environment, the isolated marker, and a non-production database identity.
+- Controlled writes require `--write`, `--confirm-isolated`, explicit `--user` and/or `--branch`, local/testing environment, the isolated marker, and a verified non-production database identity.
 - Missing selection, missing confirmation, unsafe environment, or production database identity fails before mutation.
 - The controlled test fixture proves first-write creation, second-write zero duplicates, third dry-run zero equivalent proposals, and transactional write scope.
 - **No global backfill** and no production/global write were executed for this report.
@@ -80,7 +80,7 @@ Invalid or missing modes, malformed allowlists, unsafe environments, and missing
 
 ## H. Graph Mode Behavior
 
-`graph` returns canonical reporting, Sales-team, and hierarchy results only for an explicitly activated safe context. It never unions legacy and canonical IDs. An unsafe or unmatched context falls back to legacy for that evaluation.
+`graph` returns canonical reporting, Sales-team, and hierarchy results only for an explicitly activated safe context. It never unions legacy and canonical IDs. Active canonical edges are revalidated for current users, roles, workspace, branch, and cycle safety; invalid edges fall back out of graph reads. An unsafe or unmatched context falls back to legacy for that evaluation.
 
 ## I. Scoped Activation Design
 
@@ -112,7 +112,7 @@ The read-only health command returns `BLOCKED` for the current workspace evidenc
 - `backfill_proposals`: 10;
 - `controlled_evidence_incomplete`: 1.
 
-Health output is machine-readable with stable `READY`/`BLOCKED` status, reason codes, parity, backfill, integrity, writer, mode, and shadow sections. `production_read_source=legacy` and `production_cutover_performed=false` remain explicit.
+Health output is machine-readable with stable `READY`/`BLOCKED` status, reason codes, parity, backfill, integrity, writer-evidence, mode, and shadow sections. Missing selected users, stale/ambiguous edges, unavailable writer evidence, and invalid configuration block readiness. `production_read_source=legacy` and `production_cutover_performed=false` remain explicit.
 
 ## O. Files Changed
 

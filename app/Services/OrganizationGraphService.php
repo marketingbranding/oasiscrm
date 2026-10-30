@@ -324,6 +324,38 @@ class OrganizationGraphService
             ->pluck('id')->map(fn ($id) => (int) $id)->all();
     }
 
+    /** @return array<int> */
+    public function diagnosticDescendantIds(User $root): array
+    {
+        $assignments = OrganizationAssignment::query()
+            ->current()
+            ->get(['user_id', 'parent_user_id']);
+        $childrenByParent = $assignments->groupBy('parent_user_id');
+        $visited = [(int) $root->id => true];
+        $frontier = [(int) $root->id];
+        $descendants = [];
+
+        while ($frontier !== []) {
+            $next = [];
+            foreach ($frontier as $parentId) {
+                foreach ($childrenByParent->get($parentId, collect()) as $assignment) {
+                    $childId = (int) $assignment->user_id;
+                    if (isset($visited[$childId])) {
+                        continue;
+                    }
+
+                    $visited[$childId] = true;
+                    $descendants[] = $childId;
+                    $next[] = $childId;
+                }
+            }
+            $frontier = $next;
+        }
+
+        return User::query()->whereIn('id', $descendants)->where('is_active', true)
+            ->pluck('id')->map(fn ($id) => (int) $id)->all();
+    }
+
     /** @return Collection<int, User> */
     public function descendants(User $root): Collection
     {

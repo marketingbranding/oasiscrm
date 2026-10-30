@@ -279,6 +279,29 @@ class OrganizationBackfillTest extends TestCase
         $this->assertDatabaseCount('organization_assignments', 0);
     }
 
+    public function test_controlled_write_rolls_back_all_selected_proposals_when_one_fails_preflight(): void
+    {
+        $branch = $this->branch('ATM');
+        $validParent = $this->user('supervisor', $branch);
+        $validChild = $this->user('staff', $branch);
+        $validChild->forceFill(['supervisor_user_id' => $validParent->id])->saveQuietly();
+        $invalidParent = $this->user('sales', $branch);
+        $invalidChild = $this->user('sales_coordinator', $branch);
+        $invalidChild->forceFill(['supervisor_user_id' => $invalidParent->id])->saveQuietly();
+        config(['app.env' => 'testing', 'organization.backfill_isolated' => true]);
+
+        $report = app(OrganizationBackfillService::class)->runControlled(
+            [$validChild->id, $invalidChild->id],
+            true,
+            true,
+        );
+
+        $this->assertFalse($report['safety']['allowed']);
+        $this->assertContains('write_preflight_failed', $report['safety']['reasons']);
+        $this->assertSame(0, $report['created']);
+        $this->assertDatabaseCount('organization_assignments', 0);
+    }
+
     public function test_controlled_backfill_requires_a_non_production_database_identity(): void
     {
         $branch = $this->branch('DBI');

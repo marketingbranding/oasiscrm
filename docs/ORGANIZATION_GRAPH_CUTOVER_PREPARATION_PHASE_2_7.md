@@ -44,6 +44,7 @@ The guarded command and service were proven in isolated PHPUnit SQLite transacti
 - Controlled writes require `--write`, `--confirm-isolated`, explicit `--user` and/or `--branch`, local/testing environment, independent isolation and non-production markers, and a verified non-production database identity.
 - Missing selection, missing confirmation, unsafe environment, or production database identity fails before mutation.
 - The controlled test fixture proves first-write creation, second-write zero duplicates, third dry-run zero equivalent proposals, and transactional write scope.
+- Controlled writes perform a complete preflight and reject the whole selected batch when any selected proposal is invalid; source rows are locked and revalidated during the write transaction.
 - **No global backfill** and no production/global write were executed for this report.
 
 ## D. Post-Backfill Parity
@@ -80,7 +81,7 @@ Invalid or missing modes, malformed allowlists, unsafe environments, and missing
 
 ## H. Graph Mode Behavior
 
-`graph` returns canonical reporting, Sales-team, and hierarchy results only for an explicitly activated safe context. It never unions legacy and canonical IDs. Active canonical edges are revalidated for current users, roles, workspace, branch, and cycle safety; invalid edges fall back out of graph reads. An unsafe or unmatched context falls back to legacy for that evaluation.
+`graph` returns canonical reporting, Sales-team, and hierarchy results only for an explicitly activated safe context. It never unions legacy and canonical IDs. Active canonical edges are revalidated for current users, roles, workspace, branch, and cycle safety; invalid edges fall back out of graph reads. Branch-context reads filter canonical results to that evaluated branch. An unsafe or unmatched context falls back to legacy for that evaluation.
 
 ## I. Scoped Activation Design
 
@@ -139,7 +140,7 @@ Task-focused verification passed through Task 5, including 84 tests/580 assertio
 
 ## R. Production Cutover Recommendation
 
-`NOT READY`. Keep production and the default read source on `graph_mode=legacy`. Do not perform cutover while the four access losses, ten deterministic proposals, and incomplete controlled evidence remain unresolved.
+`NOT READY`. Keep production and the default read source on `graph_mode=legacy`. Do not perform cutover while the four access losses, ten deterministic proposals, and incomplete controlled evidence remain unresolved. A fresh health process without durable shadow evidence is intentionally blocked.
 
 ## S. Proposed Production Cutover Procedure
 

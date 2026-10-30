@@ -21,6 +21,11 @@ class OrganizationBackfill extends Command
     public function handle(OrganizationBackfillService $backfill): int
     {
         $write = (bool) $this->option('write');
+        if ($write && (bool) $this->option('dry-run')) {
+            $this->error('Gunakan tepat satu dari --dry-run atau --write.');
+
+            return self::FAILURE;
+        }
         if (! $write && ! (bool) $this->option('dry-run')) {
             $this->error('Gunakan --dry-run untuk diagnostik atau --write dengan --confirm-isolated dan pilihan pengguna/cabang.');
 

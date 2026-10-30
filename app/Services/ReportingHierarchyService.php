@@ -83,7 +83,17 @@ class ReportingHierarchyService
             return $legacy;
         }
 
-        return $this->graph->descendantIds($supervisor);
+        $canonical = $this->graph->descendantIds($supervisor);
+        if ($branchId === null) {
+            return $canonical;
+        }
+
+        return User::query()
+            ->whereIn('id', $canonical)
+            ->where('branch_id', $branchId)
+            ->pluck('id')
+            ->map(fn ($id): int => (int) $id)
+            ->all();
     }
 
     /** @return array<int> */

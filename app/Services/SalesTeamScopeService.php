@@ -34,7 +34,7 @@ class SalesTeamScopeService
 
         $effectiveMode = $this->mode->modeFor($actor, $branchId);
         if ($effectiveMode === 'graph') {
-            return $this->canonicalFor($actor, $empty, $includeHistorical);
+            return $this->filterTeamToBranch($this->canonicalFor($actor, $empty, $includeHistorical), $branchId);
         }
 
         $legacy = $this->legacyFor($actor, $empty, $includeHistorical, $role);
@@ -205,6 +205,7 @@ class SalesTeamScopeService
                 ->where('users.account_status', AccountStatus::Active->value)
                 ->where('users.is_active', true)
                 ->whereHas('role', fn (Builder $query) => $query->where('slug', 'sales'))
+                ->when($branchId !== null, fn (Builder $query) => $query->where('users.branch_id', $branchId))
                 ->whereIn('users.id', $this->graph->salesTeamMemberIds($coordinator));
         }
 
@@ -259,6 +260,28 @@ class SalesTeamScopeService
             'coordinators' => $team['coordinators']->pluck('id')->map(fn ($id): int => (int) $id)->sort()->values()->all(),
             'sales' => $team['sales']->pluck('id')->map(fn ($id): int => (int) $id)->sort()->values()->all(),
         ];
+    }
+
+    private function filterTeamToBranch(array $team, ?int $branchId): array
+    {
+        if ($branchId === null) {
+            return $team;
+        }
+
+        $keep = fn (Collection $users): Collection => $users->filter(fn (User $user): bool => (int) $user->branch_id === $branchId)->values();
+        $team['supervisors'] = $keep($team['supervisors']);
+        $team['coordinators'] = $keep($team['coordinators']);
+        $team['sales'] = $keep($team['sales']);
+        $coordinatorIds = $team['coordinators']->pluck('id');
+        $salesIds = $team['sales']->pluck('id');
+        $team['sales_ids_by_coordinator'] = $team['sales_ids_by_coordinator']
+            ->only($coordinatorIds->all())
+            ->map(fn (Collection $ids): Collection => $ids->intersect($salesIds)->values());
+        $team['coordinator_ids_by_supervisor'] = $team['coordinator_ids_by_supervisor']
+            ->only($team['supervisors']->pluck('id')->all())
+            ->map(fn (Collection $ids): Collection => $ids->intersect($coordinatorIds)->values());
+
+        return $team;
     }
 
     private function workspacePeople(Builder $query, array $branchIds, array $projectIds, bool $includeHistorical): void

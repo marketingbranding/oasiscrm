@@ -268,12 +268,13 @@ class OrganizationGraphService
 
     public function directChildren(User $parent): Collection
     {
+        $childIds = $this->validReportingAssignments()
+            ->where('parent_user_id', $parent->id)
+            ->pluck('user_id');
+
         return User::query()
             ->with('role')
-            ->whereIn('id', OrganizationAssignment::query()
-                ->current()
-                ->where('parent_user_id', $parent->id)
-                ->pluck('user_id'))
+            ->whereIn('id', $childIds)
             ->where('is_active', true)
             ->get();
     }
@@ -281,23 +282,7 @@ class OrganizationGraphService
     /** @return array<int> */
     public function descendantIds(User $root): array
     {
-        $assignments = OrganizationAssignment::query()
-            ->current()
-            ->with(['user.role', 'parent.role'])
-            ->get();
-        $assignments = $assignments->filter(function (OrganizationAssignment $assignment): bool {
-            if (! $assignment->user instanceof User || ! $assignment->parent instanceof User) {
-                return false;
-            }
-
-            try {
-                $this->validateParent($assignment->user, $assignment->parent);
-            } catch (Throwable) {
-                return false;
-            }
-
-            return true;
-        });
+        $assignments = $this->validReportingAssignments();
         $childrenByParent = $assignments->groupBy('parent_user_id');
         $visited = [(int) $root->id => true];
         $frontier = [(int) $root->id];
@@ -371,7 +356,7 @@ class OrganizationGraphService
     /** @return Collection<int, User> */
     public function ancestors(User $user): Collection
     {
-        $parentByUser = OrganizationAssignment::query()->current()->pluck('parent_user_id', 'user_id')->all();
+        $parentByUser = $this->validReportingAssignments()->pluck('parent_user_id', 'user_id')->all();
         $ids = [];
         $currentId = (int) $user->id;
         $visited = [];
@@ -387,6 +372,29 @@ class OrganizationGraphService
 
         return User::query()->with('role')->whereIn('id', $ids)->get()
             ->sortBy(fn (User $ancestor) => array_search($ancestor->id, $ids, true))->values();
+    }
+
+    /** @return Collection<int, OrganizationAssignment> */
+    private function validReportingAssignments(): Collection
+    {
+        return OrganizationAssignment::query()
+            ->current()
+            ->with(['user.role', 'parent.role'])
+            ->get()
+            ->filter(function (OrganizationAssignment $assignment): bool {
+                if (! $assignment->user instanceof User || ! $assignment->parent instanceof User) {
+                    return false;
+                }
+
+                try {
+                    $this->validateParent($assignment->user, $assignment->parent);
+                } catch (Throwable) {
+                    return false;
+                }
+
+                return true;
+            })
+            ->values();
     }
 
     /** @return Collection<int, OrganizationAssignment> */

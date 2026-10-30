@@ -22,6 +22,16 @@ class OrganizationBackfillCommandTest extends TestCase
             ->assertExitCode(1);
     }
 
+    public function test_write_and_dry_run_cannot_be_combined(): void
+    {
+        $this->artisan('organization:backfill', [
+            '--write' => true,
+            '--dry-run' => true,
+            '--confirm-isolated' => true,
+            '--user' => [1],
+        ])->assertExitCode(1);
+    }
+
     public function test_selected_controlled_write_accepts_all_explicit_guards(): void
     {
         $branch = Branch::query()->create(['name' => 'CMD2', 'code' => 'CMD2', 'is_active' => true]);

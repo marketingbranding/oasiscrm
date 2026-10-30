@@ -8,6 +8,7 @@ use App\Models\User;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
+use Throwable;
 
 class OrganizationBackfillService
 {
@@ -69,7 +70,48 @@ class OrganizationBackfillService
             ];
         }
 
-        $report = $this->runForUsers($userIds, ! $write);
+        $preflight = $this->runForUsers($userIds, true);
+        if ($write && $this->writePreflightBlocked($preflight)) {
+            return [
+                ...$preflight,
+                'dry_run' => false,
+                'safety' => [
+                    'allowed' => false,
+                    'reasons' => ['write_preflight_failed'],
+                    'selected_user_ids' => $userIds,
+                ],
+                'loss_analysis' => [
+                    'proposals' => $preflight['proposals'],
+                    'details' => $preflight['details'],
+                ],
+                'before' => ['assignment_count' => $beforeCount],
+                'after' => ['assignment_count' => $beforeCount],
+                'created' => 0,
+                'idempotency' => ['eligible' => false, 'reason' => 'write_preflight_blocked'],
+            ];
+        }
+
+        try {
+            $report = $write ? $this->runForUsers($userIds, false, true) : $preflight;
+        } catch (Throwable) {
+            return [
+                ...$preflight,
+                'dry_run' => false,
+                'safety' => [
+                    'allowed' => false,
+                    'reasons' => ['strict_write_failed'],
+                    'selected_user_ids' => $userIds,
+                ],
+                'loss_analysis' => [
+                    'proposals' => $preflight['proposals'],
+                    'details' => $preflight['details'],
+                ],
+                'before' => ['assignment_count' => $beforeCount],
+                'after' => ['assignment_count' => $beforeCount],
+                'created' => 0,
+                'idempotency' => ['eligible' => false, 'reason' => 'strict_write_failed'],
+            ];
+        }
         $afterCount = OrganizationAssignment::query()->count();
 
         return [
@@ -94,7 +136,7 @@ class OrganizationBackfillService
     }
 
     /** @param array<int>|null $userIds @return array<string, mixed> */
-    private function runForUsers(?array $userIds, bool $dryRun): array
+    private function runForUsers(?array $userIds, bool $dryRun, bool $strictWrite = false): array
     {
         $users = User::query()
             ->with('role')
@@ -125,7 +167,7 @@ class OrganizationBackfillService
         ];
         $cycleUsers = $this->legacyCycleUsers($legacyParents);
 
-        $process = function () use ($users, $legacyParents, $cycleUsers, $coordinatorAssignments, &$report, $dryRun): void {
+        $process = function () use ($users, $legacyParents, $cycleUsers, $coordinatorAssignments, &$report, $dryRun, $strictWrite): void {
             foreach ($users as $user) {
                 $this->backfillReporting(
                     $user,
@@ -133,12 +175,14 @@ class OrganizationBackfillService
                     $cycleUsers,
                     $report,
                     $dryRun,
+                    $strictWrite,
                 );
                 $this->backfillSalesTeam(
                     $user,
                     $coordinatorAssignments->get($user->id, collect()),
                     $report,
                     $dryRun,
+                    $strictWrite,
                 );
             }
         };
@@ -150,6 +194,27 @@ class OrganizationBackfillService
         }
 
         return $report;
+    }
+
+    /** @param array<string, mixed> $report */
+    private function writePreflightBlocked(array $report): bool
+    {
+        return collect([
+            'conflicts',
+            'multiple_active_coordinator_assignments',
+            'cycles',
+            'invalid_role_relationships',
+            'missing_users',
+            'inactive_parents',
+            'cross_scope_anomalies',
+        ])->contains(fn (string $key): bool => (int) ($report[$key] ?? 0) > 0);
+    }
+
+    private function strictFailure(bool $strictWrite, string $message): void
+    {
+        if ($strictWrite) {
+            throw ValidationException::withMessages(['backfill' => $message]);
+        }
     }
 
     private function hasSafeDatabaseIdentity(): bool
@@ -200,6 +265,7 @@ class OrganizationBackfillService
         array $cycleUsers,
         array &$report,
         bool $dryRun,
+        bool $strictWrite,
     ): void {
         if (! $parent instanceof User) {
             if ($parent === false) {
@@ -220,6 +286,7 @@ class OrganizationBackfillService
         $freshParent = User::query()->with(['role', 'branch'])->lockForUpdate()->find($parent->id);
         if (! $freshUser instanceof User || ! $freshParent instanceof User || (int) $freshUser->supervisor_user_id !== (int) $freshParent->id) {
             $this->conflict($report, $user, 'legacy_reporting_source_changed_during_backfill', $parent, OrganizationAssignment::REPORTS_TO);
+            $this->strictFailure($strictWrite, 'Sumber reporting legacy berubah saat backfill.');
 
             return;
         }
@@ -231,6 +298,7 @@ class OrganizationBackfillService
             $this->detail($report, $user, 'Relasi legacy membentuk siklus organisasi.', $parent, [
                 'relationship_type' => OrganizationAssignment::REPORTS_TO,
             ]);
+            $this->strictFailure($strictWrite, 'Relasi reporting membentuk siklus saat backfill.');
 
             return;
         }
@@ -246,6 +314,7 @@ class OrganizationBackfillService
         }
         if ($current !== null) {
             $this->conflict($report, $user, 'canonical_reporting_assignment_differs', $parent, OrganizationAssignment::REPORTS_TO);
+            $this->strictFailure($strictWrite, 'Assignment reporting canonical berubah saat backfill.');
 
             return;
         }
@@ -254,6 +323,7 @@ class OrganizationBackfillService
             $this->graph->validateParent($user, $parent);
         } catch (ValidationException $exception) {
             $this->recordValidationFailure($report, $user, $parent, $exception, OrganizationAssignment::REPORTS_TO);
+            $this->strictFailure($strictWrite, 'Validasi reporting gagal saat backfill.');
 
             return;
         }
@@ -274,7 +344,7 @@ class OrganizationBackfillService
     }
 
     /** @param Collection<int, SalesCoordinatorSales> $assignments */
-    private function backfillSalesTeam(User $sales, Collection $assignments, array &$report, bool $dryRun): void
+    private function backfillSalesTeam(User $sales, Collection $assignments, array &$report, bool $dryRun, bool $strictWrite): void
     {
         if ($assignments->isEmpty()) {
             return;
@@ -283,6 +353,7 @@ class OrganizationBackfillService
         $lockedSales = User::query()->with(['role', 'branch'])->lockForUpdate()->find($sales->id);
         if (! $lockedSales instanceof User) {
             $report['missing_users']++;
+            $this->strictFailure($strictWrite, 'Pengguna Sales hilang saat backfill.');
 
             return;
         }
@@ -308,6 +379,7 @@ class OrganizationBackfillService
                     'remediation_status' => 'UNRESOLVED',
                 ]);
             }
+            $this->strictFailure($strictWrite, 'Sumber Sales-team legacy berubah saat backfill.');
 
             return;
         }
@@ -322,6 +394,7 @@ class OrganizationBackfillService
                 'confidence' => 'HIGH',
                 'remediation_status' => 'UNRESOLVED',
             ]);
+            $this->strictFailure($strictWrite, 'Relasi Sales-team legacy tidak valid saat backfill.');
 
             return;
         }
@@ -335,6 +408,7 @@ class OrganizationBackfillService
                 'confidence' => 'UNKNOWN',
                 'remediation_status' => 'UNRESOLVED',
             ]);
+            $this->strictFailure($strictWrite, 'Sales memiliki lebih dari satu coordinator aktif saat backfill.');
 
             return;
         }
@@ -350,6 +424,7 @@ class OrganizationBackfillService
                 'confidence' => 'HIGH',
                 'remediation_status' => 'UNRESOLVED',
             ]);
+            $this->strictFailure($strictWrite, 'Coordinator legacy hilang saat backfill.');
 
             return;
         }
@@ -367,6 +442,7 @@ class OrganizationBackfillService
                 'confidence' => 'HIGH',
                 'remediation_status' => 'UNRESOLVED',
             ]);
+            $this->strictFailure($strictWrite, 'Assignment Sales-team canonical ambigu saat backfill.');
 
             return;
         }
@@ -378,6 +454,7 @@ class OrganizationBackfillService
         }
         if ($current !== null) {
             $this->conflict($report, $sales, 'canonical_sales_team_assignment_differs', $coordinator, OrganizationAssignment::SALES_TEAM_MEMBER_OF);
+            $this->strictFailure($strictWrite, 'Assignment Sales-team canonical berubah saat backfill.');
 
             return;
         }
@@ -386,6 +463,7 @@ class OrganizationBackfillService
             $this->graph->validateSalesTeamMember($sales, $coordinator);
         } catch (ValidationException $exception) {
             $this->recordValidationFailure($report, $sales, $coordinator, $exception, OrganizationAssignment::SALES_TEAM_MEMBER_OF);
+            $this->strictFailure($strictWrite, 'Validasi Sales-team gagal saat backfill.');
 
             return;
         }

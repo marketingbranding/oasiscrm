@@ -59,4 +59,20 @@ class OrganizationBackfillCommandTest extends TestCase
             'is_active' => true,
         ]);
     }
+
+    public function test_branch_selection_rejects_users_from_another_primary_branch(): void
+    {
+        $first = Branch::query()->create(['name' => 'B1', 'code' => 'B1', 'is_active' => true]);
+        $second = Branch::query()->create(['name' => 'B2', 'code' => 'B2', 'is_active' => true]);
+        $user = User::factory()->create([
+            'role_id' => Role::query()->where('slug', 'staff')->firstOrFail()->id,
+            'branch_id' => $second->id,
+        ]);
+
+        $this->artisan('organization:backfill', [
+            '--dry-run' => true,
+            '--branch' => $first->id,
+            '--user' => [$user->id],
+        ])->assertExitCode(1);
+    }
 }

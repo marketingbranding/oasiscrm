@@ -42,6 +42,7 @@ The guarded command and service were proven in isolated PHPUnit SQLite transacti
 
 - `organization:backfill --dry-run`: 19 users scanned, 10 proposals, 0 created, 1 already migrated, 0 conflicts.
 - Controlled writes require `--write`, `--confirm-isolated`, explicit `--user` and/or `--branch`, local/testing environment, independent isolation and non-production markers, and a verified non-production database identity.
+- When both selectors are supplied, every explicit user must belong to the selected active branch; branch selection is restrictive, not additive.
 - Missing selection, missing confirmation, unsafe environment, or production database identity fails before mutation.
 - The controlled test fixture proves first-write creation, second-write zero duplicates, third dry-run zero equivalent proposals, and transactional write scope.
 - Controlled writes perform a complete preflight and reject the whole selected batch when any selected proposal is invalid; source rows are locked and revalidated during the write transaction.

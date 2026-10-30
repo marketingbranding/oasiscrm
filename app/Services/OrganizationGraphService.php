@@ -112,7 +112,8 @@ class OrganizationGraphService
             && $coordinator->is_active
             && $sales->branch_id !== null
             && $sales->branch_id === $coordinator->branch_id
-            && ($assignment->branch_id === null || (int) $assignment->branch_id === (int) $sales->branch_id);
+            && $assignment->branch_id !== null
+            && (int) $assignment->branch_id === (int) $sales->branch_id;
     }
 
     public function currentSalesTeamCoordinator(User $sales): ?User
@@ -377,12 +378,20 @@ class OrganizationGraphService
     /** @return Collection<int, OrganizationAssignment> */
     private function validReportingAssignments(): Collection
     {
-        $valid = OrganizationAssignment::query()
+        $all = OrganizationAssignment::query()
             ->current()
             ->with(['user.role', 'parent.role'])
-            ->get()
+            ->get();
+        $ambiguousUserIds = $all->groupBy('user_id')
+            ->filter(fn (Collection $assignments): bool => $assignments->count() > 1)
+            ->keys();
+        $valid = $all
+            ->reject(fn (OrganizationAssignment $assignment): bool => $ambiguousUserIds->contains($assignment->user_id))
             ->filter(function (OrganizationAssignment $assignment): bool {
                 if (! $assignment->user instanceof User || ! $assignment->parent instanceof User) {
+                    return false;
+                }
+                if ($assignment->branch_id !== null && (int) $assignment->branch_id !== (int) $assignment->user->branch_id) {
                     return false;
                 }
 
@@ -394,11 +403,8 @@ class OrganizationGraphService
 
                 return true;
             });
-        $ambiguousUserIds = $valid->groupBy('user_id')
-            ->filter(fn (Collection $assignments): bool => $assignments->count() > 1)
-            ->keys();
 
-        return $valid->reject(fn (OrganizationAssignment $assignment): bool => $ambiguousUserIds->contains($assignment->user_id))->values();
+        return $valid->values();
     }
 
     /** @return Collection<int, OrganizationAssignment> */

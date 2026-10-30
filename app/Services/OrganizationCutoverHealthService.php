@@ -180,6 +180,7 @@ final class OrganizationCutoverHealthService
             'integrity_cycle_failures' => $integrity['cycle_failures'] > 0,
             'invalid_user_selection' => $integrity['missing_users'] > 0,
             'writer_sync_failure' => $writers['compatibility_writer_sync_failures'] > 0,
+            'transaction_failure' => $writers['transaction_failures'] > 0,
             'writer_evidence_incomplete' => ! $writers['evidence_available'],
             'transaction_evidence_incomplete' => ! $writers['evidence_available'],
             'shadow_mismatch' => collect($shadow['counters'] ?? [])->filter(fn (int $count, string $key): bool => str_ends_with($key, '.mismatch') && $count > 0)->isNotEmpty(),

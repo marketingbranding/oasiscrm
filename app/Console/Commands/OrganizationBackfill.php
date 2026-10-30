@@ -2,6 +2,7 @@
 
 namespace App\Console\Commands;
 
+use App\Models\Branch;
 use App\Models\User;
 use App\Services\OrganizationBackfillService;
 use Illuminate\Console\Attributes\Description;
@@ -48,7 +49,14 @@ class OrganizationBackfill extends Command
                 if (! is_scalar($branchId) || filter_var($branchId, FILTER_VALIDATE_INT) === false || (int) $branchId < 1) {
                     throw new InvalidArgumentException('Opsi --branch harus berupa ID positif.');
                 }
-                $userIds = $userIds->merge(User::query()->where('branch_id', (int) $branchId)->pluck('id'));
+                $branch = Branch::query()->whereKey((int) $branchId)->where('is_active', true)->first();
+                if ($branch === null) {
+                    throw new InvalidArgumentException('Opsi --branch harus menunjuk cabang aktif.');
+                }
+                if ($userIds->isNotEmpty() && User::query()->whereIn('id', $userIds)->where('branch_id', '!=', $branch->id)->exists()) {
+                    throw new InvalidArgumentException('Opsi --user harus berada pada cabang yang dipilih.');
+                }
+                $userIds = $userIds->merge(User::query()->where('branch_id', $branch->id)->pluck('id'));
             }
         } catch (InvalidArgumentException $exception) {
             $this->error($exception->getMessage());

@@ -127,4 +127,19 @@ class DanaTalanganBridgeCommandTest extends TestCase
     {
         $this->assertSame(1, \DB::table('changelogs')->whereNull('version')->where('title', 'Bridge Dana Talangan Aman')->count());
     }
+
+    public function test_monday_mvp_changelog_migration_is_idempotent(): void
+    {
+        $title = 'Dana Talangan Siap Operasional Senin';
+        \DB::table('changelogs')->whereNull('version')->where('title', $title)->delete();
+        $migration = require base_path('database/migrations/2026_10_30_180000_add_dana_talangan_monday_mvp_changelog.php');
+
+        $migration->up();
+        $migration->up();
+
+        $this->assertSame(1, \DB::table('changelogs')->whereNull('version')->where('title', $title)->count());
+
+        $migration->down();
+        $this->assertSame(0, \DB::table('changelogs')->whereNull('version')->where('title', $title)->count());
+    }
 }

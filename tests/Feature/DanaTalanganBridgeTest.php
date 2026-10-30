@@ -151,6 +151,43 @@ class DanaTalanganBridgeTest extends TestCase
         $this->assertSame('synced', $record->fresh()->sync_status);
     }
 
+    public function test_bridge_round_trip_preserves_nominal_and_undetermined_status(): void
+    {
+        [$record] = $this->record();
+        $record->update([
+            'nominal' => '1072173.00',
+            'status' => 'belum_ditentukan',
+        ]);
+        $service = $this->bridge($this->contracts([]));
+
+        $payload = $service->canonicalPayload($record->fresh());
+        $this->assertSame('1072173.00', $payload['Nominal']);
+        $this->assertSame('belum_ditentukan', $payload['Status Cicilan']);
+
+        $normalize = new \ReflectionMethod(DanaTalanganBridgeService::class, 'normalizeRemote');
+        $normalize->setAccessible(true);
+        $normalized = $normalize->invoke($service, $payload);
+        $this->assertSame('1072173.00', $normalized['Nominal']);
+        $this->assertSame('belum_ditentukan', $normalized['Status Cicilan']);
+    }
+
+    public function test_failed_push_preserves_local_record_and_marks_sync_failure(): void
+    {
+        [$record, $actor] = $this->record();
+        $this->enable('push_only');
+        $writer = Mockery::mock(DanaTalanganSpreadsheetWriter::class);
+        $writer->shouldReceive('append')->once()->andThrow(new \RuntimeException('remote unavailable'));
+
+        $result = $this->bridge($this->contracts([]), $writer)->push($record->fresh(), $actor);
+        $fresh = $record->fresh();
+
+        $this->assertFalse($result['ok']);
+        $this->assertSame('sync_failed', $result['status']);
+        $this->assertSame('sync_failed', $fresh->sync_status);
+        $this->assertSame('Konsumen Test', $fresh->nama_konsumen);
+        $this->assertSame('Sinkronisasi spreadsheet gagal.', $fresh->last_sync_error);
+    }
+
     public function test_pull_updates_only_clean_shared_fields(): void
     {
         [$record, $actor] = $this->record();

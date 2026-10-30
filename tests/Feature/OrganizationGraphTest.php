@@ -271,12 +271,13 @@ class OrganizationGraphTest extends TestCase
         $this->assertSame(0, $dryRun['created']);
         $this->assertDatabaseCount('organization_assignments', 0);
 
-        $result = $service->run(false);
+        config(['organization.backfill_isolated' => true]);
+        $result = $service->runControlled([$sales->id], true, true);
         $this->assertSame(1, $result['created']);
         $this->assertDatabaseCount('organization_assignments', 1);
         $this->assertDatabaseCount('sales_coordinator_sales', 1);
 
-        $again = $service->run(false);
+        $again = $service->runControlled([$sales->id], true, true);
         $this->assertSame(1, $again['already_migrated']);
         $this->assertSame(0, $again['created']);
         $this->assertDatabaseCount('organization_assignments', 1);
@@ -306,7 +307,8 @@ class OrganizationGraphTest extends TestCase
         $this->assertDatabaseCount('organization_assignments', 0);
         $this->assertDatabaseCount('sales_coordinator_sales', 3);
 
-        $actual = $service->run(false);
+        config(['organization.backfill_isolated' => true]);
+        $actual = $service->runControlled([$coordinatorOne->id, $coordinatorTwo->id, $salesA->id, $salesB->id, $salesC->id], true, true);
 
         $this->assertSame(5, $actual['created']);
         $this->assertSame(5, $actual['assignments_proposed']);
@@ -320,7 +322,7 @@ class OrganizationGraphTest extends TestCase
         $this->assertSame($coordinatorOne->id, app(OrganizationGraphService::class)->currentSalesTeamCoordinator($salesB)?->id);
         $this->assertSame($coordinatorTwo->id, app(OrganizationGraphService::class)->currentSalesTeamCoordinator($salesC)?->id);
 
-        $again = $service->run(false);
+        $again = $service->runControlled([$coordinatorOne->id, $coordinatorTwo->id, $salesA->id, $salesB->id, $salesC->id], true, true);
 
         $this->assertSame(0, $again['assignments_proposed']);
         $this->assertSame(0, $again['created']);
@@ -368,7 +370,8 @@ class OrganizationGraphTest extends TestCase
         $sales->forceFill(['supervisor_user_id' => $coordinatorTwo->id])->saveQuietly();
         $mapping = $this->legacySalesMapping($coordinatorOne, $sales);
 
-        $report = app(OrganizationBackfillService::class)->run(false);
+        config(['organization.backfill_isolated' => true]);
+        $report = app(OrganizationBackfillService::class)->runControlled([$sales->id], true, true);
 
         $this->assertSame(0, $report['conflicts']);
         $this->assertSame(2, $report['created']);
@@ -397,7 +400,7 @@ class OrganizationGraphTest extends TestCase
         $first = $this->legacySalesMapping($coordinatorOne, $sales);
         $second = $this->legacySalesMapping($coordinatorTwo, $sales);
 
-        $report = app(OrganizationBackfillService::class)->run(false);
+        $report = app(OrganizationBackfillService::class)->run(true);
 
         $this->assertSame(1, $report['multiple_active_coordinator_assignments']);
         $this->assertSame(0, $report['created']);
@@ -414,7 +417,7 @@ class OrganizationGraphTest extends TestCase
         $first->forceFill(['supervisor_user_id' => $second->id])->saveQuietly();
         $second->forceFill(['supervisor_user_id' => $first->id])->saveQuietly();
 
-        $report = app(OrganizationBackfillService::class)->run(false);
+        $report = app(OrganizationBackfillService::class)->run(true);
 
         $this->assertSame(2, $report['cycles']);
         $this->assertSame(0, $report['created']);
@@ -431,7 +434,7 @@ class OrganizationGraphTest extends TestCase
         $parent->forceFill(['is_active' => false, 'account_status' => AccountStatus::Inactive])->saveQuietly();
         $child->forceFill(['supervisor_user_id' => $parent->id])->saveQuietly();
 
-        $report = app(OrganizationBackfillService::class)->run(false);
+        $report = app(OrganizationBackfillService::class)->run(true);
 
         $this->assertSame(1, $report['inactive_parents']);
         $this->assertSame(0, $report['created']);
@@ -445,7 +448,7 @@ class OrganizationGraphTest extends TestCase
         DB::statement('PRAGMA defer_foreign_keys = ON');
         $child->forceFill(['supervisor_user_id' => 999999])->saveQuietly();
 
-        $report = app(OrganizationBackfillService::class)->run(false);
+        $report = app(OrganizationBackfillService::class)->run(true);
 
         $this->assertSame(1, $report['missing_users']);
         $this->assertSame(0, $report['created']);
@@ -459,7 +462,7 @@ class OrganizationGraphTest extends TestCase
         $child = $this->user('sales_coordinator', $branch);
         $child->forceFill(['supervisor_user_id' => $parent->id])->saveQuietly();
 
-        $report = app(OrganizationBackfillService::class)->run(false);
+        $report = app(OrganizationBackfillService::class)->run(true);
 
         $this->assertSame(1, $report['invalid_role_relationships']);
         $this->assertSame(0, $report['created']);

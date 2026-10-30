@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\Branch;
 use App\Models\Role;
 use App\Models\User;
+use App\Services\OrganizationGraphShadowService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
@@ -93,6 +94,8 @@ class OrganizationParityCommandTest extends TestCase
     public function test_cutover_health_command_returns_json_without_failing_for_blocked_health(): void
     {
         $viewer = $this->user('staff', $this->branch('HLT'));
+        config(['organization.controlled_evidence_marker' => true]);
+        app(OrganizationGraphShadowService::class)->record('health_fixture', true);
 
         $exitCode = Artisan::call('organization:cutover-health', [
             '--user' => [$viewer->id],

@@ -26,22 +26,25 @@ final class OrganizationCutoverHealthService
         $backfill = $selectedUserIds === []
             ? $this->backfill->run(true)
             : $this->backfill->runControlled($selectedUserIds, false, true);
+        $shadowCounters = $this->shadow->snapshot();
+        $evidenceMarker = (bool) config('organization.controlled_evidence_marker', false);
         $evidenceComplete = $controlledEvidence
             && $selectedUserIds !== []
+            && $evidenceMarker
             && ($backfill['safety']['allowed'] ?? false)
             && ($backfill['assignments_proposed'] ?? 0) === 0
             && ($backfill['conflicts'] ?? 0) === 0
-            && $parity['mismatches'] === 0;
+            && $parity['mismatches'] === 0
+            && $shadowCounters !== [];
         $edgeIntegrity = $this->edgeIntegrity($selectedUserIds);
         $integrity = $this->integrity($parity, $backfill, $missingUsers, $edgeIntegrity);
-        $writerEvidenceAvailable = $controlledEvidence && $selectedUserIds !== [];
+        $writerEvidenceAvailable = $controlledEvidence && $evidenceMarker && $selectedUserIds !== [] && $shadowCounters !== [];
         $writers = [
             'evidence_available' => $writerEvidenceAvailable,
             'compatibility_writer_sync_failures' => 0,
             'transaction_failures' => 0,
         ];
         $mode = $this->modeDiagnostics($selectedUserIds);
-        $shadowCounters = $this->shadow->snapshot();
         $shadow = [
             'evidence_available' => $shadowCounters !== [],
             'counters' => $shadowCounters,
@@ -242,12 +245,10 @@ final class OrganizationCutoverHealthService
         $reporting = OrganizationAssignment::query()
             ->current()
             ->with(['user', 'parent'])
-            ->when($userIds !== [], fn ($query) => $query->whereIn('user_id', $userIds))
             ->get();
         $salesTeam = OrganizationAssignment::query()
             ->currentSalesTeam()
             ->with(['user', 'parent'])
-            ->when($userIds !== [], fn ($query) => $query->whereIn('user_id', $userIds))
             ->get();
         $all = $reporting->concat($salesTeam);
         $ambiguous = $all->groupBy(fn (OrganizationAssignment $assignment): string => $assignment->relationship_type.':'.$assignment->user_id)

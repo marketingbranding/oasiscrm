@@ -53,7 +53,7 @@ class OrganizationScopeService
             if ($this->isSupervisorSalesScope($viewer, $module)) {
                 $ids = in_array('own', $scopes, true) ? [(int) $viewer->id] : [];
                 if (in_array('team', $scopes, true)) {
-                    $ids = [...$ids, ...$this->teamIds($viewer, $module)];
+                    $ids = [...$ids, ...$this->teamIds($viewer, $module, $this->evaluationBranchId($workspaceBranchIds))];
                 }
 
                 return collect($ids)->map(fn ($id) => (int) $id)->unique()->values()->all();
@@ -61,7 +61,7 @@ class OrganizationScopeService
 
             $ids = in_array('own', $scopes, true) ? [(int) $viewer->id] : [];
             if (in_array('team', $scopes, true)) {
-                $ids = [...$ids, ...$this->teamIds($viewer, $module)];
+                $ids = [...$ids, ...$this->teamIds($viewer, $module, $this->evaluationBranchId($workspaceBranchIds))];
             }
             if (in_array('branch', $scopes, true)) {
                 $branchIds = $this->branchIds($viewer, $module, $action);
@@ -152,7 +152,7 @@ class OrganizationScopeService
                 $ids = [...$ids, ...$this->currentAssignedProjectIds($viewer, $workspaceBranchIds)];
             }
             if (in_array('team', $scopes, true)) {
-                $teamProjectIds = $this->currentProjectIdsForUsers($this->teamIds($viewer, $module));
+                $teamProjectIds = $this->currentProjectIdsForUsers($this->teamIds($viewer, $module, $this->evaluationBranchId($workspaceBranchIds)));
                 $assignedProjectIds = $this->currentAssignedProjectIds($viewer, $workspaceBranchIds);
                 $authorizedProjectIds = LeadMaster::query()
                     ->where('is_active', true)
@@ -236,11 +236,11 @@ class OrganizationScopeService
     }
 
     /** @return array<int> */
-    public function teamIds(User $viewer, ?string $module = null): array
+    public function teamIds(User $viewer, ?string $module = null, ?int $branchId = null): array
     {
-        return $this->cached('team:'.$viewer->id.':'.$module, function () use ($viewer, $module): array {
+        return $this->cached('team:'.$viewer->id.':'.$module.':'.($branchId ?? 'current'), function () use ($viewer, $module, $branchId): array {
             if ($module === 'sales_pocketbook' && $viewer->hasPrimaryRole('sales_coordinator')) {
-                return $this->salesTeamScope->currentSalesQuery($viewer)
+                return $this->salesTeamScope->currentSalesQuery($viewer, $branchId)
                     ->pluck('users.id')
                     ->map(fn ($id) => (int) $id)
                     ->values()
@@ -253,6 +253,7 @@ class OrganizationScopeService
                     $this->workspaceBranchIds($viewer),
                     $this->workspaceAccess->accessibleProjectIds($viewer),
                     includeHistorical: false,
+                    branchContext: $branchId,
                 );
 
                 return collect([$team['coordinators'], $team['sales']])
@@ -264,7 +265,7 @@ class OrganizationScopeService
                     ->all();
             }
 
-            $descendantIds = $this->hierarchy->descendantIds($viewer);
+            $descendantIds = $this->hierarchy->descendantIds($viewer, branchId: $branchId);
             if ($descendantIds === []) {
                 return [];
             }
@@ -290,6 +291,12 @@ class OrganizationScopeService
     private function workspaceBranchIds(User $user): array
     {
         return $this->cached('workspace:'.$user->id, fn () => $this->workspaceAccess->accessibleBranchIds($user));
+    }
+
+    /** @param array<int> $branchIds */
+    private function evaluationBranchId(array $branchIds): ?int
+    {
+        return count($branchIds) === 1 ? (int) $branchIds[0] : null;
     }
 
     private function isSupervisorSalesScope(User $viewer, ?string $module): bool

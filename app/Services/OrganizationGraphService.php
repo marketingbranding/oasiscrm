@@ -356,6 +356,12 @@ class OrganizationGraphService
             ->pluck('id')->map(fn ($id) => (int) $id)->all();
     }
 
+    /** @return array<int> */
+    public function invalidReportingDescendantIds(User $root): array
+    {
+        return array_values(array_diff($this->diagnosticDescendantIds($root), $this->descendantIds($root)));
+    }
+
     /** @return Collection<int, User> */
     public function descendants(User $root): Collection
     {

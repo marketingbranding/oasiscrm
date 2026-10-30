@@ -6,6 +6,7 @@ use App\Models\Branch;
 use App\Models\Role;
 use App\Models\User;
 use App\Services\OrganizationCutoverHealthService;
+use App\Services\OrganizationGraphShadowService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
@@ -45,6 +46,8 @@ class OrganizationCutoverHealthServiceTest extends TestCase
     public function test_complete_equivalent_controlled_evidence_is_ready(): void
     {
         $viewer = $this->user('staff', $this->branch('RDY'));
+        config(['organization.controlled_evidence_marker' => true]);
+        app(OrganizationGraphShadowService::class)->record('health_fixture', true);
 
         $health = app(OrganizationCutoverHealthService::class)->check([$viewer->id], true);
 

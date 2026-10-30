@@ -36,7 +36,7 @@ class AppServiceProvider extends ServiceProvider
     {
         $this->app->scoped(OrganizationScopeService::class);
         $this->app->scoped(CrmAuthorizationService::class);
-        $this->app->singleton(OrganizationGraphShadowService::class);
+        $this->app->scoped(OrganizationGraphShadowService::class);
     }
 
     public function boot(): void

@@ -139,7 +139,8 @@ class OrganizationBackfillTest extends TestCase
         $this->assertSame(0, $dryRun['created']);
         $this->assertDatabaseCount('organization_assignments', 0);
 
-        $actual = $service->run(false);
+        config(['organization.backfill_isolated' => true]);
+        $actual = $service->runControlled([$sales->id], true, true);
 
         $this->assertSame(2, $actual['created']);
         $this->assertDatabaseHas('organization_assignments', [
@@ -155,7 +156,7 @@ class OrganizationBackfillTest extends TestCase
             'is_active' => true,
         ]);
 
-        $again = $service->run(false);
+        $again = $service->runControlled([$sales->id], true, true);
 
         $this->assertSame(0, $again['created']);
         $this->assertSame(2, $again['already_migrated']);
@@ -222,6 +223,17 @@ class OrganizationBackfillTest extends TestCase
         $this->assertContains('isolated_marker_required', $report['safety']['reasons']);
         $this->assertSame(0, $report['created']);
         $this->assertDatabaseCount('organization_assignments', 0);
+    }
+
+    public function test_legacy_write_api_fails_closed_without_controlled_selection(): void
+    {
+        config(['app.env' => 'testing', 'organization.backfill_isolated' => true]);
+
+        $report = app(OrganizationBackfillService::class)->run(false);
+
+        $this->assertFalse($report['safety']['allowed']);
+        $this->assertContains('explicit_selection_required', $report['safety']['reasons']);
+        $this->assertSame(0, $report['created']);
     }
 
     public function test_controlled_backfill_is_idempotent_for_selected_dual_relationships(): void

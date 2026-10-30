@@ -115,16 +115,21 @@ final class OrganizationParityService
             $graph = $this->graphIds($viewer, $dimension, $filter);
             $onlyLegacy = array_values(array_diff($legacy, $graph));
             $onlyGraph = array_values(array_diff($graph, $legacy));
-            $equivalent = $onlyLegacy === [] && $onlyGraph === [];
+            $invalidGraphIds = in_array($dimension, ['reporting_descendants', 'team_members', 'supervisor_coordinator_membership'], true)
+                ? $this->graph->invalidReportingDescendantIds($viewer)
+                : [];
+            $equivalent = $onlyLegacy === [] && $onlyGraph === [] && $invalidGraphIds === [];
 
-            $details = $this->details($viewer, $dimension);
+            $details = [...$this->details($viewer, $dimension), 'invalid_graph_ids' => $invalidGraphIds];
             $assessment = $this->assessment(
                 $viewer,
                 $dimension,
                 $onlyLegacy,
                 $onlyGraph,
                 $equivalent,
-                $classification = $equivalent ? 'EQUIVALENT' : $this->classify($viewer, $dimension, $onlyLegacy, $onlyGraph, $filter->scope),
+                $classification = $equivalent
+                    ? 'EQUIVALENT'
+                    : ($invalidGraphIds !== [] ? 'DATA_INTEGRITY_PROBLEM' : $this->classify($viewer, $dimension, $onlyLegacy, $onlyGraph, $filter->scope)),
                 $filter,
                 $details,
             );
@@ -141,7 +146,9 @@ final class OrganizationParityService
                 'only_graph' => $onlyGraph,
                 'equivalent' => $equivalent,
                 'classification' => $classification,
-                'reason' => $equivalent ? 'Legacy dan graph menghasilkan himpunan yang sama.' : $this->reason($dimension, $onlyLegacy, $onlyGraph),
+                'reason' => $equivalent
+                    ? 'Legacy dan graph menghasilkan himpunan yang sama.'
+                    : ($invalidGraphIds !== [] ? 'Graph memiliki edge reporting yang gagal validasi integritas.' : $this->reason($dimension, $onlyLegacy, $onlyGraph)),
                 'details' => $details,
                 ...$assessment,
             ];

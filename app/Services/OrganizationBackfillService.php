@@ -16,7 +16,11 @@ class OrganizationBackfillService
     /** @return array<string, mixed> */
     public function run(bool $dryRun = true): array
     {
-        return $this->runForUsers(null, $dryRun);
+        if ($dryRun) {
+            return $this->runForUsers(null, true);
+        }
+
+        return $this->runControlled([], true, false);
     }
 
     /** @return array<string, mixed> */
@@ -32,6 +36,9 @@ class OrganizationBackfillService
         }
         if ($write && ! (bool) config('organization.backfill_isolated', false)) {
             $reasons[] = 'isolated_marker_required';
+        }
+        if ($write && (string) config('app.env') === 'local' && ! (bool) config('organization.backfill_non_production_marker', false)) {
+            $reasons[] = 'non_production_marker_required';
         }
         if ($write && ! in_array((string) config('app.env'), ['local', 'testing'], true)) {
             $reasons[] = 'unsafe_environment';
@@ -152,6 +159,10 @@ class OrganizationBackfillService
                 && (string) config('database.connections.sqlite.database') === ':memory:';
         }
 
+        if (! (bool) config('organization.backfill_non_production_marker', false)) {
+            return false;
+        }
+
         $expected = trim((string) config('organization.backfill_database_identity', ''));
         if ($expected === '') {
             return false;
@@ -205,8 +216,8 @@ class OrganizationBackfillService
             return;
         }
 
-        $freshUser = $user->fresh(['role', 'branch']);
-        $freshParent = $parent->fresh(['role', 'branch']);
+        $freshUser = User::query()->with(['role', 'branch'])->lockForUpdate()->find($user->id);
+        $freshParent = User::query()->with(['role', 'branch'])->lockForUpdate()->find($parent->id);
         if (! $freshUser instanceof User || ! $freshParent instanceof User || (int) $freshUser->supervisor_user_id !== (int) $freshParent->id) {
             $this->conflict($report, $user, 'legacy_reporting_source_changed_during_backfill', $parent, OrganizationAssignment::REPORTS_TO);
 
@@ -269,11 +280,18 @@ class OrganizationBackfillService
             return;
         }
 
-        $sales = $sales->fresh(['role', 'branch']);
+        $lockedSales = User::query()->with(['role', 'branch'])->lockForUpdate()->find($sales->id);
+        if (! $lockedSales instanceof User) {
+            $report['missing_users']++;
+
+            return;
+        }
+        $sales = $lockedSales;
         $freshAssignments = SalesCoordinatorSales::query()
             ->current()
             ->where('sales_user_id', $sales->id)
             ->with(['coordinator.role', 'coordinator.branch', 'sales.role', 'sales.branch'])
+            ->lockForUpdate()
             ->get();
         if ($freshAssignments->count() !== $assignments->count()
             || $freshAssignments->pluck('coordinator_user_id')->sort()->values()->all() !== $assignments->pluck('coordinator_user_id')->sort()->values()->all()) {

@@ -127,9 +127,9 @@ class SalesTeamScopeService
         ];
     }
 
-    public function displayedFor(User $actor, array $branchIds, array $projectIds, bool $includeHistorical = false): array
+    public function displayedFor(User $actor, array $branchIds, array $projectIds, bool $includeHistorical = false, ?int $branchContext = null): array
     {
-        $team = $this->for($actor, $includeHistorical);
+        $team = $this->for($actor, $includeHistorical, $branchContext);
         $personIds = collect([$team['supervisors'], $team['coordinators'], $team['sales']])
             ->flatten(1)->pluck('id')->unique();
         $today = today()->toDateString();
@@ -159,9 +159,9 @@ class SalesTeamScopeService
         return $team;
     }
 
-    public function forWorkspace(User $actor, array $branchIds, array $projectIds, bool $includeHistorical = false): array
+    public function forWorkspace(User $actor, array $branchIds, array $projectIds, bool $includeHistorical = false, ?int $branchContext = null): array
     {
-        $team = $this->displayedFor($actor, $branchIds, $projectIds, $includeHistorical);
+        $team = $this->displayedFor($actor, $branchIds, $projectIds, $includeHistorical, $branchContext);
         $branchIds = collect($branchIds)->map(fn ($id) => (int) $id)->values()->all();
         $projectIds = collect($projectIds)->map(fn ($id) => (int) $id)->values()->all();
         $hierarchyIds = collect([$team['supervisors'], $team['coordinators']])->flatten(1)->pluck('id')->unique();

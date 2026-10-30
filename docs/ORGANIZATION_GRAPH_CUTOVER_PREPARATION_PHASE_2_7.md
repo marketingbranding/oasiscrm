@@ -41,7 +41,7 @@ The proposal source remains the legacy projection (`supervisor_user_id` and `sal
 The guarded command and service were proven in isolated PHPUnit SQLite transactions. The direct evidence run against the current workspace was dry-run only:
 
 - `organization:backfill --dry-run`: 19 users scanned, 10 proposals, 0 created, 1 already migrated, 0 conflicts.
-- Controlled writes require `--write`, `--confirm-isolated`, explicit `--user` and/or `--branch`, local/testing environment, the isolated marker, and a verified non-production database identity.
+- Controlled writes require `--write`, `--confirm-isolated`, explicit `--user` and/or `--branch`, local/testing environment, independent isolation and non-production markers, and a verified non-production database identity.
 - Missing selection, missing confirmation, unsafe environment, or production database identity fails before mutation.
 - The controlled test fixture proves first-write creation, second-write zero duplicates, third dry-run zero equivalent proposals, and transactional write scope.
 - **No global backfill** and no production/global write were executed for this report.

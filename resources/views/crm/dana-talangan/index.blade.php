@@ -20,16 +20,17 @@
         'penyelesaian' => old('penyelesaian'),
         'konfirmasi_keuangan' => old('konfirmasi_keuangan', false),
         'branch_id' => old('branch_id'),
-        'status' => old('status', 'sanggup'),
+         'status' => old('status', 'belum_ditentukan'),
         'updated_at' => old('expected_updated_at'),
     ] : null;
     $activeFilters = [];
     if ($selectedBranchId && isset($branches) && $branches->count() > 1) {
         $activeFilters[] = 'Cabang: '.($branches->firstWhere('id', $selectedBranchId)?->name ?? $selectedBranchId);
     }
-    if ($selectedProject) $activeFilters[] = 'Proyek: '.$selectedProject;
-    if ($selectedStatus) {
-        $activeFilters[] = 'Status: '.(['sanggup' => 'Sanggup', 'tidak_sanggup' => 'Tidak Sanggup', 'lunas' => 'Lunas'][$selectedStatus] ?? $selectedStatus);
+     if ($selectedProject) $activeFilters[] = 'Proyek: '.$selectedProject;
+     if ($selectedMarketing) $activeFilters[] = 'Marketing: '.$selectedMarketing;
+     if ($selectedStatus) {
+         $activeFilters[] = 'Status: '.(['belum_ditentukan' => 'Belum Ditentukan', 'sanggup' => 'Sanggup', 'tidak_sanggup' => 'Tidak Sanggup', 'lunas' => 'Lunas'][$selectedStatus] ?? $selectedStatus);
     }
     if ($filterMode === 'date' && ($dateFrom || $dateTo)) {
         $activeFilters[] = 'Tanggal: '.($dateFrom ?: 'awal').' - '.($dateTo ?: 'akhir');
@@ -89,15 +90,19 @@
     @endif
 
     <div class="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <x-crm.card padding="sm">        <div class="font-[Helvetica] text-[10px] font-bold uppercase">Total Record Filter</div><div class="mt-1 text-xl font-bold">{{ number_format($summary['total']) }}</div></x-crm.card>
-        <x-crm.card padding="sm"><div class="font-[Helvetica] text-[10px] font-bold uppercase">Status Sanggup</div><div class="mt-1 text-xl font-bold">{{ number_format($summary['sanggup']) }}</div></x-crm.card>
-        <x-crm.card padding="sm"><div class="font-[Helvetica] text-[10px] font-bold uppercase">Status Tidak Sanggup</div><div class="mt-1 text-xl font-bold">{{ number_format($summary['tidak_sanggup']) }}</div></x-crm.card>
-        <x-crm.card padding="sm"><div class="font-[Helvetica] text-[10px] font-bold uppercase">Status Lunas</div><div class="mt-1 text-xl font-bold">{{ number_format($summary['lunas']) }}</div></x-crm.card>
+         <x-crm.card padding="sm">        <div class="font-[Helvetica] text-[10px] font-bold uppercase">Total Record Filter</div><div class="mt-1 text-xl font-bold">{{ number_format($summary['total']) }}</div></x-crm.card>
+         <x-crm.card padding="sm"><div class="font-[Helvetica] text-[10px] font-bold uppercase">Total Nominal</div><div class="mt-1 text-xl font-bold">{{ \App\Support\DanaTalanganMoney::format($summary['nominal']) }}</div></x-crm.card>
+         <x-crm.card padding="sm"><div class="font-[Helvetica] text-[10px] font-bold uppercase">Status Sanggup</div><div class="mt-1 text-xl font-bold">{{ number_format($summary['sanggup']) }}</div></x-crm.card>
+         <x-crm.card padding="sm"><div class="font-[Helvetica] text-[10px] font-bold uppercase">Status Tidak Sanggup</div><div class="mt-1 text-xl font-bold">{{ number_format($summary['tidak_sanggup']) }}</div></x-crm.card>
+         <x-crm.card padding="sm"><div class="font-[Helvetica] text-[10px] font-bold uppercase">Status Lunas</div><div class="mt-1 text-xl font-bold">{{ number_format($summary['lunas']) }}</div></x-crm.card>
+         <x-crm.card padding="sm"><div class="font-[Helvetica] text-[10px] font-bold uppercase">Belum Ditentukan</div><div class="mt-1 text-xl font-bold">{{ number_format($summary['belum_ditentukan']) }}</div></x-crm.card>
+         <x-crm.card padding="sm"><div class="font-[Helvetica] text-[10px] font-bold uppercase">Komitmen Mendatang</div><div class="mt-1 text-xl font-bold">{{ number_format($summary['upcoming_commitments']) }}</div></x-crm.card>
+         <x-crm.card padding="sm"><div class="font-[Helvetica] text-[10px] font-bold uppercase">Komitmen Terlewat</div><div class="mt-1 text-xl font-bold text-[#c0392b]">{{ number_format($summary['overdue_commitments']) }}</div></x-crm.card>
     </div>
 
     <x-crm.toolbar label="Filter dan aksi dana talangan" class="mb-3">
         <form method="GET" action="{{ route('dana-talangan.index') }}" class="flex min-w-[240px] max-w-xl grow">
-            @foreach(request()->only(['branch_id', 'project_name', 'status', 'filter_mode', 'date_from', 'date_to', 'month_from', 'month_to', 'sort', 'dir', 'per_page']) as $key => $value)
+            @foreach(request()->only(['branch_id', 'project_name', 'marketing', 'status', 'filter_mode', 'date_from', 'date_to', 'month_from', 'month_to', 'sort', 'dir', 'per_page']) as $key => $value)
                 @if($value !== null && $value !== '')<input type="hidden" name="{{ $key }}" value="{{ $value }}">@endif
             @endforeach
             <input name="search" value="{{ $search }}" placeholder="Cari nama konsumen..." aria-label="Cari Nama Konsumen" class="min-w-0 grow border-2 border-r-0 border-black px-3 py-1.5 text-sm font-['Times_New_Roman'] bg-white rounded-none">
@@ -110,7 +115,7 @@
         </button>
         <x-slot:actions>
             @if($canExport || $canManage)
-            <x-crm.export-import export-route="dana-talangan.export" import-route="dana-talangan.import" :params="request()->only(['branch_id', 'project_name', 'status', 'search', 'filter_mode', 'date_from', 'date_to', 'month_from', 'month_to'])" :can-export="$canExport" :can-import="$canManage" />
+            <x-crm.export-import export-route="dana-talangan.export" import-route="dana-talangan.import" :params="request()->only(['branch_id', 'project_name', 'marketing', 'status', 'search', 'filter_mode', 'date_from', 'date_to', 'month_from', 'month_to'])" :can-export="$canExport" :can-import="$canManage" />
             @endif
         </x-slot:actions>
     </x-crm.toolbar>
@@ -133,12 +138,13 @@
                 @foreach(request()->only(['sort', 'dir', 'per_page']) as $key => $value)
                     @if($value !== null && $value !== '')<input type="hidden" name="{{ $key }}" value="{{ $value }}">@endif
                 @endforeach
-                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     @if(isset($branches) && $branches->count() > 1)
                     <div><label class="font-[Helvetica] font-bold text-xs uppercase block mb-1">Cabang</label><select name="branch_id" class="w-full border-2 border-black px-3 py-2 text-sm font-['Times_New_Roman'] bg-white"><option value="">— Semua Cabang —</option>@foreach($branches as $b)<option value="{{ $b->id }}" {{ (string)$selectedBranchId === (string)$b->id ? 'selected' : '' }} @if(str_contains(mb_strtolower($b->name), 'pusat')) style="color:#b8860b;font-weight:700;background:#fff3b0" @endif>{{ $b->name }}</option>@endforeach</select></div>
                     @endif
-                    <div><label class="font-[Helvetica] font-bold text-xs uppercase block mb-1">Proyek</label><select name="project_name" class="w-full border-2 border-black px-3 py-2 text-sm font-['Times_New_Roman'] bg-white"><option value="">— Semua Proyek —</option>@foreach($projectOptions as $projectName)<option value="{{ $projectName }}" {{ $selectedProject === $projectName ? 'selected' : '' }}>{{ $projectName }}</option>@endforeach</select></div>
-                    <div><label class="font-[Helvetica] font-bold text-xs uppercase block mb-1">Status Cicilan</label><select name="status" class="w-full border-2 border-black px-3 py-2 text-sm font-['Times_New_Roman'] bg-white"><option value="">— Semua Status —</option><option value="sanggup" {{ $selectedStatus === 'sanggup' ? 'selected' : '' }}>Sanggup</option><option value="tidak_sanggup" {{ $selectedStatus === 'tidak_sanggup' ? 'selected' : '' }}>Tidak Sanggup</option><option value="lunas" {{ $selectedStatus === 'lunas' ? 'selected' : '' }}>Lunas</option></select></div>
+                     <div><label class="font-[Helvetica] font-bold text-xs uppercase block mb-1">Proyek</label><select name="project_name" class="w-full border-2 border-black px-3 py-2 text-sm font-['Times_New_Roman'] bg-white"><option value="">— Semua Proyek —</option>@foreach($projectOptions as $projectName)<option value="{{ $projectName }}" {{ $selectedProject === $projectName ? 'selected' : '' }}>{{ $projectName }}</option>@endforeach</select></div>
+                     <div><label class="font-[Helvetica] font-bold text-xs uppercase block mb-1">Marketing</label><select name="marketing" class="w-full border-2 border-black px-3 py-2 text-sm font-['Times_New_Roman'] bg-white"><option value="">— Semua Marketing —</option>@foreach($marketingOptions as $marketingOption)<option value="{{ $marketingOption }}" {{ $selectedMarketing === $marketingOption ? 'selected' : '' }}>{{ $marketingOption }}</option>@endforeach</select></div>
+                     <div><label class="font-[Helvetica] font-bold text-xs uppercase block mb-1">Status Cicilan</label><select name="status" class="w-full border-2 border-black px-3 py-2 text-sm font-['Times_New_Roman'] bg-white"><option value="">— Semua Status —</option><option value="belum_ditentukan" {{ $selectedStatus === 'belum_ditentukan' ? 'selected' : '' }}>Belum Ditentukan</option><option value="sanggup" {{ $selectedStatus === 'sanggup' ? 'selected' : '' }}>Sanggup</option><option value="tidak_sanggup" {{ $selectedStatus === 'tidak_sanggup' ? 'selected' : '' }}>Tidak Sanggup</option><option value="lunas" {{ $selectedStatus === 'lunas' ? 'selected' : '' }}>Lunas</option></select></div>
                     <div><label class="font-[Helvetica] font-bold text-xs uppercase block mb-1">Mode Rentang</label><select name="filter_mode" x-model="filterMode" class="w-full border-2 border-black px-3 py-2 text-sm font-['Times_New_Roman'] bg-white"><option value="date">Rentang Tanggal</option><option value="month">Rentang Bulan</option></select></div>
                 </div>
                 <template x-if="filterMode === 'date'"><div class="grid grid-cols-1 sm:grid-cols-2 gap-4"><div><label class="font-[Helvetica] font-bold text-xs uppercase block mb-1">Dari Tanggal</label><div class="date-wrapper" data-accent="#f1c40f" style="position:relative"><div class="date-display w-full border-2 border-black px-3 py-2 text-sm font-['Times_New_Roman'] bg-white cursor-pointer flex justify-between" tabindex="0"><span class="date-text">— Pilih Tanggal —</span><span class="date-arrow">▼</span></div><input type="date" name="date_from" value="{{ $dateFrom }}" style="position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0"></div></div><div><label class="font-[Helvetica] font-bold text-xs uppercase block mb-1">Sampai Tanggal</label><div class="date-wrapper" data-accent="#f1c40f" style="position:relative"><div class="date-display w-full border-2 border-black px-3 py-2 text-sm font-['Times_New_Roman'] bg-white cursor-pointer flex justify-between" tabindex="0"><span class="date-text">— Pilih Tanggal —</span><span class="date-arrow">▼</span></div><input type="date" name="date_to" value="{{ $dateTo }}" style="position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0"></div></div></div></template>
@@ -235,8 +241,8 @@
                         <span class="crm-boolean-box {{ $r->konfirmasi_keuangan ? 'is-checked' : '' }}">{{ $r->konfirmasi_keuangan ? '✓' : '' }}</span>
                     </td>
                     <td class="text-center">
-                        <x-crm.status-badge :variant="$r->status === 'lunas' ? 'success' : ($r->status === 'tidak_sanggup' ? 'danger' : 'info')">
-                            {{ $r->status === 'sanggup' ? 'SANGGUP' : ($r->status === 'tidak_sanggup' ? 'TIDAK SANGGUP' : 'LUNAS') }}
+                         <x-crm.status-badge :variant="$r->status === 'lunas' ? 'success' : ($r->status === 'tidak_sanggup' ? 'danger' : ($r->status === 'belum_ditentukan' ? 'neutral' : 'info'))">
+                             {{ ['belum_ditentukan' => 'BELUM DITENTUKAN', 'sanggup' => 'SANGGUP', 'tidak_sanggup' => 'TIDAK SANGGUP', 'lunas' => 'LUNAS'][$r->status] ?? 'BELUM DITENTUKAN' }}
                         </x-crm.status-badge>
                     </td>
                     <td class="text-center">
@@ -292,9 +298,10 @@
                             <form method="POST" action="{{ route('dana-talangan.destroy', ['dana_talangan' => $r->id]) }}"
                                   class="inline" @submit.prevent="confirm('Hapus data ini?') && $el.submit()">
                                 @csrf
-                                @method('DELETE')
-                                <input type="hidden" name="branch_id" value="{{ request('branch_id') }}">
-                                <input type="hidden" name="project_name" value="{{ request('project_name') }}">
+                                 @method('DELETE')
+                                 <input type="hidden" name="branch_id" value="{{ request('branch_id') }}">
+                                 <input type="hidden" name="project_name" value="{{ request('project_name') }}">
+                                 <input type="hidden" name="marketing" value="{{ request('marketing') }}">
                                  <input type="hidden" name="status" value="{{ request('status') }}">
                                 <button type="submit" class="font-[Helvetica] font-bold underline" style="font-size:11px;color:#c0392b;">Hapus</button>
                             </form>
@@ -399,7 +406,7 @@
                     <div>
                         <label class="font-[Helvetica] font-bold text-xs uppercase block mb-1">Status Cicilan</label>
                         <select name="status" required class="w-full border-2 border-black px-3 py-2 text-sm font-['Times_New_Roman'] bg-white">
-                            <option value="sanggup">Sanggup</option><option value="tidak_sanggup">Tidak Sanggup</option><option value="lunas">Lunas</option>
+                             <option value="belum_ditentukan" {{ old('status', 'belum_ditentukan') === 'belum_ditentukan' ? 'selected' : '' }}>Belum Ditentukan</option><option value="sanggup" {{ old('status') === 'sanggup' ? 'selected' : '' }}>Sanggup</option><option value="tidak_sanggup" {{ old('status') === 'tidak_sanggup' ? 'selected' : '' }}>Tidak Sanggup</option><option value="lunas" {{ old('status') === 'lunas' ? 'selected' : '' }}>Lunas</option>
                         </select>
                     </div>
                     <div class="flex items-center gap-6 pt-5">
@@ -445,7 +452,7 @@
                     <div><label class="font-[Helvetica] font-bold text-xs uppercase block mb-1">Umur</label><input type="number" name="umur" x-model="editingRecord.umur" min="0" max="150" class="w-full border-2 border-black px-3 py-2 text-sm font-['Times_New_Roman']"></div>
                      <div><label class="font-[Helvetica] font-bold text-xs uppercase block mb-1">TGL Komitmen</label><div class="date-wrapper" data-accent="#f1c40f" style="position:relative"><div class="date-display w-full border-2 border-black px-3 py-2 text-sm font-['Times_New_Roman'] bg-white cursor-pointer select-none flex items-center justify-between" tabindex="0"><span class="date-text">— Pilih Tanggal —</span><span class="date-arrow">▼</span></div><input type="date" name="tgl_komitmen" x-model="editingRecord.tgl_komitmen" style="position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0"></div></div>
                      <div><label class="font-[Helvetica] font-bold text-xs uppercase block mb-1">Nominal</label><input type="number" name="nominal" x-model="editingRecord.nominal" min="0" step="0.01" inputmode="decimal" class="w-full border-2 border-black px-3 py-2 text-sm font-['Times_New_Roman']"></div>
-                    <div><label class="font-[Helvetica] font-bold text-xs uppercase block mb-1">Status Cicilan</label><select name="status" x-model="editingRecord.status" required class="w-full border-2 border-black px-3 py-2 text-sm font-['Times_New_Roman'] bg-white"><option value="sanggup">Sanggup</option><option value="tidak_sanggup">Tidak Sanggup</option><option value="lunas">Lunas</option></select></div>
+                     <div><label class="font-[Helvetica] font-bold text-xs uppercase block mb-1">Status Cicilan</label><select name="status" x-model="editingRecord.status" required class="w-full border-2 border-black px-3 py-2 text-sm font-['Times_New_Roman'] bg-white"><option value="belum_ditentukan">Belum Ditentukan</option><option value="sanggup">Sanggup</option><option value="tidak_sanggup">Tidak Sanggup</option><option value="lunas">Lunas</option></select></div>
                     <div class="flex items-center gap-6 pt-5"><label class="flex items-center gap-2 text-sm font-['Times_New_Roman']"><input type="hidden" name="pinjam_nama" value="0"><input type="checkbox" name="pinjam_nama" value="1" x-model="editingRecord.pinjam_nama" class="w-5 h-5 accent-[#f1c40f]"> Pinjam Nama</label><label class="flex items-center gap-2 text-sm font-['Times_New_Roman']"><input type="hidden" name="konfirmasi_keuangan" value="0"><input type="checkbox" name="konfirmasi_keuangan" value="1" x-model="editingRecord.konfirmasi_keuangan" class="w-5 h-5 accent-[#f1c40f]"> Konfirmasi</label></div>
                     <div class="sm:col-span-2"><label class="font-[Helvetica] font-bold text-xs uppercase block mb-1">Penyelesaian</label><textarea name="penyelesaian" x-model="editingRecord.penyelesaian" rows="3" class="w-full border-2 border-black px-3 py-2 text-sm font-['Times_New_Roman']"></textarea></div>
                 </div>
@@ -462,10 +469,10 @@
     <x-crm.bulk-bar
         destroy-route="{{ route('dana-talangan.bulk-destroy') }}"
         update-route="{{ route('dana-talangan.bulk-update') }}"
-        :status-options="['sanggup' => 'Sanggup', 'tidak_sanggup' => 'Tidak Sanggup', 'lunas' => 'Lunas']"
+         :status-options="['belum_ditentukan' => 'Belum Ditentukan', 'sanggup' => 'Sanggup', 'tidak_sanggup' => 'Tidak Sanggup', 'lunas' => 'Lunas']"
         status-label="Status Cicilan"
         accent-color="#f1c40f"
-        :params="request()->only(['branch_id', 'project_name', 'status', 'search', 'filter_mode', 'date_from', 'date_to', 'month_from', 'month_to'])" />
+         :params="request()->only(['branch_id', 'project_name', 'marketing', 'status', 'search', 'filter_mode', 'date_from', 'date_to', 'month_from', 'month_to'])" />
     @endif
 
 <x-crm.detail-modal

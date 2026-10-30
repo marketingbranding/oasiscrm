@@ -213,9 +213,10 @@
                      <div>
                          <label class="font-[Helvetica] font-bold text-xs uppercase block mb-1">Status Cicilan</label>
                         <select name="status" required class="w-full border-2 border-black px-3 py-2 text-sm font-['Times_New_Roman'] bg-white rounded-none @error('status') border-[#e91d2a] @enderror">
-                            <option value="sanggup" {{ old('status') === 'sanggup' ? 'selected' : '' }}>Sanggup</option>
-                            <option value="tidak_sanggup" {{ old('status') === 'tidak_sanggup' ? 'selected' : '' }}>Tidak Sanggup</option>
-                            <option value="lunas" {{ old('status') === 'lunas' ? 'selected' : '' }}>Lunas</option>
+                             <option value="belum_ditentukan" {{ old('status', 'belum_ditentukan') === 'belum_ditentukan' ? 'selected' : '' }}>Belum Ditentukan</option>
+                             <option value="sanggup" {{ old('status') === 'sanggup' ? 'selected' : '' }}>Sanggup</option>
+                             <option value="tidak_sanggup" {{ old('status') === 'tidak_sanggup' ? 'selected' : '' }}>Tidak Sanggup</option>
+                             <option value="lunas" {{ old('status') === 'lunas' ? 'selected' : '' }}>Lunas</option>
                         </select>
                         @error('status') <p class="text-[#e91d2a] text-xs mt-1 font-[Helvetica] font-bold">{{ $message }}</p> @enderror
                     </div>

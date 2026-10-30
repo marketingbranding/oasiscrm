@@ -10,6 +10,7 @@ use App\Models\Permission;
 use App\Models\Role;
 use App\Models\User;
 use App\Services\OptimisticLockService;
+use App\Support\DanaTalanganMoney;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use PhpOffice\PhpSpreadsheet\Cell\Coordinate;
@@ -335,6 +336,81 @@ class DanaTalanganInteractionTest extends TestCase
         $templateHeaders = $templateSheet->rangeToArray('A1:Z1')[0];
         $this->assertContains('Nominal', $templateHeaders);
         $this->assertSame('"belum_ditentukan,sanggup,tidak_sanggup,lunas"', $templateSheet->getCell('P2')->getDataValidation()->getFormula1());
+    }
+
+    public function test_marketing_and_date_filters_drive_summary_and_export(): void
+    {
+        [$branch, $user] = $this->makeBranchAndUser();
+        $project = $this->makeProject($branch);
+        $today = now()->toDateString();
+        $yesterday = now()->subDay()->toDateString();
+
+        $sanggup = $this->makeRecord($branch, $user);
+        $sanggup->update([
+            'project_id' => $project->id,
+            'tanggal' => $today,
+            'nama_konsumen' => 'Marketing Ardo Sanggup',
+            'nama_marketing' => 'Ardo',
+            'nominal' => '1100000.00',
+            'tgl_komitmen' => $today,
+            'status' => 'sanggup',
+        ]);
+
+        $blankStatus = $this->makeRecord($branch, $user);
+        $blankStatus->update([
+            'project_id' => $project->id,
+            'tanggal' => $yesterday,
+            'nama_konsumen' => 'Marketing Ardo Belum Ditentukan',
+            'nama_marketing' => 'Ardo',
+            'nominal' => '300.00',
+            'tgl_komitmen' => $yesterday,
+            'status' => 'belum_ditentukan',
+        ]);
+
+        $otherMarketing = $this->makeRecord($branch, $user);
+        $otherMarketing->update([
+            'project_id' => $project->id,
+            'tanggal' => $today,
+            'nama_konsumen' => 'Marketing Budi Lunas',
+            'nama_marketing' => 'Budi',
+            'nominal' => '200.00',
+            'tgl_komitmen' => now()->addDay()->toDateString(),
+            'status' => 'lunas',
+        ]);
+
+        $query = [
+            'marketing' => 'Ardo',
+            'filter_mode' => 'date',
+            'date_from' => $yesterday,
+            'date_to' => $today,
+        ];
+        $response = $this->actingAs($user)->get(route('dana-talangan.index', $query));
+
+        $response->assertOk()->assertSee('Marketing: Ardo');
+        $this->assertSame(
+            ['Marketing Ardo Sanggup', 'Marketing Ardo Belum Ditentukan'],
+            collect($response->viewData('records')->items())->pluck('nama_konsumen')->all(),
+        );
+        $this->assertSame([
+            'total' => 2,
+            'nominal' => '1100300.00',
+            'sanggup' => 1,
+            'tidak_sanggup' => 0,
+            'lunas' => 0,
+            'belum_ditentukan' => 1,
+            'upcoming_commitments' => 1,
+            'overdue_commitments' => 1,
+        ], $response->viewData('summary'));
+
+        $export = $this->actingAs($user)->get(route('dana-talangan.export', $query));
+        $sheet = IOFactory::load($export->baseResponse->getFile()->getPathname())->getActiveSheet();
+        $names = array_column($sheet->rangeToArray('C2:C'.$sheet->getHighestRow()), 0);
+        $this->assertSame(['Marketing Ardo Sanggup', 'Marketing Ardo Belum Ditentukan'], $names);
+
+        $blankStatus = $this->actingAs($user)->get(route('dana-talangan.index', [...$query, 'status' => 'belum_ditentukan']));
+        $blankStatus->assertOk()->assertSee('Status: Belum Ditentukan');
+        $this->assertSame(['Marketing Ardo Belum Ditentukan'], collect($blankStatus->viewData('records')->items())->pluck('nama_konsumen')->all());
+        $this->assertSame('9876543211.00', DanaTalanganMoney::sum(['9876543210.99', '0.01']));
     }
 
     public function test_rendering_fix_changelog_is_unique_and_visible(): void

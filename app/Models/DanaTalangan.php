@@ -98,22 +98,7 @@ class DanaTalangan extends Model
 
     public function formattedNominal(): string
     {
-        $nominal = $this->nominal;
-        if ($nominal === null || (string) $nominal === '') {
-            return '—';
-        }
-
-        $value = DanaTalanganMoney::normalize((string) $nominal);
-        if ($value === null) {
-            return '—';
-        }
-
-        $negative = str_starts_with($value, '-');
-        $value = ltrim($value, '-');
-        [$whole, $fraction] = array_pad(explode('.', $value, 2), 2, '00');
-        $whole = preg_replace('/\B(?=(\d{3})+(?!\d))/', '.', ltrim($whole, '0') ?: '0');
-
-        return ($negative ? '-' : '').'Rp'.$whole.','.str_pad($fraction, 2, '0');
+        return DanaTalanganMoney::format($this->nominal);
     }
 
     public function comments(): MorphMany

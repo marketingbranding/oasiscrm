@@ -4,6 +4,39 @@ namespace App\Support;
 
 final class DanaTalanganMoney
 {
+    public static function sum(iterable $values): string
+    {
+        $whole = '0';
+        $fraction = '00';
+
+        foreach ($values as $value) {
+            $normalized = self::normalize($value);
+            if ($normalized === null || str_starts_with($normalized, '-')) {
+                continue;
+            }
+
+            [$valueWhole, $valueFraction] = array_pad(explode('.', $normalized, 2), 2, '00');
+            [$whole, $fraction] = self::addPositive($whole, $fraction, $valueWhole, str_pad($valueFraction, 2, '0'));
+        }
+
+        return $whole.'.'.$fraction;
+    }
+
+    public static function format(mixed $value): string
+    {
+        $normalized = self::normalize($value);
+        if ($normalized === null) {
+            return '—';
+        }
+
+        $negative = str_starts_with($normalized, '-');
+        $normalized = ltrim($normalized, '-');
+        [$whole, $fraction] = array_pad(explode('.', $normalized, 2), 2, '00');
+        $whole = preg_replace('/\B(?=(\d{3})+(?!\d))/', '.', ltrim($whole, '0') ?: '0');
+
+        return ($negative ? '-' : '').'Rp'.$whole.','.str_pad($fraction, 2, '0');
+    }
+
     public static function normalize(mixed $value): ?string
     {
         if ($value === null || trim((string) $value) === '') {
@@ -87,5 +120,30 @@ final class DanaTalanganMoney
         }
 
         return strrev(implode('', $digits));
+    }
+
+    /** @return array{string, string} */
+    private static function addPositive(string $leftWhole, string $leftFraction, string $rightWhole, string $rightFraction): array
+    {
+        $fractionValue = (int) $leftFraction + (int) $rightFraction;
+        $carry = intdiv($fractionValue, 100);
+        $fraction = str_pad((string) ($fractionValue % 100), 2, '0', STR_PAD_LEFT);
+
+        $leftDigits = str_split(strrev($leftWhole));
+        $rightDigits = str_split(strrev($rightWhole));
+        $length = max(count($leftDigits), count($rightDigits));
+        $digits = [];
+
+        for ($index = 0; $index < $length; $index++) {
+            $sum = (int) ($leftDigits[$index] ?? 0) + (int) ($rightDigits[$index] ?? 0) + $carry;
+            $digits[] = (string) ($sum % 10);
+            $carry = intdiv($sum, 10);
+        }
+
+        if ($carry > 0) {
+            $digits[] = (string) $carry;
+        }
+
+        return [ltrim(strrev(implode('', $digits)), '0') ?: '0', $fraction];
     }
 }

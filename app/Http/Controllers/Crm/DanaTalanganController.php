@@ -28,7 +28,9 @@ use App\Services\OrganizationScopeService;
 use App\Services\PresenceService;
 use App\Services\SyncResponseService;
 use App\Services\WorkspaceAccessService;
+use App\Support\DanaTalanganMoney;
 use Carbon\Carbon;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Symfony\Component\HttpFoundation\Response;
@@ -70,7 +72,7 @@ class DanaTalanganController extends Controller
 
     protected string $bulkRedirectRoute = 'dana-talangan.index';
 
-    protected array $bulkRedirectParams = ['branch_id', 'project_name', 'status', 'search', 'filter_mode', 'date_from', 'date_to', 'month_from', 'month_to'];
+    protected array $bulkRedirectParams = ['branch_id', 'project_name', 'marketing', 'status', 'search', 'filter_mode', 'date_from', 'date_to', 'month_from', 'month_to'];
 
     public function __construct(
         private readonly WorkspaceAccessService $workspaceAccess,
@@ -90,6 +92,7 @@ class DanaTalanganController extends Controller
         $selectedBranchId = $request->filled('branch_id') ? $request->integer('branch_id') : null;
         abort_if($selectedBranchId && ! in_array($selectedBranchId, $allowedBranchIds, true), 403);
         $selectedProject = $request->get('project_name');
+        $selectedMarketing = trim((string) $request->get('marketing'));
         $selectedStatus = $request->get('status');
         [$filterMode, $dateFrom, $dateTo, $monthFrom, $monthTo, $rangeStart, $rangeEnd] = $this->resolveDateRange($request);
 
@@ -109,6 +112,14 @@ class DanaTalanganController extends Controller
             ->distinct()
             ->pluck('project_name');
         $projectOptions = $projects->pluck('project_name')->merge($syncedProjectNames)->filter()->unique()->sort()->values();
+        $marketingOptions = DanaTalangan::query()->visibleTo($user)
+            ->when($selectedBranchId, fn ($query) => $query->where('branch_id', $selectedBranchId))
+            ->when($selectedProject, fn ($query) => $query->where('project_name', $selectedProject))
+            ->whereNotNull('nama_marketing')
+            ->where('nama_marketing', '<>', '')
+            ->distinct()
+            ->orderBy('nama_marketing')
+            ->pluck('nama_marketing');
         $query = DanaTalangan::with(['branch', 'creator'])->visibleTo($user)
             ->withCount('comments')
             ->when($selectedBranchId, fn ($query) => $query->where('branch_id', $selectedBranchId));
@@ -121,25 +132,35 @@ class DanaTalanganController extends Controller
         }
 
         $query->when($selectedProject, fn ($q) => $q->where('project_name', $selectedProject));
-        $query->when($selectedStatus, fn ($q) => $q->where('status', $selectedStatus));
+        $query->when($selectedMarketing !== '', fn ($q) => $q->where('nama_marketing', $selectedMarketing));
+        $this->applyStatusFilter($query, $selectedStatus);
         $search = trim((string) $request->get('search'));
         $query->when($search !== '', fn ($q) => $q->whereRaw('LOWER(nama_konsumen) LIKE ?', ['%'.mb_strtolower($search).'%']));
 
-        $statusCounts = DanaTalangan::query()->visibleTo($user)
+        $summaryQuery = DanaTalangan::query()->visibleTo($user)
             ->when($selectedBranchId, fn ($q) => $q->where('branch_id', $selectedBranchId))
             ->when($rangeStart, fn ($q) => $q->whereDate('tanggal', '>=', $rangeStart))
             ->when($rangeEnd, fn ($q) => $q->whereDate('tanggal', '<=', $rangeEnd))
             ->when($selectedProject, fn ($q) => $q->where('project_name', $selectedProject))
-            ->when($selectedStatus, fn ($q) => $q->where('status', $selectedStatus))
-            ->when($search !== '', fn ($q) => $q->whereRaw('LOWER(nama_konsumen) LIKE ?', ['%'.mb_strtolower($search).'%']))
-            ->selectRaw('status, COUNT(*) as total')
+            ->when($selectedMarketing !== '', fn ($q) => $q->where('nama_marketing', $selectedMarketing))
+            ->when($search !== '', fn ($q) => $q->whereRaw('LOWER(nama_konsumen) LIKE ?', ['%'.mb_strtolower($search).'%']));
+        $this->applyStatusFilter($summaryQuery, $selectedStatus);
+        $statusCounts = (clone $summaryQuery)
+            ->selectRaw("COALESCE(NULLIF(status, ''), 'belum_ditentukan') as status, COUNT(*) as total")
             ->groupBy('status')
             ->pluck('total', 'status');
+        $nominal = DanaTalanganMoney::sum((clone $summaryQuery)->pluck('nominal'));
+        $upcomingCommitments = (clone $summaryQuery)->whereDate('tgl_komitmen', '>=', Carbon::today())->count();
+        $overdueCommitments = (clone $summaryQuery)->whereDate('tgl_komitmen', '<', Carbon::today())->count();
         $summary = [
             'total' => (int) $statusCounts->sum(),
+            'nominal' => $nominal,
             'sanggup' => (int) ($statusCounts['sanggup'] ?? 0),
             'tidak_sanggup' => (int) ($statusCounts['tidak_sanggup'] ?? 0),
             'lunas' => (int) ($statusCounts['lunas'] ?? 0),
+            'belum_ditentukan' => (int) ($statusCounts['belum_ditentukan'] ?? 0),
+            'upcoming_commitments' => $upcomingCommitments,
+            'overdue_commitments' => $overdueCommitments,
         ];
 
         $trackingSummary = collect();
@@ -192,7 +213,7 @@ class DanaTalanganController extends Controller
         $canExport = $user->hasPermission('bridge_fund.export');
         $openReconciliationCount = $canReview ? DanaTalanganReconciliationItem::where('status', 'open')->count() : 0;
 
-        return view('crm.dana-talangan.index', compact('records', 'branches', 'projects', 'formProjects', 'projectOptions', 'selectedBranchId', 'selectedProject', 'selectedStatus', 'sortField', 'sortDir', 'perPage', 'syncStatus', 'bridgeSetting', 'search', 'trackingSummary', 'filterMode', 'dateFrom', 'dateTo', 'monthFrom', 'monthTo', 'canSync', 'canManage', 'canExport', 'canReview', 'openReconciliationCount', 'summary'));
+        return view('crm.dana-talangan.index', compact('records', 'branches', 'projects', 'formProjects', 'projectOptions', 'marketingOptions', 'selectedBranchId', 'selectedProject', 'selectedMarketing', 'selectedStatus', 'sortField', 'sortDir', 'perPage', 'syncStatus', 'bridgeSetting', 'search', 'trackingSummary', 'filterMode', 'dateFrom', 'dateTo', 'monthFrom', 'monthTo', 'canSync', 'canManage', 'canExport', 'canReview', 'openReconciliationCount', 'summary'));
     }
 
     public function create()
@@ -337,7 +358,8 @@ class DanaTalanganController extends Controller
             ->when($selectedBranchId, fn ($query) => $query->where('branch_id', $selectedBranchId));
 
         $query->when($request->get('project_name'), fn ($q, $v) => $q->where('project_name', $v));
-        $query->when($request->get('status'), fn ($q, $v) => $q->where('status', $v));
+        $query->when(trim((string) $request->get('marketing')) !== '', fn ($q) => $q->where('nama_marketing', trim((string) $request->get('marketing'))));
+        $this->applyStatusFilter($query, $request->get('status'));
         $query->when(trim((string) $request->get('search')) !== '', fn ($q) => $q->whereRaw(
             'LOWER(nama_konsumen) LIKE ?',
             ['%'.mb_strtolower(trim((string) $request->get('search'))).'%']
@@ -490,7 +512,7 @@ class DanaTalanganController extends Controller
     public function bulkUpdate(Request $request, DanaTalanganService $service)
     {
         abort_unless($request->user()->hasPermission('bridge_fund.manage'), 403);
-        $status = $request->validate(['new_status' => 'required|in:sanggup,tidak_sanggup,lunas'])['new_status'];
+        $status = $request->validate(['new_status' => 'required|in:belum_ditentukan,sanggup,tidak_sanggup,lunas'])['new_status'];
         $updated = 0;
         foreach ($this->bulkRecords($request) as $record) {
             $record->update(['status' => $status, 'updated_by' => $request->user()->id]);
@@ -550,6 +572,25 @@ class DanaTalanganController extends Controller
         }
 
         return $records;
+    }
+
+    private function applyStatusFilter(Builder $query, ?string $status): void
+    {
+        if (! $status) {
+            return;
+        }
+
+        $query->where(function (Builder $statusQuery) use ($status): void {
+            if ($status === 'belum_ditentukan') {
+                $statusQuery->where('status', 'belum_ditentukan')
+                    ->orWhereNull('status')
+                    ->orWhere('status', '');
+
+                return;
+            }
+
+            $statusQuery->where('status', $status);
+        });
     }
 
     private function resolveDateRange(Request $request): array

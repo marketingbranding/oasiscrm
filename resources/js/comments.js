@@ -5,7 +5,8 @@ export default function registerComments(Alpine) {
         comments: [], loading: true, loadingOlder: false, loadError: '', retryAction: null,
         page: 0, lastPage: 1, total: Number(config.initialCount || 0),
         canCreate: false, canMention: false, body: '', mentions: [], sending: false,
-        replies: {}, editing: { id: null, body: '', mentions: [], lock_version: 0 }, deletingId: null, moderation: null,
+        replies: {}, editing: { id: null, body: '', mentions: [], lock_version: 0 }, deletingId: null,
+        moderationOpen: false, moderation: { comment: null, reason: '' },
         historyOpen: false, historyLoading: false, history: [], historyComment: null, overlayTrigger: null,
         suggestions: [], mentionOpen: false, mentionIndex: 0, mentionTimer: null, mentionRequest: null, activeDraft: null, mentionRange: null, mentionTextarea: null,
 
@@ -119,11 +120,16 @@ export default function registerComments(Alpine) {
         openModeration(comment) {
             this.overlayTrigger = document.activeElement;
             this.moderation = { comment, reason: '' };
+            this.moderationOpen = true;
             this.$nextTick(() => this.$refs.moderationDialog?.querySelector('textarea')?.focus());
         },
-        closeModeration() { this.moderation = null; this.$nextTick(() => this.overlayTrigger?.focus()); },
+        closeModeration() {
+            this.moderationOpen = false;
+            this.moderation = { comment: null, reason: '' };
+            this.$nextTick(() => this.overlayTrigger?.focus());
+        },
         async hideComment(event) {
-            if (this.sending || !this.moderation?.reason.trim()) return;
+            if (!this.moderationOpen || this.sending || !this.moderation.reason.trim()) return;
             this.sending = true;
             const comment = this.moderation.comment;
             try {

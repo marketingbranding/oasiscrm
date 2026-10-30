@@ -58,6 +58,9 @@ class UniversalCommentsUiTest extends TestCase
         $this->assertStringContainsString('DIEDIT', $panel);
         $this->assertStringContainsString("event.key === 'ArrowDown'", $script);
         $this->assertStringContainsString("reloadLabel: 'Muat Ulang Komentar'", $script);
+        $this->assertStringContainsString('moderationOpen: false', $script);
+        $this->assertStringContainsString('this.moderationOpen = true', $script);
+        $this->assertStringContainsString('this.moderationOpen = false', $script);
 
         foreach (['ExpenseController.php', 'SalesPocketbookController.php', 'ContentCalendarController.php', 'DanaTalanganController.php'] as $controller) {
             $this->assertStringContainsString('withCount(\'comments\')', file_get_contents(app_path('Http/Controllers/Crm/'.$controller)));

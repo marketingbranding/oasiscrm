@@ -171,7 +171,7 @@ Task-level verification completed:
 - parity/remediation suite: 30 tests, 144 assertions;
 - module access-separation suite: 93 tests, 594 assertions.
 
-- full PHPUnit: **1,542 passed, 11,559 assertions, 0 failures**;
+- full PHPUnit: **1,548 passed, 11,573 assertions, 0 failures**;
 - `php artisan optimize:clear`: passed;
 - `php artisan view:cache`: passed;
 - `php artisan migrate --force`: passed, including the Phase 2.6 Changelog migration;

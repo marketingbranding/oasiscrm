@@ -27,7 +27,7 @@ class StoreExpenseRequest extends FormRequest
         return [
             'expense_date' => ['required', 'date'],
             'branch_id' => ['required', Rule::exists('branches', 'id')->where('is_active', true)],
-            'project_id' => ['nullable', Rule::exists('lead_master', 'id')->where(fn ($query) => $query->where('is_active', true)->where('branch_id', $branchId))],
+            'project_id' => ['required', Rule::exists('lead_master', 'id')->where(fn ($query) => $query->where('is_active', true)->where('branch_id', $branchId))],
             'expense_category_id' => ['required', Rule::exists('expense_categories', 'id')->where(fn ($query) => $query->where('is_active', true)->whereNull('deleted_at'))],
             'amount' => ['required', 'numeric', 'gt:0', 'decimal:0,2', 'max:9999999999999.99'],
             'description' => ['required', 'string', 'max:255'],

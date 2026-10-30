@@ -85,7 +85,7 @@ class ExpenseFilterService
     public function query(array $filters, bool $withSorting = true): Builder
     {
         $query = $this->baseQuery($filters)
-            ->whereBetween('expense_date', [$filters['period_start']->toDateString(), $filters['period_end']->toDateString()]);
+            ->whereBetween('expense_date', [$filters['period_start']->startOfDay(), $filters['period_end']->endOfDay()]);
 
         if ($filters['status'] === 'all') {
             $query->whereIn('status', [Expense::STATUS_ACTIVE, Expense::STATUS_CANCELLED]);
@@ -157,7 +157,7 @@ class ExpenseFilterService
     {
         return $this->baseQuery($filters)
             ->where('status', Expense::STATUS_ACTIVE)
-            ->whereBetween('expense_date', [$start->toDateString(), $end->toDateString()]);
+            ->whereBetween('expense_date', [$start->startOfDay(), $end->endOfDay()]);
     }
 
     private function previousPeriod(array $filters): array

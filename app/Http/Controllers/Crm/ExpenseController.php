@@ -239,7 +239,7 @@ class ExpenseController extends Controller
     private function formData(?Expense $expense, mixed $branchId): array
     {
         $branchIds = $this->organizationScope->branchIds(request()->user(), 'expenses', 'manage');
-        $branches = Branch::where('is_active', true)->whereIn('id', $branchIds)->forDropdown()->get(['id', 'name', 'code']);
+        $branches = Branch::where('is_active', true)->whereIn('id', $branchIds)->forDropdown()->get(['id', 'name', 'code', 'is_active']);
         if ($expense && ! $branches->contains('id', $expense->branch_id)) {
             $branches->push($expense->branch);
         }

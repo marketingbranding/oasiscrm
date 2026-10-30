@@ -36,6 +36,16 @@ class ExpenseReportingExportTest extends TestCase
         $this->assertSame('custom', $response->viewData('filters')['period_type']);
     }
 
+    public function test_custom_date_range_includes_expense_on_the_end_date(): void
+    {
+        $expense = $this->expense(['expense_date' => '2026-10-30', 'description' => 'END DATE MATCH']);
+
+        $this->assertSame([$expense->id], $this->filteredIds([
+            'date_from' => '2026-10-30',
+            'date_to' => '2026-10-30',
+        ]));
+    }
+
     public function test_each_domain_filter_and_search_excludes_its_nonmatching_record(): void
     {
         $branch = $this->expenseBranch('Filter Branch');

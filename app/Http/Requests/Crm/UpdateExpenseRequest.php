@@ -27,7 +27,7 @@ class UpdateExpenseRequest extends StoreExpenseRequest
 
         return array_replace($this->expenseRules(), [
             'branch_id' => ['required', $branchRule],
-            'project_id' => ['nullable', $projectRule],
+            'project_id' => ['required', $projectRule],
             'expense_category_id' => ['required', $categoryRule],
             'expected_updated_at' => ['required', 'string', 'max:40'],
         ]);

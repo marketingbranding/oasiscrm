@@ -131,6 +131,35 @@ class ExpenseManagementTest extends TestCase
         $this->assertSame(0, Expense::where('description', 'like', 'Invalid%')->count());
     }
 
+    public function test_project_is_required_for_new_and_updated_expenses(): void
+    {
+        $branch = $this->expenseBranch();
+        $project = $this->expenseProject($branch);
+        $category = $this->expenseCategory();
+        $user = $this->expenseUser('pusat', $branch);
+
+        $this->actingAs($user)->post(route('expenses.store'), $this->validExpensePayload(
+            $branch,
+            $project,
+            $category,
+            ['project_id' => null],
+        ))->assertSessionHasErrors('project_id');
+
+        $expense = $this->expense(compact('branch', 'project', 'category') + ['creator' => $user]);
+
+        $this->actingAs($user)->put(route('expenses.update', $expense), $this->validExpensePayload(
+            $branch,
+            $project,
+            $category,
+            [
+                'project_id' => null,
+                'expected_updated_at' => app(OptimisticLockService::class)->token($expense),
+            ],
+        ))->assertSessionHasErrors('project_id');
+
+        $this->assertSame('Biaya operasional pengujian', $expense->fresh()->description);
+    }
+
     public function test_inactive_historical_category_remains_visible_but_is_not_selectable_for_new_expenses(): void
     {
         $branch = $this->expenseBranch();

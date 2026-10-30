@@ -107,6 +107,24 @@ class ExpenseAccessTest extends TestCase
         }
     }
 
+    public function test_expense_form_requires_project_and_labels_active_branches_correctly(): void
+    {
+        $branch = $this->expenseBranch('Active Expense Branch');
+        $user = $this->expenseUser('pusat', $branch);
+
+        $response = $this->actingAs($user)->get(route('expenses.create'))->assertOk();
+        $html = $response->getContent();
+
+        $this->assertStringContainsString('name="project_id"', $html);
+        $this->assertStringContainsString('name="project_id" x-model="projectId"', $html);
+        $this->assertStringContainsString(':disabled="loadingProjects || !branchId || Boolean(projectError)"', $html);
+        $this->assertStringContainsString('x-init="syncProjectSelection()"', $html);
+        $this->assertStringContainsString(':disabled="submitting || Boolean(projectError)', $html);
+        $this->assertStringContainsString('required class=', $html);
+        $this->assertStringNotContainsString('— Tanpa Proyek —', $html);
+        $this->assertStringNotContainsString($branch->name.' (Tidak Aktif)', $html);
+    }
+
     public function test_category_management_is_superadmin_only_at_ui_and_http_layers(): void
     {
         $branch = $this->expenseBranch();

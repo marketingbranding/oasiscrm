@@ -30,9 +30,9 @@
             @error('branch_id')<p class="mt-1 text-xs font-bold text-[#c0392b]">{{ $message }}</p>@enderror
         </div>
         <div>
-            <label class="mb-1 block font-[Helvetica] text-xs font-bold uppercase">Proyek</label>
-            <select name="project_id" x-model="projectId" :disabled="loadingProjects || !branchId || projectError" class="{{ $field }}">
-                <option value="" x-text="loadingProjects ? 'Memuat proyek...' : '— Tanpa Proyek —'"></option>
+            <label class="mb-1 block font-[Helvetica] text-xs font-bold uppercase">Proyek <span class="text-[#c0392b]">*</span></label>
+            <select name="project_id" x-model="projectId" x-init="syncProjectSelection()" :disabled="loadingProjects || !branchId || Boolean(projectError)" required class="{{ $field }}">
+                <option value="" x-text="loadingProjects ? 'Memuat proyek...' : '— Pilih Proyek —'"></option>
                 <template x-for="project in projects" :key="project.id"><option :value="project.id" x-text="project.name"></option></template>
             </select>
             <p x-show="!loadingProjects && branchId && !projectError && projects.length === 0" class="mt-1 text-xs italic">Tidak ada proyek aktif untuk cabang ini.</p>
@@ -71,8 +71,8 @@
         <div class="md:col-span-2"><label class="mb-1 block font-[Helvetica] text-xs font-bold uppercase">Catatan</label><textarea name="notes" maxlength="2000" rows="4" class="{{ $field }}">{{ old('notes', $expense?->notes) }}</textarea>@error('notes')<p class="mt-1 text-xs font-bold text-[#c0392b]">{{ $message }}</p>@enderror</div>
     </div>
     <div class="flex flex-wrap gap-2 border-t-2 border-black bg-gray-100 p-4">
-        <button type="submit" @unless($editing) @click="$refs.submitAction.value = 'save'" @endunless :disabled="submitting || projectError || {{ $categories->isEmpty() ? 'true' : 'false' }}" class="border-2 border-black bg-[#b3bd95] px-4 py-2 font-bold disabled:opacity-50">{{ $editing ? 'Simpan Perubahan' : 'Simpan' }}</button>
-        @unless($editing)<button type="submit" @click="$refs.submitAction.value = 'add_another'" :disabled="submitting || projectError || {{ $categories->isEmpty() ? 'true' : 'false' }}" class="border-2 border-black bg-white px-4 py-2 font-bold disabled:opacity-50">Simpan &amp; Tambah Lagi</button>@endunless
+        <button type="submit" @unless($editing) @click="$refs.submitAction.value = 'save'" @endunless :disabled="submitting || Boolean(projectError) || {{ $categories->isEmpty() ? 'true' : 'false' }}" class="border-2 border-black bg-[#b3bd95] px-4 py-2 font-bold disabled:opacity-50">{{ $editing ? 'Simpan Perubahan' : 'Simpan' }}</button>
+        @unless($editing)<button type="submit" @click="$refs.submitAction.value = 'add_another'" :disabled="submitting || Boolean(projectError) || {{ $categories->isEmpty() ? 'true' : 'false' }}" class="border-2 border-black bg-white px-4 py-2 font-bold disabled:opacity-50">Simpan &amp; Tambah Lagi</button>@endunless
         <a href="{{ $editing ? route('expenses.show', $expense) : route('expenses.index') }}" class="border-2 border-black bg-white px-4 py-2 font-bold">Batal</a>
     </div>
 </form>
@@ -89,6 +89,13 @@ document.addEventListener('alpine:init', () => {
         projectError: '',
         submitting: false,
         projectRequest: 0,
+        syncProjectSelection() {
+            this.$nextTick(() => {
+                if (this.projectId) {
+                    this.$el.value = this.projectId;
+                }
+            });
+        },
         async loadProjects(clearSelection) {
             if (clearSelection) this.projectId = '';
             this.projects = [];
@@ -102,6 +109,7 @@ document.addEventListener('alpine:init', () => {
                 if (!response.ok) throw new Error(data.message || 'Pilihan proyek gagal dimuat. Silakan coba lagi.');
                 if (requestId !== this.projectRequest) return;
                 this.projects = data.projects;
+                this.syncProjectSelection();
             } catch (error) {
                 if (requestId !== this.projectRequest) return;
                 this.projectError = error.message || 'Pilihan proyek gagal dimuat. Silakan coba lagi.';

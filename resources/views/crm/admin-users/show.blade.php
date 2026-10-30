@@ -48,6 +48,7 @@
                 <div><dt class="font-bold">Email</dt><dd>{{ $user->email }}</dd></div>
                 <div><dt class="font-bold">Telepon</dt><dd>{{ $user->phone ?: '-' }}</dd></div>
                 <div><dt class="font-bold">Peran</dt><dd>{{ $user->role?->name }}</dd></div>
+                @if($user->isSales())<div><dt class="font-bold">Kategori Sales</dt><dd>{{ $user->sales_category?->label() ?? 'Belum Ditentukan' }}</dd></div>@endif
                 <div><dt class="font-bold">Peran Tambahan</dt><dd>{{ $user->roles->pluck('name')->join(', ') ?: '-' }}</dd></div>
                 <div><dt class="font-bold">Cabang Utama</dt><dd>{{ $user->branch?->name ?: '-' }}</dd></div>
                 <div><dt class="font-bold">Cabang Tambahan</dt><dd>{{ $user->branches->where('id','!=',$user->branch_id)->pluck('name')->join(', ') ?: '-' }}</dd></div>

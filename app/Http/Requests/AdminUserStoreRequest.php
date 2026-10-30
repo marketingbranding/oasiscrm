@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests;
 
+use App\Enums\SalesCategory;
 use App\Models\Branch;
 use App\Models\LeadMaster;
 use App\Models\Role;
@@ -41,6 +42,7 @@ class AdminUserStoreRequest extends FormRequest
             'email' => ['required', 'email', 'max:255', Rule::unique(User::class, 'email')],
             'phone' => ['nullable', 'string', 'max:20'],
             'role_id' => ['required', Rule::exists(Role::class, 'id')->where('is_active', true)],
+            'sales_category' => ['nullable', Rule::enum(SalesCategory::class)],
             'branch_id' => ['nullable', Rule::exists(Branch::class, 'id')->where('is_active', true)],
             'branch_ids' => [Rule::prohibitedIf(fn (): bool => blank($this->input('branch_id'))), 'nullable', 'array'],
             'branch_ids.*' => ['integer', 'distinct', Rule::exists(Branch::class, 'id')->where('is_active', true)],
@@ -61,7 +63,7 @@ class AdminUserStoreRequest extends FormRequest
 
     public function attributes(): array
     {
-        return ['name' => 'nama lengkap', 'role_id' => 'peran', 'branch_id' => 'cabang utama', 'branch_ids' => 'cabang tambahan', 'assigned_project_ids' => 'proyek tambahan', 'primary_project_id' => 'proyek utama', 'supervisor_user_id' => 'atasan langsung'];
+        return ['name' => 'nama lengkap', 'role_id' => 'peran', 'sales_category' => 'kategori Sales', 'branch_id' => 'cabang utama', 'branch_ids' => 'cabang tambahan', 'assigned_project_ids' => 'proyek tambahan', 'primary_project_id' => 'proyek utama', 'supervisor_user_id' => 'atasan langsung'];
     }
 
     public function after(): array

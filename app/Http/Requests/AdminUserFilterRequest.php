@@ -3,6 +3,7 @@
 namespace App\Http\Requests;
 
 use App\Enums\AccountStatus;
+use App\Enums\SalesCategory;
 use App\Models\User;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
@@ -21,6 +22,7 @@ class AdminUserFilterRequest extends FormRequest
             'account_status' => ['nullable', Rule::enum(AccountStatus::class)],
             'role_id' => ['nullable', 'integer'], 'branch_id' => ['nullable', 'integer'],
             'project_id' => ['nullable', 'integer'], 'supervisor_user_id' => ['nullable', 'integer'],
+            'sales_category' => ['nullable', Rule::in([...array_map(fn (SalesCategory $category): string => $category->value, SalesCategory::cases()), 'unclassified'])],
             'invitation_status' => ['nullable', Rule::in(['draft', 'usable', 'expired', 'accepted', 'revoked'])],
             'sort' => ['nullable', Rule::in(['name', 'email', 'last_login_at', 'account_status'])],
             'direction' => ['nullable', Rule::in(['asc', 'desc'])],

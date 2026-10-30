@@ -59,6 +59,10 @@ class AdminUserController extends Controller
                 ->where('name', 'like', "%{$search}%")->orWhere('email', 'like', "%{$search}%")))
             ->when($filters['account_status'] ?? null, fn (Builder $q, string $status) => $q->where('account_status', $status))
             ->when($filters['role_id'] ?? null, fn (Builder $q, $id) => $q->where('role_id', $id))
+            ->when($filters['sales_category'] ?? null, function (Builder $q, string $category): void {
+                $q->whereHas('role', fn (Builder $role) => $role->where('slug', 'sales'))
+                    ->when($category === 'unclassified', fn (Builder $query) => $query->whereNull('sales_category'), fn (Builder $query) => $query->where('sales_category', $category));
+            })
             ->when($filters['branch_id'] ?? null, fn (Builder $q, $id) => $q->where(fn (Builder $inner) => $inner->where('branch_id', $id)->orWhereHas('branches', fn (Builder $b) => $b->whereKey($id))))
             ->when($filters['project_id'] ?? null, fn (Builder $q, $id) => $q->whereHas('assignedProjects', fn (Builder $p) => $p->whereKey($id)))
             ->when($filters['supervisor_user_id'] ?? null, fn (Builder $q, $id) => $q->where('supervisor_user_id', $id))
@@ -99,10 +103,11 @@ class AdminUserController extends Controller
         $direct = $data['provisioning_mode'] === 'direct';
         abort_if($direct && ! $actor->isSuperadmin(), 403);
 
-        $user = DB::transaction(function () use ($actor, $data, $branchIds, $projectIds, $direct) {
+        $user = DB::transaction(function () use ($actor, $data, $branchIds, $projectIds, $direct, $role) {
             $attributes = [
                 'name' => $data['name'], 'email' => $data['email'], 'phone' => $data['phone'] ?? null,
                 'role_id' => $data['role_id'],
+                'sales_category' => $role->slug === 'sales' ? ($data['sales_category'] ?? null) : null,
             ];
             $user = $direct
                 ? $this->provisioning->createDirectlyActivated($attributes, $data['temporary_password'], $actor)
@@ -191,9 +196,16 @@ class AdminUserController extends Controller
         }
         $this->assertAssignmentPermissions($actor, $branchIds, $projectIds, $data['supervisor_user_id'] ?? null, $admin_user);
 
-        return $this->locks->execute($request, $admin_user, $data['expected_updated_at'], function (User $user) use ($actor, $data, $branchIds, $projectIds) {
-            $old = $user->only(['name', 'email', 'phone', 'role_id']);
-            $user->fill(['name' => $data['name'], 'email' => $data['email'], 'phone' => $data['phone'] ?? null, 'role_id' => $data['role_id'], 'updated_by' => $actor->id]);
+        return $this->locks->execute($request, $admin_user, $data['expected_updated_at'], function (User $user) use ($actor, $data, $branchIds, $projectIds, $role) {
+            $old = $user->only(['name', 'email', 'phone', 'role_id', 'sales_category']);
+            $user->fill([
+                'name' => $data['name'],
+                'email' => $data['email'],
+                'phone' => $data['phone'] ?? null,
+                'role_id' => $data['role_id'],
+                'sales_category' => $role->slug === 'sales' ? ($data['sales_category'] ?? null) : null,
+                'updated_by' => $actor->id,
+            ]);
             if ($user->isDirty('email')) {
                 $user->email_verified_at = null;
             }
@@ -204,7 +216,7 @@ class AdminUserController extends Controller
                 $this->hierarchy->assignSupervisor($user, $supervisorId, $actor);
             }
             $this->salesCoordinators->sync($user, (array) ($data['coordinator_sales_ids'] ?? []));
-            $this->audit->log('user_updated', $user, $actor, $old, $user->only(['name', 'email', 'phone', 'role_id']));
+            $this->audit->log('user_updated', $user, $actor, $old, $user->only(['name', 'email', 'phone', 'role_id', 'sales_category']));
 
             return redirect()->route('admin-users.show', $user)->with('success', 'Data pengguna berhasil diperbarui.');
         });

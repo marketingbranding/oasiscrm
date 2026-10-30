@@ -3,6 +3,7 @@
 namespace App\Http\Requests;
 
 use App\Enums\AccountStatus;
+use App\Enums\SalesCategory;
 use App\Models\Branch;
 use App\Models\LeadMaster;
 use App\Models\Role;
@@ -34,6 +35,7 @@ class AdminUserUpdateRequest extends FormRequest
             'email' => ['required', 'email', 'max:255', Rule::unique(User::class, 'email')->ignore($target)],
             'phone' => ['nullable', 'string', 'max:20'],
             'role_id' => ['required', Rule::exists(Role::class, 'id')->where('is_active', true)],
+            'sales_category' => ['nullable', Rule::enum(SalesCategory::class)],
             'branch_id' => ['required', Rule::exists(Branch::class, 'id')->where('is_active', true)],
             'branch_ids' => ['nullable', 'array'],
             'branch_ids.*' => ['integer', 'distinct', Rule::exists(Branch::class, 'id')->where('is_active', true)],

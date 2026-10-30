@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Enums\AccountStatus;
+use App\Enums\SalesCategory;
 use Database\Factories\UserFactory;
 use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
@@ -41,6 +42,7 @@ use Illuminate\Support\Facades\Schema;
     'updated_by',
     'password_changed_at',
     'must_change_password',
+    'sales_category',
 ])]
 #[Hidden(['password', 'remember_token'])]
 class User extends Authenticatable implements MustVerifyEmail
@@ -99,6 +101,7 @@ class User extends Authenticatable implements MustVerifyEmail
             'email_verified_at' => 'datetime',
             'password_changed_at' => 'datetime',
             'account_status' => AccountStatus::class,
+            'sales_category' => SalesCategory::class,
             'invited_at' => 'datetime',
             'activated_at' => 'datetime',
             'suspended_at' => 'datetime',

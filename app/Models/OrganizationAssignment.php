@@ -8,6 +8,10 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class OrganizationAssignment extends Model
 {
+    public const REPORTS_TO = 'reports_to';
+
+    public const SALES_TEAM_MEMBER_OF = 'sales_team_member_of';
+
     protected $fillable = [
         'user_id',
         'parent_user_id',
@@ -68,12 +72,26 @@ class OrganizationAssignment extends Model
 
     public function scopeReportsTo(Builder $query): Builder
     {
-        return $query->where('relationship_type', 'reports_to');
+        return $query->where('relationship_type', self::REPORTS_TO);
+    }
+
+    public function scopeSalesTeamMemberOf(Builder $query): Builder
+    {
+        return $query->where('relationship_type', self::SALES_TEAM_MEMBER_OF);
     }
 
     public function scopeCurrent(Builder $query): Builder
     {
         return $query->reportsTo()
+            ->where('is_active', true)
+            ->where('is_primary', true)
+            ->whereDate('started_at', '<=', today())
+            ->where(fn (Builder $date) => $date->whereNull('ended_at')->orWhereDate('ended_at', '>', today()));
+    }
+
+    public function scopeCurrentSalesTeam(Builder $query): Builder
+    {
+        return $query->salesTeamMemberOf()
             ->where('is_active', true)
             ->where('is_primary', true)
             ->whereDate('started_at', '<=', today())

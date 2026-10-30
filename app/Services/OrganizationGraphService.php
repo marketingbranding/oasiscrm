@@ -6,7 +6,6 @@ use App\Enums\AccountStatus;
 use App\Exceptions\OrganizationAssignmentConflictException;
 use App\Models\OrganizationAssignment;
 use App\Models\OrganizationUnit;
-use App\Models\SalesCoordinatorSales;
 use App\Models\User;
 use Carbon\CarbonImmutable;
 use Carbon\CarbonInterface;
@@ -17,7 +16,9 @@ use Throwable;
 
 class OrganizationGraphService
 {
-    public const REPORTS_TO = 'reports_to';
+    public const REPORTS_TO = OrganizationAssignment::REPORTS_TO;
+
+    public const SALES_TEAM_MEMBER_OF = OrganizationAssignment::SALES_TEAM_MEMBER_OF;
 
     public function __construct(
         private readonly WorkspaceAccessService $workspaceAccess,
@@ -36,6 +37,155 @@ class OrganizationGraphService
             ->current()
             ->with(['parent.role', 'user.role'])
             ->first();
+    }
+
+    public function currentSalesTeamAssignment(User $sales): ?OrganizationAssignment
+    {
+        return OrganizationAssignment::query()
+            ->where('user_id', $sales->id)
+            ->currentSalesTeam()
+            ->with(['parent.role', 'user.role'])
+            ->first();
+    }
+
+    public function currentSalesTeamCoordinator(User $sales): ?User
+    {
+        return $this->currentSalesTeamAssignment($sales)?->parent()->first();
+    }
+
+    /** @return array<int> */
+    public function salesTeamMemberIds(User $coordinator, bool $includeHistorical = false): array
+    {
+        $query = OrganizationAssignment::query()
+            ->salesTeamMemberOf()
+            ->where('parent_user_id', $coordinator->id)
+            ->whereDate('started_at', '<=', today())
+            ->with('user.role');
+
+        if (! $includeHistorical) {
+            $query->currentSalesTeam();
+        }
+
+        $ids = $query->get()
+            ->filter(fn (OrganizationAssignment $assignment): bool => $assignment->user?->hasPrimaryRole('sales'))
+            ->pluck('user_id')
+            ->map(fn ($id): int => (int) $id)
+            ->unique()
+            ->sort()
+            ->values()
+            ->all();
+
+        return User::query()->whereIn('id', $ids)->where('is_active', true)
+            ->pluck('id')->map(fn ($id): int => (int) $id)->all();
+    }
+
+    public function validateSalesTeamMember(User $sales, User $coordinator): void
+    {
+        $this->assertTargetAndParent($sales, $coordinator);
+
+        if (! $sales->hasPrimaryRole('sales')) {
+            throw ValidationException::withMessages(['user' => 'Anggota Sales harus memiliki primary role sales.']);
+        }
+        if (! $coordinator->hasPrimaryRole('sales_coordinator')) {
+            throw ValidationException::withMessages(['parent_user_id' => 'Target harus memiliki primary role sales_coordinator.']);
+        }
+        if (blank($sales->branch_id) || blank($coordinator->branch_id) || (int) $sales->branch_id !== (int) $coordinator->branch_id) {
+            throw ValidationException::withMessages(['parent_user_id' => 'Sales dan Koordinator harus berada pada cabang utama yang sama.']);
+        }
+    }
+
+    public function assignSalesTeamMember(
+        User $sales,
+        User $coordinator,
+        ?User $actor = null,
+        ?CarbonInterface $effectiveDate = null,
+        ?string $source = null,
+        ?string $reason = null,
+    ): ?OrganizationAssignment {
+        $effectiveDate = CarbonImmutable::instance($effectiveDate ?? today())->startOfDay();
+        if (! $effectiveDate->isToday()) {
+            throw ValidationException::withMessages(['effective_date' => 'Perubahan struktur harus menggunakan tanggal hari ini.']);
+        }
+
+        $this->validateSalesTeamMember($sales, $coordinator);
+
+        return DB::transaction(function () use ($actor, $coordinator, $effectiveDate, $reason, $sales, $source): ?OrganizationAssignment {
+            $lockedSales = User::query()->with('role')->lockForUpdate()->findOrFail($sales->id);
+            $lockedCoordinator = User::query()->with('role')->lockForUpdate()->findOrFail($coordinator->id);
+            $this->validateSalesTeamMember($lockedSales, $lockedCoordinator);
+
+            $currentAssignments = OrganizationAssignment::query()
+                ->where('user_id', $lockedSales->id)
+                ->salesTeamMemberOf()
+                ->where('is_active', true)
+                ->where('is_primary', true)
+                ->lockForUpdate()
+                ->get();
+            $same = $currentAssignments->firstWhere('parent_user_id', $lockedCoordinator->id);
+
+            $currentAssignments->reject(fn (OrganizationAssignment $assignment): bool => $same?->is($assignment) ?? false)
+                ->each(fn (OrganizationAssignment $assignment) => $assignment->forceFill([
+                    'is_active' => false,
+                    'ended_at' => $effectiveDate->toDateString(),
+                    'lock_version' => $assignment->lock_version + 1,
+                ])->save());
+
+            if ($same !== null) {
+                return $same;
+            }
+
+            $assignment = OrganizationAssignment::create([
+                'user_id' => $lockedSales->id,
+                'parent_user_id' => $lockedCoordinator->id,
+                'organization_unit_id' => $lockedSales->organization_unit_id,
+                'relationship_type' => self::SALES_TEAM_MEMBER_OF,
+                'branch_id' => $lockedSales->branch_id,
+                'project_id' => null,
+                'started_at' => $effectiveDate->toDateString(),
+                'is_active' => true,
+                'is_primary' => true,
+                'source' => $source ?? 'organization_sales_team',
+                'changed_by' => $actor?->id,
+                'reason' => $reason,
+                'lock_version' => 1,
+            ]);
+
+            $this->audit->log('organization_sales_team_assignment_changed', $lockedSales, $actor, [
+                'old_coordinator_id' => $same?->parent_user_id,
+            ], [
+                'new_coordinator_id' => $assignment->parent_user_id,
+                'effective_date' => $effectiveDate->toDateString(),
+                'source' => $source ?? 'organization_sales_team',
+                'reason' => $reason,
+                'branch_id' => $lockedSales->branch_id,
+            ]);
+
+            return $assignment->load(['parent.role', 'user.role']);
+        }, attempts: 3);
+    }
+
+    public function closeSalesTeamMember(User $sales, User $coordinator, ?string $reason = null): void
+    {
+        DB::transaction(function () use ($coordinator, $reason, $sales): void {
+            $assignment = OrganizationAssignment::query()
+                ->where('user_id', $sales->id)
+                ->where('parent_user_id', $coordinator->id)
+                ->salesTeamMemberOf()
+                ->where('is_active', true)
+                ->lockForUpdate()
+                ->first();
+
+            if ($assignment === null) {
+                return;
+            }
+
+            $assignment->forceFill([
+                'is_active' => false,
+                'ended_at' => today()->toDateString(),
+                'lock_version' => $assignment->lock_version + 1,
+                'reason' => $reason ?? $assignment->reason,
+            ])->save();
+        }, attempts: 3);
     }
 
     public function directChildren(User $parent): Collection
@@ -359,7 +509,6 @@ class OrganizationGraphService
             ]);
 
             $lockedUser->forceFill(['supervisor_user_id' => $lockedParent?->id])->saveQuietly();
-            $this->syncLegacySalesProjection($lockedUser, $lockedParent, $effectiveDate, $source);
             $this->audit->log('organization_assignment_changed', $lockedUser, $actor, [
                 'old_parent_id' => $current?->parent_user_id,
                 'old_assignment_id' => $current?->id,
@@ -549,31 +698,5 @@ class OrganizationGraphService
             ->where(fn ($query) => $query->whereNull('assignment_start_date')->orWhereDate('assignment_start_date', '<=', today()))
             ->where(fn ($query) => $query->whereNull('assignment_end_date')->orWhereDate('assignment_end_date', '>=', today()))
             ->pluck('project_id')->map(fn ($id) => (int) $id)->all();
-    }
-
-    private function syncLegacySalesProjection(User $sales, ?User $parent, CarbonImmutable $effectiveDate, string $source): void
-    {
-        if (! $sales->hasPrimaryRole('sales') || $source === 'legacy_reporting_hierarchy') {
-            return;
-        }
-
-        $current = SalesCoordinatorSales::query()->where('sales_user_id', $sales->id)->current()->get();
-        $sameCoordinator = $parent?->hasPrimaryRole('sales_coordinator')
-            ? $current->firstWhere('coordinator_user_id', $parent->id)
-            : null;
-        $current->reject(fn (SalesCoordinatorSales $assignment) => $sameCoordinator?->is($assignment) ?? false)
-            ->each(fn (SalesCoordinatorSales $assignment) => $assignment->update([
-                'is_active' => false,
-                'ended_at' => $effectiveDate->toDateString(),
-            ]));
-
-        if ($parent?->hasPrimaryRole('sales_coordinator') && $sameCoordinator === null) {
-            SalesCoordinatorSales::create([
-                'coordinator_user_id' => $parent->id,
-                'sales_user_id' => $sales->id,
-                'is_active' => true,
-                'started_at' => $effectiveDate->toDateString(),
-            ]);
-        }
     }
 }

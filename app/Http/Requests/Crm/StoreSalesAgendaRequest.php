@@ -36,6 +36,24 @@ class StoreSalesAgendaRequest extends FormRequest
         ];
     }
 
+    public function messages(): array
+    {
+        return [
+            'scheduled_date.required' => 'Tanggal agenda wajib diisi.',
+            'scheduled_date.date' => 'Tanggal agenda harus berupa tanggal yang valid.',
+            'start_time.date_format' => 'Waktu mulai harus menggunakan format jam yang valid.',
+            'end_time.date_format' => 'Waktu selesai harus menggunakan format jam yang valid.',
+            'end_time.after' => 'Waktu selesai harus setelah waktu mulai.',
+            'sales_activity_category.required' => 'Kategori aktivitas Sales wajib dipilih.',
+            'sales_activity_category.in' => 'Kategori aktivitas Sales tidak dikenali.',
+            'title.required' => 'Judul agenda wajib diisi.',
+            'title.max' => 'Judul agenda maksimal 255 karakter.',
+            'photos.max' => 'Maksimal 2 foto dapat diunggah.',
+            'photos.*.file' => 'Bukti foto harus berupa file yang valid.',
+            'photos.*.max' => 'Ukuran setiap bukti foto terlalu besar.',
+        ];
+    }
+
     protected function prepareForValidation(): void
     {
         $this->merge([

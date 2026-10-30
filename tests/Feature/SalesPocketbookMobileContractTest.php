@@ -214,6 +214,21 @@ class SalesPocketbookMobileContractTest extends TestCase
             ->assertSee('Hasil aktivitas');
     }
 
+    public function test_sales_agenda_validation_uses_understandable_indonesian_messages(): void
+    {
+        [, , $sales] = $this->salesContext();
+
+        $this->actingAs($sales)
+            ->post(route('sales-agendas.store'), [
+                'scheduled_date' => today()->toDateString(),
+            ])
+            ->assertRedirect()
+            ->assertSessionHasErrors([
+                'sales_activity_category' => 'Kategori aktivitas Sales wajib dipilih.',
+                'title' => 'Judul agenda wajib diisi.',
+            ]);
+    }
+
     public function test_sales_can_create_toggle_and_delete_agenda_tasks(): void
     {
         [, $project, $sales] = $this->salesContext();

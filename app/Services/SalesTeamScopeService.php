@@ -189,10 +189,7 @@ class SalesTeamScopeService
                 ->where('users.account_status', AccountStatus::Active->value)
                 ->where('users.is_active', true)
                 ->whereHas('role', fn (Builder $query) => $query->where('slug', 'sales'))
-                ->whereIn('users.id', OrganizationAssignment::query()
-                    ->currentSalesTeam()
-                    ->where('parent_user_id', $coordinator->id)
-                    ->pluck('user_id'));
+                ->whereIn('users.id', $this->graph->salesTeamMemberIds($coordinator));
         }
 
         $ambiguousSalesIds = SalesCoordinatorSales::query()
@@ -277,10 +274,13 @@ class SalesTeamScopeService
             ->whereIn('user_id', $people->keys())
             ->get(['user_id', 'parent_user_id'])
             ->keyBy('user_id');
-        $salesTeamAssignments = OrganizationAssignment::query()
-            ->currentSalesTeam()
-            ->whereIn('parent_user_id', $coordinators->pluck('id'))
-            ->get(['user_id', 'parent_user_id']);
+        $salesTeamAssignments = $coordinators
+            ->flatMap(fn (User $coordinator): Collection => $this->graph->currentSalesTeamAssignments($coordinator))
+            ->map(fn (OrganizationAssignment $assignment): array => [
+                'user_id' => (int) $assignment->user_id,
+                'parent_user_id' => (int) $assignment->parent_user_id,
+            ])
+            ->values();
         $mappedSales = User::query()->with('role:id,slug')
             ->whereIn('id', $salesTeamAssignments->pluck('user_id')->unique())
             ->where('account_status', AccountStatus::Active->value)
@@ -292,16 +292,32 @@ class SalesTeamScopeService
             ->groupBy('parent_user_id')
             ->map(fn (Collection $items) => $items->pluck('user_id')->map(fn ($id) => (int) $id)->unique()->values());
         if ($includeHistorical) {
-            $historicalMappings = OrganizationAssignment::query()
+            $historicalMappings = collect(OrganizationAssignment::query()
                 ->salesTeamMemberOf()
                 ->whereDate('started_at', '<=', today())
                 ->whereIn('parent_user_id', $coordinators->pluck('id'))
-                ->get(['parent_user_id', 'user_id']);
+                ->get(['parent_user_id', 'user_id'])
+                ->map(fn (OrganizationAssignment $assignment): array => [
+                    'parent_user_id' => (int) $assignment->parent_user_id,
+                    'user_id' => (int) $assignment->user_id,
+                ])->all());
+            $historicalMappings = $historicalMappings->merge(
+                SalesCoordinatorSales::query()
+                    ->currentOrHistorical()
+                    ->withValidRoles()
+                    ->whereIn('coordinator_user_id', $coordinators->pluck('id'))
+                    ->get(['coordinator_user_id', 'sales_user_id'])
+                    ->map(fn (SalesCoordinatorSales $mapping): array => [
+                        'parent_user_id' => (int) $mapping->coordinator_user_id,
+                        'user_id' => (int) $mapping->sales_user_id,
+                    ]),
+            );
             $historicalSales = User::query()->with('role:id,slug')
                 ->whereIn('id', $historicalMappings->pluck('user_id')->unique())
                 ->where('account_status', AccountStatus::Active->value)
                 ->where('is_active', true)
-                ->get();
+                ->get()
+                ->filter(fn (User $user): bool => $this->isRole($user, 'sales'));
             $historicalByCoordinator = $historicalMappings
                 ->groupBy('parent_user_id')
                 ->map(fn (Collection $items) => $items->pluck('user_id')->map(fn ($id) => (int) $id)->reject(

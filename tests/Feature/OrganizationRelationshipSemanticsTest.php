@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Enums\AccountStatus;
+use App\Models\ActivityLog;
 use App\Models\Branch;
 use App\Models\OrganizationAssignment;
 use App\Models\Role;
@@ -12,6 +13,7 @@ use App\Services\OrganizationScopeService;
 use App\Services\SalesCoordinatorAssignmentService;
 use App\Services\SalesTeamScopeService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 use Tests\TestCase;
 
@@ -117,6 +119,24 @@ class OrganizationRelationshipSemanticsTest extends TestCase
         $this->assertSame(2, OrganizationAssignment::query()->salesTeamMemberOf()->where('user_id', $sales->id)->count());
     }
 
+    public function test_reporting_to_a_coordinator_does_not_create_sales_team_membership(): void
+    {
+        $branch = $this->branch('RCO');
+        $coordinator = $this->user('sales_coordinator', $branch);
+        $sales = $this->user('sales', $branch);
+        $graph = app(OrganizationGraphService::class);
+
+        $graph->assign($sales, $coordinator);
+
+        $this->assertDatabaseCount('sales_coordinator_sales', 0);
+        $this->assertDatabaseMissing('organization_assignments', [
+            'user_id' => $sales->id,
+            'relationship_type' => OrganizationAssignment::SALES_TEAM_MEMBER_OF,
+        ]);
+        $this->assertSame($coordinator->id, $graph->currentParent($sales)?->id);
+        $this->assertNull($graph->currentSalesTeamCoordinator($sales));
+    }
+
     public function test_canonical_sales_team_scope_reads_typed_edge_without_reporting_parent(): void
     {
         config(['organization.graph_mode' => 'canonical']);
@@ -196,6 +216,94 @@ class OrganizationRelationshipSemanticsTest extends TestCase
         $this->assertNotContains($sales->id, $graph->salesTeamMemberIds($firstCoordinator));
         $this->assertContains($sales->id, $graph->salesTeamMemberIds($secondCoordinator));
         $this->assertSame(2, $graph->historicalAssignments($sales->fresh())->count());
+    }
+
+    public function test_ambiguous_current_sales_team_edges_fail_closed_in_canonical_reads_and_writes(): void
+    {
+        config(['organization.graph_mode' => 'canonical']);
+        $branch = $this->branch('AMB');
+        $firstCoordinator = $this->user('sales_coordinator', $branch);
+        $secondCoordinator = $this->user('sales_coordinator', $branch);
+        $sales = $this->user('sales', $branch);
+
+        foreach ([$firstCoordinator, $secondCoordinator] as $coordinator) {
+            OrganizationAssignment::query()->create([
+                'user_id' => $sales->id,
+                'parent_user_id' => $coordinator->id,
+                'relationship_type' => OrganizationAssignment::SALES_TEAM_MEMBER_OF,
+                'branch_id' => $branch->id,
+                'started_at' => today()->toDateString(),
+                'is_active' => true,
+                'is_primary' => true,
+                'source' => 'ambiguous_fixture',
+                'lock_version' => 1,
+            ]);
+        }
+
+        $this->assertNull(app(OrganizationGraphService::class)->currentSalesTeamCoordinator($sales));
+        $this->assertSame([], app(SalesTeamScopeService::class)->currentSales($firstCoordinator)->pluck('id')->all());
+        $this->expectException(ValidationException::class);
+        app(OrganizationGraphService::class)->assignSalesTeamMember($sales, $firstCoordinator);
+    }
+
+    public function test_historical_legacy_sales_mapping_is_available_only_in_historical_scope(): void
+    {
+        config(['organization.graph_mode' => 'canonical']);
+        $branch = $this->branch('HST');
+        $coordinator = $this->user('sales_coordinator', $branch);
+        $sales = $this->user('sales', $branch);
+        DB::table('sales_coordinator_sales')->insert([
+            'coordinator_user_id' => $coordinator->id,
+            'sales_user_id' => $sales->id,
+            'is_active' => true,
+            'started_at' => today()->subDays(5)->toDateString(),
+            'ended_at' => today()->subDay()->toDateString(),
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $scope = app(SalesTeamScopeService::class);
+
+        $this->assertSame([], $scope->currentSales($coordinator)->pluck('id')->all());
+        $this->assertContains($sales->id, $scope->for($coordinator, includeHistorical: true)['sales']->pluck('id')->all());
+    }
+
+    public function test_sales_team_replacement_audit_records_old_and_new_coordinators(): void
+    {
+        $branch = $this->branch('AUD');
+        $firstCoordinator = $this->user('sales_coordinator', $branch);
+        $secondCoordinator = $this->user('sales_coordinator', $branch);
+        $sales = $this->user('sales', $branch);
+        $graph = app(OrganizationGraphService::class);
+
+        $graph->assignSalesTeamMember($sales, $firstCoordinator);
+        $graph->assignSalesTeamMember($sales, $secondCoordinator);
+
+        $log = ActivityLog::query()
+            ->where('subject_id', $sales->id)
+            ->where('event', 'organization_sales_team_assignment_changed')
+            ->latest('id')
+            ->firstOrFail();
+
+        $this->assertSame($firstCoordinator->id, $log->properties['old']['coordinator_id']);
+        $this->assertSame($secondCoordinator->id, $log->properties['new']['coordinator_id']);
+    }
+
+    public function test_stale_typed_sales_team_edges_fail_closed_after_branch_or_role_changes(): void
+    {
+        config(['organization.graph_mode' => 'canonical']);
+        $branch = $this->branch('STL');
+        $otherBranch = $this->branch('STX');
+        $coordinator = $this->user('sales_coordinator', $branch);
+        $sales = $this->user('sales', $branch);
+        $graph = app(OrganizationGraphService::class);
+        $graph->assignSalesTeamMember($sales, $coordinator);
+
+        $sales->forceFill(['branch_id' => $otherBranch->id])->saveQuietly();
+        $this->assertFalse(app(SalesTeamScopeService::class)->contains($coordinator, $sales));
+
+        $sales->forceFill(['branch_id' => $branch->id, 'role_id' => Role::query()->where('slug', 'staff')->firstOrFail()->id])->saveQuietly();
+        $this->assertFalse(app(SalesTeamScopeService::class)->contains($coordinator, $sales));
     }
 
     private function branch(string $code): Branch

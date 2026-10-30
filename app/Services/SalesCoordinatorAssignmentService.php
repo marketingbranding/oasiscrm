@@ -14,16 +14,38 @@ class SalesCoordinatorAssignmentService
     public function sync(User $coordinator, array $salesIds): void
     {
         $selected = collect($salesIds)->map(fn ($id) => (int) $id)->unique()->values();
-        $current = SalesCoordinatorSales::query()->where('coordinator_user_id', $coordinator->id)->current()->get();
-        $current->whereNotIn('sales_user_id', $selected)->each(fn (SalesCoordinatorSales $assignment) => $this->end($assignment));
-
         if (! $coordinator->hasPrimaryRole('sales_coordinator')) {
             return;
         }
 
-        foreach ($selected as $salesId) {
-            $this->assign(User::findOrFail($salesId), $coordinator);
-        }
+        DB::transaction(function () use ($coordinator, $selected): void {
+            $selectedUsers = User::query()
+                ->whereIn('id', $selected)
+                ->orderBy('id')
+                ->lockForUpdate()
+                ->get()
+                ->keyBy('id');
+            $lockedCoordinator = User::query()->lockForUpdate()->findOrFail($coordinator->id);
+
+            foreach ($selected as $salesId) {
+                $sales = $selectedUsers->get($salesId);
+                if (! $sales instanceof User) {
+                    throw ValidationException::withMessages(['sales_ids' => "Pengguna Sales {$salesId} tidak ditemukan."]);
+                }
+                $this->graph->validateSalesTeamMember($sales, $lockedCoordinator);
+            }
+
+            $current = SalesCoordinatorSales::query()
+                ->where('coordinator_user_id', $lockedCoordinator->id)
+                ->current()
+                ->lockForUpdate()
+                ->get();
+            $current->whereNotIn('sales_user_id', $selected)->each(fn (SalesCoordinatorSales $assignment) => $this->end($assignment));
+
+            foreach ($selectedUsers as $sales) {
+                $this->assign($sales, $lockedCoordinator);
+            }
+        });
     }
 
     public function assign(User $sales, User $coordinator): SalesCoordinatorSales
@@ -47,10 +69,11 @@ class SalesCoordinatorAssignmentService
         }
 
         return DB::transaction(function () use ($coordinator, $sales): SalesCoordinatorSales {
-            $current = SalesCoordinatorSales::query()->where('sales_user_id', $sales->id)->current()->get();
+            $lockedSales = User::query()->lockForUpdate()->findOrFail($sales->id);
+            $current = SalesCoordinatorSales::query()->where('sales_user_id', $lockedSales->id)->current()->lockForUpdate()->get();
             $same = $current->firstWhere('coordinator_user_id', $coordinator->id);
 
-            $this->graph->assignSalesTeamMember($sales, $coordinator, source: 'legacy_sales_coordinator');
+            $this->graph->assignSalesTeamMember($lockedSales, $coordinator, source: 'legacy_sales_coordinator');
             $current->where('coordinator_user_id', '!=', $coordinator->id)
                 ->each(fn (SalesCoordinatorSales $assignment) => $this->end($assignment));
 

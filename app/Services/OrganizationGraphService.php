@@ -41,11 +41,78 @@ class OrganizationGraphService
 
     public function currentSalesTeamAssignment(User $sales): ?OrganizationAssignment
     {
-        return OrganizationAssignment::query()
+        $assignments = $this->currentSalesTeamAssignmentsForUser($sales);
+
+        return $assignments->count() === 1 ? $assignments->first() : null;
+    }
+
+    /** @return Collection<int, OrganizationAssignment> */
+    public function currentSalesTeamAssignments(User $coordinator, bool $includeHistorical = false): Collection
+    {
+        $query = OrganizationAssignment::query()
+            ->salesTeamMemberOf()
+            ->where('parent_user_id', $coordinator->id)
+            ->with(['parent.role', 'parent', 'user.role', 'user']);
+
+        if ($includeHistorical) {
+            $query->whereDate('started_at', '<=', today());
+        } else {
+            $query->currentSalesTeam();
+        }
+
+        $assignments = $query->get();
+        if ($includeHistorical) {
+            return $assignments;
+        }
+
+        $ambiguousUserIds = OrganizationAssignment::query()
+            ->currentSalesTeam()
+            ->select('user_id')
+            ->groupBy('user_id')
+            ->havingRaw('COUNT(*) > 1')
+            ->pluck('user_id')
+            ->map(fn ($id): int => (int) $id)
+            ->all();
+
+        return $assignments
+            ->groupBy('user_id')
+            ->filter(fn (Collection $rows): bool => $rows->count() === 1
+                && ! in_array((int) $rows->first()->user_id, $ambiguousUserIds, true))
+            ->flatten(1)
+            ->filter(fn (OrganizationAssignment $assignment): bool => $this->isValidCurrentSalesTeamAssignment($assignment))
+            ->values();
+    }
+
+    /** @return Collection<int, OrganizationAssignment> */
+    private function currentSalesTeamAssignmentsForUser(User $sales): Collection
+    {
+        $assignments = OrganizationAssignment::query()
             ->where('user_id', $sales->id)
             ->currentSalesTeam()
-            ->with(['parent.role', 'user.role'])
-            ->first();
+            ->with(['parent.role', 'parent', 'user.role', 'user'])
+            ->get();
+
+        return $assignments->count() === 1
+            ? $assignments->filter(fn (OrganizationAssignment $assignment): bool => $this->isValidCurrentSalesTeamAssignment($assignment))
+            : collect();
+    }
+
+    private function isValidCurrentSalesTeamAssignment(OrganizationAssignment $assignment): bool
+    {
+        $sales = $assignment->user;
+        $coordinator = $assignment->parent;
+
+        return $sales instanceof User
+            && $coordinator instanceof User
+            && $sales->hasPrimaryRole('sales')
+            && $coordinator->hasPrimaryRole('sales_coordinator')
+            && $sales->isAccountActive()
+            && $coordinator->isAccountActive()
+            && $sales->is_active
+            && $coordinator->is_active
+            && $sales->branch_id !== null
+            && $sales->branch_id === $coordinator->branch_id
+            && ($assignment->branch_id === null || (int) $assignment->branch_id === (int) $sales->branch_id);
     }
 
     public function currentSalesTeamCoordinator(User $sales): ?User
@@ -56,18 +123,7 @@ class OrganizationGraphService
     /** @return array<int> */
     public function salesTeamMemberIds(User $coordinator, bool $includeHistorical = false): array
     {
-        $query = OrganizationAssignment::query()
-            ->salesTeamMemberOf()
-            ->where('parent_user_id', $coordinator->id)
-            ->whereDate('started_at', '<=', today())
-            ->with('user.role');
-
-        if (! $includeHistorical) {
-            $query->currentSalesTeam();
-        }
-
-        $ids = $query->get()
-            ->filter(fn (OrganizationAssignment $assignment): bool => $assignment->user?->hasPrimaryRole('sales'))
+        $ids = $this->currentSalesTeamAssignments($coordinator, $includeHistorical)
             ->pluck('user_id')
             ->map(fn ($id): int => (int) $id)
             ->unique()
@@ -75,13 +131,21 @@ class OrganizationGraphService
             ->values()
             ->all();
 
-        return User::query()->whereIn('id', $ids)->where('is_active', true)
-            ->pluck('id')->map(fn ($id): int => (int) $id)->all();
+        return $ids;
     }
 
-    public function validateSalesTeamMember(User $sales, User $coordinator): void
+    public function validateSalesTeamMember(User $sales, User $coordinator, bool $allowPendingSales = false): void
     {
-        $this->assertTargetAndParent($sales, $coordinator);
+        if ($allowPendingSales && in_array($sales->account_status?->value, [AccountStatus::PendingInvitation->value, AccountStatus::Invited->value], true)) {
+            if ($sales->is($coordinator)) {
+                throw ValidationException::withMessages(['parent_user_id' => 'Pengguna tidak dapat menjadi Coordinator dirinya sendiri.']);
+            }
+            if (! $coordinator->isAccountActive() || ! $coordinator->is_active) {
+                throw ValidationException::withMessages(['parent_user_id' => 'Coordinator harus merupakan pengguna aktif.']);
+            }
+        } else {
+            $this->assertTargetAndParent($sales, $coordinator);
+        }
 
         if (! $sales->hasPrimaryRole('sales')) {
             throw ValidationException::withMessages(['user' => 'Anggota Sales harus memiliki primary role sales.']);
@@ -107,12 +171,13 @@ class OrganizationGraphService
             throw ValidationException::withMessages(['effective_date' => 'Perubahan struktur harus menggunakan tanggal hari ini.']);
         }
 
-        $this->validateSalesTeamMember($sales, $coordinator);
+        $allowPendingSales = $source === 'legacy_sales_coordinator';
+        $this->validateSalesTeamMember($sales, $coordinator, $allowPendingSales);
 
-        return DB::transaction(function () use ($actor, $coordinator, $effectiveDate, $reason, $sales, $source): ?OrganizationAssignment {
+        return DB::transaction(function () use ($actor, $allowPendingSales, $coordinator, $effectiveDate, $reason, $sales, $source): ?OrganizationAssignment {
             $lockedSales = User::query()->with('role')->lockForUpdate()->findOrFail($sales->id);
             $lockedCoordinator = User::query()->with('role')->lockForUpdate()->findOrFail($coordinator->id);
-            $this->validateSalesTeamMember($lockedSales, $lockedCoordinator);
+            $this->validateSalesTeamMember($lockedSales, $lockedCoordinator, $allowPendingSales);
 
             $currentAssignments = OrganizationAssignment::query()
                 ->where('user_id', $lockedSales->id)
@@ -121,12 +186,18 @@ class OrganizationGraphService
                 ->where('is_primary', true)
                 ->lockForUpdate()
                 ->get();
+            if ($currentAssignments->count() > 1) {
+                throw ValidationException::withMessages(['organization' => 'Terdapat lebih dari satu assignment Sales-team aktif.']);
+            }
+            $previous = $currentAssignments->first();
             $same = $currentAssignments->firstWhere('parent_user_id', $lockedCoordinator->id);
 
             $currentAssignments->reject(fn (OrganizationAssignment $assignment): bool => $same?->is($assignment) ?? false)
                 ->each(fn (OrganizationAssignment $assignment) => $assignment->forceFill([
                     'is_active' => false,
                     'ended_at' => $effectiveDate->toDateString(),
+                    'changed_by' => $actor?->id,
+                    'reason' => $reason ?? $assignment->reason,
                     'lock_version' => $assignment->lock_version + 1,
                 ])->save());
 
@@ -151,9 +222,9 @@ class OrganizationGraphService
             ]);
 
             $this->audit->log('organization_sales_team_assignment_changed', $lockedSales, $actor, [
-                'old_coordinator_id' => $same?->parent_user_id,
+                'coordinator_id' => $previous?->parent_user_id,
             ], [
-                'new_coordinator_id' => $assignment->parent_user_id,
+                'coordinator_id' => $assignment->parent_user_id,
                 'effective_date' => $effectiveDate->toDateString(),
                 'source' => $source ?? 'organization_sales_team',
                 'reason' => $reason,
@@ -164,9 +235,9 @@ class OrganizationGraphService
         }, attempts: 3);
     }
 
-    public function closeSalesTeamMember(User $sales, User $coordinator, ?string $reason = null): void
+    public function closeSalesTeamMember(User $sales, User $coordinator, ?string $reason = null, ?User $actor = null): void
     {
-        DB::transaction(function () use ($coordinator, $reason, $sales): void {
+        DB::transaction(function () use ($actor, $coordinator, $reason, $sales): void {
             $assignment = OrganizationAssignment::query()
                 ->where('user_id', $sales->id)
                 ->where('parent_user_id', $coordinator->id)
@@ -182,9 +253,16 @@ class OrganizationGraphService
             $assignment->forceFill([
                 'is_active' => false,
                 'ended_at' => today()->toDateString(),
+                'changed_by' => $actor?->id,
                 'lock_version' => $assignment->lock_version + 1,
                 'reason' => $reason ?? $assignment->reason,
             ])->save();
+            $this->audit->log('organization_sales_team_assignment_closed', $sales, $actor, [
+                'coordinator_id' => $coordinator->id,
+            ], [
+                'coordinator_id' => $coordinator->id,
+                'reason' => $reason,
+            ]);
         }, attempts: 3);
     }
 

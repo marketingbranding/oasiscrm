@@ -22,6 +22,7 @@ use App\Services\OrganizationBackfillService;
 use App\Services\OrganizationGraphService;
 use App\Services\OrganizationScopeService;
 use App\Services\ReportingHierarchyService;
+use App\Services\SalesCoordinatorAssignmentService;
 use App\Services\SalesTeamScopeService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
@@ -47,6 +48,7 @@ class OrganizationGraphTest extends TestCase
         $initial = $graph->assign($sales, $firstCoordinator);
 
         $graph->move($actor, $sales, $secondCoordinator, expectedAssignmentId: $initial->id, expectedVersion: 1);
+        app(SalesCoordinatorAssignmentService::class)->assign($sales, $secondCoordinator);
 
         $this->assertSame('sales', $sales->fresh()->role->slug);
         $this->assertSame($secondCoordinator->id, $graph->currentParent($sales)?->id);
@@ -308,19 +310,23 @@ class OrganizationGraphTest extends TestCase
 
         $this->assertSame(5, $actual['created']);
         $this->assertSame(5, $actual['assignments_proposed']);
-        $this->assertSame(5, OrganizationAssignment::query()->current()->count());
+        $this->assertSame(2, OrganizationAssignment::query()->current()->count());
         $this->assertSame($supervisor->id, app(OrganizationGraphService::class)->currentParent($coordinatorOne)?->id);
         $this->assertSame($supervisor->id, app(OrganizationGraphService::class)->currentParent($coordinatorTwo)?->id);
-        $this->assertSame($coordinatorOne->id, app(OrganizationGraphService::class)->currentParent($salesA)?->id);
-        $this->assertSame($coordinatorOne->id, app(OrganizationGraphService::class)->currentParent($salesB)?->id);
-        $this->assertSame($coordinatorTwo->id, app(OrganizationGraphService::class)->currentParent($salesC)?->id);
+        $this->assertNull(app(OrganizationGraphService::class)->currentParent($salesA));
+        $this->assertNull(app(OrganizationGraphService::class)->currentParent($salesB));
+        $this->assertNull(app(OrganizationGraphService::class)->currentParent($salesC));
+        $this->assertSame($coordinatorOne->id, app(OrganizationGraphService::class)->currentSalesTeamCoordinator($salesA)?->id);
+        $this->assertSame($coordinatorOne->id, app(OrganizationGraphService::class)->currentSalesTeamCoordinator($salesB)?->id);
+        $this->assertSame($coordinatorTwo->id, app(OrganizationGraphService::class)->currentSalesTeamCoordinator($salesC)?->id);
 
         $again = $service->run(false);
 
         $this->assertSame(0, $again['assignments_proposed']);
         $this->assertSame(0, $again['created']);
         $this->assertSame(5, $again['already_migrated']);
-        $this->assertSame(5, OrganizationAssignment::query()->current()->count());
+        $this->assertSame(2, OrganizationAssignment::query()->current()->count());
+        $this->assertSame(3, OrganizationAssignment::query()->currentSalesTeam()->count());
         $this->assertDatabaseCount('sales_coordinator_sales', 3);
     }
 
@@ -336,15 +342,24 @@ class OrganizationGraphTest extends TestCase
         $this->artisan('organization:backfill', ['--dry-run' => true])->assertExitCode(0);
         $this->assertDatabaseCount('organization_assignments', 0);
 
-        $this->artisan('organization:backfill')->assertExitCode(0);
+        config(['organization.backfill_isolated' => true]);
+        $this->artisan('organization:backfill', [
+            '--write' => true,
+            '--confirm-isolated' => true,
+            '--user' => [$coordinator->id, $sales->id],
+        ])->assertExitCode(0);
         $this->assertDatabaseCount('organization_assignments', 2);
 
-        $this->artisan('organization:backfill')->assertExitCode(0);
+        $this->artisan('organization:backfill', [
+            '--write' => true,
+            '--confirm-isolated' => true,
+            '--user' => [$coordinator->id, $sales->id],
+        ])->assertExitCode(0);
         $this->assertDatabaseCount('organization_assignments', 2);
-        $this->assertSame(2, OrganizationAssignment::query()->current()->count());
+        $this->assertSame(1, OrganizationAssignment::query()->current()->count());
     }
 
-    public function test_backfill_reports_coordinator_supervisor_ambiguity_without_mutation(): void
+    public function test_backfill_preserves_distinct_coordinator_and_supervisor_relationships(): void
     {
         $branch = $this->branch('AMB');
         $coordinatorOne = $this->user('sales_coordinator', $branch);
@@ -355,10 +370,20 @@ class OrganizationGraphTest extends TestCase
 
         $report = app(OrganizationBackfillService::class)->run(false);
 
-        $this->assertSame(1, $report['conflicts']);
-        $this->assertSame('Coordinator Sales dan supervisor legacy berbeda.', $report['details'][0]['reason']);
-        $this->assertSame(0, $report['created']);
-        $this->assertDatabaseCount('organization_assignments', 0);
+        $this->assertSame(0, $report['conflicts']);
+        $this->assertSame(2, $report['created']);
+        $this->assertDatabaseHas('organization_assignments', [
+            'user_id' => $sales->id,
+            'parent_user_id' => $coordinatorTwo->id,
+            'relationship_type' => OrganizationAssignment::REPORTS_TO,
+            'is_active' => true,
+        ]);
+        $this->assertDatabaseHas('organization_assignments', [
+            'user_id' => $sales->id,
+            'parent_user_id' => $coordinatorOne->id,
+            'relationship_type' => OrganizationAssignment::SALES_TEAM_MEMBER_OF,
+            'is_active' => true,
+        ]);
         $this->assertDatabaseHas('sales_coordinator_sales', ['id' => $mapping->id, 'is_active' => true]);
         $this->assertSame($coordinatorTwo->id, $sales->fresh()->supervisor_user_id);
     }
@@ -463,6 +488,7 @@ class OrganizationGraphTest extends TestCase
 
         $graph->assign($coordinator, $supervisor);
         $graph->assign($sales, $coordinator);
+        $graph->assignSalesTeamMember($sales, $coordinator);
 
         $this->assertContains($sales->id, app(OrganizationScopeService::class)->teamIds($supervisor));
         $this->assertTrue(app(SalesTeamScopeService::class)->contains($coordinator, $sales));
@@ -515,7 +541,13 @@ class OrganizationGraphTest extends TestCase
         $this->legacySalesMapping($coordinatorOne, $salesA);
         $this->legacySalesMapping($coordinatorOne, $salesB);
         $this->legacySalesMapping($coordinatorTwo, $salesC);
-        app(OrganizationBackfillService::class)->run(false);
+        $graph = app(OrganizationGraphService::class);
+        $graph->assign($coordinatorOne, $supervisor);
+        $graph->assign($coordinatorTwo, $supervisor);
+        $salesCoordinatorAssignments = app(SalesCoordinatorAssignmentService::class);
+        $salesCoordinatorAssignments->assign($salesA, $coordinatorOne);
+        $salesCoordinatorAssignments->assign($salesB, $coordinatorOne);
+        $salesCoordinatorAssignments->assign($salesC, $coordinatorTwo);
 
         config(['organization.graph_mode' => 'legacy']);
         app()->forgetScopedInstances();
@@ -573,6 +605,11 @@ class OrganizationGraphTest extends TestCase
         $graph->assign($salesB, $coordinatorOne);
         $graph->assign($salesC, $coordinatorOne);
         $graph->assign($salesD, $coordinatorTwo);
+        $salesCoordinatorAssignments = app(SalesCoordinatorAssignmentService::class);
+        $salesCoordinatorAssignments->assign($salesA, $coordinatorOne);
+        $salesCoordinatorAssignments->assign($salesB, $coordinatorOne);
+        $salesCoordinatorAssignments->assign($salesC, $coordinatorOne);
+        $salesCoordinatorAssignments->assign($salesD, $coordinatorTwo);
         $leadA = SalesLead::create(['branch_id' => $branch->id, 'project_id' => $project->id, 'sales_user_id' => $salesA->id, 'lead_date' => today(), 'customer_name' => 'Sales A', 'created_by' => $salesA->id]);
         $leadB = SalesLead::create(['branch_id' => $branch->id, 'project_id' => $project->id, 'sales_user_id' => $salesB->id, 'lead_date' => today(), 'customer_name' => 'Sales B', 'created_by' => $salesB->id]);
         $agendaA = ContentItem::create(['branch_id' => $branch->id, 'sales_project_id' => $project->id, 'item_type' => 'agenda', 'agenda_type' => ContentItem::SALES_AGENDA_TYPE, 'visibility' => 'team', 'title' => 'Agenda Sales A', 'scheduled_date' => today(), 'status' => 'planned', 'owner_user_id' => $salesA->id, 'created_by' => $salesA->id]);
@@ -588,6 +625,7 @@ class OrganizationGraphTest extends TestCase
         $permissionSlugs = $salesA->role->permissions()->pluck('slug')->sort()->values()->all();
 
         $graph->move($this->user('superadmin', $branch), $salesA, $coordinatorTwo, expectedAssignmentId: $initial->id, expectedVersion: 1);
+        $salesCoordinatorAssignments->assign($salesA, $coordinatorTwo);
 
         config(['organization.graph_mode' => 'legacy']);
         app()->forgetScopedInstances();
@@ -619,8 +657,14 @@ class OrganizationGraphTest extends TestCase
         $this->assertSame($roleId, $salesA->fresh()->role_id);
         $this->assertSame($permissionSlugs, $salesA->fresh()->role->permissions()->pluck('slug')->sort()->values()->all());
         $this->assertSame(1, OrganizationAssignment::query()->current()->where('user_id', $salesA->id)->count());
-        $this->assertSame(2, OrganizationAssignment::query()->where('user_id', $salesA->id)->count());
+        $this->assertSame(4, OrganizationAssignment::query()->where('user_id', $salesA->id)->count());
         $this->assertDatabaseHas('organization_assignments', ['id' => $initial->id, 'is_active' => false]);
+        $this->assertDatabaseHas('organization_assignments', [
+            'user_id' => $salesA->id,
+            'parent_user_id' => $coordinatorOne->id,
+            'relationship_type' => OrganizationAssignment::SALES_TEAM_MEMBER_OF,
+            'is_active' => false,
+        ]);
         $this->assertDatabaseHas('activity_log', ['subject_id' => $salesA->id, 'event' => 'organization_assignment_changed']);
     }
 

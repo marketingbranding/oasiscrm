@@ -5,6 +5,7 @@ namespace App\Imports;
 use App\Imports\Concerns\ParsesImport;
 use App\Models\DanaTalangan;
 use App\Services\ProjectIdentityResolver;
+use App\Support\DanaTalanganMoney;
 use Illuminate\Support\Facades\Auth;
 
 class DanaTalanganImport
@@ -28,6 +29,8 @@ class DanaTalanganImport
 
         [$hasCabang, $branchNames] = self::detectHasCabang($rows, $allowedBranchIds);
         $branchNameToId = self::branchNameToIdMap($allowedBranchIds);
+        $headerMap = self::headerMap($rows[0] ?? []);
+        $hasNominal = isset($headerMap['nominal']);
 
         foreach ($rows as $cells) {
             $rowNum++;
@@ -51,11 +54,9 @@ class DanaTalanganImport
                 }
             }
 
-            $offset = $hasCabang ? 1 : 0;
-
             $branchFromFile = null;
             if ($hasCabang) {
-                $cabangName = trim((string) ($cells[0] ?? ''));
+                $cabangName = self::cell($cells, $headerMap, 'cabang', 0);
                 $branchFromFile = self::resolveBranchFromFile($cabangName, $branchNameToId, $branchNames);
                 if (! $branchFromFile || ($branchId && (int) $branchId !== (int) $branchFromFile)) {
                     $errors[] = "Baris {$rowNum}: Cabang tidak dikenal atau tidak sesuai izin import.";
@@ -64,19 +65,21 @@ class DanaTalanganImport
                 }
             }
 
-            $tanggalRaw = $cells[1 + $offset] ?? '';
-            $namaKonsumen = trim($cells[2 + $offset] ?? '');
-            $kav = trim($cells[3 + $offset] ?? '');
-            $projectName = trim($cells[4 + $offset] ?? '');
-            $pinjamNamaRaw = trim($cells[5 + $offset] ?? '');
-            $pekerjaan = trim($cells[6 + $offset] ?? '');
-            $statusKawin = trim($cells[7 + $offset] ?? '');
-            $umurRaw = trim($cells[8 + $offset] ?? '');
-            $marketing = trim($cells[9 + $offset] ?? '');
-            $tglKomitmenRaw = trim($cells[10 + $offset] ?? '');
-            $penyelesaian = trim($cells[11 + $offset] ?? '');
-            $konfirmasiRaw = trim($cells[12 + $offset] ?? '');
-            $statusRaw = trim($cells[13 + $offset] ?? '');
+            $tanggalRaw = self::cell($cells, $headerMap, 'tanggal', 1);
+            $namaKonsumen = self::cell($cells, $headerMap, 'nama konsumen', 2);
+            $kav = self::cell($cells, $headerMap, 'kav', 3);
+            $projectName = self::cell($cells, $headerMap, 'proyek', 4);
+            $pinjamNamaRaw = self::cell($cells, $headerMap, 'pinjam nama', 5);
+            $pekerjaan = self::cell($cells, $headerMap, 'pekerjaan', 6);
+            $statusKawin = self::cell($cells, $headerMap, 'status kawin', 7);
+            $umurRaw = self::cell($cells, $headerMap, 'umur', 8);
+            $marketing = self::cell($cells, $headerMap, 'marketing', 9);
+            $tglKomitmenRaw = self::cell($cells, $headerMap, 'tgl komitmen', 10);
+            $nominalValue = $hasNominal ? self::rawCell($cells, $headerMap, 'nominal', 11) : null;
+            $nominalRaw = trim((string) $nominalValue);
+            $penyelesaian = self::cell($cells, $headerMap, 'penyelesaian', $hasNominal ? 12 : 11);
+            $konfirmasiRaw = self::cell($cells, $headerMap, 'konfirmasi', $hasNominal ? 13 : 12);
+            $statusRaw = self::cell($cells, $headerMap, 'status cicilan', $hasNominal ? 14 : 13);
 
             if (empty($namaKonsumen)) {
                 $errors[] = "Baris {$rowNum}: Nama konsumen kosong.";
@@ -91,8 +94,8 @@ class DanaTalanganImport
                 continue;
             }
 
-            $status = str_replace(' ', '_', strtolower($statusRaw));
-            if (! in_array($status, ['lunas', 'sanggup', 'tidak_sanggup'], true)) {
+            $status = self::normalizeStatus($statusRaw);
+            if ($status === null) {
                 $errors[] = "Baris {$rowNum}: Status cicilan tidak valid ('{$statusRaw}').";
 
                 continue;
@@ -100,12 +103,12 @@ class DanaTalanganImport
 
             $umur = null;
             if ($umurRaw !== '') {
-                if (! ctype_digit($umurRaw)) {
+                if (! preg_match('/^(\d{1,3})(?:\s*th(?:n)?\.?)?$/iu', $umurRaw, $ageMatches)) {
                     $errors[] = "Baris {$rowNum}: Umur harus berupa angka ('{$umurRaw}').";
 
                     continue;
                 }
-                $umur = (int) $umurRaw;
+                $umur = (int) $ageMatches[1];
                 if ($umur < 0 || $umur > 150) {
                     $errors[] = "Baris {$rowNum}: Umur harus antara 0 dan 150 ('{$umurRaw}').";
 
@@ -135,6 +138,13 @@ class DanaTalanganImport
 
                     continue;
                 }
+            }
+
+            $nominal = $hasNominal ? DanaTalanganMoney::normalize($nominalValue) : null;
+            if ($nominalRaw !== '' && $nominal === null) {
+                $errors[] = "Baris {$rowNum}: Nominal tidak valid ('{$nominalRaw}').";
+
+                continue;
             }
 
             $resolvedBranchId = $hasCabang ? $branchFromFile : ($branchId ?? $user->branch_id);
@@ -180,6 +190,7 @@ class DanaTalanganImport
                 'umur' => $umur,
                 'nama_marketing' => $marketing ?: null,
                 'tgl_komitmen' => $tglKomitmen,
+                'nominal' => $nominal,
                 'penyelesaian' => $penyelesaian ?: null,
                 'konfirmasi_keuangan' => $konfirmasiKeuangan,
                 'status' => $status,
@@ -210,5 +221,43 @@ class DanaTalanganImport
         }
 
         return self::BOOL_ALIASES[$normalized] ?? null;
+    }
+
+    /** @return array<string, int> */
+    private static function headerMap(array $headers): array
+    {
+        $map = [];
+        foreach (array_values($headers) as $index => $header) {
+            $normalized = mb_strtolower(trim((string) $header));
+            if ($normalized !== '') {
+                $map[$normalized] = $index;
+            }
+        }
+
+        return $map;
+    }
+
+    /** @param array<int, mixed> $cells */
+    private static function cell(array $cells, array $headerMap, string $header, int $fallback): string
+    {
+        return trim((string) self::rawCell($cells, $headerMap, $header, $fallback));
+    }
+
+    /** @param array<int, mixed> $cells */
+    private static function rawCell(array $cells, array $headerMap, string $header, int $fallback): mixed
+    {
+        $index = $headerMap[$header] ?? $fallback;
+
+        return $cells[$index] ?? null;
+    }
+
+    private static function normalizeStatus(string $raw): ?string
+    {
+        $status = str_replace(' ', '_', mb_strtolower(trim($raw)));
+        if ($status === '') {
+            return 'belum_ditentukan';
+        }
+
+        return in_array($status, ['belum_ditentukan', 'sanggup', 'tidak_sanggup', 'lunas'], true) ? $status : null;
     }
 }

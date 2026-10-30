@@ -631,21 +631,6 @@ class DanaTalanganGoogleService
         );
     }
 
-    private function money(string $value): string
-    {
-        $value = trim($value);
-        if ($value === '') {
-            return '';
-        }
-        $value = preg_replace('/[^0-9,.\\-]/', '', $value);
-        if (str_contains($value, ',')) {
-            $value = str_replace('.', '', $value);
-            $value = str_replace(',', '.', $value);
-        }
-
-        return $value;
-    }
-
     private function dataHash(array $data): string
     {
         return hash('sha256', json_encode(array_intersect_key($data, array_flip([
@@ -659,7 +644,7 @@ class DanaTalanganGoogleService
     {
         $value = str_replace(' ', '_', mb_strtolower(trim((string) $value)));
 
-        return in_array($value, ['sanggup', 'tidak_sanggup', 'lunas'], true) ? $value : 'sanggup';
+        return in_array($value, ['belum_ditentukan', 'sanggup', 'tidak_sanggup', 'lunas'], true) ? $value : 'belum_ditentukan';
     }
 
     private function boolean($value): bool

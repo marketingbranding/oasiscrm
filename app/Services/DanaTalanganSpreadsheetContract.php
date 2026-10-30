@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Exceptions\DanaTalanganSpreadsheetContractException;
+use App\Support\DanaTalanganMoney;
 use App\ValueObjects\ResolvedDanaTalanganSpreadsheetContract;
 use Carbon\CarbonImmutable;
 use Throwable;
@@ -127,9 +128,9 @@ class DanaTalanganSpreadsheetContract
         foreach (['Pinjam Nama', 'Konfirmasi'] as $field) {
             $payload[$field] = in_array(mb_strtolower($payload[$field]), ['1', 'true', 'ya', 'iya', 'yes', 'y', '✓'], true) ? '1' : '0';
         }
-        $payload['Status Cicilan'] = str_replace(' ', '_', mb_strtolower($payload['Status Cicilan']));
+        $payload['Status Cicilan'] = str_replace(' ', '_', mb_strtolower($payload['Status Cicilan'])) ?: 'belum_ditentukan';
         $payload['Umur'] = $payload['Umur'] === '' ? '' : (string) ((int) $payload['Umur']);
-        $payload['Nominal'] = $this->money($payload['Nominal'] ?? '');
+        $payload['Nominal'] = DanaTalanganMoney::normalize($payload['Nominal'] ?? '') ?? '';
 
         return $payload;
     }
@@ -157,21 +158,6 @@ class DanaTalanganSpreadsheetContract
             ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'],
             trim($value),
         );
-    }
-
-    private function money(string $value): string
-    {
-        $value = trim($value);
-        if ($value === '') {
-            return '';
-        }
-        $value = preg_replace('/[^0-9,.\\-]/', '', $value);
-        if (str_contains($value, ',')) {
-            $value = str_replace('.', '', $value);
-            $value = str_replace(',', '.', $value);
-        }
-
-        return $value;
     }
 
     private function normalize(mixed $value): string

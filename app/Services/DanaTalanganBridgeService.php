@@ -11,6 +11,7 @@ use App\Models\DanaTalanganReconciliationItem;
 use App\Models\DanaTalanganSyncStatus;
 use App\Models\LeadMaster;
 use App\Models\User;
+use App\Support\DanaTalanganMoney;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
@@ -539,9 +540,9 @@ class DanaTalanganBridgeService
         foreach (['Pinjam Nama', 'Konfirmasi'] as $field) {
             $payload[$field] = $this->boolean($payload[$field]) ? '1' : '0';
         }
-        $payload['Status Cicilan'] = str_replace(' ', '_', mb_strtolower($payload['Status Cicilan']));
+        $payload['Status Cicilan'] = str_replace(' ', '_', mb_strtolower($payload['Status Cicilan'])) ?: 'belum_ditentukan';
         $payload['Umur'] = $payload['Umur'] === '' ? '' : (string) ((int) $payload['Umur']);
-        $payload['Nominal'] = $this->money($payload['Nominal'] ?? '');
+        $payload['Nominal'] = DanaTalanganMoney::normalize($payload['Nominal'] ?? '') ?? '';
 
         return $payload;
     }
@@ -559,7 +560,7 @@ class DanaTalanganBridgeService
                 $invalid[] = $field;
             }
         }
-        if (filled($row['Status Cicilan'] ?? null) && ! in_array(str_replace(' ', '_', mb_strtolower(trim((string) $row['Status Cicilan']))), ['sanggup', 'tidak_sanggup', 'lunas'], true)) {
+        if (filled($row['Status Cicilan'] ?? null) && ! in_array(str_replace(' ', '_', mb_strtolower(trim((string) $row['Status Cicilan']))), ['belum_ditentukan', 'sanggup', 'tidak_sanggup', 'lunas'], true)) {
             $invalid[] = 'Status Cicilan';
         }
 
@@ -783,17 +784,7 @@ class DanaTalanganBridgeService
 
     private function money(string $value): string
     {
-        $value = trim($value);
-        if ($value === '') {
-            return '';
-        }
-        $value = preg_replace('/[^0-9,.\\-]/', '', $value);
-        if (str_contains($value, ',')) {
-            $value = str_replace('.', '', $value);
-            $value = str_replace(',', '.', $value);
-        }
-
-        return $value;
+        return DanaTalanganMoney::normalize($value) ?? '';
     }
 
     private function boolean(string $value): bool

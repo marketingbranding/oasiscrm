@@ -195,6 +195,38 @@ class DanaTalanganInteractionTest extends TestCase
         $this->assertSame('2026-08-30', $record->tgl_komitmen->format('Y-m-d'));
     }
 
+    public function test_import_normalizes_current_workbook_money_age_and_blank_status(): void
+    {
+        [$branch, $user] = $this->makeBranchAndUser();
+        $project = $this->makeProject($branch);
+        $spreadsheet = new Spreadsheet;
+        $spreadsheet->getActiveSheet()->fromArray([
+            ['No', 'Tanggal', 'Nama Konsumen', 'Kav', 'Proyek', 'Pinjam Nama', 'Pekerjaan', 'Status Kawin', 'Umur', 'Marketing', 'TGL Komitmen', 'Nominal', 'Penyelesaian', 'Konfirmasi', 'Status Cicilan'],
+            [1, '2026-08-31', 'Nominal Plain', '', 'Proyek Test', 'TIDAK', '', '', 25, '', '', '1100000', '', 'TIDAK', ''],
+            [2, '2026-08-31', 'Nominal Comma', '', 'Proyek Test', 'TIDAK', '', '', '25 th', '', '', '1,100,000', '', 'TIDAK', 'Sanggup'],
+            [3, '2026-08-31', 'Nominal Currency', '', 'Proyek Test', 'TIDAK', '', '', 30, '', '', 'Rp1,072,173', '', 'YA', 'Lunas'],
+            [4, '2026-08-31', 'Nominal Decimal', '', 'Proyek Test', 'TIDAK', '', '', 31, '', '', '9876543210.99', '', 'YA', 'Tidak Sanggup'],
+        ]);
+        $path = tempnam(sys_get_temp_dir(), 'dana-import-');
+        (new Xlsx($spreadsheet))->save($path);
+
+        $this->actingAs($user);
+        $result = DanaTalanganImport::import($path, $branch->id, [], [$branch->id], [$project->id]);
+        unlink($path);
+
+        $this->assertSame(4, $result['imported'], implode('; ', $result['errors']));
+        $this->assertSame([], $result['errors']);
+        $this->assertSame('1100000.00', (string) DanaTalangan::where('nama_konsumen', 'Nominal Plain')->sole()->nominal);
+        $this->assertSame('1100000.00', (string) DanaTalangan::where('nama_konsumen', 'Nominal Comma')->sole()->nominal);
+        $this->assertSame('1072173.00', (string) DanaTalangan::where('nama_konsumen', 'Nominal Currency')->sole()->nominal);
+        $this->assertSame('9876543210.99', (string) DanaTalangan::where('nama_konsumen', 'Nominal Decimal')->sole()->nominal);
+        $this->assertSame(25, DanaTalangan::where('nama_konsumen', 'Nominal Comma')->sole()->umur);
+        $this->assertSame('belum_ditentukan', DanaTalangan::where('nama_konsumen', 'Nominal Plain')->sole()->status);
+        $this->assertSame('sanggup', DanaTalangan::where('nama_konsumen', 'Nominal Comma')->sole()->status);
+        $this->assertSame('lunas', DanaTalangan::where('nama_konsumen', 'Nominal Currency')->sole()->status);
+        $this->assertSame('tidak_sanggup', DanaTalangan::where('nama_konsumen', 'Nominal Decimal')->sole()->status);
+    }
+
     public function test_import_rejects_decimal_and_scientific_age_without_mutation(): void
     {
         [$branch, $user] = $this->makeBranchAndUser();

@@ -64,7 +64,7 @@ class DanaTalanganController extends Controller
 
     protected string $bulkLabel = 'data dana talangan';
 
-    protected array $bulkStatusOptions = ['sanggup', 'tidak_sanggup', 'lunas'];
+    protected array $bulkStatusOptions = ['belum_ditentukan', 'sanggup', 'tidak_sanggup', 'lunas'];
 
     protected string $bulkDefaultStatus = 'sanggup';
 

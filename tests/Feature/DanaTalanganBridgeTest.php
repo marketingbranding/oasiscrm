@@ -109,6 +109,18 @@ class DanaTalanganBridgeTest extends TestCase
         $money = new \ReflectionMethod(DanaTalanganBridgeService::class, 'money');
         $money->setAccessible(true);
         $this->assertSame('1100000.00', $money->invoke($service, 'Rp1.100.000,00'));
+        $this->assertSame('1100000.00', $money->invoke($service, '1,100,000'));
+        $this->assertSame('1072173.00', $money->invoke($service, 'Rp1,072,173'));
+        $this->assertSame('9876543210.99', $money->invoke($service, '9876543210.99'));
+
+        $normalize = new \ReflectionMethod(DanaTalanganBridgeService::class, 'normalizeRemote');
+        $normalize->setAccessible(true);
+        $normalized = $normalize->invoke($service, [
+            'Nominal' => '1,100,000',
+            'Status Cicilan' => '',
+        ]);
+        $this->assertSame('1100000.00', $normalized['Nominal']);
+        $this->assertSame('belum_ditentukan', $normalized['Status Cicilan']);
     }
 
     public function test_formula_leading_text_is_escaped(): void

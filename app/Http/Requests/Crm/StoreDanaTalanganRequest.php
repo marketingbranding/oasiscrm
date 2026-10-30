@@ -31,7 +31,7 @@ class StoreDanaTalanganRequest extends FormRequest
             'nominal' => 'nullable|numeric|min:0|max:9999999999999.99',
             'penyelesaian' => 'nullable|string',
             'konfirmasi_keuangan' => 'nullable|boolean',
-            'status' => 'required|in:sanggup,tidak_sanggup,lunas',
+            'status' => 'required|in:belum_ditentukan,sanggup,tidak_sanggup,lunas',
         ];
     }
 }

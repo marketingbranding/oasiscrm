@@ -196,7 +196,6 @@ class PermissionCatalog
                 'database.view', 'database.edit', 'database.sync',
                 'consumer_progress.view', 'consumer_progress.sync',
                 'bridge_fund.view', 'bridge_fund.manage', 'bridge_fund.export',
-                'expenses.view', 'expenses.create', 'expenses.update', 'expenses.cancel', 'expenses.export',
                 'sales_targets.view_branch', 'sales_daily_plans.view_branch',
                 ...$comments,
             ],

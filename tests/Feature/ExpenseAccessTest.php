@@ -62,7 +62,7 @@ class ExpenseAccessTest extends TestCase
         $owner = $this->expenseUser('pusat', $branch);
         $expense = $this->expense(compact('branch', 'project', 'category') + ['creator' => $owner]);
 
-        foreach (['sales', 'staff', 'admin', 'manager'] as $role) {
+        foreach (['sales', 'staff', 'admin', 'manager', 'supervisor'] as $role) {
             $user = $this->expenseUser($role, $branch);
             $token = app(OptimisticLockService::class)->token($expense);
 
@@ -99,7 +99,7 @@ class ExpenseAccessTest extends TestCase
             }
         }
 
-        foreach (['sales', 'staff', 'admin', 'manager'] as $role) {
+        foreach (['sales', 'staff', 'admin', 'manager', 'supervisor'] as $role) {
             $user = $this->expenseUser($role, $branch);
             $route = $role === 'sales' ? 'sales-pocketbook.index' : 'dashboard';
             $response = $this->actingAs($user)->get(route($route))->assertOk();

@@ -13,6 +13,12 @@ final class OrganizationGraphShadowService
         $this->counters[$key] = ($this->counters[$key] ?? 0) + 1;
     }
 
+    public function recordFailure(string $dimension): void
+    {
+        $key = "{$dimension}.failure";
+        $this->counters[$key] = ($this->counters[$key] ?? 0) + 1;
+    }
+
     /** @return array<string, int> */
     public function snapshot(): array
     {

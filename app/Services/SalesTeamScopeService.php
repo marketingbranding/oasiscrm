@@ -8,6 +8,7 @@ use App\Models\SalesCoordinatorSales;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
+use Throwable;
 
 class SalesTeamScopeService
 {
@@ -32,14 +33,24 @@ class SalesTeamScopeService
             return [...$empty, 'sales' => collect([$actor])];
         }
 
+        $legacy = $this->legacyFor($actor, $empty, $includeHistorical, $role);
         $effectiveMode = $this->mode->modeFor($actor, $branchId);
         if ($effectiveMode === 'graph') {
-            return $this->filterTeamToBranch($this->canonicalFor($actor, $empty, $includeHistorical), $branchId);
+            try {
+                return $this->filterTeamToBranch($this->canonicalFor($actor, $empty, $includeHistorical), $branchId);
+            } catch (Throwable) {
+                return $legacy;
+            }
         }
 
-        $legacy = $this->legacyFor($actor, $empty, $includeHistorical, $role);
         if ($effectiveMode === 'shadow') {
-            $canonical = $this->canonicalFor($actor, $empty, $includeHistorical);
+            try {
+                $canonical = $this->canonicalFor($actor, $empty, $includeHistorical);
+            } catch (Throwable) {
+                $this->shadow->recordFailure('sales_team_scope');
+
+                return $legacy;
+            }
             $this->shadow->record('sales_team_scope', $this->normalizedTeam($legacy) === $this->normalizedTeam($canonical));
         }
 
@@ -201,12 +212,15 @@ class SalesTeamScopeService
         }
 
         if ($this->mode->isGraph($coordinator, $branchId)) {
-            return User::query()
-                ->where('users.account_status', AccountStatus::Active->value)
-                ->where('users.is_active', true)
-                ->whereHas('role', fn (Builder $query) => $query->where('slug', 'sales'))
-                ->when($branchId !== null, fn (Builder $query) => $query->where('users.branch_id', $branchId))
-                ->whereIn('users.id', $this->graph->salesTeamMemberIds($coordinator));
+            try {
+                return User::query()
+                    ->where('users.account_status', AccountStatus::Active->value)
+                    ->where('users.is_active', true)
+                    ->whereHas('role', fn (Builder $query) => $query->where('slug', 'sales'))
+                    ->when($branchId !== null, fn (Builder $query) => $query->where('users.branch_id', $branchId))
+                    ->whereIn('users.id', $this->graph->salesTeamMemberIds($coordinator, strict: true));
+            } catch (Throwable) {
+            }
         }
 
         $ambiguousSalesIds = SalesCoordinatorSales::query()
@@ -309,7 +323,7 @@ class SalesTeamScopeService
             return $empty;
         }
 
-        $people = collect([$actor, ...$this->graph->descendants($actor)])->keyBy('id');
+        $people = collect([$actor, ...$this->graph->descendants($actor, strict: true)])->keyBy('id');
         $supervisors = $role === 'supervisor'
             ? collect([$actor])
             : $people->filter(fn (User $user) => $this->isRole($user, 'supervisor'))->values();
@@ -324,7 +338,7 @@ class SalesTeamScopeService
             ->get(['user_id', 'parent_user_id'])
             ->keyBy('user_id');
         $salesTeamAssignments = $coordinators
-            ->flatMap(fn (User $coordinator): Collection => $this->graph->currentSalesTeamAssignments($coordinator))
+            ->flatMap(fn (User $coordinator): Collection => $this->graph->currentSalesTeamAssignments($coordinator, strict: true))
             ->map(fn (OrganizationAssignment $assignment): array => [
                 'user_id' => (int) $assignment->user_id,
                 'parent_user_id' => (int) $assignment->parent_user_id,

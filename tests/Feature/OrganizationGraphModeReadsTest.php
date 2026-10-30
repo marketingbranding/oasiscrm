@@ -6,6 +6,7 @@ use App\Models\Branch;
 use App\Models\OrganizationAssignment;
 use App\Models\Role;
 use App\Models\User;
+use App\Services\OrganizationGraphService;
 use App\Services\OrganizationGraphShadowService;
 use App\Services\OrganizationScopeService;
 use App\Services\ReportingHierarchyService;
@@ -131,6 +132,112 @@ class OrganizationGraphModeReadsTest extends TestCase
         ]);
 
         $this->assertSame([], app(ReportingHierarchyService::class)->descendantIds($invalidParent));
+    }
+
+    public function test_legacy_hierarchy_does_not_execute_canonical_graph_traversal(): void
+    {
+        $branch = $this->branch('LEG');
+        $parent = $this->user('supervisor', $branch);
+        $viewer = $this->user('staff', $branch);
+        $viewer->forceFill(['supervisor_user_id' => $parent->id])->saveQuietly();
+        config(['app.env' => 'local', 'organization.graph_mode' => 'legacy']);
+
+        $graph = \Mockery::mock(OrganizationGraphService::class);
+        $graph->shouldReceive('ancestors')->never();
+        $graph->shouldReceive('descendantIds')->never();
+        app()->instance(OrganizationGraphService::class, $graph);
+
+        $hierarchyIds = app(OrganizationScopeService::class)->hierarchyIds($viewer);
+
+        $this->assertContains($parent->id, $hierarchyIds);
+    }
+
+    public function test_legacy_mode_skips_canonical_traversal_in_reporting_and_sales_reads(): void
+    {
+        $branch = $this->branch('LGC');
+        $supervisor = $this->user('supervisor', $branch);
+        $coordinator = $this->user('sales_coordinator', $branch);
+        $sales = $this->user('sales', $branch);
+        $coordinator->forceFill(['supervisor_user_id' => $supervisor->id])->saveQuietly();
+        $this->legacyMapping($coordinator, $sales);
+        config(['app.env' => 'local', 'organization.graph_mode' => 'legacy']);
+
+        $graph = \Mockery::mock(OrganizationGraphService::class);
+        $graph->shouldReceive('ancestors')->never();
+        $graph->shouldReceive('descendantIds')->never();
+        $graph->shouldReceive('descendants')->never();
+        $graph->shouldReceive('salesTeamMemberIds')->never();
+        app()->instance(OrganizationGraphService::class, $graph);
+
+        $this->assertSame([$coordinator->id], app(ReportingHierarchyService::class)->descendantIds($supervisor));
+        $this->assertSame([$sales->id], app(SalesTeamScopeService::class)->for($coordinator)['sales']->pluck('id')->all());
+    }
+
+    public function test_shadow_graph_failure_preserves_legacy_reporting_result(): void
+    {
+        $branch = $this->branch('SFL');
+        $parent = $this->user('supervisor', $branch);
+        $child = $this->user('sales_coordinator', $branch);
+        $child->forceFill(['supervisor_user_id' => $parent->id])->saveQuietly();
+        config(['app.env' => 'local', 'organization.graph_mode' => 'shadow']);
+        $shadow = app(OrganizationGraphShadowService::class);
+        $shadow->reset();
+
+        $graph = \Mockery::mock(OrganizationGraphService::class);
+        $graph->shouldReceive('descendantIds')->once()->andThrow(new \RuntimeException('graph unavailable'));
+        app()->instance(OrganizationGraphService::class, $graph);
+
+        $descendants = app(ReportingHierarchyService::class)->descendantIds($parent);
+
+        $this->assertSame([$child->id], $descendants);
+        $this->assertSame(1, $shadow->snapshot()['reporting_descendants.failure']);
+    }
+
+    public function test_graph_integrity_failure_falls_back_to_legacy_reporting_result(): void
+    {
+        $branch = $this->branch('GFL');
+        $parent = $this->user('sales', $branch);
+        $child = $this->user('manager', $branch);
+        $child->forceFill(['supervisor_user_id' => $parent->id])->saveQuietly();
+        OrganizationAssignment::query()->create([
+            'user_id' => $child->id,
+            'parent_user_id' => $parent->id,
+            'relationship_type' => OrganizationAssignment::REPORTS_TO,
+            'branch_id' => null,
+            'started_at' => today()->toDateString(),
+            'is_active' => true,
+            'is_primary' => true,
+            'source' => 'integrity_fixture',
+            'lock_version' => 1,
+        ]);
+        config([
+            'app.env' => 'local',
+            'organization.graph_mode' => 'graph',
+            'organization.graph_user_ids' => (string) $parent->id,
+            'organization.graph_branch_ids' => '',
+        ]);
+
+        $this->assertSame([$child->id], app(ReportingHierarchyService::class)->descendantIds($parent));
+    }
+
+    public function test_shadow_sales_team_failure_preserves_legacy_result(): void
+    {
+        $branch = $this->branch('SSL');
+        $coordinator = $this->user('sales_coordinator', $branch);
+        $sales = $this->user('sales', $branch);
+        $this->legacyMapping($coordinator, $sales);
+        config(['app.env' => 'local', 'organization.graph_mode' => 'shadow']);
+        $shadow = app(OrganizationGraphShadowService::class);
+        $shadow->reset();
+
+        $graph = \Mockery::mock(OrganizationGraphService::class);
+        $graph->shouldReceive('descendants')->once()->andThrow(new \RuntimeException('graph unavailable'));
+        app()->instance(OrganizationGraphService::class, $graph);
+
+        $team = app(SalesTeamScopeService::class)->for($coordinator);
+
+        $this->assertSame([$sales->id], $team['sales']->pluck('id')->all());
+        $this->assertSame(1, $shadow->snapshot()['sales_team_scope.failure']);
     }
 
     private function branch(string $code): Branch

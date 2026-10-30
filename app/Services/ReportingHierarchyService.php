@@ -7,6 +7,7 @@ use App\Models\User;
 use App\Models\UserImportBatch;
 use App\Models\UserImportRow;
 use Illuminate\Validation\ValidationException;
+use Throwable;
 
 class ReportingHierarchyService
 {
@@ -74,7 +75,13 @@ class ReportingHierarchyService
         $legacy = $this->legacyDescendantIds($supervisor, $depthLimit);
         $effectiveMode = $this->mode->modeFor($supervisor, $branchId ?? $supervisor->branch_id);
         if ($effectiveMode === 'shadow') {
-            $canonical = $this->graph->descendantIds($supervisor);
+            try {
+                $canonical = $this->graph->descendantIds($supervisor, strict: true);
+            } catch (Throwable) {
+                $this->shadow->recordFailure('reporting_descendants');
+
+                return $legacy;
+            }
             $this->shadow->record('reporting_descendants', $this->normalized($legacy) === $this->normalized($canonical));
 
             return $legacy;
@@ -83,7 +90,11 @@ class ReportingHierarchyService
             return $legacy;
         }
 
-        $canonical = $this->graph->descendantIds($supervisor);
+        try {
+            $canonical = $this->graph->descendantIds($supervisor, strict: true);
+        } catch (Throwable) {
+            return $legacy;
+        }
         if ($branchId === null) {
             return $canonical;
         }
@@ -97,7 +108,7 @@ class ReportingHierarchyService
     }
 
     /** @return array<int> */
-    private function legacyDescendantIds(User $supervisor, int $depthLimit): array
+    public function legacyDescendantIds(User $supervisor, int $depthLimit = 100): array
     {
         $visited = [(int) $supervisor->id => true];
         $frontier = [(int) $supervisor->id];

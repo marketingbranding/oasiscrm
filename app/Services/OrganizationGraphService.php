@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Enums\AccountStatus;
 use App\Exceptions\OrganizationAssignmentConflictException;
+use App\Exceptions\OrganizationGraphIntegrityException;
 use App\Models\OrganizationAssignment;
 use App\Models\OrganizationUnit;
 use App\Models\User;
@@ -47,7 +48,7 @@ class OrganizationGraphService
     }
 
     /** @return Collection<int, OrganizationAssignment> */
-    public function currentSalesTeamAssignments(User $coordinator, bool $includeHistorical = false): Collection
+    public function currentSalesTeamAssignments(User $coordinator, bool $includeHistorical = false, bool $strict = false): Collection
     {
         $query = OrganizationAssignment::query()
             ->salesTeamMemberOf()
@@ -74,12 +75,28 @@ class OrganizationGraphService
             ->map(fn ($id): int => (int) $id)
             ->all();
 
+        if ($strict && $ambiguousUserIds !== []) {
+            throw new OrganizationGraphIntegrityException('Terdapat assignment Sales-team aktif yang ambigu.');
+        }
+
         return $assignments
             ->groupBy('user_id')
             ->filter(fn (Collection $rows): bool => $rows->count() === 1
                 && ! in_array((int) $rows->first()->user_id, $ambiguousUserIds, true))
             ->flatten(1)
-            ->filter(fn (OrganizationAssignment $assignment): bool => $this->isValidCurrentSalesTeamAssignment($assignment))
+            ->filter(function (OrganizationAssignment $assignment) use ($strict): bool {
+                if (! $this->isValidCurrentSalesTeamAssignment($assignment)) {
+                    if ($strict && $assignment->user instanceof User
+                        && $assignment->user->isAccountActive()
+                        && $assignment->user->is_active) {
+                        throw new OrganizationGraphIntegrityException('Assignment Sales-team aktif tidak valid.');
+                    }
+
+                    return false;
+                }
+
+                return true;
+            })
             ->values();
     }
 
@@ -122,9 +139,9 @@ class OrganizationGraphService
     }
 
     /** @return array<int> */
-    public function salesTeamMemberIds(User $coordinator, bool $includeHistorical = false): array
+    public function salesTeamMemberIds(User $coordinator, bool $includeHistorical = false, bool $strict = false): array
     {
-        $ids = $this->currentSalesTeamAssignments($coordinator, $includeHistorical)
+        $ids = $this->currentSalesTeamAssignments($coordinator, $includeHistorical, $strict)
             ->pluck('user_id')
             ->map(fn ($id): int => (int) $id)
             ->unique()
@@ -281,9 +298,9 @@ class OrganizationGraphService
     }
 
     /** @return array<int> */
-    public function descendantIds(User $root): array
+    public function descendantIds(User $root, bool $strict = false): array
     {
-        $assignments = $this->validReportingAssignments();
+        $assignments = $this->validReportingAssignments($strict);
         $childrenByParent = $assignments->groupBy('parent_user_id');
         $visited = [(int) $root->id => true];
         $frontier = [(int) $root->id];
@@ -349,15 +366,15 @@ class OrganizationGraphService
     }
 
     /** @return Collection<int, User> */
-    public function descendants(User $root): Collection
+    public function descendants(User $root, bool $strict = false): Collection
     {
-        return User::query()->with('role')->whereIn('id', $this->descendantIds($root))->get();
+        return User::query()->with('role')->whereIn('id', $this->descendantIds($root, $strict))->get();
     }
 
     /** @return Collection<int, User> */
-    public function ancestors(User $user): Collection
+    public function ancestors(User $user, bool $strict = false): Collection
     {
-        $parentByUser = $this->validReportingAssignments()->pluck('parent_user_id', 'user_id')->all();
+        $parentByUser = $this->validReportingAssignments($strict)->pluck('parent_user_id', 'user_id')->all();
         $ids = [];
         $currentId = (int) $user->id;
         $visited = [];
@@ -376,7 +393,7 @@ class OrganizationGraphService
     }
 
     /** @return Collection<int, OrganizationAssignment> */
-    private function validReportingAssignments(): Collection
+    private function validReportingAssignments(bool $strict = false): Collection
     {
         $all = OrganizationAssignment::query()
             ->current()
@@ -385,27 +402,47 @@ class OrganizationGraphService
         $ambiguousUserIds = $all->groupBy('user_id')
             ->filter(fn (Collection $assignments): bool => $assignments->count() > 1)
             ->keys();
-        $valid = $all
-            ->reject(fn (OrganizationAssignment $assignment): bool => $ambiguousUserIds->contains($assignment->user_id))
-            ->filter(function (OrganizationAssignment $assignment): bool {
+        if ($strict && $ambiguousUserIds->isNotEmpty()) {
+            throw new OrganizationGraphIntegrityException('Terdapat assignment reporting aktif yang ambigu.');
+        }
+
+        return $all
+            ->filter(function (OrganizationAssignment $assignment) use ($ambiguousUserIds, $strict): bool {
+                if ($ambiguousUserIds->contains($assignment->user_id)) {
+                    return false;
+                }
                 if (! $assignment->user instanceof User || ! $assignment->parent instanceof User) {
+                    if ($strict) {
+                        throw new OrganizationGraphIntegrityException('Assignment reporting aktif memiliki pengguna yang tidak ditemukan.');
+                    }
+
+                    return false;
+                }
+                if (! $assignment->user->isAccountActive() || ! $assignment->user->is_active) {
                     return false;
                 }
                 if ($assignment->user->branch_id !== null
                     && ($assignment->branch_id === null || (int) $assignment->branch_id !== (int) $assignment->user->branch_id)) {
+                    if ($strict) {
+                        throw new OrganizationGraphIntegrityException('Assignment reporting aktif memiliki konteks cabang yang tidak valid.');
+                    }
+
                     return false;
                 }
 
                 try {
                     $this->validateParent($assignment->user, $assignment->parent);
-                } catch (Throwable) {
+                } catch (Throwable $exception) {
+                    if ($strict) {
+                        throw new OrganizationGraphIntegrityException('Assignment reporting aktif gagal validasi integritas.', 0, $exception);
+                    }
+
                     return false;
                 }
 
                 return true;
-            });
-
-        return $valid->values();
+            })
+            ->values();
     }
 
     /** @return Collection<int, OrganizationAssignment> */

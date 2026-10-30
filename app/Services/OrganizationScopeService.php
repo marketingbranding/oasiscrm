@@ -8,6 +8,7 @@ use App\Models\User;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use Throwable;
 
 class OrganizationScopeService
 {
@@ -200,27 +201,39 @@ class OrganizationScopeService
     {
         return $this->cached('hierarchy:'.$viewer->id.':'.($branchId ?? 'current'), function () use ($viewer, $branchId): array {
             $evaluationBranchId = $branchId ?? $viewer->branch_id;
-            $ids = $this->hierarchy->descendantIds($viewer, branchId: $evaluationBranchId);
             $effectiveMode = $this->mode->modeFor($viewer, $evaluationBranchId);
-            $canonical = collect([...$ids, ...$this->graph->ancestors($viewer)->pluck('id')->all()])
-                ->when($evaluationBranchId !== null, fn (Collection $ids) => $ids->filter(
-                    fn (int $id): bool => (int) User::query()->whereKey($id)->value('branch_id') === (int) $evaluationBranchId,
-                ))
-                ->map(fn ($id) => (int) $id)
-                ->unique()
-                ->values()
-                ->all();
-            if ($effectiveMode === 'graph') {
-                return $canonical;
+            $legacy = $this->legacyHierarchyIds($viewer, $this->hierarchy->legacyDescendantIds($viewer));
+            if ($effectiveMode === 'legacy') {
+                return $legacy;
             }
-            if ($effectiveMode === 'shadow') {
-                $legacy = $this->legacyHierarchyIds($viewer, $ids);
-                $this->shadow->record('hierarchy_ids', $legacy === $canonical);
+
+            try {
+                $canonical = collect([
+                    ...$this->graph->descendantIds($viewer, strict: true),
+                    ...$this->graph->ancestors($viewer, strict: true)->pluck('id')->all(),
+                ])
+                    ->when($evaluationBranchId !== null, fn (Collection $ids) => $ids->filter(
+                        fn (int $id): bool => (int) User::query()->whereKey($id)->value('branch_id') === (int) $evaluationBranchId,
+                    ))
+                    ->map(fn ($id) => (int) $id)
+                    ->unique()
+                    ->values()
+                    ->all();
+            } catch (Throwable) {
+                if ($effectiveMode === 'shadow') {
+                    $this->shadow->recordFailure('hierarchy_ids');
+                }
 
                 return $legacy;
             }
 
-            return $this->legacyHierarchyIds($viewer, $ids);
+            if ($effectiveMode === 'graph') {
+                return $canonical;
+            }
+
+            $this->shadow->record('hierarchy_ids', $legacy === $canonical);
+
+            return $legacy;
         });
     }
 

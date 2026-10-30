@@ -137,16 +137,20 @@ final class OrganizationGraphModeService
         if (is_array($value)) {
             $tokens = $value;
         } else {
-            $tokens = preg_split('/\s*,\s*/', trim((string) $value), -1, PREG_SPLIT_NO_EMPTY);
+            $raw = trim((string) $value);
+            if ($raw === '') {
+                return ['valid' => true, 'ids' => []];
+            }
+            $tokens = explode(',', $raw);
         }
 
-        if ($tokens === false || $tokens === []) {
+        if ($tokens === []) {
             return ['valid' => true, 'ids' => []];
         }
 
         $ids = [];
         foreach ($tokens as $token) {
-            if (! is_scalar($token) || filter_var($token, FILTER_VALIDATE_INT) === false || (int) $token < 1) {
+            if (! is_scalar($token) || trim((string) $token) === '' || filter_var(trim((string) $token), FILTER_VALIDATE_INT) === false || (int) $token < 1) {
                 return ['valid' => false, 'ids' => []];
             }
             $ids[] = (int) $token;

@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\OrganizationAssignment;
+use App\Models\SalesCoordinatorSales;
 use App\Models\User;
 use App\Support\OrganizationParityFilter;
 use Illuminate\Support\Collection;
@@ -35,18 +36,14 @@ final class OrganizationCutoverHealthService
             && ($backfill['assignments_proposed'] ?? 0) === 0
             && ($backfill['conflicts'] ?? 0) === 0
             && $parity['mismatches'] === 0
-            && $shadowCounters !== [];
+            && $this->hasShadowEvidence($shadowCounters);
         $edgeIntegrity = $this->edgeIntegrity($selectedUserIds);
         $integrity = $this->integrity($parity, $backfill, $missingUsers, $edgeIntegrity);
-        $writerEvidenceAvailable = $controlledEvidence && $evidenceMarker && $selectedUserIds !== [] && $shadowCounters !== [];
-        $writers = [
-            'evidence_available' => $writerEvidenceAvailable,
-            'compatibility_writer_sync_failures' => 0,
-            'transaction_failures' => 0,
-        ];
+        $writerEvidenceAvailable = $controlledEvidence && $evidenceMarker && $selectedUserIds !== [] && $this->hasShadowEvidence($shadowCounters);
+        $writers = $this->writerChecks($selectedUserIds, $writerEvidenceAvailable, $backfill);
         $mode = $this->modeDiagnostics($selectedUserIds);
         $shadow = [
-            'evidence_available' => $shadowCounters !== [],
+            'evidence_available' => $this->hasShadowEvidence($shadowCounters),
             'counters' => $shadowCounters,
         ];
         $blockers = $this->blockers($parity, $backfill, $integrity, $writers, $mode, $shadow, $evidenceComplete);
@@ -237,6 +234,46 @@ final class OrganizationCutoverHealthService
         }
 
         return count($userIds) - User::query()->whereIn('id', $userIds)->count();
+    }
+
+    /** @param array<int> $userIds @return array<string, int|bool> */
+    private function writerChecks(array $userIds, bool $evidenceAvailable, array $backfill): array
+    {
+        $failures = 0;
+        if ($evidenceAvailable) {
+            foreach (User::query()->whereIn('id', $userIds)->get() as $user) {
+                $legacyParentId = $user->supervisor_user_id === null ? null : (int) $user->supervisor_user_id;
+                $canonicalParentId = OrganizationAssignment::query()->where('user_id', $user->id)->current()->value('parent_user_id');
+                if ($legacyParentId !== null && (int) $canonicalParentId !== $legacyParentId) {
+                    $failures++;
+                }
+                if ($legacyParentId === null && $canonicalParentId !== null) {
+                    $failures++;
+                }
+
+                $legacyCoordinatorIds = SalesCoordinatorSales::query()->current()->where('sales_user_id', $user->id)->pluck('coordinator_user_id')->sort()->values()->all();
+                $canonicalCoordinatorIds = OrganizationAssignment::query()->where('user_id', $user->id)->currentSalesTeam()->pluck('parent_user_id')->sort()->values()->all();
+                if ($legacyCoordinatorIds !== $canonicalCoordinatorIds) {
+                    $failures++;
+                }
+            }
+        }
+
+        return [
+            'evidence_available' => $evidenceAvailable,
+            'compatibility_writer_sync_failures' => $failures,
+            'transaction_failures' => (int) ($backfill['strict_write_failures'] ?? 0),
+        ];
+    }
+
+    /** @param array<string, int> $counters */
+    private function hasShadowEvidence(array $counters): bool
+    {
+        return collect([
+            'reporting_descendants.equivalent',
+            'sales_team_scope.equivalent',
+            'hierarchy_ids.equivalent',
+        ])->every(fn (string $key): bool => array_key_exists($key, $counters));
     }
 
     /** @param array<int> $userIds @return array{ambiguous_edges: int, stale_edges: int} */

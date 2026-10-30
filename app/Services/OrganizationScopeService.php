@@ -199,9 +199,13 @@ class OrganizationScopeService
     public function hierarchyIds(User $viewer, ?int $branchId = null): array
     {
         return $this->cached('hierarchy:'.$viewer->id.':'.($branchId ?? 'current'), function () use ($viewer, $branchId): array {
-            $ids = $this->hierarchy->descendantIds($viewer);
-            $effectiveMode = $this->mode->modeFor($viewer, $branchId ?? $viewer->branch_id);
+            $evaluationBranchId = $branchId ?? $viewer->branch_id;
+            $ids = $this->hierarchy->descendantIds($viewer, branchId: $evaluationBranchId);
+            $effectiveMode = $this->mode->modeFor($viewer, $evaluationBranchId);
             $canonical = collect([...$ids, ...$this->graph->ancestors($viewer)->pluck('id')->all()])
+                ->when($evaluationBranchId !== null, fn (Collection $ids) => $ids->filter(
+                    fn (int $id): bool => (int) User::query()->whereKey($id)->value('branch_id') === (int) $evaluationBranchId,
+                ))
                 ->map(fn ($id) => (int) $id)
                 ->unique()
                 ->values()

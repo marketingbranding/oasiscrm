@@ -111,6 +111,12 @@ class OrganizationGraphModeServiceTest extends TestCase
 
         $this->assertSame('legacy', $resolver->modeFor($viewer));
         $this->assertSame('invalid_allowlist', $resolver->activationDiagnostics($viewer)['reason']);
+
+        config(['organization.graph_user_ids' => '1,,2']);
+        $this->assertSame('legacy', $resolver->modeFor($viewer));
+
+        config(['organization.graph_user_ids' => '1,']);
+        $this->assertSame('legacy', $resolver->modeFor($viewer));
     }
 
     public function test_role_changes_do_not_change_effective_mode(): void

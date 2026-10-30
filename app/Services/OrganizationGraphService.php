@@ -377,7 +377,7 @@ class OrganizationGraphService
     /** @return Collection<int, OrganizationAssignment> */
     private function validReportingAssignments(): Collection
     {
-        return OrganizationAssignment::query()
+        $valid = OrganizationAssignment::query()
             ->current()
             ->with(['user.role', 'parent.role'])
             ->get()
@@ -393,8 +393,12 @@ class OrganizationGraphService
                 }
 
                 return true;
-            })
-            ->values();
+            });
+        $ambiguousUserIds = $valid->groupBy('user_id')
+            ->filter(fn (Collection $assignments): bool => $assignments->count() > 1)
+            ->keys();
+
+        return $valid->reject(fn (OrganizationAssignment $assignment): bool => $ambiguousUserIds->contains($assignment->user_id))->values();
     }
 
     /** @return Collection<int, OrganizationAssignment> */

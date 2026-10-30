@@ -47,7 +47,10 @@ class OrganizationCutoverHealthServiceTest extends TestCase
     {
         $viewer = $this->user('staff', $this->branch('RDY'));
         config(['organization.controlled_evidence_marker' => true]);
-        app(OrganizationGraphShadowService::class)->record('health_fixture', true);
+        $shadow = app(OrganizationGraphShadowService::class);
+        $shadow->record('reporting_descendants', true);
+        $shadow->record('sales_team_scope', true);
+        $shadow->record('hierarchy_ids', true);
 
         $health = app(OrganizationCutoverHealthService::class)->check([$viewer->id], true);
 

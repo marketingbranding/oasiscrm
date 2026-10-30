@@ -27,10 +27,23 @@ class OrganizationBackfillService
     /** @return array<string, mixed> */
     public function runControlled(array $userIds, bool $write = false, bool $confirmIsolated = false): array
     {
+        $invalidSelection = collect($userIds)->contains(fn (mixed $id): bool => ! is_scalar($id)
+            || filter_var($id, FILTER_VALIDATE_INT) === false
+            || (int) $id < 1);
         $userIds = collect($userIds)->map(fn ($id): int => (int) $id)->filter(fn (int $id): bool => $id > 0)->unique()->sort()->values()->all();
         $reasons = [];
+        if ($invalidSelection) {
+            $reasons[] = 'invalid_user_selection';
+        }
         if ($userIds === []) {
             $reasons[] = 'explicit_selection_required';
+        }
+        $missingUserIds = $userIds === [] ? [] : array_values(array_diff(
+            $userIds,
+            User::query()->whereIn('id', $userIds)->pluck('id')->map(fn ($id): int => (int) $id)->all(),
+        ));
+        if ($missingUserIds !== []) {
+            $reasons[] = 'selected_user_not_found';
         }
         if ($write && ! $confirmIsolated) {
             $reasons[] = 'confirm_isolated_required';
@@ -66,6 +79,7 @@ class OrganizationBackfillService
                 'created' => 0,
                 'already_migrated' => 0,
                 'conflicts' => 0,
+                'strict_write_failures' => 0,
                 'idempotency' => ['eligible' => false, 'reason' => 'safety_guard_blocked'],
             ];
         }
@@ -87,6 +101,7 @@ class OrganizationBackfillService
                 'before' => ['assignment_count' => $beforeCount],
                 'after' => ['assignment_count' => $beforeCount],
                 'created' => 0,
+                'strict_write_failures' => 1,
                 'idempotency' => ['eligible' => false, 'reason' => 'write_preflight_blocked'],
             ];
         }
@@ -156,6 +171,7 @@ class OrganizationBackfillService
             'created' => 0,
             'already_migrated' => 0,
             'conflicts' => 0,
+            'strict_write_failures' => 0,
             'multiple_active_coordinator_assignments' => 0,
             'cycles' => 0,
             'invalid_role_relationships' => 0,

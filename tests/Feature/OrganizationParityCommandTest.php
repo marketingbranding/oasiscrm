@@ -91,11 +91,19 @@ class OrganizationParityCommandTest extends TestCase
         $this->assertSame(1, Artisan::call('organization:parity', ['--severity' => 'not-a-severity']));
     }
 
+    public function test_missing_user_filter_fails_instead_of_returning_clean_parity(): void
+    {
+        $this->assertSame(1, Artisan::call('organization:parity', ['--user' => '999999999']));
+    }
+
     public function test_cutover_health_command_returns_json_without_failing_for_blocked_health(): void
     {
         $viewer = $this->user('staff', $this->branch('HLT'));
         config(['organization.controlled_evidence_marker' => true]);
-        app(OrganizationGraphShadowService::class)->record('health_fixture', true);
+        $shadow = app(OrganizationGraphShadowService::class);
+        $shadow->record('reporting_descendants', true);
+        $shadow->record('sales_team_scope', true);
+        $shadow->record('hierarchy_ids', true);
 
         $exitCode = Artisan::call('organization:cutover-health', [
             '--user' => [$viewer->id],

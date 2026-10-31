@@ -3,7 +3,7 @@
 @section('title', 'Buku Saku Saya - Oasis CRM')
 
 @section('content')
-<div class="sales-pocketbook-workspace sales-receipt-page space-y-4">
+<div class="sales-pocketbook-workspace sales-receipt-page space-y-4" x-data="salesAgendaWorkspace()">
     @if($dailyReminder['shouldShow']) @include('crm.sales-pocketbook._daily-reminder', ['dailyReminder' => $dailyReminder]) @endif
     @include('crm.sales-pocketbook.partials.buku-saku-header')
 

@@ -41,20 +41,27 @@
     @endif
 
     @if($project)
-        <details id="agenda-input" class="sales-receipt-add-panel" @if(!$daySubmission && $agendas->isEmpty()) open @endif>
-            <summary><span>+ Tambah agenda</span><small>{{ $daySubmission ? 'Agenda tambahan di luar target 420 menit' : 'Masukkan aktivitas ke struk hari ini' }}</small></summary>
+        <div id="agenda-input" class="sales-receipt-add-panel">
+            <button type="button" class="sales-receipt-add-trigger" @click="openAgendaSheet($event)" aria-haspopup="dialog" aria-controls="sales-agenda-create-sheet"><span>+ Tambah agenda</span><small>{{ $daySubmission ? 'Agenda tambahan di luar target 420 menit' : 'Masukkan aktivitas ke struk hari ini' }}</small></button>
+        </div>
+        <div x-show="agendaOpen" x-cloak class="sales-sheet-backdrop" @click.self="closeSheet()" @keydown="handleSheetKeydown($event)" role="dialog" aria-modal="true" aria-labelledby="sales-agenda-create-title" aria-describedby="sales-agenda-create-description">
+            <div id="sales-agenda-create-sheet" x-ref="agendaPanel" class="sales-bottom-sheet">
+                <div class="sales-bottom-sheet-header"><div><span class="sales-bottom-sheet-eyebrow">Agenda {{ $agendaDate->locale('id')->translatedFormat('d F Y') }}</span><h2 id="sales-agenda-create-title">Tambah agenda</h2></div><button type="button" x-ref="sheetClose" @click="closeSheet()" class="sales-bottom-sheet-close" aria-label="Tutup form agenda">&times;</button></div>
+                <p id="sales-agenda-create-description" class="sales-bottom-sheet-description">{{ $daySubmission ? 'Agenda ini dicatat sebagai pekerjaan tambahan di luar target 420 menit.' : 'Susun aktivitas dengan waktu mulai dan durasi yang jelas.' }}</p>
             <form method="POST" action="{{ route('sales-agendas.store') }}" class="sales-receipt-form">
                 @csrf
                 <input type="hidden" name="scheduled_date" value="{{ $agendaDate->toDateString() }}">
                 <x-crm.field label="Kategori" for="sales-agenda-category" required><select id="sales-agenda-category" class="sales-input" name="sales_activity_category" required><option value="">Pilih kategori</option>@foreach(\App\Models\ContentItem::SALES_ACTIVITY_CATEGORIES as $category)<option value="{{ $category }}" @selected(old('sales_activity_category') === $category)>{{ $category }}</option>@endforeach</select></x-crm.field>
                 <x-crm.field label="Judul Agenda" for="sales-agenda-title" required><input id="sales-agenda-title" class="sales-input" name="title" value="{{ old('title') }}" required></x-crm.field>
                 <x-crm.field label="Mulai" for="sales-agenda-start-time" required><x-crm.time-field id="sales-agenda-start-time" name="start_time" :value="old('start_time')" required /></x-crm.field>
+                <x-crm.field label="Durasi" for="sales-agenda-duration" required><select id="sales-agenda-duration" class="sales-input" name="duration_minutes" required @change="syncDuration($event.target.value)"><option value="">Pilih durasi</option>@foreach([30, 60, 90, 120] as $duration)<option value="{{ $duration }}">{{ $duration }} menit</option>@endforeach</select><span class="sales-field-preview" data-end-preview aria-live="polite">Waktu selesai akan dihitung dari jam mulai.</span></x-crm.field>
                 <x-crm.field label="Selesai" for="sales-agenda-end-time" required><x-crm.time-field id="sales-agenda-end-time" name="end_time" :value="old('end_time')" required /></x-crm.field>
                 <x-crm.field label="Lokasi" for="sales-agenda-location"><input id="sales-agenda-location" class="sales-input" name="location" value="{{ old('location') }}"></x-crm.field>
                 <x-crm.field label="Hasil awal" for="sales-agenda-result" hint="Opsional; isi setelah kegiatan bila belum tersedia." class="md:col-span-2"><textarea id="sales-agenda-result" class="sales-input" name="activity_result" rows="2">{{ old('activity_result') }}</textarea></x-crm.field>
                 <div class="sales-receipt-form-actions"><button type="submit" class="crm-button crm-button--primary crm-button--md" data-accent="sales">{{ $daySubmission ? 'Simpan agenda tambahan' : 'Simpan agenda' }}</button></div>
             </form>
-        </details>
+            </div>
+        </div>
     @else
         <x-crm.alert variant="warning" title="Penugasan proyek diperlukan">Proyek utama belum ditentukan. Hubungi admin untuk menetapkan proyek sebelum membuat agenda.</x-crm.alert>
     @endif

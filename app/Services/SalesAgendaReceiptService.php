@@ -57,6 +57,11 @@ class SalesAgendaReceiptService
         return $summary['normal_minutes'] + $durationMinutes <= self::TARGET_MINUTES;
     }
 
+    public function submission(User $owner, CarbonImmutable $date): ?SalesAgendaDaySubmission
+    {
+        return $this->submissionQuery($owner, $date)->first();
+    }
+
     public function submit(User $owner, CarbonImmutable $date): SalesAgendaDaySubmission
     {
         $existing = $this->submissionQuery($owner, $date)->first();

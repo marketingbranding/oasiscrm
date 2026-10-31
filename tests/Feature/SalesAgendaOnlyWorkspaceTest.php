@@ -59,10 +59,10 @@ class SalesAgendaOnlyWorkspaceTest extends TestCase
 
         $response->assertOk()
             ->assertSee($agenda->title)
-            ->assertSee('Tambah Agenda')
+            ->assertSee('+ Tambah agenda')
             ->assertDontSee('Daily Planning')
             ->assertDontSee('Kertas Agenda Harian')
-            ->assertDontSee('420 menit');
+            ->assertSee('420 menit');
     }
 
     public function test_coordinator_sees_only_buku_saku_agendas_owned_by_current_team_sales(): void

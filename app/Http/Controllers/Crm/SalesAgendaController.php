@@ -55,6 +55,18 @@ class SalesAgendaController extends Controller
             'lead_status' => ['nullable', Rule::in(['open', 'completed'])],
         ]);
         $agendaDate = CarbonImmutable::createFromFormat('Y-m-d', $request->query('work_date', today()->toDateString()), config('app.timezone'));
+        $receiptSummary = $this->receiptService->summarize($request->user(), $agendaDate);
+        $daySubmission = $this->receiptService->submission($request->user(), $agendaDate);
+        $incompletePreviousAgendas = ContentItem::query()
+            ->where('item_type', 'agenda')
+            ->where('agenda_type', ContentItem::SALES_AGENDA_TYPE)
+            ->where('owner_user_id', $request->user()->id)
+            ->whereDate('scheduled_date', $agendaDate->subDay()->toDateString())
+            ->whereNotIn('status', ['done', 'cancelled', 'rescheduled'])
+            ->orderBy('start_time')
+            ->latest('id')
+            ->limit(5)
+            ->get();
         $agendas = ContentItem::query()
             ->with(['branch', 'salesProject', 'evidence'])
             ->where('item_type', 'agenda')
@@ -118,7 +130,7 @@ class SalesAgendaController extends Controller
         ];
         $canExport = $request->user()->hasPermission('sales_pocketbook.export_own');
 
-        return view('crm.sales-pocketbook.sales-agenda', compact('project', 'agendas', 'agendaGroups', 'leads', 'leadStatus', 'openLeadCount', 'completedLeadCount', 'tab', 'projects', 'defaultProjectId', 'cascadeProjects', 'leadOptionsEndpoint', 'promos', 'dailyReminder', 'canExport', 'agendaDate'));
+        return view('crm.sales-pocketbook.sales-agenda', compact('project', 'agendas', 'agendaGroups', 'leads', 'leadStatus', 'openLeadCount', 'completedLeadCount', 'tab', 'projects', 'defaultProjectId', 'cascadeProjects', 'leadOptionsEndpoint', 'promos', 'dailyReminder', 'canExport', 'agendaDate', 'receiptSummary', 'daySubmission', 'incompletePreviousAgendas'));
     }
 
     public function show(Request $request, ContentItem $agenda)

@@ -28,22 +28,94 @@ class SalesAgendaReceiptService
      */
     public function summarize(User $owner, CarbonImmutable $date): array
     {
-        $normalAgendas = $this->normalAgendaQuery($owner, $date)->get(['id', 'duration_minutes', 'status']);
+        $schedule = $this->schedule($date);
+        $normalAgendas = ($schedule['is_weekend'] ? $this->agendaQuery($owner, $date) : $this->normalAgendaQuery($owner, $date))
+            ->whereNotIn('status', ['cancelled', 'rescheduled'])
+            ->get(['id', 'duration_minutes', 'status', 'start_time', 'end_time']);
         $extraAgendas = $this->agendaQuery($owner, $date)
             ->where('is_outside_schedule', true)
             ->whereNotIn('status', ['cancelled', 'rescheduled'])
             ->count();
-        $normalMinutes = (int) $normalAgendas->sum(fn (ContentItem $agenda): int => (int) $agenda->duration_minutes);
+        $normalMinutes = (int) $normalAgendas->sum(fn (ContentItem $agenda): int => $this->effectiveMinutes($date, $agenda->start_time, $agenda->end_time));
 
         return [
             'normal_minutes' => $normalMinutes,
-            'target_minutes' => self::TARGET_MINUTES,
-            'remaining_minutes' => max(0, self::TARGET_MINUTES - $normalMinutes),
+            'target_minutes' => $schedule['target_minutes'],
+            'remaining_minutes' => $schedule['requires_target'] ? max(0, $schedule['target_minutes'] - $normalMinutes) : 0,
             'completed_count' => $normalAgendas->where('status', 'done')->count(),
             'agenda_count' => $normalAgendas->count(),
             'submitted' => $this->submissionQuery($owner, $date)->exists(),
-            'extra_count' => $extraAgendas,
+            'extra_count' => $schedule['is_weekend'] ? 0 : $extraAgendas,
+            'is_weekend' => $schedule['is_weekend'],
+            'requires_target' => $schedule['requires_target'],
+            'schedule' => $schedule,
         ];
+    }
+
+    /**
+     * @return array{is_weekend: bool, start_time: ?string, end_time: ?string, break_start: ?string, break_end: ?string, target_minutes: int, requires_target: bool}
+     */
+    public function schedule(CarbonImmutable $date): array
+    {
+        if ($date->isWeekend()) {
+            return [
+                'is_weekend' => true,
+                'start_time' => null,
+                'end_time' => null,
+                'break_start' => null,
+                'break_end' => null,
+                'target_minutes' => 0,
+                'requires_target' => false,
+            ];
+        }
+
+        $isFriday = $date->dayOfWeekIso === 5;
+
+        return [
+            'is_weekend' => false,
+            'start_time' => $isFriday ? '07:30' : '08:00',
+            'end_time' => '17:00',
+            'break_start' => $isFriday ? '11:30' : '12:00',
+            'break_end' => '13:00',
+            'target_minutes' => self::TARGET_MINUTES,
+            'requires_target' => true,
+        ];
+    }
+
+    public function assertTimeSlotAvailable(User $owner, CarbonImmutable $date, string $startTime, string $endTime, ?int $ignoreAgendaId = null): void
+    {
+        $schedule = $this->schedule($date);
+        $startMinute = $this->timeToMinutes($startTime);
+        $endMinute = $this->timeToMinutes($endTime);
+
+        if (! $schedule['is_weekend']) {
+            $scheduleStart = $this->timeToMinutes($schedule['start_time']);
+            $scheduleEnd = $this->timeToMinutes($schedule['end_time']);
+
+            if ($startMinute < $scheduleStart || $endMinute > $scheduleEnd) {
+                throw new RuntimeException('Agenda harus berada di dalam jam kerja yang tersedia.');
+            }
+
+        }
+
+        $query = $this->agendaQuery($owner, $date)
+            ->where('is_outside_schedule', false)
+            ->whereNotIn('status', ['cancelled', 'rescheduled'])
+            ->whereNotNull('start_time')
+            ->whereNotNull('end_time');
+
+        if ($ignoreAgendaId !== null) {
+            $query->where('id', '<>', $ignoreAgendaId);
+        }
+
+        $overlaps = $query->get(['start_time', 'end_time'])->contains(function (ContentItem $agenda) use ($startMinute, $endMinute): bool {
+            return $startMinute < $this->timeToMinutes(substr((string) $agenda->end_time, 0, 5))
+                && $endMinute > $this->timeToMinutes(substr((string) $agenda->start_time, 0, 5));
+        });
+
+        if ($overlaps) {
+            throw new RuntimeException('Waktu agenda bertumpang tindih dengan agenda lain.');
+        }
     }
 
     public function canAddNormal(User $owner, CarbonImmutable $date, int $durationMinutes): bool
@@ -54,7 +126,7 @@ class SalesAgendaReceiptService
 
         $summary = $this->summarize($owner, $date);
 
-        return $summary['normal_minutes'] + $durationMinutes <= self::TARGET_MINUTES;
+        return ! $summary['requires_target'] || $summary['target_minutes'] >= $summary['normal_minutes'] + $durationMinutes;
     }
 
     public function submission(User $owner, CarbonImmutable $date): ?SalesAgendaDaySubmission
@@ -76,15 +148,20 @@ class SalesAgendaReceiptService
             }
 
             $summary = $this->summarize($owner, $date);
-            if ($summary['normal_minutes'] !== self::TARGET_MINUTES) {
-                throw new RuntimeException('Agenda harus mencapai 420 menit sebelum dikirim ke Koordinator.');
+            if (! $summary['requires_target'] && $summary['agenda_count'] < 1) {
+                throw new RuntimeException('Agenda akhir pekan harus memiliki minimal satu agenda sebelum dikirim ke Koordinator.');
+            }
+
+            if ($summary['requires_target'] && $summary['normal_minutes'] !== self::TARGET_MINUTES) {
+                throw new RuntimeException('Agenda harus mencapai 480 menit sebelum dikirim ke Koordinator.');
             }
 
             return SalesAgendaDaySubmission::create([
                 'owner_user_id' => $owner->id,
                 'scheduled_date' => $date->toDateString(),
-                'target_minutes' => self::TARGET_MINUTES,
+                'target_minutes' => $summary['target_minutes'],
                 'normal_minutes_at_submission' => $summary['normal_minutes'],
+                'is_weekend' => $summary['is_weekend'],
                 'submitted_at' => now(),
             ]);
         });
@@ -178,9 +255,52 @@ class SalesAgendaReceiptService
             ->whereDate('scheduled_date', $date->toDateString());
     }
 
+    public function effectiveMinutes(CarbonImmutable $date, ?string $startTime, ?string $endTime): int
+    {
+        if ($startTime === null || $endTime === null) {
+            return 0;
+        }
+
+        $startMinute = $this->timeToMinutes($startTime);
+        $endMinute = $this->timeToMinutes($endTime);
+        $duration = max(0, $endMinute - $startMinute);
+
+        if ($duration === 0 || $date->isWeekend()) {
+            return $duration;
+        }
+
+        $schedule = $this->schedule($date);
+        $breakStart = $this->timeToMinutes($schedule['break_start']);
+        $breakEnd = $this->timeToMinutes($schedule['break_end']);
+        $breakMinutes = max(0, min($endMinute, $breakEnd) - max($startMinute, $breakStart));
+
+        return max(0, $duration - $breakMinutes);
+    }
+
+    public function isBreakAgenda(CarbonImmutable $date, ?string $startTime, ?string $endTime): bool
+    {
+        if ($date->isWeekend() || $startTime === null || $endTime === null) {
+            return false;
+        }
+
+        $startMinute = $this->timeToMinutes($startTime);
+        $endMinute = $this->timeToMinutes($endTime);
+        $schedule = $this->schedule($date);
+
+        return $startMinute < $this->timeToMinutes($schedule['break_end'])
+            && $endMinute > $this->timeToMinutes($schedule['break_start']);
+    }
+
     private function isSalesAgenda(ContentItem $agenda): bool
     {
         return $agenda->item_type === 'agenda'
             && $agenda->agenda_type === ContentItem::SALES_AGENDA_TYPE;
+    }
+
+    private function timeToMinutes(?string $time): int
+    {
+        [$hours, $minutes] = array_map('intval', explode(':', substr((string) $time, 0, 5)));
+
+        return ($hours * 60) + $minutes;
     }
 }

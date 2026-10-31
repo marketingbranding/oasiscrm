@@ -7,13 +7,14 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class SalesAgendaDaySubmission extends Model
 {
-    public const TARGET_MINUTES = 420;
+    public const TARGET_MINUTES = 480;
 
     protected $fillable = [
         'owner_user_id',
         'scheduled_date',
         'target_minutes',
         'normal_minutes_at_submission',
+        'is_weekend',
         'submitted_at',
     ];
 
@@ -23,6 +24,7 @@ class SalesAgendaDaySubmission extends Model
             'scheduled_date' => 'date',
             'target_minutes' => 'integer',
             'normal_minutes_at_submission' => 'integer',
+            'is_weekend' => 'boolean',
             'submitted_at' => 'datetime',
         ];
     }

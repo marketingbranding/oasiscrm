@@ -176,6 +176,7 @@ Route::middleware(['auth', 'active', 'verified', 'password.changed', 'operationa
         Route::get('/buku-saku-sales/agendas/export', SalesAgendaExportController::class)->middleware('permission:sales_pocketbook.export_own')->name('sales-agendas.export');
         Route::get('/buku-saku-sales/agendas/{agenda}', [SalesAgendaController::class, 'show'])->middleware('permission:sales_pocketbook.view_own')->name('sales-agendas.show');
         Route::post('/buku-saku-sales/agendas', [SalesAgendaController::class, 'store'])->middleware('permission:sales_pocketbook.manage_own')->name('sales-agendas.store');
+        Route::post('/buku-saku-sales/agendas/submit', [SalesAgendaController::class, 'submit'])->middleware('permission:sales_pocketbook.manage_own')->name('sales-agendas.submit');
         Route::patch('/buku-saku-sales/agendas/{agenda}', [SalesAgendaController::class, 'update'])->middleware('permission:sales_pocketbook.manage_own')->name('sales-agendas.update');
         Route::post('/buku-saku-sales/agendas/{agenda}/tasks', [SalesAgendaTaskController::class, 'store'])->middleware('permission:sales_pocketbook.manage_own')->name('sales-agendas.tasks.store');
         Route::patch('/buku-saku-sales/agendas/{agenda}/tasks/{task}', [SalesAgendaTaskController::class, 'update'])->middleware('permission:sales_pocketbook.manage_own')->name('sales-agendas.tasks.update');

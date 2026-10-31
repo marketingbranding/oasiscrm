@@ -87,6 +87,11 @@ class SalesAgendaReceiptService
 
     public function deferToNextDay(User $actor, ContentItem $agenda): ContentItem
     {
+        return DB::transaction(fn (): ContentItem => $this->deferToNextDayLocked($actor, $agenda));
+    }
+
+    public function deferToNextDayLocked(User $actor, ContentItem $agenda): ContentItem
+    {
         if ((int) $agenda->owner_user_id !== (int) $actor->id) {
             throw new AuthorizationException('Anda tidak dapat menunda Agenda Sales ini.');
         }
@@ -103,42 +108,40 @@ class SalesAgendaReceiptService
             throw new RuntimeException('Agenda ini sudah memiliki Agenda lanjutan.');
         }
 
-        return DB::transaction(function () use ($actor, $agenda): ContentItem {
-            $current = ContentItem::query()->lockForUpdate()->findOrFail($agenda->id);
-            if ($current->rescheduledItems()->exists()) {
-                throw new RuntimeException('Agenda ini sudah memiliki Agenda lanjutan.');
-            }
+        $current = ContentItem::query()->lockForUpdate()->findOrFail($agenda->id);
+        if ($current->rescheduledItems()->exists()) {
+            throw new RuntimeException('Agenda ini sudah memiliki Agenda lanjutan.');
+        }
 
-            $copy = $current->replicate([
-                'scheduled_date',
-                'status',
-                'completed_at',
-                'activity_result',
-                'daily_plan_id',
-                'sort_order',
-                'rescheduled_from_id',
-                'is_outside_schedule',
-                'updated_by',
-            ]);
-            $copy->fill([
-                'scheduled_date' => CarbonImmutable::parse($current->scheduled_date)->addDay()->toDateString(),
-                'status' => 'planned',
-                'completed_at' => null,
-                'activity_result' => null,
-                'daily_plan_id' => null,
-                'sort_order' => null,
-                'rescheduled_from_id' => $current->id,
-                'is_outside_schedule' => false,
-                'created_by' => $actor->id,
-                'updated_by' => $actor->id,
-            ]);
-            $copy->save();
-            $copy->assignees()->sync([$copy->owner_user_id]);
+        $copy = $current->replicate([
+            'scheduled_date',
+            'status',
+            'completed_at',
+            'activity_result',
+            'daily_plan_id',
+            'sort_order',
+            'rescheduled_from_id',
+            'is_outside_schedule',
+            'updated_by',
+        ]);
+        $copy->fill([
+            'scheduled_date' => CarbonImmutable::parse($current->scheduled_date)->addDay()->toDateString(),
+            'status' => 'planned',
+            'completed_at' => null,
+            'activity_result' => null,
+            'daily_plan_id' => null,
+            'sort_order' => null,
+            'rescheduled_from_id' => $current->id,
+            'is_outside_schedule' => false,
+            'created_by' => $actor->id,
+            'updated_by' => $actor->id,
+        ]);
+        $copy->save();
+        $copy->assignees()->sync([$copy->owner_user_id]);
 
-            $current->update(['status' => 'rescheduled', 'updated_by' => $actor->id]);
+        $current->update(['status' => 'rescheduled', 'updated_by' => $actor->id]);
 
-            return $copy;
-        });
+        return $copy;
     }
 
     public function isScheduleEditable(User $actor, ContentItem $agenda): bool

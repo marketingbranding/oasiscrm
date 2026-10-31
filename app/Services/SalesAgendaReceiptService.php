@@ -118,15 +118,16 @@ class SalesAgendaReceiptService
         }
     }
 
-    public function canAddNormal(User $owner, CarbonImmutable $date, int $durationMinutes): bool
+    public function canAddNormal(User $owner, CarbonImmutable $date, int $durationMinutes, ?int $effectiveMinutes = null): bool
     {
         if ($durationMinutes < 1 || $this->submissionQuery($owner, $date)->exists()) {
             return false;
         }
 
         $summary = $this->summarize($owner, $date);
+        $effectiveMinutes ??= $durationMinutes;
 
-        return ! $summary['requires_target'] || $summary['target_minutes'] >= $summary['normal_minutes'] + $durationMinutes;
+        return ! $summary['requires_target'] || $summary['target_minutes'] >= $summary['normal_minutes'] + $effectiveMinutes;
     }
 
     public function submission(User $owner, CarbonImmutable $date): ?SalesAgendaDaySubmission

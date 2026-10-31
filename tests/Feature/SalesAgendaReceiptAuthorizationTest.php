@@ -36,24 +36,106 @@ class SalesAgendaReceiptAuthorizationTest extends TestCase
         $this->assertNotNull($project);
     }
 
+    public function test_new_weekday_agenda_can_be_created_during_break_time(): void
+    {
+        [$sales, $project] = $this->salesContext();
+        $this->agendaAt($sales, $project, '2026-10-29', '09:00', '10:00');
+
+        $this->actingAs($sales)
+            ->post(route('sales-agendas.store'), [
+                'scheduled_date' => '2026-10-29',
+                'start_time' => '09:30',
+                'end_time' => '10:30',
+                'sales_activity_category' => 'Follow-up',
+                'title' => 'Agenda tumpang tindih',
+            ])
+            ->assertSessionHasErrors(['end_time']);
+
+        $this->actingAs($sales)
+            ->post(route('sales-agendas.store'), [
+                'scheduled_date' => '2026-10-29',
+                'start_time' => '12:00',
+                'end_time' => '13:00',
+                'sales_activity_category' => 'Follow-up',
+                'title' => 'Agenda jam istirahat',
+            ])
+            ->assertRedirect(route('sales-agendas.index'))
+            ->assertSessionDoesntHaveErrors();
+
+        $this->assertDatabaseHas('content_items', [
+            'title' => 'Agenda jam istirahat',
+            'duration_minutes' => 60,
+            'is_outside_schedule' => false,
+        ]);
+    }
+
+    public function test_capacity_uses_effective_minutes_for_a_cross_break_agenda(): void
+    {
+        [$sales, $project] = $this->salesContext();
+        $date = '2026-10-30';
+        $this->agendaAt($sales, $project, $date, '07:30', '10:30');
+        $this->agendaAt($sales, $project, $date, '10:30', '11:00');
+        $this->agendaAt($sales, $project, $date, '13:30', '17:00');
+
+        $this->actingAs($sales)
+            ->post(route('sales-agendas.store'), [
+                'scheduled_date' => $date,
+                'start_time' => '11:00',
+                'end_time' => '13:30',
+                'sales_activity_category' => 'Follow-up',
+                'title' => 'Agenda melintasi istirahat',
+            ])
+            ->assertRedirect(route('sales-agendas.index'))
+            ->assertSessionDoesntHaveErrors();
+
+        $this->assertDatabaseHas('content_items', [
+            'title' => 'Agenda melintasi istirahat',
+            'duration_minutes' => 150,
+            'is_outside_schedule' => false,
+        ]);
+    }
+
+    public function test_weekend_agenda_can_be_created_without_weekday_target(): void
+    {
+        [$sales, $project] = $this->salesContext();
+
+        $this->actingAs($sales)
+            ->post(route('sales-agendas.store'), [
+                'scheduled_date' => '2026-11-01',
+                'start_time' => '20:00',
+                'end_time' => '21:00',
+                'sales_activity_category' => 'TikTok Live',
+                'title' => 'TikTok Live akhir pekan',
+            ])
+            ->assertRedirect(route('sales-agendas.index'))
+            ->assertSessionDoesntHaveErrors();
+
+        $this->assertDatabaseHas('content_items', [
+            'title' => 'TikTok Live akhir pekan',
+            'scheduled_date' => '2026-11-01 00:00:00',
+            'duration_minutes' => 60,
+            'is_outside_schedule' => false,
+        ]);
+    }
+
     public function test_owner_can_submit_exact_target_and_new_agenda_becomes_additional(): void
     {
         [$sales, $project] = $this->salesContext();
-        $agenda = $this->agenda($sales, $project, 420);
+        $agenda = $this->agendaAt($sales, $project, '2026-10-29', '08:00', '17:00');
 
         $this->actingAs($sales)
-            ->post(route('sales-agendas.submit'), ['scheduled_date' => '2026-10-31'])
+            ->post(route('sales-agendas.submit'), ['scheduled_date' => '2026-10-29'])
             ->assertRedirect(route('sales-agendas.index'));
 
         $this->assertDatabaseHas('sales_agenda_day_submissions', [
             'owner_user_id' => $sales->id,
-            'target_minutes' => 420,
-            'normal_minutes_at_submission' => 420,
+            'target_minutes' => 480,
+            'normal_minutes_at_submission' => 480,
         ]);
 
         $this->actingAs($sales)
             ->post(route('sales-agendas.store'), [
-                'scheduled_date' => '2026-10-31',
+                'scheduled_date' => '2026-10-29',
                 'start_time' => '17:00',
                 'end_time' => '17:30',
                 'sales_activity_category' => 'Follow-up',
@@ -65,7 +147,7 @@ class SalesAgendaReceiptAuthorizationTest extends TestCase
             'title' => 'Agenda tambahan',
             'is_outside_schedule' => true,
         ]);
-        $this->assertSame(420, $agenda->fresh()->duration_minutes);
+        $this->assertSame(540, $agenda->fresh()->duration_minutes);
     }
 
     public function test_submitted_agenda_can_be_completed_and_receive_evidence(): void
@@ -147,7 +229,7 @@ class SalesAgendaReceiptAuthorizationTest extends TestCase
         return [$sales, $project];
     }
 
-    private function agenda(User $sales, LeadMaster $project, int $duration): ContentItem
+    private function agenda(User $sales, LeadMaster $project, int $duration, string $scheduledDate = '2026-10-31'): ContentItem
     {
         $agenda = ContentItem::create([
             'branch_id' => $project->branch_id,
@@ -158,10 +240,34 @@ class SalesAgendaReceiptAuthorizationTest extends TestCase
             'visibility' => 'personal',
             'title' => 'Agenda awal',
             'sales_activity_category' => 'Follow-up',
-            'scheduled_date' => '2026-10-31',
+            'scheduled_date' => $scheduledDate,
             'start_time' => '09:00',
             'end_time' => sprintf('%02d:00', 9 + intdiv($duration, 60)),
             'duration_minutes' => $duration,
+            'status' => 'planned',
+            'owner_user_id' => $sales->id,
+            'created_by' => $sales->id,
+        ]);
+        $agenda->assignees()->sync([$sales->id]);
+
+        return $agenda;
+    }
+
+    private function agendaAt(User $sales, LeadMaster $project, string $date, string $start, string $end): ContentItem
+    {
+        $agenda = ContentItem::create([
+            'branch_id' => $project->branch_id,
+            'project_name' => $project->project_name,
+            'sales_project_id' => $project->id,
+            'item_type' => 'agenda',
+            'agenda_type' => ContentItem::SALES_AGENDA_TYPE,
+            'visibility' => 'personal',
+            'title' => 'Agenda '.$start,
+            'sales_activity_category' => 'Follow-up',
+            'scheduled_date' => $date,
+            'start_time' => $start,
+            'end_time' => $end,
+            'duration_minutes' => ((int) substr($end, 0, 2) * 60 + (int) substr($end, 3, 2)) - ((int) substr($start, 0, 2) * 60 + (int) substr($start, 3, 2)),
             'status' => 'planned',
             'owner_user_id' => $sales->id,
             'created_by' => $sales->id,

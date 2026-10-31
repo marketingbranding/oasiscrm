@@ -45,11 +45,11 @@ class SalesAgendaController extends Controller
     public function index(Request $request)
     {
         abort_unless($request->user()->isSales(), 403);
-        if ($this->onboarding->shouldShow($request->user())) {
-            return redirect()->route('sales-pocketbook.onboarding.show');
-        }
         $project = $this->projectResolver->resolve($request->user());
-        $tab = $request->query('tab') === 'leads' ? 'leads' : 'agenda';
+        $showSalesTour = $request->boolean('tour') || $this->onboarding->shouldShow($request->user());
+        $tab = $showSalesTour && ! $request->boolean('tour')
+            ? 'agenda'
+            : ($request->query('tab') === 'leads' ? 'leads' : 'agenda');
         $request->validate([
             'work_date' => ['nullable', 'date_format:Y-m-d'],
             'lead_status' => ['nullable', Rule::in(['open', 'completed'])],
@@ -130,7 +130,7 @@ class SalesAgendaController extends Controller
         ];
         $canExport = $request->user()->hasPermission('sales_pocketbook.export_own');
 
-        return view('crm.sales-pocketbook.sales-agenda', compact('project', 'agendas', 'agendaGroups', 'leads', 'leadStatus', 'openLeadCount', 'completedLeadCount', 'tab', 'projects', 'defaultProjectId', 'cascadeProjects', 'leadOptionsEndpoint', 'promos', 'dailyReminder', 'canExport', 'agendaDate', 'receiptSummary', 'daySubmission', 'incompletePreviousAgendas'));
+        return view('crm.sales-pocketbook.sales-agenda', compact('project', 'agendas', 'agendaGroups', 'leads', 'leadStatus', 'openLeadCount', 'completedLeadCount', 'tab', 'projects', 'defaultProjectId', 'cascadeProjects', 'leadOptionsEndpoint', 'promos', 'dailyReminder', 'canExport', 'agendaDate', 'receiptSummary', 'daySubmission', 'incompletePreviousAgendas', 'showSalesTour'));
     }
 
     public function show(Request $request, ContentItem $agenda)
@@ -148,11 +148,23 @@ class SalesAgendaController extends Controller
         $project = $this->agendaProject($request, $owner, $data);
         abort_unless($project, 422, 'Proyek utama belum ditentukan. Hubungi admin untuk menetapkan proyek utama.');
         $duration = $this->durationMinutes($data['start_time'], $data['end_time']);
-        $summary = $this->receiptService->summarize($owner, CarbonImmutable::parse($data['scheduled_date']));
+        $scheduledDate = CarbonImmutable::parse($data['scheduled_date']);
+        $summary = $this->receiptService->summarize($owner, $scheduledDate);
         $outsideSchedule = $summary['submitted'];
-        if (! $outsideSchedule && ! $this->receiptService->canAddNormal($owner, CarbonImmutable::parse($data['scheduled_date']), $duration)) {
+        if (! $outsideSchedule) {
+            try {
+                $this->receiptService->assertTimeSlotAvailable($owner, $scheduledDate, $data['start_time'], $data['end_time']);
+            } catch (\RuntimeException $exception) {
+                throw ValidationException::withMessages(['end_time' => $exception->getMessage()]);
+            }
+        }
+
+        $effectiveDuration = $this->receiptService->effectiveMinutes($scheduledDate, $data['start_time'], $data['end_time']);
+        if (! $outsideSchedule && ! $this->receiptService->canAddNormal($owner, $scheduledDate, $duration, $effectiveDuration)) {
             throw ValidationException::withMessages([
-                'end_time' => 'Durasi agenda melebihi sisa waktu kerja 420 menit.',
+                'end_time' => $summary['requires_target']
+                    ? 'Durasi agenda melebihi sisa waktu kerja '.$summary['target_minutes'].' menit.'
+                    : 'Agenda akhir pekan tidak dapat ditambahkan.',
             ]);
         }
         $prepared = $uploads->prepare($request->file('photos', []), 'photos');

@@ -66,6 +66,7 @@ class ContentItem extends Model
         'completed_at',
         'activity_result',
         'duration_minutes',
+        'is_outside_schedule',
         'daily_plan_id',
         'sort_order',
         'sales_activity_category',
@@ -86,6 +87,7 @@ class ContentItem extends Model
             'pic_names' => 'array',
             'completed_at' => 'datetime',
             'duration_minutes' => 'integer',
+            'is_outside_schedule' => 'boolean',
             'sort_order' => 'integer',
         ];
     }

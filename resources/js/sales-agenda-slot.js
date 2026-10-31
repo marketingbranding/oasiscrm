@@ -50,16 +50,14 @@ export function calculateAgendaSlot({
 
     const existingAgendas = agendas
         .filter((agenda) => !['cancelled', 'rescheduled'].includes(agenda.status))
+        .filter((agenda) => !Boolean(agenda.isOutsideSchedule ?? agenda.is_outside_schedule))
         .map((agenda) => ({
             start: timeToMinutes(agenda.startTime ?? agenda.start_time),
             end: timeToMinutes(agenda.endTime ?? agenda.end_time),
-            duration: Number(agenda.durationMinutes ?? agenda.duration_minutes) || 0,
-            isOutsideSchedule: Boolean(agenda.isOutsideSchedule ?? agenda.is_outside_schedule),
         }))
         .filter((agenda) => agenda.start !== null && agenda.end !== null);
 
     const normalMinutes = existingAgendas
-        .filter((agenda) => !agenda.isOutsideSchedule)
         .reduce((total, agenda) => total + effectiveMinutes(agenda.start, agenda.end, schedule), 0);
 
     let start = timeToMinutes(requestedStart);

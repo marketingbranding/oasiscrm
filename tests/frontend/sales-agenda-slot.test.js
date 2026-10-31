@@ -103,6 +103,22 @@ test('rejects an agenda overlapping an existing agenda', () => {
     assert.match(result.message, /bertumpang tindih/i);
 });
 
+test('ignores outside, cancelled, and rescheduled agendas for automatic slots and overlaps', () => {
+    const result = calculateAgendaSlot({
+        date: '2026-10-26',
+        agendas: [
+            { startTime: '08:00', endTime: '09:00', status: 'cancelled' },
+            { startTime: '09:00', endTime: '10:00', status: 'rescheduled' },
+            { startTime: '17:00', endTime: '18:00', isOutsideSchedule: true },
+        ],
+        durationMinutes: 60,
+    });
+
+    assert.equal(result.ok, true);
+    assert.equal(result.startTime, '08:00');
+    assert.equal(result.endTime, '09:00');
+});
+
 test('allows an agenda crossing lunch but rejects one past the weekday end', () => {
     const crossingLunch = calculateAgendaSlot({
         date: '2026-10-26',

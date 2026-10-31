@@ -28,9 +28,16 @@
                             @php($breakRendered = true)
                             <li class="sales-receipt-break-row">— ISTIRAHAT {{ $schedule['break_start'] }}–{{ $schedule['break_end'] }} —</li>
                         @endif
-                         @php($breakAgenda = ! $agenda->is_outside_schedule && $isBreakAgenda($agenda))
+                         @php($breakAgenda = $isBreakAgenda($agenda))
+                         @php($agendaLabels = [])
+                         @if($agenda->is_outside_schedule)
+                             @php($agendaLabels[] = 'Agenda tambahan · di luar target')
+                         @endif
+                         @if($breakAgenda)
+                             @php($agendaLabels[] = 'Agenda jam istirahat')
+                         @endif
                          <li class="sales-receipt-paper-row {{ $agenda->is_outside_schedule ? 'is-additional' : '' }} {{ $breakAgenda ? 'is-break' : '' }}" data-tour-target="agenda-row">
-                             <span><b>{{ $agenda->start_time && $agenda->end_time ? substr((string) $agenda->start_time, 0, 5).'–'.substr((string) $agenda->end_time, 0, 5) : 'Fleksibel' }}</b>@if($agenda->start_time && $agenda->end_time)<small>{{ $agenda->duration_minutes }} mnt</small>@endif<br>{{ $agenda->title }}@if($breakAgenda)<small class="sales-agenda-break-label">Agenda jam istirahat</small>@endif</span>
+                             <span><b>{{ $agenda->start_time && $agenda->end_time ? substr((string) $agenda->start_time, 0, 5).'–'.substr((string) $agenda->end_time, 0, 5) : 'Fleksibel' }}</b>@if($agenda->start_time && $agenda->end_time)<small>{{ $agenda->duration_minutes }} mnt</small>@endif<br>{{ $agenda->title }}@if($agendaLabels)<small class="sales-agenda-break-label">{{ implode(' · ', $agendaLabels) }}</small>@endif</span>
                             @if($agenda->start_time && $agenda->end_time)<strong>{{ $agenda->duration_minutes }}m</strong>@endif
                             <a href="{{ route('sales-agendas.show', $agenda) }}" class="sr-only">Buka detail agenda {{ $agenda->title }}</a>
                         </li>

@@ -24,6 +24,9 @@ class SalesAgendaReceiptService
      *     agenda_count: int,
      *     submitted: bool,
      *     extra_count: int,
+     *     is_weekend: bool,
+     *     requires_target: bool,
+     *     schedule: array{is_weekend: bool, start_time: ?string, end_time: ?string, break_start: ?string, break_end: ?string, target_minutes: int, requires_target: bool},
      * }
      */
     public function summarize(User $owner, CarbonImmutable $date): array
@@ -37,14 +40,19 @@ class SalesAgendaReceiptService
             ->whereNotIn('status', ['cancelled', 'rescheduled'])
             ->count();
         $normalMinutes = (int) $normalAgendas->sum(fn (ContentItem $agenda): int => $this->effectiveMinutes($date, $agenda->start_time, $agenda->end_time));
+        $submission = $this->submissionQuery($owner, $date)->first();
+        if ($submission) {
+            $normalMinutes = (int) $submission->normal_minutes_at_submission;
+        }
+        $targetMinutes = $submission ? (int) $submission->target_minutes : $schedule['target_minutes'];
 
         return [
             'normal_minutes' => $normalMinutes,
-            'target_minutes' => $schedule['target_minutes'],
-            'remaining_minutes' => $schedule['requires_target'] ? max(0, $schedule['target_minutes'] - $normalMinutes) : 0,
+            'target_minutes' => $targetMinutes,
+            'remaining_minutes' => $schedule['requires_target'] ? max(0, $targetMinutes - $normalMinutes) : 0,
             'completed_count' => $normalAgendas->where('status', 'done')->count(),
             'agenda_count' => $normalAgendas->count(),
-            'submitted' => $this->submissionQuery($owner, $date)->exists(),
+            'submitted' => $submission !== null,
             'extra_count' => $schedule['is_weekend'] ? 0 : $extraAgendas,
             'is_weekend' => $schedule['is_weekend'],
             'requires_target' => $schedule['requires_target'],

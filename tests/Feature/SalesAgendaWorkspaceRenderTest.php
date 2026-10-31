@@ -54,6 +54,30 @@ class SalesAgendaWorkspaceRenderTest extends TestCase
             ->assertDontSee('960–17:00 · kosong 60 menit');
     }
 
+    public function test_open_slot_guidance_uses_effective_minutes_after_the_break(): void
+    {
+        [$sales, $project] = $this->salesContext();
+        $this->agendaAt($sales, $project, '2026-10-30', '09:00', '10:00', 'Agenda pagi');
+
+        $this->actingAs($sales)
+            ->get(route('sales-agendas.index', ['work_date' => '2026-10-30']))
+            ->assertOk()
+            ->assertSee('10:00–17:00 · kosong 330 menit');
+    }
+
+    public function test_break_start_preview_uses_effective_remaining_minutes(): void
+    {
+        [$sales] = $this->salesContext();
+
+        $this->withSession(['_old_input' => [
+            'start_time' => '12:00',
+            'duration_minutes' => '60',
+        ]])->actingAs($sales)
+            ->get(route('sales-agendas.index', ['work_date' => '2026-10-30']))
+            ->assertOk()
+            ->assertSee('Selesai 13:00 · sisa 480 menit');
+    }
+
     public function test_weekend_agenda_renders_free_plan_without_target_or_break_row(): void
     {
         [$sales] = $this->salesContext();
@@ -79,6 +103,26 @@ class SalesAgendaWorkspaceRenderTest extends TestCase
             ->assertOk()
             ->assertSee('Agenda jam istirahat')
             ->assertSee('is-break', false);
+    }
+
+    public function test_submitted_outside_break_agenda_renders_both_status_labels(): void
+    {
+        [$sales, $project] = $this->salesContext();
+        $this->agendaAt($sales, $project, '2026-10-30', '07:30', '17:00', 'Agenda utama');
+        $this->agendaAt($sales, $project, '2026-10-30', '12:00', '13:00', 'Agenda tambahan istirahat', true);
+        SalesAgendaDaySubmission::create([
+            'owner_user_id' => $sales->id,
+            'scheduled_date' => '2026-10-30',
+            'target_minutes' => 480,
+            'normal_minutes_at_submission' => 480,
+            'submitted_at' => now(),
+        ]);
+
+        $this->actingAs($sales)
+            ->get(route('sales-agendas.index', ['work_date' => '2026-10-30']))
+            ->assertOk()
+            ->assertSee('Agenda tambahan · di luar target · Agenda jam istirahat')
+            ->assertSee('sales-submitted-row is-break', false);
     }
 
     public function test_flexible_agenda_row_does_not_render_placeholder_clock_or_zero_minutes(): void
@@ -244,7 +288,7 @@ class SalesAgendaWorkspaceRenderTest extends TestCase
         return $agenda;
     }
 
-    private function agendaAt(User $sales, LeadMaster $project, string $date, string $start, string $end, string $title): ContentItem
+    private function agendaAt(User $sales, LeadMaster $project, string $date, string $start, string $end, string $title, bool $outsideSchedule = false): ContentItem
     {
         $agenda = ContentItem::create([
             'branch_id' => $project->branch_id,
@@ -260,7 +304,7 @@ class SalesAgendaWorkspaceRenderTest extends TestCase
             'end_time' => $end,
             'duration_minutes' => ((int) substr($end, 0, 2) * 60 + (int) substr($end, 3, 2)) - ((int) substr($start, 0, 2) * 60 + (int) substr($start, 3, 2)),
             'status' => 'planned',
-            'is_outside_schedule' => false,
+            'is_outside_schedule' => $outsideSchedule,
             'owner_user_id' => $sales->id,
             'created_by' => $sales->id,
         ]);

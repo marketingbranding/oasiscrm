@@ -119,7 +119,26 @@ class SalesAgendaReceiptWorkflowTest extends TestCase
         $this->assertSame(0, $summary['remaining_minutes']);
     }
 
-    public function test_schedule_rejects_overlap_and_break_time_but_allows_weekend_slots(): void
+    public function test_submitted_summary_preserves_the_recorded_historical_target_and_minutes(): void
+    {
+        [$owner, $branch] = $this->salesContext();
+        $date = CarbonImmutable::parse('2026-10-29');
+        $this->agendaAt($owner, $branch, $date, '09:00', '16:00');
+        SalesAgendaDaySubmission::create([
+            'owner_user_id' => $owner->id,
+            'scheduled_date' => $date,
+            'target_minutes' => 420,
+            'normal_minutes_at_submission' => 420,
+            'submitted_at' => now(),
+        ]);
+
+        $summary = app(SalesAgendaReceiptService::class)->summarize($owner, $date);
+
+        $this->assertSame(420, $summary['target_minutes']);
+        $this->assertSame(420, $summary['normal_minutes']);
+    }
+
+    public function test_schedule_rejects_overlapping_slots(): void
     {
         [$owner, $branch] = $this->salesContext();
         $service = app(SalesAgendaReceiptService::class);

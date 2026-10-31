@@ -18,7 +18,8 @@
 
         return ($hours * 60) + $minutes;
     };
-    $lastEnd = $agendas->filter(fn ($agenda): bool => filled($agenda->end_time))->max(fn ($agenda): int => $toMinutes((string) $agenda->end_time));
+    $validNormalAgendas = $agendas->filter(fn ($agenda): bool => ! $agenda->is_outside_schedule && ! in_array($agenda->status, ['cancelled', 'rescheduled'], true));
+    $lastEnd = $validNormalAgendas->filter(fn ($agenda): bool => filled($agenda->end_time))->max(fn ($agenda): int => $toMinutes((string) $agenda->end_time));
     $formatMinutes = static function (?int $minutes): string {
         $minutes ??= 0;
 
@@ -32,7 +33,22 @@
         return $toMinutes((string) $agenda->start_time) < $toMinutes((string) $schedule['break_end'])
             && $toMinutes((string) $agenda->end_time) > $toMinutes((string) $schedule['break_start']);
     };
-    $freeMinutes = ! $isWeekend && $lastEnd ? max(0, $toMinutes($schedule['end_time']) - $lastEnd) : 0;
+    $effectiveIntervalMinutes = static function (?int $startMinute, ?int $endMinute) use ($isWeekend, $schedule): int {
+        if ($startMinute === null || $endMinute === null) {
+            return 0;
+        }
+
+        $duration = max(0, $endMinute - $startMinute);
+        if ($duration === 0 || $isWeekend) {
+            return $duration;
+        }
+
+        $breakStart = $schedule['break_start'] ? (int) substr($schedule['break_start'], 0, 2) * 60 + (int) substr($schedule['break_start'], 3, 2) : 0;
+        $breakEnd = $schedule['break_end'] ? (int) substr($schedule['break_end'], 0, 2) * 60 + (int) substr($schedule['break_end'], 3, 2) : 0;
+
+        return max(0, $duration - max(0, min($endMinute, $breakEnd) - max($startMinute, $breakStart)));
+    };
+    $freeMinutes = ! $isWeekend && $lastEnd ? $effectiveIntervalMinutes($lastEnd, $toMinutes($schedule['end_time'])) : 0;
     $agendaSlotData = $agendas->map(fn ($agenda): array => [
         'startTime' => $agenda->start_time ? substr((string) $agenda->start_time, 0, 5) : null,
         'endTime' => $agenda->end_time ? substr((string) $agenda->end_time, 0, 5) : null,
@@ -57,7 +73,7 @@
     $defaultStart = $defaultStartMinutes !== null ? $formatMinutes($defaultStartMinutes) : '';
     $defaultEnd = $defaultEndMinutes !== null ? $formatMinutes($defaultEndMinutes) : '';
     $defaultRemaining = ! $isWeekend && $defaultEndMinutes !== null
-        ? max(0, $receiptSummary['target_minutes'] - $receiptSummary['normal_minutes'] - $defaultDuration)
+        ? max(0, $receiptSummary['target_minutes'] - $receiptSummary['normal_minutes'] - $effectiveIntervalMinutes($defaultStartMinutes, $defaultEndMinutes))
         : null;
 @endphp
 
@@ -92,10 +108,20 @@
                                 $isRunning = $agenda->status !== 'done' && now(config('app.timezone'))->betweenIncluded($startsAt, $endsAt);
                             }
                              [$agendaStatusLabel, $agendaStatusVariant] = $isRunning ? ['Berjalan', 'info'] : ($agendaStatuses[$agenda->status] ?? [ucfirst(str_replace('_', ' ', $agenda->status)), 'neutral']);
-                             $breakAgenda = ! $agenda->is_outside_schedule && $isBreakAgenda($agenda);
+                             $breakAgenda = $isBreakAgenda($agenda);
+                             $agendaLabels = [];
+                             if ($agenda->is_outside_schedule) {
+                                 $agendaLabels[] = 'Agenda tambahan · di luar target';
+                             }
+                             if ($breakAgenda) {
+                                 $agendaLabels[] = 'Agenda jam istirahat';
+                             }
+                             if ($agendaLabels === []) {
+                                 $agendaLabels[] = $agenda->sales_activity_category ?: 'Lainnya';
+                             }
                          @endphp
                          <li class="sales-submitted-row {{ $breakAgenda ? 'is-break' : '' }}" data-tour-target="agenda-row">
-                             <a href="{{ route('sales-agendas.show', $agenda) }}" class="sales-submitted-row-main"><span class="sales-submitted-row-time">{{ $agenda->start_time && $agenda->end_time ? substr((string) $agenda->start_time, 0, 5).'–'.substr((string) $agenda->end_time, 0, 5) : 'Fleksibel' }}@if($agenda->start_time && $agenda->end_time)<small>{{ $agenda->duration_minutes }} mnt</small>@endif</span><span class="sales-submitted-row-copy"><strong>{{ $agenda->title }}</strong><em>{{ $breakAgenda ? 'Agenda jam istirahat' : ($agenda->is_outside_schedule ? 'Agenda tambahan · di luar target' : ($agenda->sales_activity_category ?: 'Lainnya')) }}</em></span></a>
+                             <a href="{{ route('sales-agendas.show', $agenda) }}" class="sales-submitted-row-main"><span class="sales-submitted-row-time">{{ $agenda->start_time && $agenda->end_time ? substr((string) $agenda->start_time, 0, 5).'–'.substr((string) $agenda->end_time, 0, 5) : 'Fleksibel' }}@if($agenda->start_time && $agenda->end_time)<small>{{ $agenda->duration_minutes }} mnt</small>@endif</span><span class="sales-submitted-row-copy"><strong>{{ $agenda->title }}</strong><em>{{ implode(' · ', $agendaLabels) }}</em></span></a>
                             <x-crm.status-badge :variant="$agendaStatusVariant">{{ $agendaStatusLabel }}</x-crm.status-badge>
                         </li>
                     @endforeach

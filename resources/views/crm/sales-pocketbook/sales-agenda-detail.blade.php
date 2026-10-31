@@ -25,6 +25,10 @@
         <div><span>Lokasi</span><strong>{{ $agenda->location ?: 'Belum diisi' }}</strong></div>
     </section>
 
+    @if($errors->has('photo'))
+        <x-crm.alert variant="error" title="Foto belum tersimpan." id="sales-agenda-photo-error">{{ $errors->first('photo') }}</x-crm.alert>
+    @endif
+
     <x-crm.section id="agenda-evidence" title="Bukti foto" description="Maksimal dua foto dari ponsel." class="sales-pocketbook-screen-section">
         <div class="sales-agenda-photo-grid">
             @forelse($agenda->evidence as $evidence)
@@ -41,12 +45,23 @@
             @endforelse
         </div>
         @if(!$agenda->isFinished() && $agenda->evidence->count() < 2)
-            <form method="POST" enctype="multipart/form-data" action="{{ route('sales-agendas.evidence.store', $agenda) }}" class="mt-4">
-                @csrf
-                <label for="sales-agenda-detail-photo">Tambah foto</label>
-                <input id="sales-agenda-detail-photo" type="file" name="photo" accept="image/jpeg,image/png,image/webp" capture="environment" class="mt-2 block min-h-11 w-full min-w-0 py-2 text-sm" required>
-                <x-crm.button type="submit" variant="secondary" class="mt-2">Unggah bukti</x-crm.button>
-            </form>
+            <div class="mt-4 grid gap-3 sm:grid-cols-2" role="group" aria-labelledby="sales-agenda-photo-actions-title">
+                <h3 id="sales-agenda-photo-actions-title" class="sr-only">Tambah bukti foto</h3>
+                <form method="POST" enctype="multipart/form-data" action="{{ route('sales-agendas.evidence.store', $agenda) }}" class="border-2 border-black bg-white p-3">
+                    @csrf
+                    <label for="sales-agenda-camera-photo" class="block font-[Helvetica] text-sm font-bold">Ambil Foto</label>
+                    <p class="mt-1 text-xs">Gunakan kamera perangkat, bila tersedia.</p>
+                    <input id="sales-agenda-camera-photo" type="file" name="photo" accept="image/jpeg,image/png,image/webp" capture="environment" class="mt-2 block min-h-11 w-full min-w-0 py-2 text-sm" required>
+                    <x-crm.button type="submit" variant="secondary" class="mt-2 w-full">Simpan Foto</x-crm.button>
+                </form>
+                <form method="POST" enctype="multipart/form-data" action="{{ route('sales-agendas.evidence.store', $agenda) }}" class="border-2 border-black bg-white p-3">
+                    @csrf
+                    <label for="sales-agenda-upload-photo" class="block font-[Helvetica] text-sm font-bold">Upload Foto</label>
+                    <p class="mt-1 text-xs">Pilih foto yang sudah tersimpan di perangkat.</p>
+                    <input id="sales-agenda-upload-photo" type="file" name="photo" accept="image/jpeg,image/png,image/webp" class="mt-2 block min-h-11 w-full min-w-0 py-2 text-sm" required>
+                    <x-crm.button type="submit" variant="secondary" class="mt-2 w-full">Simpan Foto</x-crm.button>
+                </form>
+            </div>
         @endif
     </x-crm.section>
 

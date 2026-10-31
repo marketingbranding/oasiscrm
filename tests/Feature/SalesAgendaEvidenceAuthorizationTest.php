@@ -12,6 +12,7 @@ use App\Models\SalesCoordinatorSales;
 use App\Models\User;
 use App\Services\SalesAgendaEvidenceAuthorizationService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
@@ -55,6 +56,31 @@ class SalesAgendaEvidenceAuthorizationTest extends TestCase
 
         $this->assertFalse($access->canView($admin, $agenda));
         $this->assertFalse($access->canManageArchives($admin));
+    }
+
+    public function test_sales_cannot_upload_evidence_to_another_sales_agenda(): void
+    {
+        Storage::fake('agenda_evidence');
+        $branch = Branch::create(['name' => 'Solo', 'code' => 'SO', 'is_active' => true]);
+        $owner = $this->user('sales', $branch);
+        $otherSales = $this->user('sales', $branch);
+        $agenda = ContentItem::create([
+            'branch_id' => $branch->id,
+            'item_type' => 'agenda',
+            'agenda_type' => ContentItem::SALES_AGENDA_TYPE,
+            'title' => 'Visit',
+            'scheduled_date' => now(),
+            'status' => 'planned',
+            'owner_user_id' => $owner->id,
+            'created_by' => $owner->id,
+        ]);
+
+        $this->actingAs($otherSales)
+            ->post(route('sales-agendas.evidence.store', $agenda), ['photo' => UploadedFile::fake()->image('forbidden.jpg')])
+            ->assertForbidden();
+
+        $this->assertDatabaseCount('sales_agenda_evidences', 0);
+        $this->assertSame([], Storage::disk('agenda_evidence')->allFiles());
     }
 
     public function test_archive_page_exposes_only_backend_authorized_ready_downloads(): void

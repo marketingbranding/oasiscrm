@@ -99,8 +99,8 @@
     @if($errors->any())<x-crm.alert variant="error" title="Data belum tersimpan.">{{ $errors->first() }}</x-crm.alert>@endif
 
     @php
-        $previousAgendaDate = $agendaDate->isMonday() ? $agendaDate->subDays(3) : $agendaDate->subDay();
-        $nextAgendaDate = $agendaDate->isFriday() ? $agendaDate->addDays(3) : $agendaDate->addDay();
+        $previousAgendaDate = $agendaDate->subDay();
+        $nextAgendaDate = $agendaDate->addDay();
         $agendaStatuses = [
             'planned' => ['Direncanakan', 'pending'],
             'confirmed' => ['Dikonfirmasi', 'info'],

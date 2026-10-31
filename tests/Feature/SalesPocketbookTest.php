@@ -95,13 +95,56 @@ class SalesPocketbookTest extends TestCase
         $this->actingAs($sales)->get(route('sales-agendas.index', ['tab' => 'agenda', 'work_date' => '2026-10-26']))
             ->assertOk()
             ->assertSee('Buku Saku Saya')
-            ->assertSee('Agenda 23 Okt 2026')
+            ->assertSee('Agenda 25 Okt 2026')
             ->assertSee('Agenda 27 Okt 2026')
             ->assertSee('Belum ada agenda')
             ->assertDontSee('Catat dan selesaikan agenda sales Anda.')
             ->assertDontSee('Satu kertas untuk satu hari kerja.')
             ->assertDontSee('Hari kerja sebelumnya')
             ->assertDontSee('Hari kerja berikutnya');
+    }
+
+    public function test_sales_agenda_date_navigation_includes_weekends(): void
+    {
+        [, , $sales] = $this->salesContext();
+
+        $response = $this->actingAs($sales)->get(route('sales-agendas.index', [
+            'tab' => 'agenda',
+            'work_date' => '2026-10-24',
+        ]))->assertOk()
+            ->assertSee('Agenda 23 Okt 2026')
+            ->assertSee('Agenda 25 Okt 2026');
+
+        $this->assertSame('2026-10-24', $response->viewData('agendaDate')->toDateString());
+    }
+
+    #[DataProvider('salesAgendaDateProvider')]
+    public function test_sales_can_create_and_reopen_agenda_on_weekday_or_weekend(string $scheduledDate): void
+    {
+        [, , $sales] = $this->salesContext();
+
+        $this->actingAs($sales)->post(route('sales-agendas.store'), [
+            'scheduled_date' => $scheduledDate,
+            'sales_activity_category' => 'Cek Lokasi',
+            'title' => 'Agenda '.$scheduledDate,
+        ])->assertRedirect(route('sales-agendas.index'))->assertSessionDoesntHaveErrors();
+
+        $agenda = ContentItem::query()->where('title', 'Agenda '.$scheduledDate)->sole();
+
+        $this->assertSame($scheduledDate, $agenda->scheduled_date->toDateString());
+        $this->actingAs($sales)->get(route('sales-agendas.show', $agenda))
+            ->assertOk()
+            ->assertSee($agenda->title)
+            ->assertSee($agenda->scheduled_date->locale('id')->translatedFormat('l, d F Y'));
+    }
+
+    public static function salesAgendaDateProvider(): array
+    {
+        return [
+            'weekday' => ['2026-10-23'],
+            'saturday' => ['2026-10-24'],
+            'sunday' => ['2026-10-25'],
+        ];
     }
 
     public function test_shared_sales_pocketbook_url_requires_sales_lead_view_permission(): void

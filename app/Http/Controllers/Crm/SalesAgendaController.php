@@ -52,9 +52,6 @@ class SalesAgendaController extends Controller
             'lead_status' => ['nullable', Rule::in(['open', 'completed'])],
         ]);
         $agendaDate = CarbonImmutable::createFromFormat('Y-m-d', $request->query('work_date', today()->toDateString()), config('app.timezone'));
-        while ($agendaDate->isWeekend()) {
-            $agendaDate = $agendaDate->addDay();
-        }
         $agendas = ContentItem::query()
             ->with(['branch', 'salesProject', 'evidence'])
             ->where('item_type', 'agenda')

@@ -77,7 +77,7 @@
 
 **Interfaces:**
 - Consumes: Task 1 `SalesAgendaReceiptService::effectiveMinutes()` and effective-minute capacity behavior.
-- Produces: unchanged routes and authorization with controller validation that passes candidate effective minutes to capacity checks and permits intentional in-schedule break agendas.
+- Produces: unchanged routes and authorization with controller validation that passes candidate raw and effective minutes to `canAddNormal(User $owner, CarbonImmutable $date, int $durationMinutes, ?int $effectiveMinutes = null)` and permits intentional in-schedule break agendas.
 
 - [ ] **Step 1: Write the failing authorization/HTTP tests**
 
@@ -118,7 +118,7 @@
 
 - [ ] **Step 1: Write the failing Node tests**
 
-  Update weekday/Friday expected start and target values. Add tests for empty Monday starting `08:00`, empty Friday starting `07:30`, defaulting from an agenda ending `11:30` to `13:00`, explicit `12:00–13:00` acceptance with `remainingMinutes` unchanged, Friday `11:30–13:30` returning `60` effective minutes, and a default slot that does not begin inside the break.
+  Update weekday/Friday expected start and target values. Add tests for empty Monday starting `08:00`, empty Friday starting `07:30`, defaulting from an agenda ending `11:30` to `13:00`, explicit `12:00–13:00` acceptance with `remainingMinutes` unchanged, Friday `11:30–13:30` returning `30` effective minutes under the explicit break, Friday `11:00–13:30` returning `60`, and a default slot that does not begin inside the break.
 
 - [ ] **Step 2: Run the Node tests to verify failure**
 

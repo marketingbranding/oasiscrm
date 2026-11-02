@@ -224,4 +224,167 @@ class SalesAgendaEvidenceTest extends TestCase
         $agenda->update(['status' => 'done']);
         $this->actingAs($sales)->delete(route('sales-agendas.evidence.destroy', [$agenda, $evidence]))->assertForbidden();
     }
+
+    public function test_agenda_detail_renders_empty_photo_slots_and_the_next_owned_open_agenda(): void
+    {
+        $branch = Branch::create(['name' => 'Solo', 'code' => 'SO', 'is_active' => true]);
+        $role = Role::firstOrCreate(['slug' => 'sales'], ['name' => 'Sales']);
+        $sales = User::factory()->create(['role_id' => $role->id, 'branch_id' => $branch->id, 'password_changed_at' => now()]);
+        $otherSales = User::factory()->create(['role_id' => $role->id, 'branch_id' => $branch->id, 'password_changed_at' => now()]);
+        $agenda = ContentItem::create([
+            'branch_id' => $branch->id,
+            'item_type' => 'agenda',
+            'agenda_type' => ContentItem::SALES_AGENDA_TYPE,
+            'title' => 'Agenda Saat Ini',
+            'scheduled_date' => '2026-11-02',
+            'start_time' => '10:00:00',
+            'status' => 'planned',
+            'owner_user_id' => $sales->id,
+            'created_by' => $sales->id,
+        ]);
+        ContentItem::create([
+            'branch_id' => $branch->id,
+            'item_type' => 'agenda',
+            'agenda_type' => ContentItem::SALES_AGENDA_TYPE,
+            'title' => 'Agenda Pemilik Lain',
+            'scheduled_date' => '2026-11-02',
+            'start_time' => '10:30:00',
+            'status' => 'planned',
+            'owner_user_id' => $otherSales->id,
+            'created_by' => $otherSales->id,
+        ]);
+        ContentItem::create([
+            'branch_id' => $branch->id,
+            'item_type' => 'agenda',
+            'agenda_type' => ContentItem::SALES_AGENDA_TYPE,
+            'title' => 'Agenda Selesai Lebih Dulu',
+            'scheduled_date' => '2026-11-02',
+            'start_time' => '11:00:00',
+            'status' => 'done',
+            'owner_user_id' => $sales->id,
+            'created_by' => $sales->id,
+        ]);
+        ContentItem::create([
+            'branch_id' => $branch->id,
+            'item_type' => 'agenda',
+            'agenda_type' => ContentItem::SALES_AGENDA_TYPE,
+            'title' => 'Tindak Lanjut Konsumen',
+            'scheduled_date' => '2026-11-02',
+            'start_time' => '11:30:00',
+            'status' => 'planned',
+            'owner_user_id' => $sales->id,
+            'created_by' => $sales->id,
+        ]);
+
+        $response = $this->actingAs($sales)->get(route('sales-agendas.show', $agenda));
+
+        $response->assertOk()
+            ->assertSeeText('0 dari 2')
+            ->assertSeeText('+ Foto')
+            ->assertSeeText('Selanjutnya: 11:30 Tindak Lanjut Konsumen')
+            ->assertDontSeeText('Preview foto')
+            ->assertDontSeeText('Agenda Pemilik Lain')
+            ->assertSee('sales-mobile-detail-page', false)
+            ->assertSee('accept="image/jpeg,image/png,image/webp"', false)
+            ->assertSee('capture="environment"', false);
+        $this->assertSame(2, substr_count($response->getContent(), 'data-agenda-photo-slot'));
+    }
+
+    public function test_agenda_detail_hides_next_line_without_a_later_owned_open_agenda(): void
+    {
+        $branch = Branch::create(['name' => 'Solo', 'code' => 'SO', 'is_active' => true]);
+        $role = Role::firstOrCreate(['slug' => 'sales'], ['name' => 'Sales']);
+        $sales = User::factory()->create(['role_id' => $role->id, 'branch_id' => $branch->id, 'password_changed_at' => now()]);
+        $agenda = ContentItem::create([
+            'branch_id' => $branch->id,
+            'item_type' => 'agenda',
+            'agenda_type' => ContentItem::SALES_AGENDA_TYPE,
+            'title' => 'Agenda Terakhir',
+            'scheduled_date' => '2026-11-02',
+            'start_time' => '10:00:00',
+            'status' => 'planned',
+            'owner_user_id' => $sales->id,
+            'created_by' => $sales->id,
+        ]);
+
+        $this->actingAs($sales)->get(route('sales-agendas.show', $agenda))
+            ->assertOk()
+            ->assertDontSeeText('Selanjutnya:');
+    }
+
+    public function test_agenda_detail_shows_saved_photo_and_one_remaining_upload_slot(): void
+    {
+        $branch = Branch::create(['name' => 'Solo', 'code' => 'SO', 'is_active' => true]);
+        $role = Role::firstOrCreate(['slug' => 'sales'], ['name' => 'Sales']);
+        $sales = User::factory()->create(['role_id' => $role->id, 'branch_id' => $branch->id, 'password_changed_at' => now()]);
+        $agenda = ContentItem::create([
+            'branch_id' => $branch->id,
+            'item_type' => 'agenda',
+            'agenda_type' => ContentItem::SALES_AGENDA_TYPE,
+            'title' => 'Agenda dengan Bukti',
+            'scheduled_date' => '2026-11-02',
+            'start_time' => '10:00:00',
+            'status' => 'planned',
+            'owner_user_id' => $sales->id,
+            'created_by' => $sales->id,
+        ]);
+        SalesAgendaEvidence::create([
+            'content_item_id' => $agenda->id,
+            'uploaded_by_user_id' => $sales->id,
+            'storage_path' => 'sales-agenda-evidence/proof.webp',
+            'original_name' => 'foto-konsumen.webp',
+            'mime_type' => 'image/webp',
+            'width' => 10,
+            'height' => 10,
+            'size_bytes' => 12,
+            'sha256' => hash('sha256', 'foto'),
+        ]);
+
+        $response = $this->actingAs($sales)->get(route('sales-agendas.show', $agenda));
+
+        $response->assertOk()
+            ->assertSeeText('1 dari 2')
+            ->assertSeeText('foto-konsumen.webp')
+            ->assertDontSeeText('Preview foto');
+        $this->assertSame(1, substr_count($response->getContent(), 'data-agenda-photo-slot'));
+    }
+
+    public function test_agenda_detail_mobile_bar_spans_viewport_and_excludes_legacy_shadow(): void
+    {
+        $css = file_get_contents(resource_path('css/app.css'));
+
+        $this->assertIsString($css);
+        $this->assertMatchesRegularExpression(
+            '/body\.sales-mobile-detail-page \.sales-agenda-sticky-action \{[^}]*position: fixed !important;[^}]*right: 0 !important;[^}]*bottom: 0 !important;[^}]*left: 0 !important;[^}]*max-width: 100vw !important;[^}]*margin-inline: auto !important;[^}]*env\(safe-area-inset-bottom\)[^}]*;/s',
+            $css,
+        );
+        $this->assertMatchesRegularExpression(
+            '/\.sales-pocketbook-workspace:not\(\.sales-agenda-detail\) \.crm-button--primary\[data-accent=\'sales\'\],\s*\.sales-pocketbook-workspace:not\(\.sales-agenda-detail\) \[data-accent=\'sales\'\]\.crm-button--primary \{[^}]*box-shadow: var\(--oasis-sales-shadow\);/s',
+            $css,
+        );
+        $this->assertMatchesRegularExpression(
+            '/body\.sales-mobile-detail-page \.sales-agenda-sticky-action \.crm-button \{[^}]*box-shadow: none !important;/s',
+            $css,
+        );
+        $this->assertMatchesRegularExpression(
+            '/\.sales-agenda-photo-picker \{[^}]*min-height: 110px;[^}]*border: 2px dashed/s',
+            $css,
+        );
+        $this->assertDoesNotMatchRegularExpression(
+            '/\.sales-mobile-detail-page \.sales-agenda-detail form input\[type="file"\] \{[^}]*width: 100% !important;/s',
+            $css,
+        );
+    }
+
+    public function test_mobile_agenda_detail_changelog_is_created_once_and_visible_to_superadmin(): void
+    {
+        $title = 'Detail Agenda Sales Menampilkan Slot Foto dan Agenda Berikutnya';
+        $role = Role::firstOrCreate(['slug' => 'superadmin'], ['name' => 'Super Admin', 'is_superadmin' => true]);
+        $superadmin = User::factory()->create(['role_id' => $role->id, 'password_changed_at' => now()]);
+
+        $this->assertSame(1, DB::table('changelogs')->whereNull('version')->where('title', $title)->count());
+        $this->actingAs($superadmin)->get(route('changelogs.index'))
+            ->assertOk()
+            ->assertSeeText($title);
+    }
 }

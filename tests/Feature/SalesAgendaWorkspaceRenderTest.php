@@ -11,6 +11,7 @@ use App\Models\User;
 use App\Services\SalesPocketbookOnboardingService;
 use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
 class SalesAgendaWorkspaceRenderTest extends TestCase
@@ -84,6 +85,27 @@ class SalesAgendaWorkspaceRenderTest extends TestCase
                 'aria-current="page"',
                 'Rencana',
             ], false);
+    }
+
+    public function test_date_navigation_changelog_is_idempotent_and_visible(): void
+    {
+        $title = 'Navigasi tanggal Buku Saku Sales menampilkan agenda yang dipilih';
+        $migration = require database_path('migrations/2026_11_02_083327_add_sales_agenda_date_navigation_changelog.php');
+
+        $migration->up();
+        $migration->up();
+
+        $this->assertSame(1, DB::table('changelogs')->whereNull('version')->where('title', $title)->count());
+
+        $superadmin = User::factory()->create([
+            'role_id' => Role::query()->where('slug', 'superadmin')->value('id'),
+            'password_changed_at' => now(),
+        ]);
+
+        $this->actingAs($superadmin)
+            ->get(route('changelogs.index'))
+            ->assertOk()
+            ->assertSeeText($title);
     }
 
     public function test_receipt_formats_open_slot_start_time_as_clock_time(): void

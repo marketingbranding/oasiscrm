@@ -78,15 +78,15 @@
 @endphp
 
 <section id="agenda-list" class="sales-receipt-workspace {{ $isReceiptMode ? 'is-receipt-mode' : '' }} {{ $daySubmission ? 'is-submitted-mode' : '' }}" aria-labelledby="agenda-receipt-title">
+    <div class="sales-receipt-contexts" aria-label="Pilihan hari agenda">
+        <a href="{{ route('sales-agendas.index', ['tab' => 'agenda', 'work_date' => $today->subDay()->toDateString()]) }}" class="{{ $isYesterday ? 'is-active' : '' }}" @if($isYesterday) aria-current="page" @endif><span>Kemarin</span><strong>{{ $today->subDay()->format('d') }}</strong></a>
+        <a href="{{ route('sales-agendas.index', ['tab' => 'agenda', 'work_date' => $today->toDateString()]) }}" class="{{ $isToday ? 'is-active' : '' }}" @if($isToday) aria-current="page" @endif><span>Hari ini</span><strong>{{ $today->format('d') }}</strong></a>
+        <a href="{{ route('sales-agendas.index', ['tab' => 'agenda', 'work_date' => $today->addDay()->toDateString()]) }}" class="{{ $isPlan ? 'is-active' : '' }}" @if($isPlan) aria-current="page" @endif><span>Rencana</span></a>
+    </div>
+
     @if($isReceiptMode)
         @include('crm.sales-pocketbook.partials.agenda-receipt-canvas', ['isReceiptPreview' => false])
     @else
-        <div class="sales-receipt-contexts" aria-label="Pilihan hari agenda">
-            <a href="{{ route('sales-agendas.index', ['tab' => 'agenda', 'work_date' => $today->subDay()->toDateString()]) }}" class="{{ $isYesterday ? 'is-active' : '' }}"><span>Kemarin</span><strong>{{ $today->subDay()->format('d') }}</strong></a>
-            <a href="{{ route('sales-agendas.index', ['tab' => 'agenda', 'work_date' => $today->toDateString()]) }}" class="{{ $isToday ? 'is-active' : '' }}"><span>Hari ini</span><strong>{{ $today->format('d') }}</strong></a>
-            <a href="{{ route('sales-agendas.index', ['tab' => 'agenda', 'work_date' => $today->addDay()->toDateString()]) }}" class="{{ $isPlan ? 'is-active' : '' }}"><span>Rencana</span></a>
-        </div>
-
         @if($daySubmission)
             <div class="sales-submitted-plan" data-tour-target="work-summary">
                 <div class="sales-submitted-meter"><strong>{{ $receiptSummary['target_minutes'] ? $receiptSummary['target_minutes'].' / '.$receiptSummary['target_minutes'].' menit' : 'Akhir pekan · '.$receiptSummary['normal_minutes'].' menit' }}</strong><span>Terkirim ke Koordinator</span>@if($isWeekend)<b class="sales-weekend-inline-stamp">AKHIR PEKAN</b>@endif</div>

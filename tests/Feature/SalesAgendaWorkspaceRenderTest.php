@@ -9,6 +9,7 @@ use App\Models\Role;
 use App\Models\SalesAgendaDaySubmission;
 use App\Models\User;
 use App\Services\SalesPocketbookOnboardingService;
+use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -40,6 +41,36 @@ class SalesAgendaWorkspaceRenderTest extends TestCase
             ->assertSee('+ Tambah rencana')
             ->assertSee('Belum ada agenda')
             ->assertSee($project->project_name);
+    }
+
+    public function test_populated_receipt_keeps_date_navigation_with_exact_date_links(): void
+    {
+        [$sales, $project] = $this->salesContext();
+        $today = CarbonImmutable::today(config('app.timezone'));
+        $yesterday = $today->subDay();
+
+        $this->agendaAt($sales, $project, $yesterday->toDateString(), '09:00', '10:00', 'Agenda kemarin');
+        $this->agendaAt($sales, $project, $today->toDateString(), '09:00', '10:00', 'Agenda hari ini');
+        $this->agendaAt($sales, $project, $today->addDay()->toDateString(), '09:00', '10:00', 'Agenda rencana');
+
+        $response = $this->actingAs($sales)
+            ->get(route('sales-agendas.index', [
+                'tab' => 'agenda',
+                'work_date' => $yesterday->toDateString(),
+            ]))
+            ->assertOk()
+            ->assertSee('Kemarin')
+            ->assertSee('Hari ini')
+            ->assertSee('Rencana')
+            ->assertSee('Agenda kemarin')
+            ->assertDontSee('Agenda hari ini')
+            ->assertDontSee('Agenda rencana');
+
+        $response
+            ->assertSee('href="'.e(route('sales-agendas.index', ['tab' => 'agenda', 'work_date' => $yesterday->toDateString()])).'"', false)
+            ->assertSee('href="'.e(route('sales-agendas.index', ['tab' => 'agenda', 'work_date' => $today->toDateString()])).'"', false)
+            ->assertSee('href="'.e(route('sales-agendas.index', ['tab' => 'agenda', 'work_date' => $today->addDay()->toDateString()])).'"', false)
+            ->assertSee('aria-current="page"', false);
     }
 
     public function test_receipt_formats_open_slot_start_time_as_clock_time(): void

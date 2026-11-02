@@ -71,6 +71,19 @@ class SalesAgendaWorkspaceRenderTest extends TestCase
             ->assertSee('href="'.e(route('sales-agendas.index', ['tab' => 'agenda', 'work_date' => $today->toDateString()])).'"', false)
             ->assertSee('href="'.e(route('sales-agendas.index', ['tab' => 'agenda', 'work_date' => $today->addDay()->toDateString()])).'"', false)
             ->assertSee('aria-current="page"', false);
+
+        $this->actingAs($sales)
+            ->get(route('sales-agendas.index', [
+                'tab' => 'agenda',
+                'work_date' => $today->addDay()->toDateString(),
+            ]))
+            ->assertOk()
+            ->assertSeeInOrder([
+                e(route('sales-agendas.index', ['tab' => 'agenda', 'work_date' => $today->addDay()->toDateString()])),
+                'class="is-active"',
+                'aria-current="page"',
+                'Rencana',
+            ], false);
     }
 
     public function test_receipt_formats_open_slot_start_time_as_clock_time(): void

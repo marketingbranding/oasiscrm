@@ -282,6 +282,25 @@ class SalesPocketbookMobileContractTest extends TestCase
         $this->assertNull($lead->campaign_name);
     }
 
+    public function test_primary_sales_rejects_a_lead_date_after_the_project_assignment_window(): void
+    {
+        [, $project, $sales] = $this->salesContext();
+        $sales->assignedProjects()->updateExistingPivot($project->id, [
+            'assignment_end_date' => today()->addDays(3)->toDateString(),
+        ]);
+
+        $selectedDate = today()->addDays(7)->toDateString();
+        $response = $this->actingAs($sales)->post(route('sales-leads.store'), [
+            'customer_name' => 'Lead Di Luar Penugasan',
+            'phone' => '081234567890',
+            'lead_date' => $selectedDate,
+            'operation_uuid' => (string) Str::uuid(),
+        ]);
+
+        $response->assertRedirect()->assertSessionHasErrors('project_id');
+        $this->assertDatabaseCount('sales_leads', 0);
+    }
+
     public function test_primary_sales_defaults_missing_lead_date_to_today(): void
     {
         [, $project, $sales] = $this->salesContext();

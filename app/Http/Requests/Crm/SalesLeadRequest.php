@@ -32,9 +32,10 @@ abstract class SalesLeadRequest extends FormRequest
             'notes' => ['nullable', 'string', 'max:5000'],
             'promo_name' => ['nullable', 'string', 'max:255', function (string $attribute, mixed $value, \Closure $fail): void {
                 $project = LeadMaster::find($this->integer('project_id'));
-                if (! $project || ! $this->date('lead_date') || ! app(PromoOptionService::class)->accepts(
+                $leadDate = $this->input('lead_date');
+                if (! $project || ! $this->isValidDateInput($leadDate) || ! app(PromoOptionService::class)->accepts(
                     (int) $project->branch_id,
-                    $this->date('lead_date'),
+                    $leadDate,
                     $value,
                     $this->lead()?->id_promo,
                 )) {

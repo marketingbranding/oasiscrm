@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Http\Requests\Crm\StoreSalesLeadRequest;
 use App\Models\Branch;
 use App\Models\ContentItem;
 use App\Models\LeadMaster;
@@ -14,6 +15,7 @@ use App\Services\OptimisticLockService;
 use App\Services\SalesPocketbookOnboardingService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Str;
 use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
@@ -277,6 +279,32 @@ class SalesPocketbookTest extends TestCase
         $migration->down();
 
         $this->assertDatabaseMissing('changelogs', ['version' => null, 'title' => $title]);
+    }
+
+    public function test_invalid_lead_date_with_promo_returns_validation_error(): void
+    {
+        [$branch, $project, $sales] = $this->salesContext();
+        $manager = $this->user('manager', $branch, 'Manager');
+        $request = StoreSalesLeadRequest::create('/sales-leads', 'POST', [
+            'branch_id' => $branch->id,
+            'project_id' => $project->id,
+            'sales_user_id' => $sales->id,
+            'lead_date' => 'not-a-date',
+            'promo_name' => 'No Promo',
+            'customer_name' => 'Lead Invalid Date',
+            'phone' => '081234567890',
+            'source' => 'Referral',
+            'platform' => 'WhatsApp',
+            'campaign_name' => 'Referral',
+            'current_status' => 'no_response',
+            'operation_uuid' => (string) Str::uuid(),
+        ]);
+        $request->setUserResolver(fn (): User => $manager);
+
+        $validator = Validator::make($request->all(), $request->rules());
+
+        $this->assertTrue($validator->fails());
+        $this->assertArrayHasKey('lead_date', $validator->errors()->toArray());
     }
 
     public function test_primary_sales_creates_lead_for_self_and_cannot_spoof_sales_owner(): void

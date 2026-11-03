@@ -5571,7 +5571,7 @@ body.sales-personal-page .crm-page-shell { width: min(100%, 480px) !important; p
 .sales-lead-entry-close svg { width: 20px !important; height: 20px !important; }
 .sales-lead-entry-close:focus-visible { outline: 3px solid #1a6dd6 !important; outline-offset: 2px !important; }
 .sales-lead-form-group:first-of-type::before { content: none !important; }
-.sales-lead-entry-form { display: flex !important; flex-direction: column !important; flex: 1 1 auto !important; min-height: 0 !important; gap: 10px !important; overflow: hidden !important; padding: 0 20px calc(10px + env(safe-area-inset-bottom)) !important; }
+.sales-lead-entry-form { display: flex !important; flex-direction: column !important; flex: 1 1 0% !important; min-height: 0 !important; margin-bottom: 0 !important; gap: 10px !important; overflow: hidden !important; padding: 0 20px calc(10px + env(safe-area-inset-bottom)) !important; }
 .sales-lead-entry-scroll { display: grid !important; flex: 1 1 auto !important; min-height: 0 !important; gap: 10px !important; overflow-y: auto !important; padding-top: 0 !important; }
 .sales-lead-form-group { border: 0 !important; padding: 0 !important; }
 .sales-lead-form-group legend { display: none !important; }

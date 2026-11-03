@@ -217,6 +217,37 @@ class SalesPocketbookTest extends TestCase
         $this->assertDatabaseMissing('changelogs', ['version' => null, 'title' => $title]);
     }
 
+    public function test_mobile_lead_modal_actions_changelog_is_idempotent_visible_and_reversible(): void
+    {
+        $title = 'Aksi Simpan Lead Mobile Lebih Mudah Dijangkau';
+        $migration = require database_path('migrations/2026_11_03_171015_add_sales_lead_modal_actions_changelog.php');
+
+        $migration->up();
+        $migration->up();
+
+        $this->assertSame(1,
+            DB::table('changelogs')
+                ->whereNull('version')
+                ->where('title', $title)
+                ->where('category', 'changed')
+                ->count(),
+        );
+
+        $actor = User::factory()->create([
+            'role_id' => Role::query()->where('slug', 'superadmin')->value('id'),
+            'password_changed_at' => now(),
+        ]);
+
+        $this->actingAs($actor)->get(route('changelogs.index'))
+            ->assertOk()
+            ->assertSeeText($title)
+            ->assertSeeText('Form Tambah Lead di mobile kini memiliki tombol tutup');
+
+        $migration->down();
+
+        $this->assertDatabaseMissing('changelogs', ['version' => null, 'title' => $title]);
+    }
+
     public function test_primary_sales_creates_lead_for_self_and_cannot_spoof_sales_owner(): void
     {
         [$branch, $project, $sales] = $this->salesContext();

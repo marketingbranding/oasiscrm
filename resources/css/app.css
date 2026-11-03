@@ -5055,6 +5055,11 @@ body.sales-pocketbook-onboarding-shell .crm-page-body {
 }
 
 .sales-agenda-photo-card {
+    position: relative;
+    min-width: 0;
+}
+
+.sales-agenda-photo-card > .sales-agenda-photo-link {
     display: grid;
     gap: 0.35rem;
     color: #0000ee;
@@ -5063,11 +5068,19 @@ body.sales-pocketbook-onboarding-shell .crm-page-body {
     text-decoration: underline;
 }
 
-.sales-agenda-photo-card img {
+.sales-agenda-photo-link img {
     aspect-ratio: 4 / 3;
     width: 100%;
     border: 1px solid #000;
     object-fit: cover;
+}
+
+.sales-agenda-photo-delete {
+    position: absolute;
+    top: 0.5rem;
+    right: 0.5rem;
+    z-index: 1;
+    box-shadow: none !important;
 }
 
 .sales-agenda-photo-placeholder {

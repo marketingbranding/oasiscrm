@@ -51,14 +51,30 @@
     <x-crm.section id="agenda-evidence" title="Bukti foto" description="Maks. 2" class="sales-pocketbook-screen-section">
         @php
             $activeEvidence = $agenda->evidence->filter(fn ($evidence): bool => ! $evidence->purged_at)->values();
-            $canUploadEvidence = $canUploadEvidence && $activeEvidence->count() < 2;
+            $canUploadEvidence = $canMutateEvidence && $activeEvidence->count() < 2;
+            $deletableEvidence = $activeEvidence->filter(fn ($evidence): bool => in_array((int) $evidence->id, $deletableEvidenceIds, true))->values();
         @endphp
         <div class="sales-agenda-photo-grid">
             @forelse($activeEvidence as $evidence)
-                <a href="{{ route('sales-agendas.evidence.show', [$agenda, $evidence]) }}" class="sales-agenda-photo-card" data-agenda-photo-preview>
-                    <img src="{{ route('sales-agendas.evidence.show', [$agenda, $evidence]) }}" alt="{{ $evidence->original_name }}" loading="lazy">
-                    <span>{{ $evidence->original_name }}</span>
-                </a>
+                <div class="sales-agenda-photo-card">
+                    <a href="{{ route('sales-agendas.evidence.show', [$agenda, $evidence]) }}" class="sales-agenda-photo-link" data-agenda-photo-preview>
+                        <img src="{{ route('sales-agendas.evidence.show', [$agenda, $evidence]) }}" alt="{{ $evidence->original_name }}" loading="lazy">
+                        <span>{{ $evidence->original_name }}</span>
+                    </a>
+                    @if($deletableEvidence->contains('id', $evidence->id))
+                        <x-crm.icon-button
+                            type="button"
+                            variant="danger"
+                            label="Hapus foto {{ $evidence->original_name }}"
+                            title="Hapus foto"
+                            class="sales-agenda-photo-delete"
+                            data-agenda-photo-delete="true"
+                            @click="$dispatch('oasis:modal-open', { name: 'delete-agenda-evidence-{{ $evidence->id }}', trigger: $el })"
+                        >
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18" /></svg>
+                        </x-crm.icon-button>
+                    @endif
+                </div>
             @empty
                 <div class="sales-agenda-photo-placeholder" data-agenda-photo-preview role="img" aria-label="Pratinjau foto belum tersedia"><span>Preview foto</span></div>
             @endforelse
@@ -77,6 +93,25 @@
                 <div class="sales-agenda-photo-slot is-unavailable" aria-hidden="true"><span>+ Foto</span></div>
             @endif
         </div>
+        @if($deletableEvidence->isNotEmpty())
+            @foreach($deletableEvidence as $evidence)
+                <x-crm.modal
+                    name="delete-agenda-evidence-{{ $evidence->id }}"
+                    title="Hapus foto agenda"
+                    description="Foto yang dihapus tidak dapat dipulihkan dari agenda ini."
+                    size="sm"
+                >
+                    <p class="text-sm">Hapus foto <strong>{{ $evidence->original_name }}</strong> dari agenda ini?</p>
+                    <form method="POST" action="{{ route('sales-agendas.evidence.destroy', [$agenda, $evidence]) }}" class="mt-4">
+                        @csrf @method('DELETE')
+                        <div class="flex flex-wrap justify-end gap-2">
+                            <x-crm.button type="button" variant="secondary" @click="$dispatch('oasis:modal-close', { name: 'delete-agenda-evidence-{{ $evidence->id }}' })">Batal</x-crm.button>
+                            <x-crm.button type="submit" variant="danger">Hapus foto</x-crm.button>
+                        </div>
+                    </form>
+                </x-crm.modal>
+            @endforeach
+        @endif
         <p class="sales-agenda-photo-count" aria-live="polite">{{ min(2, $activeEvidence->count()) }} dari 2</p>
     </x-crm.section>
 

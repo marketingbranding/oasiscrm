@@ -30,6 +30,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Symfony\Component\HttpFoundation\Response;
@@ -183,7 +184,15 @@ class SalesAgendaController extends Controller
     {
         $this->authorize('view', $agenda);
         $agenda->load(['branch', 'salesProject', 'evidence', 'tasks.creator']);
-        $canUploadEvidence = $this->evidenceAuthorization->canMutate($request->user(), $agenda);
+        $canMutateEvidence = $this->evidenceAuthorization->canMutate($request->user(), $agenda);
+        $deletableEvidenceIds = $agenda->evidence
+            ->filter(fn ($evidence): bool => $canMutateEvidence
+                && ! $evidence->purged_at
+                && filled($evidence->storage_path)
+                && Storage::disk('agenda_evidence')->exists($evidence->storage_path))
+            ->map(fn ($evidence): int => (int) $evidence->getKey())
+            ->values()
+            ->all();
         $nextAgenda = null;
 
         if ($agenda->scheduled_date !== null && $agenda->owner_user_id !== null) {
@@ -213,7 +222,7 @@ class SalesAgendaController extends Controller
                 ->first(['id', 'title', 'scheduled_date', 'start_time']);
         }
 
-        return view('crm.sales-pocketbook.sales-agenda-detail', compact('agenda', 'canUploadEvidence', 'nextAgenda'));
+        return view('crm.sales-pocketbook.sales-agenda-detail', compact('agenda', 'canMutateEvidence', 'deletableEvidenceIds', 'nextAgenda'));
     }
 
     public function store(StoreSalesAgendaRequest $request, SalesAgendaEvidenceUploadService $uploads)

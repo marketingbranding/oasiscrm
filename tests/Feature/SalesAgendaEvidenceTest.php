@@ -224,6 +224,27 @@ class SalesAgendaEvidenceTest extends TestCase
             ->assertSeeText($title);
     }
 
+    public function test_photo_delete_changelog_is_deployed_once_and_visible(): void
+    {
+        $role = Role::firstOrCreate(['slug' => 'superadmin'], ['name' => 'Super Admin']);
+        $actor = User::factory()->create([
+            'role_id' => $role->id,
+            'password_changed_at' => now(),
+        ]);
+
+        $title = 'Foto Agenda Sales dapat dihapus sebelum agenda selesai';
+        $migration = require database_path('migrations/2026_11_03_110801_add_sales_agenda_photo_delete_changelog.php');
+
+        $migration->up();
+        $migration->up();
+
+        $this->assertSame(1, DB::table('changelogs')->whereNull('version')->where('title', $title)->count());
+        $this->actingAs($actor)
+            ->get(route('changelogs.index'))
+            ->assertOk()
+            ->assertSeeText($title);
+    }
+
     public function test_mobile_agenda_detail_actions_fit_and_center_within_the_viewport(): void
     {
         $css = file_get_contents(resource_path('css/app.css'));
@@ -293,6 +314,7 @@ class SalesAgendaEvidenceTest extends TestCase
 
     public function test_agenda_detail_places_existing_photo_left_and_upload_slot_right(): void
     {
+        Storage::fake('agenda_evidence');
         $branch = Branch::create(['name' => 'Solo', 'code' => 'SO', 'is_active' => true]);
         $role = Role::firstOrCreate(['slug' => 'sales'], ['name' => 'Sales']);
         $sales = User::factory()->create(['role_id' => $role->id, 'branch_id' => $branch->id, 'password_changed_at' => now()]);
@@ -307,6 +329,7 @@ class SalesAgendaEvidenceTest extends TestCase
             'created_by' => $sales->id,
         ]);
         $path = 'sales-agenda-evidence/preview.webp';
+        Storage::disk('agenda_evidence')->put($path, 'photo');
         SalesAgendaEvidence::create([
             'content_item_id' => $agenda->id,
             'uploaded_by_user_id' => $sales->id,
@@ -323,12 +346,93 @@ class SalesAgendaEvidenceTest extends TestCase
             ->get(route('sales-agendas.show', $agenda))
             ->assertOk()
             ->assertSee('sales-agenda-photo-card', false)
+            ->assertSee('data-agenda-photo-delete', false)
+            ->assertSee('aria-label="Hapus foto preview.jpg"', false)
+            ->assertSee('delete-agenda-evidence-'.$agenda->evidence()->sole()->id, false)
+            ->assertSee(route('sales-agendas.evidence.destroy', [$agenda, $agenda->evidence()->sole()]), false)
+            ->assertSee('value="DELETE"', false)
             ->assertSee('sales-agenda-photo-slot', false)
             ->assertSee('sales-agenda-photo-picker', false)
             ->getContent();
 
         $this->assertSame(1, substr_count($content, 'data-agenda-photo-slot'));
         $this->assertSame(1, substr_count($content, 'data-agenda-photo-preview'));
+    }
+
+    public function test_owner_can_delete_each_photo_when_agenda_has_two_photos(): void
+    {
+        Storage::fake('agenda_evidence');
+        $branch = Branch::create(['name' => 'Solo', 'code' => 'SO', 'is_active' => true]);
+        $role = Role::firstOrCreate(['slug' => 'sales'], ['name' => 'Sales']);
+        $sales = User::factory()->create(['role_id' => $role->id, 'branch_id' => $branch->id, 'password_changed_at' => now()]);
+        $agenda = ContentItem::create([
+            'branch_id' => $branch->id,
+            'item_type' => 'agenda',
+            'agenda_type' => ContentItem::SALES_AGENDA_TYPE,
+            'title' => 'Visit dengan dua foto',
+            'scheduled_date' => now(),
+            'status' => 'planned',
+            'owner_user_id' => $sales->id,
+            'created_by' => $sales->id,
+        ]);
+
+        foreach (['first.webp', 'second.webp'] as $filename) {
+            $path = "sales-agenda-evidence/$filename";
+            Storage::disk('agenda_evidence')->put($path, $filename);
+            SalesAgendaEvidence::create([
+                'content_item_id' => $agenda->id,
+                'uploaded_by_user_id' => $sales->id,
+                'storage_path' => $path,
+                'original_name' => $filename,
+                'mime_type' => 'image/webp',
+                'width' => 320,
+                'height' => 180,
+                'size_bytes' => strlen($filename),
+                'sha256' => hash('sha256', $filename),
+            ]);
+        }
+
+        $response = $this->actingAs($sales)->get(route('sales-agendas.show', $agenda))->assertOk();
+
+        $content = $response->getContent();
+        $this->assertSame(2, substr_count($content, 'data-agenda-photo-delete'));
+        $this->assertSame(2, substr_count($content, 'value="DELETE"'));
+        $this->assertStringNotContainsString('sales-agenda-photo-slot', $content);
+    }
+
+    public function test_missing_storage_photo_does_not_render_delete_control(): void
+    {
+        Storage::fake('agenda_evidence');
+        $branch = Branch::create(['name' => 'Solo', 'code' => 'SO', 'is_active' => true]);
+        $role = Role::firstOrCreate(['slug' => 'sales'], ['name' => 'Sales']);
+        $sales = User::factory()->create(['role_id' => $role->id, 'branch_id' => $branch->id, 'password_changed_at' => now()]);
+        $agenda = ContentItem::create([
+            'branch_id' => $branch->id,
+            'item_type' => 'agenda',
+            'agenda_type' => ContentItem::SALES_AGENDA_TYPE,
+            'title' => 'Visit tanpa file',
+            'scheduled_date' => now(),
+            'status' => 'planned',
+            'owner_user_id' => $sales->id,
+            'created_by' => $sales->id,
+        ]);
+        SalesAgendaEvidence::create([
+            'content_item_id' => $agenda->id,
+            'uploaded_by_user_id' => $sales->id,
+            'storage_path' => 'sales-agenda-evidence/missing.webp',
+            'original_name' => 'missing.webp',
+            'mime_type' => 'image/webp',
+            'width' => 320,
+            'height' => 180,
+            'size_bytes' => 3,
+            'sha256' => hash('sha256', 'missing'),
+        ]);
+
+        $this->actingAs($sales)
+            ->get(route('sales-agendas.show', $agenda))
+            ->assertOk()
+            ->assertDontSee('data-agenda-photo-delete', false)
+            ->assertDontSee('value="DELETE"', false);
     }
 
     public function test_create_photo_changelog_is_unique_and_rendered(): void
@@ -469,6 +573,83 @@ class SalesAgendaEvidenceTest extends TestCase
         $this->actingAs($sales)->get(route('sales-agendas.show', $agenda))->assertOk()->assertSee('proof.jpg');
         $agenda->update(['status' => 'done']);
         $this->actingAs($sales)->delete(route('sales-agendas.evidence.destroy', [$agenda, $evidence]))->assertForbidden();
+    }
+
+    public function test_owner_can_delete_active_photo_and_audit_it(): void
+    {
+        Storage::fake('agenda_evidence');
+        $branch = Branch::create(['name' => 'Solo', 'code' => 'SO', 'is_active' => true]);
+        $role = Role::firstOrCreate(['slug' => 'sales'], ['name' => 'Sales']);
+        $sales = User::factory()->create(['role_id' => $role->id, 'branch_id' => $branch->id, 'password_changed_at' => now()]);
+        $agenda = ContentItem::create(['branch_id' => $branch->id, 'item_type' => 'agenda', 'agenda_type' => ContentItem::SALES_AGENDA_TYPE, 'title' => 'Visit', 'scheduled_date' => now(), 'status' => 'planned', 'owner_user_id' => $sales->id, 'created_by' => $sales->id]);
+        $path = 'sales-agenda-evidence/remove-me.webp';
+        Storage::disk('agenda_evidence')->put($path, 'photo');
+        $evidence = SalesAgendaEvidence::create([
+            'content_item_id' => $agenda->id,
+            'uploaded_by_user_id' => $sales->id,
+            'storage_path' => $path,
+            'original_name' => 'remove-me.jpg',
+            'mime_type' => 'image/webp',
+            'width' => 320,
+            'height' => 180,
+            'size_bytes' => 5,
+            'sha256' => hash('sha256', 'photo'),
+        ]);
+
+        $this->actingAs($sales)
+            ->delete(route('sales-agendas.evidence.destroy', [$agenda, $evidence]))
+            ->assertRedirect();
+
+        Storage::disk('agenda_evidence')->assertMissing($path);
+        $this->assertDatabaseMissing('sales_agenda_evidences', ['id' => $evidence->id]);
+        $this->assertDatabaseHas('activity_log', [
+            'causer_id' => $sales->id,
+            'subject_id' => $evidence->id,
+            'event' => 'agenda_evidence_deleted_before_done',
+        ]);
+    }
+
+    public function test_stale_delete_cannot_remove_missing_or_purged_evidence_metadata(): void
+    {
+        Storage::fake('agenda_evidence');
+        $branch = Branch::create(['name' => 'Solo', 'code' => 'SO', 'is_active' => true]);
+        $role = Role::firstOrCreate(['slug' => 'sales'], ['name' => 'Sales']);
+        $sales = User::factory()->create(['role_id' => $role->id, 'branch_id' => $branch->id, 'password_changed_at' => now()]);
+        $agenda = ContentItem::create(['branch_id' => $branch->id, 'item_type' => 'agenda', 'agenda_type' => ContentItem::SALES_AGENDA_TYPE, 'title' => 'Visit', 'scheduled_date' => now(), 'status' => 'planned', 'owner_user_id' => $sales->id, 'created_by' => $sales->id]);
+        $missing = SalesAgendaEvidence::create([
+            'content_item_id' => $agenda->id,
+            'uploaded_by_user_id' => $sales->id,
+            'storage_path' => 'sales-agenda-evidence/missing.webp',
+            'original_name' => 'missing.webp',
+            'mime_type' => 'image/webp',
+            'width' => 10,
+            'height' => 10,
+            'size_bytes' => 3,
+            'sha256' => hash('sha256', 'missing'),
+        ]);
+        $purgedPath = 'sales-agenda-evidence/purged.webp';
+        Storage::disk('agenda_evidence')->put($purgedPath, 'purged');
+        $purged = SalesAgendaEvidence::create([
+            'content_item_id' => $agenda->id,
+            'uploaded_by_user_id' => $sales->id,
+            'storage_path' => $purgedPath,
+            'original_name' => 'purged.webp',
+            'mime_type' => 'image/webp',
+            'width' => 10,
+            'height' => 10,
+            'size_bytes' => 3,
+            'sha256' => hash('sha256', 'purged'),
+            'purged_at' => now(),
+        ]);
+
+        foreach ([$missing, $purged] as $evidence) {
+            $this->actingAs($sales)
+                ->delete(route('sales-agendas.evidence.destroy', [$agenda, $evidence]))
+                ->assertStatus(410);
+            $this->assertModelExists($evidence);
+        }
+
+        Storage::disk('agenda_evidence')->assertExists($purgedPath);
     }
 
     public function test_agenda_detail_renders_empty_photo_slots_and_the_next_owned_open_agenda(): void

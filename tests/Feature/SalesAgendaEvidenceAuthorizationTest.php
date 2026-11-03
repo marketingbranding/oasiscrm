@@ -83,8 +83,47 @@ class SalesAgendaEvidenceAuthorizationTest extends TestCase
         $this->assertSame([], Storage::disk('agenda_evidence')->allFiles());
     }
 
-    public function test_authorized_viewer_does_not_see_photo_mutation_control_without_mutation_scope(): void
+    public function test_sales_cannot_delete_evidence_owned_by_another_sales(): void
     {
+        Storage::fake('agenda_evidence');
+        $branch = Branch::create(['name' => 'Solo', 'code' => 'SO', 'is_active' => true]);
+        $owner = $this->user('sales', $branch);
+        $otherSales = $this->user('sales', $branch);
+        $agenda = ContentItem::create([
+            'branch_id' => $branch->id,
+            'item_type' => 'agenda',
+            'agenda_type' => ContentItem::SALES_AGENDA_TYPE,
+            'title' => 'Visit',
+            'scheduled_date' => now(),
+            'status' => 'planned',
+            'owner_user_id' => $owner->id,
+            'created_by' => $owner->id,
+        ]);
+        $path = 'evidence/another-owner.webp';
+        Storage::disk('agenda_evidence')->put($path, 'image');
+        $evidence = SalesAgendaEvidence::create([
+            'content_item_id' => $agenda->id,
+            'uploaded_by_user_id' => $owner->id,
+            'storage_path' => $path,
+            'original_name' => 'another-owner.webp',
+            'mime_type' => 'image/webp',
+            'width' => 10,
+            'height' => 10,
+            'size_bytes' => 5,
+            'sha256' => hash('sha256', 'image'),
+        ]);
+
+        $this->actingAs($otherSales)
+            ->delete(route('sales-agendas.evidence.destroy', [$agenda, $evidence]))
+            ->assertForbidden();
+
+        $this->assertModelExists($evidence);
+        Storage::disk('agenda_evidence')->assertExists($path);
+    }
+
+    public function test_read_only_viewer_cannot_delete_agenda_evidence(): void
+    {
+        Storage::fake('agenda_evidence');
         $branch = Branch::create(['name' => 'Solo', 'code' => 'SO', 'is_active' => true]);
         $owner = $this->user('sales', $branch);
         $viewer = $this->user('superadmin', $branch);
@@ -98,12 +137,64 @@ class SalesAgendaEvidenceAuthorizationTest extends TestCase
             'owner_user_id' => $owner->id,
             'created_by' => $owner->id,
         ]);
+        $path = 'evidence/read-only.webp';
+        Storage::disk('agenda_evidence')->put($path, 'image');
+        $evidence = SalesAgendaEvidence::create([
+            'content_item_id' => $agenda->id,
+            'uploaded_by_user_id' => $owner->id,
+            'storage_path' => $path,
+            'original_name' => 'read-only.webp',
+            'mime_type' => 'image/webp',
+            'width' => 10,
+            'height' => 10,
+            'size_bytes' => 5,
+            'sha256' => hash('sha256', 'image'),
+        ]);
+
+        $this->actingAs($viewer)
+            ->delete(route('sales-agendas.evidence.destroy', [$agenda, $evidence]))
+            ->assertForbidden();
+
+        $this->assertModelExists($evidence);
+        Storage::disk('agenda_evidence')->assertExists($path);
+    }
+
+    public function test_authorized_viewer_does_not_see_photo_mutation_control_without_mutation_scope(): void
+    {
+        Storage::fake('agenda_evidence');
+        $branch = Branch::create(['name' => 'Solo', 'code' => 'SO', 'is_active' => true]);
+        $owner = $this->user('sales', $branch);
+        $viewer = $this->user('superadmin', $branch);
+        $agenda = ContentItem::create([
+            'branch_id' => $branch->id,
+            'item_type' => 'agenda',
+            'agenda_type' => ContentItem::SALES_AGENDA_TYPE,
+            'title' => 'Visit',
+            'scheduled_date' => now(),
+            'status' => 'planned',
+            'owner_user_id' => $owner->id,
+            'created_by' => $owner->id,
+        ]);
+        $evidence = SalesAgendaEvidence::create([
+            'content_item_id' => $agenda->id,
+            'uploaded_by_user_id' => $owner->id,
+            'storage_path' => 'evidence/view-only.webp',
+            'original_name' => 'view-only.webp',
+            'mime_type' => 'image/webp',
+            'width' => 10,
+            'height' => 10,
+            'size_bytes' => 3,
+            'sha256' => hash('sha256', 'view-only'),
+        ]);
+        Storage::disk('agenda_evidence')->put($evidence->storage_path, 'view-only');
 
         $this->actingAs($viewer)
             ->get(route('sales-agendas.show', $agenda))
             ->assertOk()
             ->assertDontSee('data-agenda-photo-slot', false)
-            ->assertDontSee('name="photo"', false);
+            ->assertDontSee('name="photo"', false)
+            ->assertDontSee('data-agenda-photo-delete', false)
+            ->assertDontSee('value="DELETE"', false);
     }
 
     public function test_archive_page_exposes_only_backend_authorized_ready_downloads(): void

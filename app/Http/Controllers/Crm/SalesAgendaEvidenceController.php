@@ -54,7 +54,8 @@ class SalesAgendaEvidenceController extends Controller
     {
         abort_unless($access->canMutate($request->user(), $agenda), 403);
         abort_unless($evidence->content_item_id === $agenda->id, 404);
-        if ($evidence->storage_path && Storage::disk('agenda_evidence')->exists($evidence->storage_path) && ! Storage::disk('agenda_evidence')->delete($evidence->storage_path)) {
+        abort_if($evidence->purged_at || ! $evidence->storage_path || ! Storage::disk('agenda_evidence')->exists($evidence->storage_path), 410, 'Bukti foto telah dipindahkan ke arsip atau tidak tersedia.');
+        if (! Storage::disk('agenda_evidence')->delete($evidence->storage_path)) {
             abort(500, 'Bukti foto gagal dihapus.');
         }
         $evidence->delete();

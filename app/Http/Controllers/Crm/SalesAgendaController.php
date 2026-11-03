@@ -179,7 +179,7 @@ class SalesAgendaController extends Controller
         ];
         $canExport = $request->user()->hasPermission('sales_pocketbook.export_own');
 
-        return view('crm.sales-pocketbook.sales-agenda', compact('project', 'agendas', 'allAgendas', 'agendaView', 'incompleteAgendaCount', 'agendaGroups', 'leads', 'leadStatus', 'openLeadCount', 'completedLeadCount', 'tab', 'projects', 'defaultProjectId', 'cascadeProjects', 'leadOptionsEndpoint', 'promos', 'dailyReminder', 'canExport', 'agendaDate', 'agendaWeek', 'receiptSummary', 'daySubmission', 'incompletePreviousAgendas', 'showSalesTour'));
+        return view('crm.sales-pocketbook.sales-agenda', compact('project', 'agendas', 'allAgendas', 'agendaView', 'incompleteAgendaCount', 'agendaGroups', 'leads', 'leadStatus', 'openLeadCount', 'completedLeadCount', 'tab', 'projects', 'defaultProjectId', 'cascadeProjects', 'leadOptionsEndpoint', 'leadDate', 'promos', 'dailyReminder', 'canExport', 'agendaDate', 'agendaWeek', 'receiptSummary', 'daySubmission', 'incompletePreviousAgendas', 'showSalesTour'));
     }
 
     private function normalizeLeadDate(mixed $value): string

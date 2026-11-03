@@ -34,12 +34,12 @@
                         @if(auth()->user()->isSales())
                             <input type="hidden" name="project_id" value="{{ old('project_id', $defaultProjectId) }}">
                             <div class="sales-lead-form-grid">
-                                <label><span class="sales-lead-label">Tanggal Lead <span class="sales-required-mark" aria-hidden="true">*</span></span><input type="date" name="lead_date" value="{{ old('lead_date', request('lead_date', today()->toDateString())) }}" required></label>
+                                <label><span class="sales-lead-label">Tanggal Lead <span class="sales-required-mark" aria-hidden="true">*</span></span><input type="date" name="lead_date" value="{{ $leadDate }}" required></label>
                                 <div class="sales-lead-server-context" aria-label="Konteks lead"><span><b>Proyek</b>{{ $projects->firstWhere('id', (int) old('project_id', $defaultProjectId))?->project_name ?? 'Proyek utama' }}</span></div>
                             </div>
                         @else
                             <div class="sales-lead-form-grid">
-                                <label><span class="sales-lead-label">Tanggal Lead <span class="sales-required-mark" aria-hidden="true">*</span></span><input type="date" name="lead_date" value="{{ old('lead_date', request('lead_date', today()->toDateString())) }}" required></label>
+                                <label><span class="sales-lead-label">Tanggal Lead <span class="sales-required-mark" aria-hidden="true">*</span></span><input type="date" name="lead_date" value="{{ $leadDate }}" required></label>
                                 <label><span class="sales-lead-label">Proyek <span class="sales-required-mark" aria-hidden="true">*</span></span><select name="project_id" required>@foreach($projects as $item)<option value="{{ $item->id }}" @selected((string) old('project_id', $defaultProjectId) === (string) $item->id)>{{ $item->project_name }}</option>@endforeach</select></label>
                             </div>
                         @endif

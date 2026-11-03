@@ -431,6 +431,32 @@ class SalesPocketbookMobileContractTest extends TestCase
         $this->assertMatchesRegularExpression('/\.sales-lead-entry-scroll \{[^}]*overflow-y: auto !important/s', $css);
     }
 
+    public function test_invalid_array_lead_date_query_does_not_break_lead_workspace_rendering(): void
+    {
+        [, , $sales] = $this->salesContext();
+
+        $this->actingAs($sales)
+            ->get(route('sales-agendas.index', ['tab' => 'leads', 'lead_date' => ['invalid']]))
+            ->assertOk();
+    }
+
+    public function test_invalid_array_lead_date_submission_can_render_validation_feedback(): void
+    {
+        [, , $sales] = $this->salesContext();
+
+        $response = $this->actingAs($sales)
+            ->from(route('sales-agendas.index', ['tab' => 'leads']))
+            ->post(route('sales-leads.store'), [
+                'customer_name' => 'Lead Tanggal Array',
+                'phone' => '081234567890',
+                'lead_date' => ['invalid'],
+                'operation_uuid' => (string) Str::uuid(),
+            ]);
+
+        $response->assertRedirect()->assertSessionHasErrors('lead_date');
+        $this->followRedirects($response)->assertOk();
+    }
+
     public function test_mobile_lead_entry_reopens_optional_fields_when_their_validation_fails(): void
     {
         [, , $sales] = $this->salesContext();

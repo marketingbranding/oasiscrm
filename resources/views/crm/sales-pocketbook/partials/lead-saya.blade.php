@@ -32,9 +32,11 @@
                     <fieldset class="sales-lead-form-group">
                         <legend>Data lead</legend>
                         @if(auth()->user()->isSales())
-                            <input type="hidden" name="lead_date" value="{{ old('lead_date', request('lead_date', today()->toDateString())) }}">
                             <input type="hidden" name="project_id" value="{{ old('project_id', $defaultProjectId) }}">
-                            <div class="sales-lead-server-context" aria-label="Konteks lead"><span><b>Tanggal</b>{{ old('lead_date', request('lead_date', today()->toDateString())) }}</span><span><b>Proyek</b>{{ $projects->firstWhere('id', (int) old('project_id', $defaultProjectId))?->project_name ?? 'Proyek utama' }}</span></div>
+                            <div class="sales-lead-form-grid">
+                                <label><span class="sales-lead-label">Tanggal Lead <span class="sales-required-mark" aria-hidden="true">*</span></span><input type="date" name="lead_date" value="{{ old('lead_date', request('lead_date', today()->toDateString())) }}" required></label>
+                                <div class="sales-lead-server-context" aria-label="Konteks lead"><span><b>Proyek</b>{{ $projects->firstWhere('id', (int) old('project_id', $defaultProjectId))?->project_name ?? 'Proyek utama' }}</span></div>
+                            </div>
                         @else
                             <div class="sales-lead-form-grid">
                                 <label><span class="sales-lead-label">Tanggal Lead <span class="sales-required-mark" aria-hidden="true">*</span></span><input type="date" name="lead_date" value="{{ old('lead_date', request('lead_date', today()->toDateString())) }}" required></label>

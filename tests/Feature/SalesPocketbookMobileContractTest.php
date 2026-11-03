@@ -260,7 +260,7 @@ class SalesPocketbookMobileContractTest extends TestCase
         $this->assertDatabaseMissing('sales_agenda_tasks', ['id' => $task->id]);
     }
 
-    public function test_primary_sales_can_create_a_minimal_lead_with_server_controlled_date_and_project(): void
+    public function test_primary_sales_can_create_a_minimal_lead_with_selected_date_and_server_controlled_project(): void
     {
         [, $project, $sales] = $this->salesContext();
         $spoofedProject = LeadMaster::create(['branch_id' => $project->branch_id, 'project_name' => 'Proyek Spoof', 'is_active' => true]);
@@ -275,11 +275,27 @@ class SalesPocketbookMobileContractTest extends TestCase
 
         $lead = SalesLead::sole();
         $this->assertSame($project->id, $lead->project_id);
-        $this->assertSame(today()->toDateString(), $lead->lead_date->toDateString());
+        $this->assertSame('2020-01-01', $lead->lead_date->toDateString());
         $this->assertSame('no_response', $lead->current_status->value);
         $this->assertNull($lead->source);
         $this->assertNull($lead->platform);
         $this->assertNull($lead->campaign_name);
+    }
+
+    public function test_primary_sales_defaults_missing_lead_date_to_today(): void
+    {
+        [, $project, $sales] = $this->salesContext();
+
+        $this->actingAs($sales)->post(route('sales-leads.store'), [
+            'customer_name' => 'Lead Tanpa Tanggal',
+            'phone' => '081234567890',
+            'operation_uuid' => (string) Str::uuid(),
+        ])->assertRedirect();
+
+        $lead = SalesLead::sole();
+
+        $this->assertSame($project->id, $lead->project_id);
+        $this->assertSame(today()->toDateString(), $lead->lead_date->toDateString());
     }
 
     public function test_mobile_lead_cards_use_yellow_manual_statuses_and_visible_detail_actions(): void
@@ -330,6 +346,8 @@ class SalesPocketbookMobileContractTest extends TestCase
             ->assertOk()
             ->assertSee('Tambah lead')
             ->assertSee('sales-required-mark', false)
+            ->assertSee('type="date" name="lead_date" value="'.today()->toDateString().'"', false)
+            ->assertDontSee('type="hidden" name="lead_date"', false)
             ->assertSee('No. WhatsApp / Telepon')
             ->assertSee('Sumber dan proses')
             ->assertSee('Simpan')

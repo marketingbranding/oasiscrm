@@ -12,6 +12,7 @@ use App\Services\PromoOptionService;
 use App\Services\SalesAgendaProjectResolver;
 use App\Services\WorkspaceAccessService;
 use App\Support\SalesLeadMasterData;
+use DateTimeImmutable;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Http\Exceptions\HttpResponseException;
 use Illuminate\Validation\Rule;
@@ -60,8 +61,10 @@ abstract class SalesLeadRequest extends FormRequest
         if ($this->user()?->isSales()) {
             $data['sales_user_id'] = $this->user()->id;
             $data['branch_id'] = $this->user()->branch_id;
-            $data['lead_date'] = today()->toDateString();
-            $project = app(SalesAgendaProjectResolver::class)->resolve($this->user(), $data['lead_date']);
+            $data['lead_date'] = $this->filled('lead_date') ? $this->input('lead_date') : today()->toDateString();
+            $project = $this->isValidDateInput($data['lead_date'])
+                ? app(SalesAgendaProjectResolver::class)->resolve($this->user(), $data['lead_date'])
+                : null;
             $data['project_id'] = $project?->id;
         }
         if (! $this->lead() && ! $this->exists('current_status')) {
@@ -106,7 +109,7 @@ abstract class SalesLeadRequest extends FormRequest
     public function after(): array
     {
         return [function (Validator $validator) {
-            if ($validator->errors()->hasAny(['branch_id', 'project_id', 'sales_user_id'])) {
+            if ($validator->errors()->hasAny(['branch_id', 'project_id', 'sales_user_id', 'lead_date'])) {
                 return;
             }
 
@@ -137,8 +140,8 @@ abstract class SalesLeadRequest extends FormRequest
             } elseif (! $owner->assignedProjects()
                 ->whereKey($this->integer('project_id'))
                 ->wherePivot('is_active', true)
-                ->where(fn ($query) => $query->whereNull('project_user.assignment_start_date')->orWhereDate('project_user.assignment_start_date', '<=', today()))
-                ->where(fn ($query) => $query->whereNull('project_user.assignment_end_date')->orWhereDate('project_user.assignment_end_date', '>=', today()))
+                ->where(fn ($query) => $query->whereNull('project_user.assignment_start_date')->orWhereDate('project_user.assignment_start_date', '<=', $this->date('lead_date')))
+                ->where(fn ($query) => $query->whereNull('project_user.assignment_end_date')->orWhereDate('project_user.assignment_end_date', '>=', $this->date('lead_date')))
                 ->exists()) {
                 $validator->errors()->add('sales_user_id', 'Sales belum memiliki penugasan aktif pada proyek yang dipilih.');
             }
@@ -188,6 +191,17 @@ abstract class SalesLeadRequest extends FormRequest
         $current = $this->lead()?->{$field};
 
         return $this->lead() && $this->input($field) === $current ? Rule::in([$current]) : Rule::in($values);
+    }
+
+    private function isValidDateInput(mixed $value): bool
+    {
+        if (! is_string($value)) {
+            return false;
+        }
+
+        $date = DateTimeImmutable::createFromFormat('!Y-m-d', $value);
+
+        return $date !== false && $date->format('Y-m-d') === $value;
     }
 
     private function isQuickSalesCreate(): bool

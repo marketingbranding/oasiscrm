@@ -17,7 +17,6 @@ return new class extends Migration
             $table->date('scheduled_date');
             $table->unsignedSmallInteger('target_minutes');
             $table->unsignedSmallInteger('normal_minutes_at_submission');
-            $table->boolean('is_weekend')->default(false);
             $table->timestamp('submitted_at');
             $table->timestamps();
 

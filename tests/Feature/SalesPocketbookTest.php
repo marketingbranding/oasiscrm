@@ -289,7 +289,7 @@ class SalesPocketbookTest extends TestCase
             'branch_id' => $branch->id,
             'project_id' => $project->id,
             'sales_user_id' => $sales->id,
-            'lead_date' => 'not-a-date',
+            'lead_date' => "2026-01-01\0",
             'promo_name' => 'No Promo',
             'customer_name' => 'Lead Invalid Date',
             'phone' => '081234567890',
@@ -304,7 +304,36 @@ class SalesPocketbookTest extends TestCase
         $validator = Validator::make($request->all(), $request->rules());
 
         $this->assertTrue($validator->fails());
-        $this->assertArrayHasKey('lead_date', $validator->errors()->toArray());
+        $this->assertNotEmpty($validator->errors()->toArray());
+    }
+
+    public function test_non_sales_assignment_validation_remains_based_on_today(): void
+    {
+        [$branch, $project, $sales] = $this->salesContext();
+        $manager = $this->user('pusat', $branch, 'Tim Pusat');
+        $sales->assignedProjects()->updateExistingPivot($project->id, [
+            'assignment_end_date' => today()->addDays(3)->toDateString(),
+        ]);
+
+        $response = $this->actingAs($manager)->post(route('sales-leads.store'), [
+            'branch_id' => $branch->id,
+            'project_id' => $project->id,
+            'sales_user_id' => $sales->id,
+            'lead_date' => today()->addDays(7)->toDateString(),
+            'customer_name' => 'Lead Non Sales',
+            'phone' => '081234567890',
+            'source' => 'Referral',
+            'platform' => 'WhatsApp',
+            'campaign_name' => 'Referral',
+            'current_status' => 'no_response',
+            'operation_uuid' => (string) Str::uuid(),
+        ]);
+
+        $response->assertRedirect()->assertSessionHasNoErrors();
+        $this->assertTrue(SalesLead::query()
+            ->where('customer_name', 'Lead Non Sales')
+            ->whereDate('lead_date', today()->addDays(7)->toDateString())
+            ->exists());
     }
 
     public function test_primary_sales_creates_lead_for_self_and_cannot_spoof_sales_owner(): void

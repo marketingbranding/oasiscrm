@@ -141,8 +141,8 @@ abstract class SalesLeadRequest extends FormRequest
             } elseif (! $owner->assignedProjects()
                 ->whereKey($this->integer('project_id'))
                 ->wherePivot('is_active', true)
-                ->where(fn ($query) => $query->whereNull('project_user.assignment_start_date')->orWhereDate('project_user.assignment_start_date', '<=', $this->date('lead_date')))
-                ->where(fn ($query) => $query->whereNull('project_user.assignment_end_date')->orWhereDate('project_user.assignment_end_date', '>=', $this->date('lead_date')))
+                ->where(fn ($query) => $query->whereNull('project_user.assignment_start_date')->orWhereDate('project_user.assignment_start_date', '<=', $this->assignmentValidationDate()))
+                ->where(fn ($query) => $query->whereNull('project_user.assignment_end_date')->orWhereDate('project_user.assignment_end_date', '>=', $this->assignmentValidationDate()))
                 ->exists()) {
                 $validator->errors()->add('sales_user_id', 'Sales belum memiliki penugasan aktif pada proyek yang dipilih.');
             }
@@ -200,9 +200,20 @@ abstract class SalesLeadRequest extends FormRequest
             return false;
         }
 
-        $date = DateTimeImmutable::createFromFormat('!Y-m-d', $value);
+        try {
+            $date = DateTimeImmutable::createFromFormat('!Y-m-d', $value);
+        } catch (\ValueError) {
+            return false;
+        }
 
         return $date !== false && $date->format('Y-m-d') === $value;
+    }
+
+    private function assignmentValidationDate(): string
+    {
+        return $this->isQuickSalesCreate()
+            ? (string) $this->input('lead_date')
+            : today()->toDateString();
     }
 
     private function isQuickSalesCreate(): bool

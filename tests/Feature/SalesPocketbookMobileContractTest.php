@@ -264,18 +264,23 @@ class SalesPocketbookMobileContractTest extends TestCase
     {
         [, $project, $sales] = $this->salesContext();
         $spoofedProject = LeadMaster::create(['branch_id' => $project->branch_id, 'project_name' => 'Proyek Spoof', 'is_active' => true]);
+        $selectedDate = today()->addDays(2)->toDateString();
+        $sales->assignedProjects()->updateExistingPivot($project->id, [
+            'assignment_start_date' => today()->subDay()->toDateString(),
+            'assignment_end_date' => today()->addDays(3)->toDateString(),
+        ]);
 
         $this->actingAs($sales)->post(route('sales-leads.store'), [
             'customer_name' => 'Lead Mobile',
             'phone' => '081234567890',
-            'lead_date' => '2020-01-01',
+            'lead_date' => $selectedDate,
             'project_id' => $spoofedProject->id,
             'operation_uuid' => (string) Str::uuid(),
         ])->assertRedirect();
 
         $lead = SalesLead::sole();
         $this->assertSame($project->id, $lead->project_id);
-        $this->assertSame('2020-01-01', $lead->lead_date->toDateString());
+        $this->assertSame($selectedDate, $lead->lead_date->toDateString());
         $this->assertSame('no_response', $lead->current_status->value);
         $this->assertNull($lead->source);
         $this->assertNull($lead->platform);
@@ -298,6 +303,42 @@ class SalesPocketbookMobileContractTest extends TestCase
         ]);
 
         $response->assertRedirect()->assertSessionHasErrors('project_id');
+        $this->assertDatabaseCount('sales_leads', 0);
+    }
+
+    public function test_primary_sales_rejects_a_lead_date_before_the_project_assignment_window(): void
+    {
+        [, $project, $sales] = $this->salesContext();
+        $sales->assignedProjects()->updateExistingPivot($project->id, [
+            'assignment_start_date' => today()->subDay()->toDateString(),
+            'assignment_end_date' => today()->addDays(3)->toDateString(),
+        ]);
+
+        $selectedDate = today()->subDays(2)->toDateString();
+        $response = $this->actingAs($sales)->post(route('sales-leads.store'), [
+            'customer_name' => 'Lead Sebelum Penugasan',
+            'phone' => '081234567890',
+            'lead_date' => $selectedDate,
+            'operation_uuid' => (string) Str::uuid(),
+        ]);
+
+        $response->assertRedirect()->assertSessionHasErrors('project_id');
+        $this->assertDatabaseCount('sales_leads', 0);
+    }
+
+    public function test_primary_sales_returns_validation_error_for_an_invalid_lead_date(): void
+    {
+        [, , $sales] = $this->salesContext();
+
+        $response = $this->actingAs($sales)->post(route('sales-leads.store'), [
+            'customer_name' => 'Lead Tanggal Rusak',
+            'phone' => '081234567890',
+            'lead_date' => 'not-a-date',
+            'promo_name' => 'No Promo',
+            'operation_uuid' => (string) Str::uuid(),
+        ]);
+
+        $response->assertRedirect()->assertSessionHasErrors();
         $this->assertDatabaseCount('sales_leads', 0);
     }
 

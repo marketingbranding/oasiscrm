@@ -180,8 +180,36 @@ class SalesAgendaController extends Controller
         $this->authorize('view', $agenda);
         $agenda->load(['branch', 'salesProject', 'evidence', 'tasks.creator']);
         $canUploadEvidence = $this->evidenceAuthorization->canMutate($request->user(), $agenda);
+        $nextAgenda = null;
 
-        return view('crm.sales-pocketbook.sales-agenda-detail', compact('agenda', 'canUploadEvidence'));
+        if ($agenda->scheduled_date !== null && $agenda->owner_user_id !== null) {
+            $currentDate = $agenda->scheduled_date->toDateString();
+            $currentTime = $agenda->start_time ?: '00:00:00';
+            $nextAgenda = ContentItem::query()
+                ->where('item_type', 'agenda')
+                ->where('agenda_type', ContentItem::SALES_AGENDA_TYPE)
+                ->where('owner_user_id', $agenda->owner_user_id)
+                ->whereNotIn('status', ['done', 'cancelled', 'rescheduled'])
+                ->where(function (Builder $query) use ($agenda, $currentDate, $currentTime): void {
+                    $query->whereDate('scheduled_date', '>', $currentDate)
+                        ->orWhere(function (Builder $sameDate) use ($agenda, $currentDate, $currentTime): void {
+                            $sameDate->whereDate('scheduled_date', $currentDate)
+                                ->where(function (Builder $sameDay) use ($agenda, $currentTime): void {
+                                    $sameDay->whereRaw("COALESCE(start_time, '00:00:00') > ?", [$currentTime])
+                                        ->orWhere(function (Builder $sameTime) use ($agenda, $currentTime): void {
+                                            $sameTime->whereRaw("COALESCE(start_time, '00:00:00') = ?", [$currentTime])
+                                                ->where('id', '>', $agenda->id);
+                                        });
+                                });
+                        });
+                })
+                ->orderBy('scheduled_date')
+                ->orderByRaw("COALESCE(start_time, '00:00:00')")
+                ->orderBy('id')
+                ->first(['id', 'title', 'scheduled_date', 'start_time']);
+        }
+
+        return view('crm.sales-pocketbook.sales-agenda-detail', compact('agenda', 'canUploadEvidence', 'nextAgenda'));
     }
 
     public function store(StoreSalesAgendaRequest $request, SalesAgendaEvidenceUploadService $uploads)

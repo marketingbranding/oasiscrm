@@ -90,7 +90,9 @@
                 <input type="hidden" name="expected_updated_at" value="{{ app(\App\Services\OptimisticLockService::class)->token($agenda) }}">
                 <label for="sales-agenda-result">Hasil aktivitas <span aria-hidden="true">*</span></label>
                 <textarea id="sales-agenda-result" class="sales-input" name="activity_result" rows="5" required data-agenda-result>{{ old('activity_result') }}</textarea>
-                <p class="sales-agenda-next" role="status">Selanjutnya: {{ $agenda->end_time ? substr((string) $agenda->end_time, 0, 5) : '—' }} agenda berikutnya</p>
+                @if($nextAgenda)
+                    <p class="sales-agenda-next" role="status">Selanjutnya: {{ $nextAgenda->start_time ? substr((string) $nextAgenda->start_time, 0, 5) : 'Fleksibel' }} {{ $nextAgenda->title }}</p>
+                @endif
                 <div class="sales-agenda-sticky-action">
                     <x-crm.button type="submit" variant="primary" accent="sales" data-complete-agenda disabled aria-disabled="true">Selesaikan agenda</x-crm.button>
                 </div>

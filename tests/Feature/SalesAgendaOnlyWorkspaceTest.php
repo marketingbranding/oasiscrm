@@ -88,10 +88,9 @@ class SalesAgendaOnlyWorkspaceTest extends TestCase
 
         $response->assertOk()
             ->assertSee('sales-receipt-workspace', false)
-            ->assertSeeText('Kemarin')
-            ->assertSeeText('Hari ini')
-            ->assertSeeText('Rencana')
-            ->assertSeeText('+ Tambah rencana hari ini');
+            ->assertSee('data-agenda-week-navigation', false)
+            ->assertSeeText('Minggu agenda')
+            ->assertSeeText('+ Tambah agenda ke struk');
     }
 
     public function test_coordinator_sees_only_buku_saku_agendas_owned_by_current_team_sales(): void

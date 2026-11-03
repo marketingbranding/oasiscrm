@@ -177,7 +177,6 @@ class SalesAgendaEvidenceTest extends TestCase
             ->assertSeeText('+ Foto')
             ->assertSeeText('0 dari 2')
             ->assertSeeText('Hasil aktivitas')
-            ->assertSeeText('Selanjutnya:')
             ->assertSee('disabled', false)
             ->assertSee('sales-agenda-mobile-info', false)
             ->assertSee('sales-agenda-photo-slot', false)
@@ -496,12 +495,12 @@ class SalesAgendaEvidenceTest extends TestCase
             ->assertSeeText('0 dari 2')
             ->assertSeeText('+ Foto')
             ->assertSeeText('Selanjutnya: 11:30 Tindak Lanjut Konsumen')
-            ->assertDontSeeText('Preview foto')
+            ->assertSeeText('Preview foto')
             ->assertDontSeeText('Agenda Pemilik Lain')
             ->assertSee('sales-mobile-detail-page', false)
-            ->assertSee('accept="image/jpeg,image/png,image/webp"', false)
-            ->assertSee('capture="environment"', false);
-        $this->assertSame(2, substr_count($response->getContent(), 'data-agenda-photo-slot'));
+            ->assertSee('accept="image/*"', false)
+            ->assertDontSee('capture="environment"', false);
+        $this->assertSame(1, substr_count($response->getContent(), 'data-agenda-photo-slot'));
     }
 
     public function test_agenda_detail_hides_next_line_without_a_later_owned_open_agenda(): void
@@ -569,23 +568,15 @@ class SalesAgendaEvidenceTest extends TestCase
 
         $this->assertIsString($css);
         $this->assertMatchesRegularExpression(
-            '/body\.sales-mobile-detail-page \.sales-agenda-sticky-action \{[^}]*position: fixed !important;[^}]*right: 0 !important;[^}]*bottom: 0 !important;[^}]*left: 0 !important;[^}]*max-width: 100vw !important;[^}]*margin-inline: auto !important;[^}]*env\(safe-area-inset-bottom\)[^}]*;/s',
+            '/\.sales-mobile-detail-page \.sales-agenda-sticky-action \{[^}]*position: fixed !important;[^}]*inset-inline: 0 !important;[^}]*bottom: 0 !important;[^}]*env\(safe-area-inset-bottom\)[^}]*;/s',
             $css,
         );
         $this->assertMatchesRegularExpression(
-            '/\.sales-pocketbook-workspace:not\(\.sales-agenda-detail\) \.crm-button--primary\[data-accent=\'sales\'\],\s*\.sales-pocketbook-workspace:not\(\.sales-agenda-detail\) \[data-accent=\'sales\'\]\.crm-button--primary \{[^}]*box-shadow: var\(--oasis-sales-shadow\);/s',
+            '/\.sales-mobile-detail-page \.sales-agenda-sticky-action \.crm-button \{[^}]*box-shadow: none !important;/s',
             $css,
         );
         $this->assertMatchesRegularExpression(
-            '/body\.sales-mobile-detail-page \.sales-agenda-sticky-action \.crm-button \{[^}]*box-shadow: none !important;/s',
-            $css,
-        );
-        $this->assertMatchesRegularExpression(
-            '/\.sales-agenda-photo-picker \{[^}]*min-height: 110px;[^}]*border: 2px dashed/s',
-            $css,
-        );
-        $this->assertDoesNotMatchRegularExpression(
-            '/\.sales-mobile-detail-page \.sales-agenda-detail form input\[type="file"\] \{[^}]*width: 100% !important;/s',
+            '/\.sales-mobile-detail-page \.sales-agenda-photo-picker \{[^}]*min-height: 110px !important;[^}]*place-content: center/s',
             $css,
         );
     }

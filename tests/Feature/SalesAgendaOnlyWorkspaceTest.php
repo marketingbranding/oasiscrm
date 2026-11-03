@@ -55,14 +55,14 @@ class SalesAgendaOnlyWorkspaceTest extends TestCase
             'created_by' => $sales->id,
         ]);
 
-        $response = $this->actingAs($sales)->get(route('sales-agendas.index'));
+        $response = $this->actingAs($sales)->get(route('sales-agendas.index', ['work_date' => '2026-10-28']));
 
         $response->assertOk()
             ->assertSee($agenda->title)
-            ->assertSee('+ Tambah agenda')
+            ->assertSee('+ Tambah agenda ke struk')
             ->assertDontSee('Daily Planning')
             ->assertDontSee('Kertas Agenda Harian')
-            ->assertSee('420 menit');
+            ->assertSee('480 menit');
     }
 
     public function test_sales_workspace_renders_receipt_date_context_and_add_plan_action(): void

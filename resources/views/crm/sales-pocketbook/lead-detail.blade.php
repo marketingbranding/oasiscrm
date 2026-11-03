@@ -1,6 +1,7 @@
 @extends('layouts.crm')
 
 @section('title', 'Detail Lead - Oasis CRM')
+@section('body-class', 'sales-mobile-detail-page')
 
 @section('content')
 @php

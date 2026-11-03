@@ -18,6 +18,169 @@ class SalesAgendaWorkspaceRenderTest extends TestCase
 {
     use RefreshDatabase;
 
+    public function test_receipt_heading_matches_today_tomorrow_and_other_planned_dates(): void
+    {
+        [$sales] = $this->salesContext();
+        $today = CarbonImmutable::today(config('app.timezone'));
+        $tomorrow = $today->addDay();
+        $laterDate = $today->addDays(2);
+
+        $this->actingAs($sales)
+            ->get(route('sales-agendas.index', ['work_date' => $today->toDateString()]))
+            ->assertOk()
+            ->assertSee('RENCANA HARI INI');
+
+        $this->actingAs($sales)
+            ->get(route('sales-agendas.index', ['work_date' => $tomorrow->toDateString()]))
+            ->assertOk()
+            ->assertSee('RENCANA BESOK')
+            ->assertDontSee('RENCANA HARI INI');
+
+        $this->actingAs($sales)
+            ->get(route('sales-agendas.index', ['work_date' => $laterDate->toDateString()]))
+            ->assertOk()
+            ->assertSee('RENCANA '.$laterDate->locale('id')->translatedFormat('d M Y'))
+            ->assertDontSee('RENCANA HARI INI');
+    }
+
+    public function test_plan_date_alias_accepts_any_selected_date_for_week_navigation(): void
+    {
+        [$sales] = $this->salesContext();
+        $today = CarbonImmutable::today(config('app.timezone'));
+        $futureDate = $today->addDays(5);
+
+        $this->actingAs($sales)
+            ->get(route('sales-agendas.index', ['plan_date' => $futureDate->toDateString()]))
+            ->assertRedirect(route('sales-agendas.index', ['work_date' => $futureDate->toDateString()]));
+
+        foreach ([$today, $today->subDay()] as $selectedDate) {
+            $this->actingAs($sales)
+                ->get(route('sales-agendas.index', ['plan_date' => $selectedDate->toDateString()]))
+                ->assertRedirect(route('sales-agendas.index', ['work_date' => $selectedDate->toDateString()]));
+        }
+    }
+
+    public function test_work_date_is_canonical_when_legacy_plan_date_is_also_present(): void
+    {
+        [$sales] = $this->salesContext();
+
+        $this->actingAs($sales)
+            ->get(route('sales-agendas.index', [
+                'work_date' => '2026-11-04',
+                'plan_date' => '2026-11-05',
+            ]))
+            ->assertOk()
+            ->assertViewHas('agendaDate', fn (CarbonImmutable $agendaDate): bool => $agendaDate->toDateString() === '2026-11-04')
+            ->assertSee('data-agenda-date="2026-11-04"', false)
+            ->assertSee('name="scheduled_date" value="2026-11-04"', false)
+            ->assertDontSee('name="scheduled_date" value="2026-11-05"', false);
+    }
+
+    public function test_future_date_picker_changelog_is_idempotent_and_visible(): void
+    {
+        $title = 'Rencana Agenda dapat memilih tanggal mendatang';
+        $migration = require database_path('migrations/2026_11_02_112046_add_sales_agenda_future_date_picker_changelog.php');
+
+        $migration->up();
+        $migration->up();
+
+        $this->assertSame(1, DB::table('changelogs')->whereNull('version')->where('title', $title)->count());
+
+        $superadmin = User::factory()->create([
+            'role_id' => Role::query()->where('slug', 'superadmin')->value('id'),
+            'password_changed_at' => now(),
+        ]);
+
+        $this->actingAs($superadmin)
+            ->get(route('changelogs.index'))
+            ->assertOk()
+            ->assertSeeText($title);
+    }
+
+    public function test_weekend_direct_plan_changelog_is_idempotent_and_visible(): void
+    {
+        $title = 'Rencana akhir pekan tersimpan langsung tanpa struk';
+        $migration = require database_path('migrations/2026_11_02_130000_add_sales_agenda_weekend_direct_plan_changelog.php');
+
+        $migration->up();
+        $migration->up();
+
+        $this->assertSame(1, DB::table('changelogs')->whereNull('version')->where('title', $title)->count());
+
+        $superadmin = User::factory()->create([
+            'role_id' => Role::query()->where('slug', 'superadmin')->value('id'),
+            'password_changed_at' => now(),
+        ]);
+
+        $this->actingAs($superadmin)
+            ->get(route('changelogs.index'))
+            ->assertOk()
+            ->assertSeeText($title);
+    }
+
+    public function test_unified_shell_changelog_is_idempotent_and_visible(): void
+    {
+        $title = 'Shell Agenda Buku Saku menyatukan status dan tampilan';
+        $migration = require database_path('migrations/2026_11_02_140000_add_sales_agenda_unified_shell_changelog.php');
+
+        $migration->up();
+        $migration->up();
+
+        $this->assertSame(1, DB::table('changelogs')->whereNull('version')->where('title', $title)->count());
+
+        $superadmin = User::factory()->create([
+            'role_id' => Role::query()->where('slug', 'superadmin')->value('id'),
+            'password_changed_at' => now(),
+        ]);
+
+        $this->actingAs($superadmin)
+            ->get(route('changelogs.index'))
+            ->assertOk()
+            ->assertSeeText($title);
+    }
+
+    public function test_weekly_navigation_changelog_is_idempotent_and_visible(): void
+    {
+        $title = 'Navigasi Agenda menggunakan minggu Senin sampai Minggu';
+        $migration = require database_path('migrations/2026_11_02_114944_add_sales_agenda_weekly_navigation_changelog.php');
+
+        $migration->up();
+        $migration->up();
+
+        $this->assertSame(1, DB::table('changelogs')->whereNull('version')->where('title', $title)->count());
+
+        $superadmin = User::factory()->create([
+            'role_id' => Role::query()->where('slug', 'superadmin')->value('id'),
+            'password_changed_at' => now(),
+        ]);
+
+        $this->actingAs($superadmin)
+            ->get(route('changelogs.index'))
+            ->assertOk()
+            ->assertSeeText($title);
+    }
+
+    public function test_weekly_refinement_changelog_is_idempotent_and_visible(): void
+    {
+        $title = 'Navigasi mingguan Agenda dirapikan untuk alur struk';
+        $migration = require database_path('migrations/2026_11_02_123207_add_sales_agenda_weekly_refinement_changelog.php');
+
+        $migration->up();
+        $migration->up();
+
+        $this->assertSame(1, DB::table('changelogs')->whereNull('version')->where('title', $title)->count());
+
+        $superadmin = User::factory()->create([
+            'role_id' => Role::query()->where('slug', 'superadmin')->value('id'),
+            'password_changed_at' => now(),
+        ]);
+
+        $this->actingAs($superadmin)
+            ->get(route('changelogs.index'))
+            ->assertOk()
+            ->assertSeeText($title);
+    }
+
     public function test_empty_agenda_renders_receipt_target_and_add_action(): void
     {
         [$sales, $project] = $this->salesContext();
@@ -27,10 +190,14 @@ class SalesAgendaWorkspaceRenderTest extends TestCase
             ->assertOk()
             ->assertSee('sales-personal-page', false)
             ->assertSee('sales-reference-shell', false)
+            ->assertSee('aria-labelledby="agenda-workspace-title"', false)
+            ->assertSee('id="agenda-workspace-title"', false)
             ->assertSee('Buku Saku Saya')
             ->assertSee('Agenda')
             ->assertSee('Lead Saya')
             ->assertSee('0 / 480 menit')
+            ->assertDontSee('data-agenda-workflow-status="empty"', false)
+            ->assertDontSee('sales-agenda-workflow-status--empty', false)
             ->assertSee('Jam kerja')
             ->assertSee('07:30–17:00')
             ->assertSee('target hari ini')
@@ -44,7 +211,50 @@ class SalesAgendaWorkspaceRenderTest extends TestCase
             ->assertSee($project->project_name);
     }
 
-    public function test_populated_receipt_keeps_date_navigation_with_exact_date_links(): void
+    public function test_mobile_workspace_bottom_action_stays_fixed_through_embedded_tablet_widths(): void
+    {
+        [$sales] = $this->salesContext();
+        $css = file_get_contents(resource_path('css/app.css'));
+
+        $this->assertIsString($css);
+        $this->assertStringContainsString('@media (max-width: 1024px)', $css);
+        $this->assertMatchesRegularExpression(
+            '/body\.sales-personal-page \{[^}]*overflow-x: clip !important;/s',
+            $css,
+        );
+        $this->assertMatchesRegularExpression(
+            '/body\.sales-personal-page #crm-main \{[^}]*overflow: visible !important;/s',
+            $css,
+        );
+        $this->assertMatchesRegularExpression(
+            '/body\.sales-personal-page #agenda-input\.sales-reference-bottom-action \{[^}]*position: fixed !important;[^}]*inset-inline: 0 !important;[^}]*bottom: 0 !important;[^}]*justify-content: center !important;/s',
+            $css,
+        );
+        $this->assertMatchesRegularExpression(
+            '/body\.sales-personal-page #agenda-input\.sales-reference-bottom-action \.sales-receipt-add-trigger \{[^}]*width: 100% !important;[^}]*max-width: 480px !important;[^}]*margin: 0 auto !important;/s',
+            $css,
+        );
+
+        $response = $this->actingAs($sales)
+            ->get(route('sales-agendas.index', ['work_date' => '2026-11-07']))
+            ->assertOk()
+            ->getContent();
+
+        $this->assertMatchesRegularExpression(
+            '/<div id="agenda-input"[^>]*sales-reference-bottom-action[^>]*>.*?openAgendaSheet\(\$event\).*?aria-controls="sales-agenda-create-sheet"/s',
+            $response,
+        );
+        $this->assertMatchesRegularExpression(
+            '/body\.sales-personal-page #agenda-input\.sales-reference-bottom-action \{[^}]*position: fixed !important;/s',
+            $css,
+        );
+        $this->assertMatchesRegularExpression(
+            '/\.sales-reference-bottom-action\.is-receipt-action \{[^}]*position: static !important;/s',
+            $css,
+        );
+    }
+
+    public function test_populated_receipt_keeps_weekly_navigation_with_exact_date_links(): void
     {
         [$sales, $project] = $this->salesContext();
         $today = CarbonImmutable::today(config('app.timezone'));
@@ -60,18 +270,15 @@ class SalesAgendaWorkspaceRenderTest extends TestCase
                 'work_date' => $yesterday->toDateString(),
             ]))
             ->assertOk()
-            ->assertSee('Kemarin')
-            ->assertSee('Hari ini')
-            ->assertSee('Rencana')
             ->assertSee('Agenda kemarin')
             ->assertDontSee('Agenda hari ini')
             ->assertDontSee('Agenda rencana');
 
         $response
-            ->assertSee('href="'.e(route('sales-agendas.index', ['tab' => 'agenda', 'work_date' => $yesterday->toDateString()])).'"', false)
-            ->assertSee('href="'.e(route('sales-agendas.index', ['tab' => 'agenda', 'work_date' => $today->toDateString()])).'"', false)
-            ->assertSee('href="'.e(route('sales-agendas.index', ['tab' => 'agenda', 'work_date' => $today->addDay()->toDateString()])).'"', false)
-            ->assertSee('aria-current="page"', false);
+            ->assertSee('href="'.e(route('sales-agendas.index', ['tab' => 'agenda', 'work_date' => $yesterday->startOfWeek(CarbonImmutable::MONDAY)->toDateString()])).'"', false)
+            ->assertSee('href="'.e(route('sales-agendas.index', ['tab' => 'agenda', 'work_date' => $yesterday->endOfWeek(CarbonImmutable::SUNDAY)->toDateString()])).'"', false)
+            ->assertSee('data-agenda-week-navigation', false)
+            ->assertSee('aria-current="date"', false);
 
         $this->actingAs($sales)
             ->get(route('sales-agendas.index', [
@@ -79,18 +286,301 @@ class SalesAgendaWorkspaceRenderTest extends TestCase
                 'work_date' => $today->addDay()->toDateString(),
             ]))
             ->assertOk()
-            ->assertSeeInOrder([
-                e(route('sales-agendas.index', ['tab' => 'agenda', 'work_date' => $today->addDay()->toDateString()])),
-                'class="is-active"',
-                'aria-current="page"',
-                'Rencana',
-            ], false);
+            ->assertSee('data-week-day="'.$today->addDay()->toDateString().'"', false)
+            ->assertSee('class="sales-week-navigation-day is-active"', false);
+    }
+
+    public function test_weekly_navigation_renders_monday_to_sunday_with_selected_date(): void
+    {
+        [$sales] = $this->salesContext();
+
+        $response = $this->actingAs($sales)
+            ->get(route('sales-agendas.index', [
+                'tab' => 'agenda',
+                'work_date' => '2026-11-08',
+            ]))
+            ->assertOk();
+
+        $response
+            ->assertSee('data-agenda-week-navigation', false)
+            ->assertSee('Sen')
+            ->assertSee('Sel')
+            ->assertSee('Rab')
+            ->assertSee('Kam')
+            ->assertSee('Jum')
+            ->assertSee('Sab')
+            ->assertSee('Min')
+            ->assertSee('data-week-day="2026-11-02"', false)
+            ->assertSee('data-week-day="2026-11-08"', false)
+            ->assertSee('aria-current="date"', false);
+    }
+
+    public function test_weekly_navigation_exposes_week_controls_without_date_picker(): void
+    {
+        [$sales] = $this->salesContext();
+
+        $this->actingAs($sales)
+            ->get(route('sales-agendas.index', [
+                'tab' => 'agenda',
+                'work_date' => '2026-11-08',
+            ]))
+            ->assertOk()
+            ->assertSee('work_date=2026-11-01', false)
+            ->assertSee('work_date=2026-11-15', false)
+            ->assertDontSee('sales-week-navigation-picker', false)
+            ->assertDontSee('sales-agenda-week-date', false)
+            ->assertDontSee('Pilih minggu', false);
+    }
+
+    public function test_weekly_navigation_marks_empty_and_unfinished_dates_without_false_alerts(): void
+    {
+        [$sales, $project] = $this->salesContext();
+        $planned = $this->agendaAt($sales, $project, '2026-11-03', '09:00', '10:00', 'Agenda belum selesai');
+        $done = $this->agendaAt($sales, $project, '2026-11-04', '09:00', '10:00', 'Agenda selesai');
+        $cancelled = $this->agendaAt($sales, $project, '2026-11-05', '09:00', '10:00', 'Agenda dibatalkan');
+        $rescheduled = $this->agendaAt($sales, $project, '2026-11-06', '09:00', '10:00', 'Agenda ditunda');
+        $done->update(['status' => 'done']);
+        $cancelled->update(['status' => 'cancelled']);
+        $rescheduled->update(['status' => 'rescheduled']);
+
+        $this->actingAs($sales)
+            ->get(route('sales-agendas.index', ['tab' => 'agenda', 'work_date' => '2026-11-02']))
+            ->assertOk()
+            ->assertSee('data-week-day-state="empty"', false)
+            ->assertSee('data-week-day-state="attention"', false)
+            ->assertSee('aria-label="Selasa, 03 November 2026, 1 agenda belum selesai"', false)
+            ->assertSee('data-week-day="2026-11-04" data-week-day-state="ready"', false)
+            ->assertSee('data-week-day="2026-11-05" data-week-day-state="empty"', false)
+            ->assertSee('data-week-day="2026-11-06" data-week-day-state="empty"', false);
+    }
+
+    public function test_today_navigation_marks_only_the_selected_week_day_as_active(): void
+    {
+        [$sales] = $this->salesContext();
+        $today = CarbonImmutable::today(config('app.timezone'));
+
+        $response = $this->actingAs($sales)
+            ->get(route('sales-agendas.index', ['tab' => 'agenda', 'work_date' => $today->toDateString()]))
+            ->assertOk();
+
+        $html = $response->getContent();
+        $this->assertStringContainsString('class="sales-week-navigation-day is-active" data-week-day="'.$today->toDateString().'"', $html);
+        $this->assertSame(1, substr_count($html, 'aria-current="date"'));
+    }
+
+    public function test_mobile_receipt_preview_uses_save_draft_label_without_changing_submit_contract(): void
+    {
+        [$sales, $project] = $this->salesContext();
+
+        $response = $this->actingAs($sales)
+            ->get(route('sales-agendas.index', ['work_date' => '2026-10-30']))
+            ->assertOk();
+
+        $response
+            ->assertSee('class="sales-receipt-preview-header"', false)
+            ->assertSee('Simpan Draft')
+            ->assertDontSee('Simpan draft struk')
+            ->assertSee('type="button" x-ref="receiptClose"', false)
+            ->assertSee('name="custom_duration_minutes"', false)
+            ->assertDontSee('name="duration_minutes" required', false)
+            ->assertDontSee('class="sales-receipt-preview-header"><span>Struk agenda</span><button', false);
+
+        $this->agendaAt($sales, $project, '2026-10-30', '07:30', '17:00', 'Agenda utama');
+
+        $this->actingAs($sales)
+            ->get(route('sales-agendas.index', ['work_date' => '2026-10-30']))
+            ->assertOk()
+            ->assertSee('data-receipt-submit', false);
+    }
+
+    public function test_all_agenda_view_is_owner_scoped_and_preserves_history_action(): void
+    {
+        [$sales, $project] = $this->salesContext();
+        $otherSales = User::factory()->create([
+            'role_id' => Role::query()->where('slug', 'sales')->value('id'),
+            'branch_id' => $project->branch_id,
+            'password_changed_at' => now(),
+        ]);
+        $otherSales->assignedProjects()->attach($project->id, ['is_primary' => true, 'is_active' => true]);
+        app(SalesPocketbookOnboardingService::class)->skip($otherSales);
+
+        $inaccessibleBranch = Branch::create(['name' => 'Cabang Tertutup', 'code' => 'CT', 'is_active' => true]);
+        $inaccessibleProject = LeadMaster::create(['branch_id' => $inaccessibleBranch->id, 'project_name' => 'Proyek Tertutup', 'is_active' => true]);
+
+        $this->agendaAt($sales, $project, '2026-10-29', '09:00', '10:00', 'Agenda lama milik saya');
+        $this->agendaAt($sales, $project, '2026-11-03', '09:00', '10:00', 'Agenda depan milik saya');
+        $this->agendaAt($otherSales, $project, '2026-10-29', '09:00', '10:00', 'Agenda milik Sales lain');
+        $this->agendaAtForBranch($sales, $inaccessibleBranch, $inaccessibleProject, '2026-10-29', '09:00', '10:00', 'Agenda proyek tertutup');
+
+        $this->actingAs($sales)
+            ->get(route('sales-agendas.index', [
+                'tab' => 'agenda',
+                'view' => 'all',
+                'work_date' => '2026-10-30',
+            ]))
+            ->assertOk()
+            ->assertSee('Agenda lama milik saya')
+            ->assertSee('Agenda depan milik saya')
+            ->assertDontSee('Agenda milik Sales lain')
+            ->assertDontSee('Agenda proyek tertutup');
+
+        $this->actingAs($sales)
+            ->get(route('sales-agendas.index', ['tab' => 'agenda', 'work_date' => '2026-10-30']))
+            ->assertOk()
+            ->assertSee('view=all', false)
+            ->assertSee('work_date=2026-10-30', false);
+    }
+
+    public function test_receipt_ignores_same_day_agenda_outside_sales_scope(): void
+    {
+        [$sales] = $this->salesContext();
+        $inaccessibleBranch = Branch::create(['name' => 'Cabang Tertutup', 'code' => 'CT', 'is_active' => true]);
+        $inaccessibleProject = LeadMaster::create(['branch_id' => $inaccessibleBranch->id, 'project_name' => 'Proyek Tertutup', 'is_active' => true]);
+        $this->agendaAtForBranch($sales, $inaccessibleBranch, $inaccessibleProject, '2026-10-30', '09:00', '10:00', 'Agenda proyek tertutup');
+
+        $this->actingAs($sales)
+            ->get(route('sales-agendas.index', ['work_date' => '2026-10-30']))
+            ->assertOk()
+            ->assertSee('0 / 480 menit')
+            ->assertDontSee('Agenda proyek tertutup');
+    }
+
+    public function test_agenda_detail_back_link_preserves_history_view_and_selected_date(): void
+    {
+        [$sales, $project] = $this->salesContext();
+        $agenda = $this->agendaAt($sales, $project, '2026-10-29', '09:00', '10:00', 'Agenda riwayat detail');
+
+        $this->actingAs($sales)
+            ->get(route('sales-agendas.index', [
+                'tab' => 'agenda',
+                'view' => 'all',
+                'work_date' => '2026-10-30',
+            ]))
+            ->assertOk()
+            ->assertSee('return_view=all', false)
+            ->assertSee('return_work_date=2026-10-30', false);
+
+        $this->actingAs($sales)
+            ->get(route('sales-agendas.show', [
+                'agenda' => $agenda,
+                'return_view' => 'all',
+                'return_work_date' => '2026-10-30',
+            ]))
+            ->assertOk()
+            ->assertSee('work_date=2026-10-30&amp;view=all', false);
+    }
+
+    public function test_all_agenda_action_counts_only_unfinished_statuses(): void
+    {
+        [$sales, $project] = $this->salesContext();
+        $planned = $this->agendaAt($sales, $project, '2026-10-29', '09:00', '10:00', 'Agenda planned');
+        $confirmed = $this->agendaAt($sales, $project, '2026-10-29', '10:00', '11:00', 'Agenda confirmed');
+        $done = $this->agendaAt($sales, $project, '2026-10-29', '11:00', '12:00', 'Agenda done');
+        $cancelled = $this->agendaAt($sales, $project, '2026-10-29', '13:00', '14:00', 'Agenda cancelled');
+        $rescheduled = $this->agendaAt($sales, $project, '2026-10-29', '14:00', '15:00', 'Agenda rescheduled');
+        $confirmed->update(['status' => 'confirmed']);
+        $done->update(['status' => 'done']);
+        $cancelled->update(['status' => 'cancelled']);
+        $rescheduled->update(['status' => 'rescheduled']);
+
+        $this->actingAs($sales)
+            ->get(route('sales-agendas.index', ['work_date' => '2026-10-30']))
+            ->assertOk()
+            ->assertSee('Lihat semua agenda')
+            ->assertSee('2 belum selesai');
+    }
+
+    public function test_all_agenda_history_paginates_while_preserving_view_context(): void
+    {
+        [$sales, $project] = $this->salesContext();
+
+        for ($index = 1; $index <= 21; $index++) {
+            $this->agendaAt(
+                $sales,
+                $project,
+                CarbonImmutable::parse('2026-10-01')->addDays($index)->toDateString(),
+                '09:00',
+                '10:00',
+                'Agenda riwayat '.$index,
+            );
+        }
+
+        $this->actingAs($sales)
+            ->get(route('sales-agendas.index', [
+                'tab' => 'agenda',
+                'view' => 'all',
+                'work_date' => '2026-10-30',
+                'agenda_page' => 2,
+            ]))
+            ->assertOk()
+            ->assertSee('Agenda riwayat 1')
+            ->assertSee('agenda_page=1', false)
+            ->assertSee('view=all', false)
+            ->assertSee('work_date=2026-10-30', false);
+    }
+
+    public function test_agenda_history_changelog_is_idempotent_and_visible(): void
+    {
+        $title = 'Perbaikan draft, durasi custom, dan riwayat Agenda Sales';
+        $migration = require database_path('migrations/2026_11_02_120100_add_sales_agenda_history_ux_changelog.php');
+
+        $migration->up();
+        $migration->up();
+
+        $this->assertSame(1, DB::table('changelogs')->whereNull('version')->where('title', $title)->count());
+
+        $superadmin = User::factory()->create([
+            'role_id' => Role::query()->where('slug', 'superadmin')->value('id'),
+            'password_changed_at' => now(),
+        ]);
+
+        $this->actingAs($superadmin)
+            ->get(route('changelogs.index'))
+            ->assertOk()
+            ->assertSeeText($title);
+    }
+
+    public function test_workspace_uses_separate_focus_state_for_preview_and_create_sheet(): void
+    {
+        [$sales] = $this->salesContext();
+        $source = file_get_contents(resource_path('js/sales-agenda-workspace.js'));
+
+        $this->assertIsString($source);
+        $this->assertStringContainsString('receiptTrigger: null', $source);
+        $this->assertStringContainsString('agendaTrigger: null', $source);
+        $this->assertStringContainsString("receiptLockOwner: 'sales-agenda-receipt-preview'", $source);
+        $this->assertStringContainsString("agendaLockOwner: 'sales-agenda-create-sheet'", $source);
+
+        $this->actingAs($sales)
+            ->get(route('sales-agendas.index'))
+            ->assertOk();
     }
 
     public function test_date_navigation_changelog_is_idempotent_and_visible(): void
     {
         $title = 'Navigasi tanggal Buku Saku Sales menampilkan agenda yang dipilih';
         $migration = require database_path('migrations/2026_11_02_083327_add_sales_agenda_date_navigation_changelog.php');
+
+        $migration->up();
+        $migration->up();
+
+        $this->assertSame(1, DB::table('changelogs')->whereNull('version')->where('title', $title)->count());
+
+        $superadmin = User::factory()->create([
+            'role_id' => Role::query()->where('slug', 'superadmin')->value('id'),
+            'password_changed_at' => now(),
+        ]);
+
+        $this->actingAs($superadmin)
+            ->get(route('changelogs.index'))
+            ->assertOk()
+            ->assertSeeText($title);
+    }
+
+    public function test_agenda_date_context_changelog_is_idempotent_and_visible(): void
+    {
+        $title = 'Struk Agenda mempertahankan tanggal rencana';
+        $migration = require database_path('migrations/2026_11_02_105204_add_sales_agenda_date_context_changelog.php');
 
         $migration->up();
         $migration->up();
@@ -153,10 +643,36 @@ class SalesAgendaWorkspaceRenderTest extends TestCase
             ->assertOk()
             ->assertSee('Akhir pekan')
             ->assertSee('AKHIR PEKAN')
+            ->assertDontSee('data-agenda-workflow-status="weekend"', false)
+            ->assertDontSee('sales-agenda-workflow-status--weekend', false)
             ->assertSee('Tanpa target')
+            ->assertSee('openAgendaSheet($event)', false)
+            ->assertDontSee('openAgendaPreview($event)', false)
+            ->assertDontSee('data-agenda-receipt-preview', false)
+            ->assertDontSee('sales-receipt-canvas', false)
+            ->assertDontSee('sales-receipt-submit-form', false)
+            ->assertSee('Tambah Rencana')
+            ->assertSee('Tambahkan Rencana')
             ->assertDontSee('TARGET HARIAN')
             ->assertDontSee('420 menit')
             ->assertDontSee('Istirahat');
+    }
+
+    public function test_unsubmitted_weekend_agenda_renders_saved_plan_without_receipt(): void
+    {
+        [$sales, $project] = $this->salesContext();
+        $this->agendaAt($sales, $project, '2026-11-01', '09:00', '09:30', 'Agenda akhir pekan tersimpan');
+
+        $this->actingAs($sales)
+            ->get(route('sales-agendas.index', ['work_date' => '2026-11-01']))
+            ->assertOk()
+            ->assertSee('sales-weekend-plan', false)
+            ->assertSee('Agenda akhir pekan tersimpan')
+            ->assertSee('+ Tambah rencana akhir pekan')
+            ->assertSee('openAgendaSheet($event)', false)
+            ->assertDontSee('sales-receipt-canvas', false)
+            ->assertDontSee('sales-receipt-submit-form', false)
+            ->assertDontSee('Sobek &amp; kirim ke Koordinator', false);
     }
 
     public function test_break_agenda_renders_distinct_status_label(): void
@@ -237,7 +753,7 @@ class SalesAgendaWorkspaceRenderTest extends TestCase
             ->assertSee('Selesai', false)
             ->assertSee('sisa', false)
             ->assertSee('sales-receipt-form-actions', false)
-            ->assertSee('Tambahkan ke struk');
+            ->assertSee('Tambahkan Rencana');
     }
 
     public function test_mobile_empty_agenda_requires_receipt_preview_before_add_form(): void
@@ -251,6 +767,38 @@ class SalesAgendaWorkspaceRenderTest extends TestCase
             ->assertSee('data-agenda-receipt-preview', false)
             ->assertSee('data-receipt-preview-add', false)
             ->assertSee('openAgendaSheet', false);
+    }
+
+    public function test_unsubmitted_agenda_stays_in_receipt_mode(): void
+    {
+        [$sales, $project] = $this->salesContext();
+        $this->agendaAt($sales, $project, '2026-10-30', '07:30', '17:00', 'Agenda draft');
+
+        $this->actingAs($sales)
+            ->get(route('sales-agendas.index', ['work_date' => '2026-10-30']))
+            ->assertOk()
+            ->assertSee('sales-receipt-workspace is-receipt-mode', false)
+            ->assertSee('sales-receipt-canvas', false)
+            ->assertSee('Sobek &amp; kirim ke Koordinator', false)
+            ->assertDontSee('<div class="sales-submitted-plan"', false)
+            ->assertDontSee('Terkirim ke Koordinator');
+    }
+
+    public function test_weekday_draft_keeps_buku_saku_shell_and_exposes_workflow_status(): void
+    {
+        [$sales, $project] = $this->salesContext();
+        $this->agendaAt($sales, $project, '2026-10-30', '07:30', '17:00', 'Agenda draft shell');
+
+        $this->actingAs($sales)
+            ->get(route('sales-agendas.index', ['work_date' => '2026-10-30']))
+            ->assertOk()
+            ->assertSee('sales-reference-header', false)
+            ->assertSee('sales-pocketbook-tabs', false)
+            ->assertDontSee('data-agenda-workflow-status="draft"', false)
+            ->assertSee('sales-draft-stamp', false)
+            ->assertSee('>DRAFT</b>', false)
+            ->assertSee('sales-receipt-canvas', false)
+            ->assertSee('sales-receipt-submit-form', false);
     }
 
     public function test_submitted_receipt_renders_status_and_extra_work_state(): void
@@ -269,9 +817,15 @@ class SalesAgendaWorkspaceRenderTest extends TestCase
         $this->actingAs($sales)
             ->get(route('sales-agendas.index', ['work_date' => '2026-10-30']))
             ->assertOk()
+            ->assertDontSee('data-agenda-workflow-status="submitted"', false)
+            ->assertDontSee('sales-agenda-workflow-status--submitted', false)
+            ->assertSee('aria-labelledby="agenda-workspace-title"', false)
+            ->assertSee('id="agenda-workspace-title"', false)
+            ->assertSee('sales-submitted-plan', false)
             ->assertSee('Terkirim ke Koordinator')
             ->assertSee('Waktu, judul, kategori, dan lokasi agenda terjadwal tidak dapat diubah.')
             ->assertSee('Agenda tambahan · di luar target')
+            ->assertSee('data-agenda-submitted="true"', false)
             ->assertSee($extra->title)
             ->assertDontSee('Sobek &amp; kirim ke Koordinator', false);
     }
@@ -291,12 +845,16 @@ class SalesAgendaWorkspaceRenderTest extends TestCase
         $this->actingAs($sales)
             ->get(route('sales-agendas.index', ['work_date' => '2026-11-01']))
             ->assertOk()
-            ->assertSee('Terkirim ke Koordinator')
+            ->assertSee('Tersimpan langsung')
+            ->assertDontSee('Terkirim ke Koordinator')
             ->assertSee('AKHIR PEKAN')
             ->assertSee('TOTAL 30 MENIT')
             ->assertSee('TANPA TARGET')
             ->assertSee('+ Tambah rencana akhir pekan')
             ->assertSee('sales-agenda-create-sheet', false)
+            ->assertSee('openAgendaSheet($event)', false)
+            ->assertDontSee('data-agenda-receipt-preview', false)
+            ->assertDontSee('sales-receipt-submit-form', false)
             ->assertSee('Simpan agenda tambahan');
     }
 
@@ -377,5 +935,27 @@ class SalesAgendaWorkspaceRenderTest extends TestCase
         $agenda->assignees()->sync([$sales->id]);
 
         return $agenda;
+    }
+
+    private function agendaAtForBranch(User $sales, Branch $branch, LeadMaster $project, string $date, string $start, string $end, string $title): ContentItem
+    {
+        return ContentItem::create([
+            'branch_id' => $branch->id,
+            'project_name' => $project->project_name,
+            'sales_project_id' => $project->id,
+            'item_type' => 'agenda',
+            'agenda_type' => ContentItem::SALES_AGENDA_TYPE,
+            'visibility' => 'personal',
+            'title' => $title,
+            'sales_activity_category' => 'Follow-up',
+            'scheduled_date' => $date,
+            'start_time' => $start,
+            'end_time' => $end,
+            'duration_minutes' => 60,
+            'status' => 'planned',
+            'is_outside_schedule' => false,
+            'owner_user_id' => $sales->id,
+            'created_by' => $sales->id,
+        ]);
     }
 }

@@ -6,9 +6,13 @@
 @section('content')
 <div class="sales-pocketbook-workspace sales-agenda-detail space-y-4">
     <nav aria-label="Breadcrumb" class="text-sm font-bold">
-        <a class="text-[#0000ee] underline" href="{{ route('sales-agendas.index') }}">Buku Saku Saya</a>
-        <span aria-hidden="true"> / </span>
-        <span>Detail Agenda</span>
+        @php
+            $returnQuery = ['work_date' => request()->query('return_work_date', $agenda->scheduled_date?->toDateString())];
+            if (request()->query('return_view') === 'all') {
+                $returnQuery['view'] = 'all';
+            }
+        @endphp
+        <a class="sales-agenda-back-link" href="{{ route('sales-agendas.index', $returnQuery) }}"><span class="sales-agenda-back-link-icon" aria-hidden="true">←</span><span>Kembali</span></a>
     </nav>
 
     <x-crm.page-header variant="canonical" class="sales-pocketbook-detail-hero" eyebrow="Agenda Sales" :title="$agenda->title">
@@ -19,6 +23,20 @@
         </x-slot:actions>
     </x-crm.page-header>
 
+    <section class="sales-agenda-mobile-info" aria-label="Informasi agenda">
+        <div class="sales-agenda-mobile-info-top">
+            <x-crm.status-badge :variant="$agenda->isFinished() ? 'success' : 'pending'">
+                {{ $agenda->isFinished() ? 'Selesai' : 'Belum selesai' }}
+            </x-crm.status-badge>
+            <span>{{ $agenda->scheduled_date?->locale('id')->translatedFormat('l, d F Y') }}</span>
+        </div>
+        <h1>{{ $agenda->title }}</h1>
+        <div class="sales-agenda-mobile-info-meta">
+            <strong>{{ $agenda->sales_activity_category ?: 'Lainnya' }}</strong>
+            <span>{{ $agenda->location ?: 'Belum diisi' }}</span>
+        </div>
+    </section>
+
     <section class="sales-pocketbook-context-strip sales-agenda-detail-summary" aria-label="Ringkasan agenda">
         <div><span>Tanggal</span><strong>{{ $agenda->scheduled_date?->locale('id')->translatedFormat('l, d F Y') }}</strong></div>
         <div><span>Waktu</span><strong>{{ $agenda->start_time ? substr((string) $agenda->start_time, 0, 5) : 'Fleksibel' }}{{ $agenda->end_time ? '–'.substr((string) $agenda->end_time, 0, 5) : '' }}</strong></div>
@@ -26,30 +44,37 @@
         <div><span>Lokasi</span><strong>{{ $agenda->location ?: 'Belum diisi' }}</strong></div>
     </section>
 
-    <x-crm.section id="agenda-evidence" title="Bukti foto" description="Maksimal dua foto dari ponsel." class="sales-pocketbook-screen-section">
+    @if($errors->has('photo'))
+        <x-crm.alert variant="error" title="Foto belum tersimpan." id="sales-agenda-photo-error">{{ $errors->first('photo') }}</x-crm.alert>
+    @endif
+
+    <x-crm.section id="agenda-evidence" title="Bukti foto" description="Maks. 2" class="sales-pocketbook-screen-section">
         @php
             $activeEvidence = $agenda->evidence->filter(fn ($evidence): bool => ! $evidence->purged_at)->values();
-            $canUploadEvidence = ! $agenda->isFinished() && $activeEvidence->count() < 2;
+            $canUploadEvidence = $canUploadEvidence && $activeEvidence->count() < 2;
         @endphp
-        @if($errors->has('photo'))
-            <x-crm.alert variant="error" title="Foto belum tersimpan.">{{ $errors->first('photo') }}</x-crm.alert>
-        @endif
         <div class="sales-agenda-photo-grid">
-            @foreach($activeEvidence as $evidence)
-                <a href="{{ route('sales-agendas.evidence.show', [$agenda, $evidence]) }}" class="sales-agenda-photo-card">
+            @forelse($activeEvidence as $evidence)
+                <a href="{{ route('sales-agendas.evidence.show', [$agenda, $evidence]) }}" class="sales-agenda-photo-card" data-agenda-photo-preview>
                     <img src="{{ route('sales-agendas.evidence.show', [$agenda, $evidence]) }}" alt="{{ $evidence->original_name }}" loading="lazy">
                     <span>{{ $evidence->original_name }}</span>
                 </a>
-            @endforeach
+            @empty
+                <div class="sales-agenda-photo-placeholder" data-agenda-photo-preview role="img" aria-label="Pratinjau foto belum tersedia"><span>Preview foto</span></div>
+            @endforelse
 
             @if($canUploadEvidence)
-                @for($slot = $activeEvidence->count(); $slot < 2; $slot++)
-                    <form method="POST" enctype="multipart/form-data" action="{{ route('sales-agendas.evidence.store', $agenda) }}" class="sales-agenda-photo-slot" data-agenda-photo-slot>
-                        @csrf
-                        <label for="sales-agenda-photo-{{ $slot }}" class="sales-agenda-photo-picker">+ Foto</label>
-                        <input id="sales-agenda-photo-{{ $slot }}" type="file" name="photo" accept="image/jpeg,image/png,image/webp" capture="environment" class="sales-agenda-photo-input sr-only" data-photo-input required>
-                    </form>
-                @endfor
+                <form method="POST" enctype="multipart/form-data" action="{{ route('sales-agendas.evidence.store', $agenda) }}" class="sales-agenda-photo-slot" data-agenda-photo-slot>
+                    @csrf
+                    <label for="sales-agenda-photo-{{ $activeEvidence->count() }}" class="sales-agenda-photo-picker">
+                        <span data-photo-label>+ Foto</span>
+                        <small data-photo-state>JPG, PNG, atau WebP</small>
+                    </label>
+                    <input id="sales-agenda-photo-{{ $activeEvidence->count() }}" type="file" name="photo" accept="image/*" class="sales-agenda-photo-input sr-only" data-photo-input>
+                    <button type="button" class="sales-agenda-photo-retry" data-photo-retry hidden>Coba lagi</button>
+                </form>
+            @elseif($activeEvidence->count() < 2)
+                <div class="sales-agenda-photo-slot is-unavailable" aria-hidden="true"><span>+ Foto</span></div>
             @endif
         </div>
         <p class="sales-agenda-photo-count" aria-live="polite">{{ min(2, $activeEvidence->count()) }} dari 2</p>
@@ -60,16 +85,14 @@
             <p class="sales-agenda-result-readonly">{{ $agenda->activity_result }}</p>
         @endif
         @if(!$agenda->isFinished())
-            <form method="POST" action="{{ route('sales-agendas.update', $agenda) }}" class="sales-agenda-completion-form" data-paper-submit>
+            <form method="POST" action="{{ route('sales-agendas.update', $agenda) }}" class="sales-agenda-completion-form" data-paper-submit data-completion-form>
                 @csrf @method('PATCH')
                 <input type="hidden" name="expected_updated_at" value="{{ app(\App\Services\OptimisticLockService::class)->token($agenda) }}">
                 <label for="sales-agenda-result">Hasil aktivitas <span aria-hidden="true">*</span></label>
-                <textarea id="sales-agenda-result" class="sales-input" name="activity_result" rows="5" required>{{ old('activity_result') }}</textarea>
-                @if($nextAgenda)
-                    <p class="sales-agenda-next" role="status">Selanjutnya: {{ $nextAgenda->start_time ? substr((string) $nextAgenda->start_time, 0, 5) : 'Fleksibel' }} {{ $nextAgenda->title }}</p>
-                @endif
+                <textarea id="sales-agenda-result" class="sales-input" name="activity_result" rows="5" required data-agenda-result>{{ old('activity_result') }}</textarea>
+                <p class="sales-agenda-next" role="status">Selanjutnya: {{ $agenda->end_time ? substr((string) $agenda->end_time, 0, 5) : '—' }} agenda berikutnya</p>
                 <div class="sales-agenda-sticky-action">
-                    <x-crm.button type="submit" variant="primary" accent="sales">Selesaikan agenda</x-crm.button>
+                    <x-crm.button type="submit" variant="primary" accent="sales" data-complete-agenda disabled aria-disabled="true">Selesaikan agenda</x-crm.button>
                 </div>
             </form>
         @endif

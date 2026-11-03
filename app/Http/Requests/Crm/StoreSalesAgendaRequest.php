@@ -4,8 +4,10 @@ namespace App\Http\Requests\Crm;
 
 use App\Models\ContentItem;
 use App\Support\SalesAgendaEvidenceRules;
+use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\Validator;
 
 class StoreSalesAgendaRequest extends FormRequest
 {
@@ -54,6 +56,26 @@ class StoreSalesAgendaRequest extends FormRequest
             'photos.*.file' => 'Bukti foto harus berupa file yang valid.',
             'photos.*.max' => 'Ukuran setiap bukti foto terlalu besar.',
         ];
+    }
+
+    /**
+     * @return array<int, callable(Validator): void>
+     */
+    public function after(): array
+    {
+        return [function (Validator $validator): void {
+            if ($validator->errors()->isNotEmpty()) {
+                return;
+            }
+
+            $start = CarbonImmutable::createFromFormat('H:i', (string) $this->input('start_time'));
+            $end = CarbonImmutable::createFromFormat('H:i', (string) $this->input('end_time'));
+            $duration = $start->diffInMinutes($end);
+
+            if ($duration < 5 || $duration % 5 !== 0) {
+                $validator->errors()->add('end_time', 'Durasi agenda harus minimal 5 menit dan kelipatan 5 menit.');
+            }
+        }];
     }
 
     protected function prepareForValidation(): void

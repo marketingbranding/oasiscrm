@@ -36,12 +36,17 @@ export function formatAgendaTime(minutes) {
     return `${String(Math.floor(safeMinutes / 60)).padStart(2, '0')}:${String(safeMinutes % 60).padStart(2, '0')}`;
 }
 
+export function resolveAgendaDuration(presetValue, customValue) {
+    return String(presetValue || customValue || '');
+}
+
 export function calculateAgendaSlot({
     date,
     agendas = [],
     requestedStart = null,
     durationMinutes,
     schedule = scheduleForDate(date),
+    allowOutsideSchedule = false,
 }) {
     const duration = Number(durationMinutes);
     if (!Number.isInteger(duration) || duration < 5 || duration % 5 !== 0) {
@@ -73,7 +78,7 @@ export function calculateAgendaSlot({
         );
     }
 
-    if (!schedule.isWeekend) {
+    if (!schedule.isWeekend && !allowOutsideSchedule) {
         const workStart = timeToMinutes(schedule.startTime);
         const workEnd = timeToMinutes(schedule.endTime);
         const breakStart = timeToMinutes(schedule.breakStart);
@@ -97,7 +102,7 @@ export function calculateAgendaSlot({
 
     const end = start + duration;
     const effectiveDuration = effectiveMinutes(start, end, schedule);
-    const overlaps = existingAgendas.some((agenda) => start < agenda.end && end > agenda.start);
+    const overlaps = !allowOutsideSchedule && existingAgendas.some((agenda) => start < agenda.end && end > agenda.start);
     if (overlaps) {
         return invalidResult('Waktu agenda bertumpang tindih dengan agenda lain.');
     }
@@ -109,7 +114,7 @@ export function calculateAgendaSlot({
         durationMinutes: duration,
         remainingMinutes: schedule.isWeekend
             ? null
-            : Math.max(0, (schedule.targetMinutes ?? WEEKDAY_TARGET_MINUTES) - normalMinutes - effectiveDuration),
+            : Math.max(0, (schedule.targetMinutes ?? WEEKDAY_TARGET_MINUTES) - normalMinutes - (allowOutsideSchedule ? 0 : effectiveDuration)),
         message: '',
     };
 }

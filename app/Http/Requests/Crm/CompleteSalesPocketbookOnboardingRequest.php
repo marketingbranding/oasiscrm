@@ -15,7 +15,7 @@ class CompleteSalesPocketbookOnboardingRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'current_step' => ['required', 'integer', Rule::in([4])],
+            'current_step' => ['required', 'integer', Rule::in([4, 5])],
         ];
     }
 }

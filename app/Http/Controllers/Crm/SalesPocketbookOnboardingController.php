@@ -7,22 +7,16 @@ use App\Http\Requests\Crm\CompleteSalesPocketbookOnboardingRequest;
 use App\Services\SalesPocketbookOnboardingService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\View\View;
 
 class SalesPocketbookOnboardingController extends Controller
 {
     public function __construct(private readonly SalesPocketbookOnboardingService $onboarding) {}
 
-    public function show(Request $request): View|RedirectResponse
+    public function show(Request $request): RedirectResponse
     {
         $this->authorizeAccess($request);
-        if (! $this->onboarding->shouldShow($request->user())) {
-            return redirect()->route('sales-agendas.index');
-        }
 
-        return view('crm.sales-pocketbook.onboarding', [
-            'steps' => SalesPocketbookOnboardingService::STEPS,
-        ]);
+        return redirect()->route('sales-agendas.index', ['tour' => 1]);
     }
 
     public function skip(Request $request): RedirectResponse
@@ -46,7 +40,7 @@ class SalesPocketbookOnboardingController extends Controller
         $this->authorizeAccess($request);
         $this->onboarding->replay($request->user());
 
-        return redirect()->route('sales-pocketbook.onboarding.show');
+        return redirect()->route('sales-agendas.index', ['tour' => 1]);
     }
 
     private function authorizeAccess(Request $request): void

@@ -32,17 +32,20 @@ class SalesAgendaEvidenceTest extends TestCase
         app(SalesPocketbookOnboardingService::class)->skip($sales);
 
         foreach ([0, 1, 2] as $count) {
+            $startHour = 9 + $count;
             $photos = [];
             for ($index = 0; $index < $count; $index++) {
                 $photos[] = UploadedFile::fake()->image("create-$count-$index.png");
             }
             $this->actingAs($sales)->post(route('sales-agendas.store'), [
                 'scheduled_date' => '2026-08-24',
+                'start_time' => sprintf('%02d:00', $startHour),
+                'end_time' => sprintf('%02d:00', $startHour + 1),
                 'sales_activity_category' => 'Cek Lokasi',
                 'title' => "Agenda $count foto",
                 'activity_result' => $count === 1 ? 'Selesai saat dibuat' : null,
                 'photos' => $photos,
-            ])->assertRedirect(route('sales-agendas.index'))->assertSessionDoesntHaveErrors();
+            ])->assertRedirect(route('sales-agendas.index', ['work_date' => '2026-08-24']))->assertSessionDoesntHaveErrors();
         }
 
         $agendas = ContentItem::query()->orderBy('id')->get();
@@ -67,7 +70,7 @@ class SalesAgendaEvidenceTest extends TestCase
         $sales = User::factory()->create(['role_id' => $role->id, 'branch_id' => $branch->id, 'password_changed_at' => now()]);
         $sales->assignedProjects()->attach($project->id, ['is_primary' => true, 'is_active' => true]);
         app(SalesPocketbookOnboardingService::class)->skip($sales);
-        $data = ['scheduled_date' => '2026-08-24', 'sales_activity_category' => 'Cek Lokasi', 'title' => 'Agenda gagal'];
+        $data = ['scheduled_date' => '2026-08-24', 'start_time' => '09:00', 'end_time' => '10:00', 'sales_activity_category' => 'Cek Lokasi', 'title' => 'Agenda gagal'];
 
         $this->actingAs($sales)->post(route('sales-agendas.store'), $data + ['photos' => [
             UploadedFile::fake()->image('one.jpg'),
@@ -99,6 +102,8 @@ class SalesAgendaEvidenceTest extends TestCase
         try {
             $this->actingAs($sales)->post(route('sales-agendas.store'), [
                 'scheduled_date' => '2026-08-24',
+                'start_time' => '09:00',
+                'end_time' => '10:00',
                 'sales_activity_category' => 'Cek Lokasi',
                 'title' => 'Agenda gagal audit',
                 'photos' => [UploadedFile::fake()->image('audit.jpg')],
@@ -138,13 +143,13 @@ class SalesAgendaEvidenceTest extends TestCase
         app(SalesPocketbookOnboardingService::class)->skip($sales);
 
         $this->actingAs($sales)->get(route('sales-agendas.index'))->assertOk()
-            ->assertSee('Tambah Agenda')
+            ->assertSee('+ Tambah rencana')
             ->assertSee('action="'.route('sales-agendas.store').'"', false)
             ->assertSee('name="scheduled_date"', false)
             ->assertDontSee('Buat Agenda Tambahan');
     }
 
-    public function test_agenda_detail_exposes_separate_camera_and_upload_actions(): void
+    public function test_agenda_detail_exposes_one_upload_slot_next_to_a_preview_and_required_completion_contract(): void
     {
         $branch = Branch::create(['name' => 'Solo', 'code' => 'SO', 'is_active' => true]);
         $role = Role::firstOrCreate(['slug' => 'sales'], ['name' => 'Sales']);
@@ -163,19 +168,29 @@ class SalesAgendaEvidenceTest extends TestCase
         $response = $this->actingAs($sales)->get(route('sales-agendas.show', $agenda));
 
         $response->assertOk()
-            ->assertSeeText('Ambil Foto')
-            ->assertSeeText('Upload Foto')
+            ->assertSee('sales-mobile-detail-page', false)
+            ->assertSee('sales-agenda-completion-form', false)
+            ->assertSeeText('Kembali')
+            ->assertDontSee('‹ Rencana hari ini')
+            ->assertSee('sales-agenda-back-link-icon', false)
+            ->assertSee('←', false)
+            ->assertSeeText('+ Foto')
+            ->assertSeeText('0 dari 2')
+            ->assertSeeText('Hasil aktivitas')
+            ->assertSeeText('Selanjutnya:')
+            ->assertSee('disabled', false)
+            ->assertSee('sales-agenda-mobile-info', false)
+            ->assertSee('sales-agenda-photo-slot', false)
+            ->assertSee('data-agenda-photo-preview', false)
+            ->assertSee('sales-agenda-photo-placeholder', false)
+            ->assertSee('sales-agenda-sticky-action', false)
             ->assertSee('name="photo"', false)
-            ->assertSee('accept="image/jpeg,image/png,image/webp"', false)
-            ->assertSee('capture="environment"', false)
+            ->assertSee('accept="image/*"', false)
             ->assertSee('action="'.route('sales-agendas.evidence.store', $agenda).'"', false);
 
-        $this->assertSame(1, substr_count($response->getContent(), 'capture="environment"'));
-        $this->assertSame(1, substr_count($response->getContent(), 'id="sales-agenda-camera-photo"'));
-        $this->assertSame(1, substr_count($response->getContent(), 'id="sales-agenda-upload-photo"'));
-        $this->assertMatchesRegularExpression('/<input id="sales-agenda-camera-photo"[^>]*accept="image\/jpeg,image\/png,image\/webp"[^>]*capture="environment"/', $response->getContent());
-        $this->assertMatchesRegularExpression('/<input id="sales-agenda-upload-photo"[^>]*accept="image\/jpeg,image\/png,image\/webp"(?![^>]*capture=)/', $response->getContent());
-        $this->assertSame(0, preg_match('/<input id="sales-agenda-upload-photo"[^>]*capture=/', $response->getContent()));
+        $this->assertSame(1, substr_count($response->getContent(), 'data-agenda-photo-slot'));
+        $this->assertSame(1, substr_count($response->getContent(), 'accept="image/*"'));
+        $this->assertSame(0, substr_count($response->getContent(), 'Simpan Foto'));
 
         $this->actingAs($sales)
             ->from(route('sales-agendas.show', $agenda))
@@ -183,6 +198,105 @@ class SalesAgendaEvidenceTest extends TestCase
             ->post(route('sales-agendas.evidence.store', $agenda), ['photo' => UploadedFile::fake()->createWithContent('invalid.txt', 'not an image')])
             ->assertOk()
             ->assertSeeText('Foto harus berupa JPEG, PNG, atau WebP yang valid.');
+    }
+
+    public function test_mobile_agenda_detail_actions_fit_and_center_within_the_viewport(): void
+    {
+        $css = file_get_contents(resource_path('css/app.css'));
+
+        $this->assertIsString($css);
+        $this->assertMatchesRegularExpression(
+            '/\.sales-mobile-detail-page \{[^}]*overflow-x: clip !important;/s',
+            $css,
+        );
+        $this->assertMatchesRegularExpression(
+            '/\.sales-mobile-detail-page #crm-main \{[^}]*overflow: visible !important;/s',
+            $css,
+        );
+        $this->assertStringNotContainsString(
+            '.sales-mobile-detail-page .sales-pocketbook-workspace > nav span { display: none !important; }',
+            $css,
+        );
+        $this->assertMatchesRegularExpression(
+            '/\.sales-mobile-detail-page \.sales-agenda-back-link \{[^}]*border: 2px solid #141210 !important;[^}]*display: inline-flex !important;/s',
+            $css,
+        );
+        $this->assertMatchesRegularExpression(
+            '/\.sales-mobile-detail-page \.sales-agenda-sticky-action \{[^}]*position: fixed !important;[^}]*inset-inline: 0 !important;[^}]*bottom: 0 !important;[^}]*justify-content: center !important;/s',
+            $css,
+        );
+        $this->assertMatchesRegularExpression(
+            '/\.sales-mobile-detail-page \.sales-agenda-sticky-action \.crm-button \{[^}]*max-width: 480px !important;/s',
+            $css,
+        );
+    }
+
+    public function test_embedded_mobile_agenda_detail_keeps_completion_action_fixed_at_narrow_tablet_widths(): void
+    {
+        $css = file_get_contents(resource_path('css/app.css'));
+
+        $this->assertIsString($css);
+        $this->assertStringContainsString('@media (max-width: 1024px)', $css);
+        $this->assertMatchesRegularExpression(
+            '/body\.sales-mobile-detail-page \{[^}]*overflow-x: clip !important;/s',
+            $css,
+        );
+        $this->assertMatchesRegularExpression(
+            '/body\.sales-mobile-detail-page #crm-main \{[^}]*overflow: visible !important;/s',
+            $css,
+        );
+        $this->assertMatchesRegularExpression(
+            '/body\.sales-mobile-detail-page \.sales-agenda-sticky-action \{[^}]*position: fixed !important;/s',
+            $css,
+        );
+        $this->assertMatchesRegularExpression(
+            '/body\.sales-mobile-detail-page \.sales-agenda-sticky-action \{[^}]*left: 50vw !important;[^}]*right: auto !important;[^}]*width: min\(480px, calc\(100vw - 40px\)\) !important;[^}]*transform: translateX\(-50%\) !important;/s',
+            $css,
+        );
+        $this->assertMatchesRegularExpression(
+            '/body\.sales-mobile-detail-page \.sales-agenda-detail form\.sales-agenda-completion-form \{[^}]*padding-bottom: 120px !important;/s',
+            $css,
+        );
+    }
+
+    public function test_agenda_detail_places_existing_photo_left_and_upload_slot_right(): void
+    {
+        $branch = Branch::create(['name' => 'Solo', 'code' => 'SO', 'is_active' => true]);
+        $role = Role::firstOrCreate(['slug' => 'sales'], ['name' => 'Sales']);
+        $sales = User::factory()->create(['role_id' => $role->id, 'branch_id' => $branch->id, 'password_changed_at' => now()]);
+        $agenda = ContentItem::create([
+            'branch_id' => $branch->id,
+            'item_type' => 'agenda',
+            'agenda_type' => ContentItem::SALES_AGENDA_TYPE,
+            'title' => 'Visit dengan foto',
+            'scheduled_date' => now(),
+            'status' => 'planned',
+            'owner_user_id' => $sales->id,
+            'created_by' => $sales->id,
+        ]);
+        $path = 'sales-agenda-evidence/preview.webp';
+        SalesAgendaEvidence::create([
+            'content_item_id' => $agenda->id,
+            'uploaded_by_user_id' => $sales->id,
+            'storage_path' => $path,
+            'original_name' => 'preview.jpg',
+            'mime_type' => 'image/webp',
+            'width' => 320,
+            'height' => 180,
+            'size_bytes' => 5,
+            'sha256' => hash('sha256', 'photo'),
+        ]);
+
+        $content = $this->actingAs($sales)
+            ->get(route('sales-agendas.show', $agenda))
+            ->assertOk()
+            ->assertSee('sales-agenda-photo-card', false)
+            ->assertSee('sales-agenda-photo-slot', false)
+            ->assertSee('sales-agenda-photo-picker', false)
+            ->getContent();
+
+        $this->assertSame(1, substr_count($content, 'data-agenda-photo-slot'));
+        $this->assertSame(1, substr_count($content, 'data-agenda-photo-preview'));
     }
 
     public function test_create_photo_changelog_is_unique_and_rendered(): void
@@ -202,6 +316,54 @@ class SalesAgendaEvidenceTest extends TestCase
         $superadmin = User::factory()->create(['role_id' => $role->id, 'password_changed_at' => now()]);
 
         $this->assertSame(1, DB::table('changelogs')->whereNull('version')->where('title', $title)->count());
+        $this->actingAs($superadmin)->get(route('changelogs.index'))->assertOk()->assertSeeText($title);
+    }
+
+    public function test_mobile_agenda_detail_photo_layout_changelog_is_unique_and_rendered(): void
+    {
+        $title = 'Detail Agenda Sales menyederhanakan bukti foto mobile';
+        $migration = require database_path('migrations/2026_11_02_150000_add_sales_agenda_mobile_photo_layout_changelog.php');
+
+        $migration->up();
+        $migration->up();
+
+        $this->assertSame(1, DB::table('changelogs')->whereNull('version')->where('title', $title)->count());
+
+        $role = Role::firstOrCreate(['slug' => 'superadmin'], ['name' => 'Super Admin', 'is_superadmin' => true]);
+        $superadmin = User::factory()->create(['role_id' => $role->id, 'password_changed_at' => now()]);
+
+        $this->actingAs($superadmin)->get(route('changelogs.index'))->assertOk()->assertSeeText($title);
+    }
+
+    public function test_mobile_agenda_detail_controls_changelog_is_unique_and_rendered(): void
+    {
+        $title = 'Kontrol Detail Agenda mengikuti viewport mobile';
+        $migration = require database_path('migrations/2026_11_02_160000_add_sales_agenda_mobile_controls_changelog.php');
+
+        $migration->up();
+        $migration->up();
+
+        $this->assertSame(1, DB::table('changelogs')->whereNull('version')->where('title', $title)->count());
+
+        $role = Role::firstOrCreate(['slug' => 'superadmin'], ['name' => 'Super Admin', 'is_superadmin' => true]);
+        $superadmin = User::factory()->create(['role_id' => $role->id, 'password_changed_at' => now()]);
+
+        $this->actingAs($superadmin)->get(route('changelogs.index'))->assertOk()->assertSeeText($title);
+    }
+
+    public function test_mobile_agenda_detail_control_visibility_changelog_is_unique_and_rendered(): void
+    {
+        $title = 'Kontrol Detail Agenda menampilkan kembali teks dan sticky action';
+        $migration = require database_path('migrations/2026_11_02_170000_add_sales_agenda_mobile_control_visibility_changelog.php');
+
+        $migration->up();
+        $migration->up();
+
+        $this->assertSame(1, DB::table('changelogs')->whereNull('version')->where('title', $title)->count());
+
+        $role = Role::firstOrCreate(['slug' => 'superadmin'], ['name' => 'Super Admin', 'is_superadmin' => true]);
+        $superadmin = User::factory()->create(['role_id' => $role->id, 'password_changed_at' => now()]);
+
         $this->actingAs($superadmin)->get(route('changelogs.index'))->assertOk()->assertSeeText($title);
     }
 
@@ -252,8 +414,8 @@ class SalesAgendaEvidenceTest extends TestCase
             ->assertSee($available->title)
             ->assertSee($full->title)
             ->assertSee($finished->title)
-            ->assertSee(route('sales-agendas.evidence.show', [$full, $full->evidence()->first()]), false)
-            ->assertSee('sales-agenda-paper', false)
+            ->assertSee(route('sales-agendas.show', $full), false)
+            ->assertSee('sales-receipt-paper', false)
             ->assertDontSee('Riwayat Agenda Tambahan');
 
         $this->assertModelExists($available);

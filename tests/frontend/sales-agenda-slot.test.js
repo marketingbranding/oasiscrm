@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { calculateAgendaSlot, formatAgendaTime, scheduleForDate } from '../../resources/js/sales-agenda-slot.js';
+import { calculateAgendaSlot, formatAgendaTime, resolveAgendaDuration, scheduleForDate } from '../../resources/js/sales-agenda-slot.js';
+import registerSalesAgendaWorkspace from '../../resources/js/sales-agenda-workspace.js';
 
 test('formats agenda minutes as HH:MM', () => {
     assert.equal(formatAgendaTime(0), '00:00');
@@ -29,6 +30,36 @@ test('starts an empty Friday at 07:30', () => {
 
     assert.equal(result.startTime, '07:30');
     assert.equal(result.endTime, '08:00');
+});
+
+test('counts a full Friday schedule from 07:30 to 17:00 as 480 effective minutes', () => {
+    const result = calculateAgendaSlot({
+        date: '2026-10-30',
+        agendas: [],
+        requestedStart: '07:30',
+        durationMinutes: 570,
+    });
+
+    assert.deepEqual(result, {
+        ok: true,
+        startTime: '07:30',
+        endTime: '17:00',
+        durationMinutes: 570,
+        remainingMinutes: 0,
+        message: '',
+    });
+});
+
+test('counts a Friday schedule from 08:00 to 17:00 as 450 effective minutes', () => {
+    const result = calculateAgendaSlot({
+        date: '2026-10-30',
+        agendas: [],
+        requestedStart: '08:00',
+        durationMinutes: 540,
+    });
+
+    assert.equal(result.endTime, '17:00');
+    assert.equal(result.remainingMinutes, 30);
 });
 
 test('defaults to the last agenda end time', () => {
@@ -119,6 +150,25 @@ test('ignores outside, cancelled, and rescheduled agendas for automatic slots an
     assert.equal(result.endTime, '09:00');
 });
 
+test('allows submitted-day additions outside weekday hours without overlap rejection', () => {
+    const result = calculateAgendaSlot({
+        date: '2026-10-26',
+        agendas: [{ startTime: '08:00', endTime: '09:00' }],
+        requestedStart: '18:00',
+        durationMinutes: 60,
+        allowOutsideSchedule: true,
+    });
+
+    assert.deepEqual(result, {
+        ok: true,
+        startTime: '18:00',
+        endTime: '19:00',
+        durationMinutes: 60,
+        remainingMinutes: 420,
+        message: '',
+    });
+});
+
 test('allows an agenda crossing lunch but rejects one past the weekday end', () => {
     const crossingLunch = calculateAgendaSlot({
         date: '2026-10-26',
@@ -162,4 +212,62 @@ test('rejects custom duration that is not a positive multiple of five', () => {
 
     assert.equal(result.ok, false);
     assert.match(result.message, /kelipatan 5/i);
+});
+
+test('resolves custom duration without requiring a preset select option', () => {
+    assert.equal(resolveAgendaDuration('', '180'), '180');
+    assert.equal(resolveAgendaDuration('60', '180'), '60');
+    assert.equal(resolveAgendaDuration('', ''), '');
+});
+
+test('keeps nested preview and create-sheet locks and focus restoration independent', () => {
+    const previousDocument = globalThis.document;
+    const previousWindow = globalThis.window;
+    const focusEvents = [];
+    const previewTrigger = { focus: () => focusEvents.push('preview') };
+    const sheetTrigger = { focus: () => focusEvents.push('sheet') };
+    const documentStub = {
+        activeElement: previewTrigger,
+        body: { style: { overflow: '' } },
+    };
+    const windowStub = {
+        matchMedia: () => ({ matches: true }),
+    };
+    const registrations = {};
+
+    globalThis.document = documentStub;
+    globalThis.window = windowStub;
+
+    try {
+        registerSalesAgendaWorkspace({
+            data(name, factory) {
+                registrations[name] = factory;
+            },
+        });
+
+        const workspace = registrations.salesAgendaWorkspace();
+        workspace.$nextTick = (callback) => callback();
+        workspace.$refs = {
+            receiptClose: { focus: () => focusEvents.push('receipt-close') },
+            sheetClose: { focus: () => focusEvents.push('sheet-close') },
+        };
+
+        workspace.openAgendaPreview({ currentTarget: previewTrigger });
+        workspace.openAgendaSheet({ currentTarget: sheetTrigger });
+        assert.equal(workspace.receiptOpen, true);
+        assert.equal(workspace.agendaOpen, true);
+        assert.equal(documentStub.body.style.overflow, 'hidden');
+
+        workspace.closeSheet();
+        assert.equal(workspace.receiptOpen, true);
+        assert.equal(documentStub.body.style.overflow, 'hidden');
+        assert.deepEqual(focusEvents, ['receipt-close', 'sheet-close', 'sheet']);
+
+        workspace.closeReceipt();
+        assert.equal(documentStub.body.style.overflow, '');
+        assert.deepEqual(focusEvents, ['receipt-close', 'sheet-close', 'sheet', 'preview']);
+    } finally {
+        globalThis.document = previousDocument;
+        globalThis.window = previousWindow;
+    }
 });

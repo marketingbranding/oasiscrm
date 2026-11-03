@@ -280,6 +280,28 @@ class SalesFeeReportTest extends TestCase
         $this->assertStringNotContainsString('Hasil:', $blankRow);
     }
 
+    public function test_print_includes_agenda_hours_and_inclusive_end_date_with_datetime_values(): void
+    {
+        $agenda = $this->agenda($this->sales, $this->project, 'Agenda Hari Terakhir', '2026-08-31', 'planned');
+        DB::table('content_items')->where('id', $agenda->id)->update([
+            'scheduled_date' => '2026-08-31 09:30:00',
+            'start_time' => '09:30',
+            'end_time' => '10:45',
+        ]);
+        $lead = $this->lead($this->sales, $this->project, 'Lead Hari Terakhir', '2026-08-31');
+        DB::table('sales_leads')->where('id', $lead->id)->update(['lead_date' => '2026-08-31 00:00:00']);
+
+        $detail = $this->actingAs($this->actor)
+            ->get(route('sales-fee-reports.show', [$this->sales, $this->project] + $this->period()));
+        $print = $this->actingAs($this->actor)
+            ->get(route('sales-fee-reports.print', [$this->sales, $this->project] + $this->period()));
+
+        $detail->assertViewHas('metrics', fn (array $metrics): bool => $metrics['total_agenda'] === 1 && $metrics['total_lead'] === 1);
+        $print->assertSee('Agenda Hari Terakhir')
+            ->assertSee('09:30 - 10:45')
+            ->assertSee('Lead Hari Terakhir');
+    }
+
     public function test_primary_admin_and_superadmin_are_allowed_while_other_roles_are_denied(): void
     {
         foreach (['admin', 'superadmin'] as $slug) {
@@ -318,6 +340,30 @@ class SalesFeeReportTest extends TestCase
     {
         $title = 'Penyelarasan Akses Buku Saku Sales';
         $migration = require database_path('migrations/2026_09_10_000002_fix_sales_pocketbook_access_alignment_changelog.php');
+
+        $migration->up();
+        $migration->up();
+
+        $this->assertSame(1, DB::table('changelogs')->whereNull('version')->where('title', $title)->count());
+        $this->actingAs($this->actor)->get(route('changelogs.index'))->assertOk()->assertSeeText($title);
+    }
+
+    public function test_print_hours_changelog_is_idempotent_and_visible(): void
+    {
+        $title = 'Laporan Aktivitas Sales menampilkan jam agenda';
+        $migration = require database_path('migrations/2026_11_02_095914_add_sales_fee_report_print_hours_changelog.php');
+
+        $migration->up();
+        $migration->up();
+
+        $this->assertSame(1, DB::table('changelogs')->whereNull('version')->where('title', $title)->count());
+        $this->actingAs($this->actor)->get(route('changelogs.index'))->assertOk()->assertSeeText($title);
+    }
+
+    public function test_sales_agenda_draft_changelog_is_idempotent_and_visible(): void
+    {
+        $title = 'Sales dapat mengubah rencana sebelum dikirim';
+        $migration = require database_path('migrations/2026_11_02_102933_add_sales_agenda_draft_edit_delete_changelog.php');
 
         $migration->up();
         $migration->up();

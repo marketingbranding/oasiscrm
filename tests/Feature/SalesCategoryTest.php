@@ -42,6 +42,8 @@ class SalesCategoryTest extends TestCase
 
         $this->post(route('sales-agendas.store'), [
             'scheduled_date' => '2026-10-31',
+            'start_time' => '09:00',
+            'end_time' => '10:00',
             'sales_activity_category' => 'Cek Lokasi',
             'title' => 'Agenda Kategori Sales',
         ])->assertRedirect();

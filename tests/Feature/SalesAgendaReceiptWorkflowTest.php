@@ -176,6 +176,30 @@ class SalesAgendaReceiptWorkflowTest extends TestCase
         $this->assertSame(60, $service->effectiveMinutes($date, $agendaBeforeBreak->start_time, $agendaBeforeBreak->end_time));
     }
 
+    public function test_friday_full_schedule_reaches_480_effective_minutes(): void
+    {
+        [$owner, $branch] = $this->salesContext();
+        $date = CarbonImmutable::parse('2026-10-30');
+        $this->agendaAt($owner, $branch, $date, '07:30', '17:00');
+
+        $summary = app(SalesAgendaReceiptService::class)->summarize($owner, $date);
+
+        $this->assertSame(480, $summary['normal_minutes']);
+        $this->assertSame(0, $summary['remaining_minutes']);
+    }
+
+    public function test_friday_schedule_starting_at_0800_is_30_minutes_short(): void
+    {
+        [$owner, $branch] = $this->salesContext();
+        $date = CarbonImmutable::parse('2026-10-30');
+        $this->agendaAt($owner, $branch, $date, '08:00', '17:00');
+
+        $summary = app(SalesAgendaReceiptService::class)->summarize($owner, $date);
+
+        $this->assertSame(450, $summary['normal_minutes']);
+        $this->assertSame(30, $summary['remaining_minutes']);
+    }
+
     public function test_weekend_submission_requires_one_agenda_and_persists_weekend_marker(): void
     {
         [$owner, $branch] = $this->salesContext();

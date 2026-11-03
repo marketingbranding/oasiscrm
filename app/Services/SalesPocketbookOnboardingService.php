@@ -11,14 +11,15 @@ class SalesPocketbookOnboardingService
 {
     public const FLOW_KEY = 'sales_pocketbook';
 
-    public const VERSION = '1';
+    public const VERSION = '2';
 
     /** @var array<int, array{title: string, description: string, mark: string}> */
     public const STEPS = [
-        ['title' => 'Satu buku saku untuk kerjamu', 'description' => 'Agenda dan Lead Saya berada di satu tempat yang mudah dibuka dari ponsel.', 'mark' => 'Buku'],
-        ['title' => 'Hari kemarin, hari ini, dan rencana', 'description' => 'Agenda langsung terlihat. Buka agenda untuk tugas, foto, dan hasil aktivitas.', 'mark' => 'Agenda'],
-        ['title' => 'Tulis di struk, lalu sobek', 'description' => 'Selesaikan agenda untuk mengirim hasil aktivitas ke Koordinator Sales dan menampilkannya di daftar.', 'mark' => 'Kirim'],
-        ['title' => 'Lead selesai saat kamu bilang selesai', 'description' => 'Status funnel dapat diperbarui, tetapi lead belum selesai sebelum Anda memilih Tandai selesai.', 'mark' => 'Selesai'],
+        ['title' => 'Selamat datang, Sales', 'description' => 'Tour singkat ini menunjukkan cara mencatat rencana kerja dan lead. Hanya sekitar satu menit.', 'mark' => 'Sambutan'],
+        ['title' => 'Target harian: 420 menit', 'description' => 'Senin–Kamis 09:00–17:00 dan Jumat 08:30–17:00, dengan waktu istirahat. Rencanamu harus pas 420 menit.', 'mark' => 'Jam kerja'],
+        ['title' => 'Tulis rencana, lalu sobek', 'description' => 'Tambahkan aktivitas ke struk, lengkapi sampai target, lalu kirim ke Koordinator Sales.', 'mark' => 'Tambah rencana'],
+        ['title' => 'Bukti foto dan hasil per agenda', 'description' => 'Buka agenda yang berjalan, unggah bukti foto, tulis hasil aktivitas, lalu selesaikan.', 'mark' => 'Bukti'],
+        ['title' => 'Catat lead di tab Lead Saya', 'description' => 'Tambah calon konsumen, perbarui statusnya, dan tekan Tandai selesai bila prosesnya tuntas.', 'mark' => 'Lead Saya'],
     ];
 
     public function canAccess(User $user): bool
@@ -53,12 +54,12 @@ class SalesPocketbookOnboardingService
         });
     }
 
-    public function complete(User $user, int $step = 4): UserOnboardingProgress
+    public function complete(User $user, int $step = 5): UserOnboardingProgress
     {
         return DB::transaction(function () use ($user, $step): UserOnboardingProgress {
             $progress = $this->progress($user);
             $progress->forceFill([
-                'current_step' => max(1, min($step, 4)),
+                'current_step' => max(1, min($step, count(self::STEPS))),
                 'completed_at' => $progress->completed_at ?? now(),
                 'skipped_at' => null,
             ])->save();

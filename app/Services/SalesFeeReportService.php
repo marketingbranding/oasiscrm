@@ -71,17 +71,20 @@ class SalesFeeReportService
         abort_unless(in_array((int) $salesUser->id, $access['salesIds'], true) && in_array((int) $project->id, $access['projectIds'], true), 403);
         $assignment = $this->assignmentQuery($access, [])->where('project_user.user_id', $salesUser->id)->where('project_user.project_id', $project->id)->first();
         abort_unless($assignment, 403);
+        $dateToExclusive = $this->dateToExclusive($filters);
 
         $agendas = ContentItem::query()
             ->where('branch_id', $access['branchId'])
             ->where('item_type', 'agenda')->where('agenda_type', ContentItem::SALES_AGENDA_TYPE)
             ->where('owner_user_id', $salesUser->id)->where('sales_project_id', $project->id)
-            ->whereBetween('scheduled_date', [$filters['date_from'], $filters['date_to']])
+            ->where('scheduled_date', '>=', $filters['date_from'])
+            ->where('scheduled_date', '<', $dateToExclusive)
             ->orderBy('scheduled_date')->orderBy('id')->get();
         $leads = SalesLead::query()->with('project')
             ->where('branch_id', $access['branchId'])
             ->where('sales_user_id', $salesUser->id)->where('project_id', $project->id)
-            ->whereBetween('lead_date', [$filters['date_from'], $filters['date_to']])
+            ->where('lead_date', '>=', $filters['date_from'])
+            ->where('lead_date', '<', $dateToExclusive)
             ->orderBy('lead_date')->orderBy('id')->get();
         $lifecycleLeads = SalesLead::query()
             ->with(['statusHistories' => fn ($query) => $query
@@ -207,20 +210,31 @@ class SalesFeeReportService
 
     private function agendaAggregate(int $branchId, array $salesIds, array $projectIds, array $filters)
     {
+        $dateToExclusive = $this->dateToExclusive($filters);
+
         return ContentItem::query()->where('branch_id', $branchId)
             ->where('item_type', 'agenda')->where('agenda_type', ContentItem::SALES_AGENDA_TYPE)
             ->whereIn('owner_user_id', $salesIds)->whereIn('sales_project_id', $projectIds)
-            ->whereBetween('scheduled_date', [$filters['date_from'], $filters['date_to']])
+            ->where('scheduled_date', '>=', $filters['date_from'])
+            ->where('scheduled_date', '<', $dateToExclusive)
             ->select('owner_user_id', 'sales_project_id', DB::raw('COUNT(*) as agenda_total'), DB::raw("SUM(CASE WHEN status = 'done' THEN 1 ELSE 0 END) as agenda_done"))
             ->groupBy('owner_user_id', 'sales_project_id')->get();
     }
 
     private function leadAggregate(int $branchId, array $salesIds, array $projectIds, array $filters)
     {
+        $dateToExclusive = $this->dateToExclusive($filters);
+
         return SalesLead::query()->where('branch_id', $branchId)
             ->whereIn('sales_user_id', $salesIds)->whereIn('project_id', $projectIds)
-            ->whereBetween('lead_date', [$filters['date_from'], $filters['date_to']])
+            ->where('lead_date', '>=', $filters['date_from'])
+            ->where('lead_date', '<', $dateToExclusive)
             ->select('sales_user_id', 'project_id', DB::raw('COUNT(*) as lead_total'))
             ->groupBy('sales_user_id', 'project_id')->get();
+    }
+
+    private function dateToExclusive(array $filters): string
+    {
+        return CarbonImmutable::parse($filters['date_to'])->addDay()->toDateString();
     }
 }

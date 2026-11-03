@@ -14,6 +14,11 @@
     <title>@yield('title', 'Oasis CRM')</title>
     <link rel="preconnect" href="https://fonts.bunny.net">
     <link href="https://fonts.bunny.net/css?family=figtree:400,500,600&display=swap" rel="stylesheet" />
+    @if(request()->is('buku-saku-sales*'))
+        <link rel="preconnect" href="https://fonts.googleapis.com">
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700;800;900&display=swap" rel="stylesheet" />
+    @endif
     <link rel="icon" type="image/svg+xml" href="{{ asset('favicon.svg') }}">
     @if(is_file(public_path('build/manifest.json')))
         @vite(['resources/css/app.css', 'resources/js/app.js'])
@@ -24,7 +29,7 @@
     <style>
         [x-cloak] { display: none !important; }
         @media (max-width: 767px) {
-            button, select, input, textarea, a, [class*="py-1"] { min-height: 44px !important; font-size: 16px !important; }
+            body:not(.sales-personal-page) button, body:not(.sales-personal-page) select, body:not(.sales-personal-page) input, body:not(.sales-personal-page) textarea, body:not(.sales-personal-page) a, body:not(.sales-personal-page) [class*="py-1"] { min-height: 44px !important; font-size: 16px !important; }
             table th, table td { padding: 6px 4px !important; font-size: 12px !important; }
             .filter-bar { flex-direction: column !important; gap: 0.5rem !important; }
             .filter-bar select, .filter-bar input { width: 100% !important; }

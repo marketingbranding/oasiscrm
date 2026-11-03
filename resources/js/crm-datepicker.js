@@ -1,4 +1,5 @@
 import { positionPickerPopup } from './crm-picker-position';
+import { isDateWithinRange } from './crm-date-range';
 
 const monthsId = ['Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember'];
 
@@ -14,35 +15,50 @@ function renderCalendar(wrapper, state) {
     const prevDays = new Date(y, m, 0).getDate();
     const grid = wrapper.querySelector('.cal-grid');
     const title = wrapper.querySelector('.cal-title');
+    const input = wrapper.querySelector('input[type="date"]');
     if (!grid || !title) return;
     grid.innerHTML = '';
     for (let i = 0; i < 42; i++) {
-        const div = document.createElement('div');
-        div.className = 'cal-day';
+        const isCurrentMonthDay = i >= first && i < first + days;
+        const day = document.createElement(isCurrentMonthDay ? 'button' : 'div');
+        day.className = 'cal-day';
+        if (isCurrentMonthDay) day.type = 'button';
         if (i < first) {
-            div.textContent = prevDays - first + i + 1;
-            div.classList.add('cal-other');
+            day.textContent = prevDays - first + i + 1;
+            day.classList.add('cal-other');
         } else if (i >= first + days) {
-            div.textContent = i - first - days + 1;
-            div.classList.add('cal-other');
+            day.textContent = i - first - days + 1;
+            day.classList.add('cal-other');
         } else {
             const dayNum = i - first + 1;
             const ds = y + '-' + String(m + 1).padStart(2, '0') + '-' + String(dayNum).padStart(2, '0');
-            div.textContent = dayNum;
-            div.dataset.date = ds;
-            const input = wrapper.querySelector('input[type="date"]');
-            if (input && input.value === ds) div.classList.add('cal-selected');
-            if (ds === todayString()) div.classList.add('cal-today');
-            div.addEventListener('click', function() { selectDate(wrapper, ds); });
+            day.textContent = dayNum;
+            day.dataset.date = ds;
+            day.setAttribute('aria-label', 'Tanggal ' + dayNum + ' ' + monthsId[m] + ' ' + y);
+            if (input && input.value === ds) day.classList.add('cal-selected');
+            if (ds === todayString()) day.classList.add('cal-today');
+            if (isDateWithinRange(ds, input?.min || '', input?.max || '')) {
+                day.addEventListener('click', function() { selectDate(wrapper, ds); });
+            } else {
+                day.classList.add('cal-disabled');
+                day.disabled = true;
+            }
         }
-        grid.appendChild(div);
+        grid.appendChild(day);
     }
     title.textContent = monthsId[m] + ' ' + y;
+    const todayButton = wrapper.querySelector('.cal-today-btn');
+    if (todayButton) {
+        const todayAllowed = isDateWithinRange(todayString(), input?.min || '', input?.max || '');
+        todayButton.disabled = ! todayAllowed;
+        todayButton.setAttribute('aria-disabled', todayAllowed ? 'false' : 'true');
+    }
 }
 
 function selectDate(wrapper, dateStr) {
     const input = wrapper.querySelector('input[type="date"]');
     if (!input) return;
+    if (! isDateWithinRange(dateStr, input.min || '', input.max || '')) return;
     input.value = dateStr;
     const parts = dateStr.split('-');
     const d = parseInt(parts[2], 10);
@@ -62,6 +78,8 @@ function closeCalendar(wrapper) {
     const arrow = wrapper.querySelector('.date-arrow');
     if (cal) cal.style.display = 'none';
     if (arrow) arrow.textContent = '\u25BC';
+    const display = wrapper.querySelector('.date-display');
+    if (display) display.setAttribute('aria-expanded', 'false');
 }
 
 function syncDateDisplay(wrapper) {
@@ -91,13 +109,15 @@ function initDatePickers() {
         } else {
             cal = document.createElement('div');
             cal.className = 'date-calendar';
+            cal.setAttribute('role', 'dialog');
+            cal.setAttribute('aria-label', 'Kalender tanggal');
             cal.style.cssText = 'display:none;position:fixed;top:0;left:0;z-index:9999;border:2px solid #000;background:#fff;width:280px';
             const accent = wrapper.dataset.accent || '#f1c40f';
             cal.innerHTML =
                 '<div class="cal-header" style="background:#000;color:#fff;display:flex;align-items:center;justify-content:space-between;padding:6px 10px;font-family:\'Times New Roman\';font-size:14px;font-weight:bold;user-select:none">' +
-                '<button class="cal-prev" type="button" style="background:none;border:none;color:#fff;cursor:pointer;font-size:14px;padding:2px 8px;font-family:\'Times New Roman\';font-weight:bold;line-height:1">\u25C0</button>' +
+                '<button class="cal-prev" type="button" aria-label="Bulan sebelumnya" style="background:none;border:none;color:#fff;cursor:pointer;font-size:14px;padding:2px 8px;font-family:\'Times New Roman\';font-weight:bold;line-height:1">\u25C0</button>' +
                 '<span class="cal-title"></span>' +
-                '<button class="cal-next" type="button" style="background:none;border:none;color:#fff;cursor:pointer;font-size:14px;padding:2px 8px;font-family:\'Times New Roman\';font-weight:bold;line-height:1">\u25B6</button>' +
+                '<button class="cal-next" type="button" aria-label="Bulan berikutnya" style="background:none;border:none;color:#fff;cursor:pointer;font-size:14px;padding:2px 8px;font-family:\'Times New Roman\';font-weight:bold;line-height:1">\u25B6</button>' +
                 '</div>' +
                 '<div class="cal-weekdays" style="display:grid;grid-template-columns:repeat(7,1fr);border-bottom:2px solid #000;font-family:\'Times New Roman\';font-size:11px;font-weight:bold;text-align:center;background:#f5f5f5;color:#000">' +
                 '<span style="padding:5px 0;border-right:1px solid #ddd">Min</span>' +
@@ -144,6 +164,7 @@ function initDatePickers() {
                 });
                 cal.style.display = 'block';
                 cal.style.visibility = 'hidden';
+                display.setAttribute('aria-expanded', 'true');
                 const arrow = wrapper.querySelector('.date-arrow');
                 if (arrow) arrow.textContent = '\u25B2';
                 if (!wrapper.__calState) {
@@ -159,6 +180,13 @@ function initDatePickers() {
                 renderCalendar(wrapper, wrapper.__calState);
                 positionPickerPopup(wrapper, cal, '.date-display');
                 cal.style.visibility = 'visible';
+            }
+        });
+
+        display.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter' || e.key === 'Space' || e.key === ' ') {
+                e.preventDefault();
+                display.click();
             }
         });
 

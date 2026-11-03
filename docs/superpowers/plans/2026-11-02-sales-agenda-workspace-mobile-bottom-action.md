@@ -1,0 +1,137 @@
+# Sales Agenda Workspace Mobile Bottom Action Implementation Plan
+
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
+
+**Goal:** Keep the Agenda workspace's “+ Tambah rencana” action fixed and centered on mobile and embedded tablet-width viewports through 1024px.
+
+**Architecture:** Extend the existing route-scoped CSS contract for `body.sales-personal-page` rather than adding JavaScript or changing the Alpine action. Preserve the current desktop behavior above 1024px, keep the existing `sales-reference-bottom-action` markup, and reserve bottom clearance in the workspace shell.
+
+**Tech Stack:** Laravel Blade, Tailwind/Vite CSS, PHPUnit feature contract tests, Playwright browser verification.
+
+**Spec:** Approved in conversation on 2026-11-02; related viewport contract: `docs/superpowers/specs/2026-11-02-sales-agenda-sticky-completion-viewport-design.md`.
+
+## Global Constraints
+
+- Do not change routes, validation, authorization, Alpine workflow, or backend agenda creation behavior.
+- Use the existing `.sales-reference-bottom-action` and `.sales-receipt-add-trigger` patterns.
+- Preserve desktop inline behavior for CSS viewports wider than 1024px.
+- Prevent horizontal overflow and preserve safe-area/bottom content clearance.
+- Reuse the existing changelog migration; do not add a duplicate changelog migration.
+
+## Review Focus
+
+- CSS viewport 768–1024px: action must remain fixed rather than inheriting the desktop `position: static` rule.
+- CSS viewport 390px: action must span the viewport while the button remains centered and bounded.
+- Long workspace content: scrolling must not move the fixed action or create an internal `#crm-main` scroll container.
+- Desktop viewport above 1024px: existing inline action layout must remain unchanged.
+- Existing Alpine trigger: the button must retain `openAgendaSheet($event)` and its dialog accessibility attributes.
+
+---
+
+### Task 1: Add the failing workspace mobile contract
+
+**Files:**
+- Modify: `tests/Feature/SalesAgendaWorkspaceRenderTest.php`
+
+**Interfaces:**
+- Consumes: `resources/css/app.css` as the source of the route-scoped responsive contract.
+- Produces: a named regression test proving the workspace fallback breakpoint, fixed action geometry, overflow safety, and unchanged Alpine trigger markup.
+
+- [ ] **Step 1: Write the failing test**
+
+Add a PHPUnit feature contract test that reads `resources/css/app.css` and asserts:
+
+- a `@media (max-width: 1024px)` fallback exists for `body.sales-personal-page`;
+- `body.sales-personal-page #crm-main` uses `overflow: visible !important`;
+- `body.sales-personal-page` uses `overflow-x: clip !important`;
+- `.sales-reference-bottom-action` is fixed with `inset-inline: 0`, `bottom: 0`, and centered content;
+- `.sales-receipt-add-trigger` is full-width with `max-width: 480px` and auto margins;
+- the rendered workspace still contains `openAgendaSheet($event)` and `aria-controls="sales-agenda-create-sheet"`.
+
+- [ ] **Step 2: Run the test to verify it fails**
+
+Run:
+
+```bash
+php artisan test --compact tests/Feature/SalesAgendaWorkspaceRenderTest.php --filter=mobile.*bottom.*action
+```
+
+Expected: FAIL because the workspace has no `max-width: 1024px` route-scoped fallback contract.
+
+### Task 2: Implement the responsive fallback
+
+**Files:**
+- Modify: `resources/css/app.css` near the final mobile/reference contract overrides.
+- Modify: `database/migrations/2026_11_02_170000_add_sales_agenda_mobile_control_visibility_changelog.php`
+
+**Interfaces:**
+- Consumes: existing `sales-reference-bottom-action` markup and the `sales-personal-page` body class.
+- Produces: a CSS-only responsive fallback active through 1024px; the existing changelog entry describes both mobile agenda action visibility cases.
+
+- [ ] **Step 1: Add the minimal CSS fix**
+
+Add a final `@media (max-width: 1024px)` block scoped to `body.sales-personal-page` that:
+
+- sets body horizontal overflow to `clip`;
+- sets `#crm-main` overflow to `visible`;
+- keeps the action fixed at the viewport bottom with full-width inset and safe-area padding;
+- centers the existing trigger with `width: 100%`, `max-width: 480px`, and auto margins;
+- adds bottom clearance to the page shell/workspace without changing the trigger action.
+
+Do not add scroll listeners, DOM cloning, new classes in Blade, or route/controller changes.
+
+- [ ] **Step 2: Broaden the existing changelog description**
+
+Update only the existing migration's Indonesian description so it covers the mobile completion action and the workspace “Tambah rencana” bottom action. Keep its stable title and idempotent `updateOrInsert` identity unchanged.
+
+- [ ] **Step 3: Run the focused test**
+
+Run:
+
+```bash
+php artisan test --compact tests/Feature/SalesAgendaWorkspaceRenderTest.php --filter=mobile.*bottom.*action
+```
+
+Expected: PASS.
+
+### Task 3: Verify build, browser behavior, and regression safety
+
+**Files:**
+- Generated by build: `public/build/manifest.json` and Vite assets, following repository convention.
+
+**Interfaces:**
+- Consumes: the CSS fallback from Task 2.
+- Produces: verified desktop/mobile responsive behavior with no console or overflow regressions.
+
+- [ ] **Step 1: Run focused workspace tests**
+
+Run the new contract test plus the existing workspace render/interaction tests. Expected: all selected tests pass.
+
+- [ ] **Step 2: Build frontend assets**
+
+Run `npm run build`. Expected: Vite exits with code 0.
+
+- [ ] **Step 3: Verify browser runtime**
+
+At approximately 390×844 and 1024×720, inspect `#agenda-input` after scrolling to the top and bottom. Expected:
+
+- computed `position: fixed`, `bottom: 0`;
+- action remains viewport anchored at both scroll positions;
+- trigger is centered and no wider than 480px;
+- `#crm-main` is not an internal scroll container;
+- no horizontal overflow and no console errors.
+
+At a viewport wider than 1024px, confirm the existing desktop inline action remains unchanged.
+
+- [ ] **Step 4: Run quality gates**
+
+Run:
+
+```bash
+vendor/bin/pint --dirty --format agent
+git diff --check
+php artisan view:cache
+graphify update .
+```
+
+Expected: all commands exit successfully; report unrelated baseline suite failures separately rather than weakening tests.

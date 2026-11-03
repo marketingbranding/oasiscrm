@@ -26,6 +26,7 @@
         th, td { border: 1px solid #000; padding: 1.1mm; text-align: left; vertical-align: top; white-space: normal; overflow-wrap: anywhere; }
         th { font-size: 8pt; font-weight: bold; }
         .agenda-title { font-weight: bold; }
+        .agenda-time { white-space: nowrap; font-weight: bold; }
         .agenda-result { margin-top: .5mm; font-size: 7.5pt; }
         .channel-activity { line-height: 1.2; }
         .empty { text-align: center; }
@@ -54,8 +55,8 @@
     </section>
     <section aria-labelledby="agenda-title">
         <h2 id="agenda-title">DETAIL AGENDA</h2>
-        <table><thead><tr><th>Tanggal</th><th>Kategori</th><th>Agenda / Hasil</th><th>Lokasi</th><th>Status</th></tr></thead><tbody>
-            @forelse($agendas as $agenda)<tr><td>{{ $agenda->scheduled_date?->format('d/m/Y') ?? '-' }}</td><td>{{ $agenda->sales_activity_category ?: '-' }}</td><td><div class="agenda-title">{{ $agenda->title }}</div>@if(filled($agenda->activity_result))<div class="agenda-result">Hasil: {{ $agenda->activity_result }}</div>@endif</td><td>{{ $agenda->location ?: '-' }}</td><td>{{ $agendaStatusLabels[$agenda->status] ?? $agenda->status }}</td></tr>@empty<tr><td colspan="5" class="empty">Belum ada agenda pada periode ini.</td></tr>@endforelse
+            <table><thead><tr><th>Tanggal</th><th>Jam</th><th>Kategori</th><th>Agenda / Hasil</th><th>Lokasi</th><th>Status</th></tr></thead><tbody>
+            @forelse($agendas as $agenda)<tr><td>{{ $agenda->scheduled_date?->format('d/m/Y') ?? '-' }}</td><td class="agenda-time">{{ filled($agenda->start_time) && filled($agenda->end_time) ? \Illuminate\Support\Carbon::parse($agenda->start_time)->format('H:i').' - '.\Illuminate\Support\Carbon::parse($agenda->end_time)->format('H:i') : '-' }}</td><td>{{ $agenda->sales_activity_category ?: '-' }}</td><td><div class="agenda-title">{{ $agenda->title }}</div>@if(filled($agenda->activity_result))<div class="agenda-result">Hasil: {{ $agenda->activity_result }}</div>@endif</td><td>{{ $agenda->location ?: '-' }}</td><td>{{ $agendaStatusLabels[$agenda->status] ?? $agenda->status }}</td></tr>@empty<tr><td colspan="6" class="empty">Belum ada agenda pada periode ini.</td></tr>@endforelse
         </tbody></table>
     </section>
     <section aria-labelledby="lead-title">

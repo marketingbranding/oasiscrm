@@ -33,14 +33,14 @@ class SalesPocketbookTest extends TestCase
 
         $this->actingAs($sales)->get(route('sales-agendas.index', ['tab' => 'leads']))
             ->assertOk()
-            ->assertSee('Input Lead Hari Ini')
+            ->assertSee('Tambah lead')
             ->assertDontSee('+ Tambah Lead')
             ->assertSee('Simpan')
             ->assertSee('Simpan & Tambah Lagi');
 
         $this->actingAs($sales)->get(route('sales-leads.create'))->assertRedirect(route('sales-agendas.index', ['tab' => 'leads']));
         $this->actingAs($sales)->get(route('sales-agendas.index', ['tab' => 'leads']))->assertOk()
-            ->assertSee('Input Lead Hari Ini')
+            ->assertSee('Tambah lead')
             ->assertSee('name="sales_user_id" value="'.$sales->id.'"', false)
             ->assertSee('value="'.$project->id.'"', false)
             ->assertSee('value="'.$branch->id.'"', false);
@@ -54,9 +54,9 @@ class SalesPocketbookTest extends TestCase
             ->assertOk()
             ->assertSee('Data konsumen')
             ->assertSee('Sumber dan proses')
-            ->assertSee('Catatan tambahan')
+            ->assertSee('Catatan')
             ->assertSee('sales-lead-mobile-list', false)
-            ->assertSee('Input Lead Hari Ini');
+            ->assertSee('Tambah lead');
     }
 
     public function test_lead_saya_form_disables_both_submit_buttons_while_saving(): void
@@ -95,8 +95,10 @@ class SalesPocketbookTest extends TestCase
         $this->actingAs($sales)->get(route('sales-agendas.index', ['tab' => 'agenda', 'work_date' => '2026-10-26']))
             ->assertOk()
             ->assertSee('Buku Saku Saya')
-            ->assertSee('Agenda 25 Okt 2026')
-            ->assertSee('Agenda 27 Okt 2026')
+            ->assertSee('data-agenda-week-navigation', false)
+            ->assertSee('Minggu agenda')
+            ->assertSee('Sen')
+            ->assertSee('Min')
             ->assertSee('Belum ada agenda')
             ->assertDontSee('Catat dan selesaikan agenda sales Anda.')
             ->assertDontSee('Satu kertas untuk satu hari kerja.')
@@ -112,8 +114,8 @@ class SalesPocketbookTest extends TestCase
             'tab' => 'agenda',
             'work_date' => '2026-10-24',
         ]))->assertOk()
-            ->assertSee('Agenda 23 Okt 2026')
-            ->assertSee('Agenda 25 Okt 2026');
+            ->assertSee('data-agenda-week-navigation', false)
+            ->assertSee('data-week-day="2026-10-24"', false);
 
         $this->assertSame('2026-10-24', $response->viewData('agendaDate')->toDateString());
     }
@@ -125,9 +127,11 @@ class SalesPocketbookTest extends TestCase
 
         $this->actingAs($sales)->post(route('sales-agendas.store'), [
             'scheduled_date' => $scheduledDate,
+            'start_time' => '09:00',
+            'end_time' => '10:00',
             'sales_activity_category' => 'Cek Lokasi',
             'title' => 'Agenda '.$scheduledDate,
-        ])->assertRedirect(route('sales-agendas.index'))->assertSessionDoesntHaveErrors();
+        ])->assertRedirect(route('sales-agendas.index', ['work_date' => $scheduledDate]))->assertSessionDoesntHaveErrors();
 
         $agenda = ContentItem::query()->where('title', 'Agenda '.$scheduledDate)->sole();
 
@@ -242,8 +246,8 @@ class SalesPocketbookTest extends TestCase
             static fn (string $category): string => 'value="'.$category.'"',
             ContentItem::SALES_ACTIVITY_CATEGORIES,
         ), false)->assertDontSee('value="Survey Lokasi"', false)
-            ->assertSee('Agenda Saya')
-            ->assertSee('sales-agenda-paper', false)
+            ->assertSee('Buku Saku Saya')
+            ->assertSee('sales-reference-shell', false)
             ->assertDontSee('Daily Planning');
     }
 
@@ -254,7 +258,7 @@ class SalesPocketbookTest extends TestCase
         app(SalesPocketbookOnboardingService::class)->skip($sales);
 
         $this->actingAs($sales)->get(route('sales-pocketbook.index'))->assertOk()
-            ->assertSee('Proyek utama belum ditentukan. Hubungi admin untuk menetapkan proyek sebelum membuat agenda.')
+            ->assertSee('Proyek utama belum tersedia')
             ->assertDontSee('name="scheduled_date"', false);
     }
 
@@ -264,11 +268,13 @@ class SalesPocketbookTest extends TestCase
 
         $this->actingAs($sales)->post(route('sales-agendas.store'), [
             'scheduled_date' => '2026-07-10',
+            'start_time' => '09:00',
+            'end_time' => '10:00',
             'sales_activity_category' => 'Cek Lokasi',
             'title' => 'Follow-up Konsumen',
             'location' => 'Kantor pemasaran',
             'activity_result' => null,
-        ])->assertRedirect(route('sales-agendas.index'))
+        ])->assertRedirect(route('sales-agendas.index', ['work_date' => '2026-07-10']))
             ->assertSessionHas('success', 'Agenda sales berhasil ditambahkan.');
 
         $agenda = ContentItem::sole();
@@ -283,7 +289,7 @@ class SalesPocketbookTest extends TestCase
         $this->actingAs($sales)->patch(route('sales-agendas.update', $agenda), [
             'activity_result' => 'Konsumen tertarik.',
             'expected_updated_at' => app(OptimisticLockService::class)->token($agenda),
-        ])->assertRedirect(route('sales-agendas.index'));
+        ])->assertRedirect(route('sales-agendas.index', ['work_date' => '2026-07-10']));
 
         $this->assertSame('done', $agenda->fresh()->status);
         $this->assertSame('Konsumen tertarik.', $agenda->fresh()->activity_result);
@@ -296,6 +302,8 @@ class SalesPocketbookTest extends TestCase
 
         $this->actingAs($sales)->post(route('sales-agendas.store'), [
             'scheduled_date' => '2026-07-10',
+            'start_time' => '09:00',
+            'end_time' => '10:00',
             'sales_activity_category' => $category,
             'title' => 'Agenda '.$category,
         ])->assertSessionDoesntHaveErrors();
@@ -343,6 +351,8 @@ class SalesPocketbookTest extends TestCase
 
         $this->actingAs($sales)->post(route('sales-agendas.store'), [
             'scheduled_date' => '2026-07-10',
+            'start_time' => '09:00',
+            'end_time' => '10:00',
             'sales_activity_category' => 'Cek Lokasi',
             'title' => 'Kunjungan lokasi',
             'location' => '',
@@ -364,7 +374,7 @@ class SalesPocketbookTest extends TestCase
         $this->actingAs($sales)->patch(route('sales-agendas.update', $own), [
             'activity_result' => 'Selesai.',
             'expected_updated_at' => app(OptimisticLockService::class)->token($own),
-        ])->assertRedirect(route('sales-agendas.index'));
+        ])->assertRedirect(route('sales-agendas.index', ['work_date' => '2026-07-10']));
         $this->assertSame('done', $own->fresh()->status);
 
         $this->actingAs($sales)->patch(route('sales-agendas.update', $foreign), [

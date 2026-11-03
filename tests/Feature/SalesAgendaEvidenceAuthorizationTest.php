@@ -83,6 +83,29 @@ class SalesAgendaEvidenceAuthorizationTest extends TestCase
         $this->assertSame([], Storage::disk('agenda_evidence')->allFiles());
     }
 
+    public function test_authorized_viewer_does_not_see_photo_mutation_control_without_mutation_scope(): void
+    {
+        $branch = Branch::create(['name' => 'Solo', 'code' => 'SO', 'is_active' => true]);
+        $owner = $this->user('sales', $branch);
+        $viewer = $this->user('superadmin', $branch);
+        $agenda = ContentItem::create([
+            'branch_id' => $branch->id,
+            'item_type' => 'agenda',
+            'agenda_type' => ContentItem::SALES_AGENDA_TYPE,
+            'title' => 'Visit',
+            'scheduled_date' => now(),
+            'status' => 'planned',
+            'owner_user_id' => $owner->id,
+            'created_by' => $owner->id,
+        ]);
+
+        $this->actingAs($viewer)
+            ->get(route('sales-agendas.show', $agenda))
+            ->assertOk()
+            ->assertDontSee('data-agenda-photo-slot', false)
+            ->assertDontSee('name="photo"', false);
+    }
+
     public function test_archive_page_exposes_only_backend_authorized_ready_downloads(): void
     {
         $branch = Branch::create(['name' => 'Solo', 'code' => 'SO', 'is_active' => true]);

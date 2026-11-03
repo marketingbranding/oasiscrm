@@ -214,6 +214,17 @@ class SalesPocketbookMobileContractTest extends TestCase
             ->assertSee('Hasil aktivitas');
     }
 
+    public function test_mobile_sales_agenda_completion_form_keeps_clearance_for_fixed_action(): void
+    {
+        $css = file_get_contents(resource_path('css/app.css'));
+
+        $this->assertIsString($css);
+        $this->assertMatchesRegularExpression(
+            '/\.sales-mobile-detail-page \.sales-agenda-detail form\.sales-agenda-completion-form \{[^}]*padding: 0 0 120px !important;/s',
+            $css,
+        );
+    }
+
     public function test_sales_agenda_validation_uses_understandable_indonesian_messages(): void
     {
         [, , $sales] = $this->salesContext();

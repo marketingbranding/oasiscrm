@@ -15,6 +15,8 @@ class SalesAgendaReceiptService
 {
     public const TARGET_MINUTES = SalesAgendaDaySubmission::TARGET_MINUTES;
 
+    public function __construct(private readonly CrmAuthorizationService $authorization) {}
+
     /**
      * @return array{
      *     normal_minutes: int,
@@ -138,6 +140,58 @@ class SalesAgendaReceiptService
         return ! $summary['requires_target'] || $summary['target_minutes'] >= $summary['normal_minutes'] + $effectiveMinutes;
     }
 
+    public function updateDraft(User $actor, ContentItem $agenda, array $data): ContentItem
+    {
+        $this->assertDraftEditable($actor, $agenda);
+        $date = CarbonImmutable::parse($agenda->scheduled_date);
+
+        try {
+            $this->assertTimeSlotAvailable($actor, $date, $data['start_time'], $data['end_time'], $agenda->id);
+        } catch (RuntimeException $exception) {
+            throw new RuntimeException($exception->getMessage(), previous: $exception);
+        }
+
+        $duration = $this->durationMinutes($data['start_time'], $data['end_time']);
+        $effectiveMinutes = $this->effectiveMinutes($date, $data['start_time'], $data['end_time']);
+        if (! $this->canUpdateNormal($actor, $date, $agenda->id, $duration, $effectiveMinutes)) {
+            throw new RuntimeException('Durasi agenda melebihi sisa waktu kerja '.self::TARGET_MINUTES.' menit.');
+        }
+
+        $agenda->update([
+            'sales_activity_category' => $data['sales_activity_category'],
+            'title' => $data['title'],
+            'start_time' => $data['start_time'],
+            'end_time' => $data['end_time'],
+            'duration_minutes' => $duration,
+            'location' => $data['location'] ?? null,
+            'updated_by' => $actor->id,
+        ]);
+
+        return $agenda->fresh();
+    }
+
+    public function deleteDraft(User $actor, ContentItem $agenda): void
+    {
+        $this->assertDraftEditable($actor, $agenda);
+        $agenda->delete();
+    }
+
+    public function canUpdateNormal(User $owner, CarbonImmutable $date, int $ignoreAgendaId, int $durationMinutes, int $effectiveMinutes): bool
+    {
+        if ($durationMinutes < 1 || $this->submissionQuery($owner, $date)->exists()) {
+            return false;
+        }
+
+        $schedule = $this->schedule($date);
+        if (! $schedule['requires_target']) {
+            return true;
+        }
+
+        $normalMinutes = $this->normalAgendaMinutes($owner, $date, $ignoreAgendaId);
+
+        return $schedule['target_minutes'] >= $normalMinutes + $effectiveMinutes;
+    }
+
     public function submission(User $owner, CarbonImmutable $date): ?SalesAgendaDaySubmission
     {
         return $this->submissionQuery($owner, $date)->first();
@@ -238,16 +292,48 @@ class SalesAgendaReceiptService
     public function isScheduleEditable(User $actor, ContentItem $agenda): bool
     {
         return (int) $agenda->owner_user_id === (int) $actor->id
+            && $agenda->status === 'planned'
             && ! $this->submissionQuery($actor, CarbonImmutable::parse($agenda->scheduled_date))->exists();
+    }
+
+    private function assertDraftEditable(User $actor, ContentItem $agenda): void
+    {
+        if (! $this->isSalesAgenda($agenda)) {
+            throw new RuntimeException('Item yang dipilih bukan Agenda Sales.');
+        }
+
+        if ((int) $agenda->owner_user_id !== (int) $actor->id) {
+            throw new AuthorizationException('Anda tidak dapat mengubah Agenda Sales ini.');
+        }
+
+        if ($agenda->status !== 'planned') {
+            throw new RuntimeException('Agenda yang sudah diproses tidak dapat diubah dari struk draft.');
+        }
+
+        if ($this->submissionQuery($actor, CarbonImmutable::parse($agenda->scheduled_date))->exists()) {
+            throw new RuntimeException('Struk agenda sudah dikirim ke Koordinator. Agenda tidak dapat diubah.');
+        }
     }
 
     private function agendaQuery(User $owner, CarbonImmutable $date): Builder
     {
-        return ContentItem::query()
+        $query = ContentItem::query()
             ->where('item_type', 'agenda')
             ->where('agenda_type', ContentItem::SALES_AGENDA_TYPE)
             ->where('owner_user_id', $owner->id)
             ->whereDate('scheduled_date', $date->toDateString());
+
+        if ($owner->isSales()) {
+            $query
+                ->whereIn('branch_id', $this->authorization->visibleBranchIds($owner, 'sales_pocketbook', 'view'))
+                ->where(function (Builder $scoped) use ($owner): void {
+                    $scoped
+                        ->whereNull('sales_project_id')
+                        ->orWhereIn('sales_project_id', $this->authorization->visibleProjectIds($owner, 'sales_pocketbook', 'view'));
+                });
+        }
+
+        return $query;
     }
 
     private function normalAgendaQuery(User $owner, CarbonImmutable $date): Builder
@@ -255,6 +341,14 @@ class SalesAgendaReceiptService
         return $this->agendaQuery($owner, $date)
             ->where('is_outside_schedule', false)
             ->whereNotIn('status', ['cancelled', 'rescheduled']);
+    }
+
+    private function normalAgendaMinutes(User $owner, CarbonImmutable $date, ?int $ignoreAgendaId = null): int
+    {
+        return (int) $this->normalAgendaQuery($owner, $date)
+            ->when($ignoreAgendaId !== null, fn (Builder $query) => $query->where('id', '<>', $ignoreAgendaId))
+            ->get(['start_time', 'end_time'])
+            ->sum(fn (ContentItem $agenda): int => $this->effectiveMinutes($date, $agenda->start_time, $agenda->end_time));
     }
 
     private function submissionQuery(User $owner, CarbonImmutable $date): Builder
@@ -311,5 +405,11 @@ class SalesAgendaReceiptService
         [$hours, $minutes] = array_map('intval', explode(':', substr((string) $time, 0, 5)));
 
         return ($hours * 60) + $minutes;
+    }
+
+    private function durationMinutes(string $startTime, string $endTime): int
+    {
+        return CarbonImmutable::createFromFormat('H:i', $startTime)
+            ->diffInMinutes(CarbonImmutable::createFromFormat('H:i', $endTime));
     }
 }

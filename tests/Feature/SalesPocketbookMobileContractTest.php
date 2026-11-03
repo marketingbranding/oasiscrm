@@ -337,6 +337,7 @@ class SalesPocketbookMobileContractTest extends TestCase
             ->assertSee('class="sales-lead-entry-close"', false)
             ->assertSee('type="button"', false)
             ->assertSee('aria-label="Tutup form tambah lead"', false)
+            ->assertSee('@click="$el.closest(\'details\').open = false; $el.closest(\'details\').querySelector(\'summary\').focus()"', false)
             ->assertSee('name="submit_action" value="save"', false)
             ->assertSee('name="submit_action" value="add_another"', false)
             ->assertDontSee('class="sales-lead-form-group sales-lead-optional-fields" open', false);
@@ -347,6 +348,8 @@ class SalesPocketbookMobileContractTest extends TestCase
         $this->assertMatchesRegularExpression('/\.sales-lead-form-actions \{[^}]*position: sticky !important;[^}]*padding: [^}]*env\(safe-area-inset-bottom\)/s', $css);
         $this->assertMatchesRegularExpression('/\.sales-lead-entry-close \{[^}]*display: none/s', $css);
         $this->assertMatchesRegularExpression('/\.sales-lead-entry-close \{[^}]*display: inline-flex !important/s', $css);
+        $this->assertMatchesRegularExpression('/\.sales-lead-entry-heading-copy \{[^}]*gap: var\(--oasis-space-1\)/s', $css);
+        $this->assertMatchesRegularExpression('/\.sales-lead-entry-scroll \{[^}]*overflow-y: auto !important/s', $css);
     }
 
     public function test_mobile_lead_entry_reopens_optional_fields_when_their_validation_fails(): void

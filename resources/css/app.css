@@ -3444,15 +3444,43 @@ body.sales-pocketbook-onboarding-shell .crm-page-body {
 
     .crm-modal-backdrop { align-items: flex-end; padding: var(--oasis-space-2); }
     .crm-modal-panel { max-height: calc(100dvh - (2 * var(--oasis-space-2))); }
+    .crm-modal-mobile-transition-enter,
+    .crm-modal-mobile-transition-leave { transition: opacity 170ms ease; }
+    .crm-modal-mobile-transition-enter-start,
+    .crm-modal-mobile-transition-leave-end { opacity: 0; }
+    .crm-modal-mobile-transition-enter-end,
+    .crm-modal-mobile-transition-leave-start { opacity: 1; }
+    .crm-modal-backdrop:not(.crm-modal-backdrop--right) .crm-modal-panel {
+        transition: transform 170ms cubic-bezier(.22, 1, .36, 1);
+    }
+    .crm-modal-backdrop:not(.crm-modal-backdrop--right).crm-modal-mobile-transition-enter-start .crm-modal-panel,
+    .crm-modal-backdrop:not(.crm-modal-backdrop--right).crm-modal-mobile-transition-leave-end .crm-modal-panel {
+        transform: translateY(100%);
+    }
     .crm-modal-backdrop--right { align-items: stretch; padding: 0; }
     .crm-modal-panel--right { max-width: none; max-height: 100dvh; border-left: 0; border-radius: 0; }
+    .sales-sheet-transition-enter,
+    .sales-sheet-transition-leave { transition: opacity 170ms ease; }
+    .sales-sheet-transition-enter-start,
+    .sales-sheet-transition-leave-end { opacity: 0; }
+    .sales-sheet-transition-enter-end,
+    .sales-sheet-transition-leave-start { opacity: 1; }
+    body.sales-personal-page .sales-sheet-transition-enter-start .sales-bottom-sheet,
+    body.sales-personal-page .sales-sheet-transition-leave-end .sales-bottom-sheet { transform: translateY(100%) !important; }
+    .sales-bottom-sheet { transition: transform 170ms cubic-bezier(.22, 1, .36, 1); }
     .database-consumer-detail-grid { grid-template-columns: minmax(0, 1fr); }
 }
 
 @media (prefers-reduced-motion: reduce) {
     .crm-modal-transition-enter,
     .crm-modal-transition-leave,
-    .crm-modal-backdrop--right .crm-modal-panel--right { transition-duration: 1ms; }
+    .crm-modal-mobile-transition-enter,
+    .crm-modal-mobile-transition-leave,
+    .crm-modal-backdrop--right .crm-modal-panel--right,
+    .crm-modal-backdrop:not(.crm-modal-backdrop--right) .crm-modal-panel,
+    .sales-sheet-transition-enter,
+    .sales-sheet-transition-leave,
+    .sales-bottom-sheet { transition-duration: 1ms; }
 }
 
 @media (prefers-reduced-motion: reduce) {

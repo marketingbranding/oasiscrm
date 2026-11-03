@@ -24,6 +24,13 @@
      x-transition:leave="crm-modal-transition-leave"
      x-transition:leave-start="crm-modal-transition-leave-start"
      x-transition:leave-end="crm-modal-transition-leave-end"
+     @else
+     x-transition:enter="crm-modal-mobile-transition-enter"
+     x-transition:enter-start="crm-modal-mobile-transition-enter-start"
+     x-transition:enter-end="crm-modal-mobile-transition-enter-end"
+     x-transition:leave="crm-modal-mobile-transition-leave"
+     x-transition:leave-start="crm-modal-mobile-transition-leave-start"
+     x-transition:leave-end="crm-modal-mobile-transition-leave-end"
      @endif
      class="crm-modal-backdrop{{ $placement === 'right' ? ' crm-modal-backdrop--right' : '' }}"
      @click.self="hide(true, 'backdrop')"

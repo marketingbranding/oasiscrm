@@ -697,6 +697,27 @@ class SalesAgendaWorkspaceRenderTest extends TestCase
         $this->assertSame(1, DB::table('changelogs')->whereNull('version')->where('title', 'Agenda Akhir Pekan Lebih Mudah Dibedakan')->count());
     }
 
+    public function test_mobile_modal_animation_changelog_migration_is_idempotent(): void
+    {
+        $title = 'Animasi Modal Mobile dari Bawah';
+        DB::table('changelogs')->whereNull('version')->where('title', $title)->delete();
+
+        $migration = require database_path('migrations/2026_11_03_130000_add_mobile_modal_animation_changelog.php');
+        $migration->up();
+        $migration->up();
+
+        $this->assertSame(1, DB::table('changelogs')->whereNull('version')->where('title', $title)->count());
+        $this->assertDatabaseHas('changelogs', [
+            'version' => null,
+            'title' => $title,
+            'category' => 'changed',
+        ]);
+
+        $migration->down();
+
+        $this->assertSame(0, DB::table('changelogs')->whereNull('version')->where('title', $title)->count());
+    }
+
     public function test_unsubmitted_weekend_agenda_renders_saved_plan_without_receipt(): void
     {
         [$sales, $project] = $this->salesContext();

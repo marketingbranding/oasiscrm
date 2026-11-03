@@ -107,6 +107,27 @@ class SalesAgendaWorkspaceInteractionMarkupTest extends TestCase
         $this->assertStringContainsString('name="location"', $html);
     }
 
+    public function test_mobile_modal_transitions_cover_shared_modal_and_agenda_sheet(): void
+    {
+        $sales = $this->sales();
+        $css = file_get_contents(resource_path('css/app.css'));
+
+        $html = $this->actingAs($sales)
+            ->get(route('sales-agendas.index'))
+            ->assertOk()
+            ->getContent();
+
+        $this->assertIsString($css);
+        $this->assertStringContainsString('x-transition:enter="crm-modal-mobile-transition-enter"', $html);
+        $this->assertStringContainsString('x-transition:leave-end="sales-sheet-transition-leave-end"', $html);
+        $this->assertStringContainsString('.crm-modal-backdrop:not(.crm-modal-backdrop--right).crm-modal-mobile-transition-enter-start', $css);
+        $this->assertStringContainsString('.sales-sheet-transition-enter-start', $css);
+        $this->assertStringContainsString('body.sales-personal-page .sales-sheet-transition-enter-start .sales-bottom-sheet', $css);
+        $this->assertStringContainsString('transform: translateY(100%);', $css);
+        $this->assertStringContainsString('@media (prefers-reduced-motion: reduce)', $css);
+        $this->assertStringContainsString('.sales-sheet-transition-enter,', $css);
+    }
+
     public function test_weekend_add_action_opens_the_agenda_sheet_without_receipt_preview(): void
     {
         $sales = $this->sales();

@@ -176,7 +176,14 @@
     @endif
 
     @if($project)
-        <div x-show="agendaOpen" x-cloak class="sales-sheet-backdrop" @click.self="closeSheet()" @keydown="handleSheetKeydown($event)" role="dialog" aria-modal="true" aria-labelledby="sales-agenda-create-title" aria-describedby="sales-agenda-create-description">
+        <div x-show="agendaOpen" x-cloak
+             x-transition:enter="sales-sheet-transition-enter"
+             x-transition:enter-start="sales-sheet-transition-enter-start"
+             x-transition:enter-end="sales-sheet-transition-enter-end"
+             x-transition:leave="sales-sheet-transition-leave"
+             x-transition:leave-start="sales-sheet-transition-leave-start"
+             x-transition:leave-end="sales-sheet-transition-leave-end"
+             class="sales-sheet-backdrop" @click.self="closeSheet()" @keydown="handleSheetKeydown($event)" role="dialog" aria-modal="true" aria-labelledby="sales-agenda-create-title" aria-describedby="sales-agenda-create-description">
             <div id="sales-agenda-create-sheet" x-ref="agendaPanel" class="sales-bottom-sheet">
                 <div class="sales-bottom-sheet-handle" aria-hidden="true"></div>
                 <div class="sales-bottom-sheet-header"><div><span class="sales-bottom-sheet-eyebrow">Agenda {{ $agendaDate->locale('id')->translatedFormat('d F Y') }}</span><h2 id="sales-agenda-create-title" x-ref="agendaFormTitle">Tambah Rencana</h2></div><button type="button" x-ref="sheetClose" @click="closeSheet()" class="sales-bottom-sheet-close" aria-label="Tutup form agenda">&times;</button></div>

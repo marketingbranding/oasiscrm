@@ -137,6 +137,9 @@ class DesignSystemComponentTest extends TestCase
         $this->assertStringContainsString('hasOpenPicker()', $source);
         $this->assertStringContainsString('class="crm-modal-backdrop"', $html);
         $this->assertStringNotContainsString('crm-modal-backdrop--right', $html);
+        $this->assertStringContainsString('x-transition:enter="crm-modal-mobile-transition-enter"', $html);
+        $this->assertStringContainsString('x-transition:enter-start="crm-modal-mobile-transition-enter-start"', $html);
+        $this->assertStringContainsString('x-transition:leave-end="crm-modal-mobile-transition-leave-end"', $html);
 
         $right = Blade::render('<x-crm.modal name="drawer" title="Panel" placement="right">Isi</x-crm.modal>');
         $this->assertStringContainsString('class="crm-modal-backdrop crm-modal-backdrop--right"', $right);

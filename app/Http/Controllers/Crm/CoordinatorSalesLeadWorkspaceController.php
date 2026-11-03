@@ -16,6 +16,7 @@ use App\Services\SalesLeadTargetService;
 use App\Services\WorkspaceAccessService;
 use App\Support\SalesLeadMasterData;
 use Carbon\CarbonImmutable;
+use DateTimeImmutable;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -63,8 +64,9 @@ class CoordinatorSalesLeadWorkspaceController extends Controller
         $data['channels'] = SalesLeadMasterData::CHANNELS;
         $data['activities'] = SalesLeadMasterData::ACTIVITIES;
         $initialProject = LeadMaster::find($request->old('project_id'));
+        $data['leadDate'] = $this->normalizeLeadDate($request->old('lead_date', today()));
         $data['promos'] = $initialProject
-            ? $this->promoOptions->availableForBranchAndDate((int) $initialProject->branch_id, $request->old('lead_date', today()))
+            ? $this->promoOptions->availableForBranchAndDate((int) $initialProject->branch_id, $data['leadDate'])
             : collect([PromoOptionService::NO_PROMO]);
         $data['promoOptionsEndpoint'] = route('coordinator-leads.promo-options', ['project' => 'PROJECT_ID']);
         $data['statuses'] = SalesLeadStatus::MANUAL;
@@ -77,6 +79,23 @@ class CoordinatorSalesLeadWorkspaceController extends Controller
         $data['tab'] = $tab;
 
         return view('crm.sales-pocketbook.coordinator-leads', $data);
+    }
+
+    private function normalizeLeadDate(mixed $value): string
+    {
+        if (! is_string($value)) {
+            return today()->toDateString();
+        }
+
+        try {
+            $date = DateTimeImmutable::createFromFormat('!Y-m-d', $value);
+        } catch (\ValueError) {
+            return today()->toDateString();
+        }
+
+        return $date !== false && $date->format('Y-m-d') === $value
+            ? $value
+            : today()->toDateString();
     }
 
     public function promoOptions(Request $request, LeadMaster $project): JsonResponse

@@ -82,6 +82,32 @@ class SalesPocketbookScopeMatrixTest extends TestCase
             ->assertOk();
     }
 
+    public function test_coordinator_invalid_lead_date_can_render_validation_feedback(): void
+    {
+        $context = $this->context();
+
+        $response = $this->actingAs($context['coordinator'])
+            ->from(route('sales-pocketbook.index'))
+            ->post(route('sales-leads.store'), [
+                'branch_id' => $context['branch']->id,
+                'project_id' => $context['project']->id,
+                'sales_user_id' => $context['sales']->id,
+                'lead_date' => ['invalid'],
+                'customer_name' => 'Lead Tanggal Array Koordinator',
+                'phone' => '081234567890',
+                'source' => 'Online',
+                'platform' => 'Instagram',
+                'campaign_name' => 'Live',
+                'current_status' => 'no_response',
+                'operation_uuid' => fake()->uuid(),
+            ]);
+
+        $response->assertRedirect()->assertSessionHasErrors('lead_date');
+        $this->followRedirects($response)
+            ->assertOk()
+            ->assertViewIs('crm.sales-pocketbook.coordinator-leads');
+    }
+
     public function test_coordinator_can_create_and_complete_a_current_team_agenda_but_not_an_out_of_team_agenda(): void
     {
         $context = $this->context();

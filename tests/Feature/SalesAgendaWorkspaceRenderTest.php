@@ -669,6 +669,34 @@ class SalesAgendaWorkspaceRenderTest extends TestCase
             ->assertDontSee('Istirahat');
     }
 
+    public function test_weekend_navigation_and_receipt_surfaces_have_distinct_visual_contract(): void
+    {
+        [$sales] = $this->salesContext();
+        $css = file_get_contents(resource_path('css/app.css'));
+
+        $this->assertIsString($css);
+        $this->assertMatchesRegularExpression(
+            '/\.sales-week-navigation-day\.is-weekend::before \{[^}]*repeating-linear-gradient/s',
+            $css,
+        );
+        $this->assertMatchesRegularExpression(
+            '/\.sales-receipt-paper\.is-weekend,\s*\.sales-submitted-plan\.is-weekend \{[^}]*background:/s',
+            $css,
+        );
+        $this->assertStringContainsString('body.sales-personal-page .sales-submitted-plan.is-weekend', $css);
+
+        $this->actingAs($sales)
+            ->get(route('sales-agendas.index', ['work_date' => '2026-11-01']))
+            ->assertOk()
+            ->assertSee('data-week-day-weekend="true"', false);
+
+        $migration = require database_path('migrations/2026_11_03_120000_add_sales_agenda_weekend_visual_changelog.php');
+        $migration->up();
+        $migration->up();
+
+        $this->assertSame(1, DB::table('changelogs')->whereNull('version')->where('title', 'Agenda Akhir Pekan Lebih Mudah Dibedakan')->count());
+    }
+
     public function test_unsubmitted_weekend_agenda_renders_saved_plan_without_receipt(): void
     {
         [$sales, $project] = $this->salesContext();

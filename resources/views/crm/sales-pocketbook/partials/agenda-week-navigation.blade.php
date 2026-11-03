@@ -23,6 +23,7 @@
                 @php
                     $isSelected = $day['date']->isSameDay($agendaDate);
                     $isToday = $day['date']->isSameDay($today);
+                    $isWeekend = $day['date']->isWeekend();
                     $dayName = $day['date']->locale('id')->translatedFormat('l');
                     $dayAriaLabel = $dayName.', '.$day['date']->locale('id')->translatedFormat('d F Y');
                     if (! $day['has_plan']) {
@@ -34,7 +35,7 @@
                 @endphp
                 <li class="sales-week-navigation-day-item" role="listitem">
                     @if($isToday)<span id="sales-week-day-today-{{ $day['date']->toDateString() }}" class="sr-only">Hari ini</span>@endif
-                    <a href="{{ route('sales-agendas.index', ['tab' => 'agenda', 'work_date' => $day['date']->toDateString()]) }}" class="sales-week-navigation-day {{ $isSelected ? 'is-active' : '' }}" data-week-day="{{ $day['date']->toDateString() }}" data-week-day-state="{{ ! $day['has_plan'] ? 'empty' : ($day['has_incomplete_agenda'] ? 'attention' : 'ready') }}" data-week-day-today="{{ $isToday ? 'true' : 'false' }}" aria-label="{{ $dayAriaLabel }}" @if($isToday) aria-describedby="sales-week-day-today-{{ $day['date']->toDateString() }}" @endif @if($isSelected) aria-current="date" @endif>
+                    <a href="{{ route('sales-agendas.index', ['tab' => 'agenda', 'work_date' => $day['date']->toDateString()]) }}" @class(['sales-week-navigation-day', 'is-active' => $isSelected, 'is-weekend' => $isWeekend]) data-week-day="{{ $day['date']->toDateString() }}" data-week-day-state="{{ ! $day['has_plan'] ? 'empty' : ($day['has_incomplete_agenda'] ? 'attention' : 'ready') }}" data-week-day-today="{{ $isToday ? 'true' : 'false' }}" data-week-day-weekend="{{ $isWeekend ? 'true' : 'false' }}" aria-label="{{ $dayAriaLabel }}" @if($isToday) aria-describedby="sales-week-day-today-{{ $day['date']->toDateString() }}" @endif @if($isSelected) aria-current="date" @endif>
                     <span class="sales-week-navigation-day-name">{{ $day['day_label'] }}</span>
                     <strong>{{ $day['date_label'] }}</strong>
                     <span class="sales-week-navigation-day-status" aria-hidden="true">

@@ -1,4 +1,4 @@
-<div class="sales-weekend-plan sales-submitted-plan" data-tour-target="work-summary">
+<div class="sales-weekend-plan sales-submitted-plan is-weekend" data-tour-target="work-summary">
     <div class="sales-submitted-meter">
         <strong>{{ $agendas->count() }} rencana akhir pekan</strong>
         <span>Tersimpan</span>

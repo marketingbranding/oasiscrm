@@ -2246,6 +2246,26 @@ body.sales-personal-page .crm-feedback-bubble {
     background: var(--oasis-accent-sales);
     color: #000;
 }
+.sales-week-navigation-day.is-weekend {
+    position: relative;
+    isolation: isolate;
+    background: #fff4f2;
+    color: #7f2d26;
+}
+.sales-week-navigation-day.is-weekend::before {
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    background: repeating-linear-gradient(-45deg, transparent 0 12px, rgb(192 57 43 / 10%) 12px 13px, transparent 13px 25px);
+    content: '';
+    pointer-events: none;
+}
+.sales-week-navigation-day.is-weekend > * { position: relative; z-index: 1; }
+.sales-week-navigation-day.is-weekend.is-active {
+    background: var(--oasis-accent-sales);
+    color: #000;
+    box-shadow: inset 0 4px 0 var(--oasis-danger);
+}
 .sales-week-navigation-day-name {
     font: 700 10px/1.1 var(--oasis-font-controls);
     text-transform: uppercase;
@@ -2276,6 +2296,15 @@ body.sales-personal-page .crm-feedback-bubble {
     background: var(--oasis-danger);
     color: #fff;
     font: 900 11px/1 var(--oasis-font-controls);
+}
+.sales-reference-summary.is-weekend {
+    border-color: var(--oasis-danger);
+    background: #fff4f2;
+}
+.sales-receipt-paper.is-weekend,
+.sales-submitted-plan.is-weekend {
+    border-color: var(--oasis-danger);
+    background: #fff4f2;
 }
 
 @media (max-width: 639px) {
@@ -5832,5 +5861,25 @@ body.sales-personal-page .sales-bottom-sheet {
     .sales-submitted-row > .crm-status-badge {
         justify-self: start !important;
         margin-left: 72px !important;
+    }
+}
+
+@media (max-width: 767px) {
+    body.sales-personal-page .sales-week-navigation-day.is-weekend {
+        background: #fff4f2 !important;
+        color: #7f2d26 !important;
+    }
+
+    body.sales-personal-page .sales-week-navigation-day.is-weekend.is-active {
+        background: var(--oasis-accent-sales) !important;
+        color: #000 !important;
+        box-shadow: inset 0 4px 0 var(--oasis-danger) !important;
+    }
+
+    body.sales-personal-page .sales-reference-summary.is-weekend,
+    body.sales-personal-page .sales-receipt-paper.is-weekend,
+    body.sales-personal-page .sales-submitted-plan.is-weekend {
+        border-color: var(--oasis-danger) !important;
+        background: #fff4f2 !important;
     }
 }

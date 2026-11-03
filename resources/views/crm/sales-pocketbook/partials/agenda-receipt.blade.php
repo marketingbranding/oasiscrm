@@ -102,7 +102,7 @@
         @include('crm.sales-pocketbook.partials.agenda-weekend-list')
     @else
         @if($daySubmission)
-            <div class="sales-submitted-plan" data-tour-target="work-summary">
+            <div class="sales-submitted-plan {{ $isWeekend ? 'is-weekend' : '' }}" data-tour-target="work-summary">
                  <div class="sales-submitted-meter"><strong>{{ $receiptSummary['target_minutes'] ? $receiptSummary['target_minutes'].' / '.$receiptSummary['target_minutes'].' menit' : 'Akhir pekan · '.$receiptSummary['normal_minutes'].' menit' }}</strong><span>{{ $isWeekend ? 'Tersimpan langsung' : 'Terkirim ke Koordinator' }}</span>@if($isWeekend)<b class="sales-weekend-inline-stamp">AKHIR PEKAN</b>@endif</div>
                 <p class="sales-submitted-note">{{ $isWeekend ? 'Akhir pekan bebas jam dan menit.' : 'Waktu, judul, kategori, dan lokasi agenda terjadwal tidak dapat diubah.' }}</p>
                 @if($receiptSummary['target_minutes'])<div class="sales-submitted-meter-track"><span style="width:100%"></span></div>@endif

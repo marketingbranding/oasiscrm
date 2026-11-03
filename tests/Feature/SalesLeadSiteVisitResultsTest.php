@@ -22,6 +22,127 @@ class SalesLeadSiteVisitResultsTest extends TestCase
 {
     use RefreshDatabase;
 
+    public function test_lead_detail_renders_mobile_reference_sections_and_empty_history(): void
+    {
+        [$sales, $lead, $project] = $this->context();
+        $lead->update([
+            'customer_name' => 'Konsumen Detail Mobile',
+            'phone' => '081299900007',
+            'source' => 'Referensi',
+        ]);
+
+        $response = $this->actingAs($sales)->get(route('sales-leads.show', $lead));
+
+        $response->assertOk()
+            ->assertSeeText('‹ Lead Saya')
+            ->assertSeeText('Konsumen Detail Mobile')
+            ->assertSeeText($project->project_name)
+            ->assertSeeText($lead->branch->name)
+            ->assertSeeText('Informasi')
+            ->assertSeeText('Riwayat hasil')
+            ->assertSeeText('081299900007')
+            ->assertSeeText('Referensi')
+            ->assertSeeText('13/08/2026')
+            ->assertSee('data-current-step="1"', false)
+            ->assertSeeText('Belum ada riwayat hasil.');
+    }
+
+    public function test_lead_detail_maps_lifecycle_statuses_to_the_five_reference_steps(): void
+    {
+        [$sales, $lead] = $this->context();
+        $steps = [
+            SalesLeadStatus::NoResponse->value => [1, 'No Respon'],
+            SalesLeadStatus::Discussion->value => [2, 'Diskusi'],
+            SalesLeadStatus::FaceToFace->value => [2, 'Tatap Muka'],
+            SalesLeadStatus::SiteVisit->value => [3, 'Cek Lokasi'],
+            SalesLeadStatus::Utj->value => [3, 'UTJ'],
+            SalesLeadStatus::SlikCheck->value => [4, 'Cek Slik'],
+            SalesLeadStatus::SlikRejected->value => [4, 'Tidak Lolos BI Checking'],
+            SalesLeadStatus::Akad->value => [5, 'Akad'],
+        ];
+
+        foreach ($steps as $status => [$step, $label]) {
+            $lead->update(['current_status' => $status]);
+
+            $this->actingAs($sales)->get(route('sales-leads.show', $lead))
+                ->assertOk()
+                ->assertSee('data-current-step="'.$step.'"', false)
+                ->assertSeeText($label);
+        }
+    }
+
+    public function test_lead_detail_history_merges_status_changes_and_visit_results_newest_first(): void
+    {
+        [$sales, $lead] = $this->context();
+        SalesLeadStatusHistory::create([
+            'sales_lead_id' => $lead->id,
+            'branch_id' => $lead->branch_id,
+            'actor_id' => $sales->id,
+            'operation_uuid' => (string) Str::uuid(),
+            'status' => SalesLeadStatus::NoResponse,
+            'source' => 'test',
+            'changed_at' => '2026-08-10 09:00:00',
+        ]);
+        SalesLeadStatusHistory::create([
+            'sales_lead_id' => $lead->id,
+            'branch_id' => $lead->branch_id,
+            'actor_id' => $sales->id,
+            'operation_uuid' => (string) Str::uuid(),
+            'status' => SalesLeadStatus::FaceToFace,
+            'source' => 'test',
+            'changed_at' => '2026-08-12 10:00:00',
+        ]);
+        SalesLeadSiteVisit::create([
+            'sales_lead_id' => $lead->id,
+            'branch_id' => $lead->branch_id,
+            'actor_id' => $sales->id,
+            'operation_uuid' => (string) Str::uuid(),
+            'status' => 'completed',
+            'is_completed' => true,
+            'visit_date' => '2026-08-13',
+            'visit_time' => 'siang',
+            'visit_status' => 'follow up',
+            'notes' => 'Kunjungan selesai, konsumen tertarik unit tipe 36.',
+            'visited_at' => '2026-08-13 14:00:00',
+        ]);
+
+        $response = $this->actingAs($sales)->get(route('sales-leads.show', $lead))->assertOk();
+        preg_match('/data-lead-history-list[^>]*>(.*?)<\/ol>/s', $response->getContent(), $historyList);
+
+        $this->assertArrayHasKey(1, $historyList);
+        $historyText = strip_tags($historyList[1]);
+        $this->assertStringContainsString('Kunjungan selesai, konsumen tertarik unit tipe 36.', $historyText);
+        $this->assertStringContainsString('Tatap Muka', $historyText);
+        $this->assertStringContainsString('No Respon', $historyText);
+        $this->assertLessThan(strpos($historyText, 'Tatap Muka'), strpos($historyText, 'Kunjungan selesai'));
+        $this->assertLessThan(strpos($historyText, 'No Respon'), strpos($historyText, 'Tatap Muka'));
+    }
+
+    public function test_lead_detail_completion_action_is_visible_only_to_the_authorized_owner(): void
+    {
+        [$sales, $lead] = $this->context();
+
+        $this->actingAs($sales)->get(route('sales-leads.show', $lead))
+            ->assertOk()
+            ->assertSeeText('Update hasil')
+            ->assertSee(route('sales-leads.lifecycle-status.update', $lead), false)
+            ->assertSeeText('Ya, Ubah Status')
+            ->assertSeeText('Ya, Tandai UTJ')
+            ->assertSee(route('sales-leads.complete', $lead), false);
+
+        $superadmin = $this->user('superadmin', $lead->branch);
+        $this->actingAs($superadmin)->get(route('sales-leads.show', $lead))
+            ->assertOk()
+            ->assertDontSee('sales-leads.lifecycle-status.update', false);
+
+        $lead->update(['current_status' => SalesLeadStatus::FaceToFace, 'completed_at' => now(), 'completed_by_user_id' => $sales->id]);
+        $this->actingAs($sales)->get(route('sales-leads.show', $lead))
+            ->assertOk()
+            ->assertSeeText('Tatap Muka')
+            ->assertSeeText('Selesai')
+            ->assertDontSee('sales-leads.lifecycle-status.update', false);
+    }
+
     public function test_results_visibility_uses_exact_or_evidence_and_survives_later_statuses(): void
     {
         [$sales, $lead] = $this->context();

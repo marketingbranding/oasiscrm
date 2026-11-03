@@ -312,6 +312,31 @@ class SalesPocketbookTest extends TestCase
         $this->assertDatabaseMissing('changelogs', ['version' => null, 'title' => $title]);
     }
 
+    public function test_mobile_lead_detail_redesign_changelog_is_idempotent_visible_and_reversible(): void
+    {
+        $title = 'Detail Lead Mobile Menampilkan Progres dan Riwayat';
+        $migration = require database_path('migrations/2026_11_03_215544_add_sales_lead_detail_mobile_redesign_changelog.php');
+
+        $migration->up();
+        $migration->up();
+
+        $this->assertSame(1, DB::table('changelogs')->whereNull('version')->where('title', $title)->where('category', 'changed')->count());
+
+        $actor = User::factory()->create([
+            'role_id' => Role::query()->where('slug', 'superadmin')->value('id'),
+            'password_changed_at' => now(),
+        ]);
+
+        $this->actingAs($actor)->get(route('changelogs.index'))
+            ->assertOk()
+            ->assertSeeText($title)
+            ->assertSeeText('Detail lead kini menampilkan progres status');
+
+        $migration->down();
+
+        $this->assertDatabaseMissing('changelogs', ['version' => null, 'title' => $title]);
+    }
+
     public function test_invalid_lead_date_with_promo_returns_validation_error(): void
     {
         [$branch, $project, $sales] = $this->salesContext();

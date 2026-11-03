@@ -628,6 +628,25 @@ class SalesPocketbookMobileContractTest extends TestCase
         $this->assertStringContainsString('sales-pocketbook-detail-hero', file_get_contents(resource_path('views/crm/sales-pocketbook/lead-detail.blade.php')));
     }
 
+    public function test_mobile_lead_detail_uses_dedicated_reference_layout_contract(): void
+    {
+        $css = file_get_contents(resource_path('css/app.css'));
+        $view = file_get_contents(resource_path('views/crm/sales-pocketbook/lead-detail.blade.php'));
+
+        foreach ([
+            'sales-lead-detail-mobile',
+            'sales-lead-detail-progress',
+            'sales-lead-detail-information',
+            'sales-lead-detail-history',
+            'sales-lead-detail-actions',
+        ] as $className) {
+            $this->assertStringContainsString($className, $view);
+            $this->assertStringContainsString($className, $css);
+        }
+
+        $this->assertStringContainsString('env(safe-area-inset-bottom)', $css);
+    }
+
     public function test_full_workflow_redesign_changelog_is_idempotent_and_rendered(): void
     {
         $title = 'Buku Saku Sales memiliki tampilan operasional terpadu';

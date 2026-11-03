@@ -334,7 +334,19 @@ class SalesPocketbookMobileContractTest extends TestCase
             ->assertSee('Sumber dan proses')
             ->assertSee('Simpan')
             ->assertSee('Simpan &amp; Tambah Lagi', false)
+            ->assertSee('class="sales-lead-entry-close"', false)
+            ->assertSee('type="button"', false)
+            ->assertSee('aria-label="Tutup form tambah lead"', false)
+            ->assertSee('name="submit_action" value="save"', false)
+            ->assertSee('name="submit_action" value="add_another"', false)
             ->assertDontSee('class="sales-lead-form-group sales-lead-optional-fields" open', false);
+
+        $css = file_get_contents(resource_path('css/app.css'));
+
+        $this->assertIsString($css);
+        $this->assertMatchesRegularExpression('/\.sales-lead-form-actions \{[^}]*position: sticky !important;[^}]*padding: [^}]*env\(safe-area-inset-bottom\)/s', $css);
+        $this->assertMatchesRegularExpression('/\.sales-lead-entry-close \{[^}]*display: none/s', $css);
+        $this->assertMatchesRegularExpression('/\.sales-lead-entry-close \{[^}]*display: inline-flex !important/s', $css);
     }
 
     public function test_mobile_lead_entry_reopens_optional_fields_when_their_validation_fails(): void

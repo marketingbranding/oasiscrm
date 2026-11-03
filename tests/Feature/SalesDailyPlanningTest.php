@@ -35,6 +35,8 @@ class SalesDailyPlanningTest extends TestCase
 
         $this->actingAs($sales)->post(route('sales-agendas.store'), [
             'scheduled_date' => '2026-10-20',
+            'start_time' => '09:00',
+            'end_time' => '10:00',
             'sales_activity_category' => 'Canvassing',
             'title' => 'Kunjungan calon konsumen',
             'location' => 'Project P2',

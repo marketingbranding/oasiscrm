@@ -55,7 +55,11 @@ class SalesAgendaController extends Controller
     {
         abort_unless($request->user()->isSales(), 403);
         $project = $this->projectResolver->resolve($request->user());
-        $showSalesTour = $request->boolean('tour') || $this->onboarding->shouldShow($request->user());
+        if (! $request->boolean('tour') && $this->onboarding->shouldShow($request->user())) {
+            return redirect()->route('sales-pocketbook.onboarding.show');
+        }
+
+        $showSalesTour = $request->boolean('tour');
         $tab = $showSalesTour && ! $request->boolean('tour')
             ? 'agenda'
             : ($request->query('tab') === 'leads' ? 'leads' : 'agenda');
@@ -217,7 +221,7 @@ class SalesAgendaController extends Controller
         $data = $request->validated();
         $owner = $this->agendaOwner($request, $data);
         $project = $this->agendaProject($request, $owner, $data);
-        abort_unless($project, 422, 'Proyek utama belum ditentukan. Hubungi admin untuk menetapkan proyek utama.');
+        abort_unless($project, 422, 'Proyek utama belum ditentukan. Hubungi admin untuk menetapkan proyek sebelum membuat agenda.');
         $duration = $this->durationMinutes($data['start_time'], $data['end_time']);
         $scheduledDate = CarbonImmutable::parse($data['scheduled_date']);
         $summary = $this->receiptService->summarize($owner, $scheduledDate);

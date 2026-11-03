@@ -88,6 +88,12 @@
     @endif
     @include('crm.sales-pocketbook.partials.agenda-week-navigation')
 
+    @if(! $project)
+        <div class="sales-receipt-warning" role="alert">
+            Proyek utama belum ditentukan. Hubungi admin untuk menetapkan proyek sebelum membuat agenda.
+        </div>
+    @endif
+
     @if($isAllAgendas)
         @include('crm.sales-pocketbook.partials.agenda-history')
     @elseif($isReceiptMode)

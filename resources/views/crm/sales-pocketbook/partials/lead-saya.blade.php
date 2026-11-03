@@ -5,8 +5,8 @@
         <p>Pantau lead yang perlu ditindaklanjuti dan yang sudah selesai.</p>
     </header>
     <nav class="sales-lead-status-tabs" aria-label="Status Lead Saya">
-        <a href="{{ route('sales-agendas.index', ['tab' => 'leads', 'lead_status' => 'open']) }}" class="{{ $leadStatus === 'open' ? 'is-active' : '' }}">Belum selesai <strong>{{ $openLeadCount }}</strong></a>
-        <a href="{{ route('sales-agendas.index', ['tab' => 'leads', 'lead_status' => 'completed']) }}" class="{{ $leadStatus === 'completed' ? 'is-active' : '' }}">Selesai <strong>{{ $completedLeadCount }}</strong></a>
+        <a href="{{ route('sales-agendas.index', ['tab' => 'leads', 'lead_status' => 'open']) }}" class="{{ $leadStatus === 'open' ? 'is-active' : '' }}">Belum selesai ({{ $openLeadCount }})</a>
+        <a href="{{ route('sales-agendas.index', ['tab' => 'leads', 'lead_status' => 'completed']) }}" class="{{ $leadStatus === 'completed' ? 'is-active' : '' }}">Selesai ({{ $completedLeadCount }})</a>
     </nav>
 
     @if(request('tab') === 'leads' && auth()->user()->can('create', \App\Models\SalesLead::class))

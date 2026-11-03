@@ -91,6 +91,8 @@ class SalesPocketbookScopeMatrixTest extends TestCase
                 'sales_user_id' => $context['sales']->id,
                 'project_id' => $context['project']->id,
                 'scheduled_date' => today()->toDateString(),
+                'start_time' => '09:00',
+                'end_time' => '10:00',
                 'sales_activity_category' => 'Cek Lokasi',
                 'title' => 'Agenda Tim Baru',
                 'location' => 'Lokasi Tim',
@@ -108,6 +110,8 @@ class SalesPocketbookScopeMatrixTest extends TestCase
                 'sales_user_id' => $context['foreignSales']->id,
                 'project_id' => $context['project']->id,
                 'scheduled_date' => today()->toDateString(),
+                'start_time' => '09:00',
+                'end_time' => '10:00',
                 'sales_activity_category' => 'Cek Lokasi',
                 'title' => 'Agenda Luar Tim',
             ])

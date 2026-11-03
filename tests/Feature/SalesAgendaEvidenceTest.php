@@ -249,11 +249,19 @@ class SalesAgendaEvidenceTest extends TestCase
             $css,
         );
         $this->assertMatchesRegularExpression(
-            '/body\.sales-mobile-detail-page \.sales-agenda-sticky-action \{[^}]*left: 50vw !important;[^}]*right: auto !important;[^}]*width: min\(480px, calc\(100vw - 40px\)\) !important;[^}]*transform: translateX\(-50%\) !important;/s',
+            '/body\.sales-mobile-detail-page \.sales-agenda-sticky-action \{[^}]*inset: auto 0 0 !important;[^}]*width: 100vw !important;[^}]*transform: none !important;/s',
+            $css,
+        );
+        $this->assertDoesNotMatchRegularExpression(
+            '/body\.sales-mobile-detail-page \.sales-agenda-sticky-action \{[^}]*left: 50vw !important;[^}]*width: min\(480px, calc\(100vw - 40px\)\) !important;[^}]*transform: translateX\(-50%\) !important;/s',
             $css,
         );
         $this->assertMatchesRegularExpression(
-            '/body\.sales-mobile-detail-page \.sales-agenda-detail form\.sales-agenda-completion-form \{[^}]*padding-bottom: 120px !important;/s',
+            '/body\.sales-mobile-detail-page \.crm-feedback-bubble \{[^}]*display: none !important;/s',
+            $css,
+        );
+        $this->assertMatchesRegularExpression(
+            '/body\.sales-mobile-detail-page \.sales-agenda-detail form\.sales-agenda-completion-form \{[^}]*padding-bottom: 132px !important;/s',
             $css,
         );
     }

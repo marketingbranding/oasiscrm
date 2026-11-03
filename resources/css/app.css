@@ -5672,7 +5672,7 @@ body.sales-personal-page .sales-bottom-sheet {
 }
 }
 
-/* Embedded mobile browsers can expose a narrow page with a CSS viewport wider than 767px. */
+/* Keep the mobile detail completion action anchored to the viewport. */
 @media (max-width: 1024px) {
     body.sales-mobile-detail-page {
         overflow-x: clip !important;
@@ -5683,22 +5683,19 @@ body.sales-personal-page .sales-bottom-sheet {
     }
 
     body.sales-mobile-detail-page .sales-agenda-detail form.sales-agenda-completion-form {
-        padding-bottom: 120px !important;
+        padding-bottom: 132px !important;
     }
 
     body.sales-mobile-detail-page .sales-agenda-sticky-action {
         position: fixed !important;
-        inset-inline: auto !important;
-        left: 50vw !important;
-        right: auto !important;
-        bottom: 0 !important;
-        z-index: 40 !important;
+        inset: auto 0 0 !important;
+        z-index: 100 !important;
         display: flex !important;
-        width: min(480px, calc(100vw - 40px)) !important;
+        width: 100vw !important;
         box-sizing: border-box !important;
         justify-content: center !important;
         margin: 0 !important;
-        transform: translateX(-50%) !important;
+        transform: none !important;
         padding: 12px 20px max(12px, env(safe-area-inset-bottom)) !important;
         border-top: 2px solid #141210 !important;
         background: #fbf7ec !important;
@@ -5706,12 +5703,16 @@ body.sales-personal-page .sales-bottom-sheet {
 
     body.sales-mobile-detail-page .sales-agenda-sticky-action .crm-button {
         width: 100% !important;
-        max-width: none !important;
+        max-width: 480px !important;
         min-height: 52px !important;
         margin: 0 auto !important;
         box-sizing: border-box !important;
         justify-content: center !important;
         text-align: center !important;
+    }
+
+    body.sales-mobile-detail-page .crm-feedback-bubble {
+        display: none !important;
     }
 }
 
@@ -5751,5 +5752,61 @@ body.sales-personal-page .sales-bottom-sheet {
         margin: 0 auto !important;
         justify-content: center !important;
         text-align: center !important;
+    }
+}
+
+/* Final mobile agenda refinements: keep today legible, rows scannable, and
+   the completion action anchored to the viewport after all legacy overrides. */
+.sales-week-navigation-day[data-week-day-today='true'] {
+    background: #fff3b0;
+    box-shadow: inset 0 4px 0 #fdc20f;
+}
+
+.sales-week-navigation-day[data-week-day-today='true'].is-active {
+    background: #fdc20f;
+    box-shadow: inset 0 4px 0 #141210;
+}
+
+@media (max-width: 767px) {
+    .sales-submitted-row {
+        display: grid !important;
+        grid-template-columns: minmax(0, 1fr) !important;
+        align-items: start !important;
+        gap: 6px !important;
+        min-height: 0 !important;
+        padding: 10px 12px !important;
+    }
+
+    .sales-submitted-row-main {
+        display: grid !important;
+        grid-template-columns: 64px minmax(0, 1fr) !important;
+        align-items: start !important;
+        gap: 8px !important;
+        width: 100% !important;
+    }
+
+    .sales-submitted-row-time {
+        width: auto !important;
+        min-width: 0 !important;
+        padding-top: 2px !important;
+        font-size: 11px !important;
+    }
+
+    .sales-submitted-row-copy {
+        gap: 4px !important;
+    }
+
+    .sales-submitted-row-copy strong {
+        font-size: 13px !important;
+        line-height: 1.2 !important;
+    }
+
+    .sales-submitted-row-copy em {
+        font-size: 9px !important;
+    }
+
+    .sales-submitted-row > .crm-status-badge {
+        justify-self: start !important;
+        margin-left: 72px !important;
     }
 }

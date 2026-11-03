@@ -1,5 +1,6 @@
 @php
     $isAllAgendas = ($agendaView ?? 'day') === 'all';
+    $today = \Carbon\CarbonImmutable::today(config('app.timezone'));
 @endphp
 
 @if(! $isAllAgendas)
@@ -21,10 +22,19 @@
             @foreach($agendaWeek['days'] as $day)
                 @php
                     $isSelected = $day['date']->isSameDay($agendaDate);
+                    $isToday = $day['date']->isSameDay($today);
                     $dayName = $day['date']->locale('id')->translatedFormat('l');
+                    $dayAriaLabel = $dayName.', '.$day['date']->locale('id')->translatedFormat('d F Y');
+                    if (! $day['has_plan']) {
+                        $dayAriaLabel .= ', belum ada rencana';
+                    }
+                    if ($day['has_incomplete_agenda']) {
+                        $dayAriaLabel .= ', '.$day['incomplete_count'].' agenda belum selesai';
+                    }
                 @endphp
                 <li class="sales-week-navigation-day-item" role="listitem">
-                    <a href="{{ route('sales-agendas.index', ['tab' => 'agenda', 'work_date' => $day['date']->toDateString()]) }}" class="sales-week-navigation-day {{ $isSelected ? 'is-active' : '' }}" data-week-day="{{ $day['date']->toDateString() }}" data-week-day-state="{{ ! $day['has_plan'] ? 'empty' : ($day['has_incomplete_agenda'] ? 'attention' : 'ready') }}" aria-label="{{ $dayName }}, {{ $day['date']->locale('id')->translatedFormat('d F Y') }}{{ $day['has_plan'] ? '' : ', belum ada rencana' }}{{ $day['has_incomplete_agenda'] ? ', '.$day['incomplete_count'].' agenda belum selesai' : '' }}" @if($isSelected) aria-current="date" @endif>
+                    @if($isToday)<span id="sales-week-day-today-{{ $day['date']->toDateString() }}" class="sr-only">Hari ini</span>@endif
+                    <a href="{{ route('sales-agendas.index', ['tab' => 'agenda', 'work_date' => $day['date']->toDateString()]) }}" class="sales-week-navigation-day {{ $isSelected ? 'is-active' : '' }}" data-week-day="{{ $day['date']->toDateString() }}" data-week-day-state="{{ ! $day['has_plan'] ? 'empty' : ($day['has_incomplete_agenda'] ? 'attention' : 'ready') }}" data-week-day-today="{{ $isToday ? 'true' : 'false' }}" aria-label="{{ $dayAriaLabel }}" @if($isToday) aria-describedby="sales-week-day-today-{{ $day['date']->toDateString() }}" @endif @if($isSelected) aria-current="date" @endif>
                     <span class="sales-week-navigation-day-name">{{ $day['day_label'] }}</span>
                     <strong>{{ $day['date_label'] }}</strong>
                     <span class="sales-week-navigation-day-status" aria-hidden="true">

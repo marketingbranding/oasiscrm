@@ -31,6 +31,7 @@ class SalesAgendaWorkspaceInteractionMarkupTest extends TestCase
             ->assertDontSee('sales-agenda-week-date', false)
             ->assertDontSee('Pilih minggu', false)
             ->assertSee('data-week-day="'.$today.'"', false)
+            ->assertSee('data-week-day-today="true"', false)
             ->assertDontSee('name="plan_date"', false);
     }
 
@@ -69,6 +70,8 @@ class SalesAgendaWorkspaceInteractionMarkupTest extends TestCase
         $this->assertStringContainsString('grid-template-columns: repeat(7, minmax(44px, 1fr));', $css);
         $this->assertStringContainsString('overflow-x: visible;', $css);
         $this->assertStringContainsString('width: calc(100% + 40px);', $css);
+        $this->assertStringContainsString(".sales-week-navigation-day[data-week-day-today='true']", $css);
+        $this->assertStringContainsString('.sales-submitted-row-main', $css);
     }
 
     public function test_receipt_mode_does_not_hide_the_buku_saku_shell(): void

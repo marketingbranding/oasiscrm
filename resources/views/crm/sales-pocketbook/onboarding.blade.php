@@ -23,6 +23,8 @@
         </div>
     </div>
 
+    <p class="sr-only">Satu buku saku untuk kerjamu.</p>
+
     <div class="sales-pocketbook-onboarding-stage" x-ref="step" role="region" aria-live="polite">
         @foreach($steps as $index => $item)
             <article class="sales-pocketbook-onboarding-slide" data-onboarding-step="{{ $index + 1 }}" x-show="step === {{ $index + 1 }}" @if($index > 0) hidden @endif :hidden="step !== {{ $index + 1 }}" x-transition.opacity>

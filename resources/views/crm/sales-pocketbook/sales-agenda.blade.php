@@ -5,7 +5,7 @@
 @section('body-class', 'sales-personal-page')
 
 @section('content')
-<div class="sales-pocketbook-workspace sales-reference-shell sales-receipt-page space-y-4" x-data="salesAgendaWorkspace()">
+<div class="sales-pocketbook-workspace sales-pocketbook-screen-section sales-reference-shell sales-receipt-page space-y-4" data-composition="sales-pocketbook-composer" x-data="salesAgendaWorkspace()">
     @if($dailyReminder['shouldShow']) @include('crm.sales-pocketbook._daily-reminder', ['dailyReminder' => $dailyReminder]) @endif
     @include('crm.sales-pocketbook.partials.buku-saku-header')
 

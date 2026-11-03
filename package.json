@@ -4,6 +4,7 @@
     "type": "module",
     "scripts": {
         "build": "vite build",
+        "test:frontend": "node --test tests/frontend/*.test.js",
         "dev": "vite"
     },
     "devDependencies": {

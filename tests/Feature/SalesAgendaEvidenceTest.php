@@ -177,7 +177,11 @@ class SalesAgendaEvidenceTest extends TestCase
             ->assertSeeText('+ Foto')
             ->assertSeeText('0 dari 2')
             ->assertSeeText('Hasil aktivitas')
+            ->assertSee('data-completion-form', false)
+            ->assertSee('data-agenda-result', false)
+            ->assertSee('data-complete-agenda', false)
             ->assertSee('disabled', false)
+            ->assertSee('aria-disabled="true"', false)
             ->assertSee('sales-agenda-mobile-info', false)
             ->assertSee('sales-agenda-photo-slot', false)
             ->assertSee('data-agenda-photo-preview', false)
@@ -197,6 +201,27 @@ class SalesAgendaEvidenceTest extends TestCase
             ->post(route('sales-agendas.evidence.store', $agenda), ['photo' => UploadedFile::fake()->createWithContent('invalid.txt', 'not an image')])
             ->assertOk()
             ->assertSeeText('Foto harus berupa JPEG, PNG, atau WebP yang valid.');
+    }
+
+    public function test_completion_button_changelog_is_deployed_once_and_visible(): void
+    {
+        $role = Role::firstOrCreate(['slug' => 'superadmin'], ['name' => 'Super Admin']);
+        $actor = User::factory()->create([
+            'role_id' => $role->id,
+            'password_changed_at' => now(),
+        ]);
+
+        $title = 'Tombol penyelesaian Agenda Sales aktif setelah hasil diisi';
+        $migration = require database_path('migrations/2026_11_03_103628_add_sales_agenda_completion_button_changelog.php');
+
+        $migration->up();
+        $migration->up();
+
+        $this->assertSame(1, DB::table('changelogs')->whereNull('version')->where('title', $title)->count());
+        $this->actingAs($actor)
+            ->get(route('changelogs.index'))
+            ->assertOk()
+            ->assertSeeText($title);
     }
 
     public function test_mobile_agenda_detail_actions_fit_and_center_within_the_viewport(): void

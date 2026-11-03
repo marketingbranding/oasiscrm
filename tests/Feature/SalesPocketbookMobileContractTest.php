@@ -401,6 +401,7 @@ class SalesPocketbookMobileContractTest extends TestCase
         }
 
         $this->assertStringContainsString('sales-pocketbook-composer', file_get_contents(resource_path('views/crm/sales-pocketbook/sales-agenda.blade.php')));
+        $this->assertStringNotContainsString('class="sales-pocketbook-workspace sales-pocketbook-screen-section', file_get_contents(resource_path('views/crm/sales-pocketbook/sales-agenda.blade.php')));
         $this->assertStringContainsString('sales-pocketbook-composer', file_get_contents(resource_path('views/crm/sales-pocketbook/index.blade.php')));
         $this->assertStringContainsString('sales-pocketbook-detail-hero', file_get_contents(resource_path('views/crm/sales-pocketbook/sales-agenda-detail.blade.php')));
         $this->assertStringContainsString('sales-pocketbook-detail-hero', file_get_contents(resource_path('views/crm/sales-pocketbook/lead-detail.blade.php')));

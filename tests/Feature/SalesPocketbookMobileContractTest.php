@@ -139,6 +139,33 @@ class SalesPocketbookMobileContractTest extends TestCase
         $this->assertSame(1, DB::table('changelogs')->whereNull('version')->where('title', $title)->count());
     }
 
+    public function test_mobile_lead_and_agenda_layout_changelog_is_idempotent_and_visible(): void
+    {
+        $title = 'Perbaikan tampilan form lead dan aksi agenda di mobile';
+        $migrationPaths = glob(database_path('migrations/*_add_sales_lead_agenda_mobile_layout_changelog.php'));
+
+        $this->assertCount(1, $migrationPaths);
+
+        $migration = require $migrationPaths[0];
+        $migration->up();
+        $migration->up();
+
+        $this->assertSame(1, DB::table('changelogs')->whereNull('version')->where('title', $title)->count());
+        $this->assertDatabaseHas('changelogs', [
+            'version' => null,
+            'title' => $title,
+            'category' => 'changed',
+            'created_by' => null,
+        ]);
+
+        $actor = User::factory()->create([
+            'role_id' => Role::query()->where('slug', 'superadmin')->value('id'),
+            'password_changed_at' => now(),
+        ]);
+
+        $this->actingAs($actor)->get(route('changelogs.index'))->assertOk()->assertSeeText($title);
+    }
+
     public function test_sales_agenda_stores_time_range_and_duration_without_a_daily_minutes_cap(): void
     {
         [$branch, $project, $sales] = $this->salesContext();
@@ -221,6 +248,29 @@ class SalesPocketbookMobileContractTest extends TestCase
         $this->assertIsString($css);
         $this->assertMatchesRegularExpression(
             '/\.sales-mobile-detail-page \.sales-agenda-detail form\.sales-agenda-completion-form \{[^}]*padding: 0 0 120px !important;/s',
+            $css,
+        );
+    }
+
+    public function test_mobile_lead_form_actions_do_not_cover_scrollable_fields_and_agenda_actions_wrap(): void
+    {
+        $css = file_get_contents(resource_path('css/app.css'));
+
+        $this->assertIsString($css);
+        $this->assertMatchesRegularExpression(
+            '/\.sales-lead-entry-scroll \{[^}]*overflow-y: auto !important;[^}]*\}/s',
+            $css,
+        );
+        $this->assertMatchesRegularExpression(
+            '/\.sales-lead-form-actions \{[^}]*position: static !important;[^}]*\}/s',
+            $css,
+        );
+        $this->assertMatchesRegularExpression(
+            '/\.sales-receipt-paper-row \{[^}]*flex-wrap: wrap !important;[^}]*\}/s',
+            $css,
+        );
+        $this->assertMatchesRegularExpression(
+            '/\.sales-receipt-paper-row-actions \{[^}]*flex: 0 0 100% !important;[^}]*\}/s',
             $css,
         );
     }
@@ -425,12 +475,12 @@ class SalesPocketbookMobileContractTest extends TestCase
         $css = file_get_contents(resource_path('css/app.css'));
 
         $this->assertIsString($css);
-        $this->assertMatchesRegularExpression('/\.sales-lead-form-actions \{[^}]*position: sticky !important;[^}]*padding: [^}]*env\(safe-area-inset-bottom\)/s', $css);
+        $this->assertMatchesRegularExpression('/\.sales-lead-form-actions \{[^}]*position: static !important;[^}]*padding: [^}]*env\(safe-area-inset-bottom\)/s', $css);
         $this->assertMatchesRegularExpression('/\.sales-lead-entry-close \{[^}]*display: none/s', $css);
         $this->assertMatchesRegularExpression('/\.sales-lead-entry-close \{[^}]*display: inline-flex !important/s', $css);
         $this->assertMatchesRegularExpression('/\.sales-lead-entry-heading-copy \{[^}]*gap: var\(--oasis-space-1\)/s', $css);
         $this->assertMatchesRegularExpression('/\.sales-lead-entry-scroll \{[^}]*overflow-y: auto !important/s', $css);
-        $this->assertMatchesRegularExpression('/\.sales-lead-entry-scroll \{[^}]*padding-top: 8px !important/s', $css);
+        $this->assertMatchesRegularExpression('/\.sales-lead-entry-scroll \{[^}]*padding: 8px 0 12px !important/s', $css);
     }
 
     public function test_invalid_array_lead_date_query_does_not_break_lead_workspace_rendering(): void

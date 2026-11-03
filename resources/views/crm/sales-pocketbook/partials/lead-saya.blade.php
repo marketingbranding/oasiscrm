@@ -52,7 +52,7 @@
                         </div>
                     </fieldset>
                     <details class="sales-lead-form-group sales-lead-optional-fields" @if($errors->hasAny(['source', 'platform', 'campaign_name', 'current_status', 'notes']) || old('source') !== null || old('platform') !== null || old('campaign_name') !== null || old('current_status') !== null || old('notes') !== null) open @endif>
-                        <summary>Sumber dan proses <span>(opsional untuk input cepat)</span></summary>
+                        <summary>Sumber dan proses</summary>
                         <div class="sales-lead-form-grid">
                             @foreach(['source' => ['Sumber Lead', \App\Support\SalesLeadMasterData::SOURCES], 'platform' => ['Kanal Masuk', \App\Support\SalesLeadMasterData::CHANNELS], 'campaign_name' => ['Aktivitas Lead', \App\Support\SalesLeadMasterData::ACTIVITIES]] as $name => [$label, $options])
                                 <label><span class="sales-lead-label">{{ $label }} @if(!auth()->user()->isSales())<span class="sales-required-mark" aria-hidden="true">*</span>@endif</span><select name="{{ $name }}" @required(!auth()->user()->isSales())><option value="">Pilih {{ strtolower($label) }}</option>@foreach($options as $option)<option value="{{ $option }}" @selected(old($name) === $option)>{{ $option }}</option>@endforeach</select></label>

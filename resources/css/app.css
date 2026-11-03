@@ -971,7 +971,6 @@ body.sales-personal-page .crm-shell-frame { background: var(--sales-reference-pa
 .sales-lead-form-group:first-of-type .sales-lead-server-context { display: none; }
 .sales-lead-optional-fields { border-top: 1px dashed var(--sales-reference-ink); margin-top: 10px; padding-top: 10px; }
 .sales-lead-optional-fields > summary { margin-bottom: 8px; color: var(--sales-reference-muted); font: 600 12px/1.2 Archivo, Arial, sans-serif; }
-.sales-lead-optional-fields > summary span { display: none; }
 .sales-lead-form-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-top: 12px; }
 .sales-lead-form-actions .crm-button { min-height: 52px; width: 100%; font: 800 14px/1.2 Archivo, Arial, sans-serif; }
 .sales-lead-form-actions .crm-button--primary { background: var(--sales-reference-ink); color: var(--sales-reference-yellow); }
@@ -1971,7 +1970,6 @@ body.sales-personal-page .crm-feedback-bubble {
 .sales-lead-optional-fields > summary::-webkit-details-marker { display: none; }
 .sales-lead-optional-fields > summary::after { float: right; content: '+'; color: #fff; }
 .sales-lead-optional-fields[open] > summary::after { content: '−'; }
-.sales-lead-optional-fields > summary span { color: #fff; font-weight: 400; text-transform: none; }
 
 .sales-lead-server-context {
     border: 1px dashed #000;
@@ -5572,7 +5570,7 @@ body.sales-personal-page .crm-page-shell { width: min(100%, 480px) !important; p
 .sales-lead-entry-close:focus-visible { outline: 3px solid #1a6dd6 !important; outline-offset: 2px !important; }
 .sales-lead-form-group:first-of-type::before { content: none !important; }
 .sales-lead-entry-form { display: flex !important; flex-direction: column !important; flex: 1 1 0% !important; min-height: 0 !important; margin-bottom: 0 !important; gap: 10px !important; overflow: hidden !important; padding: 0 20px calc(10px + env(safe-area-inset-bottom)) !important; }
-.sales-lead-entry-scroll { display: grid !important; flex: 1 1 auto !important; min-height: 0 !important; gap: 10px !important; overflow-y: auto !important; padding-top: 0 !important; }
+.sales-lead-entry-scroll { display: grid !important; flex: 1 1 auto !important; min-height: 0 !important; gap: 10px !important; overflow-y: auto !important; padding-top: 8px !important; }
 .sales-lead-form-group { border: 0 !important; padding: 0 !important; }
 .sales-lead-form-group legend { display: none !important; }
 .sales-lead-form-grid { display: grid !important; grid-template-columns: repeat(2, minmax(0, 1fr)) !important; gap: 10px !important; }
@@ -5583,7 +5581,6 @@ body.sales-personal-page .crm-page-shell { width: min(100%, 480px) !important; p
 .sales-lead-server-context b { font: 800 11px/1.2 Archivo, Arial, sans-serif !important; }
 .sales-lead-optional-fields { border-top: 1px dashed #141210 !important; margin-top: 0 !important; padding-top: 10px !important; }
 .sales-lead-optional-fields > summary { margin-bottom: 8px !important; color: #5e594d !important; font: 600 12px/1.2 Archivo, Arial, sans-serif !important; }
-.sales-lead-optional-fields > summary span { display: inline !important; }
 .sales-lead-notes-field { grid-column: 1 / -1 !important; }
 .sales-lead-form-actions { position: sticky !important; bottom: 0 !important; z-index: 2 !important; display: grid !important; grid-template-columns: repeat(2, minmax(0, 1fr)) !important; gap: 10px !important; margin: 0 -20px !important; padding: 10px 20px calc(10px + env(safe-area-inset-bottom)) !important; border-top: 2px solid #141210 !important; background: #fbf7ec !important; }
 .sales-lead-form-actions .crm-button { min-height: 52px !important; width: 100% !important; font: 800 14px/1.2 Archivo, Arial, sans-serif !important; }

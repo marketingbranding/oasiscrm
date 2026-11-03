@@ -409,6 +409,7 @@ class SalesPocketbookMobileContractTest extends TestCase
             ->assertSee('sales-required-mark', false)
             ->assertSee('type="date" name="lead_date" value="'.today()->toDateString().'"', false)
             ->assertDontSee('type="hidden" name="lead_date"', false)
+            ->assertDontSee('(opsional untuk input cepat)', false)
             ->assertSee('No. WhatsApp / Telepon')
             ->assertSee('Sumber dan proses')
             ->assertSee('Simpan')
@@ -429,6 +430,7 @@ class SalesPocketbookMobileContractTest extends TestCase
         $this->assertMatchesRegularExpression('/\.sales-lead-entry-close \{[^}]*display: inline-flex !important/s', $css);
         $this->assertMatchesRegularExpression('/\.sales-lead-entry-heading-copy \{[^}]*gap: var\(--oasis-space-1\)/s', $css);
         $this->assertMatchesRegularExpression('/\.sales-lead-entry-scroll \{[^}]*overflow-y: auto !important/s', $css);
+        $this->assertMatchesRegularExpression('/\.sales-lead-entry-scroll \{[^}]*padding-top: 8px !important/s', $css);
     }
 
     public function test_invalid_array_lead_date_query_does_not_break_lead_workspace_rendering(): void

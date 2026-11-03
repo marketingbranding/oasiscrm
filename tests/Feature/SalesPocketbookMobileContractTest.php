@@ -339,6 +339,7 @@ class SalesPocketbookMobileContractTest extends TestCase
         ]);
 
         $response->assertRedirect()->assertSessionHasErrors();
+        $this->followRedirects($response)->assertOk();
         $this->assertDatabaseCount('sales_leads', 0);
     }
 

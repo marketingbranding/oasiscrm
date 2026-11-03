@@ -26,7 +26,11 @@ abstract class SalesLeadRequest extends FormRequest
             'branch_id' => ['required', 'integer', 'exists:branches,id'],
             'project_id' => ['required', 'integer', 'exists:lead_master,id'],
             'sales_user_id' => ['required', 'integer', 'exists:users,id'],
-            'lead_date' => ['required', 'date'],
+            'lead_date' => ['required', 'date', function (string $attribute, mixed $value, \Closure $fail): void {
+                if (! $this->isValidDateInput($value)) {
+                    $fail('Tanggal lead harus berformat YYYY-MM-DD.');
+                }
+            }],
             'customer_name' => ['required', 'string', 'max:255'],
             'phone' => ['required', 'string', 'max:50'],
             'notes' => ['nullable', 'string', 'max:5000'],
@@ -62,10 +66,12 @@ abstract class SalesLeadRequest extends FormRequest
         if ($this->user()?->isSales()) {
             $data['sales_user_id'] = $this->user()->id;
             $data['branch_id'] = $this->user()->branch_id;
-            $data['lead_date'] = $this->filled('lead_date') ? $this->input('lead_date') : today()->toDateString();
-            $project = $this->isValidDateInput($data['lead_date'])
+            $data['lead_date'] = $this->isQuickSalesCreate() && $this->filled('lead_date')
+                ? $this->input('lead_date')
+                : today()->toDateString();
+            $project = $this->isQuickSalesCreate() && $this->isValidDateInput($data['lead_date'])
                 ? app(SalesAgendaProjectResolver::class)->resolve($this->user(), $data['lead_date'])
-                : null;
+                : app(SalesAgendaProjectResolver::class)->resolve($this->user(), today()->toDateString());
             $data['project_id'] = $project?->id;
         }
         if (! $this->lead() && ! $this->exists('current_status')) {

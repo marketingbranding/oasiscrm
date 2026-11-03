@@ -26,6 +26,7 @@ use App\Services\SalesDailyReminderService;
 use App\Services\SalesPocketbookOnboardingService;
 use App\Services\WorkspaceAccessService;
 use Carbon\CarbonImmutable;
+use DateTimeImmutable;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -161,13 +162,14 @@ class SalesAgendaController extends Controller
             ->withQueryString();
         $projects = $this->workspaceAccess->accessibleProjects($request->user())->where('is_active', true)->values();
         $defaultProjectId = old('project_id', $request->query('project_id', $project?->id));
+        $leadDate = $this->normalizeLeadDate(old('lead_date', $request->query('lead_date', today()->toDateString())));
         $cascadeProjects = $projects->map(fn (LeadMaster $item) => [
             'id' => (string) $item->id,
             'branch_id' => (string) $item->branch_id,
         ])->values();
         $leadOptionsEndpoint = route('sales-leads.options', ['branch' => 'BRANCH_ID']);
         $promos = $defaultProjectId
-            ? $this->promoOptions->availableForBranchAndDate((int) $projects->firstWhere('id', (int) $defaultProjectId)?->branch_id, old('lead_date', $request->query('lead_date', today())))
+            ? $this->promoOptions->availableForBranchAndDate((int) $projects->firstWhere('id', (int) $defaultProjectId)?->branch_id, $leadDate)
             : collect([PromoOptionService::NO_PROMO]);
         $dailyReminder = $this->dailyReminder->state($request->user()) + [
             'leadInputUrl' => route('sales-agendas.index', ['tab' => 'leads']).'#lead-saya',
@@ -178,6 +180,23 @@ class SalesAgendaController extends Controller
         $canExport = $request->user()->hasPermission('sales_pocketbook.export_own');
 
         return view('crm.sales-pocketbook.sales-agenda', compact('project', 'agendas', 'allAgendas', 'agendaView', 'incompleteAgendaCount', 'agendaGroups', 'leads', 'leadStatus', 'openLeadCount', 'completedLeadCount', 'tab', 'projects', 'defaultProjectId', 'cascadeProjects', 'leadOptionsEndpoint', 'promos', 'dailyReminder', 'canExport', 'agendaDate', 'agendaWeek', 'receiptSummary', 'daySubmission', 'incompletePreviousAgendas', 'showSalesTour'));
+    }
+
+    private function normalizeLeadDate(mixed $value): string
+    {
+        if (! is_string($value)) {
+            return today()->toDateString();
+        }
+
+        try {
+            $date = DateTimeImmutable::createFromFormat('!Y-m-d', $value);
+        } catch (\ValueError) {
+            return today()->toDateString();
+        }
+
+        return $date !== false && $date->format('Y-m-d') === $value
+            ? $value
+            : today()->toDateString();
     }
 
     public function show(Request $request, ContentItem $agenda)

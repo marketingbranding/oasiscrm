@@ -307,6 +307,31 @@ class SalesPocketbookTest extends TestCase
         $this->assertNotEmpty($validator->errors()->toArray());
     }
 
+    public function test_invalid_lead_date_without_promo_returns_validation_error(): void
+    {
+        [$branch, $project, $sales] = $this->salesContext();
+        $manager = $this->user('pusat', $branch, 'Tim Pusat');
+        $request = StoreSalesLeadRequest::create('/sales-leads', 'POST', [
+            'branch_id' => $branch->id,
+            'project_id' => $project->id,
+            'sales_user_id' => $sales->id,
+            'lead_date' => "2026-01-01\0",
+            'customer_name' => 'Lead Invalid Date Without Promo',
+            'phone' => '081234567890',
+            'source' => 'Referral',
+            'platform' => 'WhatsApp',
+            'campaign_name' => 'Referral',
+            'current_status' => 'no_response',
+            'operation_uuid' => (string) Str::uuid(),
+        ]);
+        $request->setUserResolver(fn (): User => $manager);
+
+        $validator = Validator::make($request->all(), $request->rules());
+
+        $this->assertTrue($validator->fails());
+        $this->assertNotEmpty($validator->errors()->toArray());
+    }
+
     public function test_non_sales_assignment_validation_remains_based_on_today(): void
     {
         [$branch, $project, $sales] = $this->salesContext();

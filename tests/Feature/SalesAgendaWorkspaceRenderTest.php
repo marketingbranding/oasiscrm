@@ -442,6 +442,28 @@ class SalesAgendaWorkspaceRenderTest extends TestCase
             ->assertSee('work_date=2026-10-30', false);
     }
 
+    public function test_all_agenda_view_uses_compact_rows_for_mobile_scanning(): void
+    {
+        [$sales, $project] = $this->salesContext();
+        $agenda = $this->agendaAt($sales, $project, '2026-10-29', '09:00', '10:00', 'Agenda ringkas lintas tanggal');
+        $agenda->update(['sales_activity_category' => 'Canvassing']);
+
+        $this->actingAs($sales)
+            ->get(route('sales-agendas.index', [
+                'tab' => 'agenda',
+                'view' => 'all',
+                'work_date' => '2026-10-30',
+            ]))
+            ->assertOk()
+            ->assertSee('sales-agenda-history-compact-row', false)
+            ->assertSee('sales-agenda-history-compact-time', false)
+            ->assertSee('sales-agenda-history-compact-category', false)
+            ->assertSee('sales-agenda-history-compact-status', false)
+            ->assertSee('Agenda ringkas lintas tanggal')
+            ->assertSee('return_view=all', false)
+            ->assertDontSee('sales-agenda-history-facts', false);
+    }
+
     public function test_receipt_ignores_same_day_agenda_outside_sales_scope(): void
     {
         [$sales] = $this->salesContext();
@@ -528,6 +550,27 @@ class SalesAgendaWorkspaceRenderTest extends TestCase
             ->assertSee('agenda_page=1', false)
             ->assertSee('view=all', false)
             ->assertSee('work_date=2026-10-30', false);
+    }
+
+    public function test_compact_agenda_history_changelog_migration_is_idempotent(): void
+    {
+        $title = 'Daftar Semua Agenda Lebih Ringkas';
+        DB::table('changelogs')->whereNull('version')->where('title', $title)->delete();
+
+        $migration = require database_path('migrations/2026_11_03_140000_add_sales_agenda_history_compact_changelog.php');
+        $migration->up();
+        $migration->up();
+
+        $this->assertSame(1, DB::table('changelogs')->whereNull('version')->where('title', $title)->count());
+        $this->assertDatabaseHas('changelogs', [
+            'version' => null,
+            'title' => $title,
+            'category' => 'changed',
+        ]);
+
+        $migration->down();
+
+        $this->assertSame(0, DB::table('changelogs')->whereNull('version')->where('title', $title)->count());
     }
 
     public function test_agenda_history_changelog_is_idempotent_and_visible(): void

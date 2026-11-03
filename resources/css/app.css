@@ -790,21 +790,25 @@ body.sales-personal-page .crm-shell-frame { background: var(--sales-reference-pa
 .sales-agenda-history-header > a,
 .sales-agenda-history-detail { color: #0000ee; font: 700 12px/1.3 Archivo, Arial, sans-serif; text-decoration: underline; text-underline-offset: 2px; }
 .sales-agenda-history-list { display: grid; gap: 8px; }
-.sales-agenda-history-item { display: grid; gap: 10px; border: 2px solid var(--sales-reference-ink); padding: 14px; background: #fff; }
-.sales-agenda-history-item-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
-.sales-agenda-history-item-heading > div { min-width: 0; }
-.sales-agenda-history-item-heading > div > span { color: var(--sales-reference-muted); font: 700 11px/1.2 Archivo, Arial, sans-serif; text-transform: uppercase; }
-.sales-agenda-history-item-heading h3 { margin-top: 4px; overflow-wrap: anywhere; font: 800 16px/1.2 Archivo, Arial, sans-serif; }
-.sales-agenda-history-facts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 12px; }
-.sales-agenda-history-facts div { min-width: 0; }
-.sales-agenda-history-facts dt { color: var(--sales-reference-muted); font: 700 10px/1.2 Archivo, Arial, sans-serif; text-transform: uppercase; }
-.sales-agenda-history-facts dd { margin-top: 2px; overflow-wrap: anywhere; font: 500 13px/1.3 Archivo, Arial, sans-serif; }
+.sales-agenda-history-compact-row { border: 2px solid var(--sales-reference-ink); background: #fff; padding: 8px 10px; }
+.sales-agenda-history-compact-main { display: grid; grid-template-columns: minmax(4.5rem, auto) minmax(0, 1fr); gap: 10px; }
+.sales-agenda-history-compact-time { display: grid; align-content: start; gap: 2px; border-right: 1px dashed var(--sales-reference-ink); padding: 2px 10px 2px 0; }
+.sales-agenda-history-compact-time strong { font: 800 12px/1.2 Archivo, Arial, sans-serif; white-space: nowrap; }
+.sales-agenda-history-compact-time small { color: var(--sales-reference-muted); font: 500 10px/1.2 Archivo, Arial, sans-serif; }
+.sales-agenda-history-compact-content { display: grid; min-width: 0; gap: 4px; align-content: start; }
+.sales-agenda-history-compact-meta { display: flex; flex-wrap: wrap; gap: 4px 8px; color: var(--sales-reference-muted); font: 700 10px/1.2 Archivo, Arial, sans-serif; text-transform: uppercase; }
+.sales-agenda-history-compact-category { color: var(--sales-reference-ink); }
+.sales-agenda-history-compact-content h3 { overflow-wrap: anywhere; font: 800 15px/1.2 Archivo, Arial, sans-serif; }
+.sales-agenda-history-compact-status { min-height: 24px; display: flex; align-items: center; }
+.sales-agenda-history-detail { display: inline-flex; min-height: 44px; align-items: center; width: fit-content; }
 
 @media (max-width: 767px) {
     .sales-agenda-history-header { display: grid; }
     .sales-agenda-history-header > a { justify-self: start; }
-    .sales-agenda-history-item-heading { flex-direction: column; }
     .sales-agenda-history-action { align-items: flex-start; }
+    .sales-agenda-history-compact-row { padding: 8px; }
+    .sales-agenda-history-compact-main { gap: 8px; }
+    .sales-agenda-history-compact-time { padding-right: 8px; }
 }
 
 .sales-reference-bottom-action {

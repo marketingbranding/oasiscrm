@@ -24,21 +24,24 @@
         <div class="sales-agenda-history-list" role="list">
             @foreach($allAgendas as $agenda)
                 @php([$agendaStatusLabel, $agendaStatusVariant] = $agendaStatuses[$agenda->status] ?? [ucfirst(str_replace('_', ' ', $agenda->status)), 'neutral'])
-                <article class="sales-agenda-history-item" role="listitem">
-                    <div class="sales-agenda-history-item-heading">
-                        <div>
-                            <span>{{ $agenda->scheduled_date->format('d/m/Y') }} · {{ $agenda->sales_activity_category ?: 'Aktivitas Sales' }}</span>
-                            <h3>{{ $agenda->title }}</h3>
+                <article class="sales-agenda-history-compact-row" role="listitem">
+                    <div class="sales-agenda-history-compact-main">
+                        <div class="sales-agenda-history-compact-time" aria-label="Jadwal agenda">
+                            <strong>{{ $agenda->start_time && $agenda->end_time ? substr((string) $agenda->start_time, 0, 5).'–'.substr((string) $agenda->end_time, 0, 5) : 'Fleksibel' }}</strong>
+                            @if($agenda->duration_minutes)<small>{{ $agenda->duration_minutes }} menit</small>@endif
                         </div>
-                        <x-crm.status-badge :variant="$agendaStatusVariant">{{ $agendaStatusLabel }}</x-crm.status-badge>
+                        <div class="sales-agenda-history-compact-content">
+                            <div class="sales-agenda-history-compact-meta">
+                                <span>{{ $agenda->scheduled_date->format('d/m/Y') }}</span>
+                                <span class="sales-agenda-history-compact-category">{{ $agenda->sales_activity_category ?: 'Aktivitas Sales' }}</span>
+                            </div>
+                            <h3>{{ $agenda->title }}</h3>
+                            <div class="sales-agenda-history-compact-status">
+                                <x-crm.status-badge :variant="$agendaStatusVariant">{{ $agendaStatusLabel }}</x-crm.status-badge>
+                            </div>
+                            <a class="sales-agenda-history-detail" href="{{ route('sales-agendas.show', [$agenda, 'return_view' => 'all', 'return_work_date' => $agendaDate->toDateString()]) }}">Buka detail agenda</a>
+                        </div>
                     </div>
-                    <dl class="sales-agenda-history-facts">
-                        <div><dt>Jadwal</dt><dd>{{ $agenda->start_time && $agenda->end_time ? substr((string) $agenda->start_time, 0, 5).'–'.substr((string) $agenda->end_time, 0, 5) : 'Fleksibel' }}</dd></div>
-                        <div><dt>Durasi</dt><dd>{{ $agenda->duration_minutes ? $agenda->duration_minutes.' menit' : 'Tidak ditentukan' }}</dd></div>
-                        <div><dt>Proyek</dt><dd>{{ $agenda->salesProject?->project_name ?: ($agenda->project_name ?: 'Belum tersedia') }}</dd></div>
-                        <div><dt>Lokasi</dt><dd>{{ $agenda->location ?: 'Tidak dicatat' }}</dd></div>
-                    </dl>
-                    <a class="sales-agenda-history-detail" href="{{ route('sales-agendas.show', [$agenda, 'return_view' => 'all', 'return_work_date' => $agendaDate->toDateString()]) }}">Buka detail agenda</a>
                 </article>
             @endforeach
         </div>

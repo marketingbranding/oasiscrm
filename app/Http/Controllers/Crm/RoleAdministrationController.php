@@ -12,16 +12,21 @@ use App\Models\Permission;
 use App\Models\Role;
 use App\Models\User;
 use App\Services\AccountAuditService;
+use App\Services\SystemAdministrationAuthorizationService;
 use App\Support\PermissionCatalog;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
 
 class RoleAdministrationController extends Controller
 {
+    public function __construct(private readonly SystemAdministrationAuthorizationService $systemAdministration) {}
+
     public function index(): View
     {
+        $this->authorizeSystemAdministration();
         $roles = Role::query()->with('permissions')->withCount('users')->orderBy('authority_level')->orderBy('name')->get();
         $permissions = Permission::query()->orderBy('group_name')->orderBy('name')->get()->groupBy('group_name');
 
@@ -34,6 +39,7 @@ class RoleAdministrationController extends Controller
 
     public function store(RoleStoreRequest $request): RedirectResponse
     {
+        $this->authorizeSystemAdministration();
         $data = $request->validated();
         $data['slug'] = $this->uniqueSlug($data['slug'] ?? $data['name']);
         $role = Role::create([...$data, 'is_superadmin' => false, 'is_active' => true]);
@@ -44,6 +50,7 @@ class RoleAdministrationController extends Controller
 
     public function update(RoleUpdateRequest $request, Role $role): RedirectResponse
     {
+        $this->authorizeSystemAdministration();
         $data = $request->validated();
         if ($role->is_superadmin && ! $data['is_active']) {
             throw ValidationException::withMessages(['is_active' => 'Superadmin tidak dapat dinonaktifkan.']);
@@ -67,6 +74,7 @@ class RoleAdministrationController extends Controller
 
     public function updatePermissions(RolePermissionUpdateRequest $request, Role $role): RedirectResponse
     {
+        $this->authorizeSystemAdministration();
         if ($role->is_superadmin) {
             throw ValidationException::withMessages(['role' => 'Permission Superadmin mengikuti registry wildcard dan tidak diedit melalui matrix.']);
         }
@@ -89,6 +97,13 @@ class RoleAdministrationController extends Controller
             'description' => "Peran {$role->name} diperbarui",
             'properties' => ['old' => $old, 'new' => $new],
         ]);
+    }
+
+    private function authorizeSystemAdministration(): void
+    {
+        $actor = Auth::user();
+        abort_unless($actor instanceof User, 403);
+        $this->systemAdministration->assertCanManage($actor, SystemAdministrationAuthorizationService::ROLES);
     }
 
     private function uniqueSlug(string $value): string

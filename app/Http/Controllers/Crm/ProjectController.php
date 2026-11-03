@@ -7,8 +7,10 @@ use App\Http\Requests\Crm\StoreProjectRequest;
 use App\Http\Requests\Crm\UpdateProjectRequest;
 use App\Models\Branch;
 use App\Models\LeadMaster;
+use App\Models\User;
 use App\Services\ProjectAdministrationService;
 use App\Services\SalesLeadSheetOptionService;
+use App\Services\SystemAdministrationAuthorizationService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Symfony\Component\HttpFoundation\Response;
@@ -16,9 +18,11 @@ use Throwable;
 
 class ProjectController extends Controller
 {
+    public function __construct(private readonly SystemAdministrationAuthorizationService $systemAdministration) {}
+
     public function index(Request $request)
     {
-        $this->ensureSuperadmin();
+        $this->authorizeSystemAdministration();
         $selectedBranchId = $request->get('branch_id');
         $branches = Branch::where('is_active', true)->forDropdown()->get();
         $query = LeadMaster::with('branch')->withCount('kavlings');
@@ -52,7 +56,7 @@ class ProjectController extends Controller
 
     public function create()
     {
-        $this->ensureSuperadmin();
+        $this->authorizeSystemAdministration();
         $branches = Branch::where('is_active', true)->forDropdown()->get();
 
         return view('crm.projects.create', compact('branches'));
@@ -71,7 +75,7 @@ class ProjectController extends Controller
 
     public function edit(LeadMaster $project, SalesLeadSheetOptionService $sheetOptions)
     {
-        $this->ensureSuperadmin();
+        $this->authorizeSystemAdministration();
         $branches = Branch::where('is_active', true)->forDropdown()->get();
         $projectOptions = [];
         $sheetOptionsWarning = null;
@@ -102,7 +106,7 @@ class ProjectController extends Controller
 
     public function destroy(Request $request, LeadMaster $project, ProjectAdministrationService $projects)
     {
-        $this->ensureSuperadmin();
+        $this->authorizeSystemAdministration();
         $archived = $projects->archive($request, $project, $request->user(), $request->input('expected_updated_at'));
         if ($archived instanceof Response) {
             return $archived;
@@ -117,10 +121,10 @@ class ProjectController extends Controller
         return redirect()->route('projects.edit', ['project' => $project->id]);
     }
 
-    private function ensureSuperadmin(): void
+    private function authorizeSystemAdministration(): void
     {
-        if (! Auth::user()->isSuperadmin()) {
-            abort(403);
-        }
+        $actor = Auth::user();
+        abort_unless($actor instanceof User, 403);
+        $this->systemAdministration->assertCanManage($actor, SystemAdministrationAuthorizationService::PROJECTS);
     }
 }

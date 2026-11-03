@@ -59,10 +59,39 @@ class SalesAgendaOnlyWorkspaceTest extends TestCase
 
         $response->assertOk()
             ->assertSee($agenda->title)
-            ->assertSee('Tambah Agenda')
+            ->assertSee('+ Tambah agenda')
             ->assertDontSee('Daily Planning')
             ->assertDontSee('Kertas Agenda Harian')
-            ->assertDontSee('420 menit');
+            ->assertSee('420 menit');
+    }
+
+    public function test_sales_workspace_renders_receipt_date_context_and_add_plan_action(): void
+    {
+        [$branch, $project, $sales] = $this->salesContext();
+        ContentItem::create([
+            'branch_id' => $branch->id,
+            'project_name' => $project->project_name,
+            'sales_project_id' => $project->id,
+            'item_type' => 'agenda',
+            'agenda_type' => ContentItem::SALES_AGENDA_TYPE,
+            'visibility' => 'personal',
+            'title' => 'Agenda Receipt Regression',
+            'scheduled_date' => today()->toDateString(),
+            'start_time' => '09:00',
+            'end_time' => '10:00',
+            'status' => 'planned',
+            'owner_user_id' => $sales->id,
+            'created_by' => $sales->id,
+        ]);
+
+        $response = $this->actingAs($sales)->get(route('sales-agendas.index'));
+
+        $response->assertOk()
+            ->assertSee('sales-receipt-workspace', false)
+            ->assertSeeText('Kemarin')
+            ->assertSeeText('Hari ini')
+            ->assertSeeText('Rencana')
+            ->assertSeeText('+ Tambah rencana hari ini');
     }
 
     public function test_coordinator_sees_only_buku_saku_agendas_owned_by_current_team_sales(): void

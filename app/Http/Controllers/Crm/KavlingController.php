@@ -5,24 +5,25 @@ namespace App\Http\Controllers\Crm;
 use App\Http\Controllers\Controller;
 use App\Models\Kavling;
 use App\Models\LeadMaster;
+use App\Models\User;
+use App\Services\SystemAdministrationAuthorizationService;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Auth;
 
 class KavlingController extends Controller
 {
+    public function __construct(private readonly SystemAdministrationAuthorizationService $systemAdministration) {}
+
     public function index(LeadMaster $project)
     {
-        if (!Auth::user()->isSuperadmin()) {
-            abort(403);
-        }
+        $this->authorizeSystemAdministration();
 
         $search = request()->get('search');
         $kavlingsQuery = $project->kavlings();
 
         if ($search) {
-            $kavlingsQuery->where(function($q) use ($search) {
+            $kavlingsQuery->where(function ($q) use ($search) {
                 $q->where('kavling_code', 'like', "%{$search}%")
-                  ->orWhere('name', 'like', "%{$search}%");
+                    ->orWhere('name', 'like', "%{$search}%");
             });
         }
 
@@ -38,18 +39,14 @@ class KavlingController extends Controller
 
     public function bulkImport(LeadMaster $project)
     {
-        if (!Auth::user()->isSuperadmin()) {
-            abort(403);
-        }
+        $this->authorizeSystemAdministration();
 
         return view('crm.kavlings.bulk-import', compact('project'));
     }
 
     public function bulkStore(Request $request, LeadMaster $project)
     {
-        if (!Auth::user()->isSuperadmin()) {
-            abort(403);
-        }
+        $this->authorizeSystemAdministration();
 
         $request->validate([
             'list' => 'required|string',
@@ -68,12 +65,14 @@ class KavlingController extends Controller
             $lastDash = strrpos($line, '-');
             if ($lastDash === false) {
                 $errors[] = "Format salah: {$line}";
+
                 continue;
             }
 
             $code = substr($line, $lastDash + 1);
             if (empty($code)) {
                 $errors[] = "Kode kavling tidak ditemukan: {$line}";
+
                 continue;
             }
 
@@ -87,8 +86,8 @@ class KavlingController extends Controller
         }
 
         $message = "Berhasil mengimpor {$count} kavling.";
-        if (!empty($errors)) {
-            $message .= ' ' . count($errors) . ' baris dilewati karena format salah.';
+        if (! empty($errors)) {
+            $message .= ' '.count($errors).' baris dilewati karena format salah.';
         }
 
         return redirect()->route('kavlings.index', ['project' => $project->id])
@@ -97,9 +96,7 @@ class KavlingController extends Controller
 
     public function bulkDestroy(Request $request)
     {
-        if (!Auth::user()->isSuperadmin()) {
-            abort(403);
-        }
+        $this->authorizeSystemAdministration();
 
         $ids = array_filter(explode(',', $request->input('selected_ids', '')));
         if (empty($ids)) {
@@ -113,14 +110,19 @@ class KavlingController extends Controller
 
     public function destroy(Kavling $kavling)
     {
-        if (!Auth::user()->isSuperadmin()) {
-            abort(403);
-        }
+        $this->authorizeSystemAdministration();
 
         $projectId = $kavling->project_id;
         $kavling->delete();
 
         return redirect()->route('kavlings.index', ['project' => $projectId])
             ->with('success', 'Kavling berhasil dihapus.');
+    }
+
+    private function authorizeSystemAdministration(): void
+    {
+        $actor = request()->user();
+        abort_unless($actor instanceof User, 403);
+        $this->systemAdministration->assertCanManage($actor, SystemAdministrationAuthorizationService::KAVLINGS);
     }
 }

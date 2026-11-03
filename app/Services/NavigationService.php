@@ -10,6 +10,8 @@ use LogicException;
 
 class NavigationService
 {
+    public function __construct(private readonly SystemAdministrationAuthorizationService $systemAdministration) {}
+
     public function forUser(User $user, ?string $routeName = null, array $moduleMaintenance = []): array
     {
         $routeName ??= request()->route()?->getName();
@@ -76,10 +78,10 @@ class NavigationService
                 ! $isSales && $user->can('viewAny', Promo::class)
                     ? $this->item('Promo', 'promos.index', 'sales', 'administration', ['promos.*'], $routeName, 'promo', $moduleMaintenance)
                     : null,
-                ! $isSales && $user->isSuperadmin() && $user->hasPermission('branches.manage')
+                ! $isSales && $this->systemAdministration->canManage($user, SystemAdministrationAuthorizationService::BRANCHES)
                     ? $this->item('Cabang', 'branches.index', 'branch', 'administration', ['branches.*'], $routeName, 'branches', $moduleMaintenance)
                     : null,
-                ! $isSales && $user->isSuperadmin() && $user->hasPermission('projects.manage')
+                ! $isSales && $this->systemAdministration->canManage($user, SystemAdministrationAuthorizationService::PROJECTS)
                     ? $this->item('Proyek', 'projects.index', 'project', 'administration', ['projects.*', 'kavlings.*'], $routeName, ['projects', 'kavling'], $moduleMaintenance)
                     : null,
                 ! $isSales && $user->hasPermission('users.view')
@@ -88,7 +90,7 @@ class NavigationService
                 ! $isSales && $user->hasPermission('organization.view')
                     ? $this->item('Struktur Organisasi', 'organization.index', 'organization', 'administration', ['organization.*'], $routeName, 'users', $moduleMaintenance)
                     : null,
-                ! $isSales && $user->hasPermission('roles.view')
+                ! $isSales && $this->systemAdministration->canManage($user, SystemAdministrationAuthorizationService::ROLES)
                     ? $this->item('Peran dan Izin', 'roles.index', 'organization', 'administration', ['roles.*'], $routeName, 'users', $moduleMaintenance)
                     : null,
                 ! $isSales

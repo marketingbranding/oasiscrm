@@ -16,6 +16,7 @@ use App\Services\OptimisticLockService;
 use App\Services\PromoOptionService;
 use App\Services\SalesAgendaEvidenceUploadService;
 use App\Services\SalesAgendaProjectResolver;
+use App\Services\SalesAgendaReceiptService;
 use App\Services\SalesDailyReminderService;
 use App\Services\SalesPocketbookOnboardingService;
 use App\Services\WorkspaceAccessService;
@@ -25,6 +26,7 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 use Symfony\Component\HttpFoundation\Response;
 
 class SalesAgendaController extends Controller
@@ -38,21 +40,34 @@ class SalesAgendaController extends Controller
         private readonly PromoOptionService $promoOptions,
         private readonly SalesDailyReminderService $dailyReminder,
         private readonly SalesPocketbookOnboardingService $onboarding,
+        private readonly SalesAgendaReceiptService $receiptService,
     ) {}
 
     public function index(Request $request)
     {
         abort_unless($request->user()->isSales(), 403);
-        if ($this->onboarding->shouldShow($request->user())) {
-            return redirect()->route('sales-pocketbook.onboarding.show');
-        }
         $project = $this->projectResolver->resolve($request->user());
-        $tab = $request->query('tab') === 'leads' ? 'leads' : 'agenda';
+        $showSalesTour = $request->boolean('tour') || $this->onboarding->shouldShow($request->user());
+        $tab = $showSalesTour && ! $request->boolean('tour')
+            ? 'agenda'
+            : ($request->query('tab') === 'leads' ? 'leads' : 'agenda');
         $request->validate([
             'work_date' => ['nullable', 'date_format:Y-m-d'],
             'lead_status' => ['nullable', Rule::in(['open', 'completed'])],
         ]);
         $agendaDate = CarbonImmutable::createFromFormat('Y-m-d', $request->query('work_date', today()->toDateString()), config('app.timezone'));
+        $receiptSummary = $this->receiptService->summarize($request->user(), $agendaDate);
+        $daySubmission = $this->receiptService->submission($request->user(), $agendaDate);
+        $incompletePreviousAgendas = ContentItem::query()
+            ->where('item_type', 'agenda')
+            ->where('agenda_type', ContentItem::SALES_AGENDA_TYPE)
+            ->where('owner_user_id', $request->user()->id)
+            ->whereDate('scheduled_date', $agendaDate->subDay()->toDateString())
+            ->whereNotIn('status', ['done', 'cancelled', 'rescheduled'])
+            ->orderBy('start_time')
+            ->latest('id')
+            ->limit(5)
+            ->get();
         $agendas = ContentItem::query()
             ->with(['branch', 'salesProject', 'evidence'])
             ->where('item_type', 'agenda')
@@ -116,7 +131,7 @@ class SalesAgendaController extends Controller
         ];
         $canExport = $request->user()->hasPermission('sales_pocketbook.export_own');
 
-        return view('crm.sales-pocketbook.sales-agenda', compact('project', 'agendas', 'agendaGroups', 'leads', 'leadStatus', 'openLeadCount', 'completedLeadCount', 'tab', 'projects', 'defaultProjectId', 'cascadeProjects', 'leadOptionsEndpoint', 'promos', 'dailyReminder', 'canExport', 'agendaDate'));
+        return view('crm.sales-pocketbook.sales-agenda', compact('project', 'agendas', 'agendaGroups', 'leads', 'leadStatus', 'openLeadCount', 'completedLeadCount', 'tab', 'projects', 'defaultProjectId', 'cascadeProjects', 'leadOptionsEndpoint', 'promos', 'dailyReminder', 'canExport', 'agendaDate', 'receiptSummary', 'daySubmission', 'incompletePreviousAgendas', 'showSalesTour'));
     }
 
     public function show(Request $request, ContentItem $agenda)
@@ -161,11 +176,31 @@ class SalesAgendaController extends Controller
         $owner = $this->agendaOwner($request, $data);
         $project = $this->agendaProject($request, $owner, $data);
         abort_unless($project, 422, 'Proyek utama belum ditentukan. Hubungi admin untuk menetapkan proyek utama.');
+        $duration = $this->durationMinutes($data['start_time'], $data['end_time']);
+        $scheduledDate = CarbonImmutable::parse($data['scheduled_date']);
+        $summary = $this->receiptService->summarize($owner, $scheduledDate);
+        $outsideSchedule = $summary['submitted'];
+        if (! $outsideSchedule) {
+            try {
+                $this->receiptService->assertTimeSlotAvailable($owner, $scheduledDate, $data['start_time'], $data['end_time']);
+            } catch (\RuntimeException $exception) {
+                throw ValidationException::withMessages(['end_time' => $exception->getMessage()]);
+            }
+        }
+
+        $effectiveDuration = $this->receiptService->effectiveMinutes($scheduledDate, $data['start_time'], $data['end_time']);
+        if (! $outsideSchedule && ! $this->receiptService->canAddNormal($owner, $scheduledDate, $duration, $effectiveDuration)) {
+            throw ValidationException::withMessages([
+                'end_time' => $summary['requires_target']
+                    ? 'Durasi agenda melebihi sisa waktu kerja '.$summary['target_minutes'].' menit.'
+                    : 'Agenda akhir pekan tidak dapat ditambahkan.',
+            ]);
+        }
         $prepared = $uploads->prepare($request->file('photos', []), 'photos');
         $result = filled($data['activity_result'] ?? null) ? $data['activity_result'] : null;
 
         try {
-            DB::transaction(function () use ($request, $owner, $project, $data, $result, $prepared, $uploads) {
+            DB::transaction(function () use ($request, $owner, $project, $data, $result, $prepared, $uploads, $duration, $outsideSchedule) {
                 $agenda = ContentItem::create([
                     'branch_id' => $project->branch_id,
                     'project_name' => $project->project_name,
@@ -179,7 +214,8 @@ class SalesAgendaController extends Controller
                     'scheduled_date' => $data['scheduled_date'],
                     'start_time' => $data['start_time'] ?? null,
                     'end_time' => $data['end_time'] ?? null,
-                    'duration_minutes' => $this->durationMinutes($data['start_time'] ?? null, $data['end_time'] ?? null),
+                    'duration_minutes' => $duration,
+                    'is_outside_schedule' => $outsideSchedule,
                     'status' => $result ? 'done' : 'planned',
                     'completed_at' => $result ? now() : null,
                     'activity_result' => $result,
@@ -198,6 +234,27 @@ class SalesAgendaController extends Controller
         }
 
         return $this->successRedirect($request, 'Agenda sales berhasil ditambahkan.');
+    }
+
+    public function submit(Request $request)
+    {
+        abort_unless($request->user()->isSales(), 403);
+        $data = $request->validate([
+            'scheduled_date' => ['required', 'date_format:Y-m-d'],
+        ]);
+
+        try {
+            $this->receiptService->submit(
+                $request->user(),
+                CarbonImmutable::createFromFormat('Y-m-d', $data['scheduled_date'], config('app.timezone')),
+            );
+        } catch (\RuntimeException $exception) {
+            throw ValidationException::withMessages([
+                'scheduled_date' => $exception->getMessage(),
+            ]);
+        }
+
+        return $this->successRedirect($request, 'Agenda hari ini berhasil dikirim ke Koordinator.');
     }
 
     public function update(CompleteSalesAgendaRequest $request, ContentItem $agenda)
@@ -226,7 +283,15 @@ class SalesAgendaController extends Controller
     public function reschedule(RescheduleSalesAgendaRequest $request, ContentItem $agenda)
     {
         $this->authorizeAgenda($request, $agenda);
-        abort(403);
+        $data = $request->validated();
+        $scheduledDate = CarbonImmutable::parse($agenda->scheduled_date);
+        abort_unless(CarbonImmutable::parse($data['scheduled_date'])->isSameDay($scheduledDate->addDay()), 422, 'Agenda hanya dapat ditunda ke hari berikutnya.');
+
+        $result = $this->optimisticLock->execute($request, $agenda, $data['expected_updated_at'], fn (ContentItem $current) => $this->receiptService->deferToNextDayLocked($request->user(), $current));
+
+        return $result instanceof Response
+            ? $result
+            : $this->successRedirect($request, 'Agenda berhasil ditunda ke hari berikutnya.');
     }
 
     private function authorizeAgenda(Request $request, ContentItem $agenda): void
@@ -277,12 +342,8 @@ class SalesAgendaController extends Controller
         return redirect()->route('sales-agendas.index')->with('success', $message);
     }
 
-    private function durationMinutes(?string $startTime, ?string $endTime): ?int
+    private function durationMinutes(string $startTime, string $endTime): int
     {
-        if (blank($startTime) || blank($endTime)) {
-            return null;
-        }
-
         $start = CarbonImmutable::createFromFormat('H:i', $startTime);
         $end = CarbonImmutable::createFromFormat('H:i', $endTime);
 

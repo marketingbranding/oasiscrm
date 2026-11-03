@@ -84,7 +84,7 @@ Route::middleware(['auth', 'active', 'verified', 'password.changed', 'operationa
     Route::bind('comment', fn ($value) => Comment::withTrashed()->findOrFail($value));
     Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
 
-    Route::prefix('admin/roles')->name('roles.')->middleware('permission:roles.view')->group(function () {
+    Route::prefix('admin/roles')->name('roles.')->middleware(['permission:roles.view', 'system.admin:roles'])->group(function () {
         Route::get('/', [RoleAdministrationController::class, 'index'])->name('index');
         Route::middleware('not.impersonating')->group(function () {
             Route::post('/', [RoleAdministrationController::class, 'store'])->middleware('permission:roles.create')->name('store');
@@ -176,6 +176,7 @@ Route::middleware(['auth', 'active', 'verified', 'password.changed', 'operationa
         Route::get('/buku-saku-sales/agendas/export', SalesAgendaExportController::class)->middleware('permission:sales_pocketbook.export_own')->name('sales-agendas.export');
         Route::get('/buku-saku-sales/agendas/{agenda}', [SalesAgendaController::class, 'show'])->middleware('permission:sales_pocketbook.view_own')->name('sales-agendas.show');
         Route::post('/buku-saku-sales/agendas', [SalesAgendaController::class, 'store'])->middleware('permission:sales_pocketbook.manage_own')->name('sales-agendas.store');
+        Route::post('/buku-saku-sales/agendas/submit', [SalesAgendaController::class, 'submit'])->middleware('permission:sales_pocketbook.manage_own')->name('sales-agendas.submit');
         Route::patch('/buku-saku-sales/agendas/{agenda}', [SalesAgendaController::class, 'update'])->middleware('permission:sales_pocketbook.manage_own')->name('sales-agendas.update');
         Route::post('/buku-saku-sales/agendas/{agenda}/tasks', [SalesAgendaTaskController::class, 'store'])->middleware('permission:sales_pocketbook.manage_own')->name('sales-agendas.tasks.store');
         Route::patch('/buku-saku-sales/agendas/{agenda}/tasks/{task}', [SalesAgendaTaskController::class, 'update'])->middleware('permission:sales_pocketbook.manage_own')->name('sales-agendas.tasks.update');
@@ -412,7 +413,7 @@ Route::middleware(['auth', 'active', 'verified', 'password.changed', 'operationa
         });
     });
     Route::view('/admin/design-system', 'crm.design-system.index')->middleware('can:viewDesignSystem')->name('admin.design-system');
-    Route::middleware(['module.maintenance:branches', 'permission:branches.manage'])->group(function () {
+    Route::middleware(['module.maintenance:branches', 'permission:branches.manage', 'system.admin:branches'])->group(function () {
         Route::get('/branches', [BranchController::class, 'index'])->name('branches.index');
         Route::get('/branches/{branch}/edit', [BranchController::class, 'edit'])->name('branches.edit');
         Route::put('/branches/{branch}', [BranchController::class, 'update'])->middleware('not.impersonating')->name('branches.update');
@@ -421,12 +422,12 @@ Route::middleware(['auth', 'active', 'verified', 'password.changed', 'operationa
         Route::delete('/branches/{user}/remove-admin', [BranchController::class, 'removeAdmin'])->middleware('not.impersonating')->name('branches.remove-admin');
 
     });
-    Route::middleware('permission:projects.manage')->group(function () {
+    Route::middleware(['permission:projects.manage', 'system.admin:projects'])->group(function () {
         Route::bind('project', fn ($v) => LeadMaster::findOrFail($v));
         Route::resource('projects', ProjectController::class)
             ->middleware('module.maintenance:projects')
             ->middlewareFor(['store', 'update', 'destroy'], 'not.impersonating');
-        Route::middleware('module.maintenance:kavling')->group(function () {
+        Route::middleware(['module.maintenance:kavling', 'system.admin:kavlings'])->group(function () {
             Route::get('/projects/{project}/kavlings', [KavlingController::class, 'index'])->name('kavlings.index');
             Route::get('/projects/{project}/kavlings/bulk-import', [KavlingController::class, 'bulkImport'])->name('kavlings.bulk-import');
             Route::post('/projects/{project}/kavlings/bulk-store', [KavlingController::class, 'bulkStore'])->middleware('not.impersonating')->name('kavlings.bulk-store');

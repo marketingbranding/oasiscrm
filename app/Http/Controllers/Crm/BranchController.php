@@ -7,6 +7,7 @@ use App\Models\ActivityLog;
 use App\Models\Branch;
 use App\Models\User;
 use App\Services\CollaborationNotificationService;
+use App\Services\SystemAdministrationAuthorizationService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -15,11 +16,14 @@ use Illuminate\Validation\ValidationException;
 
 class BranchController extends Controller
 {
-    public function __construct(private readonly CollaborationNotificationService $notifications) {}
+    public function __construct(
+        private readonly CollaborationNotificationService $notifications,
+        private readonly SystemAdministrationAuthorizationService $systemAdministration,
+    ) {}
 
     public function index()
     {
-        $this->ensureSuperadmin();
+        $this->authorizeSystemAdministration();
         $branches = Branch::withCount(['contentItems', 'users as members_count'])->where('is_active', true)->forDropdown()->get();
 
         return view('crm.branches.index', compact('branches'));
@@ -27,7 +31,7 @@ class BranchController extends Controller
 
     public function edit(Branch $branch)
     {
-        $this->ensureSuperadmin();
+        $this->authorizeSystemAdministration();
         abort_unless($branch->is_active, 404);
 
         return view('crm.branches.edit', compact('branch'));
@@ -35,7 +39,7 @@ class BranchController extends Controller
 
     public function update(Request $request, Branch $branch)
     {
-        $this->ensureSuperadmin();
+        $this->authorizeSystemAdministration();
         abort_unless($branch->is_active, 404);
         $name = Str::squish($request->string('name')->toString());
         validator(['name' => $name], ['name' => ['required', 'string', 'max:255']])->validate();
@@ -80,7 +84,7 @@ class BranchController extends Controller
 
     public function assignForm(Branch $branch)
     {
-        $this->ensureSuperadmin();
+        $this->authorizeSystemAdministration();
         abort_unless($branch->is_active, 404);
         $members = $branch->users()->with('role')->orderBy('name')->get();
         $availableUsers = User::where('is_active', true)
@@ -92,7 +96,7 @@ class BranchController extends Controller
 
     public function assignStore(Request $request, Branch $branch)
     {
-        $this->ensureSuperadmin();
+        $this->authorizeSystemAdministration();
         abort_unless($branch->is_active, 404);
         $data = $request->validate([
             'user_id' => ['required', 'integer', 'exists:users,id'],
@@ -119,7 +123,7 @@ class BranchController extends Controller
 
     public function removeAdmin(Request $request, User $user)
     {
-        $this->ensureSuperadmin();
+        $this->authorizeSystemAdministration();
         $branchId = (int) $request->validate(['branch_id' => ['required', 'integer', 'exists:branches,id']])['branch_id'];
         if ($user->isSuperadmin()) {
             return back()->with('error', 'Tidak dapat menghapus Super Admin.');
@@ -138,11 +142,11 @@ class BranchController extends Controller
         return back()->with('success', 'Akses cabang berhasil dihapus tanpa menghapus akun user.');
     }
 
-    private function ensureSuperadmin(): void
+    private function authorizeSystemAdministration(): void
     {
-        if (! Auth::user()->isSuperadmin()) {
-            abort(403);
-        }
+        $actor = Auth::user();
+        abort_unless($actor instanceof User, 403);
+        $this->systemAdministration->assertCanManage($actor, SystemAdministrationAuthorizationService::BRANCHES);
     }
 
     private function logMembership(User $user, Branch $branch, string $event): void

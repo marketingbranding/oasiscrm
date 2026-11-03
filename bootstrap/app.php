@@ -13,6 +13,7 @@ use App\Http\Middleware\EnsureWorkspaceV2Enabled;
 use App\Http\Middleware\PermissionMiddleware;
 use App\Http\Middleware\RejectImpersonatedRequest;
 use App\Http\Middleware\RestrictSalesModuleAccess;
+use App\Http\Middleware\SystemAdministrationMiddleware;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
@@ -40,6 +41,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'sales.access' => RestrictSalesModuleAccess::class,
             'workspace.v2' => EnsureWorkspaceV2Enabled::class,
             'operational.module' => EnsureOperationalModuleEnabled::class,
+            'system.admin' => SystemAdministrationMiddleware::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {

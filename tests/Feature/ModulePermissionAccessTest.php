@@ -63,6 +63,22 @@ class ModulePermissionAccessTest extends TestCase
         }
     }
 
+    public function test_organization_administration_routes_use_explicit_system_authorization(): void
+    {
+        $expected = [
+            'roles.index' => 'roles',
+            'branches.index' => 'branches',
+            'projects.index' => 'projects',
+            'kavlings.index' => 'kavlings',
+        ];
+
+        foreach ($expected as $routeName => $area) {
+            $middleware = Route::getRoutes()->getByName($routeName)?->gatherMiddleware() ?? [];
+
+            $this->assertContains("system.admin:{$area}", $middleware, $routeName);
+        }
+    }
+
     public function test_hidden_actions_remain_forbidden_by_backend_permissions(): void
     {
         $branch = Branch::create(['name' => 'Solo', 'code' => 'SLO', 'is_active' => true]);

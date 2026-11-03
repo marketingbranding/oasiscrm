@@ -282,6 +282,105 @@ class SalesPocketbookMobileContractTest extends TestCase
         $this->assertNull($lead->campaign_name);
     }
 
+    public function test_mobile_lead_cards_use_yellow_manual_statuses_and_visible_detail_actions(): void
+    {
+        [, $project, $sales] = $this->salesContext();
+        $this->leadForMobile($sales, $project, 'Lead Diskusi Mobile');
+        $completed = $this->leadForMobile($sales, $project, 'Lead Selesai Mobile');
+        $completed->update(['completed_at' => now(), 'completed_by_user_id' => $sales->id]);
+        $system = $this->leadForMobile($sales, $project, 'Lead Akad Mobile');
+        $system->update(['current_status' => 'akad']);
+
+        $openResponse = $this->actingAs($sales)->get(route('sales-agendas.index', ['tab' => 'leads', 'lead_status' => 'open']));
+        $completedResponse = $this->actingAs($sales)->get(route('sales-agendas.index', ['tab' => 'leads', 'lead_status' => 'completed']));
+
+        $openResponse
+            ->assertOk()
+            ->assertSee('crm-status-badge--pending', false)
+            ->assertSee('sales-lead-mobile-detail-action', false)
+            ->assertSee('Lead Diskusi Mobile')
+            ->assertSee('Diskusi')
+            ->assertSee('Lead Akad Mobile')
+            ->assertSee('Akad')
+            ->assertSee('crm-status-badge--neutral', false);
+
+        $completedResponse
+            ->assertOk()
+            ->assertSee('crm-status-badge--success', false)
+            ->assertSee('Lead Selesai Mobile');
+
+        $openHtml = $openResponse->getContent();
+
+        $this->assertIsString($openHtml);
+        $this->assertMatchesRegularExpression('/<article[^>]*sales-lead-mobile-card[^>]*>.*?crm-status-badge crm-status-badge--neutral.*?Lead Akad Mobile.*?<\/article>/s', $openHtml);
+
+        $css = file_get_contents(resource_path('css/app.css'));
+
+        $this->assertIsString($css);
+        $this->assertMatchesRegularExpression('/\.sales-lead-mobile-card-actions \{[^}]*position: static !important;/s', $css);
+        $this->assertDoesNotMatchRegularExpression('/\.sales-lead-mobile-card \.flex \{[^}]*position: absolute;/s', $css);
+    }
+
+    public function test_mobile_lead_entry_matches_reference_form_contract(): void
+    {
+        [, , $sales] = $this->salesContext();
+
+        $this->actingAs($sales)
+            ->get(route('sales-agendas.index', ['tab' => 'leads']))
+            ->assertOk()
+            ->assertSee('Tambah lead')
+            ->assertSee('sales-required-mark', false)
+            ->assertSee('No. WhatsApp / Telepon')
+            ->assertSee('Sumber dan proses')
+            ->assertSee('Simpan')
+            ->assertSee('Simpan &amp; Tambah Lagi', false)
+            ->assertDontSee('class="sales-lead-form-group sales-lead-optional-fields" open', false);
+    }
+
+    public function test_mobile_lead_entry_reopens_optional_fields_when_their_validation_fails(): void
+    {
+        [, , $sales] = $this->salesContext();
+
+        $response = $this->actingAs($sales)
+            ->from(route('sales-agendas.index', ['tab' => 'leads']))
+            ->post(route('sales-leads.store'), [
+                'customer_name' => 'Lead Sumber Tidak Valid',
+                'phone' => '081234567890',
+                'source' => 'Sumber Tidak Terdaftar',
+                'operation_uuid' => (string) Str::uuid(),
+            ]);
+
+        $response
+            ->assertRedirect(route('sales-agendas.index', ['tab' => 'leads']))
+            ->assertSessionHasErrors('source');
+
+        $html = $this->followRedirects($response)->assertOk()->getContent();
+
+        $this->assertIsString($html);
+        $this->assertMatchesRegularExpression('/class="sales-lead-form-group sales-lead-optional-fields"\s+open/', $html);
+    }
+
+    public function test_primary_sales_cannot_submit_a_lead_without_a_phone_number(): void
+    {
+        [, , $sales] = $this->salesContext();
+        $message = 'No. WhatsApp / Telepon wajib diisi untuk lead baru atau perubahan melalui formulir.';
+
+        $response = $this->actingAs($sales)
+            ->from(route('sales-agendas.index', ['tab' => 'leads']))
+            ->post(route('sales-leads.store'), [
+                'customer_name' => 'Lead Tanpa Nomor',
+                'source' => 'Online',
+                'operation_uuid' => (string) Str::uuid(),
+            ])
+            ->assertRedirect()
+            ->assertSessionHasErrors(['phone' => $message]);
+
+        $html = $this->followRedirects($response)->assertOk()->getContent();
+
+        $this->assertIsString($html);
+        $this->assertMatchesRegularExpression('/class="sales-lead-form-group sales-lead-optional-fields"\s+open/', $html);
+    }
+
     public function test_primary_sales_can_complete_a_lead_without_changing_funnel_status_and_retry_is_idempotent(): void
     {
         [, $project, $sales] = $this->salesContext();

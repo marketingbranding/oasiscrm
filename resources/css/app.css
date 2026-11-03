@@ -951,9 +951,6 @@ body.sales-personal-page .crm-shell-frame { background: var(--sales-reference-pa
 .sales-lead-mobile-card dt { display: none; }
 .sales-lead-mobile-card dd { display: inline; margin: 0; }
 .sales-lead-mobile-card .crm-status-badge { position: absolute; top: 12px; right: 12px; }
-.sales-lead-mobile-card .flex { position: absolute; inset: 0; z-index: 1; }
-.sales-lead-mobile-card .flex a { width: 100%; height: 100%; opacity: 0; }
-.sales-lead-mobile-card .flex a + a { display: none; }
 .sales-lead-entry-panel { position: fixed; inset: 0; z-index: 70; display: none; border: 0; background: rgb(20 18 16 / .68); }
 .sales-lead-entry-panel[open] { display: block; }
 .sales-lead-entry-panel > summary { position: fixed; right: 0; bottom: 0; left: 0; z-index: 1; min-height: 52px; display: flex; justify-content: center; padding: 12px 20px 24px; border-top: 2px solid var(--sales-reference-ink); background: var(--sales-reference-paper); color: var(--sales-reference-yellow); font: 800 14px/1.2 Archivo, Arial, sans-serif; list-style: none; }
@@ -5585,6 +5582,13 @@ body.sales-personal-page .crm-page-shell { width: min(100%, 480px) !important; p
 .sales-lead-form-actions .crm-button--primary { background: #141210 !important; color: #fdc20f !important; }
 .sales-lead-mobile-list .crm-empty-state-mark { display: none !important; }
 .sales-lead-mobile-list .crm-empty-state { display: block !important; padding: 16px !important; text-align: left !important; }
+.sales-required-mark { color: #c0392b !important; font: 900 1em/1 var(--oasis-font-controls); }
+.sales-lead-label { display: inline-flex; align-items: baseline; gap: 2px; }
+.sales-lead-mobile-card .sales-lead-mobile-card-actions { position: static !important; inset: auto !important; z-index: auto !important; align-items: center; }
+.sales-lead-mobile-card .sales-lead-mobile-card-actions a { width: auto !important; height: auto !important; min-height: 44px !important; opacity: 1 !important; }
+.sales-lead-mobile-card .sales-lead-mobile-card-actions a + a { display: inline-flex !important; }
+.sales-lead-mobile-detail-action { display: inline-flex !important; align-items: center; justify-content: flex-start; padding-inline: 0 !important; font-weight: 800 !important; }
+.sales-lead-mobile-card .crm-status-badge--pending { border-color: #7a5a00 !important; background: #fff1b8 !important; color: #7a5a00 !important; }
 .sales-sheet-backdrop { padding: 0 !important; }
 .sales-bottom-sheet { width: 100% !important; height: min(564px, calc(100dvh - 12rem)) !important; max-height: min(564px, calc(100dvh - 12rem)) !important; overflow: hidden !important; border-inline: 0 !important; }
 .sales-receipt-form { grid-template-columns: minmax(0, 1fr) !important; min-height: 0 !important; max-height: calc(100% - 118px) !important; overflow-y: auto !important; }

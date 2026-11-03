@@ -31,26 +31,26 @@
                         <div class="sales-lead-server-context" aria-label="Konteks lead"><span><b>Tanggal</b>{{ old('lead_date', request('lead_date', today()->toDateString())) }}</span><span><b>Proyek</b>{{ $projects->firstWhere('id', (int) old('project_id', $defaultProjectId))?->project_name ?? 'Proyek utama' }}</span></div>
                     @else
                         <div class="sales-lead-form-grid">
-                            <label>Tanggal Lead<input type="date" name="lead_date" value="{{ old('lead_date', request('lead_date', today()->toDateString())) }}" required></label>
-                            <label>Proyek<select name="project_id" required>@foreach($projects as $item)<option value="{{ $item->id }}" @selected((string) old('project_id', $defaultProjectId) === (string) $item->id)>{{ $item->project_name }}</option>@endforeach</select></label>
+                            <label><span class="sales-lead-label">Tanggal Lead <span class="sales-required-mark" aria-hidden="true">*</span></span><input type="date" name="lead_date" value="{{ old('lead_date', request('lead_date', today()->toDateString())) }}" required></label>
+                            <label><span class="sales-lead-label">Proyek <span class="sales-required-mark" aria-hidden="true">*</span></span><select name="project_id" required>@foreach($projects as $item)<option value="{{ $item->id }}" @selected((string) old('project_id', $defaultProjectId) === (string) $item->id)>{{ $item->project_name }}</option>@endforeach</select></label>
                         </div>
                     @endif
                 </fieldset>
                 <fieldset class="sales-lead-form-group">
                     <legend>Data konsumen</legend>
                     <div class="sales-lead-form-grid">
-                        <label>Nama Calon Konsumen<input name="customer_name" value="{{ old('customer_name') }}" autocomplete="name" required></label>
-                        <label>No. WhatsApp / Telepon<input name="phone" value="{{ old('phone') }}" type="tel" autocomplete="tel" required></label>
+                        <label><span class="sales-lead-label">Nama Calon Konsumen <span class="sales-required-mark" aria-hidden="true">*</span></span><input name="customer_name" value="{{ old('customer_name') }}" autocomplete="name" required></label>
+                        <label><span class="sales-lead-label">No. WhatsApp / Telepon <span class="sales-required-mark" aria-hidden="true">*</span></span><input name="phone" value="{{ old('phone') }}" type="tel" autocomplete="tel" required></label>
                     </div>
                 </fieldset>
-                <details class="sales-lead-form-group sales-lead-optional-fields" open>
+                <details class="sales-lead-form-group sales-lead-optional-fields" @if($errors->hasAny(['source', 'platform', 'campaign_name', 'current_status', 'notes']) || old('source') !== null || old('platform') !== null || old('campaign_name') !== null || old('current_status') !== null || old('notes') !== null) open @endif>
                     <summary>Sumber dan proses <span>(opsional untuk input cepat)</span></summary>
                     <div class="sales-lead-form-grid">
                         @foreach(['source' => ['Sumber Lead', \App\Support\SalesLeadMasterData::SOURCES], 'platform' => ['Kanal Masuk', \App\Support\SalesLeadMasterData::CHANNELS], 'campaign_name' => ['Aktivitas Lead', \App\Support\SalesLeadMasterData::ACTIVITIES]] as $name => [$label, $options])
-                            <label>{{ $label }}<select name="{{ $name }}" @required(!auth()->user()->isSales())><option value="">Pilih {{ strtolower($label) }}</option>@foreach($options as $option)<option value="{{ $option }}" @selected(old($name) === $option)>{{ $option }}</option>@endforeach</select></label>
+                            <label><span class="sales-lead-label">{{ $label }} @if(!auth()->user()->isSales())<span class="sales-required-mark" aria-hidden="true">*</span>@endif</span><select name="{{ $name }}" @required(!auth()->user()->isSales())><option value="">Pilih {{ strtolower($label) }}</option>@foreach($options as $option)<option value="{{ $option }}" @selected(old($name) === $option)>{{ $option }}</option>@endforeach</select></label>
                         @endforeach
-                        <label>Status Lead<select name="current_status" required><option value="no_response">No Respon</option><option value="discussion" @selected(old('current_status') === 'discussion')>Diskusi</option><option value="face_to_face" @selected(old('current_status') === 'face_to_face')>Tatap Muka</option><option value="site_visit" @selected(old('current_status') === 'site_visit')>Cek Lokasi</option></select></label>
-                        <label class="sales-lead-notes-field">Catatan<textarea name="notes">{{ old('notes') }}</textarea></label>
+                        <label><span class="sales-lead-label">Status Lead <span class="sales-required-mark" aria-hidden="true">*</span></span><select name="current_status" required><option value="no_response">No Respon</option><option value="discussion" @selected(old('current_status') === 'discussion')>Diskusi</option><option value="face_to_face" @selected(old('current_status') === 'face_to_face')>Tatap Muka</option><option value="site_visit" @selected(old('current_status') === 'site_visit')>Cek Lokasi</option></select></label>
+                        <label class="sales-lead-notes-field"><span class="sales-lead-label">Catatan</span><textarea name="notes">{{ old('notes') }}</textarea></label>
                     </div>
                 </details>
                 <div class="sales-lead-form-actions"><button name="submit_action" value="save" class="crm-button crm-button--primary crm-button--md" data-accent="sales" x-bind:disabled="submitting"><span x-show="!submitting">Simpan</span><span x-show="submitting" x-cloak>Menyimpan...</span></button><button name="submit_action" value="add_another" class="crm-button crm-button--secondary crm-button--md" x-bind:disabled="submitting"><span x-show="!submitting">Simpan &amp; Tambah Lagi</span><span x-show="submitting" x-cloak>Menyimpan...</span></button><span class="sr-only" aria-live="polite" x-text="submitting ? 'Lead sedang disimpan.' : ''"></span></div>
@@ -62,10 +62,10 @@
     <div id="sales-lead-mobile-list" class="sales-lead-mobile-list md:hidden">
         @forelse($leads as $lead)
             <article class="sales-pocketbook-record sales-lead-mobile-card {{ $lead->completed_at ? 'is-completed' : '' }}">
-                <div class="sales-lead-mobile-card-header"><div><span>Tanggal lead</span><strong>{{ $lead->lead_date->format('d/m/Y') }}</strong></div><x-crm.status-badge :variant="$lead->completed_at ? 'success' : 'neutral'">{{ $lead->completed_at ? 'Selesai' : $lead->current_status->label() }}</x-crm.status-badge></div>
+                <div class="sales-lead-mobile-card-header"><div><span>Tanggal lead</span><strong>{{ $lead->lead_date->format('d/m/Y') }}</strong></div><x-crm.status-badge :variant="$lead->completed_at ? 'success' : ($lead->current_status->isManual() ? 'pending' : 'neutral')">{{ $lead->completed_at ? 'Selesai' : $lead->current_status->label() }}</x-crm.status-badge></div>
                 <h3>{{ $lead->customer_name }}</h3>
                 <dl><div><dt>Proyek</dt><dd>{{ $lead->project?->project_name ?: '-' }}</dd></div><div><dt>Cabang</dt><dd>{{ $lead->branch?->name ?: '-' }}</dd></div></dl>
-                <div class="flex flex-wrap gap-2"><x-crm.button variant="text" size="sm" :href="route('sales-leads.show', $lead)">Lihat detail lead</x-crm.button>@can('update', $lead)<x-crm.button variant="text" size="sm" :href="route('sales-leads.edit', $lead)">Edit lead</x-crm.button>@endcan</div>
+                <div class="sales-lead-mobile-card-actions flex flex-wrap gap-2"><x-crm.button variant="text" size="sm" :href="route('sales-leads.show', $lead)" class="sales-lead-mobile-detail-action">Lihat detail lead</x-crm.button>@can('update', $lead)<x-crm.button variant="text" size="sm" :href="route('sales-leads.edit', $lead)">Edit lead</x-crm.button>@endcan</div>
             </article>
         @empty
             <x-crm.empty-state title="Belum ada lead" description="Lead Anda akan tampil di sini." />

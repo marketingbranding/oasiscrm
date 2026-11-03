@@ -5693,6 +5693,13 @@ body.sales-personal-page .sales-bottom-sheet {
 
     body.sales-mobile-detail-page #crm-main {
         overflow: visible !important;
+        display: flex !important;
+        flex-direction: column !important;
+        min-height: 100vh !important;
+    }
+
+    body.sales-mobile-detail-page .crm-page-shell {
+        flex: 1 0 auto !important;
     }
 
     body.sales-mobile-detail-page .sales-agenda-detail form.sales-agenda-completion-form {
@@ -5741,6 +5748,10 @@ body.sales-personal-page .sales-bottom-sheet {
 
     body.sales-personal-page .crm-page-shell {
         padding-bottom: 120px !important;
+    }
+
+    body.sales-personal-page #agenda-list.is-receipt-mode > .sales-receipt-canvas {
+        margin-bottom: 0 !important;
     }
 
     body.sales-personal-page #agenda-input.sales-reference-bottom-action {

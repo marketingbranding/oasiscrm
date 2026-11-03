@@ -254,6 +254,17 @@ class SalesAgendaWorkspaceRenderTest extends TestCase
         );
     }
 
+    public function test_mobile_receipt_keeps_history_link_below_receipt_actions(): void
+    {
+        $css = file_get_contents(resource_path('css/app.css'));
+
+        $this->assertIsString($css);
+        $this->assertMatchesRegularExpression(
+            '/body\.sales-personal-page #agenda-list\.is-receipt-mode > \.sales-receipt-canvas \{[^}]*margin-bottom: 0 !important;/s',
+            $css,
+        );
+    }
+
     public function test_populated_receipt_keeps_weekly_navigation_with_exact_date_links(): void
     {
         [$sales, $project] = $this->salesContext();

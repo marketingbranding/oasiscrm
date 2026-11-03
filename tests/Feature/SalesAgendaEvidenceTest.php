@@ -312,6 +312,21 @@ class SalesAgendaEvidenceTest extends TestCase
         );
     }
 
+    public function test_completed_mobile_agenda_detail_keeps_footer_at_viewport_bottom(): void
+    {
+        $css = file_get_contents(resource_path('css/app.css'));
+
+        $this->assertIsString($css);
+        $this->assertMatchesRegularExpression(
+            '/body\.sales-mobile-detail-page #crm-main \{[^}]*display: flex !important;[^}]*flex-direction: column !important;/s',
+            $css,
+        );
+        $this->assertMatchesRegularExpression(
+            '/body\.sales-mobile-detail-page \.crm-page-shell \{[^}]*flex: 1 0 auto !important;/s',
+            $css,
+        );
+    }
+
     public function test_agenda_detail_places_existing_photo_left_and_upload_slot_right(): void
     {
         Storage::fake('agenda_evidence');

@@ -23,11 +23,11 @@ class SalesAgendaEvidenceImageService
         $mime = $info['mime'] ?? null;
         $width = (int) ($info[0] ?? 0);
         $height = (int) ($info[1] ?? 0);
-        if ($width < 1 || $height < 1 || $width * $height > SalesAgendaEvidenceRules::MAX_PIXELS) {
-            throw ValidationException::withMessages(['photo' => 'Dimensi foto terlalu besar.']);
-        }
         if (! in_array($mime, SalesAgendaEvidenceRules::MIME_TYPES, true)) {
             throw ValidationException::withMessages(['photo' => 'Foto harus berupa JPEG, PNG, atau WebP yang valid.']);
+        }
+        if ($width < 1 || $height < 1 || $width * $height > SalesAgendaEvidenceRules::MAX_PIXELS) {
+            throw ValidationException::withMessages(['photo' => 'Dimensi foto terlalu besar.']);
         }
         $source = match ($mime) {
             'image/jpeg' => function_exists('imagecreatefromjpeg') ? @imagecreatefromjpeg($file->getRealPath()) : false,

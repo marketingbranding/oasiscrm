@@ -109,13 +109,16 @@ class SalesAgendaOnlyWorkspaceTest extends TestCase
         $otherAgenda = $this->agenda($otherSales, $project, 'Agenda Sales Lain');
 
         $response = $this->actingAs($coordinator)->get(route('sales-pocketbook.index', [
-            'tab' => 'agenda',
-            'period' => 'custom',
-            'date_from' => '2026-07-10',
-            'date_to' => '2026-07-10',
+            'tab' => 'today',
+            'view' => 'detail',
+            'sales_id' => $teamSales->id,
+            'detail_date' => '2026-07-10',
         ]));
 
         $response->assertOk()
+            ->assertViewHas('tab', 'today')
+            ->assertViewHas('todayView', 'detail')
+            ->assertViewHas('salesDetail.agendas', fn ($agendas): bool => $agendas->contains('id', $teamAgenda->id))
             ->assertSee($teamAgenda->title)
             ->assertDontSee($otherAgenda->title)
             ->assertDontSee('Daily Plan Sales Tim')

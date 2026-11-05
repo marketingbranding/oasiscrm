@@ -75,13 +75,26 @@ class SalesRoleWorkspaceScopeTest extends TestCase
         $agenda = $this->agenda($sales, 'AGENDA_READ_ONLY');
 
         $coordinatorPage = $this->actingAs($coordinator)->get(route('sales-pocketbook.index'))->assertOk()
-            ->assertSee('Buku Saku Sales')->assertSee('date-wrapper', false);
+            ->assertSee('Buku Saku Sales')->assertSee('Hari ini')->assertSee('Lead')->assertSee('Laporan');
         $supervisorPage = $this->actingAs($supervisor)->get(route('sales-pocketbook.index'))->assertOk()
-            ->assertSee('Monitoring Tim')->assertSee('date-wrapper', false);
-        $this->actingAs($coordinator)->patch(route('sales-agendas.update', $agenda), [
+            ->assertSee('Monitoring Tim');
+        $updateResponse = $this->actingAs($coordinator)->patch(route('sales-agendas.update', $agenda), [
             'activity_result' => 'Hasil tim',
             'expected_updated_at' => app(OptimisticLockService::class)->token($agenda),
-        ])->assertRedirect();
+        ]);
+        $updateResponse->assertRedirect(route('sales-pocketbook.index', [
+            'tab' => 'today',
+            'view' => 'detail',
+            'sales_id' => $sales->id,
+            'detail_date' => $agenda->scheduled_date->toDateString(),
+        ]));
+        $this->actingAs($coordinator)->get(route('sales-pocketbook.index', [
+            'tab' => 'today',
+            'view' => 'detail',
+            'sales_id' => $sales->id,
+            'detail_date' => $agenda->scheduled_date->toDateString(),
+        ]))
+            ->assertOk()->assertSee('Hasil tim');
 
         $this->actingAs($supervisor)->patch(route('sales-agendas.update', $agenda), [
             'activity_result' => 'Tidak boleh',

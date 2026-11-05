@@ -39,7 +39,8 @@ class SalesAgendaWorkspaceRenderTest extends TestCase
         $this->actingAs($sales)
             ->get(route('sales-agendas.index', ['work_date' => $laterDate->toDateString()]))
             ->assertOk()
-            ->assertSee('RENCANA '.$laterDate->locale('id')->translatedFormat('d M Y'))
+            ->assertSee('Agenda '.$laterDate->locale('id')->translatedFormat('d F Y'))
+            ->assertSee('AKHIR PEKAN')
             ->assertDontSee('RENCANA HARI INI');
     }
 

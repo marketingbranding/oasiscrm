@@ -7,10 +7,13 @@ use App\Models\Branch;
 use App\Models\ContentItem;
 use App\Models\LeadMaster;
 use App\Models\Role;
+use App\Models\SalesAgendaEvidence;
 use App\Models\SalesCoordinatorSales;
 use App\Models\SalesLead;
 use App\Models\SalesLeadStatusHistory;
 use App\Models\User;
+use App\Models\UserNotification;
+use App\Services\CoordinatorAgendaReminderService;
 use App\Services\CoordinatorSalesMonitoringService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
@@ -145,6 +148,101 @@ class CoordinatorSalesMonitoringServiceTest extends TestCase
         $data = app(CoordinatorSalesMonitoringService::class)->resolve($this->coordinator, [], false);
         $this->assertSame([$included->id], $data['agendas']->pluck('id')->all());
         $this->assertTrue($data['agendas']->first()->relationLoaded('owner'));
+    }
+
+    public function test_weekly_incomplete_agendas_include_only_prior_dates_missing_result_or_evidence(): void
+    {
+        $resultMissing = $this->agenda($this->sales, 'Hasil belum ada', $this->branch, $this->project, '2026-08-10');
+        $evidenceMissing = $this->agenda($this->sales, 'Bukti belum ada', $this->branch, $this->project, '2026-08-10');
+        $this->agenda($this->sales, 'Hari ini', $this->branch, $this->project, '2026-08-11');
+        $this->agenda($this->sales, 'Minggu lalu', $this->branch, $this->project, '2026-08-08');
+        $complete = $this->agenda($this->sales, 'Lengkap', $this->branch, $this->project, '2026-08-10');
+        $complete->forceFill(['activity_result' => 'Sudah dikunjungi'])->save();
+        SalesAgendaEvidence::create([
+            'content_item_id' => $complete->id,
+            'original_name' => 'bukti.jpg',
+            'mime_type' => 'image/jpeg',
+            'width' => 100,
+            'height' => 100,
+            'size_bytes' => 100,
+            'sha256' => str_repeat('a', 64),
+        ]);
+        $this->agenda($this->outsideSales, 'Sales luar', $this->outsideBranch, $this->outsideProject, '2026-08-10');
+
+        $groups = app(CoordinatorSalesMonitoringService::class)->weeklyIncompleteAgendas($this->coordinator);
+
+        $this->assertSame([$this->sales->id], $groups->keys()->all());
+        $this->assertSame([$resultMissing->id, $evidenceMissing->id], $groups->first()->pluck('id')->all());
+    }
+
+    public function test_today_workspace_uses_active_team_and_counts_submitted_plans_and_completed_agendas(): void
+    {
+        $done = $this->agenda($this->sales, 'Selesai', $this->branch, $this->project, '2026-08-11');
+        $done->forceFill(['status' => 'done', 'activity_result' => 'Selesai'])->save();
+        $this->agenda($this->outsideSales, 'Agenda luar tim', $this->outsideBranch, $this->outsideProject, '2026-08-11');
+
+        $workspace = app(CoordinatorSalesMonitoringService::class)->todayWorkspace($this->coordinator);
+
+        $this->assertSame(1, $workspace['sales_count']);
+        $this->assertSame(0, $workspace['submitted_count']);
+        $this->assertSame(1, $workspace['completed_agenda_count']);
+        $this->assertSame('Sales Tim', $workspace['cards']->first()['sales']->name);
+    }
+
+    public function test_coordinator_agenda_reminders_require_confirmation_within_twenty_four_hours(): void
+    {
+        $service = app(CoordinatorAgendaReminderService::class);
+        $secondSales = $this->user('sales', 'Sales Kedua', $this->branch);
+        $secondSales->assignedProjects()->attach($this->project, ['is_primary' => true, 'is_active' => true]);
+        SalesCoordinatorSales::create(['coordinator_user_id' => $this->coordinator->id, 'sales_user_id' => $secondSales->id]);
+
+        $firstSend = $service->send($this->coordinator, [$this->sales->id]);
+        $repeatSend = $service->send($this->coordinator, [$this->sales->id, $secondSales->id]);
+
+        $this->assertSame(1, $firstSend['sent']);
+        $this->assertSame(1, $repeatSend['sent']);
+        $this->assertSame([$this->sales->id], $repeatSend['needs_confirmation']);
+        $this->assertSame(1, UserNotification::where('user_id', $this->sales->id)->count());
+        $this->assertSame(1, UserNotification::where('user_id', $secondSales->id)->count());
+        $this->assertSame($this->coordinator->id, UserNotification::where('user_id', $this->sales->id)->value('actor_user_id'));
+
+        $confirmed = $service->send($this->coordinator, [$this->sales->id], true);
+
+        $this->assertSame(1, $confirmed['sent']);
+        $this->assertSame(2, UserNotification::where('user_id', $this->sales->id)->count());
+        $this->assertSame(1, UserNotification::where('user_id', $secondSales->id)->count());
+
+        $this->expectException(HttpException::class);
+        $service->send($this->coordinator, [999999]);
+    }
+
+    public function test_sales_detail_returns_week_strip_and_selected_day_agendas_only_for_team_members(): void
+    {
+        $this->agenda($this->sales, 'Monday agenda', $this->branch, $this->project, '2026-08-10');
+        $today = $this->agenda($this->sales, 'Tuesday agenda', $this->branch, $this->project, '2026-08-11');
+        $detail = app(CoordinatorSalesMonitoringService::class)->salesDetail($this->coordinator, $this->sales->id);
+
+        $this->assertCount(7, $detail['week']);
+        $this->assertSame([$today->id], $detail['agendas']->pluck('id')->all());
+        $this->assertSame('incomplete', $detail['week'][0]['state']);
+
+        $this->expectException(HttpException::class);
+        app(CoordinatorSalesMonitoringService::class)->salesDetail($this->coordinator, $this->outsideSales->id);
+    }
+
+    public function test_actionable_leads_use_adjustable_stale_threshold_and_report_sync_failures_separately(): void
+    {
+        $stale = $this->lead($this->sales, 'Lead lama', '2026-08-01', $this->project, $this->branch);
+        $stale->forceFill(['updated_at' => Carbon::parse('2026-08-08 09:00:00')])->save();
+        $failedSync = $this->lead($this->sales, 'Lead gagal sync', '2026-08-11', $this->project, $this->branch);
+        $failedSync->forceFill(['sync_status' => 'sync_failed'])->save();
+
+        $default = app(CoordinatorSalesMonitoringService::class)->resolve($this->coordinator, [], false);
+        $custom = app(CoordinatorSalesMonitoringService::class)->resolve($this->coordinator, ['stale_days' => 5], false);
+
+        $this->assertSame(['Lead lama'], $default['actionableLeads']->pluck('customer_name')->all());
+        $this->assertSame(['Lead gagal sync'], $default['failedSyncLeads']->pluck('customer_name')->all());
+        $this->assertSame([], $custom['actionableLeads']->pluck('customer_name')->all());
     }
 
     private function user(string $role, string $name, Branch $branch, ?User $supervisor = null): User

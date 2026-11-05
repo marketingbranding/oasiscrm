@@ -196,6 +196,7 @@ Route::middleware(['auth', 'active', 'verified', 'password.changed', 'operationa
         Route::get('/buku-saku-sales/duplicate-phone', [SalesLeadController::class, 'duplicatePhone'])->name('sales-leads.duplicate-phone');
         Route::get('/buku-saku-sales/branches/{branch}/lead-options', SalesLeadOptionController::class)->name('sales-leads.options');
         Route::get('/buku-saku-sales/leads/export', [CoordinatorSalesLeadWorkspaceController::class, 'export'])->middleware('permission:sales_pocketbook.export_team')->name('coordinator-leads.export');
+        Route::post('/buku-saku-sales/coordinator/agenda-reminders', [CoordinatorSalesLeadWorkspaceController::class, 'remind'])->middleware('permission:sales_pocketbook.manage_team')->name('coordinator-agenda-reminders.store');
         Route::get('/buku-saku-sales/projects/{project}/promo-options', [CoordinatorSalesLeadWorkspaceController::class, 'promoOptions'])->name('coordinator-leads.promo-options');
         Route::post('/buku-saku-sales/leads/sync', [CoordinatorSalesLeadWorkspaceController::class, 'push'])->middleware(['operational.module:spreadsheet_sync', 'permission:sales_pocketbook.sync'])->name('coordinator-leads.sync');
         Route::post('/buku-saku-sales/leads', [SalesLeadController::class, 'store'])->name('sales-leads.store');

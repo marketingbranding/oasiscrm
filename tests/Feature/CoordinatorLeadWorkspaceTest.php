@@ -32,6 +32,23 @@ class CoordinatorLeadWorkspaceTest extends TestCase
         $this->actingAs($actor)->get(route('changelogs.index'))->assertOk()->assertSeeText($title);
     }
 
+    public function test_coordinator_workspace_changelog_is_idempotent_and_visible(): void
+    {
+        $title = 'Workspace Koordinator Sales Terpadu';
+        $migration = require database_path('migrations/2026_11_05_120952_add_coordinator_workspace_changelog.php');
+
+        $migration->up();
+        $migration->up();
+
+        $this->assertSame(1, DB::table('changelogs')->whereNull('version')->where('title', $title)->count());
+        $actor = User::factory()->create([
+            'role_id' => Role::query()->where('slug', 'superadmin')->value('id'),
+            'password_changed_at' => now(),
+        ]);
+
+        $this->actingAs($actor)->get(route('changelogs.index'))->assertOk()->assertSeeText($title);
+    }
+
     public function test_controller_exposes_workspace_export_and_push_actions(): void
     {
         foreach (['index', 'export', 'push'] as $method) {
@@ -43,7 +60,7 @@ class CoordinatorLeadWorkspaceTest extends TestCase
     {
         $view = file_get_contents(resource_path('views/crm/sales-pocketbook/coordinator-leads.blade.php'));
 
-        foreach (['Lead Baru', 'Tatap Muka', 'Cek Lokasi', 'UTJ', 'Performa Sales', 'Agenda Sales Tim', 'Nama Promo', '<th>Lokasi</th><th>Hasil</th><th>Status</th>', 'Belum ada aktivitas pada periode ini.', 'Pilih sumber lead', 'Pilih promo', 'Pilih Sales', "'lead' => 'Lead'", "'agenda' => 'Agenda'", "'report' => 'Laporan'"] as $label) {
+        foreach (['Lead Baru', 'Tatap Muka', 'Cek Lokasi', 'UTJ', 'Performa Sales', 'Agenda Sales Tim', 'Nama Promo', '<th>Lokasi</th><th>Hasil</th><th>Status</th>', 'Belum ada aktivitas pada periode ini.', 'Pilih sumber lead', 'Pilih promo', 'Pilih Sales', "'today' => 'Hari ini'", "'lead' => 'Lead'", "'report' => 'Laporan'", 'Perlu diupdate', 'Semua agenda sudah diupdate', '480 menit'] as $label) {
             $this->assertStringContainsString($label, $view);
         }
         foreach (['BELUM SYNC', 'TERSYNC', 'PERLU SYNC ULANG', 'SYNC GAGAL', 'ID Promo', 'sales-leads.options', 'Tatap Muka Konsumen', '>Survey<', 'Survey Lokasi'] as $label) {
@@ -83,7 +100,7 @@ class CoordinatorLeadWorkspaceTest extends TestCase
         ] as $mapping) {
             $this->assertStringContainsString($mapping, $view);
         }
-        $this->assertStringContainsString('Sinkronisasi gagal. Silakan coba lagi.', $view);
+        $this->assertStringContainsString('lead gagal sinkron Google Sheet', $view);
         $this->assertStringNotContainsString('{{ $lead->last_sync_error }}', $view);
     }
 

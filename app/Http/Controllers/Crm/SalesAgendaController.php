@@ -307,7 +307,7 @@ class SalesAgendaController extends Controller
             throw $exception;
         }
 
-        return $this->successRedirect($request, 'Agenda sales berhasil ditambahkan.', $data['scheduled_date']);
+        return $this->successRedirect($request, 'Agenda sales berhasil ditambahkan.', $data['scheduled_date'], $owner->id);
     }
 
     public function submit(Request $request)
@@ -351,7 +351,7 @@ class SalesAgendaController extends Controller
 
         return $result instanceof Response
             ? $result
-            : $this->successRedirect($request, 'Hasil agenda berhasil disimpan.', $agenda->scheduled_date?->toDateString());
+            : $this->successRedirect($request, 'Hasil agenda berhasil disimpan.', $agenda->scheduled_date?->toDateString(), $agenda->owner_user_id);
     }
 
     public function updatePlan(UpdateSalesAgendaPlanRequest $request, ContentItem $agenda): RedirectResponse|Response
@@ -372,7 +372,7 @@ class SalesAgendaController extends Controller
 
         return $result instanceof Response
             ? $result
-            : $this->successRedirect($request, 'Rencana agenda berhasil diperbarui.', $agenda->scheduled_date?->toDateString());
+            : $this->successRedirect($request, 'Rencana agenda berhasil diperbarui.', $agenda->scheduled_date?->toDateString(), $agenda->owner_user_id);
     }
 
     public function deletePlan(DeleteSalesAgendaPlanRequest $request, ContentItem $agenda): RedirectResponse|Response
@@ -397,7 +397,7 @@ class SalesAgendaController extends Controller
 
         return $result instanceof Response
             ? $result
-            : $this->successRedirect($request, 'Rencana agenda berhasil dihapus.', $agenda->scheduled_date?->toDateString());
+            : $this->successRedirect($request, 'Rencana agenda berhasil dihapus.', $agenda->scheduled_date?->toDateString(), $agenda->owner_user_id);
     }
 
     public function reschedule(RescheduleSalesAgendaRequest $request, ContentItem $agenda)
@@ -411,7 +411,7 @@ class SalesAgendaController extends Controller
 
         return $result instanceof Response
             ? $result
-            : $this->successRedirect($request, 'Agenda berhasil ditunda ke hari berikutnya.', $agenda->scheduled_date?->toDateString());
+            : $this->successRedirect($request, 'Agenda berhasil ditunda ke hari berikutnya.', $agenda->scheduled_date?->toDateString(), $agenda->owner_user_id);
     }
 
     private function authorizeAgenda(Request $request, ContentItem $agenda): void
@@ -453,10 +453,17 @@ class SalesAgendaController extends Controller
         return $this->projectResolver->resolve($owner, $data['scheduled_date']);
     }
 
-    private function successRedirect(Request $request, string $message, ?string $workDate = null): RedirectResponse
+    private function successRedirect(Request $request, string $message, ?string $workDate = null, ?int $salesId = null): RedirectResponse
     {
         if ($request->user()->hasPrimaryRole('sales_coordinator')) {
-            return redirect()->route('sales-pocketbook.index', ['tab' => 'agenda'])->with('success', $message);
+            abort_unless($salesId && filled($workDate), 422);
+
+            return redirect()->route('sales-pocketbook.index', [
+                'tab' => 'today',
+                'view' => 'detail',
+                'sales_id' => $salesId,
+                'detail_date' => $workDate,
+            ])->with('success', $message);
         }
 
         return redirect()->route('sales-agendas.index', filled($workDate) ? ['work_date' => $workDate] : [])->with('success', $message);

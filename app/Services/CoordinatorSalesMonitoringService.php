@@ -18,6 +18,7 @@ class CoordinatorSalesMonitoringService
         private readonly SalesTeamScopeService $salesTeamScope,
         private readonly OrganizationScopeService $organizationScope,
         private readonly WorkspaceAccessService $workspaceAccess,
+        private readonly SalesAgendaReceiptService $receiptService,
     ) {}
 
     public function canViewAgenda(User $actor, ContentItem $agenda): bool
@@ -37,6 +38,122 @@ class CoordinatorSalesMonitoringService
     {
         return $actor->hasPermission('sales_pocketbook.manage_team')
             && $this->canViewAgenda($actor, $agenda);
+    }
+
+    public function weeklyIncompleteAgendas(User $actor, ?CarbonImmutable $referenceDate = null)
+    {
+        abort_unless($this->coordinatorTeam->isCoordinator($actor), 403);
+
+        $today = ($referenceDate ?? CarbonImmutable::today(config('app.timezone')))->startOfDay();
+        $scope = $this->scope($actor);
+        $salesUsers = $this->salesUsers($actor, $scope);
+        $salesIds = $salesUsers->pluck('id')->map(fn ($id) => (int) $id)->all();
+
+        $agendas = $this->agendaBase($salesIds, $scope, [
+            'from' => $today->startOfWeek(),
+            'to' => $today->subDay(),
+        ])
+            ->whereNotIn('status', ['cancelled', 'rescheduled'])
+            ->where(function (Builder $query): void {
+                $query->whereNull('activity_result')
+                    ->orWhere('activity_result', '')
+                    ->orWhereDoesntHave('evidence', fn (Builder $evidence) => $evidence->whereNull('purged_at'));
+            })
+            ->with(['owner:id,name', 'branch:id,name', 'salesProject:id,project_name', 'evidence'])
+            ->orderBy('scheduled_date')
+            ->orderBy('start_time')
+            ->get();
+
+        return $agendas->groupBy('owner_user_id')->map(function ($items) {
+            $items->each(function (ContentItem $agenda): void {
+                $agenda->setAttribute('missing_result', blank($agenda->activity_result));
+                $agenda->setAttribute('missing_evidence', $agenda->evidence->whereNull('purged_at')->isEmpty());
+            });
+
+            return $items;
+        })->sortKeys();
+    }
+
+    public function todayWorkspace(User $actor, ?CarbonImmutable $referenceDate = null, ?int $requestedSalesId = null): array
+    {
+        abort_unless($this->coordinatorTeam->isCoordinator($actor), 403);
+
+        $date = ($referenceDate ?? CarbonImmutable::today(config('app.timezone')))->startOfDay();
+        $scope = $this->scope($actor);
+        $salesUsers = $this->salesUsers($actor, $scope);
+        if ($requestedSalesId !== null) {
+            abort_unless($salesUsers->contains('id', $requestedSalesId), 403);
+            $salesUsers = $salesUsers->where('id', $requestedSalesId)->values();
+        }
+        $salesIds = $salesUsers->pluck('id')->map(fn ($id) => (int) $id)->all();
+        $agendaItems = $this->agendaBase($salesIds, $scope, ['from' => $date, 'to' => $date])
+            ->with(['evidence', 'rescheduledFrom:id,scheduled_date'])
+            ->orderBy('start_time')
+            ->get()
+            ->groupBy('owner_user_id');
+        $incompleteBySales = $this->weeklyIncompleteAgendas($actor, $date);
+        $cards = $salesUsers->map(function (User $sales) use ($date, $incompleteBySales, $agendaItems): array {
+            $summary = $this->receiptService->summarize($sales, $date);
+            $backlogCount = $incompleteBySales->get($sales->id, collect())->count();
+            $priority = ! $summary['submitted'] ? 0 : ($backlogCount > 0 ? 1 : ($summary['agenda_count'] > 0 && $summary['completed_count'] === $summary['agenda_count'] ? 3 : 2));
+
+            return [
+                'sales' => $sales,
+                'summary' => $summary,
+                'backlog_count' => $backlogCount,
+                'priority' => $priority,
+                'agenda_items' => $agendaItems->get($sales->id, collect()),
+            ];
+        })->sortBy(fn (array $card): array => [$card['priority'], $card['sales']->name])->values();
+
+        return [
+            'date' => $date,
+            'cards' => $cards,
+            'submitted_count' => $cards->where('summary.submitted', true)->count(),
+            'sales_count' => $cards->count(),
+            'completed_agenda_count' => $cards->sum(fn (array $card): int => $card['summary']['completed_count']),
+            'agenda_count' => $cards->sum(fn (array $card): int => $card['summary']['agenda_count']),
+            'incomplete_agendas' => $incompleteBySales,
+            'incomplete_count' => $incompleteBySales->sum(fn ($items): int => $items->count()),
+        ];
+    }
+
+    public function salesDetail(User $actor, int $salesId, ?CarbonImmutable $selectedDate = null): array
+    {
+        abort_unless($this->coordinatorTeam->isCoordinator($actor), 403);
+
+        $scope = $this->scope($actor);
+        $sales = $this->salesUsers($actor, $scope)->firstWhere('id', $salesId);
+        abort_unless($sales, 403);
+
+        $date = ($selectedDate ?? CarbonImmutable::today(config('app.timezone')))->startOfDay();
+        $weekStart = $date->startOfWeek();
+        $weekEnd = $date->endOfWeek();
+        $agendas = $this->agendaBase([$salesId], $scope, ['from' => $weekStart, 'to' => $weekEnd])
+            ->with(['evidence', 'branch:id,name', 'salesProject:id,project_name'])
+            ->orderBy('scheduled_date')->orderBy('start_time')->get();
+        $days = collect(range(0, 6))->map(function (int $offset) use ($weekStart, $agendas): array {
+            $day = $weekStart->addDays($offset);
+            $items = $agendas->filter(fn (ContentItem $agenda): bool => $agenda->scheduled_date?->isSameDay($day));
+            $incomplete = $items->contains(fn (ContentItem $agenda): bool => ! in_array($agenda->status, ['cancelled', 'rescheduled'], true)
+                && (blank($agenda->activity_result) || $agenda->evidence->whereNull('purged_at')->isEmpty()));
+
+            return [
+                'date' => $day,
+                'items' => $items->values(),
+                'state' => $items->isEmpty() ? ($day->isWeekend() ? 'weekend_empty' : 'weekday_empty') : ($incomplete ? 'incomplete' : 'complete'),
+            ];
+        });
+
+        return [
+            'sales' => $sales,
+            'selected_date' => $date,
+            'week' => $days,
+            'agendas' => $agendas->filter(fn (ContentItem $agenda): bool => $agenda->scheduled_date?->isSameDay($date))->values(),
+            'backlog' => $agendas->filter(fn (ContentItem $agenda): bool => $agenda->scheduled_date?->lt($date)
+                && ! in_array($agenda->status, ['cancelled', 'rescheduled'], true)
+                && (blank($agenda->activity_result) || $agenda->evidence->whereNull('purged_at')->isEmpty()))->values(),
+        ];
     }
 
     public function resolve(User $actor, array $filters, bool $paginate = true): array
@@ -81,6 +198,16 @@ class CoordinatorSalesMonitoringService
             ->whereDate('lead_date', '<=', $period['to']->toDateString())
             ->with(['branch:id,name', 'project:id,project_name', 'sales:id,name', 'leadSource:id,name'])
             ->latest('lead_date')->latest('id');
+        $staleDays = max(1, min(14, (int) ($filters['stale_days'] ?? 2)));
+        $actionableLeads = $this->leadBase($salesIds, $scope)
+            ->whereIn('current_status', array_map(fn (SalesLeadStatus $status): string => $status->value, SalesLeadStatus::MANUAL))
+            ->where('updated_at', '<=', now(config('app.timezone'))->subDays($staleDays))
+            ->with(['branch:id,name', 'project:id,project_name', 'sales:id,name'])
+            ->latest('updated_at')->get();
+        $failedSyncLeads = $this->leadBase($salesIds, $scope)
+            ->where('sync_status', 'sync_failed')
+            ->with(['branch:id,name', 'project:id,project_name', 'sales:id,name'])
+            ->latest('updated_at')->get();
 
         $result = [
             'period' => $period,
@@ -91,6 +218,9 @@ class CoordinatorSalesMonitoringService
                 'sales_id' => $salesId,
             ],
             'salesUsers' => $filterSalesUsers,
+            'actionableLeads' => $actionableLeads,
+            'failedSyncLeads' => $failedSyncLeads,
+            'staleDays' => $staleDays,
             'selectedSalesUsers' => $salesUsers,
             'kpi' => [
                 'lead_new' => $salesRows->sum('lead_new'),

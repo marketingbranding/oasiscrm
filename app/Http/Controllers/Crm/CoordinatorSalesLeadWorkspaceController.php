@@ -8,6 +8,7 @@ use App\Http\Controllers\Controller;
 use App\Models\LeadMaster;
 use App\Models\SalesLead;
 use App\Models\User;
+use App\Services\CoordinatorAgendaReminderService;
 use App\Services\CoordinatorLeadPushService;
 use App\Services\CoordinatorLeadTeamService;
 use App\Services\CoordinatorSalesMonitoringService;
@@ -37,21 +38,29 @@ class CoordinatorSalesLeadWorkspaceController extends Controller
     public function index(Request $request): View
     {
         $filters = $request->validate([
-            'tab' => ['nullable', 'in:lead,agenda,report'],
+            'tab' => ['nullable', 'in:today,lead,agenda,report'],
+            'view' => ['nullable', 'in:today,plans,updates,detail'],
+            'plan_day' => ['nullable', 'in:tomorrow,saturday,sunday'],
             'period' => ['nullable', 'in:today,week,month,custom'],
             'date_from' => ['nullable', 'required_if:period,custom', 'date'],
             'date_to' => ['nullable', 'required_if:period,custom', 'date', 'after_or_equal:date_from'],
             'sales_id' => ['nullable', 'integer'],
+            'detail_date' => ['nullable', 'date_format:Y-m-d'],
             'target_month' => ['nullable', 'date_format:Y-m'],
+            'stale_days' => ['nullable', 'integer', 'between:1,14'],
         ]);
-        $tab = $filters['tab'] ?? 'lead';
+        $tab = $filters['tab'] ?? 'today';
+        $todayView = $filters['view'] ?? 'today';
+        $planDayKey = $filters['plan_day'] ?? 'tomorrow';
         unset($filters['tab']);
 
         $data = $this->monitoring->resolve($request->user(), $filters);
         $targetMonthValue = $request->query('target_month', now(config('app.timezone'))->format('Y-m'));
         $targetMonth = CarbonImmutable::createFromFormat('Y-m-d', $targetMonthValue.'-01', config('app.timezone'));
         $data['targetMonth'] = $targetMonth;
-        $data['targetSummaries'] = $data['salesUsers']->mapWithKeys(fn (User $sales) => [$sales->id => $this->leadTargets->summary($sales, $targetMonth)]);
+        $data['targetSummaries'] = $tab === 'report'
+            ? $data['salesUsers']->mapWithKeys(fn (User $sales) => [$sales->id => $this->leadTargets->summary($sales, $targetMonth)])
+            : collect();
         $data['projectsBySales'] = $data['salesUsers']->mapWithKeys(fn ($sales) => [
             (string) $sales->id => $sales->assignedProjects->map(fn ($project) => [
                 'id' => (string) $project->id,
@@ -77,6 +86,39 @@ class CoordinatorSalesLeadWorkspaceController extends Controller
             && config('services.google_sheets.sales_lead_sync_enabled')
             && $request->user()->hasPermission('sales_pocketbook.sync');
         $data['tab'] = $tab;
+        $data['todayView'] = $todayView;
+        $data['planDayKey'] = $planDayKey;
+        $data['todayWorkspace'] = $tab === 'today'
+            ? $this->monitoring->todayWorkspace(
+                $request->user(),
+                null,
+                isset($filters['sales_id']) ? (int) $filters['sales_id'] : null,
+            )
+            : ['date' => CarbonImmutable::today(config('app.timezone')), 'cards' => collect(), 'submitted_count' => 0, 'sales_count' => 0, 'completed_agenda_count' => 0, 'agenda_count' => 0, 'incomplete_agendas' => collect(), 'incomplete_count' => 0];
+        if ($tab === 'today' && $todayView === 'detail') {
+            abort_unless(isset($filters['sales_id']), 422, 'Sales harus dipilih.');
+            $data['salesDetail'] = $this->monitoring->salesDetail(
+                $request->user(),
+                (int) $filters['sales_id'],
+                isset($filters['detail_date']) ? CarbonImmutable::createFromFormat('Y-m-d', $filters['detail_date'], config('app.timezone')) : null,
+            );
+        }
+        $today = CarbonImmutable::today(config('app.timezone'));
+        $saturdayOffset = (6 - $today->dayOfWeekIso + 7) % 7 ?: 7;
+        $sundayOffset = (7 - $today->dayOfWeekIso + 7) % 7 ?: 7;
+        $planDate = match ($planDayKey) {
+            'saturday' => $today->addDays($saturdayOffset),
+            'sunday' => $today->addDays($sundayOffset),
+            default => $today->addDay(),
+        };
+        $data['upcomingPlans'] = collect();
+        if ($tab === 'today' && $todayView === 'plans') {
+            $planWorkspace = $this->monitoring->todayWorkspace($request->user(), $planDate);
+            $data['upcomingPlans'] = [[
+                'date' => $planDate,
+                'items' => $planWorkspace['cards'],
+            ]];
+        }
 
         return view('crm.sales-pocketbook.coordinator-leads', $data);
     }
@@ -157,5 +199,30 @@ class CoordinatorSalesLeadWorkspaceController extends Controller
         return back()->with($result['failed'] > 0 ? 'warning' : 'success', $result['failed'] > 0
             ? $message.", {$result['failed']} gagal."
             : $message.'.');
+    }
+
+    public function remind(Request $request, CoordinatorAgendaReminderService $reminders): RedirectResponse
+    {
+        $data = $request->validate([
+            'sales_ids' => ['required', 'array', 'min:1', 'max:100'],
+            'sales_ids.*' => ['required', 'integer', 'distinct', 'exists:users,id'],
+            'confirm_recent' => ['sometimes', 'boolean'],
+        ]);
+        $result = $reminders->send(
+            $request->user(),
+            array_map('intval', $data['sales_ids']),
+            (bool) ($data['confirm_recent'] ?? false),
+        );
+
+        if ($result['needs_confirmation'] !== []) {
+            return redirect()->route('sales-pocketbook.index', ['tab' => 'today', 'view' => 'updates'])
+                ->with('coordinator_reminder_confirmation', [
+                    'sales_ids' => $result['needs_confirmation'],
+                ])
+                ->with('coordinator_reminder_sent', $result['sent']);
+        }
+
+        return redirect()->route('sales-pocketbook.index', ['tab' => 'today', 'view' => 'updates'])
+            ->with('success', $result['sent'].' Sales menerima pengingat.');
     }
 }

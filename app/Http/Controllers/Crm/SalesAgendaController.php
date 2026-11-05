@@ -70,6 +70,7 @@ class SalesAgendaController extends Controller
             'plan_date' => ['nullable', 'date_format:Y-m-d'],
             'view' => ['nullable', Rule::in(['all'])],
             'lead_status' => ['nullable', Rule::in(['open', 'completed'])],
+            'resume_receipt' => ['nullable', 'boolean'],
         ]);
         if (! $request->filled('work_date') && $request->filled('plan_date')) {
             $query = $request->query();
@@ -113,6 +114,11 @@ class SalesAgendaController extends Controller
             ->orderBy('start_time')
             ->latest('id')
             ->paginate(20, ['*'], 'agenda_page');
+        $resumeReceipt = $request->boolean('resume_receipt')
+            && $agendaView === 'day'
+            && ! $daySubmission
+            && ! $receiptSummary['is_weekend']
+            && $agendas->isNotEmpty();
         $allAgendas = $agendaView === 'all'
             ? (clone $agendaBaseQuery)
                 ->orderByDesc('scheduled_date')
@@ -179,7 +185,7 @@ class SalesAgendaController extends Controller
         ];
         $canExport = $request->user()->hasPermission('sales_pocketbook.export_own');
 
-        return view('crm.sales-pocketbook.sales-agenda', compact('project', 'agendas', 'allAgendas', 'agendaView', 'incompleteAgendaCount', 'agendaGroups', 'leads', 'leadStatus', 'openLeadCount', 'completedLeadCount', 'tab', 'projects', 'defaultProjectId', 'cascadeProjects', 'leadOptionsEndpoint', 'leadDate', 'promos', 'dailyReminder', 'canExport', 'agendaDate', 'agendaWeek', 'receiptSummary', 'daySubmission', 'incompletePreviousAgendas', 'showSalesTour'));
+        return view('crm.sales-pocketbook.sales-agenda', compact('project', 'agendas', 'allAgendas', 'agendaView', 'incompleteAgendaCount', 'agendaGroups', 'leads', 'leadStatus', 'openLeadCount', 'completedLeadCount', 'tab', 'projects', 'defaultProjectId', 'cascadeProjects', 'leadOptionsEndpoint', 'leadDate', 'promos', 'dailyReminder', 'canExport', 'agendaDate', 'agendaWeek', 'receiptSummary', 'daySubmission', 'incompletePreviousAgendas', 'showSalesTour', 'resumeReceipt'));
     }
 
     private function normalizeLeadDate(mixed $value): string
@@ -307,7 +313,13 @@ class SalesAgendaController extends Controller
             throw $exception;
         }
 
-        return $this->successRedirect($request, 'Agenda sales berhasil ditambahkan.', $data['scheduled_date'], $owner->id);
+        return $this->successRedirect(
+            $request,
+            'Agenda sales berhasil ditambahkan.',
+            $data['scheduled_date'],
+            $owner->id,
+            $request->boolean('receipt_context'),
+        );
     }
 
     public function submit(Request $request)
@@ -453,7 +465,7 @@ class SalesAgendaController extends Controller
         return $this->projectResolver->resolve($owner, $data['scheduled_date']);
     }
 
-    private function successRedirect(Request $request, string $message, ?string $workDate = null, ?int $salesId = null): RedirectResponse
+    private function successRedirect(Request $request, string $message, ?string $workDate = null, ?int $salesId = null, bool $resumeReceipt = false): RedirectResponse
     {
         if ($request->user()->hasPrimaryRole('sales_coordinator')) {
             abort_unless($salesId && filled($workDate), 422);
@@ -466,7 +478,12 @@ class SalesAgendaController extends Controller
             ])->with('success', $message);
         }
 
-        return redirect()->route('sales-agendas.index', filled($workDate) ? ['work_date' => $workDate] : [])->with('success', $message);
+        $query = filled($workDate) ? ['work_date' => $workDate] : [];
+        if ($resumeReceipt) {
+            $query['resume_receipt'] = '1';
+        }
+
+        return redirect()->route('sales-agendas.index', $query)->with('success', $message);
     }
 
     private function durationMinutes(string $startTime, string $endTime): int

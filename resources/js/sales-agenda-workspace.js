@@ -52,6 +52,10 @@ export default function registerSalesAgendaWorkspace(Alpine) {
                 this.syncChipState();
             };
             this.$el.addEventListener('click', this.handleChipSelection);
+
+            if (this.$el.dataset.resumeReceipt === 'true') {
+                this.$nextTick(() => this.openAgendaPreview(null, true));
+            }
         },
 
         destroy() {
@@ -70,6 +74,10 @@ export default function registerSalesAgendaWorkspace(Alpine) {
                     this.populateAgendaForm();
                 } else {
                     this.resetAgendaForm();
+                }
+                const receiptContext = this.$refs.agendaPanel?.querySelector('[data-receipt-context]');
+                if (receiptContext) {
+                    receiptContext.value = !this.editingAgenda && event?.currentTarget?.closest('[data-receipt-preview-add]') ? '1' : '0';
                 }
                 this.$refs.sheetClose?.focus();
                 this.initializeSlot();
@@ -128,8 +136,8 @@ export default function registerSalesAgendaWorkspace(Alpine) {
             });
         },
 
-        openAgendaPreview(event = null) {
-            if (!window.matchMedia('(max-width: 767px)').matches) {
+        openAgendaPreview(event = null, forcePreview = false) {
+            if (!forcePreview && !window.matchMedia('(max-width: 767px)').matches) {
                 this.openAgendaSheet(event);
                 return;
             }
@@ -365,6 +373,8 @@ export default function registerSalesAgendaWorkspace(Alpine) {
             form.action = form.dataset.createAction;
             form.querySelector('[data-agenda-method]').value = '';
             form.querySelector('[data-agenda-expected-updated-at]').value = '';
+            const receiptContext = form.querySelector('[data-receipt-context]');
+            if (receiptContext) receiptContext.value = '0';
              this.$refs.agendaFormTitle.textContent = 'Tambah Rencana';
              this.$refs.agendaFormSubmit.textContent = form.dataset.createLabel || 'Tambahkan Rencana';
         },

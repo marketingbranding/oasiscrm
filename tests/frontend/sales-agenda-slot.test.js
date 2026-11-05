@@ -262,6 +262,76 @@ test('opens the agenda sheet without focusing and popping the native category pi
     }
 });
 
+test('reopens the receipt preview when the workspace resumes a draft', () => {
+    const previousDocument = globalThis.document;
+    const previousWindow = globalThis.window;
+    const focusEvents = [];
+    const trigger = { focus: () => focusEvents.push('trigger') };
+    const root = {
+        dataset: { resumeReceipt: 'true' },
+        addEventListener: () => {},
+        removeEventListener: () => {},
+    };
+    const registrations = {};
+
+    globalThis.document = { activeElement: trigger, body: { style: { overflow: '' } } };
+    globalThis.window = { matchMedia: () => ({ matches: true }) };
+
+    try {
+        registerSalesAgendaWorkspace({
+            data(name, factory) {
+                registrations[name] = factory;
+            },
+        });
+
+        const workspace = registrations.salesAgendaWorkspace();
+        workspace.$el = root;
+        workspace.$nextTick = (callback) => callback();
+        workspace.$refs = { receiptClose: { focus: () => focusEvents.push('receipt-close') } };
+        workspace.init();
+
+        assert.equal(workspace.receiptOpen, true);
+        assert.equal(document.body.style.overflow, 'hidden');
+        assert.deepEqual(focusEvents, ['receipt-close']);
+        workspace.closeReceipt(false);
+        workspace.destroy();
+    } finally {
+        globalThis.document = previousDocument;
+        globalThis.window = previousWindow;
+    }
+});
+
+test('opens the receipt preview for a resumed draft on desktop too', () => {
+    const previousDocument = globalThis.document;
+    const previousWindow = globalThis.window;
+    const focusEvents = [];
+    const registrations = {};
+
+    globalThis.document = { activeElement: null, body: { style: { overflow: '' } } };
+    globalThis.window = { matchMedia: () => ({ matches: false }) };
+
+    try {
+        registerSalesAgendaWorkspace({
+            data(name, factory) {
+                registrations[name] = factory;
+            },
+        });
+
+        const workspace = registrations.salesAgendaWorkspace();
+        workspace.$nextTick = (callback) => callback();
+        workspace.$refs = { receiptClose: { focus: () => focusEvents.push('receipt-close') } };
+        workspace.openAgendaPreview(null, true);
+
+        assert.equal(workspace.receiptOpen, true);
+        assert.equal(workspace.agendaOpen, false);
+        assert.deepEqual(focusEvents, ['receipt-close']);
+        workspace.closeReceipt(false);
+    } finally {
+        globalThis.document = previousDocument;
+        globalThis.window = previousWindow;
+    }
+});
+
 test('uses Enter in a single-line agenda field to move to the next visible control', () => {
     const focusEvents = [];
     const titleInput = {
@@ -310,7 +380,11 @@ test('keeps nested preview and create-sheet locks and focus restoration independ
     const previousWindow = globalThis.window;
     const focusEvents = [];
     const previewTrigger = { focus: () => focusEvents.push('preview') };
-    const sheetTrigger = { focus: () => focusEvents.push('sheet') };
+    const sheetTrigger = {
+        focus: () => focusEvents.push('sheet'),
+        closest: (selector) => selector === '[data-receipt-preview-add]' ? {} : null,
+    };
+    const receiptContext = { value: '0' };
     const documentStub = {
         activeElement: previewTrigger,
         body: { style: { overflow: '' } },
@@ -335,12 +409,17 @@ test('keeps nested preview and create-sheet locks and focus restoration independ
         workspace.$refs = {
             receiptClose: { focus: () => focusEvents.push('receipt-close') },
             sheetClose: { focus: () => focusEvents.push('sheet-close') },
+            agendaPanel: {
+                querySelector: (selector) => selector === '[data-receipt-context]' ? receiptContext : null,
+                querySelectorAll: () => [],
+            },
         };
 
         workspace.openAgendaPreview({ currentTarget: previewTrigger });
         workspace.openAgendaSheet({ currentTarget: sheetTrigger });
         assert.equal(workspace.receiptOpen, true);
         assert.equal(workspace.agendaOpen, true);
+        assert.equal(receiptContext.value, '1');
         assert.equal(documentStub.body.style.overflow, 'hidden');
 
         workspace.closeSheet();

@@ -39,6 +39,31 @@ class SalesAgendaReceiptAuthorizationTest extends TestCase
         }
     }
 
+    public function test_adding_agenda_from_receipt_preview_returns_to_the_resumable_draft(): void
+    {
+        [$sales] = $this->salesContext();
+        $date = CarbonImmutable::today(config('app.timezone'))->toDateString();
+
+        $this->actingAs($sales)
+            ->post(route('sales-agendas.store'), [
+                'scheduled_date' => $date,
+                'start_time' => '08:00',
+                'end_time' => '09:00',
+                'sales_activity_category' => 'Follow-up',
+                'title' => 'Agenda dari struk',
+                'receipt_context' => '1',
+            ])
+            ->assertRedirect(route('sales-agendas.index', [
+                'work_date' => $date,
+                'resume_receipt' => '1',
+            ]));
+
+        $this->assertDatabaseHas('content_items', [
+            'title' => 'Agenda dari struk',
+            'status' => 'planned',
+        ]);
+    }
+
     public function test_new_agenda_requires_start_and_end_time(): void
     {
         [$sales, $project] = $this->salesContext();

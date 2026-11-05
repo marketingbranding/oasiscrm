@@ -2,11 +2,11 @@
     $today = \Carbon\CarbonImmutable::today(config('app.timezone'));
     $isWeekend = $receiptSummary['is_weekend'];
     $isAllAgendas = ($agendaView ?? 'day') === 'all';
-    $isReceiptMode = ! $isAllAgendas && ! $daySubmission && ! $isWeekend && $agendas->isNotEmpty();
+    $hasDraftAgendas = ! $isAllAgendas && ! $daySubmission && ! $isWeekend && $agendas->isNotEmpty();
     $isToday = $agendaDate->isSameDay($today);
     $tomorrow = $today->addDay();
     $isTomorrow = $agendaDate->isSameDay($tomorrow);
-    $agendaSectionLabelId = $isWeekend ? 'agenda-weekend-title' : ($isReceiptMode ? 'agenda-receipt-title' : 'agenda-workspace-title');
+    $agendaSectionLabelId = $isWeekend ? 'agenda-weekend-title' : 'agenda-workspace-title';
     $schedule = $receiptSummary['schedule'];
     $agendaStatuses = [
         'planned' => ['Menunggu', 'pending'],
@@ -80,10 +80,10 @@
         : null;
 @endphp
 
-<section id="agenda-list" class="sales-receipt-workspace {{ $isReceiptMode ? 'is-receipt-mode' : '' }} {{ $daySubmission ? 'is-submitted-mode' : '' }}" aria-labelledby="{{ $agendaSectionLabelId }}">
+<section id="agenda-list" class="sales-receipt-workspace {{ $daySubmission ? 'is-submitted-mode' : '' }}" aria-labelledby="{{ $agendaSectionLabelId }}">
     @if($isWeekend)
         <span id="agenda-weekend-title" class="sr-only">Rencana akhir pekan</span>
-    @elseif(! $isReceiptMode)
+    @else
         <span id="agenda-workspace-title" class="sr-only">Agenda {{ $agendaDate->locale('id')->translatedFormat('l, d M Y') }}</span>
     @endif
     @include('crm.sales-pocketbook.partials.agenda-week-navigation')
@@ -96,8 +96,6 @@
 
     @if($isAllAgendas)
         @include('crm.sales-pocketbook.partials.agenda-history')
-    @elseif($isReceiptMode)
-        @include('crm.sales-pocketbook.partials.agenda-receipt-canvas', ['isReceiptPreview' => false])
     @elseif($isWeekend && ! $daySubmission && $agendas->isNotEmpty())
         @include('crm.sales-pocketbook.partials.agenda-weekend-list')
     @else
@@ -154,12 +152,16 @@
                     <div class="sales-reference-progress"><div><span>{{ $receiptSummary['normal_minutes'] }} / {{ $receiptSummary['target_minutes'] }} menit</span><strong>target hari ini</strong></div><div class="sales-reference-progress-track" role="progressbar" aria-label="Progress rencana hari ini" aria-valuemin="0" aria-valuemax="{{ $receiptSummary['target_minutes'] }}" aria-valuenow="{{ $receiptSummary['normal_minutes'] }}"><span style="width: {{ min(100, ($receiptSummary['normal_minutes'] / max(1, $receiptSummary['target_minutes'])) * 100) }}%"></span></div></div>
                 @endif
             </section>
-             <div class="sales-reference-empty" data-tour-target="agenda-row" role="status"><div class="sales-reference-empty-mark" aria-hidden="true">＋</div><strong>{{ $isWeekend ? 'Belum ada rencana akhir pekan' : 'Belum ada rencana hari ini' }}</strong><span>{{ $isWeekend ? 'Tambahkan aktivitas bila ada rencana usaha ekstra.' : 'Tulis rencana kerja 480 menit di struk, lalu sobek dan kirim ke Koordinator.' }}</span><span class="sr-only">Belum ada agenda</span></div>
+             @if($hasDraftAgendas)
+                 <div class="sales-reference-empty" data-tour-target="agenda-row" role="status"><div class="sales-reference-empty-mark" aria-hidden="true">✓</div><strong>Draft agenda tersimpan</strong><span>{{ $agendas->total() }} agenda belum dikirim ke Koordinator.</span></div>
+             @else
+                 <div class="sales-reference-empty" data-tour-target="agenda-row" role="status"><div class="sales-reference-empty-mark" aria-hidden="true">＋</div><strong>{{ $isWeekend ? 'Belum ada rencana akhir pekan' : 'Belum ada rencana hari ini' }}</strong><span>{{ $isWeekend ? 'Tambahkan aktivitas bila ada rencana usaha ekstra.' : 'Tulis rencana kerja 480 menit di struk, lalu sobek dan kirim ke Koordinator.' }}</span><span class="sr-only">Belum ada agenda</span></div>
+             @endif
             @if(! $isWeekend && $incompletePreviousAgendas->isNotEmpty() && $isToday)
                 <div class="sales-receipt-warning" role="status"><strong>{{ $incompletePreviousAgendas->count() }} rencana kemarin belum lengkap</strong><span>{{ $incompletePreviousAgendas->count() }} agenda belum ada bukti foto · lengkapi sekarang</span></div>
             @endif
             @if($project)
-                <div id="agenda-input" class="sales-receipt-add-panel sales-reference-bottom-action" data-tour-target="add-plan-action"><button type="button" class="sales-receipt-add-trigger" @click="{{ $isWeekend ? 'openAgendaSheet($event)' : 'openAgendaPreview($event)' }}" aria-haspopup="dialog" aria-controls="{{ $isWeekend ? 'sales-agenda-create-sheet' : 'sales-agenda-receipt-preview' }}"><span>+ Tambah rencana {{ $isWeekend ? 'akhir pekan' : 'hari ini' }}</span></button></div>
+                 <div id="agenda-input" class="sales-receipt-add-panel sales-reference-bottom-action" data-tour-target="add-plan-action"><button type="button" class="sales-receipt-add-trigger" @click="{{ $isWeekend ? 'openAgendaSheet($event)' : ($hasDraftAgendas ? 'openAgendaPreview($event, true)' : 'openAgendaPreview($event)') }}" aria-haspopup="dialog" aria-controls="{{ $isWeekend ? 'sales-agenda-create-sheet' : 'sales-agenda-receipt-preview' }}"><span>{{ $hasDraftAgendas ? 'Lanjutkan Draft' : '+ Tambah rencana '.($isWeekend ? 'akhir pekan' : 'hari ini') }}</span></button></div>
             @endif
         @endif
     @endif
@@ -171,7 +173,7 @@
         </a>
     @endif
 
-    @if(! $isAllAgendas && ! $isReceiptMode && ! $isWeekend && $project)
+    @if(! $isAllAgendas && ! $isWeekend && $project)
         @include('crm.sales-pocketbook.partials.agenda-receipt-canvas', ['isReceiptPreview' => true])
     @endif
 
@@ -193,6 +195,7 @@
                      <input type="hidden" name="_method" value="" data-agenda-method>
                      <input type="hidden" name="expected_updated_at" value="" data-agenda-expected-updated-at>
                      <input type="hidden" name="scheduled_date" value="{{ $agendaDate->toDateString() }}">
+                     <input type="hidden" name="receipt_context" value="0" data-receipt-context>
                     <x-crm.field label="Kategori" for="sales-agenda-category" required><select id="sales-agenda-category" class="sales-input sales-chip-select" name="sales_activity_category" required><option value="">Pilih kategori</option>@foreach(\App\Models\ContentItem::SALES_ACTIVITY_CATEGORIES as $category)<option value="{{ $category }}" @selected(old('sales_activity_category') === $category)>{{ $category }}</option>@endforeach</select><div class="sales-category-chips" aria-label="Kategori agenda">@foreach(\App\Models\ContentItem::SALES_ACTIVITY_CATEGORIES as $category)<button type="button" class="sales-category-chip" data-category-option="{{ $category }}">{{ $category }}</button>@endforeach</div></x-crm.field>
                     <x-crm.field label="Judul agenda" for="sales-agenda-title" required><input id="sales-agenda-title" class="sales-input" name="title" value="{{ old('title') }}" required></x-crm.field>
                     <x-crm.field label="Mulai" for="sales-agenda-start-time" required><input id="sales-agenda-start-time" class="sales-input sales-agenda-start-input" name="start_time" type="time" value="{{ old('start_time', $defaultStart) }}" required @change="syncSlot()" @input="syncSlot()" data-slot-start><span class="sales-field-error" data-slot-error role="alert" aria-live="polite"></span></x-crm.field>

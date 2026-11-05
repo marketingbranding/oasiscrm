@@ -212,6 +212,59 @@ class SalesAgendaWorkspaceRenderTest extends TestCase
             ->assertSee($project->project_name);
     }
 
+    public function test_existing_draft_shows_a_resume_action_and_resume_query_opens_receipt(): void
+    {
+        [$sales, $project] = $this->salesContext();
+        $date = CarbonImmutable::today(config('app.timezone'));
+        $this->agendaAt($sales, $project, $date->toDateString(), '09:00', '10:00', 'Draft tersimpan');
+
+        $this->actingAs($sales)
+            ->get(route('sales-agendas.index', ['work_date' => $date->toDateString()]))
+            ->assertOk()
+            ->assertSeeText('Draft agenda tersimpan')
+            ->assertSeeText('Lanjutkan Draft')
+            ->assertDontSeeText('Belum ada rencana hari ini');
+
+        $this->actingAs($sales)
+            ->get(route('sales-agendas.index', [
+                'work_date' => $date->toDateString(),
+                'resume_receipt' => '1',
+            ]))
+            ->assertOk()
+            ->assertSee('data-resume-receipt="true"', false)
+            ->assertSeeText('Draft tersimpan');
+
+        $this->actingAs($sales)
+            ->get(route('sales-agendas.index', [
+                'view' => 'all',
+                'work_date' => $date->toDateString(),
+                'resume_receipt' => '1',
+            ]))
+            ->assertOk()
+            ->assertSee('data-resume-receipt="false"', false);
+    }
+
+    public function test_resumable_draft_changelog_is_idempotent_and_visible(): void
+    {
+        $title = 'Draft Agenda Dapat Dilanjutkan dari Struk';
+        $migration = require database_path('migrations/2026_11_05_152733_add_sales_agenda_resumable_draft_changelog.php');
+
+        $migration->up();
+        $migration->up();
+
+        $this->assertSame(1, DB::table('changelogs')->whereNull('version')->where('title', $title)->count());
+
+        $superadmin = User::factory()->create([
+            'role_id' => Role::query()->where('slug', 'superadmin')->value('id'),
+            'password_changed_at' => now(),
+        ]);
+
+        $this->actingAs($superadmin)
+            ->get(route('changelogs.index'))
+            ->assertOk()
+            ->assertSeeText($title);
+    }
+
     public function test_mobile_workspace_bottom_action_stays_fixed_through_embedded_tablet_widths(): void
     {
         [$sales] = $this->salesContext();
@@ -916,7 +969,7 @@ class SalesAgendaWorkspaceRenderTest extends TestCase
             ->assertSee('openAgendaSheet', false);
     }
 
-    public function test_unsubmitted_agenda_stays_in_receipt_mode(): void
+    public function test_unsubmitted_agenda_is_saved_in_receipt_preview_with_a_resume_action(): void
     {
         [$sales, $project] = $this->salesContext();
         $this->agendaAt($sales, $project, '2026-10-30', '07:30', '17:00', 'Agenda draft');
@@ -924,8 +977,12 @@ class SalesAgendaWorkspaceRenderTest extends TestCase
         $this->actingAs($sales)
             ->get(route('sales-agendas.index', ['work_date' => '2026-10-30']))
             ->assertOk()
-            ->assertSee('sales-receipt-workspace is-receipt-mode', false)
+            ->assertSee('sales-receipt-workspace ', false)
+            ->assertDontSee('is-receipt-mode', false)
+            ->assertSeeText('Draft agenda tersimpan')
+            ->assertSeeText('Lanjutkan Draft')
             ->assertSee('sales-receipt-canvas', false)
+            ->assertSee('sales-receipt-submit-form', false)
             ->assertSee('Sobek &amp; kirim ke Koordinator', false)
             ->assertDontSee('<div class="sales-submitted-plan"', false)
             ->assertDontSee('Terkirim ke Koordinator');
@@ -945,6 +1002,8 @@ class SalesAgendaWorkspaceRenderTest extends TestCase
             ->assertSee('sales-draft-stamp', false)
             ->assertSee('>DRAFT</b>', false)
             ->assertSee('sales-receipt-canvas', false)
+            ->assertSeeText('Lanjutkan Draft')
+            ->assertSee('data-agenda-receipt-preview', false)
             ->assertSee('sales-receipt-submit-form', false);
     }
 

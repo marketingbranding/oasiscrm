@@ -66,14 +66,14 @@
                 <div class="sales-reference-bottom-action is-receipt-action" data-tour-target="add-plan-action">
                     <button type="button" class="sales-receipt-add-trigger" data-receipt-preview-add @click="openAgendaSheet($event)" aria-haspopup="dialog" aria-controls="sales-agenda-create-sheet"><span>+ Tambah agenda ke struk</span></button>
                 </div>
-                @if(! $isReceiptPreview && (($isWeekend && $receiptSummary['agenda_count'] > 0) || (!$isWeekend && $receiptSummary['normal_minutes'] === $receiptSummary['target_minutes'])))
+                @if(! $daySubmission && (($isWeekend && $receiptSummary['agenda_count'] > 0) || (!$isWeekend && $receiptSummary['normal_minutes'] === $receiptSummary['target_minutes'])))
                     <form method="POST" action="{{ route('sales-agendas.submit') }}" class="sales-receipt-submit-form" data-receipt-submit>
                         @csrf
                         <input type="hidden" name="scheduled_date" value="{{ $agendaDate->toDateString() }}">
                          <div class="sales-receipt-submit-help">{{ $isWeekend ? 'Akhir pekan bebas jam dan menit. Koordinator melihat tanda Akhir pekan.' : 'Total tepat '.$receiptSummary['target_minutes'].' menit. Struk akan disobek dan terkirim ke atas.' }}</div>
                         <button type="submit" class="crm-button crm-button--primary crm-button--lg" data-accent="sales">Sobek &amp; kirim ke Koordinator</button>
                     </form>
-                @elseif(! $isReceiptPreview && ! $daySubmission)
+                @elseif(! $daySubmission)
                     <div class="sales-receipt-submit-disabled">Isi {{ $receiptSummary['remaining_minutes'] }} menit lagi untuk mengirim</div>
                 @endif
             </div>

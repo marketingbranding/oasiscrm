@@ -1,7 +1,7 @@
 @php($isReceiptPreview = $isReceiptPreview ?? false)
 
 @if($isReceiptPreview)
-    <div x-show="receiptOpen" x-cloak x-ref="receiptPanel" id="sales-agenda-receipt-preview" data-agenda-receipt-preview class="sales-receipt-preview-backdrop" @click.self="closeReceipt()" @keydown="handleReceiptKeydown($event)" role="dialog" aria-modal="true" aria-labelledby="sales-receipt-preview-title">
+    <div x-show="receiptOpen" x-cloak x-ref="receiptPanel" x-transition:enter="sales-receipt-preview-transition" x-transition:enter-start="sales-receipt-preview-transition-start" x-transition:enter-end="sales-receipt-preview-transition-end" x-transition:leave="sales-receipt-preview-transition" x-transition:leave-start="sales-receipt-preview-transition-end" x-transition:leave-end="sales-receipt-preview-transition-start" id="sales-agenda-receipt-preview" data-agenda-receipt-preview class="sales-receipt-preview-backdrop" @click.self="closeReceipt()" @keydown="handleReceiptKeydown($event)" role="dialog" aria-modal="true" aria-labelledby="sales-receipt-preview-title">
 @endif
         <div class="sales-receipt-canvas {{ $isReceiptPreview ? 'sales-receipt-canvas--preview' : '' }}" aria-label="Struk rencana agenda">
             @if($isReceiptPreview)

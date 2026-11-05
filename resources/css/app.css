@@ -3609,7 +3609,8 @@ body.sales-pocketbook-onboarding-shell .crm-page-body {
     .crm-modal-backdrop:not(.crm-modal-backdrop--right) .crm-modal-panel,
     .sales-sheet-transition-enter,
     .sales-sheet-transition-leave,
-    .sales-bottom-sheet { transition-duration: 1ms; }
+    .sales-bottom-sheet,
+    .sales-receipt-preview-transition { transition-duration: 1ms; }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -5894,6 +5895,9 @@ body.sales-personal-page .sales-receipt-preview-backdrop {
     overflow-y: auto !important;
     background: #141210 !important;
 }
+body.sales-personal-page .sales-receipt-preview-transition { transition: opacity 170ms ease; }
+body.sales-personal-page .sales-receipt-preview-transition-start { opacity: 0; }
+body.sales-personal-page .sales-receipt-preview-transition-end { opacity: 1; }
 body.sales-personal-page .sales-receipt-preview-backdrop .sales-receipt-canvas--preview {
     display: flex !important;
     width: 100% !important;
@@ -5932,10 +5936,11 @@ body.sales-personal-page .sales-bottom-sheet {
     position: relative !important;
     inset: auto !important;
     width: 100% !important;
-    height: min(564px, calc(100dvh - 12rem)) !important;
-    max-height: min(564px, calc(100dvh - 12rem)) !important;
+    height: auto !important;
+    max-height: calc(100dvh - env(safe-area-inset-top, 0px)) !important;
+    overflow-x: hidden !important;
+    overflow-y: auto !important;
     margin: 0 !important;
-    transform: none !important;
 }
 }
 

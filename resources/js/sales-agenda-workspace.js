@@ -66,16 +66,38 @@ export default function registerSalesAgendaWorkspace(Alpine) {
             this.agendaOpen = true;
             lockBodyScroll(this.agendaLockOwner);
             this.$nextTick(() => {
-                const initial = this.$refs.agendaPanel?.querySelector('[data-autofocus]') || this.$refs.sheetClose;
-                 initial?.focus();
                 if (this.editingAgenda) {
                     this.populateAgendaForm();
                 } else {
                     this.resetAgendaForm();
                 }
+                this.$refs.sheetClose?.focus();
                 this.initializeSlot();
                 this.syncChipState();
             });
+        },
+
+        handleAgendaFormKeydown(event) {
+            if (event.key !== 'Enter' || event.isComposing || event.target?.tagName === 'TEXTAREA') {
+                return;
+            }
+
+            const form = event.target?.form;
+            if (!form || event.target.matches('button, select, textarea, [type="submit"]')) {
+                return;
+            }
+
+            const focusable = [...form.querySelectorAll(
+                'input:not([type="hidden"]):not([disabled]), select:not([disabled]), textarea:not([disabled]), button:not([disabled])',
+            )].filter((element) => element.offsetParent !== null && element.type !== 'submit');
+            const currentIndex = focusable.indexOf(event.target);
+            const next = focusable[currentIndex + 1];
+            if (!next) {
+                return;
+            }
+
+            event.preventDefault();
+            next.focus();
         },
 
         openAgendaEdit(event) {

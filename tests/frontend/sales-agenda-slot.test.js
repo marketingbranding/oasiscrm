@@ -220,6 +220,91 @@ test('resolves custom duration without requiring a preset select option', () => 
     assert.equal(resolveAgendaDuration('', ''), '');
 });
 
+test('opens the agenda sheet without focusing and popping the native category picker', () => {
+    const previousDocument = globalThis.document;
+    const previousWindow = globalThis.window;
+    const focusEvents = [];
+    const categoryPicker = { focus: () => focusEvents.push('category') };
+    const closeButton = { focus: () => focusEvents.push('close') };
+    const trigger = { focus: () => focusEvents.push('trigger') };
+    const panel = {
+        querySelector(selector) {
+            return selector === '[data-autofocus]' ? categoryPicker : null;
+        },
+        querySelectorAll() {
+            return [];
+        },
+    };
+    const registrations = {};
+
+    globalThis.document = { activeElement: trigger, body: { style: { overflow: '' } } };
+    globalThis.window = { matchMedia: () => ({ matches: true }) };
+
+    try {
+        registerSalesAgendaWorkspace({
+            data(name, factory) {
+                registrations[name] = factory;
+            },
+        });
+
+        const workspace = registrations.salesAgendaWorkspace();
+        workspace.$nextTick = (callback) => callback();
+        workspace.$refs = { agendaPanel: panel, sheetClose: closeButton };
+
+        workspace.openAgendaSheet({ currentTarget: trigger });
+
+        assert.deepEqual(focusEvents, ['close']);
+        assert.equal(workspace.agendaOpen, true);
+        workspace.closeSheet(false);
+    } finally {
+        globalThis.document = previousDocument;
+        globalThis.window = previousWindow;
+    }
+});
+
+test('uses Enter in a single-line agenda field to move to the next visible control', () => {
+    const focusEvents = [];
+    const titleInput = {
+        tagName: 'INPUT',
+        type: 'text',
+        disabled: false,
+        offsetParent: {},
+        matches: () => false,
+        focus: () => focusEvents.push('title'),
+    };
+    const startInput = {
+        tagName: 'INPUT',
+        type: 'time',
+        disabled: false,
+        offsetParent: {},
+        matches: () => false,
+        focus: () => focusEvents.push('start'),
+    };
+    const form = { querySelectorAll: () => [titleInput, startInput] };
+    titleInput.form = form;
+    const event = {
+        key: 'Enter',
+        target: titleInput,
+        isComposing: false,
+        preventDefault() {
+            this.defaultPrevented = true;
+        },
+    };
+    const registrations = {};
+
+    registerSalesAgendaWorkspace({
+        data(name, factory) {
+            registrations[name] = factory;
+        },
+    });
+
+    const workspace = registrations.salesAgendaWorkspace();
+    workspace.handleAgendaFormKeydown(event);
+
+    assert.equal(event.defaultPrevented, true);
+    assert.deepEqual(focusEvents, ['start']);
+});
+
 test('keeps nested preview and create-sheet locks and focus restoration independent', () => {
     const previousDocument = globalThis.document;
     const previousWindow = globalThis.window;

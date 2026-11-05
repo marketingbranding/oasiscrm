@@ -762,6 +762,49 @@ class SalesAgendaWorkspaceRenderTest extends TestCase
         $this->assertSame(0, DB::table('changelogs')->whereNull('version')->where('title', $title)->count());
     }
 
+    public function test_agenda_modal_avoids_native_picker_autofocus_and_has_keyboard_navigation(): void
+    {
+        [$sales] = $this->salesContext();
+
+        $this->actingAs($sales)
+            ->get(route('sales-agendas.index', ['work_date' => '2026-11-02']))
+            ->assertOk()
+            ->assertSee('@keydown="handleAgendaFormKeydown($event)"', false)
+            ->assertSee('x-ref="sheetClose"', false)
+            ->assertDontSee('name="sales_activity_category" required data-autofocus', false)
+            ->assertSee('sales-receipt-preview-transition', false);
+
+        $css = file_get_contents(resource_path('css/app.css'));
+
+        $this->assertIsString($css);
+        $this->assertStringContainsString('max-height: calc(100dvh - env(safe-area-inset-top, 0px)) !important;', $css);
+        $this->assertDoesNotMatchRegularExpression(
+            '/body\.sales-personal-page \.sales-bottom-sheet \{[^}]*transform:\s*none/s',
+            $css,
+        );
+    }
+
+    public function test_sales_agenda_modal_interaction_changelog_migration_is_idempotent(): void
+    {
+        $title = 'Perbaikan Modal dan Input Agenda Mobile';
+        DB::table('changelogs')->whereNull('version')->where('title', $title)->delete();
+
+        $migration = require database_path('migrations/2026_11_05_144536_add_sales_agenda_modal_interaction_changelog.php');
+        $migration->up();
+        $migration->up();
+
+        $this->assertSame(1, DB::table('changelogs')->whereNull('version')->where('title', $title)->count());
+        $this->assertDatabaseHas('changelogs', [
+            'version' => null,
+            'title' => $title,
+            'category' => 'fixed',
+        ]);
+
+        $migration->down();
+
+        $this->assertSame(0, DB::table('changelogs')->whereNull('version')->where('title', $title)->count());
+    }
+
     public function test_unsubmitted_weekend_agenda_renders_saved_plan_without_receipt(): void
     {
         [$sales, $project] = $this->salesContext();

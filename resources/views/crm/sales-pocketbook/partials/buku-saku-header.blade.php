@@ -10,6 +10,10 @@
                 </form>
                 <button type="button" class="sales-tear-sound-toggle" data-sales-tear-sound aria-pressed="true">Suara sobek: aktif</button>
                 @if($canExport)<a href="{{ route('sales-agendas.export') }}">Export XLSX</a>@endif
+                <form method="POST" action="{{ route('logout') }}" class="sales-reference-logout-form" data-sales-pocketbook-logout>
+                    @csrf
+                    <button type="submit" class="sales-reference-logout">Logout</button>
+                </form>
             </div>
         </details>
     </div>

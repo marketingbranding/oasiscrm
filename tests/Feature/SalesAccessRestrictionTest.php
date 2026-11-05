@@ -9,6 +9,7 @@ use App\Models\User;
 use App\Models\UserNotification;
 use App\Services\SalesPocketbookOnboardingService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
 class SalesAccessRestrictionTest extends TestCase
@@ -74,12 +75,34 @@ class SalesAccessRestrictionTest extends TestCase
         $response->assertSee(route('sales-pocketbook.index'), false)
             ->assertSee(route('profile.edit'), false)
             ->assertSee(route('logout'), false)
+            ->assertSee('data-sales-pocketbook-logout', false)
             ->assertDontSee(route('dashboard'), false)
             ->assertDontSee(route('database.index'), false)
             ->assertDontSee(route('konsumen-progress.index'), false)
             ->assertDontSee(route('dana-talangan.index'), false)
             ->assertDontSee(route('changelogs.index'), false)
             ->assertDontSee('Oasis AI - Asisten Magang');
+    }
+
+    public function test_sales_logout_changelog_is_idempotent_and_visible(): void
+    {
+        $title = 'Logout tersedia di Buku Saku Saya';
+        $migrationPaths = glob(database_path('migrations/*_add_sales_pocketbook_logout_changelog.php'));
+
+        $this->assertCount(1, $migrationPaths);
+
+        $migration = require $migrationPaths[0];
+        $migration->up();
+        $migration->up();
+
+        $this->assertSame(1, DB::table('changelogs')->whereNull('version')->where('title', $title)->count());
+
+        $superadmin = User::factory()->create([
+            'role_id' => Role::query()->where('slug', 'superadmin')->value('id'),
+            'password_changed_at' => now(),
+        ]);
+
+        $this->actingAs($superadmin)->get(route('changelogs.index'))->assertOk()->assertSeeText($title);
     }
 
     public function test_non_sales_dashboard_and_navigation_remain_available(): void

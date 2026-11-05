@@ -1311,6 +1311,8 @@ body.sales-personal-page .crm-feedback-bubble {
 }
 .sales-reference-menu-panel form + a,
 .sales-reference-menu-panel a { border-top: 1px solid var(--oasis-sales-rule); }
+.sales-reference-menu-panel .sales-reference-logout-form { border-top: 1px solid var(--oasis-sales-rule); }
+.sales-reference-menu-panel .sales-reference-logout { color: var(--oasis-danger); }
 .sales-reference-menu-panel :is(button, a):hover,
 .sales-reference-menu-panel :is(button, a):focus-visible { background: var(--oasis-sales-selected); }
 

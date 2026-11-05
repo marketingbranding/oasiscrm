@@ -123,9 +123,7 @@ class AdminUserDirectActivationTest extends TestCase
                 ->assertRedirect(route($user->landingRouteName()));
             if ($slug === 'sales') {
                 $this->get(route($user->landingRouteName()))
-                    ->assertRedirect(route('sales-pocketbook.onboarding.show'));
-                $this->post(route('sales-pocketbook.onboarding.skip'))
-                    ->assertRedirect(route('sales-agendas.index'));
+                    ->assertOk();
             }
             $this->get(route($user->landingRouteName()))->assertOk();
 

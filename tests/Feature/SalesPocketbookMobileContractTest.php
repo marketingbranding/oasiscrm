@@ -139,6 +139,40 @@ class SalesPocketbookMobileContractTest extends TestCase
         $this->assertSame(1, DB::table('changelogs')->whereNull('version')->where('title', $title)->count());
     }
 
+    public function test_sales_pocketbook_onboarding_disabled_changelog_is_idempotent_and_rendered(): void
+    {
+        $title = 'Onboarding Buku Saku Sales dinonaktifkan sementara';
+        $migrationPaths = glob(database_path('migrations/*_add_sales_pocketbook_onboarding_disabled_changelog.php'));
+
+        $this->assertCount(1, $migrationPaths);
+
+        $migration = require $migrationPaths[0];
+        $migration->up();
+        $migration->up();
+
+        $this->assertSame(1, DB::table('changelogs')->whereNull('version')->where('title', $title)->count());
+        $this->assertDatabaseHas('changelogs', [
+            'version' => null,
+            'title' => $title,
+            'category' => 'changed',
+            'created_by' => null,
+        ]);
+
+        $superadmin = User::factory()->create([
+            'role_id' => Role::query()->where('slug', 'superadmin')->value('id'),
+            'password_changed_at' => now(),
+        ]);
+
+        $this->actingAs($superadmin)->get(route('changelogs.index'))->assertOk()->assertSeeText($title);
+
+        $migration->down();
+
+        $this->assertDatabaseMissing('changelogs', [
+            'version' => null,
+            'title' => $title,
+        ]);
+    }
+
     public function test_mobile_lead_and_agenda_layout_changelog_is_idempotent_and_visible(): void
     {
         $title = 'Perbaikan tampilan form lead dan aksi agenda di mobile';
@@ -594,12 +628,44 @@ class SalesPocketbookMobileContractTest extends TestCase
             ->assertDontSee('Lead Belum Selesai');
     }
 
-    public function test_first_personal_workspace_visit_redirects_to_sales_pocketbook_onboarding(): void
+    public function test_first_personal_workspace_visit_bypasses_disabled_sales_pocketbook_onboarding(): void
     {
+        config(['oasis.sales_pocketbook_onboarding_enabled' => false]);
+        [, , $sales] = $this->salesContext(false);
+
+        $this->actingAs($sales)->get(route('sales-agendas.index'))
+            ->assertOk();
+    }
+
+    public function test_disabled_sales_pocketbook_onboarding_blocks_all_tour_endpoints(): void
+    {
+        config(['oasis.sales_pocketbook_onboarding_enabled' => false]);
+        [, , $sales] = $this->salesContext(false);
+
+        $this->actingAs($sales)->post(route('sales-pocketbook.onboarding.skip'))
+            ->assertForbidden();
+        $this->actingAs($sales)->post(route('sales-pocketbook.onboarding.complete'), ['current_step' => 4])
+            ->assertForbidden();
+        $this->actingAs($sales)->post(route('sales-pocketbook.onboarding.replay'))
+            ->assertForbidden();
+    }
+
+    public function test_reenabling_sales_pocketbook_onboarding_restores_first_workspace_redirect(): void
+    {
+        config(['oasis.sales_pocketbook_onboarding_enabled' => true]);
         [, , $sales] = $this->salesContext(false);
 
         $this->actingAs($sales)->get(route('sales-agendas.index'))
             ->assertRedirect(route('sales-pocketbook.onboarding.show'));
+    }
+
+    public function test_disabled_sales_pocketbook_onboarding_cannot_be_opened_directly(): void
+    {
+        config(['oasis.sales_pocketbook_onboarding_enabled' => false]);
+        [, , $sales] = $this->salesContext(false);
+
+        $this->actingAs($sales)->get(route('sales-pocketbook.onboarding.show'))
+            ->assertForbidden();
     }
 
     public function test_onboarding_visual_system_has_pdf_composition_and_accessibility_states(): void
@@ -715,6 +781,7 @@ class SalesPocketbookMobileContractTest extends TestCase
 
     public function test_sales_pocketbook_onboarding_can_be_skipped_completed_and_replayed_idempotently(): void
     {
+        config(['oasis.sales_pocketbook_onboarding_enabled' => true]);
         [, , $sales] = $this->salesContext(false);
 
         $this->actingAs($sales)->get(route('sales-pocketbook.onboarding.show'))->assertOk()
@@ -743,6 +810,7 @@ class SalesPocketbookMobileContractTest extends TestCase
 
     public function test_non_sales_user_cannot_open_personal_sales_pocketbook_onboarding(): void
     {
+        config(['oasis.sales_pocketbook_onboarding_enabled' => true]);
         [$branch] = $this->salesContext();
         $role = Role::firstOrCreate(['slug' => 'sales_coordinator'], ['name' => 'Koordinator Sales']);
         $coordinator = User::factory()->create([

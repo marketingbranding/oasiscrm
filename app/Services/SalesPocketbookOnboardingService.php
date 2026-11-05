@@ -24,7 +24,8 @@ class SalesPocketbookOnboardingService
 
     public function canAccess(User $user): bool
     {
-        return $user->isAccountActive()
+        return config('oasis.sales_pocketbook_onboarding_enabled')
+            && $user->isAccountActive()
             && $user->hasVerifiedEmail()
             && $user->hasPrimaryRole('sales')
             && $user->hasPermission('sales_pocketbook.view_own');

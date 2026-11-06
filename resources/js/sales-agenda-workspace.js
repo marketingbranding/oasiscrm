@@ -67,6 +67,7 @@ export default function registerSalesAgendaWorkspace(Alpine) {
         openAgendaSheet(event = null, editingAgenda = null) {
             this.agendaTrigger = event?.currentTarget || document.activeElement;
             this.editingAgenda = editingAgenda;
+            const resumeReceiptAfterSave = !editingAgenda && Boolean(event?.currentTarget?.closest?.('[data-receipt-preview-add]'));
             this.agendaOpen = true;
             lockBodyScroll(this.agendaLockOwner);
             this.$nextTick(() => {
@@ -77,7 +78,7 @@ export default function registerSalesAgendaWorkspace(Alpine) {
                 }
                 const receiptContext = this.$refs.agendaPanel?.querySelector('[data-receipt-context]');
                 if (receiptContext) {
-                    receiptContext.value = !this.editingAgenda && event?.currentTarget?.closest('[data-receipt-preview-add]') ? '1' : '0';
+                    receiptContext.value = resumeReceiptAfterSave ? '1' : '0';
                 }
                 this.$refs.sheetClose?.focus();
                 this.initializeSlot();

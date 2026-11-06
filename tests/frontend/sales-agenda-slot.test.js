@@ -435,3 +435,43 @@ test('keeps nested preview and create-sheet locks and focus restoration independ
         globalThis.window = previousWindow;
     }
 });
+
+test('preserves receipt context after the browser clears currentTarget before nextTick', () => {
+    const previousDocument = globalThis.document;
+    const previousWindow = globalThis.window;
+    const receiptContext = { value: '0' };
+    const previewAddButton = { closest: (selector) => selector === '[data-receipt-preview-add]' ? {} : null };
+    const callbacks = [];
+    const registrations = {};
+
+    globalThis.document = { activeElement: null, body: { style: { overflow: '' } } };
+    globalThis.window = { matchMedia: () => ({ matches: true }) };
+
+    try {
+        registerSalesAgendaWorkspace({
+            data(name, factory) {
+                registrations[name] = factory;
+            },
+        });
+
+        const workspace = registrations.salesAgendaWorkspace();
+        workspace.$nextTick = (callback) => callbacks.push(callback);
+        workspace.$refs = {
+            agendaPanel: {
+                querySelector: (selector) => selector === '[data-receipt-context]' ? receiptContext : null,
+                querySelectorAll: () => [],
+            },
+            sheetClose: { focus() {} },
+        };
+
+        const event = { currentTarget: previewAddButton };
+        workspace.openAgendaSheet(event);
+        event.currentTarget = null;
+        callbacks.shift()();
+
+        assert.equal(receiptContext.value, '1');
+    } finally {
+        globalThis.document = previousDocument;
+        globalThis.window = previousWindow;
+    }
+});

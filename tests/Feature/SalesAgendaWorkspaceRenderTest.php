@@ -265,6 +265,27 @@ class SalesAgendaWorkspaceRenderTest extends TestCase
             ->assertSeeText($title);
     }
 
+    public function test_adding_to_a_draft_changelog_is_idempotent_and_visible(): void
+    {
+        $title = 'Draft Agenda Tetap Terbuka Saat Menambah Rencana';
+        $migration = require database_path('migrations/2026_11_06_083359_add_sales_agenda_receipt_resume_changelog.php');
+
+        $migration->up();
+        $migration->up();
+
+        $this->assertSame(1, DB::table('changelogs')->whereNull('version')->where('title', $title)->count());
+
+        $superadmin = User::factory()->create([
+            'role_id' => Role::query()->where('slug', 'superadmin')->value('id'),
+            'password_changed_at' => now(),
+        ]);
+
+        $this->actingAs($superadmin)
+            ->get(route('changelogs.index'))
+            ->assertOk()
+            ->assertSeeText($title);
+    }
+
     public function test_mobile_workspace_bottom_action_stays_fixed_through_embedded_tablet_widths(): void
     {
         [$sales] = $this->salesContext();

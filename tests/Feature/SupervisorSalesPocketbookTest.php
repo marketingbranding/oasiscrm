@@ -97,6 +97,22 @@ class SupervisorSalesPocketbookTest extends TestCase
         $this->actingAs($supplemental)->get(route('sales-pocketbook.index'))->assertOk()->assertViewIs('crm.sales-pocketbook.sales-agenda');
     }
 
+    public function test_coordinator_today_tab_renders_the_team_dashboard_contract(): void
+    {
+        $this->actingAs($this->coordinatorA)
+            ->get(route('sales-pocketbook.index', ['tab' => 'today']))
+            ->assertOk()
+            ->assertSee('coordinator-mobile-header', false)
+            ->assertSeeText('Buku Saku Tim')
+            ->assertSeeText('Koordinator · Solo · 2 Sales')
+            ->assertSee('aria-label="Ringkasan hari ini"', false)
+            ->assertSeeText('rencana terkirim')
+            ->assertSeeText('agenda selesai')
+            ->assertSeeText('Sales hari ini')
+            ->assertSeeText('Sales 1')
+            ->assertSeeText('Belum kirim');
+    }
+
     public function test_team_uses_current_direct_hierarchy_access_and_unique_mappings(): void
     {
         $this->assertContains($this->project->id, app(OrganizationScopeService::class)->projectIds($this->supervisor, 'sales_pocketbook', 'view'));

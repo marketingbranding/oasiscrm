@@ -32,13 +32,27 @@
 @endphp
 <div class="sales-pocketbook-workspace">
 <div class="space-y-4" x-data="{ sales: @js($initialSalesId), project: @js($initialProjectId), branch: @js((string) old('branch_id', $initialProjects->count() === 1 ? $initialProjects->first()['branch_id'] : '')), leadDate: @js($leadDate), promo: @js(old('promo_name', 'No Promo')), promos: @js($promos), promoEndpoint: @js($promoOptionsEndpoint), projectsBySales: @js($projectsBySales), get projects() { return this.projectsBySales[this.sales] || [] }, salesChanged() { this.project = this.projects.length === 1 ? this.projects[0].id : ''; this.projectChanged() }, agendaSalesChanged() { this.project = this.projects.length === 1 ? this.projects[0].id : '' }, projectChanged() { this.branch = this.projects.find(item => item.id === this.project)?.branch_id || ''; this.loadPromos() }, async loadPromos() { if (!this.project || !this.leadDate) { this.promos = ['No Promo']; this.promo = 'No Promo'; return } const url = new URL(this.promoEndpoint.replace('PROJECT_ID', this.project), window.location.origin); url.searchParams.set('date', this.leadDate); const response = await fetch(url, { headers: { Accept: 'application/json' } }); if (!response.ok) { this.promos = ['No Promo']; this.promo = 'No Promo'; return } this.promos = (await response.json()).options; if (!this.promos.includes(this.promo)) this.promo = 'No Promo' } }">
-    <x-crm.page-header variant="canonical" eyebrow="Koordinator Sales" title="Buku Saku Sales" description="Kelola Lead tim, pantau Agenda Sales, dan tinjau laporan performa.">
-        @if($tab === 'lead')
-            <x-slot:actions>
-                @if($canCreate)<x-crm.button variant="primary" accent="sales" href="#coordinator-lead-input">INPUT LEAD</x-crm.button>@endif
-            </x-slot:actions>
-        @endif
-    </x-crm.page-header>
+    @if($tab === 'today')
+        <header class="coordinator-mobile-header">
+            <a href="{{ route(auth()->user()->landingRouteName()) }}">OASIS CRM</a>
+            <a class="coordinator-mobile-avatar" href="{{ route('profile.edit') }}" aria-label="Buka profil {{ auth()->user()->name }}">{{ mb_strtoupper(mb_substr(auth()->user()->name, 0, 1)) }}</a>
+        </header>
+        <header class="coordinator-today-heading">
+            <h1>Buku Saku Tim</h1>
+            <p>Koordinator · {{ auth()->user()->branch?->name ?? 'Cabang belum ditentukan' }} · {{ $salesUsers->count() }} Sales</p>
+        </header>
+        <div class="coordinator-desktop-heading">
+            <x-crm.page-header variant="canonical" eyebrow="Koordinator Sales" title="Buku Saku Tim" description="Pantau rencana dan aktivitas Sales dalam tim Anda." />
+        </div>
+    @else
+        <x-crm.page-header variant="canonical" eyebrow="Koordinator Sales" title="Buku Saku Sales" description="Kelola Lead tim, pantau Agenda Sales, dan tinjau laporan performa.">
+            @if($tab === 'lead')
+                <x-slot:actions>
+                    @if($canCreate)<x-crm.button variant="primary" accent="sales" href="#coordinator-lead-input">INPUT LEAD</x-crm.button>@endif
+                </x-slot:actions>
+            @endif
+        </x-crm.page-header>
+    @endif
 
     @if($errors->any())<x-crm.alert variant="error" title="Data belum tersimpan">{{ $errors->first() }}</x-crm.alert>@endif
 
@@ -95,40 +109,46 @@
             $updatesUrl = route('sales-pocketbook.index', ['tab' => 'today', 'view' => 'updates']);
         @endphp
         <nav class="coordinator-today-segments" aria-label="Ringkasan dan rencana tim">
-            <a href="{{ $todayUrl }}" @if($todayView === 'today') aria-current="page" @endif>Hari ini · {{ $todayWorkspace['date']->translatedFormat('j F') }}</a>
+            <a href="{{ $todayUrl }}" @if($todayView === 'today') aria-current="page" @endif>Hari ini · {{ $todayWorkspace['date']->locale('id')->translatedFormat('l j M') }}</a>
             <a href="{{ $plansUrl }}" @if($todayView === 'plans') aria-current="page" @endif>Rencana</a>
         </nav>
         @if($todayView === 'today')
             <section class="coordinator-today-summary" aria-label="Ringkasan hari ini">
-                <div><span>Rencana terkirim</span><strong>{{ $todayWorkspace['submitted_count'] }} / {{ $todayWorkspace['sales_count'] }}</strong></div>
-                <div><span>Agenda selesai</span><strong>{{ $todayWorkspace['completed_agenda_count'] }} / {{ $todayWorkspace['agenda_count'] }}</strong></div>
+                <div><strong>{{ $todayWorkspace['submitted_count'] }} / {{ $todayWorkspace['sales_count'] }}</strong><span>rencana terkirim</span></div>
+                <div><strong>{{ $todayWorkspace['completed_agenda_count'] }} / {{ $todayWorkspace['agenda_count'] }}</strong><span>agenda selesai</span></div>
             </section>
             @if($todayWorkspace['incomplete_count'] > 0)
                 <a class="coordinator-backlog-callout" href="{{ $updatesUrl }}">
-                    <strong>! {{ $todayWorkspace['incomplete_count'] }} agenda minggu ini belum diupdate</strong>
-                    <span>{{ $todayWorkspace['incomplete_agendas']->keys()->map(fn ($id) => $salesUsers->firstWhere('id', $id)?->name)->filter()->join(', ') }}</span>
-                    <span class="coordinator-callout-action">Lihat agenda yang perlu diupdate →</span>
+                    <strong>! {{ $todayWorkspace['incomplete_count'] }} agenda sebelumnya belum diupdate</strong>
+                    <span>{{ $todayWorkspace['incomplete_agendas']->keys()->map(fn ($id) => $salesUsers->firstWhere('id', $id)?->name)->filter()->join(', ') }} · ketuk untuk tinjau ›</span>
                 </a>
             @endif
-            <section class="coordinator-sales-cards" aria-label="Status Sales hari ini">
+            <section class="coordinator-sales-today" aria-labelledby="coordinator-sales-today-title">
+                <div class="coordinator-sales-list-heading"><h2 id="coordinator-sales-today-title">Sales hari ini</h2><span>{{ $todayWorkspace['sales_count'] }} Sales</span></div>
+                <div class="coordinator-sales-cards">
                 @forelse($todayWorkspace['cards'] as $card)
                     @php
-                        [$priorityLabel, $priorityMark] = match ($card['priority']) {
-                            0 => ['Belum kirim rencana', '▫'],
-                            1 => ['Perlu update', '!'],
-                            3 => ['Selesai', '✓'],
-                            default => ['Berjalan', '→'],
+                        [$priorityLabel, $priorityClass] = match ($card['priority']) {
+                            0 => ['Belum kirim', 'is-not-submitted'],
+                            1 => ['Perlu update', 'is-needs-update'],
+                            3 => ['Selesai', 'is-complete'],
+                            default => ['Berjalan', 'is-active'],
                         };
                     @endphp
                     <a class="coordinator-sales-card" href="{{ route('sales-pocketbook.index', ['tab' => 'today', 'view' => 'detail', 'sales_id' => $card['sales']->id]) }}">
-                        <div class="coordinator-sales-card-heading"><strong>{{ $card['sales']->name }}</strong><span>{{ $priorityMark }} {{ $priorityLabel }}</span></div>
-                        <p>{{ $card['summary']['agenda_count'] }} agenda · {{ $card['summary']['normal_minutes'] }} menit</p>
-                        <div class="coordinator-progress" role="progressbar" aria-label="Progres agenda {{ $card['sales']->name }}" aria-valuemin="0" aria-valuemax="{{ max(1, $card['summary']['agenda_count']) }}" aria-valuenow="{{ $card['summary']['completed_count'] }}"><span style="width: {{ $card['summary']['agenda_count'] ? min(100, round($card['summary']['completed_count'] / $card['summary']['agenda_count'] * 100)) : 0 }}%"></span></div>
-                        @if($card['backlog_count'] > 0)<small>! {{ $card['backlog_count'] }} agenda minggu ini belum diupdate</small>@endif
+                        <div class="coordinator-sales-card-heading"><strong>{{ $card['sales']->name }}</strong><span class="{{ $priorityClass }}">{{ $priorityLabel }}</span></div>
+                        @if($card['summary']['agenda_count'] > 0)
+                            <p>{{ $card['summary']['agenda_count'] }} agenda · {{ $card['summary']['normal_minutes'] }} mnt</p>
+                            <div class="coordinator-progress" role="progressbar" aria-label="Progres agenda {{ $card['sales']->name }}" aria-valuemin="0" aria-valuemax="{{ max(1, $card['summary']['agenda_count']) }}" aria-valuenow="{{ $card['summary']['completed_count'] }}"><span style="width: {{ min(100, round($card['summary']['completed_count'] / $card['summary']['agenda_count'] * 100)) }}%"></span></div>
+                        @else
+                            <p>Rencana belum dikirim</p>
+                        @endif
+                        @if($card['backlog_count'] > 0)<small>! {{ $card['backlog_count'] }} agenda sebelumnya belum diupdate</small>@endif
                     </a>
                 @empty
                     <x-crm.empty-state title="Belum ada Sales dalam tim aktif." />
                 @endforelse
+                </div>
             </section>
         @elseif($todayView === 'updates')
             <section class="coordinator-backlog-list" aria-labelledby="coordinator-updates-title">

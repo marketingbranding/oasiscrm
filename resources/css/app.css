@@ -492,12 +492,18 @@ body.sales-personal-page .sales-pocketbook-workspace { color: #141210 !important
 .sales-pocketbook-workspace .sales-pocketbook-tab.active { background: #fdc20f !important; }
 
 /* Coordinator mobile-first daily cockpit */
+.coordinator-mobile-header { display: none; }
+.coordinator-mobile-header a { color: #141210; text-decoration: none; }
+.coordinator-mobile-avatar { display: grid; width: 38px; height: 38px; place-items: center; border: 2px solid #141210; background: #fdc20f; color: #141210; font-weight: 900; }
+.coordinator-today-heading { display: none; }
+.coordinator-today-heading h1 { margin: 0; color: #141210; font-size: clamp(30px, 9vw, 48px); font-weight: 900; line-height: 1.08; }
+.coordinator-today-heading p { margin: 2px 0 0; color: #625d51; font-size: 16px; line-height: 1.35; }
 .coordinator-today-segments,
 .coordinator-today-summary,
 .coordinator-sales-cards,
 .coordinator-backlog-list,
 .coordinator-plan-list { display: grid; gap: 12px; }
-.coordinator-today-segments { grid-template-columns: 1fr 1fr; margin-block: 12px; border: 2px solid #141210; }
+.coordinator-today-segments { grid-template-columns: 1.5fr 1fr; margin-block: 12px 14px; border: 2px solid #141210; }
 .coordinator-today-segments a { display: flex; min-height: 48px; align-items: center; justify-content: center; padding: 10px; color: #141210; font-weight: 800; text-align: center; }
 .coordinator-today-segments a + a { border-left: 2px solid #141210; }
 .coordinator-today-segments a[aria-current="page"] { background: #fdc20f; }
@@ -505,19 +511,26 @@ body.sales-personal-page .sales-pocketbook-workspace { color: #141210 !important
 .coordinator-today-summary > div,
 .coordinator-sales-card,
 .coordinator-plan-card { min-width: 0; border: 2px solid #141210; background: #fffdf5; padding: 12px; color: #141210; }
-.coordinator-today-summary > div { display: grid; gap: 6px; }
-.coordinator-today-summary span { font-size: 11px; font-weight: 700; text-transform: uppercase; }
-.coordinator-today-summary strong { font-size: 22px; }
+.coordinator-today-summary > div { display: grid; gap: 2px; }
+.coordinator-today-summary span { color: #625d51; font-size: 13px; font-weight: 700; }
+.coordinator-today-summary strong { font-size: 26px; line-height: 1.1; }
 .coordinator-backlog-callout { display: grid; gap: 6px; border: 2px solid #141210; background: #fff1d6; padding: 14px; color: #141210; }
 .coordinator-backlog-callout :is(strong, .coordinator-callout-action) { font-weight: 800; }
+.coordinator-sales-today { display: grid; gap: 8px; margin-top: 14px; }
+.coordinator-sales-list-heading { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.coordinator-sales-list-heading h2 { margin: 0; color: #141210; font-size: 17px; font-weight: 800; }
+.coordinator-sales-list-heading span { color: #625d51; font-size: 13px; font-weight: 700; }
 .coordinator-sales-card { display: grid; gap: 8px; min-height: 112px; text-decoration: none; }
 .coordinator-sales-card-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
 .coordinator-sales-card-heading span,
 .coordinator-plan-card > span { flex: 0 0 auto; border: 1px solid #141210; padding: 4px 6px; font-size: 11px; font-weight: 800; }
+.coordinator-sales-card-heading :is(.is-not-submitted, .is-needs-update) { border: 2px solid #a53613; background: #fff1d6; color: #a53613; }
+.coordinator-sales-card-heading .is-active { border: 2px solid #141210; background: #fdc20f; color: #141210; }
+.coordinator-sales-card-heading .is-complete { border: 2px solid #236a45; background: #fff; color: #236a45; }
 .coordinator-sales-card p,
 .coordinator-plan-card p { margin: 0; font-size: 13px; }
 .coordinator-sales-card small { font-weight: 700; }
-.coordinator-progress { height: 8px; overflow: hidden; background: #e8e1d2; }
+.coordinator-progress { height: 14px; overflow: hidden; border: 2px solid #141210; background: #e8e1d2; }
 .coordinator-progress span { display: block; height: 100%; background: #fdc20f; }
 .coordinator-backlog-list > h2,
 .coordinator-plan-day > h2 { margin: 8px 0 0; font-size: 18px; font-weight: 800; }
@@ -592,6 +605,26 @@ body.sales-personal-page .sales-pocketbook-workspace { color: #141210 !important
 .coordinator-report-cards article > div { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
 .coordinator-report-cards article > div span { display: flex; justify-content: space-between; gap: 8px; border-top: 1px solid #9a9384; padding-top: 6px; font-size: 12px; }
 @media (max-width: 767px) {
+    body.coordinator-workspace-page { background: #fbf7ec !important; }
+    body.coordinator-workspace-page > header { display: none !important; }
+    body.coordinator-workspace-page .crm-shell-frame { padding-top: 0; }
+    body.coordinator-workspace-page .crm-page-shell { width: min(100%, 780px); margin-inline: auto; padding: 28px 20px 32px; }
+    body.coordinator-workspace-page .coordinator-mobile-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 18px; font-size: 14px; font-weight: 900; letter-spacing: 0.04em; }
+    body.coordinator-workspace-page .coordinator-today-heading { display: block; margin-bottom: 14px; }
+    body.coordinator-workspace-page .coordinator-desktop-heading { display: none; }
+    body.coordinator-workspace-page .sales-pocketbook-tabs { grid-template-columns: repeat(3, minmax(0, 1fr)) !important; margin: 0 0 14px !important; }
+    body.coordinator-workspace-page .sales-pocketbook-tab { min-height: 44px !important; }
+    body.coordinator-workspace-page .coordinator-today-segments { gap: 0; }
+    body.coordinator-workspace-page .coordinator-today-segments a { min-height: 42px; font-size: 14px; }
+    body.coordinator-workspace-page .coordinator-today-summary > div,
+    body.coordinator-workspace-page .coordinator-sales-card { background: #fff; }
+    body.coordinator-workspace-page .coordinator-backlog-callout { padding: 12px; color: #a53613; font-size: 13px; text-decoration: none; }
+    body.coordinator-workspace-page .coordinator-backlog-callout span { color: #625d51; font-weight: 700; }
+    body.coordinator-workspace-page .coordinator-sales-today { margin-top: 14px; }
+    body.coordinator-workspace-page .coordinator-sales-list-heading h2 { font-size: 16px; }
+    body.coordinator-workspace-page .coordinator-sales-card { min-height: 0; padding: 12px; }
+    body.coordinator-workspace-page .coordinator-sales-card-heading strong { font-size: 17px; }
+    body.coordinator-workspace-page .coordinator-sales-card-heading span { padding: 4px 8px; font-size: 11px; }
     .coordinator-lead-table { display: none; }
     .coordinator-report-table { display: none; }
     .coordinator-lead-sticky-create { left: max(12px, calc(50% - 210px)); right: max(12px, calc(50% - 210px)); }

@@ -49,6 +49,23 @@ class CoordinatorLeadWorkspaceTest extends TestCase
         $this->actingAs($actor)->get(route('changelogs.index'))->assertOk()->assertSeeText($title);
     }
 
+    public function test_coordinator_today_dashboard_changelog_is_idempotent_and_visible(): void
+    {
+        $title = 'Tampilan Ringkasan Hari Ini Koordinator';
+        $migration = require database_path('migrations/2026_11_06_000001_add_coordinator_today_dashboard_changelog.php');
+
+        $migration->up();
+        $migration->up();
+
+        $this->assertSame(1, DB::table('changelogs')->whereNull('version')->where('title', $title)->count());
+        $actor = User::factory()->create([
+            'role_id' => Role::query()->where('slug', 'superadmin')->value('id'),
+            'password_changed_at' => now(),
+        ]);
+
+        $this->actingAs($actor)->get(route('changelogs.index'))->assertOk()->assertSeeText($title);
+    }
+
     public function test_controller_exposes_workspace_export_and_push_actions(): void
     {
         foreach (['index', 'export', 'push'] as $method) {

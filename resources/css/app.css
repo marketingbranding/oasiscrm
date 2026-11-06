@@ -503,7 +503,7 @@ body.sales-personal-page .sales-pocketbook-workspace { color: #141210 !important
 .coordinator-sales-cards,
 .coordinator-backlog-list,
 .coordinator-plan-list { display: grid; gap: 12px; }
-.coordinator-today-segments { grid-template-columns: 1.5fr 1fr; margin-block: 12px 14px; border: 2px solid #141210; }
+.coordinator-today-segments { grid-template-columns: repeat(2, minmax(0, 1fr)); margin-block: 12px 14px; border: 2px solid #141210; }
 .coordinator-today-segments a { display: flex; min-height: 48px; align-items: center; justify-content: center; padding: 10px; color: #141210; font-weight: 800; text-align: center; }
 .coordinator-today-segments a + a { border-left: 2px solid #141210; }
 .coordinator-today-segments a[aria-current="page"] { background: #fdc20f; }
@@ -612,7 +612,7 @@ body.sales-personal-page .sales-pocketbook-workspace { color: #141210 !important
     body.coordinator-workspace-page .coordinator-mobile-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 18px; font-size: 14px; font-weight: 900; letter-spacing: 0.04em; }
     body.coordinator-workspace-page .coordinator-today-heading { display: block; margin-bottom: 14px; }
     body.coordinator-workspace-page .coordinator-desktop-heading { display: none; }
-    body.coordinator-workspace-page .sales-pocketbook-tabs { grid-template-columns: repeat(3, minmax(0, 1fr)) !important; margin: 0 0 14px !important; }
+    body.coordinator-workspace-page .sales-pocketbook-tabs { grid-template-columns: repeat(3, minmax(0, 1fr)) !important; margin: 0 0 14px !important; padding-inline: 0 !important; }
     body.coordinator-workspace-page .sales-pocketbook-tab { min-height: 44px !important; }
     body.coordinator-workspace-page .coordinator-today-segments { gap: 0; }
     body.coordinator-workspace-page .coordinator-today-segments a { min-height: 42px; font-size: 14px; }

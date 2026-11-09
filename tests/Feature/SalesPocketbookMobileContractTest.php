@@ -296,6 +296,10 @@ class SalesPocketbookMobileContractTest extends TestCase
             $css,
         );
         $this->assertMatchesRegularExpression(
+            '/\.sales-lead-entry-panel\[open\] > \.sales-lead-entry-form \{[^}]*min-height: 0 !important;[^}]*overflow: hidden !important;[^}]*\}/s',
+            $css,
+        );
+        $this->assertMatchesRegularExpression(
             '/\.sales-lead-form-actions \{[^}]*position: static !important;[^}]*\}/s',
             $css,
         );

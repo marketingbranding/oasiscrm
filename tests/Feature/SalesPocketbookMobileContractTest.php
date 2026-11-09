@@ -300,6 +300,18 @@ class SalesPocketbookMobileContractTest extends TestCase
             $css,
         );
         $this->assertMatchesRegularExpression(
+            '/\.sales-lead-entry-panel\[open\] > \.sales-lead-entry-form \{[^}]*position: relative !important;[^}]*\}/s',
+            $css,
+        );
+        $this->assertMatchesRegularExpression(
+            '/\.sales-lead-entry-panel\[open\] > \.sales-lead-entry-form \.sales-lead-form-actions \{[^}]*position: absolute !important;[^}]*bottom: 0 !important;[^}]*\}/s',
+            $css,
+        );
+        $this->assertMatchesRegularExpression(
+            '/\.sales-lead-entry-panel\[open\] > \.sales-lead-entry-form \.sales-lead-entry-scroll \{[^}]*padding-bottom: calc\(86px \+ env\(safe-area-inset-bottom\)\) !important;[^}]*\}/s',
+            $css,
+        );
+        $this->assertMatchesRegularExpression(
             '/\.sales-lead-form-actions \{[^}]*position: static !important;[^}]*\}/s',
             $css,
         );

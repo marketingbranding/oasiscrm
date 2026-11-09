@@ -6,6 +6,8 @@ use App\Models\User;
 use Illuminate\Auth\Notifications\ResetPassword;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Notification;
+use Illuminate\Support\Facades\Password;
+use RuntimeException;
 use Tests\TestCase;
 
 class PasswordResetTest extends TestCase
@@ -69,5 +71,32 @@ class PasswordResetTest extends TestCase
 
             return true;
         });
+    }
+
+    public function test_mail_delivery_failure_returns_a_form_error_instead_of_a_server_error(): void
+    {
+        $user = User::factory()->create(['email' => 'mail-failure@example.test']);
+        Password::shouldReceive('sendResetLink')
+            ->once()
+            ->andThrow(new RuntimeException('SMTP unavailable'));
+
+        $this->post('/forgot-password', ['email' => $user->email])
+            ->assertSessionHasErrors(['email' => 'Email reset belum dapat dikirim. Periksa konfigurasi email atau hubungi administrator OASIS.']);
+    }
+
+    public function test_password_reset_requests_are_rate_limited(): void
+    {
+        $user = User::factory()->create(['email' => 'rate-limited@example.test']);
+        Password::shouldReceive('sendResetLink')
+            ->times(5)
+            ->andReturn(Password::RESET_LINK_SENT);
+
+        foreach (range(1, 5) as $_) {
+            $this->post('/forgot-password', ['email' => $user->email])
+                ->assertSessionHasNoErrors();
+        }
+
+        $this->post('/forgot-password', ['email' => $user->email])
+            ->assertSessionHasErrors(['email' => 'Terlalu banyak permintaan reset. Coba lagi beberapa saat lagi.']);
     }
 }

@@ -40,6 +40,14 @@
         </x-slot:actions>
     </x-crm.page-header>
 
+    @if(session('temporary_password_reset'))
+    <x-crm.alert variant="warning" title="Password sementara — simpan sekarang" class="mb-4">
+        <p>Password ini hanya ditampilkan sekali. Sampaikan melalui kanal pribadi tepercaya dan jangan simpan di catatan audit.</p>
+        <p class="mt-2 text-lg font-bold tracking-wide">{{ session('temporary_password_reset.password') }}</p>
+        <p class="mt-1 text-xs">Berlaku sampai {{ \Illuminate\Support\Carbon::parse(session('temporary_password_reset.expires_at'))->format('d/m/Y H:i') }}.</p>
+    </x-crm.alert>
+    @endif
+
     <div class="grid gap-4 lg:grid-cols-3">
         <section class="crm-section bg-white lg:col-span-2">
             <div class="bg-black text-white p-2 text-xs font-bold">AKUN DAN ORGANISASI</div>
@@ -76,7 +84,7 @@
                 @if($user->latestInvitation?->isUsable())@can('users.invite')<button type="button" @click="openLifecycle({ url: @js(route('admin-users.invitation.revoke',$user)), method: 'PATCH', label: 'Cabut Undangan', reasonRequired: false })" class="w-full border-2 border-black p-2 font-bold">REVOKE INVITATION</button>@endcan @endif
                 @endif
 
-                @can('users.reset_password')<button type="button" @click="openLifecycle({ url: @js(route('admin-users.reset-access',$user)), method: 'POST', label: 'Kirim Pemulihan Akses', reasonRequired: false })" class="w-full border-2 border-black p-2 font-bold">RESET ACCESS</button>@endcan
+                @if(auth()->user()->isSuperadmin()) @can('users.reset_password')<button type="button" @click="openLifecycle({ url: @js(route('admin-users.reset-access',$user)), method: 'POST', label: '{{ in_array($user->account_status,[\App\Enums\AccountStatus::PendingInvitation,\App\Enums\AccountStatus::Invited], true) ? 'Kirim Ulang Undangan' : 'Buat Password Sementara' }}', reasonRequired: false })" class="w-full border-2 border-black p-2 font-bold">{{ in_array($user->account_status,[\App\Enums\AccountStatus::PendingInvitation,\App\Enums\AccountStatus::Invited], true) ? 'KIRIM ULANG UNDANGAN' : 'RESET ACCESS' }}</button>@endcan @endif
 
                 @php($statusActions = match($user->account_status) {
                     \App\Enums\AccountStatus::Active => ['suspend' => 'SUSPEND', 'deactivate' => 'DEACTIVATE'],

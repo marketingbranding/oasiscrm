@@ -36,6 +36,7 @@ class UserAccountService
             'password' => Hash::make($password),
             'password_changed_at' => now(),
             'must_change_password' => false,
+            'temporary_password_expires_at' => null,
             'remember_token' => Str::random(60),
         ])->save();
 

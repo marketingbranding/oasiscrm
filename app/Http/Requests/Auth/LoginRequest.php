@@ -75,6 +75,15 @@ class LoginRequest extends FormRequest
             ]);
         }
 
+        $user = Auth::user();
+        if ($user?->must_change_password && $user->temporary_password_expires_at?->isPast()) {
+            Auth::logout();
+
+            throw ValidationException::withMessages([
+                'email' => 'Password sementara sudah kedaluwarsa. Hubungi Super Admin untuk mereset akses kembali.',
+            ]);
+        }
+
         RateLimiter::clear($this->throttleKey());
     }
 

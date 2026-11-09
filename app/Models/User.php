@@ -42,6 +42,7 @@ use Illuminate\Support\Facades\Schema;
     'updated_by',
     'password_changed_at',
     'must_change_password',
+    'temporary_password_expires_at',
     'sales_category',
 ])]
 #[Hidden(['password', 'remember_token'])]
@@ -100,6 +101,7 @@ class User extends Authenticatable implements MustVerifyEmail
         return [
             'email_verified_at' => 'datetime',
             'password_changed_at' => 'datetime',
+            'temporary_password_expires_at' => 'datetime',
             'account_status' => AccountStatus::class,
             'sales_category' => SalesCategory::class,
             'invited_at' => 'datetime',

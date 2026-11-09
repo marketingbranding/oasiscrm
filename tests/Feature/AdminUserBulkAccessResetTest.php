@@ -115,9 +115,11 @@ class AdminUserBulkAccessResetTest extends TestCase
         $projectPivot = DB::table('project_user')->where('user_id', $sales->id)->where('project_id', $project->id)->first();
         $coordinatorPivot = DB::table('sales_coordinator_sales')->where('sales_user_id', $sales->id)->first();
 
-        $this->actingAs($actor)->post(route('admin-users.bulk-reset-access'), [
+        $response = $this->actingAs($actor)->post(route('admin-users.bulk-reset-access'), [
             'user_ids' => [$pending->id, $sales->id],
         ])->assertRedirect()->assertSessionHasNoErrors()->assertSessionHas('success', 'Akses 2 pengguna berhasil direset.');
+        $temporaryPasswords = collect($response->getSession()->get('temporary_password_resets'))->keyBy('user_id');
+        $this->assertCount(2, $temporaryPasswords);
 
         foreach ([$pending->fresh(), $sales->fresh()] as $target) {
             $this->assertSame(AccountStatus::Active, $target->account_status);
@@ -125,7 +127,8 @@ class AdminUserBulkAccessResetTest extends TestCase
             $this->assertNotNull($target->email_verified_at);
             $this->assertTrue($target->must_change_password);
             $this->assertNull($target->password_changed_at);
-            $this->assertTrue(Hash::check('password', $target->password));
+            $this->assertTrue(Hash::check($temporaryPasswords[$target->id]['password'], $target->password));
+            $this->assertNotNull($target->temporary_password_expires_at);
         }
         $this->assertSame($identity, $sales->fresh()->only(array_keys($identity)));
         $this->assertEquals($branchPivot, DB::table('branch_user')->where('user_id', $sales->id)->where('branch_id', $branch->id)->first());
@@ -157,18 +160,21 @@ class AdminUserBulkAccessResetTest extends TestCase
         $actor = $this->user('superadmin');
         $sales = $this->user('sales', ['email' => 'bulk-login@example.test', 'password' => 'old-password']);
 
-        $this->actingAs($actor)->post(route('admin-users.bulk-reset-access'), ['user_ids' => [$sales->id]])->assertSessionHasNoErrors();
+        $response = $this->actingAs($actor)->post(route('admin-users.bulk-reset-access'), ['user_ids' => [$sales->id]])->assertSessionHasNoErrors();
+        $temporaryPassword = $response->getSession()->get('temporary_password_resets.0.password');
+        $this->assertIsString($temporaryPassword);
         $this->post(route('logout'));
         $this->post('/login', ['email' => $sales->email, 'password' => 'old-password']);
         $this->assertGuest();
-        $this->post('/login', ['email' => $sales->email, 'password' => 'password'])->assertRedirect(route('password.change'));
+        $this->post('/login', ['email' => $sales->email, 'password' => $temporaryPassword])->assertRedirect(route('password.change'));
         $this->get(route('dashboard'))->assertRedirect(route('password.change'));
         $this->put(route('password.change.update'), [
             'password' => 'new-bulk-password',
             'password_confirmation' => 'new-bulk-password',
         ])->assertRedirect(route($sales->landingRouteName()));
+        $this->assertNull($sales->fresh()->temporary_password_expires_at);
         $this->post(route('logout'));
-        $this->post('/login', ['email' => $sales->email, 'password' => 'password']);
+        $this->post('/login', ['email' => $sales->email, 'password' => $temporaryPassword]);
         $this->assertGuest();
         $this->post('/login', ['email' => $sales->email, 'password' => 'new-bulk-password']);
         $this->assertAuthenticatedAs($sales);
@@ -233,7 +239,7 @@ class AdminUserBulkAccessResetTest extends TestCase
             ->assertOk()
             ->assertSee('aria-label="Pilih Target Checkbox"', false)
             ->assertSee('Konfirmasi Reset / Aktifkan Akses')
-            ->assertSee('Password awal:')
+            ->assertSee('Password sementara dibuat otomatis')
             ->assertSee('Pengguna wajib mengganti password saat login pertama.')
             ->assertSee('Email undangan tidak dikirim.')
             ->assertSee('Password lama tidak lagi berlaku.');

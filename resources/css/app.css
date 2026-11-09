@@ -5725,7 +5725,8 @@ body.sales-personal-page .crm-page-shell { width: min(100%, 480px) !important; p
 .sales-lead-entry-panel[open] > :not(summary) { position: static !important; right: auto !important; bottom: auto !important; left: auto !important; height: auto !important; max-height: none !important; overflow: visible !important; background: #fbf7ec !important; }
 .sales-lead-entry-panel[open] > .sales-lead-entry-form { position: relative !important; min-height: 0 !important; overflow: hidden !important; }
 .sales-lead-entry-panel[open] > .sales-lead-entry-form .sales-lead-entry-scroll { padding-bottom: calc(86px + env(safe-area-inset-bottom)) !important; }
-.sales-lead-entry-panel[open] > .sales-lead-entry-form .sales-lead-form-actions { position: absolute !important; right: 0 !important; bottom: 0 !important; left: 0 !important; z-index: 2 !important; margin: 0 -20px !important; }
+.sales-lead-entry-panel[open] > .sales-lead-entry-form .sales-lead-entry-scroll { flex: 0 0 auto !important; height: min(328px, calc(100dvh - 12rem - 150px)) !important; max-height: min(328px, calc(100dvh - 12rem - 150px)) !important; }
+.sales-lead-entry-panel[open] > .sales-lead-entry-form .sales-lead-form-actions { position: fixed !important; right: 0 !important; bottom: 0 !important; left: 0 !important; z-index: 72 !important; width: 100vw !important; box-sizing: border-box !important; margin: 0 !important; }
 .sales-lead-entry-heading { display: flex !important; flex: 0 0 auto !important; align-items: flex-start !important; justify-content: space-between !important; gap: 12px !important; margin: 0 !important; padding: 16px 20px 10px !important; }
 .sales-lead-entry-heading-copy { display: grid !important; gap: 8px !important; min-width: 0 !important; }
 .sales-lead-entry-heading strong { font: 900 20px/1.1 Archivo, Arial, sans-serif !important; }

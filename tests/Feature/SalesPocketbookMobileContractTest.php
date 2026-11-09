@@ -304,11 +304,15 @@ class SalesPocketbookMobileContractTest extends TestCase
             $css,
         );
         $this->assertMatchesRegularExpression(
-            '/\.sales-lead-entry-panel\[open\] > \.sales-lead-entry-form \.sales-lead-form-actions \{[^}]*position: absolute !important;[^}]*bottom: 0 !important;[^}]*\}/s',
+            '/\.sales-lead-entry-panel\[open\] > \.sales-lead-entry-form \.sales-lead-form-actions \{[^}]*position: fixed !important;[^}]*bottom: 0 !important;[^}]*\}/s',
             $css,
         );
         $this->assertMatchesRegularExpression(
             '/\.sales-lead-entry-panel\[open\] > \.sales-lead-entry-form \.sales-lead-entry-scroll \{[^}]*padding-bottom: calc\(86px \+ env\(safe-area-inset-bottom\)\) !important;[^}]*\}/s',
+            $css,
+        );
+        $this->assertMatchesRegularExpression(
+            '/\.sales-lead-entry-panel\[open\] > \.sales-lead-entry-form \.sales-lead-entry-scroll \{[^}]*flex: 0 0 auto !important;[^}]*height: min\(328px, calc\(100dvh - 12rem - 150px\)\) !important;[^}]*max-height: min\(328px, calc\(100dvh - 12rem - 150px\)\) !important;[^}]*\}/s',
             $css,
         );
         $this->assertMatchesRegularExpression(

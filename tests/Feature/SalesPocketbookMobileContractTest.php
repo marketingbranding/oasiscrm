@@ -139,6 +139,40 @@ class SalesPocketbookMobileContractTest extends TestCase
         $this->assertSame(1, DB::table('changelogs')->whereNull('version')->where('title', $title)->count());
     }
 
+    public function test_personal_sales_phone_mode_changelog_is_idempotent_and_rendered(): void
+    {
+        $title = 'Buku Saku Sales tetap menggunakan tampilan ponsel saat dibuka di laptop';
+        $migrationPaths = glob(database_path('migrations/*_add_sales_personal_phone_mode_changelog.php'));
+
+        $this->assertCount(1, $migrationPaths);
+
+        $migration = require $migrationPaths[0];
+        $migration->up();
+        $migration->up();
+
+        $this->assertSame(1, DB::table('changelogs')->whereNull('version')->where('title', $title)->count());
+        $this->assertDatabaseHas('changelogs', [
+            'version' => null,
+            'title' => $title,
+            'category' => 'changed',
+            'created_by' => null,
+        ]);
+
+        $superadmin = User::factory()->create([
+            'role_id' => Role::query()->where('slug', 'superadmin')->value('id'),
+            'password_changed_at' => now(),
+        ]);
+
+        $this->actingAs($superadmin)->get(route('changelogs.index'))->assertOk()->assertSeeText($title);
+
+        $migration->down();
+
+        $this->assertDatabaseMissing('changelogs', [
+            'version' => null,
+            'title' => $title,
+        ]);
+    }
+
     public function test_sales_pocketbook_onboarding_disabled_changelog_is_idempotent_and_rendered(): void
     {
         $title = 'Onboarding Buku Saku Sales dinonaktifkan sementara';
@@ -282,6 +316,25 @@ class SalesPocketbookMobileContractTest extends TestCase
         $this->assertIsString($css);
         $this->assertMatchesRegularExpression(
             '/\.sales-mobile-detail-page \.sales-agenda-detail form\.sales-agenda-completion-form \{[^}]*padding: 0 0 120px !important;/s',
+            $css,
+        );
+    }
+
+    public function test_personal_sales_workspace_keeps_phone_mode_at_laptop_width(): void
+    {
+        $css = file_get_contents(resource_path('css/app.css'));
+
+        $this->assertIsString($css);
+        $this->assertMatchesRegularExpression(
+            '/body\.sales-personal-page \.crm-page-shell \{[^}]*width: min\(100%, 480px\) !important;[^}]*padding: 0 20px 100px !important;[^}]*\}/s',
+            $css,
+        );
+        $this->assertMatchesRegularExpression(
+            '/body\.sales-personal-page \.sales-reference-header \{[^}]*display: block !important;[^}]*\}/s',
+            $css,
+        );
+        $this->assertMatchesRegularExpression(
+            '/body\.sales-personal-page \.sales-pocketbook-tabs \{[^}]*display: grid !important;[^}]*grid-template-columns: repeat\(2, minmax\(0, 1fr\)\) !important;[^}]*\}/s',
             $css,
         );
     }

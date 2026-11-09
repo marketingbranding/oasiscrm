@@ -6150,3 +6150,454 @@ body.sales-personal-page .sales-bottom-sheet {
         background: #fff4f2 !important;
     }
 }
+
+/* Keep the personal Buku Saku Sales workspace in its phone composition at every viewport width. */
+body.sales-personal-page {
+    overflow-x: clip !important;
+}
+
+body.sales-personal-page #crm-main {
+    overflow: visible !important;
+}
+
+body.sales-personal-page .crm-page-shell {
+    width: min(100%, 480px) !important;
+    margin: 0 auto !important;
+    padding: 0 20px 120px !important;
+}
+
+body.sales-personal-page .sales-reference-header {
+    display: block !important;
+    border: 0 !important;
+    padding: 16px 0 0 !important;
+    background: #fbf7ec !important;
+}
+
+body.sales-personal-page .sales-reference-brandline { width: 100% !important; }
+
+body.sales-personal-page .sales-reference-menu summary {
+    width: 34px !important;
+    height: 34px !important;
+    min-height: 34px !important;
+    border: 2px solid #141210 !important;
+    background: #fdc20f !important;
+}
+
+body.sales-personal-page .sales-reference-heading { margin-top: 12px !important; }
+
+body.sales-personal-page .sales-reference-heading h1 {
+    font: 900 26px/1.1 Archivo, Arial, sans-serif !important;
+    text-transform: none !important;
+}
+
+body.sales-personal-page .sales-reference-heading p {
+    font: 500 13px/1.3 Archivo, Arial, sans-serif !important;
+}
+
+body.sales-personal-page .sales-pocketbook-tabs {
+    display: grid !important;
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    margin: 14px 0 0 !important;
+    border: 0 !important;
+}
+
+body.sales-personal-page .sales-pocketbook-workspace .sales-pocketbook-tab {
+    min-height: 44px !important;
+    border: 2px solid #141210 !important;
+    background: #fff !important;
+    color: #141210 !important;
+    font: 800 13px/1 Archivo, Arial, sans-serif !important;
+    text-transform: none !important;
+}
+
+body.sales-personal-page .sales-pocketbook-workspace .sales-pocketbook-tab.active { background: #fdc20f !important; }
+
+body.sales-personal-page .sales-reference-summary {
+    display: block !important;
+    margin-top: 0 !important;
+    border: 2px solid #141210 !important;
+    padding: 14px !important;
+    background: #fff !important;
+    box-shadow: none !important;
+}
+
+body.sales-personal-page .sales-reference-summary-heading strong { display: none !important; }
+
+body.sales-personal-page .sales-reference-summary-heading span,
+body.sales-personal-page .sales-reference-progress span,
+body.sales-personal-page .sales-reference-summary > div > span,
+body.sales-personal-page .sales-reference-progress > div > span {
+    color: #141210 !important;
+    font: 800 14px/1.2 Archivo, Arial, sans-serif !important;
+    letter-spacing: 0 !important;
+    text-transform: none !important;
+}
+
+body.sales-personal-page .sales-reference-summary small,
+body.sales-personal-page .sales-reference-progress > small {
+    color: #5e594d !important;
+    font: 500 13px/1.3 Archivo, Arial, sans-serif !important;
+}
+
+body.sales-personal-page .sales-reference-progress-track {
+    height: 14px !important;
+    border: 2px solid #141210 !important;
+    background: #e7e1cf !important;
+}
+
+body.sales-personal-page .sales-reference-progress-track span { background: #fdc20f !important; }
+
+body.sales-personal-page .sales-reference-empty {
+    display: grid !important;
+    min-height: 92px !important;
+    border: 2px dashed #141210 !important;
+    padding: 14px !important;
+    background: transparent !important;
+    text-align: left !important;
+}
+
+body.sales-personal-page .sales-reference-empty-mark { display: none !important; }
+
+body.sales-personal-page .sales-reference-empty strong { font: 800 16px/1.2 Archivo, Arial, sans-serif !important; }
+
+body.sales-personal-page .sales-reference-empty span:not(.sr-only) {
+    color: #5e594d !important;
+    font: 500 13px/1.3 Archivo, Arial, sans-serif !important;
+}
+
+body.sales-personal-page .sales-reference-bottom-action {
+    position: fixed !important;
+    right: 0 !important;
+    bottom: 0 !important;
+    left: 0 !important;
+    z-index: 30 !important;
+    padding: 12px 20px max(12px, env(safe-area-inset-bottom)) !important;
+    border-top: 2px solid #141210 !important;
+    background: #fbf7ec !important;
+}
+
+body.sales-personal-page .sales-reference-bottom-action .sales-receipt-add-trigger {
+    display: flex !important;
+    width: 100% !important;
+    max-width: 480px !important;
+    min-height: 52px !important;
+    margin: 0 auto !important;
+    align-items: center !important;
+    justify-content: center !important;
+    border: 0 !important;
+    background: #141210 !important;
+    color: #fdc20f !important;
+}
+
+body.sales-personal-page .sales-reference-bottom-action .sales-receipt-add-trigger span {
+    font: 800 14px/1.2 Archivo, Arial, sans-serif !important;
+    text-transform: none !important;
+}
+
+body.sales-personal-page .sales-receipt-canvas {
+    display: flex !important;
+    min-height: 100dvh !important;
+    margin: 0 -20px -120px !important;
+    padding: 28px 20px 24px !important;
+    flex-direction: column !important;
+    background: #141210 !important;
+}
+
+body.sales-personal-page .sales-receipt-paper {
+    width: min(100%, 340px) !important;
+    margin: 34px auto 0 !important;
+    padding: 16px 20px 34px !important;
+    border: 0 !important;
+    background: #fffdf5 !important;
+    box-shadow: none !important;
+}
+
+body.sales-personal-page .sales-receipt-canvas-actions {
+    display: grid !important;
+    gap: 8px !important;
+    margin-top: auto !important;
+}
+
+body.sales-personal-page .sales-receipt-form {
+    grid-template-columns: minmax(0, 1fr) !important;
+    min-height: 0 !important;
+    max-height: calc(100% - 118px) !important;
+    overflow-y: auto !important;
+}
+
+body.sales-personal-page .sales-receipt-form > .crm-field {
+    width: 100% !important;
+    grid-column: 1 !important;
+    grid-row: auto !important;
+    margin: 0 !important;
+}
+
+body.sales-personal-page .sales-receipt-form .crm-field-control { width: 100% !important; }
+
+body.sales-personal-page .sales-receipt-form-actions {
+    grid-column: 1 !important;
+    grid-row: auto !important;
+    order: 5 !important;
+    position: sticky !important;
+    bottom: 0 !important;
+    z-index: 3 !important;
+    margin: 8px -20px -1px !important;
+    padding: 10px 20px 0 !important;
+    background: #fbf7ec !important;
+}
+
+body.sales-personal-page .sales-lead-workspace {
+    display: grid !important;
+    gap: 12px !important;
+    border: 0 !important;
+    padding: 14px 0 0 !important;
+    background: transparent !important;
+    box-shadow: none !important;
+}
+
+body.sales-personal-page .sales-lead-heading { display: none !important; }
+
+body.sales-personal-page .sales-lead-status-tabs {
+    display: grid !important;
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+}
+
+body.sales-personal-page .sales-lead-status-tabs a {
+    min-height: 44px !important;
+    border: 2px solid #141210 !important;
+    background: #fff !important;
+    font: 800 13px/1 Archivo, Arial, sans-serif !important;
+    text-decoration: none !important;
+}
+
+body.sales-personal-page .sales-lead-status-tabs a.is-active { background: #fdc20f !important; }
+
+body.sales-personal-page .sales-lead-workspace > .crm-table-scroll { display: none !important; }
+
+body.sales-personal-page .sales-lead-mobile-list {
+    display: grid !important;
+    gap: 10px !important;
+}
+
+body.sales-personal-page .sales-lead-mobile-card {
+    min-height: 74px !important;
+    border: 2px solid #141210 !important;
+    background: #fff !important;
+}
+
+body.sales-personal-page .sales-lead-mobile-card h3 { font: 900 17px/1.15 Archivo, Arial, sans-serif !important; }
+
+body.sales-personal-page .sales-lead-mobile-card dl {
+    color: #5e594d !important;
+    font: 500 13px/1.25 Archivo, Arial, sans-serif !important;
+}
+
+body.sales-personal-page .sales-lead-entry-panel {
+    position: static !important;
+    inset: auto !important;
+    display: block !important;
+    background: transparent !important;
+}
+
+body.sales-personal-page .sales-lead-entry-panel[open] {
+    position: fixed !important;
+    inset: 0 !important;
+    z-index: 70 !important;
+    display: block !important;
+    background: rgb(20 18 16 / .68) !important;
+}
+
+body.sales-personal-page .sales-lead-entry-panel > summary {
+    position: fixed !important;
+    right: 0 !important;
+    bottom: 0 !important;
+    left: 0 !important;
+    z-index: 1 !important;
+    min-height: 52px !important;
+    padding: 12px 20px 24px !important;
+    border-top: 2px solid #141210 !important;
+    background: #fbf7ec !important;
+    color: #fdc20f !important;
+}
+
+body.sales-personal-page .sales-lead-entry-panel[open] > summary { position: absolute !important; }
+
+body.sales-personal-page .sales-lead-entry-panel > :not(summary) {
+    position: absolute !important;
+    right: 0 !important;
+    bottom: 0 !important;
+    left: 0 !important;
+}
+
+body.sales-personal-page .sales-lead-entry-panel:not([open]) > :not(summary) { display: none !important; }
+
+body.sales-personal-page .sales-lead-entry-panel > summary span {
+    display: flex !important;
+    width: 100% !important;
+    min-height: 52px !important;
+    align-items: center !important;
+    justify-content: center !important;
+    background: #141210 !important;
+    color: #fdc20f !important;
+    font: 800 14px/1.2 Archivo, Arial, sans-serif !important;
+    text-transform: none !important;
+}
+
+body.sales-personal-page .sales-lead-entry-panel[open] > summary { display: none !important; }
+
+body.sales-personal-page .sales-lead-entry-panel[open] {
+    inset: auto 0 0 !important;
+    height: min(478px, calc(100dvh - 12rem)) !important;
+    max-height: min(478px, calc(100dvh - 12rem)) !important;
+    display: flex !important;
+    flex-direction: column !important;
+    overflow: hidden !important;
+    background: #fbf7ec !important;
+    box-shadow: 0 -100vh 0 100vh rgb(20 18 16 / .68) !important;
+}
+
+body.sales-personal-page .sales-lead-entry-panel[open] > :not(summary) {
+    position: static !important;
+    right: auto !important;
+    bottom: auto !important;
+    left: auto !important;
+    height: auto !important;
+    max-height: none !important;
+    overflow: visible !important;
+    background: #fbf7ec !important;
+}
+
+body.sales-personal-page .sales-lead-entry-panel[open] > .sales-lead-entry-form {
+    position: relative !important;
+    min-height: 0 !important;
+    overflow: hidden !important;
+}
+
+body.sales-personal-page .sales-lead-entry-panel[open] > .sales-lead-entry-form .sales-lead-entry-scroll {
+    flex: 0 0 auto !important;
+    height: min(328px, calc(100dvh - 12rem - 150px)) !important;
+    max-height: min(328px, calc(100dvh - 12rem - 150px)) !important;
+    overflow-y: auto !important;
+    padding-bottom: calc(86px + env(safe-area-inset-bottom)) !important;
+}
+
+body.sales-personal-page .sales-lead-entry-panel[open] > .sales-lead-entry-form .sales-lead-form-actions {
+    position: fixed !important;
+    right: 0 !important;
+    bottom: 0 !important;
+    left: 0 !important;
+    z-index: 72 !important;
+    width: 100vw !important;
+    box-sizing: border-box !important;
+    margin: 0 !important;
+}
+
+body.sales-personal-page .sales-lead-entry-heading {
+    display: flex !important;
+    flex: 0 0 auto !important;
+    align-items: flex-start !important;
+    justify-content: space-between !important;
+    gap: 12px !important;
+    margin: 0 !important;
+    padding: 16px 20px 10px !important;
+}
+
+body.sales-personal-page .sales-lead-entry-heading-copy {
+    display: grid !important;
+    gap: 8px !important;
+    min-width: 0 !important;
+}
+
+body.sales-personal-page .sales-lead-entry-heading strong { font: 900 20px/1.1 Archivo, Arial, sans-serif !important; }
+
+body.sales-personal-page .sales-lead-entry-close {
+    display: inline-flex !important;
+    width: 44px !important;
+    height: 44px !important;
+    flex: 0 0 44px !important;
+    align-items: center !important;
+    justify-content: center !important;
+    border: 2px solid #141210 !important;
+    background: #fff !important;
+    color: #141210 !important;
+}
+
+body.sales-personal-page .sales-lead-entry-form {
+    display: flex !important;
+    flex: 1 1 0% !important;
+    flex-direction: column !important;
+    min-height: 0 !important;
+    margin-bottom: 0 !important;
+    gap: 10px !important;
+    overflow: hidden !important;
+    padding: 0 20px calc(10px + env(safe-area-inset-bottom)) !important;
+}
+
+body.sales-personal-page .sales-lead-entry-scroll {
+    display: grid !important;
+    flex: 1 1 auto !important;
+    min-height: 0 !important;
+    gap: 10px !important;
+    overflow-y: auto !important;
+    overscroll-behavior: contain !important;
+    padding: 8px 0 12px !important;
+}
+
+body.sales-personal-page .sales-lead-form-group { border: 0 !important; padding: 0 !important; }
+body.sales-personal-page .sales-lead-form-group legend { display: none !important; }
+
+body.sales-personal-page .sales-lead-form-grid {
+    display: grid !important;
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 10px !important;
+}
+
+body.sales-personal-page .sales-lead-form-group label {
+    display: grid !important;
+    gap: 4px !important;
+    color: #141210 !important;
+    font: 800 11px/1.2 Archivo, Arial, sans-serif !important;
+}
+
+body.sales-personal-page .sales-lead-form-group :is(input, select, textarea) {
+    min-height: 44px !important;
+    border: 2px solid #141210 !important;
+    border-radius: 0 !important;
+    background: #fff !important;
+    color: #141210 !important;
+    font: 500 14px/1.2 Archivo, Arial, sans-serif !important;
+}
+
+body.sales-personal-page .sales-lead-optional-fields {
+    border-top: 1px dashed #141210 !important;
+    margin-top: 0 !important;
+    padding-top: 10px !important;
+}
+
+body.sales-personal-page .sales-lead-optional-fields > summary {
+    margin-bottom: 8px !important;
+    color: #5e594d !important;
+    font: 600 12px/1.2 Archivo, Arial, sans-serif !important;
+}
+
+body.sales-personal-page .sales-lead-notes-field { grid-column: 1 / -1 !important; }
+
+body.sales-personal-page .sales-lead-form-actions {
+    position: static !important;
+    display: grid !important;
+    flex: 0 0 auto !important;
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 10px !important;
+    margin: 0 -20px !important;
+    padding: 10px 20px calc(10px + env(safe-area-inset-bottom)) !important;
+    border-top: 2px solid #141210 !important;
+    background: #fbf7ec !important;
+}
+
+body.sales-personal-page .sales-lead-form-actions .crm-button {
+    width: 100% !important;
+    min-height: 52px !important;
+    font: 800 14px/1.2 Archivo, Arial, sans-serif !important;
+}
+
+body.sales-personal-page .sales-lead-form-actions .crm-button--primary { background: #141210 !important; color: #fdc20f !important; }

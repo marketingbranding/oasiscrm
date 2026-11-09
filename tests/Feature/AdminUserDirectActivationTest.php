@@ -9,8 +9,8 @@ use App\Models\LeadMaster;
 use App\Models\Role;
 use App\Models\User;
 use App\Models\UserInvitation;
-use Illuminate\Auth\Notifications\ResetPassword;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Notification;
 use Tests\TestCase;
@@ -135,7 +135,7 @@ class AdminUserDirectActivationTest extends TestCase
         }
     }
 
-    public function test_reset_access_for_active_direct_user_preserves_activation_and_creates_no_invitation(): void
+    public function test_reset_access_hard_resets_active_user_and_displays_one_time_temporary_password(): void
     {
         Notification::fake();
         $actor = User::factory()->create(['role_id' => Role::where('slug', 'superadmin')->value('id'), 'password_changed_at' => now()]);
@@ -144,16 +144,60 @@ class AdminUserDirectActivationTest extends TestCase
         $this->actingAs($actor)->post(route('admin-users.store'), $this->payload($role, $branch, ['email' => 'reset-direct@example.test']));
         $user = User::where('email', 'reset-direct@example.test')->firstOrFail();
         $activatedAt = $user->activated_at;
+        DB::table('sessions')->insert([
+            'id' => 'reset-direct-session',
+            'user_id' => $user->id,
+            'payload' => 'payload',
+            'last_activity' => time(),
+        ]);
+        $oldPassword = $user->password;
 
-        $this->post(route('admin-users.reset-access', $user))->assertSessionHas('success');
+        $response = $this->post(route('admin-users.reset-access', $user))->assertSessionHas('success');
+        $temporaryPassword = $response->getSession()->get('temporary_password_reset.password');
 
         $user->refresh();
         $this->assertSame(AccountStatus::Active, $user->account_status);
         $this->assertTrue($user->is_active);
         $this->assertTrue($activatedAt->equalTo($user->activated_at));
+        $this->assertIsString($temporaryPassword);
+        $this->assertMatchesRegularExpression('/^[A-Z][a-zA-Z]+\d{4}$/', $temporaryPassword);
+        $this->assertNotSame($oldPassword, $user->password);
+        $this->assertTrue(Hash::check($temporaryPassword, $user->password));
+        $this->assertTrue($user->must_change_password);
+        $this->assertNull($user->password_changed_at);
+        $this->assertNotNull($user->temporary_password_expires_at);
+        $this->assertEqualsWithDelta(now()->addDay()->timestamp, $user->temporary_password_expires_at->timestamp, 5);
         $this->assertFalse(UserInvitation::where('user_id', $user->id)->exists());
-        Notification::assertSentTo($user, ResetPassword::class);
-        $this->assertDatabaseHas('activity_log', ['subject_id' => $user->id, 'event' => 'password_reset_requested']);
+        Notification::assertNothingSent();
+        $this->assertDatabaseMissing('sessions', ['id' => 'reset-direct-session']);
+        $this->assertDatabaseHas('activity_log', ['subject_id' => $user->id, 'event' => 'user_access_reset']);
+
+        $this->get(route('admin-users.show', $user))
+            ->assertSee($temporaryPassword)
+            ->assertSee('Password sementara — simpan sekarang');
+        $this->get(route('admin-users.show', $user))
+            ->assertDontSee($temporaryPassword);
+    }
+
+    public function test_expired_temporary_password_cannot_be_used_to_login(): void
+    {
+        $actor = User::factory()->create(['role_id' => Role::where('slug', 'superadmin')->value('id'), 'password_changed_at' => now()]);
+        $target = User::factory()->create([
+            'email' => 'expired-reset@example.test',
+            'account_status' => AccountStatus::Active,
+            'is_active' => true,
+            'email_verified_at' => now(),
+            'password' => 'old-password',
+        ]);
+
+        $response = $this->actingAs($actor)->post(route('admin-users.reset-access', $target));
+        $temporaryPassword = $response->getSession()->get('temporary_password_reset.password');
+        $target->refresh()->forceFill(['temporary_password_expires_at' => now()->subMinute()])->save();
+
+        $this->post(route('logout'));
+        $this->post('/login', ['email' => $target->email, 'password' => $temporaryPassword])
+            ->assertSessionHasErrors(['email' => 'Password sementara sudah kedaluwarsa. Hubungi Super Admin untuk mereset akses kembali.']);
+        $this->assertGuest();
     }
 
     public function test_actor_without_user_creation_permission_cannot_create_active_user(): void

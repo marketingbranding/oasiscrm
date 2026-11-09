@@ -18,6 +18,17 @@
     toggleVisible() { this.selected = this.allVisibleSelected() ? this.selected.filter(id => !this.visibleIds.includes(id)) : [...new Set([...this.selected, ...this.visibleIds])] }
 }">
 <x-crm.page-header color="#8c9ae0" title="Manajemen Pengguna" />
+@if(session('temporary_password_resets'))
+<x-crm.alert variant="warning" title="Password sementara — simpan sekarang" class="mb-4">
+    <p>Password hanya ditampilkan sekali. Sampaikan melalui kanal pribadi tepercaya dan jangan simpan di catatan audit.</p>
+    <div class="mt-3 space-y-2">
+        @foreach(session('temporary_password_resets') as $reset)
+        <p><strong>{{ $reset['name'] }}</strong> ({{ $reset['email'] }}): <span class="text-lg font-bold tracking-wide">{{ $reset['password'] }}</span></p>
+        @endforeach
+    </div>
+    <p class="mt-2 text-xs">Setiap password berlaku selama 24 jam dan wajib diganti saat login.</p>
+</x-crm.alert>
+@endif
 <div class="border-2 border-black bg-white p-3 mb-4 flex flex-wrap items-center gap-2">
     <form method="GET" class="flex min-w-64 flex-1"><input name="search" value="{{ request('search') }}" placeholder="Cari nama atau email" class="w-full border-2 border-black px-3 py-2 text-sm"><input type="hidden" name="account_status" value="{{ request('account_status') }}"><input type="hidden" name="role_id" value="{{ request('role_id') }}"><input type="hidden" name="sales_category" value="{{ request('sales_category') }}"><input type="hidden" name="branch_id" value="{{ request('branch_id') }}"><input type="hidden" name="project_id" value="{{ request('project_id') }}"><input type="hidden" name="supervisor_user_id" value="{{ request('supervisor_user_id') }}"><input type="hidden" name="invitation_status" value="{{ request('invitation_status') }}"><button class="bg-black text-white border-2 border-black px-4 text-xs font-bold">CARI</button></form>
     @php($activeFilters = collect(['account_status','role_id','sales_category','branch_id','project_id','supervisor_user_id','invitation_status'])->filter(fn($key) => filled(request($key))))
@@ -63,9 +74,10 @@
         <div class="space-y-3 text-sm">
             <p><strong x-text="selected.length"></strong> pengguna akan direset atau diaktifkan aksesnya.</p>
             <ul class="list-disc space-y-1 pl-5">
-                <li>Password awal: <strong>password</strong>.</li>
+                <li>Password sementara dibuat otomatis dan ditampilkan sekali setelah reset.</li>
                 <li>Pengguna wajib mengganti password saat login pertama.</li>
                 <li>Email undangan tidak dikirim.</li>
+                <li>Password sementara berlaku selama 24 jam.</li>
                 <li class="font-bold text-[#c0392b]">Password lama tidak lagi berlaku.</li>
             </ul>
         </div>

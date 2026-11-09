@@ -29,7 +29,6 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Password;
 use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
 use Throwable;
@@ -259,26 +258,42 @@ class AdminUserController extends Controller
     public function bulkResetAccess(AdminUserBulkResetAccessRequest $request): RedirectResponse
     {
         try {
-            $users = $this->provisioning->resetExistingAccess($request->validated('user_ids'), 'password', $request->user());
+            $resets = $this->provisioning->resetExistingAccess($request->validated('user_ids'), $request->user());
         } catch (\DomainException $exception) {
             return back()->with('error', $exception->getMessage());
         }
 
-        return back()->with('success', "Akses {$users->count()} pengguna berhasil direset.");
+        return back()->with('success', "Akses {$resets->count()} pengguna berhasil direset.")
+            ->with('temporary_password_resets', $resets->map(fn (array $reset): array => [
+                'user_id' => $reset['user']->id,
+                'name' => $reset['user']->name,
+                'email' => $reset['user']->email,
+                'password' => $reset['temporary_password'],
+                'expires_at' => $reset['user']->temporary_password_expires_at?->toIso8601String(),
+            ])->values()->all());
     }
 
     public function resetAccess(User $admin_user): RedirectResponse
     {
         $actor = request()->user();
+        abort_unless($actor->isSuperadmin(), 403, 'Hanya Super Admin yang dapat membuat password sementara.');
         $this->administration->assertCanManage($actor, $admin_user, 'users.reset_password');
         abort_if($admin_user->account_status === AccountStatus::Anonymized, 403, 'Akun anonim tidak dapat direset aksesnya.');
         if (in_array($admin_user->account_status, [AccountStatus::PendingInvitation, AccountStatus::Invited], true)) {
             return $this->issueInvitation($admin_user, true);
         }
-        $status = Password::sendResetLink(['email' => $admin_user->email]);
-        $this->audit->log('password_reset_requested', $admin_user, $actor);
+        try {
+            $temporaryPassword = $this->provisioning->resetAccess($admin_user, $actor);
+        } catch (\DomainException $exception) {
+            return back()->with('error', $exception->getMessage());
+        }
 
-        return back()->with($status === Password::RESET_LINK_SENT ? 'success' : 'warning', __($status));
+        return back()->with('success', 'Akses berhasil direset. Password sementara hanya ditampilkan sekali dan wajib diganti dalam 24 jam.')
+            ->with('temporary_password_reset', [
+                'user_id' => $admin_user->id,
+                'password' => $temporaryPassword,
+                'expires_at' => $admin_user->fresh()->temporary_password_expires_at?->toIso8601String(),
+            ]);
     }
 
     public function anonymize(AdminUserStatusRequest $request, User $admin_user): RedirectResponse

@@ -977,6 +977,21 @@ class SalesAgendaWorkspaceRenderTest extends TestCase
             ->assertSee('Tambahkan Rencana');
     }
 
+    public function test_mobile_receipt_preview_keeps_submit_action_above_add_action_bar(): void
+    {
+        $css = file_get_contents(resource_path('css/app.css'));
+
+        $this->assertIsString($css);
+        $this->assertStringContainsString(
+            'body.sales-personal-page #agenda-input.sales-reference-bottom-action',
+            $css,
+        );
+        $this->assertMatchesRegularExpression(
+            '/\.sales-reference-bottom-action\.is-receipt-action\s*\{[^}]*position:\s*static\s*!important;/s',
+            $css,
+        );
+    }
+
     public function test_mobile_empty_agenda_requires_receipt_preview_before_add_form(): void
     {
         [$sales] = $this->salesContext();

@@ -29,6 +29,11 @@ import registerConsumerWorkspace from './consumer-workspace';
 import organizationWorkspace from './organization-workspace';
 
 window.Alpine = Alpine;
+
+// Stamp the running bundle so devices stuck on an old service-worker cache can
+// be identified without opening devtools. Bump the number whenever rebuilt
+// assets must reach cached clients under a fresh filename.
+window.OASIS_ASSET_BUILD = 2;
 window.Sortable = Sortable;
 window.oasisBodyScroll = { lock: lockBodyScroll, unlock: unlockBodyScroll };
 

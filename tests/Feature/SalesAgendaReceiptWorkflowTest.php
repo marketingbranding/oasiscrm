@@ -4,12 +4,14 @@ namespace Tests\Feature;
 
 use App\Models\Branch;
 use App\Models\ContentItem;
+use App\Models\Role;
 use App\Models\SalesAgendaDaySubmission;
 use App\Models\SalesAgendaEvidence;
 use App\Models\User;
 use App\Services\SalesAgendaReceiptService;
 use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
 class SalesAgendaReceiptWorkflowTest extends TestCase
@@ -244,6 +246,22 @@ class SalesAgendaReceiptWorkflowTest extends TestCase
         $this->assertNull($copy->completed_at);
         $this->assertCount(1, $agenda->fresh()->evidence);
         $this->assertCount(0, $copy->evidence);
+    }
+
+    public function test_submit_button_changelog_entry_is_idempotent_and_visible(): void
+    {
+        $title = 'Tombol kirim struk agenda kembali tampil';
+        $migration = require database_path('migrations/2026_11_10_000001_add_sales_agenda_submit_button_changelog.php');
+
+        $migration->up();
+        $migration->up();
+
+        $this->assertSame(1, DB::table('changelogs')->whereNull('version')->where('title', $title)->count());
+
+        $role = Role::firstOrCreate(['slug' => 'superadmin'], ['name' => 'Superadmin', 'is_superadmin' => true]);
+        $superadmin = User::factory()->create(['role_id' => $role->id, 'password_changed_at' => now()]);
+
+        $this->actingAs($superadmin)->get(route('changelogs.index'))->assertOk()->assertSeeText($title);
     }
 
     private function salesContext(): array

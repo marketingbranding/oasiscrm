@@ -347,6 +347,27 @@ class SalesAgendaEvidenceTest extends TestCase
             ->assertSeeText($title);
     }
 
+    public function test_mandatory_photo_changelog_is_deployed_once_and_visible(): void
+    {
+        $role = Role::firstOrCreate(['slug' => 'superadmin'], ['name' => 'Super Admin']);
+        $actor = User::factory()->create([
+            'role_id' => $role->id,
+            'password_changed_at' => now(),
+        ]);
+
+        $title = 'Bukti Foto Wajib sebelum Agenda Sales Selesai';
+        $migration = require database_path('migrations/2026_11_11_000001_add_sales_agenda_photo_requirement_changelog.php');
+
+        $migration->up();
+        $migration->up();
+
+        $this->assertSame(1, DB::table('changelogs')->whereNull('version')->where('title', $title)->count());
+        $this->actingAs($actor)
+            ->get(route('changelogs.index'))
+            ->assertOk()
+            ->assertSeeText($title);
+    }
+
     public function test_mobile_agenda_detail_actions_fit_and_center_within_the_viewport(): void
     {
         $css = file_get_contents(resource_path('css/app.css'));

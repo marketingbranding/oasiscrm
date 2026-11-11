@@ -471,8 +471,13 @@ class SalesAgendaReceiptAuthorizationTest extends TestCase
 
     public function test_owner_can_complete_an_agenda_without_losing_the_selected_date(): void
     {
+        Storage::fake('agenda_evidence');
         [$sales, $project] = $this->salesContext();
         $agenda = $this->agenda($sales, $project, 60, '2026-10-31');
+
+        $this->actingAs($sales)->post(route('sales-agendas.evidence.store', $agenda), [
+            'photo' => UploadedFile::fake()->image('selected-date.jpg'),
+        ])->assertRedirect();
 
         $this->actingAs($sales)
             ->patch(route('sales-agendas.update', $agenda), [

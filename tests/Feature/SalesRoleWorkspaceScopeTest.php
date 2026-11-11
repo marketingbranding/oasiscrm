@@ -11,6 +11,8 @@ use App\Models\User;
 use App\Services\OptimisticLockService;
 use App\Services\SalesPocketbookOnboardingService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Storage;
 use PhpOffice\PhpSpreadsheet\IOFactory;
 use Tests\TestCase;
 
@@ -71,6 +73,7 @@ class SalesRoleWorkspaceScopeTest extends TestCase
 
     public function test_coordinator_can_update_team_agendas_while_supervisor_remains_read_only(): void
     {
+        Storage::fake('agenda_evidence');
         [, $supervisor, $coordinator, , $sales] = $this->hierarchy();
         $agenda = $this->agenda($sales, 'AGENDA_READ_ONLY');
 
@@ -78,6 +81,9 @@ class SalesRoleWorkspaceScopeTest extends TestCase
             ->assertSee('Buku Saku Sales')->assertSee('Hari ini')->assertSee('Lead')->assertSee('Laporan');
         $supervisorPage = $this->actingAs($supervisor)->get(route('sales-pocketbook.index'))->assertOk()
             ->assertSee('Monitoring Tim');
+        $this->actingAs($sales)->post(route('sales-agendas.evidence.store', $agenda), [
+            'photo' => UploadedFile::fake()->image('team-agenda.jpg'),
+        ])->assertRedirect();
         $updateResponse = $this->actingAs($coordinator)->patch(route('sales-agendas.update', $agenda), [
             'activity_result' => 'Hasil tim',
             'expected_updated_at' => app(OptimisticLockService::class)->token($agenda),

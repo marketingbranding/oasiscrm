@@ -63,19 +63,30 @@ class StoreSalesAgendaRequest extends FormRequest
      */
     public function after(): array
     {
-        return [function (Validator $validator): void {
-            if ($validator->errors()->isNotEmpty()) {
-                return;
-            }
+        return [
+            function (Validator $validator): void {
+                if ($validator->errors()->isNotEmpty()) {
+                    return;
+                }
 
-            $start = CarbonImmutable::createFromFormat('H:i', (string) $this->input('start_time'));
-            $end = CarbonImmutable::createFromFormat('H:i', (string) $this->input('end_time'));
-            $duration = $start->diffInMinutes($end);
+                $start = CarbonImmutable::createFromFormat('H:i', (string) $this->input('start_time'));
+                $end = CarbonImmutable::createFromFormat('H:i', (string) $this->input('end_time'));
+                $duration = $start->diffInMinutes($end);
 
-            if ($duration < 5 || $duration % 5 !== 0) {
-                $validator->errors()->add('end_time', 'Durasi agenda harus minimal 5 menit dan kelipatan 5 menit.');
-            }
-        }];
+                if ($duration < 5 || $duration % 5 !== 0) {
+                    $validator->errors()->add('end_time', 'Durasi agenda harus minimal 5 menit dan kelipatan 5 menit.');
+                }
+            },
+            function (Validator $validator): void {
+                if ($validator->errors()->isNotEmpty()) {
+                    return;
+                }
+
+                if (filled($this->input('activity_result')) && blank($this->file('photos'))) {
+                    $validator->errors()->add('photos', SalesAgendaEvidenceRules::PHOTO_REQUIRED_MESSAGE);
+                }
+            },
+        ];
     }
 
     protected function prepareForValidation(): void

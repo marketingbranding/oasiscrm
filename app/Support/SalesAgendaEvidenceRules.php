@@ -6,6 +6,8 @@ use App\Models\ContentItem;
 
 final class SalesAgendaEvidenceRules
 {
+    public const PHOTO_REQUIRED_MESSAGE = 'Bukti foto wajib diunggah sebelum agenda diselesaikan.';
+
     public const MAX_FILES = 2;
 
     public const MAX_BYTES = 10 * 1024 * 1024;

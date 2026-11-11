@@ -142,6 +142,11 @@ class ContentItem extends Model
         return $this->hasMany(SalesAgendaEvidence::class);
     }
 
+    public function hasActiveEvidence(): bool
+    {
+        return $this->evidence()->whereNull('purged_at')->exists();
+    }
+
     public function tasks(): HasMany
     {
         return $this->hasMany(SalesAgendaTask::class)->orderBy('sort_order')->orderBy('id');

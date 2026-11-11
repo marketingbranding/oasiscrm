@@ -25,6 +25,7 @@ use App\Services\SalesAgendaWeekNavigationService;
 use App\Services\SalesDailyReminderService;
 use App\Services\SalesPocketbookOnboardingService;
 use App\Services\WorkspaceAccessService;
+use App\Support\SalesAgendaEvidenceRules;
 use Carbon\CarbonImmutable;
 use DateTimeImmutable;
 use Illuminate\Database\Eloquent\Builder;
@@ -350,6 +351,9 @@ class SalesAgendaController extends Controller
         $result = $this->optimisticLock->execute($request, $agenda, $data['expected_updated_at'], function (ContentItem $current) use ($request, $data) {
             $this->authorizeAgenda($request, $current);
             abort_if(in_array($current->status, ['cancelled', 'rescheduled'], true), 422, 'Agenda ini tidak dapat diselesaikan.');
+            if (! $current->hasActiveEvidence()) {
+                throw ValidationException::withMessages(['photo' => SalesAgendaEvidenceRules::PHOTO_REQUIRED_MESSAGE]);
+            }
             $current->update([
                 'activity_result' => $data['activity_result'],
                 'status' => 'done',

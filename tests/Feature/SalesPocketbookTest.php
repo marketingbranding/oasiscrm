@@ -14,7 +14,9 @@ use App\Models\User;
 use App\Services\OptimisticLockService;
 use App\Services\SalesPocketbookOnboardingService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Str;
 use PHPUnit\Framework\Attributes\DataProvider;
@@ -495,6 +497,7 @@ class SalesPocketbookTest extends TestCase
 
     public function test_sales_creates_planned_agenda_without_result_then_completes_it(): void
     {
+        Storage::fake('agenda_evidence');
         [$branch, $project, $sales] = $this->salesContext();
 
         $this->actingAs($sales)->post(route('sales-agendas.store'), [
@@ -516,6 +519,10 @@ class SalesPocketbookTest extends TestCase
         $this->assertNull($agenda->activity_result);
         $this->assertSame('Cek Lokasi', $agenda->sales_activity_category);
         $this->assertTrue($agenda->assignees->contains($sales));
+
+        $this->actingAs($sales)->post(route('sales-agendas.evidence.store', $agenda), [
+            'photo' => UploadedFile::fake()->image('follow-up.jpg'),
+        ])->assertRedirect();
 
         $this->actingAs($sales)->patch(route('sales-agendas.update', $agenda), [
             'activity_result' => 'Konsumen tertarik.',
@@ -597,10 +604,15 @@ class SalesPocketbookTest extends TestCase
 
     public function test_sales_can_complete_own_agenda_but_not_another_sales_agenda(): void
     {
+        Storage::fake('agenda_evidence');
         [$branch, $project, $sales] = $this->salesContext();
         $other = $this->sales($branch, $project, 'Sales Lain');
         $own = $this->agenda($sales, $project);
         $foreign = $this->agenda($other, $project);
+
+        $this->actingAs($sales)->post(route('sales-agendas.evidence.store', $own), [
+            'photo' => UploadedFile::fake()->image('own-agenda.jpg'),
+        ])->assertRedirect();
 
         $this->actingAs($sales)->patch(route('sales-agendas.update', $own), [
             'activity_result' => 'Selesai.',

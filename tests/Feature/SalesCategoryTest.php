@@ -13,7 +13,9 @@ use App\Models\User;
 use App\Services\OptimisticLockService;
 use App\Services\SalesPocketbookOnboardingService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Facades\Storage;
 use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
@@ -33,6 +35,7 @@ class SalesCategoryTest extends TestCase
     #[DataProvider('salesCategories')]
     public function test_each_sales_category_keeps_login_buku_saku_and_agenda_workflow(?SalesCategory $category): void
     {
+        Storage::fake('agenda_evidence');
         [$sales, $project] = $this->salesContext($category);
 
         $this->post('/login', ['email' => $sales->email, 'password' => 'password'])
@@ -48,6 +51,10 @@ class SalesCategoryTest extends TestCase
             'title' => 'Agenda Kategori Sales',
         ])->assertRedirect();
         $agenda = ContentItem::query()->where('owner_user_id', $sales->id)->firstOrFail();
+
+        $this->post(route('sales-agendas.evidence.store', $agenda), [
+            'photo' => UploadedFile::fake()->image('category.jpg'),
+        ])->assertRedirect();
 
         $this->patch(route('sales-agendas.update', $agenda), [
             'activity_result' => 'Selesai ditindaklanjuti',

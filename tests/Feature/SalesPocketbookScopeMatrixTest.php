@@ -11,6 +11,8 @@ use App\Models\SalesLead;
 use App\Models\User;
 use App\Services\OptimisticLockService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
 class SalesPocketbookScopeMatrixTest extends TestCase
@@ -110,6 +112,7 @@ class SalesPocketbookScopeMatrixTest extends TestCase
 
     public function test_coordinator_can_create_and_complete_a_current_team_agenda_but_not_an_out_of_team_agenda(): void
     {
+        Storage::fake('agenda_evidence');
         $context = $this->context();
 
         $createdResponse = $this->actingAs($context['coordinator'])
@@ -161,6 +164,10 @@ class SalesPocketbookScopeMatrixTest extends TestCase
             ->assertForbidden();
 
         $this->assertDatabaseMissing('content_items', ['title' => 'Agenda Luar Tim']);
+
+        $this->actingAs($context['sales'])->post(route('sales-agendas.evidence.store', $agenda), [
+            'photo' => UploadedFile::fake()->image('team-scope.jpg'),
+        ])->assertRedirect();
 
         $updatedResponse = $this->actingAs($context['coordinator'])
             ->patch(route('sales-agendas.update', $agenda), [

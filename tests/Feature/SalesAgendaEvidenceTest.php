@@ -88,6 +88,100 @@ class SalesAgendaEvidenceTest extends TestCase
         $this->assertSame([], Storage::disk('agenda_evidence')->allFiles());
     }
 
+    public function test_completion_requires_active_photo_evidence(): void
+    {
+        $branch = Branch::create(['name' => 'Solo', 'code' => 'SO', 'is_active' => true]);
+        $role = Role::firstOrCreate(['slug' => 'sales'], ['name' => 'Sales']);
+        $sales = User::factory()->create(['role_id' => $role->id, 'branch_id' => $branch->id, 'password_changed_at' => now()]);
+        $agenda = ContentItem::create([
+            'branch_id' => $branch->id,
+            'item_type' => 'agenda',
+            'agenda_type' => ContentItem::SALES_AGENDA_TYPE,
+            'title' => 'Agenda tanpa foto',
+            'scheduled_date' => now(),
+            'status' => 'planned',
+            'owner_user_id' => $sales->id,
+            'created_by' => $sales->id,
+        ]);
+
+        $this->actingAs($sales)
+            ->from(route('sales-agendas.show', $agenda))
+            ->patch(route('sales-agendas.update', $agenda), [
+                'activity_result' => 'Hasil aktivitas',
+                'expected_updated_at' => app(OptimisticLockService::class)->token($agenda),
+            ])
+            ->assertSessionHasErrors(['photo' => 'Bukti foto wajib diunggah sebelum agenda diselesaikan.']);
+
+        $this->assertDatabaseHas('content_items', [
+            'id' => $agenda->id,
+            'status' => 'planned',
+            'activity_result' => null,
+        ]);
+    }
+
+    public function test_purged_photo_does_not_satisfy_completion_evidence_requirement(): void
+    {
+        $branch = Branch::create(['name' => 'Solo', 'code' => 'SO', 'is_active' => true]);
+        $role = Role::firstOrCreate(['slug' => 'sales'], ['name' => 'Sales']);
+        $sales = User::factory()->create(['role_id' => $role->id, 'branch_id' => $branch->id, 'password_changed_at' => now()]);
+        $agenda = ContentItem::create([
+            'branch_id' => $branch->id,
+            'item_type' => 'agenda',
+            'agenda_type' => ContentItem::SALES_AGENDA_TYPE,
+            'title' => 'Agenda dengan foto terarsip',
+            'scheduled_date' => now(),
+            'status' => 'planned',
+            'owner_user_id' => $sales->id,
+            'created_by' => $sales->id,
+        ]);
+        SalesAgendaEvidence::create([
+            'content_item_id' => $agenda->id,
+            'uploaded_by_user_id' => $sales->id,
+            'storage_path' => 'archived/photo.webp',
+            'original_name' => 'photo.webp',
+            'mime_type' => 'image/webp',
+            'width' => 10,
+            'height' => 10,
+            'size_bytes' => 3,
+            'sha256' => hash('sha256', 'archived-photo'),
+            'purged_at' => now(),
+        ]);
+
+        $this->actingAs($sales)
+            ->from(route('sales-agendas.show', $agenda))
+            ->patch(route('sales-agendas.update', $agenda), [
+                'activity_result' => 'Hasil aktivitas',
+                'expected_updated_at' => app(OptimisticLockService::class)->token($agenda),
+            ])
+            ->assertSessionHasErrors(['photo' => 'Bukti foto wajib diunggah sebelum agenda diselesaikan.']);
+
+        $this->assertSame('planned', $agenda->fresh()->status);
+    }
+
+    public function test_initial_result_requires_photo_evidence(): void
+    {
+        $branch = Branch::create(['name' => 'Solo', 'code' => 'SO', 'is_active' => true]);
+        $project = LeadMaster::create(['branch_id' => $branch->id, 'project_name' => 'Oasis Solo', 'is_active' => true]);
+        $role = Role::firstOrCreate(['slug' => 'sales'], ['name' => 'Sales']);
+        $sales = User::factory()->create(['role_id' => $role->id, 'branch_id' => $branch->id, 'password_changed_at' => now()]);
+        $sales->assignedProjects()->attach($project->id, ['is_primary' => true, 'is_active' => true]);
+        app(SalesPocketbookOnboardingService::class)->skip($sales);
+
+        $this->actingAs($sales)
+            ->from(route('sales-agendas.index'))
+            ->post(route('sales-agendas.store'), [
+                'scheduled_date' => '2026-08-24',
+                'start_time' => '09:00',
+                'end_time' => '10:00',
+                'sales_activity_category' => 'Cek Lokasi',
+                'title' => 'Agenda selesai tanpa foto',
+                'activity_result' => 'Selesai saat dibuat',
+            ])
+            ->assertSessionHasErrors(['photos' => 'Bukti foto wajib diunggah sebelum agenda diselesaikan.']);
+
+        $this->assertDatabaseCount('content_items', 0);
+    }
+
     public function test_create_cleans_prepared_photo_when_database_audit_fails(): void
     {
         Storage::fake('agenda_evidence');
@@ -518,7 +612,7 @@ class SalesAgendaEvidenceTest extends TestCase
         $this->actingAs($superadmin)->get(route('changelogs.index'))->assertOk()->assertSeeText($title);
     }
 
-    public function test_all_categories_can_complete_with_zero_one_or_two_optional_photos_and_max_two_is_enforced(): void
+    public function test_all_categories_require_one_photo_and_max_two_is_enforced(): void
     {
         Storage::fake('agenda_evidence');
         Storage::fake('agenda_evidence_archives');
@@ -529,7 +623,7 @@ class SalesAgendaEvidenceTest extends TestCase
         foreach (ContentItem::SALES_ACTIVITY_CATEGORIES as $index => $category) {
             $agenda = ContentItem::create(['branch_id' => $branch->id, 'item_type' => 'agenda', 'agenda_type' => ContentItem::SALES_AGENDA_TYPE,
                 'title' => $category, 'sales_activity_category' => $category, 'scheduled_date' => now(), 'status' => 'planned', 'owner_user_id' => $sales->id, 'created_by' => $sales->id]);
-            for ($photo = 0; $photo < $index % 3; $photo++) {
+            for ($photo = 0; $photo < max(1, $index % 3); $photo++) {
                 $this->actingAs($sales)->post(route('sales-agendas.evidence.store', $agenda), ['photo' => UploadedFile::fake()->image("$photo.jpg")])->assertRedirect();
             }
             $this->actingAs($sales)->patch(route('sales-agendas.update', $agenda), ['activity_result' => 'Selesai', 'expected_updated_at' => app(OptimisticLockService::class)->token($agenda)])->assertRedirect();

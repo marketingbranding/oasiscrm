@@ -3,6 +3,7 @@
 namespace App\Support;
 
 use App\Models\ContentItem;
+use Illuminate\Validation\ValidationException;
 
 final class SalesAgendaEvidenceRules
 {
@@ -30,5 +31,12 @@ final class SalesAgendaEvidenceRules
     public static function isMutable(ContentItem $agenda): bool
     {
         return ! $agenda->isFinished();
+    }
+
+    public static function assertCompletionEvidence(ContentItem $agenda): void
+    {
+        if (self::isSalesAgenda($agenda) && ! $agenda->hasActiveEvidence()) {
+            throw ValidationException::withMessages(['photo' => self::PHOTO_REQUIRED_MESSAGE]);
+        }
     }
 }

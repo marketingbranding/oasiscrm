@@ -81,6 +81,13 @@ class SalesRoleWorkspaceScopeTest extends TestCase
             ->assertSee('Buku Saku Sales')->assertSee('Hari ini')->assertSee('Lead')->assertSee('Laporan');
         $supervisorPage = $this->actingAs($supervisor)->get(route('sales-pocketbook.index'))->assertOk()
             ->assertSee('Monitoring Tim');
+        $this->actingAs($coordinator)
+            ->patch(route('sales-agendas.update', $agenda), [
+                'activity_result' => 'Belum ada foto',
+                'expected_updated_at' => app(OptimisticLockService::class)->token($agenda),
+            ])
+            ->assertSessionHasErrors('photo');
+        $this->assertSame('planned', $agenda->fresh()->status);
         $this->actingAs($sales)->post(route('sales-agendas.evidence.store', $agenda), [
             'photo' => UploadedFile::fake()->image('team-agenda.jpg'),
         ])->assertRedirect();

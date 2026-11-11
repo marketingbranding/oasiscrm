@@ -52,14 +52,22 @@ class SalesAgendaEvidenceController extends Controller
 
     public function destroy(Request $request, ContentItem $agenda, SalesAgendaEvidence $evidence, SalesAgendaEvidenceAuthorizationService $access)
     {
-        abort_unless($access->canMutate($request->user(), $agenda), 403);
-        abort_unless($evidence->content_item_id === $agenda->id, 404);
-        abort_if($evidence->purged_at || ! $evidence->storage_path || ! Storage::disk('agenda_evidence')->exists($evidence->storage_path), 410, 'Bukti foto telah dipindahkan ke arsip atau tidak tersedia.');
-        if (! Storage::disk('agenda_evidence')->delete($evidence->storage_path)) {
+        $storagePath = DB::transaction(function () use ($request, $agenda, $evidence, $access): string {
+            $lockedAgenda = ContentItem::query()->lockForUpdate()->findOrFail($agenda->id);
+            abort_unless($access->canMutate($request->user(), $lockedAgenda), 403);
+            $lockedEvidence = SalesAgendaEvidence::query()->findOrFail($evidence->id);
+            abort_unless($lockedEvidence->content_item_id === $lockedAgenda->id, 404);
+            abort_if($lockedEvidence->purged_at || ! $lockedEvidence->storage_path || ! Storage::disk('agenda_evidence')->exists($lockedEvidence->storage_path), 410, 'Bukti foto telah dipindahkan ke arsip atau tidak tersedia.');
+            $storagePath = $lockedEvidence->storage_path;
+            $lockedEvidence->delete();
+            ActivityLog::create(['causer_id' => $request->user()->id, 'subject_type' => SalesAgendaEvidence::class, 'subject_id' => $lockedEvidence->id, 'event' => 'agenda_evidence_deleted_before_done', 'description' => 'Bukti foto Agenda Sales dihapus sebelum Agenda selesai.', 'properties' => ['agenda_id' => $lockedAgenda->id, 'evidence_id' => $lockedEvidence->id]]);
+
+            return $storagePath;
+        });
+
+        if (! Storage::disk('agenda_evidence')->delete($storagePath)) {
             abort(500, 'Bukti foto gagal dihapus.');
         }
-        $evidence->delete();
-        ActivityLog::create(['causer_id' => $request->user()->id, 'subject_type' => SalesAgendaEvidence::class, 'subject_id' => $evidence->id, 'event' => 'agenda_evidence_deleted_before_done', 'description' => 'Bukti foto Agenda Sales dihapus sebelum Agenda selesai.', 'properties' => ['agenda_id' => $agenda->id, 'evidence_id' => $evidence->id]]);
 
         return back()->with('success', 'Bukti foto dihapus.');
     }

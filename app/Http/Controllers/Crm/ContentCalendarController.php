@@ -304,6 +304,9 @@ class ContentCalendarController extends Controller
                     'errors' => ['status' => ['Status tidak valid untuk tipe item ini.']],
                 ], 422);
             }
+            if ($status === 'done') {
+                SalesAgendaEvidenceRules::assertCompletionEvidence($current);
+            }
             $current->update($this->normalizeCompletion(['status' => $status, 'updated_by' => Auth::id()], $current));
 
             return $current->fresh();
@@ -357,18 +360,29 @@ class ContentCalendarController extends Controller
                 throw ValidationException::withMessages(['status' => 'Bulk status hanya dapat diterapkan pada item bertipe sama.']);
             }
         }
-        foreach ($items as $item) {
-            $updates = array_filter([
-                'status' => $data['status'] ?? null,
-                'priority' => $data['priority'] ?? null,
-            ]);
-            if (! empty($data['pic_names'])) {
-                $updates['pic_names'] = array_values(array_unique(array_merge($item->pic_names ?? [], array_filter($data['pic_names']))));
+        DB::transaction(function () use ($items, $data): void {
+            foreach ($items as $item) {
+                $current = ($data['status'] ?? null) === 'done'
+                    ? ContentItem::query()->lockForUpdate()->findOrFail($item->id)
+                    : $item;
+
+                if (($data['status'] ?? null) === 'done') {
+                    $this->authorize('update', $current);
+                    SalesAgendaEvidenceRules::assertCompletionEvidence($current);
+                }
+
+                $updates = array_filter([
+                    'status' => $data['status'] ?? null,
+                    'priority' => $data['priority'] ?? null,
+                ]);
+                if (! empty($data['pic_names'])) {
+                    $updates['pic_names'] = array_values(array_unique(array_merge($current->pic_names ?? [], array_filter($data['pic_names']))));
+                }
+                if ($updates) {
+                    $current->update($this->normalizeCompletion($updates, $current));
+                }
             }
-            if ($updates) {
-                $item->update($this->normalizeCompletion($updates, $item));
-            }
-        }
+        });
 
         return back()->with('success', $items->count().' item berhasil diperbarui.');
     }

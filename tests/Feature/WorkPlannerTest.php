@@ -2,15 +2,18 @@
 
 namespace Tests\Feature;
 
+use App\Http\Middleware\RestrictSalesModuleAccess;
 use App\Imports\ContentItemImport;
 use App\Models\Branch;
 use App\Models\Changelog;
 use App\Models\ContentItem;
 use App\Models\LeadMaster;
+use App\Models\Permission;
 use App\Models\Role;
 use App\Models\User;
 use App\Services\WorkPlannerReminderService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Storage;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
 use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
 use Tests\TestCase;
@@ -521,6 +524,42 @@ class WorkPlannerTest extends TestCase
         $this->assertNotNull($item->completed_at);
     }
 
+    public function test_work_planner_status_update_requires_photo_for_sales_agenda_completion(): void
+    {
+        Storage::fake('agenda_evidence');
+        $this->withoutMiddleware(RestrictSalesModuleAccess::class);
+        [$user, $agenda] = $this->salesAgendaPlannerContext();
+
+        $this->actingAs($user)
+            ->withHeaders(['Accept' => 'application/json'])
+            ->patchJson(route('content-calendar.update-status', $agenda), [
+                'status' => 'done',
+                'expected_updated_at' => $agenda->updated_at->copy()->utc()->format('Y-m-d H:i:s'),
+            ])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['photo']);
+
+        $this->assertSame('planned', $agenda->fresh()->status);
+    }
+
+    public function test_work_planner_bulk_status_update_requires_photo_for_sales_agenda_completion(): void
+    {
+        Storage::fake('agenda_evidence');
+        $this->withoutMiddleware(RestrictSalesModuleAccess::class);
+        [$user, $agenda] = $this->salesAgendaPlannerContext();
+
+        $this->actingAs($user)
+            ->withHeaders(['Accept' => 'application/json'])
+            ->postJson(route('content-calendar.bulk-update'), [
+                'ids' => [$agenda->id],
+                'status' => 'done',
+            ])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['photo']);
+
+        $this->assertSame('planned', $agenda->fresh()->status);
+    }
+
     public function test_board_status_rejects_status_from_other_type(): void
     {
         [$branch, $user] = $this->branchAndUser();
@@ -563,6 +602,40 @@ class WorkPlannerTest extends TestCase
         ]);
 
         return [$branch, $user];
+    }
+
+    private function salesAgendaPlannerContext(): array
+    {
+        $branch = Branch::create(['name' => 'Sales Planner', 'code' => 'SP', 'is_active' => true]);
+        $project = LeadMaster::create(['branch_id' => $branch->id, 'project_name' => 'Sales Planner Project', 'is_active' => true]);
+        $role = Role::firstOrCreate(['slug' => 'sales'], ['name' => 'Sales']);
+        $permissions = collect([
+            ['slug' => 'work_planner.update', 'name' => 'Work Planner Update'],
+            ['slug' => 'work_planner.view_own', 'name' => 'Work Planner View Own'],
+            ['slug' => 'sales_pocketbook.view_own', 'name' => 'Sales Pocketbook View Own'],
+            ['slug' => 'sales_pocketbook.manage_own', 'name' => 'Sales Pocketbook Manage Own'],
+        ])->map(fn (array $permission): int => Permission::firstOrCreate(['slug' => $permission['slug']], ['name' => $permission['name']])->id);
+        $role->permissions()->syncWithoutDetaching($permissions->all());
+        $user = User::factory()->create([
+            'role_id' => $role->id,
+            'branch_id' => $branch->id,
+            'password_changed_at' => now(),
+        ]);
+        $user->assignedProjects()->attach($project->id, ['is_primary' => true, 'is_active' => true]);
+        $agenda = ContentItem::create([
+            'branch_id' => $branch->id,
+            'sales_project_id' => $project->id,
+            'item_type' => 'agenda',
+            'agenda_type' => ContentItem::SALES_AGENDA_TYPE,
+            'visibility' => 'personal',
+            'title' => 'Sales Planner Agenda',
+            'scheduled_date' => today(),
+            'status' => 'planned',
+            'owner_user_id' => $user->id,
+            'created_by' => $user->id,
+        ]);
+
+        return [$user, $agenda];
     }
 
     private function makeItem(Branch $branch, User $creator, array $overrides = []): ContentItem

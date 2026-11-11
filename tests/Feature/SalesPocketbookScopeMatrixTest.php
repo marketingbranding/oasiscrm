@@ -165,6 +165,14 @@ class SalesPocketbookScopeMatrixTest extends TestCase
 
         $this->assertDatabaseMissing('content_items', ['title' => 'Agenda Luar Tim']);
 
+        $this->actingAs($context['coordinator'])
+            ->patch(route('sales-agendas.update', $agenda), [
+                'activity_result' => 'Belum ada foto',
+                'expected_updated_at' => app(OptimisticLockService::class)->token($agenda),
+            ])
+            ->assertSessionHasErrors('photo');
+        $this->assertSame('planned', $agenda->fresh()->status);
+
         $this->actingAs($context['sales'])->post(route('sales-agendas.evidence.store', $agenda), [
             'photo' => UploadedFile::fake()->image('team-scope.jpg'),
         ])->assertRedirect();

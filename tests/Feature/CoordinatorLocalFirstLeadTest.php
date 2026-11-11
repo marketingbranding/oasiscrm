@@ -322,7 +322,7 @@ class CoordinatorLocalFirstLeadTest extends TestCase
         $this->actingAs($coordinator)->get(route('sales-pocketbook.index'))
             ->assertOk()
             ->assertSeeText('Hari ini')
-            ->assertSeeText('Rencana terkirim')
+            ->assertSeeText('rencana terkirim')
             ->assertSeeText('Lead')
             ->assertSeeText('Laporan')
             ->assertDontSee('SYNC KE SPREADSHEET');

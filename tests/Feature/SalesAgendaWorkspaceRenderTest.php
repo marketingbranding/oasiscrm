@@ -23,7 +23,7 @@ class SalesAgendaWorkspaceRenderTest extends TestCase
         [$sales] = $this->salesContext();
         $today = CarbonImmutable::today(config('app.timezone'));
         $tomorrow = $today->addDay();
-        $laterDate = $today->addDays(2);
+        $laterDate = $today->next(CarbonImmutable::SATURDAY);
 
         $this->actingAs($sales)
             ->get(route('sales-agendas.index', ['work_date' => $today->toDateString()]))

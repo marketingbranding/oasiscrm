@@ -59,22 +59,6 @@
     @if($tab !== 'today')
     <x-crm.section id="coordinator-team" title="Tim Sales Saya" :description="$salesUsers->isEmpty() ? 'Belum ada Sales aktif dalam Tim Sales Saya.' : $salesUsers->count().' Sales: '.$salesUsers->pluck('name')->join(', ')" class="sales-pocketbook-screen-section" />
     @endif
-    @if($tab === 'report' && $targetSummaries->isNotEmpty())
-        <x-crm.section id="coordinator-sales-lead-target-progress" title="Target Lead {{ $targetMonth->translatedFormat('F Y') }}" description="Actual dihitung berdasarkan PIC Sales. Target yang belum diatur ditampilkan sebagai Belum ditetapkan." class="sales-pocketbook-screen-section">
-            <div class="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-                @foreach($targetSummaries as $salesId => $summary)
-                    @php
-                        $targetSales = $salesUsers->firstWhere('id', $salesId);
-                    @endphp
-                    <div class="border-2 border-black bg-white p-3">
-                        <div class="flex items-start justify-between gap-3"><strong>{{ $targetSales?->name }}</strong><span class="text-xs font-bold uppercase">{{ $summary['target'] === null ? 'Belum ditetapkan' : $summary['achievement'].'%' }}</span></div>
-                        <div class="mt-2 flex items-baseline gap-2"><strong class="text-2xl">{{ $summary['actual'] }}</strong><span class="text-xs uppercase">actual / {{ $summary['target'] ?? '—' }} target</span></div>
-                    </div>
-                @endforeach
-            </div>
-        </x-crm.section>
-    @endif
-
     <nav class="sales-pocketbook-tabs crm-horizontal-tabs" data-horizontal-tabs aria-label="Workspace Koordinator Sales">
         @foreach(['today' => 'Hari ini', 'lead' => 'Lead', 'report' => 'Laporan'] as $key => $label)
             <a href="{{ $tabUrl($key) }}" @if($tab === $key) aria-current="page" @endif class="sales-pocketbook-tab {{ $tab === $key ? 'active' : '' }}">{{ $label }}</a>
@@ -108,14 +92,30 @@
             $plansUrl = route('sales-pocketbook.index', ['tab' => 'today', 'view' => 'plans']);
             $updatesUrl = route('sales-pocketbook.index', ['tab' => 'today', 'view' => 'updates']);
         @endphp
-        <nav class="coordinator-today-segments" aria-label="Ringkasan dan rencana tim">
-            <a href="{{ $todayUrl }}" @if($todayView === 'today') aria-current="page" @endif>Hari ini · {{ $todayWorkspace['date']->locale('id')->translatedFormat('l j M') }}</a>
+        <nav class="coordinator-today-segments" aria-label="Antrean kerja koordinator">
+            <a href="{{ $todayUrl }}" @if($todayView === 'today') aria-current="page" @endif>Ringkasan</a>
             <a href="{{ $plansUrl }}" @if($todayView === 'plans') aria-current="page" @endif>Rencana</a>
+            <a href="{{ $updatesUrl }}" @if($todayView === 'updates') aria-current="page" @endif>Perlu update</a>
         </nav>
         @if($todayView === 'today')
+            @php
+                $priorityCounts = collect($todayWorkspace['cards'])->countBy('priority');
+            @endphp
             <section class="coordinator-today-summary" aria-label="Ringkasan hari ini">
                 <div><strong>{{ $todayWorkspace['submitted_count'] }} / {{ $todayWorkspace['sales_count'] }}</strong><span>rencana terkirim</span></div>
                 <div><strong>{{ $todayWorkspace['completed_agenda_count'] }} / {{ $todayWorkspace['agenda_count'] }}</strong><span>agenda selesai</span></div>
+            </section>
+            <section class="coordinator-action-queue" aria-labelledby="coordinator-action-queue-title">
+                <div class="coordinator-action-queue-heading">
+                    <div><h2 id="coordinator-action-queue-title">Perlu tindakan hari ini</h2><p>Mulai dari Sales dengan pekerjaan yang paling mendesak.</p></div>
+                    <span>{{ $todayWorkspace['sales_count'] }} Sales</span>
+                </div>
+                <div class="coordinator-action-queue-grid">
+                    <div><strong>{{ $priorityCounts->get(0, 0) }}</strong><span>Belum kirim rencana</span></div>
+                    <div><strong>{{ $priorityCounts->get(1, 0) }}</strong><span>Perlu update</span></div>
+                    <div><strong>{{ $priorityCounts->get(2, 0) }}</strong><span>Berjalan</span></div>
+                    <div><strong>{{ $priorityCounts->get(3, 0) }}</strong><span>Selesai</span></div>
+                </div>
             </section>
             @if($todayWorkspace['incomplete_count'] > 0)
                 <a class="coordinator-backlog-callout" href="{{ $updatesUrl }}">
@@ -169,7 +169,7 @@
                 @forelse($todayWorkspace['incomplete_agendas'] as $salesId => $items)
                     <fieldset class="coordinator-backlog-group"><legend><label><input type="checkbox" name="sales_ids[]" value="{{ $salesId }}" checked> {{ $salesUsers->firstWhere('id', $salesId)?->name }}</label></legend>
                         @foreach($items as $agenda)
-                            <article class="coordinator-backlog-item"><time>{{ $agenda->scheduled_date?->format('D, d M') }} · {{ substr((string) $agenda->start_time, 0, 5) }}</time><strong>{{ $agenda->title }}</strong><div>@if($agenda->missing_result)<span>Belum ada hasil</span>@endif @if($agenda->missing_evidence)<span>Belum ada bukti</span>@endif</div></article>
+                            <article class="coordinator-backlog-item"><time>{{ $agenda->scheduled_date?->locale('id')->translatedFormat('D, d M') }} · {{ substr((string) $agenda->start_time, 0, 5) }}</time><strong>{{ $agenda->title }}</strong><div>@if($agenda->missing_result)<span>Belum ada hasil</span>@endif @if($agenda->missing_evidence)<span>Belum ada bukti</span>@endif</div></article>
                         @endforeach
                     </fieldset>
                 @empty
@@ -187,7 +187,7 @@
             <section class="coordinator-plan-list" aria-label="Rencana tim">
                 @foreach($upcomingPlans as $planDay)
                     <section class="coordinator-plan-day">
-                        <h2>{{ $planDay['date']->isWeekend() ? strtoupper($planDay['date']->translatedFormat('l')).' · AKHIR PEKAN' : 'Besok · '.$planDay['date']->translatedFormat('l, d F') }}</h2>
+                        <h2>{{ $planDay['date']->isWeekend() ? strtoupper($planDay['date']->locale('id')->translatedFormat('l')).' · AKHIR PEKAN' : 'Besok · '.$planDay['date']->locale('id')->translatedFormat('l, d F') }}</h2>
                         @php
                             $salesWithoutPlan = collect($planDay['items'])->filter(
                                 fn ($plan) => ! $plan['summary']['submitted'] && $plan['summary']['agenda_count'] === 0,
@@ -195,7 +195,7 @@
                         @endphp
                         @if($salesWithoutPlan->isNotEmpty())
                             <aside class="coordinator-backlog-callout">
-                                <strong>! {{ $salesWithoutPlan->count() }} Sales belum punya rencana {{ $planDay['date']->translatedFormat('l') }}</strong>
+                                <strong>! {{ $salesWithoutPlan->count() }} Sales belum punya rencana {{ $planDay['date']->locale('id')->translatedFormat('l') }}</strong>
                                 <form method="POST" action="{{ route('coordinator-agenda-reminders.store') }}">
                                     @csrf
                                     @foreach($salesWithoutPlan as $plan)
@@ -235,15 +235,22 @@
                 $detailUpdatesUrl = route('sales-pocketbook.index', ['tab' => 'today', 'view' => 'updates', 'sales_id' => $detailSalesId]);
             @endphp
             <section class="coordinator-sales-detail" aria-labelledby="coordinator-detail-name">
-                <header><a href="{{ $todayUrl }}">← Hari ini</a><h2 id="coordinator-detail-name">{{ $salesDetail['sales']->name }}</h2><p>{{ $salesDetail['sales']->branch?->name }} · {{ $salesDetail['sales']->resolved_project_name ?: 'Proyek belum ditentukan' }}</p></header>
+                <header><a href="{{ $todayUrl }}">← Ringkasan</a><h2 id="coordinator-detail-name">{{ $salesDetail['sales']->name }}</h2><p>{{ $salesDetail['sales']->branch?->name }} · {{ $salesDetail['sales']->resolved_project_name ?: 'Proyek belum ditentukan' }}</p></header>
                 @if($salesDetail['backlog']->isNotEmpty())<a class="coordinator-backlog-callout" href="{{ $updatesUrl }}"><strong>! {{ $salesDetail['backlog']->count() }} agenda sebelumnya perlu dilengkapi</strong></a>@endif
                 <nav class="coordinator-week-strip" aria-label="Pilih hari dalam minggu ini">
                     @foreach($salesDetail['week'] as $day)
-                        @php([$daySymbol, $dayText] = match ($day['state']) { 'complete' => ['✓', 'Lengkap'], 'incomplete' => ['!', 'Perlu dilengkapi'], 'weekend_empty' => ['–', 'Akhir pekan'], default => ['▫', 'Hari kerja tanpa rencana'] })
-                        <a href="{{ $detailUrl($day['date']) }}" @if($detailDate->isSameDay($day['date'])) aria-current="date" @endif aria-label="{{ $day['date']->translatedFormat('l j F') }}: {{ $dayText }}"><span>{{ $day['date']->translatedFormat('D') }}</span><strong>{{ $daySymbol }}</strong><small>{{ $day['date']->format('j') }}</small></a>
+                        @php
+                            [$daySymbol, $dayText] = match ($day['state']) {
+                                'complete' => ['✓', 'Lengkap'],
+                                'incomplete' => ['!', 'Perlu dilengkapi'],
+                                'weekend_empty' => ['–', 'Akhir pekan'],
+                                default => ['▫', 'Hari kerja tanpa rencana'],
+                            };
+                        @endphp
+                        <a href="{{ $detailUrl($day['date']) }}" @if($detailDate->isSameDay($day['date'])) aria-current="date" @endif aria-label="{{ $day['date']->locale('id')->translatedFormat('l j F') }}: {{ $dayText }}"><span>{{ $day['date']->locale('id')->translatedFormat('D') }}</span><strong>{{ $daySymbol }}</strong><small>{{ $day['date']->format('j') }}</small></a>
                     @endforeach
                 </nav>
-                <h3>Agenda · {{ $detailDate->translatedFormat('l, j F') }}</h3>
+                <h3>Agenda · {{ $detailDate->locale('id')->translatedFormat('l, j F') }}</h3>
                 <div class="coordinator-detail-agendas">
                     @forelse($salesDetail['agendas'] as $agenda)
                         <article class="coordinator-detail-agenda" id="agenda-result-{{ $agenda->id }}">
@@ -257,17 +264,34 @@
                             @endif
                         </article>
                     @empty
-                        <x-crm.empty-state title="Belum ada agenda pada hari ini." />
+                        <x-crm.empty-state title="Belum ada agenda pada tanggal ini." />
                     @endforelse
                 </div>
-                <div class="coordinator-detail-sticky-actions"><a href="{{ $detailUpdatesUrl }}">Ingatkan</a>@if($salesDetail['agendas']->first())<a href="#agenda-result-{{ $salesDetail['agendas']->first()->id }}">Isi hasil</a>@endif</div>
+                @php
+                    $firstEditableAgenda = null;
+                @endphp
+                @if($salesDetail['agendas']->isNotEmpty())
+                    @php
+                        $firstEditableAgenda = $salesDetail['agendas']->first(fn ($agenda) => ! in_array($agenda->status, ['done', 'cancelled', 'rescheduled'], true));
+                    @endphp
+                @endif
+                @if($salesDetail['backlog']->isNotEmpty() || $firstEditableAgenda)
+                    <div class="coordinator-detail-sticky-actions">
+                        @if($salesDetail['backlog']->isNotEmpty())<a href="{{ $detailUpdatesUrl }}">Ingatkan</a>@endif
+                        @if($firstEditableAgenda)<a href="#agenda-result-{{ $firstEditableAgenda->id }}">Isi hasil</a>@endif
+                    </div>
+                @endif
             </section>
         @endif
     @elseif($tab === 'lead')
         <section class="coordinator-lead-actions" aria-labelledby="coordinator-lead-actions-title">
             <h2 id="coordinator-lead-actions-title">Perlu tindakan</h2>
             @if($actionableLeads->isNotEmpty())
-                <div class="coordinator-lead-warning"><strong>{{ $actionableLeads->count() }} lead belum ditindaklanjuti ≥ {{ $staleDays }} hari</strong><ul>@foreach($actionableLeads as $lead)<li><a href="{{ route('sales-leads.show', $lead) }}">{{ $lead->customer_name }} · {{ $lead->sales?->name }} · {{ $lead->current_status->label() }}</a></li>@endforeach</ul></div>
+                @php
+                    $actionablePreview = $actionableLeads->take(5);
+                    $actionableListUrl = route('sales-pocketbook.index', array_merge($filters, ['tab' => 'lead', 'stale_days' => $staleDays, 'focus' => 'stale']));
+                @endphp
+                <div class="coordinator-lead-warning"><strong>{{ $actionableLeads->count() }} lead belum ditindaklanjuti ≥ {{ $staleDays }} hari</strong><ul>@foreach($actionablePreview as $lead)<li><a href="{{ route('sales-leads.show', $lead) }}">{{ $lead->customer_name }} · {{ $lead->sales?->name }} · {{ $lead->current_status->label() }}</a></li>@endforeach</ul>@if($actionableLeads->count() > $actionablePreview->count())<a class="coordinator-lead-queue-link" href="{{ $actionableListUrl }}#coordinator-team-leads">Lihat semua lead yang perlu ditindaklanjuti</a>@endif</div>
             @endif
             @if($failedSyncLeads->isNotEmpty())
                 <div class="coordinator-lead-warning"><strong>{{ $failedSyncLeads->count() }} lead gagal sinkron Google Sheet</strong><p>Dikelompokkan untuk pemeriksaan ulang; detail error teknis tidak ditampilkan.</p>
@@ -292,7 +316,11 @@
         <x-crm.section id="coordinator-team-leads" title="Lead Tim" description="Lead yang dicatat untuk Sales aktif dalam tim Anda." class="sales-pocketbook-screen-section">
             <x-slot:actions><x-crm.status-badge variant="neutral">{{ $leads->total() }} Lead</x-crm.status-badge></x-slot:actions>
             <div class="coordinator-lead-cards">@forelse($leads as $lead)<a class="coordinator-lead-card" href="{{ route('sales-leads.show', $lead) }}"><div><strong>{{ $lead->customer_name }}</strong><span>{{ $lead->current_status->label() }}</span></div><p>{{ $lead->sales?->name }} · {{ $lead->lead_date->format('d/m/Y') }}</p><small>{{ match($lead->sync_status) { 'synced' => 'Sinkron ✓', 'sync_failed' => 'Sinkron gagal', 'pending_update' => 'Menunggu sinkron', default => 'Menunggu sinkron' } }}</small></a>@empty<x-crm.empty-state title="Belum ada lead tim" description="Lead anggota aktif tim pada periode ini akan muncul di sini." />@endforelse</div>
-            <div class="crm-table-scroll coordinator-lead-table"><table class="crm-data-table"><thead><tr><th>Tanggal</th><th>Konsumen</th><th>Sales PIC</th><th>Cabang</th><th>Proyek</th><th>Promo</th><th>Status Lead</th><th>Status Sync</th><th>Aksi</th></tr></thead><tbody>@forelse($leads as $lead)@php([$syncStatusLabel, $syncStatusVariant] = $syncStatuses[$lead->sync_status] ?? [ucfirst(str_replace('_', ' ', $lead->sync_status)), 'neutral'])<tr><td>{{ $lead->lead_date->format('d/m/Y') }}</td><td>{{ $lead->customer_name }}</td><td>{{ $lead->sales?->name }}</td><td>{{ $lead->branch?->name }}</td><td>{{ $lead->project?->project_name }}</td><td>{{ $lead->id_promo ?: '-' }}</td><td>{{ $lead->current_status->label() }}</td><td><x-crm.status-badge :variant="$syncStatusVariant">{{ $syncStatusLabel }}</x-crm.status-badge></td><td><div class="flex gap-2">@can('viewSiteVisit', $lead)<x-crm.button variant="text" size="sm" :href="route('sales-leads.show', $lead)">Detail</x-crm.button>@endcan @can('update', $lead)<x-crm.button variant="text" size="sm" :href="route('sales-leads.edit', $lead)">Edit</x-crm.button>@endcan @can('markUtjDirect', $lead) @if($lead->current_status->isManual())<x-crm.button type="button" variant="text" size="sm" @click="$dispatch('oasis:modal-open', { name: 'coordinator-utj-{{ $lead->id }}' })">Tandai UTJ</x-crm.button><x-crm.modal name="coordinator-utj-{{ $lead->id }}" title="Tandai UTJ: {{ $lead->customer_name }}" description="Lead langsung ditandai UTJ tanpa mencatat data cek lokasi atau konsumen."><form method="POST" action="{{ route('sales-leads.utj.store', $lead) }}" x-data="{ submitting: false }" @submit="submitting = true" class="space-y-3" :aria-busy="submitting">@csrf<input type="hidden" name="operation_uuid" value="{{ Illuminate\Support\Str::uuid() }}"><p class="text-sm">Tanggal tercatat otomatis: {{ now()->format('d/m/Y H:i') }} (waktu input). Tanggal ini menentukan periode laporan aktivitas.</p><x-crm.button type="submit" variant="primary" accent="sales" x-bind:disabled="submitting">Ya, Tandai UTJ</x-crm.button></form></x-crm.modal>@endif @endcan</div></td></tr>@empty<tr><td colspan="9"><x-crm.empty-state title="Belum ada lead tim" description="Lead anggota aktif tim pada periode ini akan muncul di sini." /></td></tr>@endforelse</tbody></table></div>
+            <div class="crm-table-scroll coordinator-lead-table"><table class="crm-data-table"><thead><tr><th>Tanggal</th><th>Konsumen</th><th>Sales PIC</th><th>Cabang</th><th>Proyek</th><th>Promo</th><th>Status Lead</th><th>Status Sync</th><th>Aksi</th></tr></thead><tbody>@forelse($leads as $lead)
+                @php
+                    [$syncStatusLabel, $syncStatusVariant] = $syncStatuses[$lead->sync_status] ?? [ucfirst(str_replace('_', ' ', $lead->sync_status)), 'neutral'];
+                @endphp
+                <tr><td>{{ $lead->lead_date->format('d/m/Y') }}</td><td>{{ $lead->customer_name }}</td><td>{{ $lead->sales?->name }}</td><td>{{ $lead->branch?->name }}</td><td>{{ $lead->project?->project_name }}</td><td>{{ $lead->id_promo ?: '-' }}</td><td>{{ $lead->current_status->label() }}</td><td><x-crm.status-badge :variant="$syncStatusVariant">{{ $syncStatusLabel }}</x-crm.status-badge></td><td><div class="flex gap-2">@can('viewSiteVisit', $lead)<x-crm.button variant="text" size="sm" :href="route('sales-leads.show', $lead)">Detail</x-crm.button>@endcan @can('update', $lead)<x-crm.button variant="text" size="sm" :href="route('sales-leads.edit', $lead)">Edit</x-crm.button>@endcan @can('markUtjDirect', $lead) @if($lead->current_status->isManual())<x-crm.button type="button" variant="text" size="sm" @click="$dispatch('oasis:modal-open', { name: 'coordinator-utj-{{ $lead->id }}' })">Tandai UTJ</x-crm.button><x-crm.modal name="coordinator-utj-{{ $lead->id }}" title="Tandai UTJ: {{ $lead->customer_name }}" description="Lead langsung ditandai UTJ tanpa mencatat data cek lokasi atau konsumen."><form method="POST" action="{{ route('sales-leads.utj.store', $lead) }}" x-data="{ submitting: false }" @submit="submitting = true" class="space-y-3" :aria-busy="submitting">@csrf<input type="hidden" name="operation_uuid" value="{{ Illuminate\Support\Str::uuid() }}"><p class="text-sm">Tanggal tercatat otomatis: {{ now()->format('d/m/Y H:i') }} (waktu input). Tanggal ini menentukan periode laporan aktivitas.</p><x-crm.button type="submit" variant="primary" accent="sales" x-bind:disabled="submitting">Ya, Tandai UTJ</x-crm.button></form></x-crm.modal>@endif @endcan</div></td></tr>@empty<tr><td colspan="9"><x-crm.empty-state title="Belum ada lead tim" description="Lead anggota aktif tim pada periode ini akan muncul di sini." /></td></tr>@endforelse</tbody></table></div>
             <x-crm.pagination :collection="$leads" :show-per-page="false" />
         </x-crm.section>
     @elseif($tab === 'agenda')
@@ -311,13 +339,35 @@
                 </x-crm.section>
             @endif
             <!-- <th>Lokasi</th><th>Hasil</th><th>Status</th> legacy table contract -->
-            <div class="crm-table-scroll"><table class="crm-data-table"><thead><tr><th>Tanggal</th><th>Sales PIC</th><th>Cabang</th><th>Proyek</th><th>Kategori</th><th>Agenda</th><th>Lokasi</th><th>Hasil</th><th>Bukti</th><th>Status</th></tr></thead><tbody>@forelse($agendas as $agenda)@php([$agendaStatusLabel, $agendaStatusVariant] = $agendaStatuses[$agenda->status] ?? [ucfirst(str_replace('_', ' ', $agenda->status)), 'neutral'])<tr><td>{{ $agenda->scheduled_date->format('d/m/Y') }}</td><td>{{ $agenda->owner?->name }}</td><td>{{ $agenda->branch?->name }}</td><td>{{ $agenda->salesProject?->project_name }}</td><td>{{ $agenda->sales_activity_category ?: '-' }}</td><td>{{ $agenda->title }}</td><td>{{ $agenda->location ?: '-' }}</td><td>{{ $agenda->activity_result ?: '-' }}</td><td>@forelse($agenda->evidence as $evidence)@if($evidence->purged_at)<span>Bukti foto telah dipindahkan ke arsip.</span>@else<a class="font-bold underline" href="{{ route('sales-agendas.evidence.show', [$agenda, $evidence]) }}">{{ $evidence->original_name }}</a>@endif<br>@empty-@endforelse</td><td><x-crm.status-badge :variant="$agendaStatusVariant">{{ $agendaStatusLabel }}</x-crm.status-badge></td></tr>@empty<tr><td colspan="10"><x-crm.empty-state title="Belum ada agenda tim" description="Agenda Sales pada periode terpilih akan tampil di sini." /></td></tr>@endforelse</tbody></table></div>
+            @php
+                $openAgendaCount = $agendas->getCollection()->filter(fn ($agenda) => ! in_array($agenda->status, ['done', 'cancelled', 'rescheduled'], true))->count();
+            @endphp
+            <div class="crm-table-scroll coordinator-agenda-table"><table class="crm-data-table"><thead><tr><th>Tanggal</th><th>Sales PIC</th><th>Cabang</th><th>Proyek</th><th>Kategori</th><th>Agenda</th><th>Lokasi</th><th>Hasil</th><th>Bukti</th><th>Status</th></tr></thead><tbody>@forelse($agendas as $agenda)
+                @php
+                    [$agendaStatusLabel, $agendaStatusVariant] = $agendaStatuses[$agenda->status] ?? [ucfirst(str_replace('_', ' ', $agenda->status)), 'neutral'];
+                @endphp
+                <tr><td>{{ $agenda->scheduled_date->format('d/m/Y') }}</td><td>{{ $agenda->owner?->name }}</td><td>{{ $agenda->branch?->name }}</td><td>{{ $agenda->salesProject?->project_name }}</td><td>{{ $agenda->sales_activity_category ?: '-' }}</td><td>{{ $agenda->title }}</td><td>{{ $agenda->location ?: '-' }}</td><td>{{ $agenda->activity_result ?: '-' }}</td><td>@forelse($agenda->evidence as $evidence)@if($evidence->purged_at)<span>Bukti foto telah dipindahkan ke arsip.</span>@else<a class="font-bold underline" href="{{ route('sales-agendas.evidence.show', [$agenda, $evidence]) }}">{{ $evidence->original_name }}</a>@endif<br>@empty-@endforelse</td><td><x-crm.status-badge :variant="$agendaStatusVariant">{{ $agendaStatusLabel }}</x-crm.status-badge></td></tr>@empty<tr><td colspan="10"><x-crm.empty-state title="Belum ada agenda tim" description="Agenda Sales pada periode terpilih akan tampil di sini." /></td></tr>@endforelse</tbody></table></div>
+            <div class="coordinator-agenda-mobile-cards" aria-label="Agenda tim versi mobile">
+                @forelse($agendas as $agenda)
+                    @php
+                        [$agendaStatusLabel, $agendaStatusVariant] = $agendaStatuses[$agenda->status] ?? [ucfirst(str_replace('_', ' ', $agenda->status)), 'neutral'];
+                    @endphp
+                    <article class="coordinator-agenda-card">
+                        <div class="coordinator-agenda-card-heading"><strong>{{ $agenda->title }}</strong><x-crm.status-badge :variant="$agendaStatusVariant">{{ $agendaStatusLabel }}</x-crm.status-badge></div>
+                        <dl><div><dt>Sales PIC</dt><dd>{{ $agenda->owner?->name ?: '-' }}</dd></div><div><dt>Jadwal</dt><dd>{{ $agenda->scheduled_date->locale('id')->translatedFormat('D, d M Y') }} · {{ substr((string) $agenda->start_time, 0, 5) }}</dd></div><div><dt>Lokasi</dt><dd>{{ $agenda->location ?: '-' }}</dd></div></dl>
+                        <a href="{{ route('sales-agendas.show', $agenda) }}">Lihat detail agenda</a>
+                    </article>
+                @empty
+                    <x-crm.empty-state title="Belum ada agenda tim" description="Agenda Sales pada periode terpilih akan tampil di sini." />
+                @endforelse
+            </div>
             @if($canManageAgenda)
-                <x-crm.section id="coordinator-agenda-updates" title="Perbarui Hasil Agenda" description="Koordinator dapat menandai agenda Sales tim sebagai selesai." class="sales-pocketbook-screen-section">
+                <x-crm.section id="coordinator-agenda-updates" title="Agenda perlu diperbarui" :description="$openAgendaCount.' agenda masih menunggu hasil.'" class="sales-pocketbook-screen-section">
+                    <span class="coordinator-agenda-updates-count">{{ $openAgendaCount }} agenda terbuka</span>
                     <div class="grid gap-3 p-4 md:grid-cols-2">
                         @foreach($agendas as $agenda)
                             @if(!in_array($agenda->status, ['done', 'cancelled', 'rescheduled'], true))
-                                <form method="POST" action="{{ route('sales-agendas.update', $agenda) }}" class="border-2 border-black bg-white p-3">@csrf @method('PATCH')<input type="hidden" name="expected_updated_at" value="{{ app(\App\Services\OptimisticLockService::class)->token($agenda) }}"><strong class="block">{{ $agenda->owner?->name }} · {{ $agenda->title }}</strong><x-crm.field label="Hasil Aktivitas" for="coordinator-agenda-result-{{ $agenda->id }}" required><textarea id="coordinator-agenda-result-{{ $agenda->id }}" class="sales-input" name="activity_result" rows="2" required></textarea></x-crm.field><x-crm.button type="submit" variant="primary" accent="sales" size="sm">Tandai Selesai</x-crm.button></form>
+                                <form method="POST" action="{{ route('sales-agendas.update', $agenda) }}" class="border-2 border-black bg-white p-3" id="coordinator-agenda-result-card-{{ $agenda->id }}">@csrf @method('PATCH')<input type="hidden" name="expected_updated_at" value="{{ app(\App\Services\OptimisticLockService::class)->token($agenda) }}"><strong class="block">{{ $agenda->owner?->name }} · {{ $agenda->title }}</strong><x-crm.field label="Hasil Aktivitas" for="coordinator-agenda-result-{{ $agenda->id }}" required><textarea id="coordinator-agenda-result-{{ $agenda->id }}" class="sales-input" name="activity_result" rows="2" required></textarea></x-crm.field><x-crm.button type="submit" variant="primary" accent="sales" size="sm">Tandai Selesai</x-crm.button></form>
                             @endif
                         @endforeach
                     </div>
@@ -336,6 +386,22 @@
                 <div class="px-4 pb-4"><x-crm.empty-state title="Belum ada aktivitas pada periode ini." description="Metrik akan terisi setelah lead atau aktivitas terkait tercatat dalam scope dan periode yang dipilih." /></div>
             @endif
         </x-crm.section>
+
+        @if($targetSummaries->isNotEmpty())
+            <x-crm.section id="coordinator-sales-lead-target-progress" title="Target Lead {{ $targetMonth->locale('id')->translatedFormat('F Y') }}" description="Target menjadi konteks performa Sales; angka actual dihitung berdasarkan PIC Sales." class="sales-pocketbook-screen-section">
+                <div class="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                    @foreach($targetSummaries as $salesId => $summary)
+                        @php
+                            $targetSales = $salesUsers->firstWhere('id', $salesId);
+                        @endphp
+                        <div class="border-2 border-black bg-white p-3">
+                            <div class="flex items-start justify-between gap-3"><strong>{{ $targetSales?->name }}</strong><span class="text-xs font-bold uppercase">{{ $summary['target'] === null ? 'Belum ditetapkan' : $summary['achievement'].'%' }}</span></div>
+                            <div class="mt-2 flex items-baseline gap-2"><strong class="text-2xl">{{ $summary['actual'] }}</strong><span class="text-xs uppercase">actual / {{ $summary['target'] ?? '—' }} target</span></div>
+                        </div>
+                    @endforeach
+                </div>
+            </x-crm.section>
+        @endif
 
         <x-crm.section id="coordinator-performance" title="Performa Sales" description="Perbandingan funnel Lead untuk setiap Sales aktif dalam tim Anda." class="sales-pocketbook-screen-section">
             <div class="coordinator-report-cards">@forelse($salesRows as $row)<article><strong>{{ $row->name }}</strong><p>{{ $row->branch_name ?: '-' }} · {{ $row->project_name ?: '-' }}</p><div><span>Lead baru <b>{{ $row->lead_new }}</b></span><span>Tatap muka <b>{{ $row->face_to_face }}</b></span><span>Cek lokasi <b>{{ $row->site_visit }}</b></span><span>UTJ <b>{{ $row->utj }}</b></span></div></article>@empty<x-crm.empty-state title="Belum ada Sales pada cakupan ini." />@endforelse</div>

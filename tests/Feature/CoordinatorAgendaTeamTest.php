@@ -24,4 +24,21 @@ class CoordinatorAgendaTeamTest extends TestCase
         $this->assertStringContainsString('abort_if($salesId && ! $filterSalesUsers->contains', $service);
         $this->assertStringContainsString('canManageAgenda', $service);
     }
+
+    public function test_coordinator_agenda_has_a_mobile_card_composition_and_separate_update_queue(): void
+    {
+        $view = file_get_contents(resource_path('views/crm/sales-pocketbook/coordinator-leads.blade.php'));
+
+        foreach ([
+            'coordinator-agenda-table',
+            'coordinator-agenda-mobile-cards',
+            'coordinator-agenda-card',
+            'Agenda perlu diperbarui',
+            'coordinator-agenda-updates-count',
+            'Sales PIC',
+            'Lihat detail agenda',
+        ] as $contract) {
+            $this->assertStringContainsString($contract, $view);
+        }
+    }
 }

@@ -148,4 +148,52 @@ class CoordinatorLeadWorkspaceTest extends TestCase
             $this->assertStringNotContainsString($label, $view);
         }
     }
+
+    public function test_coordinator_workspace_uses_task_first_navigation_and_bounded_lead_queue(): void
+    {
+        $view = file_get_contents(resource_path('views/crm/sales-pocketbook/coordinator-leads.blade.php'));
+
+        foreach ([
+            '>Ringkasan<',
+            '>Rencana<',
+            '>Perlu update<',
+            'coordinator-action-queue',
+            'Perlu tindakan hari ini',
+            '->take(5)',
+            'Lihat semua lead yang perlu ditindaklanjuti',
+            'locale(\'id\')->translatedFormat',
+        ] as $contract) {
+            $this->assertStringContainsString($contract, $view);
+        }
+
+        $this->assertStringNotContainsString('Hari ini · {{ $todayWorkspace', $view);
+        $this->assertStringNotContainsString("format('D, d M')", $view);
+    }
+
+    public function test_sales_detail_actions_are_contextual_to_agenda_state(): void
+    {
+        $view = file_get_contents(resource_path('views/crm/sales-pocketbook/coordinator-leads.blade.php'));
+
+        $this->assertStringContainsString("@if(\$salesDetail['backlog']->isNotEmpty())", $view);
+        $this->assertStringContainsString("@if(\$salesDetail['agendas']->isNotEmpty())", $view);
+        $this->assertStringContainsString('Belum ada agenda pada tanggal ini.', $view);
+        $this->assertStringContainsString('Isi hasil', $view);
+    }
+
+    public function test_task_first_workspace_changelog_is_idempotent_and_visible(): void
+    {
+        $title = 'Workspace Koordinator Sales Memprioritaskan Antrean Tindakan';
+        $migration = require database_path('migrations/2026_11_11_000001_add_coordinator_task_first_workspace_changelog.php');
+
+        $migration->up();
+        $migration->up();
+
+        $this->assertSame(1, DB::table('changelogs')->whereNull('version')->where('title', $title)->count());
+        $actor = User::factory()->create([
+            'role_id' => Role::query()->where('slug', 'superadmin')->value('id'),
+            'password_changed_at' => now(),
+        ]);
+
+        $this->actingAs($actor)->get(route('changelogs.index'))->assertOk()->assertSeeText($title);
+    }
 }

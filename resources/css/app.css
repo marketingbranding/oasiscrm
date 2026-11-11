@@ -503,7 +503,7 @@ body.sales-personal-page .sales-pocketbook-workspace { color: #141210 !important
 .coordinator-sales-cards,
 .coordinator-backlog-list,
 .coordinator-plan-list { display: grid; gap: 12px; }
-.coordinator-today-segments { grid-template-columns: repeat(2, minmax(0, 1fr)); margin-block: 12px 14px; border: 2px solid #141210; }
+.coordinator-today-segments { grid-template-columns: repeat(3, minmax(0, 1fr)); margin-block: 12px 14px; border: 2px solid #141210; }
 .coordinator-today-segments a { display: flex; min-height: 48px; align-items: center; justify-content: center; padding: 10px; color: #141210; font-weight: 800; text-align: center; }
 .coordinator-today-segments a + a { border-left: 2px solid #141210; }
 .coordinator-today-segments a[aria-current="page"] { background: #fdc20f; }
@@ -514,6 +514,15 @@ body.sales-personal-page .sales-pocketbook-workspace { color: #141210 !important
 .coordinator-today-summary > div { display: grid; gap: 2px; }
 .coordinator-today-summary span { color: #625d51; font-size: 13px; font-weight: 700; }
 .coordinator-today-summary strong { font-size: 26px; line-height: 1.1; }
+.coordinator-action-queue { display: grid; gap: 10px; border: 2px solid #141210; background: #fff; padding: 12px; }
+.coordinator-action-queue-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.coordinator-action-queue-heading h2 { margin: 0; font-size: 18px; font-weight: 800; }
+.coordinator-action-queue-heading p { margin: 3px 0 0; color: #625d51; font-size: 13px; }
+.coordinator-action-queue-heading > span { flex: 0 0 auto; color: #625d51; font-size: 12px; font-weight: 800; }
+.coordinator-action-queue-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+.coordinator-action-queue-grid > div { display: grid; gap: 2px; min-width: 0; border-top: 3px solid #141210; padding-top: 7px; }
+.coordinator-action-queue-grid strong { font-size: 24px; line-height: 1; }
+.coordinator-action-queue-grid span { color: #49443a; font-size: 11px; font-weight: 700; line-height: 1.25; }
 .coordinator-backlog-callout { display: grid; gap: 6px; border: 2px solid #141210; background: #fff1d6; padding: 14px; color: #141210; }
 .coordinator-backlog-callout :is(strong, .coordinator-callout-action) { font-weight: 800; }
 .coordinator-sales-today { display: grid; gap: 8px; margin-top: 14px; }
@@ -582,6 +591,7 @@ body.sales-personal-page .sales-pocketbook-workspace { color: #141210 !important
 .coordinator-lead-warning { display: grid; gap: 8px; }
 .coordinator-lead-warning ul { display: grid; gap: 6px; margin: 0; padding-left: 18px; }
 .coordinator-lead-warning a { color: #141210; text-decoration: underline; text-underline-offset: 2px; }
+.coordinator-lead-queue-link { display: inline-flex; min-height: 44px; align-items: center; font-weight: 800; }
 .coordinator-lead-warning button { min-height: 44px; border: 2px solid #141210; background: #fdc20f; padding: 8px 12px; font-weight: 800; }
 .coordinator-lead-clear { margin: 0; font-weight: 700; }
 .coordinator-lead-sticky-create { position: fixed; z-index: 30; right: 12px; bottom: calc(10px + env(safe-area-inset-bottom)); left: 12px; display: grid; min-height: 48px; place-items: center; border: 2px solid #141210; background: #fdc20f; color: #141210; font-weight: 800; text-decoration: none; }
@@ -604,6 +614,16 @@ body.sales-personal-page .sales-pocketbook-workspace { color: #141210 !important
 .coordinator-report-cards p { margin: 0; font-size: 12px; }
 .coordinator-report-cards article > div { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
 .coordinator-report-cards article > div span { display: flex; justify-content: space-between; gap: 8px; border-top: 1px solid #9a9384; padding-top: 6px; font-size: 12px; }
+.coordinator-agenda-mobile-cards { display: none; }
+.coordinator-agenda-card { display: grid; gap: 10px; border: 2px solid #141210; background: #fffdf5; padding: 12px; }
+.coordinator-agenda-card-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
+.coordinator-agenda-card-heading strong { min-width: 0; font-size: 16px; }
+.coordinator-agenda-card dl { display: grid; gap: 6px; margin: 0; }
+.coordinator-agenda-card dl > div { display: grid; grid-template-columns: 82px minmax(0, 1fr); gap: 8px; border-top: 1px solid #9a9384; padding-top: 6px; }
+.coordinator-agenda-card dt { color: #625d51; font-size: 11px; font-weight: 800; text-transform: uppercase; }
+.coordinator-agenda-card dd { margin: 0; font-size: 13px; }
+.coordinator-agenda-card > a { display: inline-flex; min-height: 44px; align-items: center; color: #0000ee; font-weight: 800; text-decoration: underline; }
+.coordinator-agenda-updates-count { display: inline-flex; margin: 0 16px 12px; border: 1px solid #141210; padding: 4px 7px; font-size: 11px; font-weight: 800; }
 @media (max-width: 767px) {
     body.coordinator-workspace-page { background: #fbf7ec !important; }
     body.coordinator-workspace-page > header { display: none !important; }
@@ -625,6 +645,9 @@ body.sales-personal-page .sales-pocketbook-workspace { color: #141210 !important
     body.coordinator-workspace-page .coordinator-sales-card { min-height: 0; padding: 12px; }
     body.coordinator-workspace-page .coordinator-sales-card-heading strong { font-size: 17px; }
     body.coordinator-workspace-page .coordinator-sales-card-heading span { padding: 4px 8px; font-size: 11px; }
+    body.coordinator-workspace-page .coordinator-action-queue-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    body.coordinator-workspace-page .coordinator-agenda-table { display: none; }
+    body.coordinator-workspace-page .coordinator-agenda-mobile-cards { display: grid; gap: 8px; }
     .coordinator-lead-table { display: none; }
     .coordinator-report-table { display: none; }
     .coordinator-lead-sticky-create { left: max(12px, calc(50% - 210px)); right: max(12px, calc(50% - 210px)); }
@@ -636,6 +659,7 @@ body.sales-personal-page .sales-pocketbook-workspace { color: #141210 !important
     .coordinator-report-cards { display: none; }
     .coordinator-lead-sticky-create { display: none; }
     .coordinator-detail-sticky-actions { position: static; }
+    .coordinator-agenda-updates-count { margin-left: 16px; }
 }
 .coordinator-today-segments a:focus-visible,
 .coordinator-backlog-callout:focus-visible,
@@ -716,6 +740,125 @@ body.sales-personal-page .sales-pocketbook-workspace { color: #141210 !important
 .sales-weekend-inline-stamp { display: inline-block; width: fit-content; margin-top: 8px; border: 2px solid #b45309; padding: 4px 8px; color: #b45309; font: 900 12px/1 Archivo, Arial, sans-serif; transform: rotate(-2deg); }
 .sales-submitted-note { margin: 0; border-top: 1px solid #141210; border-bottom: 1px solid #141210; padding: 8px 12px; color: #5e594d; font: 600 12px/1.3 Archivo, Arial, sans-serif; }
 .sales-lead-entry-panel > summary { min-height: 52px !important; background: #141210 !important; color: #fdc20f !important; font: 800 14px/1.2 Archivo, Arial, sans-serif !important; }
+}
+
+/* Coordinator workspace desktop composition. The mobile rules above are kept
+   route-scoped for the compact phone layout; these rules restore the same
+   primitives when the coordinator shell has room for its workstation grid. */
+@media (min-width: 768px) {
+    .coordinator-mobile-header,
+    .coordinator-today-heading { display: none; }
+    .coordinator-today-segments,
+    .coordinator-today-summary,
+    .coordinator-sales-cards,
+    .coordinator-backlog-list,
+    .coordinator-plan-list,
+    .coordinator-action-queue { display: grid; gap: 12px; }
+    .coordinator-today-segments { grid-template-columns: repeat(3, minmax(0, 1fr)); margin-block: 12px 14px; border: 2px solid #141210; }
+    .coordinator-today-segments a { display: flex; min-height: 48px; align-items: center; justify-content: center; padding: 10px; color: #141210; font-weight: 800; text-align: center; }
+    .coordinator-today-segments a + a { border-left: 2px solid #141210; }
+    .coordinator-today-segments a[aria-current="page"] { background: #fdc20f; }
+    .coordinator-today-summary { grid-template-columns: repeat(2, minmax(180px, 240px)); }
+    .coordinator-today-summary > div,
+    .coordinator-sales-card,
+    .coordinator-plan-card { min-width: 0; border: 2px solid #141210; background: #fffdf5; padding: 12px; color: #141210; }
+    .coordinator-today-summary > div { display: grid; gap: 2px; }
+    .coordinator-today-summary span { color: #625d51; font-size: 13px; font-weight: 700; }
+    .coordinator-today-summary strong { font-size: 26px; line-height: 1.1; }
+    .coordinator-action-queue { border: 2px solid #141210; background: #fff; padding: 12px; }
+    .coordinator-action-queue-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+    .coordinator-action-queue-heading h2 { margin: 0; font-size: 18px; font-weight: 800; }
+    .coordinator-action-queue-heading p { margin: 3px 0 0; color: #625d51; font-size: 13px; }
+    .coordinator-action-queue-heading > span { flex: 0 0 auto; color: #625d51; font-size: 12px; font-weight: 800; }
+    .coordinator-action-queue-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+    .coordinator-action-queue-grid > div { display: grid; gap: 2px; min-width: 0; border-top: 3px solid #141210; padding-top: 7px; }
+    .coordinator-action-queue-grid strong { font-size: 24px; line-height: 1; }
+    .coordinator-action-queue-grid span { color: #49443a; font-size: 11px; font-weight: 700; line-height: 1.25; }
+    .coordinator-backlog-callout { display: grid; gap: 6px; border: 2px solid #141210; background: #fff1d6; padding: 14px; color: #141210; }
+    .coordinator-backlog-callout :is(strong, .coordinator-callout-action) { font-weight: 800; }
+    .coordinator-sales-today { display: grid; gap: 8px; margin-top: 14px; }
+    .coordinator-sales-list-heading { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+    .coordinator-sales-list-heading h2 { margin: 0; color: #141210; font-size: 17px; font-weight: 800; }
+    .coordinator-sales-list-heading span { color: #625d51; font-size: 13px; font-weight: 700; }
+    .coordinator-sales-cards { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .coordinator-sales-card { display: grid; gap: 8px; min-height: 112px; text-decoration: none; }
+    .coordinator-sales-card-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
+    .coordinator-sales-card-heading span,
+    .coordinator-plan-card > span { flex: 0 0 auto; border: 1px solid #141210; padding: 4px 6px; font-size: 11px; font-weight: 800; }
+    .coordinator-sales-card-heading :is(.is-not-submitted, .is-needs-update) { border: 2px solid #a53613; background: #fff1d6; color: #a53613; }
+    .coordinator-sales-card-heading .is-active { border: 2px solid #141210; background: #fdc20f; color: #141210; }
+    .coordinator-sales-card-heading .is-complete { border: 2px solid #236a45; background: #fff; color: #236a45; }
+    .coordinator-sales-card p,
+    .coordinator-plan-card p { margin: 0; font-size: 13px; }
+    .coordinator-sales-card small { font-weight: 700; }
+    .coordinator-progress { height: 14px; overflow: hidden; border: 2px solid #141210; background: #e8e1d2; }
+    .coordinator-progress span { display: block; height: 100%; background: #fdc20f; }
+    .coordinator-backlog-list > h2,
+    .coordinator-plan-day > h2 { margin: 8px 0 0; font-size: 18px; font-weight: 800; }
+    .coordinator-backlog-list > p { margin: 0; font-size: 13px; }
+    .coordinator-backlog-group { min-width: 0; border: 2px solid #141210; padding: 10px; }
+    .coordinator-backlog-group legend { padding-inline: 6px; font-weight: 800; }
+    .coordinator-backlog-group legend label { display: flex; min-height: 44px; align-items: center; gap: 8px; }
+    .coordinator-backlog-item { display: grid; gap: 6px; border-top: 1px solid #9a9384; padding: 12px 0; }
+    .coordinator-backlog-item time,
+    .coordinator-backlog-item div { color: #49443a; font-size: 12px; }
+    .coordinator-backlog-item div { display: flex; flex-wrap: wrap; gap: 6px; }
+    .coordinator-backlog-item div span { border: 1px solid #141210; padding: 3px 6px; font-weight: 700; }
+    .coordinator-plan-day { display: grid; gap: 8px; }
+    .coordinator-plan-list { grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: start; }
+    .coordinator-plan-choices { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); border: 2px solid #141210; }
+    .coordinator-plan-choices a { display: grid; min-height: 54px; place-items: center; align-content: center; color: #141210; font-weight: 800; text-decoration: none; }
+    .coordinator-plan-choices a + a { border-left: 1px solid #141210; }
+    .coordinator-plan-choices a[aria-current="date"] { background: #fdc20f; }
+    .coordinator-plan-choices small { font-size: 10px; font-weight: 600; }
+    .coordinator-plan-day .coordinator-backlog-callout form button { min-height: 44px; border: 2px solid #141210; background: #fdc20f; padding: 8px 12px; font-weight: 800; }
+    .coordinator-plan-card { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px; align-items: start; }
+    .coordinator-plan-card p { grid-column: 1 / -1; }
+    .coordinator-reminder-form { display: grid; gap: 10px; }
+    .coordinator-reminder-sticky { position: sticky; z-index: 20; bottom: 8px; border: 2px solid #141210; background: #fbf7ec; padding: 8px; }
+    .coordinator-reminder-sticky button,
+    .coordinator-reminder-confirm { width: 100%; min-height: 48px; border: 2px solid #141210; background: #fdc20f; padding: 10px 14px; color: #141210; font-weight: 800; }
+    .coordinator-sales-detail { display: grid; gap: 14px; padding-bottom: 12px; color: #141210; }
+    .coordinator-sales-detail header { display: grid; gap: 4px; }
+    .coordinator-sales-detail header > a { display: inline-flex; min-height: 44px; align-items: center; font-weight: 700; }
+    .coordinator-sales-detail header h2 { margin: 0; font-size: 24px; font-weight: 800; }
+    .coordinator-sales-detail header p { margin: 0; color: #49443a; font-size: 13px; }
+    .coordinator-week-strip { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); border: 2px solid #141210; }
+    .coordinator-week-strip a { display: grid; min-height: 66px; justify-items: center; align-content: center; gap: 2px; color: #141210; text-decoration: none; }
+    .coordinator-week-strip a + a { border-left: 1px solid #9a9384; }
+    .coordinator-week-strip a[aria-current="date"] { background: #fdc20f; }
+    .coordinator-week-strip strong { font-size: 17px; }
+    .coordinator-week-strip small { font-size: 11px; }
+    .coordinator-sales-detail h3 { margin: 0; font-size: 17px; font-weight: 800; }
+    .coordinator-detail-agendas { display: grid; gap: 10px; }
+    .coordinator-detail-agenda { display: grid; min-width: 0; gap: 7px; border: 2px solid #141210; background: #fffdf5; padding: 12px; }
+    .coordinator-agenda-time { font-size: 12px; font-weight: 700; }
+    .coordinator-result-form { display: grid; gap: 8px; border-top: 1px solid #9a9384; padding-top: 10px; }
+    .coordinator-result-form textarea { min-height: 80px; border: 1px solid #141210; padding: 8px; }
+    .coordinator-result-form button { min-height: 44px; border: 2px solid #141210; background: #fdc20f; font-weight: 800; }
+    .coordinator-detail-sticky-actions { position: static; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; border: 2px solid #141210; background: #fbf7ec; padding: 8px; }
+    .coordinator-detail-sticky-actions a { display: grid; min-height: 44px; place-items: center; border: 2px solid #141210; background: #fdc20f; color: #141210; font-weight: 800; text-decoration: none; }
+    .coordinator-lead-actions { display: grid; gap: 10px; border: 2px solid #141210; background: #fff1d6; padding: 12px; }
+    .coordinator-lead-actions h2 { margin: 0; font-size: 18px; font-weight: 800; }
+    .coordinator-lead-warning { display: grid; gap: 8px; }
+    .coordinator-lead-warning ul { display: grid; gap: 6px; margin: 0; padding-left: 18px; }
+    .coordinator-lead-warning a { color: #141210; text-decoration: underline; text-underline-offset: 2px; }
+    .coordinator-lead-queue-link { display: inline-flex; min-height: 44px; align-items: center; font-weight: 800; }
+    .coordinator-lead-warning button { min-height: 44px; border: 2px solid #141210; background: #fdc20f; padding: 8px 12px; font-weight: 800; }
+    .coordinator-lead-clear { margin: 0; font-weight: 700; }
+    .coordinator-lead-cards,
+    .coordinator-report-cards { display: none; }
+    .coordinator-lead-sticky-create { display: none; }
+    .coordinator-lead-table,
+    .coordinator-report-table { display: block; }
+    .coordinator-agenda-mobile-cards { display: none; }
+    .coordinator-agenda-updates-count { display: inline-flex; margin: 0 16px 12px; border: 1px solid #141210; padding: 4px 7px; font-size: 11px; font-weight: 800; }
+    .coordinator-today-segments a:focus-visible,
+    .coordinator-backlog-callout:focus-visible,
+    .coordinator-sales-card:focus-visible { outline: 3px solid #141210; outline-offset: 2px; }
+    .sales-pocketbook-tabs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)) !important; }
+    .sales-pocketbook-workspace .sales-pocketbook-tab { min-height: 44px; border: 2px solid #141210; background: #fff; color: #141210; font-weight: 800; text-align: center; }
+    .sales-pocketbook-workspace .sales-pocketbook-tab.active { background: #fdc20f; }
 }
 
 /* ============================================================

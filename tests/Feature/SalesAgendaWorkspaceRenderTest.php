@@ -858,6 +858,27 @@ class SalesAgendaWorkspaceRenderTest extends TestCase
         );
     }
 
+    public function test_sales_agenda_workspace_submit_visibility_changelog_migration_is_idempotent(): void
+    {
+        $title = 'Tombol kirim agenda tampil di workspace ponsel';
+        DB::table('changelogs')->whereNull('version')->where('title', $title)->delete();
+
+        $migration = require database_path('migrations/2026_11_11_000002_fix_sales_agenda_workspace_submit_visibility_changelog.php');
+        $migration->up();
+        $migration->up();
+
+        $this->assertSame(1, DB::table('changelogs')->whereNull('version')->where('title', $title)->count());
+        $this->assertDatabaseHas('changelogs', [
+            'version' => null,
+            'title' => $title,
+            'category' => 'fixed',
+        ]);
+
+        $migration->down();
+
+        $this->assertSame(0, DB::table('changelogs')->whereNull('version')->where('title', $title)->count());
+    }
+
     public function test_sales_agenda_modal_interaction_changelog_migration_is_idempotent(): void
     {
         $title = 'Perbaikan Modal dan Input Agenda Mobile';
@@ -1005,29 +1026,31 @@ class SalesAgendaWorkspaceRenderTest extends TestCase
             ->assertSee('openAgendaSheet', false);
     }
 
-    public function test_unsubmitted_agenda_is_saved_in_receipt_preview_with_a_resume_action(): void
+    public function test_complete_unsubmitted_agenda_exposes_workspace_submit_action(): void
     {
         [$sales, $project] = $this->salesContext();
-        $this->agendaAt($sales, $project, '2026-10-30', '07:30', '17:00', 'Agenda draft');
+        $this->agendaAt($sales, $project, '2026-10-30', '07:30', '17:00', 'Agenda target');
 
-        $this->actingAs($sales)
+        $html = $this->actingAs($sales)
             ->get(route('sales-agendas.index', ['work_date' => '2026-10-30']))
             ->assertOk()
             ->assertSee('sales-receipt-workspace ', false)
             ->assertDontSee('is-receipt-mode', false)
             ->assertSeeText('Draft agenda tersimpan')
-            ->assertSeeText('Lanjutkan Draft')
-            ->assertSee('sales-receipt-canvas', false)
-            ->assertSee('sales-receipt-submit-form', false)
-            ->assertSee('Sobek &amp; kirim ke Koordinator', false)
             ->assertDontSee('<div class="sales-submitted-plan"', false)
-            ->assertDontSee('Terkirim ke Koordinator');
+            ->assertDontSee('Terkirim ke Koordinator')
+            ->getContent();
+
+        $this->assertMatchesRegularExpression(
+            '/<div id="agenda-input"[^>]*>.*?<form[^>]*sales-receipt-submit-form--workspace[^>]*>.*?Sobek &amp; kirim ke Koordinator.*?<\/form>.*?<\/div>/s',
+            $html,
+        );
     }
 
     public function test_weekday_draft_keeps_buku_saku_shell_and_exposes_workflow_status(): void
     {
         [$sales, $project] = $this->salesContext();
-        $this->agendaAt($sales, $project, '2026-10-30', '07:30', '17:00', 'Agenda draft shell');
+        $this->agendaAt($sales, $project, '2026-10-30', '07:30', '08:00', 'Agenda draft shell');
 
         $this->actingAs($sales)
             ->get(route('sales-agendas.index', ['work_date' => '2026-10-30']))
@@ -1040,7 +1063,7 @@ class SalesAgendaWorkspaceRenderTest extends TestCase
             ->assertSee('sales-receipt-canvas', false)
             ->assertSeeText('Lanjutkan Draft')
             ->assertSee('data-agenda-receipt-preview', false)
-            ->assertSee('sales-receipt-submit-form', false);
+            ->assertSee('sales-receipt-submit-disabled', false);
     }
 
     public function test_submitted_receipt_renders_status_and_extra_work_state(): void

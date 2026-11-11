@@ -161,7 +161,18 @@
                 <div class="sales-receipt-warning" role="status"><strong>{{ $incompletePreviousAgendas->count() }} rencana kemarin belum lengkap</strong><span>{{ $incompletePreviousAgendas->count() }} agenda belum ada bukti foto · lengkapi sekarang</span></div>
             @endif
             @if($project)
-                 <div id="agenda-input" class="sales-receipt-add-panel sales-reference-bottom-action" data-tour-target="add-plan-action"><button type="button" class="sales-receipt-add-trigger" @click="{{ $isWeekend ? 'openAgendaSheet($event)' : ($hasDraftAgendas ? 'openAgendaPreview($event, true)' : 'openAgendaPreview($event)') }}" aria-haspopup="dialog" aria-controls="{{ $isWeekend ? 'sales-agenda-create-sheet' : 'sales-agenda-receipt-preview' }}"><span>{{ $hasDraftAgendas ? 'Lanjutkan Draft' : '+ Tambah rencana '.($isWeekend ? 'akhir pekan' : 'hari ini') }}</span></button></div>
+                 <div id="agenda-input" class="sales-receipt-add-panel sales-reference-bottom-action" data-tour-target="add-plan-action">
+                     @if(! $isWeekend && ! $daySubmission && $receiptSummary['normal_minutes'] === $receiptSummary['target_minutes'])
+                         <form method="POST" action="{{ route('sales-agendas.submit') }}" class="sales-receipt-submit-form sales-receipt-submit-form--workspace" data-receipt-submit>
+                             @csrf
+                             <input type="hidden" name="scheduled_date" value="{{ $agendaDate->toDateString() }}">
+                             <div class="sales-receipt-submit-help">Total tepat {{ $receiptSummary['target_minutes'] }} menit. Kirim rencana ke Koordinator.</div>
+                             <button type="submit" class="crm-button crm-button--primary crm-button--lg" data-accent="sales">Sobek &amp; kirim ke Koordinator</button>
+                         </form>
+                     @else
+                         <button type="button" class="sales-receipt-add-trigger" @click="{{ $isWeekend ? 'openAgendaSheet($event)' : ($hasDraftAgendas ? 'openAgendaPreview($event, true)' : 'openAgendaPreview($event)') }}" aria-haspopup="dialog" aria-controls="{{ $isWeekend ? 'sales-agenda-create-sheet' : 'sales-agenda-receipt-preview' }}"><span>{{ $hasDraftAgendas ? 'Lanjutkan Draft' : '+ Tambah rencana '.($isWeekend ? 'akhir pekan' : 'hari ini') }}</span></button>
+                     @endif
+                 </div>
             @endif
         @endif
     @endif

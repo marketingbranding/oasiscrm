@@ -48,7 +48,7 @@
         <x-crm.alert variant="error" title="Foto belum tersimpan." id="sales-agenda-photo-error">{{ $errors->first('photo') }}</x-crm.alert>
     @endif
 
-    <x-crm.section id="agenda-evidence" title="Bukti foto" description="Maks. 2" class="sales-pocketbook-screen-section">
+    <x-crm.section id="agenda-evidence" title="Bukti foto" description="Minimal 1 foto, maksimal 2" class="sales-pocketbook-screen-section">
         @php
             $activeEvidence = $agenda->evidence->filter(fn ($evidence): bool => ! $evidence->purged_at)->values();
             $canUploadEvidence = $canMutateEvidence && $activeEvidence->count() < 2;
@@ -120,11 +120,14 @@
             <p class="sales-agenda-result-readonly">{{ $agenda->activity_result }}</p>
         @endif
         @if(!$agenda->isFinished())
-            <form method="POST" action="{{ route('sales-agendas.update', $agenda) }}" class="sales-agenda-completion-form" data-paper-submit data-completion-form>
+            <form method="POST" action="{{ route('sales-agendas.update', $agenda) }}" class="sales-agenda-completion-form" data-paper-submit data-completion-form data-evidence-count="{{ $activeEvidence->count() }}">
                 @csrf @method('PATCH')
                 <input type="hidden" name="expected_updated_at" value="{{ app(\App\Services\OptimisticLockService::class)->token($agenda) }}">
                 <label for="sales-agenda-result">Hasil aktivitas <span aria-hidden="true">*</span></label>
                 <textarea id="sales-agenda-result" class="sales-input" name="activity_result" rows="5" required data-agenda-result>{{ old('activity_result') }}</textarea>
+                @if($activeEvidence->isEmpty())
+                    <p id="sales-agenda-photo-required" class="text-sm font-bold text-[var(--oasis-danger)]" role="status">Bukti foto wajib diunggah sebelum agenda diselesaikan.</p>
+                @endif
                 @if($nextAgenda)
                     <p class="sales-agenda-next" role="status">Selanjutnya: {{ $nextAgenda->start_time ? substr((string) $nextAgenda->start_time, 0, 5) : 'Fleksibel' }} {{ $nextAgenda->title }}</p>
                 @endif

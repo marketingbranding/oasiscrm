@@ -7,8 +7,10 @@ export function syncAgendaCompletionState(form) {
     }
 
     const hasResult = result.value.trim().length > 0;
-    submit.disabled = !hasResult;
-    submit.setAttribute('aria-disabled', String(!hasResult));
+    const hasEvidence = Number(form.dataset.evidenceCount || 0) > 0;
+    const canComplete = hasResult && hasEvidence;
+    submit.disabled = !canComplete;
+    submit.setAttribute('aria-disabled', String(!canComplete));
 }
 
 export default function registerSalesAgendaDetail() {

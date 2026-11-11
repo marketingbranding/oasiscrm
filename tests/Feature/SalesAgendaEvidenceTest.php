@@ -280,6 +280,9 @@ class SalesAgendaEvidenceTest extends TestCase
             ->assertSee('sales-agenda-photo-slot', false)
             ->assertSee('data-agenda-photo-preview', false)
             ->assertSee('sales-agenda-photo-placeholder', false)
+            ->assertSeeText('Minimal 1 foto, maksimal 2')
+            ->assertSee('data-evidence-count="0"', false)
+            ->assertSeeText('Bukti foto wajib diunggah sebelum agenda diselesaikan.')
             ->assertSee('sales-agenda-sticky-action', false)
             ->assertSee('name="photo"', false)
             ->assertSee('accept="image/*"', false)
@@ -288,6 +291,11 @@ class SalesAgendaEvidenceTest extends TestCase
         $this->assertSame(1, substr_count($response->getContent(), 'data-agenda-photo-slot'));
         $this->assertSame(1, substr_count($response->getContent(), 'accept="image/*"'));
         $this->assertSame(0, substr_count($response->getContent(), 'Simpan Foto'));
+
+        $detailScript = file_get_contents(resource_path('js/sales-agenda-detail.js'));
+        $this->assertIsString($detailScript);
+        $this->assertStringContainsString('form.dataset.evidenceCount', $detailScript);
+        $this->assertStringContainsString('const hasEvidence', $detailScript);
 
         $this->actingAs($sales)
             ->from(route('sales-agendas.show', $agenda))

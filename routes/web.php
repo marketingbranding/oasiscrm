@@ -163,6 +163,7 @@ Route::middleware(['auth', 'active', 'verified', 'password.changed', 'operationa
         Route::post('/buku-saku-sales/onboarding/replay', [SalesPocketbookOnboardingController::class, 'replay'])->middleware('permission:sales_pocketbook.view_own')->name('sales-pocketbook.onboarding.replay');
         Route::get('/buku-saku-sales', [SalesPocketbookController::class, 'index'])->name('sales-pocketbook.index');
         Route::get('/sales-fee-reports', [SalesFeeReportController::class, 'index'])->middleware('permission:sales_pocketbook.export')->name('sales-fee-reports.index');
+        Route::get('/sales-fee-reports/export', [SalesFeeReportController::class, 'export'])->middleware('permission:sales_pocketbook.export')->name('sales-fee-reports.export');
         Route::get('/sales-fee-reports/{salesUser}/{project}', [SalesFeeReportController::class, 'show'])->middleware('permission:sales_pocketbook.export')->name('sales-fee-reports.show');
         Route::get('/sales-fee-reports/{salesUser}/{project}/print', [SalesFeeReportController::class, 'print'])->middleware('permission:sales_pocketbook.export')->name('sales-fee-reports.print');
         Route::get('/buku-saku-sales/supervisor/agenda-export', [SupervisorSalesPocketbookController::class, 'agendaExport'])->middleware('permission:sales_pocketbook.export_team')->name('sales-pocketbook.supervisor-monitoring.agenda-export');

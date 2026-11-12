@@ -86,6 +86,8 @@ class SalesFeeReportTest extends TestCase
 
         $response->assertOk()
             ->assertSee('Laporan Fee Sales')
+            ->assertSee('Export Excel')
+            ->assertSee(route('sales-fee-reports.export', ['branch_id' => $this->branch->id] + $this->period()))
             ->assertSee('Sales Sendiri')
             ->assertSee('Sales Kosong')
             ->assertSee('Proyek Utama')
@@ -404,6 +406,18 @@ class SalesFeeReportTest extends TestCase
     {
         $title = 'Laporan Aktivitas Sales menampilkan jam agenda';
         $migration = require database_path('migrations/2026_11_02_095914_add_sales_fee_report_print_hours_changelog.php');
+
+        $migration->up();
+        $migration->up();
+
+        $this->assertSame(1, DB::table('changelogs')->whereNull('version')->where('title', $title)->count());
+        $this->actingAs($this->actor)->get(route('changelogs.index'))->assertOk()->assertSeeText($title);
+    }
+
+    public function test_excel_export_changelog_is_idempotent_and_visible(): void
+    {
+        $title = 'Export Excel Laporan Fee Sales';
+        $migration = require database_path('migrations/2026_11_12_000001_add_sales_fee_report_excel_export_changelog.php');
 
         $migration->up();
         $migration->up();

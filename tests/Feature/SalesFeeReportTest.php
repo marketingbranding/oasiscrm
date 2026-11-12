@@ -13,6 +13,8 @@ use App\Services\GoogleSheetsApiService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Mockery;
+use PhpOffice\PhpSpreadsheet\Cell\DataType;
+use PhpOffice\PhpSpreadsheet\IOFactory;
 use Tests\TestCase;
 
 class SalesFeeReportTest extends TestCase
@@ -84,6 +86,8 @@ class SalesFeeReportTest extends TestCase
 
         $response->assertOk()
             ->assertSee('Laporan Fee Sales')
+            ->assertSee('Export Excel')
+            ->assertSee(route('sales-fee-reports.export', ['branch_id' => $this->branch->id] + $this->period()))
             ->assertSee('Sales Sendiri')
             ->assertSee('Sales Kosong')
             ->assertSee('Proyek Utama')
@@ -238,6 +242,56 @@ class SalesFeeReportTest extends TestCase
         });
     }
 
+    public function test_export_downloads_filtered_fee_report_with_numeric_total_row(): void
+    {
+        $this->sales->update(['name' => '=Sales Formula']);
+        $this->agenda($this->sales, $this->project, 'Agenda Selesai', '2026-08-05', 'done');
+        $this->agenda($this->sales, $this->project, 'Agenda Rencana', '2026-08-06', 'planned');
+        $this->agenda($this->sales, $this->secondProject, 'Agenda Tidak Dipilih', '2026-08-07', 'done');
+        $this->lead($this->sales, $this->project, 'Lead Dalam Satu', '2026-08-03');
+        $this->lead($this->sales, $this->project, 'Lead Dalam Dua', '2026-08-10');
+        $this->lead($this->sales, $this->secondProject, 'Lead Tidak Dipilih', '2026-08-11');
+
+        $response = $this->actingAs($this->actor)->get(route('sales-fee-reports.export', [
+            'project_id' => $this->project->id,
+        ] + $this->period()));
+
+        $response->assertOk()
+            ->assertHeader('content-type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+            ->assertDownload('laporan-fee-sales-2026-08-01-sampai-2026-08-31.xlsx');
+        $sheet = IOFactory::load($response->baseResponse->getFile()->getPathname())->getActiveSheet();
+        $rows = $sheet->toArray(null, true, true, true);
+
+        $this->assertSame(['Sales', 'Koordinator', 'Proyek', 'Total Agenda', 'Agenda Selesai', 'Total Lead'], array_values($rows[1]));
+        $this->assertSame('=Sales Formula', $rows[2]['A']);
+        $this->assertSame('Proyek Utama', $rows[2]['C']);
+        $this->assertSame(DataType::TYPE_NUMERIC, $sheet->getCell('D2')->getDataType());
+        $this->assertSame(2, $sheet->getCell('D2')->getValue());
+        $this->assertSame(1, $sheet->getCell('E2')->getValue());
+        $this->assertSame(2, $sheet->getCell('F2')->getValue());
+        $this->assertSame('Sales Kosong', $rows[3]['A']);
+        $this->assertSame(0, $sheet->getCell('D3')->getValue());
+        $this->assertSame(0, $sheet->getCell('E3')->getValue());
+        $this->assertSame(0, $sheet->getCell('F3')->getValue());
+        $this->assertSame('TOTAL', $rows[4]['A']);
+        $this->assertSame(2, $sheet->getCell('D4')->getValue());
+        $this->assertSame(1, $sheet->getCell('E4')->getValue());
+        $this->assertSame(2, $sheet->getCell('F4')->getValue());
+        $this->assertSame('s', $sheet->getCell('A2')->getDataType());
+
+        $sheet->getParent()->disconnectWorksheets();
+    }
+
+    public function test_export_is_forbidden_for_user_without_fee_report_access(): void
+    {
+        $denied = $this->user('supervisor', $this->branch, 'Supervisor Ditolak');
+        $denied->branches()->updateExistingPivot($this->branch, $this->branchMembership());
+
+        $this->actingAs($denied)
+            ->get(route('sales-fee-reports.export', $this->period()))
+            ->assertForbidden();
+    }
+
     public function test_detail_and_print_are_read_only_with_expected_tables_and_metadata(): void
     {
         $agendaWithResult = $this->agenda($this->sales, $this->project, 'Agenda Dengan Hasil', '2026-08-05', 'done');
@@ -352,6 +406,18 @@ class SalesFeeReportTest extends TestCase
     {
         $title = 'Laporan Aktivitas Sales menampilkan jam agenda';
         $migration = require database_path('migrations/2026_11_02_095914_add_sales_fee_report_print_hours_changelog.php');
+
+        $migration->up();
+        $migration->up();
+
+        $this->assertSame(1, DB::table('changelogs')->whereNull('version')->where('title', $title)->count());
+        $this->actingAs($this->actor)->get(route('changelogs.index'))->assertOk()->assertSeeText($title);
+    }
+
+    public function test_excel_export_changelog_is_idempotent_and_visible(): void
+    {
+        $title = 'Export Excel Laporan Fee Sales';
+        $migration = require database_path('migrations/2026_11_12_000001_add_sales_fee_report_excel_export_changelog.php');
 
         $migration->up();
         $migration->up();

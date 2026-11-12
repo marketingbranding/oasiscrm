@@ -5,6 +5,8 @@
 @section('content')
 <x-crm.page-header variant="canonical" eyebrow="Laporan" title="Laporan Fee Sales" description="Rekap aktivitas Sales berdasarkan periode dan proyek." />
 
+@php($exportParameters = ['branch_id' => $branchId, 'date_from' => $dateFrom, 'date_to' => $dateTo, 'project_id' => $projectId, 'coordinator_id' => $coordinatorId, 'sales_user_id' => $salesUserId])
+
 <form method="GET" action="{{ route('sales-fee-reports.index') }}">
     <x-crm.toolbar label="Filter laporan aktivitas Sales">
         @if($branches->count() > 1)
@@ -47,6 +49,7 @@
             </select>
         </x-crm.field>
         <x-slot:actions>
+            <x-crm.button variant="secondary" :href="route('sales-fee-reports.export', $exportParameters)">Export Excel</x-crm.button>
             <x-crm.button type="submit" variant="primary" accent="reports">Terapkan Filter</x-crm.button>
         </x-slot:actions>
     </x-crm.toolbar>

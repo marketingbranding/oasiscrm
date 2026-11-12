@@ -18,7 +18,7 @@ class SalesFeeReportExport
         'Sales', 'Koordinator', 'Proyek', 'Total Agenda', 'Agenda Selesai', 'Total Lead',
     ];
 
-    public static function toBrowser(Collection $rows, array $report, string $filename): BinaryFileResponse
+    public static function toBrowser(Collection $rows, string $filename): BinaryFileResponse
     {
         $spreadsheet = new Spreadsheet;
         $sheet = $spreadsheet->getActiveSheet();

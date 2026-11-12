@@ -30,7 +30,6 @@ class SalesFeeReportController extends Controller
 
         return SalesFeeReportExport::toBrowser(
             $report['rows'],
-            $report,
             "laporan-fee-sales-{$dateFrom}-sampai-{$dateTo}.xlsx",
         );
     }

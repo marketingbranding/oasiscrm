@@ -234,6 +234,30 @@ class SalesPocketbookMobileContractTest extends TestCase
         $this->actingAs($actor)->get(route('changelogs.index'))->assertOk()->assertSeeText($title);
     }
 
+    public function test_short_viewport_lead_form_scroll_changelog_is_idempotent_and_visible(): void
+    {
+        $title = 'Form lead Buku Saku Sales dapat discroll di layar pendek';
+        $migration = require database_path('migrations/2026_11_16_115655_add_sales_lead_mobile_scroll_changelog.php');
+
+        $migration->up();
+        $migration->up();
+
+        $this->assertSame(1, DB::table('changelogs')->whereNull('version')->where('title', $title)->count());
+        $this->assertDatabaseHas('changelogs', [
+            'version' => null,
+            'title' => $title,
+            'category' => 'fixed',
+            'created_by' => null,
+        ]);
+
+        $actor = User::factory()->create([
+            'role_id' => Role::query()->where('slug', 'superadmin')->value('id'),
+            'password_changed_at' => now(),
+        ]);
+
+        $this->actingAs($actor)->get(route('changelogs.index'))->assertOk()->assertSeeText($title);
+    }
+
     public function test_sales_agenda_stores_time_range_and_duration_without_a_daily_minutes_cap(): void
     {
         [$branch, $project, $sales] = $this->salesContext();
@@ -365,7 +389,11 @@ class SalesPocketbookMobileContractTest extends TestCase
             $css,
         );
         $this->assertMatchesRegularExpression(
-            '/\.sales-lead-entry-panel\[open\] > \.sales-lead-entry-form \.sales-lead-entry-scroll \{[^}]*flex: 0 0 auto !important;[^}]*height: min\(328px, calc\(100dvh - 12rem - 150px\)\) !important;[^}]*max-height: min\(328px, calc\(100dvh - 12rem - 150px\)\) !important;[^}]*\}/s',
+            '/body\.sales-personal-page \.sales-lead-entry-panel\[open\] > \.sales-lead-entry-form \.sales-lead-entry-scroll \{[^}]*flex: 0 0 auto !important;[^}]*height: min\(328px, max\(0px, calc\(100dvh - 118px\)\)\) !important;[^}]*max-height: min\(328px, max\(0px, calc\(100dvh - 118px\)\)\) !important;[^}]*overflow-y: auto !important;[^}]*\}/s',
+            $css,
+        );
+        $this->assertMatchesRegularExpression(
+            '/body\.sales-personal-page \.sales-lead-entry-panel\[open\] \{[^}]*height: min\(478px, calc\(100dvh - 24px\)\) !important;[^}]*max-height: min\(478px, calc\(100dvh - 24px\)\) !important;[^}]*\}/s',
             $css,
         );
         $this->assertMatchesRegularExpression(
@@ -699,6 +727,29 @@ class SalesPocketbookMobileContractTest extends TestCase
             ->assertOk()
             ->assertSee('Lead Sudah Selesai')
             ->assertDontSee('Lead Belum Selesai');
+    }
+
+    public function test_lead_validation_feedback_stays_inside_the_scrollable_form_region(): void
+    {
+        [, , $sales] = $this->salesContext();
+
+        $response = $this->actingAs($sales)
+            ->followingRedirects()
+            ->from(route('sales-agendas.index', ['tab' => 'leads']))
+            ->post(route('sales-leads.store'), ['operation_uuid' => (string) Str::uuid()])
+            ->assertOk();
+
+        $response->assertSee('Data belum tersimpan.');
+        $html = $response->getContent();
+        $scrollRegionPosition = strpos($html, 'class="sales-lead-entry-scroll"');
+        $feedbackPosition = strpos($html, 'Data belum tersimpan.', $scrollRegionPosition);
+        $firstFieldPosition = strpos($html, '<fieldset class="sales-lead-form-group">');
+
+        $this->assertIsInt($scrollRegionPosition);
+        $this->assertIsInt($feedbackPosition);
+        $this->assertIsInt($firstFieldPosition);
+        $this->assertGreaterThan($scrollRegionPosition, $feedbackPosition);
+        $this->assertLessThan($firstFieldPosition, $feedbackPosition);
     }
 
     public function test_first_personal_workspace_visit_bypasses_disabled_sales_pocketbook_onboarding(): void

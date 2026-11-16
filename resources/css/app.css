@@ -6596,8 +6596,8 @@ body.sales-personal-page .sales-lead-entry-panel[open] > summary { display: none
 
 body.sales-personal-page .sales-lead-entry-panel[open] {
     inset: auto 0 0 !important;
-    height: min(478px, calc(100dvh - 12rem)) !important;
-    max-height: min(478px, calc(100dvh - 12rem)) !important;
+    height: min(478px, calc(100dvh - 24px)) !important;
+    max-height: min(478px, calc(100dvh - 24px)) !important;
     display: flex !important;
     flex-direction: column !important;
     overflow: hidden !important;
@@ -6624,8 +6624,8 @@ body.sales-personal-page .sales-lead-entry-panel[open] > .sales-lead-entry-form 
 
 body.sales-personal-page .sales-lead-entry-panel[open] > .sales-lead-entry-form .sales-lead-entry-scroll {
     flex: 0 0 auto !important;
-    height: min(328px, calc(100dvh - 12rem - 150px)) !important;
-    max-height: min(328px, calc(100dvh - 12rem - 150px)) !important;
+    height: min(328px, max(0px, calc(100dvh - 118px))) !important;
+    max-height: min(328px, max(0px, calc(100dvh - 118px))) !important;
     overflow-y: auto !important;
     padding-bottom: calc(86px + env(safe-area-inset-bottom)) !important;
 }

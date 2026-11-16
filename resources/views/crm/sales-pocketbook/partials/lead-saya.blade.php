@@ -21,14 +21,14 @@
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18" /></svg>
                 </button>
             </div>
-            @if($errors->any())<x-crm.alert variant="error" title="Data belum tersimpan.">{{ $errors->first() }}</x-crm.alert>@endif
-            @if(session('success'))<x-crm.alert variant="success" title="Berhasil">{{ session('success') }}</x-crm.alert>@endif
             <form method="POST" action="{{ route('sales-leads.store') }}" class="sales-pocketbook-composer sales-lead-entry-form" data-conflict-form x-data="salesLeadSubmit()" @submit="beginSubmit($event)" :aria-busy="submitting">
                 @csrf
                 <input type="hidden" name="operation_uuid" value="{{ old('operation_uuid', (string) \Illuminate\Support\Str::uuid()) }}">
                 <input type="hidden" name="sales_user_id" value="{{ auth()->id() }}">
                 <input type="hidden" name="branch_id" value="{{ auth()->user()->branch_id }}">
                 <div class="sales-lead-entry-scroll">
+                    @if($errors->any())<x-crm.alert variant="error" title="Data belum tersimpan.">{{ $errors->first() }}</x-crm.alert>@endif
+                    @if(session('success'))<x-crm.alert variant="success" title="Berhasil">{{ session('success') }}</x-crm.alert>@endif
                     <fieldset class="sales-lead-form-group">
                         <legend>Data lead</legend>
                         @if(auth()->user()->isSales())

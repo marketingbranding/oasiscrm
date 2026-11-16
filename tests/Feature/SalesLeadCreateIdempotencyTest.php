@@ -122,6 +122,30 @@ class SalesLeadCreateIdempotencyTest extends TestCase
         $this->assertSame('Local Lead', $lead->customer_name);
     }
 
+    public function test_correcting_a_validation_error_can_reuse_the_same_operation_uuid(): void
+    {
+        [$branch, $project, $sales, $coordinator] = $this->context('validation-retry');
+        $data = $this->leadData($branch, $project, $sales, ['operation_uuid' => (string) Str::uuid()]);
+        $invalidData = $data;
+        unset($invalidData['customer_name']);
+
+        $this->actingAs($coordinator)
+            ->from(route('sales-pocketbook.index', ['tab' => 'leads']))
+            ->post(route('sales-leads.store'), $invalidData)
+            ->assertRedirect()
+            ->assertSessionHasErrors('customer_name');
+
+        $this->post(route('sales-leads.store'), $data)
+            ->assertRedirect()
+            ->assertSessionHasNoErrors();
+
+        $this->assertDatabaseCount('sales_leads', 1);
+        $this->assertDatabaseHas('sales_leads', [
+            'customer_name' => $data['customer_name'],
+            'external_sync_id' => $data['operation_uuid'],
+        ]);
+    }
+
     public function test_reused_operation_uuid_for_soft_deleted_lead_returns_validation_error(): void
     {
         [$branch, $project, $sales, $coordinator] = $this->context('deleted');

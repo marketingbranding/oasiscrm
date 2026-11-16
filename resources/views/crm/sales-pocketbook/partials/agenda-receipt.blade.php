@@ -201,9 +201,10 @@
                 <div class="sales-bottom-sheet-handle" aria-hidden="true"></div>
                 <div class="sales-bottom-sheet-header"><div><span class="sales-bottom-sheet-eyebrow">Agenda {{ $agendaDate->locale('id')->translatedFormat('d F Y') }}</span><h2 id="sales-agenda-create-title" x-ref="agendaFormTitle">Tambah Rencana</h2></div><button type="button" x-ref="sheetClose" @click="closeSheet()" class="sales-bottom-sheet-close" aria-label="Tutup form agenda">&times;</button></div>
                 <p id="sales-agenda-create-description" class="sales-bottom-sheet-description">Pilih kategori, isi judul, lalu atur waktu dan durasi kegiatan.</p>
-                <form method="POST" action="{{ route('sales-agendas.store') }}" class="sales-receipt-form" data-agenda-slot-form data-create-action="{{ route('sales-agendas.store') }}" data-create-label="{{ $daySubmission ? 'Simpan agenda tambahan' : 'Tambahkan Rencana' }}" data-agenda-date="{{ $agendaDate->toDateString() }}" data-agenda-submitted="{{ $daySubmission ? 'true' : 'false' }}" data-agendas='@json($agendaSlotData)' data-schedule='@json($schedule)' @keydown="handleAgendaFormKeydown($event)">
-                     @csrf
-                     <input type="hidden" name="_method" value="" data-agenda-method>
+                <form method="POST" action="{{ route('sales-agendas.store') }}" class="sales-receipt-form" data-agenda-slot-form data-create-action="{{ route('sales-agendas.store') }}" data-create-label="{{ $daySubmission ? 'Simpan agenda tambahan' : 'Tambahkan Rencana' }}" data-agenda-date="{{ $agendaDate->toDateString() }}" data-agenda-submitted="{{ $daySubmission ? 'true' : 'false' }}" data-agendas='@json($agendaSlotData)' data-schedule='@json($schedule)' x-data="{ submitting: false }" @submit="if (submitting) { $event.preventDefault() } else { submitting = true }" :aria-busy="submitting" @keydown="handleAgendaFormKeydown($event)">
+                      @csrf
+                      <input type="hidden" name="operation_uuid" value="{{ old('operation_uuid', (string) \Illuminate\Support\Str::uuid()) }}">
+                      <input type="hidden" name="_method" value="" data-agenda-method>
                      <input type="hidden" name="expected_updated_at" value="" data-agenda-expected-updated-at>
                      <input type="hidden" name="scheduled_date" value="{{ $agendaDate->toDateString() }}">
                      <input type="hidden" name="receipt_context" value="0" data-receipt-context>
@@ -214,7 +215,7 @@
                     <input type="hidden" name="end_time" value="{{ old('end_time', $defaultEnd) }}" data-slot-end>
                     <x-crm.field label="Lokasi" for="sales-agenda-location"><input id="sales-agenda-location" class="sales-input" name="location" value="{{ old('location') }}"></x-crm.field>
                     <x-crm.field label="Hasil awal" for="sales-agenda-result" hint="Opsional; isi setelah kegiatan bila belum tersedia." class="md:col-span-2"><textarea id="sales-agenda-result" class="sales-input" name="activity_result" rows="2">{{ old('activity_result') }}</textarea></x-crm.field>
-                     <div class="sales-receipt-form-actions"><button type="submit" class="crm-button crm-button--primary crm-button--md" data-accent="sales" x-ref="agendaFormSubmit">{{ $daySubmission ? 'Simpan agenda tambahan' : 'Tambahkan Rencana' }}</button></div>
+                      <div class="sales-receipt-form-actions"><button type="submit" class="crm-button crm-button--primary crm-button--md" data-accent="sales" x-ref="agendaFormSubmit" x-bind:disabled="submitting"><span x-show="!submitting">{{ $daySubmission ? 'Simpan agenda tambahan' : 'Tambahkan Rencana' }}</span><span x-show="submitting" x-cloak>Menyimpan...</span></button><span class="sr-only" aria-live="polite" x-text="submitting ? 'Agenda sedang disimpan.' : ''"></span></div>
                 </form>
             </div>
         </div>

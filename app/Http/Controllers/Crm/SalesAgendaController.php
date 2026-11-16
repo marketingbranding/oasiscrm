@@ -29,10 +29,12 @@ use App\Support\SalesAgendaEvidenceRules;
 use Carbon\CarbonImmutable;
 use DateTimeImmutable;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Symfony\Component\HttpFoundation\Response;
@@ -261,6 +263,25 @@ class SalesAgendaController extends Controller
         $scheduledDate = CarbonImmutable::parse($data['scheduled_date']);
         $summary = $this->receiptService->summarize($owner, $scheduledDate);
         $outsideSchedule = $summary['submitted'];
+        $operationUuid = $data['operation_uuid'] ?? null;
+        $operationPayloadHash = $operationUuid === null
+            ? null
+            : $this->createOperationPayloadHash($request, $owner, $project, $data, $duration);
+        if ($operationUuid !== null) {
+            $existing = ContentItem::query()->where('operation_uuid', $operationUuid)->first();
+            if ($existing) {
+                $this->assertCreateRetryMatches($existing, $request, $operationPayloadHash);
+
+                return $this->successRedirect(
+                    $request,
+                    'Agenda sales berhasil ditambahkan.',
+                    $data['scheduled_date'],
+                    $owner->id,
+                    $request->boolean('receipt_context'),
+                );
+            }
+        }
+
         if (! $outsideSchedule) {
             try {
                 $this->receiptService->assertTimeSlotAvailable($owner, $scheduledDate, $data['start_time'], $data['end_time']);
@@ -281,7 +302,7 @@ class SalesAgendaController extends Controller
         $result = filled($data['activity_result'] ?? null) ? $data['activity_result'] : null;
 
         try {
-            DB::transaction(function () use ($request, $owner, $project, $data, $result, $prepared, $uploads, $duration, $outsideSchedule) {
+            DB::transaction(function () use ($request, $owner, $project, $data, $result, $prepared, $uploads, $duration, $outsideSchedule, $operationUuid, $operationPayloadHash) {
                 $agenda = ContentItem::create([
                     'branch_id' => $project->branch_id,
                     'project_name' => $project->project_name,
@@ -302,6 +323,8 @@ class SalesAgendaController extends Controller
                     'activity_result' => $result,
                     'owner_user_id' => $owner->id,
                     'created_by' => $request->user()->id,
+                    'operation_uuid' => $operationUuid,
+                    'operation_payload_hash' => $operationPayloadHash,
                 ]);
                 $agenda->assignees()->sync([$owner->id]);
                 if ($result) {
@@ -309,6 +332,19 @@ class SalesAgendaController extends Controller
                 }
                 $uploads->persist($agenda, $prepared, $request->user());
             });
+        } catch (UniqueConstraintViolationException $exception) {
+            $uploads->cleanup($prepared);
+
+            if ($operationUuid === null || ! $this->isOperationUuidViolation($exception)) {
+                throw $exception;
+            }
+
+            $existing = ContentItem::query()->where('operation_uuid', $operationUuid)->first();
+            if (! $existing) {
+                throw $exception;
+            }
+
+            $this->assertCreateRetryMatches($existing, $request, $operationPayloadHash);
         } catch (\Throwable $exception) {
             $uploads->cleanup($prepared);
             throw $exception;
@@ -321,6 +357,68 @@ class SalesAgendaController extends Controller
             $owner->id,
             $request->boolean('receipt_context'),
         );
+    }
+
+    private function createOperationPayloadHash(
+        Request $request,
+        User $owner,
+        LeadMaster $project,
+        array $data,
+        int $duration,
+    ): string {
+        $photos = array_map(
+            static fn ($file): string|false => hash_file('sha256', $file->getRealPath()),
+            $request->file('photos', []),
+        );
+        $payload = [
+            'actor_id' => (int) $request->user()->id,
+            'owner_user_id' => (int) $owner->id,
+            'branch_id' => (int) $project->branch_id,
+            'sales_project_id' => (int) $project->id,
+            'title' => $data['title'],
+            'sales_activity_category' => $data['sales_activity_category'],
+            'location' => $data['location'] ?? null,
+            'scheduled_date' => $data['scheduled_date'],
+            'start_time' => $data['start_time'],
+            'end_time' => $data['end_time'],
+            'duration_minutes' => $duration,
+            'activity_result' => filled($data['activity_result'] ?? null) ? $data['activity_result'] : null,
+            'photos' => $photos,
+        ];
+
+        return hash('sha256', json_encode($payload, JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE));
+    }
+
+    private function assertCreateRetryMatches(
+        ContentItem $existing,
+        Request $request,
+        string $operationPayloadHash,
+    ): void {
+        $matches = $existing->item_type === 'agenda'
+            && $existing->agenda_type === ContentItem::SALES_AGENDA_TYPE
+            && (int) $existing->created_by === (int) $request->user()->id
+            && filled($existing->operation_payload_hash)
+            && hash_equals($existing->operation_payload_hash, $operationPayloadHash);
+
+        if (! $matches) {
+            throw ValidationException::withMessages([
+                'operation_uuid' => 'Identitas pengiriman ini sudah digunakan untuk data agenda yang berbeda. Muat ulang formulir lalu coba kembali.',
+            ]);
+        }
+    }
+
+    private function isOperationUuidViolation(UniqueConstraintViolationException $exception): bool
+    {
+        if ($exception->index === 'content_items_operation_uuid_unique') {
+            return true;
+        }
+
+        $columns = array_map(
+            static fn (string $column): string => Str::afterLast($column, '.'),
+            $exception->columns,
+        );
+
+        return $columns === ['operation_uuid'];
     }
 
     public function submit(Request $request)

@@ -61,6 +61,78 @@ class SalesAgendaEvidenceTest extends TestCase
         $this->assertSame(SalesAgendaEvidence::class, $audit->subject_type);
     }
 
+    public function test_replaying_a_sales_agenda_create_request_returns_the_existing_agenda(): void
+    {
+        $branch = Branch::create(['name' => 'Solo', 'code' => 'SO', 'is_active' => true]);
+        $project = LeadMaster::create(['branch_id' => $branch->id, 'project_name' => 'Oasis Solo', 'is_active' => true]);
+        $role = Role::firstOrCreate(['slug' => 'sales'], ['name' => 'Sales']);
+        $sales = User::factory()->create(['role_id' => $role->id, 'branch_id' => $branch->id, 'password_changed_at' => now()]);
+        $sales->assignedProjects()->attach($project->id, ['is_primary' => true, 'is_active' => true]);
+        app(SalesPocketbookOnboardingService::class)->skip($sales);
+        $data = [
+            'operation_uuid' => '8e68d7e7-648c-4dd5-8ee1-cf06a64c4793',
+            'scheduled_date' => '2026-08-24',
+            'start_time' => '09:00',
+            'end_time' => '10:00',
+            'sales_activity_category' => 'Cek Lokasi',
+            'title' => 'Agenda yang sama',
+        ];
+
+        $this->actingAs($sales)
+            ->post(route('sales-agendas.store'), $data)
+            ->assertRedirect(route('sales-agendas.index', ['work_date' => '2026-08-24']))
+            ->assertSessionDoesntHaveErrors();
+        $this->post(route('sales-agendas.store'), $data)
+            ->assertRedirect(route('sales-agendas.index', ['work_date' => '2026-08-24']))
+            ->assertSessionDoesntHaveErrors();
+
+        $this->assertDatabaseCount('content_items', 1);
+    }
+
+    public function test_reusing_a_sales_agenda_operation_identifier_with_different_data_is_rejected(): void
+    {
+        $branch = Branch::create(['name' => 'Solo', 'code' => 'SO', 'is_active' => true]);
+        $project = LeadMaster::create(['branch_id' => $branch->id, 'project_name' => 'Oasis Solo', 'is_active' => true]);
+        $role = Role::firstOrCreate(['slug' => 'sales'], ['name' => 'Sales']);
+        $sales = User::factory()->create(['role_id' => $role->id, 'branch_id' => $branch->id, 'password_changed_at' => now()]);
+        $sales->assignedProjects()->attach($project->id, ['is_primary' => true, 'is_active' => true]);
+        app(SalesPocketbookOnboardingService::class)->skip($sales);
+        $data = [
+            'operation_uuid' => '752a7d9c-9a28-4c48-9e04-24b2a2d2d1fe',
+            'scheduled_date' => '2026-08-24',
+            'start_time' => '09:00',
+            'end_time' => '10:00',
+            'sales_activity_category' => 'Cek Lokasi',
+            'title' => 'Agenda awal',
+        ];
+        $this->actingAs($sales)->post(route('sales-agendas.store'), $data)
+            ->assertRedirect(route('sales-agendas.index', ['work_date' => '2026-08-24']))
+            ->assertSessionDoesntHaveErrors();
+
+        $this->post(route('sales-agendas.store'), [...$data, 'title' => 'Agenda berbeda'])
+            ->assertSessionHasErrors('operation_uuid');
+
+        $this->assertDatabaseCount('content_items', 1);
+    }
+
+    public function test_duplicate_prevention_changelog_is_idempotent_and_visible(): void
+    {
+        $title = 'Pengiriman agenda mencegah data ganda';
+        $migration = require database_path('migrations/2026_11_16_110119_add_sales_agenda_duplicate_prevention_changelog.php');
+        $migration->up();
+        $migration->up();
+        $superadmin = User::factory()->create([
+            'role_id' => Role::query()->where('slug', 'superadmin')->value('id'),
+            'password_changed_at' => now(),
+        ]);
+
+        $this->assertSame(1, DB::table('changelogs')->whereNull('version')->where('title', $title)->count());
+        $this->actingAs($superadmin)->get(route('changelogs.index'))
+            ->assertOk()
+            ->assertSeeText($title)
+            ->assertSeeText('Tombol simpan agenda menampilkan proses penyimpanan dan pengiriman ulang tidak membuat agenda duplikat.');
+    }
+
     public function test_create_rejects_three_photos_and_invalid_second_without_agenda_or_orphan(): void
     {
         Storage::fake('agenda_evidence');
@@ -239,6 +311,8 @@ class SalesAgendaEvidenceTest extends TestCase
         $this->actingAs($sales)->get(route('sales-agendas.index'))->assertOk()
             ->assertSee('+ Tambah rencana')
             ->assertSee('action="'.route('sales-agendas.store').'"', false)
+            ->assertSee('name="operation_uuid"', false)
+            ->assertSee('Menyimpan...', false)
             ->assertSee('name="scheduled_date"', false)
             ->assertDontSee('Buat Agenda Tambahan');
     }

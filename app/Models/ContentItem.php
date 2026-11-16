@@ -73,6 +73,8 @@ class ContentItem extends Model
         'owner_user_id',
         'sales_project_id',
         'rescheduled_from_id',
+        'operation_uuid',
+        'operation_payload_hash',
         'notes',
         'created_by',
         'updated_by',

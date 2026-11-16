@@ -24,6 +24,7 @@ class StoreSalesAgendaRequest extends FormRequest
     public function rules(): array
     {
         return [
+            'operation_uuid' => ['nullable', 'uuid'],
             'sales_user_id' => [Rule::requiredIf(fn (): bool => $this->user()?->hasPrimaryRole('sales_coordinator') === true), 'nullable', 'integer', 'exists:users,id'],
             'project_id' => [Rule::requiredIf(fn (): bool => $this->user()?->hasPrimaryRole('sales_coordinator') === true), 'nullable', 'integer', 'exists:lead_master,id'],
             'scheduled_date' => ['required', 'date'],

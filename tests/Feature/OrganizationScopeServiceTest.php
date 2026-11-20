@@ -7,6 +7,7 @@ use App\Models\ContentItem;
 use App\Models\LeadMaster;
 use App\Models\Role;
 use App\Models\User;
+use App\Services\AppSettingResolver;
 use App\Services\OrganizationScopeService;
 use App\Services\ReportingHierarchyService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -36,6 +37,46 @@ class OrganizationScopeServiceTest extends TestCase
         $this->assertEqualsCanonicalizing([$direct->id, $descendant->id], $scope->teamIds($viewer));
         $this->assertContains($direct->id, $scope->visibleUserIds($viewer, 'sales_pocketbook'));
         $this->assertNotContains($crossBranch->id, $scope->visibleUserIds($viewer, 'sales_pocketbook'));
+    }
+
+    public function test_br51_flag_on_in_graph_mode_includes_recursive_reporting_descendants(): void
+    {
+        // BR-51: hierarchical monitoring follows effective reporting graph descendants.
+        $branch = $this->branch('HIE');
+        $viewer = $this->user('supervisor', $branch);
+        $direct = $this->user('sales_coordinator', $branch);
+        $remote = $this->user('sales', $branch);
+        app(ReportingHierarchyService::class)->assignSupervisor($direct, $viewer);
+        app(ReportingHierarchyService::class)->assignSupervisor($remote, $direct);
+        $this->enableHierarchicalMonitoring();
+        config(['organization.graph_mode' => 'graph', 'organization.graph_user_ids' => '']);
+
+        $this->assertEqualsCanonicalizing(
+            [$direct->id, $remote->id],
+            app(OrganizationScopeService::class)->visibleUserIds($viewer, 'sales_pocketbook'),
+        );
+    }
+
+    public function test_br52_pusat_scope_only_widens_existing_branch_permission(): void
+    {
+        // BR-52: pusat widens branch scope for stated roles, not own/assigned scope.
+        $branch = $this->branch('PUS');
+        $otherBranch = $this->branch('POT');
+        $viewer = $this->user('supervisor', $branch);
+        $viewer->forceFill(['scope_level' => 'pusat'])->saveQuietly();
+        $this->enableHierarchicalMonitoring();
+
+        $scope = app(OrganizationScopeService::class);
+        $this->assertContains($otherBranch->id, $scope->branchIds($viewer, 'sales_pocketbook'));
+        $this->assertNotContains($otherBranch->id, $scope->branchIds($viewer, 'work_planner'));
+    }
+
+    public function test_br53_extension_point_grants_no_access(): void
+    {
+        // BR-53: special access remains unavailable until WP-2.2.
+        $viewer = $this->user('manager', $this->branch('B53'));
+
+        $this->assertFalse(app(OrganizationScopeService::class)->hasSpecialMonitoringGrant($viewer, 'sales_pocketbook', null));
     }
 
     public function test_supplemental_pusat_role_does_not_grant_global_branch_access(): void
@@ -159,6 +200,15 @@ class OrganizationScopeServiceTest extends TestCase
         $superadmin->forceFill(['password_changed_at' => now()])->save();
 
         $this->actingAs($superadmin)->get(route('changelogs.index'))->assertOk()->assertSeeText($title);
+    }
+
+    private function enableHierarchicalMonitoring(): void
+    {
+        DB::table('app_settings')->updateOrInsert(
+            ['key' => 'org_hierarchical_monitoring'],
+            ['value' => json_encode(true, JSON_THROW_ON_ERROR), 'group' => 'feature_flags', 'updated_at' => now(), 'created_at' => now()],
+        );
+        app(AppSettingResolver::class)->forget('org_hierarchical_monitoring');
     }
 
     private function branch(string $code): Branch

@@ -10,9 +10,10 @@ PRD sumber kebenaran: `docs/product/PRD_OASIS_CRM_V3.md` versi 3.3 (D30–D33)
 - PRD v3 menjadi sumber perilaku produk.
 - Kode yang dapat dijalankan menjadi sumber perilaku saat ini.
 - Perubahan user worktree yang sudah ada tidak disentuh.
-- WP-0 audit dan pencatatan selesai; WP-1.1/WP-1.2 runtime slice selesai di branch ini.
+- WP-0 audit dan pencatatan selesai; WP-1.1/WP-1.2 runtime slice dan WP-1.3 role foundation selesai di branch ini.
 - WP-1.1/WP-1.2 commits: `b2c351c`, `4ee24eb`, `47526ee`, `fe565dd`; pushed to `origin/prd-v3/fase-1-fondasi`.
-- WP-1.1/WP-1.2 settings page, resolver, permission migration, audit, cache invalidation, and flag facade are complete for registered initial keys. Consumer cutover remains pending.
+- WP-1.3 commits: `e39af08`, `8dc207f`, `fe0952b`, `b301b9e`, `c6e1685`.
+- WP-1.1/WP-1.2 settings page, resolver, permission migration, audit, cache invalidation, and flag facade are complete for registered initial keys. WP-1.3 role foundation is complete; consumer cutover remains pending.
 - Focused verification before review fixes: 12 tests passed, 42 assertions. Review-fix verification: 13 tests passed, 46 assertions. Full-suite baseline remains 1,823 tests, 1,821 passed, 2 known failures listed below.
 - Keputusan register konflik C-01–C-08 disetujui pemilik produk; C-09–C-11 ditambahkan dari review lanjutan.
 - Cutover produksi tidak dieksekusi: mode graf kanonis, pemadaman sinkronisasi Sheet, pembekuan tab Talangan, penghapusan role lama, dan penghapusan kolom lama.
@@ -26,7 +27,7 @@ PRD sumber kebenaran: `docs/product/PRD_OASIS_CRM_V3.md` versi 3.3 (D30–D33)
 | WP-0 | 0 | Audit PRD v3, inventaris hardcode, impact map, baseline, snapshot permission | Selesai audit awal | Semua fase |
 | WP-1.1 | 1 | Pengaturan Aturan: `app_settings`, resolver bertipe, audit perubahan | Selesai untuk consumer awal; aturan lain pindah bersama consumer. Commits `b2c351c`, `4ee24eb`, `fe565dd` | BR-06; semua BR bertanda ⚙ pada consumer terkait |
 | WP-1.2 | 1 | Feature flag PRD v3 dan helper pembacaan tunggal | Selesai; four registered flags default mati. Commit `47526ee` | BR-50–BR-53, risiko transisi |
-| WP-1.3 | 1 | Role `ass_manager`, atribut user, migrasi pemetaan role lama | Diblokir sampai register konflik disetujui | §4.1, D6, D21, D25 |
+| WP-1.3 | 1 | Role `ass_manager`, atribut user, migrasi pemetaan role lama | Selesai untuk fondasi role, atribut, parity, dan command dry-run; form/import/legacy-check ditunda | §4.1, BR-21, BR-25, D6, D21, D25; D32 ditunda |
 | WP-1.4 | 1 | Graf organisasi kanonis dan pemantauan berjenjang | Belum mulai; menunggu laporan paritas | BR-50–BR-53 |
 | WP-1.5 | 1 | Jam kerja, target 480, Jumat, akhir pekan, hari libur | Belum mulai | BR-01–BR-09 |
 | WP-1.6 | 1 | Tahap Lead Baru–UTJ, Gugur, kunci setelah UTJ | Belum mulai | BR-10–BR-16 |
@@ -87,6 +88,9 @@ Latest verification after WP-1.1/WP-1.2 and review fixes:
 - `npm run build`: passed.
 - `git diff --check`: passed.
 - `php artisan route:list --name=admin.app-settings`, `php artisan optimize:clear`, and `php artisan view:cache`: passed.
+- WP-1.3 focused role suite: 11 tests passed, 63 assertions.
+- WP-1.3 full suite: 1,835 tests, 1,829 passed, 5 failed, 1 error, 13,268 assertions; failures/errors are recorded in the WP-1.3 section below and are not caused by a claim of full-suite success.
+- WP-1.3 final checks: `vendor/bin/pint --dirty --format agent`, `git diff --check`, `php artisan optimize:clear`, `php artisan view:cache`, and `graphify update .` passed.
 - No production cutover executed.
 
 ## Inventaris hardcode aturan PRD
@@ -191,6 +195,15 @@ Status: selesai untuk shared default-off helper; consumers remain gated for late
 
 ### WP-1.3 — Role dan atribut user
 
+Status: selesai untuk fondasi role, atribut, permission parity, dan command migrasi terkontrol. Tidak ada production cutover.
+
+- Implementasi: role `ass_manager` memakai mapping permission `manager`; `users.sales_type`, `users.staff_type`, dan `users.scope_level` nullable serta di-cast sebagai string; mapping permission Staff Admin memilih `staff_type` dan mempertahankan snapshot pre-v3.
+- Legacy mapping: `admin→admin_cabang`, `sas→sales`, `sam→marketing`, `staff lama→umum`; `oasis:roles-v3-migrate --dry-run` read-only; eksekusi aktual transaksional, idempoten, mempertahankan ID user dan supplemental membership, lalu menandai role legacy tidak aktif. `scope_level` di-backfill sebagai `pusat` tanpa cabang dan `cabang` dengan cabang.
+- BR/D mapping: §4.1 role/atribut foundation; BR-21/D21 menjaga ID user dan supplemental membership saat transisi; BR-25/D25 memetakan `scope_level` dari penempatan cabang; D6 menjaga transisi operator-controlled lewat dry-run tanpa mutasi. Permission parity diuji terhadap `tests/Fixtures/permission_snapshot_pre_v3.json`; supplemental role tidak menaikkan permission.
+- Focused tests: `tests/Feature/PrdV3RoleAttributesTest.php`, `tests/Feature/PrdV3RolePermissionParityTest.php`, `tests/Feature/PrdV3RoleMigrationCommandTest.php` — atribut/role, parity exact, supplemental-role non-escalation, migration backfill, dry-run no-write, idempotent mapping, and scope backfill. Result: 11 tests passed, 63 assertions.
+- Full-suite verification: `composer test` / PHPUnit JUnit result `1,835 tests, 1,829 passed, 5 failed, 1 error, 13,268 assertions`; known failures/errors: `AdminUserImportDirectActivationTest::test_non_superadmin_and_supplemental_superadmin_cannot_forge_direct_mode` (`UserImportBatch` query missing), `BranchTransferHistoricalAccessTest::test_historical_content_owned_by_transferred_user_is_view_only` (expected 200, got 403), `ModuleMaintenanceTest::test_global_maintenance_has_higher_priority_and_off_state_preserves_permission_behavior`, `SalesAgendaWorkspaceRenderTest::test_receipt_heading_matches_today_tomorrow_and_other_planned_dates`, `SalesAgendaWorkspaceRenderTest::test_populated_receipt_keeps_weekly_navigation_with_exact_date_links`, and `WorkPlannerTest::test_personal_items_are_hidden_from_colleagues_but_visible_to_assignees_and_pusat` (expected 200, got 403). These remain recorded, not silently deferred.
+- Deferred: D32 (hak tambahan SAS untuk input NUP/Proses Penjualan), form user, bulk import, invitation fields, dan seluruh legacy role checks ditunda ke slice berikutnya; graf organisasi kanonis dan pemantauan berjenjang tetap WP-1.4. Preserve legacy roles until operator runs reviewed migration command; no production migration executed.
+
 - Route: `routes/web.php` pada route admin user, role, dan organisasi.
 - Middleware: auth, account state, permission, module access, scope checks.
 - Controller: `app/Http/Controllers/Crm/AdminUserController.php`, import/proposal controller, role administration controller.
@@ -282,7 +295,7 @@ Status: selesai untuk shared default-off helper; consumers remain gated for late
 |---|---|
 | WP-1.1 | `tests/Unit/AppSettingResolverTest.php`, `tests/Feature/AppSettingTest.php`: defaults/overrides, `BR-06`, audit, direct URL, Superadmin-only access, invalid values, and service boundary |
 | WP-1.2 | `tests/Unit/FeatureFlagTest.php`: exact four-key set, default-off, explicit enabled override, shared resolver source; consumer transition paths and `BR-52` remain WP-1.4/consumer scope |
-| WP-1.3 | role/attribute validation, legacy role mapping, no permission escalation via additional role |
+| WP-1.3 | `tests/Feature/PrdV3RoleAttributesTest.php`, `tests/Feature/PrdV3RolePermissionParityTest.php`, `tests/Feature/PrdV3RoleMigrationCommandTest.php`: role/attribute validation, legacy role mapping, exact snapshot parity, no permission escalation via additional role, dry-run no mutation, idempotent migration, and scope backfill |
 | WP-1.4 | `BR-50`, `BR-51`, `BR-52`, `BR-53` boundary and direct URL |
 | WP-1.5 | `BR-01`–`BR-09`, nilai default dan nilai Pengaturan yang diubah |
 | WP-1.6 | `BR-10`–`BR-16` |

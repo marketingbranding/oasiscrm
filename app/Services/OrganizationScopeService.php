@@ -319,6 +319,7 @@ class OrganizationScopeService
             $projectIds = $this->currentAssignedProjectIds($viewer, $branchIds);
             $projectUserIds = $this->currentUserIdsForProjects($projectIds);
             $branchUserIds = $this->authorizedUserIdsForBranches($branchIds);
+            $projectUserIds = array_intersect($projectUserIds, $branchUserIds);
 
             return User::query()
                 ->whereIn('id', $descendantIds)

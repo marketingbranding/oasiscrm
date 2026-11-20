@@ -39,6 +39,97 @@ class OrganizationScopeServiceTest extends TestCase
         $this->assertNotContains($crossBranch->id, $scope->visibleUserIds($viewer, 'sales_pocketbook'));
     }
 
+    public function test_br51_flag_off_preserves_legacy_scope_baseline(): void
+    {
+        // BR-51: disabled hierarchical monitoring preserves legacy team scope.
+        $branch = $this->branch('OFF');
+        $viewer = $this->user('supervisor', $branch);
+        $coordinator = $this->user('sales_coordinator', $branch);
+        $sales = $this->user('sales', $branch);
+        app(ReportingHierarchyService::class)->assignSupervisor($coordinator, $viewer);
+        app(ReportingHierarchyService::class)->assignSupervisor($sales, $coordinator);
+        DB::table('sales_coordinator_sales')->insert([
+            'coordinator_user_id' => $coordinator->id, 'sales_user_id' => $sales->id, 'is_active' => true,
+            'started_at' => today(), 'created_at' => now(), 'updated_at' => now(),
+        ]);
+        $this->setHierarchicalMonitoring(false);
+
+        $this->assertEqualsCanonicalizing(
+            [$coordinator->id, $sales->id],
+            app(OrganizationScopeService::class)->visibleUserIds($viewer, 'sales_pocketbook'),
+        );
+    }
+
+    public function test_br51_hierarchical_scope_uses_each_graph_read_mode(): void
+    {
+        // BR-51: enabled hierarchical monitoring follows legacy, shadow, and graph read modes.
+        $branch = $this->branch('MOD');
+        $viewer = $this->user('manager', $branch);
+        $descendant = $this->user('sales', $branch);
+        app(ReportingHierarchyService::class)->assignSupervisor($descendant, $viewer);
+        $this->enableHierarchicalMonitoring();
+
+        foreach (['legacy', 'shadow', 'graph'] as $mode) {
+            config([
+                'app.env' => 'testing',
+                'organization.graph_mode' => $mode,
+                'organization.graph_user_ids' => '',
+                'organization.graph_branch_ids' => '',
+            ]);
+
+            $this->assertContains(
+                $descendant->id,
+                app(OrganizationScopeService::class)->visibleUserIds($viewer, 'sales_pocketbook'),
+                "Mode {$mode} must include active reporting descendant.",
+            );
+        }
+    }
+
+    public function test_br51_team_ids_intersect_project_assignments_with_workspace_branches(): void
+    {
+        // BR-51: project assignment cannot bypass strict workspace branch intersection in teamIds().
+        $branch = $this->branch('TWS');
+        $outside = $this->branch('TWO');
+        $viewer = $this->user('manager', $branch);
+        $allowed = $this->user('sales', $branch);
+        $leak = $this->user('sales', $outside);
+        $allowed->forceFill(['supervisor_user_id' => $viewer->id])->saveQuietly();
+        $leak->forceFill(['supervisor_user_id' => $viewer->id])->saveQuietly();
+        $project = LeadMaster::create(['branch_id' => $branch->id, 'project_name' => 'Workspace Team Project', 'is_active' => true]);
+        DB::table('project_user')->insert([
+            ['user_id' => $viewer->id, 'project_id' => $project->id, 'is_active' => true],
+            ['user_id' => $allowed->id, 'project_id' => $project->id, 'is_active' => true],
+            ['user_id' => $leak->id, 'project_id' => $project->id, 'is_active' => true],
+        ]);
+
+        $teamIds = app(OrganizationScopeService::class)->teamIds($viewer, 'work_planner');
+
+        $this->assertContains($allowed->id, $teamIds);
+        $this->assertNotContains($leak->id, $teamIds);
+    }
+
+    public function test_br51_team_ids_cache_keeps_distinct_branch_contexts_isolated(): void
+    {
+        // BR-51: teamIds() cache key includes branch context and cannot reuse another branch result.
+        $primary = $this->branch('TCA');
+        $secondary = $this->branch('TCB');
+        $coordinator = $this->user('sales_coordinator', $primary);
+        $coordinator->branches()->attach($secondary->id, ['is_current' => true, 'can_view' => true]);
+        $salesPrimary = $this->user('sales', $primary);
+        $salesSecondary = $this->user('sales', $secondary);
+        DB::table('sales_coordinator_sales')->insert([
+            ['coordinator_user_id' => $coordinator->id, 'sales_user_id' => $salesPrimary->id, 'is_active' => true, 'started_at' => today(), 'created_at' => now(), 'updated_at' => now()],
+            ['coordinator_user_id' => $coordinator->id, 'sales_user_id' => $salesSecondary->id, 'is_active' => true, 'started_at' => today(), 'created_at' => now(), 'updated_at' => now()],
+        ]);
+
+        $scope = app(OrganizationScopeService::class);
+        $primaryTeam = $scope->teamIds($coordinator, 'sales_pocketbook', $primary->id);
+        $secondaryTeam = $scope->teamIds($coordinator, 'sales_pocketbook', $secondary->id);
+
+        $this->assertSame([$salesPrimary->id], $primaryTeam);
+        $this->assertSame([$salesSecondary->id], $secondaryTeam);
+    }
+
     public function test_br51_flag_on_in_graph_mode_includes_recursive_reporting_descendants(): void
     {
         // BR-51: hierarchical monitoring follows effective reporting graph descendants.
@@ -359,9 +450,14 @@ class OrganizationScopeServiceTest extends TestCase
 
     private function enableHierarchicalMonitoring(): void
     {
+        $this->setHierarchicalMonitoring(true);
+    }
+
+    private function setHierarchicalMonitoring(bool $enabled): void
+    {
         DB::table('app_settings')->updateOrInsert(
             ['key' => 'org_hierarchical_monitoring'],
-            ['value' => json_encode(true, JSON_THROW_ON_ERROR), 'group' => 'feature_flags', 'updated_at' => now(), 'created_at' => now()],
+            ['value' => json_encode($enabled, JSON_THROW_ON_ERROR), 'group' => 'feature_flags', 'updated_at' => now(), 'created_at' => now()],
         );
         app(AppSettingResolver::class)->forget('org_hierarchical_monitoring');
     }

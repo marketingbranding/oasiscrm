@@ -102,6 +102,30 @@ Message: `feat: gate hierarchical organization scope`
 - Team cache key now passes requested branch context into `semanticCacheKey()`.
 - Added regression tests for cross-branch assigned descendants, explicit branch boundary, and Coordinator own-only scope.
 
+# Round 4 fix
+
+## Changes
+
+- `teamIds()` now intersects project-assigned descendants with authorized workspace-branch membership before applying descendant visibility, preventing out-of-workspace project assignment leaks.
+- Added BR-51 regression for direct `teamIds()` project-assignment workspace isolation.
+- Added BR-51 flag-off baseline regression.
+- Added BR-51 hierarchical scope regression across `legacy`, `shadow`, and `graph` modes.
+- Added BR-51 cache regression proving distinct `teamIds()` branch contexts do not reuse results.
+
+## Commands and output
+
+- `php artisan test --compact tests/Feature/OrganizationScopeServiceTest.php tests/Feature/OrganizationGraphModeReadsTest.php tests/Unit/FeatureFlagTest.php` — **35 passed, 78 assertions**.
+- `vendor/bin/pint --dirty --format agent` — **passed**.
+- `git diff --check` — **passed**.
+- `$env:CACHE_STORE='array'; php artisan optimize:clear` — **passed**.
+- `php artisan view:cache` — **passed**.
+- `graphify update .` — **passed**, graph rebuilt.
+
+## Concerns
+
+- Full suite not run; focused Task 3 coverage passed.
+- Existing untracked planning/spec files remain untouched.
+
 ## Commands and output
 
 - `php artisan test --compact tests/Feature/OrganizationScopeServiceTest.php tests/Feature/OrganizationGraphModeReadsTest.php tests/Unit/FeatureFlagTest.php` — **31 passed, 70 assertions**.

@@ -28,21 +28,59 @@ class SalesMonitoringProjectionService
             return $record;
         }
 
-        return match ($recordType) {
-            'lead' => $this->lead($record),
-            'agenda' => $this->agenda($record),
-            default => $record,
-        };
+        $summary = [];
+        if ($recordType === 'agenda') {
+            $date = $this->agendaDate($record);
+            $owner = data_get($record, 'owner');
+            if ($date instanceof CarbonImmutable && $owner instanceof User) {
+                $summary = $this->receiptService->summarize($owner, $date);
+            }
+        }
+
+        return $this->projectRecord($recordType, $record, $summary);
     }
 
     public function projectCollection(User $viewer, string $recordType, Collection $records, string $ownerAttribute): Collection
     {
-        return $records->map(fn (mixed $record): mixed => $this->project(
-            $viewer,
-            (int) data_get($record, $ownerAttribute),
-            $recordType,
-            $record,
-        ));
+        if (! FeatureFlag::enabled('org_hierarchical_monitoring') || $records->isEmpty()) {
+            return $records;
+        }
+
+        $distances = [];
+        $agendaSummaries = [];
+
+        return $records->map(function (mixed $record) use ($viewer, $recordType, $ownerAttribute, &$distances, &$agendaSummaries): mixed {
+            $ownerId = (int) data_get($record, $ownerAttribute);
+            $distances[$ownerId] ??= $this->hierarchy->distance($viewer, $ownerId);
+            $distance = $distances[$ownerId];
+            if ($distance === null || $distance <= 1) {
+                return $record;
+            }
+
+            $summary = null;
+            if ($recordType === 'agenda') {
+                $date = $this->agendaDate($record);
+                $key = $ownerId.'|'.($date?->toDateString() ?? '');
+                if ($date instanceof CarbonImmutable && ! array_key_exists($key, $agendaSummaries)) {
+                    $owner = data_get($record, 'owner');
+                    $agendaSummaries[$key] = $owner instanceof User
+                        ? $this->receiptService->summarize($owner, $date)
+                        : [];
+                }
+                $summary = $agendaSummaries[$key] ?? [];
+            }
+
+            return $this->projectRecord($recordType, $record, $summary);
+        });
+    }
+
+    private function projectRecord(string $recordType, mixed $record, ?array $agendaSummary = null): mixed
+    {
+        return match ($recordType) {
+            'lead' => $this->lead($record),
+            'agenda' => $this->agenda($record, $agendaSummary ?? []),
+            default => $record,
+        };
     }
 
     /** @return array{lead_date:?string, name:string, sales_name:?string, project_name:?string, stage:?string, last_active_at:?string} */
@@ -50,7 +88,8 @@ class SalesMonitoringProjectionService
     {
         $status = data_get($lead, 'current_status');
         $stage = is_object($status) && method_exists($status, 'label') ? $status->label() : $status;
-        $lastActiveAt = data_get($lead, 'updated_at')
+        $lastActiveAt = data_get($lead, 'latest_activity_at')
+            ?? data_get($lead, 'latestStatusHistory.changed_at')
             ?? data_get($lead, 'current_status_changed_at')
             ?? data_get($lead, 'lead_date');
 
@@ -75,20 +114,9 @@ class SalesMonitoringProjectionService
     }
 
     /** @return array{sales_name:?string, date:?string, total_minutes:int, target_minutes:int, submitted:bool, activity_count:int, late_activity_count:int} */
-    private function agenda(ContentItem|array $agenda): array
+    private function agenda(ContentItem|array $agenda, array $summary = []): array
     {
-        $dateValue = data_get($agenda, 'scheduled_date');
-        $date = $dateValue instanceof CarbonImmutable
-            ? $dateValue
-            : ($dateValue instanceof DateTimeInterface ? CarbonImmutable::instance($dateValue) : ($dateValue !== null ? CarbonImmutable::parse((string) $dateValue) : null));
-        $owner = data_get($agenda, 'owner');
-        $summary = $owner instanceof User && $date instanceof CarbonImmutable
-            ? $this->receiptService->summarize($owner, $date)
-            : [];
-        $status = (string) data_get($agenda, 'status');
-        $isLate = $date instanceof CarbonImmutable
-            && $date->isPast()
-            && ! in_array($status, ['done', 'cancelled', 'rescheduled'], true);
+        $date = $this->agendaDate($agenda);
 
         return [
             'sales_name' => data_get($agenda, 'owner.name'),
@@ -97,7 +125,16 @@ class SalesMonitoringProjectionService
             'target_minutes' => (int) ($summary['target_minutes'] ?? 0),
             'submitted' => (bool) ($summary['submitted'] ?? false),
             'activity_count' => (int) ($summary['agenda_count'] ?? 1),
-            'late_activity_count' => $isLate ? 1 : 0,
+            'late_activity_count' => (int) ($summary['late_activity_count'] ?? 0),
         ];
+    }
+
+    private function agendaDate(ContentItem|array $agenda): ?CarbonImmutable
+    {
+        $dateValue = data_get($agenda, 'scheduled_date');
+
+        return $dateValue instanceof CarbonImmutable
+            ? $dateValue
+            : ($dateValue instanceof DateTimeInterface ? CarbonImmutable::instance($dateValue) : ($dateValue !== null ? CarbonImmutable::parse((string) $dateValue) : null));
     }
 }

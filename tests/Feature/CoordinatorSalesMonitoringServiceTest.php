@@ -15,8 +15,10 @@ use App\Models\User;
 use App\Models\UserNotification;
 use App\Services\CoordinatorAgendaReminderService;
 use App\Services\CoordinatorSalesMonitoringService;
+use App\Services\SalesMonitoringProjectionService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
+use Mockery;
 use Symfony\Component\HttpKernel\Exception\HttpException;
 use Tests\TestCase;
 
@@ -231,6 +233,53 @@ class CoordinatorSalesMonitoringServiceTest extends TestCase
         app(CoordinatorSalesMonitoringService::class)->salesDetail($this->coordinator, $this->outsideSales->id);
     }
 
+    public function test_br51_coordinator_actionable_and_failed_leads_use_projection_contract(): void
+    {
+        $stale = $this->lead($this->sales, 'Lead lama', '2026-08-01', $this->project, $this->branch);
+        $stale->forceFill(['updated_at' => Carbon::parse('2026-08-08 09:00:00')])->save();
+        $failedSync = $this->lead($this->sales, 'Lead gagal sync', '2026-08-11', $this->project, $this->branch);
+        $failedSync->forceFill(['sync_status' => 'sync_failed'])->save();
+        $projection = Mockery::mock(SalesMonitoringProjectionService::class);
+        $projection->shouldReceive('projectCollection')->atLeast()->once()->andReturnUsing(
+            fn ($actor, $type, $records) => $records->map(fn () => ['name' => 'Ringkasan'])
+        );
+        $this->app->instance(SalesMonitoringProjectionService::class, $projection);
+
+        $data = app(CoordinatorSalesMonitoringService::class)->resolve($this->coordinator, [], false);
+
+        $this->assertIsArray($data['actionableLeads']->first());
+        $this->assertIsArray($data['failedSyncLeads']->first());
+    }
+
+    public function test_br51_coordinator_detail_projects_week_items_and_backlog(): void
+    {
+        $this->agenda($this->sales, 'Agenda sebelumnya', $this->branch, $this->project, '2026-08-10');
+        $this->agenda($this->sales, 'Agenda hari ini', $this->branch, $this->project, '2026-08-11');
+        $projection = Mockery::mock(SalesMonitoringProjectionService::class);
+        $projection->shouldReceive('projectCollection')->atLeast()->once()->andReturnUsing(
+            fn ($actor, $type, $records) => $records->map(fn ($record) => ['date' => $record->scheduled_date->toDateString()])
+        );
+        $this->app->instance(SalesMonitoringProjectionService::class, $projection);
+
+        $detail = app(CoordinatorSalesMonitoringService::class)->salesDetail($this->coordinator, $this->sales->id);
+
+        $this->assertIsArray($detail['backlog']->first());
+        $this->assertIsArray($detail['week']->first()['items']->first());
+    }
+
+    public function test_br51_actionable_leads_use_status_activity_not_updated_at_for_stale_threshold(): void
+    {
+        $active = $this->lead($this->sales, 'Lead masih aktif', '2026-08-01', $this->project, $this->branch);
+        $active->forceFill([
+            'current_status_changed_at' => Carbon::parse('2026-08-10 09:00:00'),
+            'updated_at' => Carbon::parse('2026-08-11 09:00:00'),
+        ])->save();
+
+        $data = app(CoordinatorSalesMonitoringService::class)->resolve($this->coordinator, [], false);
+
+        $this->assertSame([], $data['actionableLeads']->pluck('customer_name')->all());
+    }
+
     public function test_actionable_leads_use_adjustable_stale_threshold_and_report_sync_failures_separately(): void
     {
         $stale = $this->lead($this->sales, 'Lead lama', '2026-08-01', $this->project, $this->branch);
@@ -243,7 +292,7 @@ class CoordinatorSalesMonitoringServiceTest extends TestCase
 
         $this->assertSame(['Lead lama'], $default['actionableLeads']->pluck('customer_name')->all());
         $this->assertSame(['Lead gagal sync'], $default['failedSyncLeads']->pluck('customer_name')->all());
-        $this->assertSame([], $custom['actionableLeads']->pluck('customer_name')->all());
+        $this->assertSame(['Lead lama'], $custom['actionableLeads']->pluck('customer_name')->all());
     }
 
     private function user(string $role, string $name, Branch $branch, ?User $supervisor = null): User

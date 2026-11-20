@@ -134,11 +134,18 @@ class CoordinatorSalesMonitoringService
         $agendas = $this->agendaBase([$salesId], $scope, ['from' => $weekStart, 'to' => $weekEnd])
             ->with(['evidence', 'branch:id,name', 'salesProject:id,project_name'])
             ->orderBy('scheduled_date')->orderBy('start_time')->get();
-        $days = collect(range(0, 6))->map(function (int $offset) use ($weekStart, $agendas): array {
+        $projectedAgendas = $this->projection->projectCollection($actor, 'agenda', $agendas, 'owner_user_id');
+        $days = collect(range(0, 6))->map(function (int $offset) use ($weekStart, $projectedAgendas): array {
             $day = $weekStart->addDays($offset);
-            $items = $agendas->filter(fn (ContentItem $agenda): bool => $agenda->scheduled_date?->isSameDay($day));
-            $incomplete = $items->contains(fn (ContentItem $agenda): bool => ! in_array($agenda->status, ['cancelled', 'rescheduled'], true)
-                && (blank($agenda->activity_result) || $agenda->evidence->whereNull('purged_at')->isEmpty()));
+            $items = $projectedAgendas->filter(fn (mixed $agenda): bool => CarbonImmutable::parse((string) data_get($agenda, 'scheduled_date', data_get($agenda, 'date')))->isSameDay($day));
+            $incomplete = $items->contains(function (mixed $agenda): bool {
+                if ($agenda instanceof ContentItem) {
+                    return ! in_array($agenda->status, ['cancelled', 'rescheduled'], true)
+                        && (blank($agenda->activity_result) || $agenda->evidence->whereNull('purged_at')->isEmpty());
+                }
+
+                return ! (bool) data_get($agenda, 'submitted', false);
+            });
 
             return [
                 'date' => $day,
@@ -147,16 +154,17 @@ class CoordinatorSalesMonitoringService
             ];
         });
 
-        $selectedAgendas = $agendas->filter(fn (ContentItem $agenda): bool => $agenda->scheduled_date?->isSameDay($date))->values();
+        $selectedAgendas = $projectedAgendas->filter(fn (mixed $agenda): bool => CarbonImmutable::parse((string) data_get($agenda, 'scheduled_date', data_get($agenda, 'date')))->isSameDay($date))->values();
+        $backlog = $agendas->filter(fn (ContentItem $agenda): bool => $agenda->scheduled_date?->lt($date)
+            && ! in_array($agenda->status, ['cancelled', 'rescheduled'], true)
+            && (blank($agenda->activity_result) || $agenda->evidence->whereNull('purged_at')->isEmpty()))->values();
 
         return [
             'sales' => $sales,
             'selected_date' => $date,
             'week' => $days,
-            'agendas' => $this->projection->projectCollection($actor, 'agenda', $selectedAgendas, 'owner_user_id'),
-            'backlog' => $agendas->filter(fn (ContentItem $agenda): bool => $agenda->scheduled_date?->lt($date)
-                && ! in_array($agenda->status, ['cancelled', 'rescheduled'], true)
-                && (blank($agenda->activity_result) || $agenda->evidence->whereNull('purged_at')->isEmpty()))->values(),
+            'agendas' => $selectedAgendas,
+            'backlog' => $this->projection->projectCollection($actor, 'agenda', $backlog, 'owner_user_id'),
         ];
     }
 
@@ -200,18 +208,41 @@ class CoordinatorSalesMonitoringService
         $leads = $this->leadBase($salesIds, $scope)
             ->whereDate('lead_date', '>=', $period['from']->toDateString())
             ->whereDate('lead_date', '<=', $period['to']->toDateString())
-            ->with(['branch:id,name', 'project:id,project_name', 'sales:id,name', 'leadSource:id,name'])
+            ->with([
+                'branch:id,name',
+                'project:id,project_name',
+                'sales:id,name',
+                'leadSource:id,name',
+                'latestStatusHistory:id,sales_lead_id,status,changed_at',
+            ])
             ->latest('lead_date')->latest('id');
         $staleDays = max(1, min(14, (int) ($filters['stale_days'] ?? 2)));
         $actionableLeads = $this->leadBase($salesIds, $scope)
             ->whereIn('current_status', array_map(fn (SalesLeadStatus $status): string => $status->value, SalesLeadStatus::MANUAL))
-            ->where('updated_at', '<=', now(config('app.timezone'))->subDays($staleDays))
-            ->with(['branch:id,name', 'project:id,project_name', 'sales:id,name'])
-            ->latest('updated_at')->get();
+            ->whereRaw(
+                'COALESCE((SELECT MAX(sales_lead_status_histories.changed_at) FROM sales_lead_status_histories WHERE sales_lead_status_histories.sales_lead_id = sales_leads.id), sales_leads.current_status_changed_at, sales_leads.lead_date) <= ?',
+                [now(config('app.timezone'))->subDays($staleDays)],
+            )
+            ->with([
+                'branch:id,name',
+                'project:id,project_name',
+                'sales:id,name',
+                'latestStatusHistory:id,sales_lead_id,status,changed_at',
+            ])
+            ->latest('lead_date')->get();
         $failedSyncLeads = $this->leadBase($salesIds, $scope)
             ->where('sync_status', 'sync_failed')
-            ->with(['branch:id,name', 'project:id,project_name', 'sales:id,name'])
-            ->latest('updated_at')->get();
+            ->with([
+                'branch:id,name',
+                'project:id,project_name',
+                'sales:id,name',
+                'latestStatusHistory:id,sales_lead_id,status,changed_at',
+            ])
+            ->latest('lead_date')->get();
+        $actionableLeads->each(fn (SalesLead $lead) => $lead->setAttribute('latest_activity_at', $lead->latestStatusHistory?->changed_at ?? $lead->current_status_changed_at ?? $lead->lead_date));
+        $failedSyncLeads->each(fn (SalesLead $lead) => $lead->setAttribute('latest_activity_at', $lead->latestStatusHistory?->changed_at ?? $lead->current_status_changed_at ?? $lead->lead_date));
+        $actionableLeads = $this->projection->projectCollection($actor, 'lead', $actionableLeads, 'sales_user_id');
+        $failedSyncLeads = $this->projection->projectCollection($actor, 'lead', $failedSyncLeads, 'sales_user_id');
 
         $leadsCollection = $paginate
             ? $leads->paginate(20, ['*'], 'lead_page')->withQueryString()
@@ -220,9 +251,11 @@ class CoordinatorSalesMonitoringService
             ? $agendas->paginate(15, ['*'], 'agenda_page')->withQueryString()
             : $agendas->get();
         if ($paginate) {
+            $leadsCollection->getCollection()->each(fn (SalesLead $lead) => $lead->setAttribute('latest_activity_at', $lead->latestStatusHistory?->changed_at ?? $lead->current_status_changed_at ?? $lead->lead_date));
             $leadsCollection->setCollection($this->projection->projectCollection($actor, 'lead', $leadsCollection->getCollection(), 'sales_user_id'));
             $agendasCollection->setCollection($this->projection->projectCollection($actor, 'agenda', $agendasCollection->getCollection(), 'owner_user_id'));
         } else {
+            $leadsCollection->each(fn (SalesLead $lead) => $lead->setAttribute('latest_activity_at', $lead->latestStatusHistory?->changed_at ?? $lead->current_status_changed_at ?? $lead->lead_date));
             $leadsCollection = $this->projection->projectCollection($actor, 'lead', $leadsCollection, 'sales_user_id');
             $agendasCollection = $this->projection->projectCollection($actor, 'agenda', $agendasCollection, 'owner_user_id');
         }
@@ -254,7 +287,9 @@ class CoordinatorSalesMonitoringService
             $result['exportData'] = $this->projection->projectCollection(
                 $actor,
                 'lead',
-                (clone $leads)->reorder('lead_date')->orderBy('id')->get(),
+                (clone $leads)->reorder('lead_date')->orderBy('id')->with('latestStatusHistory:id,sales_lead_id,status,changed_at')->get()->each(
+                    fn (SalesLead $lead) => $lead->setAttribute('latest_activity_at', $lead->latestStatusHistory?->changed_at ?? $lead->current_status_changed_at ?? $lead->lead_date)
+                ),
                 'sales_user_id',
             );
         }

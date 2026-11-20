@@ -102,7 +102,13 @@ class SupervisorSalesMonitoringService
             ? $this->agendaBase($salesIds, $period, $scope)->with(['owner:id,name', 'branch:id,name', 'salesProject:id,project_name', 'evidence'])->orderByDesc('scheduled_date')->orderByDesc('id')
             : null;
         $leads = ($salesId || ! $paginate)
-            ? $this->leadBase($salesIds, $period, $scope)->with(['sales:id,name', 'branch:id,name', 'project:id,project_name', 'leadSource:id,name'])->orderByDesc('lead_date')->orderByDesc('id')
+            ? $this->leadBase($salesIds, $period, $scope)->with([
+                'sales:id,name',
+                'branch:id,name',
+                'project:id,project_name',
+                'leadSource:id,name',
+                'latestStatusHistory:id,sales_lead_id,status,changed_at',
+            ])->orderByDesc('lead_date')->orderByDesc('id')
             : null;
 
         $agendaCollection = $agendas ? ($paginate ? $agendas->paginate(15, ['*'], 'agenda_page')->withQueryString() : $agendas->get()) : ($paginate ? null : collect());
@@ -113,8 +119,10 @@ class SupervisorSalesMonitoringService
             $agendaCollection = $this->projection->projectCollection($actor, 'agenda', $agendaCollection, 'owner_user_id');
         }
         if ($leadCollection instanceof LengthAwarePaginator) {
+            $leadCollection->getCollection()->each(fn (SalesLead $lead) => $lead->setAttribute('latest_activity_at', $lead->latestStatusHistory?->changed_at ?? $lead->current_status_changed_at ?? $lead->lead_date));
             $leadCollection->setCollection($this->projection->projectCollection($actor, 'lead', $leadCollection->getCollection(), 'sales_user_id'));
         } elseif ($leadCollection instanceof Collection) {
+            $leadCollection->each(fn (SalesLead $lead) => $lead->setAttribute('latest_activity_at', $lead->latestStatusHistory?->changed_at ?? $lead->current_status_changed_at ?? $lead->lead_date));
             $leadCollection = $this->projection->projectCollection($actor, 'lead', $leadCollection, 'sales_user_id');
         }
 

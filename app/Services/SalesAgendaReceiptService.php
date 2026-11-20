@@ -26,6 +26,7 @@ class SalesAgendaReceiptService
      *     agenda_count: int,
      *     submitted: bool,
      *     extra_count: int,
+     *     late_activity_count: int,
      *     is_weekend: bool,
      *     requires_target: bool,
      *     schedule: array{is_weekend: bool, start_time: ?string, end_time: ?string, break_start: ?string, break_end: ?string, target_minutes: int, requires_target: bool},
@@ -56,6 +57,8 @@ class SalesAgendaReceiptService
             'agenda_count' => $normalAgendas->count(),
             'submitted' => $submission !== null,
             'extra_count' => $schedule['is_weekend'] ? 0 : $extraAgendas,
+            'late_activity_count' => $normalAgendas->filter(fn (ContentItem $agenda): bool => $date->isPast()
+                && ! in_array($agenda->status, ['done', 'cancelled', 'rescheduled'], true))->count(),
             'is_weekend' => $schedule['is_weekend'],
             'requires_target' => $schedule['requires_target'],
             'schedule' => $schedule,

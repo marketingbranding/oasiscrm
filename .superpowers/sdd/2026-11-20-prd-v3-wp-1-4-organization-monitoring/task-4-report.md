@@ -67,10 +67,19 @@ Selesai untuk 1.4c–1.4d. Projection 1.4d implemented. Flag `org_hierarchical_m
 - `UniversalCommentNotificationTest::test_open_is_recipient_only_marks_read_redirects_with_fragment_and_reauthorizes` verifies recipient-only access, target reauthorization, read state, and comment fragment redirect.
 - `UniversalCommentNotificationTest::test_notification_service_skips_inactive_and_inaccessible_recipients` verifies inaccessible recipients receive no notification.
 
+## Round 2 findings and fixes
+
+- Coordinator `actionableLeads`, `failedSyncLeads`, detail week items, and backlog now pass through shared projection. Views handle distant summary arrays without detail routes or mutation controls.
+- Lead projection uses `latest_activity_at`, latest status-history `changed_at`, then current-status timestamp; never prefers `updated_at` when activity history exists.
+- Agenda receipt summary now exposes `late_activity_count` for all late activities on owner/date. Collection projection caches hierarchy distance and owner/date receipt summaries.
+- Coordinator and Supervisor exports keep summary values under matching summary headers; distant summaries do not occupy phone, notes, sync, result, or location columns.
+- Added BR-51 regression coverage for projection source, late-count aggregation, Coordinator distant consumers, and existing export contracts.
+
 ## Full-suite result
 
-- `php artisan test --compact`: **1,870 passed, 8 failed**.
-- Failures are baseline/unrelated to Task 4 projection: all 8 are Sales personal workspace markup tests. Their routes use `SalesAgendaController`/personal workspace rendering, not `CoordinatorSalesMonitoringService` or `SalesMonitoringProjectionService`; no projection file changed that path.
+- No parent-branch before/after comparison was captured. Do not label current failures baseline.
+- `php artisan test --compact` — 1,883 tests, 13,419 assertions, 8 failures, 0 errors. Exit 1.
+- Failures remain limited to Sales personal workspace markup/evidence tests. No parent-branch before/after comparison exists; cause remains unclassified, not baseline.
 - Exact failures:
   - `Tests\Feature\SalesAgendaEvidenceTest::test_agenda_records_and_evidence_are_preserved_in_the_direct_workspace`
   - `Tests\Feature\SalesAgendaOnlyWorkspaceTest::test_sales_workspace_renders_receipt_date_context_and_add_plan_action`

@@ -59,7 +59,7 @@ class AdminBranchSalesMonitoringService
             ->paginate(20, ['*'], 'lead_page')->withQueryString();
         $leads->getCollection()->each(function (SalesLead $lead) {
             $lead->setAttribute('latest_activity_status', $lead->latestStatusHistory?->status ?? $lead->current_status);
-            $lead->setAttribute('latest_activity_at', $lead->latestStatusHistory?->changed_at ?? $lead->current_status_changed_at ?? $lead->updated_at);
+            $lead->setAttribute('latest_activity_at', $lead->latestStatusHistory?->changed_at ?? $lead->current_status_changed_at ?? $lead->lead_date);
         });
 
         $agendas = $this->agendaQuery($scope, $period, $salesIds, $filters, $projectId)

@@ -15,7 +15,7 @@ class SupervisorSalesAgendaExport
     use ExcelStyle;
 
     private const HEADERS = [
-        'Tanggal Agenda', 'Koordinator', 'Sales', 'Cabang', 'Proyek', 'Kategori Aktivitas', 'Agenda', 'Lokasi', 'Hasil', 'Status',
+        'Tanggal Agenda', 'Koordinator', 'Sales', 'Cabang', 'Proyek', 'Kategori Aktivitas', 'Agenda', 'Lokasi', 'Hasil', 'Status', 'Ringkasan Aktivitas',
     ];
 
     public static function toBrowser(Collection $agendas, array $coordinatorNamesBySalesId, string $filename): BinaryFileResponse
@@ -44,8 +44,9 @@ class SupervisorSalesAgendaExport
                     null,
                     'Ringkasan agenda',
                     null,
-                    ($agenda['total_minutes'] ?? 0).' / '.($agenda['target_minutes'] ?? 0).' menit; '.($agenda['activity_count'] ?? 0).' kegiatan; '.($agenda['late_activity_count'] ?? 0).' terlambat',
+                    null,
                     $agenda['submitted'] ? 'Terkirim' : 'Belum Terkirim',
+                    ($agenda['total_minutes'] ?? 0).' / '.($agenda['target_minutes'] ?? 0).' menit; '.($agenda['activity_count'] ?? 0).' kegiatan; '.($agenda['late_activity_count'] ?? 0).' terlambat',
                 ];
             } else {
                 $values = [
@@ -68,7 +69,7 @@ class SupervisorSalesAgendaExport
 
         $lastRow = $agendas->count() + 1;
         self::applyStyles($spreadsheet, self::HEADERS, $lastRow, [
-            'A' => 16, 'B' => 24, 'C' => 22, 'D' => 18, 'E' => 24, 'F' => 22, 'G' => 30, 'H' => 24, 'I' => 32, 'J' => 16,
+            'A' => 16, 'B' => 24, 'C' => 22, 'D' => 18, 'E' => 24, 'F' => 22, 'G' => 30, 'H' => 24, 'I' => 32, 'J' => 16, 'K' => 40,
         ]);
         self::addAutoFilter($sheet, self::HEADERS, $lastRow);
         if ($lastRow > 1) {

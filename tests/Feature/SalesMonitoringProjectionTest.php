@@ -7,6 +7,7 @@ use App\Exports\SupervisorSalesLeadExport;
 use App\Models\ContentItem;
 use App\Models\LeadMaster;
 use App\Models\SalesLead;
+use App\Models\SalesLeadStatusHistory;
 use App\Models\User;
 use App\Services\AppSettingResolver;
 use App\Services\ReportingHierarchyService;
@@ -63,9 +64,60 @@ class SalesMonitoringProjectionTest extends TestCase
         $this->assertSame('Sales Jauh', $projected['sales_name']);
         $this->assertSame('Proyek Jauh', $projected['project_name']);
         $this->assertSame('Diskusi', $projected['stage']);
-        $this->assertSame('2026-08-11 10:00:00', $projected['last_active_at']);
+        $this->assertSame('2026-08-10 10:00:00', $projected['last_active_at']);
         $this->assertArrayNotHasKey('phone', $projected);
         $this->assertArrayNotHasKey('notes', $projected);
+    }
+
+    public function test_br51_distant_lead_projection_uses_latest_status_activity_not_updated_at(): void
+    {
+        $this->setHierarchicalMonitoring(true);
+        $viewer = new User(['id' => 1]);
+        $lead = new SalesLead([
+            'sales_user_id' => 2,
+            'customer_name' => 'Lead Aktif',
+            'current_status' => 'discussion',
+            'current_status_changed_at' => '2026-08-01 10:00:00',
+            'updated_at' => '2026-08-11 10:00:00',
+        ]);
+        $lead->setRelation('sales', new User(['id' => 2, 'name' => 'Sales Jauh']));
+        $lead->setRelation('project', new LeadMaster(['project_name' => 'Proyek Jauh']));
+        $lead->setRelation('latestStatusHistory', new SalesLeadStatusHistory([
+            'changed_at' => '2026-08-05 09:00:00',
+        ]));
+
+        $hierarchy = Mockery::mock(ReportingHierarchyService::class);
+        $hierarchy->shouldReceive('distance')->once()->with($viewer, 2)->andReturn(2);
+        $this->app->instance(ReportingHierarchyService::class, $hierarchy);
+        $this->mock(SalesAgendaReceiptService::class);
+
+        $projected = app(SalesMonitoringProjectionService::class)->project($viewer, 2, 'lead', $lead);
+
+        $this->assertSame('2026-08-05 09:00:00', $projected['last_active_at']);
+    }
+
+    public function test_br51_distant_agenda_projection_counts_all_late_activities_for_owner_date(): void
+    {
+        $this->setHierarchicalMonitoring(true);
+        $viewer = new User(['id' => 1]);
+        $owner = new User(['id' => 2, 'name' => 'Sales Jauh']);
+        $first = new ContentItem(['owner_user_id' => 2, 'scheduled_date' => '2026-08-10', 'status' => 'planned']);
+        $first->setRelation('owner', $owner);
+        $second = new ContentItem(['owner_user_id' => 2, 'scheduled_date' => '2026-08-10', 'status' => 'planned']);
+        $second->setRelation('owner', $owner);
+        $hierarchy = Mockery::mock(ReportingHierarchyService::class);
+        $hierarchy->shouldReceive('distance')->once()->with($viewer, 2)->andReturn(2);
+        $this->app->instance(ReportingHierarchyService::class, $hierarchy);
+        $receipt = Mockery::mock(SalesAgendaReceiptService::class);
+        $receipt->shouldReceive('summarize')->once()->andReturn([
+            'normal_minutes' => 120, 'target_minutes' => 420, 'submitted' => false,
+            'agenda_count' => 2, 'late_activity_count' => 2,
+        ]);
+        $this->app->instance(SalesAgendaReceiptService::class, $receipt);
+
+        $projected = app(SalesMonitoringProjectionService::class)->projectCollection($viewer, 'agenda', collect([$first, $second]), 'owner_user_id');
+
+        $this->assertSame([2, 2], $projected->pluck('late_activity_count')->all());
     }
 
     public function test_br51_direct_lead_projection_keeps_existing_model_shape(): void

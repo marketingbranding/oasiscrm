@@ -24,6 +24,9 @@ use Illuminate\Support\Facades\Schema;
     'email',
     'password',
     'role_id',
+    'sales_type',
+    'staff_type',
+    'scope_level',
     'branch_id',
     'organization_unit_id',
     'phone',
@@ -113,6 +116,9 @@ class User extends Authenticatable implements MustVerifyEmail
             'password' => 'hashed',
             'is_active' => 'boolean',
             'must_change_password' => 'boolean',
+            'sales_type' => 'string',
+            'staff_type' => 'string',
+            'scope_level' => 'string',
         ];
     }
 

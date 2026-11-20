@@ -14,6 +14,7 @@ class RoleSeeder extends Seeder
             ['slug' => 'sales_coordinator', 'name' => 'Koordinator Sales', 'description' => 'Koordinator penjualan dengan akses ke data tim.'],
             ['slug' => 'supervisor', 'name' => 'Supervisor', 'description' => 'Supervisor dengan akses tim dan penugasan operasional.'],
             ['slug' => 'manager', 'name' => 'Manager', 'description' => 'Manager dengan akses pemantauan berdasarkan penugasan.'],
+            ['slug' => 'ass_manager', 'name' => 'Ass. Manager', 'description' => 'Ass. Manager dengan akses pemantauan berdasarkan penugasan.', 'authority_level' => 40],
             ['slug' => 'branch_manager', 'name' => 'Branch Manager', 'description' => 'Pimpinan cabang dengan akses operasional tingkat cabang.'],
             ['slug' => 'sas', 'name' => 'Staff Admin Sales', 'description' => 'Administrasi Sales tingkat cabang dengan akses monitoring.'],
             ['slug' => 'sam', 'name' => 'Staff Admin Marketing', 'description' => 'Administrasi Marketing tingkat cabang dengan akses monitoring.'],

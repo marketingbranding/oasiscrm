@@ -10,7 +10,7 @@ PRD sumber kebenaran: `docs/product/PRD_OASIS_CRM_V3.md` versi 3.3 (D30–D33)
 - PRD v3 menjadi sumber perilaku produk.
 - Kode yang dapat dijalankan menjadi sumber perilaku saat ini.
 - Perubahan user worktree yang sudah ada tidak disentuh.
-- WP-0 audit dan pencatatan selesai; perubahan product code WP-1.1/WP-1.2 belum dimulai.
+- WP-0 audit dan pencatatan selesai; WP-1.1/WP-1.2 runtime slice selesai di branch ini.
 - Keputusan register konflik C-01–C-08 disetujui pemilik produk; C-09–C-11 ditambahkan dari review lanjutan.
 - Cutover produksi tidak dieksekusi: mode graf kanonis, pemadaman sinkronisasi Sheet, pembekuan tab Talangan, penghapusan role lama, dan penghapusan kolom lama.
 - Setiap aturan BR yang diimplementasikan nanti wajib punya tes yang menyebut ID BR.
@@ -21,8 +21,8 @@ PRD sumber kebenaran: `docs/product/PRD_OASIS_CRM_V3.md` versi 3.3 (D30–D33)
 | Paket | Fase | Cakupan | Status | BR utama |
 |---|---:|---|---|---|
 | WP-0 | 0 | Audit PRD v3, inventaris hardcode, impact map, baseline, snapshot permission | Selesai audit awal | Semua fase |
-| WP-1.1 | 1 | Pengaturan Aturan: `app_settings`, resolver bertipe, audit perubahan | Belum mulai | Semua BR bertanda ⚙ |
-| WP-1.2 | 1 | Feature flag PRD v3 dan helper pembacaan tunggal | Belum mulai | BR-50–BR-53, risiko transisi |
+| WP-1.1 | 1 | Pengaturan Aturan: `app_settings`, resolver bertipe, audit perubahan | Selesai untuk consumer awal; aturan lain pindah bersama consumer | Semua BR bertanda ⚙ |
+| WP-1.2 | 1 | Feature flag PRD v3 dan helper pembacaan tunggal | Selesai; semua flag default mati | BR-50–BR-53, risiko transisi |
 | WP-1.3 | 1 | Role `ass_manager`, atribut user, migrasi pemetaan role lama | Diblokir sampai register konflik disetujui | §4.1, D6, D21, D25 |
 | WP-1.4 | 1 | Graf organisasi kanonis dan pemantauan berjenjang | Belum mulai; menunggu laporan paritas | BR-50–BR-53 |
 | WP-1.5 | 1 | Jam kerja, target 480, Jumat, akhir pekan, hari libur | Belum mulai | BR-01–BR-09 |

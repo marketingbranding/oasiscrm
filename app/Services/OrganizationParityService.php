@@ -48,21 +48,41 @@ final class OrganizationParityService
         $reportedComparisons = $reportedComparisons->filter(fn (array $comparison): bool => $this->matchesFilter($comparison, $filter));
         $summary = $this->summary($allComparisons, $differences);
         $gate = $this->gate($allComparisons, $summary);
-        if ($filter->userId !== null && $viewers->isEmpty()) {
+        $invalidUserSelection = $filter->userId !== null && $viewers->isEmpty();
+        $invalidBranchSelection = $filter->branchId !== null
+            && ! Branch::query()->whereKey($filter->branchId)->where('is_active', true)->exists();
+        if ($invalidUserSelection || $invalidBranchSelection) {
+            $failures = [];
+            if ($invalidUserSelection) {
+                $failures['invalid_user_selection'] = 1;
+            }
+            if ($invalidBranchSelection) {
+                $failures['invalid_branch_selection'] = 1;
+            }
             $gate = [
                 'status' => 'BLOCKED',
-                'failures' => ['invalid_user_selection' => 1],
+                'failures' => $failures,
                 'diagnostic_only' => true,
             ];
         }
+        $effectiveReadModes = $viewers
+            ->map(fn (User $viewer): string => $this->mode->modeFor($viewer, $filter->branchId ?? $viewer->branch_id))
+            ->unique()
+            ->sort()
+            ->values()
+            ->all();
+        $effectiveReadMode = match (count($effectiveReadModes)) {
+            0 => 'legacy',
+            1 => $effectiveReadModes[0],
+            default => 'mixed',
+        };
 
         return [
             'meta' => [
                 'production_read_source' => 'legacy',
                 'configured_read_mode' => $this->mode->configuredMode(),
-                'effective_read_mode' => $viewers->isEmpty()
-                    ? 'legacy'
-                    : $this->mode->modeFor($viewers->first(), $filter->branchId ?? $viewers->first()->branch_id),
+                'effective_read_mode' => $effectiveReadMode,
+                'effective_read_modes' => $effectiveReadModes,
                 'graph_mode' => config('organization.graph_mode', 'legacy'),
                 'hierarchical_monitoring_enabled' => FeatureFlag::enabled('org_hierarchical_monitoring'),
                 'graph_comparable' => $filter->scope !== 'system-wide',
@@ -83,7 +103,8 @@ final class OrganizationParityService
                     'only_conflicts' => $filter->onlyConflicts,
                 ],
                 'viewers_scanned' => $viewers->count(),
-                'invalid_user_selection' => $filter->userId !== null && $viewers->isEmpty(),
+                'invalid_user_selection' => $invalidUserSelection,
+                'invalid_branch_selection' => $invalidBranchSelection,
             ],
             'comparisons' => $reportedComparisons->values()->all(),
             'summary' => $summary,
@@ -128,11 +149,12 @@ final class OrganizationParityService
         $comparisons = collect($dimensions)->map(function (string $dimension) use ($viewer, $filter): array {
             $legacy = $this->legacyIds($viewer, $dimension, $filter);
             $graph = $this->graphIds($viewer, $dimension, $filter);
-            $onlyLegacy = array_values(array_diff($legacy, $graph));
-            $onlyGraph = array_values(array_diff($graph, $legacy));
             $invalidGraphIds = in_array($dimension, ['reporting_descendants', 'team_members', 'supervisor_coordinator_membership'], true)
                 ? $this->graph->invalidReportingDescendantIds($viewer)
                 : [];
+            $graph = array_values(array_diff($graph, $invalidGraphIds));
+            $onlyLegacy = array_values(array_diff($legacy, $graph));
+            $onlyGraph = array_values(array_diff($graph, $legacy));
             $equivalent = $onlyLegacy === [] && $onlyGraph === [] && $invalidGraphIds === [];
 
             $details = [...$this->details($viewer, $dimension), 'invalid_graph_ids' => $invalidGraphIds];
@@ -246,7 +268,10 @@ final class OrganizationParityService
     {
         $ids = $source === 'legacy'
             ? $this->legacyDescendantIds($viewer)
-            : $this->graph->diagnosticDescendantIds($viewer);
+            : array_values(array_diff(
+                $this->graph->diagnosticDescendantIds($viewer),
+                $this->graph->invalidReportingDescendantIds($viewer),
+            ));
 
         $ids[] = (int) $viewer->id;
 

@@ -1,5 +1,6 @@
 <?php
 
+use App\Support\PermissionCatalog;
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\DB;
@@ -75,19 +76,22 @@ return new class extends Migration
 
             DB::table('roles')->updateOrInsert(['slug' => 'ass_manager'], $assManagerValues);
 
-            if ($managerRoleId && Schema::hasTable('role_permission')) {
+            if ($managerRoleId && Schema::hasTable('role_permission') && Schema::hasTable('permissions')) {
                 $assManagerRoleId = DB::table('roles')->where('slug', 'ass_manager')->value('id');
-                $permissions = DB::table('role_permission')
-                    ->where('role_id', $managerRoleId)
-                    ->get(['permission_id']);
+                $permissionIds = DB::table('permissions')->pluck('id', 'slug');
+                $permissions = collect(PermissionCatalog::rolePermissions()['ass_manager'])
+                    ->map(fn (string $permissionSlug): ?int => $permissionIds[$permissionSlug] ?? null)
+                    ->filter()
+                    ->map(fn (int $permissionId): array => [
+                        'permission_id' => $permissionId,
+                        'role_id' => $assManagerRoleId,
+                        'created_at' => now(),
+                        'updated_at' => now(),
+                    ])
+                    ->all();
 
                 DB::table('role_permission')->where('role_id', $assManagerRoleId)->delete();
-                DB::table('role_permission')->insert($permissions->map(fn (object $permission): array => [
-                    'permission_id' => $permission->permission_id,
-                    'role_id' => $assManagerRoleId,
-                    'created_at' => now(),
-                    'updated_at' => now(),
-                ])->all());
+                DB::table('role_permission')->insert($permissions);
             }
         }
 
@@ -124,18 +128,15 @@ return new class extends Migration
 
         if (Schema::hasTable('roles')) {
             $assManagerRoleId = DB::table('roles')->where('slug', 'ass_manager')->value('id');
-            if ($assManagerRoleId && ! DB::table('users')->where('role_id', $assManagerRoleId)->exists()) {
+            if ($assManagerRoleId
+                && ! DB::table('users')->where('role_id', $assManagerRoleId)->exists()
+                && ! DB::table('role_user')->where('role_id', $assManagerRoleId)->exists()) {
                 DB::table('roles')->where('id', $assManagerRoleId)->delete();
             }
         }
 
-        if (Schema::hasTable('users')) {
-            $columns = collect(['sales_type', 'staff_type', 'scope_level'])
-                ->filter(fn (string $column): bool => Schema::hasColumn('users', $column))
-                ->all();
-            if ($columns !== []) {
-                Schema::table('users', fn (Blueprint $table) => $table->dropColumn($columns));
-            }
-        }
+        // Columns may predate this migration; rollback only removes columns created by this migration when tracked metadata exists.
+        // No tracked metadata exists yet, so preserve all user columns conservatively.
+
     }
 };

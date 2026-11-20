@@ -4,6 +4,8 @@ namespace Tests\Feature;
 
 use App\Models\Role;
 use App\Models\User;
+use App\Support\PermissionCatalog;
+use Database\Seeders\PermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
@@ -30,6 +32,7 @@ class PrdV3RoleAttributesTest extends TestCase
         $this->assertSame('string', (new User)->getCasts()['scope_level']);
         $this->assertSame('Ass. Manager', $assManager->name);
         $this->assertSame($manager->authority_level, $assManager->authority_level);
+        $this->assertSame(PermissionCatalog::rolePermissions()['manager'], PermissionCatalog::rolePermissions()['ass_manager']);
         $this->assertFalse($assManager->is_superadmin);
         $this->assertSame(
             $manager->permissions()->pluck('slug')->sort()->values()->all(),
@@ -39,6 +42,37 @@ class PrdV3RoleAttributesTest extends TestCase
             'version' => null,
             'title' => 'Tambahkan atribut user PRD v3 dan role Ass. Manager',
         ]);
+    }
+
+    public function test_br_ass_manager_permission_mapping_is_canonical_and_survives_reseeding(): void
+    {
+        $managerPermissions = PermissionCatalog::rolePermissions()['manager'];
+        $this->assertSame($managerPermissions, PermissionCatalog::rolePermissions()['ass_manager']);
+
+        $assManager = Role::query()->where('slug', 'ass_manager')->firstOrFail();
+        $assManager->permissions()->detach();
+        $this->seed(PermissionSeeder::class);
+
+        $this->assertSame(
+            collect($managerPermissions)->sort()->values()->all(),
+            $assManager->fresh()->permissions()->pluck('slug')->sort()->values()->all(),
+        );
+    }
+
+    public function test_br_migration_down_preserves_columns_and_supplemental_ass_manager_assignment(): void
+    {
+        $assManager = Role::query()->where('slug', 'ass_manager')->firstOrFail();
+        $user = User::factory()->create();
+        $user->roles()->attach($assManager);
+
+        $migration = require database_path('migrations/'.collect(glob(database_path('migrations/*add_prd_v3_user_attributes_and_ass_manager.php')))->map('basename')->first());
+        $migration->down();
+
+        $this->assertTrue(Schema::hasColumn('users', 'sales_type'));
+        $this->assertTrue(Schema::hasColumn('users', 'staff_type'));
+        $this->assertTrue(Schema::hasColumn('users', 'scope_level'));
+        $this->assertDatabaseHas('roles', ['id' => $assManager->id, 'slug' => 'ass_manager']);
+        $this->assertDatabaseHas('role_user', ['user_id' => $user->id, 'role_id' => $assManager->id]);
     }
 
     public function test_br_role_attributes_backfill_legacy_roles_without_cutover(): void

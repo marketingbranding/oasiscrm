@@ -172,6 +172,16 @@ class PermissionCatalog
         $branchMutableModules = ['work_planner', 'database', 'consumer_progress', 'bridge_fund'];
         $comments = ['comments.view', 'comments.create', 'comments.reply', 'comments.update_own', 'comments.delete_own', 'comments.mention'];
 
+        $manager = [
+            ...$scoped($allModules, ['assigned', 'branch'], ['view', 'export']),
+            ...$scoped(['sales_pocketbook'], ['assigned', 'branch'], ['manage']),
+            'sales_pocketbook.export', 'work_planner.create', 'work_planner.update', 'work_planner.assign',
+            'sales_pocketbook.sync', 'sales_pocketbook.reconcile',
+            'work_planner.export', 'database.view', 'consumer_progress.view', 'bridge_fund.view', 'bridge_fund.export',
+            'sales_targets.view_branch', 'sales_daily_plans.view_branch',
+            ...$comments,
+        ];
+
         return [
             'sales' => [
                 'sales_pocketbook.view_own', 'sales_pocketbook.manage_own', 'sales_pocketbook.export_own',
@@ -200,15 +210,8 @@ class PermissionCatalog
                 'sales_targets.view_branch', 'sales_daily_plans.view_branch',
                 ...$comments,
             ],
-            'manager' => [
-                ...$scoped($allModules, ['assigned', 'branch'], ['view', 'export']),
-                ...$scoped(['sales_pocketbook'], ['assigned', 'branch'], ['manage']),
-                'sales_pocketbook.export', 'work_planner.create', 'work_planner.update', 'work_planner.assign',
-                'sales_pocketbook.sync', 'sales_pocketbook.reconcile',
-                'work_planner.export', 'database.view', 'consumer_progress.view', 'bridge_fund.view', 'bridge_fund.export',
-                'sales_targets.view_branch', 'sales_daily_plans.view_branch',
-                ...$comments,
-            ],
+            'manager' => $manager,
+            'ass_manager' => $manager,
             'branch_manager' => [
                 'users.view', 'users.create', 'users.invite', 'users.update', 'users.reset_password', 'users.export',
                 'users.assign_branches', 'users.assign_projects', 'users.assign_supervisor',

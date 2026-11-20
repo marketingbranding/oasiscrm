@@ -32,3 +32,20 @@
 ## Concerns
 - Ass. Manager permission mapping copies current manager pivot rows during migration. Future permission catalog changes require the existing permission sync path or a later migration.
 - Test manually invokes migration after `RefreshDatabase` to prove backfill; normal fresh migration execution also passed.
+
+# Review Fix Report
+
+## Changes
+- Made migration rollback conservative: `down()` no longer drops `users` columns because guarded `up()` cannot prove column ownership.
+- Added supplemental `role_user` existence check before deleting `ass_manager`, matching existing migration safety pattern.
+- Added canonical `ass_manager` mapping in `PermissionCatalog`, sharing exact Manager permission set.
+- Migration now seeds Ass. Manager permissions from canonical catalog IDs, not arbitrary current manager pivots.
+- Added tests for safe rollback, supplemental assignment preservation, canonical mapping, and PermissionSeeder reseeding.
+
+## Test evidence
+- RED: focused test failed before fixes: missing `PermissionCatalog` `ass_manager` mapping and rollback dropped user columns.
+- GREEN: `php artisan test --compact tests/Feature/PrdV3RoleAttributesTest.php` passed: 4 tests, 30 assertions.
+- Regression: `php artisan test --compact tests/Feature/RolePermissionTest.php` passed: 9 tests, 52 assertions.
+- `vendor/bin/pint --dirty --format agent` passed.
+- `git diff --check` passed.
+

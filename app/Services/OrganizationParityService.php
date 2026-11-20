@@ -7,6 +7,7 @@ use App\Models\LeadMaster;
 use App\Models\OrganizationAssignment;
 use App\Models\SalesCoordinatorSales;
 use App\Models\User;
+use App\Support\FeatureFlag;
 use App\Support\OrganizationParityFilter;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
@@ -27,6 +28,7 @@ final class OrganizationParityService
     public function __construct(
         private readonly WorkspaceAccessService $workspaceAccess,
         private readonly OrganizationGraphService $graph,
+        private readonly OrganizationGraphModeService $mode,
     ) {}
 
     /** @return array<string, mixed> */
@@ -57,7 +59,12 @@ final class OrganizationParityService
         return [
             'meta' => [
                 'production_read_source' => 'legacy',
+                'configured_read_mode' => $this->mode->configuredMode(),
+                'effective_read_mode' => $viewers->isEmpty()
+                    ? 'legacy'
+                    : $this->mode->modeFor($viewers->first(), $filter->branchId ?? $viewers->first()->branch_id),
                 'graph_mode' => config('organization.graph_mode', 'legacy'),
+                'hierarchical_monitoring_enabled' => FeatureFlag::enabled('org_hierarchical_monitoring'),
                 'graph_comparable' => $filter->scope !== 'system-wide',
                 'filters' => [
                     'user_id' => $filter->userId,
@@ -145,6 +152,9 @@ final class OrganizationParityService
             return [
                 'viewer_id' => (int) $viewer->id,
                 'viewer_role' => $viewer->role?->slug,
+                'configured_read_mode' => $this->mode->configuredMode(),
+                'effective_read_mode' => $this->mode->modeFor($viewer, $filter->branchId ?? $viewer->branch_id),
+                'hierarchical_monitoring_enabled' => FeatureFlag::enabled('org_hierarchical_monitoring'),
                 'module' => $filter->module,
                 'scope' => $filter->scope ?? 'all-dimensions',
                 'dimension' => $dimension,

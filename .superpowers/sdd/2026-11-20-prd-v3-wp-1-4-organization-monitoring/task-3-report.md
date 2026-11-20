@@ -89,5 +89,29 @@ Message: `feat: gate hierarchical organization scope`
 
 ## Remaining concerns
 
-- Full suite not run; covering scope, graph mode, and feature-flag tests passed.
+- Full suite not run; covering scope, graph-mode, and feature-flag tests passed.
+- Existing untracked planning/spec files remain untouched.
+
+# Round 3 review fixes
+
+## Changes
+
+- Assigned/project hierarchical visibility now intersects descendant IDs with strict active workspace branch membership.
+- Coordinator `teamIds()` now fails closed for explicit out-of-workspace branch context and uses requested branch for query and authorization filtering.
+- Coordinator hierarchical visibility now requires `team` scope for team data; own-only returns viewer only, unregistered actions return empty.
+- Team cache key now passes requested branch context into `semanticCacheKey()`.
+- Added regression tests for cross-branch assigned descendants, explicit branch boundary, and Coordinator own-only scope.
+
+## Commands and output
+
+- `php artisan test --compact tests/Feature/OrganizationScopeServiceTest.php tests/Feature/OrganizationGraphModeReadsTest.php tests/Unit/FeatureFlagTest.php` — **31 passed, 70 assertions**.
+- `vendor/bin/pint --dirty --format agent` — **passed**.
+- `git diff --check` — **passed**.
+- `$env:CACHE_STORE='array'; php artisan optimize:clear` — **passed**.
+- `php artisan view:cache` — **passed**.
+- `graphify update .` — **passed**, graph rebuilt.
+
+## Remaining concerns
+
+- Full suite not run; covering scope, graph-mode, and feature-flag tests passed.
 - Existing untracked planning/spec files remain untouched.

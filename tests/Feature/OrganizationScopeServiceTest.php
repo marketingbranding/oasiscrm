@@ -163,6 +163,54 @@ class OrganizationScopeServiceTest extends TestCase
         $this->assertNotContains($leak->id, $teamIds);
     }
 
+    public function test_br51_assigned_descendant_requires_workspace_branch_intersection(): void
+    {
+        // BR-51: assigned/project scope cannot leak a descendant across workspace branch boundary.
+        $branch = $this->branch('DPA');
+        $otherBranch = $this->branch('DPB');
+        $viewer = $this->user('manager', $branch);
+        $descendant = $this->user('sales', $otherBranch);
+        $descendant->forceFill(['supervisor_user_id' => $viewer->id])->saveQuietly();
+        $project = LeadMaster::create(['branch_id' => $branch->id, 'project_name' => 'Workspace Assigned', 'is_active' => true]);
+        DB::table('project_user')->insert(['user_id' => $descendant->id, 'project_id' => $project->id, 'is_active' => true]);
+        $this->enableHierarchicalMonitoring();
+
+        $this->assertNotContains($descendant->id, app(OrganizationScopeService::class)->visibleUserIds($viewer, 'sales_pocketbook'));
+    }
+
+    public function test_br51_coordinator_explicit_outside_branch_returns_empty_team(): void
+    {
+        // BR-51: explicit branch context outside workspace fails closed.
+        $branch = $this->branch('CTX');
+        $outside = $this->branch('CTO');
+        $coordinator = $this->user('sales_coordinator', $branch);
+        $sales = $this->user('sales', $outside);
+        DB::table('sales_coordinator_sales')->insert([
+            'coordinator_user_id' => $coordinator->id, 'sales_user_id' => $sales->id, 'is_active' => true,
+            'started_at' => today(), 'created_at' => now(), 'updated_at' => now(),
+        ]);
+
+        $this->assertSame([], app(OrganizationScopeService::class)->teamIds($coordinator, 'sales_pocketbook', $outside->id));
+    }
+
+    public function test_br51_coordinator_own_only_scope_returns_only_self(): void
+    {
+        // BR-51: own-only permission never expands to full team.
+        $branch = $this->branch('OWN');
+        $coordinator = $this->user('sales_coordinator', $branch);
+        $sales = $this->user('sales', $branch);
+        DB::table('sales_coordinator_sales')->insert([
+            'coordinator_user_id' => $coordinator->id, 'sales_user_id' => $sales->id, 'is_active' => true,
+            'started_at' => today(), 'created_at' => now(), 'updated_at' => now(),
+        ]);
+        $this->enableHierarchicalMonitoring();
+        $coordinator->setRelation('role', tap($coordinator->role)->setRelation('permissions', collect([
+            (object) ['slug' => 'sales_pocketbook.view_own'],
+        ])));
+
+        $this->assertSame([$coordinator->id], app(OrganizationScopeService::class)->visibleUserIds($coordinator, 'sales_pocketbook'));
+    }
+
     public function test_br51_coordinator_unregistered_action_fails_closed(): void
     {
         // BR-51: no registered permission or scope yields no Coordinator team data.

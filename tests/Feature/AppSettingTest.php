@@ -6,7 +6,9 @@ use App\Models\ActivityLog;
 use App\Models\Role;
 use App\Models\User;
 use App\Services\AppSettingResolver;
+use App\Services\AppSettingService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Validation\ValidationException;
 use Tests\TestCase;
 
 class AppSettingTest extends TestCase
@@ -81,6 +83,17 @@ class AppSettingTest extends TestCase
 
         $this->assertSame(15, $resolver->int('sales_agenda.reminder_lead_minutes'));
         $this->assertDatabaseCount('activity_log', 0);
+    }
+
+    public function test_service_rejects_out_of_range_values_before_database_write(): void
+    {
+        $superadmin = $this->user('superadmin');
+
+        $this->expectException(ValidationException::class);
+
+        app(AppSettingService::class)->update($superadmin, [
+            'sales_agenda.reminder_lead_minutes' => 0,
+        ]);
     }
 
     public function test_each_changed_setting_writes_audited_value_without_contact_fields(): void

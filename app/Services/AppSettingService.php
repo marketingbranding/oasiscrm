@@ -7,6 +7,7 @@ use App\Models\AppSetting;
 use App\Models\User;
 use App\Support\AppSettingCatalog;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\ValidationException;
 use InvalidArgumentException;
 
@@ -33,6 +34,8 @@ class AppSettingService
         $normalized = $this->normalizeValues($values);
 
         DB::transaction(function () use ($actor, $normalized): void {
+            $changedKeys = [];
+
             foreach ($normalized as $key => $value) {
                 $definition = AppSettingCatalog::definition($key);
                 $setting = AppSetting::query()->firstOrNew(['key' => $key]);
@@ -63,8 +66,14 @@ class AppSettingService
                     ],
                 ]);
 
-                $this->resolver->forget($key);
+                $changedKeys[] = $key;
             }
+
+            DB::afterCommit(function () use ($changedKeys): void {
+                foreach ($changedKeys as $key) {
+                    $this->resolver->forget($key);
+                }
+            });
         });
     }
 
@@ -93,7 +102,7 @@ class AppSettingService
         $normalized = [];
         foreach ($values as $key => $value) {
             $definition = AppSettingCatalog::definition($key);
-            $normalized[$key] = match ($definition['type']) {
+            $normalizedValue = match ($definition['type']) {
                 'integer' => is_int($value) || (is_string($value) && filter_var($value, FILTER_VALIDATE_INT) !== false)
                     ? (int) $value
                     : throw ValidationException::withMessages([$key => 'Nilai harus berupa bilangan bulat.']),
@@ -107,6 +116,9 @@ class AppSettingService
                 'list' => is_array($value) && array_is_list($value) ? $value : throw ValidationException::withMessages([$key => 'Nilai harus berupa daftar.']),
                 default => throw new InvalidArgumentException("Unsupported application setting type [{$definition['type']}]."),
             };
+
+            Validator::make(['value' => $normalizedValue], ['value' => $definition['rules']])->validate();
+            $normalized[$key] = $normalizedValue;
         }
 
         return $normalized;

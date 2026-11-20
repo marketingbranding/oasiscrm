@@ -19,6 +19,7 @@ class CoordinatorSalesMonitoringService
         private readonly OrganizationScopeService $organizationScope,
         private readonly WorkspaceAccessService $workspaceAccess,
         private readonly SalesAgendaReceiptService $receiptService,
+        private readonly SalesMonitoringProjectionService $projection,
     ) {}
 
     public function canViewAgenda(User $actor, ContentItem $agenda): bool
@@ -64,13 +65,13 @@ class CoordinatorSalesMonitoringService
             ->orderBy('start_time')
             ->get();
 
-        return $agendas->groupBy('owner_user_id')->map(function ($items) {
+        return $agendas->groupBy('owner_user_id')->map(function ($items) use ($actor) {
             $items->each(function (ContentItem $agenda): void {
                 $agenda->setAttribute('missing_result', blank($agenda->activity_result));
                 $agenda->setAttribute('missing_evidence', $agenda->evidence->whereNull('purged_at')->isEmpty());
             });
 
-            return $items;
+            return $this->projection->projectCollection($actor, 'agenda', $items, 'owner_user_id');
         })->sortKeys();
     }
 
@@ -90,7 +91,8 @@ class CoordinatorSalesMonitoringService
             ->with(['evidence', 'rescheduledFrom:id,scheduled_date'])
             ->orderBy('start_time')
             ->get()
-            ->groupBy('owner_user_id');
+            ->groupBy('owner_user_id')
+            ->map(fn ($items) => $this->projection->projectCollection($actor, 'agenda', $items, 'owner_user_id'));
         $incompleteBySales = $this->weeklyIncompleteAgendas($actor, $date);
         $cards = $salesUsers->map(function (User $sales) use ($date, $incompleteBySales, $agendaItems): array {
             $summary = $this->receiptService->summarize($sales, $date);
@@ -145,11 +147,13 @@ class CoordinatorSalesMonitoringService
             ];
         });
 
+        $selectedAgendas = $agendas->filter(fn (ContentItem $agenda): bool => $agenda->scheduled_date?->isSameDay($date))->values();
+
         return [
             'sales' => $sales,
             'selected_date' => $date,
             'week' => $days,
-            'agendas' => $agendas->filter(fn (ContentItem $agenda): bool => $agenda->scheduled_date?->isSameDay($date))->values(),
+            'agendas' => $this->projection->projectCollection($actor, 'agenda', $selectedAgendas, 'owner_user_id'),
             'backlog' => $agendas->filter(fn (ContentItem $agenda): bool => $agenda->scheduled_date?->lt($date)
                 && ! in_array($agenda->status, ['cancelled', 'rescheduled'], true)
                 && (blank($agenda->activity_result) || $agenda->evidence->whereNull('purged_at')->isEmpty()))->values(),
@@ -209,6 +213,20 @@ class CoordinatorSalesMonitoringService
             ->with(['branch:id,name', 'project:id,project_name', 'sales:id,name'])
             ->latest('updated_at')->get();
 
+        $leadsCollection = $paginate
+            ? $leads->paginate(20, ['*'], 'lead_page')->withQueryString()
+            : $leads->get();
+        $agendasCollection = $paginate
+            ? $agendas->paginate(15, ['*'], 'agenda_page')->withQueryString()
+            : $agendas->get();
+        if ($paginate) {
+            $leadsCollection->setCollection($this->projection->projectCollection($actor, 'lead', $leadsCollection->getCollection(), 'sales_user_id'));
+            $agendasCollection->setCollection($this->projection->projectCollection($actor, 'agenda', $agendasCollection->getCollection(), 'owner_user_id'));
+        } else {
+            $leadsCollection = $this->projection->projectCollection($actor, 'lead', $leadsCollection, 'sales_user_id');
+            $agendasCollection = $this->projection->projectCollection($actor, 'agenda', $agendasCollection, 'owner_user_id');
+        }
+
         $result = [
             'period' => $period,
             'filters' => [
@@ -229,15 +247,16 @@ class CoordinatorSalesMonitoringService
                 'utj' => $salesRows->sum('utj'),
             ],
             'salesRows' => $salesRows,
-            'leads' => $paginate
-                ? $leads->paginate(20, ['*'], 'lead_page')->withQueryString()
-                : $leads->get(),
-            'agendas' => $paginate
-                ? $agendas->paginate(15, ['*'], 'agenda_page')->withQueryString()
-                : $agendas->get(),
+            'leads' => $leadsCollection,
+            'agendas' => $agendasCollection,
         ];
         if (! $paginate) {
-            $result['exportData'] = (clone $leads)->reorder('lead_date')->orderBy('id')->get();
+            $result['exportData'] = $this->projection->projectCollection(
+                $actor,
+                'lead',
+                (clone $leads)->reorder('lead_date')->orderBy('id')->get(),
+                'sales_user_id',
+            );
         }
 
         return $result;

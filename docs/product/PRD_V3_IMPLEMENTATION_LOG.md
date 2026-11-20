@@ -245,7 +245,7 @@ Status: desain disetujui; irisan 1.4a–1.4f sedang berjalan. Tidak ada cutover 
 
 #### WP-1.4 Task 4 — Inventaris consumer monitoring Sales (1.4c–1.4d)
 
-Status: selesai minimal confirmed migration. Flag `org_hierarchical_monitoring` tetap default-off; tidak ada cutover produksi.
+Status: selesai 1.4c–1.4d. Flag `org_hierarchical_monitoring` tetap default-off; tidak ada cutover produksi.
 
 - Lead Tim / monitoring coordinator: `CoordinatorSalesMonitoringService` dipakai oleh `CoordinatorSalesLeadWorkspaceController` pada route `sales-pocketbook.index`; `resolve`, `todayWorkspace`, `salesDetail`, dan `agendaBase` memakai irisan `OrganizationScopeService` + `WorkspaceAccessService` + `SalesTeamScopeService`. Filter `sales_id` forged diuji lewat direct URL dan ditolak (BR-51).
 - Supervisor/Admin Branch monitoring: `SupervisorSalesMonitoringService` dan `AdminBranchSalesMonitoringService` sudah memakai `OrganizationScopeService` untuk branch/project/user scope. Tidak diubah.
@@ -253,11 +253,14 @@ Status: selesai minimal confirmed migration. Flag `org_hierarchical_monitoring` 
 - Lead options AJAX: `SalesLeadOptionController` sebelumnya hanya memeriksa workspace branch. Saat flag aktif, sekarang memeriksa `OrganizationScopeService::branchIds($user, 'sales_pocketbook', 'view')`; saat flag mati, jalur lama tetap. Direct AJAX branch luar scope diuji (BR-51).
 - Export: coordinator export memanggil `CoordinatorSalesMonitoringService::resolve(..., false)`; supervisor export memakai monitoring service. Tidak ada consumer baru.
 - Notifikasi/deep link dan komentar: `NotificationController`, `CommentableAccessService`, dan `CommentMentionService` memakai policy/shared scope; tidak diubah.
-- Team history route/service: tidak ditemukan. Tidak diinventasikan atau diinventalkan.
-- Sales monitoring AI tool: tidak ditemukan di `AiToolRegistry`; tidak ditambahkan.
+- Team history route/service: tidak ditemukan. Team History tetap absent; tidak diinventasikan atau diinventalkan.
+- Sales monitoring AI tool: tidak ada tool khusus pemantauan Sales di `AiToolRegistry` dan tidak ditambahkan. `AiToolRegistry` tetap memiliki 8 generic read-only tools.
 - Konsumen, Dana Talangan, Expenses: tidak dipindah ke distant-summary mode; consumer yang ada tidak ditambah.
-- Distant summary: tidak ditambah karena belum ada consumer team-history/AI/summary yang dapat dimigrasikan tanpa mengarang interface.
-- Changelog: tidak ditambah; perubahan berada di bawah feature flag dan Task 3 sudah memiliki changelog untuk scope behavior.
+- 1.4d distant-summary projection implemented: `SalesMonitoringProjectionService` menerima viewer, owner ID, type, dan row; saat flag mati atau jarak 0–1, mengembalikan model lama. Saat flag hidup dan jarak >1, mengembalikan allowlist Lead/agenda tanpa model penuh. `ReportingHierarchyService::distance` memakai sumber legacy/shadow/graph sesuai mode. Coordinator, Supervisor, dan Admin Branch memakai hasil projection identik untuk layar dan export.
+- Forbidden distant fields tested: phone, notes, agenda title, location, activity result, evidence. Direct URL/export boundary tests remain in consumer suites.
+- Exact notification/deep-link coverage: `UniversalCommentNotificationTest::test_br51_sales_notification_deep_link_rechecks_target_scope`, `test_open_is_recipient_only_marks_read_redirects_with_fragment_and_reauthorizes`, dan `test_notification_service_skips_inactive_and_inaccessible_recipients`; coverage menguji recipient-only access, target reauthorization, scope rejection, read state, redirect fragment, dan recipient filtering.
+- Full-suite result: `php artisan test --compact` menghasilkan 1,870 passed / 8 failed. Delapan failure baseline/unrelated pada personal Sales workspace markup; route memakai `SalesAgendaController`, bukan monitoring projection. Daftar exact test ada di Task 4 report.
+- Changelog: migrasi idempoten `2026_11_21_000002_add_sales_monitoring_projection_changelog.php` menambahkan satu entri perubahan ringkasan pemantauan, default flag tetap mati.
 
 
 ### WP-1.5 — Kalender kerja

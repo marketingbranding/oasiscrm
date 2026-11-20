@@ -27,19 +27,41 @@ class SupervisorSalesAgendaExport
 
         foreach ($agendas->values() as $index => $agenda) {
             $row = $index + 2;
-            $sheet->setCellValue(self::cell(1, $row), ExcelDate::dateTimeToExcel($agenda->scheduled_date));
+            if (! is_array($agenda)) {
+                $sheet->setCellValue(self::cell(1, $row), ExcelDate::dateTimeToExcel($agenda->scheduled_date));
+            }
 
-            foreach ([
-                self::coordinatorNames($coordinatorNamesBySalesId[$agenda->owner_user_id] ?? []),
-                $agenda->owner?->name,
-                $agenda->branch?->name,
-                $agenda->salesProject?->project_name ?? $agenda->project_name,
-                $agenda->sales_activity_category,
-                $agenda->title,
-                $agenda->location,
-                $agenda->activity_result,
-                $agenda->status,
-            ] as $column => $value) {
+            if (is_array($agenda)) {
+                $agendaDate = $agenda['date'] ?? null;
+                if ($agendaDate !== null) {
+                    $sheet->setCellValue(self::cell(1, $row), ExcelDate::dateTimeToExcel(new \DateTimeImmutable($agendaDate)));
+                }
+                $values = [
+                    null,
+                    $agenda['sales_name'] ?? null,
+                    null,
+                    $agenda['project_name'] ?? null,
+                    null,
+                    'Ringkasan agenda',
+                    null,
+                    ($agenda['total_minutes'] ?? 0).' / '.($agenda['target_minutes'] ?? 0).' menit; '.($agenda['activity_count'] ?? 0).' kegiatan; '.($agenda['late_activity_count'] ?? 0).' terlambat',
+                    $agenda['submitted'] ? 'Terkirim' : 'Belum Terkirim',
+                ];
+            } else {
+                $values = [
+                    self::coordinatorNames($coordinatorNamesBySalesId[$agenda->owner_user_id] ?? []),
+                    $agenda->owner?->name,
+                    $agenda->branch?->name,
+                    $agenda->salesProject?->project_name ?? $agenda->project_name,
+                    $agenda->sales_activity_category,
+                    $agenda->title,
+                    $agenda->location,
+                    $agenda->activity_result,
+                    $agenda->status,
+                ];
+            }
+
+            foreach ($values as $column => $value) {
                 $sheet->setCellValueExplicit(self::cell($column + 2, $row), $value === null ? '' : (string) $value, DataType::TYPE_STRING);
             }
         }

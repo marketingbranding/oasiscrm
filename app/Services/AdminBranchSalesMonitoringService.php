@@ -16,6 +16,7 @@ class AdminBranchSalesMonitoringService
     public function __construct(
         private readonly OrganizationScopeService $organizationScope,
         private readonly WorkspaceAccessService $workspaceAccess,
+        private readonly SalesMonitoringProjectionService $projection,
     ) {}
 
     public function resolve(User $actor, array $filters): array
@@ -65,6 +66,9 @@ class AdminBranchSalesMonitoringService
             ->with(['owner:id,name', 'salesProject:id,project_name', 'evidence'])
             ->orderByDesc('scheduled_date')->orderByDesc('id')
             ->paginate(20, ['*'], 'agenda_page')->withQueryString();
+
+        $leads->setCollection($this->projection->projectCollection($actor, 'lead', $leads->getCollection(), 'sales_user_id'));
+        $agendas->setCollection($this->projection->projectCollection($actor, 'agenda', $agendas->getCollection(), 'owner_user_id'));
 
         return [
             'tab' => $filters['tab'] ?? 'leads',

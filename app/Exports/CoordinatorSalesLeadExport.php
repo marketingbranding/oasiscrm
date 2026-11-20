@@ -28,26 +28,47 @@ class CoordinatorSalesLeadExport
 
         foreach ($leads->values() as $index => $lead) {
             $row = $index + 2;
-            $sheet->setCellValue(self::cell(1, $row), ExcelDate::dateTimeToExcel($lead->lead_date));
-            foreach ([
-                $lead->customer_name,
-                $lead->phone,
-                $lead->effective_source,
-                $lead->platform,
-                $lead->campaign_name ?: $lead->campaign_id,
-                $lead->id_promo,
-                $lead->sales?->name,
-                $lead->branch?->name,
-                $lead->project?->project_name,
-                $lead->current_status?->label(),
-                $lead->notes,
-                match ($lead->sync_status) {
-                    'synced' => 'Tersinkron',
-                    'pending_update' => 'Perlu Sync Ulang',
-                    'sync_failed' => 'Sync Gagal',
-                    default => 'Belum Sync',
-                },
-            ] as $column => $value) {
+            if (is_array($lead)) {
+                if (($lead['lead_date'] ?? null) !== null) {
+                    $sheet->setCellValue(self::cell(1, $row), ExcelDate::dateTimeToExcel(new \DateTimeImmutable((string) $lead['lead_date'])));
+                }
+                $values = [
+                    $lead['name'] ?? null,
+                    null,
+                    null,
+                    $lead['stage'] ?? null,
+                    null,
+                    null,
+                    $lead['sales_name'] ?? null,
+                    null,
+                    $lead['project_name'] ?? null,
+                    $lead['stage'] ?? null,
+                    $lead['last_active_at'] ?? null,
+                    null,
+                ];
+            } else {
+                $sheet->setCellValue(self::cell(1, $row), ExcelDate::dateTimeToExcel($lead->lead_date));
+                $values = [
+                    $lead->customer_name,
+                    $lead->phone,
+                    $lead->effective_source,
+                    $lead->platform,
+                    $lead->campaign_name ?: $lead->campaign_id,
+                    $lead->id_promo,
+                    $lead->sales?->name,
+                    $lead->branch?->name,
+                    $lead->project?->project_name,
+                    $lead->current_status?->label(),
+                    $lead->notes,
+                    match ($lead->sync_status) {
+                        'synced' => 'Tersinkron',
+                        'pending_update' => 'Perlu Sync Ulang',
+                        'sync_failed' => 'Sync Gagal',
+                        default => 'Belum Sync',
+                    },
+                ];
+            }
+            foreach ($values as $column => $value) {
                 $sheet->setCellValueExplicit(self::cell($column + 2, $row), $value === null ? '' : (string) $value, DataType::TYPE_STRING);
             }
         }

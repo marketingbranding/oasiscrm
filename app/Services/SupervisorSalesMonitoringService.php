@@ -8,6 +8,8 @@ use App\Models\SalesLead;
 use App\Models\User;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Pagination\LengthAwarePaginator;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
 class SupervisorSalesMonitoringService
@@ -16,6 +18,7 @@ class SupervisorSalesMonitoringService
         private readonly OrganizationScopeService $organizationScope,
         private readonly WorkspaceAccessService $workspaceAccess,
         private readonly SalesTeamScopeService $salesTeamScope,
+        private readonly SalesMonitoringProjectionService $projection,
     ) {}
 
     public function isSupervisor(User $user): bool
@@ -102,6 +105,19 @@ class SupervisorSalesMonitoringService
             ? $this->leadBase($salesIds, $period, $scope)->with(['sales:id,name', 'branch:id,name', 'project:id,project_name', 'leadSource:id,name'])->orderByDesc('lead_date')->orderByDesc('id')
             : null;
 
+        $agendaCollection = $agendas ? ($paginate ? $agendas->paginate(15, ['*'], 'agenda_page')->withQueryString() : $agendas->get()) : ($paginate ? null : collect());
+        $leadCollection = $leads ? ($paginate ? $leads->paginate(15, ['*'], 'lead_page')->withQueryString() : $leads->get()) : ($paginate ? null : collect());
+        if ($agendaCollection instanceof LengthAwarePaginator) {
+            $agendaCollection->setCollection($this->projection->projectCollection($actor, 'agenda', $agendaCollection->getCollection(), 'owner_user_id'));
+        } elseif ($agendaCollection instanceof Collection) {
+            $agendaCollection = $this->projection->projectCollection($actor, 'agenda', $agendaCollection, 'owner_user_id');
+        }
+        if ($leadCollection instanceof LengthAwarePaginator) {
+            $leadCollection->setCollection($this->projection->projectCollection($actor, 'lead', $leadCollection->getCollection(), 'sales_user_id'));
+        } elseif ($leadCollection instanceof Collection) {
+            $leadCollection = $this->projection->projectCollection($actor, 'lead', $leadCollection, 'sales_user_id');
+        }
+
         return [
             'period' => $period,
             'filters' => ['period' => $period['key'], 'date_from' => $period['from']->toDateString(), 'date_to' => $period['to']->toDateString(), 'coordinator_id' => $coordinatorId, 'sales_id' => $salesId],
@@ -125,8 +141,8 @@ class SupervisorSalesMonitoringService
             'coordinatorRows' => $coordinatorRows,
             'salesRows' => $salesRows,
             'coordinatorNamesBySalesId' => $team['coordinator_names_by_sales_id'],
-            'agendas' => $agendas ? ($paginate ? $agendas->paginate(15, ['*'], 'agenda_page')->withQueryString() : $agendas->get()) : ($paginate ? null : collect()),
-            'leads' => $leads ? ($paginate ? $leads->paginate(15, ['*'], 'lead_page')->withQueryString() : $leads->get()) : ($paginate ? null : collect()),
+            'agendas' => $agendaCollection,
+            'leads' => $leadCollection,
         ];
     }
 

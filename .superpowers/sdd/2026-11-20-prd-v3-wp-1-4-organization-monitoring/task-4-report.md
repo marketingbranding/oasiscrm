@@ -2,7 +2,7 @@
 
 ## Status
 
-Selesai minimal confirmed migration. Flag `org_hierarchical_monitoring` tetap default-off. Tidak ada cutover produksi.
+Selesai untuk 1.4c–1.4d. Projection 1.4d implemented. Flag `org_hierarchical_monitoring` tetap default-off. Tidak ada cutover produksi.
 
 ## Changes
 
@@ -10,6 +10,17 @@ Selesai minimal confirmed migration. Flag `org_hierarchical_monitoring` tetap de
 - Tambah direct AJAX boundary test untuk branch luar scope (BR-51).
 - Tambah direct coordinator monitoring URL test untuk forged `sales_id` (BR-51). Existing service guard tetap dipakai.
 - Agenda personal tidak diubah. Baseline flag-off tidak menghasilkan foreign agenda visibility dengan fixture valid; controller sudah memakai owner, branch, dan project scope.
+- Round 1 fix: `SalesMonitoringProjectionService` adds one internal projection contract. Flag-off and direct descendants keep existing Eloquent model shape. Distant descendants use Lead allowlist (name, owner Sales, project, stage, last active date) and agenda allowlist (Sales name, date, total/target minutes, send status, activity count, late count). Full distant models never reach Blade/export.
+- `ReportingHierarchyService::distance` follows legacy/shadow/graph source semantics. Coordinator, Supervisor, and Admin Branch monitoring paths project same datasets used by screen and Supervisor/Coordinator exports. Team history remains absent; no route/service invented.
+- Distant leakage tests cover phone, notes, agenda title, location, activity result, and evidence. Export projection parity tested. Existing notification/deep-link tests explicitly recheck recipient and comment scope; no notification path changed.
+- AI inventory corrected: `AiToolRegistry` has 8 read-only tools; no Sales-monitoring-specific tool exists and none added.
+
+## Round 1 fix verification
+
+- `php artisan test --compact tests/Feature/SalesMonitoringProjectionTest.php tests/Feature/SupervisorSalesPocketbookTest.php tests/Feature/SupervisorSalesPocketbookExportTest.php tests/Feature/CoordinatorSalesMonitoringServiceTest.php tests/Feature/AdminBranchSalesMonitoringTest.php` — 55 passed, 358 assertions before final export-test extension; projection suite latest 4 passed, 35 assertions.
+- `vendor/bin/pint --dirty --format agent` — passed.
+- `git diff --check` — passed.
+- `php artisan view:cache` — passed.
 
 ## Consumer inventory
 
@@ -46,7 +57,26 @@ Selesai minimal confirmed migration. Flag `org_hierarchical_monitoring` tetap de
 
 - No new permission or authorization layer.
 - No BR-53 grants.
-- No team-history route/service.
-- No AI monitoring tool.
-- No consumer/distant-summary implementation.
+- No team-history route/service; Team History remains absent.
+- No Sales-monitoring-specific AI tool. `AiToolRegistry` retains 8 generic read-only tools.
 - No agenda controller change without a reproducing RED test.
+
+## Exact notification/deep-link coverage
+
+- `UniversalCommentNotificationTest::test_br51_sales_notification_deep_link_rechecks_target_scope` verifies direct notification deep links reauthorize Sales target scope and redirect unauthorized recipients to the dashboard.
+- `UniversalCommentNotificationTest::test_open_is_recipient_only_marks_read_redirects_with_fragment_and_reauthorizes` verifies recipient-only access, target reauthorization, read state, and comment fragment redirect.
+- `UniversalCommentNotificationTest::test_notification_service_skips_inactive_and_inaccessible_recipients` verifies inaccessible recipients receive no notification.
+
+## Full-suite result
+
+- `php artisan test --compact`: **1,870 passed, 8 failed**.
+- Failures are baseline/unrelated to Task 4 projection: all 8 are Sales personal workspace markup tests. Their routes use `SalesAgendaController`/personal workspace rendering, not `CoordinatorSalesMonitoringService` or `SalesMonitoringProjectionService`; no projection file changed that path.
+- Exact failures:
+  - `Tests\Feature\SalesAgendaEvidenceTest::test_agenda_records_and_evidence_are_preserved_in_the_direct_workspace`
+  - `Tests\Feature\SalesAgendaOnlyWorkspaceTest::test_sales_workspace_renders_receipt_date_context_and_add_plan_action`
+  - `Tests\Feature\SalesAgendaWorkspaceInteractionMarkupTest::test_mobile_modal_transitions_cover_shared_modal_and_agenda_sheet`
+  - `Tests\Feature\SalesAgendaWorkspaceInteractionMarkupTest::test_draft_receipt_exposes_edit_delete_actions_and_submitted_receipt_hides_them`
+  - `Tests\Feature\SalesAgendaWorkspaceRenderTest::test_receipt_heading_matches_today_tomorrow_and_other_planned_dates`
+  - `Tests\Feature\SalesAgendaWorkspaceRenderTest::test_existing_draft_shows_a_resume_action_and_resume_query_opens_receipt`
+  - `Tests\Feature\SalesAgendaWorkspaceRenderTest::test_populated_receipt_keeps_weekly_navigation_with_exact_date_links`
+  - `Tests\Feature\SalesAgendaWorkspaceRenderTest::test_today_navigation_marks_only_the_selected_week_day_as_active`

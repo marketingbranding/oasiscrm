@@ -4,6 +4,7 @@ namespace App\Models;
 
 use App\Enums\AccountStatus;
 use App\Enums\SalesCategory;
+use App\Support\PermissionCatalog;
 use Database\Factories\UserFactory;
 use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
@@ -319,6 +320,13 @@ class User extends Authenticatable implements MustVerifyEmail
 
         if ($this->isSuperadmin()) {
             return true;
+        }
+
+        if ($this->hasPrimaryRole('staff')) {
+            $staffTypePermissions = PermissionCatalog::staffTypePermissions();
+
+            return isset($staffTypePermissions[$this->staff_type])
+                && in_array($permission, $staffTypePermissions[$this->staff_type], true);
         }
 
         // V1 intentionally has no per-user overrides or supplemental-role grants.

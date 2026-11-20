@@ -158,6 +158,37 @@ class PermissionCatalog
         ];
     }
 
+    /** @return array<string, array<int, string>> */
+    public static function staffTypePermissions(): array
+    {
+        return [
+            'admin_cabang' => [
+                'bridge_fund.export', 'bridge_fund.export_branch', 'bridge_fund.manage', 'bridge_fund.manage_branch', 'bridge_fund.sync_branch', 'bridge_fund.view', 'bridge_fund.view_branch',
+                'comments.create', 'comments.delete_own', 'comments.mention', 'comments.reply', 'comments.update_own', 'comments.view',
+                'consumer_progress.export_branch', 'consumer_progress.manage_branch', 'consumer_progress.sync', 'consumer_progress.sync_branch', 'consumer_progress.view', 'consumer_progress.view_branch',
+                'database.edit', 'database.export_branch', 'database.manage_branch', 'database.sync', 'database.sync_branch', 'database.view', 'database.view_branch',
+                'promo.manage',
+                'sales_pocketbook.export', 'sales_pocketbook.export_branch', 'sales_pocketbook.reconcile', 'sales_pocketbook.sync', 'sales_pocketbook.view_branch',
+                'users.assign_branches', 'users.assign_projects', 'users.assign_supervisor', 'users.create', 'users.invite', 'users.propose_sales', 'users.reset_password', 'users.update', 'users.view',
+                'work_planner.assign', 'work_planner.create', 'work_planner.export', 'work_planner.export_branch', 'work_planner.manage_branch', 'work_planner.update', 'work_planner.view_branch',
+            ],
+            'sales' => [
+                'sales_daily_plans.view_branch', 'sales_pocketbook.export', 'sales_pocketbook.export_branch', 'sales_pocketbook.view_branch', 'sales_targets.view_branch',
+            ],
+            'marketing' => [
+                'sales_daily_plans.view_branch', 'sales_pocketbook.export', 'sales_pocketbook.export_branch', 'sales_pocketbook.view_branch', 'sales_targets.view_branch',
+            ],
+            'umum' => [
+                'bridge_fund.manage', 'bridge_fund.manage_assigned', 'bridge_fund.view', 'bridge_fund.view_assigned',
+                'comments.create', 'comments.delete_own', 'comments.mention', 'comments.reply', 'comments.update_own', 'comments.view',
+                'consumer_progress.manage_assigned', 'consumer_progress.view', 'consumer_progress.view_assigned',
+                'database.edit', 'database.manage_assigned', 'database.view', 'database.view_assigned',
+                'expenses.manage_assigned', 'expenses.view_assigned',
+                'work_planner.create', 'work_planner.manage_own', 'work_planner.update', 'work_planner.view_own',
+            ],
+        ];
+    }
+
     public static function rolePermissions(): array
     {
         $scoped = fn (array $modules, array $scopes, array $actions): array => collect($modules)

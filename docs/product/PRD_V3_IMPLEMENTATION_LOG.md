@@ -28,7 +28,7 @@ PRD sumber kebenaran: `docs/product/PRD_OASIS_CRM_V3.md` versi 3.3 (D30–D33)
 | WP-1.1 | 1 | Pengaturan Aturan: `app_settings`, resolver bertipe, audit perubahan | Selesai untuk consumer awal; aturan lain pindah bersama consumer. Commits `b2c351c`, `4ee24eb`, `fe565dd` | BR-06; semua BR bertanda ⚙ pada consumer terkait |
 | WP-1.2 | 1 | Feature flag PRD v3 dan helper pembacaan tunggal | Selesai; four registered flags default mati. Commit `47526ee` | BR-50–BR-53, risiko transisi |
 | WP-1.3 | 1 | Role `ass_manager`, atribut user, migrasi pemetaan role lama | Selesai untuk fondasi role, atribut, parity, dan command dry-run; form/import/legacy-check ditunda | §4.1, BR-21, BR-25, D6, D21, D25; D32 ditunda |
-| WP-1.4 | 1 | Graf organisasi kanonis dan pemantauan berjenjang | Belum mulai; menunggu laporan paritas | BR-50–BR-53 |
+| WP-1.4 | 1 | Graf organisasi kanonis dan pemantauan berjenjang | Desain disetujui; irisan 1.4a–1.4f sedang berjalan | BR-50–BR-53 |
 | WP-1.5 | 1 | Jam kerja, target 480, Jumat, akhir pekan, hari libur | Belum mulai | BR-01–BR-09 |
 | WP-1.6 | 1 | Tahap Lead Baru–UTJ, Gugur, kunci setelah UTJ | Belum mulai | BR-10–BR-16 |
 | WP-1.7 | 1 | Status/event transaksi, alasan Mundur, NUP baru | Belum mulai | BR-20–BR-36 |
@@ -222,6 +222,19 @@ Status: selesai untuk fondasi role, atribut, permission parity, dan command migr
 - Test: flag defaults, enabled/disabled branches, direct endpoint behavior, no production cutover.
 
 ### WP-1.4 — Graf organisasi dan pemantauan berjenjang
+
+Status: desain disetujui; irisan 1.4a–1.4f sedang berjalan. Tidak ada cutover produksi atau backfill write oleh agent.
+
+#### Keputusan WP-1.4
+
+- 1.4e read-only hanya berlaku untuk data tim Sales: Lead, rencana harian/agenda, dan riwayat tim. Modul lain tetap mengikuti permission/policy saat ini.
+- `canEditHistoricalOwnedLead` untuk Branch Manager dan Admin Cabang tetap berlaku sampai WP-2.1 Alih Lead; keputusan ini wajib ditinjau ulang pada WP-2.1.
+- `scope_level=pusat` tidak menambah permission. Untuk `manager`, `ass_manager`, dan `supervisor`, atribut ini hanya memperluas scope permission `*_branch` ke semua cabang. Permission `*_own` dan `*_assigned` tidak diperluas.
+- Ringkasan turunan jauh hanya berlaku untuk data tim Sales. Allowlist Lead: nama Lead, Sales pemilik, proyek, tahap, dan tanggal aktif terakhir. Allowlist rencana harian/agenda: nama Sales, tanggal, total menit/target, status kirim, jumlah kegiatan, dan jumlah kegiatan terlambat. Allowlist riwayat tim: waktu, jenis perubahan, pelaku, dan objek. Nilai sebelum/sesudah tidak ditampilkan.
+- Jarak mengikuti edge `REPORTS_TO` yang saat ini efektif, lalu disaring dengan scope workspace. Pengecualian: `scope_level=pusat` untuk `manager`, `ass_manager`, dan `supervisor` tidak dibatasi cabang sesuai BR-52.
+- 1.4a hanya menghasilkan laporan parity/dry-run read-only. Laporan harus machine-readable dan tidak mengaktifkan source mode. Pemilik produk mengoperasikan `organization.graph_mode`; agent tidak melakukan cutover produksi atau backfill write.
+- D33, yaitu dry-run salinan production yang ditinjau pemilik, masih pending. Jangan menyatakan cutover produksi sudah dilakukan.
+- `canEditHistoricalOwnedLead` dicatat sebagai agenda review WP-2.1.
 
 - Route/controller: organization workspace, supervisor/coordinator monitoring, dashboard leadership.
 - Service utama: `OrganizationGraphService`, `OrganizationScopeService`, `ReportingHierarchyService`, `SalesTeamScopeService`, `OrganizationGraphModeService`, `OrganizationCutoverHealthService`.

@@ -65,7 +65,7 @@ class NavigationService
                 ! $isSales && $user->hasPermission('feedback_reports.review')
                     ? $this->item('Review Laporan', 'feedback-reports.index', 'report', 'reports', ['feedback-reports.index', 'feedback-reports.show', 'feedback-reports.review'], $routeName, 'feedback_reports', $moduleMaintenance)
                     : null,
-                ($user->hasPrimaryRole('admin') || $user->isSuperadmin())
+                ($user->isAdminCabang() || $user->isSuperadmin())
                     && $user->hasPermission('sales_pocketbook.export')
                     && $user->hasScopedPermission('sales_pocketbook', 'export')
                     ? $this->item('Laporan Fee Sales', 'sales-fee-reports.index', 'report', 'reports', ['sales-fee-reports.*'], $routeName, null, $moduleMaintenance)

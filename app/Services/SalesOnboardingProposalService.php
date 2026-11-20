@@ -29,7 +29,7 @@ class SalesOnboardingProposalService
      */
     public function create(array $data, User $actor): SalesOnboardingProposal
     {
-        abort_unless($actor->hasPrimaryRole('admin') && $actor->hasPermission('users.propose_sales'), 403);
+        abort_unless($actor->isAdminCabang() && $actor->hasPermission('users.propose_sales'), 403);
 
         $email = mb_strtolower(trim((string) $data['email']));
 

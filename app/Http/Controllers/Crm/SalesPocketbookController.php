@@ -55,7 +55,7 @@ class SalesPocketbookController extends Controller
             return app(SupervisorSalesPocketbookController::class)->index($request);
         }
 
-        if ($user->hasPrimaryRole('admin')) {
+        if ($user->isAdminCabang()) {
             return app(AdminSalesPocketbookController::class)->index($request);
         }
 

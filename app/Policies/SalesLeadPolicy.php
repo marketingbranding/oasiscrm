@@ -57,7 +57,7 @@ class SalesLeadPolicy
 
     public function create(User $user): bool
     {
-        if ($user->hasPrimaryRole(['admin', 'branch_manager', 'supervisor'])) {
+        if ($user->isAdminCabang() || $user->hasPrimaryRole(['branch_manager', 'supervisor'])) {
             return false;
         }
 
@@ -210,7 +210,7 @@ class SalesLeadPolicy
 
     public function canEditHistoricalOwnedLead(User $user, SalesLead $lead): bool
     {
-        return $user->hasPrimaryRole(['admin', 'branch_manager'])
+        return $user->isAdminCabang() || $user->hasPrimaryRole('branch_manager')
             && app(WorkspaceAccessService::class)->canEditBranch($user, $lead->branch_id)
             && $lead->sales !== null
             && app(WorkspaceAccessService::class)->canViewHistoricalBranch($lead->sales, $lead->branch_id);

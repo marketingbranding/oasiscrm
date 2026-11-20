@@ -96,9 +96,35 @@ class PrdV3RoleMigrationCommandTest extends TestCase
         $this->assertSame($afterFirstRun, DB::table('users')->whereIn('id', $ids)->orderBy('id')->get()->toJson());
     }
 
+    public function test_br25_d25_roles_v3_migrate_never_assigns_pusat_to_staff(): void
+    {
+        // BR-25 / D25: Staff scope_level never becomes pusat.
+        $roles = $this->legacyRoles();
+        $user = User::factory()->create(['role_id' => $roles['sas']->id, 'branch_id' => null]);
+
+        $this->artisan('oasis:roles-v3-migrate')->assertSuccessful();
+
+        $this->assertDatabaseHas('users', ['id' => $user->id, 'scope_level' => 'cabang']);
+    }
+
+    public function test_br21_d21_roles_v3_migrate_rolls_back_when_effective_permissions_differ(): void
+    {
+        // BR-21 / D21: migration must rollback on any before/after effective permission diff.
+        $roles = $this->legacyRoles();
+        $user = User::factory()->create(['role_id' => $roles['admin']->id, 'staff_type' => 'sales']);
+        $staffRole = $roles['staff'];
+        $roles['sas']->permissions()->detach();
+
+        $this->artisan('oasis:roles-v3-migrate')
+            ->expectsOutputToContain('Perbedaan permission')
+            ->assertFailed();
+
+        $this->assertDatabaseHas('users', ['id' => $user->id, 'role_id' => $roles['admin']->id, 'staff_type' => 'sales']);
+    }
+
     public function test_br25_d25_roles_v3_migrate_backfills_scope_level_from_branch(): void
     {
-        // BR-25 / D25: scope_level follows placement, pusat without branch and cabang with branch.
+        // BR-25 / D25: non-staff scope_level follows placement, staff stays cabang.
         $roles = $this->legacyRoles();
         $branchId = DB::table('branches')->insertGetId([
             'name' => 'Cabang Migrasi Role',
@@ -112,7 +138,7 @@ class PrdV3RoleMigrationCommandTest extends TestCase
 
         $this->artisan('oasis:roles-v3-migrate')->assertSuccessful();
 
-        $this->assertDatabaseHas('users', ['id' => $pusat->id, 'scope_level' => 'pusat']);
+        $this->assertDatabaseHas('users', ['id' => $pusat->id, 'scope_level' => 'cabang']);
         $this->assertDatabaseHas('users', ['id' => $cabang->id, 'scope_level' => 'cabang']);
     }
 

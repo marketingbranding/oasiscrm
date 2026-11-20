@@ -111,9 +111,9 @@ class PrdV3RoleAttributesTest extends TestCase
 
         $this->assertDatabaseHas('users', ['id' => $userIds['admin'], 'staff_type' => 'admin_cabang', 'scope_level' => 'cabang']);
         $this->assertDatabaseHas('users', ['id' => $preservedUser->id, 'sales_type' => 'personal', 'staff_type' => 'existing', 'scope_level' => 'khusus']);
-        $this->assertDatabaseHas('users', ['id' => $userIds['sas'], 'staff_type' => 'sales', 'scope_level' => 'pusat']);
-        $this->assertDatabaseHas('users', ['id' => $userIds['sam'], 'staff_type' => 'marketing', 'scope_level' => 'pusat']);
-        $this->assertDatabaseHas('users', ['id' => $userIds['staff'], 'staff_type' => 'umum', 'scope_level' => 'pusat']);
+        $this->assertDatabaseHas('users', ['id' => $userIds['sas'], 'staff_type' => 'sales', 'scope_level' => 'cabang']);
+        $this->assertDatabaseHas('users', ['id' => $userIds['sam'], 'staff_type' => 'marketing', 'scope_level' => 'cabang']);
+        $this->assertDatabaseHas('users', ['id' => $userIds['staff'], 'staff_type' => 'umum', 'scope_level' => 'cabang']);
 
         foreach ($roles as $roleId) {
             $this->assertDatabaseHas('roles', ['id' => $roleId]);

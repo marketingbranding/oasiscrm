@@ -25,36 +25,8 @@ class MigrateRolesV3 extends Command
 
     public function handle(): int
     {
-        if ((bool) $this->option('dry-run')) {
-            $roles = Role::query()->whereIn('slug', array_keys(self::STAFF_TYPES))->get()->keyBy('slug');
-            $staffRole = $roles->get('staff');
-            $candidates = $this->candidates($roles);
-
-            $roleChanges = $staffRole === null
-                ? $candidates->count()
-                : $candidates->where('role_id', '!=', $staffRole->id)->count();
-            $attributeChanges = $candidates->filter(
-                fn (object $candidate): bool => $candidate->staff_type === null || $candidate->scope_level === null,
-            )->count();
-            $targetStatus = $staffRole === null ? 'hilang' : 'tersedia';
-            $conflict = $candidates->isNotEmpty() && $staffRole === null
-                ? 'role target staff tidak tersedia'
-                : 'tidak ada';
-
-            $this->line('Mode: dry-run');
-            $this->line('Kandidat: '.$candidates->count());
-            $this->line('Perubahan role: '.$roleChanges);
-            $this->line('Perubahan atribut: '.$attributeChanges);
-            $this->line('Role target staff: '.$targetStatus);
-            $this->line('Konflik: '.$conflict);
-            $this->line('Role lama tersedia: '.$roles->count().'/'.count(self::STAFF_TYPES));
-
-            return self::SUCCESS;
-        }
-
         try {
-            $mapped = 0;
-            $result = DB::transaction(function () use (&$mapped): array {
+            $report = DB::transaction(function (): array {
                 $roles = Role::query()
                     ->whereIn('slug', array_keys(self::STAFF_TYPES))
                     ->lockForUpdate()
@@ -63,32 +35,35 @@ class MigrateRolesV3 extends Command
                 $staffRole = $roles->get('staff');
                 $candidates = $this->candidates($roles);
 
-                if ($candidates->isNotEmpty() && $staffRole === null) {
+                if ($candidates->isNotEmpty() && $staffRole === null && ! $this->option('dry-run')) {
                     throw new RuntimeException('Role staff tidak tersedia; tidak ada data yang diubah.');
                 }
 
-                foreach ($candidates as $candidate) {
-                    $values = [
-                        'staff_type' => $candidate->staff_type ?? self::STAFF_TYPES[$candidate->role_slug],
-                        'scope_level' => $candidate->scope_level ?? ($candidate->branch_id === null ? 'pusat' : 'cabang'),
-                    ];
-                    DB::table('users')->where('id', $candidate->id)->update($values);
-                    DB::table('users')->where('id', $candidate->id)->update(['role_id' => $staffRole->id]);
-                    $mapped++;
+                $report = $this->report($candidates, $roles, $staffRole);
+                if (! $this->option('dry-run')) {
+                    foreach ($candidates as $candidate) {
+                        DB::table('users')->where('id', $candidate->id)->update([
+                            'staff_type' => $candidate->staff_type ?? self::STAFF_TYPES[$candidate->role_slug],
+                            'scope_level' => 'cabang',
+                            'role_id' => $staffRole->id,
+                            'updated_at' => now(),
+                        ]);
+                    }
+
+                    if ($report['differences'] !== []) {
+                        throw new RuntimeException('Perbedaan permission atau isAdminCabang terdeteksi; transaksi dibatalkan.');
+                    }
+
+                    $legacyRoleIds = $roles
+                        ->filter(fn (Role $role, string $slug): bool => $slug !== 'staff')
+                        ->pluck('id')
+                        ->all();
+                    if ($legacyRoleIds !== []) {
+                        Role::query()->whereIn('id', $legacyRoleIds)->update(['is_active' => false]);
+                    }
                 }
 
-                $legacyRoleIds = $roles
-                    ->filter(fn (Role $role, string $slug): bool => $slug !== 'staff')
-                    ->pluck('id')
-                    ->all();
-                if ($legacyRoleIds !== []) {
-                    Role::query()->whereIn('id', $legacyRoleIds)->update(['is_active' => false]);
-                }
-
-                return [
-                    'candidates' => $candidates->count(),
-                    'legacy_roles' => $roles->filter(fn (Role $role, string $slug): bool => $slug !== 'staff')->count(),
-                ];
+                return $report;
             });
         } catch (RuntimeException $exception) {
             $this->error($exception->getMessage());
@@ -96,10 +71,17 @@ class MigrateRolesV3 extends Command
             return self::FAILURE;
         }
 
-        $this->line('Mode: migrasi');
-        $this->line('Kandidat: '.$result['candidates']);
-        $this->line('Dipetakan: '.$mapped);
-        $this->line('Role lama dinonaktifkan: '.$result['legacy_roles']);
+        $this->line('Mode: '.($this->option('dry-run') ? 'dry-run' : 'migrasi'));
+        $this->line('Kandidat: '.$report['candidates']);
+        $this->line('Perubahan role: '.$report['role_changes']);
+        $this->line('Perubahan atribut: '.$report['attribute_changes']);
+        $this->line('Role target staff: '.($report['staff_role_available'] ? 'tersedia' : 'hilang'));
+        $this->line('Role lama tersedia: '.$report['legacy_roles'].'/'.count(self::STAFF_TYPES));
+        $this->line('Konflik: '.($report['staff_role_available'] || $report['candidates'] === 0 ? 'tidak ada' : 'role target staff tidak tersedia'));
+        foreach ($report['by_staff_type'] as $staffType => $ids) {
+            $this->line($staffType.': '.count($ids).' ['.implode(',', $ids).']');
+        }
+        $this->line('Perbedaan: '.($report['differences'] === [] ? 'tidak ada' : json_encode($report['differences'], JSON_THROW_ON_ERROR)));
 
         return self::SUCCESS;
     }
@@ -121,6 +103,7 @@ class MigrateRolesV3 extends Command
             ->where(function ($query): void {
                 $query->where('roles.slug', '!=', 'staff')
                     ->orWhereNull('users.staff_type')
+                    ->orWhere('users.scope_level', '!=', 'cabang')
                     ->orWhereNull('users.scope_level');
             })
             ->get([
@@ -128,8 +111,82 @@ class MigrateRolesV3 extends Command
                 'users.role_id',
                 'users.staff_type',
                 'users.scope_level',
-                'users.branch_id',
                 'roles.slug as role_slug',
             ]);
+    }
+
+    /**
+     * @param  Collection<int, object>  $candidates
+     * @param  Collection<string, Role>  $roles
+     * @return array{candidates: int, role_changes: int, attribute_changes: int, legacy_roles: int, staff_role_available: bool, by_staff_type: array<string, array<int, int>>, differences: array<int, array<string, mixed>>}
+     */
+    private function report(Collection $candidates, Collection $roles, ?Role $staffRole): array
+    {
+        $byStaffType = array_fill_keys(array_values(self::STAFF_TYPES), []);
+        $differences = [];
+        $roleChanges = 0;
+        $attributeChanges = 0;
+
+        foreach ($candidates as $candidate) {
+            $staffType = $candidate->staff_type ?? self::STAFF_TYPES[$candidate->role_slug];
+            $byStaffType[$staffType][] = (int) $candidate->id;
+            $roleChanges += (int) ($candidate->role_id !== $staffRole?->id);
+            $attributeChanges += (int) ($candidate->staff_type === null || $candidate->scope_level !== 'cabang');
+
+            $beforeRoleSlug = $candidate->role_slug;
+            if ($beforeRoleSlug === 'staff') {
+                $beforeRoleSlug = match ($staffType) {
+                    'admin_cabang' => 'admin',
+                    'sales' => 'sas',
+                    'marketing' => 'sam',
+                    'umum' => 'staff',
+                    default => null,
+                };
+            }
+            $beforeRoleId = $beforeRoleSlug === null ? null : $roles->get($beforeRoleSlug)?->id;
+            $beforePermissions = $beforeRoleId === null ? [] : $this->permissionSlugs($beforeRoleId);
+            $afterRoleSlug = match ($staffType) {
+                'admin_cabang' => 'admin',
+                'sales' => 'sas',
+                'marketing' => 'sam',
+                'umum' => 'staff',
+                default => null,
+            };
+            $afterRoleId = $afterRoleSlug === null ? null : $roles->get($afterRoleSlug)?->id;
+            $afterPermissions = $afterRoleId === null ? [] : $this->permissionSlugs($afterRoleId);
+            $beforeAdminCabang = $beforeRoleSlug === 'admin';
+            $afterAdminCabang = $staffType === 'admin_cabang';
+
+            if ($beforePermissions !== $afterPermissions || $beforeAdminCabang !== $afterAdminCabang) {
+                $differences[] = [
+                    'id' => (int) $candidate->id,
+                    'permission_before' => $beforePermissions,
+                    'permission_after' => $afterPermissions,
+                    'isAdminCabang_before' => $beforeAdminCabang,
+                    'isAdminCabang_after' => $afterAdminCabang,
+                ];
+            }
+        }
+
+        return [
+            'candidates' => $candidates->count(),
+            'role_changes' => $roleChanges,
+            'attribute_changes' => $attributeChanges,
+            'legacy_roles' => $roles->filter(fn (Role $role, string $slug): bool => $slug !== 'staff')->count(),
+            'staff_role_available' => $staffRole !== null,
+            'by_staff_type' => $byStaffType,
+            'differences' => $differences,
+        ];
+    }
+
+    /** @return array<int, string> */
+    private function permissionSlugs(int $roleId): array
+    {
+        return DB::table('role_permission')
+            ->join('permissions', 'permissions.id', '=', 'role_permission.permission_id')
+            ->where('role_permission.role_id', $roleId)
+            ->orderBy('permissions.slug')
+            ->pluck('permissions.slug')
+            ->all();
     }
 }

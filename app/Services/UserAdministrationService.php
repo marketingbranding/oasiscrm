@@ -69,7 +69,7 @@ class UserAdministrationService
     {
         return $actor->isSuperadmin()
             || (! in_array($role->slug, self::IMPORT_SUPERADMIN_ONLY_PROVISIONING_ROLES, true)
-                && ! ($actor->hasPrimaryRole('admin') && $role->slug === 'sales'));
+                && ! ($actor->isAdminCabang() && $role->slug === 'sales'));
     }
 
     public function assertCanTransferBranch(User $actor, User $target, int $branchId): void

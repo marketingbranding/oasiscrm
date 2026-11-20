@@ -79,11 +79,27 @@ class PrdV3RolePermissionParityTest extends TestCase
         $this->assertFalse($user->hasPermission('system.maintenance_bypass'));
     }
 
-    public function test_staff_type_permission_catalog_has_exact_canonical_keys(): void
+    public function test_br_staff_type_permissions_read_legacy_role_database_profile(): void
     {
-        $this->assertSame(
-            ['admin_cabang', 'sales', 'marketing', 'umum'],
-            array_keys(PermissionCatalog::staffTypePermissions()),
-        );
+        $admin = Role::query()->where('slug', 'admin')->firstOrFail();
+        $admin->permissions()->syncWithoutDetaching([
+            $admin->permissions()->where('permissions.slug', 'users.view')->pluck('permissions.id')->first(),
+        ]);
+        $user = User::factory()->create([
+            'role_id' => Role::query()->where('slug', 'staff')->firstOrFail()->id,
+            'staff_type' => 'admin_cabang',
+        ]);
+
+        $this->assertTrue($user->hasPermission('users.view'));
+    }
+
+    public function test_br_admin_cabang_helper_covers_legacy_and_staff_profiles_only(): void
+    {
+        $admin = Role::query()->where('slug', 'admin')->firstOrFail();
+        $staff = Role::query()->where('slug', 'staff')->firstOrFail();
+
+        $this->assertTrue(User::factory()->create(['role_id' => $admin->id])->isAdminCabang());
+        $this->assertTrue(User::factory()->create(['role_id' => $staff->id, 'staff_type' => 'admin_cabang'])->isAdminCabang());
+        $this->assertFalse(User::factory()->create(['role_id' => $staff->id, 'staff_type' => 'sales'])->isAdminCabang());
     }
 }

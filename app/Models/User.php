@@ -4,7 +4,6 @@ namespace App\Models;
 
 use App\Enums\AccountStatus;
 use App\Enums\SalesCategory;
-use App\Support\PermissionCatalog;
 use Database\Factories\UserFactory;
 use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
@@ -307,6 +306,12 @@ class User extends Authenticatable implements MustVerifyEmail
         return $this->hasPrimaryRole('sales');
     }
 
+    public function isAdminCabang(): bool
+    {
+        return $this->hasPrimaryRole('admin')
+            || ($this->hasPrimaryRole('staff') && $this->staff_type === 'admin_cabang');
+    }
+
     public function hasPrimaryRole(string|array $roles): bool
     {
         return in_array($this->role?->slug, (array) $roles, true);
@@ -322,15 +327,23 @@ class User extends Authenticatable implements MustVerifyEmail
             return true;
         }
 
-        if ($this->hasPrimaryRole('staff')) {
-            if ($this->staff_type === null) {
-                return $this->role?->permissions->contains('slug', $permission) ?? false;
+        if ($this->hasPrimaryRole('staff') && $this->staff_type !== null) {
+            $legacyRoleSlug = match ($this->staff_type) {
+                'admin_cabang' => 'admin',
+                'sales' => 'sas',
+                'marketing' => 'sam',
+                'umum' => 'staff',
+                default => null,
+            };
+
+            if ($legacyRoleSlug === null) {
+                return false;
             }
 
-            $staffTypePermissions = PermissionCatalog::staffTypePermissions();
-
-            return isset($staffTypePermissions[$this->staff_type])
-                && in_array($permission, $staffTypePermissions[$this->staff_type], true);
+            return Role::query()
+                ->where('slug', $legacyRoleSlug)
+                ->whereHas('permissions', fn ($query) => $query->where('permissions.slug', $permission))
+                ->exists();
         }
 
         // V1 intentionally has no per-user overrides or supplemental-role grants.

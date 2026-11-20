@@ -119,24 +119,7 @@ return new class extends Migration
                 ->delete();
         }
 
-        if (Schema::hasTable('role_permission')) {
-            $assManagerRoleId = DB::table('roles')->where('slug', 'ass_manager')->value('id');
-            if ($assManagerRoleId) {
-                DB::table('role_permission')->where('role_id', $assManagerRoleId)->delete();
-            }
-        }
-
-        if (Schema::hasTable('roles')) {
-            $assManagerRoleId = DB::table('roles')->where('slug', 'ass_manager')->value('id');
-            if ($assManagerRoleId
-                && ! DB::table('users')->where('role_id', $assManagerRoleId)->exists()
-                && ! DB::table('role_user')->where('role_id', $assManagerRoleId)->exists()) {
-                DB::table('roles')->where('id', $assManagerRoleId)->delete();
-            }
-        }
-
-        // Columns may predate this migration; rollback only removes columns created by this migration when tracked metadata exists.
-        // No tracked metadata exists yet, so preserve all user columns conservatively.
-
+        // Role and pivot rows may predate this migration; preserve them conservatively.
+        // Columns may predate this migration; preserve all user columns conservatively.
     }
 };

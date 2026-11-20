@@ -40,13 +40,29 @@ class PrdV3RolePermissionParityTest extends TestCase
         }
     }
 
-    public function test_br_staff_without_staff_type_gets_no_staff_admin_permissions(): void
+    public function test_br_staff_without_staff_type_keeps_legacy_primary_role_permissions_during_transition(): void
     {
         $staff = Role::query()->where('slug', 'staff')->firstOrFail();
-        $user = User::factory()->create(['role_id' => $staff->id]);
+        $user = User::factory()->create(['role_id' => $staff->id, 'staff_type' => null]);
+
+        $expected = $staff->permissions()->pluck('slug')->sort()->values()->all();
+        $actual = collect(PermissionCatalog::permissions())
+            ->pluck('slug')
+            ->filter(fn (string $permission): bool => $user->hasPermission($permission))
+            ->sort()
+            ->values()
+            ->all();
+
+        $this->assertSame($expected, $actual);
+    }
+
+    public function test_br_staff_with_unknown_staff_type_cannot_elevate_permissions(): void
+    {
+        $staff = Role::query()->where('slug', 'staff')->firstOrFail();
+        $user = User::factory()->create(['role_id' => $staff->id, 'staff_type' => 'unknown']);
 
         $this->assertFalse($user->hasPermission('users.view'));
-        $this->assertFalse($user->hasPermission('sales_pocketbook.view_branch'));
+        $this->assertFalse($user->hasPermission('bridge_fund.manage'));
     }
 
     public function test_br_supplemental_role_does_not_elevate_staff_permissions(): void

@@ -30,9 +30,23 @@ class MigrateRolesV3 extends Command
             $staffRole = $roles->get('staff');
             $candidates = $this->candidates($roles);
 
+            $roleChanges = $staffRole === null
+                ? $candidates->count()
+                : $candidates->where('role_id', '!=', $staffRole->id)->count();
+            $attributeChanges = $candidates->filter(
+                fn (object $candidate): bool => $candidate->staff_type === null || $candidate->scope_level === null,
+            )->count();
+            $targetStatus = $staffRole === null ? 'hilang' : 'tersedia';
+            $conflict = $candidates->isNotEmpty() && $staffRole === null
+                ? 'role target staff tidak tersedia'
+                : 'tidak ada';
+
             $this->line('Mode: dry-run');
             $this->line('Kandidat: '.$candidates->count());
-            $this->line('Perubahan role: '.($candidates->count() > 0 && $staffRole !== null ? $candidates->where('role_id', '!=', $staffRole->id)->count() : 0));
+            $this->line('Perubahan role: '.$roleChanges);
+            $this->line('Perubahan atribut: '.$attributeChanges);
+            $this->line('Role target staff: '.$targetStatus);
+            $this->line('Konflik: '.$conflict);
             $this->line('Role lama tersedia: '.$roles->count().'/'.count(self::STAFF_TYPES));
 
             return self::SUCCESS;

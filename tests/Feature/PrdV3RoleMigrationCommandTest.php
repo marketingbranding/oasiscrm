@@ -33,6 +33,10 @@ class PrdV3RoleMigrationCommandTest extends TestCase
         $this->artisan('oasis:roles-v3-migrate', ['--dry-run' => true])
             ->expectsOutputToContain('Mode: dry-run')
             ->expectsOutputToContain('Kandidat: 4')
+            ->expectsOutputToContain('Perubahan role: 3')
+            ->expectsOutputToContain('Perubahan atribut: 4')
+            ->expectsOutputToContain('Role target staff: tersedia')
+            ->expectsOutputToContain('Konflik: tidak ada')
             ->assertSuccessful();
 
         $freshUsers = $users->map(fn (User $user): User => $user->fresh());
@@ -42,6 +46,23 @@ class PrdV3RoleMigrationCommandTest extends TestCase
         $this->assertSame($before['scope_levels'], $freshUsers->mapWithKeys(fn (User $user, string $slug): array => [$slug => $user->scope_level])->all());
         $this->assertSame($before['role_active'], $freshRoles->mapWithKeys(fn (Role $role, string $slug): array => [$slug => $role->is_active])->all());
         $this->assertSame($before['supplemental_count'], DB::table('role_user')->where('user_id', $users['admin']->id)->count());
+    }
+
+    public function test_br06_d6_roles_v3_migrate_dry_run_reports_missing_target_conflict_without_writes(): void
+    {
+        // BR-06 / D6: missing target is reported as conflict and dry-run remains read-only.
+        $roles = $this->legacyRoles();
+        $user = User::factory()->create(['role_id' => $roles['admin']->id]);
+        $staffRole = $roles['staff'];
+        $staffRole->delete();
+
+        $this->artisan('oasis:roles-v3-migrate', ['--dry-run' => true])
+            ->expectsOutputToContain('Kandidat: 1')
+            ->expectsOutputToContain('Role target staff: hilang')
+            ->expectsOutputToContain('Konflik: role target staff tidak tersedia')
+            ->assertSuccessful();
+
+        $this->assertDatabaseHas('users', ['id' => $user->id, 'role_id' => $roles['admin']->id, 'staff_type' => null, 'scope_level' => null]);
     }
 
     public function test_br21_d21_roles_v3_migrate_maps_legacy_users_idempotently(): void

@@ -323,6 +323,10 @@ class User extends Authenticatable implements MustVerifyEmail
         }
 
         if ($this->hasPrimaryRole('staff')) {
+            if ($this->staff_type === null) {
+                return $this->role?->permissions->contains('slug', $permission) ?? false;
+            }
+
             $staffTypePermissions = PermissionCatalog::staffTypePermissions();
 
             return isset($staffTypePermissions[$this->staff_type])

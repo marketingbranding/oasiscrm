@@ -59,9 +59,10 @@ class PrdV3RoleAttributesTest extends TestCase
         );
     }
 
-    public function test_br_migration_down_preserves_columns_and_supplemental_ass_manager_assignment(): void
+    public function test_br_migration_down_preserves_preexisting_ass_manager_role_and_permissions(): void
     {
         $assManager = Role::query()->where('slug', 'ass_manager')->firstOrFail();
+        $permission = $assManager->permissions()->firstOrFail();
         $user = User::factory()->create();
         $user->roles()->attach($assManager);
 
@@ -73,6 +74,7 @@ class PrdV3RoleAttributesTest extends TestCase
         $this->assertTrue(Schema::hasColumn('users', 'scope_level'));
         $this->assertDatabaseHas('roles', ['id' => $assManager->id, 'slug' => 'ass_manager']);
         $this->assertDatabaseHas('role_user', ['user_id' => $user->id, 'role_id' => $assManager->id]);
+        $this->assertDatabaseHas('role_permission', ['role_id' => $assManager->id, 'permission_id' => $permission->id]);
     }
 
     public function test_br_role_attributes_backfill_legacy_roles_without_cutover(): void

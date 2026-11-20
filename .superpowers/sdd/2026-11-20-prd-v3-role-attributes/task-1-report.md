@@ -48,4 +48,3 @@
 - Regression: `php artisan test --compact tests/Feature/RolePermissionTest.php` passed: 9 tests, 52 assertions.
 - `vendor/bin/pint --dirty --format agent` passed.
 - `git diff --check` passed.
-

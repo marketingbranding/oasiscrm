@@ -9,6 +9,7 @@ use App\Models\User;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 
 class SalesWeeklyMetricsService
 {
@@ -70,8 +71,8 @@ class SalesWeeklyMetricsService
             'documents_akad' => $this->conversion($metrics['akad'], $metrics['documents_completed']),
         ];
 
-        $leadInput = (clone $leadQuery)->max('created_at');
-        $agendaInput = (clone $agendaQuery)->max('created_at');
+        $leadInput = (clone $leadQuery)->max(DB::raw('COALESCE(current_status_changed_at, lead_date)'));
+        $agendaInput = (clone $agendaQuery)->max(DB::raw('COALESCE(completed_at, scheduled_date)'));
         $lastInput = collect([$leadInput, $agendaInput])->filter()->max();
         $metrics['last_input'] = $lastInput ? CarbonImmutable::parse($lastInput, config('app.timezone')) : null;
 

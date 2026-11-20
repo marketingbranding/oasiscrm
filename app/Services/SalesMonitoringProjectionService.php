@@ -113,13 +113,14 @@ class SalesMonitoringProjectionService
         return $value instanceof DateTimeInterface ? $value->format('Y-m-d H:i:s') : ($value !== null ? (string) $value : null);
     }
 
-    /** @return array{sales_name:?string, date:?string, total_minutes:int, target_minutes:int, submitted:bool, activity_count:int, late_activity_count:int} */
+    /** @return array{sales_name:?string, project_name:?string, date:?string, total_minutes:int, target_minutes:int, submitted:bool, activity_count:int, late_activity_count:int} */
     private function agenda(ContentItem|array $agenda, array $summary = []): array
     {
         $date = $this->agendaDate($agenda);
 
         return [
             'sales_name' => data_get($agenda, 'owner.name'),
+            'project_name' => data_get($agenda, 'salesProject.project_name') ?? data_get($agenda, 'project_name'),
             'date' => $date?->toDateString(),
             'total_minutes' => (int) ($summary['normal_minutes'] ?? data_get($agenda, 'duration_minutes', 0)),
             'target_minutes' => (int) ($summary['target_minutes'] ?? 0),

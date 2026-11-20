@@ -8,12 +8,14 @@ use App\Models\ContentItem;
 use App\Models\DanaTalangan;
 use App\Models\DanaTalanganReconciliationItem;
 use App\Models\LeadMaster;
+use App\Models\OrganizationAssignment;
 use App\Models\Permission;
 use App\Models\Role;
 use App\Models\SalesCoordinatorSales;
 use App\Models\SalesLead;
 use App\Models\User;
 use App\Policies\SalesLeadPolicy;
+use App\Services\AppSettingResolver;
 use App\Services\GoogleSheetsApiService;
 use App\Services\SalesPocketbookOnboardingService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -89,6 +91,62 @@ class AdminBranchSalesMonitoringTest extends TestCase
         $this->mapping($this->secondCoordinator, $this->secondSales);
         $this->mapping($this->historicalCoordinator, $this->sales, true, today()->subYear()->toDateString(), today()->subMonth()->toDateString());
         $this->mapping($this->inactiveCoordinator, $this->sales);
+    }
+
+    public function test_br51_flag_on_admin_http_screen_and_shared_export_project_distant_details(): void
+    {
+        DB::table('app_settings')->updateOrInsert(['key' => 'org_hierarchical_monitoring'], [
+            'value' => json_encode(true, JSON_THROW_ON_ERROR), 'group' => 'feature_flags', 'created_at' => now(), 'updated_at' => now(),
+        ]);
+        app(AppSettingResolver::class)->forget('org_hierarchical_monitoring');
+        config(['organization.graph_mode' => 'graph']);
+
+        $coordinator = $this->user('sales_coordinator', $this->branch, 'Koordinator Jarak');
+        $distantSales = $this->user('sales', $this->branch, 'Sales Jarak');
+        $this->assign($distantSales, $this->project);
+        $this->mapping($coordinator, $distantSales);
+        foreach ([[$coordinator, $this->admin], [$distantSales, $coordinator]] as [$child, $parent]) {
+            OrganizationAssignment::create([
+                'user_id' => $child->id, 'parent_user_id' => $parent->id, 'relationship_type' => OrganizationAssignment::REPORTS_TO,
+                'branch_id' => $this->branch->id, 'started_at' => today(), 'is_active' => true, 'is_primary' => true,
+            ]);
+        }
+        OrganizationAssignment::create([
+            'user_id' => $distantSales->id, 'parent_user_id' => $coordinator->id, 'relationship_type' => OrganizationAssignment::SALES_TEAM_MEMBER_OF,
+            'branch_id' => $this->branch->id, 'started_at' => today(), 'is_active' => true, 'is_primary' => true,
+        ]);
+        $lead = $this->lead($distantSales, $this->project, 'Lead Admin Jauh');
+        $lead->update(['phone' => '089999888777', 'notes' => 'Catatan admin rahasia']);
+        $agenda = $this->agenda($distantSales, $this->project, 'Agenda Admin Rahasia', 'Follow-up', 'done');
+        $agenda->update(['location' => 'Lokasi Admin Rahasia', 'activity_result' => 'Hasil Admin Rahasia']);
+
+        $leadScreen = $this->actingAs($this->admin)->get($this->url(['tab' => 'leads']));
+        $leadScreen->assertOk()->assertSee('Lead Admin Jauh')
+            ->assertDontSee('089999888777')->assertDontSee('Catatan admin rahasia');
+
+        $agendaScreen = $this->actingAs($this->admin)->get($this->url(['tab' => 'agenda']));
+        $agendaScreen->assertOk()->assertDontSee('Agenda Admin Rahasia')
+            ->assertDontSee('Lokasi Admin Rahasia')->assertDontSee('Hasil Admin Rahasia')
+            ->assertSee('Ringkasan agenda');
+
+        $response = $this->actingAs($this->admin)->get(route('sales-pocketbook.export', [
+            'period_type' => 'custom', 'date_from' => '2026-08-10', 'date_to' => '2026-08-10',
+        ]));
+        $response->assertOk();
+        $workbook = IOFactory::load($response->baseResponse->getFile()->getPathname());
+        $leadSheet = $workbook->getSheetByName('LEAD HARIAN');
+        $agendaSheet = $workbook->getSheetByName('AGENDA HARIAN');
+        $this->assertSame('Nama Konsumen', $leadSheet->getCell('E1')->getValue());
+        $this->assertSame('Agenda', $agendaSheet->getCell('I1')->getValue());
+        $values = collect($workbook->getSheetNames())->flatMap(fn (string $sheetName) => $workbook->getSheetByName($sheetName)->toArray())->flatten()->implode('|');
+        $this->assertStringContainsString('Lead Admin Jauh', $values);
+        $this->assertStringContainsString('Ringkasan agenda', $values);
+        $this->assertStringNotContainsString('089999888777', $values);
+        $this->assertStringNotContainsString('Catatan admin rahasia', $values);
+        $this->assertStringNotContainsString('Agenda Admin Rahasia', $values);
+        $this->assertStringNotContainsString('Lokasi Admin Rahasia', $values);
+        $this->assertStringNotContainsString('Hasil Admin Rahasia', $values);
+        $workbook->disconnectWorksheets();
     }
 
     public function test_primary_admin_leads_are_compact_read_only_and_use_latest_status_activity(): void

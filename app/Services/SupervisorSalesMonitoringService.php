@@ -51,7 +51,7 @@ class SupervisorSalesMonitoringService
             ->selectRaw("owner_user_id, COUNT(*) AS total, SUM(CASE WHEN status = 'done' THEN 1 ELSE 0 END) AS done, SUM(CASE WHEN COALESCE(activity_result, '') = '' AND status NOT IN ('cancelled', 'rescheduled') THEN 1 ELSE 0 END) AS missing")
             ->groupBy('owner_user_id')->get()->keyBy('owner_user_id');
         $leadAggregate = $this->leadBase($salesIds, $period, $scope)
-            ->selectRaw("sales_user_id, COUNT(*) AS total, SUM(CASE WHEN sync_status = 'pending_create' THEN 1 ELSE 0 END) AS pending_create, SUM(CASE WHEN sync_status = 'pending_update' THEN 1 ELSE 0 END) AS pending_update, SUM(CASE WHEN sync_status = 'sync_failed' THEN 1 ELSE 0 END) AS sync_failed, MAX(created_at) AS latest_created_at, MAX(lead_date) AS latest_lead_date")
+            ->selectRaw("sales_user_id, COUNT(*) AS total, SUM(CASE WHEN sync_status = 'pending_create' THEN 1 ELSE 0 END) AS pending_create, SUM(CASE WHEN sync_status = 'pending_update' THEN 1 ELSE 0 END) AS pending_update, SUM(CASE WHEN sync_status = 'sync_failed' THEN 1 ELSE 0 END) AS sync_failed, MAX(COALESCE(current_status_changed_at, lead_date)) AS latest_activity_at")
             ->groupBy('sales_user_id')->get()->keyBy('sales_user_id');
 
         $salesRows = $sales->map(function (User $user) use ($agendaAggregate, $leadAggregate, $team) {
@@ -72,7 +72,7 @@ class SupervisorSalesMonitoringService
                 'pending_update' => (int) ($lead?->pending_update ?? 0),
                 'sync_failed' => (int) ($lead?->sync_failed ?? 0),
                 'latest_agenda' => null,
-                'latest_lead' => $lead?->latest_created_at ?? $lead?->latest_lead_date,
+                'latest_lead' => $lead?->latest_activity_at,
             ];
         });
 

@@ -38,6 +38,20 @@ class SalesAgendaReceiptWorkflowTest extends TestCase
         $this->assertFalse($summary['submitted']);
     }
 
+    public function test_br51_late_activity_count_uses_scheduled_end_time_for_today(): void
+    {
+        [$owner, $branch] = $this->salesContext();
+        $this->travelTo(CarbonImmutable::parse('2026-10-29 10:00:00', config('app.timezone')));
+        $date = CarbonImmutable::parse('2026-10-29');
+        $this->agendaAt($owner, $branch, $date, '08:00', '09:00');
+        $this->agendaAt($owner, $branch, $date, '10:30', '11:30');
+        $this->agendaAt($owner, $branch, $date->subDay(), '10:00', '11:00');
+
+        $summary = app(SalesAgendaReceiptService::class)->summarize($owner, $date);
+
+        $this->assertSame(1, $summary['late_activity_count']);
+    }
+
     public function test_capacity_allows_remaining_minutes_but_rejects_overflow(): void
     {
         [$owner, $branch] = $this->salesContext();

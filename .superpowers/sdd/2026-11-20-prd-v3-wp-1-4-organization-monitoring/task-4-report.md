@@ -75,11 +75,18 @@ Selesai untuk 1.4c–1.4d. Projection 1.4d implemented. Flag `org_hierarchical_m
 - Coordinator and Supervisor exports keep summary values under matching summary headers; distant summaries do not occupy phone, notes, sync, result, or location columns.
 - Added BR-51 regression coverage for projection source, late-count aggregation, Coordinator distant consumers, and existing export contracts.
 
+## Round 3 HTTP/export coverage
+
+- Flag-on HTTP coverage now covers Coordinator, Supervisor, and Admin Branch at hierarchy distance >1.
+- `sales-pocketbook.index`, `coordinator-leads.export`, Supervisor lead/agenda exports, and shared `sales-pocketbook.export` use same projection contract. XLSX tests inspect headers and values with `PhpSpreadsheet\IOFactory`.
+- Forbidden distant fields remain absent: phone, notes, agenda title, location, activity result, and evidence. Flag-off tests retain existing model-detail behavior.
+- Export boundary normalizes projected date strings before PhpSpreadsheet conversion.
+
 ## Full-suite result
 
+- Fresh run after Round 3: `php artisan test --compact` with `CACHE_STORE=array` — 1,887 tests, 13,473 assertions, 8 failures, 0 errors. Exit 1.
+- Result matches prior failure count; no new failure outside Sales personal workspace markup/evidence.
 - No parent-branch before/after comparison was captured. Do not label current failures baseline.
-- `php artisan test --compact` — 1,883 tests, 13,419 assertions, 8 failures, 0 errors. Exit 1.
-- Failures remain limited to Sales personal workspace markup/evidence tests. No parent-branch before/after comparison exists; cause remains unclassified, not baseline.
 - Exact failures:
   - `Tests\Feature\SalesAgendaEvidenceTest::test_agenda_records_and_evidence_are_preserved_in_the_direct_workspace`
   - `Tests\Feature\SalesAgendaOnlyWorkspaceTest::test_sales_workspace_renders_receipt_date_context_and_add_plan_action`

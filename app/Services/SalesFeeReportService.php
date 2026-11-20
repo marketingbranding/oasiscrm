@@ -146,7 +146,7 @@ class SalesFeeReportService
 
     private function access(User $actor, array $filters): array
     {
-        abort_unless($actor->hasPrimaryRole('admin') || $actor->isSuperadmin(), 403);
+        abort_unless($actor->isAdminCabang() || $actor->isSuperadmin(), 403);
         $branchIds = array_values(array_intersect(
             $this->scope->branchIds($actor, 'sales_pocketbook', 'export'),
             $this->workspace->accessibleBranchIds($actor),

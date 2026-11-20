@@ -20,11 +20,11 @@ class UserImportTemplateExport
 
     public const EXAMPLE_MARKER = 'CONTOH - JANGAN DIIMPORT';
 
-    public const ROLE_SLUGS = ['sales', 'sales_coordinator', 'supervisor', 'manager', 'branch_manager', 'pusat'];
+    public const ROLE_SLUGS = ['sales', 'sales_coordinator', 'supervisor', 'manager', 'branch_manager', 'pusat', 'staff'];
 
     public const HEADERS = [
         'Nama', 'Email', 'Role', 'Cabang Utama', 'Cabang Tambahan', 'Proyek Utama',
-        'Proyek Tambahan', 'Atasan Langsung', 'Status', 'Koordinator Sales',
+        'Proyek Tambahan', 'Atasan Langsung', 'Status', 'Koordinator Sales', 'Tipe Staff', 'Scope Level',
     ];
 
     public static function download(Collection $roles, Collection $branches, Collection $projects): BinaryFileResponse
@@ -69,26 +69,28 @@ class UserImportTemplateExport
         $example = [
             self::EXAMPLE_MARKER, 'contoh@oasis.test', 'sales', 'Cabang Contoh',
             'Cabang A; Cabang B', 'Proyek Contoh', 'Proyek A; Proyek B',
-            'atasan@oasis.test', 'pending_invitation', 'koordinator@oasis.test',
+            'atasan@oasis.test', 'pending_invitation', 'koordinator@oasis.test', '', '',
         ];
         foreach ($example as $column => $value) {
             self::text($sheet, $column + 1, 2, $value);
         }
 
-        $sheet->getStyle('A2:J501')->getNumberFormat()->setFormatCode('@');
-        self::blackHeader($sheet, 'A1:J1');
-        $sheet->getStyle('A1:J501')->getBorders()->getAllBorders()->setBorderStyle(Border::BORDER_THIN);
+        $lastColumn = Coordinate::stringFromColumnIndex(count(self::HEADERS));
+        $sheet->getStyle("A2:{$lastColumn}501")->getNumberFormat()->setFormatCode('@');
+        self::blackHeader($sheet, "A1:{$lastColumn}1");
+        $sheet->getStyle("A1:{$lastColumn}501")->getBorders()->getAllBorders()->setBorderStyle(Border::BORDER_THIN);
         $sheet->getStyle('A2:I2')->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setRGB('FFF3B0');
         $sheet->freezePane('A2');
-        $sheet->setAutoFilter('A1:J501');
+        $sheet->setAutoFilter("A1:{$lastColumn}501");
 
-        foreach (['A' => 31, 'B' => 31, 'C' => 22, 'D' => 25, 'E' => 34, 'F' => 28, 'G' => 38, 'H' => 31, 'I' => 22, 'J' => 31] as $column => $width) {
+        foreach (['A' => 31, 'B' => 31, 'C' => 22, 'D' => 22, 'E' => 22, 'F' => 25, 'G' => 34, 'H' => 28, 'I' => 38, 'J' => 31, 'K' => 22, 'L' => 31] as $column => $width) {
             $sheet->getColumnDimension($column)->setWidth($width);
         }
 
-        $sheet->setDataValidation('C2:C501', self::validation("'REFERENSI'!\$A\$3:\$A\$8"));
-        $sheet->setDataValidation('I2:I501', self::validation("'REFERENSI'!\$D\$3:\$D\$5"));
+        $sheet->setDataValidation('C2:C501', self::validation("'REFERENSI'!\$A\$3:\$A\$".(count(self::ROLE_SLUGS) + 2)));
         $sheet->setDataValidation('D2:D501', self::validation("'REFERENSI'!\$G\$3:\$G\$".max(3, $branches->count() + 2)));
+        $sheet->setDataValidation('K2:K501', self::validation("'REFERENSI'!\$N\$3:\$N\$6"));
+        $sheet->setDataValidation('L2:L501', self::validation("'REFERENSI'!\$P\$3:\$P\$6"));
     }
 
     private static function writeReferenceSheet(Worksheet $sheet, Collection $roles, Collection $branches, Collection $projects): void
@@ -101,6 +103,17 @@ class UserImportTemplateExport
             $role = $roles->firstWhere('slug', $slug);
             self::text($sheet, 1, $index + 3, $slug);
             self::text($sheet, 2, $index + 3, $role?->name ?? str($slug)->replace('_', ' ')->title()->toString());
+        }
+
+        self::text($sheet, 14, 1, 'TIPE STAFF');
+        self::text($sheet, 14, 2, 'VALUE');
+        foreach (['admin_cabang', 'sales', 'marketing', 'umum'] as $index => $value) {
+            self::text($sheet, 14, $index + 3, $value);
+        }
+        self::text($sheet, 16, 1, 'SCOPE LEVEL');
+        self::text($sheet, 16, 2, 'VALUE');
+        foreach (['cabang', 'tim', 'khusus', 'pusat'] as $index => $value) {
+            self::text($sheet, 16, $index + 3, $value);
         }
 
         self::text($sheet, 4, 1, 'STATUS YANG DIIZINKAN');
@@ -145,13 +158,13 @@ class UserImportTemplateExport
             self::text($sheet, 13, $index + 2, $instruction);
         }
 
-        foreach (['A2:B8', 'D2:E5', 'G2:H'.max(3, $branches->count() + 2), 'J2:K'.max(3, $projects->count() + 2)] as $range) {
+        foreach (['A2:B'.(count(self::ROLE_SLUGS) + 2), 'D2:E5', 'G2:H'.max(3, $branches->count() + 2), 'J2:K'.max(3, $projects->count() + 2), 'N1:N6', 'P1:P6'] as $range) {
             $sheet->getStyle($range)->getBorders()->getAllBorders()->setBorderStyle(Border::BORDER_THIN);
         }
-        foreach (['A1:B2', 'D1:E2', 'G1:H2', 'J1:K2', 'M1:M1'] as $range) {
+        foreach (['A1:B2', 'D1:E2', 'G1:H2', 'J1:K2', 'M1:M1', 'N1:N2', 'P1:P2'] as $range) {
             self::blackHeader($sheet, $range);
         }
-        foreach (['A' => 24, 'B' => 28, 'D' => 24, 'E' => 45, 'G' => 28, 'H' => 16, 'J' => 28, 'K' => 34, 'M' => 85] as $column => $width) {
+        foreach (['A' => 24, 'B' => 28, 'D' => 24, 'E' => 45, 'G' => 28, 'H' => 16, 'J' => 28, 'K' => 34, 'M' => 85, 'N' => 22, 'P' => 22] as $column => $width) {
             $sheet->getColumnDimension($column)->setWidth($width);
         }
         $sheet->getStyle('M1:M9')->getAlignment()->setWrapText(true)->setVertical(Alignment::VERTICAL_TOP);

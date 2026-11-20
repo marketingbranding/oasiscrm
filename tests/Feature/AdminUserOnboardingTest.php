@@ -23,7 +23,7 @@ class AdminUserOnboardingTest extends TestCase
 
         $this->actingAs($actor)->post(route('admin-users.store'), [
             'name' => 'Pengguna Baru', 'email' => ' New.User@Example.com ', 'phone' => '08123',
-            'role_id' => $role->id, 'branch_id' => $branch->id, 'branch_ids' => [$branch->id],
+            'role_id' => $role->id, 'staff_type' => 'umum', 'branch_id' => $branch->id, 'branch_ids' => [$branch->id],
             'provisioning_mode' => 'direct', 'temporary_password' => 'Initial123',
             'temporary_password_confirmation' => 'Initial123', 'submit_action' => 'activate',
         ])->assertRedirect();

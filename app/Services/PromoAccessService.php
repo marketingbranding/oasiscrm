@@ -26,7 +26,7 @@ class PromoAccessService
             return Branch::query()->where('is_active', true)->forDropdown()->get();
         }
 
-        if ($user->hasPrimaryRole(['admin', 'branch_manager']) && $user->hasPermission('promo.manage')) {
+        if (($user->isAdminCabang() || $user->hasPrimaryRole('branch_manager')) && $user->hasPermission('promo.manage')) {
             return $this->workspaceAccess->accessibleBranches($user)
                 ->filter(fn (Branch $branch): bool => $this->workspaceAccess->canEditBranch($user, $branch))
                 ->values();
@@ -67,7 +67,7 @@ class PromoAccessService
             return false;
         }
 
-        if ($user->hasPrimaryRole(['admin', 'branch_manager']) && $user->hasPermission('promo.manage')) {
+        if (($user->isAdminCabang() || $user->hasPrimaryRole('branch_manager')) && $user->hasPermission('promo.manage')) {
             return $this->workspaceAccess->canEditBranch($user, $branchId);
         }
 

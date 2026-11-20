@@ -17,7 +17,7 @@ class AdminSalesPocketbookController extends Controller
 
     public function index(Request $request): View|RedirectResponse
     {
-        abort_unless($request->user()->hasPrimaryRole('admin'), 403);
+        abort_unless($request->user()->isAdminCabang(), 403);
         abort_unless($request->user()->hasScopedPermission('sales_pocketbook'), 403);
 
         if ($request->query('tab') === 'report') {

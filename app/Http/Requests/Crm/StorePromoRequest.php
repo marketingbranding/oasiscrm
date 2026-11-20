@@ -15,7 +15,7 @@ class StorePromoRequest extends FormRequest
         $branchId = (int) $this->input('branch_id');
 
         return $this->user()->can('create', Promo::class)
-            && (! $this->user()->hasPrimaryRole('admin') || $branchId === (int) $this->user()->branch_id)
+            && (! $this->user()->isAdminCabang() || $branchId === (int) $this->user()->branch_id)
             && app(PromoAccessService::class)->canManageBranch($this->user(), $branchId);
     }
 

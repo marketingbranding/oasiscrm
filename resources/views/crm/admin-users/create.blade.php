@@ -121,6 +121,12 @@
                         @foreach($roles as $role)<option value="{{ $role->id }}">{{ $role->name }}</option>@endforeach
                     </select>
                 </x-crm.field>
+                <x-crm.field label="Tipe Staff Admin" for="staff_type" :error="$errors->first('staff_type')">
+                    <select id="staff_type" name="staff_type" class="crm-input w-full" :required="roleSlug === 'staff'"><option value="">Pilih tipe</option>@foreach(['admin_cabang' => 'Admin Cabang', 'sales' => 'Sales', 'marketing' => 'Marketing', 'umum' => 'Umum'] as $type => $label)<option value="{{ $type }}" @selected(old('staff_type') === $type)>{{ $label }}</option>@endforeach</select>
+                </x-crm.field>
+                <x-crm.field label="Scope Level" for="scope_level" :error="$errors->first('scope_level')">
+                    <select id="scope_level" name="scope_level" class="crm-input w-full"><option value="">Otomatis</option>@foreach(['cabang', 'tim', 'khusus'] as $scope)<option value="{{ $scope }}" @selected(old('scope_level') === $scope)>{{ ucfirst($scope) }}</option>@endforeach<option value="pusat" @selected(old('scope_level') === 'pusat') x-show="['manager', 'ass_manager', 'supervisor'].includes(roleSlug)">Pusat</option></select>
+                </x-crm.field>
             </div>
         </div>
 

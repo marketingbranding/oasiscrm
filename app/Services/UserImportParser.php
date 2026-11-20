@@ -15,8 +15,8 @@ use ZipArchive;
 class UserImportParser
 {
     public const FIELDS = [
-        'name', 'email', 'role', 'primary_branch', 'additional_branches',
-        'primary_project', 'additional_projects', 'supervisor_email', 'status', 'sales_coordinator_email',
+        'name', 'email', 'role', 'primary_branch', 'additional_branches', 'primary_project',
+        'additional_projects', 'supervisor_email', 'status', 'sales_coordinator_email', 'staff_type', 'scope_level',
     ];
 
     /** @return array<int, array{row_number:int, raw_data:array<string, string>, parser_errors:array<int, string>}> */
@@ -56,13 +56,13 @@ class UserImportParser
             }
 
             $actualHeaders = [];
-            foreach (range(1, 10) as $column) {
+            foreach (range(1, count(UserImportTemplateExport::HEADERS)) as $column) {
                 $actualHeaders[] = $this->normalizeHeader((string) $sheet->getCell(Coordinate::stringFromColumnIndex($column).'1')->getValue());
             }
             $expectedHeaders = array_map($this->normalizeHeader(...), UserImportTemplateExport::HEADERS);
-            $legacyHeaders = array_slice($expectedHeaders, 0, 9);
-            $columnCount = $actualHeaders === $expectedHeaders ? 10 : 9;
-            if ($columnCount === 9 && (array_slice($actualHeaders, 0, 9) !== $legacyHeaders || $actualHeaders[9] !== '')) {
+            $legacyHeaders = array_slice($expectedHeaders, 0, 10);
+            $columnCount = $actualHeaders === $expectedHeaders ? count(UserImportTemplateExport::HEADERS) : 10;
+            if ($columnCount === 10 && array_slice($actualHeaders, 0, 10) !== $legacyHeaders) {
                 $this->invalid('Header sheet IMPORT USER tidak sesuai template. Gunakan tepat: '.implode(', ', UserImportTemplateExport::HEADERS).'.');
             }
 

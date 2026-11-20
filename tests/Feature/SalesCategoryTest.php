@@ -100,6 +100,7 @@ class SalesCategoryTest extends TestCase
 
         $this->actingAs($administrator)->put(route('admin-users.update', $sales), $this->adminUpdatePayload($sales, $project, [
             'role_id' => $staffRole->id,
+            'staff_type' => 'umum',
             'sales_category' => SalesCategory::Inhouse->value,
         ]))->assertRedirect(route('admin-users.show', $sales));
 
@@ -267,6 +268,8 @@ class SalesCategoryTest extends TestCase
             'email' => $user->email,
             'phone' => $user->phone,
             'role_id' => $user->role_id,
+            'staff_type' => $user->staff_type,
+            'scope_level' => $user->scope_level,
             'branch_id' => $user->branch_id,
             'branch_ids' => [$user->branch_id],
             'primary_project_id' => $project->id,

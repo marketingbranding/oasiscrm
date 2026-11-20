@@ -87,6 +87,7 @@ class IdentityAccessManagementTest extends TestCase
                 'name' => "Undangan {$role}",
                 'email' => $email,
                 'role_id' => $staffRole->id,
+                'staff_type' => 'umum',
                 'branch_id' => $branch->id,
                 'branch_ids' => [$branch->id],
                 'provisioning_mode' => $role === 'superadmin' ? 'direct' : 'invitation',
@@ -102,10 +103,31 @@ class IdentityAccessManagementTest extends TestCase
         $unauthorized = $this->user('staff', $branch);
         $this->actingAs($unauthorized)->post(route('admin-users.store'), [
             'name' => 'Tidak Sah', 'email' => 'unauthorized@example.com', 'role_id' => $staffRole->id,
-            'branch_id' => $branch->id, 'branch_ids' => [$branch->id],
+            'staff_type' => 'umum', 'branch_id' => $branch->id, 'branch_ids' => [$branch->id],
             'submit_action' => 'draft',
         ])->assertForbidden();
         $this->assertDatabaseMissing('users', ['email' => 'unauthorized@example.com']);
+    }
+
+    public function test_br_user_creation_rejects_legacy_roles_requires_staff_type_and_restricts_center_scope(): void
+    {
+        $actor = $this->user('superadmin');
+        $branch = $this->branch('JKT');
+        foreach (['admin', 'sas', 'sam'] as $legacy) {
+            $this->actingAs($actor)->post(route('admin-users.store'), [
+                'name' => 'Legacy '.$legacy,
+                'email' => $legacy.'-new@example.com',
+                'role_id' => Role::where('slug', $legacy)->value('id'),
+                'branch_id' => $branch->id,
+                'branch_ids' => [$branch->id],
+                'submit_action' => 'draft',
+            ])->assertSessionHasErrors('role_id');
+        }
+
+        $staff = Role::where('slug', 'staff')->firstOrFail();
+        $base = ['name' => 'Staff Baru', 'email' => 'staff-new@example.com', 'role_id' => $staff->id, 'branch_id' => $branch->id, 'branch_ids' => [$branch->id], 'submit_action' => 'draft'];
+        $this->actingAs($actor)->post(route('admin-users.store'), $base)->assertSessionHasErrors('staff_type');
+        $this->actingAs($actor)->post(route('admin-users.store'), [...$base, 'staff_type' => 'umum', 'scope_level' => 'pusat'])->assertSessionHasErrors('scope_level');
     }
 
     public function test_duplicate_email_is_rejected_and_valid_account_is_created_active(): void
@@ -116,7 +138,7 @@ class IdentityAccessManagementTest extends TestCase
         $existing = $this->user('staff', email: 'duplicate@example.com');
         $payload = [
             'name' => 'Duplikat', 'email' => strtoupper($existing->email), 'role_id' => $role->id,
-            'branch_id' => $branch->id, 'branch_ids' => [$branch->id],
+            'branch_id' => $branch->id, 'branch_ids' => [$branch->id], 'staff_type' => 'umum',
             'provisioning_mode' => 'direct', 'temporary_password' => 'Initial123',
             'temporary_password_confirmation' => 'Initial123', 'submit_action' => 'activate',
         ];
@@ -291,7 +313,7 @@ class IdentityAccessManagementTest extends TestCase
         $this->actingAs($actor)->putJson(route('admin-users.update', $target), [
             'expected_updated_at' => '2000-01-01 00:00:00', 'name' => 'Stale overwrite',
             'email' => $target->email, 'role_id' => $target->role_id,
-            'branch_id' => $branch->id, 'branch_ids' => [$branch->id],
+            'staff_type' => 'umum', 'branch_id' => $branch->id, 'branch_ids' => [$branch->id],
         ])->assertConflict()->assertJsonPath('code', 'record_modified');
         $this->assertNotSame('Stale overwrite', $target->fresh()->name);
 

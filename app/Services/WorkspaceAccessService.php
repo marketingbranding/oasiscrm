@@ -221,7 +221,7 @@ class WorkspaceAccessService
 
     public function isBranchScopedOperator(User $user): bool
     {
-        return $user->hasPrimaryRole(['admin', 'branch_manager']);
+        return $user->isAdminCabang() || $user->hasPrimaryRole('branch_manager');
     }
 
     private function hasPermission(

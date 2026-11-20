@@ -106,6 +106,8 @@ class AdminUserController extends Controller
             $attributes = [
                 'name' => $data['name'], 'email' => $data['email'], 'phone' => $data['phone'] ?? null,
                 'role_id' => $data['role_id'],
+                'staff_type' => $role->slug === 'staff' ? $data['staff_type'] : null,
+                'scope_level' => $data['scope_level'] ?? null,
                 'sales_category' => $role->slug === 'sales' ? ($data['sales_category'] ?? null) : null,
             ];
             $user = $direct
@@ -169,7 +171,7 @@ class AdminUserController extends Controller
     {
         $this->authorize('update', $admin_user);
         $admin_user->load(['branches', 'assignedProjects', 'supervisor', 'currentCoordinatorSales']);
-        $options = $this->options(request()->user());
+        $options = $this->options(request()->user(), $admin_user);
         $options['coordinatorSales'] = $admin_user->hasPrimaryRole('sales_coordinator')
             ? $this->manageableSales(request()->user())->get()
             : collect();
@@ -202,6 +204,8 @@ class AdminUserController extends Controller
                 'email' => $data['email'],
                 'phone' => $data['phone'] ?? null,
                 'role_id' => $data['role_id'],
+                'staff_type' => $role->slug === 'staff' ? $data['staff_type'] : null,
+                'scope_level' => $data['scope_level'] ?? null,
                 'sales_category' => $role->slug === 'sales' ? ($data['sales_category'] ?? null) : null,
                 'updated_by' => $actor->id,
             ]);
@@ -374,7 +378,7 @@ class AdminUserController extends Controller
         return back()->with('success', 'Status akun berhasil diperbarui.');
     }
 
-    private function options(User $actor): array
+    private function options(User $actor, ?User $target = null): array
     {
         $all = $actor->isSuperadmin() || $actor->hasPrimaryRole('pusat');
         $branchIds = $all ? Branch::where('is_active', true)->pluck('id')->all() : app(OrganizationScopeService::class)->branchIds($actor);
@@ -389,7 +393,7 @@ class AdminUserController extends Controller
             ->orderBy('name')
             ->get(['id', 'name', 'branch_id', 'role_id']);
 
-        return ['roles' => $this->administration->availableRoles($actor), 'branches' => $branches, 'projects' => $projects, 'projectsByBranch' => $projects->groupBy('branch_id'), 'supervisors' => $supervisors, 'coordinators' => $coordinators];
+        return ['roles' => $this->administration->availableRoles($actor, $target), 'branches' => $branches, 'projects' => $projects, 'projectsByBranch' => $projects->groupBy('branch_id'), 'coordinators' => $coordinators, 'supervisors' => $supervisors];
     }
 
     private function manageableSales(User $actor): Builder

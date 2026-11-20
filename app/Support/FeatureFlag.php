@@ -6,14 +6,6 @@ use App\Services\AppSettingResolver;
 
 final class FeatureFlag
 {
-    /** @var list<string> */
-    private const KEYS = [
-        'org_hierarchical_monitoring',
-        'lead_stages_v3',
-        'work_hours_v3',
-        'transaction_events_v3',
-    ];
-
     public static function enabled(string $key): bool
     {
         $definition = AppSettingCatalog::definition($key);
@@ -27,7 +19,9 @@ final class FeatureFlag
     /** @return array<string, bool> */
     public static function all(): array
     {
-        return collect(self::KEYS)
+        return collect(AppSettingCatalog::definitions())
+            ->filter(fn (array $definition): bool => ($definition['feature_flag'] ?? false) === true)
+            ->keys()
             ->mapWithKeys(fn (string $key): array => [$key => self::enabled($key)])
             ->all();
     }

@@ -13,7 +13,7 @@ PRD sumber kebenaran: `docs/product/PRD_OASIS_CRM_V3.md` versi 3.3 (D30–D33)
 - WP-0 audit dan pencatatan selesai; WP-1.1/WP-1.2 runtime slice selesai di branch ini.
 - WP-1.1/WP-1.2 commits: `b2c351c`, `4ee24eb`, `47526ee`, `fe565dd`; pushed to `origin/prd-v3/fase-1-fondasi`.
 - WP-1.1/WP-1.2 settings page, resolver, permission migration, audit, cache invalidation, and flag facade are complete for registered initial keys. Consumer cutover remains pending.
-- Focused verification: 12 tests passed, 42 assertions. Full-suite verification: 1,823 tests, 1,821 passed, 2 known baseline failures listed below.
+- Focused verification before review fixes: 12 tests passed, 42 assertions. Review-fix verification: 13 tests passed, 46 assertions. Full-suite baseline remains 1,823 tests, 1,821 passed, 2 known failures listed below.
 - Keputusan register konflik C-01–C-08 disetujui pemilik produk; C-09–C-11 ditambahkan dari review lanjutan.
 - Cutover produksi tidak dieksekusi: mode graf kanonis, pemadaman sinkronisasi Sheet, pembekuan tab Talangan, penghapusan role lama, dan penghapusan kolom lama.
 - Setiap aturan BR yang diimplementasikan nanti wajib punya tes yang menyebut ID BR.
@@ -77,10 +77,12 @@ Keduanya berupa assertion markup HTML, bukan exception aplikasi:
 
 WP-0 tidak memperbaiki failure. WP-1.5 akan mengunci tanggal tes memakai `Carbon::setTestNow`, karena perilaku ini terkait aturan akhir pekan BR-08.
 
-Latest verification after WP-1.1/WP-1.2:
+Latest verification after WP-1.1/WP-1.2 and review fixes:
 
-- Focused settings/flags suite: 12 passed, 42 assertions.
-- Full suite: 1,823 tests, 1,821 passed, 2 failures; same two known `SalesAgendaWorkspaceRenderTest` baseline failures above.
+- Focused settings/flags suite: 13 passed, 46 assertions.
+- Review regression coverage: browser-rendered field names use `settings[<key>]` with dots encoded as `__`; failed submissions retain encoded old input and matching errors.
+- Resolver regression coverage: DB read failure returns catalog default without caching; recovery reads stored value without `Cache::flush`.
+- Full suite baseline: 1,823 tests, 1,821 passed, 2 failures; same two known `SalesAgendaWorkspaceRenderTest` baseline failures above.
 - `vendor/bin/pint --dirty --format agent`: passed.
 - `npm run build`: passed.
 - `git diff --check`: passed.

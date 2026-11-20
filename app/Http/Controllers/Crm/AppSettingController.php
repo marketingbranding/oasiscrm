@@ -21,7 +21,7 @@ class AppSettingController extends Controller
 
     public function update(UpdateAppSettingsRequest $request, AppSettingService $settings): RedirectResponse
     {
-        $settings->update($request->user(), $request->validated());
+        $settings->update($request->user(), $request->validated()['settings'] ?? []);
 
         return to_route('admin.app-settings.index')->with('success', 'Pengaturan aturan berhasil disimpan.');
     }

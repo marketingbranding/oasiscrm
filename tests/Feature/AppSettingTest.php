@@ -35,10 +35,16 @@ class AppSettingTest extends TestCase
             ->assertSee('Jeda pengingat kegiatan');
 
         $this->actingAs($superadmin)
+            ->get(route('admin.app-settings.index'))
+            ->assertSee('name="settings[sales_agenda__reminder_lead_minutes]"', false);
+
+        $this->actingAs($superadmin)
             ->put(route('admin.app-settings.update'), [
-                'sales_agenda.reminder_lead_minutes' => 20,
-                'sales_monitoring.stale_lead_days' => 5,
-                'org_hierarchical_monitoring' => true,
+                'settings' => [
+                    'sales_agenda__reminder_lead_minutes' => 20,
+                    'sales_monitoring__stale_lead_days' => 5,
+                    'org_hierarchical_monitoring' => true,
+                ],
             ])
             ->assertRedirect(route('admin.app-settings.index'));
 
@@ -47,7 +53,7 @@ class AppSettingTest extends TestCase
         $this->assertTrue(app(AppSettingResolver::class)->bool('org_hierarchical_monitoring'));
     }
 
-    public function test_br52_non_superadmin_cannot_read_or_update_settings(): void
+    public function test_non_superadmin_cannot_read_or_update_settings(): void
     {
         $staff = $this->user('staff');
 
@@ -72,14 +78,24 @@ class AppSettingTest extends TestCase
         $resolver = app(AppSettingResolver::class);
         $this->assertSame(15, $resolver->int('sales_agenda.reminder_lead_minutes'));
 
-        $this->actingAs($superadmin)
+        $response = $this->actingAs($superadmin)
             ->from(route('admin.app-settings.index'))
             ->put(route('admin.app-settings.update'), [
-                'sales_agenda.reminder_lead_minutes' => 0,
-                'unknown.setting' => 'bad',
+                'settings' => [
+                    'sales_agenda__reminder_lead_minutes' => 0,
+                    'unknown__setting' => 'bad',
+                ],
             ])
-            ->assertRedirect(route('admin.app-settings.index'))
-            ->assertSessionHasErrors(['sales_agenda.reminder_lead_minutes', 'unknown.setting']);
+            ->assertRedirect(route('admin.app-settings.index'));
+
+        $response
+            ->assertSessionHasErrors(['settings.sales_agenda__reminder_lead_minutes', 'settings.unknown__setting'])
+            ->assertSessionHasInput('settings.sales_agenda__reminder_lead_minutes', 0);
+
+        $this->actingAs($superadmin)
+            ->get(route('admin.app-settings.index'))
+            ->assertSee('name="settings[sales_agenda__reminder_lead_minutes]"', false)
+            ->assertSee('value="0"', false);
 
         $this->assertSame(15, $resolver->int('sales_agenda.reminder_lead_minutes'));
         $this->assertDatabaseCount('activity_log', 0);
@@ -101,8 +117,10 @@ class AppSettingTest extends TestCase
         $superadmin = $this->user('superadmin');
 
         $this->actingAs($superadmin)->put(route('admin.app-settings.update'), [
-            'sales_agenda.reminder_lead_minutes' => 20,
-            'sales_monitoring.stale_lead_days' => 5,
+            'settings' => [
+                'sales_agenda__reminder_lead_minutes' => 20,
+                'sales_monitoring__stale_lead_days' => 5,
+            ],
         ])->assertRedirect();
 
         $logs = ActivityLog::query()->where('event', 'app_setting_updated')->get();

@@ -22,24 +22,27 @@
                 </x-slot:header>
                 <div class="grid gap-5 md:grid-cols-2">
                     @foreach($items as $key => $definition)
-                        @php($inputId = 'setting-'.str_replace('.', '-', $key))
+                        @php($settingKey = $definition['key'])
+                        @php($inputId = 'setting-'.str_replace('.', '-', $settingKey))
+                        @php($inputKey = str_replace('.', '__', $settingKey))
+                        @php($oldKey = 'settings.'.$inputKey)
                         <x-crm.field
                             :label="$definition['label']"
                             :for="$inputId"
                             :hint="$definition['description'].' Bawaan: '.(is_bool($definition['default']) ? ($definition['default'] ? 'Aktif' : 'Mati') : $definition['default'])"
-                            :error="$errors->first($key)"
+                            :error="$errors->first($oldKey)"
                         >
                             @if($definition['type'] === 'boolean')
-                                <select id="{{ $inputId }}" name="{{ $key }}" class="crm-control">
-                                    <option value="0" @selected(! $definition['value'])>Mati</option>
-                                    <option value="1" @selected($definition['value'])>Aktif</option>
+                                <select id="{{ $inputId }}" name="settings[{{ $inputKey }}]" class="crm-control">
+                                    <option value="0" @selected(old($oldKey, $definition['value']) === false || old($oldKey, $definition['value']) === '0')>Mati</option>
+                                    <option value="1" @selected(old($oldKey, $definition['value']) === true || old($oldKey, $definition['value']) === '1')>Aktif</option>
                                 </select>
                             @else
                                 <input
                                     id="{{ $inputId }}"
-                                    name="{{ $key }}"
+                                    name="settings[{{ $inputKey }}]"
                                     type="{{ $definition['type'] === 'integer' ? 'number' : 'text' }}"
-                                    value="{{ old($key, $definition['value']) }}"
+                                    value="{{ old($oldKey, $definition['value']) }}"
                                     @if($definition['type'] === 'integer') min="1" @endif
                                     class="crm-control"
                                 >

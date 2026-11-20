@@ -21,7 +21,7 @@ class AppSettingService
     public function definitions(): array
     {
         return collect(AppSettingCatalog::definitions())
-            ->map(fn (array $definition, string $key): array => [...$definition, 'value' => $this->resolver->value($key)])
+            ->map(fn (array $definition, string $key): array => [...$definition, 'key' => $key, 'value' => $this->resolver->value($key)])
             ->all();
     }
 

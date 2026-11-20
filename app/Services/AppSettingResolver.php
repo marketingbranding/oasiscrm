@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\AppSetting;
 use App\Support\AppSettingCatalog;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Log;
 use InvalidArgumentException;
 use Throwable;
 
@@ -16,18 +17,23 @@ class AppSettingResolver
     {
         $definition = AppSettingCatalog::definition($key);
 
-        return Cache::rememberForever($this->cacheKey($key), function () use ($key, $definition): mixed {
-            try {
-                $stored = AppSetting::query()->where('key', $key)->first();
-                if ($stored === null) {
-                    return $definition['default'];
-                }
+        try {
+            $stored = AppSetting::query()->where('key', $key)->first();
+            $value = $stored === null
+                ? $definition['default']
+                : $this->normalize($stored->value, $definition['type'], $definition['default']);
 
-                return $this->normalize($stored->value, $definition['type'], $definition['default']);
-            } catch (Throwable) {
-                return $definition['default'];
-            }
-        });
+            Cache::forever($this->cacheKey($key), $value);
+
+            return $value;
+        } catch (Throwable $exception) {
+            Log::warning('Application setting read failed; using catalog default.', [
+                'setting_key' => $key,
+                'exception' => $exception::class,
+            ]);
+
+            return $definition['default'];
+        }
     }
 
     public function int(string $key): int

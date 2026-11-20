@@ -67,3 +67,27 @@ Message: `feat: gate hierarchical organization scope`
 
 - Full suite not run; task verification used all covering scope, graph-mode, and feature-flag tests.
 - Existing untracked planning/spec files remain untouched.
+
+# Round 2 review fixes
+
+## Changes
+
+- Strict workspace intersection now requires assigned users to also belong to authorized workspace branches.
+- Coordinator `teamIds()` filters mapped Sales across every accessible workspace branch and authorized membership, including multi-branch workspaces.
+- Coordinator hierarchical visibility fails closed when requested action has no registered scope permission.
+- Cache semantic keys now include requested branch context and effective graph mode, plus flag and `scope_level`.
+- Added regression tests for cross-branch assignment, multi-branch Coordinator isolation, unregistered action fail-closed, and changelog-backed behavior.
+
+## Commands and output
+
+- `php artisan test --compact tests/Feature/OrganizationScopeServiceTest.php tests/Feature/OrganizationGraphModeReadsTest.php tests/Unit/FeatureFlagTest.php` — **28 passed, 67 assertions**.
+- `vendor/bin/pint --dirty --format agent` — **passed**.
+- `git diff --check` — **passed**.
+- `$env:CACHE_STORE='array'; php artisan optimize:clear` — **passed**.
+- `php artisan view:cache` — **passed**.
+- `graphify update .` — **passed**, graph rebuilt.
+
+## Remaining concerns
+
+- Full suite not run; covering scope, graph mode, and feature-flag tests passed.
+- Existing untracked planning/spec files remain untouched.

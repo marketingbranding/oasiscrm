@@ -127,6 +127,57 @@ class OrganizationScopeServiceTest extends TestCase
         $this->assertNotContains($unassignedProject->id, $scope->projectIds($viewer, 'work_planner'));
     }
 
+    public function test_br51_workspace_intersection_rejects_assigned_user_outside_workspace_branch(): void
+    {
+        // BR-51: project assignment cannot bypass workspace branch intersection.
+        $branch = $this->branch('WSP');
+        $otherBranch = $this->branch('WOT');
+        $viewer = $this->user('supervisor', $branch);
+        $descendant = $this->user('sales', $otherBranch);
+        $descendant->forceFill(['supervisor_user_id' => $viewer->id])->saveQuietly();
+        $project = LeadMaster::create(['branch_id' => $otherBranch->id, 'project_name' => 'Outside Workspace', 'is_active' => true]);
+        DB::table('project_user')->insert(['user_id' => $descendant->id, 'project_id' => $project->id, 'is_active' => true]);
+        $this->enableHierarchicalMonitoring();
+
+        $this->assertNotContains($descendant->id, app(OrganizationScopeService::class)->visibleUserIds($viewer, 'sales_pocketbook'));
+    }
+
+    public function test_br51_coordinator_team_ids_respect_all_workspace_branches(): void
+    {
+        // BR-51: Coordinator team scope remains bounded across multi-branch workspace.
+        $primary = $this->branch('CPA');
+        $secondary = $this->branch('CPB');
+        $outside = $this->branch('CPO');
+        $coordinator = $this->user('sales_coordinator', $primary);
+        $coordinator->branches()->attach($secondary->id, ['is_current' => true, 'can_view' => true]);
+        $allowed = $this->user('sales', $secondary);
+        $leak = $this->user('sales', $outside);
+        DB::table('sales_coordinator_sales')->insert([
+            ['coordinator_user_id' => $coordinator->id, 'sales_user_id' => $allowed->id, 'is_active' => true, 'started_at' => today(), 'created_at' => now(), 'updated_at' => now()],
+            ['coordinator_user_id' => $coordinator->id, 'sales_user_id' => $leak->id, 'is_active' => true, 'started_at' => today(), 'created_at' => now(), 'updated_at' => now()],
+        ]);
+
+        $teamIds = app(OrganizationScopeService::class)->teamIds($coordinator, 'sales_pocketbook');
+
+        $this->assertContains($allowed->id, $teamIds);
+        $this->assertNotContains($leak->id, $teamIds);
+    }
+
+    public function test_br51_coordinator_unregistered_action_fails_closed(): void
+    {
+        // BR-51: no registered permission or scope yields no Coordinator team data.
+        $branch = $this->branch('CFA');
+        $coordinator = $this->user('sales_coordinator', $branch);
+        $sales = $this->user('sales', $branch);
+        DB::table('sales_coordinator_sales')->insert([
+            'coordinator_user_id' => $coordinator->id, 'sales_user_id' => $sales->id, 'is_active' => true,
+            'started_at' => today(), 'created_at' => now(), 'updated_at' => now(),
+        ]);
+        $this->enableHierarchicalMonitoring();
+
+        $this->assertSame([], app(OrganizationScopeService::class)->visibleUserIds($coordinator, 'sales_pocketbook', 'unregistered_action'));
+    }
+
     public function test_br53_extension_point_grants_no_access(): void
     {
         // BR-53: special access remains unavailable until WP-2.2.

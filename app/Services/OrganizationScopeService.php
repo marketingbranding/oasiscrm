@@ -219,7 +219,7 @@ class OrganizationScopeService
     /** @return array<int> */
     public function hierarchyIds(User $viewer, ?int $branchId = null): array
     {
-        return $this->cached('hierarchy:'.$viewer->id.':'.$this->semanticCacheKey($viewer).':'.($branchId ?? 'current'), function () use ($viewer, $branchId): array {
+        return $this->cached('hierarchy:'.$viewer->id.':'.$this->semanticCacheKey($viewer, $branchId).':'.($branchId ?? 'current'), function () use ($viewer, $branchId): array {
             $evaluationBranchId = $branchId ?? $viewer->branch_id;
             $effectiveMode = $this->mode->modeFor($viewer, $evaluationBranchId);
             $legacy = $this->legacyHierarchyIds($viewer, $this->hierarchy->legacyDescendantIds($viewer));
@@ -276,8 +276,14 @@ class OrganizationScopeService
     public function teamIds(User $viewer, ?string $module = null, ?int $branchId = null): array
     {
         return $this->cached('team:'.$viewer->id.':'.$module.':'.$this->semanticCacheKey($viewer).':'.($branchId ?? 'current'), function () use ($viewer, $module, $branchId): array {
-            if ($module === 'sales_pocketbook' && $viewer->hasPrimaryRole('sales_coordinator')) {
-                return $this->salesTeamScope->currentSalesQuery($viewer, $branchId)
+            if ($this->isCoordinatorSalesScope($viewer, $module)) {
+                $workspaceBranchIds = $this->workspaceBranchIds($viewer);
+                $query = $this->salesTeamScope->currentSalesQuery($viewer, $branchId);
+                if ($branchId === null) {
+                    $query->whereIn('users.branch_id', $workspaceBranchIds);
+                }
+
+                return $query->whereIn('users.id', $this->authorizedUserIdsForBranches($workspaceBranchIds))
                     ->pluck('users.id')
                     ->map(fn ($id) => (int) $id)
                     ->values()
@@ -330,12 +336,15 @@ class OrganizationScopeService
         return $this->cached('workspace:'.$user->id, fn () => $this->workspaceAccess->accessibleBranchIds($user));
     }
 
-    private function semanticCacheKey(User $viewer): string
+    private function semanticCacheKey(User $viewer, ?int $branchId = null): string
     {
+        $effectiveBranchId = $branchId ?? $viewer->branch_id;
+
         return implode(':', [
             FeatureFlag::enabled('org_hierarchical_monitoring') ? 'on' : 'off',
             (string) ($viewer->scope_level ?? ''),
-            $this->mode->modeFor($viewer, $viewer->branch_id),
+            (string) ($effectiveBranchId ?? 'none'),
+            $this->mode->modeFor($viewer, $effectiveBranchId),
         ]);
     }
 
@@ -349,6 +358,10 @@ class OrganizationScopeService
     private function hierarchicalVisibleUserIds(User $viewer, ?string $module, string $action, array $scopes, array $workspaceBranchIds): array
     {
         if ($this->isCoordinatorSalesScope($viewer, $module)) {
+            if (! $this->hasAnyScope($scopes, ['own', 'team', 'branch', 'assigned', 'project'])) {
+                return [];
+            }
+
             return $this->salesTeamScope->currentSalesQuery($viewer, $this->evaluationBranchId($workspaceBranchIds))
                 ->whereIn('users.id', $this->authorizedUserIdsForBranches($workspaceBranchIds))
                 ->whereIn('users.branch_id', $workspaceBranchIds)
@@ -389,9 +402,18 @@ class OrganizationScopeService
         return User::query()->where('is_active', true)->where(function (Builder $query) use ($branchIds, $projectIds): void {
             $query->whereIn('branch_id', $branchIds);
             if ($projectIds !== []) {
-                $query->orWhereIn('id', $this->currentUserIdsForProjects($projectIds));
+                $query->orWhere(function (Builder $assigned) use ($branchIds, $projectIds): void {
+                    $assigned->whereIn('id', $this->currentUserIdsForProjects($projectIds))
+                        ->whereIn('branch_id', $branchIds);
+                });
             }
         })->pluck('id')->map(fn ($id): int => (int) $id)->all();
+    }
+
+    /** @param array<int> $scopes @param array<int> $allowed */
+    private function hasAnyScope(array $scopes, array $allowed): bool
+    {
+        return array_intersect($scopes, $allowed) !== [];
     }
 
     private function isCoordinatorSalesScope(User $viewer, ?string $module): bool

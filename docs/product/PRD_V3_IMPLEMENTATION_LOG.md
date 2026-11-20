@@ -3,14 +3,15 @@
 Tanggal audit awal: 20 November 2026
 Basis kode: `f42aa91` (`main` sebelum pekerjaan Fase 1)
 Cabang kerja: `prd-v3/fase-1-fondasi`
-PRD sumber kebenaran: `docs/product/PRD_OASIS_CRM_V3.md` versi 3.2
+PRD sumber kebenaran: `docs/product/PRD_OASIS_CRM_V3.md` versi 3.3 (D30–D33)
 
 ## Aturan kerja audit
 
 - PRD v3 menjadi sumber perilaku produk.
 - Kode yang dapat dijalankan menjadi sumber perilaku saat ini.
 - Perubahan user worktree yang sudah ada tidak disentuh.
-- WP-0 hanya audit dan pencatatan. Belum ada perubahan product code.
+- WP-0 audit dan pencatatan selesai; perubahan product code WP-1.1/WP-1.2 belum dimulai.
+- Keputusan register konflik C-01–C-08 disetujui pemilik produk; C-09–C-11 ditambahkan dari review lanjutan.
 - Cutover produksi tidak dieksekusi: mode graf kanonis, pemadaman sinkronisasi Sheet, pembekuan tab Talangan, penghapusan role lama, dan penghapusan kolom lama.
 - Setiap aturan BR yang diimplementasikan nanti wajib punya tes yang menyebut ID BR.
 - Setiap perubahan perilaku nanti wajib punya migrasi changelog idempoten dengan `version = null` bila nomor versi belum diberikan.
@@ -71,7 +72,7 @@ Keduanya berupa assertion markup HTML, bukan exception aplikasi:
 - `test_receipt_heading_matches_today_tomorrow_and_other_planned_dates`: test memakai `tomorrow` sebagai hari kerja, tetapi baseline dijalankan pada Jumat 20 November 2026 sehingga `tomorrow` adalah Sabtu. Response merender heading akhir pekan, bukan `RENCANA BESOK`; assertion gagal pada `SalesAgendaWorkspaceRenderTest.php:36`.
 - `test_populated_receipt_keeps_weekly_navigation_with_exact_date_links`: response memuat kelas `sales-week-navigation-day is-active is-weekend`, sedangkan assertion mencari substring persis `class="sales-week-navigation-day is-active"`; assertion gagal pada `SalesAgendaWorkspaceRenderTest.php:376`.
 
-Keduanya tidak terbukti terkait PRD v3 dan tidak diperbaiki pada WP-0. Tetap baseline sampai paket kerja terpisah menanganinya.
+WP-0 tidak memperbaiki failure. WP-1.5 akan mengunci tanggal tes memakai `Carbon::setTestNow`, karena perilaku ini terkait aturan akhir pekan BR-08.
 
 ## Inventaris hardcode aturan PRD
 
@@ -235,21 +236,24 @@ Keduanya tidak terbukti terkait PRD v3 dan tidak diperbaiki pada WP-0. Tetap bas
 
 | ID | Deskripsi konflik | Bukti kode | Usulan teknis | Keputusan pemilik produk diperlukan |
 |---|---|---|---|---|
-| C-01 | Daily Plan lama memakai 420 menit/09.00, sedangkan Receipt/Agenda memakai 480 menit/08.00/07.30. | `app/Models/SalesDailyPlan.php:19-21`; `app/Services/SalesDailyPlanScheduleService.php:12,81-87`; `app/Services/SalesAgendaReceiptService.php:66-89`; `app/Models/SalesAgendaDaySubmission.php:10` | Satu resolver Pengaturan dan kalender kerja. Simpan `target_minutes` serta jadwal efektif pada Daily Plan baru; rencana lama tetap memakai snapshot 420. | Setujui sumber kebenaran dan aturan transisi data lama. |
-| C-02 | PRD meminta graf organisasi kanonis, tetapi aturan kerja melarang agent mengaktifkan cutover produksi. | `config/organization.php`; `app/Services/OrganizationGraphModeService.php`; `app/Services/OrganizationCutoverHealthService.php`; `app/Console/Commands/OrganizationBackfill.php` | Bangun feature flag, dry-run, laporan paritas, health gate, dan proyeksi kompatibilitas. Operator mengaktifkan setelah gate lulus. | Setujui kriteria parity dan pihak yang berwenang melakukan cutover. |
-| C-03 | PRD menghapus `Berkas Awal Lengkap`/`Akad` sebagai tahap Lead, tetapi data historis dan sheet lifecycle masih memakainya sebagai fakta/status. | `app/Models/SalesLead.php:19-35`; `app/Services/SalesLeadLifecycleSyncService.php:27,376-414,454-478`; `app/Services/SalesLeadSpreadsheetContract.php:34,78-86`; `resources/views/crm/sales-pocketbook/_lead-lifecycle.blade.php:202`; `resources/views/crm/sales-pocketbook/index.blade.php:342,653` | Pertahankan `documents_completed_at`, `akad_at`, link, dan tab `akad` sebagai fakta legacy. Mapping aktif: status sheet `Akad` diproses sebagai fakta transaksi tertaut, bukan stage v3; status Lead v3 dibatasi sampai UTJ/Gugur. Jangan drop kolom/tab sebelum semua cabang lulus. | Putuskan nilai `status_lead` yang dikirim balik ke sheet saat Lead sudah UTJ tetapi tab `akad` tetap aktif; putuskan apakah workbook tetap menerima `Akad` legacy selama transisi. |
-| C-04 | Status transaksi legacy mencampur status dan event seperti `Pindah Kavling`, `Reject`, dan `Diganti Konsumen`. | `app/Services/ConsumerOperationalService.php:24-26,69-117`; `app/Services/ConsumerApplicationLifecycleService.php:124-179` | Tambah event/audit dan mapping transisi additive. Pertahankan kolom lama sampai migrasi cabang selesai. | Setujui mapping status legacy ke Lanjut/Mundur dan definisi laporan historis. |
-| C-05 | NUP manual belum membuktikan asal UTJ/Kembali ke NUP dan belum memiliki field asal PRD. | `app/Models/ConsumerNup.php:15-18`; `app/Services/ConsumerNupService.php:33-115` | Tambah field nullable `source_application_id`, `issue_id`, `entry_type`; data lama tidak dibubuhi asal fiktif, tandai perlu tinjau. | Setujui kategori untuk NUP lama tanpa bukti asal. |
-| C-06 | Boundary AI belum eksplisit menyaring PII dari input user dan hasil tool. | `app/Services/AiAssistantService.php:328-350`; `app/Services/AiToolRegistry.php:514-522,549-557,594-600,635-647` | Sanitizer teruji sebelum provider; NIK/HP/alamat dibuang; nama mengikuti toggle Pengaturan; tool tetap read-only dan scoped. | Setujui apakah email/telepon pegawai pada tool informasi cabang juga harus dibuang. |
-| C-07 | Tabel Pengaturan Aturan dan hari libur belum ada; config/env tidak cukup untuk override ter-audit. | Tidak ditemukan `app_settings`/`holidays`; `app/Services/OperationalMaintenanceService.php` hanya mengelola maintenance operasional. | Buat `app_settings`, `holidays`, resolver bertipe, cache invalidation, dan activity log. | Setujui daftar key, default, batas validasi, dan siapa boleh mengubah tiap key. |
-| C-08 | Angka ⚙ tersebar pada code/config/frontend, termasuk reminder 15 menit, stale 2 hari, retensi bukti 60 hari, interval 60 detik, dan break agenda. | `app/Console/Commands/SendSalesAgendaReminders.php:65-68`; `app/Services/CoordinatorSalesMonitoringService.php:201-204`; `app/Support/SalesAgendaEvidenceRules.php:22`; `app/Http/Controllers/Crm/SalesAgendaEvidenceArchiveController.php:73-74`; `resources/js/sales-agenda-slot.js:27-28`; `resources/js/notifications.js:20`; `resources/js/presence.js:9,62` | Gunakan inventory sebagai acceptance list WP-1.1/WP-1.5. Pindahkan hanya angka yang PRD tandai ⚙ ke resolver; pertahankan konstanta teknis non-BR dengan alasan tertulis. | Setujui apakah retensi bukti 60 hari dan interval presence masuk Pengaturan Aturan atau tetap kebijakan teknis. |
+| C-01 | Daily Plan lama memakai 420 menit/09.00, sedangkan Receipt/Agenda memakai 480 menit/08.00/07.30. | `app/Models/SalesDailyPlan.php:19-21`; `app/Services/SalesDailyPlanScheduleService.php:12,81-87`; `app/Services/SalesAgendaReceiptService.php:66-89`; `app/Models/SalesAgendaDaySubmission.php:10` | Jalur Receipt/Agenda menjadi acuan. Daily Plan lama tetap memakai snapshot 420. Sebelum WP-1.5 dilaporkan route aktif dan jumlah data per tabel. | Disetujui. |
+| C-02 | PRD meminta mode graf kanonis Fase 1, tetapi agent tidak boleh mengaktifkan cutover produksi. | `config/organization.php`; `app/Services/OrganizationGraphModeService.php`; `app/Services/OrganizationCutoverHealthService.php`; `app/Console/Commands/OrganizationBackfill.php` | `organization:backfill --dry-run` tanpa konflik tak terjelaskan; semua gate health lulus; ID terlihat per user legacy/graf sama minimal 7 hari. Pemilik produk menjalankan cutover. | Disetujui (D33). |
+| C-03 | PRD menghapus `Berkas Awal Lengkap`/`Akad` sebagai tahap Lead, tetapi sheet lifecycle masih memakainya. | `app/Services/SalesLeadLifecycleSyncService.php:376-415`; `app/Services/SalesLeadSpreadsheetContract.php:34,78-86` | Tulis balik sheet lead maksimal `UTJ`/`Gugur`. Tab `akad` tetap dibaca sebagai fakta transaksi selama transisi, bukan tahap lead. | Disetujui. |
+| C-04 | Status transaksi legacy mencampur status dan event. | `app/Services/ConsumerOperationalService.php:24-26,69-117`; `app/Services/ConsumerApplicationLifecycleService.php:124-179` | `Pindah Kavling` → `LANJUT` + event. `Reject` → `MUNDUR` dengan alasan proses atau `Reject (data lama)`. `DIGANTI_KONSUMEN`/`REPLACED` → `DITUTUP` + `closed_by_event=GANTI_NAMA`. DITUTUP hanya Ganti Nama/Kembali ke NUP; bukan aktif/gugur. | Disetujui (D31). |
+| C-05 | NUP manual belum memiliki asal UTJ/Kembali ke NUP. | `app/Models/ConsumerNup.php:15-18`; `app/Services/ConsumerNupService.php:33-115` | NUP lama tanpa bukti memakai `entry_type=legacy`, perlu tinjau, belum dihitung UTJ sampai konfirmasi admin. | Disetujui. |
+| C-06 | Boundary AI belum menyaring seluruh kontak dari payload provider. | `app/Services/AiAssistantService.php:328-350`; `app/Services/AiToolRegistry.php:594-600` | Hapus semua nomor HP dan email dari payload: konsumen, pegawai, cabang, input, dan tool informasi cabang. NIK/alamat tetap dilarang. | Disetujui. |
+| C-07 | Tabel `app_settings` dan halaman Pengaturan Aturan belum ada. | Tidak ditemukan `app_settings`; `app/Services/OperationalMaintenanceService.php` hanya maintenance operasional. | Tambah resolver bertipe, audit, cache invalidation. Hanya Superadmin boleh mengubah Pengaturan. | Disetujui. |
+| C-08 | Angka aturan dan teknis tersebar di code/config/frontend. | `app/Console/Commands/SendSalesAgendaReminders.php:65-68`; `app/Services/CoordinatorSalesMonitoringService.php:201-204`; `app/Support/SalesAgendaEvidenceRules.php:22`; `resources/js/presence.js:9,62` | Pengingat 15 menit (BR-06) dan stale 2 hari masuk Pengaturan. Retensi bukti 60 hari dan interval presence 60 detik tetap konstanta teknis; alasan didokumentasikan. | Disetujui. |
+| C-09 | Penggabungan role wajib mempertahankan hak efektif per user dengan empat jenis Staff Admin. | `tests/Fixtures/permission_snapshot_pre_v3.json`; `app/Support/PermissionCatalog.php`; `database/seeders/RoleSeeder.php` | `admin→admin_cabang`, `sas→sales`, `sam→marketing`, `staff lama→umum`; tes exact permission parity. Commit terpisah menambah hak input NUP/Proses Penjualan SAS. Konversi sebelum UTJ oleh Admin Cabang, SAS, Koordinator. | Disetujui (D30, D32). |
+| C-10 | Status Ditutup belum kanonis pada transaksi. | `app/Services/ConsumerOperationalService.php:24-26`; `app/Services/ConsumerApplicationLifecycleService.php:124-179` | Status kanonis `LANJUT`/`MUNDUR`/`DITUTUP`; DITUTUP hanya Ganti Nama/Kembali ke NUP; bukan aktif/gugur. | Disetujui (D31). |
+| C-11 | Tiga versi jam kerja hidup: Daily Plan 420/09.00, Receipt 480/08.00/07.30, onboarding Jumat 08.30. | `app/Models/SalesDailyPlan.php:19-21`; `app/Services/SalesAgendaReceiptService.php:66-89`; `app/Services/SalesPocketbookOnboardingService.php:19` | Sebelum WP-1.5, laporkan route aktif dan jumlah data per tabel. Lalu satukan semua jalur ke resolver Receipt/Agenda. | Disetujui (C-01). |
 
 ## Daftar aturan BR untuk tes
 
 | Paket | Tes wajib minimal |
 |---|---|
-| WP-1.1 | `BR-52`, setting defaults/overrides, audit, and feature-flag access |
-| WP-1.2 | Feature-flag defaults, enabled/disabled transition paths |
+| WP-1.1 | setting defaults/overrides, audit, and Superadmin-only access |
+| WP-1.2 | feature-flag defaults, enabled/disabled transition paths, and `BR-52` |
 | WP-1.3 | role/attribute validation, legacy role mapping, no permission escalation via additional role |
 | WP-1.4 | `BR-50`, `BR-51`, `BR-52`, `BR-53` boundary and direct URL |
 | WP-1.5 | `BR-01`–`BR-09`, nilai default dan nilai Pengaturan yang diubah |
@@ -259,7 +263,7 @@ Keduanya tidak terbukti terkait PRD v3 dan tidak diperbaiki pada WP-0. Tetap bas
 | WP-1.10 | fase 1 verification and documentation checks |
 | WP-2.1 | `BR-54`, `BR-55` |
 | WP-2.2 | `BR-53` |
-| WP-2.4 | `BR-42`–`BR-44` |
+| WP-2.5 | `BR-42`–`BR-44` |
 | WP-3.1 | `BR-60`–`BR-64` |
 
 ## File yang diaudit pada WP-0

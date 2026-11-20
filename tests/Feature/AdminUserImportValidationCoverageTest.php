@@ -42,6 +42,22 @@ class AdminUserImportValidationCoverageTest extends TestCase
         $this->assertDatabaseCount('user_import_batches', 0);
     }
 
+    public function test_br_import_rejects_legacy_roles_requires_staff_type_and_restricts_center_scope(): void
+    {
+        $actor = $this->importActor();
+        Branch::create(['name' => 'Solo', 'code' => 'SLO', 'is_active' => true]);
+        $rows = [
+            ['Legacy', 'legacy@example.test', 'admin', 'Solo', '', '', '', '', 'pending_invitation', '', '', ''],
+            ['Staff', 'staff-import@example.test', 'staff', 'Solo', '', '', '', '', 'pending_invitation', '', '', ''],
+            ['Center Staff', 'center-import@example.test', 'staff', 'Solo', '', '', '', '', 'pending_invitation', '', 'umum', 'pusat'],
+        ];
+        $this->uploadImport($actor, $rows);
+        $rowsByEmail = UserImportRow::query()->get()->keyBy(fn (UserImportRow $row) => $row->normalized_data['email']);
+        $this->assertSame(UserImportRow::VALIDATION_ERROR, $rowsByEmail['legacy@example.test']->validation_status);
+        $this->assertSame(UserImportRow::VALIDATION_ERROR, $rowsByEmail['staff-import@example.test']->validation_status);
+        $this->assertSame(UserImportRow::VALIDATION_ERROR, $rowsByEmail['center-import@example.test']->validation_status);
+    }
+
     public function test_all_six_roles_accept_case_insensitive_input_while_superadmin_and_inactive_role_are_rejected(): void
     {
         $actor = $this->importActor();
@@ -49,15 +65,14 @@ class AdminUserImportValidationCoverageTest extends TestCase
         LeadMaster::create(['branch_id' => $branch->id, 'project_name' => 'Oasis Solo', 'is_active' => true]);
         $rows = collect(UserImportTemplateExport::ROLE_SLUGS)->map(fn (string $role, int $index) => [
             "Role {$index}", "role{$index}@example.test", strtoupper($role), ' slo ', '',
-            $role === 'sales' ? 'Oasis Solo' : '', '', '', ' PENDING_INVITATION ',
+            $role === 'sales' ? 'Oasis Solo' : '', '', '', ' PENDING_INVITATION ', '', '', '',
         ])->all();
-        $rows[] = ['Root', 'root@example.test', 'superadmin', 'Solo', '', '', '', '', ''];
+        $rows[] = ['Root', 'root@example.test', 'superadmin', 'Solo', '', '', '', '', '', '', '', ''];
         Role::query()->where('slug', 'staff')->update(['is_active' => false]);
-        $rows[] = ['Inactive Role', 'inactive-role@example.test', 'staff', 'Solo', '', '', '', '', ''];
+        $rows[] = ['Inactive Role', 'inactive-role@example.test', 'staff', 'Solo', '', '', '', '', '', '', '', ''];
 
         $this->uploadImport($actor, $rows);
         $byEmail = UserImportRow::all()->keyBy(fn (UserImportRow $row) => $row->normalized_data['email']);
-
         foreach (range(0, 5) as $index) {
             $this->assertSame(UserImportRow::VALIDATION_VALID, $byEmail["role{$index}@example.test"]->validation_status);
             $this->assertSame(UserImportTemplateExport::ROLE_SLUGS[$index], $byEmail["role{$index}@example.test"]->normalized_data['role_slug']);

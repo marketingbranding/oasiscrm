@@ -14,6 +14,12 @@ class UserAdministrationService
 
     private const IMPORT_SUPERADMIN_ONLY_PROVISIONING_ROLES = ['sales_coordinator', 'admin', 'branch_manager'];
 
+    private const LEGACY_ROLE_SLUGS = ['admin', 'sas', 'sam'];
+
+    private const STAFF_TYPES = ['admin_cabang', 'sales', 'marketing', 'umum'];
+
+    private const CENTER_SCOPE_ROLES = ['manager', 'ass_manager', 'supervisor'];
+
     public function __construct(
         private readonly OrganizationScopeService $scope,
         private readonly ReportingHierarchyService $hierarchy,
@@ -41,6 +47,22 @@ class UserAdministrationService
         abort_unless($this->visibleQuery($actor)->whereKey($target)->exists(), 403);
         abort_if(! $actor->isSuperadmin() && $target->isSuperadmin(), 403);
         abort_if($this->hierarchy->roleRank($target) > $this->hierarchy->roleRank($actor), 403);
+    }
+
+    public function validateRoleAttributes(Role $role, ?string $staffType, ?string $scopeLevel, bool $allowLegacyRole = false): array
+    {
+        $errors = [];
+        if (! $allowLegacyRole && in_array($role->slug, self::LEGACY_ROLE_SLUGS, true)) {
+            $errors['role_id'] = 'Role legacy admin, sas, dan sam tidak dapat dipilih untuk pengguna baru.';
+        }
+        if ($role->slug === 'staff' && ! in_array($staffType, self::STAFF_TYPES, true)) {
+            $errors['staff_type'] = 'Tipe Staff Admin wajib dipilih.';
+        }
+        if ($scopeLevel === 'pusat' && ! in_array($role->slug, self::CENTER_SCOPE_ROLES, true)) {
+            $errors['scope_level'] = 'Scope pusat hanya dapat dipilih untuk manager, ass_manager, atau supervisor.';
+        }
+
+        return $errors;
     }
 
     public function assertCanAssignRole(User $actor, Role $role, ?User $target = null): void
@@ -108,13 +130,15 @@ class UserAdministrationService
         }
     }
 
-    public function availableRoles(User $actor)
+    public function availableRoles(User $actor, ?User $target = null)
     {
         return Role::query()->with('permissions')->where('is_active', true)
             ->when(! $actor->isSuperadmin(), fn (Builder $query) => $query->where('is_superadmin', false))
             ->get()
-            ->filter(fn (Role $role) => $this->hierarchy->roleRank($role->slug) <= $this->hierarchy->roleRank($actor)
+            ->filter(fn (Role $role) => ! in_array($role->slug, self::LEGACY_ROLE_SLUGS, true)
+                && $this->hierarchy->roleRank($role->slug) <= $this->hierarchy->roleRank($actor)
                 && ($actor->isSuperadmin() || ! $role->permissions->contains(fn ($permission) => in_array($permission->slug, ['roles.manage', 'permissions.manage'], true))))
+            ->when($target?->role && in_array($target->role->slug, self::LEGACY_ROLE_SLUGS, true), fn ($roles) => $roles->prepend($target->role->loadMissing('permissions')))
             ->values();
     }
 }

@@ -123,6 +123,8 @@ class UserImportExecutionService
                         'name' => $data['name'],
                         'email' => $data['email'],
                         'role_id' => $data['role_id'],
+                        'staff_type' => $data['staff_type'] !== '' ? $data['staff_type'] : null,
+                        'scope_level' => $data['scope_level'] !== '' ? $data['scope_level'] : null,
                     ];
                     $user = $directActivation
                         ? $this->provisioning->createDirectlyActivated($attributes, $password, $actor)

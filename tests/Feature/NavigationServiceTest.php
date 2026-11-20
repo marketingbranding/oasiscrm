@@ -7,6 +7,7 @@ use App\Models\Role;
 use App\Models\User;
 use App\Services\NavigationService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Route;
 use Tests\TestCase;
 
@@ -86,6 +87,22 @@ class NavigationServiceTest extends TestCase
         $this->assertTrue($database['maintenance']);
         $this->assertTrue($database['active']);
         $this->assertSame('database', $database['module_key']);
+    }
+
+    public function test_br_staff_admin_navigation_memoizes_permission_queries_per_user(): void
+    {
+        $user = $this->user('staff');
+        $user->forceFill(['staff_type' => 'admin_cabang'])->saveQuietly();
+        $queries = 0;
+        DB::listen(function ($query) use (&$queries): void {
+            if (str_contains(strtolower($query->sql), 'role_permission')) {
+                $queries++;
+            }
+        });
+
+        app(NavigationService::class)->forUser($user);
+
+        $this->assertSame(1, $queries);
     }
 
     public function test_supplemental_role_does_not_add_navigation_access(): void

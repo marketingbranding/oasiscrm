@@ -76,6 +76,16 @@ class UserImportValidationService
                 $errors[] = 'Role tersebut hanya dapat diprovisikan melalui Superadmin atau proposal onboarding.';
             }
 
+            if ($role !== null) {
+                foreach ($this->administration->validateRoleAttributes(
+                    $role,
+                    $this->clean($raw['staff_type']),
+                    $this->clean($raw['scope_level']),
+                ) as $message) {
+                    $errors[] = $message;
+                }
+            }
+
             $primaryBranch = $this->branchLabels->resolve($raw['primary_branch'], $branches);
             if ($primaryBranch === null || ! $primaryBranch->is_active) {
                 $errors[] = 'Cabang utama wajib diisi dengan nama atau kode cabang aktif yang valid.';
@@ -160,6 +170,8 @@ class UserImportValidationService
                     'email' => $email,
                     'role_slug' => $roleSlug,
                     'role_id' => $role?->id,
+                    'staff_type' => $this->clean($raw['staff_type']),
+                    'scope_level' => $this->clean($raw['scope_level']),
                     'primary_branch_id' => $primaryBranch?->id,
                     'additional_branches' => $additionalBranchLabels,
                     'branch_ids' => $branchIds,

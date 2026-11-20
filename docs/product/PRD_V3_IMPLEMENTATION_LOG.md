@@ -92,7 +92,8 @@ Latest verification after WP-1.1/WP-1.2 and review fixes:
 - WP-1.3 former staff-related regressions are fixed: legacy primary `staff` permission fallback and denial for unknown non-null `staff_type`.
 - WP-1.3 full suite: 1,837 tests, 1,835 passed, 2 failed, 13,286 assertions; both failures are `SalesAgendaWorkspaceRenderTest::test_receipt_heading_matches_today_tomorrow_and_other_planned_dates` and `SalesAgendaWorkspaceRenderTest::test_populated_receipt_keeps_weekly_navigation_with_exact_date_links`. Full suite remains not green.
 - WP-1.3 final checks: `vendor/bin/pint --dirty --format agent`, `git diff --check`, `php artisan optimize:clear`, `php artisan view:cache`, and `graphify update .` passed.
-- No production cutover executed.
+- No production cutover executed. `oasis:roles-v3-migrate` production execution waits for owner-reviewed dry-run on a production database copy (D33).
+- Review fixes: deployed RBAC migration `2026_10_20_000001_add_rbac_policy_foundation_roles.php` restored unchanged; legacy role profiles are completed by `2026_11_20_210003_complete_prd_v3_legacy_role_profiles.php`. Staff permission checks memoize one legacy profile per `User` instance. User create/update and XLSX import reject legacy admin/sas/sam selection, require `staff_type` for staff, and allow `scope_level=pusat` only for manager/ass_manager/supervisor.
 
 ## Inventaris hardcode aturan PRD
 

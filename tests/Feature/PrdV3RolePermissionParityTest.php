@@ -5,12 +5,26 @@ namespace Tests\Feature;
 use App\Models\Role;
 use App\Models\User;
 use App\Support\PermissionCatalog;
+use Illuminate\Database\Events\QueryExecuted;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
 class PrdV3RolePermissionParityTest extends TestCase
 {
     use RefreshDatabase;
+
+    public function test_br_fresh_and_legacy_database_role_permission_profiles_match(): void
+    {
+        $slugs = ['admin', 'sas', 'sam', 'staff'];
+        $fresh = $this->rolePermissionSets($slugs);
+
+        DB::table('role_permission')->whereIn('role_id', Role::query()->whereIn('slug', $slugs)->pluck('id'))->delete();
+        $migration = require base_path('database/migrations/2026_11_20_210003_complete_prd_v3_legacy_role_profiles.php');
+        $migration->up();
+
+        $this->assertSame($fresh, $this->rolePermissionSets($slugs));
+    }
 
     public function test_br_staff_type_permissions_match_pre_v3_snapshot(): void
     {
@@ -79,6 +93,26 @@ class PrdV3RolePermissionParityTest extends TestCase
         $this->assertFalse($user->hasPermission('system.maintenance_bypass'));
     }
 
+    public function test_br_staff_permission_checks_memoize_legacy_profile_per_user_instance(): void
+    {
+        $user = User::factory()->create([
+            'role_id' => Role::query()->where('slug', 'staff')->firstOrFail()->id,
+            'staff_type' => 'admin_cabang',
+        ]);
+        $queries = 0;
+        DB::listen(function (QueryExecuted $query) use (&$queries): void {
+            if (str_contains(strtolower($query->sql), 'role_permission')) {
+                $queries++;
+            }
+        });
+
+        $user->hasPermission('users.view');
+        $user->hasPermission('users.create');
+        $user->hasPermission('users.update');
+
+        $this->assertSame(1, $queries);
+    }
+
     public function test_br_staff_type_permissions_read_legacy_role_database_profile(): void
     {
         $admin = Role::query()->where('slug', 'admin')->firstOrFail();
@@ -91,6 +125,14 @@ class PrdV3RolePermissionParityTest extends TestCase
         ]);
 
         $this->assertTrue($user->hasPermission('users.view'));
+    }
+
+    /** @param array<int, string> $slugs @return array<string, array<int, string>> */
+    private function rolePermissionSets(array $slugs): array
+    {
+        return Role::query()->whereIn('slug', $slugs)->get()->sortBy('slug')->mapWithKeys(
+            fn (Role $role): array => [$role->slug => $role->permissions()->pluck('slug')->sort()->values()->all()],
+        )->all();
     }
 
     public function test_br_admin_cabang_helper_covers_legacy_and_staff_profiles_only(): void

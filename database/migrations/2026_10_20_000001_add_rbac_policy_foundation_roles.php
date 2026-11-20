@@ -11,10 +11,8 @@ return new class extends Migration
     public function up(): void
     {
         foreach ([
-            ['slug' => 'sas', 'name' => 'Staff Admin · Sales', 'description' => 'Profil izin legacy untuk Staff Admin bertipe Sales.'],
-            ['slug' => 'sam', 'name' => 'Staff Admin · Marketing', 'description' => 'Profil izin legacy untuk Staff Admin bertipe Marketing.'],
-            ['slug' => 'admin', 'name' => 'Staff Admin · Admin Cabang', 'description' => 'Profil izin legacy untuk Staff Admin bertipe Admin Cabang.'],
-            ['slug' => 'staff', 'name' => 'Staff Admin · Umum', 'description' => 'Profil izin legacy untuk Staff Admin bertipe Umum.'],
+            ['slug' => 'sas', 'name' => 'Staff Admin Sales', 'description' => 'Administrasi Sales tingkat cabang dengan akses monitoring.'],
+            ['slug' => 'sam', 'name' => 'Staff Admin Marketing', 'description' => 'Administrasi Marketing tingkat cabang dengan akses monitoring.'],
         ] as $role) {
             DB::table('roles')->updateOrInsert(['slug' => $role['slug']], [
                 'name' => $role['name'],
@@ -35,7 +33,7 @@ return new class extends Migration
         }
 
         $permissionIds = DB::table('permissions')->pluck('id', 'slug');
-        foreach (['sas', 'sam', 'admin', 'staff'] as $roleSlug) {
+        foreach (['sas', 'sam'] as $roleSlug) {
             $roleId = DB::table('roles')->where('slug', $roleSlug)->value('id');
             DB::table('role_permission')->where('role_id', $roleId)->delete();
 

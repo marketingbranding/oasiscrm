@@ -11,6 +11,9 @@ PRD sumber kebenaran: `docs/product/PRD_OASIS_CRM_V3.md` versi 3.3 (D30–D33)
 - Kode yang dapat dijalankan menjadi sumber perilaku saat ini.
 - Perubahan user worktree yang sudah ada tidak disentuh.
 - WP-0 audit dan pencatatan selesai; WP-1.1/WP-1.2 runtime slice selesai di branch ini.
+- WP-1.1/WP-1.2 commits: `b2c351c`, `4ee24eb`, `47526ee`, `fe565dd`; pushed to `origin/prd-v3/fase-1-fondasi`.
+- WP-1.1/WP-1.2 settings page, resolver, permission migration, audit, cache invalidation, and flag facade are complete for registered initial keys. Consumer cutover remains pending.
+- Focused verification: 12 tests passed, 42 assertions. Full-suite verification: 1,823 tests, 1,821 passed, 2 known baseline failures listed below.
 - Keputusan register konflik C-01–C-08 disetujui pemilik produk; C-09–C-11 ditambahkan dari review lanjutan.
 - Cutover produksi tidak dieksekusi: mode graf kanonis, pemadaman sinkronisasi Sheet, pembekuan tab Talangan, penghapusan role lama, dan penghapusan kolom lama.
 - Setiap aturan BR yang diimplementasikan nanti wajib punya tes yang menyebut ID BR.
@@ -21,8 +24,8 @@ PRD sumber kebenaran: `docs/product/PRD_OASIS_CRM_V3.md` versi 3.3 (D30–D33)
 | Paket | Fase | Cakupan | Status | BR utama |
 |---|---:|---|---|---|
 | WP-0 | 0 | Audit PRD v3, inventaris hardcode, impact map, baseline, snapshot permission | Selesai audit awal | Semua fase |
-| WP-1.1 | 1 | Pengaturan Aturan: `app_settings`, resolver bertipe, audit perubahan | Selesai untuk consumer awal; aturan lain pindah bersama consumer | Semua BR bertanda ⚙ |
-| WP-1.2 | 1 | Feature flag PRD v3 dan helper pembacaan tunggal | Selesai; semua flag default mati | BR-50–BR-53, risiko transisi |
+| WP-1.1 | 1 | Pengaturan Aturan: `app_settings`, resolver bertipe, audit perubahan | Selesai untuk consumer awal; aturan lain pindah bersama consumer. Commits `b2c351c`, `4ee24eb`, `fe565dd` | BR-06; semua BR bertanda ⚙ pada consumer terkait |
+| WP-1.2 | 1 | Feature flag PRD v3 dan helper pembacaan tunggal | Selesai; four registered flags default mati. Commit `47526ee` | BR-50–BR-53, risiko transisi |
 | WP-1.3 | 1 | Role `ass_manager`, atribut user, migrasi pemetaan role lama | Diblokir sampai register konflik disetujui | §4.1, D6, D21, D25 |
 | WP-1.4 | 1 | Graf organisasi kanonis dan pemantauan berjenjang | Belum mulai; menunggu laporan paritas | BR-50–BR-53 |
 | WP-1.5 | 1 | Jam kerja, target 480, Jumat, akhir pekan, hari libur | Belum mulai | BR-01–BR-09 |
@@ -73,6 +76,16 @@ Keduanya berupa assertion markup HTML, bukan exception aplikasi:
 - `test_populated_receipt_keeps_weekly_navigation_with_exact_date_links`: response memuat kelas `sales-week-navigation-day is-active is-weekend`, sedangkan assertion mencari substring persis `class="sales-week-navigation-day is-active"`; assertion gagal pada `SalesAgendaWorkspaceRenderTest.php:376`.
 
 WP-0 tidak memperbaiki failure. WP-1.5 akan mengunci tanggal tes memakai `Carbon::setTestNow`, karena perilaku ini terkait aturan akhir pekan BR-08.
+
+Latest verification after WP-1.1/WP-1.2:
+
+- Focused settings/flags suite: 12 passed, 42 assertions.
+- Full suite: 1,823 tests, 1,821 passed, 2 failures; same two known `SalesAgendaWorkspaceRenderTest` baseline failures above.
+- `vendor/bin/pint --dirty --format agent`: passed.
+- `npm run build`: passed.
+- `git diff --check`: passed.
+- `php artisan route:list --name=admin.app-settings`, `php artisan optimize:clear`, and `php artisan view:cache`: passed.
+- No production cutover executed.
 
 ## Inventaris hardcode aturan PRD
 
@@ -156,10 +169,23 @@ WP-0 tidak memperbaiki failure. WP-1.5 akan mengunci tanggal tes memakai `Carbon
 
 ### WP-1.1 — Pengaturan aturan dan feature flag
 
-- Data: migration `app_settings`, resolver bertipe, audit perubahan, cache invalidation.
-- Route/controller/view: halaman Pengaturan Superadmin, named routes, validasi, inline errors.
-- Service: setting resolver, feature-flag helper, consumers Daily Plan/Agenda/Reminder.
-- Test: default setting, override setting, audit, flag mati/hidup, authorization direct URL.
+Status: selesai untuk fondasi runtime dan halaman Superadmin; consumer migration tetap paket berikutnya.
+
+- Main files: `database/migrations/2026_11_20_000001_create_app_settings_table.php`, `app/Models/AppSetting.php`, `app/Support/AppSettingCatalog.php`, `app/Services/AppSettingResolver.php`, `app/Services/AppSettingService.php`, `app/Http/Requests/Crm/UpdateAppSettingsRequest.php`, `app/Http/Controllers/Crm/AppSettingController.php`, `resources/views/crm/app-settings/index.blade.php`, `routes/web.php`.
+- Permission/audit: `system.settings_manage` registered in `PermissionCatalog`, idempotent permission/changelog migration, existing Superadmin mapping, per-key `ActivityLog` event `app_setting_updated`.
+- Registered rule keys: `sales_agenda.reminder_lead_minutes` default `15` (`BR-06`) and `sales_monitoring.stale_lead_days` default `2`. Missing rows use code defaults; stored values are typed, validated, cached, and invalidated after commit.
+- Authorization: direct GET/PUT routes require registered permission, system administration middleware, primary Superadmin, active account, and non-impersonating mutation.
+- Tests: `tests/Unit/AppSettingResolverTest.php` and `tests/Feature/AppSettingTest.php`; focused suite covers defaults, overrides, BR-06, direct access denial, supplemental-role non-escalation, invalid/unknown values, service boundary validation, audit, and contact-field exclusion.
+- Not included: remaining PRD ⚙ consumers, `holidays`, Daily Plan/Receipt migration, and production cutover.
+
+### WP-1.2 — Feature flag PRD v3
+
+Status: selesai untuk shared default-off helper; consumers remain gated for later packages.
+
+- Main files: `app/Support/FeatureFlag.php`, shared `AppSettingCatalog`/`AppSettingResolver`.
+- Canonical registered keys in this implementation: `org_hierarchical_monitoring`, `lead_stages_v3`, `work_hours_v3`, `transaction_events_v3`; all default `false`.
+- Tests: `tests/Unit/FeatureFlagTest.php` covers exact key set, default-off behavior, and explicit true override through shared resolver.
+- No consumer branch, graph mode activation, sheet cutover, or production rollout executed.
 
 ### WP-1.3 — Role dan atribut user
 
@@ -252,8 +278,8 @@ WP-0 tidak memperbaiki failure. WP-1.5 akan mengunci tanggal tes memakai `Carbon
 
 | Paket | Tes wajib minimal |
 |---|---|
-| WP-1.1 | setting defaults/overrides, audit, and Superadmin-only access |
-| WP-1.2 | feature-flag defaults, enabled/disabled transition paths, and `BR-52` |
+| WP-1.1 | `tests/Unit/AppSettingResolverTest.php`, `tests/Feature/AppSettingTest.php`: defaults/overrides, `BR-06`, audit, direct URL, Superadmin-only access, invalid values, and service boundary |
+| WP-1.2 | `tests/Unit/FeatureFlagTest.php`: exact four-key set, default-off, explicit enabled override, shared resolver source; consumer transition paths and `BR-52` remain WP-1.4/consumer scope |
 | WP-1.3 | role/attribute validation, legacy role mapping, no permission escalation via additional role |
 | WP-1.4 | `BR-50`, `BR-51`, `BR-52`, `BR-53` boundary and direct URL |
 | WP-1.5 | `BR-01`–`BR-09`, nilai default dan nilai Pengaturan yang diubah |

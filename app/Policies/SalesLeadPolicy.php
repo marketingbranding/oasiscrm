@@ -210,7 +210,7 @@ class SalesLeadPolicy
 
     public function canEditHistoricalOwnedLead(User $user, SalesLead $lead): bool
     {
-        return $user->isAdminCabang() || $user->hasPrimaryRole('branch_manager')
+        return ($user->isAdminCabang() || $user->hasPrimaryRole('branch_manager'))
             && app(WorkspaceAccessService::class)->canEditBranch($user, $lead->branch_id)
             && $lead->sales !== null
             && app(WorkspaceAccessService::class)->canViewHistoricalBranch($lead->sales, $lead->branch_id);

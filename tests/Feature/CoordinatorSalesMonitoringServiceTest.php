@@ -119,16 +119,17 @@ class CoordinatorSalesMonitoringServiceTest extends TestCase
         $this->assertSame(1, $data['kpi']['face_to_face']);
     }
 
-    public function test_forged_sales_filter_is_forbidden(): void
+    public function test_br51_direct_coordinator_monitoring_url_rejects_forged_sales_filter(): void
     {
         $outsider = $this->user('sales', 'Bukan Tim', $this->branch);
 
-        try {
-            app(CoordinatorSalesMonitoringService::class)->resolve($this->coordinator, ['sales_id' => $outsider->id]);
-            $this->fail('Expected 403.');
-        } catch (HttpException $exception) {
-            $this->assertSame(403, $exception->getStatusCode());
-        }
+        $this->actingAs($this->coordinator)
+            ->get(route('sales-pocketbook.index', [
+                'tab' => 'today',
+                'view' => 'detail',
+                'sales_id' => $outsider->id,
+            ]))
+            ->assertForbidden();
     }
 
     public function test_agendas_require_canonical_type_current_mapping_and_exact_scope(): void

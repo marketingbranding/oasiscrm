@@ -243,6 +243,23 @@ Status: desain disetujui; irisan 1.4a–1.4f sedang berjalan. Tidak ada cutover 
 - Operator: `organization:backfill --dry-run`, parity/health report. Tidak ada production write oleh agent.
 - Test: `OrganizationScopeServiceTest`, `OrganizationWorkspaceAuthorizationTest`, `OrganizationGraphModeWorkflowTest`, parity tests, direct endpoint and branch/project boundary tests.
 
+#### WP-1.4 Task 4 — Inventaris consumer monitoring Sales (1.4c–1.4d)
+
+Status: selesai minimal confirmed migration. Flag `org_hierarchical_monitoring` tetap default-off; tidak ada cutover produksi.
+
+- Lead Tim / monitoring coordinator: `CoordinatorSalesMonitoringService` dipakai oleh `CoordinatorSalesLeadWorkspaceController` pada route `sales-pocketbook.index`; `resolve`, `todayWorkspace`, `salesDetail`, dan `agendaBase` memakai irisan `OrganizationScopeService` + `WorkspaceAccessService` + `SalesTeamScopeService`. Filter `sales_id` forged diuji lewat direct URL dan ditolak (BR-51).
+- Supervisor/Admin Branch monitoring: `SupervisorSalesMonitoringService` dan `AdminBranchSalesMonitoringService` sudah memakai `OrganizationScopeService` untuk branch/project/user scope. Tidak diubah.
+- Rencana Harian Tim/agenda: coordinator monitoring memakai shared scope. Sales personal agenda `SalesAgendaController::index` sudah membatasi owner ke user sendiri dan branch/project ke authorization scope; baseline flag-off tidak membuktikan bypass baru, sehingga controller tidak diubah.
+- Lead options AJAX: `SalesLeadOptionController` sebelumnya hanya memeriksa workspace branch. Saat flag aktif, sekarang memeriksa `OrganizationScopeService::branchIds($user, 'sales_pocketbook', 'view')`; saat flag mati, jalur lama tetap. Direct AJAX branch luar scope diuji (BR-51).
+- Export: coordinator export memanggil `CoordinatorSalesMonitoringService::resolve(..., false)`; supervisor export memakai monitoring service. Tidak ada consumer baru.
+- Notifikasi/deep link dan komentar: `NotificationController`, `CommentableAccessService`, dan `CommentMentionService` memakai policy/shared scope; tidak diubah.
+- Team history route/service: tidak ditemukan. Tidak diinventasikan atau diinventalkan.
+- Sales monitoring AI tool: tidak ditemukan di `AiToolRegistry`; tidak ditambahkan.
+- Konsumen, Dana Talangan, Expenses: tidak dipindah ke distant-summary mode; consumer yang ada tidak ditambah.
+- Distant summary: tidak ditambah karena belum ada consumer team-history/AI/summary yang dapat dimigrasikan tanpa mengarang interface.
+- Changelog: tidak ditambah; perubahan berada di bawah feature flag dan Task 3 sudah memiliki changelog untuk scope behavior.
+
+
 ### WP-1.5 — Kalender kerja
 
 - Data: migration `holidays`, audit update; settings consumed from WP-1.1.

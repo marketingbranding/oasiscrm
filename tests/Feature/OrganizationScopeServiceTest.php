@@ -71,6 +71,62 @@ class OrganizationScopeServiceTest extends TestCase
         $this->assertNotContains($otherBranch->id, $scope->branchIds($viewer, 'work_planner'));
     }
 
+    public function test_br51_flag_on_filters_inactive_and_cross_branch_descendants(): void
+    {
+        // BR-51: inactive and out-of-workspace descendants never enter monitoring scope.
+        $branch = $this->branch('ACT');
+        $otherBranch = $this->branch('OUT');
+        $viewer = $this->user('supervisor', $branch);
+        $inactive = $this->user('sales_coordinator', $branch);
+        $crossBranch = $this->user('sales_coordinator', $otherBranch);
+        $inactive->forceFill(['is_active' => false, 'supervisor_user_id' => $viewer->id])->saveQuietly();
+        $crossBranch->forceFill(['supervisor_user_id' => $viewer->id])->saveQuietly();
+        $this->enableHierarchicalMonitoring();
+
+        $visible = app(OrganizationScopeService::class)->visibleUserIds($viewer, 'sales_pocketbook');
+
+        $this->assertNotContains($inactive->id, $visible);
+        $this->assertNotContains($crossBranch->id, $visible);
+    }
+
+    public function test_br51_flag_on_coordinator_scope_keeps_team_mapping_isolated(): void
+    {
+        // BR-51: Coordinator A cannot see Coordinator B's active Sales members.
+        $branch = $this->branch('COA');
+        $coordinatorA = $this->user('sales_coordinator', $branch);
+        $coordinatorB = $this->user('sales_coordinator', $branch);
+        $salesA = $this->user('sales', $branch);
+        $salesB = $this->user('sales', $branch);
+        DB::table('sales_coordinator_sales')->insert([
+            ['coordinator_user_id' => $coordinatorA->id, 'sales_user_id' => $salesA->id, 'is_active' => true, 'started_at' => today(), 'created_at' => now(), 'updated_at' => now()],
+            ['coordinator_user_id' => $coordinatorB->id, 'sales_user_id' => $salesB->id, 'is_active' => true, 'started_at' => today(), 'created_at' => now(), 'updated_at' => now()],
+        ]);
+        $this->enableHierarchicalMonitoring();
+
+        $visible = app(OrganizationScopeService::class)->visibleUserIds($coordinatorA, 'sales_pocketbook');
+
+        $this->assertSame([$salesA->id], $visible);
+        $this->assertNotContains($salesB->id, $visible);
+    }
+
+    public function test_br52_pusat_scope_does_not_expand_own_or_assigned_projects(): void
+    {
+        // BR-52: pusat only widens branch permission, never own or assigned permission.
+        $branch = $this->branch('OWN');
+        $otherBranch = $this->branch('ASN');
+        $viewer = $this->user('supervisor', $branch);
+        $viewer->forceFill(['scope_level' => 'pusat'])->saveQuietly();
+        $assignedProject = LeadMaster::create(['branch_id' => $otherBranch->id, 'project_name' => 'Assigned Other', 'is_active' => true]);
+        $unassignedProject = LeadMaster::create(['branch_id' => $otherBranch->id, 'project_name' => 'Unassigned Other', 'is_active' => true]);
+        DB::table('project_user')->insert(['user_id' => $viewer->id, 'project_id' => $assignedProject->id, 'is_active' => true]);
+        $this->enableHierarchicalMonitoring();
+
+        $scope = app(OrganizationScopeService::class);
+
+        $this->assertNotContains($assignedProject->id, $scope->projectIds($viewer, 'work_planner'));
+        $this->assertNotContains($unassignedProject->id, $scope->projectIds($viewer, 'work_planner'));
+    }
+
     public function test_br53_extension_point_grants_no_access(): void
     {
         // BR-53: special access remains unavailable until WP-2.2.

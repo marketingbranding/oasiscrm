@@ -42,8 +42,9 @@ class OrganizationScopeService
     {
         $workspaceBranchIds = $this->workspaceBranchIds($viewer);
         $hierarchicalMonitoring = $this->hierarchicalMonitoringEnabled($viewer);
+        $semanticKey = $this->semanticCacheKey($viewer);
 
-        return $this->cached('users:'.$viewer->id.':'.$module.':'.$action.':'.($hierarchicalMonitoring ? 'hierarchical' : 'legacy').':'.implode(',', $workspaceBranchIds), function () use ($viewer, $module, $action, $workspaceBranchIds): array {
+        return $this->cached('users:'.$viewer->id.':'.$module.':'.$action.':'.$semanticKey.':'.implode(',', $workspaceBranchIds), function () use ($viewer, $module, $action, $workspaceBranchIds): array {
             $scopes = $this->scopes($viewer, $module, $action);
             if (in_array('all', $scopes, true) && ! $this->workspaceAccess->isBranchScopedOperator($viewer)) {
                 return User::query()->where('is_active', true)->pluck('id')->map(fn ($id) => (int) $id)->all();
@@ -53,7 +54,8 @@ class OrganizationScopeService
                 return $this->authorizedUserIdsForBranches($workspaceBranchIds);
             }
 
-            if ($this->hierarchicalMonitoringEnabled($viewer)) {
+            if ($this->hierarchicalMonitoringEnabled($viewer)
+                || (FeatureFlag::enabled('org_hierarchical_monitoring') && $this->isCoordinatorSalesScope($viewer, $module))) {
                 return $this->hierarchicalVisibleUserIds($viewer, $module, $action, $scopes, $workspaceBranchIds);
             }
 
@@ -101,8 +103,9 @@ class OrganizationScopeService
     public function branchIds(User $viewer, ?string $module = null, string $action = 'view'): array
     {
         $workspaceBranchIds = $this->workspaceBranchIds($viewer);
+        $semanticKey = $this->semanticCacheKey($viewer);
 
-        return $this->cached('branch:'.$viewer->id.':'.$module.':'.$action.':'.implode(',', $workspaceBranchIds), function () use ($viewer, $module, $action, $workspaceBranchIds): array {
+        return $this->cached('branch:'.$viewer->id.':'.$module.':'.$action.':'.$semanticKey.':'.implode(',', $workspaceBranchIds), function () use ($viewer, $module, $action, $workspaceBranchIds): array {
             $scopes = $this->scopes($viewer, $module, $action);
             if (in_array('all', $scopes, true) && ! $this->workspaceAccess->isBranchScopedOperator($viewer)) {
                 return Branch::query()->where('is_active', true)->pluck('id')->map(fn ($id) => (int) $id)->all();
@@ -131,8 +134,9 @@ class OrganizationScopeService
     public function projectIds(User $viewer, ?string $module = null, string $action = 'view'): array
     {
         $workspaceBranchIds = $this->workspaceBranchIds($viewer);
+        $semanticKey = $this->semanticCacheKey($viewer);
 
-        return $this->cached('project:'.$viewer->id.':'.$module.':'.$action.':'.implode(',', $workspaceBranchIds), function () use ($viewer, $module, $action, $workspaceBranchIds): array {
+        return $this->cached('project:'.$viewer->id.':'.$module.':'.$action.':'.$semanticKey.':'.implode(',', $workspaceBranchIds), function () use ($viewer, $module, $action, $workspaceBranchIds): array {
             $scopes = $this->scopes($viewer, $module, $action);
             if (in_array('all', $scopes, true) && ! $this->workspaceAccess->isBranchScopedOperator($viewer)) {
                 return LeadMaster::query()->where('is_active', true)->pluck('id')->map(fn ($id) => (int) $id)->all();
@@ -215,7 +219,7 @@ class OrganizationScopeService
     /** @return array<int> */
     public function hierarchyIds(User $viewer, ?int $branchId = null): array
     {
-        return $this->cached('hierarchy:'.$viewer->id.':'.($branchId ?? 'current'), function () use ($viewer, $branchId): array {
+        return $this->cached('hierarchy:'.$viewer->id.':'.$this->semanticCacheKey($viewer).':'.($branchId ?? 'current'), function () use ($viewer, $branchId): array {
             $evaluationBranchId = $branchId ?? $viewer->branch_id;
             $effectiveMode = $this->mode->modeFor($viewer, $evaluationBranchId);
             $legacy = $this->legacyHierarchyIds($viewer, $this->hierarchy->legacyDescendantIds($viewer));
@@ -271,7 +275,7 @@ class OrganizationScopeService
     /** @return array<int> */
     public function teamIds(User $viewer, ?string $module = null, ?int $branchId = null): array
     {
-        return $this->cached('team:'.$viewer->id.':'.$module.':'.($branchId ?? 'current'), function () use ($viewer, $module, $branchId): array {
+        return $this->cached('team:'.$viewer->id.':'.$module.':'.$this->semanticCacheKey($viewer).':'.($branchId ?? 'current'), function () use ($viewer, $module, $branchId): array {
             if ($module === 'sales_pocketbook' && $viewer->hasPrimaryRole('sales_coordinator')) {
                 return $this->salesTeamScope->currentSalesQuery($viewer, $branchId)
                     ->pluck('users.id')
@@ -326,6 +330,15 @@ class OrganizationScopeService
         return $this->cached('workspace:'.$user->id, fn () => $this->workspaceAccess->accessibleBranchIds($user));
     }
 
+    private function semanticCacheKey(User $viewer): string
+    {
+        return implode(':', [
+            FeatureFlag::enabled('org_hierarchical_monitoring') ? 'on' : 'off',
+            (string) ($viewer->scope_level ?? ''),
+            $this->mode->modeFor($viewer, $viewer->branch_id),
+        ]);
+    }
+
     private function hierarchicalMonitoringEnabled(User $viewer): bool
     {
         return FeatureFlag::enabled('org_hierarchical_monitoring')
@@ -335,23 +348,23 @@ class OrganizationScopeService
     /** @param array<int> $scopes @param array<int> $workspaceBranchIds @return array<int> */
     private function hierarchicalVisibleUserIds(User $viewer, ?string $module, string $action, array $scopes, array $workspaceBranchIds): array
     {
-        if ($module === 'sales_pocketbook' && $viewer->hasPrimaryRole('sales_coordinator')) {
+        if ($this->isCoordinatorSalesScope($viewer, $module)) {
             return $this->salesTeamScope->currentSalesQuery($viewer, $this->evaluationBranchId($workspaceBranchIds))
                 ->whereIn('users.id', $this->authorizedUserIdsForBranches($workspaceBranchIds))
+                ->whereIn('users.branch_id', $workspaceBranchIds)
                 ->pluck('users.id')->map(fn ($id): int => (int) $id)->all();
         }
 
-        $monitoringIds = $this->graphMonitoringUserIds($viewer);
-        if ($monitoringIds === []) {
-            return [];
-        }
-
+        $monitoringIds = $this->activeUserIds($this->graphMonitoringUserIds($viewer));
         $ids = [];
-        if (in_array('own', $scopes, true)) {
+        if (in_array('own', $scopes, true) && $viewer->is_active) {
             $ids[] = (int) $viewer->id;
         }
         if (in_array('team', $scopes, true)) {
-            $ids = [...$ids, ...$monitoringIds];
+            $ids = [...$ids, ...array_intersect(
+                $monitoringIds,
+                $this->workspaceVisibleUserIds($workspaceBranchIds, $this->projectIds($viewer, $module, $action)),
+            )];
         }
         if (in_array('branch', $scopes, true)) {
             $branchIds = $this->hierarchicalBranchIds($viewer, $scopes, $workspaceBranchIds);
@@ -362,6 +375,28 @@ class OrganizationScopeService
         }
 
         return collect($ids)->map(fn ($id): int => (int) $id)->unique()->values()->all();
+    }
+
+    /** @param array<int> $ids @return array<int> */
+    private function activeUserIds(array $ids): array
+    {
+        return User::query()->whereIn('id', $ids)->where('is_active', true)->pluck('id')->map(fn ($id): int => (int) $id)->all();
+    }
+
+    /** @param array<int> $branchIds @param array<int> $projectIds @return array<int> */
+    private function workspaceVisibleUserIds(array $branchIds, array $projectIds): array
+    {
+        return User::query()->where('is_active', true)->where(function (Builder $query) use ($branchIds, $projectIds): void {
+            $query->whereIn('branch_id', $branchIds);
+            if ($projectIds !== []) {
+                $query->orWhereIn('id', $this->currentUserIdsForProjects($projectIds));
+            }
+        })->pluck('id')->map(fn ($id): int => (int) $id)->all();
+    }
+
+    private function isCoordinatorSalesScope(User $viewer, ?string $module): bool
+    {
+        return $module === 'sales_pocketbook' && $viewer->hasPrimaryRole('sales_coordinator');
     }
 
     /** @return array<int> */

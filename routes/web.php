@@ -4,6 +4,7 @@ use App\Http\Controllers\Auth\PasswordChangeController;
 use App\Http\Controllers\Crm\AdminUserController;
 use App\Http\Controllers\Crm\AdminUserImportController;
 use App\Http\Controllers\Crm\AiChatController;
+use App\Http\Controllers\Crm\AppSettingController;
 use App\Http\Controllers\Crm\BranchController;
 use App\Http\Controllers\Crm\ChangelogController;
 use App\Http\Controllers\Crm\CommentController;
@@ -83,6 +84,11 @@ Route::middleware(['auth', 'active', 'verified'])->group(function () {
 Route::middleware(['auth', 'active', 'verified', 'password.changed', 'operational.maintenance', 'crm.read-only', 'sales.access'])->group(function () {
     Route::bind('comment', fn ($value) => Comment::withTrashed()->findOrFail($value));
     Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
+
+    Route::prefix('admin/pengaturan-aturan')->name('admin.app-settings.')->middleware(['permission:system.settings_manage', 'system.admin:settings'])->group(function () {
+        Route::get('/', [AppSettingController::class, 'index'])->name('index');
+        Route::put('/', [AppSettingController::class, 'update'])->middleware('not.impersonating')->name('update');
+    });
 
     Route::prefix('admin/roles')->name('roles.')->middleware(['permission:roles.view', 'system.admin:roles'])->group(function () {
         Route::get('/', [RoleAdministrationController::class, 'index'])->name('index');

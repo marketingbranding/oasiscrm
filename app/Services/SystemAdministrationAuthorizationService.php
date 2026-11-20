@@ -16,12 +16,15 @@ final class SystemAdministrationAuthorizationService
 
     public const PERMISSIONS = 'permissions';
 
+    public const SETTINGS = 'settings';
+
     private const AREAS = [
         self::BRANCHES,
         self::PROJECTS,
         self::KAVLINGS,
         self::ROLES,
         self::PERMISSIONS,
+        self::SETTINGS,
     ];
 
     public function canManage(User $actor, string $area): bool

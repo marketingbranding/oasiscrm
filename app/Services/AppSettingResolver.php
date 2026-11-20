@@ -18,12 +18,12 @@ class AppSettingResolver
 
         return Cache::rememberForever($this->cacheKey($key), function () use ($key, $definition): mixed {
             try {
-                $stored = AppSetting::query()->where('key', $key)->value('value');
+                $stored = AppSetting::query()->where('key', $key)->first();
                 if ($stored === null) {
                     return $definition['default'];
                 }
 
-                return $this->normalize($stored, $definition['type'], $definition['default']);
+                return $this->normalize($stored->value, $definition['type'], $definition['default']);
             } catch (Throwable) {
                 return $definition['default'];
             }

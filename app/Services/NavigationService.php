@@ -104,6 +104,9 @@ class NavigationService
                 ! $isSales && $user->hasPermission('system.maintenance_manage')
                     ? $this->item('Maintenance', 'admin.maintenance.index', 'health', 'administration', ['admin.maintenance.*'], $routeName, null, $moduleMaintenance)
                     : null,
+                ! $isSales && $user->isSuperadmin() && $user->hasPermission('system.settings_manage')
+                     ? $this->item('Pengaturan Aturan', 'admin.app-settings.index', 'administration', 'administration', ['admin.app-settings.*'], $routeName, null, $moduleMaintenance)
+                     : null,
                 ! $isSales && $user->can('viewDesignSystem')
                     ? $this->item('Design System', 'admin.design-system', 'administration', 'administration', ['admin.design-system'], $routeName, null, $moduleMaintenance)
                     : null,

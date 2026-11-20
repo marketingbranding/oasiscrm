@@ -276,16 +276,20 @@ class OrganizationScopeService
     public function teamIds(User $viewer, ?string $module = null, ?int $branchId = null): array
     {
         return $this->cached('team:'.$viewer->id.':'.$module.':'.$this->semanticCacheKey($viewer, $branchId).':'.($branchId ?? 'current'), function () use ($viewer, $module, $branchId): array {
-            if ($this->isCoordinatorSalesScope($viewer, $module)) {
-                $workspaceBranchIds = $this->workspaceBranchIds($viewer);
-                if ($branchId !== null && ! in_array($branchId, $workspaceBranchIds, true)) {
-                    return [];
-                }
+            $workspaceBranchIds = $this->workspaceBranchIds($viewer);
+            $hierarchicalMonitoring = FeatureFlag::enabled('org_hierarchical_monitoring');
+            $coordinatorScope = $this->isCoordinatorSalesScope($viewer, $module);
+            if ($branchId !== null && ! in_array($branchId, $workspaceBranchIds, true)) {
+                return [];
+            }
+            $branchContextApplies = $branchId !== null;
+            $scopeBranchIds = $branchContextApplies ? [$branchId] : $workspaceBranchIds;
 
+            if ($coordinatorScope) {
                 $query = $this->salesTeamScope->currentSalesQuery($viewer, $branchId);
-                $query->whereIn('users.branch_id', $branchId === null ? $workspaceBranchIds : [$branchId]);
+                $query->whereIn('users.branch_id', $scopeBranchIds);
 
-                return $query->whereIn('users.id', $this->authorizedUserIdsForBranches($branchId === null ? $workspaceBranchIds : [$branchId]))
+                return $query->whereIn('users.id', $this->authorizedUserIdsForBranches($scopeBranchIds))
                     ->pluck('users.id')
                     ->map(fn ($id) => (int) $id)
                     ->values()
@@ -295,7 +299,7 @@ class OrganizationScopeService
             if ($this->isSupervisorSalesScope($viewer, $module)) {
                 $team = $this->salesTeamScope->forWorkspace(
                     $viewer,
-                    $this->workspaceBranchIds($viewer),
+                    $scopeBranchIds,
                     $this->workspaceAccess->accessibleProjectIds($viewer),
                     includeHistorical: false,
                     branchContext: $branchId,
@@ -303,6 +307,7 @@ class OrganizationScopeService
 
                 return collect([$team['coordinators'], $team['sales']])
                     ->flatten(1)
+                    ->filter(fn (User $user): bool => $branchId === null || (int) $user->branch_id === $branchId)
                     ->pluck('id')
                     ->map(fn ($id) => (int) $id)
                     ->unique()
@@ -310,19 +315,22 @@ class OrganizationScopeService
                     ->all();
             }
 
-            $descendantIds = $this->hierarchy->descendantIds($viewer, branchId: $branchId);
+            $descendantIds = $this->hierarchy->descendantIds($viewer, branchId: $branchContextApplies ? $branchId : null);
             if ($descendantIds === []) {
                 return [];
             }
 
-            $branchIds = $this->workspaceBranchIds($viewer);
+            $branchIds = $scopeBranchIds;
             $projectIds = $this->currentAssignedProjectIds($viewer, $branchIds);
             $projectUserIds = $this->currentUserIdsForProjects($projectIds);
             $branchUserIds = $this->authorizedUserIdsForBranches($branchIds);
-            $projectUserIds = array_intersect($projectUserIds, $branchUserIds);
+            if ($hierarchicalMonitoring) {
+                $projectUserIds = array_intersect($projectUserIds, $branchUserIds);
+            }
 
             return User::query()
                 ->whereIn('id', $descendantIds)
+                ->when($branchId !== null, fn (Builder $query) => $query->where('branch_id', $branchId))
                 ->where('is_active', true)
                 ->where(function (Builder $query) use ($branchUserIds, $projectUserIds) {
                     $query->whereIn('id', $branchUserIds);

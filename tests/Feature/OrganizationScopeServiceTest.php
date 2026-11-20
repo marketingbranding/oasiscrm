@@ -60,13 +60,64 @@ class OrganizationScopeServiceTest extends TestCase
         );
     }
 
-    public function test_br51_hierarchical_scope_uses_each_graph_read_mode(): void
+    public function test_br51_flag_off_team_ids_preserve_legacy_project_assignment_baseline(): void
     {
-        // BR-51: enabled hierarchical monitoring follows legacy, shadow, and graph read modes.
-        $branch = $this->branch('MOD');
+        // BR-51: flag-off teamIds() keeps legacy project-assignment visibility unchanged.
+        $branch = $this->branch('OFFT');
+        $outside = $this->branch('OFFO');
         $viewer = $this->user('manager', $branch);
+        $descendant = $this->user('sales', $outside);
+        $descendant->forceFill(['supervisor_user_id' => $viewer->id])->saveQuietly();
+        $project = LeadMaster::create(['branch_id' => $branch->id, 'project_name' => 'Legacy Team Project', 'is_active' => true]);
+        DB::table('project_user')->insert([
+            ['user_id' => $viewer->id, 'project_id' => $project->id, 'is_active' => true],
+            ['user_id' => $descendant->id, 'project_id' => $project->id, 'is_active' => true],
+        ]);
+        $this->setHierarchicalMonitoring(false);
+
+        $this->assertContains($descendant->id, app(OrganizationScopeService::class)->teamIds($viewer, 'work_planner'));
+    }
+
+    public function test_br51_team_ids_branch_context_isolated_in_legacy_shadow_and_graph_modes(): void
+    {
+        // BR-51: explicit branch context excludes sibling workspace descendants in every read mode.
+        $branch = $this->branch('BCA');
+        $sibling = $this->branch('BCB');
+        $outside = $this->branch('BCC');
+        $viewer = $this->user('manager', $branch);
+        $viewer->branches()->attach($sibling->id, ['is_current' => true, 'can_view' => true]);
         $descendant = $this->user('sales', $branch);
-        app(ReportingHierarchyService::class)->assignSupervisor($descendant, $viewer);
+        $siblingDescendant = $this->user('sales', $sibling);
+        $descendant->forceFill(['supervisor_user_id' => $viewer->id])->saveQuietly();
+        $siblingDescendant->forceFill(['supervisor_user_id' => $viewer->id])->saveQuietly();
+        DB::table('organization_assignments')->insert([
+            [
+                'user_id' => $descendant->id,
+                'parent_user_id' => $viewer->id,
+                'relationship_type' => 'reports_to',
+                'branch_id' => $branch->id,
+                'started_at' => today()->toDateString(),
+                'is_active' => true,
+                'is_primary' => true,
+                'source' => 'test',
+                'lock_version' => 1,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ],
+            [
+                'user_id' => $siblingDescendant->id,
+                'parent_user_id' => $viewer->id,
+                'relationship_type' => 'reports_to',
+                'branch_id' => $sibling->id,
+                'started_at' => today()->toDateString(),
+                'is_active' => true,
+                'is_primary' => true,
+                'source' => 'test',
+                'lock_version' => 1,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ],
+        ]);
         $this->enableHierarchicalMonitoring();
 
         foreach (['legacy', 'shadow', 'graph'] as $mode) {
@@ -77,11 +128,53 @@ class OrganizationScopeServiceTest extends TestCase
                 'organization.graph_branch_ids' => '',
             ]);
 
-            $this->assertContains(
-                $descendant->id,
-                app(OrganizationScopeService::class)->visibleUserIds($viewer, 'sales_pocketbook'),
-                "Mode {$mode} must include active reporting descendant.",
-            );
+            $teamIds = app(OrganizationScopeService::class)->teamIds($viewer, 'work_planner', $branch->id);
+
+            $this->assertContains($descendant->id, $teamIds, "Mode {$mode} must include requested branch descendant.");
+            $this->assertNotContains($siblingDescendant->id, $teamIds, "Mode {$mode} must exclude sibling branch descendant.");
+            $this->assertSame([], app(OrganizationScopeService::class)->teamIds($viewer, 'work_planner', $outside->id));
+        }
+    }
+
+    public function test_br51_hierarchical_scope_uses_distinct_legacy_and_graph_sources(): void
+    {
+        // BR-51: graph mode reads canonical assignments instead of legacy supervisor columns.
+        $branch = $this->branch('SRC');
+        $viewer = $this->user('manager', $branch);
+        $legacyOnly = $this->user('sales', $branch);
+        $graphOnly = $this->user('sales', $branch);
+        $legacyOnly->forceFill(['supervisor_user_id' => $viewer->id])->saveQuietly();
+        DB::table('organization_assignments')->insert([
+            'user_id' => $graphOnly->id,
+            'parent_user_id' => $viewer->id,
+            'relationship_type' => 'reports_to',
+            'branch_id' => $branch->id,
+            'started_at' => today()->toDateString(),
+            'is_active' => true,
+            'is_primary' => true,
+            'source' => 'test',
+            'lock_version' => 1,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $this->enableHierarchicalMonitoring();
+
+        foreach ([
+            'legacy' => [$legacyOnly->id, $graphOnly->id],
+            'shadow' => [$legacyOnly->id, $graphOnly->id],
+            'graph' => [$graphOnly->id, $legacyOnly->id],
+        ] as $mode => [$expected, $excluded]) {
+            config([
+                'app.env' => 'testing',
+                'organization.graph_mode' => $mode,
+                'organization.graph_user_ids' => '',
+                'organization.graph_branch_ids' => '',
+            ]);
+
+            $teamIds = app(OrganizationScopeService::class)->teamIds($viewer, 'work_planner');
+
+            $this->assertContains($expected, $teamIds, "Mode {$mode} must use expected reporting source.");
+            $this->assertNotContains($excluded, $teamIds, "Mode {$mode} must exclude other reporting source.");
         }
     }
 
@@ -101,6 +194,7 @@ class OrganizationScopeServiceTest extends TestCase
             ['user_id' => $allowed->id, 'project_id' => $project->id, 'is_active' => true],
             ['user_id' => $leak->id, 'project_id' => $project->id, 'is_active' => true],
         ]);
+        $this->enableHierarchicalMonitoring();
 
         $teamIds = app(OrganizationScopeService::class)->teamIds($viewer, 'work_planner');
 

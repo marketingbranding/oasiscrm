@@ -139,3 +139,28 @@ Message: `feat: gate hierarchical organization scope`
 
 - Full suite not run; covering scope, graph-mode, and feature-flag tests passed.
 - Existing untracked planning/spec files remain untouched.
+
+# Round 5 final fixes
+
+## Changes
+
+- `teamIds()` now keeps legacy project-assignment behavior when `org_hierarchical_monitoring=false`; strict project-user and authorized-branch intersection applies only when flag is enabled.
+- Explicit branch context now fails closed outside viewer workspace and constrains non-Coordinator descendants to requested branch, preventing sibling workspace leakage in legacy, shadow, and graph modes.
+- Added direct BR-51 flag-off `teamIds()` regression for legacy project-assignment baseline.
+- Added BR-51 branch-context regressions across legacy, shadow, and graph modes, including outside-workspace rejection.
+- Added BR-51 fixture proving legacy and canonical graph reporting sources differ; graph mode includes canonical-only descendant while legacy/shadow use legacy supervisor source.
+
+## Commands and output
+
+- `php artisan test --compact tests/Feature/OrganizationScopeServiceTest.php --filter='br51'` — **15 passed, 33 assertions**.
+- `php artisan test --compact tests/Feature/OrganizationScopeServiceTest.php tests/Feature/OrganizationGraphModeReadsTest.php tests/Unit/FeatureFlagTest.php` — **37 passed, 91 assertions**.
+- `vendor/bin/pint --dirty --format agent` — **passed**.
+- `git diff --check` — **passed**.
+- `$env:CACHE_STORE='array'; php artisan optimize:clear` — **passed**.
+- `php artisan view:cache` — **passed**.
+- `graphify update .` — **passed**, graph rebuilt.
+
+## Concerns
+
+- Full suite not run; focused Task 3 suite passed.
+- Existing untracked planning/spec files remain untouched.

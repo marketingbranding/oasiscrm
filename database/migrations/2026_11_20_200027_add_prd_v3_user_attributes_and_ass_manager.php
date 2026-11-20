@@ -51,7 +51,7 @@ return new class extends Migration
             DB::table('users')
                 ->whereNull('scope_level')
                 ->update([
-                    'scope_level' => DB::raw("CASE WHEN branch_id IS NULL THEN 'pusat' ELSE 'cabang' END"),
+                    'scope_level' => DB::raw("CASE WHEN role_id IN (SELECT id FROM roles WHERE slug IN ('admin', 'sas', 'sam', 'staff')) THEN 'cabang' WHEN branch_id IS NULL THEN 'pusat' ELSE 'cabang' END"),
                 ]);
         }
 

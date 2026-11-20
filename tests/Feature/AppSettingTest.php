@@ -8,6 +8,7 @@ use App\Models\User;
 use App\Services\AppSettingResolver;
 use App\Services\AppSettingService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Validation\ValidationException;
 use Tests\TestCase;
 
@@ -70,6 +71,22 @@ class AppSettingTest extends TestCase
         $staff->roles()->attach($superadminRole);
 
         $this->actingAs($staff)->get(route('admin.app-settings.index'))->assertForbidden();
+    }
+
+    public function test_br_wp11_service_update_clears_changed_setting_cache(): void
+    {
+        $superadmin = $this->user('superadmin');
+        $resolver = app(AppSettingResolver::class);
+
+        $this->assertSame(15, $resolver->int('sales_agenda.reminder_lead_minutes'));
+        Cache::put('oasis:app-setting:sales_agenda.reminder_lead_minutes', 15);
+
+        app(AppSettingService::class)->update($superadmin, [
+            'sales_agenda.reminder_lead_minutes' => 20,
+        ]);
+
+        $this->assertFalse(Cache::has('oasis:app-setting:sales_agenda.reminder_lead_minutes'));
+        $this->assertSame(20, $resolver->int('sales_agenda.reminder_lead_minutes'));
     }
 
     public function test_invalid_or_unknown_values_do_not_change_settings(): void

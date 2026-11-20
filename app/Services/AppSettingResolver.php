@@ -17,6 +17,12 @@ class AppSettingResolver
     {
         $definition = AppSettingCatalog::definition($key);
 
+        $missing = new \stdClass;
+        $cached = Cache::get($this->cacheKey($key), $missing);
+        if ($cached !== $missing) {
+            return $cached;
+        }
+
         try {
             $stored = AppSetting::query()->where('key', $key)->first();
             $value = $stored === null

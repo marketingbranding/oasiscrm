@@ -34,7 +34,7 @@ PRD sumber kebenaran: `docs/product/PRD_OASIS_CRM_V3.md` versi 3.3 (D30–D33)
 | WP-1.7 | 1 | Status/event transaksi, alasan Mundur, NUP baru | Selesai implementasi; flag default mati; belum cutover produksi | BR-20–BR-36 |
 | WP-1.8 | 1 | Istilah glosarium dan navigasi | Selesai; label tampilan, navigasi, ekspor, AI, notifikasi, metadata izin, dan changelog diselaraskan tanpa mengubah identifier internal | §3, D15 |
 | WP-1.9 | 1 | Privasi AI dan backup terpisah | Selesai implementasi; perlu verifikasi operator restore | BR-70–BR-73, BR-81 |
-| WP-1.10 | 1 | Penutup Fase 1: changelog, dokumentasi, verifikasi penuh | Belum mulai | Semua fase 1 |
+| WP-1.10 | 1 | Penutup Fase 1: changelog, dokumentasi, verifikasi penuh | Selesai; laporan fase dan operator handoff tersedia; cutover produksi tetap menunggu operator | Semua fase 1 |
 | WP-2.1 | 2 | Alih Lead dan antrean lead tanpa pemilik | Belum mulai | BR-54–BR-55 |
 | WP-2.2 | 2 | Izin Akses Khusus | Belum mulai | BR-53 |
 | WP-2.3 | 2 | Penanda perhatian | Belum mulai | §7.4 |
@@ -380,9 +380,14 @@ Status: implementasi selesai di branch `prd-v3/wp-1.7-transaction-nup`. Flag `tr
 - Ops: document backup contract and health check; never commit credentials or run production backup/cutover.
 - Test: BR-70–BR-73; no NIK/HP/address in provider messages, same scope as screen, read-only tools, server-only secret handling.
 
-### WP-1.10 — Penutup Fase 1
+### WP-1.10 - Penutup Fase 1
 
-- Verify all phase 1 BR tests, changelog migrations, docs, and operator handoff before phase acceptance.
+Status: selesai pada branch `prd-v3/wp-1.10-fase1-closeout`; merge phase branch menunggu review.
+
+- Semua paket WP-1.1–WP-1.9 dicatat; WP-1.6, WP-1.7, dan graf organisasi tetap menunggu gate/cutover operator.
+- Laporan verifikasi dan operator handoff: `docs/product/PRD_V3_PHASE_1_CLOSEOUT_REPORT.md`.
+- `composer test`: 2003 tests, 14163 assertions; Pint, diff check, build, migrasi kosong, dan graphify pass.
+- Backup Hostinger menjadi backup utama; command OASIS hanya backup manual pra-cutover.
 
 ## Konflik, risiko, dan keputusan yang harus dijaga
 

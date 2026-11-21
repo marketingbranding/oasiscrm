@@ -153,7 +153,7 @@ Jangan menulis ulang logika scope di controller atau Blade.
 
 ### 6.3 Data pribadi dan AI
 - NIK disamarkan di tampilan. Membuka NIK lengkap butuh permission khusus dan dicatat.
-- **NIK, nomor HP, dan alamat tidak pernah dikirim ke penyedia AI** (BR-70). Nama boleh dikirim, kecuali dimatikan di Pengaturan.
+- **NIK, nomor HP, dan alamat tidak pernah dikirim ke penyedia AI** (BR-70). Filter berlaku pada isi pesan, argumen, dan hasil alat; field protokol/skema tetap utuh. Nama orang boleh dikirim, kecuali dimatikan di Pengaturan. Nama proyek/cabang dan nama alat tetap boleh dikirim.
 - Asisten AI hanya memakai alat **baca** dengan scope dan otorisasi yang sama dengan layar biasa. Output alat dan jawaban model diperlakukan sebagai teks tidak tepercaya. Jangan menambah alat AI yang bisa menulis data tanpa ruang lingkup produk, konfirmasi, audit, dan tes otorisasi.
 - Kunci API (AI, gateway WhatsApp, VAPID) disimpan di environment atau terenkripsi di server, dan tidak pernah dikirim ke browser.
 

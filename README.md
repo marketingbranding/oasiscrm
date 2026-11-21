@@ -48,6 +48,7 @@ The application is a Laravel server-rendered application:
 - Policies, middleware, permissions, workspace access, and organization scope protect routes and records.
 - Local notifications and polling provide collaboration features; there is no realtime server requirement.
 - Changelog entries are inserted by idempotent migrations into `changelogs`.
+- AI provider payloads pass through one server-side privacy filter; database backup command is manual cutover evidence with 7-day configurable retention, while primary disaster backup uses Hostinger automation.
 - RBAC and the additive organization graph transition are documented in `docs/RBAC_ORGANIZATION_ARCHITECTURE.md`.
 
 ### Local data versus mirrors

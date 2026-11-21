@@ -24,7 +24,8 @@ class ConsumerV2ProcessTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_historical_entry_can_start_at_akad_without_fake_history(): void
+    /** BR-36: historical data starts at current process position without fabricated history. */
+    public function test_br36_historical_entry_starts_at_current_process_without_fake_history(): void
     {
         $application = ConsumerApplication::factory()->create();
         $actor = $this->superadmin($application);
@@ -118,6 +119,35 @@ class ConsumerV2ProcessTest extends TestCase
         app(ConsumerNupService::class)->convert($nup, ['kavling_id' => $kavling->id], $actor);
 
         $this->assertDatabaseHas('consumer_nups', ['id' => $nup->id, 'status' => 'waiting', 'converted_application_id' => null]);
+    }
+
+    /**
+     * BR-25: two conversion attempts for one kavling leave one LANJUT holder.
+     * SQLite test DB cannot run two independent transactions concurrently; sequential collision exercises same invariant deterministically.
+     */
+    public function test_br25_second_nup_conversion_to_same_kavling_is_rejected_without_mutation(): void
+    {
+        $application = ConsumerApplication::factory()->create();
+        $actor = $this->superadmin($application);
+        $kavling = Kavling::create(['project_id' => $application->project_id, 'kavling_code' => 'N-03', 'name' => 'N-03']);
+        $first = ConsumerNup::factory()->create(['branch_id' => $application->branch_id, 'project_id' => $application->project_id, 'nup_number' => 'NUP-BR25-1']);
+        $second = ConsumerNup::factory()->create(['branch_id' => $application->branch_id, 'project_id' => $application->project_id, 'nup_number' => 'NUP-BR25-2']);
+        $service = app(ConsumerNupService::class);
+
+        $holder = $service->convert($first, ['kavling_id' => $kavling->id], $actor);
+
+        try {
+            $service->convert($second, ['kavling_id' => $kavling->id], $actor);
+            $this->fail('Kavling tidak boleh memiliki dua transaksi LANJUT.');
+        } catch (\DomainException $exception) {
+            $this->assertSame('Kavling sudah memiliki assignment aktif.', $exception->getMessage());
+        }
+
+        $this->assertSame('LANJUT', $holder->fresh()->transaction_status);
+        $this->assertDatabaseHas('consumer_nups', ['id' => $first->id, 'status' => 'converted', 'converted_application_id' => $holder->id]);
+        $this->assertDatabaseHas('consumer_nups', ['id' => $second->id, 'status' => 'waiting', 'converted_application_id' => null]);
+        $this->assertSame(1, ConsumerKavlingAssignment::query()->where('kavling_id', $kavling->id)->whereNull('released_at')->count());
+    }
         $this->assertDatabaseCount('consumer_applications', 2);
     }
 
@@ -195,7 +225,8 @@ class ConsumerV2ProcessTest extends TestCase
         $this->assertSame('legacy', $nup->fresh()->provenanceType());
     }
 
-    public function test_psjb_can_be_recorded_before_slik_under_default_v2_policy(): void
+    /** BR-35: PSJB may be recorded before SLIK. */
+    public function test_br35_psjb_can_be_recorded_before_slik(): void
     {
         $application = ConsumerApplication::factory()->create();
         $actor = $this->superadmin($application);
@@ -204,6 +235,24 @@ class ConsumerV2ProcessTest extends TestCase
 
         $this->assertSame($application->id, $psjb->consumer_application_id);
         $this->assertSame('psjb', $application->fresh()->current_process);
+        $this->assertSame(0, $application->fresh()->stageEvents()->where('stage', 'bi_checking')->count());
+    }
+
+    /** BR-35: SLIK may be recorded before PSJB. */
+    public function test_br35_slik_can_be_recorded_before_psjb(): void
+    {
+        $application = ConsumerApplication::factory()->create();
+        $actor = $this->superadmin($application);
+        $lifecycle = app(ConsumerApplicationLifecycleService::class);
+
+        $slik = $lifecycle->recordBiChecking($application, [
+            'tanggal_slik' => '2026-10-01',
+            'hasil_slik' => 'Lolos',
+        ], $actor);
+
+        $this->assertSame('bi_checking', $slik->stage);
+        $this->assertSame('slik', $application->fresh()->current_process);
+        $this->assertSame(0, $application->fresh()->stageEvents()->where('stage', 'PSJB')->count());
     }
 
     public function test_cash_marks_bank_and_sp3k_not_applicable_and_rejects_bank_write(): void

@@ -38,6 +38,7 @@ abstract class SalesLeadLifecycleRequest extends FormRequest
             'tanggal_slik' => 'tanggal SLIK',
             'hasil_slik' => 'hasil SLIK',
             'keterangan' => 'keterangan',
+            'pre_utj_exception_reason' => 'alasan pengecualian sebelum UTJ',
         ];
     }
 }

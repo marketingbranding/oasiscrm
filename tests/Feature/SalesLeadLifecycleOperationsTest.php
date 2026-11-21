@@ -106,9 +106,32 @@ class SalesLeadLifecycleOperationsTest extends TestCase
         ])->assertRedirect()->assertSessionHasErrors('branch_id');
     }
 
+    public function test_br23_pre_utj_conversion_requires_exception_reason_and_records_audit_metadata(): void
+    {
+        [$project, $sales, $lead] = array_slice($this->context(), 1);
+        $admin = $this->user('admin', $lead->branch, 'Admin Cabang');
+        $admin->assignedProjects()->attach($project->id, ['is_primary' => true, 'is_active' => true]);
+        $this->mockAppendWriter();
+
+        $payload = ['project_id' => $project->id, 'nik' => '0123456789012345', 'id_kavling' => 'A-1'];
+        $this->actingAs($admin)->postJson(route('sales-leads.consumer.store', $lead), $payload)->assertUnprocessable()->assertJsonValidationErrors('pre_utj_exception_reason');
+        $this->actingAs($admin)->postJson(route('sales-leads.consumer.store', $lead), $payload + ['pre_utj_exception_reason' => 'Persetujuan khusus'])->assertOk();
+        $this->assertSame(['pre_utj_exception' => true, 'exception_reason' => 'Persetujuan khusus'], SalesLeadConsumerLink::firstOrFail()->metadata);
+    }
+
+    public function test_br23_primary_sales_with_supplemental_role_cannot_convert_pre_utj_by_direct_json_or_url(): void
+    {
+        [$project, $sales, $lead] = array_slice($this->context(), 1);
+        $sales->roles()->attach(Role::query()->where('slug', 'admin')->value('id'));
+        $payload = ['project_id' => $project->id, 'nik' => '0123456789012345', 'id_kavling' => 'A-1', 'pre_utj_exception_reason' => 'Bypass'];
+        $this->actingAs($sales)->postJson(route('sales-leads.consumer.store', $lead), $payload)->assertForbidden();
+        $this->actingAs($sales)->from(route('sales-pocketbook.index'))->post(route('sales-leads.consumer.store', $lead), $payload)->assertForbidden();
+    }
+
     public function test_consumer_enforces_nik_rules_preserves_leading_zero_and_blocks_branch_duplicate(): void
     {
         [, $project, $sales, $lead] = $this->context();
+        $lead->update(['lead_stage' => 'utj']);
         $this->mockAppendWriter();
 
         $this->actingAs($sales)->from(route('sales-pocketbook.index'))->post(route('sales-leads.consumer.store', $lead), [

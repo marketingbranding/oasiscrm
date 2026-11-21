@@ -107,6 +107,16 @@ class SalesLead extends Model
         return $this->belongsTo(User::class, 'sales_user_id');
     }
 
+    public function transfers(): HasMany
+    {
+        return $this->hasMany(SalesLeadTransfer::class);
+    }
+
+    public function unownedQueue(): HasOne
+    {
+        return $this->hasOne(SalesLeadUnownedQueue::class);
+    }
+
     public function leadSource(): BelongsTo
     {
         return $this->belongsTo(LeadSource::class);

@@ -35,7 +35,7 @@ PRD sumber kebenaran: `docs/product/PRD_OASIS_CRM_V3.md` versi 3.3 (D30–D33)
 | WP-1.8 | 1 | Istilah glosarium dan navigasi | Selesai; label tampilan, navigasi, ekspor, AI, notifikasi, metadata izin, dan changelog diselaraskan tanpa mengubah identifier internal | §3, D15 |
 | WP-1.9 | 1 | Privasi AI dan backup terpisah | Selesai implementasi; perlu verifikasi operator restore | BR-70–BR-73, BR-81 |
 | WP-1.10 | 1 | Penutup Fase 1: changelog, dokumentasi, verifikasi penuh | Selesai; laporan fase dan operator handoff tersedia; cutover produksi tetap menunggu operator | Semua fase 1 |
-| WP-2.1 | 2 | Alih Lead dan antrean lead tanpa pemilik | Belum mulai | BR-54–BR-55 |
+| WP-2.1 | 2 | Alih Lead dan antrean lead tanpa pemilik | Berjalan | BR-54–BR-55 |
 | WP-2.2 | 2 | Izin Akses Khusus | Belum mulai | BR-53 |
 | WP-2.3 | 2 | Penanda perhatian | Belum mulai | §7.4 |
 | WP-2.4 | 2 | Status peralihan cabang dan laporan paritas | Belum mulai | §9.3 |
@@ -289,6 +289,14 @@ Status: desain disetujui; irisan 1.4a–1.4f sedang berjalan. Tidak ada cutover 
 - 1.4a hanya menghasilkan laporan parity/dry-run read-only. Laporan harus machine-readable dan tidak mengaktifkan source mode. Pemilik produk mengoperasikan `organization.graph_mode`; agent tidak melakukan cutover produksi atau backfill write.
 - D33, yaitu dry-run salinan production yang ditinjau pemilik, masih pending. Jangan menyatakan cutover produksi sudah dilakukan.
 - `canEditHistoricalOwnedLead` dicatat sebagai agenda review WP-2.1.
+
+### Keputusan WP-2.1 — Alih Lead
+
+1. BR-55: deactivate Sales tidak diblokir. Akses dicabut seketika; form menampilkan jumlah lead aktif dan peringatan. Lead aktif non-UTJ/Gugur masuk antrean `Lead tanpa pemilik aktif` milik Koordinator dari tim aktif terakhir Sales. Jika tidak ada Koordinator aktif, hanya Superadmin dapat menangani antrean.
+2. Tim Koordinator berarti assignment aktif saat aksi alih. Pengecualian hanya untuk menentukan pemilik antrean berdasarkan tim aktif terakhir Sales nonaktif.
+3. Alih massal atomik. Kegagalan menyebut lead penyebab.
+4. Notifikasi hanya in-app dan activity log. Jenis notifikasi kanonis: `lead_transferred_to_me`, agar dapat dipakai push pada WP-3.3.
+5. `canEditHistoricalOwnedLead` dicabut untuk Branch Manager dan Admin Cabang; keduanya read-only. Perubahan pemilik hanya melalui Alih Lead Koordinator atau antrean Superadmin saat tidak ada Koordinator aktif.
 
 - Route/controller: organization workspace, supervisor/coordinator monitoring, dashboard leadership.
 - Service utama: `OrganizationGraphService`, `OrganizationScopeService`, `ReportingHierarchyService`, `SalesTeamScopeService`, `OrganizationGraphModeService`, `OrganizationCutoverHealthService`.

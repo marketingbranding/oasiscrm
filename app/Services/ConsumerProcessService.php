@@ -64,7 +64,7 @@ class ConsumerProcessService
             $updates = ['current_process' => 'garansi', 'current_process_source' => 'operational'];
             if (in_array($warranty->status_garansi, ['Selesai', 'Tidak Ada Komplain'], true)) {
                 $updates['current_process'] = 'selesai';
-                $updates['transaction_status'] = FeatureFlag::enabled('transaction_events_v3') ? 'LANJUT' : 'SELESAI';
+                $updates['transaction_status'] = FeatureFlag::enabledForBranch('transaction_events_v3', $application->branch_id) ? 'LANJUT' : 'SELESAI';
                 $updates['consumer_status'] = 'Selesai';
             }
             $application->update($updates);

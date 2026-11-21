@@ -22,8 +22,32 @@ class PrdV3RolePermissionParityTest extends TestCase
         DB::table('role_permission')->whereIn('role_id', Role::query()->whereIn('slug', $slugs)->pluck('id'))->delete();
         $migration = require base_path('database/migrations/2026_11_20_210003_complete_prd_v3_legacy_role_profiles.php');
         $migration->up();
+        $permissionMigration = require base_path('database/migrations/2026_11_21_230001_add_consumer_migration_reconcile_permission.php');
+        $permissionMigration->up();
+        $sasMigration = require base_path('database/migrations/2026_11_21_230002_add_sas_consumer_input_permission.php');
+        $sasMigration->up();
 
         $this->assertSame($fresh, $this->rolePermissionSets($slugs));
+    }
+
+    public function test_br_d32_sas_delta_adds_only_consumer_progress_manage(): void
+    {
+        $snapshot = json_decode(file_get_contents(base_path('tests/Fixtures/permission_snapshot_pre_v3.json')), true, 512, JSON_THROW_ON_ERROR);
+        $sas = Role::query()->where('slug', 'sas')->firstOrFail();
+        $actual = $sas->permissions()->pluck('slug')->sort()->values()->all();
+        $expected = collect($snapshot['effective_permissions_by_primary_role']['sas'])
+            ->push('consumer_progress.manage')
+            ->sort()->values()->all();
+
+        $this->assertSame($expected, $actual);
+        $this->assertSame(
+            $snapshot['effective_permissions_by_primary_role']['sam'],
+            Role::query()->where('slug', 'sam')->firstOrFail()->permissions()->pluck('slug')->sort()->values()->all(),
+        );
+        $this->assertSame(
+            $snapshot['effective_permissions_by_primary_role']['staff'],
+            Role::query()->where('slug', 'staff')->firstOrFail()->permissions()->pluck('slug')->sort()->values()->all(),
+        );
     }
 
     public function test_br_staff_type_permissions_match_pre_v3_snapshot(): void
@@ -43,6 +67,10 @@ class PrdV3RolePermissionParityTest extends TestCase
                 'staff_type' => $staffType,
             ]);
             $expected = $snapshot['effective_permissions_by_primary_role'][$legacyRole];
+            if ($staffType === 'sales') {
+                $expected[] = 'consumer_progress.manage';
+                sort($expected);
+            }
             $actual = collect(PermissionCatalog::permissions())
                 ->pluck('slug')
                 ->filter(fn (string $permission): bool => $user->hasPermission($permission))

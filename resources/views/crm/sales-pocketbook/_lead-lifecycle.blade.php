@@ -1,6 +1,6 @@
 @php
     $status = $lead->current_status;
-     $stageV3 = \App\Support\FeatureFlag::enabled('lead_stages_v3');
+     $stageV3 = \App\Support\FeatureFlag::enabledForBranch('lead_stages_v3', $lead->branch_id);
      $currentStageV3 = $stageV3 ? $lead->resolveStageV3() : null;
     $latestVisit = $lead->siteVisits->first();
     $normalConsumer = $lead->consumerLinks->first(fn ($link) => $link->sheet_type === 'data_konsumen' && $link->status === 'completed');

@@ -147,8 +147,9 @@ class RbacPolicyFoundationTest extends TestCase
         $sasPermissions = $sas->permissions()->pluck('slug')->sort()->values()->all();
         $samPermissions = $sam->permissions()->pluck('slug')->sort()->values()->all();
 
-        $this->assertSame($sasPermissions, $samPermissions);
+        $this->assertSame(array_values(array_diff($sasPermissions, ['consumer_progress.manage'])), $samPermissions);
         $this->assertSame([
+            'consumer_progress.manage',
             'sales_daily_plans.view_branch',
             'sales_pocketbook.export',
             'sales_pocketbook.export_branch',

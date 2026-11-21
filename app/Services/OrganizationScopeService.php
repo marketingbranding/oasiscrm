@@ -506,7 +506,8 @@ class OrganizationScopeService
 
         return collect(['all', 'branch', 'assigned', 'project', 'team', 'own'])
             ->filter(fn (string $scope) => collect($modules)->contains(
-                fn (string $candidate) => $viewer->hasPermission("{$candidate}.{$action}_{$scope}"),
+                fn (string $candidate) => $viewer->hasPermission("{$candidate}.{$action}_{$scope}")
+                    || ($candidate === 'consumer_progress' && $scope === 'project' && $action === 'manage' && $viewer->hasPermission('consumer_progress.manage')),
             ))
             ->values()->all();
     }

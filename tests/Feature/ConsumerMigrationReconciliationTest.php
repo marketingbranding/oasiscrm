@@ -15,6 +15,7 @@ use App\Services\ConsumerKavlingLifecycleService;
 use App\Services\ConsumerMigrationReconciliationService;
 use App\Services\ConsumerOperationalService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 use Tests\TestCase;
 
@@ -34,6 +35,20 @@ class ConsumerMigrationReconciliationTest extends TestCase
         $this->branch = Branch::create(['code' => 'MGL', 'name' => 'Magelang', 'is_active' => true]);
         $this->project = LeadMaster::create(['branch_id' => $this->branch->id, 'project_name' => 'Proyek Migrasi', 'is_active' => true]);
         $this->admin = User::factory()->create(['role_id' => Role::where('slug', 'superadmin')->value('id'), 'branch_id' => $this->branch->id, 'email_verified_at' => now(), 'password_changed_at' => now()]);
+    }
+
+    public function test_br_d32_reconciliation_permission_preserves_previous_manage_access(): void
+    {
+        $manageId = DB::table('permissions')->where('slug', 'consumer_progress.manage')->value('id');
+        $this->assertNotNull($manageId);
+        $reconcileId = DB::table('permissions')->where('slug', 'consumer_migration.reconcile')->value('id');
+
+        $this->assertNotNull($reconcileId);
+        $this->assertContains(
+            $this->admin->role_id,
+            DB::table('role_permission')->where('permission_id', $reconcileId)->pluck('role_id')->all(),
+        );
+        $this->assertTrue($this->admin->hasPermission('consumer_migration.reconcile'));
     }
 
     public function test_pending_queue_and_resolved_item_scope(): void

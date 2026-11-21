@@ -117,7 +117,7 @@ class SalesLeadBridgeService
             }
 
             $fields = $this->writeFields($lead, $contract);
-            if (FeatureFlag::enabled('lead_stages_v3')
+            if (FeatureFlag::enabledForBranch('lead_stages_v3', $lead->branch_id)
                 && $lead->resolveStageV3() === 'gugur'
                 && ($fields['status_lead'] ?? '') === '') {
                 $this->issue($lead->branch, $lead, 'capability', 'status_lead', ['missing_option' => 'Gugur'], 'sheet_missing_gugur_option');
@@ -299,7 +299,7 @@ class SalesLeadBridgeService
                     }
                     $rawRemoteStatus = trim((string) ($row['status_lead'] ?? ''));
                     $remoteStatus = $this->status($rawRemoteStatus);
-                    $v3Stage = FeatureFlag::enabled('lead_stages_v3') ? $this->v3StageForSheetStatus($rawRemoteStatus) : null;
+                    $v3Stage = FeatureFlag::enabledForBranch('lead_stages_v3', $branch->id) ? $this->v3StageForSheetStatus($rawRemoteStatus) : null;
                     if ($lead !== null && $v3Stage !== null) {
                         if ($v3Stage === 'gugur') {
                             if ($lead->resolveStageV3() !== 'gugur') {
@@ -545,7 +545,7 @@ class SalesLeadBridgeService
     {
         $lead->loadMissing(['project', 'sales']);
 
-        $status = FeatureFlag::enabled('lead_stages_v3')
+        $status = FeatureFlag::enabledForBranch('lead_stages_v3', $lead->branch_id)
             ? $this->contracts->statusForLead($lead, $contract)
             : $this->effectiveStatus($lead)->spreadsheetValue();
         $payload = $this->normalizeRemote([

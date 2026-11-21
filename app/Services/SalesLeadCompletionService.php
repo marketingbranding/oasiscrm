@@ -17,7 +17,7 @@ class SalesLeadCompletionService
         $readOnlyMonitor = $actor->hasPrimaryRole(['supervisor', 'manager', 'ass_manager', 'branch_manager'])
             || $actor->isAdminCabang();
         if ((FeatureFlag::enabled('org_hierarchical_monitoring') && $readOnlyMonitor)
-            || (FeatureFlag::enabled('lead_stages_v3') && in_array($lead->resolveStageV3(), ['utj', 'gugur'], true))
+            || (FeatureFlag::enabledForBranch('lead_stages_v3', $lead->branch_id) && in_array($lead->resolveStageV3(), ['utj', 'gugur'], true))
             || ! $actor->hasPermission('sales_pocketbook.manage_own')
             || ! $this->authorization->canViewSalesLead($actor, $lead)) {
             throw new AuthorizationException('Anda tidak memiliki akses untuk menyelesaikan lead ini.');

@@ -20,7 +20,7 @@ class ConvertSalesLeadConsumerRequest extends SalesLeadLifecycleRequest
 
         return $this->operationRules() + [
             'project_id' => ['required', 'integer', Rule::in(array_filter([$lead?->project_id]))],
-            'pre_utj_exception_reason' => [FeatureFlag::enabled('lead_stages_v3') && $lead?->resolveStageV3() !== 'utj' ? 'required' : 'nullable', 'string', 'max:2000'],
+            'pre_utj_exception_reason' => [FeatureFlag::enabledForBranch('lead_stages_v3', $lead?->branch_id) && $lead?->resolveStageV3() !== 'utj' ? 'required' : 'nullable', 'string', 'max:2000'],
             'nik' => ['required', 'string', 'regex:/^\d{16}$/', function (string $attribute, mixed $value, Closure $fail): void {
                 if (preg_match('/^(\d)\1{15}$/', (string) $value)) {
                     $fail('NIK tidak boleh berupa angka placeholder yang sama berulang kali.');

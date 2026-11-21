@@ -1,4 +1,4 @@
-@php($stageV3 = \App\Support\FeatureFlag::enabled('lead_stages_v3'))
+@php($stageV3 = \App\Support\FeatureFlag::enabledForBranch('lead_stages_v3', $lead->branch_id))
 <div class="sales-lead-stage-controls" data-lead-id="{{ $lead->id }}" data-token="{{ app(\App\Services\OptimisticLockService::class)->token($lead) }}">
     @if($stageV3)
         @foreach(\App\Models\SalesLead::STAGE_V3_LABELS as $stage => $label)

@@ -151,7 +151,7 @@ class ConsumerNupService
                 'notes' => $data['reason'] ?? $issue->description,
             ]);
             $locked->update(['transaction_status' => 'DITUTUP', 'closed_by_event' => 'KEMBALI_KE_NUP']);
-            if (FeatureFlag::enabled('transaction_events_v3')) {
+            if (FeatureFlag::enabledForBranch('transaction_events_v3', $locked->branch_id)) {
                 app(ConsumerOperationalService::class)->appendTransactionEvent($locked, 'KEMBALI_KE_NUP', $actor, 'manual', $nup->notes, ['nup_id' => $nup->id, 'issue_id' => $issue->id]);
             }
             $this->audit($actor, $locked, $before, $this->snapshot($locked->fresh()), $nup);

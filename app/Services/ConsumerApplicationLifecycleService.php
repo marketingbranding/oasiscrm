@@ -82,7 +82,7 @@ final class ConsumerApplicationLifecycleService
             $before = $this->snapshot($locked);
             $this->kavlingLifecycle->mundur($locked);
             $locked->update(['withdraw_reason' => $withdrawReason]);
-            if (FeatureFlag::enabled('transaction_events_v3')) {
+            if (FeatureFlag::enabledForBranch('transaction_events_v3', $application->branch_id)) {
                 $this->operational->appendTransactionEvent($locked->fresh(), 'MUNDUR', $actor, 'manual', $withdrawReason, [], $withdrawReason);
             }
             $result = $locked->fresh();
@@ -105,7 +105,7 @@ final class ConsumerApplicationLifecycleService
                 $actor,
                 $this->kavlingLifecycle,
             );
-            if (FeatureFlag::enabled('transaction_events_v3')) {
+            if (FeatureFlag::enabledForBranch('transaction_events_v3', $application->branch_id)) {
                 $this->operational->appendTransactionEvent($result, 'PINDAH_KAVLING', $actor, 'manual', 'Pindah kavling', [
                     'kavling_id' => $targetKavling->id,
                     'previous_kavling_id' => $previousKavling?->id,
@@ -206,7 +206,7 @@ final class ConsumerApplicationLifecycleService
                 'kavling_id' => null,
             ]);
 
-            if (FeatureFlag::enabled('transaction_events_v3')) {
+            if (FeatureFlag::enabledForBranch('transaction_events_v3', $application->branch_id)) {
                 $this->operational->appendTransactionEvent($oldApplication, 'GANTI_NAMA', $actor, 'manual', 'Ganti nama konsumen', [
                     'replacement_application_id' => $replacement->id,
                 ]);

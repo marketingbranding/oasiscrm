@@ -32,7 +32,7 @@ final class ConsumerMigrationReconciliationService
 
     public function assertAccess(User $user, ConsumerMigrationReconciliation $reconciliation): void
     {
-        abort_unless($user->hasPermission('consumer_progress.manage'), 403);
+        abort_unless($user->hasPermission('consumer_migration.reconcile'), 403);
         abort_unless($this->scope->allowsProjectRecord($user, 'consumer_progress', 'manage', $reconciliation->branch_id, $reconciliation->project_id), 403);
         abort_unless($this->workspace->canViewBranch($user, $reconciliation->branch_id), 403);
     }

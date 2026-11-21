@@ -84,6 +84,31 @@ class AppSettingService
         });
     }
 
+    /** @return array{mode: string, branch_ids: list<int>} */
+    private function normalizeScopedFeatureFlag(string $key, mixed $value): array
+    {
+        if (! is_array($value) || ! in_array($value['mode'] ?? null, ['off', 'branches', 'all'], true)) {
+            throw ValidationException::withMessages([$key => 'Mode rollout tidak valid.']);
+        }
+
+        $branchIds = $value['branch_ids'] ?? [];
+        if (! is_array($branchIds) || ! array_is_list($branchIds)) {
+            throw ValidationException::withMessages([$key => 'Daftar cabang tidak valid.']);
+        }
+
+        $branchIds = collect($branchIds)->map(fn (mixed $id): int => (int) $id)->unique()->values()->all();
+        if ($value['mode'] === 'branches' && $branchIds === []) {
+            throw ValidationException::withMessages([$key.'.branch_ids' => 'Pilih minimal satu cabang.']);
+        }
+
+        $activeIds = DB::table('branches')->where('is_active', true)->whereIn('id', $branchIds)->pluck('id')->map(fn ($id): int => (int) $id)->all();
+        if (count($activeIds) !== count($branchIds)) {
+            throw ValidationException::withMessages([$key.'.branch_ids' => 'Cabang tidak aktif atau tidak ditemukan.']);
+        }
+
+        return ['mode' => $value['mode'], 'branch_ids' => $branchIds];
+    }
+
     public function assertCanManage(User $actor): void
     {
         abort_unless(
@@ -123,6 +148,7 @@ class AppSettingService
                 'list' => is_string($value)
                     ? array_values(array_filter(array_map('trim', preg_split('/\R/', $value) ?: []), filled(...)))
                     : (is_array($value) && array_is_list($value) ? $value : throw ValidationException::withMessages([$key => 'Nilai harus berupa daftar.'])),
+                'scoped_feature_flag' => $this->normalizeScopedFeatureFlag($key, $value),
                 default => throw new InvalidArgumentException("Unsupported application setting type [{$definition['type']}]."),
             };
 

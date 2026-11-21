@@ -22,6 +22,18 @@ class UpdateAppSettingsRequest extends FormRequest
             $settings = [];
         }
 
+        foreach (['lead_stages_v3', 'transaction_events_v3'] as $key) {
+            $modeKey = $key.'__mode';
+            $branchIdsKey = $key.'__branch_ids';
+            if (array_key_exists($modeKey, $settings)) {
+                $settings[$key] = [
+                    'mode' => $settings[$modeKey],
+                    'branch_ids' => $settings[$branchIdsKey] ?? [],
+                ];
+                unset($settings[$modeKey], $settings[$branchIdsKey]);
+            }
+        }
+
         $settings = collect($settings)
             ->mapWithKeys(function (mixed $value, string $key): array {
                 $decodedKey = $this->decodeKey($key);

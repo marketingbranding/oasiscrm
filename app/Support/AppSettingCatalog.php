@@ -73,8 +73,8 @@ class AppSettingCatalog
                 'rules' => ['string', 'in:lead_baru,dihubungi,tatap_muka,survey,utj'],
             ],
             'org_hierarchical_monitoring' => self::featureFlag('Pemantauan graf organisasi'),
-            'lead_stages_v3' => self::featureFlag('Tahap Lead v3'),
-            'transaction_events_v3' => self::featureFlag('Event transaksi v3'),
+            'lead_stages_v3' => self::scopedFeatureFlag('Tahap Lead v3'),
+            'transaction_events_v3' => self::scopedFeatureFlag('Event transaksi v3'),
             'ai.send_names' => [
                 'group' => 'ai',
                 'type' => 'boolean',
@@ -206,6 +206,19 @@ class AppSettingCatalog
             'label' => $label,
             'description' => 'Format HH:MM untuk kalender kerja Receipt/Agenda.',
             'rules' => ['string', 'regex:/^([01]\\d|2[0-3]):[0-5]\\d$/'],
+        ];
+    }
+
+    private static function scopedFeatureFlag(string $label): array
+    {
+        return [
+            'group' => 'feature_flags',
+            'type' => 'scoped_feature_flag',
+            'default' => ['mode' => 'off', 'branch_ids' => []],
+            'label' => $label,
+            'description' => 'Feature flag PRD v3; rollout per cabang, bawaan mati.',
+            'rules' => ['array'],
+            'feature_flag' => true,
         ];
     }
 

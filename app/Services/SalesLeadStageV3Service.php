@@ -34,7 +34,7 @@ class SalesLeadStageV3Service
 
     public function syncFromSheet(SalesLead $lead, string $stage, string $sourceId, string $operationUuid, ?User $actor = null): SalesLead
     {
-        if (! FeatureFlag::enabled('lead_stages_v3')) {
+        if (! FeatureFlag::enabledForBranch('lead_stages_v3', $lead->branch_id)) {
             throw ValidationException::withMessages(['stage' => 'Tahap Lead v3 belum diaktifkan.']);
         }
 
@@ -43,7 +43,7 @@ class SalesLeadStageV3Service
 
     public function closeAsGugur(SalesLead $lead, string $reason, User $actor, ?string $operationUuid = null): SalesLead
     {
-        if (! FeatureFlag::enabled('lead_stages_v3')) {
+        if (! FeatureFlag::enabledForBranch('lead_stages_v3', $lead->branch_id)) {
             throw ValidationException::withMessages(['stage' => 'Tahap Lead v3 belum diaktifkan.']);
         }
 
@@ -84,7 +84,7 @@ class SalesLeadStageV3Service
 
     private function transition(SalesLead $lead, string $stage, string $source, ?string $reason, ?User $actor, ?string $operationUuid, ?string $sourceId = null): SalesLead
     {
-        if (! FeatureFlag::enabled('lead_stages_v3')) {
+        if (! FeatureFlag::enabledForBranch('lead_stages_v3', $lead->branch_id)) {
             throw ValidationException::withMessages(['stage' => 'Tahap Lead v3 belum diaktifkan.']);
         }
         if (! in_array($stage, SalesLead::STAGE_V3_ORDER, true) || $stage === 'gugur') {

@@ -292,7 +292,7 @@ final class WorkspaceController extends Controller
     private function authorizeConsumerManage(User $user): void
     {
         abort_unless(
-            $user->hasPermission('consumer_progress.manage') && $user->hasScopedPermission('consumer_progress', 'manage'),
+            $user->hasPermission('consumer_progress.manage'),
             Response::HTTP_FORBIDDEN,
         );
     }

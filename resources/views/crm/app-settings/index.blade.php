@@ -29,10 +29,22 @@
                         <x-crm.field
                             :label="$definition['label']"
                             :for="$inputId"
-                            :hint="$definition['description'].' Bawaan: '.(is_bool($definition['default']) ? ($definition['default'] ? 'Aktif' : 'Mati') : (is_array($definition['default']) ? implode(', ', $definition['default']) : $definition['default']))"
+                            :hint="$definition['description'].' Bawaan: '.(is_bool($definition['default']) ? ($definition['default'] ? 'Aktif' : 'Mati') : ($definition['type'] === 'scoped_feature_flag' ? 'Mati' : (is_array($definition['default']) ? implode(', ', $definition['default']) : $definition['default'])))"
                             :error="$errors->first($oldKey)"
                         >
-                            @if($definition['type'] === 'boolean')
+                            @if($definition['type'] === 'scoped_feature_flag')
+                                <select id="{{ $inputId }}-mode" name="settings[{{ $inputKey }}__mode]" class="crm-control">
+                                    @foreach(['off' => 'Mati', 'branches' => 'Cabang tertentu', 'all' => 'Semua cabang'] as $mode => $label)
+                                        <option value="{{ $mode }}" @selected(($definition['value']['mode'] ?? 'off') === $mode)>{{ $label }}</option>
+                                    @endforeach
+                                </select>
+                                <label class="mt-2 block text-xs font-bold" for="{{ $inputId }}-branches">Cabang rollout</label>
+                                <select id="{{ $inputId }}-branches" name="settings[{{ $inputKey }}__branch_ids][]" class="crm-control" multiple>
+                                    @foreach(\App\Models\Branch::query()->where('is_active', true)->orderBy('name')->get() as $branch)
+                                        <option value="{{ $branch->id }}" @selected(in_array($branch->id, $definition['value']['branch_ids'] ?? [], true))>{{ $branch->name }}</option>
+                                    @endforeach
+                                </select>
+                            @elseif($definition['type'] === 'boolean')
                                 <select id="{{ $inputId }}" name="settings[{{ $inputKey }}]" class="crm-control">
                                     <option value="0" @selected(old($oldKey, $definition['value']) === false || old($oldKey, $definition['value']) === '0')>Mati</option>
                                     <option value="1" @selected(old($oldKey, $definition['value']) === true || old($oldKey, $definition['value']) === '1')>Aktif</option>

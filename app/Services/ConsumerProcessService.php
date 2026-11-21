@@ -111,9 +111,11 @@ class ConsumerProcessService
             ->when($this->scope->requiresProjectScope($user, 'consumer_progress'), fn (Builder $query): Builder => $query->whereIn('project_id', $projectIds))
             ->when(! $this->scope->requiresProjectScope($user, 'consumer_progress'), fn (Builder $query): Builder => $query->where(fn (Builder $nested): Builder => $nested->whereNull('project_id')->orWhereIn('project_id', $projectIds)))
             ->where(function (Builder $query): void {
-                $query->whereIn('transaction_status', ['LANJUT', 'SELESAI'])
+                $query->where('transaction_status', 'SELESAI')
                     ->orWhere(function (Builder $nested): void {
-                        $nested->whereHas('bastRecords')->whereHas('warranties', fn (Builder $warranty): Builder => $warranty->whereIn('status_garansi', ['Selesai', 'Tidak Ada Komplain']));
+                        $nested->where('transaction_status', 'LANJUT')
+                            ->whereHas('bastRecords')
+                            ->whereHas('warranties', fn (Builder $warranty): Builder => $warranty->whereIn('status_garansi', ['Selesai', 'Tidak Ada Komplain']));
                     });
             });
     }

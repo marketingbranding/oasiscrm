@@ -7,6 +7,7 @@ use App\Models\ConsumerApplication;
 use App\Models\ConsumerBastRecord;
 use App\Models\Kavling;
 use App\Models\User;
+use App\Services\ConsumerEntryService;
 use App\Services\ConsumerKavlingLifecycleService;
 use App\Services\ConsumerOperationalService;
 use Illuminate\Database\QueryException;
@@ -28,6 +29,23 @@ class ConsumerCanonicalDomainContractTest extends TestCase
         $this->assertSame('LANJUT', ConsumerApplication::factory()->create(['transaction_status' => 'Pindah Kavling'])->canonicalTransactionStatus());
     }
 
+    /** BR-30: manual DITUTUP is rejected for new entry writes but legacy status is preserved. */
+    public function test_br30_new_entry_rejects_ditutup_and_historical_entry_preserves_legacy_status(): void
+    {
+        $application = ConsumerApplication::factory()->create();
+        $actor = User::factory()->create(['branch_id' => $application->branch_id]);
+        $entry = app(ConsumerEntryService::class);
+
+        $this->expectException(\DomainException::class);
+        $entry->create([
+            'name' => 'New status guard',
+            'phone' => '08123456789',
+            'branch_id' => $application->branch_id,
+            'project_id' => $application->project_id,
+            'transaction_status' => 'DITUTUP',
+        ], $actor);
+    }
+
     /** BR-31: configured withdrawal reasons drive Mundur validation. */
     public function test_br31_mundur_uses_default_and_changed_configured_reasons(): void
     {
@@ -38,6 +56,9 @@ class ConsumerCanonicalDomainContractTest extends TestCase
         $service->mundur($application, 'Reject SLIK', $actor);
         $this->assertSame('Reject SLIK', $application->fresh()->withdraw_reason);
 
+        $held = ConsumerApplication::factory()->create(['branch_id' => $application->branch_id, 'project_id' => $application->project_id]);
+        $heldKavling = Kavling::create(['project_id' => $held->project_id, 'kavling_code' => 'ROUND2-01', 'name' => 'ROUND2-01']);
+        app(ConsumerKavlingLifecycleService::class)->assign($held, $heldKavling);
         $second = ConsumerApplication::factory()->create(['branch_id' => $application->branch_id, 'project_id' => $application->project_id]);
         AppSetting::query()->create(['key' => 'consumer_progress.mundur_reasons', 'value' => ['Custom reason'], 'group' => 'consumer_progress']);
         app(\App\Services\AppSettingResolver::class)->forget('consumer_progress.mundur_reasons');

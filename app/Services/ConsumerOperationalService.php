@@ -68,7 +68,10 @@ final class ConsumerOperationalService
 
     public function create(array $data, User $actor, ConsumerKavlingLifecycleService $lifecycle): ConsumerApplication
     {
-        $transactionStatus = ConsumerApplication::validateNewTransactionStatus($data['transaction_status'] ?? 'LANJUT');
+        $historical = ($data['entry_mode'] ?? 'new') !== 'new';
+        $transactionStatus = $historical
+            ? ($data['transaction_status'] ?? 'LANJUT')
+            : ConsumerApplication::validateNewTransactionStatus($data['transaction_status'] ?? 'LANJUT');
 
         return DB::transaction(function () use ($data, $actor, $lifecycle, $transactionStatus): ConsumerApplication {
             $application = ConsumerApplication::create([

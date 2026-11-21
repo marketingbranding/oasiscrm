@@ -20,3 +20,11 @@
 
 - `ConsumerProcessService` completed query retains `SELESAI` read compatibility for historical rows; no new writer persists it.
 - Typed events, NUP, and UI remain out of Task 1 scope.
+
+## Fix round 2
+
+- Historical entries preserve supplied legacy transaction statuses; non-historical entries use canonical validation.
+- Completed query requires BAST plus completed warranty facts for canonical LANJUT; historical SELESAI remains readable.
+- Added BR-30 manual DITUTUP regression and BR-31 held-kavling/custom-setting coverage.
+- PHP syntax checks and git diff --check run; PHPUnit/Pint blocked because vendor is absent.
+

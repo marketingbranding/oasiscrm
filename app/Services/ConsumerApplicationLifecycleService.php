@@ -181,10 +181,19 @@ final class ConsumerApplicationLifecycleService
                 'promo_id' => $oldApplication->promo_id,
                 'application_status' => 'active',
                 'consumer_status' => 'Lanjut',
+                'transaction_status' => 'LANJUT',
                 'status_cash' => $oldApplication->status_cash,
                 'booking_date' => $oldApplication->booking_date,
+                'akad_date' => $oldApplication->akad_date,
+                'current_stage' => $oldApplication->current_stage,
+                'current_process' => $oldApplication->current_process,
+                'current_process_source' => $oldApplication->current_process_source,
+                'source_last_process' => $oldApplication->source_last_process,
+                'source_completeness_status' => $oldApplication->source_completeness_status,
+                'payment_method' => $oldApplication->payment_method,
                 'notes' => $oldApplication->notes,
             ]);
+            $this->transferProcessHistory($oldApplication, $replacement);
             if ($currentKavling !== null) {
                 $this->kavlingLifecycle->assign($replacement, $currentKavling);
             }
@@ -192,6 +201,7 @@ final class ConsumerApplicationLifecycleService
             $oldApplication->update([
                 'application_status' => 'REPLACED',
                 'transaction_status' => 'DITUTUP',
+                'closed_by_event' => 'GANTI_NAMA',
                 'replacement_application_id' => $replacement->id,
                 'kavling_id' => null,
             ]);
@@ -209,6 +219,16 @@ final class ConsumerApplicationLifecycleService
 
             return $replacement->fresh(['customer', 'kavling', 'project', 'sales', 'promo']);
         });
+    }
+
+    private function transferProcessHistory(ConsumerApplication $oldApplication, ConsumerApplication $replacement): void
+    {
+        $oldApplication->stageEvents()->whereNull('event_type')->update(['consumer_application_id' => $replacement->id]);
+        $oldApplication->psjbs()->update(['consumer_application_id' => $replacement->id]);
+        $oldApplication->bankProcesses()->update(['consumer_application_id' => $replacement->id]);
+        $oldApplication->ppjbDevelopers()->update(['consumer_application_id' => $replacement->id]);
+        $oldApplication->akadRecords()->update(['consumer_application_id' => $replacement->id]);
+        $oldApplication->bastRecords()->update(['consumer_application_id' => $replacement->id]);
     }
 
     private function authorize(User $actor, ConsumerApplication $application): void

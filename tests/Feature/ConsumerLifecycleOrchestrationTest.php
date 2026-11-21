@@ -201,14 +201,21 @@ class ConsumerLifecycleOrchestrationTest extends TestCase
         $this->assertSame(1, ActivityLog::query()->where('event', 'consumer_ganti_konsumen')->where('subject_id', $old->id)->count());
     }
 
-    /** BR-33: Ganti Nama closes old transaction and records replacement history. */
-    public function test_br33_ganti_konsumen_creates_ganti_nama_closes_old_transaction_and_links_replacement(): void
+    /** BR-33: Ganti Nama closes old transaction and transfers relevant process history. */
+    public function test_br33_ganti_konsumen_closes_old_transaction_links_active_replacement_and_transfers_process_history(): void
     {
         [$application, $actor] = $this->applicationAndActor('superadmin');
         $oldCustomer = $application->customer;
         $replacementCustomer = Customer::factory()->create(['name' => 'Konsumen Pengganti']);
         $kavling = Kavling::create(['project_id' => $application->project_id, 'kavling_code' => 'A-20', 'name' => 'A-20']);
         app(ConsumerKavlingLifecycleService::class)->assign($application, $kavling);
+        $history = $application->stageEvents()->create([
+            'stage' => 'pemberkasan',
+            'status' => 'completed',
+            'source' => 'manual',
+            'occurred_at' => now()->subDay(),
+            'actor_id' => $actor->id,
+        ]);
         $service = app(ConsumerApplicationLifecycleService::class);
 
         $replacement = $service->gantiKonsumen($application, $replacementCustomer, $actor);
@@ -216,10 +223,15 @@ class ConsumerLifecycleOrchestrationTest extends TestCase
 
         $this->assertNotSame($old->id_transaksi, $replacement->id_transaksi);
         $this->assertSame('REPLACED', $old->application_status);
+        $this->assertSame('DITUTUP', $old->transaction_status);
+        $this->assertSame('GANTI_NAMA', $old->closed_by_event);
         $this->assertSame($replacement->id, $old->replacement_application_id);
         $this->assertSame($oldCustomer->id, $old->customer_id);
         $this->assertSame($replacementCustomer->id, $replacement->customer_id);
+        $this->assertSame('LANJUT', $replacement->transaction_status);
+        $this->assertSame($old->sales_user_id, $replacement->sales_user_id);
         $this->assertSame($kavling->id, $replacement->kavling_id);
+        $this->assertSame($replacement->id, $history->fresh()->consumer_application_id);
         $this->assertSame('released', ConsumerKavlingAssignment::query()->where('consumer_application_id', $old->id)->sole()->assignment_status);
         $this->assertSame('active', ConsumerKavlingAssignment::query()->where('consumer_application_id', $replacement->id)->sole()->assignment_status);
         $this->assertDatabaseHas('activity_log', ['event' => 'consumer_ganti_konsumen', 'subject_id' => $old->id, 'causer_id' => $actor->id]);
@@ -227,9 +239,9 @@ class ConsumerLifecycleOrchestrationTest extends TestCase
         $event = $old->stageEvents()->where('event_type', 'GANTI_NAMA')->sole();
         $this->assertSame('transaction_event', $event->stage);
         $this->assertSame($replacement->id, $event->metadata['replacement_application_id']);
-        $this->assertSame('DITUTUP', $old->transaction_status);
         $this->assertSame($application->id_transaksi, $old->id_transaksi);
         $this->assertNotSame($old->id_transaksi, $replacement->id_transaksi);
+        $this->assertSame(0, $replacement->stageEvents()->where('event_type', 'GANTI_NAMA')->count());
     }
 
     /** BR-34: Pindah Kavling through lifecycle writes typed event and audit. */

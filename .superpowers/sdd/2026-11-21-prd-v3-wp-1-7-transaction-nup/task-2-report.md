@@ -30,4 +30,14 @@ Scope exclusions: NUP, UI, authorization, production flag activation, and extern
 
 Verification:
 
-- `php artisan test --compact tests/Feature/ConsumerLifecycleOrchestrationTest.php tests/Feature/ConsumerKavlingLifecycleTest.php tests/Feature/ConsumerOperationalTest.php tests/Feature/ConsumerCanonicalDomainContractTest.php` — 43 passed, 147 assertions.
+- `php artisan test --compact tests/Feature/ConsumerOperationalTest.php tests/Feature/ConsumerLifecycleOrchestrationTest.php tests/Feature/ConsumerDatabaseWorkspaceTest.php tests/Feature/ConsumerCanonicalDomainContractTest.php` — 45 passed, 166 assertions.
+- `vendor/bin/pint --dirty --format agent` — passed.
+- `git diff --check` — passed.
+
+## Task 2 review fixes
+
+- Process reads now use `processStageEvents()` (`whereNull(event_type)`); compatibility `stageEvents()` remains unchanged.
+- Event migration guards table/column/index on up/down and preserves changelog `updateOrInsert`.
+- Typed append validates flag, event type, manage permission, and organization project scope. Legacy process writes remain available when flag is off.
+- Pindah Kavling event stores prior kavling ID, code, and name metadata.
+- Tests cover process leakage, migration idempotence, and explicit flag-enabled typed writes.

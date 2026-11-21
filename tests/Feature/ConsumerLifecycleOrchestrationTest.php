@@ -18,6 +18,7 @@ use App\Services\ConsumerOperationalService;
 use DomainException;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
 class ConsumerLifecycleOrchestrationTest extends TestCase
@@ -28,6 +29,7 @@ class ConsumerLifecycleOrchestrationTest extends TestCase
     {
         parent::setUp();
         AppSetting::query()->updateOrCreate(['key' => 'transaction_events_v3'], ['value' => true, 'group' => 'feature_flags']);
+        \DB::table('app_settings')->where('key', 'transaction_events_v3')->update(['value' => json_encode(true)]);
         app(AppSettingResolver::class)->forget('transaction_events_v3');
     }
 

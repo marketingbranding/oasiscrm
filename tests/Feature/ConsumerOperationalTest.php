@@ -14,6 +14,7 @@ use App\Models\User;
 use App\Services\AppSettingResolver;
 use App\Services\ConsumerKavlingLifecycleService;
 use App\Services\ConsumerOperationalService;
+use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -25,6 +26,7 @@ class ConsumerOperationalTest extends TestCase
     {
         parent::setUp();
         AppSetting::query()->updateOrCreate(['key' => 'transaction_events_v3'], ['value' => true, 'group' => 'feature_flags']);
+        \DB::table('app_settings')->where('key', 'transaction_events_v3')->update(['value' => json_encode(true)]);
         app(AppSettingResolver::class)->forget('transaction_events_v3');
     }
 
@@ -44,6 +46,36 @@ class ConsumerOperationalTest extends TestCase
         $this->assertSame($beforeProcess, $application->fresh()->current_process);
         $this->assertSame(1, $application->fresh()->transactionEvents()->count());
         $this->assertSame(1, $application->fresh()->stageEvents()->whereNull('event_type')->count());
+    }
+
+    public function test_invalid_transaction_event_type_is_rejected(): void
+    {
+        [$application, , $actor] = $this->records();
+
+        $this->expectException(\DomainException::class);
+        app(ConsumerOperationalService::class)->appendTransactionEvent($application, 'NOT_VALID', $actor);
+    }
+
+    public function test_transaction_event_writes_are_rejected_when_feature_flag_is_off(): void
+    {
+        [$application, , $actor] = $this->records();
+        AppSetting::query()->updateOrCreate(['key' => 'transaction_events_v3'], ['value' => false, 'group' => 'feature_flags']);
+        app(AppSettingResolver::class)->forget('transaction_events_v3');
+
+        $this->expectException(\DomainException::class);
+        app(ConsumerOperationalService::class)->appendTransactionEvent($application, 'KOREKSI_DATA', $actor);
+    }
+
+    public function test_transaction_event_writes_require_manage_scope(): void
+    {
+        [$application] = $this->records();
+        $actor = User::factory()->create([
+            'role_id' => Role::query()->where('slug', 'manager')->value('id'),
+            'branch_id' => null,
+        ]);
+
+        $this->expectException(AuthorizationException::class);
+        app(ConsumerOperationalService::class)->appendTransactionEvent($application, 'KOREKSI_DATA', $actor);
     }
 
     public function test_br34_ganti_bank_records_typed_event_without_replacing_bank_process_history(): void

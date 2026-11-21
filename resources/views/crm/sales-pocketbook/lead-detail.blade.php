@@ -10,6 +10,7 @@
     $canComplete = Auth::user()->isSales() && (int) $lead->sales_user_id === (int) Auth::id() && Auth::user()->hasPermission('sales_pocketbook.manage_own');
     $canUpdateLifecycle = Auth::user()->can('updateLifecycleStatus', $lead);
     $canMarkUtj = Auth::user()->can('markUtjDirect', $lead);
+    $stageV3 = \App\Support\FeatureFlag::enabled('lead_stages_v3');
     $statusVariant = $stageV3 && in_array($lead->resolveStageV3(), ['utj', 'gugur'], true) ? 'success' : ($lead->current_status === \App\Enums\SalesLeadStatus::Akad ? 'success' : 'neutral');
     $currentStep = $stageV3
         ? min(array_search($lead->resolveStageV3(), \App\Models\SalesLead::STAGE_V3_ORDER, true) + 1, 5)

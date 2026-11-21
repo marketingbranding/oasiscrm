@@ -82,7 +82,7 @@ final class WorkspaceController extends Controller
             ->count();
 
         return view('workspace-v2.dashboard.index', [
-            'activeTransactions' => (clone $applications)->whereNotIn('consumer_status', ['Mundur', 'Reject'])->count(),
+            'activeTransactions' => (clone $applications)->where('transaction_status', 'LANJUT')->count(),
             'completedTransactions' => (clone $applications)->whereIn('transaction_status', ['SELESAI', 'selesai', 'completed'])->count(),
             'attentionCount' => $issues + $overdue,
             'processCounts' => (clone $applications)
@@ -223,7 +223,7 @@ final class WorkspaceController extends Controller
         $applications = $this->scopedApplications($request);
 
         $data = match ($workspace) {
-            'mundur' => (clone $applications)->where('consumer_status', 'Mundur')->with(['customer', 'project', 'kavling', 'sales'])->latest('updated_at')->paginate(25)->withQueryString(),
+            'mundur' => (clone $applications)->where('transaction_status', 'MUNDUR')->with(['customer', 'project', 'kavling', 'sales'])->latest('updated_at')->paginate(25)->withQueryString(),
             'selesai' => $this->consumerProcesses->completedQuery($request->user())->with(['customer', 'project', 'kavling', 'sales'])->latest('updated_at')->paginate(25)->withQueryString(),
             'kendala' => ConsumerIssue::query()->with(['application.customer', 'application.project', 'pic'])->whereIn('consumer_application_id', $applications->clone()->select('consumer_applications.id'))->latest('opened_at')->paginate(25)->withQueryString(),
             'garansi' => ConsumerWarranty::query()->with(['application.customer', 'application.project', 'application.kavling'])->whereIn('consumer_application_id', $applications->clone()->select('consumer_applications.id'))->latest('created_at')->paginate(25)->withQueryString(),
@@ -253,7 +253,7 @@ final class WorkspaceController extends Controller
 
         return view('workspace-v2.reports.index', [
             'total' => (clone $applications)->count(),
-            'active' => (clone $applications)->whereNotIn('consumer_status', ['Mundur', 'Reject'])->count(),
+            'active' => (clone $applications)->where('transaction_status', 'LANJUT')->count(),
             'completed' => (clone $applications)->whereIn('transaction_status', ['SELESAI', 'selesai', 'completed'])->count(),
             'branches' => $this->workspaceAccess->accessibleBranches($request->user()),
         ]);

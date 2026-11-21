@@ -8,12 +8,15 @@ use App\Models\ConsumerBastRecord;
 use App\Models\Kavling;
 use App\Models\Role;
 use App\Models\User;
+use App\Services\AppSettingResolver;
+use App\Services\ConsumerApplicationLifecycleService;
 use App\Services\ConsumerEntryService;
 use App\Services\ConsumerKavlingLifecycleService;
 use App\Services\ConsumerOperationalService;
 use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 use LogicException;
 use Tests\TestCase;
 
@@ -34,7 +37,7 @@ class ConsumerCanonicalDomainContractTest extends TestCase
     public function test_br30_new_entry_rejects_ditutup(): void
     {
         $application = ConsumerApplication::factory()->create();
-        $actor = User::factory()->create(['branch_id' => $application->branch_id]);
+        $actor = $this->superadmin($application);
 
         $this->expectException(\DomainException::class);
         app(ConsumerEntryService::class)->create([
@@ -50,7 +53,7 @@ class ConsumerCanonicalDomainContractTest extends TestCase
     public function test_br30_historical_entry_preserves_legacy_transaction_status(): void
     {
         $application = ConsumerApplication::factory()->create();
-        $actor = User::factory()->create(['branch_id' => $application->branch_id]);
+        $actor = $this->superadmin($application);
 
         $historical = app(ConsumerEntryService::class)->create([
             'name' => 'Historical status',
@@ -68,10 +71,10 @@ class ConsumerCanonicalDomainContractTest extends TestCase
     public function test_br31_mundur_uses_custom_reason_and_invalid_reason_rolls_back_held_kavling(): void
     {
         $application = ConsumerApplication::factory()->create();
-        $actor = User::factory()->create(['branch_id' => $application->branch_id]);
-        $service = app(\App\Services\ConsumerApplicationLifecycleService::class);
+        $actor = $this->superadmin($application);
+        $service = app(ConsumerApplicationLifecycleService::class);
         AppSetting::query()->create(['key' => 'consumer_progress.mundur_reasons', 'value' => ['Custom reason'], 'group' => 'consumer_progress']);
-        app(\App\Services\AppSettingResolver::class)->forget('consumer_progress.mundur_reasons');
+        app(AppSettingResolver::class)->forget('consumer_progress.mundur_reasons');
 
         $service->mundur($application, 'Custom reason', $actor);
         $this->assertSame('Custom reason', $application->fresh()->withdraw_reason);
@@ -81,7 +84,7 @@ class ConsumerCanonicalDomainContractTest extends TestCase
         app(ConsumerKavlingLifecycleService::class)->assign($held, $heldKavling);
         $before = $held->fresh();
 
-        $this->expectException(\Illuminate\Validation\ValidationException::class);
+        $this->expectException(ValidationException::class);
         $service->mundur($held, 'Invalid reason', $actor);
 
         $this->assertSame('LANJUT', $held->fresh()->transaction_status);
@@ -140,7 +143,7 @@ class ConsumerCanonicalDomainContractTest extends TestCase
     public function test_native_bank_process_reuses_an_attempt_and_ganti_bank_starts_another(): void
     {
         $application = ConsumerApplication::factory()->create();
-        $actor = User::factory()->create(['branch_id' => $application->branch_id]);
+        $actor = $this->superadmin($application);
         $service = app(ConsumerOperationalService::class);
 
         $first = $service->recordPemberkasan($application, ['tanggal_terima_bank' => '2026-10-01', 'bank_name' => 'BTN'], $actor);
@@ -158,7 +161,7 @@ class ConsumerCanonicalDomainContractTest extends TestCase
     public function test_slik_retries_are_append_only_and_keep_decision_actor_and_source(): void
     {
         $application = ConsumerApplication::factory()->create();
-        $actor = User::factory()->create(['branch_id' => $application->branch_id]);
+        $actor = $this->superadmin($application);
         $service = app(ConsumerOperationalService::class);
 
         $service->recordBiChecking($application, [
@@ -184,7 +187,7 @@ class ConsumerCanonicalDomainContractTest extends TestCase
     public function test_ready100_is_a_history_fact_without_creating_bast(): void
     {
         $application = ConsumerApplication::factory()->create();
-        $actor = User::factory()->create(['branch_id' => $application->branch_id]);
+        $actor = $this->superadmin($application);
 
         $event = app(ConsumerOperationalService::class)->recordReady100($application, [
             'ready_100_at' => '2026-10-03',
@@ -197,5 +200,14 @@ class ConsumerCanonicalDomainContractTest extends TestCase
         $this->assertSame('2026-10-03', $event->event_date->toDateString());
         $this->assertSame(0, ConsumerBastRecord::query()->where('consumer_application_id', $application->id)->count());
         $this->assertDatabaseHas('consumer_stage_events', ['id' => $event->id, 'source' => 'manual']);
+    }
+
+    private function superadmin(ConsumerApplication $application): User
+    {
+        return User::factory()->create([
+            'role_id' => Role::query()->where('slug', 'superadmin')->value('id'),
+            'branch_id' => $application->branch_id,
+            'password_changed_at' => now(),
+        ]);
     }
 }

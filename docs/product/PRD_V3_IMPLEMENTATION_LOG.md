@@ -42,6 +42,7 @@ PRD sumber kebenaran: `docs/product/PRD_OASIS_CRM_V3.md` versi 3.3 (D30–D33)
 | WP-2.5 | 2 | Dana Talangan di OASIS dan cicilan | Belum mulai | BR-42–BR-44 |
 | WP-2.6 | 2 | Kembali ke NUP di Workspace Konsumen | Belum mulai | BR-20–BR-22 |
 | WP-2.7 | 2 | Penutup Fase 2: changelog, dokumentasi, verifikasi penuh | Belum mulai | Semua fase 2 |
+| WP-2.8 | 2 | Riwayat Tim: gabungan perubahan Lead dan agenda seluruh turunan | Belum mulai; paket kerja baru dari review WP-1.4 | BR-50–BR-52 |
 | WP-3.1 | 3 | WhatsApp satu nomor | Belum mulai | BR-60–BR-64 |
 | WP-3.2 | 3 | Asisten AI per peran | Belum mulai | BR-70–BR-72 |
 | WP-3.3 | 3 | Push PWA dan preferensi notifikasi | Belum mulai | §7.11 |
@@ -276,9 +277,10 @@ Status: selesai 1.4c–1.4d. Flag `org_hierarchical_monitoring` tetap default-of
 
 #### WP-1.4 Task 5 — Batas mutasi baca-saja (1.4e)
 
-Status: selesai. Saat `org_hierarchical_monitoring` aktif, `SalesLeadPolicy` menolak mutasi Lead tim dari Supervisor, Manager, Ass. Manager, Branch Manager, dan Admin Cabang melalui URL form maupun JSON; Koordinator tetap mengikuti batas tim yang sudah ada. `SalesLeadCompletionService` juga menolak bypass `manage_own` yang stale. `canEditHistoricalOwnedLead` untuk Branch Manager/Admin Cabang tetap dipertahankan. Flag mati mempertahankan perilaku lama.
+Status: selesai. Saat `org_hierarchical_monitoring` aktif, `SalesLeadPolicy` menolak mutasi Lead tim dari Supervisor, Manager, Ass. Manager, Branch Manager, dan Admin Cabang melalui URL form maupun JSON; Koordinator tetap mengikuti batas tim yang sudah ada. `SalesLeadCompletionService` juga menolak bypass `manage_own` yang stale. `canEditHistoricalOwnedLead` untuk Branch Manager/Admin Cabang tetap dipertahankan. Flag mati mempertahankan perilaku lama. Admin Cabang hanya-baca untuk Lead saat flag hidup sesuai matriks PRD dan snapshot permission: role ini tidak memiliki `sales_pocketbook.manage_own`, `sales_pocketbook.manage_team`, atau `sales_pocketbook.manage_all`.
 
 - Tidak ada route Daily Plan aktif atau route Team History khusus; tidak menambah route baru.
+- Riwayat Tim belum ada di kode. Review WP-1.4 menetapkan paket kerja baru Fase 2: **WP-2.8 Riwayat Tim**, gabungan perubahan Lead dan agenda seluruh turunan, detail penuh untuk bawahan langsung, satu baris ringkas untuk turunan jauh, filter per bawahan langsung, dan tetap mematuhi flag `org_hierarchical_monitoring`.
 - Modul Work Planner dan modul non-pemantauan tidak diubah.
 - Tes BR-51: `tests/Feature/SalesMonitoringReadOnlyMutationTest.php`, suite terkait 59 tes lulus.
 - Changelog: migrasi idempoten `2026_11_21_000003_add_sales_monitoring_read_only_changelog.php`.
@@ -351,7 +353,7 @@ Status: selesai. Saat `org_hierarchical_monitoring` aktif, Coordinator hanya men
 | C-08 | Angka aturan dan teknis tersebar di code/config/frontend. | `app/Console/Commands/SendSalesAgendaReminders.php:65-68`; `app/Services/CoordinatorSalesMonitoringService.php:201-204`; `app/Support/SalesAgendaEvidenceRules.php:22`; `resources/js/presence.js:9,62` | Pengingat 15 menit (BR-06) dan stale 2 hari masuk Pengaturan. Retensi bukti 60 hari dan interval presence 60 detik tetap konstanta teknis; alasan didokumentasikan. | Disetujui. |
 | C-09 | Penggabungan role wajib mempertahankan hak efektif per user dengan empat jenis Staff Admin. | `tests/Fixtures/permission_snapshot_pre_v3.json`; `app/Support/PermissionCatalog.php`; `database/seeders/RoleSeeder.php` | `admin→admin_cabang`, `sas→sales`, `sam→marketing`, `staff lama→umum`; tes exact permission parity. Commit terpisah menambah hak input NUP/Proses Penjualan SAS. Konversi sebelum UTJ oleh Admin Cabang, SAS, Koordinator. | Disetujui (D30, D32). |
 | C-10 | Status Ditutup belum kanonis pada transaksi. | `app/Services/ConsumerOperationalService.php:24-26`; `app/Services/ConsumerApplicationLifecycleService.php:124-179` | Status kanonis `LANJUT`/`MUNDUR`/`DITUTUP`; DITUTUP hanya Ganti Nama/Kembali ke NUP; bukan aktif/gugur. | Disetujui (D31). |
-| C-11 | Tiga versi jam kerja hidup: Daily Plan 420/09.00, Receipt 480/08.00/07.30, onboarding Jumat 08.30. | `app/Models/SalesDailyPlan.php:19-21`; `app/Services/SalesAgendaReceiptService.php:66-89`; `app/Services/SalesPocketbookOnboardingService.php:19` | Sebelum WP-1.5, laporkan route aktif dan jumlah data per tabel. Lalu satukan semua jalur ke resolver Receipt/Agenda. | Disetujui (C-01). |
+| C-11 | Tiga versi jam kerja hidup: Daily Plan 420/09.00, Receipt 480/08.00/07.30, onboarding Jumat 08.30. | `app/Models/SalesDailyPlan.php:19-21`; `app/Services/SalesAgendaReceiptService.php:66-89`; `app/Services/SalesPocketbookOnboardingService.php:19` | Terjawab: Daily Plan 420 tidak punya route aktif; alur Sales yang dipakai adalah Receipt/Agenda. WP-1.5 menyatukan resolver jam kerja di alur Receipt, mempertahankan data Daily Plan lama, dan memperbarui teks onboarding Jumat 08.30. | Disetujui (C-01). |
 
 ## Daftar aturan BR untuk tes
 

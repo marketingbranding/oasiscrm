@@ -50,7 +50,7 @@
         <div class="workspace-v2-nav-label">AKTIVITAS</div>
         @foreach([
             ['route' => 'workspace-v2.activity', 'label' => 'Aktivitas'],
-            ['route' => 'workspace-v2.tasks', 'label' => 'Tugas'],
+            ['route' => 'workspace-v2.tasks', 'label' => 'Tugas & Konten'],
             ['route' => 'workspace-v2.notifications', 'label' => 'Notifikasi'],
         ] as $link)
             <a class="workspace-v2-nav-link {{ request()->routeIs($link['route']) ? 'is-active' : '' }}" href="{{ route($link['route']) }}"><span class="workspace-v2-nav-icon">·</span><span>{{ $link['label'] }}</span></a>

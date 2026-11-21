@@ -48,7 +48,7 @@ class SalesAgendaEvidenceCleanupService
                     'subject_type' => ContentItem::class,
                     'subject_id' => $lockedAgenda->id,
                     'event' => 'sales_agenda_cleaned_by_superadmin',
-                    'description' => 'Agenda Sales dan bukti lokal dibersihkan oleh Superadmin.',
+                    'description' => 'Rencana Harian Sales dan bukti lokal dibersihkan oleh Superadmin.',
                     'properties' => $metadata + ['evidence_count' => $evidence->count(), 'reason' => $reason, 'target_user_id' => $request->user()?->id, 'original_user_id' => $original?->id],
                 ]);
                 $lockedAgenda->delete();

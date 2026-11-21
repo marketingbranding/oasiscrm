@@ -34,7 +34,7 @@ class NavigationServiceTest extends TestCase
         $branchManager = $this->navigationFor('branch_manager');
         $pusat = $this->navigationFor('pusat');
 
-        $this->assertSame(['Dashboard', 'Work Planner', 'Buku Saku Sales', 'Changelog'], $this->labels($coordinator));
+        $this->assertSame(['Dashboard', 'Tugas & Konten', 'Buku Saku Sales', 'Changelog'], $this->labels($coordinator));
         $this->assertContains('Database', $this->labels($branchManager));
         $this->assertNotContains('Pengeluaran', $this->labels($branchManager));
         $this->assertContains('User', $this->labels($branchManager));

@@ -167,7 +167,7 @@
     @elseif($tab === 'agenda')
     <x-crm.toolbar label="Filter agenda" class="sales-pocketbook-screen-section sales-agenda-toolbar">
         <div class="sales-agenda-filter-summary">
-            <strong>Daftar agenda</strong>
+            <strong>Daftar kegiatan</strong>
             <span>{{ $agendas->total() }} agenda ditemukan{{ $activeAgendaFilterCount ? ' dengan '.$activeAgendaFilterCount.' filter aktif' : ' pada minggu berjalan' }}</span>
         </div>
         @if($selectedBranch)<x-crm.filter-chip label="Cabang: {{ $selectedBranch->name }}" :remove-href="$agendaFilterUrl(['branch_id'])" remove-label="Hapus filter cabang" />@endif
@@ -197,7 +197,7 @@
     </form>
 
     <section class="sales-pocketbook-screen-section sales-agenda-monitor">
-        <header class="sales-agenda-monitor-header"><h2>{{ $monitoring ? 'Monitoring Agenda' : 'Agenda Saya' }}</h2><span>{{ $agendas->total() }} agenda</span></header>
+        <header class="sales-agenda-monitor-header"><h2>{{ $monitoring ? 'Monitoring Rencana Harian' : 'Rencana Harian Saya' }}</h2><span>{{ $agendas->total() }} agenda</span></header>
         <div class="sales-agenda-list">
             @forelse($agendas as $agenda)
             @php

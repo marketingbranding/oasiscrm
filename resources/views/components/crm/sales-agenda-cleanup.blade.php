@@ -5,7 +5,7 @@
         @php($isImpersonating = app(\App\Services\ImpersonationService::class)->isActive(request()))
         <button type="button" class="font-bold text-red-700 underline" @click="$dispatch('oasis:modal-open', { name: 'cleanup-agenda-{{ $agenda->id }}', trigger: $el })">{{ $isImpersonating ? 'Hapus sebagai Superadmin' : 'Hapus agenda' }}</button>
         @if($isImpersonating)<p class="mt-1 text-xs">Anda sedang impersonasi. Tindakan ini menggunakan wewenang Superadmin asli dan akan dicatat di audit log.</p>@endif
-        <x-crm.modal name="cleanup-agenda-{{ $agenda->id }}" title="Hapus Agenda Sales" description="Tindakan permanen. Arsip atau bukti yang sudah dipurge memblokir cleanup.">
+        <x-crm.modal name="cleanup-agenda-{{ $agenda->id }}" title="Hapus Rencana Harian Sales" description="Tindakan permanen. Arsip atau bukti yang sudah dipurge memblokir cleanup.">
             <dl class="grid gap-2 text-sm sm:grid-cols-2">
                 <div><dt class="font-bold">Agenda</dt><dd>{{ $agenda->title }}</dd></div>
                 <div><dt class="font-bold">Sales</dt><dd>{{ $agenda->owner?->name ?: '-' }}</dd></div>

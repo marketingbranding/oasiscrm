@@ -1,7 +1,7 @@
 @extends('layouts.crm')
-@section('title', 'Arsip Bukti Agenda Sales')
+@section('title', 'Arsip Bukti Kegiatan Sales')
 @section('content')
-<x-crm.page-header variant="canonical" title="Arsip Bukti Agenda Sales" description="ZIP mingguan terverifikasi per cabang." />
+<x-crm.page-header variant="canonical" title="Arsip Bukti Kegiatan Sales" description="ZIP mingguan terverifikasi per cabang." />
 <div class="grid gap-3 md:grid-cols-3"><x-crm.card><strong>{{ $archives->total() }}</strong><div>Total arsip</div></x-crm.card><x-crm.card><strong>{{ $archives->getCollection()->where('status', 'ready')->count() }}</strong><div>Terverifikasi pada halaman ini</div></x-crm.card><x-crm.card><strong>{{ $archives->getCollection()->sum(fn($archive) => count($archive->manifest['files'] ?? [])) }}</strong><div>File pada halaman ini</div></x-crm.card></div>
 <x-crm.toolbar label="Filter arsip"><form method="GET" class="flex gap-2"><select name="branch_id" class="sales-input"><option value="">Semua cabang</option>@foreach($branches as $branch)<option value="{{ $branch->id }}" @selected(request('branch_id') == $branch->id)>{{ $branch->name }}</option>@endforeach</select><x-crm.button type="submit" variant="secondary">Filter</x-crm.button></form></x-crm.toolbar>
 @if($canBuildArchive)<x-crm.section id="agenda-evidence-archive-build" title="Bangun Arsip"><form method="POST" action="{{ route('sales-agendas.evidence-archives.build') }}" class="flex flex-wrap gap-2">@csrf<select name="branch_id" class="sales-input">@foreach($branches as $branch)<option value="{{ $branch->id }}">{{ $branch->name }}</option>@endforeach</select><input type="date" name="week" required class="sales-input"><x-crm.button type="submit" variant="primary" accent="sales">Bangun ZIP</x-crm.button></form></x-crm.section>@endif

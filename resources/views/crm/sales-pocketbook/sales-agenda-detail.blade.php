@@ -15,7 +15,7 @@
         <a class="sales-agenda-back-link" href="{{ route('sales-agendas.index', $returnQuery) }}"><span class="sales-agenda-back-link-icon" aria-hidden="true">←</span><span>Kembali</span></a>
     </nav>
 
-    <x-crm.page-header variant="canonical" class="sales-pocketbook-detail-hero" eyebrow="Agenda Sales" :title="$agenda->title">
+    <x-crm.page-header variant="canonical" class="sales-pocketbook-detail-hero" eyebrow="Rencana Harian Sales" :title="$agenda->title">
         <x-slot:actions>
             <x-crm.status-badge :variant="$agenda->isFinished() ? 'success' : 'pending'">
                 {{ $agenda->isFinished() ? 'Selesai' : 'Belum selesai' }}

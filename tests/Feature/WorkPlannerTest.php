@@ -229,7 +229,7 @@ class WorkPlannerTest extends TestCase
 
         $this->actingAs($user)->get(route('content-calendar.index'))->assertOk()
             ->assertSee('Agenda Hari Ini')->assertSee('Task Hari Ini')->assertSee('Konten Hari Ini')
-            ->assertSee('Filter Work Planner')->assertSee('+ Tambah');
+            ->assertSee('Filter Tugas & Konten')->assertSee('+ Tambah');
         foreach (['calendar', 'gantt', 'tasks', 'agenda', 'content', 'all'] as $view) {
             $this->actingAs($user)->get(route('content-calendar.index', ['view' => $view]))->assertOk();
         }
@@ -244,7 +244,7 @@ class WorkPlannerTest extends TestCase
 
         $response->assertOk()
             ->assertSee('crm-page-header', false)
-            ->assertSee('Filter dan aksi Work Planner')
+            ->assertSee('Filter dan aksi Tugas & Konten')
             ->assertSee('aria-current="page"', false)
             ->assertSee('planner-filters')
             ->assertSee('aria-label="Pilih Task Kontrak UI"', false)

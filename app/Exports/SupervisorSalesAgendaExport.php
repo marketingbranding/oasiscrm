@@ -22,7 +22,7 @@ class SupervisorSalesAgendaExport
     {
         $spreadsheet = new Spreadsheet;
         $sheet = $spreadsheet->getActiveSheet();
-        $sheet->setTitle('AGENDA SALES');
+        $sheet->setTitle('RENCANA HARIAN SALES');
         self::writeHeaderRow($sheet, self::HEADERS);
 
         foreach ($agendas->values() as $index => $agenda) {

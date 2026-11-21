@@ -77,7 +77,7 @@ class CoordinatorLeadWorkspaceTest extends TestCase
     {
         $view = file_get_contents(resource_path('views/crm/sales-pocketbook/coordinator-leads.blade.php'));
 
-        foreach (['Lead Baru', 'Tatap Muka', 'Cek Lokasi', 'UTJ', 'Performa Sales', 'Agenda Sales Tim', 'Nama Promo', '<th>Lokasi</th><th>Hasil</th><th>Status</th>', 'Belum ada aktivitas pada periode ini.', 'Pilih sumber lead', 'Pilih promo', 'Pilih Sales', "'today' => 'Hari ini'", "'lead' => 'Lead'", "'report' => 'Laporan'", 'Perlu diupdate', 'Semua agenda sudah diupdate', '480 menit'] as $label) {
+        foreach (['Lead Baru', 'Tatap Muka', 'Cek Lokasi', 'UTJ', 'Performa Sales', 'Rencana Harian Tim', 'Nama Promo', '<th>Lokasi</th><th>Hasil</th><th>Status</th>', 'Belum ada aktivitas pada periode ini.', 'Pilih sumber lead', 'Pilih promo', 'Pilih Sales', "'today' => 'Hari ini'", "'lead' => 'Lead'", "'report' => 'Laporan'", 'Perlu diupdate', 'Semua agenda sudah diupdate', '480 menit'] as $label) {
             $this->assertStringContainsString($label, $view);
         }
         foreach (['BELUM SYNC', 'TERSYNC', 'PERLU SYNC ULANG', 'SYNC GAGAL', 'ID Promo', 'sales-leads.options', 'Tatap Muka Konsumen', '>Survey<', 'Survey Lokasi'] as $label) {

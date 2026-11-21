@@ -190,7 +190,7 @@ class SalesPocketbookExport
     {
         $sheet = $spreadsheet->createSheet();
         $spreadsheet->setActiveSheetIndex($spreadsheet->getIndex($sheet));
-        $sheet->setTitle('AGENDA HARIAN');
+        $sheet->setTitle('RENCANA HARIAN SALES');
         self::writeHeaderRow($sheet, self::AGENDA_HEADERS);
 
         foreach ($agendas->values() as $index => $agenda) {

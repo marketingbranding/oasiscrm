@@ -43,7 +43,7 @@ class ContentItemExport
     {
         $spreadsheet = new Spreadsheet;
         $sheet = $spreadsheet->getActiveSheet();
-        $sheet->setTitle('Work Planner');
+        $sheet->setTitle('TUGAS & KONTEN');
 
         $headers = self::headers();
         self::writeHeaderRow($sheet, $headers);

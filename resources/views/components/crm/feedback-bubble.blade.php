@@ -80,7 +80,7 @@
                         </select>
                     </label>
                     <label class="block text-xs font-bold">Modul
-                        <input x-model.trim="module" maxlength="100" placeholder="Contoh: Database, Work Planner" class="mt-1 w-full border-2 border-black px-2 py-1.5" required>
+                        <input x-model.trim="module" maxlength="100" placeholder="Contoh: Database, Tugas & Konten" class="mt-1 w-full border-2 border-black px-2 py-1.5" required>
                     </label>
                     <label class="block text-xs font-bold" x-text="type === 'permintaan_fitur' ? 'Judul fitur' : 'Judul singkat'"></label>
                     <input x-model.trim="title" maxlength="255" class="w-full border-2 border-black px-2 py-1.5" required>

@@ -7,7 +7,7 @@ class PermissionCatalog
     private const GROUP_DESCRIPTIONS = [
         'Pengguna' => 'Aksi untuk mengelola akun, akses, dan penugasan pengguna.',
         'Buku Saku Sales' => 'Akses data dan alur kerja lead serta aktivitas sales.',
-        'Work Planner' => 'Akses tugas, agenda, dan konten pekerjaan.',
+        'Tugas & Konten' => 'Akses tugas, agenda, dan konten pekerjaan.',
         'Database' => 'Akses data operasional yang tersimpan dari Database.',
         'Progress Konsumen' => 'Akses tahapan dan data proses konsumen.',
         'Dana Talangan' => 'Akses data dan proses Dana Talangan.',
@@ -19,7 +19,7 @@ class PermissionCatalog
 
     private const MODULES = [
         'sales_pocketbook' => ['Buku Saku Sales', ['own', 'team', 'assigned', 'project', 'branch', 'all'], true],
-        'work_planner' => ['Work Planner', ['own', 'team', 'assigned', 'project', 'branch', 'all'], true],
+        'work_planner' => ['Tugas & Konten', ['own', 'team', 'assigned', 'project', 'branch', 'all'], true],
         'database' => ['Database', ['assigned', 'project', 'branch', 'all'], true],
         'consumer_progress' => ['Progress Konsumen', ['team', 'assigned', 'project', 'branch', 'all'], true],
         'bridge_fund' => ['Dana Talangan', ['assigned', 'project', 'branch', 'all'], true],
@@ -88,10 +88,10 @@ class PermissionCatalog
             ['name' => 'Mengelola Daily Plan tim', 'slug' => 'sales_daily_plans.manage_team', 'description' => 'Mengubah planning Daily Plan TEAM yang sudah dikirim.', 'group_name' => 'Daily Plan Sales'],
             ['name' => 'Mengirim Daily Plan sendiri', 'slug' => 'sales_daily_plans.submit_own', 'description' => 'Mengirim Daily Plan sendiri setelah total efektif tepat 420 menit.', 'group_name' => 'Daily Plan Sales'],
             ['name' => 'Mengatur target Lead Sales', 'slug' => 'sales_pocketbook.targets_manage', 'description' => 'Menetapkan target Lead bulanan per Sales.', 'group_name' => 'Buku Saku Sales'],
-            ['name' => 'Membuat Work Planner', 'slug' => 'work_planner.create', 'description' => 'Membuat item Work Planner.', 'group_name' => 'Work Planner'],
-            ['name' => 'Memperbarui Work Planner', 'slug' => 'work_planner.update', 'description' => 'Memperbarui item Work Planner sesuai lingkup akses.', 'group_name' => 'Work Planner'],
-            ['name' => 'Menetapkan Work Planner', 'slug' => 'work_planner.assign', 'description' => 'Menetapkan item Work Planner kepada pengguna lain.', 'group_name' => 'Work Planner'],
-            ['name' => 'Mengekspor Work Planner', 'slug' => 'work_planner.export', 'description' => 'Mengekspor data Work Planner sesuai lingkup akses.', 'group_name' => 'Work Planner'],
+            ['name' => 'Membuat Tugas & Konten', 'slug' => 'work_planner.create', 'description' => 'Membuat item Work Planner.', 'group_name' => 'Work Planner'],
+            ['name' => 'Memperbarui Tugas & Konten', 'slug' => 'work_planner.update', 'description' => 'Memperbarui item Tugas & Konten sesuai lingkup akses.', 'group_name' => 'Tugas & Konten'],
+            ['name' => 'Menetapkan Tugas & Konten', 'slug' => 'work_planner.assign', 'description' => 'Menetapkan item Tugas & Konten kepada pengguna lain.', 'group_name' => 'Tugas & Konten'],
+            ['name' => 'Mengekspor Tugas & Konten', 'slug' => 'work_planner.export', 'description' => 'Mengekspor data Tugas & Konten sesuai lingkup akses.', 'group_name' => 'Tugas & Konten'],
             ['name' => 'Melihat Database', 'slug' => 'database.view', 'description' => 'Melihat data Database sesuai lingkup akses.', 'group_name' => 'Database'],
             ['name' => 'Mengubah Database', 'slug' => 'database.edit', 'description' => 'Mengubah data Database sesuai lingkup akses.', 'group_name' => 'Database'],
             ['name' => 'Menyinkronkan Database', 'slug' => 'database.sync', 'description' => 'Menjalankan sinkronisasi Database sesuai kewenangan.', 'group_name' => 'Database'],

@@ -64,7 +64,17 @@ Status: implementasi selesai di branch `prd-v3/fase-1-wp-1-6-lead-stages`. Flag 
 - Dry-run lokal: `php artisan sales-lead:stage-v3-backfill --dry-run` menghasilkan tabel kosong dan `Kasus perlu tinjau: 0` pada database lokal bersih; perintah read-only menolak eksekusi tanpa `--dry-run`.
 - Tes fokus terakhir: 60 tests passed, 311 assertions untuk stage, bridge/lifecycle sync, Gugur, contract, authorization, dan compatibility. Perubahan juga mencakup filter Lead aktif flag-on, proteksi mutasi setelah UTJ/Gugur, pull tahap v3 dari Sheet, push Gugur opsional, serta backfill query builder.
 - Migration changelog idempoten: `2026_11_21_130000_add_lead_stages_v3_changelog.php`, `2026_11_21_114841_add_lead_follow_up_list_changelog.php`.
-- Operasional sebelum flag diaktifkan: tambahkan opsi dropdown `Gugur` pada `status_lead` di setiap workbook cabang; jalankan `php artisan sales-lead:stage-v3-backfill --dry-run` terhadap salinan DB produksi dan tinjau kasus perlu tinjau. Jangan aktifkan flag atau mematikan sinkronisasi sebelum review selesai.
+### Langkah operator sebelum mengaktifkan `lead_stages_v3`
+
+Runbook untuk WP-3.7:
+
+1. Tambahkan opsi `Gugur` ke dropdown `status_lead` pada setiap workbook cabang.
+2. Jalankan `php artisan sales-lead:stage-v3-backfill --dry-run` di salinan DB produksi. Tinjau semua `Kasus perlu tinjau` sebelum mengubah data.
+3. Aktifkan flag bertahap, mulai dari satu cabang. Pantau sync issue `lead_stage_backward`, `remote_gugur_owned_by_oasis`, dan `sheet_missing_gugur_option`.
+
+Dengan flag hidup, status `UTJ` dari Sheet diterima sebagai klaim tahap Sales tanpa menunggu Data Konsumen. `UTJ` terverifikasi dibaca dari fakta transaksi.
+
+Jangan aktifkan flag atau mematikan sinkronisasi sebelum review selesai.
 
 Batas: tidak mengubah alih Lead, NUP, event transaksi, role migration, pemadaman sinkronisasi Sheet, atau aktivasi flag produksi.
 

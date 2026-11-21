@@ -4,6 +4,7 @@ namespace App\Models;
 
 use App\Enums\SalesLeadStatus;
 use App\Services\CrmAuthorizationService;
+use App\Support\FeatureFlag;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -257,6 +258,17 @@ class SalesLead extends Model
     public function scopeVisibleTo(Builder $query, User $user): Builder
     {
         return app(CrmAuthorizationService::class)->salesLeadQuery($query, $user);
+    }
+
+    public function scopeActiveForLeadViews(Builder $query): Builder
+    {
+        if (! FeatureFlag::enabled('lead_stages_v3')) {
+            return $query;
+        }
+
+        return $query->where(function (Builder $query): void {
+            $query->whereNull('lead_stage')->orWhere('lead_stage', '!=', 'gugur');
+        });
     }
 
     public function currentStage(): ?string

@@ -78,6 +78,10 @@ class SalesLeadPolicy
 
     public function update(User $user, SalesLead $lead): bool
     {
+        if (FeatureFlag::enabled('lead_stages_v3') && $user->isSales() && in_array($lead->resolveStageV3(), ['utj', 'gugur'], true)) {
+            return false;
+        }
+
         if (FeatureFlag::enabled('org_hierarchical_monitoring')
             && $this->isReadOnlySalesMonitor($user)
             && ! $this->canEditHistoricalOwnedLead($user, $lead)) {
@@ -160,8 +164,10 @@ class SalesLeadPolicy
 
     public function updateLifecycleStatus(User $user, SalesLead $lead): bool
     {
-        if (FeatureFlag::enabled('lead_stages_v3') && $user->isSales()) {
-            return $this->updateStageV3($user, $lead);
+        if (FeatureFlag::enabled('lead_stages_v3')) {
+            if ($user->isSales()) {
+                return $this->updateStageV3($user, $lead);
+            }
         }
 
         return ! $this->canEditHistoricalOwnedLead($user, $lead)
@@ -177,6 +183,10 @@ class SalesLeadPolicy
 
     public function recordSiteVisit(User $user, SalesLead $lead): bool
     {
+        if (FeatureFlag::enabled('lead_stages_v3')
+            && ($lead->lead_stage === 'gugur' || ($user->isSales() && $lead->lead_stage === 'utj'))) {
+            return false;
+        }
         if ($this->canEditHistoricalOwnedLead($user, $lead)) {
             return false;
         }
@@ -198,6 +208,10 @@ class SalesLeadPolicy
 
     public function markUtjDirect(User $user, SalesLead $lead): bool
     {
+        if (FeatureFlag::enabled('lead_stages_v3')
+            && ($lead->lead_stage === 'gugur' || ($user->isSales() && $lead->lead_stage === 'utj'))) {
+            return false;
+        }
         if ($this->canEditHistoricalOwnedLead($user, $lead)) {
             return false;
         }
@@ -219,25 +233,29 @@ class SalesLeadPolicy
 
     public function convertToConsumer(User $user, SalesLead $lead): bool
     {
-        return ! $this->canEditHistoricalOwnedLead($user, $lead)
+        return (! FeatureFlag::enabled('lead_stages_v3') || $lead->lead_stage !== 'gugur')
+            && ! $this->canEditHistoricalOwnedLead($user, $lead)
             && $this->update($user, $lead);
     }
 
     public function submitToSlik(User $user, SalesLead $lead): bool
     {
-        return ! $this->canEditHistoricalOwnedLead($user, $lead)
+        return (! FeatureFlag::enabled('lead_stages_v3') || $lead->lead_stage !== 'gugur')
+            && ! $this->canEditHistoricalOwnedLead($user, $lead)
             && $this->update($user, $lead);
     }
 
     public function markSlikRejected(User $user, SalesLead $lead): bool
     {
-        return ! $this->canEditHistoricalOwnedLead($user, $lead)
+        return (! FeatureFlag::enabled('lead_stages_v3') || $lead->lead_stage !== 'gugur')
+            && ! $this->canEditHistoricalOwnedLead($user, $lead)
             && $this->update($user, $lead);
     }
 
     public function convertToFreelance(User $user, SalesLead $lead): bool
     {
-        return ! $this->canEditHistoricalOwnedLead($user, $lead)
+        return (! FeatureFlag::enabled('lead_stages_v3') || $lead->lead_stage !== 'gugur')
+            && ! $this->canEditHistoricalOwnedLead($user, $lead)
             && $this->update($user, $lead);
     }
 

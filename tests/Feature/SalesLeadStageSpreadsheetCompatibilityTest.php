@@ -8,6 +8,8 @@ use App\Models\Role;
 use App\Models\SalesLead;
 use App\Models\User;
 use App\Services\SalesLeadSpreadsheetContract;
+use App\ValueObjects\ResolvedSalesLeadSpreadsheetContract;
+use App\ValueObjects\SalesLeadSheetDefinition;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Str;
 use Tests\TestCase;
@@ -34,6 +36,24 @@ class SalesLeadStageSpreadsheetCompatibilityTest extends TestCase
         $this->assertNotNull($lead->fresh()->akad_at);
     }
 
+    public function test_br10_contract_maps_v3_labels_to_existing_sheet_dropdown_labels(): void
+    {
+        $lead = $this->lead('dihubungi');
+        $contracts = app(SalesLeadSpreadsheetContract::class);
+
+        $this->assertSame('Diskusi', $contracts->statusForLead($lead));
+        $lead->update(['lead_stage' => 'survey']);
+        $this->assertSame('Cek Lokasi', $contracts->statusForLead($lead));
+    }
+
+    public function test_br13_gugur_status_returns_null_when_branch_contract_lacks_option(): void
+    {
+        $lead = $this->lead('gugur');
+        $contract = new ResolvedSalesLeadSpreadsheetContract('sheet', $this->definition(), 1, [], [], [], 2, ['status_lead' => ['UTJ']]);
+
+        $this->assertNull(app(SalesLeadSpreadsheetContract::class)->statusForLead($lead, $contract));
+    }
+
     public function test_br10_and_br13_canonical_stage_maps_to_sheet_status_without_changing_identity(): void
     {
         $lead = $this->lead('utj');
@@ -45,6 +65,11 @@ class SalesLeadStageSpreadsheetCompatibilityTest extends TestCase
         $lead->update(['lead_stage' => 'gugur']);
         $this->assertSame('Gugur', app(SalesLeadSpreadsheetContract::class)->statusForLead($lead));
         $this->assertSame('stable-sync-id', $lead->fresh()->external_sync_id);
+    }
+
+    private function definition(): SalesLeadSheetDefinition
+    {
+        return app(SalesLeadSpreadsheetContract::class)->definitions()['lead'];
     }
 
     private function lead(string $stage): SalesLead

@@ -40,7 +40,7 @@
         <div><dt class="font-bold">Cek lokasi</dt><dd>{{ $latestVisit ? ($latestVisit->is_completed ? 'Lengkap, '.$latestVisit->visit_date?->format('d/m/Y') : 'Belum lengkap / Isi Nanti') : 'Belum dicatat' }}</dd></div>
         <div><dt class="font-bold">Konsumen / NUP</dt><dd>{{ $normalConsumer ? 'Konsumen tercatat' : ($nupConsumer ? 'NUP tercatat, belum UTJ' : 'Belum dikonversi') }}</dd></div>
         <div><dt class="font-bold">SLIK</dt><dd>{{ $latestSlik ? ($latestSlik->status === 'rejected' ? 'Ditolak: '.$latestSlik->slik_result : 'Diajukan') : 'Belum diajukan' }}</dd></div>
-        <div><dt class="font-bold">Berkas Awal / Akad</dt><dd>{{ $documentsComplete ? 'Berkas Awal Lengkap' : 'Berkas belum lengkap' }} / {{ $akad ? 'Akad tercatat' : 'Belum Akad' }}</dd></div>
+        <div><dt class="font-bold">{{ $stageV3 ? 'Berkas Awal / Akad' : 'Freelance / Akad' }}</dt><dd>{{ $stageV3 ? ($documentsComplete ? 'Berkas Awal Lengkap' : 'Berkas belum lengkap') : ($freelance ? 'Freelance selesai' : 'Bukan freelance') }} / {{ $akad ? 'Akad tercatat' : 'Belum Akad' }}</dd></div>
     </dl>
 
     @can('updateLifecycleStatus', $lead)

@@ -181,16 +181,24 @@ class SalesLeadSpreadsheetContract
             : trim($value);
     }
 
-    public function statusForLead(SalesLead $lead): string
+    public function statusForLead(SalesLead $lead, ?ResolvedSalesLeadSpreadsheetContract $contract = null): ?string
     {
-        return match ($lead->resolveStageV3()) {
+        $status = match ($lead->resolveStageV3()) {
             'utj' => 'UTJ',
             'gugur' => 'Gugur',
-            'dihubungi' => 'Dihubungi',
+            'dihubungi' => 'Diskusi',
             'tatap_muka' => 'Tatap Muka',
-            'survey' => 'Survey',
+            'survey' => 'Cek Lokasi',
             default => 'No Respon',
         };
+
+        if ($status === 'Gugur' && $contract !== null && ! collect($contract->validationOptions['status_lead'] ?? [])->contains(
+            fn (string $option): bool => $this->normalizeValidationValue('status_lead', $option) === 'gugur',
+        )) {
+            return null;
+        }
+
+        return $status;
     }
 
     public function valueForWrite(ResolvedSalesLeadSpreadsheetContract $contract, string $header, mixed $value): mixed
@@ -288,8 +296,11 @@ class SalesLeadSpreadsheetContract
                 );
                 sort($expectedValues);
                 $legacyStatusValues = ['akad', 'cek lokasi', 'cek_slik', 'diskusi', 'jadi freelance', 'no respon', 'tatap muka', 'tidak lolos bi checking', 'utj'];
+                $legacyStatusValuesWithGugur = [...$legacyStatusValues, 'gugur'];
+                sort($legacyStatusValues);
+                sort($legacyStatusValuesWithGugur);
                 $isCompatibleLegacyStatus = $header === 'status_lead'
-                    && $actualValues === $legacyStatusValues;
+                    && in_array($actualValues, [$legacyStatusValues, $legacyStatusValuesWithGugur], true);
                 if ($actualValues !== $expectedValues && ! $isCompatibleLegacyStatus) {
                     throw SalesLeadSpreadsheetContractException::validationInvalid($definition->sheetName, $header);
                 }

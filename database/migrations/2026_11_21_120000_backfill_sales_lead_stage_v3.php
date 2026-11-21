@@ -9,14 +9,12 @@ return new class extends Migration
 {
     public function up(): void
     {
-        SalesLead::query()
+        DB::table('sales_leads')
             ->whereNull('lead_stage')
+            ->orderBy('id')
             ->chunkById(500, function ($leads): void {
                 foreach ($leads as $lead) {
-                    $status = $lead->current_status instanceof SalesLeadStatus
-                        ? $lead->current_status
-                        : SalesLeadStatus::tryFrom((string) $lead->current_status);
-
+                    $status = SalesLeadStatus::tryFrom((string) $lead->current_status);
                     $stage = SalesLead::stageV3FromLegacy($status);
                     if ($lead->contacted_at !== null) {
                         $stage = 'dihubungi';
@@ -30,7 +28,7 @@ return new class extends Migration
                     if ($lead->utj_at !== null || $stage === 'utj') {
                         $stage = 'utj';
                     }
-                    if ($lead->gugur_at !== null || $lead->lead_stage === 'gugur') {
+                    if ($lead->gugur_at !== null) {
                         $stage = 'gugur';
                     }
 
@@ -41,6 +39,6 @@ return new class extends Migration
 
     public function down(): void
     {
-        DB::table('sales_leads')->update(['lead_stage' => null]);
+        // Backfill is intentionally irreversible; later stage edits must survive rollback.
     }
 };

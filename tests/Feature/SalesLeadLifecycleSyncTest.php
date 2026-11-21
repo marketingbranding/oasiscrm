@@ -93,6 +93,47 @@ class SalesLeadLifecycleSyncTest extends TestCase
         $this->assertNull($lead->fresh()->lead_stage);
     }
 
+    public function test_br10_v3_pull_advances_stage_with_sheet_source_and_rejects_backward_status(): void
+    {
+        [$branch, $project, $sales] = $this->context('sheet-v3-stage', 'V3 Stage Project', 'V3 Stage Sales');
+        $lead = $this->lead($branch, $project, $sales, 'V3-1', 'SYNC-V3');
+        AppSetting::query()->create(['key' => 'lead_stages_v3', 'value' => true, 'group' => 'feature_flags']);
+        $lead->update(['lead_stage' => 'survey']);
+        $google = Mockery::mock(GoogleSheetsApiService::class);
+        $this->expectSheets($google, 'sheet-v3-stage', ['lead' => $this->leadSheet('V3-1', $project->project_name, $sales->name, 'Diskusi', 'SYNC-V3')]);
+        $this->app->instance(GoogleSheetsApiService::class, $google);
+
+        $result = app(SalesLeadLifecycleSyncService::class)->sync($branch);
+
+        $this->assertTrue($result['ok']);
+        $this->assertSame('survey', $lead->fresh()->lead_stage);
+        $this->assertDatabaseHas('sales_lead_lifecycle_reconciliation_items', [
+            'sales_lead_id' => $lead->id,
+            'issue_code' => 'lead_stage_backward',
+            'status' => 'open',
+        ]);
+    }
+
+    public function test_br10_v3_pull_caps_akad_at_utj_without_downstream_lead_stage(): void
+    {
+        [$branch, $project, $sales] = $this->context('sheet-v3-akad', 'V3 Akad Project', 'V3 Akad Sales');
+        $lead = $this->lead($branch, $project, $sales, 'V3-AKAD', 'SYNC-V3-AKAD');
+        $lead->update(['lead_stage' => 'lead_baru']);
+        AppSetting::query()->create(['key' => 'lead_stages_v3', 'value' => true, 'group' => 'feature_flags']);
+        $consumer = SalesLeadConsumerLink::query()->create(['sales_lead_id' => $lead->id, 'branch_id' => $branch->id, 'status' => 'completed', 'sheet_type' => 'data_konsumen', 'nik' => '123', 'id_kavling' => 'KAV-V3']);
+        SalesLeadAkadLink::query()->create(['sales_lead_id' => $lead->id, 'branch_id' => $branch->id, 'consumer_link_id' => $consumer->id, 'status' => 'completed', 'akad_at' => '2026-08-03', 'oasis_sync_id' => 'AKAD-V3']);
+        $google = Mockery::mock(GoogleSheetsApiService::class);
+        $this->expectSheets($google, 'sheet-v3-akad', [
+            'lead' => $this->leadSheet('V3-AKAD', $project->project_name, $sales->name, 'Akad', 'SYNC-V3-AKAD'),
+            'data_konsumen' => [['id_kavling', 'no_ktp', 'nama_konsumen', 'oasis_sync_id'], ['KAV-V3', '123', $lead->customer_name, 'CONSUMER-V3']],
+            'akad' => [['id_kavling', 'tanggal_akad', 'no_ppjb_akad', 'oasis_sync_id'], ['KAV-V3', '2026-08-03', 'PPJB-V3', 'AKAD-V3']],
+        ]);
+        $this->app->instance(GoogleSheetsApiService::class, $google);
+
+        $this->assertTrue(app(SalesLeadLifecycleSyncService::class)->sync($branch)['ok']);
+        $this->assertSame('utj', $lead->fresh()->lead_stage);
+    }
+
     public function test_pull_maps_tatap_muka_and_records_idempotent_history(): void
     {
         [$branch, $project, $sales] = $this->context('sheet-face-to-face', 'Face Project', 'Face Sales');

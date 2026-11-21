@@ -151,7 +151,7 @@ class SalesPocketbookController extends Controller
         $filterLeadPeriod = $reportMetric || $request->filled('period_type') || $request->filled('week') || ($request->filled('date_from') && $request->filled('date_to'));
         $leads = ($canonicalScope
             ? $this->weeklyMetrics->canonicalLeadQuery($canonicalScope)
-            : SalesLead::query()->visibleTo($user)->whereIn('sales_user_id', $visibleSalesIds))
+            : SalesLead::query()->visibleTo($user)->whereIn('sales_user_id', $visibleSalesIds)->activeForLeadViews())
             ->with([
                 'branch:id,name,sheet_id', 'project:id,project_name,is_nup_eligible', 'sales:id,name,supervisor_user_id',
                 'leadSource:id,name,is_active', 'siteVisits' => fn ($query) => $query->latest('id'),
@@ -301,7 +301,7 @@ class SalesPocketbookController extends Controller
         $coordinators = User::query()->where('is_active', true)->whereIn('id', $visibleSalesIds)
             ->whereHas('role', fn (Builder $query) => $query->whereIn('slug', ['sales_coordinator', 'supervisor', 'manager', 'branch_manager']))
             ->orderBy('name')->get(['id', 'name', 'branch_id']);
-        $sourceOptionQuery = SalesLead::query()->visibleTo($user)
+        $sourceOptionQuery = SalesLead::query()->visibleTo($user)->activeForLeadViews()
             ->whereIn('sales_user_id', $visibleSalesIds)
             ->when($selectedBranchId, fn (Builder $query) => $query->where('branch_id', $selectedBranchId))
             ->when($selectedProjectId, fn (Builder $query) => $query->where('project_id', $selectedProjectId))

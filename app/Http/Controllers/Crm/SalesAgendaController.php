@@ -159,6 +159,7 @@ class SalesAgendaController extends Controller
         $leadStatus = $request->query('lead_status', 'open');
         $leadQuery = SalesLead::query()
             ->visibleTo($request->user())
+            ->activeForLeadViews()
             ->where('sales_user_id', $request->user()->id)
             ->with(['branch:id,name', 'project:id,project_name']);
         $openLeadCount = (clone $leadQuery)->whereNull('completed_at')->count();
@@ -171,6 +172,7 @@ class SalesAgendaController extends Controller
             ->withQueryString();
         $followUpLeads = SalesLead::query()
             ->visibleTo($request->user())
+            ->activeForLeadViews()
             ->where('sales_user_id', $request->user()->id)
             ->whereNull('completed_at')
             ->whereHas('latestFollowUpSiteVisit')

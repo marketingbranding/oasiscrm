@@ -147,7 +147,7 @@ class AdminBranchSalesMonitoringService
 
     private function leadQuery(array $scope, array $period, array $salesIds, array $filters, ?int $projectId): Builder
     {
-        return SalesLead::query()->where('branch_id', $scope['branch_id'])->whereIn('project_id', $scope['project_ids'])->whereIn('sales_user_id', $salesIds)
+        return SalesLead::query()->activeForLeadViews()->where('branch_id', $scope['branch_id'])->whereIn('project_id', $scope['project_ids'])->whereIn('sales_user_id', $salesIds)
             ->whereDate('lead_date', '>=', $period['from']->toDateString())->whereDate('lead_date', '<=', $period['to']->toDateString())
             ->when($projectId, fn (Builder $query) => $query->where('project_id', $projectId))
             ->when(filled($filters['source'] ?? null), fn (Builder $query) => $query->whereEffectiveSource($filters['source']))
@@ -167,7 +167,7 @@ class AdminBranchSalesMonitoringService
 
     private function distinctLeadOptions(array $scope, string $column): array
     {
-        return SalesLead::query()->where('branch_id', $scope['branch_id'])->whereIn('project_id', $scope['project_ids'])
+        return SalesLead::query()->activeForLeadViews()->where('branch_id', $scope['branch_id'])->whereIn('project_id', $scope['project_ids'])
             ->whereNotNull($column)->where($column, '<>', '')->distinct()->orderBy($column)->pluck($column)->all();
     }
 }

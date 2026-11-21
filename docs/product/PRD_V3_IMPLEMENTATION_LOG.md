@@ -62,8 +62,9 @@ Status: implementasi selesai di branch `prd-v3/fase-1-wp-1-6-lead-stages`. Flag 
 - Spreadsheet: kontrak `lead` menerima status `UTJ`/`Gugur`; ID sinkronisasi tetap dipertahankan. Tab `akad` dibaca sebagai fakta transaksi, bukan tahap Lead. Bukti: `tests/Feature/SalesLeadStageSpreadsheetCompatibilityTest.php`, `tests/Feature/SalesLeadLifecycleSyncTest.php::test_akad_requires_valid_date_is_idempotent_and_does_not_downgrade`.
 - Flag-off: `lead_stages_v3` default `false`; `tests/Feature/SalesLeadStageV3CompatibilityTest.php::test_br10_and_br14_flag_off_keeps_legacy_status_form_and_json_behavior` memastikan jalur legacy tetap berjalan.
 - Dry-run lokal: `php artisan sales-lead:stage-v3-backfill --dry-run` menghasilkan tabel kosong dan `Kasus perlu tinjau: 0` pada database lokal bersih; perintah read-only menolak eksekusi tanpa `--dry-run`.
-- Tes fokus terakhir: 40 tests passed, 317 assertions untuk stage, sync, authorization, compatibility, dan follow-up; sync pull khusus: 16 tests passed, 147 assertions.
+- Tes fokus terakhir: 60 tests passed, 311 assertions untuk stage, bridge/lifecycle sync, Gugur, contract, authorization, dan compatibility. Perubahan juga mencakup filter Lead aktif flag-on, proteksi mutasi setelah UTJ/Gugur, pull tahap v3 dari Sheet, push Gugur opsional, serta backfill query builder.
 - Migration changelog idempoten: `2026_11_21_130000_add_lead_stages_v3_changelog.php`, `2026_11_21_114841_add_lead_follow_up_list_changelog.php`.
+- Operasional sebelum flag diaktifkan: tambahkan opsi dropdown `Gugur` pada `status_lead` di setiap workbook cabang; jalankan `php artisan sales-lead:stage-v3-backfill --dry-run` terhadap salinan DB produksi dan tinjau kasus perlu tinjau. Jangan aktifkan flag atau mematikan sinkronisasi sebelum review selesai.
 
 Batas: tidak mengubah alih Lead, NUP, event transaksi, role migration, pemadaman sinkronisasi Sheet, atau aktivasi flag produksi.
 

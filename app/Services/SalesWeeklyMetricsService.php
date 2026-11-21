@@ -133,7 +133,7 @@ class SalesWeeklyMetricsService
 
     public function leadQuery(User $viewer, array $filters = []): Builder
     {
-        return SalesLead::query()->visibleTo($viewer)
+        return SalesLead::query()->visibleTo($viewer)->activeForLeadViews()
             ->when(! empty($filters['branch_id']), fn (Builder $query) => $query->where('branch_id', $filters['branch_id']))
             ->when(! empty($filters['project_id']), fn (Builder $query) => $query->where('project_id', $filters['project_id']))
             ->when(! empty($filters['sales_user_id']), fn (Builder $query) => $query->where('sales_user_id', $filters['sales_user_id']));
@@ -141,7 +141,7 @@ class SalesWeeklyMetricsService
 
     public function canonicalLeadQuery(array $scope, array $filters = []): Builder
     {
-        return SalesLead::query()
+        return SalesLead::query()->activeForLeadViews()
             ->whereIn('sales_user_id', $scope['owner_ids'])
             ->whereIn('branch_id', $scope['branch_ids'])
             ->whereIn('project_id', $scope['project_ids'])

@@ -54,6 +54,18 @@ class SalesLeadStageAuthorizationTest extends TestCase
         ])->assertForbidden();
     }
 
+    public function test_br14_v3_rejects_legacy_manual_status_mutation_for_manager(): void
+    {
+        [$lead, $manager] = $this->context('survey');
+        $manager->update(['role_id' => Role::query()->where('slug', 'manager')->value('id')]);
+        $this->enableFeature();
+
+        $this->actingAs($manager)->patchJson(route('sales-leads.lifecycle-status.update', $lead), [
+            'status' => 'discussion',
+            'expected_updated_at' => $lead->updated_at->toISOString(),
+        ])->assertUnprocessable();
+    }
+
     public function test_br14_sales_cannot_reopen_utj_via_lifecycle_json_or_sheet_pull(): void
     {
         [$lead, $sales] = $this->context('utj');

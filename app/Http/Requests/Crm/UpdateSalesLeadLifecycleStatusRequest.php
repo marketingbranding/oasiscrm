@@ -15,7 +15,7 @@ class UpdateSalesLeadLifecycleStatusRequest extends SalesLeadLifecycleRequest
 
     public function rules(): array
     {
-        if (FeatureFlag::enabled('lead_stages_v3') && $this->input('status') === 'gugur') {
+        if (FeatureFlag::enabled('lead_stages_v3')) {
             return $this->operationRules() + [
                 'status' => ['required', 'in:gugur'],
                 'reason' => ['required', 'string', 'max:255'],

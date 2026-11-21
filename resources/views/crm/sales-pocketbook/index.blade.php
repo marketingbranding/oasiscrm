@@ -4,6 +4,7 @@
 
 @section('content')
 @php
+    $stageV3 = \App\Support\FeatureFlag::enabled('lead_stages_v3');
     $scopeParams = array_filter(request()->only(['branch_id', 'project_id', 'sales_user_id']), fn ($value) => filled($value));
     $periodParams = array_filter(request()->only(['period_type', 'week', 'date_from', 'date_to']), fn ($value) => filled($value));
     $tabUrl = fn (string $target) => route('sales-pocketbook.index', array_merge(
@@ -345,7 +346,7 @@
             <article class="sales-lead-item" data-lead-row="{{ $lead->id }}">
                 <div class="sales-lead-identity">
                     <div><span class="sales-lead-kicker">Lead <span data-lead-field="date">{{ $lead->lead_date->format('d/m/Y') }}</span></span><h3 data-lead-field="name">{{ $lead->customer_name }}</h3></div>
-                    <x-crm.status-badge :variant="$leadStageVariant" data-stage-label="{{ $lead->id }}">{{ $lead->currentStageLabel() }}</x-crm.status-badge>
+                    <x-crm.status-badge :variant="$leadStageVariant" data-stage-label="{{ $lead->id }}">{{ $stageV3 ? $lead->stageV3Label() : $lead->currentStageLabel() }}</x-crm.status-badge>
                 </div>
                 <dl class="sales-lead-facts">
                     <div><dt>Telepon</dt><dd data-lead-field="phone">{{ $lead->phone ?: '—' }}</dd></div>
@@ -353,7 +354,7 @@
                     <div><dt>Sumber</dt><dd data-lead-field="source">{{ $lead->effective_source ?: '—' }}</dd></div>
                     <div><dt>Cabang / Sales</dt><dd data-lead-field="assignment">{{ $lead->branch?->name }} / {{ $lead->sales?->name }}</dd></div>
                     <div><dt>Platform / Campaign</dt><dd>{{ $lead->platform ?: '—' }} / {{ $lead->campaign_name ?: '—' }}</dd></div>
-                    <div class="sales-lead-activity"><dt>Aktivitas terbaru</dt><dd><strong data-lead-activity-label="{{ $lead->id }}">{{ $leadStage ? 'Tahap '.$lead->currentStageLabel() : 'Lead dicatat' }}</strong><span data-lead-activity-time="{{ $lead->id }}" data-activity-stage="{{ $leadStage }}" data-lead-baseline="{{ $lead->lead_date->format('d/m/Y') }} 00:00">{{ $leadActivityAt?->format('d/m/Y H:i') ?: '—' }}</span></dd></div>
+                    <div class="sales-lead-activity"><dt>Aktivitas terbaru</dt><dd><strong data-lead-activity-label="{{ $lead->id }}">{{ $leadStage ? 'Tahap '.($stageV3 ? $lead->stageV3Label() : $lead->currentStageLabel()) : 'Lead dicatat' }}</strong><span data-lead-activity-time="{{ $lead->id }}" data-activity-stage="{{ $leadStage }}" data-lead-baseline="{{ $lead->lead_date->format('d/m/Y') }} 00:00">{{ $leadActivityAt?->format('d/m/Y H:i') ?: '—' }}</span></dd></div>
                 </dl>
                 @include('crm.sales-pocketbook._lead-lifecycle', ['lead' => $lead])
                 @can(\App\Support\FeatureFlag::enabled('lead_stages_v3') ? 'updateStageV3' : 'updateStage', $lead)<div class="sales-lead-progress"><span class="sales-lead-section-label">Perbarui progres</span>@include('crm.sales-pocketbook._stage-controls', ['lead' => $lead])</div>@endcan

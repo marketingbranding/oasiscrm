@@ -32,6 +32,15 @@ class SalesLeadStageV3Service
         return $this->transition($lead, $stage, 'correction', $reason, $actor, $operationUuid);
     }
 
+    public function syncFromSheet(SalesLead $lead, string $stage, string $sourceId, string $operationUuid, ?User $actor = null): SalesLead
+    {
+        if (! FeatureFlag::enabled('lead_stages_v3')) {
+            throw ValidationException::withMessages(['stage' => 'Tahap Lead v3 belum diaktifkan.']);
+        }
+
+        return $this->transition($lead, $stage, 'sheet', null, $actor, $operationUuid, $sourceId);
+    }
+
     public function closeAsGugur(SalesLead $lead, string $reason, User $actor, ?string $operationUuid = null): SalesLead
     {
         if (! FeatureFlag::enabled('lead_stages_v3')) {
@@ -59,11 +68,7 @@ class SalesLeadStageV3Service
                 'lead_stage_changed_at' => $changedAt,
                 'gugur_at' => $changedAt,
                 'gugur_reason' => $reason,
-                'current_status' => SalesLeadStatus::NoResponse,
-                'current_status_changed_at' => $changedAt,
-                'current_status_source' => 'web',
-                'current_status_source_id' => (string) $actor->id,
-                'updated_by' => $actor->id,
+                'updated_by' => $actor?->id,
             ]);
             $locked->logSalesActivity('gugur', [
                 'branch_id' => $locked->branch_id,
@@ -77,7 +82,7 @@ class SalesLeadStageV3Service
         });
     }
 
-    private function transition(SalesLead $lead, string $stage, string $source, ?string $reason, User $actor, ?string $operationUuid): SalesLead
+    private function transition(SalesLead $lead, string $stage, string $source, ?string $reason, ?User $actor, ?string $operationUuid, ?string $sourceId = null): SalesLead
     {
         if (! FeatureFlag::enabled('lead_stages_v3')) {
             throw ValidationException::withMessages(['stage' => 'Tahap Lead v3 belum diaktifkan.']);
@@ -85,22 +90,39 @@ class SalesLeadStageV3Service
         if (! in_array($stage, SalesLead::STAGE_V3_ORDER, true) || $stage === 'gugur') {
             throw ValidationException::withMessages(['stage' => 'Tahap Lead tidak valid.']);
         }
-        if ($source === 'web' && $this->stagePosition($stage) < $this->stagePosition($lead->resolveStageV3())) {
+        if (in_array($source, ['web', 'sheet'], true) && $this->stagePosition($stage) < $this->stagePosition($lead->resolveStageV3())) {
             throw ValidationException::withMessages(['stage' => 'Mundur tahap hanya dapat dilakukan lewat Koreksi Data.']);
         }
 
-        return DB::transaction(function () use ($lead, $stage, $source, $reason, $actor, $operationUuid): SalesLead {
+        return DB::transaction(function () use ($lead, $stage, $source, $reason, $actor, $operationUuid, $sourceId): SalesLead {
             $locked = SalesLead::query()->lockForUpdate()->findOrFail($lead->id);
             $this->assertOperationAvailable($locked, $operationUuid);
+            if ($operationUuid !== null && SalesLeadStageHistory::query()->where('sales_lead_id', $locked->id)->where('operation_uuid', $operationUuid)->exists()) {
+                return $locked->fresh();
+            }
+            if ($stage === $locked->resolveStageV3()) {
+                if ($locked->lead_stage !== null) {
+                    return $locked->fresh();
+                }
+                if ($source === 'sheet') {
+                    $locked->update([
+                        'lead_stage' => $stage,
+                        'lead_stage_changed_at' => now(),
+                        'updated_by' => $actor?->id,
+                    ]);
+
+                    return $locked->fresh();
+                }
+            }
             if ($locked->resolveStageV3() === 'gugur') {
                 throw ValidationException::withMessages(['stage' => 'Lead Gugur tidak dapat diubah.']);
             }
-            if ($source === 'web' && $this->stagePosition($stage) < $this->stagePosition($locked->resolveStageV3())) {
+            if (in_array($source, ['web', 'sheet'], true) && $this->stagePosition($stage) < $this->stagePosition($locked->resolveStageV3())) {
                 throw ValidationException::withMessages(['stage' => 'Mundur tahap hanya dapat dilakukan lewat Koreksi Data.']);
             }
 
             $changedAt = now();
-            $this->writeTransition($locked, $stage, $actor, $changedAt, $operationUuid, $source, $reason);
+            $this->writeTransition($locked, $stage, $actor, $changedAt, $operationUuid, $source, $reason, $sourceId);
             $legacyStatus = match ($stage) {
                 'lead_baru' => SalesLeadStatus::NoResponse,
                 'dihubungi' => SalesLeadStatus::Discussion,
@@ -114,25 +136,25 @@ class SalesLeadStageV3Service
                 'current_status' => $legacyStatus,
                 'current_status_changed_at' => $changedAt,
                 'current_status_source' => $source,
-                'current_status_source_id' => (string) $actor->id,
-                'updated_by' => $actor->id,
+                'current_status_source_id' => $sourceId ?? (string) $actor?->id,
+                'updated_by' => $actor?->id,
             ]);
-            $this->legacyLifecycle->recordStatusHistory($locked, $legacyStatus, $source, (string) $actor->id, $actor, $changedAt, ['reason' => $reason], $operationUuid);
+            $this->legacyLifecycle->recordStatusHistory($locked, $legacyStatus, $source, $sourceId ?? (string) $actor?->id, $actor, $changedAt, ['reason' => $reason], $operationUuid);
 
             return $locked->fresh();
         });
     }
 
-    private function writeTransition(SalesLead $lead, string $stage, User $actor, mixed $changedAt, ?string $operationUuid, string $source, ?string $reason): SalesLeadStageHistory
+    private function writeTransition(SalesLead $lead, string $stage, ?User $actor, mixed $changedAt, ?string $operationUuid, string $source, ?string $reason, ?string $sourceId = null): SalesLeadStageHistory
     {
         return SalesLeadStageHistory::query()->create([
             'sales_lead_id' => $lead->id,
             'branch_id' => $lead->branch_id,
-            'actor_id' => $actor->id,
+            'actor_id' => $actor?->id,
             'from_stage' => $lead->resolveStageV3(),
             'to_stage' => $stage,
             'source' => $source,
-            'source_id' => (string) $actor->id,
+            'source_id' => $sourceId ?? (string) $actor?->id,
             'operation_uuid' => $operationUuid ?: (string) Str::uuid(),
             'reason' => $reason,
             'changed_at' => $changedAt,

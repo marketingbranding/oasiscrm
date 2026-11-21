@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Enums\SalesLeadStatus;
 use App\Models\AppSetting;
 use App\Models\Branch;
 use App\Models\LeadMaster;
@@ -23,6 +24,7 @@ class SalesLeadGugurTest extends TestCase
         $this->enableFeature();
         $uuid = (string) Str::uuid();
 
+        $this->assertTrue($manager->can('updateLifecycleStatus', $lead));
         $payload = ['status' => 'gugur', 'reason' => 'Tidak berminat', 'operation_uuid' => $uuid];
         $this->actingAs($manager)->patchJson(route('sales-leads.lifecycle-status.update', $lead), $payload)
             ->assertOk()->assertJsonPath('stage', 'gugur');
@@ -62,6 +64,23 @@ class SalesLeadGugurTest extends TestCase
         ])->assertUnprocessable();
 
         $this->assertSame('utj', $lead->fresh()->lead_stage);
+    }
+
+    public function test_br13_closing_as_gugur_preserves_latest_current_status(): void
+    {
+        [$lead, $manager] = $this->context([
+            'lead_stage' => 'survey',
+            'current_status' => SalesLeadStatus::SiteVisit,
+        ]);
+        $this->enableFeature();
+
+        $this->actingAs($manager)->patchJson(route('sales-leads.lifecycle-status.update', $lead), [
+            'status' => 'gugur',
+            'reason' => 'Tidak berminat',
+        ])->assertOk();
+
+        $this->assertSame('gugur', $lead->fresh()->lead_stage);
+        $this->assertSame(SalesLeadStatus::SiteVisit, $lead->fresh()->current_status);
     }
 
     private function enableFeature(): void

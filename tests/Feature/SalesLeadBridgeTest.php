@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Enums\SalesLeadStatus;
+use App\Models\AppSetting;
 use App\Models\Branch;
 use App\Models\LeadMaster;
 use App\Models\Role;
@@ -127,6 +128,30 @@ class SalesLeadBridgeTest extends TestCase
         $lead->update(['customer_name' => 'Updated', 'sync_status' => 'pending_update']);
         $this->assertSame('synced', $bridge->push($lead->fresh())['status']);
         $this->assertSame('synced', $bridge->push($lead->fresh())['status']);
+    }
+
+    public function test_br13_push_skips_missing_gugur_status_option_and_records_branch_issue(): void
+    {
+        [$branch, $project, $sales, $lead] = $this->context('PushGugur');
+        AppSetting::query()->create(['key' => 'lead_stages_v3', 'value' => true, 'group' => 'feature_flags']);
+        $lead->update(['lead_stage' => 'gugur']);
+        $this->enable($branch, 'push_only');
+        $contract = $this->contract($branch, $project, $sales);
+        $google = Mockery::mock(GoogleSheetsApiService::class);
+        $google->shouldReceive('readLeadRows')->once()->andReturn(['headers' => $contract->headers, 'rows' => []]);
+        $writer = Mockery::mock(SalesLeadSpreadsheetWriter::class);
+        $writer->shouldReceive('append')->once()->withArgs(function (SalesLead $writtenLead, string $sheet, array $fields): bool {
+            return $writtenLead->is($writtenLead) && $sheet === 'lead' && ! array_key_exists('status_lead', $fields);
+        })->andReturn(new SalesLeadSpreadsheetWriteResult($branch->sheet_id, 'lead', 2, $lead->external_sync_id, $this->row($lead, 'REMOTE-GUGUR')));
+
+        $result = $this->bridge($google, $writer, $contract)->push($lead);
+
+        $this->assertTrue($result['ok']);
+        $this->assertDatabaseHas('sales_lead_lifecycle_reconciliation_items', [
+            'branch_id' => $branch->id,
+            'issue_code' => 'sheet_missing_gugur_option',
+            'status' => 'open',
+        ]);
     }
 
     public function test_first_push_failure_keeps_target_binding_and_blocks_branch_move(): void
@@ -438,6 +463,13 @@ class SalesLeadBridgeTest extends TestCase
         $contracts = Mockery::mock(SalesLeadSpreadsheetContract::class);
         $contracts->shouldReceive('resolve')->andReturn($contract);
         $contracts->shouldReceive('resolveForBranch')->andReturn($contract);
+        $contracts->shouldReceive('statusForLead')->andReturnUsing(function (SalesLead $lead, ?ResolvedSalesLeadSpreadsheetContract $resolved = null): ?string {
+            if ($lead->resolveStageV3() !== 'gugur') {
+                return 'No Respon';
+            }
+
+            return in_array('Gugur', $resolved?->validationOptions['status_lead'] ?? [], true) ? 'Gugur' : null;
+        });
         $identities = Mockery::mock(SalesSheetIdentityService::class);
         if ($project && $sales) {
             $identities->shouldReceive('reverseSales')->andReturn([$sales, null]);

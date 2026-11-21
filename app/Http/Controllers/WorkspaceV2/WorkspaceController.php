@@ -185,7 +185,7 @@ final class WorkspaceController extends Controller
     {
         $this->authorizeSalesView($request->user());
         $search = trim($request->string('search')->toString());
-        $query = SalesLead::query()->visibleTo($request->user())->with(['branch', 'project', 'sales']);
+        $query = SalesLead::query()->visibleTo($request->user())->activeForLeadViews()->with(['branch', 'project', 'sales']);
         $query->when($search !== '', fn (Builder $builder): Builder => $builder->where(function (Builder $nested) use ($search): void {
             $nested->where('customer_name', 'like', "%{$search}%")
                 ->orWhere('phone', 'like', "%{$search}%")

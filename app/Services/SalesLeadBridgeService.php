@@ -17,6 +17,7 @@ use App\ValueObjects\SalesLeadSpreadsheetWriteResult;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
 use Throwable;
 
 class SalesLeadBridgeService
@@ -44,7 +45,7 @@ class SalesLeadBridgeService
     public const BRIDGE_ISSUES = [
         'invalid_uuid', 'duplicate_uuid', 'duplicate_id_lead', 'lead_id_missing', 'lead_identity_conflict',
         'orphan_remote_uuid', 'baseline_missing', 'lead_remote_conflict', 'remote_tombstone_conflict',
-        'tombstone_remote_conflict', 'claim_unverified', 'claim_failed',
+        'tombstone_remote_conflict', 'claim_unverified', 'claim_failed', 'sheet_missing_gugur_option',
     ];
 
     public function __construct(
@@ -115,7 +116,12 @@ class SalesLeadBridgeService
                 return ['ok' => false, 'status' => 'conflict', 'operation' => $operation];
             }
 
-            $fields = $this->writeFields($lead);
+            $fields = $this->writeFields($lead, $contract);
+            if (FeatureFlag::enabled('lead_stages_v3')
+                && $lead->resolveStageV3() === 'gugur'
+                && ($fields['status_lead'] ?? '') === '') {
+                $this->issue($lead->branch, $lead, 'capability', 'status_lead', ['missing_option' => 'Gugur'], 'sheet_missing_gugur_option');
+            }
             $sentHash = $this->ownedPayloadHash($fields);
             if ($existing !== null && $this->baseline($lead) === null) {
                 $remoteHash = $this->payloadHash($existing);
@@ -148,7 +154,7 @@ class SalesLeadBridgeService
             }
 
             $row = $result->rowValues ?: $this->rowAfterWrite($lead->branch, $contract, $result->rowNumber);
-            $status = $this->recordAfterPush($lead, $row, $actor, $sentHash);
+            $status = $this->recordAfterPush($lead, $row, $actor, $sentHash, $contract);
 
             return ['ok' => true, 'status' => $status, 'operation' => $operation, 'row_number' => $result->rowNumber];
         })();
@@ -291,10 +297,30 @@ class SalesLeadBridgeService
 
                         continue;
                     }
-                    $remoteStatus = $this->status((string) ($row['status_lead'] ?? ''));
+                    $rawRemoteStatus = trim((string) ($row['status_lead'] ?? ''));
+                    $remoteStatus = $this->status($rawRemoteStatus);
+                    $v3Stage = FeatureFlag::enabled('lead_stages_v3') ? $this->v3StageForSheetStatus($rawRemoteStatus) : null;
+                    if ($lead !== null && $v3Stage !== null && $lead->lead_stage !== null) {
+                        if ($v3Stage === 'gugur') {
+                            if ($lead->resolveStageV3() !== 'gugur') {
+                                $this->reconcile($branch, $lead, 'remote_gugur_owned_by_oasis', $row, $dryRun, ['remote_status' => $rawRemoteStatus]);
+                                $summary['unresolved']++;
+                            }
+
+                            continue;
+                        }
+                        try {
+                            if (! $dryRun) {
+                                app(SalesLeadStageV3Service::class)->syncFromSheet($lead, $v3Stage, $this->stableLeadSourceId($row), (string) Str::uuid(), $actor);
+                            }
+                        } catch (ValidationException) {
+                            $this->reconcile($branch, $lead, 'lead_stage_backward', $row, $dryRun, ['remote_status' => $rawRemoteStatus]);
+                            $summary['unresolved']++;
+                        }
+                    }
                     $localStatus = $lead === null ? SalesLeadStatus::NoResponse : $this->effectiveStatus($lead);
                     if (($lead === null && $remoteStatus !== SalesLeadStatus::NoResponse)
-                        || ($lead !== null && $this->baseline($lead) !== null && ($remoteStatus === null || $remoteStatus !== $localStatus))) {
+                        || ($lead !== null && $this->baseline($lead) !== null && ($remoteStatus === null || ($v3Stage === null && $remoteStatus !== $localStatus)))) {
                         $this->reconcile($branch, $lead, 'remote_status_owned_by_oasis', $row, $dryRun, ['field_names' => ['status_lead']]);
                         $summary['unresolved']++;
 
@@ -506,11 +532,14 @@ class SalesLeadBridgeService
         }
     }
 
-    public function canonicalPayload(SalesLead $lead): array
+    public function canonicalPayload(SalesLead $lead, ?object $contract = null): array
     {
         $lead->loadMissing(['project', 'sales']);
 
-        return $this->normalizeRemote([
+        $status = FeatureFlag::enabled('lead_stages_v3')
+            ? $this->contracts->statusForLead($lead, $contract)
+            : $this->effectiveStatus($lead)->spreadsheetValue();
+        $payload = $this->normalizeRemote([
             'id_lead' => $lead->external_lead_id,
             'nama_promo' => $lead->id_promo,
             'tanggal_lead' => $lead->lead_date?->format('Y-m-d'),
@@ -521,11 +550,14 @@ class SalesLeadBridgeService
             'no_hp' => $lead->phone,
             'proyek' => $lead->project?->sheet_project_name ?: $lead->project?->project_name,
             'sales_pic' => $lead->sales?->name,
-            'status_lead' => FeatureFlag::enabled('lead_stages_v3')
-                ? $this->contracts->statusForLead($lead)
-                : $this->effectiveStatus($lead)->spreadsheetValue(),
+            'status_lead' => $status,
             'keterangan' => $lead->notes,
         ]);
+        if ($status === null) {
+            unset($payload['status_lead']);
+        }
+
+        return $payload;
     }
 
     public function payloadHash(array $payload): string
@@ -556,9 +588,14 @@ class SalesLeadBridgeService
         return ['headers' => $headers, 'rows' => $rows];
     }
 
-    private function writeFields(SalesLead $lead): array
+    private function writeFields(SalesLead $lead, object $contract): array
     {
-        return $this->canonicalPayload($lead);
+        $fields = $this->canonicalPayload($lead, $contract);
+        if (($fields['status_lead'] ?? null) === null) {
+            unset($fields['status_lead']);
+        }
+
+        return $fields;
     }
 
     private function rowAfterWrite(Branch $branch, object $contract, int $rowNumber): array
@@ -568,13 +605,13 @@ class SalesLeadBridgeService
         return collect($remote['rows'])->firstWhere('_row_number', $rowNumber) ?? [];
     }
 
-    private function recordAfterPush(SalesLead $lead, array $row, ?User $actor, string $sentHash): string
+    private function recordAfterPush(SalesLead $lead, array $row, ?User $actor, string $sentHash, object $contract): string
     {
-        return DB::transaction(function () use ($lead, $row, $actor, $sentHash): string {
+        return DB::transaction(function () use ($lead, $row, $actor, $sentHash, $contract): string {
             $locked = SalesLead::query()->lockForUpdate()->findOrFail($lead->id);
             $payload = $this->normalizeRemote($row);
             $remoteHash = $this->payloadHash($payload);
-            $unchanged = hash_equals($sentHash, $this->ownedPayloadHash($this->canonicalPayload($locked)));
+            $unchanged = hash_equals($sentHash, $this->ownedPayloadHash($this->canonicalPayload($locked, $contract)));
             $locked->update([
                 'external_lead_id' => filled($payload['id_lead'] ?? null) ? $payload['id_lead'] : $locked->external_lead_id,
                 'sync_status' => $unchanged ? 'synced' : 'pending_update',
@@ -680,6 +717,26 @@ class SalesLeadBridgeService
         $exact = collect($contract->validationOptions['proyek'] ?? [])->first(fn (string $option) => $normalize($option) === $normalize($value));
 
         return $exact === null ? [null, 'project_not_found'] : $this->projects->resolveExactWithIssue($branch, $exact);
+    }
+
+    private function v3StageForSheetStatus(string $value): ?string
+    {
+        return match (mb_strtolower(trim($value))) {
+            '', 'no respon', 'no response' => 'lead_baru',
+            'diskusi' => 'dihubungi',
+            'tatap muka' => 'tatap_muka',
+            'cek lokasi' => 'survey',
+            'utj', 'cek silk', 'cek slik', 'tidak lolos bi checking', 'akad' => 'utj',
+            'gugur' => 'gugur',
+            default => null,
+        };
+    }
+
+    private function stableLeadSourceId(array $row): string
+    {
+        return filled($row['oasis_sync_id'] ?? null)
+            ? (string) $row['oasis_sync_id']
+            : 'lead:'.(string) ($row['id_lead'] ?? 'unknown');
     }
 
     private function status(string $value): ?SalesLeadStatus

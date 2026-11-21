@@ -61,7 +61,10 @@ final class ConsumerOperationalService
     {
         $order = ['PSJB' => 'PSJB', 'bi_checking' => 'BI Checking', 'pemberkasan' => 'Pemberkasan', 'proses_bank' => 'Proses Bank', 'sp3k' => 'SP3K', 'ppjb_dev' => 'PPJB', 'akad' => 'Akad', 'bast' => 'BAST', 'garansi' => 'Form Garansi'];
         $rank = array_flip(array_keys($order));
-        $stage = $application->stageEvents->sortByDesc(fn ($event) => [$rank[$event->stage] ?? -1, $event->occurred_at?->timestamp ?? 0, $event->id])->first()?->stage;
+        $stage = $application->stageEvents
+            ->whereNull('event_type')
+            ->sortByDesc(fn ($event) => [$rank[$event->stage] ?? -1, $event->occurred_at?->timestamp ?? 0, $event->id])
+            ->first()?->stage;
 
         return $stage === null ? null : ($order[$stage] ?? $stage);
     }

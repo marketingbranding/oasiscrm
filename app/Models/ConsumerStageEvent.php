@@ -12,6 +12,8 @@ class ConsumerStageEvent extends Model
         'PINDAH_KAVLING', 'GANTI_NAMA', 'GANTI_BANK', 'KEMBALI_KE_NUP', 'KOREKSI_DATA', 'MUNDUR',
     ];
 
+    public const string TRANSACTION_EVENT_STAGE = 'transaction_event';
+
     use HasFactory;
 
     protected $fillable = [

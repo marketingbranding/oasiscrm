@@ -33,14 +33,18 @@ class DatabaseBackupService
 
         try {
             $this->dump($temporaryPath);
-            $compressed = gzencode((string) file_get_contents($temporaryPath), 9);
-            if ($compressed === false) {
-                throw new RuntimeException('Backup compression failed.');
-            }
+            $compressedPath = $this->compress($temporaryPath);
+            $stream = fopen($compressedPath, 'rb');
+            if ($stream === false || ! $disk->writeStream($filename, $stream)) {
+                if (is_resource($stream)) {
+                    fclose($stream);
+                }
 
-            $disk->put($filename, $compressed);
+                throw new RuntimeException('Backup upload failed.');
+            }
+            fclose($stream);
             $deleted = $this->prune($disk);
-            $bytes = strlen($compressed);
+            $bytes = $disk->size($filename);
 
             Log::info('Database backup completed', [
                 'path' => $filename,
@@ -62,7 +66,49 @@ class DatabaseBackupService
             throw new RuntimeException('Database backup failed.', previous: $exception);
         } finally {
             @unlink($temporaryPath);
+            if (isset($compressedPath)) {
+                @unlink($compressedPath);
+            }
         }
+    }
+
+    private function compress(string $inputPath): string
+    {
+        $outputPath = tempnam(sys_get_temp_dir(), 'oasis-backup-gzip-');
+        if ($outputPath === false) {
+            throw new RuntimeException('Backup compression file unavailable.');
+        }
+
+        $input = fopen($inputPath, 'rb');
+        $output = gzopen($outputPath, 'wb9');
+        if ($input === false || $output === false) {
+            if (is_resource($input)) {
+                fclose($input);
+            }
+            if (is_resource($output)) {
+                gzclose($output);
+            }
+            @unlink($outputPath);
+            throw new RuntimeException('Backup compression failed.');
+        }
+
+        while (! feof($input)) {
+            $chunk = fread($input, 1024 * 1024);
+            if ($chunk === false) {
+                fclose($input);
+                gzclose($output);
+                @unlink($outputPath);
+                throw new RuntimeException('Backup read failed.');
+            }
+            if ($chunk !== '') {
+                gzwrite($output, $chunk);
+            }
+        }
+
+        fclose($input);
+        gzclose($output);
+
+        return $outputPath;
     }
 
     private function dump(string $outputPath): void
@@ -92,6 +138,7 @@ class DatabaseBackupService
             '--host='.$host,
             '--port='.$port,
             '--user='.$username,
+            '--result-file='.$outputPath,
             $database,
         ], null, ['MYSQL_PWD' => $password]);
         $process->setTimeout((int) env('OASIS_BACKUP_TIMEOUT', 600));
@@ -101,7 +148,9 @@ class DatabaseBackupService
             throw new RuntimeException('Database dumper returned failure.');
         }
 
-        file_put_contents($outputPath, $process->getOutput(), LOCK_EX);
+        if (! is_file($outputPath)) {
+            throw new RuntimeException('Database dumper did not create result file.');
+        }
     }
 
     private function prune(Filesystem $disk): int

@@ -86,7 +86,7 @@ class AppSettingCatalog
             'backup.database_retention_days' => [
                 'group' => 'backup',
                 'type' => 'integer',
-                'default' => 30,
+                'default' => 7,
                 'label' => 'Retensi backup database',
                 'description' => 'Jumlah hari backup database disimpan.',
                 'rules' => ['integer', 'min:1', 'max:3650'],

@@ -152,19 +152,26 @@ class AiProviderService
         }
 
         $normalized = strtolower(preg_replace('/[^a-z0-9]/i', '', $key) ?? $key);
-        if (preg_match('/^(nik|email|emailaddress|phone|phonenumber|mobile|mobilenumber|telephone|tel|address|alamat|streetaddress|homeaddress)$/', $normalized)) {
+        if (preg_match('/^(nik|email|emailaddress|phone|phonenumber|mobile|mobilenumber|telephone|tel|address|alamat|streetaddress|homeaddress|nohp|nomorhp|hp|telepon|telp|notelp|nomortelepon|whatsapp|wa|surel)$/', $normalized)
+            || str_starts_with($normalized, 'alamat')
+            || str_ends_with($normalized, 'alamat')
+        ) {
             return true;
         }
 
         return ! $this->settings->bool('ai.send_names')
-            && preg_match('/(fullname|customername|employeename|branchname|personname)/', $normalized) === 1;
+            && (
+                preg_match('/(fullname|customername|employeename|branchname|personname)/', $normalized) === 1
+                || str_starts_with($normalized, 'name')
+                || str_ends_with($normalized, 'name')
+            );
     }
 
     private function sanitizeString(string $value): string
     {
-        $value = preg_replace('/\\b\\d{16}\\b/', '[disaring]', $value) ?? $value;
+        $value = preg_replace('/(?<!\\d)(?:\\d[ .-]?){16}(?!\\d)/', '[disaring]', $value) ?? $value;
         $value = preg_replace('/\\b[\\w.!#$%&\'*+\\/=?^`{|}~-]+@[\\w-]+(?:\\.[\\w-]+)+\\b/i', '[disaring]', $value) ?? $value;
-        $value = preg_replace('/(?<!\\d)(?:\\+62|62|0)8\\d{8,12}(?!\\d)/', '[disaring]', $value) ?? $value;
+        $value = preg_replace('/(?<!\\d)(?:(?:\\+62|62|0)[ .-]?)8(?:[ .-]?\\d){8,12}(?!\\d)/', '[disaring]', $value) ?? $value;
         $value = preg_replace('/\\b(?:alamat|address)\\s*[:=-]?\\s*[^,.!?;]+/iu', '[disaring]', $value) ?? $value;
 
         if (! $this->settings->bool('ai.send_names')) {

@@ -15,6 +15,7 @@ use App\Models\LeadMaster;
 use App\Models\Permission;
 use App\Models\Role;
 use App\Models\User;
+use App\Services\AiProviderService;
 use App\Services\AiToolRegistry;
 use App\Services\KonsumenProgressSyncService;
 use App\Services\WorkspaceAccessService;
@@ -27,6 +28,31 @@ use Tests\TestCase;
 class AiChatTest extends TestCase
 {
     use RefreshDatabase;
+
+    public function test_br70_c06_all_ai_tools_payloads_filter_personal_data(): void
+    {
+        [$branch, $user] = $this->branchAndUser();
+        config(['ai.primary.api_key' => 'test-key']);
+        $registry = app(AiToolRegistry::class);
+        foreach ($registry->allowedToolNames() as $toolName) {
+            Http::fake(function ($request) {
+                $encoded = json_encode($request->data(), JSON_UNESCAPED_UNICODE);
+                $this->assertStringNotContainsString('1234 5678 9012 3456', $encoded);
+                $this->assertStringNotContainsString('0812-3456-7890', $encoded);
+                $this->assertStringNotContainsString('person@example.com', $encoded);
+                $this->assertStringNotContainsString('Jalan Merdeka 10', $encoded);
+
+                return Http::response(['choices' => [['message' => ['content' => 'ok']]]]);
+            });
+
+            app(AiProviderService::class)->chat([
+                ['role' => 'user', 'content' => 'Budi Santoso NIK 1234 5678 9012 3456 HP 0812-3456-7890 person@example.com alamat Jalan Merdeka 10'],
+            ], [[
+                'type' => 'function',
+                'function' => ['name' => $toolName, 'arguments' => json_encode(['nomor_hp' => '0812-3456-7890', 'alamat_rumah' => 'Jalan Merdeka 10'])],
+            ]]);
+        }
+    }
 
     public function test_br70_c06_provider_payload_filters_personal_data_and_keeps_name_by_default(): void
     {

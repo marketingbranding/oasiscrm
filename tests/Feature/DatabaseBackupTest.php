@@ -18,9 +18,18 @@ class DatabaseBackupTest extends TestCase
         Storage::disk('database_backups')->put('oasis-old.sql.gz', gzencode('old'));
         touch(Storage::disk('database_backups')->path('oasis-old.sql.gz'), now()->subDays(31)->timestamp);
 
+        $peakBefore = memory_get_peak_usage(true);
         $service = new DatabaseBackupService(
             app(AppSettingResolver::class),
-            static fn (string $path): bool => file_put_contents($path, "CREATE TABLE test (id int);\n") !== false,
+            static function (string $path): bool {
+                $handle = fopen($path, 'wb');
+                for ($chunk = 0; $chunk < 50; $chunk++) {
+                    fwrite($handle, str_repeat('x', 1024 * 1024));
+                }
+                fclose($handle);
+
+                return true;
+            },
         );
 
         $result = $service->backup();
@@ -29,7 +38,17 @@ class DatabaseBackupTest extends TestCase
         $this->assertStringEndsWith('.sql.gz', $result['path']);
         Storage::disk('database_backups')->assertExists($result['path']);
         Storage::disk('database_backups')->assertMissing('oasis-old.sql.gz');
-        $this->assertStringContainsString('CREATE TABLE test', gzdecode(Storage::disk('database_backups')->get($result['path'])));
+        $compressedPath = Storage::disk('database_backups')->path($result['path']);
+        $handle = gzopen($compressedPath, 'rb');
+        $bytes = 0;
+        while (! gzeof($handle)) {
+            $chunk = gzread($handle, 1024 * 1024);
+            $bytes += strlen($chunk);
+        }
+        gzclose($handle);
+
+        $this->assertSame(50 * 1024 * 1024, $bytes);
+        $this->assertLessThan(20 * 1024 * 1024, memory_get_peak_usage(true) - $peakBefore);
     }
 
     public function test_br73_backup_failure_does_not_expose_credentials(): void

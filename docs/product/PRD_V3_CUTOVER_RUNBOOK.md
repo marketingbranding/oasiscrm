@@ -1,14 +1,34 @@
 # Runbook Cutover PRD v3
 
-## Uji pemulihan backup database
+## Backup utama dan uji pemulihan
 
-1. Set `OASIS_BACKUP_DISK_ROOT` ke lokasi disk backup terpisah dari disk aplikasi.
-2. Set kredensial database dan `OASIS_MYSQLDUMP_BINARY` melalui environment server. Jangan menaruh kredensial di command line, log, atau repository.
-3. Jalankan `php artisan oasis:database-backup`.
-4. Verifikasi output `.sql.gz`, ukuran file, timestamp, dan log task tanpa membaca atau menyalin secret.
-5. Siapkan database sementara dengan kredensial terpisah.
-6. Ekstrak backup ke pipe lokal dan restore ke database sementara. Jangan restore langsung ke database produksi untuk uji.
-7. Jalankan `php artisan migrate --force` pada database sementara bila backup berasal dari versi sebelum migrasi terbaru.
-8. Bandingkan jumlah tabel utama dan jalankan smoke test login, navigasi, pembacaan Konsumen, serta pembacaan transaksi.
-9. Catat waktu backup, ukuran, database target sementara, hasil validasi, dan operator. Hapus database sementara setelah bukti pemulihan disimpan.
-10. Uji retensi dengan file backup sintetis bertimestamp lama. Pastikan hanya file backup OASIS dalam disk backup yang terhapus.
+Backup utama OASIS memakai backup otomatis Hostinger.
+
+1. Cek frekuensi backup otomatis dan status retensi di hPanel Hostinger.
+2. Lakukan satu kali uji restore dari backup Hostinger ke lingkungan/database sementara.
+3. Verifikasi tabel utama, jumlah data, login, pembacaan Konsumen, dan pembacaan transaksi.
+4. Catat waktu backup, waktu restore, target sementara, hasil validasi, dan operator.
+
+## Backup manual sebelum cutover
+
+Sebelum setiap langkah cutover berikut, jalankan backup manual:
+
+- migrasi role;
+- aktivasi feature flag;
+- peralihan cabang.
+
+Perintah:
+
+```bash
+php artisan oasis:database-backup
+```
+
+1. Jalankan perintah dari server aplikasi.
+2. Catat nama file dan hasil command.
+3. Unduh file backup ke lokasi operator yang aman.
+4. Jalankan langkah cutover.
+5. Validasi langkah tersebut aman melalui smoke test dan pemeriksaan data.
+6. Hapus file backup manual dari server setelah langkah dinyatakan aman.
+7. Simpan catatan waktu, operator, file yang diunduh, validasi, dan penghapusan.
+
+Backup manual hanya alat pra-cutover. Backup utama tetap backup otomatis Hostinger.

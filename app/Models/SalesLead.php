@@ -36,6 +36,24 @@ class SalesLead extends Model
 
     public const STAGE_LABELS = self::STAGES;
 
+    public const STAGE_V3_ORDER = [
+        'lead_baru',
+        'dihubungi',
+        'tatap_muka',
+        'survey',
+        'utj',
+        'gugur',
+    ];
+
+    public const STAGE_V3_LABELS = [
+        'lead_baru' => 'Lead Baru',
+        'dihubungi' => 'Dihubungi',
+        'tatap_muka' => 'Tatap Muka',
+        'survey' => 'Survey',
+        'utj' => 'UTJ',
+        'gugur' => 'Gugur',
+    ];
+
     protected $fillable = [
         'branch_id', 'project_id', 'sales_user_id', 'lead_source_id', 'lead_date', 'customer_name', 'phone',
         'normalized_phone', 'source_name_snapshot', 'notes', 'linked_consumer_reference',
@@ -44,6 +62,7 @@ class SalesLead extends Model
         'external_lead_id', 'external_sync_id', 'remote_target_branch_id', 'sync_status', 'last_synced_at', 'last_synced_payload_hash', 'last_remote_payload_hash', 'last_synced_field_hashes', 'delivery_attempted_at', 'delete_pending_at', 'last_sync_error',
         'id_promo', 'source', 'platform', 'campaign_id', 'campaign_name',
         'current_status', 'current_status_changed_at', 'current_status_source', 'current_status_source_id',
+        'lead_stage', 'lead_stage_changed_at', 'gugur_at', 'gugur_reason',
         'completed_at', 'completed_by_user_id',
         'consumer_converted_at', 'freelance_converted_at', 'consumer_external_id',
         'freelance_external_id', 'slik_external_id', 'akad_external_id',
@@ -61,6 +80,8 @@ class SalesLead extends Model
             'akad_at' => 'datetime',
             'current_status' => SalesLeadStatus::class,
             'current_status_changed_at' => 'datetime',
+            'lead_stage_changed_at' => 'datetime',
+            'gugur_at' => 'datetime',
             'completed_at' => 'datetime',
             'consumer_converted_at' => 'datetime',
             'freelance_converted_at' => 'datetime',
@@ -114,6 +135,11 @@ class SalesLead extends Model
     public function statusHistories(): HasMany
     {
         return $this->hasMany(SalesLeadStatusHistory::class);
+    }
+
+    public function stageHistories(): HasMany
+    {
+        return $this->hasMany(SalesLeadStageHistory::class);
     }
 
     public function latestStatusHistory(): HasOne
@@ -223,6 +249,56 @@ class SalesLead extends Model
     public function currentStage(): ?string
     {
         return collect(self::STAGE_ORDER)->last(fn (string $stage) => $this->{$stage} !== null);
+    }
+
+    public function resolveStageV3(): string
+    {
+        if (filled($this->lead_stage)) {
+            return (string) $this->lead_stage;
+        }
+
+        if ($this->utj_at !== null || ($this->current_status?->precedence() ?? -1) >= SalesLeadStatus::Utj->precedence()) {
+            return 'utj';
+        }
+
+        if ($this->surveyed_at !== null) {
+            return 'survey';
+        }
+
+        if ($this->met_at !== null) {
+            return 'tatap_muka';
+        }
+
+        if ($this->contacted_at !== null) {
+            return 'dihubungi';
+        }
+
+        return 'lead_baru';
+    }
+
+    public static function stageV3FromLegacy(string|SalesLeadStatus|null $status): string
+    {
+        if ($status === null) {
+            return 'lead_baru';
+        }
+
+        $resolved = $status instanceof SalesLeadStatus ? $status : SalesLeadStatus::fromInput($status);
+
+        return match ($resolved) {
+            SalesLeadStatus::Discussion => 'dihubungi',
+            SalesLeadStatus::FaceToFace => 'tatap_muka',
+            SalesLeadStatus::SiteVisit => 'survey',
+            SalesLeadStatus::Utj,
+            SalesLeadStatus::SlikCheck,
+            SalesLeadStatus::SlikRejected,
+            SalesLeadStatus::Akad => 'utj',
+            default => 'lead_baru',
+        };
+    }
+
+    public function stageV3Label(): string
+    {
+        return self::STAGE_V3_LABELS[$this->resolveStageV3()] ?? 'Lead Baru';
     }
 
     public function currentStageLabel(): string

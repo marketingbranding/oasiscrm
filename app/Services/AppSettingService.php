@@ -120,7 +120,9 @@ class AppSettingService
                     default => throw ValidationException::withMessages([$key => 'Nilai harus berupa ya atau tidak.']),
                 },
                 'string' => is_string($value) ? $value : throw ValidationException::withMessages([$key => 'Nilai harus berupa teks.']),
-                'list' => is_array($value) && array_is_list($value) ? $value : throw ValidationException::withMessages([$key => 'Nilai harus berupa daftar.']),
+                'list' => is_string($value)
+                    ? array_values(array_filter(array_map('trim', preg_split('/\R/', $value) ?: []), filled(...)))
+                    : (is_array($value) && array_is_list($value) ? $value : throw ValidationException::withMessages([$key => 'Nilai harus berupa daftar.'])),
                 default => throw new InvalidArgumentException("Unsupported application setting type [{$definition['type']}]."),
             };
 

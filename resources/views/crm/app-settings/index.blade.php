@@ -37,6 +37,8 @@
                                     <option value="0" @selected(old($oldKey, $definition['value']) === false || old($oldKey, $definition['value']) === '0')>Mati</option>
                                     <option value="1" @selected(old($oldKey, $definition['value']) === true || old($oldKey, $definition['value']) === '1')>Aktif</option>
                                 </select>
+                            @elseif($definition['type'] === 'list')
+                                <textarea id="{{ $inputId }}" name="settings[{{ $inputKey }}]" rows="5" class="crm-control">{{ old($oldKey, implode("\n", $definition['value'])) }}</textarea>
                             @else
                                 <input
                                     id="{{ $inputId }}"

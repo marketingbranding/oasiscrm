@@ -43,13 +43,19 @@ return new class extends Migration
             return;
         }
 
-        Schema::table('consumer_stage_events', function (Blueprint $table): void {
-            if (Schema::hasIndex('consumer_stage_events', 'consumer_stage_events_application_event_time_index')) {
+        $hasIndex = Schema::hasIndex('consumer_stage_events', 'consumer_stage_events_application_event_time_index');
+        $hasEventType = Schema::hasColumn('consumer_stage_events', 'event_type');
+
+        if ($hasIndex) {
+            Schema::table('consumer_stage_events', function (Blueprint $table): void {
                 $table->dropIndex('consumer_stage_events_application_event_time_index');
-            }
-            if (Schema::hasColumn('consumer_stage_events', 'event_type')) {
+            });
+        }
+
+        if ($hasEventType) {
+            Schema::table('consumer_stage_events', function (Blueprint $table): void {
                 $table->dropColumn('event_type');
-            }
-        });
+            });
+        }
     }
 };

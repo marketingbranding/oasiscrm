@@ -99,6 +99,7 @@ class PermissionCatalog
             ['name' => 'Mengelola Progress Konsumen', 'slug' => 'consumer_progress.manage', 'description' => 'Membuat dan memperbarui data konsumen serta proses penjualan sesuai lingkup akses.', 'group_name' => 'Progress Konsumen'],
             ['name' => 'Melihat NIK Konsumen', 'slug' => 'consumer_progress.reveal_nik', 'description' => 'Menampilkan NIK konsumen secara eksplisit sesuai lingkup akses.', 'group_name' => 'Progress Konsumen'],
             ['name' => 'Menyinkronkan Progress Konsumen', 'slug' => 'consumer_progress.sync', 'description' => 'Menjalankan sinkronisasi Progress Konsumen.', 'group_name' => 'Progress Konsumen'],
+            ['name' => 'Rekonsiliasi migrasi data konsumen', 'slug' => 'consumer_migration.reconcile', 'description' => 'Meninjau dan menerapkan rekonsiliasi migrasi data konsumen.', 'group_name' => 'Progress Konsumen'],
             ['name' => 'Melihat Dana Talangan', 'slug' => 'bridge_fund.view', 'description' => 'Melihat Dana Talangan sesuai lingkup akses.', 'group_name' => 'Dana Talangan'],
             ['name' => 'Mengelola Dana Talangan', 'slug' => 'bridge_fund.manage', 'description' => 'Mengelola Dana Talangan sesuai lingkup akses.', 'group_name' => 'Dana Talangan'],
             ['name' => 'Mengekspor Dana Talangan', 'slug' => 'bridge_fund.export', 'description' => 'Mengekspor Dana Talangan sesuai lingkup akses.', 'group_name' => 'Dana Talangan'],

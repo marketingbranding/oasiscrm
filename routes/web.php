@@ -287,7 +287,7 @@ Route::middleware(['auth', 'active', 'verified', 'password.changed', 'operationa
         Route::post('/batches/{marisonImportBatch}/confirm', [MarisonMigrationController::class, 'confirm'])->middleware('not.impersonating')->name('batches.confirm');
     });
 
-    Route::prefix('admin/migrations/marison')->name('admin.marison-migrations.')->middleware(['module.maintenance:consumer_progress', 'operational.module:consumer_progress', 'permission:consumer_progress.manage'])->group(function () {
+    Route::prefix('admin/migrations/marison')->name('admin.marison-migrations.')->middleware(['module.maintenance:consumer_progress', 'operational.module:consumer_progress', 'permission:consumer_migration.reconcile'])->group(function () {
         Route::get('/reconciliation', [ConsumerMigrationReconciliationController::class, 'index'])->name('reconciliation.index');
         Route::get('/reconciliation/{reconciliation}', [ConsumerMigrationReconciliationController::class, 'show'])->name('reconciliation.show');
         Route::post('/reconciliation/{reconciliation}', [ConsumerMigrationReconciliationController::class, 'resolve'])->middleware('not.impersonating')->name('reconciliation.resolve');

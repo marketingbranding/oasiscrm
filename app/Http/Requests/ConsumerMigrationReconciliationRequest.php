@@ -10,7 +10,7 @@ class ConsumerMigrationReconciliationRequest extends FormRequest
 {
     public function authorize(): bool
     {
-        return $this->user()?->hasPermission('consumer_progress.manage') === true;
+        return $this->user()?->hasPermission('consumer_migration.reconcile') === true;
     }
 
     public function rules(): array

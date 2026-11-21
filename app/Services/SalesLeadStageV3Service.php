@@ -45,6 +45,9 @@ class SalesLeadStageV3Service
         return DB::transaction(function () use ($lead, $reason, $actor, $operationUuid): SalesLead {
             $locked = SalesLead::query()->lockForUpdate()->findOrFail($lead->id);
             $this->assertOperationAvailable($locked, $operationUuid);
+            if ($operationUuid !== null && SalesLeadStageHistory::query()->where('branch_id', $locked->branch_id)->where('operation_uuid', $operationUuid)->exists()) {
+                return $locked->fresh();
+            }
             if ($this->stagePosition($locked->resolveStageV3()) >= $this->stagePosition('utj')) {
                 throw ValidationException::withMessages(['stage' => 'Lead setelah UTJ tidak dapat ditutup sebagai Gugur.']);
             }
@@ -52,6 +55,8 @@ class SalesLeadStageV3Service
             $changedAt = now();
             $this->writeTransition($locked, 'gugur', $actor, $changedAt, $operationUuid, 'web', $reason);
             $locked->update([
+                'lead_stage' => 'gugur',
+                'lead_stage_changed_at' => $changedAt,
                 'gugur_at' => $changedAt,
                 'gugur_reason' => $reason,
                 'current_status' => SalesLeadStatus::NoResponse,

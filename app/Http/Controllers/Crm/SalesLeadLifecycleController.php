@@ -16,6 +16,8 @@ use App\Models\SalesLead;
 use App\Models\SalesLeadSiteVisit;
 use App\Models\SalesLeadSlikAttempt;
 use App\Services\SalesLeadLifecycleService;
+use App\Services\SalesLeadStageV3Service;
+use App\Support\FeatureFlag;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
@@ -24,11 +26,22 @@ use Illuminate\Validation\ValidationException;
 
 class SalesLeadLifecycleController extends Controller
 {
-    public function __construct(private readonly SalesLeadLifecycleService $lifecycle) {}
+    public function __construct(
+        private readonly SalesLeadLifecycleService $lifecycle,
+        private readonly SalesLeadStageV3Service $stageV3,
+    ) {}
 
     public function updateStatus(UpdateSalesLeadLifecycleStatusRequest $request, SalesLead $salesLead): RedirectResponse|Response
     {
         $operationUuid = $request->validated('operation_uuid') ?? (string) Str::uuid();
+        if (FeatureFlag::enabled('lead_stages_v3') && $request->validated('status') === 'gugur') {
+            $lead = $this->run(fn () => $this->stageV3->closeAsGugur(
+                $salesLead, $request->validated('reason'), $request->user(), $operationUuid,
+            ));
+
+            return $this->respond($request, 'Lead berhasil ditutup sebagai Gugur.', ['stage' => $lead->lead_stage, 'operation_uuid' => $operationUuid]);
+        }
+
         $lead = $this->run(fn () => $this->lifecycle->setManualStatus(
             $salesLead, $request->validated('status'), $request->user(), operationUuid: $operationUuid,
         ));

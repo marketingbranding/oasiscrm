@@ -233,9 +233,22 @@ class SalesLeadPolicy
 
     public function convertToConsumer(User $user, SalesLead $lead): bool
     {
-        return (! FeatureFlag::enabled('lead_stages_v3') || $lead->lead_stage !== 'gugur')
-            && ! $this->canEditHistoricalOwnedLead($user, $lead)
-            && $this->update($user, $lead);
+        if (FeatureFlag::enabled('lead_stages_v3') && $lead->lead_stage === 'gugur') {
+            return false;
+        }
+        if ($this->canEditHistoricalOwnedLead($user, $lead)) {
+            return false;
+        }
+
+        if (FeatureFlag::enabled('lead_stages_v3') && $lead->resolveStageV3() !== 'utj') {
+            if (! $user->isAdminCabang() && ! $user->hasPrimaryRole(['sas', 'sales_coordinator'])) {
+                return false;
+            }
+
+            return $this->authorization->canViewSalesLead($user, $lead);
+        }
+
+        return $this->update($user, $lead);
     }
 
     public function submitToSlik(User $user, SalesLead $lead): bool

@@ -6,6 +6,7 @@ use Database\Factories\ConsumerIssueFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class ConsumerIssue extends Model
 {
@@ -25,6 +26,11 @@ class ConsumerIssue extends Model
     public function application(): BelongsTo
     {
         return $this->belongsTo(ConsumerApplication::class, 'consumer_application_id');
+    }
+
+    public function returnedNups(): HasMany
+    {
+        return $this->hasMany(ConsumerNup::class, 'issue_id');
     }
 
     public function pic(): BelongsTo

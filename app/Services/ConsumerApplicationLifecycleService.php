@@ -13,8 +13,10 @@ use App\Models\ConsumerStageEvent;
 use App\Models\Customer;
 use App\Models\Kavling;
 use App\Models\User;
+use App\Support\FeatureFlag;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 
 final class ConsumerApplicationLifecycleService
 {
@@ -22,6 +24,7 @@ final class ConsumerApplicationLifecycleService
         private ConsumerKavlingLifecycleService $kavlingLifecycle,
         private ConsumerOperationalService $operational,
         private OrganizationScopeService $scope,
+        private AppSettingResolver $settings,
     ) {}
 
     public function recordPemberkasan(ConsumerApplication $application, array $data, User $actor): ConsumerBankProcess
@@ -66,31 +69,54 @@ final class ConsumerApplicationLifecycleService
         return $this->operational->gantiBank($application, $data, $actor);
     }
 
-    public function mundur(ConsumerApplication $application, User $actor): ConsumerApplication
+    public function mundur(ConsumerApplication $application, string $withdrawReason, User $actor): ConsumerApplication
     {
         $this->authorize($actor, $application);
+        $reasons = $this->settings->list('consumer_progress.mundur_reasons');
+        if (! in_array($withdrawReason, $reasons, true)) {
+            throw ValidationException::withMessages(['withdraw_reason' => 'Alasan Mundur tidak valid.']);
+        }
 
-        $before = $this->snapshot($application->fresh());
-        $result = $this->operational->update($application, ['consumer_status' => 'Mundur'], $actor, $this->kavlingLifecycle);
-        $this->audit($actor, $result, $before, $this->snapshot($result->fresh()), 'consumer_mundur', 'mundur');
+        return DB::transaction(function () use ($application, $withdrawReason, $actor): ConsumerApplication {
+            $locked = ConsumerApplication::query()->lockForUpdate()->findOrFail($application->id);
+            $before = $this->snapshot($locked);
+            $this->kavlingLifecycle->mundur($locked);
+            $locked->update(['withdraw_reason' => $withdrawReason]);
+            if (FeatureFlag::enabled('transaction_events_v3')) {
+                $this->operational->appendTransactionEvent($locked->fresh(), 'MUNDUR', $actor, 'manual', $withdrawReason, [], $withdrawReason);
+            }
+            $result = $locked->fresh();
+            $this->audit($actor, $result, $before, $this->snapshot($result), 'consumer_mundur', 'mundur');
 
-        return $result;
+            return $result;
+        });
     }
 
     public function pindahKavling(ConsumerApplication $application, Kavling $targetKavling, User $actor): ConsumerApplication
     {
         $this->authorize($actor, $application);
 
-        $before = $this->snapshot($application->fresh());
-        $result = $this->operational->update(
-            $application,
-            ['consumer_status' => 'Pindah Kavling', 'target_kavling_id' => $targetKavling->id],
-            $actor,
-            $this->kavlingLifecycle,
-        );
-        $this->audit($actor, $result, $before, $this->snapshot($result->fresh()), 'consumer_kavling_moved', 'pindah_kavling');
+        return DB::transaction(function () use ($application, $targetKavling, $actor): ConsumerApplication {
+            $before = $this->snapshot($application->fresh());
+            $previousKavling = $application->kavling_id === null ? null : Kavling::query()->find($application->kavling_id);
+            $result = $this->operational->update(
+                $application,
+                ['consumer_status' => 'Pindah Kavling', 'target_kavling_id' => $targetKavling->id],
+                $actor,
+                $this->kavlingLifecycle,
+            );
+            if (FeatureFlag::enabled('transaction_events_v3')) {
+                $this->operational->appendTransactionEvent($result, 'PINDAH_KAVLING', $actor, 'manual', 'Pindah kavling', [
+                    'kavling_id' => $targetKavling->id,
+                    'previous_kavling_id' => $previousKavling?->id,
+                    'previous_kavling_code' => $previousKavling?->kavling_code,
+                    'previous_kavling_name' => $previousKavling?->name,
+                ]);
+            }
+            $this->audit($actor, $result, $before, $this->snapshot($result->fresh()), 'consumer_kavling_moved', 'pindah_kavling');
 
-        return $result;
+            return $result;
+        });
     }
 
     public function recordReady100(ConsumerApplication $application, array $data, User $actor): ConsumerStageEvent
@@ -155,28 +181,54 @@ final class ConsumerApplicationLifecycleService
                 'promo_id' => $oldApplication->promo_id,
                 'application_status' => 'active',
                 'consumer_status' => 'Lanjut',
+                'transaction_status' => 'LANJUT',
                 'status_cash' => $oldApplication->status_cash,
                 'booking_date' => $oldApplication->booking_date,
+                'akad_date' => $oldApplication->akad_date,
+                'current_stage' => $oldApplication->current_stage,
+                'current_process' => $oldApplication->current_process,
+                'current_process_source' => $oldApplication->current_process_source,
+                'source_last_process' => $oldApplication->source_last_process,
+                'source_completeness_status' => $oldApplication->source_completeness_status,
+                'payment_method' => $oldApplication->payment_method,
                 'notes' => $oldApplication->notes,
             ]);
+            $this->transferProcessHistory($oldApplication, $replacement);
             if ($currentKavling !== null) {
                 $this->kavlingLifecycle->assign($replacement, $currentKavling);
             }
 
             $oldApplication->update([
                 'application_status' => 'REPLACED',
-                'transaction_status' => 'DIGANTI_KONSUMEN',
+                'transaction_status' => 'DITUTUP',
+                'closed_by_event' => 'GANTI_NAMA',
                 'replacement_application_id' => $replacement->id,
                 'kavling_id' => null,
             ]);
 
+            if (FeatureFlag::enabled('transaction_events_v3')) {
+                $this->operational->appendTransactionEvent($oldApplication, 'GANTI_NAMA', $actor, 'manual', 'Ganti nama konsumen', [
+                    'replacement_application_id' => $replacement->id,
+                ]);
+            }
+
             $this->audit($actor, $oldApplication, $before, [
                 'old_application' => $this->snapshot($oldApplication->fresh()),
                 'replacement_application' => $this->snapshot($replacement->fresh()),
-            ]);
+            ], 'consumer_ganti_konsumen', 'ganti_konsumen');
 
             return $replacement->fresh(['customer', 'kavling', 'project', 'sales', 'promo']);
         });
+    }
+
+    private function transferProcessHistory(ConsumerApplication $oldApplication, ConsumerApplication $replacement): void
+    {
+        $oldApplication->stageEvents()->whereNull('event_type')->update(['consumer_application_id' => $replacement->id]);
+        $oldApplication->psjbs()->update(['consumer_application_id' => $replacement->id]);
+        $oldApplication->bankProcesses()->update(['consumer_application_id' => $replacement->id]);
+        $oldApplication->ppjbDevelopers()->update(['consumer_application_id' => $replacement->id]);
+        $oldApplication->akadRecords()->update(['consumer_application_id' => $replacement->id]);
+        $oldApplication->bastRecords()->update(['consumer_application_id' => $replacement->id]);
     }
 
     private function authorize(User $actor, ConsumerApplication $application): void
@@ -195,16 +247,16 @@ final class ConsumerApplicationLifecycleService
         })->all();
     }
 
-    private function audit(User $actor, ConsumerApplication $application, array $before, array $after): void
+    private function audit(User $actor, ConsumerApplication $application, array $before, array $after, string $event, string $action): void
     {
         ActivityLog::query()->create([
             'causer_id' => $actor->id,
             'subject_type' => ConsumerApplication::class,
             'subject_id' => $application->id,
-            'event' => 'consumer_ganti_konsumen',
-            'description' => 'Konsumen aplikasi diganti dengan aplikasi pengganti.',
+            'event' => $event,
+            'description' => 'Perubahan lifecycle aplikasi konsumen: '.$action.'.',
             'properties' => [
-                'action' => 'ganti_konsumen',
+                'action' => $action,
                 'source' => 'manual',
                 'before' => $before,
                 'after' => $after,

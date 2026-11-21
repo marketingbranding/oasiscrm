@@ -17,6 +17,20 @@ class ConsumerLifecycleHttpTest extends TestCase
 {
     use RefreshDatabase;
 
+    /** BR-31: missing or invalid Mundur reason is rejected without mutation. */
+    public function test_br31_mundur_endpoint_requires_a_configured_reason(): void
+    {
+        $application = ConsumerApplication::factory()->create();
+        $actor = $this->superadmin($application);
+
+        $this->actingAs($actor)
+            ->postJson(route('consumer-applications.mundur', $application), [])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['withdraw_reason']);
+
+        $this->assertDatabaseHas('consumer_applications', ['id' => $application->id, 'transaction_status' => 'LANJUT']);
+    }
+
     public function test_mundur_endpoint_releases_the_current_kavling_assignment(): void
     {
         $application = ConsumerApplication::factory()->create();
@@ -28,7 +42,7 @@ class ConsumerLifecycleHttpTest extends TestCase
         app(ConsumerKavlingLifecycleService::class)->assign($application, $kavling);
         $actor = $this->superadmin($application);
 
-        $response = $this->actingAs($actor)->postJson(route('consumer-applications.mundur', $application));
+        $response = $this->actingAs($actor)->postJson(route('consumer-applications.mundur', $application), ['withdraw_reason' => 'Mundur atas permintaan konsumen']);
 
         $response->assertOk()->assertJsonPath('ok', true);
         $this->assertDatabaseHas('consumer_applications', [
@@ -75,7 +89,7 @@ class ConsumerLifecycleHttpTest extends TestCase
         ]);
 
         $this->actingAs($actor)
-            ->postJson(route('consumer-applications.mundur', $application))
+            ->postJson(route('consumer-applications.mundur', $application), ['withdraw_reason' => 'Mundur atas permintaan konsumen'])
             ->assertForbidden();
     }
 

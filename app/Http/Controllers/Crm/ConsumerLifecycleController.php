@@ -17,7 +17,7 @@ class ConsumerLifecycleController extends Controller
 
     public function mundur(ConsumerLifecycleRequest $request, ConsumerApplication $consumerApplication): JsonResponse|RedirectResponse
     {
-        $application = $this->lifecycle->mundur($consumerApplication, $request->user());
+        $application = $this->lifecycle->mundur($consumerApplication, $request->string('withdraw_reason')->toString(), $request->user());
 
         return $this->respond($request, 'Konsumen berhasil dimundurkan.', $application);
     }

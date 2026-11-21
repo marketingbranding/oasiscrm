@@ -55,7 +55,9 @@ class ConsumerEntryService
                 'current_process_source' => $historical ? 'historical_entry' : 'operational',
                 'entry_mode' => $data['entry_mode'] ?? 'new',
                 'acquisition_source' => $acquisitionSource,
-                'transaction_status' => $data['transaction_status'] ?? 'LANJUT',
+                'transaction_status' => $historical
+                    ? ($data['transaction_status'] ?? 'LANJUT')
+                    : ConsumerApplication::validateNewTransactionStatus($data['transaction_status'] ?? 'LANJUT'),
                 'historical_entered_at' => $historical ? now() : null,
                 'historical_entered_by' => $historical ? $actor->id : null,
                 'notes' => $data['notes'] ?? null,

@@ -24,6 +24,7 @@ class ConsumerApplicationFactory extends Factory
             'branch_id' => $branch->id,
             'project_id' => $project->id,
             'application_status' => 'draft',
+            'transaction_status' => 'LANJUT',
         ];
     }
 }

@@ -12,8 +12,10 @@ use App\Models\ConsumerPsjb;
 use App\Models\ConsumerStageEvent;
 use App\Models\Kavling;
 use App\Models\User;
+use App\Support\FeatureFlag;
 use Carbon\CarbonImmutable;
 use DomainException;
+use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\DB;
@@ -21,6 +23,10 @@ use Illuminate\Support\Str;
 
 final class ConsumerOperationalService
 {
+    public function __construct(
+        private readonly OrganizationScopeService $scope,
+    ) {}
+
     private const CONSUMER_STATUSES = ['Lanjut', 'Mundur', 'Pindah Kavling', 'Reject'];
 
     private const TERMINAL_STATUSES = ['replaced', 'mundur', 'reject', 'rejected', 'cancelled', 'withdrawn', 'completed', 'selesai', 'closed', 'diganti_konsumen'];
@@ -34,7 +40,7 @@ final class ConsumerOperationalService
 
     public function statuses(): array
     {
-        return self::CONSUMER_STATUSES;
+        return ConsumerApplication::TRANSACTION_STATUSES;
     }
 
     public function visibleQuery(User $user, OrganizationScopeService $scope): Builder
@@ -61,20 +67,28 @@ final class ConsumerOperationalService
     {
         $order = ['PSJB' => 'PSJB', 'bi_checking' => 'BI Checking', 'pemberkasan' => 'Pemberkasan', 'proses_bank' => 'Proses Bank', 'sp3k' => 'SP3K', 'ppjb_dev' => 'PPJB', 'akad' => 'Akad', 'bast' => 'BAST', 'garansi' => 'Form Garansi'];
         $rank = array_flip(array_keys($order));
-        $stage = $application->stageEvents->sortByDesc(fn ($event) => [$rank[$event->stage] ?? -1, $event->occurred_at?->timestamp ?? 0, $event->id])->first()?->stage;
+        $stage = $application->stageEvents
+            ->whereNull('event_type')
+            ->sortByDesc(fn ($event) => [$rank[$event->stage] ?? -1, $event->occurred_at?->timestamp ?? 0, $event->id])
+            ->first()?->stage;
 
         return $stage === null ? null : ($order[$stage] ?? $stage);
     }
 
     public function create(array $data, User $actor, ConsumerKavlingLifecycleService $lifecycle): ConsumerApplication
     {
-        return DB::transaction(function () use ($data, $actor, $lifecycle): ConsumerApplication {
+        $historical = ($data['entry_mode'] ?? 'new') !== 'new';
+        $transactionStatus = $historical
+            ? ($data['transaction_status'] ?? 'LANJUT')
+            : ConsumerApplication::validateNewTransactionStatus($data['transaction_status'] ?? 'LANJUT');
+
+        return DB::transaction(function () use ($data, $actor, $lifecycle, $transactionStatus): ConsumerApplication {
             $application = ConsumerApplication::create([
                 'customer_id' => $data['customer_id'], 'branch_id' => $data['branch_id'], 'project_id' => $data['project_id'],
                 'sales_user_id' => $data['sales_user_id'] ?? null, 'promo_id' => $data['promo_id'] ?? null,
                 'application_status' => 'draft', 'status_cash' => $data['status_cash'] ?? null,
                 'consumer_status' => $data['consumer_status'] ?? 'Lanjut', 'notes' => $data['notes'] ?? null,
-                'transaction_status' => $data['transaction_status'] ?? 'LANJUT',
+                'transaction_status' => $transactionStatus,
                 'payment_method' => $data['payment_method'] ?? (($data['status_cash'] ?? false) ? 'cash' : null),
                 'current_process' => $data['current_process'] ?? 'data_konsumen',
                 'current_process_source' => $data['current_process_source'] ?? 'operational',
@@ -208,6 +222,34 @@ final class ConsumerOperationalService
         });
     }
 
+    public function appendTransactionEvent(ConsumerApplication $application, string $eventType, User $actor, string $source = 'manual', ?string $notes = null, array $metadata = [], ?string $reason = null): ConsumerStageEvent
+    {
+        if (! FeatureFlag::enabled('transaction_events_v3')) {
+            throw new DomainException('Event transaksi v3 belum aktif.');
+        }
+
+        if (! in_array($eventType, ConsumerStageEvent::TRANSACTION_EVENT_TYPES, true)) {
+            throw new DomainException('Tipe event transaksi tidak valid.');
+        }
+
+        $hasManagePermission = $actor->hasPermission('consumer_progress.manage')
+            || $actor->hasScopedPermission('consumer_progress', 'manage');
+        if (! $hasManagePermission || ! $this->scope->allowsProjectRecord($actor, 'consumer_progress', 'manage', (int) $application->branch_id, $application->project_id)) {
+            throw new AuthorizationException('Anda tidak berwenang melakukan tindakan pada transaksi ini.');
+        }
+
+        return $application->stageEvents()->create([
+            'stage' => ConsumerStageEvent::TRANSACTION_EVENT_STAGE,
+            'event_type' => $eventType,
+            'source' => $source,
+            'notes' => $notes,
+            'reason' => $reason,
+            'occurred_at' => now(),
+            'actor_id' => $actor->id,
+            'metadata' => $metadata,
+        ]);
+    }
+
     private function recordBankStage(ConsumerApplication $application, string $stage, array $data, User $actor, bool $startNewAttempt, bool $reuseLatestAttempt): ConsumerBankProcess
     {
         return DB::transaction(function () use ($application, $stage, $data, $actor, $startNewAttempt, $reuseLatestAttempt): ConsumerBankProcess {
@@ -225,6 +267,9 @@ final class ConsumerOperationalService
             $before = $this->snapshot($application);
             $date = $data['tanggal_terima_bank'] ?? now()->toDateString();
             $event = $this->appendEvent($application, $stage, $data['status'] ?? $data['response_type'] ?? null, $data['notes'] ?? null, $date, $actor, $data);
+            if ($startNewAttempt && FeatureFlag::enabled('transaction_events_v3')) {
+                $this->appendTransactionEvent($application, 'GANTI_BANK', $actor, 'manual', $data['notes'] ?? null, $data);
+            }
             $record = $startNewAttempt ? null : $this->resolveBankAttempt($application, $data, $reuseLatestAttempt);
             $attributes = $this->bankAttributes($data);
 

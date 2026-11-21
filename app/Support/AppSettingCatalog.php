@@ -51,6 +51,19 @@ class AppSettingCatalog
                 'description' => 'Satu alasan per baris untuk menutup Lead sebagai Gugur (BR-13).',
                 'rules' => ['array', 'min:1'],
             ],
+            'consumer_progress.mundur_reasons' => [
+                'group' => 'consumer_progress',
+                'type' => 'list',
+                'default' => [
+                    'Mundur atas permintaan konsumen',
+                    'Reject SLIK',
+                    'Reject Bank',
+                    'Lainnya',
+                ],
+                'label' => 'Alasan Mundur',
+                'description' => 'Daftar alasan yang sah saat transaksi dimundurkan (BR-31).',
+                'rules' => ['array', 'min:1'],
+            ],
             'sales_lead.sales_max_edit_stage' => [
                 'group' => 'sales_lead',
                 'type' => 'string',

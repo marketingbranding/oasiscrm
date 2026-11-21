@@ -14,6 +14,7 @@ use App\Models\User;
 use App\Support\FeatureFlag;
 use Carbon\CarbonInterface;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 use Throwable;
@@ -379,6 +380,10 @@ class SalesLeadLifecycleService
             if ($project === null || (int) $project->branch_id !== (int) $locked->branch_id) {
                 throw ValidationException::withMessages(['project_id' => 'Proyek lead tidak valid untuk cabang ini.']);
             }
+            $preUtj = FeatureFlag::enabled('lead_stages_v3') && $locked->resolveStageV3() !== 'utj';
+            if ($preUtj && blank($data['pre_utj_exception_reason'] ?? null)) {
+                throw ValidationException::withMessages(['pre_utj_exception_reason' => 'Alasan wajib diisi untuk konversi sebelum UTJ.']);
+            }
             $sheetName = $project->is_nup_eligible ? 'data_konsumen_nup' : 'data_konsumen';
             if ($locked->consumerLinks()->where('sheet_type', $sheetName)->where('status', 'completed')->exists()) {
                 throw ValidationException::withMessages([
@@ -429,8 +434,17 @@ class SalesLeadLifecycleService
                 'nik' => $data['nik'],
                 'id_kavling' => $data['id_kavling'] ?? null,
                 'payload' => $fields,
+                'metadata' => $preUtj ? ['pre_utj_exception' => true, 'exception_reason' => $data['pre_utj_exception_reason']] : null,
                 'converted_at' => now(),
             ]);
+            if ($preUtj) {
+                $locked->logSalesActivity('consumer_converted_before_utj', [
+                    'branch_id' => $locked->branch_id,
+                    'project_id' => $locked->project_id,
+                    'sales_user_id' => $locked->sales_user_id,
+                    'reason' => $data['pre_utj_exception_reason'],
+                ]);
+            }
             if ($sheetName === 'data_konsumen') {
                 $locked->update([
                     'consumer_converted_at' => now(),

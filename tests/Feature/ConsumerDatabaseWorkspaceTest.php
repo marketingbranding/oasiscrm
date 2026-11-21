@@ -12,6 +12,7 @@ use App\Models\Role;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Tests\TestCase;
 
 class ConsumerDatabaseWorkspaceTest extends TestCase
@@ -99,6 +100,11 @@ class ConsumerDatabaseWorkspaceTest extends TestCase
             'status' => 'complete',
             'occurred_at' => now(),
         ]);
+        $application->stageEvents()->create([
+            'stage' => 'transaction_event',
+            'event_type' => 'KOREKSI_DATA',
+            'occurred_at' => now(),
+        ]);
         $application->bankProcesses()->create([
             'bank_name' => 'Bank Contoh',
             'status' => 'approved',
@@ -113,6 +119,7 @@ class ConsumerDatabaseWorkspaceTest extends TestCase
             ->assertOk()
             ->assertJsonPath('data.overview.customer_name', 'Detail Konsumen')
             ->assertJsonPath('data.process.0.stage', 'PSJB')
+            ->assertJsonCount(1, 'data.process')
             ->assertJsonPath('data.payment.0.bank_name', 'Bank Contoh')
             ->assertJsonPath('data.payment.0.no_sp3k', 'SP3K-TEST-001')
             ->assertJsonPath('data.counts.process', 1)
@@ -147,6 +154,17 @@ class ConsumerDatabaseWorkspaceTest extends TestCase
             ->assertJsonPath('data.activity.0.description', $user->name.' - Rumah Siap 100% dicatat')
             ->assertJsonPath('data.activity.0.source', 'Manual')
             ->assertJsonMissingPath('data.activity.0.properties');
+    }
+
+    public function test_transaction_event_migration_is_idempotent(): void
+    {
+        $migration = require database_path('migrations/2026_11_21_150000_add_transaction_event_types.php');
+        $migration->up();
+        $migration->up();
+
+        $this->assertTrue(Schema::hasColumn('consumer_stage_events', 'event_type'));
+        $this->assertTrue(Schema::hasIndex('consumer_stage_events', 'consumer_stage_events_application_event_time_index'));
+        $this->assertSame(1, DB::table('changelogs')->whereNull('version')->where('title', 'Menambahkan histori event transaksi bertipe')->count());
     }
 
     public function test_workspace_changelog_is_idempotent_and_visible(): void

@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\AiChatConversation;
+use App\Models\AppSetting;
 use App\Models\Branch;
 use App\Models\ContentItem;
 use App\Models\DanaTalangan;
@@ -26,6 +27,43 @@ use Tests\TestCase;
 class AiChatTest extends TestCase
 {
     use RefreshDatabase;
+
+    public function test_br70_c06_provider_payload_filters_personal_data_and_keeps_name_by_default(): void
+    {
+        [$branch, $user] = $this->branchAndUser();
+        config(['ai.primary.api_key' => 'test-key']);
+        Http::fake(function ($request) {
+            $payload = $request->data();
+            $encoded = json_encode($payload, JSON_UNESCAPED_UNICODE);
+            $this->assertStringNotContainsString('1234567890123456', $encoded);
+            $this->assertStringNotContainsString('081234567890', $encoded);
+            $this->assertStringNotContainsString('person@example.com', $encoded);
+            $this->assertStringNotContainsString('Jalan Merdeka 10', $encoded);
+            $this->assertStringContainsString('Budi Santoso', $encoded);
+
+            return Http::response(['choices' => [['message' => ['content' => 'ok']]]]);
+        });
+
+        $this->actingAs($user)->postJson(route('ai-chat.chat'), [
+            'message' => 'Budi Santoso, NIK 1234567890123456, HP 081234567890, email person@example.com, alamat Jalan Merdeka 10',
+        ])->assertOk();
+    }
+
+    public function test_br70_names_are_removed_when_setting_disabled(): void
+    {
+        [$branch, $user] = $this->branchAndUser();
+        AppSetting::query()->create(['key' => 'ai.send_names', 'value' => false, 'group' => 'ai']);
+        config(['ai.primary.api_key' => 'test-key']);
+        Http::fake(function ($request) {
+            $this->assertStringNotContainsString('Budi Santoso', json_encode($request->data(), JSON_UNESCAPED_UNICODE));
+
+            return Http::response(['choices' => [['message' => ['content' => 'ok']]]]);
+        });
+
+        $this->actingAs($user)->postJson(route('ai-chat.chat'), [
+            'message' => 'Budi Santoso perlu tindak lanjut.',
+        ])->assertOk();
+    }
 
     public function test_branch_user_gets_read_only_local_answer_when_provider_is_unavailable(): void
     {

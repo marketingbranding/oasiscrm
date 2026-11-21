@@ -9,6 +9,8 @@ use Throwable;
 
 class AiProviderService
 {
+    public function __construct(private readonly AppSettingResolver $settings) {}
+
     public function chat(array $messages, array $tools = []): array
     {
         if (! config('ai.enabled')) {
@@ -64,6 +66,8 @@ class AiProviderService
             $payload['tool_choice'] = 'auto';
         }
 
+        $payload = $this->sanitizePayload($payload);
+
         $response = Http::withHeaders($headers)
             ->timeout($this->bounded((int) config('ai.timeout', 15), 3, 60))
             ->connectTimeout($this->bounded((int) config('ai.connect_timeout', 5), 1, 15))
@@ -85,6 +89,89 @@ class AiProviderService
             'provider' => $provider['provider'] ?? 'custom',
             'model' => $provider['model'],
         ];
+    }
+
+    /**
+     * @param  array<string, mixed>  $payload
+     * @return array<string, mixed>
+     */
+    private function sanitizePayload(array $payload): array
+    {
+        $sanitized = $this->sanitizeValue($payload, null);
+
+        return is_array($sanitized) ? $sanitized : [];
+    }
+
+    private function sanitizeValue(mixed $value, ?string $key): mixed
+    {
+        if ($key === 'name' && is_string($value) && in_array($value, [
+            'count_by_stage',
+            'get_content_schedule',
+            'get_dana_talangan_summary',
+            'search_customer',
+            'get_today_summary',
+            'get_branch_info',
+            'get_supported_capabilities',
+            'ask_clarification',
+        ], true)) {
+            return $value;
+        }
+
+        if ($this->isSensitiveKey($key)) {
+            return null;
+        }
+
+        if (is_array($value)) {
+            $result = [];
+            foreach ($value as $childKey => $childValue) {
+                $sanitized = $this->sanitizeValue($childValue, (string) $childKey);
+                if ($sanitized !== null) {
+                    $result[$childKey] = $sanitized;
+                }
+            }
+
+            return $result;
+        }
+
+        if (is_string($value)) {
+            $decoded = json_decode($value, true);
+            if (is_array($decoded)) {
+                return json_encode($this->sanitizeValue($decoded, null), JSON_UNESCAPED_UNICODE);
+            }
+
+            return $this->sanitizeString($value);
+        }
+
+        return $value;
+    }
+
+    private function isSensitiveKey(?string $key): bool
+    {
+        if ($key === null) {
+            return false;
+        }
+
+        $normalized = strtolower(preg_replace('/[^a-z0-9]/i', '', $key) ?? $key);
+        if (preg_match('/^(nik|email|emailaddress|phone|phonenumber|mobile|mobilenumber|telephone|tel|address|alamat|streetaddress|homeaddress)$/', $normalized)) {
+            return true;
+        }
+
+        return ! $this->settings->bool('ai.send_names')
+            && preg_match('/(fullname|customername|employeename|branchname|personname)/', $normalized) === 1;
+    }
+
+    private function sanitizeString(string $value): string
+    {
+        $value = preg_replace('/\\b\\d{16}\\b/', '[disaring]', $value) ?? $value;
+        $value = preg_replace('/\\b[\\w.!#$%&\'*+\\/=?^`{|}~-]+@[\\w-]+(?:\\.[\\w-]+)+\\b/i', '[disaring]', $value) ?? $value;
+        $value = preg_replace('/(?<!\\d)(?:\\+62|62|0)8\\d{8,12}(?!\\d)/', '[disaring]', $value) ?? $value;
+        $value = preg_replace('/\\b(?:alamat|address)\\s*[:=-]?\\s*[^,.!?;]+/iu', '[disaring]', $value) ?? $value;
+
+        if (! $this->settings->bool('ai.send_names')) {
+            $value = preg_replace('/\\b[[:upper:]][\\p{L}]+(?:\\s+[[:upper:]][\\p{L}]+)+\\b/u', '[disaring]', $value) ?? $value;
+        }
+
+        return $value;
     }
 
     private function bounded(int $value, int $min, int $max): int

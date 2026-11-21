@@ -14,5 +14,6 @@ Schedule::command('sales-lead-lifecycle:sync')->everyTenMinutes()->withoutOverla
 Schedule::command('oasis:sales-agenda-reminders')->everyMinute()->withoutOverlapping(2)->name('sales-agenda-reminders');
 Schedule::command('agenda-evidence:archive-weekly')->weeklyOn(0, '02:00')->withoutOverlapping(120)->name('agenda-evidence-archive-weekly');
 Schedule::command('oasis:presence-cleanup')->hourly()->withoutOverlapping(120)->name('presence-cleanup');
+Schedule::command('oasis:database-backup')->dailyAt('02:30')->withoutOverlapping(120)->name('database-backup');
 Schedule::command('oasis:notifications-cleanup')->weekly()->withoutOverlapping(120)->name('notifications-cleanup');
 Schedule::command('oasis:user-import-cleanup')->daily()->withoutOverlapping(120)->name('user-import-cleanup');

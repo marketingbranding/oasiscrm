@@ -75,6 +75,22 @@ class AppSettingCatalog
             'org_hierarchical_monitoring' => self::featureFlag('Pemantauan graf organisasi'),
             'lead_stages_v3' => self::featureFlag('Tahap Lead v3'),
             'transaction_events_v3' => self::featureFlag('Event transaksi v3'),
+            'ai.send_names' => [
+                'group' => 'ai',
+                'type' => 'boolean',
+                'default' => true,
+                'label' => 'Kirim nama ke Asisten AI',
+                'description' => 'Nama boleh dikirim ke penyedia AI; data pribadi lain tetap disaring (BR-70).',
+                'rules' => ['boolean'],
+            ],
+            'backup.database_retention_days' => [
+                'group' => 'backup',
+                'type' => 'integer',
+                'default' => 30,
+                'label' => 'Retensi backup database',
+                'description' => 'Jumlah hari backup database disimpan.',
+                'rules' => ['integer', 'min:1', 'max:3650'],
+            ],
         ];
     }
 

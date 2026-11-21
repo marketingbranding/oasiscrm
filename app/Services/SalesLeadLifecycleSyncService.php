@@ -483,7 +483,8 @@ class SalesLeadLifecycleSyncService
             return;
         }
         $allowed = match ($target) {
-            SalesLeadStatus::Utj => $lead->consumerLinks()->where('sheet_type', 'data_konsumen')->where('status', 'completed')->exists(),
+            SalesLeadStatus::Utj => FeatureFlag::enabled('lead_stages_v3')
+                || $lead->consumerLinks()->where('sheet_type', 'data_konsumen')->where('status', 'completed')->exists(),
             SalesLeadStatus::SlikCheck, SalesLeadStatus::SlikRejected => $lead->slikAttempts()->exists(),
             SalesLeadStatus::Akad => $lead->akadLinks()->whereNotNull('akad_at')->exists(),
             SalesLeadStatus::Freelance => $lead->freelanceLinks()->where('status', 'completed')->exists(),

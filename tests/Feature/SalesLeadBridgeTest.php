@@ -301,6 +301,31 @@ class SalesLeadBridgeTest extends TestCase
         $this->assertSame(1, SalesLead::where('branch_id', $branch->id)->where('external_lead_id', 'REMOTE-CLAIM')->count());
     }
 
+    public function test_br10_v3_remote_claim_applies_sheet_stage_after_claim(): void
+    {
+        [$branch, $project, $sales] = $this->context('ClaimV3', false);
+        AppSetting::query()->create(['key' => 'lead_stages_v3', 'value' => true, 'group' => 'feature_flags']);
+        $this->enable($branch, 'bidirectional');
+        $row = $this->newRow($project, $sales, 'REMOTE-CLAIM-V3');
+        $row['status_lead'] = 'Diskusi';
+        $contract = $this->contract($branch, $project, $sales);
+        $google = Mockery::mock(GoogleSheetsApiService::class);
+        $google->shouldReceive('readLeadRows')->twice()->andReturnUsing(function () use (&$row, $contract): array {
+            return ['headers' => $contract->headers, 'rows' => [$row]];
+        });
+        $writer = Mockery::mock(SalesLeadSpreadsheetWriter::class);
+        $writer->shouldReceive('setSyncIdByRow')->once()->withArgs(function (SalesLead $lead, int $number, string $uuid, bool $manageLock) use (&$row): bool {
+            $row['oasis_sync_id'] = $uuid;
+
+            return $number === 2 && $manageLock === false;
+        });
+
+        $result = $this->bridge($google, $writer, $contract, $project, $sales)->pull($branch);
+
+        $this->assertSame(1, $result['summary']['claimed']);
+        $this->assertSame('dihubungi', SalesLead::query()->where('external_lead_id', 'REMOTE-CLAIM-V3')->value('lead_stage'));
+    }
+
     public function test_remote_claim_unverified_rolls_back_local_and_reconciles(): void
     {
         [$branch, $project, $sales] = $this->context('ClaimUnknown', false);

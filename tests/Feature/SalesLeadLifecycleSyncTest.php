@@ -114,6 +114,19 @@ class SalesLeadLifecycleSyncTest extends TestCase
         ]);
     }
 
+    public function test_br10_v3_pull_sets_utj_without_consumer_link(): void
+    {
+        [$branch, $project, $sales] = $this->context('sheet-v3-utj', 'V3 UTJ Project', 'V3 UTJ Sales');
+        $lead = $this->lead($branch, $project, $sales, 'V3-UTJ', 'SYNC-V3-UTJ');
+        AppSetting::query()->create(['key' => 'lead_stages_v3', 'value' => true, 'group' => 'feature_flags']);
+        $google = Mockery::mock(GoogleSheetsApiService::class);
+        $this->expectSheets($google, 'sheet-v3-utj', ['lead' => $this->leadSheet('V3-UTJ', $project->project_name, $sales->name, 'UTJ', 'SYNC-V3-UTJ')]);
+        $this->app->instance(GoogleSheetsApiService::class, $google);
+
+        $this->assertTrue(app(SalesLeadLifecycleSyncService::class)->sync($branch)['ok']);
+        $this->assertSame('utj', $lead->fresh()->lead_stage);
+    }
+
     public function test_br10_v3_pull_caps_akad_at_utj_without_downstream_lead_stage(): void
     {
         [$branch, $project, $sales] = $this->context('sheet-v3-akad', 'V3 Akad Project', 'V3 Akad Sales');

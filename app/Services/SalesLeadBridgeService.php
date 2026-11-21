@@ -300,7 +300,7 @@ class SalesLeadBridgeService
                     $rawRemoteStatus = trim((string) ($row['status_lead'] ?? ''));
                     $remoteStatus = $this->status($rawRemoteStatus);
                     $v3Stage = FeatureFlag::enabled('lead_stages_v3') ? $this->v3StageForSheetStatus($rawRemoteStatus) : null;
-                    if ($lead !== null && $v3Stage !== null && $lead->lead_stage !== null) {
+                    if ($lead !== null && $v3Stage !== null) {
                         if ($v3Stage === 'gugur') {
                             if ($lead->resolveStageV3() !== 'gugur') {
                                 $this->reconcile($branch, $lead, 'remote_gugur_owned_by_oasis', $row, $dryRun, ['remote_status' => $rawRemoteStatus]);
@@ -319,7 +319,7 @@ class SalesLeadBridgeService
                         }
                     }
                     $localStatus = $lead === null ? SalesLeadStatus::NoResponse : $this->effectiveStatus($lead);
-                    if (($lead === null && $remoteStatus !== SalesLeadStatus::NoResponse)
+                    if (($lead === null && $remoteStatus !== SalesLeadStatus::NoResponse && $v3Stage === null)
                         || ($lead !== null && $this->baseline($lead) !== null && ($remoteStatus === null || ($v3Stage === null && $remoteStatus !== $localStatus)))) {
                         $this->reconcile($branch, $lead, 'remote_status_owned_by_oasis', $row, $dryRun, ['field_names' => ['status_lead']]);
                         $summary['unresolved']++;
@@ -418,6 +418,15 @@ class SalesLeadBridgeService
 
                                 return $lead;
                             });
+                            if ($v3Stage !== null) {
+                                $lead = SalesLead::query()->where('branch_id', $branch->id)->where('external_lead_id', $idLead)->firstOrFail();
+                                try {
+                                    app(SalesLeadStageV3Service::class)->syncFromSheet($lead, $v3Stage, $this->stableLeadSourceId($row), (string) Str::uuid(), $actor);
+                                } catch (ValidationException) {
+                                    $this->reconcile($branch, $lead, 'lead_stage_backward', $row, false, ['remote_status' => $rawRemoteStatus]);
+                                    $summary['unresolved']++;
+                                }
+                            }
                             $summary['claimed']++;
                         } catch (Throwable $exception) {
                             report($exception);

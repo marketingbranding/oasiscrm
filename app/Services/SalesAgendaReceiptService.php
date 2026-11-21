@@ -162,8 +162,10 @@ class SalesAgendaReceiptService
 
         $duration = $this->durationMinutes($data['start_time'], $data['end_time']);
         $effectiveMinutes = $this->effectiveMinutes($date, $data['start_time'], $data['end_time']);
-        if (! $this->canUpdateNormal($actor, $date, $agenda->id, $duration, $effectiveMinutes)) {
-            throw new RuntimeException('Durasi agenda melebihi sisa waktu kerja '.$this->schedule($date)['target_minutes'].' menit.');
+        $submission = $this->submission($actor, $date);
+        if (! $this->canUpdateNormal($actor, $date, $agenda->id, $duration, $effectiveMinutes, $submission?->target_minutes)) {
+            $targetMinutes = $submission?->target_minutes ?? $this->schedule($date)['target_minutes'];
+            throw new RuntimeException('Durasi agenda melebihi sisa waktu kerja '.$targetMinutes.' menit.');
         }
 
         $agenda->update([
@@ -185,9 +187,9 @@ class SalesAgendaReceiptService
         $agenda->delete();
     }
 
-    public function canUpdateNormal(User $owner, CarbonImmutable $date, int $ignoreAgendaId, int $durationMinutes, int $effectiveMinutes): bool
+    public function canUpdateNormal(User $owner, CarbonImmutable $date, int $ignoreAgendaId, int $durationMinutes, int $effectiveMinutes, ?int $targetMinutes = null): bool
     {
-        if ($durationMinutes < 1 || $this->submissionQuery($owner, $date)->exists()) {
+        if ($durationMinutes < 1) {
             return false;
         }
 
@@ -197,8 +199,9 @@ class SalesAgendaReceiptService
         }
 
         $normalMinutes = $this->normalAgendaMinutes($owner, $date, $ignoreAgendaId);
+        $targetMinutes ??= $this->submission($owner, $date)?->target_minutes ?? $schedule['target_minutes'];
 
-        return $schedule['target_minutes'] >= $normalMinutes + $effectiveMinutes;
+        return $targetMinutes >= $normalMinutes + $effectiveMinutes;
     }
 
     public function submission(User $owner, CarbonImmutable $date): ?SalesAgendaDaySubmission

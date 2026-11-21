@@ -8,12 +8,14 @@ use App\Models\LeadMaster;
 use App\Models\Role;
 use App\Models\SalesAgendaDaySubmission;
 use App\Models\User;
+use App\Services\AppSettingResolver;
 use App\Services\OptimisticLockService;
 use App\Services\SalesAgendaReceiptService;
 use App\Services\SalesPocketbookOnboardingService;
 use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Tests\Concerns\FreezesSalesAgendaTime;
 use Tests\TestCase;
@@ -306,6 +308,36 @@ class SalesAgendaReceiptAuthorizationTest extends TestCase
 
         $this->assertSame('Agenda tetap di slot sendiri', $agenda->fresh()->title);
         $this->assertSame('11:00', substr((string) $other->fresh()->start_time, 0, 5));
+    }
+
+    public function test_br04_submitted_correction_uses_historical_target_after_setting_change(): void
+    {
+        [$sales, $project] = $this->salesContext();
+        $agenda = $this->agendaAt($sales, $project, '2026-10-29', '08:00', '16:00');
+        SalesAgendaDaySubmission::create([
+            'owner_user_id' => $sales->id,
+            'scheduled_date' => $agenda->scheduled_date,
+            'target_minutes' => 420,
+            'normal_minutes_at_submission' => 420,
+            'submitted_at' => now(),
+        ]);
+
+        DB::table('app_settings')->insert([
+            'key' => 'sales_agenda.target_minutes',
+            'value' => json_encode(480),
+            'group' => 'sales_agenda',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        app(AppSettingResolver::class)->forget('sales_agenda.target_minutes');
+
+        $this->assertFalse(app(SalesAgendaReceiptService::class)->canUpdateNormal(
+            $sales,
+            CarbonImmutable::parse($agenda->scheduled_date),
+            $agenda->id,
+            540,
+            480,
+        ));
     }
 
     public function test_submitted_agenda_cannot_be_edited_or_deleted(): void

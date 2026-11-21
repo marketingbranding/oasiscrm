@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Models\ActivityLog;
 use App\Models\Branch;
 use App\Models\Holiday;
 use App\Models\Role;
@@ -86,6 +87,25 @@ class SalesWorkCalendarHolidayTest extends TestCase
 
         $this->assertTrue(Holiday::query()->whereDate('date', '2026-11-25')->whereNull('branch_id')->exists());
         $this->assertTrue(Holiday::query()->whereDate('date', '2026-11-26')->where('branch_id', $branch->id)->exists());
+        $this->assertSame(2, ActivityLog::query()->where('event', 'holiday_created')->count());
+        $createdLog = ActivityLog::query()->where('event', 'holiday_created')->latest('id')->firstOrFail();
+        $this->assertSame($branch->name, $createdLog->properties['branch_name']);
+
+        $holiday = Holiday::query()->whereDate('date', '2026-11-26')->firstOrFail();
+        $this->actingAs($superadmin)
+            ->delete(route('admin.holidays.destroy', $holiday))
+            ->assertRedirect(route('admin.holidays.index'));
+
+        $this->assertDatabaseMissing('holidays', ['id' => $holiday->id]);
+        $this->assertDatabaseHas('activity_log', [
+            'event' => 'holiday_deleted',
+            'subject_type' => Holiday::class,
+            'subject_id' => $holiday->id,
+            'causer_id' => $superadmin->id,
+        ]);
+        $deletedLog = ActivityLog::query()->where('event', 'holiday_deleted')->firstOrFail();
+        $this->assertSame('Libur cabang Solo', $deletedLog->properties['name']);
+        $this->assertSame($branch->name, $deletedLog->properties['branch_name']);
     }
 
     public function test_br09_unauthorized_user_cannot_manage_holiday_settings_by_direct_url(): void

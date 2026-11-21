@@ -39,7 +39,6 @@ class AppSettingCatalog
             ],
             'org_hierarchical_monitoring' => self::featureFlag('Pemantauan graf organisasi'),
             'lead_stages_v3' => self::featureFlag('Tahap Lead v3'),
-            'work_hours_v3' => self::featureFlag('Jam kerja v3'),
             'transaction_events_v3' => self::featureFlag('Event transaksi v3'),
         ];
     }
@@ -56,6 +55,74 @@ class AppSettingCatalog
         }
 
         return $definition;
+    }
+
+    /**
+     * @param  array<string, int|string>  $values
+     * @return array<string, list<string>>
+     */
+    public static function calendarValidationErrors(array $values): array
+    {
+        $errors = [];
+        $weekday = self::calendarRuleSet($values, 'weekday');
+        $friday = self::calendarRuleSet($values, 'friday');
+
+        foreach ([$weekday, $friday] as $ruleSet) {
+            [$start, $breakStart, $breakEnd, $end] = array_map(
+                static fn (string $key): int => self::minutes((string) $values[$key]),
+                $ruleSet,
+            );
+
+            if (! ($start < $breakStart)) {
+                self::addCalendarError($errors, $ruleSet[0], 'Jam masuk harus lebih awal dari mulai istirahat.');
+                self::addCalendarError($errors, $ruleSet[1], 'Mulai istirahat harus setelah jam masuk.');
+            }
+
+            if (! ($breakStart < $breakEnd)) {
+                self::addCalendarError($errors, $ruleSet[1], 'Mulai istirahat harus lebih awal dari selesai istirahat.');
+                self::addCalendarError($errors, $ruleSet[2], 'Selesai istirahat harus setelah mulai istirahat.');
+            }
+
+            if (! ($breakEnd < $end)) {
+                self::addCalendarError($errors, $ruleSet[2], 'Selesai istirahat harus lebih awal dari jam pulang.');
+                self::addCalendarError($errors, $ruleSet[3], 'Jam pulang harus setelah selesai istirahat.');
+            }
+
+            $effectiveMinutes = ($end - $start) - ($breakEnd - $breakStart);
+            if ((int) $values['sales_agenda.target_minutes'] > $effectiveMinutes) {
+                self::addCalendarError(
+                    $errors,
+                    'sales_agenda.target_minutes',
+                    "Target menit agenda tidak boleh melebihi menit kerja efektif ({$effectiveMinutes} menit).",
+                );
+            }
+        }
+
+        return $errors;
+    }
+
+    /**
+     * @param  array<string, int|string>  $values
+     * @return array{0:string,1:string,2:string,3:string}
+     */
+    private static function calendarRuleSet(array $values, string $day): array
+    {
+        return $day === 'friday'
+            ? ['sales_agenda.friday_start_time', 'sales_agenda.friday_break_start', 'sales_agenda.friday_break_end', 'sales_agenda.friday_end_time']
+            : ['sales_agenda.weekday_start_time', 'sales_agenda.weekday_break_start', 'sales_agenda.weekday_break_end', 'sales_agenda.weekday_end_time'];
+    }
+
+    private static function minutes(string $time): int
+    {
+        [$hours, $minutes] = array_map('intval', explode(':', $time));
+
+        return ($hours * 60) + $minutes;
+    }
+
+    /** @param array<string, list<string>> $errors */
+    private static function addCalendarError(array &$errors, string $key, string $message): void
+    {
+        $errors[$key][] = $message;
     }
 
     /**

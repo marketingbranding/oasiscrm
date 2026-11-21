@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests\Crm;
 
+use App\Services\AppSettingResolver;
 use App\Support\AppSettingCatalog;
 use Illuminate\Foundation\Http\FormRequest;
 
@@ -61,6 +62,23 @@ class UpdateAppSettingsRequest extends FormRequest
 
                 if (! in_array($key, $knownKeys, true)) {
                     $validator->errors()->add("settings.{$encodedKey}", 'Pengaturan tidak dikenal.');
+                }
+            }
+
+            if ($validator->errors()->isNotEmpty()) {
+                return;
+            }
+
+            $settings = app(AppSettingResolver::class);
+            $submittedValues = $this->input('settings', []);
+            $values = collect(array_keys(AppSettingCatalog::definitions()))
+                ->mapWithKeys(fn (string $key): array => [$key => $submittedValues[$key] ?? $settings->value($key)])
+                ->all();
+
+            foreach (AppSettingCatalog::calendarValidationErrors($values) as $key => $messages) {
+                foreach ($messages as $message) {
+                    $encodedKey = str_replace('.', '__', $key);
+                    $validator->errors()->add("settings.{$encodedKey}", $message);
                 }
             }
         });

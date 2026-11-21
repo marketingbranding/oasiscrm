@@ -9,6 +9,7 @@ use App\Services\CrmAuthorizationService;
 use App\Services\OrganizationScopeService;
 use App\Services\SalesTeamScopeService;
 use App\Services\WorkspaceAccessService;
+use App\Support\FeatureFlag;
 
 class SalesLeadPolicy
 {
@@ -76,6 +77,12 @@ class SalesLeadPolicy
 
     public function update(User $user, SalesLead $lead): bool
     {
+        if (FeatureFlag::enabled('org_hierarchical_monitoring')
+            && $this->isReadOnlySalesMonitor($user)
+            && ! $this->canEditHistoricalOwnedLead($user, $lead)) {
+            return false;
+        }
+
         if (! $this->authorization->canViewSalesLead($user, $lead)) {
             return false;
         }
@@ -214,5 +221,11 @@ class SalesLeadPolicy
             && app(WorkspaceAccessService::class)->canEditBranch($user, $lead->branch_id)
             && $lead->sales !== null
             && app(WorkspaceAccessService::class)->canViewHistoricalBranch($lead->sales, $lead->branch_id);
+    }
+
+    private function isReadOnlySalesMonitor(User $user): bool
+    {
+        return $user->hasPrimaryRole(['supervisor', 'manager', 'ass_manager', 'branch_manager'])
+            || $user->isAdminCabang();
     }
 }

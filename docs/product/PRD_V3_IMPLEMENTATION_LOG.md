@@ -265,6 +265,14 @@ Status: selesai 1.4c–1.4d. Flag `org_hierarchical_monitoring` tetap default-of
 - Full-suite result: fresh `php artisan test --compact` dengan `CACHE_STORE=array` menghasilkan 1.887 test, 13.473 assertion, 8 failure, 0 error. Jumlah failure tetap sama dan tetap terbatas pada Sales personal workspace markup/evidence; belum ada perbandingan parent-branch sebelum/sesudah.
 - Changelog: migrasi idempoten `2026_11_21_000002_add_sales_monitoring_projection_changelog.php` menambahkan satu entri perubahan ringkasan pemantauan, default flag tetap mati.
 
+#### WP-1.4 Task 5 — Batas mutasi baca-saja (1.4e)
+
+Status: selesai. Saat `org_hierarchical_monitoring` aktif, `SalesLeadPolicy` menolak mutasi Lead tim dari Supervisor, Manager, Ass. Manager, Branch Manager, dan Admin Cabang melalui URL form maupun JSON; Koordinator tetap mengikuti batas tim yang sudah ada. `SalesLeadCompletionService` juga menolak bypass `manage_own` yang stale. `canEditHistoricalOwnedLead` untuk Branch Manager/Admin Cabang tetap dipertahankan. Flag mati mempertahankan perilaku lama.
+
+- Tidak ada route Daily Plan aktif atau route Team History khusus; tidak menambah route baru.
+- Modul Work Planner dan modul non-pemantauan tidak diubah.
+- Tes BR-51: `tests/Feature/SalesMonitoringReadOnlyMutationTest.php`, suite terkait 59 tes lulus.
+- Changelog: migrasi idempoten `2026_11_21_000003_add_sales_monitoring_read_only_changelog.php`.
 
 ### WP-1.5 — Kalender kerja
 

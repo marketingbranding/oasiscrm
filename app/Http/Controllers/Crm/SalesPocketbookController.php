@@ -17,6 +17,7 @@ use App\Services\SalesDailyReminderService;
 use App\Services\SalesLeadSheetOptionService;
 use App\Services\SalesLeadSyncService;
 use App\Services\SalesLeadTargetService;
+use App\Services\SalesMonitoringProjectionService;
 use App\Services\SalesTeamScopeService;
 use App\Services\SalesWeeklyMetricsService;
 use App\Services\WorkspaceAccessService;
@@ -36,6 +37,7 @@ class SalesPocketbookController extends Controller
         private readonly SalesLeadTargetService $leadTargets,
         private readonly OrganizationScopeService $organizationScope,
         private readonly SalesTeamScopeService $salesTeamScope,
+        private readonly SalesMonitoringProjectionService $projection,
     ) {}
 
     public function index(Request $request)
@@ -173,6 +175,8 @@ class SalesPocketbookController extends Controller
                 }
             })
             ->latest('lead_date')->latest('id')->paginate(20)->withQueryString();
+        $leads->getCollection()->each(fn (SalesLead $lead) => $lead->setAttribute('latest_activity_at', $lead->latestStatusHistory?->changed_at ?? $lead->current_status_changed_at ?? $lead->lead_date));
+        $leads->setCollection($this->projection->projectCollection($user, 'lead', $leads->getCollection(), 'sales_user_id'));
 
         $agendaDateFrom = $reportPeriod['start']->toDateString();
         $agendaDateTo = $reportPeriod['end']->toDateString();
@@ -197,6 +201,7 @@ class SalesPocketbookController extends Controller
             ->when($agendaDateFrom && ! $missingAgendaResultDrilldown, fn (Builder $query) => $query->whereDate($completedAgendaDrilldown ? 'completed_at' : 'scheduled_date', '>=', $agendaDateFrom))
             ->when($agendaDateTo && ! $missingAgendaResultDrilldown, fn (Builder $query) => $query->whereDate($completedAgendaDrilldown ? 'completed_at' : 'scheduled_date', '<=', $agendaDateTo))
             ->orderBy('scheduled_date')->orderBy('start_time')->paginate(20, ['*'], 'agenda_page')->withQueryString();
+        $agendas->setCollection($this->projection->projectCollection($user, 'agenda', $agendas->getCollection(), 'owner_user_id'));
 
         $defaultProject = $this->workspaceAccess->resolveRequestedProject($user, $request->query('project_id'));
         $reportFilters = array_filter([
@@ -436,7 +441,7 @@ class SalesPocketbookController extends Controller
         $leads = ($canonicalScope
             ? $this->weeklyMetrics->canonicalLeadQuery($canonicalScope, $filters)
             : $this->weeklyMetrics->leadQuery($user, $filters)->whereIn('sales_user_id', $visibleSalesIds))
-            ->with(['branch:id,name', 'project:id,project_name', 'sales:id,name', 'leadSource:id,name'])
+            ->with(['branch:id,name', 'project:id,project_name', 'sales:id,name', 'leadSource:id,name', 'latestStatusHistory:id,sales_lead_id,status,changed_at'])
             ->whereDate($leadDateColumn, '>=', $period['start']->toDateString())
             ->whereDate($leadDateColumn, '<=', $period['end']->toDateString())
             ->when($leadSourceFilter, fn (Builder $query) => $query->whereEffectiveSource($leadSourceFilter))
@@ -452,6 +457,8 @@ class SalesPocketbookController extends Controller
             ->orderBy('lead_date')
             ->orderBy('id')
             ->get();
+        $leads->each(fn (SalesLead $lead) => $lead->setAttribute('latest_activity_at', $lead->latestStatusHistory?->changed_at ?? $lead->current_status_changed_at ?? $lead->lead_date));
+        $leads = $this->projection->projectCollection($user, 'lead', $leads, 'sales_user_id');
 
         $agendas = ($canonicalScope
             ? $this->weeklyMetrics->canonicalAgendaQuery($canonicalScope, $filters)
@@ -465,6 +472,7 @@ class SalesPocketbookController extends Controller
             ->orderBy('scheduled_date')
             ->orderBy('start_time')
             ->get();
+        $agendas = $this->projection->projectCollection($user, 'agenda', $agendas, 'owner_user_id');
 
         $weeklyRows = $this->weeklyMetrics->monitoringRows($user, $period, $salesUsers, $projects, $filters);
         if ($leads->isEmpty() && $agendas->isEmpty()) {

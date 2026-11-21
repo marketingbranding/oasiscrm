@@ -6,6 +6,7 @@ use App\Enums\SalesLeadStatus;
 use App\Models\Branch;
 use App\Models\ContentItem;
 use App\Models\LeadMaster;
+use App\Models\OrganizationAssignment;
 use App\Models\Role;
 use App\Models\SalesAgendaEvidence;
 use App\Models\SalesCoordinatorSales;
@@ -13,10 +14,15 @@ use App\Models\SalesLead;
 use App\Models\SalesLeadStatusHistory;
 use App\Models\User;
 use App\Models\UserNotification;
+use App\Services\AppSettingResolver;
 use App\Services\CoordinatorAgendaReminderService;
 use App\Services\CoordinatorSalesMonitoringService;
+use App\Services\SalesMonitoringProjectionService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
+use Mockery;
+use PhpOffice\PhpSpreadsheet\IOFactory;
 use Symfony\Component\HttpKernel\Exception\HttpException;
 use Tests\TestCase;
 
@@ -119,16 +125,17 @@ class CoordinatorSalesMonitoringServiceTest extends TestCase
         $this->assertSame(1, $data['kpi']['face_to_face']);
     }
 
-    public function test_forged_sales_filter_is_forbidden(): void
+    public function test_br51_direct_coordinator_monitoring_url_rejects_forged_sales_filter(): void
     {
         $outsider = $this->user('sales', 'Bukan Tim', $this->branch);
 
-        try {
-            app(CoordinatorSalesMonitoringService::class)->resolve($this->coordinator, ['sales_id' => $outsider->id]);
-            $this->fail('Expected 403.');
-        } catch (HttpException $exception) {
-            $this->assertSame(403, $exception->getStatusCode());
-        }
+        $this->actingAs($this->coordinator)
+            ->get(route('sales-pocketbook.index', [
+                'tab' => 'today',
+                'view' => 'detail',
+                'sales_id' => $outsider->id,
+            ]))
+            ->assertForbidden();
     }
 
     public function test_agendas_require_canonical_type_current_mapping_and_exact_scope(): void
@@ -230,6 +237,104 @@ class CoordinatorSalesMonitoringServiceTest extends TestCase
         app(CoordinatorSalesMonitoringService::class)->salesDetail($this->coordinator, $this->outsideSales->id);
     }
 
+    public function test_br51_flag_on_coordinator_http_screen_and_export_project_distant_details(): void
+    {
+        DB::table('app_settings')->updateOrInsert(['key' => 'org_hierarchical_monitoring'], [
+            'value' => json_encode(true, JSON_THROW_ON_ERROR), 'group' => 'feature_flags', 'created_at' => now(), 'updated_at' => now(),
+        ]);
+        app(AppSettingResolver::class)->forget('org_hierarchical_monitoring');
+        config(['organization.graph_mode' => 'graph']);
+
+        $distantSupervisor = $this->user('supervisor', 'Supervisor Jarak', $this->branch);
+        $distantCoordinator = $this->user('sales_coordinator', 'Koordinator Jarak', $this->branch, $distantSupervisor);
+        $distantSales = $this->user('sales', 'Sales Jarak', $this->branch);
+        $distantSales->assignedProjects()->attach($this->project, ['is_primary' => true, 'is_active' => true]);
+        SalesCoordinatorSales::create(['coordinator_user_id' => $distantCoordinator->id, 'sales_user_id' => $distantSales->id]);
+        OrganizationAssignment::create([
+            'user_id' => $distantCoordinator->id, 'parent_user_id' => $this->coordinator->id, 'relationship_type' => OrganizationAssignment::REPORTS_TO,
+            'branch_id' => $this->branch->id, 'started_at' => today(), 'is_active' => true, 'is_primary' => true,
+        ]);
+        OrganizationAssignment::create([
+            'user_id' => $distantSales->id, 'parent_user_id' => $distantCoordinator->id, 'relationship_type' => OrganizationAssignment::REPORTS_TO,
+            'branch_id' => $this->branch->id, 'started_at' => today(), 'is_active' => true, 'is_primary' => true,
+        ]);
+        OrganizationAssignment::create([
+            'user_id' => $distantSales->id, 'parent_user_id' => $distantCoordinator->id, 'relationship_type' => OrganizationAssignment::SALES_TEAM_MEMBER_OF,
+            'branch_id' => $this->branch->id, 'started_at' => today(), 'is_active' => true, 'is_primary' => true,
+        ]);
+        $lead = $this->lead($distantSales, 'Lead Koordinator Jauh', '2026-08-11', $this->project, $this->branch);
+        $lead->update(['phone' => '089999888777', 'notes' => 'Catatan koordinator rahasia']);
+        $agenda = $this->agenda($distantSales, 'Agenda Koordinator Rahasia', $this->branch, $this->project, '2026-08-10');
+        $agenda->update(['status' => 'done', 'location' => 'Lokasi Koordinator Rahasia', 'activity_result' => 'Hasil Koordinator Rahasia']);
+
+        $screen = $this->actingAs($this->coordinator)->get(route('sales-pocketbook.index', ['tab' => 'lead', 'period' => 'today']));
+        $screen->assertOk()->assertSee('Lead Koordinator Jauh')
+            ->assertDontSee('089999888777')->assertDontSee('Catatan koordinator rahasia');
+
+        $agendaScreen = $this->actingAs($this->coordinator)->get(route('sales-pocketbook.index', [
+            'tab' => 'agenda', 'period' => 'custom', 'date_from' => '2026-08-10', 'date_to' => '2026-08-10',
+        ]));
+        $agendaScreen->assertOk()->assertDontSee('Agenda Koordinator Rahasia')
+            ->assertDontSee('Lokasi Koordinator Rahasia')->assertDontSee('Hasil Koordinator Rahasia')
+            ->assertSee('Ringkasan agenda');
+
+        $response = $this->actingAs($this->coordinator)->get(route('coordinator-leads.export', ['period' => 'today']));
+        $response->assertOk();
+        $workbook = IOFactory::load($response->baseResponse->getFile()->getPathname());
+        $values = collect($workbook->getActiveSheet()->toArray())->flatten()->implode('|');
+        $this->assertStringContainsString('Nama Konsumen', $values);
+        $this->assertStringNotContainsString('089999888777', $values);
+        $this->assertStringNotContainsString('Catatan koordinator rahasia', $values);
+        $workbook->disconnectWorksheets();
+    }
+
+    public function test_br51_coordinator_actionable_and_failed_leads_use_projection_contract(): void
+    {
+        $stale = $this->lead($this->sales, 'Lead lama', '2026-08-01', $this->project, $this->branch);
+        $stale->forceFill(['updated_at' => Carbon::parse('2026-08-08 09:00:00')])->save();
+        $failedSync = $this->lead($this->sales, 'Lead gagal sync', '2026-08-11', $this->project, $this->branch);
+        $failedSync->forceFill(['sync_status' => 'sync_failed'])->save();
+        $projection = Mockery::mock(SalesMonitoringProjectionService::class);
+        $projection->shouldReceive('projectCollection')->atLeast()->once()->andReturnUsing(
+            fn ($actor, $type, $records) => $records->map(fn () => ['name' => 'Ringkasan'])
+        );
+        $this->app->instance(SalesMonitoringProjectionService::class, $projection);
+
+        $data = app(CoordinatorSalesMonitoringService::class)->resolve($this->coordinator, [], false);
+
+        $this->assertIsArray($data['actionableLeads']->first());
+        $this->assertIsArray($data['failedSyncLeads']->first());
+    }
+
+    public function test_br51_coordinator_detail_projects_week_items_and_backlog(): void
+    {
+        $this->agenda($this->sales, 'Agenda sebelumnya', $this->branch, $this->project, '2026-08-10');
+        $this->agenda($this->sales, 'Agenda hari ini', $this->branch, $this->project, '2026-08-11');
+        $projection = Mockery::mock(SalesMonitoringProjectionService::class);
+        $projection->shouldReceive('projectCollection')->atLeast()->once()->andReturnUsing(
+            fn ($actor, $type, $records) => $records->map(fn ($record) => ['date' => $record->scheduled_date->toDateString()])
+        );
+        $this->app->instance(SalesMonitoringProjectionService::class, $projection);
+
+        $detail = app(CoordinatorSalesMonitoringService::class)->salesDetail($this->coordinator, $this->sales->id);
+
+        $this->assertIsArray($detail['backlog']->first());
+        $this->assertIsArray($detail['week']->first()['items']->first());
+    }
+
+    public function test_br51_actionable_leads_use_status_activity_not_updated_at_for_stale_threshold(): void
+    {
+        $active = $this->lead($this->sales, 'Lead masih aktif', '2026-08-01', $this->project, $this->branch);
+        $active->forceFill([
+            'current_status_changed_at' => Carbon::parse('2026-08-10 09:00:00'),
+            'updated_at' => Carbon::parse('2026-08-11 09:00:00'),
+        ])->save();
+
+        $data = app(CoordinatorSalesMonitoringService::class)->resolve($this->coordinator, [], false);
+
+        $this->assertSame([], $data['actionableLeads']->pluck('customer_name')->all());
+    }
+
     public function test_actionable_leads_use_adjustable_stale_threshold_and_report_sync_failures_separately(): void
     {
         $stale = $this->lead($this->sales, 'Lead lama', '2026-08-01', $this->project, $this->branch);
@@ -242,7 +347,7 @@ class CoordinatorSalesMonitoringServiceTest extends TestCase
 
         $this->assertSame(['Lead lama'], $default['actionableLeads']->pluck('customer_name')->all());
         $this->assertSame(['Lead gagal sync'], $default['failedSyncLeads']->pluck('customer_name')->all());
-        $this->assertSame([], $custom['actionableLeads']->pluck('customer_name')->all());
+        $this->assertSame(['Lead lama'], $custom['actionableLeads']->pluck('customer_name')->all());
     }
 
     private function user(string $role, string $name, Branch $branch, ?User $supervisor = null): User

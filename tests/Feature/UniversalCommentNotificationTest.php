@@ -143,6 +143,31 @@ class UniversalCommentNotificationTest extends TestCase
         $this->assertNotNull($blocked->fresh()->read_at);
     }
 
+    public function test_br51_sales_notification_deep_link_rechecks_target_scope(): void
+    {
+        [$actor, $target, $branch] = $this->fixture('sales');
+        $outsideBranch = Branch::create(['name' => 'Outside Notification', 'code' => 'OUTN']);
+        $recipient = $this->user('manager', $outsideBranch, 'Outside Recipient');
+        $comment = $target->comments()->create([
+            'user_id' => $actor->id,
+            'body' => 'Sales monitoring comment',
+            'body_plain' => 'Sales monitoring comment',
+        ]);
+        $notification = UserNotification::create([
+            'user_id' => $recipient->id,
+            'type' => 'comment_mentioned',
+            'title' => 'Sales monitoring',
+            'message' => 'Sales monitoring',
+            'comment_id' => $comment->id,
+            'action_url' => route('notifications.open', 999999),
+        ]);
+
+        $this->actingAs($recipient)
+            ->get(route('notifications.open', $notification))
+            ->assertRedirect(route('dashboard'))
+            ->assertSessionHas('warning', 'Data tidak tersedia atau Anda tidak memiliki akses.');
+    }
+
     public function test_sales_feed_preserves_comment_open_action_and_hides_deleted_body_without_n_plus_one(): void
     {
         [$sales, $target, $branch] = $this->fixture('sales');

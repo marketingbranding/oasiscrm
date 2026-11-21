@@ -28,7 +28,7 @@ PRD sumber kebenaran: `docs/product/PRD_OASIS_CRM_V3.md` versi 3.3 (D30–D33)
 | WP-1.1 | 1 | Pengaturan Aturan: `app_settings`, resolver bertipe, audit perubahan | Selesai untuk consumer awal; aturan lain pindah bersama consumer. Commits `b2c351c`, `4ee24eb`, `fe565dd` | BR-06; semua BR bertanda ⚙ pada consumer terkait |
 | WP-1.2 | 1 | Feature flag PRD v3 dan helper pembacaan tunggal | Selesai; four registered flags default mati. Commit `47526ee` | BR-50–BR-53, risiko transisi |
 | WP-1.3 | 1 | Role `ass_manager`, atribut user, migrasi pemetaan role lama | Selesai untuk fondasi role, atribut, parity, dan command dry-run; form/import/legacy-check ditunda | §4.1, BR-21, BR-25, D6, D21, D25; D32 ditunda |
-| WP-1.4 | 1 | Graf organisasi kanonis dan pemantauan berjenjang | Belum mulai; menunggu laporan paritas | BR-50–BR-53 |
+| WP-1.4 | 1 | Graf organisasi kanonis dan pemantauan berjenjang | Selesai; irisan 1.4a–1.4f selesai. Tidak ada cutover produksi atau backfill write oleh agent | BR-50–BR-53 |
 | WP-1.5 | 1 | Jam kerja, target 480, Jumat, akhir pekan, hari libur | Belum mulai | BR-01–BR-09 |
 | WP-1.6 | 1 | Tahap Lead Baru–UTJ, Gugur, kunci setelah UTJ | Belum mulai | BR-10–BR-16 |
 | WP-1.7 | 1 | Status/event transaksi, alasan Mundur, NUP baru | Belum mulai | BR-20–BR-36 |
@@ -42,6 +42,7 @@ PRD sumber kebenaran: `docs/product/PRD_OASIS_CRM_V3.md` versi 3.3 (D30–D33)
 | WP-2.5 | 2 | Dana Talangan di OASIS dan cicilan | Belum mulai | BR-42–BR-44 |
 | WP-2.6 | 2 | Kembali ke NUP di Workspace Konsumen | Belum mulai | BR-20–BR-22 |
 | WP-2.7 | 2 | Penutup Fase 2: changelog, dokumentasi, verifikasi penuh | Belum mulai | Semua fase 2 |
+| WP-2.8 | 2 | Riwayat Tim: gabungan perubahan Lead dan agenda seluruh turunan | Belum mulai; paket kerja baru dari review WP-1.4 | BR-50–BR-52 |
 | WP-3.1 | 3 | WhatsApp satu nomor | Belum mulai | BR-60–BR-64 |
 | WP-3.2 | 3 | Asisten AI per peran | Belum mulai | BR-70–BR-72 |
 | WP-3.3 | 3 | Push PWA dan preferensi notifikasi | Belum mulai | §7.11 |
@@ -77,6 +78,15 @@ Keduanya berupa assertion markup HTML, bukan exception aplikasi:
 - `test_populated_receipt_keeps_weekly_navigation_with_exact_date_links`: response memuat kelas `sales-week-navigation-day is-active is-weekend`, sedangkan assertion mencari substring persis `class="sales-week-navigation-day is-active"`; assertion gagal pada `SalesAgendaWorkspaceRenderTest.php:376`.
 
 WP-0 tidak memperbaiki failure. WP-1.5 akan mengunci tanggal tes memakai `Carbon::setTestNow`, karena perilaku ini terkait aturan akhir pekan BR-08.
+
+Verifikasi WP-1.4 pada Sabtu, 21 November 2026:
+
+- Baseline `f1702ca` (sebelum WP-1.4): 8 tes gagal dari 8 tes yang diuji.
+- WP-1.4 `3284c69`: 8 tes gagal dari 8 tes yang diuji.
+- Nama dan hasil identik pada kedua commit: `SalesAgendaEvidenceTest::test_agenda_records_and_evidence_are_preserved_in_the_direct_workspace`, `SalesAgendaOnlyWorkspaceTest::test_sales_workspace_renders_receipt_date_context_and_add_plan_action`, `SalesAgendaWorkspaceInteractionMarkupTest::test_mobile_modal_transitions_cover_shared_modal_and_agenda_sheet`, `SalesAgendaWorkspaceInteractionMarkupTest::test_draft_receipt_exposes_edit_delete_actions_and_submitted_receipt_hides_them`, `SalesAgendaWorkspaceRenderTest::test_receipt_heading_matches_today_tomorrow_and_other_planned_dates`, `SalesAgendaWorkspaceRenderTest::test_existing_draft_shows_a_resume_action_and_resume_query_opens_receipt`, `SalesAgendaWorkspaceRenderTest::test_populated_receipt_keeps_weekly_navigation_with_exact_date_links`, dan `SalesAgendaWorkspaceRenderTest::test_today_navigation_marks_only_the_selected_week_day_as_active`.
+- WP-1.4 dengan waktu dikunci sementara ke `2026-11-18 10:00:00` memakai bootstrap PHPUnit tidak di-commit: 8 tes lulus dari 8 tes yang diuji.
+- Kesimpulan: 8 failure adalah baseline bergantung hari Sabtu, bukan regresi WP-1.4 atau perubahan `OrganizationScopeService`.
+- Kriteria WP-1.5: semua tes agenda wajib menetapkan waktu uji sendiri dengan `Carbon::setTestNow` dan suite agenda harus kembali ke 0 failure tanpa bergantung hari eksekusi.
 
 Latest verification after WP-1.1/WP-1.2 and review fixes:
 
@@ -223,12 +233,65 @@ Status: selesai untuk fondasi role, atribut, permission parity, dan command migr
 
 ### WP-1.4 — Graf organisasi dan pemantauan berjenjang
 
+Status: desain disetujui; irisan 1.4a–1.4f sedang berjalan. Tidak ada cutover produksi atau backfill write oleh agent.
+
+#### Keputusan WP-1.4
+
+- 1.4e read-only hanya berlaku untuk data tim Sales: Lead, rencana harian/agenda, dan riwayat tim. Modul lain tetap mengikuti permission/policy saat ini.
+- `canEditHistoricalOwnedLead` untuk Branch Manager dan Admin Cabang tetap berlaku sampai WP-2.1 Alih Lead; keputusan ini wajib ditinjau ulang pada WP-2.1.
+- `scope_level=pusat` tidak menambah permission. Untuk `manager`, `ass_manager`, dan `supervisor`, atribut ini hanya memperluas scope permission `*_branch` ke semua cabang. Permission `*_own` dan `*_assigned` tidak diperluas.
+- Ringkasan turunan jauh hanya berlaku untuk data tim Sales. Allowlist Lead: nama Lead, Sales pemilik, proyek, tahap, dan tanggal aktif terakhir. Allowlist rencana harian/agenda: nama Sales, tanggal, total menit/target, status kirim, jumlah kegiatan, dan jumlah kegiatan terlambat. Allowlist riwayat tim: waktu, jenis perubahan, pelaku, dan objek. Nilai sebelum/sesudah tidak ditampilkan.
+- Jarak mengikuti edge `REPORTS_TO` yang saat ini efektif, lalu disaring dengan scope workspace. Pengecualian: `scope_level=pusat` untuk `manager`, `ass_manager`, dan `supervisor` tidak dibatasi cabang sesuai BR-52.
+- 1.4a hanya menghasilkan laporan parity/dry-run read-only. Laporan harus machine-readable dan tidak mengaktifkan source mode. Pemilik produk mengoperasikan `organization.graph_mode`; agent tidak melakukan cutover produksi atau backfill write.
+- D33, yaitu dry-run salinan production yang ditinjau pemilik, masih pending. Jangan menyatakan cutover produksi sudah dilakukan.
+- `canEditHistoricalOwnedLead` dicatat sebagai agenda review WP-2.1.
+
 - Route/controller: organization workspace, supervisor/coordinator monitoring, dashboard leadership.
 - Service utama: `OrganizationGraphService`, `OrganizationScopeService`, `ReportingHierarchyService`, `SalesTeamScopeService`, `OrganizationGraphModeService`, `OrganizationCutoverHealthService`.
 - Query: `SalesPocketbookController`, `SupervisorSalesPocketbookController`, `CoordinatorSalesMonitoringService`, `SupervisorSalesMonitoringService`, weekly metrics.
 - UI: monitor per bawahan langsung, ringkas untuk turunan, filter hanya per bawahan langsung.
 - Operator: `organization:backfill --dry-run`, parity/health report. Tidak ada production write oleh agent.
 - Test: `OrganizationScopeServiceTest`, `OrganizationWorkspaceAuthorizationTest`, `OrganizationGraphModeWorkflowTest`, parity tests, direct endpoint and branch/project boundary tests.
+
+#### WP-1.4 Task 4 — Inventaris consumer monitoring Sales (1.4c–1.4d)
+
+Status: selesai 1.4c–1.4d. Flag `org_hierarchical_monitoring` tetap default-off; tidak ada cutover produksi.
+
+- Lead Tim / monitoring coordinator: `CoordinatorSalesMonitoringService` dipakai oleh `CoordinatorSalesLeadWorkspaceController` pada route `sales-pocketbook.index`; `resolve`, `todayWorkspace`, `salesDetail`, dan `agendaBase` memakai irisan `OrganizationScopeService` + `WorkspaceAccessService` + `SalesTeamScopeService`. Filter `sales_id` forged diuji lewat direct URL dan ditolak (BR-51).
+- Supervisor/Admin Branch monitoring: `SupervisorSalesMonitoringService` dan `AdminBranchSalesMonitoringService` sudah memakai `OrganizationScopeService` untuk branch/project/user scope. Tidak diubah.
+- Rencana Harian Tim/agenda: coordinator monitoring memakai shared scope. Sales personal agenda `SalesAgendaController::index` sudah membatasi owner ke user sendiri dan branch/project ke authorization scope; baseline flag-off tidak membuktikan bypass baru, sehingga controller tidak diubah.
+- Lead options AJAX: `SalesLeadOptionController` sebelumnya hanya memeriksa workspace branch. Saat flag aktif, sekarang memeriksa `OrganizationScopeService::branchIds($user, 'sales_pocketbook', 'view')`; saat flag mati, jalur lama tetap. Direct AJAX branch luar scope diuji (BR-51).
+- Export: coordinator export memanggil `CoordinatorSalesMonitoringService::resolve(..., false)`; supervisor export memakai monitoring service; export bersama `sales-pocketbook.export` memakai projection yang sama untuk Admin Cabang. XLSX diuji lewat `PhpSpreadsheet\IOFactory`, termasuk header dan nilai ringkasan.
+- Notifikasi/deep link dan komentar: `NotificationController`, `CommentableAccessService`, dan `CommentMentionService` memakai policy/shared scope; tidak diubah.
+- Team history route/service: tidak ditemukan. Team History tetap absent; tidak diinventasikan atau diinventalkan.
+- Sales monitoring AI tool: tidak ada tool khusus pemantauan Sales di `AiToolRegistry` dan tidak ditambahkan. `AiToolRegistry` tetap memiliki 8 generic read-only tools.
+- Konsumen, Dana Talangan, Expenses: tidak dipindah ke distant-summary mode; consumer yang ada tidak ditambah.
+- 1.4d distant-summary projection implemented: `SalesMonitoringProjectionService` menerima viewer, owner ID, type, dan row; saat flag mati atau jarak 0–1, mengembalikan model lama. Saat flag hidup dan jarak >1, mengembalikan allowlist Lead/agenda tanpa model penuh. `ReportingHierarchyService::distance` memakai sumber legacy/shadow/graph sesuai mode. Coordinator, Supervisor, dan Admin Branch memakai hasil projection identik untuk layar dan export.
+- Forbidden distant fields tested: phone, notes, agenda title, location, activity result, evidence. Direct URL/export boundary tests remain in consumer suites.
+- Exact notification/deep-link coverage: `UniversalCommentNotificationTest::test_br51_sales_notification_deep_link_rechecks_target_scope`, `test_open_is_recipient_only_marks_read_redirects_with_fragment_and_reauthorizes`, dan `test_notification_service_skips_inactive_and_inaccessible_recipients`; coverage menguji recipient-only access, target reauthorization, scope rejection, read state, redirect fragment, dan recipient filtering.
+- Round 2 projection fixes: Coordinator `actionableLeads`, `failedSyncLeads`, detail week items, dan backlog memakai shared projection; lead activity memakai latest status-history timestamp; agenda summary menghitung seluruh late activity owner/date; collection projection melakukan cache distance dan receipt summary per viewer/owner/date; Coordinator/Supervisor export summary dipetakan ke header yang sesuai.
+- Round 3 HTTP/export coverage: flag-on diuji untuk Coordinator, Supervisor, dan Admin Cabang pada hierarchy distance >1; layar hanya menampilkan nama/status atau ringkasan agenda, sementara nomor telepon, catatan, judul agenda, lokasi, hasil, dan bukti tetap tersembunyi. `sales-pocketbook.index`, `coordinator-leads.export`, Supervisor exports, dan `sales-pocketbook.export` membaca projection contract; flag-off test suite tetap memakai model detail lama.
+- Export date boundary fixed: projected summary date strings are normalized before PhpSpreadsheet conversion.
+- Full-suite result: fresh `php artisan test --compact` dengan `CACHE_STORE=array` menghasilkan 1.887 test, 13.473 assertion, 8 failure, 0 error. Jumlah failure tetap sama dan tetap terbatas pada Sales personal workspace markup/evidence; belum ada perbandingan parent-branch sebelum/sesudah.
+- Changelog: migrasi idempoten `2026_11_21_000002_add_sales_monitoring_projection_changelog.php` menambahkan satu entri perubahan ringkasan pemantauan, default flag tetap mati.
+
+#### WP-1.4 Task 5 — Batas mutasi baca-saja (1.4e)
+
+Status: selesai. Saat `org_hierarchical_monitoring` aktif, `SalesLeadPolicy` menolak mutasi Lead tim dari Supervisor, Manager, Ass. Manager, Branch Manager, dan Admin Cabang melalui URL form maupun JSON; Koordinator tetap mengikuti batas tim yang sudah ada. `SalesLeadCompletionService` juga menolak bypass `manage_own` yang stale. `canEditHistoricalOwnedLead` untuk Branch Manager/Admin Cabang tetap dipertahankan. Flag mati mempertahankan perilaku lama. Admin Cabang hanya-baca untuk Lead saat flag hidup sesuai matriks PRD dan snapshot permission: role ini tidak memiliki `sales_pocketbook.manage_own`, `sales_pocketbook.manage_team`, atau `sales_pocketbook.manage_all`.
+
+- Tidak ada route Daily Plan aktif atau route Team History khusus; tidak menambah route baru.
+- Riwayat Tim belum ada di kode. Review WP-1.4 menetapkan paket kerja baru Fase 2: **WP-2.8 Riwayat Tim**, gabungan perubahan Lead dan agenda seluruh turunan, detail penuh untuk bawahan langsung, satu baris ringkas untuk turunan jauh, filter per bawahan langsung, dan tetap mematuhi flag `org_hierarchical_monitoring`.
+- Modul Work Planner dan modul non-pemantauan tidak diubah.
+- Tes BR-51: `tests/Feature/SalesMonitoringReadOnlyMutationTest.php`, suite terkait 59 tes lulus.
+- Changelog: migrasi idempoten `2026_11_21_000003_add_sales_monitoring_read_only_changelog.php`.
+
+#### WP-1.4 Task 6 — Isolasi Koordinator lintas endpoint (1.4f)
+
+Status: selesai. Saat `org_hierarchical_monitoring` aktif, Coordinator hanya menerima pilihan Sales dari tim aktifnya pada autocomplete Lead. URL langsung dan JSON untuk export, komentar, serta monitoring Lead asing tetap ditolak oleh scope yang sudah ada. Tidak ada tool AI khusus pemantauan Sales atau route Team History; keduanya tidak ditambahkan.
+
+- Bypass ditemukan: `SalesLeadOptionController` mengembalikan daftar Sales dari sheet tingkat cabang tanpa penyaringan tim. Saat flag aktif, daftar `sales` kini diiriskan dengan `CoordinatorLeadTeamService::currentSales()` dan cabang target. Flag mati tidak berubah.
+- Tes BR-53: `SalesMonitoringScopeBoundaryTest` menguji autocomplete JSON, export direct/JSON, komentar direct/JSON, dan Lead options cabang luar.
+- Changelog: migrasi idempoten `2026_11_21_000004_add_sales_monitoring_coordinator_isolation_changelog.php`.
 
 ### WP-1.5 — Kalender kerja
 
@@ -290,7 +353,7 @@ Status: selesai untuk fondasi role, atribut, permission parity, dan command migr
 | C-08 | Angka aturan dan teknis tersebar di code/config/frontend. | `app/Console/Commands/SendSalesAgendaReminders.php:65-68`; `app/Services/CoordinatorSalesMonitoringService.php:201-204`; `app/Support/SalesAgendaEvidenceRules.php:22`; `resources/js/presence.js:9,62` | Pengingat 15 menit (BR-06) dan stale 2 hari masuk Pengaturan. Retensi bukti 60 hari dan interval presence 60 detik tetap konstanta teknis; alasan didokumentasikan. | Disetujui. |
 | C-09 | Penggabungan role wajib mempertahankan hak efektif per user dengan empat jenis Staff Admin. | `tests/Fixtures/permission_snapshot_pre_v3.json`; `app/Support/PermissionCatalog.php`; `database/seeders/RoleSeeder.php` | `admin→admin_cabang`, `sas→sales`, `sam→marketing`, `staff lama→umum`; tes exact permission parity. Commit terpisah menambah hak input NUP/Proses Penjualan SAS. Konversi sebelum UTJ oleh Admin Cabang, SAS, Koordinator. | Disetujui (D30, D32). |
 | C-10 | Status Ditutup belum kanonis pada transaksi. | `app/Services/ConsumerOperationalService.php:24-26`; `app/Services/ConsumerApplicationLifecycleService.php:124-179` | Status kanonis `LANJUT`/`MUNDUR`/`DITUTUP`; DITUTUP hanya Ganti Nama/Kembali ke NUP; bukan aktif/gugur. | Disetujui (D31). |
-| C-11 | Tiga versi jam kerja hidup: Daily Plan 420/09.00, Receipt 480/08.00/07.30, onboarding Jumat 08.30. | `app/Models/SalesDailyPlan.php:19-21`; `app/Services/SalesAgendaReceiptService.php:66-89`; `app/Services/SalesPocketbookOnboardingService.php:19` | Sebelum WP-1.5, laporkan route aktif dan jumlah data per tabel. Lalu satukan semua jalur ke resolver Receipt/Agenda. | Disetujui (C-01). |
+| C-11 | Tiga versi jam kerja hidup: Daily Plan 420/09.00, Receipt 480/08.00/07.30, onboarding Jumat 08.30. | `app/Models/SalesDailyPlan.php:19-21`; `app/Services/SalesAgendaReceiptService.php:66-89`; `app/Services/SalesPocketbookOnboardingService.php:19` | Terjawab: Daily Plan 420 tidak punya route aktif; alur Sales yang dipakai adalah Receipt/Agenda. WP-1.5 menyatukan resolver jam kerja di alur Receipt, mempertahankan data Daily Plan lama, dan memperbarui teks onboarding Jumat 08.30. | Disetujui (C-01). |
 
 ## Daftar aturan BR untuk tes
 

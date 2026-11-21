@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\SalesLead;
 use App\Models\User;
+use App\Support\FeatureFlag;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Support\Facades\DB;
 
@@ -13,7 +14,10 @@ class SalesLeadCompletionService
 
     public function complete(SalesLead $lead, User $actor): SalesLead
     {
-        if (! $actor->hasPermission('sales_pocketbook.manage_own')
+        $readOnlyMonitor = $actor->hasPrimaryRole(['supervisor', 'manager', 'ass_manager', 'branch_manager'])
+            || $actor->isAdminCabang();
+        if ((FeatureFlag::enabled('org_hierarchical_monitoring') && $readOnlyMonitor)
+            || ! $actor->hasPermission('sales_pocketbook.manage_own')
             || ! $this->authorization->canViewSalesLead($actor, $lead)) {
             throw new AuthorizationException('Anda tidak memiliki akses untuk menyelesaikan lead ini.');
         }

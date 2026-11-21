@@ -7,6 +7,7 @@ use App\Models\LeadMaster;
 use App\Models\OrganizationAssignment;
 use App\Models\Role;
 use App\Models\User;
+use App\Services\AppSettingResolver;
 use App\Services\OrganizationGraphService;
 use App\Services\OrganizationParityService;
 use App\Support\OrganizationParityFilter;
@@ -18,6 +19,193 @@ use Tests\TestCase;
 class OrganizationParityServiceTest extends TestCase
 {
     use RefreshDatabase;
+
+    /**
+     * BR-50: parity exposes independent configured and effective read-source diagnostics.
+     */
+    public function test_br50_report_exposes_independent_read_mode_and_monitoring_flag_without_mutation(): void
+    {
+        $viewer = $this->user('supervisor', $this->branch('BR50'));
+        $beforeAssignments = DB::table('organization_assignments')->count();
+        config([
+            'app.env' => 'local',
+            'organization.graph_mode' => 'shadow',
+            'organization.graph_user_ids' => '',
+            'organization.graph_branch_ids' => '',
+        ]);
+        DB::table('app_settings')->insert([
+            'key' => 'org_hierarchical_monitoring',
+            'value' => json_encode(true, JSON_THROW_ON_ERROR),
+            'group' => 'feature_flags',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        app(AppSettingResolver::class)->forget('org_hierarchical_monitoring');
+
+        $report = app(OrganizationParityService::class)->report(
+            new OrganizationParityFilter(userId: $viewer->id, scope: 'descendants'),
+        );
+
+        $this->assertSame('shadow', $report['meta']['configured_read_mode']);
+        $this->assertSame('shadow', $report['meta']['effective_read_mode']);
+        $this->assertTrue($report['meta']['hierarchical_monitoring_enabled']);
+        $this->assertSame($beforeAssignments, DB::table('organization_assignments')->count());
+    }
+
+    /**
+     * BR-50: invalid active REPORTS_TO edges remain visible as integrity mismatch evidence.
+     */
+    public function test_br50_invalid_graph_edge_is_integrity_evidence_not_access_expansion(): void
+    {
+        $branch = $this->branch('BRI');
+        $viewer = $this->user('supervisor', $branch);
+        $invalidChild = $this->user('manager', $branch);
+        OrganizationAssignment::query()->create([
+            'user_id' => $invalidChild->id,
+            'parent_user_id' => $viewer->id,
+            'relationship_type' => OrganizationGraphService::REPORTS_TO,
+            'branch_id' => null,
+            'started_at' => today()->toDateString(),
+            'is_active' => true,
+            'is_primary' => true,
+            'source' => 'parity_fixture',
+            'lock_version' => 1,
+        ]);
+
+        $report = app(OrganizationParityService::class)->report(
+            new OrganizationParityFilter(userId: $viewer->id, scope: 'descendants', onlyDifferences: true),
+        );
+        $comparison = collect($report['comparisons'])->firstWhere('dimension', 'reporting_descendants');
+
+        $this->assertNotNull($comparison);
+        $this->assertSame('DATA_INTEGRITY_PROBLEM', $comparison['classification']);
+        $this->assertContains($invalidChild->id, $comparison['details']['invalid_graph_ids']);
+        $this->assertNotContains($invalidChild->id, $comparison['graph_ids']);
+        $this->assertNotContains($invalidChild->id, $comparison['only_graph']);
+        $this->assertSame(0, $report['summary']['access_expansion']);
+    }
+
+    /**
+     * BR-50: parity excludes future and ended REPORTS_TO edges while retaining current edges.
+     */
+    public function test_br50_report_uses_effective_dates_for_reporting_edges(): void
+    {
+        $branch = $this->branch('BRD');
+        $viewer = $this->user('supervisor', $branch);
+        $current = $this->user('sales_coordinator', $branch);
+        $future = $this->user('sales_coordinator', $branch);
+        $ended = $this->user('sales_coordinator', $branch);
+        $assignment = fn (int $userId, string $startedAt, ?string $endedAt = null): array => [
+            'user_id' => $userId,
+            'parent_user_id' => $viewer->id,
+            'organization_unit_id' => $viewer->organization_unit_id,
+            'relationship_type' => OrganizationGraphService::REPORTS_TO,
+            'branch_id' => $branch->id,
+            'started_at' => $startedAt,
+            'ended_at' => $endedAt,
+            'is_active' => true,
+            'is_primary' => true,
+            'source' => 'parity_fixture',
+            'lock_version' => 1,
+        ];
+        OrganizationAssignment::query()->create($assignment($current->id, today()->toDateString()));
+        OrganizationAssignment::query()->create($assignment($future->id, today()->addDay()->toDateString()));
+        OrganizationAssignment::query()->create($assignment($ended->id, today()->subDays(2)->toDateString(), today()->subDay()->toDateString()));
+
+        $report = app(OrganizationParityService::class)->report(
+            new OrganizationParityFilter(userId: $viewer->id, scope: 'descendants'),
+        );
+        $comparison = collect($report['comparisons'])->firstWhere('dimension', 'reporting_descendants');
+
+        $this->assertNotNull($comparison);
+        $this->assertContains($current->id, $comparison['graph_ids']);
+        $this->assertNotContains($future->id, $comparison['graph_ids']);
+        $this->assertNotContains($ended->id, $comparison['graph_ids']);
+        $this->assertSame([], $comparison['details']['invalid_graph_ids']);
+    }
+
+    /**
+     * BR-50: monitoring flag remains independent from legacy, shadow, and graph read modes.
+     */
+    public function test_br50_report_keeps_monitoring_flag_independent_for_each_read_mode(): void
+    {
+        $viewer = $this->user('supervisor', $this->branch('BRM'));
+        $graphChild = $this->user('sales_coordinator', $this->branch('BRG'));
+        OrganizationAssignment::query()->create([
+            'user_id' => $graphChild->id,
+            'parent_user_id' => $viewer->id,
+            'organization_unit_id' => $viewer->organization_unit_id,
+            'relationship_type' => OrganizationGraphService::REPORTS_TO,
+            'branch_id' => $graphChild->branch_id,
+            'started_at' => today()->toDateString(),
+            'is_active' => true,
+            'is_primary' => true,
+            'source' => 'parity_fixture',
+            'lock_version' => 1,
+        ]);
+        DB::table('app_settings')->insert([
+            'key' => 'org_hierarchical_monitoring',
+            'value' => json_encode(true, JSON_THROW_ON_ERROR),
+            'group' => 'feature_flags',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        app(AppSettingResolver::class)->forget('org_hierarchical_monitoring');
+
+        foreach (['legacy', 'shadow', 'graph'] as $mode) {
+            config([
+                'app.env' => 'local',
+                'organization.graph_mode' => $mode,
+                'organization.graph_user_ids' => $mode === 'graph' ? (string) $viewer->id : '',
+                'organization.graph_branch_ids' => '',
+            ]);
+            $report = app(OrganizationParityService::class)->report(
+                new OrganizationParityFilter(userId: $viewer->id, scope: 'descendants'),
+            );
+
+            $this->assertSame($mode, $report['meta']['configured_read_mode']);
+            $this->assertSame($mode, $report['meta']['effective_read_mode']);
+            $this->assertTrue($report['meta']['hierarchical_monitoring_enabled']);
+        }
+    }
+
+    /**
+     * BR-50: multi-viewer parity reports mixed effective modes explicitly.
+     */
+    public function test_br50_multi_viewer_report_marks_mixed_effective_modes(): void
+    {
+        $graphViewer = $this->user('supervisor', $this->branch('BRX'));
+        $legacyViewer = $this->user('supervisor', $this->branch('BRY'));
+        config([
+            'app.env' => 'local',
+            'organization.graph_mode' => 'graph',
+            'organization.graph_user_ids' => (string) $graphViewer->id,
+            'organization.graph_branch_ids' => '',
+        ]);
+
+        $report = app(OrganizationParityService::class)->report(
+            new OrganizationParityFilter(role: 'supervisor'),
+        );
+
+        $this->assertSame('mixed', $report['meta']['effective_read_mode']);
+        $this->assertSame(['graph', 'legacy'], $report['meta']['effective_read_modes']);
+        $this->assertSame([$graphViewer->id, $legacyViewer->id], collect($report['comparisons'])->pluck('viewer_id')->unique()->sort()->values()->all());
+    }
+
+    /**
+     * BR-50: nonexistent branch filters block readiness instead of producing a clean report.
+     */
+    public function test_br50_nonexistent_branch_filter_is_blocked(): void
+    {
+        $report = app(OrganizationParityService::class)->report(
+            new OrganizationParityFilter(branchId: 999999999),
+        );
+
+        $this->assertTrue($report['meta']['invalid_branch_selection']);
+        $this->assertSame('BLOCKED', $report['gate']['status']);
+        $this->assertSame(1, $report['gate']['failures']['invalid_branch_selection']);
+        $this->assertFalse($report['readiness']['cutover_gate_open']);
+    }
 
     public function test_empty_scope_report_has_stable_machine_readable_contract(): void
     {
@@ -31,6 +219,9 @@ class OrganizationParityServiceTest extends TestCase
         $this->assertArrayHasKey('comparisons', $report);
         $this->assertArrayHasKey('summary', $report);
         $this->assertArrayHasKey('readiness', $report);
+        $this->assertArrayHasKey('configured_read_mode', $report['meta']);
+        $this->assertArrayHasKey('effective_read_mode', $report['meta']);
+        $this->assertArrayHasKey('hierarchical_monitoring_enabled', $report['meta']);
         $this->assertNotEmpty($report['comparisons']);
 
         $comparison = $report['comparisons'][0];
@@ -399,7 +590,8 @@ class OrganizationParityServiceTest extends TestCase
         );
 
         $this->assertCount(1, $report['comparisons']);
-        $this->assertContains($second->id, $report['comparisons'][0]['graph_ids']);
+        $this->assertNotContains($second->id, $report['comparisons'][0]['graph_ids']);
+        $this->assertContains($second->id, $report['comparisons'][0]['details']['invalid_graph_ids']);
     }
 
     public function test_mixed_legacy_and_graph_relationship_sets_remain_unknown_and_block_cutover(): void
@@ -493,8 +685,9 @@ class OrganizationParityServiceTest extends TestCase
             new OrganizationParityFilter(userId: $viewer->id, scope: 'descendants', onlyDifferences: true),
         );
 
-        $this->assertGreaterThanOrEqual(1, $report['gate']['failures']['cross_branch_expansion']);
+        $this->assertSame(0, $report['gate']['failures']['cross_branch_expansion']);
         $this->assertSame('BLOCKED', $report['gate']['status']);
+        $this->assertGreaterThanOrEqual(1, $report['summary']['conflicts']);
     }
 
     public function test_module_shadow_reports_allow_deny_without_cross_branch_or_project_leakage(): void

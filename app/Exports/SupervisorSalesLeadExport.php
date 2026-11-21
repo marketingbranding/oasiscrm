@@ -16,7 +16,7 @@ class SupervisorSalesLeadExport
 
     private const HEADERS = [
         'Tanggal Lead', 'Koordinator', 'Sales PIC', 'Nama Konsumen', 'No HP', 'Cabang', 'Proyek',
-        'Sumber Lead', 'Kanal Masuk', 'Aktivitas Lead', 'Promo', 'Status Lead', 'Status Sync',
+        'Sumber Lead', 'Kanal Masuk', 'Aktivitas Lead', 'Promo', 'Status Lead', 'Status Sync', 'Aktivitas Terbaru',
     ];
 
     public static function toBrowser(Collection $leads, array $coordinatorNamesBySalesId, string $filename): BinaryFileResponse
@@ -28,22 +28,49 @@ class SupervisorSalesLeadExport
 
         foreach ($leads->values() as $index => $lead) {
             $row = $index + 2;
-            $sheet->setCellValue(self::cell(1, $row), ExcelDate::dateTimeToExcel($lead->lead_date));
+            if (! is_array($lead)) {
+                $sheet->setCellValue(self::cell(1, $row), ExcelDate::dateTimeToExcel($lead->lead_date));
+            }
 
-            foreach ([
-                self::coordinatorNames($coordinatorNamesBySalesId[$lead->sales_user_id] ?? []),
-                $lead->sales?->name,
-                $lead->customer_name,
-                $lead->phone,
-                $lead->branch?->name,
-                $lead->project?->project_name,
-                $lead->effective_source,
-                $lead->platform,
-                $lead->campaign_name ?: $lead->campaign_id,
-                $lead->id_promo,
-                $lead->current_status?->label(),
-                self::syncLabel($lead->sync_status),
-            ] as $column => $value) {
+            if (is_array($lead)) {
+                $leadDate = $lead['lead_date'] ?? null;
+                if ($leadDate !== null) {
+                    $sheet->setCellValue(self::cell(1, $row), ExcelDate::dateTimeToExcel(new \DateTimeImmutable((string) $leadDate)));
+                }
+                $values = [
+                    null,
+                    $lead['sales_name'] ?? null,
+                    $lead['name'] ?? null,
+                    null,
+                    null,
+                    $lead['project_name'] ?? null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    $lead['stage'] ?? null,
+                    null,
+                    $lead['last_active_at'] ?? null,
+                ];
+            } else {
+                $values = [
+                    self::coordinatorNames($coordinatorNamesBySalesId[$lead->sales_user_id] ?? []),
+                    $lead->sales?->name,
+                    $lead->customer_name,
+                    $lead->phone,
+                    $lead->branch?->name,
+                    $lead->project?->project_name,
+                    $lead->effective_source,
+                    $lead->platform,
+                    $lead->campaign_name ?: $lead->campaign_id,
+                    $lead->id_promo,
+                    $lead->current_status?->label(),
+                    self::syncLabel($lead->sync_status),
+                    data_get($lead, 'latest_activity_at')?->format('Y-m-d H:i:s'),
+                ];
+            }
+
+            foreach ($values as $column => $value) {
                 $sheet->setCellValueExplicit(self::cell($column + 2, $row), $value === null ? '' : (string) $value, DataType::TYPE_STRING);
             }
         }
@@ -51,7 +78,7 @@ class SupervisorSalesLeadExport
         $lastRow = $leads->count() + 1;
         self::applyStyles($spreadsheet, self::HEADERS, $lastRow, [
             'A' => 16, 'B' => 24, 'C' => 22, 'D' => 28, 'E' => 20, 'F' => 18,
-            'G' => 24, 'H' => 22, 'I' => 20, 'J' => 24, 'K' => 20, 'L' => 18, 'M' => 20,
+            'G' => 24, 'H' => 22, 'I' => 20, 'J' => 24, 'K' => 20, 'L' => 18, 'M' => 20, 'N' => 22,
         ]);
         self::addAutoFilter($sheet, self::HEADERS, $lastRow);
         if ($lastRow > 1) {

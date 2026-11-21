@@ -3,6 +3,7 @@
 namespace App\Exports;
 
 use App\Exports\Concerns\ExcelStyle;
+use Carbon\CarbonImmutable;
 use Illuminate\Support\Collection;
 use PhpOffice\PhpSpreadsheet\Cell\DataType;
 use PhpOffice\PhpSpreadsheet\Shared\Date as ExcelDate;
@@ -114,6 +115,36 @@ class SalesPocketbookExport
         self::writeHeaderRow($sheet, self::LEAD_HEADERS);
 
         foreach ($leads->values() as $index => $lead) {
+            if (is_array($lead)) {
+                $values = [
+                    $lead['lead_date'] ?? null,
+                    $lead['sales_name'] ?? null,
+                    null,
+                    $lead['project_name'] ?? null,
+                    $lead['name'] ?? null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    $lead['last_active_at'] ?? null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    $lead['stage'] ?? null,
+                    null,
+                ];
+                self::writeTypedRow($sheet, $index + 2, $values, [1, 16]);
+
+                continue;
+            }
+
             self::writeTypedRow($sheet, $index + 2, [
                 $lead->lead_date,
                 $lead->sales?->name,
@@ -163,6 +194,25 @@ class SalesPocketbookExport
         self::writeHeaderRow($sheet, self::AGENDA_HEADERS);
 
         foreach ($agendas->values() as $index => $agenda) {
+            if (is_array($agenda)) {
+                self::writeTypedRow($sheet, $index + 2, [
+                    $agenda['date'] ?? null,
+                    $agenda['sales_name'] ?? null,
+                    null,
+                    $agenda['project_name'] ?? null,
+                    null,
+                    null,
+                    $agenda['total_minutes'] ?? 0,
+                    'Ringkasan agenda',
+                    ($agenda['activity_count'] ?? 0).' kegiatan',
+                    null,
+                    ($agenda['late_activity_count'] ?? 0).' terlambat',
+                    ($agenda['submitted'] ?? false) ? 'Terkirim' : 'Belum Terkirim',
+                ], [1], [7]);
+
+                continue;
+            }
+
             self::writeTypedRow($sheet, $index + 2, [
                 $agenda->scheduled_date,
                 $agenda->owner?->name,
@@ -202,7 +252,8 @@ class SalesPocketbookExport
             $column = $index + 1;
             $cell = self::cell($column, $row);
             if ($value !== null && in_array($column, $dateColumns, true)) {
-                $sheet->setCellValue($cell, ExcelDate::dateTimeToExcel($value));
+                $date = $value instanceof \DateTimeInterface ? $value : CarbonImmutable::parse((string) $value);
+                $sheet->setCellValue($cell, ExcelDate::dateTimeToExcel($date));
             } elseif ($value !== null && (is_int($value) || is_float($value) || in_array($column, $numericColumns, true))) {
                 $sheet->setCellValue($cell, $value);
             } else {

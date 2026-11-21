@@ -16,6 +16,7 @@ class AdminBranchSalesMonitoringService
     public function __construct(
         private readonly OrganizationScopeService $organizationScope,
         private readonly WorkspaceAccessService $workspaceAccess,
+        private readonly SalesMonitoringProjectionService $projection,
     ) {}
 
     public function resolve(User $actor, array $filters): array
@@ -58,13 +59,16 @@ class AdminBranchSalesMonitoringService
             ->paginate(20, ['*'], 'lead_page')->withQueryString();
         $leads->getCollection()->each(function (SalesLead $lead) {
             $lead->setAttribute('latest_activity_status', $lead->latestStatusHistory?->status ?? $lead->current_status);
-            $lead->setAttribute('latest_activity_at', $lead->latestStatusHistory?->changed_at ?? $lead->current_status_changed_at ?? $lead->updated_at);
+            $lead->setAttribute('latest_activity_at', $lead->latestStatusHistory?->changed_at ?? $lead->current_status_changed_at ?? $lead->lead_date);
         });
 
         $agendas = $this->agendaQuery($scope, $period, $salesIds, $filters, $projectId)
             ->with(['owner:id,name', 'salesProject:id,project_name', 'evidence'])
             ->orderByDesc('scheduled_date')->orderByDesc('id')
             ->paginate(20, ['*'], 'agenda_page')->withQueryString();
+
+        $leads->setCollection($this->projection->projectCollection($actor, 'lead', $leads->getCollection(), 'sales_user_id'));
+        $agendas->setCollection($this->projection->projectCollection($actor, 'agenda', $agendas->getCollection(), 'owner_user_id'));
 
         return [
             'tab' => $filters['tab'] ?? 'leads',

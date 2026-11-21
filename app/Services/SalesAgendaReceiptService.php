@@ -26,6 +26,7 @@ class SalesAgendaReceiptService
      *     agenda_count: int,
      *     submitted: bool,
      *     extra_count: int,
+     *     late_activity_count: int,
      *     is_weekend: bool,
      *     requires_target: bool,
      *     schedule: array{is_weekend: bool, start_time: ?string, end_time: ?string, break_start: ?string, break_end: ?string, target_minutes: int, requires_target: bool},
@@ -56,6 +57,7 @@ class SalesAgendaReceiptService
             'agenda_count' => $normalAgendas->count(),
             'submitted' => $submission !== null,
             'extra_count' => $schedule['is_weekend'] ? 0 : $extraAgendas,
+            'late_activity_count' => $normalAgendas->filter(fn (ContentItem $agenda): bool => $this->isLate($date, $agenda))->count(),
             'is_weekend' => $schedule['is_weekend'],
             'requires_target' => $schedule['requires_target'],
             'schedule' => $schedule,
@@ -65,6 +67,27 @@ class SalesAgendaReceiptService
     /**
      * @return array{is_weekend: bool, start_time: ?string, end_time: ?string, break_start: ?string, break_end: ?string, target_minutes: int, requires_target: bool}
      */
+    private function isLate(CarbonImmutable $date, ContentItem $agenda): bool
+    {
+        if (in_array($agenda->status, ['done', 'cancelled', 'rescheduled'], true)) {
+            return false;
+        }
+
+        $now = CarbonImmutable::now(config('app.timezone'));
+        if ($date->isBefore($now->startOfDay())) {
+            return true;
+        }
+
+        if (! $date->isSameDay($now) || blank($agenda->end_time)) {
+            return false;
+        }
+
+        $endTime = substr((string) $agenda->end_time, 0, 5);
+        $endAt = CarbonImmutable::parse($date->toDateString().' '.$endTime, config('app.timezone'));
+
+        return $now->gte($endAt);
+    }
+
     public function schedule(CarbonImmutable $date): array
     {
         if ($date->isWeekend()) {

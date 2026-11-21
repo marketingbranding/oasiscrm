@@ -169,19 +169,7 @@ class SalesPocketbookController extends Controller
                 ->whereDate($reportMetric ? SalesWeeklyMetricsService::METRIC_COLUMNS[$reportMetric] : 'lead_date', '>=', $reportPeriod['start']->toDateString())
                 ->whereDate($reportMetric ? SalesWeeklyMetricsService::METRIC_COLUMNS[$reportMetric] : 'lead_date', '<=', $reportPeriod['end']->toDateString()))
             ->when($request->filled('stage'), function (Builder $query) use ($request) {
-                $stage = (string) $request->query('stage');
-                if (FeatureFlag::enabled('lead_stages_v3')) {
-                    abort_unless(array_key_exists($stage, SalesLead::STAGE_V3_LABELS), 422);
-                    $query->where('lead_stage', $stage);
-
-                    return;
-                }
-                abort_unless(array_key_exists($stage, SalesLead::STAGES), 422);
-                $query->whereNotNull($stage);
-                $later = array_slice(SalesLead::STAGE_ORDER, array_search($stage, SalesLead::STAGE_ORDER, true) + 1);
-                foreach ($later as $laterStage) {
-                    $query->whereNull($laterStage);
-                }
+                $this->applyStageFilter($query, (string) $request->query('stage'));
             })
             ->latest('lead_date')->latest('id')->paginate(20)->withQueryString();
         $leads->getCollection()->each(fn (SalesLead $lead) => $lead->setAttribute('latest_activity_at', $lead->latestStatusHistory?->changed_at ?? $lead->current_status_changed_at ?? $lead->lead_date));
@@ -455,19 +443,7 @@ class SalesPocketbookController extends Controller
             ->whereDate($leadDateColumn, '<=', $period['end']->toDateString())
             ->when($leadSourceFilter, fn (Builder $query) => $query->whereEffectiveSource($leadSourceFilter))
             ->when($request->filled('stage'), function (Builder $query) use ($request) {
-                $stage = (string) $request->query('stage');
-                if (FeatureFlag::enabled('lead_stages_v3')) {
-                    abort_unless(array_key_exists($stage, SalesLead::STAGE_V3_LABELS), 422);
-                    $query->where('lead_stage', $stage);
-
-                    return;
-                }
-                abort_unless(array_key_exists($stage, SalesLead::STAGES), 422);
-                $query->whereNotNull($stage);
-                $laterStages = array_slice(SalesLead::STAGE_ORDER, array_search($stage, SalesLead::STAGE_ORDER, true) + 1);
-                foreach ($laterStages as $laterStage) {
-                    $query->whereNull($laterStage);
-                }
+                $this->applyStageFilter($query, (string) $request->query('stage'));
             })
             ->orderBy('lead_date')
             ->orderBy('id')
@@ -555,6 +531,33 @@ class SalesPocketbookController extends Controller
             'report_agenda_completed' => ['nullable', 'boolean'],
             'report_agenda_missing_result' => ['nullable', 'boolean'],
         ];
+    }
+
+    private function applyStageFilter(Builder $query, string $stage): void
+    {
+        $scope = FeatureFlag::branchScope('lead_stages_v3');
+        $isV3Stage = array_key_exists($stage, SalesLead::STAGE_V3_LABELS);
+        $isLegacyStage = array_key_exists($stage, SalesLead::STAGES);
+        abort_unless($isV3Stage || $isLegacyStage, 422);
+
+        if ($isV3Stage) {
+            abort_unless($scope === 'all' || is_array($scope), 422);
+            $query->where('lead_stage', $stage);
+            if (is_array($scope)) {
+                $query->whereIn('branch_id', $scope);
+            }
+
+            return;
+        }
+
+        abort_unless($scope === 'none' || is_array($scope), 422);
+        $query->whereNotNull($stage);
+        if (is_array($scope)) {
+            $query->whereNotIn('branch_id', $scope);
+        }
+        foreach (array_slice(SalesLead::STAGE_ORDER, array_search($stage, SalesLead::STAGE_ORDER, true) + 1) as $laterStage) {
+            $query->whereNull($laterStage);
+        }
     }
 
     private function leadSourceFilter(Request $request): ?string

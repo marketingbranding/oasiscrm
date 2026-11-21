@@ -41,6 +41,40 @@ class FeatureFlagTest extends TestCase
         $this->assertFalse(FeatureFlag::enabledForBranch('lead_stages_v3', null));
     }
 
+    public function test_scoped_flag_global_enabled_call_is_rejected(): void
+    {
+        DB::table('app_settings')->insert([
+            'key' => 'lead_stages_v3',
+            'value' => json_encode(['mode' => 'branches', 'branch_ids' => [1]], JSON_THROW_ON_ERROR),
+            'group' => 'feature_flags',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        app(AppSettingResolver::class)->forget('lead_stages_v3');
+
+        $this->expectException(\InvalidArgumentException::class);
+        FeatureFlag::enabled('lead_stages_v3');
+    }
+
+    public function test_scoped_flag_branch_scope_returns_all_branch_ids_or_none(): void
+    {
+        $this->assertSame('none', FeatureFlag::branchScope('lead_stages_v3'));
+
+        DB::table('app_settings')->insert([
+            'key' => 'lead_stages_v3',
+            'value' => json_encode(['mode' => 'branches', 'branch_ids' => [3, 1]], JSON_THROW_ON_ERROR),
+            'group' => 'feature_flags',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        app(AppSettingResolver::class)->forget('lead_stages_v3');
+        $this->assertSame([3, 1], FeatureFlag::branchScope('lead_stages_v3'));
+
+        DB::table('app_settings')->where('key', 'lead_stages_v3')->update(['value' => json_encode(true, JSON_THROW_ON_ERROR)]);
+        app(AppSettingResolver::class)->forget('lead_stages_v3');
+        $this->assertSame('all', FeatureFlag::branchScope('lead_stages_v3'));
+    }
+
     public function test_scoped_flag_boolean_compatibility_maps_true_to_all_and_false_to_off(): void
     {
         DB::table('app_settings')->insert([

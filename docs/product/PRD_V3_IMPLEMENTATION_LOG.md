@@ -244,6 +244,9 @@ Status: selesai untuk shared default-off helper; consumers remain gated for late
 - Main files: `app/Support/FeatureFlag.php`, shared `AppSettingCatalog`/`AppSettingResolver`.
 - Canonical registered keys in this implementation: `org_hierarchical_monitoring`, `lead_stages_v3`, and `transaction_events_v3`; all default `false`.
 - Tests: `tests/Unit/FeatureFlagTest.php` covers exact key set, default-off behavior, and explicit true override through shared resolver.
+- Scoped rollout follow-up: `FeatureFlag::enabled()` is rejected for `lead_stages_v3` and `transaction_events_v3`; callers must use `enabledForBranch()` or `branchScope()`.
+- `branchScope()` returns `all`, `none`, or selected branch IDs. Pocketbook stage filters classify legacy stage fields versus V3 `lead_stage`; mixed branch queries apply each interpretation by `branch_id`.
+- Before guard: `enabled()` converted scoped array values to `false`, so mode `branches` incorrectly forced every global caller to legacy behavior. Commit `759b3d6` had no global PHP service callers, but Blade pocketbook callers remained and could misrender or fail after guard; fixed in this follow-up.
 - No consumer branch, graph mode activation, sheet cutover, or production rollout executed.
 
 ### WP-1.3 — Role dan atribut user

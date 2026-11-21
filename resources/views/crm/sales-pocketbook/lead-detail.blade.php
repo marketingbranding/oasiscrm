@@ -14,7 +14,7 @@
     $akad = $lead->akadLinks->firstWhere('status', 'completed');
     $consumerApplication = $normalConsumer?->consumerApplication;
     $documentsComplete = $lead->documents_completed_at !== null || ($consumerApplication?->documents?->isNotEmpty() && $consumerApplication->documents->every(fn ($document) => $document->status === 'completed' || $document->verified_at !== null));
-    $stageV3 = \App\Support\FeatureFlag::enabled('lead_stages_v3');
+    $stageV3 = \App\Support\FeatureFlag::enabledForBranch('lead_stages_v3', $lead->branch_id);
     $statusVariant = $stageV3 && in_array($lead->resolveStageV3(), ['utj', 'gugur'], true) ? 'success' : ($lead->current_status === \App\Enums\SalesLeadStatus::Akad ? 'success' : 'neutral');
     $currentStep = $stageV3
         ? min(array_search($lead->resolveStageV3(), \App\Models\SalesLead::STAGE_V3_ORDER, true) + 1, 5)

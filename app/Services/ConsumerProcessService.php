@@ -111,14 +111,20 @@ class ConsumerProcessService
             ->whereIn('branch_id', $branchIds)
             ->when($this->scope->requiresProjectScope($user, 'consumer_progress'), fn (Builder $query): Builder => $query->whereIn('project_id', $projectIds))
             ->when(! $this->scope->requiresProjectScope($user, 'consumer_progress'), fn (Builder $query): Builder => $query->where(fn (Builder $nested): Builder => $nested->whereNull('project_id')->orWhereIn('project_id', $projectIds)))
-            ->where(function (Builder $query): void {
-                $query->whereIn('transaction_status', ['SELESAI', 'selesai', 'COMPLETED', 'completed'])
-                    ->orWhere(function (Builder $nested): void {
-                        $nested->where('transaction_status', 'LANJUT')
-                            ->whereHas('bastRecords')
-                            ->whereHas('warranties', fn (Builder $warranty): Builder => $warranty->whereIn('status_garansi', ['Selesai', 'Tidak Ada Komplain']));
-                    });
-            });
+            ->tap(fn (Builder $query): Builder => $this->applyCompletedFilter($query));
+    }
+
+    /** @param Builder<ConsumerApplication> $query */
+    public function applyCompletedFilter(Builder $query): Builder
+    {
+        return $query->where(function (Builder $nested): void {
+            $nested->whereIn('transaction_status', ['SELESAI', 'selesai', 'COMPLETED', 'completed'])
+                ->orWhere(function (Builder $active): void {
+                    $active->where('transaction_status', 'LANJUT')
+                        ->whereHas('bastRecords')
+                        ->whereHas('warranties', fn (Builder $warranty): Builder => $warranty->whereIn('status_garansi', ['Selesai', 'Tidak Ada Komplain']));
+                });
+        });
     }
 
     private function authorize(User $actor, ConsumerApplication $application): void

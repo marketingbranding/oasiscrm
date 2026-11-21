@@ -44,25 +44,26 @@ class BackfillConsumerTransactionStatusV3 extends Command
         ];
         $mappings = [];
         $reviewCases = [];
-        $distinctStatuses = ConsumerApplication::query()
-            ->select('transaction_status')
-            ->selectRaw('COUNT(*) as total')
-            ->groupBy('transaction_status')
-            ->orderBy('transaction_status')
-            ->get()
-            ->map(fn (object $row): array => [
-                'transaction_status' => $row->transaction_status,
-                'count' => (int) $row->total,
-                'mapping' => $this->distinctStatusMapping($row->transaction_status),
-            ])
-            ->all();
+        $distinctStatuses = [];
 
         ConsumerApplication::query()
             ->with('migrationReconciliation')
             ->orderBy('id')
-            ->chunkById(500, function ($applications) use (&$counts, &$mappings, &$reviewCases): void {
+            ->chunkById(500, function ($applications) use (&$counts, &$mappings, &$reviewCases, &$distinctStatuses): void {
                 foreach ($applications as $application) {
                     $mapping = $this->map($application);
+                    $statusKey = $mapping['mapping']['legacy_status'];
+                    if (! array_key_exists($statusKey, $distinctStatuses)) {
+                        $distinctStatuses[$statusKey] = [
+                            'transaction_status' => $statusKey,
+                            'count' => 0,
+                            'mapping' => [
+                                'transaction_status' => $mapping['mapping']['transaction_status'],
+                                'needs_review' => $mapping['mapping']['needs_review'],
+                            ],
+                        ];
+                    }
+                    $distinctStatuses[$statusKey]['count']++;
                     $counts[$mapping['category']]++;
                     $mappings[] = $mapping['mapping'];
                     if ($mapping['review'] !== null) {
@@ -120,7 +121,7 @@ class BackfillConsumerTransactionStatusV3 extends Command
         if (in_array($normalized, ['PINDAH KAVLING', 'PINDAH_KAVLING'], true)) {
             return [
                 'category' => 'pindah_kavling_ke_lanjut',
-                'mapping' => $base + ['transaction_status' => 'LANJUT', 'event_type' => 'PINDAH_KAVLING'],
+                'mapping' => $base + ['transaction_status' => 'LANJUT', 'needs_review' => false, 'event_type' => 'PINDAH_KAVLING'],
                 'review' => null,
             ];
         }
@@ -139,7 +140,7 @@ class BackfillConsumerTransactionStatusV3 extends Command
                     'Reject Bank' => 'reject_bank_ke_mundur',
                     default => 'reject_data_lama_ke_mundur',
                 },
-                'mapping' => $base + ['transaction_status' => 'MUNDUR', 'withdraw_reason' => $reason],
+                'mapping' => $base + ['transaction_status' => 'MUNDUR', 'needs_review' => $reason === 'Reject (data lama)', 'withdraw_reason' => $reason],
                 'review' => $review,
             ];
         }
@@ -147,7 +148,7 @@ class BackfillConsumerTransactionStatusV3 extends Command
         if (in_array($normalized, ['DIGANTI KONSUMEN', 'DIGANTI_KONSUMEN', 'REPLACED', 'GANTI NAMA', 'GANTI_NAMA'], true)) {
             return [
                 'category' => 'diganti_konsumen_ke_ditutup',
-                'mapping' => $base + ['transaction_status' => 'DITUTUP', 'closed_by_event' => 'GANTI_NAMA'],
+                'mapping' => $base + ['transaction_status' => 'DITUTUP', 'needs_review' => false, 'closed_by_event' => 'GANTI_NAMA'],
                 'review' => null,
             ];
         }
@@ -157,7 +158,7 @@ class BackfillConsumerTransactionStatusV3 extends Command
 
             return [
                 'category' => 'sudah_kanonis',
-                'mapping' => $base + ['transaction_status' => $mappedStatus],
+                'mapping' => $base + ['transaction_status' => $mappedStatus, 'needs_review' => false],
                 'review' => null,
             ];
         }
@@ -166,18 +167,6 @@ class BackfillConsumerTransactionStatusV3 extends Command
             'category' => 'perlu_tinjau',
             'mapping' => $base + ['transaction_status' => 'LANJUT', 'needs_review' => true],
             'review' => $base + ['case' => 'legacy_status_unknown'],
-        ];
-    }
-
-    /** @return array{transaction_status: string|null, needs_review: bool} */
-    private function distinctStatusMapping(?string $legacyStatus): array
-    {
-        $application = new ConsumerApplication(['transaction_status' => $legacyStatus]);
-        $details = $application->canonicalTransactionStatusDetails();
-
-        return [
-            'transaction_status' => $details['status'],
-            'needs_review' => $details['needs_review'],
         ];
     }
 

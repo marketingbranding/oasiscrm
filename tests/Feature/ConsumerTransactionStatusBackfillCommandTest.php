@@ -74,6 +74,8 @@ class ConsumerTransactionStatusBackfillCommandTest extends TestCase
         $this->assertTrue($this->mapping($report, $closed->id)['needs_review']);
         $this->assertSame('legacy_status_unknown', collect($report['review_cases'])->firstWhere('application_id', $closed->id)['case']);
         $this->assertNotEmpty($report['distinct_transaction_statuses']);
+        $this->assertSame(1, collect($report['distinct_transaction_statuses'])->firstWhere('transaction_status', 'CLOSED')['count']);
+        $this->assertTrue(collect($report['distinct_transaction_statuses'])->firstWhere('transaction_status', 'CLOSED')['mapping']['needs_review']);
         $this->assertSame('PINDAH_KAVLING', $this->mapping($report, $pindah->id)['event_type']);
         $this->assertSame('LANJUT', $this->mapping($report, $pindah->id)['transaction_status']);
         $this->assertSame('Reject SLIK', $this->mapping($report, $rejectSlik->id)['withdraw_reason']);
@@ -117,13 +119,14 @@ class ConsumerTransactionStatusBackfillCommandTest extends TestCase
         return [$branch, $project];
     }
 
-    private function application(Branch $branch, LeadMaster $project, string $status): ConsumerApplication
+    private function application(Branch $branch, LeadMaster $project, ?string $status, ?string $consumerStatus = null): ConsumerApplication
     {
         return ConsumerApplication::query()->create([
             'branch_id' => $branch->id,
             'project_id' => $project->id,
             'application_status' => 'active',
             'transaction_status' => $status,
+            'consumer_status' => $consumerStatus,
         ]);
     }
 

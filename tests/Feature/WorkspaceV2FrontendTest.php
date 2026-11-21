@@ -187,6 +187,9 @@ class WorkspaceV2FrontendTest extends TestCase
         config(['app.workspace_v2_enabled' => true]);
         [$branch, $project] = $this->reportingContext();
         $this->reportingApplication($branch, $project, 'Aktif Kanonis', 'LANJUT');
+        $completed = $this->reportingApplication($branch, $project, 'Selesai Kanonis', 'LANJUT');
+        $completed->bastRecords()->create(['tanggal_bast' => '2026-11-01']);
+        $completed->warranties()->create(['status_komplain' => 'Tidak Ada Komplain', 'status_garansi' => 'Tidak Ada Komplain']);
         $this->reportingApplication($branch, $project, 'Gugur Kanonis', 'MUNDUR');
         $this->reportingApplication($branch, $project, 'Ditutup Ganti Nama', 'DITUTUP', 'GANTI_NAMA');
         $this->reportingApplication($branch, $project, 'Ditutup Kembali NUP', 'DITUTUP', 'KEMBALI_KE_NUP');
@@ -196,8 +199,12 @@ class WorkspaceV2FrontendTest extends TestCase
         $dashboard = $this->actingAs($user)->get(route('workspace-v2.dashboard'));
         $reports = $this->actingAs($user)->get(route('workspace-v2.reports'));
 
-        $dashboard->assertOk()->assertViewHas('activeTransactions', 2);
-        $reports->assertOk()->assertViewHas('active', 2);
+        $dashboard->assertOk()
+            ->assertViewHas('activeTransactions', 3)
+            ->assertViewHas('completedTransactions', 1);
+        $reports->assertOk()
+            ->assertViewHas('active', 3)
+            ->assertViewHas('completed', 1);
     }
 
     /** BR-30: Mundur aggregate uses canonical MUNDUR and excludes Ganti Nama/Kembali ke NUP closures. */

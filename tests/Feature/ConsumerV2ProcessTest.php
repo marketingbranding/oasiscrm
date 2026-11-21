@@ -179,7 +179,7 @@ class ConsumerV2ProcessTest extends TestCase
 
     public function test_br21_return_to_nup_rejects_non_lanjut_transaction_without_mutation(): void
     {
-        foreach (['MUNDUR', 'DITUTUP', 'REPLACED'] as $status) {
+        foreach (['MUNDUR', 'DITUTUP', 'REPLACED', 'STATUS ACAK'] as $status) {
             $application = ConsumerApplication::factory()->create(['transaction_status' => $status]);
             $actor = $this->superadmin($application);
             $kavling = Kavling::create([
@@ -192,7 +192,7 @@ class ConsumerV2ProcessTest extends TestCase
 
             try {
                 app(ConsumerNupService::class)->returnFromTransaction($application, $issue, ['nup_number' => 'NUP-'.$status], $actor);
-                $this->fail('Transaksi non-LANJUT seharusnya ditolak.');
+                $this->fail('Transaksi non-LANJUT atau perlu tinjau seharusnya ditolak.');
             } catch (\DomainException $exception) {
                 $this->assertSame('Transaksi harus berstatus LANJUT untuk dikembalikan ke NUP.', $exception->getMessage());
             }

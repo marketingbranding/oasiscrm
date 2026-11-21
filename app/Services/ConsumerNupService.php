@@ -130,7 +130,8 @@ class ConsumerNupService
             if ($existing !== null) {
                 return $existing;
             }
-            if ($locked->canonicalTransactionStatus() !== 'LANJUT') {
+            $statusDetails = $locked->canonicalTransactionStatusDetails();
+            if ($statusDetails['status'] !== 'LANJUT' || $statusDetails['needs_review']) {
                 throw new DomainException('Transaksi harus berstatus LANJUT untuk dikembalikan ke NUP.');
             }
             $before = $this->snapshot($locked);

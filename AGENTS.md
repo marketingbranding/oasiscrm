@@ -183,6 +183,7 @@ Detail lengkap ada di `docs/UI_STANDARDS.md`. Ringkasan wajibnya:
 - Mempercayai role ID, kelas morph, akses cabang/proyek, data pratinjau, atau format uang yang dikirim browser.
 - URL aplikasi yang di-hardcode (pakai named route).
 - Menyimpan atau mencatat di log kata sandi, token undangan, atau token reset dalam bentuk teks.
+- Jangan commit folder `.superpowers/` atau memakai `git add -f` untuk memasukkan file yang di-ignore.
 - Identitas model eksternal yang didasarkan pada nomor baris sheet.
 - Dependensi baru bila yang ada sudah cukup. Jika memang perlu (mis. pustaka Web Push), tulis alasannya di deskripsi PR.
 - Arsitektur kedua untuk notifikasi, toast, konflik, picker, XLSX, atau akses.

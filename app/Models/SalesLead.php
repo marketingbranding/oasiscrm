@@ -160,6 +160,14 @@ class SalesLead extends Model
         return $this->hasOne(SalesLeadSiteVisit::class)->latestOfMany();
     }
 
+    public function latestFollowUpSiteVisit(): HasOne
+    {
+        return $this->hasOne(SalesLeadSiteVisit::class)
+            ->where('visit_status', 'follow up')
+            ->where('is_completed', true)
+            ->latestOfMany();
+    }
+
     public function shouldShowSiteVisitResults(): bool
     {
         $status = $this->current_status instanceof SalesLeadStatus
@@ -186,6 +194,11 @@ class SalesLead extends Model
     public function consumerLinks(): HasMany
     {
         return $this->hasMany(SalesLeadConsumerLink::class);
+    }
+
+    public function linkedConsumerApplications(): HasMany
+    {
+        return $this->hasMany(ConsumerApplication::class, 'sales_lead_id');
     }
 
     public function slikAttempts(): HasMany
@@ -253,6 +266,10 @@ class SalesLead extends Model
 
     public function resolveStageV3(): string
     {
+        if ($this->gugur_at !== null || $this->lead_stage === 'gugur') {
+            return 'gugur';
+        }
+
         if (filled($this->lead_stage)) {
             return (string) $this->lead_stage;
         }

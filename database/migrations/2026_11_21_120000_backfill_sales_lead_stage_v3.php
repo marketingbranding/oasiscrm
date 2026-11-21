@@ -30,6 +30,9 @@ return new class extends Migration
                     if ($lead->utj_at !== null || $stage === 'utj') {
                         $stage = 'utj';
                     }
+                    if ($lead->gugur_at !== null || $lead->lead_stage === 'gugur') {
+                        $stage = 'gugur';
+                    }
 
                     DB::table('sales_leads')->where('id', $lead->id)->update(['lead_stage' => $stage]);
                 }

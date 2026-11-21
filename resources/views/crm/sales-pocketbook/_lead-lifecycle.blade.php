@@ -9,6 +9,8 @@
     $latestSlik = $lead->slikAttempts->first();
     $freelance = $lead->freelanceLinks->firstWhere('status', 'completed');
     $akad = $lead->akadLinks->firstWhere('status', 'completed');
+    $consumerApplication = $normalConsumer?->consumerApplication;
+    $documentsComplete = $lead->documents_completed_at !== null || ($consumerApplication?->documents?->isNotEmpty() && $consumerApplication->documents->every(fn ($document) => $document->status === 'completed' || $document->verified_at !== null));
     $autoOpenSiteVisit = request('lifecycle_action') === 'site_visit' && request()->integer('lead') === $lead->id;
     $sheetCapabilities = $lifecycleCapabilitiesByBranch[$lead->branch_id] ?? [];
     $siteVisitAvailable = ($sheetCapabilities['data_ceklok'] ?? false) === true;
@@ -38,7 +40,7 @@
         <div><dt class="font-bold">Cek lokasi</dt><dd>{{ $latestVisit ? ($latestVisit->is_completed ? 'Lengkap, '.$latestVisit->visit_date?->format('d/m/Y') : 'Belum lengkap / Isi Nanti') : 'Belum dicatat' }}</dd></div>
         <div><dt class="font-bold">Konsumen / NUP</dt><dd>{{ $normalConsumer ? 'Konsumen tercatat' : ($nupConsumer ? 'NUP tercatat, belum UTJ' : 'Belum dikonversi') }}</dd></div>
         <div><dt class="font-bold">SLIK</dt><dd>{{ $latestSlik ? ($latestSlik->status === 'rejected' ? 'Ditolak: '.$latestSlik->slik_result : 'Diajukan') : 'Belum diajukan' }}</dd></div>
-        <div><dt class="font-bold">Freelance / Akad</dt><dd>{{ $freelance ? 'Freelance selesai' : 'Bukan freelance' }} / {{ $akad ? 'Akad tercatat' : 'Belum Akad' }}</dd></div>
+        <div><dt class="font-bold">Berkas Awal / Akad</dt><dd>{{ $documentsComplete ? 'Berkas Awal Lengkap' : 'Berkas belum lengkap' }} / {{ $akad ? 'Akad tercatat' : 'Belum Akad' }}</dd></div>
     </dl>
 
     @can('updateLifecycleStatus', $lead)

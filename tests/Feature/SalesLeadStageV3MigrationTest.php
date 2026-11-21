@@ -18,7 +18,7 @@ class SalesLeadStageV3MigrationTest extends TestCase
 
     public function test_br10_backfill_maps_existing_lead_without_creating_fake_history(): void
     {
-        [$newLead, $contactedLead, $surveyLead, $utjLead, $downstreamLead] = $this->leads();
+        [$newLead, $contactedLead, $surveyLead, $utjLead, $downstreamLead, $gugurLead] = $this->leads();
 
         $migration = require database_path('migrations/2026_11_21_120000_backfill_sales_lead_stage_v3.php');
         $migration->up();
@@ -28,6 +28,7 @@ class SalesLeadStageV3MigrationTest extends TestCase
         $this->assertSame('survey', $surveyLead->fresh()->lead_stage);
         $this->assertSame('utj', $utjLead->fresh()->lead_stage);
         $this->assertSame('utj', $downstreamLead->fresh()->lead_stage);
+        $this->assertSame('gugur', $gugurLead->fresh()->lead_stage);
         $this->assertSame(0, SalesLeadStageHistory::query()->count());
     }
 
@@ -53,6 +54,7 @@ class SalesLeadStageV3MigrationTest extends TestCase
             $make(['surveyed_at' => '2026-11-21 08:00:00']),
             $make(['utj_at' => '2026-11-21 08:00:00']),
             $make(['current_status' => SalesLeadStatus::Akad]),
+            $make(['gugur_at' => '2026-11-21 08:00:00', 'gugur_reason' => 'Tidak berminat']),
         ];
     }
 }

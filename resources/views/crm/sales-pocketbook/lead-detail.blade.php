@@ -10,6 +10,10 @@
     $canComplete = Auth::user()->isSales() && (int) $lead->sales_user_id === (int) Auth::id() && Auth::user()->hasPermission('sales_pocketbook.manage_own');
     $canUpdateLifecycle = Auth::user()->can('updateLifecycleStatus', $lead);
     $canMarkUtj = Auth::user()->can('markUtjDirect', $lead);
+    $normalConsumer = $lead->consumerLinks->first(fn ($link) => $link->sheet_type === 'data_konsumen' && $link->status === 'completed');
+    $akad = $lead->akadLinks->firstWhere('status', 'completed');
+    $consumerApplication = $normalConsumer?->consumerApplication;
+    $documentsComplete = $lead->documents_completed_at !== null || ($consumerApplication?->documents?->isNotEmpty() && $consumerApplication->documents->every(fn ($document) => $document->status === 'completed' || $document->verified_at !== null));
     $stageV3 = \App\Support\FeatureFlag::enabled('lead_stages_v3');
     $statusVariant = $stageV3 && in_array($lead->resolveStageV3(), ['utj', 'gugur'], true) ? 'success' : ($lead->current_status === \App\Enums\SalesLeadStatus::Akad ? 'success' : 'neutral');
     $currentStep = $stageV3
@@ -70,6 +74,9 @@
 
     <section class="sales-lead-detail-information" aria-labelledby="sales-lead-information-title">
         <h2 id="sales-lead-information-title">Informasi</h2>
+        @if($stageV3)
+            <p class="mt-2 text-sm"><strong>Keterangan transaksi:</strong> {{ $documentsComplete ? 'Berkas Awal Lengkap' : 'Berkas belum lengkap' }}; {{ $akad ? 'Akad tercatat dari transaksi tertaut' : 'Akad belum tercatat' }}.</p>
+        @endif
         <dl>
             <div><dt>Telepon</dt><dd>{{ $lead->phone ?: '-' }}</dd></div>
             <div><dt>Sumber</dt><dd>{{ $lead->effective_source ?: '-' }}</dd></div>

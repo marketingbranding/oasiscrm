@@ -15,6 +15,7 @@ use App\Models\SalesLeadSiteVisit;
 use App\Models\SalesLeadSlikAttempt;
 use App\Models\SalesLeadStatusHistory;
 use App\Models\User;
+use App\Support\FeatureFlag;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -454,6 +455,11 @@ class SalesLeadLifecycleSyncService
     private function reconcileLeadStatus(Branch $branch, SalesLead $lead, array $row, string $operationUuid, ?User $actor, array &$summary): void
     {
         $raw = trim((string) ($row['status_lead'] ?? ''));
+        if (FeatureFlag::enabled('lead_stages_v3') && mb_strtolower($raw) === 'gugur') {
+            $this->issue($branch, $lead, 'lead_status', $this->rowIdentity('lead', $row), 'remote_gugur_owned_by_oasis', ['remote_status' => $raw], $operationUuid, $summary);
+
+            return;
+        }
         $target = match (mb_strtolower($raw)) {
             '', 'no respon', 'no response' => SalesLeadStatus::NoResponse,
             'diskusi' => SalesLeadStatus::Discussion,

@@ -25,6 +25,15 @@ class SalesLeadStageSpreadsheetCompatibilityTest extends TestCase
         $this->assertContains('Gugur', $definition->validations['status_lead']['values']);
     }
 
+    public function test_br11_transaction_fact_is_not_derived_from_lead_stage(): void
+    {
+        $lead = $this->lead('utj');
+        $lead->update(['akad_at' => '2026-11-21 08:00:00']);
+
+        $this->assertSame('utj', $lead->fresh()->resolveStageV3());
+        $this->assertNotNull($lead->fresh()->akad_at);
+    }
+
     public function test_br10_and_br13_canonical_stage_maps_to_sheet_status_without_changing_identity(): void
     {
         $lead = $this->lead('utj');

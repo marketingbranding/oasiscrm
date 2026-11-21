@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Enums\SalesLeadStatus;
+use App\Models\AppSetting;
 use App\Models\Branch;
 use App\Models\LeadMaster;
 use App\Models\Role;
@@ -70,6 +71,26 @@ class SalesLeadLifecycleSyncTest extends TestCase
             'source_id' => 'lead:260722-ON-TI-01',
             'status' => 'discussion',
         ]);
+    }
+
+    public function test_br14_v3_pull_does_not_import_gugur_from_sheet(): void
+    {
+        [$branch, $project, $sales] = $this->context('sheet-gugur', 'Gugur Project', 'Gugur Sales');
+        $lead = $this->lead($branch, $project, $sales, 'GUGUR-1', 'SYNC-GUGUR');
+        AppSetting::query()->create(['key' => 'lead_stages_v3', 'value' => true, 'group' => 'feature_flags']);
+        $google = Mockery::mock(GoogleSheetsApiService::class);
+        $this->expectSheets($google, 'sheet-gugur', ['lead' => $this->leadSheet('GUGUR-1', $project->project_name, $sales->name, 'Gugur', 'SYNC-GUGUR')]);
+        $this->app->instance(GoogleSheetsApiService::class, $google);
+
+        $result = app(SalesLeadLifecycleSyncService::class)->sync($branch);
+
+        $this->assertTrue($result['ok']);
+        $this->assertDatabaseHas('sales_lead_lifecycle_reconciliation_items', [
+            'sales_lead_id' => $lead->id,
+            'issue_code' => 'remote_gugur_owned_by_oasis',
+            'status' => 'open',
+        ]);
+        $this->assertNull($lead->fresh()->lead_stage);
     }
 
     public function test_pull_maps_tatap_muka_and_records_idempotent_history(): void

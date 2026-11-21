@@ -156,7 +156,9 @@ class SalesPocketbookController extends Controller
                 'branch:id,name,sheet_id', 'project:id,project_name,is_nup_eligible', 'sales:id,name,supervisor_user_id',
                 'leadSource:id,name,is_active', 'siteVisits' => fn ($query) => $query->latest('id'),
                 'consumerLinks' => fn ($query) => $query->latest('id'), 'slikAttempts' => fn ($query) => $query->latest('id'),
-                'freelanceLinks' => fn ($query) => $query->latest('id'), 'akadLinks' => fn ($query) => $query->latest('id'),
+                'freelanceLinks' => fn ($query) => $query->latest('id'),
+                'akadLinks' => fn ($query) => $query->latest('id'),
+                'consumerLinks.consumerApplication.documents',
             ])
             ->withCount('comments')
             ->when($selectedBranchId, fn (Builder $query) => $query->where('branch_id', $selectedBranchId))

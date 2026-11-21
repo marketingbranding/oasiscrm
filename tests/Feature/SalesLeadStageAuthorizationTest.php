@@ -54,6 +54,19 @@ class SalesLeadStageAuthorizationTest extends TestCase
         ])->assertForbidden();
     }
 
+    public function test_br14_sales_cannot_reopen_utj_via_lifecycle_json_or_sheet_pull(): void
+    {
+        [$lead, $sales] = $this->context('utj');
+        $this->enableFeature();
+
+        $this->actingAs($sales)->patchJson(route('sales-leads.lifecycle-status.update', $lead), [
+            'status' => 'discussion',
+            'expected_updated_at' => $lead->updated_at->toISOString(),
+        ])->assertForbidden();
+
+        $this->assertSame('utj', $lead->fresh()->lead_stage);
+    }
+
     public function test_br14_sales_cannot_use_direct_url_for_out_of_scope_lead(): void
     {
         [$ownedLead, $sales] = $this->context('survey');

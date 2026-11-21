@@ -1,7 +1,9 @@
 <?php
 
 use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
 {
@@ -11,10 +13,19 @@ return new class extends Migration
 
     public function up(): void
     {
-        $this->dropIndex();
+        if (! Schema::hasTable('consumer_kavling_assignments')) {
+            return;
+        }
+
+        $this->dropIndexIfExists();
 
         if (DB::connection()->getDriverName() === 'mysql') {
-            DB::statement('ALTER TABLE consumer_kavling_assignments DROP COLUMN active_kavling_key');
+            if (Schema::hasColumn('consumer_kavling_assignments', 'active_kavling_key')) {
+                Schema::table('consumer_kavling_assignments', function (Blueprint $table): void {
+                    $table->dropColumn('active_kavling_key');
+                });
+            }
+
             DB::statement("ALTER TABLE consumer_kavling_assignments ADD active_kavling_key BIGINT GENERATED ALWAYS AS (IF(assignment_status IN ('active', 'sold') AND released_at IS NULL, kavling_id, NULL)) STORED");
             DB::statement('CREATE UNIQUE INDEX '.self::INDEX.' ON consumer_kavling_assignments (active_kavling_key)');
         } else {
@@ -36,10 +47,20 @@ return new class extends Migration
     public function down(): void
     {
         DB::table('changelogs')->whereNull('version')->where('title', self::CHANGELOG_TITLE)->delete();
-        $this->dropIndex();
+
+        if (! Schema::hasTable('consumer_kavling_assignments')) {
+            return;
+        }
+
+        $this->dropIndexIfExists();
 
         if (DB::connection()->getDriverName() === 'mysql') {
-            DB::statement('ALTER TABLE consumer_kavling_assignments DROP COLUMN active_kavling_key');
+            if (Schema::hasColumn('consumer_kavling_assignments', 'active_kavling_key')) {
+                Schema::table('consumer_kavling_assignments', function (Blueprint $table): void {
+                    $table->dropColumn('active_kavling_key');
+                });
+            }
+
             DB::statement("ALTER TABLE consumer_kavling_assignments ADD active_kavling_key BIGINT GENERATED ALWAYS AS (IF(assignment_status = 'active' AND released_at IS NULL, kavling_id, NULL)) STORED");
             DB::statement('CREATE UNIQUE INDEX '.self::INDEX.' ON consumer_kavling_assignments (active_kavling_key)');
         } else {
@@ -47,12 +68,14 @@ return new class extends Migration
         }
     }
 
-    private function dropIndex(): void
+    private function dropIndexIfExists(): void
     {
-        $statement = DB::connection()->getDriverName() === 'mysql'
-            ? 'DROP INDEX '.self::INDEX.' ON consumer_kavling_assignments'
-            : 'DROP INDEX '.self::INDEX;
+        if (! Schema::hasIndex('consumer_kavling_assignments', self::INDEX)) {
+            return;
+        }
 
-        DB::statement($statement);
+        Schema::table('consumer_kavling_assignments', function (Blueprint $table): void {
+            $table->dropIndex(self::INDEX);
+        });
     }
 };

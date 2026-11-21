@@ -24,6 +24,8 @@ class PrdV3RolePermissionParityTest extends TestCase
         $migration->up();
         $permissionMigration = require base_path('database/migrations/2026_11_21_230001_add_consumer_migration_reconcile_permission.php');
         $permissionMigration->up();
+        $sasMigration = require base_path('database/migrations/2026_11_21_230002_add_sas_consumer_input_permission.php');
+        $sasMigration->up();
 
         $this->assertSame($fresh, $this->rolePermissionSets($slugs));
     }
@@ -35,7 +37,6 @@ class PrdV3RolePermissionParityTest extends TestCase
         $actual = $sas->permissions()->pluck('slug')->sort()->values()->all();
         $expected = collect($snapshot['effective_permissions_by_primary_role']['sas'])
             ->push('consumer_progress.manage')
-            ->push('consumer_migration.reconcile')
             ->sort()->values()->all();
 
         $this->assertSame($expected, $actual);
@@ -68,7 +69,6 @@ class PrdV3RolePermissionParityTest extends TestCase
             $expected = $snapshot['effective_permissions_by_primary_role'][$legacyRole];
             if ($staffType === 'sales') {
                 $expected[] = 'consumer_progress.manage';
-                $expected[] = 'consumer_migration.reconcile';
                 sort($expected);
             }
             $actual = collect(PermissionCatalog::permissions())

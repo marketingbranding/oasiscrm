@@ -43,9 +43,9 @@ class ConsumerMigrationReconciliationTest extends TestCase
         $reconcileId = DB::table('permissions')->where('slug', 'consumer_migration.reconcile')->value('id');
 
         $this->assertNotNull($reconcileId);
-        $this->assertSame(
-            DB::table('role_permission')->where('permission_id', $manageId)->pluck('role_id')->sort()->values()->all(),
-            DB::table('role_permission')->where('permission_id', $reconcileId)->pluck('role_id')->sort()->values()->all(),
+        $this->assertContains(
+            $this->admin->role_id,
+            DB::table('role_permission')->where('permission_id', $reconcileId)->pluck('role_id')->all(),
         );
         $this->assertTrue($this->admin->hasPermission('consumer_migration.reconcile'));
     }

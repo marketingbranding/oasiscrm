@@ -244,7 +244,6 @@ class PermissionCatalog
                 ...$comments, 'comments.view_history',
             ],
             'sas' => [
-                'consumer_progress.manage',
                 'sales_pocketbook.view_branch', 'sales_pocketbook.export_branch', 'sales_pocketbook.export',
                 'sales_targets.view_branch', 'sales_daily_plans.view_branch',
             ],

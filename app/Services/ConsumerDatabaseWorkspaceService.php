@@ -424,10 +424,12 @@ final class ConsumerDatabaseWorkspaceService
 
     private function canViewApplication(User $user, ConsumerApplication $application): bool
     {
+        $action = $user->hasPermission('consumer_progress.manage') ? 'manage' : 'view';
+
         return $this->organizationScope->allowsProjectRecord(
             $user,
             'consumer_progress',
-            'view',
+            $action,
             (int) $application->branch_id,
             $application->project_id,
         );

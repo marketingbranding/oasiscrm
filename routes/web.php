@@ -295,11 +295,11 @@ Route::middleware(['auth', 'active', 'verified', 'password.changed', 'operationa
 
     Route::middleware(['module.maintenance:consumer_progress', 'operational.module:consumer_progress'])->group(function () {
         Route::get('/consumer-workspace', [ConsumerDatabaseController::class, 'index'])->middleware('permission:consumer_progress.view')->name('consumer-database.workspace');
-        Route::get('/consumer-workspace/create', [ConsumerDatabaseController::class, 'create'])->middleware('permission:consumer_progress.view')->name('consumer-database.workspace.create');
+        Route::get('/consumer-workspace/create', [ConsumerDatabaseController::class, 'create'])->middleware('permission:consumer_progress.manage')->name('consumer-database.workspace.create');
         Route::post('/consumer-workspace', [ConsumerDatabaseController::class, 'store'])->middleware('not.impersonating')->name('consumer-database.workspace.store');
         Route::get('/consumer-workspace/{consumerApplication}', [ConsumerDatabaseController::class, 'show'])->middleware('permission:consumer_progress.view')->name('consumer-database.workspace.show');
         Route::get('/nups', [ConsumerNupController::class, 'index'])->middleware('permission:consumer_progress.view')->name('consumer-nups.index');
-        Route::get('/nups/create', [ConsumerNupController::class, 'create'])->middleware('permission:consumer_progress.view')->name('consumer-nups.create');
+        Route::get('/nups/create', [ConsumerNupController::class, 'create'])->middleware('permission:consumer_progress.manage')->name('consumer-nups.create');
         Route::post('/nups', [ConsumerNupController::class, 'store'])->middleware('not.impersonating')->name('consumer-nups.store');
         Route::post('/nups/{consumerNup}/convert', [ConsumerNupController::class, 'convert'])->middleware('not.impersonating')->name('consumer-nups.convert');
         Route::post('/konsumen-progress/applications/{consumerApplication}/kembali-ke-nup', [ConsumerNupController::class, 'returnToNup'])->middleware('not.impersonating')->name('consumer-nups.return');

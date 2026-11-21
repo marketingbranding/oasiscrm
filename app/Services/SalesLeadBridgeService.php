@@ -299,7 +299,7 @@ class SalesLeadBridgeService
                     }
                     $rawRemoteStatus = trim((string) ($row['status_lead'] ?? ''));
                     $remoteStatus = $this->status($rawRemoteStatus);
-                    $v3Stage = FeatureFlag::enabledForBranch('lead_stages_v3', $lead->branch_id) ? $this->v3StageForSheetStatus($rawRemoteStatus) : null;
+                    $v3Stage = FeatureFlag::enabledForBranch('lead_stages_v3', $branch->id) ? $this->v3StageForSheetStatus($rawRemoteStatus) : null;
                     if ($lead !== null && $v3Stage !== null) {
                         if ($v3Stage === 'gugur') {
                             if ($lead->resolveStageV3() !== 'gugur') {

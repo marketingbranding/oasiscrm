@@ -298,7 +298,7 @@ class SalesLeadService
     private function assertHistoricalImmutableFields(SalesLead $lead, array $data, User $actor): void
     {
         $policy = $this->salesLeadPolicy ?? app(SalesLeadPolicy::class);
-        if (! $policy->canEditHistoricalOwnedLead($actor, $lead)) {
+        if (! $actor->isAdminCabang() && ! $actor->hasPrimaryRole('branch_manager')) {
             return;
         }
 

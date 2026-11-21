@@ -8,14 +8,14 @@ Rujukan operator: `docs/product/PRD_V3_CUTOVER_RUNBOOK.md`
 | WP | Status | BR/D dan nama tes utama |
 |---|---|---|
 | WP-1.1 | Selesai | BR-06; `AppSettingResolverTest`, `AppSettingTest` |
-| WP-1.2 | Selesai | BR-50–BR-53; `FeatureFlagTest` |
+| WP-1.2 | Selesai | BR-50 sampai BR-53; `FeatureFlagTest` |
 | WP-1.3 | Selesai | D6, D21, D25; `PrdV3RoleAttributesTest`, `PrdV3RolePermissionParityTest`, `PrdV3RoleMigrationCommandTest` |
-| WP-1.4 | Selesai, cutover menunggu operator | BR-50–BR-53; organisasi/parity/scope authorization tests |
-| WP-1.5 | Selesai | BR-01–BR-09; working-hours, holiday, receipt, reminder tests |
-| WP-1.6 | Selesai, flag mati | BR-10–BR-16; `SalesLeadStageAuthorizationTest`, `SalesLeadStageV3CompatibilityTest` |
-| WP-1.7 | Selesai, flag mati | BR-20–BR-36; `ConsumerV2ProcessTest`, transaction status/backfill tests |
-| WP-1.8 | Selesai | §3/D15; glossary/navigation tests |
-| WP-1.9 | Selesai, restore operator | BR-70–BR-73/BR-81; `AiChatTest`, `DatabaseBackupTest` |
+| WP-1.4 | Selesai, cutover menunggu operator | BR-50 sampai BR-53; organisasi/parity/scope authorization tests |
+| WP-1.5 | Selesai | BR-01 sampai BR-09; working-hours, holiday, receipt, reminder tests |
+| WP-1.6 | Selesai, flag mati | BR-10 sampai BR-16; `SalesLeadStageAuthorizationTest`, `SalesLeadStageV3CompatibilityTest` |
+| WP-1.7 | Selesai, flag mati | BR-20 sampai BR-36; `ConsumerV2ProcessTest`, transaction status/backfill tests |
+| WP-1.8 | Selesai | Bagian 3/D15; glossary/navigation tests |
+| WP-1.9 | Selesai, restore operator | BR-70 sampai BR-73/BR-81; `AiChatTest`, `DatabaseBackupTest` |
 | WP-1.10 | Selesai implementasi, merge main menunggu review | D32; `PrdV3D32ConsumerInputTest`, `ConsumerMigrationReconciliationTest`, `PrdV3RolePermissionParityTest` |
 
 ## D32 dan permission
@@ -84,4 +84,4 @@ Urutan, output, go/no-go, rollback, jeda observasi, dan kondisi restore ada di r
 - Sebelum perubahan D32: `composer test` `2003 tests, 14163 assertions` pass.
 - Pint pass.
 - `git diff --check` pass pada perubahan teruji.
-- Build dan graphify pass pada closeout sebelumnya; jalankan ulang sebelum merge.
+- Build, graphify, dan `git diff --check` wajib dijalankan ulang pada commit final sebelum merge.

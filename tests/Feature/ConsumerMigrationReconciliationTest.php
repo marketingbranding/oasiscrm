@@ -40,6 +40,7 @@ class ConsumerMigrationReconciliationTest extends TestCase
     public function test_br_d32_reconciliation_permission_preserves_previous_manage_access(): void
     {
         $manageId = DB::table('permissions')->where('slug', 'consumer_progress.manage')->value('id');
+        $this->assertNotNull($manageId);
         $reconcileId = DB::table('permissions')->where('slug', 'consumer_migration.reconcile')->value('id');
 
         $this->assertNotNull($reconcileId);

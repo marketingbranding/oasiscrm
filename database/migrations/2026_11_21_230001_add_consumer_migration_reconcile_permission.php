@@ -12,7 +12,7 @@ return new class extends Migration
     {
         $permission = collect(PermissionCatalog::permissions())->firstWhere('slug', 'consumer_migration.reconcile');
         if ($permission === null) {
-            return;
+            throw new RuntimeException('Permission catalog missing [consumer_migration.reconcile].');
         }
 
         $permissionId = DB::table('permissions')->where('slug', $permission['slug'])->value('id');
@@ -27,7 +27,7 @@ return new class extends Migration
 
         $managePermissionId = DB::table('permissions')->where('slug', 'consumer_progress.manage')->value('id');
         if ($permissionId === null || $managePermissionId === null) {
-            return;
+            throw new RuntimeException('Required permissions missing for consumer migration reconciliation.');
         }
 
         $roleIds = DB::table('role_permission')

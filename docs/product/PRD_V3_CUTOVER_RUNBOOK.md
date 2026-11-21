@@ -91,7 +91,8 @@ Mundur: jangan aktifkan mode graf kanonis atau pemantauan berjenjang.
 
 ```bash
 git switch main
-git merge --no-ff prd-v3/fase-1-fondasi -m "merge: rilis fondasi Fase 1 PRD v3"
+git fetch origin
+git merge --no-ff origin/prd-v3/wp-1.10-fase1-closeout -m "merge: rilis fondasi Fase 1 PRD v3"
 git push origin main
 ```
 
@@ -169,7 +170,7 @@ Mundur: kembalikan dropdown Sheet; flag `lead_stages_v3` tetap mati.
 
 Aktifkan `lead_stages_v3` untuk satu cabang uji melalui Pengaturan.
 
-Go: lead baru → UTJ/Gugur, lock setelah terminal, dan sinkronisasi lulus.
+Go: lead baru ke UTJ/Gugur, lock setelah terminal, dan sinkronisasi lulus.
 No-go: downgrade, bypass lock, atau status asing.
 Mundur: matikan `lead_stages_v3`; jangan hapus data/riwayat.
 

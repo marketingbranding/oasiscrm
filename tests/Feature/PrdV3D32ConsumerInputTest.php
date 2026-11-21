@@ -14,6 +14,8 @@ class PrdV3D32ConsumerInputTest extends TestCase
 {
     use RefreshDatabase;
 
+    private User $sas;
+
     public function test_br32_sas_can_open_consumer_and_process_forms_in_own_branch(): void
     {
         [$branch, $project, $sas] = $this->context();
@@ -40,6 +42,15 @@ class PrdV3D32ConsumerInputTest extends TestCase
         [, , $sas] = $this->context();
 
         $this->actingAs($sas)->get(route('admin.marison-migrations.reconciliation.index'))->assertForbidden();
+    }
+
+    public function test_br32_sas_is_denied_unassigned_project_in_own_branch(): void
+    {
+        [$branch] = $this->context();
+        $foreignProject = LeadMaster::create(['branch_id' => $branch->id, 'project_name' => 'Proyek Tanpa Assignment', 'is_active' => true]);
+        $application = ConsumerApplication::factory()->create(['branch_id' => $branch->id, 'project_id' => $foreignProject->id]);
+
+        $this->actingAs($this->sas)->get(route('workspace-v2.transactions.process-form', [$application, 'psjb']))->assertForbidden();
     }
 
     public function test_br32_sas_is_denied_other_branch_for_direct_forms_and_json_input(): void
@@ -77,6 +88,8 @@ class PrdV3D32ConsumerInputTest extends TestCase
             'can_manage_members' => false,
         ]]);
         $sas->assignedProjects()->syncWithoutDetaching([$project->id => ['is_active' => true, 'is_primary' => true]]);
+
+        $this->sas = $sas;
 
         return [$branch, $project, $sas];
     }

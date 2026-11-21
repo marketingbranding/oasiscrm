@@ -134,6 +134,9 @@ class ConsumerKavlingLifecycleTest extends TestCase
             ['consumer_application_id' => $application->id, 'kavling_id' => $kavling->id, 'assigned_at' => now(), 'assignment_status' => 'active'],
             ['consumer_application_id' => $second->id, 'kavling_id' => $kavling->id, 'assigned_at' => now(), 'assignment_status' => 'sold'],
         ]);
+        $this->artisan('consumer:kavling-holder-audit')
+            ->assertFailed()
+            ->expectsOutputToContain((string) $kavling->id);
         $migration = require database_path('migrations/2026_11_21_164320_enforce_active_and_sold_kavling_assignment_uniqueness.php');
 
         $this->expectException(\RuntimeException::class);

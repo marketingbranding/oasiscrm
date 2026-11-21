@@ -130,6 +130,9 @@ class ConsumerNupService
             if ($existing !== null) {
                 return $existing;
             }
+            if ($locked->canonicalTransactionStatus() !== 'LANJUT') {
+                throw new DomainException('Transaksi harus berstatus LANJUT untuk dikembalikan ke NUP.');
+            }
             $before = $this->snapshot($locked);
             $this->kavlingLifecycle->releaseForNup($locked);
             $nup = ConsumerNup::create([
@@ -172,6 +175,7 @@ class ConsumerNupService
             if ($projectId === null) {
                 throw new DomainException('Proyek wajib dipilih saat NUP dilanjutkan menjadi konsumen.');
             }
+            $this->assertScope($actor, (int) $locked->branch_id, (int) $projectId);
             if (empty($data['kavling_id'])) {
                 throw new DomainException('Kavling wajib dipilih saat NUP dilanjutkan menjadi konsumen.');
             }

@@ -89,7 +89,7 @@ class ConsumerLifecycleHttpTest extends TestCase
         ]);
 
         $this->actingAs($actor)
-            ->postJson(route('consumer-applications.mundur', $application))
+            ->postJson(route('consumer-applications.mundur', $application), ['withdraw_reason' => 'Mundur atas permintaan konsumen'])
             ->assertForbidden();
     }
 

@@ -6,6 +6,7 @@ use App\Models\ConsumerApplication;
 use App\Models\ConsumerIssue;
 use App\Models\ConsumerNup;
 use App\Models\Kavling;
+use App\Models\LeadMaster;
 use App\Models\Role;
 use App\Models\SalesLead;
 use App\Models\User;
@@ -15,6 +16,7 @@ use App\Services\ConsumerKavlingLifecycleService;
 use App\Services\ConsumerNupService;
 use App\Services\ConsumerOperationalService;
 use App\Services\ConsumerProcessService;
+use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -117,6 +119,56 @@ class ConsumerV2ProcessTest extends TestCase
 
         $this->assertDatabaseHas('consumer_nups', ['id' => $nup->id, 'status' => 'waiting', 'converted_application_id' => null]);
         $this->assertDatabaseCount('consumer_applications', 2);
+    }
+
+    public function test_br22_nup_conversion_rejects_selected_project_outside_actor_scope(): void
+    {
+        $application = ConsumerApplication::factory()->create();
+        $foreignProject = LeadMaster::create([
+            'branch_id' => $application->branch_id,
+            'project_name' => 'Proyek Di Luar Scope',
+            'is_active' => true,
+        ]);
+        $actor = User::factory()->create([
+            'role_id' => Role::query()->where('slug', 'staff')->value('id'),
+            'branch_id' => $application->branch_id,
+            'password_changed_at' => now(),
+        ]);
+        $actor->assignedProjects()->attach($application->project_id, ['is_active' => true, 'is_primary' => true]);
+        $nup = ConsumerNup::factory()->create(['branch_id' => $application->branch_id, 'project_id' => $application->project_id]);
+        $kavling = Kavling::create(['project_id' => $foreignProject->id, 'kavling_code' => 'N-03', 'name' => 'N-03']);
+
+        $this->expectException(AuthorizationException::class);
+        app(ConsumerNupService::class)->convert($nup, ['project_id' => $foreignProject->id, 'kavling_id' => $kavling->id], $actor);
+
+        $this->assertDatabaseHas('consumer_nups', ['id' => $nup->id, 'status' => 'waiting', 'converted_application_id' => null]);
+        $this->assertDatabaseCount('consumer_applications', 1);
+    }
+
+    public function test_br21_return_to_nup_rejects_non_lanjut_transaction_without_mutation(): void
+    {
+        foreach (['MUNDUR', 'DITUTUP', 'REPLACED'] as $status) {
+            $application = ConsumerApplication::factory()->create(['transaction_status' => $status]);
+            $actor = $this->superadmin($application);
+            $kavling = Kavling::create([
+                'project_id' => $application->project_id,
+                'kavling_code' => 'R-'.$status,
+                'name' => 'R-'.$status,
+            ]);
+            app(ConsumerKavlingLifecycleService::class)->assign($application, $kavling);
+            $issue = ConsumerIssue::factory()->create(['consumer_application_id' => $application->id]);
+
+            try {
+                app(ConsumerNupService::class)->returnFromTransaction($application, $issue, ['nup_number' => 'NUP-'.$status], $actor);
+                $this->fail('Transaksi non-LANJUT seharusnya ditolak.');
+            } catch (\DomainException $exception) {
+                $this->assertSame('Transaksi harus berstatus LANJUT untuk dikembalikan ke NUP.', $exception->getMessage());
+            }
+
+            $this->assertDatabaseHas('consumer_applications', ['id' => $application->id, 'transaction_status' => $status, 'kavling_id' => $kavling->id]);
+            $this->assertDatabaseHas('consumer_kavling_assignments', ['consumer_application_id' => $application->id, 'assignment_status' => 'active']);
+            $this->assertDatabaseMissing('consumer_nups', ['source_application_id' => $application->id]);
+        }
     }
 
     public function test_br21_return_to_nup_releases_kavling_closes_transaction_and_links_issue(): void

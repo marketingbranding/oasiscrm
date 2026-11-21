@@ -12,6 +12,7 @@ use App\Models\SalesLeadLifecycleReconciliationItem;
 use App\Models\SalesLeadLifecycleSyncStatus;
 use App\Models\SalesLeadStatusHistory;
 use App\Models\User;
+use App\Support\FeatureFlag;
 use App\ValueObjects\SalesLeadSpreadsheetWriteResult;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
@@ -520,7 +521,9 @@ class SalesLeadBridgeService
             'no_hp' => $lead->phone,
             'proyek' => $lead->project?->sheet_project_name ?: $lead->project?->project_name,
             'sales_pic' => $lead->sales?->name,
-            'status_lead' => $this->effectiveStatus($lead)->spreadsheetValue(),
+            'status_lead' => FeatureFlag::enabled('lead_stages_v3')
+                ? $this->contracts->statusForLead($lead)
+                : $this->effectiveStatus($lead)->spreadsheetValue(),
             'keterangan' => $lead->notes,
         ]);
     }

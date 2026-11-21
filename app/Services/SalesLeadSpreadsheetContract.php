@@ -287,7 +287,10 @@ class SalesLeadSpreadsheetContract
                     $expected['values'],
                 );
                 sort($expectedValues);
-                if ($actualValues !== $expectedValues) {
+                $legacyStatusValues = ['akad', 'cek lokasi', 'cek_slik', 'diskusi', 'jadi freelance', 'no respon', 'tatap muka', 'tidak lolos bi checking', 'utj'];
+                $isCompatibleLegacyStatus = $header === 'status_lead'
+                    && $actualValues === $legacyStatusValues;
+                if ($actualValues !== $expectedValues && ! $isCompatibleLegacyStatus) {
                     throw SalesLeadSpreadsheetContractException::validationInvalid($definition->sheetName, $header);
                 }
             }

@@ -302,6 +302,7 @@ Route::middleware(['auth', 'active', 'verified', 'password.changed', 'operationa
         Route::get('/nups/create', [ConsumerNupController::class, 'create'])->middleware('permission:consumer_progress.view')->name('consumer-nups.create');
         Route::post('/nups', [ConsumerNupController::class, 'store'])->middleware('not.impersonating')->name('consumer-nups.store');
         Route::post('/nups/{consumerNup}/convert', [ConsumerNupController::class, 'convert'])->middleware('not.impersonating')->name('consumer-nups.convert');
+        Route::post('/konsumen-progress/applications/{consumerApplication}/kembali-ke-nup', [ConsumerNupController::class, 'returnToNup'])->middleware('not.impersonating')->name('consumer-nups.return');
         Route::get('/consumer-process/selesai', [ConsumerProcessController::class, 'selesai'])->middleware('permission:consumer_progress.view')->name('consumer-process.selesai');
         Route::get('/consumer-process/{process}', [ConsumerProcessController::class, 'index'])->middleware('permission:consumer_progress.view')->name('consumer-process.index');
         Route::post('/consumer-process/applications/{consumerApplication}/slik', [ConsumerProcessController::class, 'slik'])->middleware('not.impersonating')->name('consumer-process.slik');

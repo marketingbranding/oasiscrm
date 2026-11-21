@@ -22,6 +22,15 @@ class ConsumerNupRequest extends FormRequest
      */
     public function rules(): array
     {
+        if ($this->route()?->getName() === 'consumer-nups.return') {
+            return [
+                'issue_id' => ['required', 'integer', 'exists:consumer_issues,id'],
+                'nup_number' => ['required', 'string', 'max:80'],
+                'registered_at' => ['nullable', 'date'],
+                'reason' => ['nullable', 'string', 'max:5000'],
+            ];
+        }
+
         if ($this->route()?->getName() === 'consumer-nups.convert') {
             return ['project_id' => ['nullable', 'integer', 'exists:lead_master,id'], 'sales_user_id' => ['nullable', 'integer', 'exists:users,id'], 'kavling_id' => ['required', 'integer', 'exists:kavlings,id'], 'payment_method' => ['nullable', 'in:kpr,cash,cash_bertahap,other'], 'notes' => ['nullable', 'string', 'max:5000']];
         }

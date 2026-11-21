@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\ConsumerApplication;
+use App\Models\ConsumerIssue;
 use App\Models\ConsumerNup;
 use App\Models\Kavling;
 use App\Models\Role;
@@ -100,6 +101,23 @@ class ConsumerV2ProcessTest extends TestCase
         $this->assertSame((string) $lead->id, $nup->source_id);
         $this->assertNull($nup->converted_application_id);
         $this->assertNull($nup->source_application_id);
+    }
+
+    public function test_br21_return_to_nup_releases_kavling_closes_transaction_and_links_issue(): void
+    {
+        $application = ConsumerApplication::factory()->create();
+        $actor = $this->superadmin($application);
+        $kavling = Kavling::create(['project_id' => $application->project_id, 'kavling_code' => 'R-01', 'name' => 'R-01']);
+        app(ConsumerKavlingLifecycleService::class)->assign($application, $kavling);
+        $issue = ConsumerIssue::factory()->create(['consumer_application_id' => $application->id]);
+
+        $nup = app(ConsumerNupService::class)->returnFromTransaction($application, $issue, ['nup_number' => 'NUP-RETURN'], $actor);
+
+        $this->assertSame('returned', $nup->entry_type);
+        $this->assertSame($application->id, $nup->source_application_id);
+        $this->assertSame($issue->id, $nup->issue_id);
+        $this->assertDatabaseHas('consumer_applications', ['id' => $application->id, 'transaction_status' => 'DITUTUP', 'closed_by_event' => 'KEMBALI_KE_NUP']);
+        $this->assertDatabaseHas('consumer_kavling_assignments', ['consumer_application_id' => $application->id, 'release_reason' => 'kembali_ke_nup']);
     }
 
     public function test_br20_existing_nup_without_provenance_reads_as_legacy(): void

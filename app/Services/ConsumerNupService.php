@@ -4,10 +4,13 @@ namespace App\Services;
 
 use App\Models\ActivityLog;
 use App\Models\ConsumerApplication;
+use App\Models\ConsumerIssue;
 use App\Models\ConsumerNup;
 use App\Models\Kavling;
+use App\Models\LeadMaster;
 use App\Models\SalesLead;
 use App\Models\User;
+use App\Support\FeatureFlag;
 use DomainException;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Database\Eloquent\Builder;
@@ -111,6 +114,48 @@ class ConsumerNupService
         });
     }
 
+    public function returnFromTransaction(ConsumerApplication $application, ConsumerIssue $issue, array $data, User $actor): ConsumerNup
+    {
+        $this->assertScope($actor, (int) $application->branch_id, $application->project_id === null ? null : (int) $application->project_id);
+        if ((int) $issue->consumer_application_id !== (int) $application->id) {
+            throw new DomainException('Kendala harus berasal dari transaksi yang dikembalikan ke NUP.');
+        }
+        if (blank($data['reason'] ?? null) && blank($issue->description)) {
+            throw new DomainException('Alasan Kembali ke NUP wajib dicatat.');
+        }
+
+        return DB::transaction(function () use ($application, $issue, $data, $actor): ConsumerNup {
+            $locked = ConsumerApplication::query()->lockForUpdate()->findOrFail($application->id);
+            $existing = ConsumerNup::query()->where('source_application_id', $locked->id)->lockForUpdate()->first();
+            if ($existing !== null) {
+                return $existing;
+            }
+            $before = $this->snapshot($locked);
+            $this->kavlingLifecycle->releaseForNup($locked);
+            $nup = ConsumerNup::create([
+                'customer_id' => $locked->customer_id,
+                'branch_id' => $locked->branch_id,
+                'project_id' => $locked->project_id,
+                'nup_number' => $data['nup_number'],
+                'registered_at' => $data['registered_at'] ?? today()->toDateString(),
+                'status' => 'waiting',
+                'entry_type' => 'returned',
+                'source' => 'transaction',
+                'source_id' => $locked->id_transaksi,
+                'source_application_id' => $locked->id,
+                'issue_id' => $issue->id,
+                'notes' => $data['reason'] ?? $issue->description,
+            ]);
+            $locked->update(['transaction_status' => 'DITUTUP', 'closed_by_event' => 'KEMBALI_KE_NUP']);
+            if (FeatureFlag::enabled('transaction_events_v3')) {
+                app(ConsumerOperationalService::class)->appendTransactionEvent($locked, 'KEMBALI_KE_NUP', $actor, 'manual', $nup->notes, ['nup_id' => $nup->id, 'issue_id' => $issue->id]);
+            }
+            $this->audit($actor, $locked, $before, $this->snapshot($locked->fresh()), $nup);
+
+            return $nup->fresh(['customer', 'sourceApplication', 'issue']);
+        });
+    }
+
     public function convert(ConsumerNup $nup, array $data, User $actor): ConsumerApplication
     {
         $this->assertScope($actor, (int) $nup->branch_id, $nup->project_id === null ? null : (int) $nup->project_id);
@@ -129,6 +174,10 @@ class ConsumerNupService
             }
             if (empty($data['kavling_id'])) {
                 throw new DomainException('Kavling wajib dipilih saat NUP dilanjutkan menjadi konsumen.');
+            }
+            $project = LeadMaster::query()->whereKey($projectId)->where('branch_id', $locked->branch_id)->where('is_active', true)->first();
+            if ($project === null) {
+                throw new DomainException('Proyek NUP tidak valid untuk cabang NUP.');
             }
             $kavling = Kavling::query()->whereKey($data['kavling_id'])->firstOrFail();
             if ((int) $kavling->project_id !== (int) $projectId) {
@@ -172,6 +221,23 @@ class ConsumerNupService
 
             return $application;
         });
+    }
+
+    private function snapshot(ConsumerApplication $application): array
+    {
+        return collect($application->getAttributes())->all();
+    }
+
+    private function audit(User $actor, ConsumerApplication $application, array $before, array $after, ConsumerNup $nup): void
+    {
+        ActivityLog::create([
+            'causer_id' => $actor->id,
+            'subject_type' => ConsumerApplication::class,
+            'subject_id' => $application->id,
+            'event' => 'consumer_returned_to_nup',
+            'description' => 'Transaksi dikembalikan ke NUP.',
+            'properties' => ['action' => 'kembali_ke_nup', 'before' => $before, 'after' => $after, 'nup_id' => $nup->id],
+        ]);
     }
 
     private function assertScope(User $actor, int $branchId, ?int $projectId): void

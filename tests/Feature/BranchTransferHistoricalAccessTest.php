@@ -153,7 +153,7 @@ class BranchTransferHistoricalAccessTest extends TestCase
         foreach (['admin', 'branch_manager'] as $role) {
             $operator = $this->user($role, $oldBranch);
 
-            $this->assertTrue(app(SalesLeadPolicy::class)->update($operator, $lead), $role);
+            $this->assertFalse(app(SalesLeadPolicy::class)->update($operator, $lead), $role);
         }
 
         $this->assertSame($sales->id, $lead->fresh()->sales_user_id);
@@ -166,16 +166,7 @@ class BranchTransferHistoricalAccessTest extends TestCase
 
         foreach (['admin', 'branch_manager'] as $role) {
             $operator = $this->user($role, $oldBranch);
-            $response = $this->actingAs($operator)->get(route('sales-leads.edit', $lead));
-            $response->assertSee($sales->name)
-                ->assertSee('id="edit-lead-branch"', false)
-                ->assertSee('id="edit-lead-project"', false)
-                ->assertSee('id="edit-lead-sales"', false)
-                ->assertSee('pemilik historis', false)
-                ->assertSee('lead historis, baca-saja', false)
-                ->assertSee('name="branch_id" value="'.$oldBranch->id.'"', false)
-                ->assertSee('name="project_id" value="'.$lead->project_id.'"', false)
-                ->assertSee('disabled', false);
+            $this->actingAs($operator)->get(route('sales-leads.edit', $lead))->assertForbidden();
 
             $this->actingAs($operator)->put(route('sales-leads.update', $lead), [
                 'branch_id' => $oldBranch->id,
@@ -190,11 +181,11 @@ class BranchTransferHistoricalAccessTest extends TestCase
                 'current_status' => 'no_response',
                 'operation_uuid' => (string) Str::uuid(),
                 'expected_updated_at' => app(OptimisticLockService::class)->token($lead),
-            ])->assertRedirect()->assertSessionHasNoErrors();
+            ])->assertForbidden();
 
             $lead->refresh();
             $this->assertSame($sales->id, $lead->sales_user_id);
-            $this->assertSame("Lead Historis Diperbarui {$role}", $lead->customer_name);
+            $this->assertSame('Konsumen Lama', $lead->customer_name);
         }
     }
 
@@ -208,11 +199,7 @@ class BranchTransferHistoricalAccessTest extends TestCase
         $sales->forceFill(['name' => 'Pemilik Historis Nonaktif', 'account_status' => AccountStatus::Inactive, 'is_active' => false])->saveQuietly();
         $operator = $this->user('admin', $oldBranch);
 
-        $this->actingAs($operator)->get(route('sales-leads.edit', $lead))
-            ->assertSee('Pemilik Historis Nonaktif')
-            ->assertSee('pemilik historis, nonaktif', false)
-            ->assertSee('name="sales_user_id" value="'.$sales->id.'"', false)
-            ->assertDontSee('Sales Tidak Aktif Lain');
+        $this->actingAs($operator)->get(route('sales-leads.edit', $lead))->assertForbidden();
     }
 
     public function test_historical_http_edit_rejects_reassignment_to_a_new_sales_owner(): void
@@ -236,7 +223,7 @@ class BranchTransferHistoricalAccessTest extends TestCase
             'current_status' => 'no_response',
             'operation_uuid' => (string) Str::uuid(),
             'expected_updated_at' => app(OptimisticLockService::class)->token($lead),
-        ])->assertSessionHasErrors('sales_user_id');
+        ])->assertForbidden();
 
         $this->assertDatabaseHas('sales_leads', [
             'id' => $lead->id,
@@ -255,7 +242,7 @@ class BranchTransferHistoricalAccessTest extends TestCase
         $payload['branch_id'] = $newBranch->id;
 
         $this->actingAs($operator)->put(route('sales-leads.update', $lead), $payload)
-            ->assertSessionHasErrors('branch_id');
+            ->assertForbidden();
 
         $this->assertDatabaseHas('sales_leads', [
             'id' => $lead->id,
@@ -282,7 +269,7 @@ class BranchTransferHistoricalAccessTest extends TestCase
         $payload['project_id'] = $newProject->id;
 
         $this->actingAs($operator)->put(route('sales-leads.update', $lead), $payload)
-            ->assertSessionHasErrors('project_id');
+            ->assertForbidden();
 
         $this->assertDatabaseHas('sales_leads', [
             'id' => $lead->id,
@@ -304,7 +291,7 @@ class BranchTransferHistoricalAccessTest extends TestCase
         $payload['current_status'] = 'discussion';
 
         $this->actingAs($operator)->put(route('sales-leads.update', $lead), $payload)
-            ->assertSessionHasErrors('current_status');
+            ->assertForbidden();
 
         $this->assertDatabaseHas('sales_leads', [
             'id' => $lead->id,

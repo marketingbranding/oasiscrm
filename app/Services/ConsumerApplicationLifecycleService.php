@@ -92,19 +92,21 @@ final class ConsumerApplicationLifecycleService
     {
         $this->authorize($actor, $application);
 
-        $before = $this->snapshot($application->fresh());
-        $result = $this->operational->update(
-            $application,
-            ['consumer_status' => 'Pindah Kavling', 'target_kavling_id' => $targetKavling->id],
-            $actor,
-            $this->kavlingLifecycle,
-        );
-        $this->operational->appendTransactionEvent($result, 'PINDAH_KAVLING', $actor, 'manual', 'Pindah kavling', [
-            'kavling_id' => $targetKavling->id,
-        ]);
-        $this->audit($actor, $result, $before, $this->snapshot($result->fresh()), 'consumer_kavling_moved', 'pindah_kavling');
+        return DB::transaction(function () use ($application, $targetKavling, $actor): ConsumerApplication {
+            $before = $this->snapshot($application->fresh());
+            $result = $this->operational->update(
+                $application,
+                ['consumer_status' => 'Pindah Kavling', 'target_kavling_id' => $targetKavling->id],
+                $actor,
+                $this->kavlingLifecycle,
+            );
+            $this->operational->appendTransactionEvent($result, 'PINDAH_KAVLING', $actor, 'manual', 'Pindah kavling', [
+                'kavling_id' => $targetKavling->id,
+            ]);
+            $this->audit($actor, $result, $before, $this->snapshot($result->fresh()), 'consumer_kavling_moved', 'pindah_kavling');
 
-        return $result;
+            return $result;
+        });
     }
 
     public function recordReady100(ConsumerApplication $application, array $data, User $actor): ConsumerStageEvent

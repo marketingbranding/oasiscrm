@@ -54,7 +54,7 @@
     }
     $canCreatePlanner = $canViewPlanner && $user->hasPermission('work_planner.create');
     if ($canCreatePlanner) {
-        $quickActions[] = ['label' => 'Tambah Agenda', 'url' => route('content-calendar.create', ['type' => 'agenda']), 'accent' => 'planner'];
+        $quickActions[] = ['label' => 'Tambah Kegiatan', 'url' => route('content-calendar.create', ['type' => 'agenda']), 'accent' => 'planner'];
     }
     if ($user->can('create', \App\Models\Expense::class)) {
         $quickActions[] = ['label' => 'Tambah Pengeluaran', 'url' => route('expenses.create'), 'accent' => 'expenses'];

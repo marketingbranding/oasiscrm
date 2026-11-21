@@ -185,7 +185,7 @@ class ContentCalendarController extends Controller
 
     public function create(Request $request)
     {
-        abort_unless($request->user()->hasPermission('work_planner.create'), 403, 'Akun ini tidak memiliki izin membuat item Work Planner.');
+        abort_unless($request->user()->hasPermission('work_planner.create'), 403, 'Akun ini tidak memiliki izin membuat item Tugas & Konten.');
 
         return view('crm.content-calendar.create', $this->formData(null, $request->get('type', 'task')));
     }
@@ -193,7 +193,7 @@ class ContentCalendarController extends Controller
     public function store(StoreContentItemRequest $request)
     {
         $user = Auth::user();
-        abort_unless($user->hasPermission('work_planner.create'), 403, 'Akun ini tidak memiliki izin membuat item Work Planner.');
+        abort_unless($user->hasPermission('work_planner.create'), 403, 'Akun ini tidak memiliki izin membuat item Tugas & Konten.');
         $data = $request->validated();
         $assigneeIds = Arr::pull($data, 'assigned_user_ids', []);
         if (($data['item_type'] ?? null) === 'content') {
@@ -265,7 +265,7 @@ class ContentCalendarController extends Controller
         $this->notifications->recordUpdated($contentItem, Auth::user(), route('content-calendar.edit', $contentItem));
 
         return redirect()->route('content-calendar.index', ['view' => $this->returnView($request)])
-            ->with('success', 'Item Work Planner berhasil diperbarui.');
+            ->with('success', 'Item Tugas & Konten berhasil diperbarui.');
     }
 
     public function export(Request $request)
@@ -335,7 +335,7 @@ class ContentCalendarController extends Controller
             $locked->delete();
         });
 
-        return back()->with('success', 'Item Work Planner berhasil dihapus.');
+        return back()->with('success', 'Item Tugas & Konten berhasil dihapus.');
     }
 
     public function bulkUpdate(Request $request)

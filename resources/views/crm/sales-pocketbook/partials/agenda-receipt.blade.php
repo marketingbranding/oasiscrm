@@ -90,7 +90,7 @@
     @elseif($isFreeDay)
         <span id="agenda-free-day-title" class="sr-only">Rencana hari libur</span>
     @else
-        <span id="agenda-workspace-title" class="sr-only">Agenda {{ $agendaDate->locale('id')->translatedFormat('l, d M Y') }}</span>
+        <span id="agenda-workspace-title" class="sr-only">Rencana Harian Sales {{ $agendaDate->locale('id')->translatedFormat('l, d M Y') }}</span>
     @endif
     @include('crm.sales-pocketbook.partials.agenda-week-navigation')
 
@@ -110,7 +110,7 @@
                  <div class="sales-submitted-meter"><strong>{{ $receiptSummary['target_minutes'] ? $receiptSummary['target_minutes'].' / '.$receiptSummary['target_minutes'].' menit' : ucfirst($freeDayLabel).' · '.$receiptSummary['normal_minutes'].' menit' }}</strong><span>{{ $isFreeDay ? 'Tersimpan langsung' : 'Terkirim ke Koordinator' }}</span>@if($isFreeDay)<b class="sales-weekend-inline-stamp">{{ strtoupper($freeDayLabel) }}</b>@endif</div>
                 <p class="sales-submitted-note">{{ $isFreeDay ? ucfirst($freeDayLabel).' bebas jam dan menit.' : 'Waktu, judul, kategori, dan lokasi agenda terjadwal tidak dapat diubah.' }}</p>
                 @if($receiptSummary['target_minutes'])<div class="sales-submitted-meter-track"><span style="width:100%"></span></div>@endif
-                <div class="sales-submitted-count">{{ $receiptSummary['completed_count'] }} dari {{ $receiptSummary['agenda_count'] }} agenda selesai</div>
+                <div class="sales-submitted-count">{{ $receiptSummary['completed_count'] }} dari {{ $receiptSummary['agenda_count'] }} kegiatan selesai</div>
                 <ol class="sales-submitted-list">
                     @php $breakRendered = false; @endphp
                     @foreach($agendas as $agenda)
@@ -129,10 +129,10 @@
                              $breakAgenda = $isBreakAgenda($agenda);
                              $agendaLabels = [];
                              if ($agenda->is_outside_schedule) {
-                                 $agendaLabels[] = 'Agenda tambahan · di luar target';
+                                 $agendaLabels[] = 'Kegiatan tambahan · di luar target';
                              }
                              if ($breakAgenda) {
-                                 $agendaLabels[] = 'Agenda jam istirahat';
+                                 $agendaLabels[] = 'Kegiatan jam istirahat';
                              }
                              if ($agendaLabels === []) {
                                  $agendaLabels[] = $agenda->sales_activity_category ?: 'Lainnya';
@@ -159,12 +159,12 @@
                 @endif
             </section>
              @if($hasDraftAgendas)
-                 <div class="sales-reference-empty" data-tour-target="agenda-row" role="status"><div class="sales-reference-empty-mark" aria-hidden="true">✓</div><strong>Draft agenda tersimpan</strong><span>{{ $agendas->total() }} agenda belum dikirim ke Koordinator.</span></div>
+                 <div class="sales-reference-empty" data-tour-target="agenda-row" role="status"><div class="sales-reference-empty-mark" aria-hidden="true">✓</div><strong>Draft rencana tersimpan</strong><span>{{ $agendas->total() }} kegiatan belum dikirim ke Koordinator.</span></div>
              @else
                  <div class="sales-reference-empty" data-tour-target="agenda-row" role="status"><div class="sales-reference-empty-mark" aria-hidden="true">＋</div><strong>{{ $isFreeDay ? 'Belum ada rencana '.$freeDayLabel : 'Belum ada rencana hari ini' }}</strong><span>{{ $isFreeDay ? 'Tambahkan aktivitas bila ada rencana usaha ekstra.' : 'Tulis rencana kerja 480 menit di struk, lalu sobek dan kirim ke Koordinator.' }}</span><span class="sr-only">Belum ada agenda</span></div>
              @endif
             @if(! $isFreeDay && $incompletePreviousAgendas->isNotEmpty() && $isToday)
-                <div class="sales-receipt-warning" role="status"><strong>{{ $incompletePreviousAgendas->count() }} rencana kemarin belum lengkap</strong><span>{{ $incompletePreviousAgendas->count() }} agenda belum ada bukti foto · lengkapi sekarang</span></div>
+                <div class="sales-receipt-warning" role="status"><strong>{{ $incompletePreviousAgendas->count() }} rencana kemarin belum lengkap</strong><span>{{ $incompletePreviousAgendas->count() }} kegiatan belum ada bukti foto · lengkapi sekarang</span></div>
             @endif
             @if($project)
                  <div id="agenda-input" class="sales-receipt-add-panel sales-reference-bottom-action" data-tour-target="add-plan-action">

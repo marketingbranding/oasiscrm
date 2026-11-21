@@ -33,7 +33,7 @@ class CoordinatorAgendaTeamTest extends TestCase
             'coordinator-agenda-table',
             'coordinator-agenda-mobile-cards',
             'coordinator-agenda-card',
-            'Agenda perlu diperbarui',
+            'Kegiatan perlu diperbarui',
             'coordinator-agenda-updates-count',
             'Sales PIC',
             'Lihat detail agenda',

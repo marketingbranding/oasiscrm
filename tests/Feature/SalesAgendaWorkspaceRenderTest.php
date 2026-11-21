@@ -195,7 +195,7 @@ class SalesAgendaWorkspaceRenderTest extends TestCase
             ->assertSee('aria-labelledby="agenda-workspace-title"', false)
             ->assertSee('id="agenda-workspace-title"', false)
             ->assertSee('Buku Saku Saya')
-            ->assertSee('Agenda')
+            ->assertSee('Kegiatan')
             ->assertSee('Lead Saya')
             ->assertSee('0 / 480 menit')
             ->assertDontSee('data-agenda-workflow-status="empty"', false)
@@ -222,7 +222,7 @@ class SalesAgendaWorkspaceRenderTest extends TestCase
         $this->actingAs($sales)
             ->get(route('sales-agendas.index', ['work_date' => $date->toDateString()]))
             ->assertOk()
-            ->assertSeeText('Draft agenda tersimpan')
+            ->assertSeeText('Draft rencana tersimpan')
             ->assertSeeText('Lanjutkan Draft')
             ->assertDontSeeText('Belum ada rencana hari ini');
 
@@ -926,7 +926,7 @@ class SalesAgendaWorkspaceRenderTest extends TestCase
         $this->actingAs($sales)
             ->get(route('sales-agendas.index', ['work_date' => '2026-10-30']))
             ->assertOk()
-            ->assertSee('Agenda jam istirahat')
+            ->assertSee('Kegiatan jam istirahat')
             ->assertSee('is-break', false);
     }
 
@@ -946,7 +946,7 @@ class SalesAgendaWorkspaceRenderTest extends TestCase
         $this->actingAs($sales)
             ->get(route('sales-agendas.index', ['work_date' => '2026-10-30']))
             ->assertOk()
-            ->assertSee('Agenda tambahan · di luar target · Agenda jam istirahat')
+            ->assertSee('Kegiatan tambahan · di luar target · Kegiatan jam istirahat')
             ->assertSee('sales-submitted-row is-break', false);
     }
 
@@ -1037,7 +1037,7 @@ class SalesAgendaWorkspaceRenderTest extends TestCase
             ->assertOk()
             ->assertSee('sales-receipt-workspace ', false)
             ->assertDontSee('is-receipt-mode', false)
-            ->assertSeeText('Draft agenda tersimpan')
+            ->assertSeeText('Draft rencana tersimpan')
             ->assertDontSee('<div class="sales-submitted-plan"', false)
             ->assertDontSee('Terkirim ke Koordinator')
             ->getContent();
@@ -1090,7 +1090,7 @@ class SalesAgendaWorkspaceRenderTest extends TestCase
             ->assertSee('sales-submitted-plan', false)
             ->assertSee('Terkirim ke Koordinator')
             ->assertSee('Waktu, judul, kategori, dan lokasi agenda terjadwal tidak dapat diubah.')
-            ->assertSee('Agenda tambahan · di luar target')
+            ->assertSee('Kegiatan tambahan · di luar target')
             ->assertSee('data-agenda-submitted="true"', false)
             ->assertSee($extra->title)
             ->assertDontSee('Sobek &amp; kirim ke Koordinator', false);

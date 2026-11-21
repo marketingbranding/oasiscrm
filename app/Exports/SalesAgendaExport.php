@@ -15,7 +15,7 @@ class SalesAgendaExport
     use ExcelStyle;
 
     private const HEADERS = [
-        'Tanggal Agenda', 'Kategori Aktivitas', 'Sales', 'Cabang', 'Proyek', 'Agenda', 'Lokasi', 'Hasil', 'Status',
+        'Tanggal Rencana', 'Kategori Aktivitas', 'Sales', 'Cabang', 'Proyek', 'Kegiatan', 'Lokasi', 'Hasil', 'Status',
     ];
 
     public static function toBrowser(Collection $agendas, string $filename): BinaryFileResponse

@@ -33,7 +33,7 @@ class SalesPocketbookExport
 
     private const AGENDA_HEADERS = [
         'Tanggal', 'Sales', 'Cabang', 'Proyek', 'Jam Mulai', 'Jam Selesai', 'Durasi',
-        'Kategori', 'Agenda', 'Lokasi', 'Hasil', 'Status',
+        'Kategori', 'Kegiatan', 'Lokasi', 'Hasil', 'Status',
     ];
 
     public static function toBrowser(Collection $weeklyRows, Collection $leads, Collection $agendas, array $period, string $filename): BinaryFileResponse
@@ -203,7 +203,7 @@ class SalesPocketbookExport
                     null,
                     null,
                     $agenda['total_minutes'] ?? 0,
-                    'Ringkasan agenda',
+                    'Ringkasan kegiatan',
                     ($agenda['activity_count'] ?? 0).' kegiatan',
                     null,
                     ($agenda['late_activity_count'] ?? 0).' terlambat',

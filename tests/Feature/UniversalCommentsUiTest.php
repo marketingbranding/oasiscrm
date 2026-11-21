@@ -21,7 +21,7 @@ class UniversalCommentsUiTest extends TestCase
         $response = $this->actingAs($user)->get(route('comments.thread', ['alias' => 'planner-item', 'id' => $item->id]));
 
         $response->assertOk()
-            ->assertSee('Diskusi Work Planner')
+            ->assertSee('Diskusi Tugas & Konten')
             ->assertSee('data-comments-panel', false)
             ->assertSee('data-commentable-type="planner-item"', false)
             ->assertSee('1 komentar')

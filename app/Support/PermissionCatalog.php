@@ -88,7 +88,7 @@ class PermissionCatalog
             ['name' => 'Mengelola Daily Plan tim', 'slug' => 'sales_daily_plans.manage_team', 'description' => 'Mengubah planning Daily Plan TEAM yang sudah dikirim.', 'group_name' => 'Daily Plan Sales'],
             ['name' => 'Mengirim Daily Plan sendiri', 'slug' => 'sales_daily_plans.submit_own', 'description' => 'Mengirim Daily Plan sendiri setelah total efektif tepat 420 menit.', 'group_name' => 'Daily Plan Sales'],
             ['name' => 'Mengatur target Lead Sales', 'slug' => 'sales_pocketbook.targets_manage', 'description' => 'Menetapkan target Lead bulanan per Sales.', 'group_name' => 'Buku Saku Sales'],
-            ['name' => 'Membuat Tugas & Konten', 'slug' => 'work_planner.create', 'description' => 'Membuat item Work Planner.', 'group_name' => 'Work Planner'],
+            ['name' => 'Membuat Tugas & Konten', 'slug' => 'work_planner.create', 'description' => 'Membuat item Tugas & Konten.', 'group_name' => 'Tugas & Konten'],
             ['name' => 'Memperbarui Tugas & Konten', 'slug' => 'work_planner.update', 'description' => 'Memperbarui item Tugas & Konten sesuai lingkup akses.', 'group_name' => 'Tugas & Konten'],
             ['name' => 'Menetapkan Tugas & Konten', 'slug' => 'work_planner.assign', 'description' => 'Menetapkan item Tugas & Konten kepada pengguna lain.', 'group_name' => 'Tugas & Konten'],
             ['name' => 'Mengekspor Tugas & Konten', 'slug' => 'work_planner.export', 'description' => 'Mengekspor data Tugas & Konten sesuai lingkup akses.', 'group_name' => 'Tugas & Konten'],

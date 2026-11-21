@@ -15,7 +15,7 @@ class SupervisorSalesAgendaExport
     use ExcelStyle;
 
     private const HEADERS = [
-        'Tanggal Agenda', 'Koordinator', 'Sales', 'Cabang', 'Proyek', 'Kategori Aktivitas', 'Agenda', 'Lokasi', 'Hasil', 'Status', 'Ringkasan Aktivitas',
+        'Tanggal Rencana', 'Koordinator', 'Sales', 'Cabang', 'Proyek', 'Kategori Aktivitas', 'Kegiatan', 'Lokasi', 'Hasil', 'Status', 'Ringkasan Aktivitas',
     ];
 
     public static function toBrowser(Collection $agendas, array $coordinatorNamesBySalesId, string $filename): BinaryFileResponse
@@ -42,7 +42,7 @@ class SupervisorSalesAgendaExport
                     null,
                     $agenda['project_name'] ?? null,
                     null,
-                    'Ringkasan agenda',
+                    'Ringkasan kegiatan',
                     null,
                     null,
                     $agenda['submitted'] ? 'Terkirim' : 'Belum Terkirim',

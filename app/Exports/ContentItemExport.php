@@ -20,13 +20,13 @@ class ContentItemExport
         return [
             'Tipe', 'Visibilitas', 'Judul', 'Detail', 'Platform', 'Cabang', 'Proyek',
             'Mulai', 'Jam Mulai', 'Deadline/Publikasi', 'Jam Selesai', 'Prioritas', 'PIC',
-            'Status', 'Jenis Agenda', 'Lokasi', 'Format Konten', 'Tujuan Konten', 'Catatan', 'Dibuat Oleh',
+            'Status', 'Jenis Kegiatan', 'Lokasi', 'Format Konten', 'Tujuan Konten', 'Catatan', 'Dibuat Oleh',
         ];
     }
 
     private static function templateHeaders(): array
     {
-        return ['Cabang', 'Tipe', 'Visibilitas', 'Judul', 'Detail', 'Platform', 'Proyek', 'Mulai', 'Jam Mulai', 'Deadline/Publikasi', 'Jam Selesai', 'Prioritas', 'PIC Eksternal', 'Status', 'Jenis Agenda', 'Lokasi', 'Format Konten', 'Tujuan Konten', 'Catatan'];
+        return ['Cabang', 'Tipe', 'Visibilitas', 'Judul', 'Detail', 'Platform', 'Proyek', 'Mulai', 'Jam Mulai', 'Deadline/Publikasi', 'Jam Selesai', 'Prioritas', 'PIC Eksternal', 'Status', 'Jenis Kegiatan', 'Lokasi', 'Format Konten', 'Tujuan Konten', 'Catatan'];
     }
 
     private static function exportWidths(): array

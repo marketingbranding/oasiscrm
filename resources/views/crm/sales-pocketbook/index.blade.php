@@ -155,7 +155,7 @@
     @endif
 
     <nav class="sales-pocketbook-tabs crm-horizontal-tabs" data-horizontal-tabs aria-label="Tampilan Buku Saku Sales">
-        @foreach(['leads' => 'Lead', 'agenda' => 'Agenda', 'report' => 'Laporan'] as $key => $label)
+        @foreach(['leads' => 'Lead', 'agenda' => 'Rencana Harian Sales', 'report' => 'Laporan'] as $key => $label)
             <a href="{{ $tabUrl($key) }}"
                @if($tab === $key) aria-current="page" @endif
                class="sales-pocketbook-tab {{ $tab === $key ? 'active' : '' }}">{{ $label }}</a>
@@ -168,12 +168,12 @@
     <x-crm.toolbar label="Filter agenda" class="sales-pocketbook-screen-section sales-agenda-toolbar">
         <div class="sales-agenda-filter-summary">
             <strong>Daftar kegiatan</strong>
-            <span>{{ $agendas->total() }} agenda ditemukan{{ $activeAgendaFilterCount ? ' dengan '.$activeAgendaFilterCount.' filter aktif' : ' pada minggu berjalan' }}</span>
+            <span>{{ $agendas->total() }} kegiatan ditemukan{{ $activeAgendaFilterCount ? ' dengan '.$activeAgendaFilterCount.' filter aktif' : ' pada minggu berjalan' }}</span>
         </div>
         @if($selectedBranch)<x-crm.filter-chip label="Cabang: {{ $selectedBranch->name }}" :remove-href="$agendaFilterUrl(['branch_id'])" remove-label="Hapus filter cabang" />@endif
         @if($selectedProject)<x-crm.filter-chip label="Proyek: {{ $selectedProject->project_name }}" :remove-href="$agendaFilterUrl(['project_id'])" remove-label="Hapus filter proyek" />@endif
         @if($selectedSales)<x-crm.filter-chip label="Sales: {{ $selectedSales->name }}" :remove-href="$agendaFilterUrl(['sales_user_id'])" remove-label="Hapus filter sales" />@endif
-        @if($completedAgendaDrilldown)<x-crm.filter-chip label="Drilldown: Agenda selesai" :remove-href="$agendaFilterUrl(['report_agenda_completed'])" remove-label="Hapus drilldown agenda selesai" />@endif
+        @if($completedAgendaDrilldown)<x-crm.filter-chip label="Drilldown: Kegiatan selesai" :remove-href="$agendaFilterUrl(['report_agenda_completed'])" remove-label="Hapus drilldown kegiatan selesai" />@endif
         @if($missingAgendaResultDrilldown)<x-crm.filter-chip label="Drilldown: Hasil belum lengkap" :remove-href="$agendaFilterUrl(['report_agenda_missing_result'])" remove-label="Hapus drilldown hasil belum lengkap" />@endif
         @if($hasExplicitAgendaPeriod)<x-crm.filter-chip label="Periode: {{ $reportPeriod['start']->format('d/m/Y') }} - {{ $reportPeriod['end']->format('d/m/Y') }}" :remove-href="$agendaFilterUrl(['period_type', 'week', 'date_from', 'date_to'])" remove-label="Kembali ke minggu berjalan" />@endif
         <x-slot:actions>
@@ -197,7 +197,7 @@
     </form>
 
     <section class="sales-pocketbook-screen-section sales-agenda-monitor">
-        <header class="sales-agenda-monitor-header"><h2>{{ $monitoring ? 'Monitoring Rencana Harian' : 'Rencana Harian Saya' }}</h2><span>{{ $agendas->total() }} agenda</span></header>
+        <header class="sales-agenda-monitor-header"><h2>{{ $monitoring ? 'Monitoring Rencana Harian' : 'Rencana Harian Saya' }}</h2><span>{{ $agendas->total() }} kegiatan</span></header>
         <div class="sales-agenda-list">
             @forelse($agendas as $agenda)
             @php
@@ -226,15 +226,15 @@
                     @if($agenda->status === 'done' && $agenda->completed_at)<div><dt>Selesai pada</dt><dd>{{ $agenda->completed_at->format('d/m/Y H:i') }}</dd></div>@endif
                 </dl>
                 @if($agenda->rescheduledFrom)
-                    <x-crm.alert variant="info" title="Agenda pengganti" class="sales-agenda-linkage">Dijadwalkan ulang dari agenda tanggal {{ $agenda->rescheduledFrom->scheduled_date?->format('d/m/Y') ?? 'yang tidak lagi tersedia' }}.</x-crm.alert>
+                    <x-crm.alert variant="info" title="Kegiatan pengganti" class="sales-agenda-linkage">Dijadwalkan ulang dari agenda tanggal {{ $agenda->rescheduledFrom->scheduled_date?->format('d/m/Y') ?? 'yang tidak lagi tersedia' }}.</x-crm.alert>
                 @endif
                 @if($agenda->notes)<div class="sales-agenda-notes"><strong>Catatan</strong><p class="whitespace-pre-line">{{ $agenda->notes }}</p></div>@endif
                 @if($agenda->activity_result)<div class="sales-agenda-result"><strong>Hasil Aktivitas</strong><p class="whitespace-pre-line">{{ $agenda->activity_result }}</p></div>@endif
                 @if($canManageAgenda && (!in_array($agenda->status, ['done', 'cancelled', 'rescheduled'], true) || $needsMissingResult))
                     <div class="sales-agenda-action-grid">
-                        <form method="POST" action="{{ route('sales-agendas.update', $agenda) }}" x-data="{ submitting: false }" @submit="submitting = true" class="sales-agenda-action-form">@csrf @method('PATCH')<input type="hidden" name="expected_updated_at" value="{{ app(\App\Services\OptimisticLockService::class)->token($agenda) }}"><x-crm.field label="Hasil Aktivitas" for="agenda-result-{{ $agenda->id }}" required><textarea id="agenda-result-{{ $agenda->id }}" class="sales-input" name="activity_result" rows="3" required></textarea></x-crm.field><x-crm.button type="submit" variant="primary" accent="sales" x-bind:disabled="submitting" x-bind:aria-busy="submitting"><span x-show="!submitting">Tandai Selesai</span><span x-show="submitting" x-cloak>Menyimpan hasil...</span></x-crm.button><span class="sr-only" aria-live="polite" x-text="submitting ? 'Hasil agenda sedang disimpan.' : ''"></span></form>
+                        <form method="POST" action="{{ route('sales-agendas.update', $agenda) }}" x-data="{ submitting: false }" @submit="submitting = true" class="sales-agenda-action-form">@csrf @method('PATCH')<input type="hidden" name="expected_updated_at" value="{{ app(\App\Services\OptimisticLockService::class)->token($agenda) }}"><x-crm.field label="Hasil Aktivitas" for="agenda-result-{{ $agenda->id }}" required><textarea id="agenda-result-{{ $agenda->id }}" class="sales-input" name="activity_result" rows="3" required></textarea></x-crm.field><x-crm.button type="submit" variant="primary" accent="sales" x-bind:disabled="submitting" x-bind:aria-busy="submitting"><span x-show="!submitting">Tandai Selesai</span><span x-show="submitting" x-cloak>Menyimpan hasil...</span></x-crm.button><span class="sr-only" aria-live="polite" x-text="submitting ? 'Hasil kegiatan sedang disimpan.' : ''"></span></form>
                         @unless($needsMissingResult)
-                        <form method="POST" action="{{ route('sales-agendas.reschedule', $agenda) }}" x-data="{ submitting: false }" @submit="submitting = true" class="sales-agenda-action-form">@csrf<input type="hidden" name="expected_updated_at" value="{{ app(\App\Services\OptimisticLockService::class)->token($agenda) }}"><x-crm.field label="Tanggal Baru" for="agenda-reschedule-date-{{ $agenda->id }}" required><x-crm.date-field id="agenda-reschedule-date-{{ $agenda->id }}" name="scheduled_date" required /></x-crm.field><div class="sales-agenda-time-grid"><x-crm.field label="Jam Mulai" for="agenda-reschedule-start-{{ $agenda->id }}" required><x-crm.time-field id="agenda-reschedule-start-{{ $agenda->id }}" name="start_time" required /></x-crm.field><x-crm.field label="Jam Selesai" for="agenda-reschedule-end-{{ $agenda->id }}" required><x-crm.time-field id="agenda-reschedule-end-{{ $agenda->id }}" name="end_time" required /></x-crm.field></div><x-crm.button type="submit" variant="secondary" x-bind:disabled="submitting" x-bind:aria-busy="submitting"><span x-show="!submitting">Jadwalkan Ulang</span><span x-show="submitting" x-cloak>Menjadwalkan...</span></x-crm.button><span class="sr-only" aria-live="polite" x-text="submitting ? 'Agenda sedang dijadwalkan ulang.' : ''"></span></form>
+                        <form method="POST" action="{{ route('sales-agendas.reschedule', $agenda) }}" x-data="{ submitting: false }" @submit="submitting = true" class="sales-agenda-action-form">@csrf<input type="hidden" name="expected_updated_at" value="{{ app(\App\Services\OptimisticLockService::class)->token($agenda) }}"><x-crm.field label="Tanggal Baru" for="agenda-reschedule-date-{{ $agenda->id }}" required><x-crm.date-field id="agenda-reschedule-date-{{ $agenda->id }}" name="scheduled_date" required /></x-crm.field><div class="sales-agenda-time-grid"><x-crm.field label="Jam Mulai" for="agenda-reschedule-start-{{ $agenda->id }}" required><x-crm.time-field id="agenda-reschedule-start-{{ $agenda->id }}" name="start_time" required /></x-crm.field><x-crm.field label="Jam Selesai" for="agenda-reschedule-end-{{ $agenda->id }}" required><x-crm.time-field id="agenda-reschedule-end-{{ $agenda->id }}" name="end_time" required /></x-crm.field></div><x-crm.button type="submit" variant="secondary" x-bind:disabled="submitting" x-bind:aria-busy="submitting"><span x-show="!submitting">Jadwalkan Ulang</span><span x-show="submitting" x-cloak>Menjadwalkan...</span></x-crm.button><span class="sr-only" aria-live="polite" x-text="submitting ? 'Kegiatan sedang dijadwalkan ulang.' : ''"></span></form>
                         @endunless
                     </div>
                 @endif
@@ -242,8 +242,8 @@
             </article>
             @empty
                 <x-crm.empty-state
-                    :title="$missingAgendaResultDrilldown ? 'Semua hasil agenda sudah lengkap.' : ($hasAgendaFilters ? 'Tidak ada agenda yang cocok dengan filter.' : 'Belum ada agenda minggu ini.')"
-                    :description="$missingAgendaResultDrilldown ? 'Tidak ada agenda selesai yang masih membutuhkan hasil aktivitas.' : ($hasAgendaFilters ? 'Ubah atau hapus filter untuk melihat agenda lain dalam akses Anda.' : 'Agenda pada minggu berjalan akan muncul di daftar ini.')"
+                    :title="$missingAgendaResultDrilldown ? 'Semua hasil kegiatan sudah lengkap.' : ($hasAgendaFilters ? 'Tidak ada kegiatan yang cocok dengan filter.' : 'Belum ada kegiatan minggu ini.')"
+                    :description="$missingAgendaResultDrilldown ? 'Tidak ada kegiatan selesai yang masih membutuhkan hasil aktivitas.' : ($hasAgendaFilters ? 'Ubah atau hapus filter untuk melihat kegiatan lain dalam akses Anda.' : 'Kegiatan pada minggu berjalan akan muncul di daftar ini.')"
                 >
                     @if($hasAgendaFilters)
                         <x-slot:actions>

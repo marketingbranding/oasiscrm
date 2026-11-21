@@ -44,7 +44,7 @@ class SupervisorSalesPocketbookExportTest extends TestCase
         ));
 
         $this->assertSame([
-            'Tanggal Agenda', 'Koordinator', 'Sales', 'Cabang', 'Proyek', 'Kategori Aktivitas', 'Agenda', 'Lokasi', 'Hasil', 'Status',
+            'Tanggal Rencana', 'Koordinator', 'Sales', 'Cabang', 'Proyek', 'Kategori Aktivitas', 'Kegiatan', 'Lokasi', 'Hasil', 'Status',
         ], array_slice($sheet->rangeToArray('A1:J1')[0], 0, 10));
         $this->assertSame('Koordinator A; Koordinator Z', $sheet->getCell('B2')->getValue());
         $this->assertSame('Survey Lokasi', $sheet->getCell('F2')->getValue());
@@ -63,7 +63,7 @@ class SupervisorSalesPocketbookExportTest extends TestCase
         $sheet = $this->sheet(SalesAgendaExport::toBrowser(collect([$agenda]), 'agenda.xlsx'));
 
         $this->assertSame([
-            'Tanggal Agenda', 'Kategori Aktivitas', 'Sales', 'Cabang', 'Proyek', 'Agenda', 'Lokasi', 'Hasil', 'Status',
+            'Tanggal Rencana', 'Kategori Aktivitas', 'Sales', 'Cabang', 'Proyek', 'Kegiatan', 'Lokasi', 'Hasil', 'Status',
         ], array_slice($sheet->rangeToArray('A1:I1')[0], 0, 9));
         $this->assertNull($sheet->getCell('B2')->getValue());
         $this->assertSame('Kunjungan', $sheet->getCell('F2')->getValue());

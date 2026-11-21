@@ -276,7 +276,7 @@ class CoordinatorSalesMonitoringServiceTest extends TestCase
         ]));
         $agendaScreen->assertOk()->assertDontSee('Agenda Koordinator Rahasia')
             ->assertDontSee('Lokasi Koordinator Rahasia')->assertDontSee('Hasil Koordinator Rahasia')
-            ->assertSee('Ringkasan agenda');
+            ->assertSee('Ringkasan kegiatan');
 
         $response = $this->actingAs($this->coordinator)->get(route('coordinator-leads.export', ['period' => 'today']));
         $response->assertOk();

@@ -204,7 +204,7 @@ class UserLifecycleService
             ['user_invitations', fn () => DB::table('user_invitations')->where('user_id', $target->id)->exists(), 'akun memiliki riwayat undangan'],
             ['user_import_batches', fn () => DB::table('user_import_batches')->where('uploaded_by', $target->id)->exists(), 'akun mengunggah batch impor'],
             ['user_import_rows', fn () => DB::table('user_import_rows')->where('created_user_id', $target->id)->exists(), 'akun tercatat pada baris impor'],
-            ['content_items', fn () => DB::table('content_items')->where('created_by', $target->id)->exists(), 'akun membuat item Work Planner'],
+            ['content_items', fn () => DB::table('content_items')->where('created_by', $target->id)->exists(), 'akun membuat tugas atau konten'],
             ['sales_leads', fn () => DB::table('sales_leads')->where('sales_user_id', $target->id)->exists(), 'akun memiliki lead penjualan'],
             ['expenses', fn () => DB::table('expenses')->where('created_by', $target->id)->exists(), 'akun membuat pengeluaran'],
             ['dana_talangans', fn () => DB::table('dana_talangans')->where('created_by', $target->id)->exists(), 'akun membuat data Dana Talangan'],

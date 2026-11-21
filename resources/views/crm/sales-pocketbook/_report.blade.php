@@ -84,7 +84,7 @@
                 @endif
             </article>
         @endforeach
-        <article class="sales-report-metric sales-report-metric--agenda"><h3>Agenda Selesai</h3><strong>{{ $reportSummary['agenda_completed'] }}</strong></article>
+        <article class="sales-report-metric sales-report-metric--agenda"><h3>Kegiatan Selesai</h3><strong>{{ $reportSummary['agenda_completed'] }}</strong></article>
     </div>
     @unless($reportHasData)
         <x-crm.empty-state title="Belum ada aktivitas pada periode ini." description="Metrik akan terisi setelah lead atau agenda selesai tercatat dalam scope dan periode yang dipilih." class="sales-report-zero-state" />
@@ -107,7 +107,7 @@
                 @foreach($metricLabels as $key => $label)
                     <x-crm.click-sort-th :field="$key" route="sales-pocketbook.index" :label="$label" :current-sort="$reportSort" :current-dir="$reportDirection" direction-param="direction" :reset-page-keys="['page', 'agenda_page']" :current-indicator="true" align="right" />
                 @endforeach
-                <x-crm.click-sort-th field="agenda_completed" route="sales-pocketbook.index" label="Agenda" :current-sort="$reportSort" :current-dir="$reportDirection" direction-param="direction" :reset-page-keys="['page', 'agenda_page']" :current-indicator="true" align="right" />
+                <x-crm.click-sort-th field="agenda_completed" route="sales-pocketbook.index" label="Kegiatan" :current-sort="$reportSort" :current-dir="$reportDirection" direction-param="direction" :reset-page-keys="['page', 'agenda_page']" :current-indicator="true" align="right" />
                 <x-crm.click-sort-th field="last_input" route="sales-pocketbook.index" label="Input Terakhir" :current-sort="$reportSort" :current-dir="$reportDirection" direction-param="direction" :reset-page-keys="['page', 'agenda_page']" :current-indicator="true" />
             </tr></thead>
             <tbody>
@@ -121,7 +121,7 @@
                     @foreach($metricLabels as $key => $label)
                         <td class="sales-report-number"><a class="crm-table-action crm-table-action--edit" aria-label="Buka detail {{ $label }} untuk {{ $row['sales']->name }}" href="{{ route('sales-pocketbook.index', array_merge($drillScope, ['tab' => 'leads', 'report_metric' => $key])) }}">{{ $row[$key] }}</a>@if(isset($conversionLabels[$key]))<span class="sales-report-conversion">{{ $row['conversions'][$conversionLabels[$key]] === null ? '—' : number_format($row['conversions'][$conversionLabels[$key]], 1).'%' }}</span>@endif</td>
                     @endforeach
-                    <td class="sales-report-number"><a class="crm-table-action crm-table-action--edit" aria-label="Buka detail Agenda selesai untuk {{ $row['sales']->name }}" href="{{ route('sales-pocketbook.index', array_merge($drillScope, ['tab' => 'agenda', 'report_agenda_completed' => 1])) }}">{{ $row['agenda_completed'] }}</a></td>
+                    <td class="sales-report-number"><a class="crm-table-action crm-table-action--edit" aria-label="Buka detail Kegiatan selesai untuk {{ $row['sales']->name }}" href="{{ route('sales-pocketbook.index', array_merge($drillScope, ['tab' => 'agenda', 'report_agenda_completed' => 1])) }}">{{ $row['agenda_completed'] }}</a></td>
                     <td class="whitespace-nowrap">{{ $row['last_input']?->format('d/m/Y H:i') ?? '—' }}</td>
                 </tr>
             @empty

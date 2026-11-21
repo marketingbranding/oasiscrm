@@ -102,18 +102,9 @@ class AiProviderService
         return is_array($sanitized) ? $sanitized : [];
     }
 
-    private function sanitizeValue(mixed $value, ?string $key): mixed
+    private function sanitizeValue(mixed $value, ?string $key, bool $protocol = false): mixed
     {
-        if ($key === 'name' && is_string($value) && in_array($value, [
-            'count_by_stage',
-            'get_content_schedule',
-            'get_dana_talangan_summary',
-            'search_customer',
-            'get_today_summary',
-            'get_branch_info',
-            'get_supported_capabilities',
-            'ask_clarification',
-        ], true)) {
+        if ($protocol && in_array($key, ['name', 'tool_call_id', 'role', 'type'], true)) {
             return $value;
         }
 
@@ -124,7 +115,10 @@ class AiProviderService
         if (is_array($value)) {
             $result = [];
             foreach ($value as $childKey => $childValue) {
-                $sanitized = $this->sanitizeValue($childValue, (string) $childKey);
+                $childKey = (string) $childKey;
+                $childProtocol = in_array($childKey, ['role', 'type', 'tool_call_id'], true)
+                    || ($key === 'function' && $childKey === 'name');
+                $sanitized = $this->sanitizeValue($childValue, $childKey, $childProtocol);
                 if ($sanitized !== null) {
                     $result[$childKey] = $sanitized;
                 }
@@ -161,9 +155,8 @@ class AiProviderService
 
         return ! $this->settings->bool('ai.send_names')
             && (
-                preg_match('/(fullname|customername|employeename|branchname|personname)/', $normalized) === 1
-                || str_starts_with($normalized, 'name')
-                || str_ends_with($normalized, 'name')
+                in_array($normalized, ['nama', 'namakonsumen', 'namasales', 'namalengkap', 'customername', 'fullname', 'personname', 'employeename', 'salesname'], true)
+                || str_starts_with($normalized, 'nama') && ! in_array($normalized, ['namaproyek', 'namacabang'], true)
             );
     }
 

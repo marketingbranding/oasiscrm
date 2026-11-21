@@ -98,11 +98,33 @@ class AppSettingResolver
         return self::CACHE_PREFIX.$key;
     }
 
+    /** @return array{mode: string, branch_ids: list<int>} */
+    private function normalizeScopedFeatureFlag(mixed $value, mixed $default): array
+    {
+        if (is_bool($value)) {
+            return ['mode' => $value ? 'all' : 'off', 'branch_ids' => []];
+        }
+
+        if (! is_array($value) || ! in_array($value['mode'] ?? null, ['off', 'branches', 'all'], true)) {
+            return $default;
+        }
+
+        $branchIds = collect($value['branch_ids'] ?? [])
+            ->filter(fn (mixed $id): bool => is_int($id) || (is_string($id) && ctype_digit($id)))
+            ->map(fn (int|string $id): int => (int) $id)
+            ->filter(fn (int $id): bool => $id > 0)
+            ->values()
+            ->all();
+
+        return ['mode' => $value['mode'], 'branch_ids' => $branchIds];
+    }
+
     private function normalize(mixed $value, string $type, mixed $default): mixed
     {
         return match ($type) {
             'integer' => is_int($value) ? $value : $default,
             'boolean' => is_bool($value) ? $value : false,
+            'scoped_feature_flag' => $this->normalizeScopedFeatureFlag($value, $default),
             'string' => is_string($value) ? $value : $default,
             'list' => is_array($value) && array_is_list($value) ? $value : $default,
             default => $default,

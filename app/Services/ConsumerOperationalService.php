@@ -34,7 +34,7 @@ final class ConsumerOperationalService
 
     public function statuses(): array
     {
-        return self::CONSUMER_STATUSES;
+        return ConsumerApplication::TRANSACTION_STATUSES;
     }
 
     public function visibleQuery(User $user, OrganizationScopeService $scope): Builder
@@ -68,13 +68,18 @@ final class ConsumerOperationalService
 
     public function create(array $data, User $actor, ConsumerKavlingLifecycleService $lifecycle): ConsumerApplication
     {
-        return DB::transaction(function () use ($data, $actor, $lifecycle): ConsumerApplication {
+        $transactionStatus = strtoupper(trim((string) ($data['transaction_status'] ?? 'LANJUT')));
+        if (($data['entry_mode'] ?? 'new') === 'new' && ($transactionStatus === 'DITUTUP' || ! in_array($transactionStatus, ['LANJUT', 'MUNDUR'], true))) {
+            throw new DomainException('Status transaksi baru hanya boleh LANJUT atau MUNDUR.');
+        }
+
+        return DB::transaction(function () use ($data, $actor, $lifecycle, $transactionStatus): ConsumerApplication {
             $application = ConsumerApplication::create([
                 'customer_id' => $data['customer_id'], 'branch_id' => $data['branch_id'], 'project_id' => $data['project_id'],
                 'sales_user_id' => $data['sales_user_id'] ?? null, 'promo_id' => $data['promo_id'] ?? null,
                 'application_status' => 'draft', 'status_cash' => $data['status_cash'] ?? null,
                 'consumer_status' => $data['consumer_status'] ?? 'Lanjut', 'notes' => $data['notes'] ?? null,
-                'transaction_status' => $data['transaction_status'] ?? 'LANJUT',
+                'transaction_status' => $transactionStatus,
                 'payment_method' => $data['payment_method'] ?? (($data['status_cash'] ?? false) ? 'cash' : null),
                 'current_process' => $data['current_process'] ?? 'data_konsumen',
                 'current_process_source' => $data['current_process_source'] ?? 'operational',

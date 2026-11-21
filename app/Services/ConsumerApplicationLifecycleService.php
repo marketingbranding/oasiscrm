@@ -15,6 +15,7 @@ use App\Models\Kavling;
 use App\Models\User;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 
 final class ConsumerApplicationLifecycleService
 {
@@ -22,6 +23,7 @@ final class ConsumerApplicationLifecycleService
         private ConsumerKavlingLifecycleService $kavlingLifecycle,
         private ConsumerOperationalService $operational,
         private OrganizationScopeService $scope,
+        private AppSettingResolver $settings,
     ) {}
 
     public function recordPemberkasan(ConsumerApplication $application, array $data, User $actor): ConsumerBankProcess
@@ -66,15 +68,24 @@ final class ConsumerApplicationLifecycleService
         return $this->operational->gantiBank($application, $data, $actor);
     }
 
-    public function mundur(ConsumerApplication $application, User $actor): ConsumerApplication
+    public function mundur(ConsumerApplication $application, string $withdrawReason, User $actor): ConsumerApplication
     {
         $this->authorize($actor, $application);
+        $reasons = $this->settings->list('consumer_progress.mundur_reasons');
+        if (! in_array($withdrawReason, $reasons, true)) {
+            throw ValidationException::withMessages(['withdraw_reason' => 'Alasan Mundur tidak valid.']);
+        }
 
-        $before = $this->snapshot($application->fresh());
-        $result = $this->operational->update($application, ['consumer_status' => 'Mundur'], $actor, $this->kavlingLifecycle);
-        $this->audit($actor, $result, $before, $this->snapshot($result->fresh()), 'consumer_mundur', 'mundur');
+        return DB::transaction(function () use ($application, $withdrawReason, $actor): ConsumerApplication {
+            $locked = ConsumerApplication::query()->lockForUpdate()->findOrFail($application->id);
+            $before = $this->snapshot($locked);
+            $this->kavlingLifecycle->mundur($locked);
+            $locked->update(['withdraw_reason' => $withdrawReason]);
+            $result = $locked->fresh();
+            $this->audit($actor, $result, $before, $this->snapshot($result));
 
-        return $result;
+            return $result;
+        });
     }
 
     public function pindahKavling(ConsumerApplication $application, Kavling $targetKavling, User $actor): ConsumerApplication

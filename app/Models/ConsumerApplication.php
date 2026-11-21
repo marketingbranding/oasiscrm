@@ -14,6 +14,8 @@ use LogicException;
 
 class ConsumerApplication extends Model
 {
+    public const array TRANSACTION_STATUSES = ['LANJUT', 'MUNDUR', 'DITUTUP'];
+
     use HasFactory, SoftDeletes;
 
     protected $fillable = [
@@ -32,6 +34,8 @@ class ConsumerApplication extends Model
         'replacement_application_id',
         'consumer_status',
         'transaction_status',
+        'closed_by_event',
+        'withdraw_reason',
         'current_stage',
         'current_process',
         'current_process_source',
@@ -216,6 +220,15 @@ class ConsumerApplication extends Model
     public function hasReady100(): bool
     {
         return $this->ready100Events()->exists();
+    }
+
+    public function canonicalTransactionStatus(): string
+    {
+        return match (strtoupper(trim((string) $this->transaction_status))) {
+            'MUNDUR', 'REJECT', 'REJECTED', 'CANCELLED', 'WITHDRAWN' => 'MUNDUR',
+            'DITUTUP', 'REPLACED', 'DIGANTI_KONSUMEN', 'CLOSED', 'COMPLETED', 'SELESAI' => 'DITUTUP',
+            default => 'LANJUT',
+        };
     }
 
     public static function generateTransactionIdentity(?int $branchId): string

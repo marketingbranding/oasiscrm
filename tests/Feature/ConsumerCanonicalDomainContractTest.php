@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Models\AppSetting;
 use App\Models\ConsumerApplication;
 use App\Models\ConsumerBastRecord;
 use App\Models\Kavling;
@@ -17,6 +18,32 @@ use Tests\TestCase;
 class ConsumerCanonicalDomainContractTest extends TestCase
 {
     use RefreshDatabase;
+
+    /** BR-30: only canonical statuses are exposed for new transaction writes. */
+    public function test_br30_only_canonical_transaction_statuses_are_exposed_and_legacy_values_map_for_reads(): void
+    {
+        $this->assertSame(['LANJUT', 'MUNDUR', 'DITUTUP'], ConsumerApplication::TRANSACTION_STATUSES);
+        $this->assertSame('DITUTUP', ConsumerApplication::factory()->create(['transaction_status' => 'REPLACED'])->canonicalTransactionStatus());
+        $this->assertSame('MUNDUR', ConsumerApplication::factory()->create(['transaction_status' => 'Reject'])->canonicalTransactionStatus());
+        $this->assertSame('LANJUT', ConsumerApplication::factory()->create(['transaction_status' => 'Pindah Kavling'])->canonicalTransactionStatus());
+    }
+
+    /** BR-31: configured withdrawal reasons drive Mundur validation. */
+    public function test_br31_mundur_uses_default_and_changed_configured_reasons(): void
+    {
+        $application = ConsumerApplication::factory()->create();
+        $actor = User::factory()->create(['branch_id' => $application->branch_id]);
+        $service = app(\App\Services\ConsumerApplicationLifecycleService::class);
+
+        $service->mundur($application, 'Reject SLIK', $actor);
+        $this->assertSame('Reject SLIK', $application->fresh()->withdraw_reason);
+
+        $second = ConsumerApplication::factory()->create(['branch_id' => $application->branch_id, 'project_id' => $application->project_id]);
+        AppSetting::query()->create(['key' => 'consumer_progress.mundur_reasons', 'value' => ['Custom reason'], 'group' => 'consumer_progress']);
+        app(\App\Services\AppSettingResolver::class)->forget('consumer_progress.mundur_reasons');
+        $this->expectException(\Illuminate\Validation\ValidationException::class);
+        $service->mundur($second, 'Reject Bank', $actor);
+    }
 
     public function test_customer_can_have_multiple_applications_with_distinct_immutable_transaction_identities(): void
     {

@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests;
 
+use App\Services\AppSettingResolver;
 use Illuminate\Foundation\Http\FormRequest;
 
 class ConsumerLifecycleRequest extends FormRequest
@@ -15,6 +16,13 @@ class ConsumerLifecycleRequest extends FormRequest
     public function rules(): array
     {
         return match ($this->route()?->getName()) {
+            'consumer-applications.mundur' => [
+                'withdraw_reason' => ['required', 'string', 'max:255', function (string $attribute, mixed $value, \Closure $fail): void {
+                    if (! in_array($value, app(AppSettingResolver::class)->list('consumer_progress.mundur_reasons'), true)) {
+                        $fail('Alasan Mundur tidak valid.');
+                    }
+                }],
+            ],
             'consumer-applications.pindah-kavling' => [
                 'target_kavling_id' => ['required', 'integer', 'exists:kavlings,id'],
             ],

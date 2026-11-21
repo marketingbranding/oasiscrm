@@ -107,6 +107,15 @@ class SalesPocketbookMobileContractTest extends TestCase
         $this->assertDatabaseCount('activity_log', 1);
     }
 
+    public function test_br01_br02_onboarding_uses_receipt_working_hours(): void
+    {
+        $steps = SalesPocketbookOnboardingService::STEPS;
+
+        $this->assertStringContainsString('480 menit', $steps[1]['title']);
+        $this->assertStringContainsString('08:00–17:00', $steps[1]['description']);
+        $this->assertStringContainsString('07:30–17:00', $steps[1]['description']);
+    }
+
     public function test_sales_pocketbook_onboarding_skip_is_idempotent_per_user_flow_and_version(): void
     {
         $user = User::factory()->create([

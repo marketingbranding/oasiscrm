@@ -120,7 +120,7 @@ class SalesAgendaController extends Controller
         $resumeReceipt = $request->boolean('resume_receipt')
             && $agendaView === 'day'
             && ! $daySubmission
-            && ! $receiptSummary['is_weekend']
+            && $receiptSummary['requires_target']
             && $agendas->isNotEmpty();
         $allAgendas = $agendaView === 'all'
             ? (clone $agendaBaseQuery)

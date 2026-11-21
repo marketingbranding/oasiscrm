@@ -25,6 +25,27 @@ test('starts an empty Monday at 08:00 and computes remaining weekday minutes', (
     });
 });
 
+test('uses changed server schedule values instead of fixed client defaults', () => {
+    const result = calculateAgendaSlot({
+        date: '2026-10-26',
+        agendas: [],
+        durationMinutes: 30,
+        schedule: {
+            isWeekend: false,
+            isFreeDay: false,
+            startTime: '08:30',
+            endTime: '16:30',
+            breakStart: '12:30',
+            breakEnd: '13:30',
+            targetMinutes: 450,
+        },
+    });
+
+    assert.equal(result.startTime, '08:30');
+    assert.equal(result.endTime, '09:00');
+    assert.equal(result.remainingMinutes, 420);
+});
+
 test('starts an empty Friday at 07:30', () => {
     const result = calculateAgendaSlot({ date: '2026-10-30', agendas: [], durationMinutes: 30 });
 

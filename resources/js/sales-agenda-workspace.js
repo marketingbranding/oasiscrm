@@ -298,6 +298,7 @@ export default function registerSalesAgendaWorkspace(Alpine) {
                 agendas: this.parseAgendas(form.dataset.agendas, this.editingAgenda?.id),
                 requestedStart: startInput.value || null,
                 durationMinutes: durationValue,
+                schedule: this.parseSchedule(form.dataset.schedule),
                 allowOutsideSchedule: form.dataset.agendaSubmitted === 'true',
             });
 
@@ -320,6 +321,24 @@ export default function registerSalesAgendaWorkspace(Alpine) {
             this.syncChipState();
 
             return result;
+        },
+
+        parseSchedule(value) {
+            try {
+                const schedule = JSON.parse(value || '{}');
+
+                return {
+                    isWeekend: Boolean(schedule.is_weekend),
+                    isFreeDay: Boolean(schedule.is_free_day),
+                    startTime: schedule.start_time,
+                    endTime: schedule.end_time,
+                    breakStart: schedule.break_start,
+                    breakEnd: schedule.break_end,
+                    targetMinutes: Number(schedule.target_minutes) || 0,
+                };
+            } catch {
+                return undefined;
+            }
         },
 
         parseAgendas(value, excludedId = null) {

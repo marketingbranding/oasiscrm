@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\Holiday;
 use Carbon\CarbonImmutable;
 
 class SalesWorkCalendarService
@@ -15,6 +16,10 @@ class SalesWorkCalendarService
     {
         if ($date->isWeekend()) {
             return $this->freeSchedule(true);
+        }
+
+        if ($this->isHoliday($date, $branchId)) {
+            return $this->freeSchedule(false);
         }
 
         $isFriday = $date->dayOfWeekIso === 5;
@@ -33,7 +38,7 @@ class SalesWorkCalendarService
 
     public function isFreeDay(CarbonImmutable $date, ?int $branchId = null): bool
     {
-        return $date->isWeekend();
+        return $date->isWeekend() || $this->isHoliday($date, $branchId);
     }
 
     public function effectiveMinutes(CarbonImmutable $date, ?string $startTime, ?string $endTime, ?int $branchId = null): int
@@ -71,6 +76,11 @@ class SalesWorkCalendarService
         ] as $key) {
             $this->settings->forget($key);
         }
+    }
+
+    private function isHoliday(CarbonImmutable $date, ?int $branchId): bool
+    {
+        return Holiday::query()->forDate($date->toDateString(), $branchId)->exists();
     }
 
     /**

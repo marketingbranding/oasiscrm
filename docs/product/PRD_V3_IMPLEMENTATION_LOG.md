@@ -63,7 +63,7 @@ Status: implementasi berjalan. Receipt/Agenda memakai `SalesWorkCalendarService`
 
 ### Ruling WP-1.5
 
-- `work_hours_v3` tetap default-off dan belum dipakai sebagai cutover gate. Receipt/Agenda sudah menjadi jalur aktif sesuai C-01; mengunci resolver aktif di balik flag akan mempertahankan perilaku lama yang bertentangan dengan target WP-1.5. Cost jika salah: operator kehilangan kemampuan rollback lewat flag untuk aturan jam kerja.
+- `work_hours_v3` dihapus dari `AppSettingCatalog`, `FeatureFlagTest`, dan resolver test. Receipt/Agenda sudah menjadi jalur aktif sesuai C-01; gating tidak diperlukan karena perilaku live sudah sesuai PRD. Daily Plan legacy tetap memakai jalur 420 menit.
 
 ## Baseline verifikasi
 
@@ -215,7 +215,7 @@ Status: selesai untuk fondasi runtime dan halaman Superadmin; consumer migration
 Status: selesai untuk shared default-off helper; consumers remain gated for later packages.
 
 - Main files: `app/Support/FeatureFlag.php`, shared `AppSettingCatalog`/`AppSettingResolver`.
-- Canonical registered keys in this implementation: `org_hierarchical_monitoring`, `lead_stages_v3`, `work_hours_v3`, `transaction_events_v3`; all default `false`.
+- Canonical registered keys in this implementation: `org_hierarchical_monitoring`, `lead_stages_v3`, and `transaction_events_v3`; all default `false`.
 - Tests: `tests/Unit/FeatureFlagTest.php` covers exact key set, default-off behavior, and explicit true override through shared resolver.
 - No consumer branch, graph mode activation, sheet cutover, or production rollout executed.
 

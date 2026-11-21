@@ -188,6 +188,7 @@ Detail lengkap ada di `docs/UI_STANDARDS.md`. Ringkasan wajibnya:
 - Arsitektur kedua untuk notifikasi, toast, konflik, picker, XLSX, atau akses.
 - Redis, Reverb, WebSocket, atau framework frontend baru tanpa ruang lingkup eksplisit.
 - Commit `.env`, kredensial, JSON service account, atau secret.
+- Commit file kerja agent (`.superpowers/`, laporan task, `.playwright-mcp/`) atau memakai `git add -f` untuk melewati `.gitignore`.
 
 Jika sebuah tugas memang sengaja mengubah salah satu larangan ini, tuliskan alasan, jalur migrasi, dampak kompatibilitas, dan tesnya di change set yang sama.
 

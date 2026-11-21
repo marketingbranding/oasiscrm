@@ -11,10 +11,17 @@ return new class extends Migration
 
     public function up(): void
     {
-        Schema::table('consumer_stage_events', function (Blueprint $table): void {
-            $table->string('event_type', 40)->nullable()->after('stage');
-            $table->index(['consumer_application_id', 'event_type', 'occurred_at'], 'consumer_stage_events_application_event_time_index');
-        });
+        if (Schema::hasTable('consumer_stage_events') && ! Schema::hasColumn('consumer_stage_events', 'event_type')) {
+            Schema::table('consumer_stage_events', function (Blueprint $table): void {
+                $table->string('event_type', 40)->nullable()->after('stage');
+            });
+        }
+
+        if (Schema::hasTable('consumer_stage_events') && ! Schema::hasIndex('consumer_stage_events', 'consumer_stage_events_application_event_time_index')) {
+            Schema::table('consumer_stage_events', function (Blueprint $table): void {
+                $table->index(['consumer_application_id', 'event_type', 'occurred_at'], 'consumer_stage_events_application_event_time_index');
+            });
+        }
 
         DB::table('changelogs')->updateOrInsert(
             ['version' => null, 'title' => self::TITLE],
@@ -32,9 +39,17 @@ return new class extends Migration
     {
         DB::table('changelogs')->whereNull('version')->where('title', self::TITLE)->delete();
 
+        if (! Schema::hasTable('consumer_stage_events')) {
+            return;
+        }
+
         Schema::table('consumer_stage_events', function (Blueprint $table): void {
-            $table->dropIndex('consumer_stage_events_application_event_time_index');
-            $table->dropColumn('event_type');
+            if (Schema::hasIndex('consumer_stage_events', 'consumer_stage_events_application_event_time_index')) {
+                $table->dropIndex('consumer_stage_events_application_event_time_index');
+            }
+            if (Schema::hasColumn('consumer_stage_events', 'event_type')) {
+                $table->dropColumn('event_type');
+            }
         });
     }
 };

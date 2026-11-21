@@ -12,8 +12,10 @@ use App\Models\ConsumerPsjb;
 use App\Models\ConsumerStageEvent;
 use App\Models\Kavling;
 use App\Models\User;
+use App\Support\FeatureFlag;
 use Carbon\CarbonImmutable;
 use DomainException;
+use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\DB;
@@ -21,6 +23,10 @@ use Illuminate\Support\Str;
 
 final class ConsumerOperationalService
 {
+    public function __construct(
+        private readonly OrganizationScopeService $scope,
+    ) {}
+
     private const CONSUMER_STATUSES = ['Lanjut', 'Mundur', 'Pindah Kavling', 'Reject'];
 
     private const TERMINAL_STATUSES = ['replaced', 'mundur', 'reject', 'rejected', 'cancelled', 'withdrawn', 'completed', 'selesai', 'closed', 'diganti_konsumen'];
@@ -218,12 +224,22 @@ final class ConsumerOperationalService
 
     public function appendTransactionEvent(ConsumerApplication $application, string $eventType, User $actor, string $source = 'manual', ?string $notes = null, array $metadata = [], ?string $reason = null): ConsumerStageEvent
     {
+        if (! FeatureFlag::enabled('transaction_events_v3')) {
+            throw new DomainException('Event transaksi v3 belum aktif.');
+        }
+
         if (! in_array($eventType, ConsumerStageEvent::TRANSACTION_EVENT_TYPES, true)) {
             throw new DomainException('Tipe event transaksi tidak valid.');
         }
 
+        $hasManagePermission = $actor->hasPermission('consumer_progress.manage')
+            || $actor->hasScopedPermission('consumer_progress', 'manage');
+        if (! $hasManagePermission || ! $this->scope->allowsProjectRecord($actor, 'consumer_progress', 'manage', (int) $application->branch_id, $application->project_id)) {
+            throw new AuthorizationException('Anda tidak berwenang melakukan tindakan pada transaksi ini.');
+        }
+
         return $application->stageEvents()->create([
-            'stage' => 'transaction_event',
+            'stage' => ConsumerStageEvent::TRANSACTION_EVENT_STAGE,
             'event_type' => $eventType,
             'source' => $source,
             'notes' => $notes,
@@ -251,7 +267,7 @@ final class ConsumerOperationalService
             $before = $this->snapshot($application);
             $date = $data['tanggal_terima_bank'] ?? now()->toDateString();
             $event = $this->appendEvent($application, $stage, $data['status'] ?? $data['response_type'] ?? null, $data['notes'] ?? null, $date, $actor, $data);
-            if ($startNewAttempt) {
+            if ($startNewAttempt && FeatureFlag::enabled('transaction_events_v3')) {
                 $this->appendTransactionEvent($application, 'GANTI_BANK', $actor, 'manual', $data['notes'] ?? null, $data);
             }
             $record = $startNewAttempt ? null : $this->resolveBankAttempt($application, $data, $reuseLatestAttempt);

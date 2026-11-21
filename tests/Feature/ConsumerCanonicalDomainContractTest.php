@@ -24,6 +24,13 @@ class ConsumerCanonicalDomainContractTest extends TestCase
 {
     use RefreshDatabase;
 
+    protected function setUp(): void
+    {
+        parent::setUp();
+        AppSetting::query()->updateOrCreate(['key' => 'transaction_events_v3'], ['value' => true, 'group' => 'feature_flags']);
+        app(AppSettingResolver::class)->forget('transaction_events_v3');
+    }
+
     /** BR-30: only canonical statuses are exposed for new transaction writes. */
     public function test_br30_only_canonical_transaction_statuses_are_exposed_and_legacy_values_map_for_reads(): void
     {

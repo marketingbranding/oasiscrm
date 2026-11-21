@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\ActivityLog;
+use App\Models\AppSetting;
 use App\Models\ConsumerApplication;
 use App\Models\ConsumerBastRecord;
 use App\Models\ConsumerKavlingAssignment;
@@ -10,6 +11,7 @@ use App\Models\Customer;
 use App\Models\Kavling;
 use App\Models\Role;
 use App\Models\User;
+use App\Services\AppSettingResolver;
 use App\Services\ConsumerApplicationLifecycleService;
 use App\Services\ConsumerKavlingLifecycleService;
 use App\Services\ConsumerOperationalService;
@@ -21,6 +23,13 @@ use Tests\TestCase;
 class ConsumerLifecycleOrchestrationTest extends TestCase
 {
     use RefreshDatabase;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+        AppSetting::query()->updateOrCreate(['key' => 'transaction_events_v3'], ['value' => true, 'group' => 'feature_flags']);
+        app(AppSettingResolver::class)->forget('transaction_events_v3');
+    }
 
     public function test_phase_2_changelog_is_present_and_visible_to_superadmin(): void
     {
@@ -236,7 +245,7 @@ class ConsumerLifecycleOrchestrationTest extends TestCase
     }
 
     /** @return array{0: ConsumerApplication, 1: User} */
-    private function applicationAndActor(string $role = 'staff'): array
+    private function applicationAndActor(string $role = 'superadmin'): array
     {
         $application = ConsumerApplication::factory()->create();
         $actor = User::factory()->create([

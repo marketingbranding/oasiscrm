@@ -2,13 +2,16 @@
 
 namespace Tests\Feature;
 
+use App\Models\AppSetting;
 use App\Models\ConsumerAkadRecord;
 use App\Models\ConsumerApplication;
 use App\Models\ConsumerBastRecord;
 use App\Models\ConsumerKavlingAssignment;
 use App\Models\ConsumerPsjb;
 use App\Models\Kavling;
+use App\Models\Role;
 use App\Models\User;
+use App\Services\AppSettingResolver;
 use App\Services\ConsumerKavlingLifecycleService;
 use App\Services\ConsumerOperationalService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -17,6 +20,13 @@ use Tests\TestCase;
 class ConsumerOperationalTest extends TestCase
 {
     use RefreshDatabase;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+        AppSetting::query()->updateOrCreate(['key' => 'transaction_events_v3'], ['value' => true, 'group' => 'feature_flags']);
+        app(AppSettingResolver::class)->forget('transaction_events_v3');
+    }
 
     public function test_br32_transaction_events_are_excluded_from_process_history_and_do_not_change_process(): void
     {
@@ -191,7 +201,10 @@ class ConsumerOperationalTest extends TestCase
     {
         $application = ConsumerApplication::factory()->create();
         $kavling = Kavling::create(['project_id' => $application->project_id, 'kavling_code' => 'A-11', 'name' => 'A-11']);
-        $actor = User::factory()->create(['branch_id' => $application->branch_id]);
+        $actor = User::factory()->create([
+            'role_id' => Role::query()->where('slug', 'superadmin')->value('id'),
+            'branch_id' => $application->branch_id,
+        ]);
 
         return [$application, $kavling, $actor];
     }

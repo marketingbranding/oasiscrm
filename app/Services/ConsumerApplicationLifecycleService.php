@@ -13,6 +13,7 @@ use App\Models\ConsumerStageEvent;
 use App\Models\Customer;
 use App\Models\Kavling;
 use App\Models\User;
+use App\Support\FeatureFlag;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -94,15 +95,21 @@ final class ConsumerApplicationLifecycleService
 
         return DB::transaction(function () use ($application, $targetKavling, $actor): ConsumerApplication {
             $before = $this->snapshot($application->fresh());
+            $previousKavling = $application->kavling_id === null ? null : Kavling::query()->find($application->kavling_id);
             $result = $this->operational->update(
                 $application,
                 ['consumer_status' => 'Pindah Kavling', 'target_kavling_id' => $targetKavling->id],
                 $actor,
                 $this->kavlingLifecycle,
             );
-            $this->operational->appendTransactionEvent($result, 'PINDAH_KAVLING', $actor, 'manual', 'Pindah kavling', [
-                'kavling_id' => $targetKavling->id,
-            ]);
+            if (FeatureFlag::enabled('transaction_events_v3')) {
+                $this->operational->appendTransactionEvent($result, 'PINDAH_KAVLING', $actor, 'manual', 'Pindah kavling', [
+                    'kavling_id' => $targetKavling->id,
+                    'previous_kavling_id' => $previousKavling?->id,
+                    'previous_kavling_code' => $previousKavling?->kavling_code,
+                    'previous_kavling_name' => $previousKavling?->name,
+                ]);
+            }
             $this->audit($actor, $result, $before, $this->snapshot($result->fresh()), 'consumer_kavling_moved', 'pindah_kavling');
 
             return $result;
@@ -186,9 +193,11 @@ final class ConsumerApplicationLifecycleService
                 'kavling_id' => null,
             ]);
 
-            $this->operational->appendTransactionEvent($oldApplication, 'GANTI_NAMA', $actor, 'manual', 'Ganti nama konsumen', [
-                'replacement_application_id' => $replacement->id,
-            ]);
+            if (FeatureFlag::enabled('transaction_events_v3')) {
+                $this->operational->appendTransactionEvent($oldApplication, 'GANTI_NAMA', $actor, 'manual', 'Ganti nama konsumen', [
+                    'replacement_application_id' => $replacement->id,
+                ]);
+            }
 
             $this->audit($actor, $oldApplication, $before, [
                 'old_application' => $this->snapshot($oldApplication->fresh()),

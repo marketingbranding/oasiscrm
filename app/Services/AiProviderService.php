@@ -102,18 +102,9 @@ class AiProviderService
         return is_array($sanitized) ? $sanitized : [];
     }
 
-    private function sanitizeValue(mixed $value, ?string $key): mixed
+    private function sanitizeValue(mixed $value, ?string $key, bool $protocol = false): mixed
     {
-        if ($key === 'name' && is_string($value) && in_array($value, [
-            'count_by_stage',
-            'get_content_schedule',
-            'get_dana_talangan_summary',
-            'search_customer',
-            'get_today_summary',
-            'get_branch_info',
-            'get_supported_capabilities',
-            'ask_clarification',
-        ], true)) {
+        if ($protocol && in_array($key, ['name', 'tool_call_id', 'role', 'type'], true)) {
             return $value;
         }
 
@@ -124,7 +115,10 @@ class AiProviderService
         if (is_array($value)) {
             $result = [];
             foreach ($value as $childKey => $childValue) {
-                $sanitized = $this->sanitizeValue($childValue, (string) $childKey);
+                $childKey = (string) $childKey;
+                $childProtocol = in_array($childKey, ['role', 'type', 'tool_call_id'], true)
+                    || ($key === 'function' && $childKey === 'name');
+                $sanitized = $this->sanitizeValue($childValue, $childKey, $childProtocol);
                 if ($sanitized !== null) {
                     $result[$childKey] = $sanitized;
                 }
@@ -152,19 +146,25 @@ class AiProviderService
         }
 
         $normalized = strtolower(preg_replace('/[^a-z0-9]/i', '', $key) ?? $key);
-        if (preg_match('/^(nik|email|emailaddress|phone|phonenumber|mobile|mobilenumber|telephone|tel|address|alamat|streetaddress|homeaddress)$/', $normalized)) {
+        if (preg_match('/^(nik|email|emailaddress|phone|phonenumber|mobile|mobilenumber|telephone|tel|address|alamat|streetaddress|homeaddress|nohp|nomorhp|hp|telepon|telp|notelp|nomortelepon|whatsapp|wa|surel)$/', $normalized)
+            || str_starts_with($normalized, 'alamat')
+            || str_ends_with($normalized, 'alamat')
+        ) {
             return true;
         }
 
         return ! $this->settings->bool('ai.send_names')
-            && preg_match('/(fullname|customername|employeename|branchname|personname)/', $normalized) === 1;
+            && (
+                in_array($normalized, ['nama', 'namakonsumen', 'namasales', 'namalengkap', 'customername', 'fullname', 'personname', 'employeename', 'salesname'], true)
+                || str_starts_with($normalized, 'nama') && ! in_array($normalized, ['namaproyek', 'namacabang'], true)
+            );
     }
 
     private function sanitizeString(string $value): string
     {
-        $value = preg_replace('/\\b\\d{16}\\b/', '[disaring]', $value) ?? $value;
+        $value = preg_replace('/(?<!\\d)(?:\\d[ .-]?){16}(?!\\d)/', '[disaring]', $value) ?? $value;
         $value = preg_replace('/\\b[\\w.!#$%&\'*+\\/=?^`{|}~-]+@[\\w-]+(?:\\.[\\w-]+)+\\b/i', '[disaring]', $value) ?? $value;
-        $value = preg_replace('/(?<!\\d)(?:\\+62|62|0)8\\d{8,12}(?!\\d)/', '[disaring]', $value) ?? $value;
+        $value = preg_replace('/(?<!\\d)(?:(?:\\+62|62|0)[ .-]?)8(?:[ .-]?\\d){8,12}(?!\\d)/', '[disaring]', $value) ?? $value;
         $value = preg_replace('/\\b(?:alamat|address)\\s*[:=-]?\\s*[^,.!?;]+/iu', '[disaring]', $value) ?? $value;
 
         if (! $this->settings->bool('ai.send_names')) {

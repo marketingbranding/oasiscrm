@@ -374,7 +374,7 @@ Status: implementasi selesai di branch `prd-v3/wp-1.7-transaction-nup`. Flag `tr
 ### WP-1.8/WP-1.9 — Istilah, AI privacy, backup evidence
 
 - WP-1.8: label modul dan navigasi utama memakai `Tugas & Konten`; area rencana sales memakai `Rencana Harian Sales`, `Rencana Harian Tim/Cabang`, dan `Kegiatan`; route, tabel, enum, key request, serta nilai data internal tidak diubah.
-- WP-1.9: `AiProviderService` menyaring NIK, nomor HP, email, alamat, dan telepon dari payload provider pada satu titik; nama dikendalikan `ai.send_names` (default aktif). `oasis:database-backup` memakai disk terpisah, dump gzip, retensi Pengaturan, dan jadwal harian. Pemulihan wajib diuji operator memakai runbook.
+- WP-1.9: `AiProviderService` menyaring NIK, nomor HP, email, alamat, dan telepon dari payload provider pada satu titik; nama dikendalikan `ai.send_names` (default aktif). `oasis:database-backup` memakai dump gzip dan retensi Pengaturan 7 hari sebagai alat manual pra-cutover; backup utama memakai Hostinger. Pemulihan wajib diuji operator memakai runbook.
 - UI: rename only where PRD glosarium changes meaning; do not build second component system.
 - AI: `AiAssistantService`, `AiToolRegistry`, `AiProviderService`, provider HTTP tests with fake responses.
 - Ops: document backup contract and health check; never commit credentials or run production backup/cutover.

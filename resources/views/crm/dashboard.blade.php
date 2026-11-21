@@ -54,7 +54,7 @@
     }
     $canCreatePlanner = $canViewPlanner && $user->hasPermission('work_planner.create');
     if ($canCreatePlanner) {
-        $quickActions[] = ['label' => 'Tambah Agenda', 'url' => route('content-calendar.create', ['type' => 'agenda']), 'accent' => 'planner'];
+        $quickActions[] = ['label' => 'Tambah Kegiatan', 'url' => route('content-calendar.create', ['type' => 'agenda']), 'accent' => 'planner'];
     }
     if ($user->can('create', \App\Models\Expense::class)) {
         $quickActions[] = ['label' => 'Tambah Pengeluaran', 'url' => route('expenses.create'), 'accent' => 'expenses'];
@@ -234,7 +234,7 @@
         </x-dashboard.section>
     </div>
 
-    <x-dashboard.section id="dashboard-recent-activity" eyebrow="Apa yang baru terjadi" title="Aktivitas Operasional Terbaru" description="Catatan pembuatan Work Planner, lead Database, dan Dana Talangan pada area kerja ini." class="mb-4">
+    <x-dashboard.section id="dashboard-recent-activity" eyebrow="Apa yang baru terjadi" title="Aktivitas Operasional Terbaru" description="Catatan pembuatan Tugas & Konten, lead Database, dan Dana Talangan pada area kerja ini." class="mb-4">
         <div>
             <x-dashboard.timeline :items="$visibleActivity" />
         </div>

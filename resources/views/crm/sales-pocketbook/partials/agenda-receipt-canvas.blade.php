@@ -31,10 +31,10 @@
                          @php($breakAgenda = $isBreakAgenda($agenda))
                          @php($agendaLabels = [])
                          @if($agenda->is_outside_schedule)
-                             @php($agendaLabels[] = 'Agenda tambahan · di luar target')
+                             @php($agendaLabels[] = 'Kegiatan tambahan · di luar target')
                          @endif
                          @if($breakAgenda)
-                             @php($agendaLabels[] = 'Agenda jam istirahat')
+                             @php($agendaLabels[] = 'Kegiatan jam istirahat')
                          @endif
                          <li class="sales-receipt-paper-row {{ $agenda->is_outside_schedule ? 'is-additional' : '' }} {{ $breakAgenda ? 'is-break' : '' }}" data-tour-target="agenda-row">
                              <span><b>{{ $agenda->start_time && $agenda->end_time ? substr((string) $agenda->start_time, 0, 5).'–'.substr((string) $agenda->end_time, 0, 5) : 'Fleksibel' }}</b>@if($agenda->start_time && $agenda->end_time)<small>{{ $agenda->duration_minutes }} mnt</small>@endif<br>{{ $agenda->title }}@if($agendaLabels)<small class="sales-agenda-break-label">{{ implode(' · ', $agendaLabels) }}</small>@endif</span>
@@ -64,13 +64,13 @@
 
             <div class="sales-receipt-canvas-actions">
                 <div class="sales-reference-bottom-action is-receipt-action" data-tour-target="add-plan-action">
-                    <button type="button" class="sales-receipt-add-trigger" data-receipt-preview-add @click="openAgendaSheet($event)" aria-haspopup="dialog" aria-controls="sales-agenda-create-sheet"><span>+ Tambah agenda ke struk</span></button>
+                    <button type="button" class="sales-receipt-add-trigger" data-receipt-preview-add @click="openAgendaSheet($event)" aria-haspopup="dialog" aria-controls="sales-agenda-create-sheet"><span>+ Tambah kegiatan ke rencana</span></button>
                 </div>
                 @if(! $daySubmission && (($isFreeDay && $receiptSummary['agenda_count'] > 0) || (!$isFreeDay && $receiptSummary['normal_minutes'] === $receiptSummary['target_minutes'])))
                     <form method="POST" action="{{ route('sales-agendas.submit') }}" class="sales-receipt-submit-form" data-receipt-submit>
                         @csrf
                         <input type="hidden" name="scheduled_date" value="{{ $agendaDate->toDateString() }}">
-                         <div class="sales-receipt-submit-help">{{ $isFreeDay ? ($isWeekend ? 'Akhir pekan bebas jam dan menit. Koordinator melihat tanda Akhir pekan.' : 'Hari libur bebas jam dan menit. Agenda tetap tersimpan untuk catatan.') : 'Total tepat '.$receiptSummary['target_minutes'].' menit. Struk akan disobek dan terkirim ke atas.' }}</div>
+                         <div class="sales-receipt-submit-help">{{ $isFreeDay ? ($isWeekend ? 'Akhir pekan bebas jam dan menit. Koordinator melihat tanda Akhir pekan.' : 'Hari libur bebas jam dan menit. Kegiatan tetap tersimpan untuk catatan.') : 'Total tepat '.$receiptSummary['target_minutes'].' menit. Struk akan disobek dan terkirim ke atas.' }}</div>
                         <button type="submit" class="crm-button crm-button--primary crm-button--lg" data-accent="sales">Sobek &amp; kirim ke Koordinator</button>
                     </form>
                 @elseif(! $daySubmission)

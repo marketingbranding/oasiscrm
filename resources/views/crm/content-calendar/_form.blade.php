@@ -105,7 +105,7 @@
 
     <template x-if="type === 'agenda'">
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div><label class="font-[Helvetica] font-bold text-xs uppercase block mb-1">Jenis Agenda</label><select name="agenda_type" x-model="agendaType" class="w-full border-2 border-black px-3 py-2 text-sm bg-white"><option value="visit">Kunjungan</option><option value="meeting">Meeting</option><option value="survey">Survey</option><option value="follow_up">Follow Up</option><option value="event">Event</option><option value="other">Lainnya</option></select></div>
+            <div><label class="font-[Helvetica] font-bold text-xs uppercase block mb-1">Jenis Agenda</label><select name="agenda_type" x-model="agendaType" class="w-full border-2 border-black px-3 py-2 text-sm bg-white"><option value="visit">Kunjungan</option><option value="meeting">Meeting</option><option value="survey">Survey</option><option value="follow_up">Follow-up</option><option value="event">Event</option><option value="other">Lainnya</option></select></div>
             <div><label class="font-[Helvetica] font-bold text-xs uppercase block mb-1">Lokasi</label><input name="location" value="{{ old('location', $item?->location) }}" class="w-full border-2 border-black px-3 py-2 text-sm"></div>
         </div>
     </template>

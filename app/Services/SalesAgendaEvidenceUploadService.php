@@ -49,7 +49,7 @@ class SalesAgendaEvidenceUploadService
                     'subject_type' => SalesAgendaEvidence::class,
                     'subject_id' => $item->id,
                     'event' => 'agenda_evidence_uploaded',
-                    'description' => 'Bukti foto Agenda Sales diunggah.',
+                    'description' => 'Bukti foto Kegiatan Sales diunggah.',
                     'properties' => ['agenda_id' => $agenda->id, 'evidence_id' => $item->id],
                 ]);
                 $evidence[] = $item;

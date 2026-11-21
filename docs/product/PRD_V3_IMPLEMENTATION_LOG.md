@@ -32,7 +32,7 @@ PRD sumber kebenaran: `docs/product/PRD_OASIS_CRM_V3.md` versi 3.3 (D30–D33)
 | WP-1.5 | 1 | Jam kerja, target 480, Jumat, akhir pekan, hari libur | Selesai; kalender Receipt/Agenda settings-backed, holiday nasional/cabang, free-day submission marker, reminder, UI, dan verifikasi penuh selesai | BR-01–BR-09 |
 | WP-1.6 | 1 | Tahap Lead Baru–UTJ, Gugur, kunci setelah UTJ | Selesai implementasi; flag default mati, belum cutover produksi | BR-10–BR-14 |
 | WP-1.7 | 1 | Status/event transaksi, alasan Mundur, NUP baru | Selesai implementasi; flag default mati; belum cutover produksi | BR-20–BR-36 |
-| WP-1.8 | 1 | Istilah glosarium dan navigasi | Belum mulai | §3, D15 |
+| WP-1.8 | 1 | Istilah glosarium dan navigasi | Selesai; label tampilan, navigasi, ekspor, AI, notifikasi, metadata izin, dan changelog diselaraskan tanpa mengubah identifier internal | §3, D15 |
 | WP-1.9 | 1 | Privasi AI dan backup terpisah | Belum mulai | BR-70–BR-73 |
 | WP-1.10 | 1 | Penutup Fase 1: changelog, dokumentasi, verifikasi penuh | Belum mulai | Semua fase 1 |
 | WP-2.1 | 2 | Alih Lead dan antrean lead tanpa pemilik | Belum mulai | BR-54–BR-55 |
@@ -373,6 +373,7 @@ Status: implementasi selesai di branch `prd-v3/wp-1.7-transaction-nup`. Flag `tr
 
 ### WP-1.8/WP-1.9 — Istilah, AI privacy, backup evidence
 
+- WP-1.8: label modul dan navigasi utama memakai `Tugas & Konten`; area rencana sales memakai `Rencana Harian Sales`, `Rencana Harian Tim/Cabang`, dan `Kegiatan`; route, tabel, enum, key request, serta nilai data internal tidak diubah.
 - UI: rename only where PRD glosarium changes meaning; do not build second component system.
 - AI: `AiAssistantService`, `AiToolRegistry`, `AiProviderService`, provider HTTP tests with fake responses.
 - Ops: document backup contract and health check; never commit credentials or run production backup/cutover.

@@ -38,7 +38,7 @@ class AiToolRegistry
                 'date_to' => ['type' => 'string', 'description' => 'Tanggal akhir YYYY-MM-DD. Opsional.'],
                 'branch_id' => ['type' => 'integer', 'description' => 'ID cabang. Hanya berlaku untuk superadmin/pusat.'],
             ]),
-            $this->tool('get_content_schedule', 'Ambil jadwal Work Planner, terutama konten/tugas/agenda dalam rentang tanggal.', [
+            $this->tool('get_content_schedule', 'Ambil jadwal Tugas & Konten, terutama konten/tugas/agenda dalam rentang tanggal.', [
                 'start_date' => ['type' => 'string', 'description' => 'Tanggal awal YYYY-MM-DD.'],
                 'end_date' => ['type' => 'string', 'description' => 'Tanggal akhir YYYY-MM-DD.'],
                 'item_type' => ['type' => 'string', 'enum' => ['task', 'agenda', 'content'], 'description' => 'Jenis item. Opsional.'],
@@ -55,7 +55,7 @@ class AiToolRegistry
                 'query' => ['type' => 'string', 'description' => 'Nama konsumen atau kata kunci.'],
                 'branch_id' => ['type' => 'integer', 'description' => 'ID cabang. Hanya berlaku untuk superadmin/pusat.'],
             ], ['query']),
-            $this->tool('get_today_summary', 'Ambil ringkasan aktivitas hari ini dari Work Planner, Dana Talangan, dan pipeline.', [
+            $this->tool('get_today_summary', 'Ambil ringkasan aktivitas hari ini dari Tugas & Konten, Dana Talangan, dan pipeline.', [
                 'branch_id' => ['type' => 'integer', 'description' => 'ID cabang. Hanya berlaku untuk superadmin/pusat.'],
             ]),
             $this->tool('get_branch_info', 'Ambil informasi cabang yang sedang digunakan.', [
@@ -231,7 +231,7 @@ class AiToolRegistry
         return match ($name) {
             'count_by_stage' => 'Konsumen Progress',
             'get_dana_talangan_summary' => 'Dana Talangan',
-            'get_content_schedule' => 'Work Planner',
+            'get_content_schedule' => 'Tugas & Konten',
             'search_customer', 'get_today_summary', 'get_supported_capabilities' => 'Customer Search',
             default => 'Customer Search',
         };
@@ -246,7 +246,7 @@ class AiToolRegistry
         $module = match ($name) {
             'count_by_stage' => ['consumer_progress', 'consumer_progress.view', 'Konsumen Progress'],
             'get_dana_talangan_summary' => ['bridge_fund', 'bridge_fund.view', 'Dana Talangan'],
-            'get_content_schedule' => ['work_planner', null, 'Work Planner'],
+            'get_content_schedule' => ['work_planner', null, 'Tugas & Konten'],
             default => null,
         };
 
@@ -431,7 +431,7 @@ class AiToolRegistry
             ->get();
 
         return [
-            'source_module' => 'Work Planner',
+            'source_module' => 'Tugas & Konten',
             'branch' => $this->branchName($branchId ?: ($user->canViewAllBranches() ? null : $user->branch_id)),
             'date_from' => $start->toDateString(),
             'date_to' => $end->toDateString(),
@@ -581,7 +581,7 @@ class AiToolRegistry
             'date' => $today,
             'work_planner' => $user->hasScopedPermission('work_planner')
                 ? $this->contentSchedule(['start_date' => $today, 'end_date' => $today, 'branch_id' => $branchId], $user)
-                : ['error' => 'Anda tidak memiliki izin melihat data Work Planner.'],
+                : ['error' => 'Anda tidak memiliki izin melihat data Tugas & Konten.'],
             'dana_talangan' => $user->hasPermission('bridge_fund.view')
                 ? $this->danaTalanganSummary(['date_from' => $today, 'date_to' => $today, 'branch_id' => $branchId], $user)
                 : ['error' => 'Anda tidak memiliki izin melihat data Dana Talangan.'],
@@ -606,7 +606,7 @@ class AiToolRegistry
             'capabilities' => [
                 'Daftar dan jumlah cabang',
                 'Dana Talangan: jumlah, status, nama konsumen, kav, proyek, tanggal, dan konfirmasi keuangan',
-                'Work Planner: jadwal task, agenda, dan konten berdasarkan tanggal/cabang',
+                'Tugas & Konten: jadwal task, agenda, dan konten berdasarkan tanggal/cabang',
                 'Konsumen Progress: current-stage BI Checking, PSJB, Pemberkasan, Proses Bank, PPJB Dev, Akad, dan BAST',
                 'Database sheet cache: pencarian kata kunci pada data hasil sync Google Sheets',
                 'Pencarian nama konsumen lintas Dana Talangan, Konsumen Progress, dan Database',

@@ -333,7 +333,7 @@ class AiAssistantService
 
         $messages = [[
             'role' => 'system',
-            'content' => "Anda adalah Oasis AI, asisten read-only untuk Oasis CRM. Jawab natural dalam bahasa Indonesia yang ringkas. Untuk obrolan umum, boleh menjawab langsung sebagai asisten CRM. Untuk pertanyaan data Oasis (Database, Konsumen Progress/pipeline, Dana Talangan, Work Planner, cabang, atau pencarian konsumen), wajib gunakan tools yang tersedia dan jangan mengarang angka, status, nama, cabang, penyebab, atau kesimpulan yang tidak ada di tool result. Jika data tidak tersedia, katakan data belum tersedia dan sarankan Sync Sekarang bila action sync muncul di UI. User: {$user->name}. Role: {$role}. Cabang utama: {$branch}. Akses: {$access}. Hari ini: ".today()->toDateString().'.',
+            'content' => "Anda adalah Oasis AI, asisten read-only untuk Oasis CRM. Jawab natural dalam bahasa Indonesia yang ringkas. Untuk obrolan umum, boleh menjawab langsung sebagai asisten CRM. Untuk pertanyaan data Oasis (Database, Konsumen Progress/pipeline, Dana Talangan, Tugas & Konten, cabang, atau pencarian konsumen), wajib gunakan tools yang tersedia dan jangan mengarang angka, status, nama, cabang, penyebab, atau kesimpulan yang tidak ada di tool result. Jika data tidak tersedia, katakan data belum tersedia dan sarankan Sync Sekarang bila action sync muncul di UI. User: {$user->name}. Role: {$role}. Cabang utama: {$branch}. Akses: {$access}. Hari ini: ".today()->toDateString().'.',
         ]];
 
         $history = collect($conversation?->messages ?? [])
@@ -426,7 +426,7 @@ class AiAssistantService
             'get_branch_info' => $this->localBranchAnswer($result),
             'get_supported_capabilities' => $this->localCapabilitiesAnswer($result),
             'ask_clarification' => $result['message'] ?? 'Sebutkan cabang dan data yang ingin dicek.',
-            default => 'Saya menemukan ringkasan data untuk '.$branch.'. Work Planner hari ini: '.($result['work_planner']['count'] ?? 0).' item; Dana Talangan: '.($result['dana_talangan']['count'] ?? 0).' data; Pipeline: '.($result['pipeline']['count'] ?? 0).' data.',
+            default => 'Saya menemukan ringkasan data untuk '.$branch.'. Tugas & Konten hari ini: '.($result['work_planner']['count'] ?? 0).' item; Dana Talangan: '.($result['dana_talangan']['count'] ?? 0).' data; Pipeline: '.($result['pipeline']['count'] ?? 0).' data.',
         };
 
         if (($result['is_stale'] ?? false) && filled($result['last_synced_at'] ?? null)) {
@@ -440,7 +440,7 @@ class AiAssistantService
 
     private function unsupportedAnswer(): string
     {
-        return 'Saya belum mengenali pertanyaan itu. Saat ini saya bisa membaca data cabang, Dana Talangan, Work Planner, Konsumen Progress/pipeline, Database hasil sync, dan pencarian konsumen. Coba tanya dengan menyebut modul, cabang, atau nama konsumen.';
+        return 'Saya belum mengenali pertanyaan itu. Saat ini saya bisa membaca data cabang, Dana Talangan, Tugas & Konten, Konsumen Progress/pipeline, Database hasil sync, dan pencarian konsumen. Coba tanya dengan menyebut modul, cabang, atau nama konsumen.';
     }
 
     private function localContentAnswer(array $result): string

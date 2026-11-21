@@ -27,7 +27,7 @@ class WorkPlannerTest extends TestCase
         [$branch, $user] = $this->branchAndUser();
         $spreadsheet = new Spreadsheet;
         $spreadsheet->getActiveSheet()->fromArray([
-            ['Cabang', 'Tipe', 'Visibilitas', 'Judul', 'Detail', 'Platform', 'Proyek', 'Mulai', 'Jam Mulai', 'Deadline/Publikasi', 'Jam Selesai', 'Prioritas', 'PIC Eksternal', 'Status', 'Jenis Agenda', 'Lokasi', 'Format Konten', 'Tujuan Konten', 'Catatan'],
+            ['Cabang', 'Tipe', 'Visibilitas', 'Judul', 'Detail', 'Platform', 'Proyek', 'Mulai', 'Jam Mulai', 'Deadline/Publikasi', 'Jam Selesai', 'Prioritas', 'PIC Eksternal', 'Status', 'Jenis Kegiatan', 'Lokasi', 'Format Konten', 'Tujuan Konten', 'Catatan'],
             [$branch->name, 'invalid', 'team', 'Invalid Type', '', '', '', '2026-08-31', '', '2026-08-31', '', 'medium', '', 'todo'],
             [$branch->name, 'task', 'invalid', 'Invalid Visibility', '', '', '', '2026-08-31', '', '2026-08-31', '', 'medium', '', 'todo'],
             [$branch->name, 'task', 'team', 'Invalid Priority', '', '', '', '2026-08-31', '', '2026-08-31', '', 'invalid', '', 'todo'],
@@ -58,7 +58,7 @@ class WorkPlannerTest extends TestCase
         LeadMaster::create(['branch_id' => $otherBranch->id, 'project_name' => 'Proyek Alpha', 'is_active' => true]);
         $spreadsheet = new Spreadsheet;
         $spreadsheet->getActiveSheet()->fromArray([
-            ['Cabang', 'Tipe', 'Visibilitas', 'Judul', 'Detail', 'Platform', 'Proyek', 'Mulai', 'Jam Mulai', 'Deadline/Publikasi', 'Jam Selesai', 'Prioritas', 'PIC Eksternal', 'Status', 'Jenis Agenda', 'Lokasi', 'Format Konten', 'Tujuan Konten', 'Catatan'],
+            ['Cabang', 'Tipe', 'Visibilitas', 'Judul', 'Detail', 'Platform', 'Proyek', 'Mulai', 'Jam Mulai', 'Deadline/Publikasi', 'Jam Selesai', 'Prioritas', 'PIC Eksternal', 'Status', 'Jenis Kegiatan', 'Lokasi', 'Format Konten', 'Tujuan Konten', 'Catatan'],
             [$branch->name, 'task', 'team', 'Task Alpha', '', '', 'proyek   alpha', '2026-08-31', '', '2026-08-31', '', 'medium', '', 'todo', '', '', '', '', ''],
             [$branch->name, 'task', 'team', 'Task Blocked', '', '', 'Proyek Beta', '2026-08-31', '', '2026-08-31', '', 'medium', '', 'todo', '', '', '', '', ''],
             [$branch->name, 'task', 'team', 'Task Unknown', '', '', 'Proyek Gamma', '2026-08-31', '', '2026-08-31', '', 'medium', '', 'todo', '', '', '', '', ''],
@@ -84,7 +84,7 @@ class WorkPlannerTest extends TestCase
         [$branch, $user] = $this->branchAndUser();
         $spreadsheet = new Spreadsheet;
         $spreadsheet->getActiveSheet()->fromArray([
-            ['Cabang', 'Tipe', 'Visibilitas', 'Judul', 'Detail', 'Platform', 'Proyek', 'Mulai', 'Jam Mulai', 'Deadline/Publikasi', 'Jam Selesai', 'Prioritas', 'PIC Eksternal', 'Status', 'Jenis Agenda', 'Lokasi', 'Format Konten', 'Tujuan Konten', 'Catatan'],
+            ['Cabang', 'Tipe', 'Visibilitas', 'Judul', 'Detail', 'Platform', 'Proyek', 'Mulai', 'Jam Mulai', 'Deadline/Publikasi', 'Jam Selesai', 'Prioritas', 'PIC Eksternal', 'Status', 'Jenis Kegiatan', 'Lokasi', 'Format Konten', 'Tujuan Konten', 'Catatan'],
             [$branch->name, 'agenda', 'team', 'Agenda Tanpa Jenis', '', '', '', '2026-08-31', '09:00', '2026-08-31', '', 'medium', '', 'planned', '', '', '', '', ''],
             [$branch->name, 'agenda', 'team', 'Agenda Tanpa Jam', '', '', '', '2026-08-31', '', '2026-08-31', '', 'medium', '', 'planned', 'Survey', '', '', '', ''],
             [$branch->name, 'agenda', 'team', 'Agenda Tanpa Mulai', '', '', '', '', '09:00', '2026-08-31', '', 'medium', '', 'planned', 'Survey', '', '', '', ''],
@@ -229,7 +229,7 @@ class WorkPlannerTest extends TestCase
 
         $this->actingAs($user)->get(route('content-calendar.index'))->assertOk()
             ->assertSee('Agenda Hari Ini')->assertSee('Task Hari Ini')->assertSee('Konten Hari Ini')
-            ->assertSee('Filter Work Planner')->assertSee('+ Tambah');
+            ->assertSee('Filter Tugas & Konten')->assertSee('+ Tambah');
         foreach (['calendar', 'gantt', 'tasks', 'agenda', 'content', 'all'] as $view) {
             $this->actingAs($user)->get(route('content-calendar.index', ['view' => $view]))->assertOk();
         }
@@ -244,7 +244,7 @@ class WorkPlannerTest extends TestCase
 
         $response->assertOk()
             ->assertSee('crm-page-header', false)
-            ->assertSee('Filter dan aksi Work Planner')
+            ->assertSee('Filter dan aksi Tugas & Konten')
             ->assertSee('aria-current="page"', false)
             ->assertSee('planner-filters')
             ->assertSee('aria-label="Pilih Task Kontrak UI"', false)

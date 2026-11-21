@@ -23,10 +23,10 @@
                     <p class="sales-daily-reminder-status-item"><strong>Lead hari ini</strong><span>Belum ada lead yang dicatat hari ini.</span></p>
                 @endif
                 @if($dailyReminder['todayAgendaCount'] === 0)
-                    <p class="sales-daily-reminder-status-item"><strong>Agenda hari ini</strong><span>Belum ada agenda hari ini.</span></p>
+                    <p class="sales-daily-reminder-status-item"><strong>Kegiatan hari ini</strong><span>Belum ada kegiatan hari ini.</span></p>
                 @endif
                 @if($dailyReminder['missingAgendaResultCount'] > 0)
-                    <p class="sales-daily-reminder-status-item sales-daily-reminder-status-item--warning"><strong>Hasil belum lengkap</strong><span>Ada {{ $dailyReminder['missingAgendaResultCount'] }} agenda selesai yang belum memiliki hasil.</span></p>
+                    <p class="sales-daily-reminder-status-item sales-daily-reminder-status-item--warning"><strong>Hasil belum lengkap</strong><span>Ada {{ $dailyReminder['missingAgendaResultCount'] }} kegiatan selesai yang belum memiliki hasil.</span></p>
                 @endif
             </div>
             <label for="sales-daily-reminder-hide-today" class="sales-daily-reminder-option">
@@ -37,7 +37,7 @@
                 @if($dailyReminder['hasAssignedProject'])
                     <x-crm.button type="button" variant="primary" accent="sales" ::disabled="actionPending" ::aria-busy="actionPending" data-lead-input-url="{{ $dailyReminder['leadInputUrl'] }}" @click="navigate($el.dataset.leadInputUrl)">Input Lead</x-crm.button>
                 @endif
-                <button type="button" :disabled="actionPending" :aria-busy="actionPending" data-agenda-input-url="{{ $dailyReminder['agendaInputUrl'] }}" @click="navigate($el.dataset.agendaInputUrl)" class="crm-button crm-button--secondary crm-button--md">Isi Agenda</button>
+                <button type="button" :disabled="actionPending" :aria-busy="actionPending" data-agenda-input-url="{{ $dailyReminder['agendaInputUrl'] }}" @click="navigate($el.dataset.agendaInputUrl)" class="crm-button crm-button--secondary crm-button--md">Isi Kegiatan</button>
                 @if($dailyReminder['missingAgendaResultCount'] > 0)
                     <x-crm.button type="button" variant="secondary" ::disabled="actionPending" ::aria-busy="actionPending" data-missing-result-url="{{ $dailyReminder['missingResultUrl'] }}" @click="navigate($el.dataset.missingResultUrl)">Lengkapi Hasil</x-crm.button>
                 @endif

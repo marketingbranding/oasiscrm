@@ -1,9 +1,9 @@
 @extends('layouts.crm')
 
-@section('title', 'Import Work Planner - Oasis CRM')
+@section('title', 'Import Tugas & Konten - Oasis CRM')
 
 @section('content')
-    <x-crm.page-header variant="canonical" eyebrow="Work Planner" title="Import Work Planner" description="Upload XLSX sesuai template Work Planner. Arsitektur import lama tetap dipertahankan.">
+    <x-crm.page-header variant="canonical" eyebrow="Tugas & Konten" title="Import Tugas & Konten" description="Upload XLSX sesuai template Tugas & Konten. Arsitektur import lama tetap dipertahankan.">
         <x-slot:actions>
             <x-crm.button variant="secondary" :href="route('content-calendar.index')">Kembali</x-crm.button>
         </x-slot:actions>

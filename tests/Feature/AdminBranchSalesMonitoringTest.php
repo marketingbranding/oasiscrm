@@ -127,7 +127,7 @@ class AdminBranchSalesMonitoringTest extends TestCase
         $agendaScreen = $this->actingAs($this->admin)->get($this->url(['tab' => 'agenda']));
         $agendaScreen->assertOk()->assertDontSee('Agenda Admin Rahasia')
             ->assertDontSee('Lokasi Admin Rahasia')->assertDontSee('Hasil Admin Rahasia')
-            ->assertSee('Ringkasan agenda');
+            ->assertSee('Ringkasan kegiatan');
 
         $response = $this->actingAs($this->admin)->get(route('sales-pocketbook.export', [
             'period_type' => 'custom', 'date_from' => '2026-08-10', 'date_to' => '2026-08-10',
@@ -135,15 +135,16 @@ class AdminBranchSalesMonitoringTest extends TestCase
         $response->assertOk();
         $workbook = IOFactory::load($response->baseResponse->getFile()->getPathname());
         $leadSheet = $workbook->getSheetByName('LEAD HARIAN');
-        $agendaSheet = $workbook->getSheetByName('AGENDA HARIAN');
+        $agendaSheet = $workbook->getSheetByName('RENCANA HARIAN SALES');
         $this->assertSame('Nama Konsumen', $leadSheet->getCell('E1')->getValue());
-        $this->assertSame('Agenda', $agendaSheet->getCell('I1')->getValue());
+        $this->assertSame('Kegiatan', $agendaSheet->getCell('I1')->getValue());
         $values = collect($workbook->getSheetNames())->flatMap(fn (string $sheetName) => $workbook->getSheetByName($sheetName)->toArray())->flatten()->implode('|');
         $this->assertStringContainsString('Lead Admin Jauh', $values);
-        $this->assertStringContainsString('Ringkasan agenda', $values);
+        $this->assertStringContainsString('Ringkasan kegiatan', $values);
         $this->assertStringNotContainsString('089999888777', $values);
         $this->assertStringNotContainsString('Catatan admin rahasia', $values);
         $this->assertStringNotContainsString('Agenda Admin Rahasia', $values);
+        $this->assertStringNotContainsString('Ringkasan agenda', $values);
         $this->assertStringNotContainsString('Lokasi Admin Rahasia', $values);
         $this->assertStringNotContainsString('Hasil Admin Rahasia', $values);
         $workbook->disconnectWorksheets();
@@ -160,7 +161,7 @@ class AdminBranchSalesMonitoringTest extends TestCase
         $response->assertOk()->assertViewIs('crm.sales-pocketbook.admin-monitoring')
             ->assertSee('Admin Cabang · Monitoring Read Only')
             ->assertSeeTextInOrder(['Tanggal Lead', 'Nama Konsumen', 'Sales', 'Koordinator', 'Proyek', 'Sumber', 'Kanal / Aktivitas', 'Status Lead', 'Aktivitas Terbaru', 'Detail'])
-            ->assertSee('Leads')->assertSee('Agenda')->assertDontSee('tab=report', false)
+            ->assertSee('Leads')->assertSee('Rencana Harian Sales')->assertDontSee('tab=report', false)
             ->assertSee('Konsumen Admin')->assertSee('Koordinator Aktif')->assertSee('09/08/2026 15:30')
             ->assertDontSee('Koordinator Historis')->assertDontSee('Koordinator Nonaktif')
             ->assertDontSee('Sinkronisasi Lifecycle')->assertDontSee('Status Sync')->assertDontSee('Sync Lead')
@@ -197,7 +198,7 @@ class AdminBranchSalesMonitoringTest extends TestCase
         $response = $this->actingAs($this->admin)->get($this->url(['tab' => 'agenda']));
 
         $response->assertOk()
-            ->assertSeeTextInOrder(['Tanggal', 'Sales', 'Koordinator', 'Proyek', 'Kategori', 'Agenda', 'Lokasi', 'Hasil', 'Status'])
+            ->assertSeeTextInOrder(['Tanggal', 'Sales', 'Koordinator', 'Proyek', 'Kategori', 'Kegiatan', 'Lokasi', 'Hasil', 'Status'])
             ->assertSee('AGENDA_OWN')->assertDontSee('AGENDA_FOREIGN')->assertDontSee('Cabang Asing')
             ->assertDontSee('Tambah Agenda')->assertDontSee('Edit Agenda')->assertDontSee('Hapus Agenda')
             ->assertDontSee('Simpan Hasil')->assertDontSee('Jadwalkan Ulang');

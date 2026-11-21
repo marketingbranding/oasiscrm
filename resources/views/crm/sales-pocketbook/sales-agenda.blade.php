@@ -19,7 +19,7 @@
                 <header class="sales-lead-heading">
                     <span>Pengingat Lead</span>
                     <h2 id="follow-up-leads-title">Perlu dihubungi</h2>
-                    <p>Lead dengan hasil Cek Lokasi Follow Up.</p>
+                    <p>Lead dengan hasil Cek Lokasi Follow-up.</p>
                 </header>
                 <div class="crm-table-scroll"><table class="crm-data-table"><thead><tr><th>Lead</th><th>Proyek</th><th>Hasil terakhir</th><th>Aksi</th></tr></thead><tbody>
                     @foreach($followUpLeads as $followUpLead)

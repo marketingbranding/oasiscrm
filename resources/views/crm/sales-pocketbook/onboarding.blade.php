@@ -67,7 +67,7 @@
                     <div class="sales-pocketbook-onboarding-visual sales-pocketbook-onboarding-visual--tear" aria-hidden="true">
                         <span class="sales-pocketbook-onboarding-handoff">Ke Koordinator Sales</span>
                         <div class="sales-pocketbook-onboarding-receipt">
-                            <strong>AGENDA SALES</strong>
+                            <strong>RENCANA HARIAN SALES</strong>
                             <span>Tgl: 30 Okt 2026</span>
                             <span>Kat: Cek Lokasi</span>
                             <span>Agenda: Cek lokasi Jabung</span>

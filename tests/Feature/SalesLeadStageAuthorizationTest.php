@@ -9,6 +9,7 @@ use App\Models\Role;
 use App\Models\SalesLead;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Tests\TestCase;
 
@@ -93,6 +94,71 @@ class SalesLeadStageAuthorizationTest extends TestCase
 
         $this->assertSame('survey', $ownedLead->fresh()->lead_stage);
         $this->assertSame('survey', $outsideLead->fresh()->lead_stage);
+    }
+
+    public function test_br23_pre_utj_conversion_requires_reason_and_allowed_role(): void
+    {
+        [$lead, $sales] = $this->context('survey');
+        $this->enableFeature();
+        $admin = User::factory()->create([
+            'role_id' => Role::query()->where('slug', 'admin')->value('id'),
+            'branch_id' => $lead->branch_id,
+            'password_changed_at' => now(),
+        ]);
+        $lead->sales_user_id = $admin->id;
+        $lead->save();
+
+        $this->actingAs($admin)->postJson(route('sales-leads.consumer.store', $lead), [
+            'project_id' => $lead->project_id,
+            'nik' => '0123456789012345',
+            'id_kavling' => 'A-1',
+        ])->assertJsonValidationErrors('pre_utj_exception_reason');
+    }
+
+    public function test_br23_sales_cannot_pre_utj_convert_even_with_supplemental_role(): void
+    {
+        [$lead, $sales] = $this->context('survey');
+        $sales->roles()->attach(Role::query()->where('slug', 'admin')->value('id'));
+        $this->enableFeature();
+
+        $this->actingAs($sales)->postJson(route('sales-leads.consumer.store', $lead), [
+            'project_id' => $lead->project_id,
+            'nik' => '0123456789012345',
+            'id_kavling' => 'A-1',
+            'pre_utj_exception_reason' => 'Pengecualian uji BR-23',
+        ])->assertForbidden();
+    }
+
+    public function test_br23_pre_utj_conversion_records_reason_in_audit_for_coordinator(): void
+    {
+        [$lead, $sales] = $this->context('survey');
+        $this->enableFeature();
+        $coordinator = User::factory()->create([
+            'role_id' => Role::query()->where('slug', 'sales_coordinator')->value('id'),
+            'branch_id' => $lead->branch_id,
+            'password_changed_at' => now(),
+        ]);
+        DB::table('sales_coordinator_sales')->insert([
+            'coordinator_user_id' => $coordinator->id,
+            'sales_user_id' => $sales->id,
+            'is_active' => true,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $this->actingAs($coordinator)->postJson(route('sales-leads.consumer.store', $lead), [
+            'project_id' => $lead->project_id,
+            'nik' => '0123456789012345',
+            'id_kavling' => 'A-1',
+            'pre_utj_exception_reason' => 'Pengecualian uji BR-23',
+        ])->assertOk();
+
+        $this->assertDatabaseHas('activity_log', [
+            'subject_type' => SalesLead::class,
+            'subject_id' => $lead->id,
+            'event' => 'consumer_converted_before_utj',
+        ]);
+        $this->assertSame('Pengecualian uji BR-23', DB::table('activity_log')->where('subject_type', SalesLead::class)->where('subject_id', $lead->id)->where('event', 'consumer_converted_before_utj')->value('properties->reason'));
     }
 
     private function enableFeature(): void

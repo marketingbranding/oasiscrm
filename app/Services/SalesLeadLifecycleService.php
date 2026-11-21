@@ -14,6 +14,7 @@ use App\Models\User;
 use App\Support\FeatureFlag;
 use Carbon\CarbonInterface;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 use Throwable;
@@ -379,7 +380,7 @@ class SalesLeadLifecycleService
             if ($project === null || (int) $project->branch_id !== (int) $locked->branch_id) {
                 throw ValidationException::withMessages(['project_id' => 'Proyek lead tidak valid untuk cabang ini.']);
             }
-            $preUtj = $locked->resolveStageV3() !== 'utj';
+            $preUtj = FeatureFlag::enabled('lead_stages_v3') && $locked->resolveStageV3() !== 'utj';
             if ($preUtj && blank($data['pre_utj_exception_reason'] ?? null)) {
                 throw ValidationException::withMessages(['pre_utj_exception_reason' => 'Alasan wajib diisi untuk konversi sebelum UTJ.']);
             }
@@ -441,6 +442,7 @@ class SalesLeadLifecycleService
                     'branch_id' => $locked->branch_id,
                     'project_id' => $locked->project_id,
                     'sales_user_id' => $locked->sales_user_id,
+                    'reason' => $data['pre_utj_exception_reason'],
                 ]);
             }
             if ($sheetName === 'data_konsumen') {

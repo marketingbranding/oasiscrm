@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Enums\SalesLeadStatus;
 use App\Exceptions\SalesLeadSpreadsheetContractException;
+use App\Models\AppSetting;
 use App\Models\Branch;
 use App\Models\LeadMaster;
 use App\Models\Role;
@@ -12,6 +13,7 @@ use App\Models\SalesLead;
 use App\Models\SalesLeadConsumerLink;
 use App\Models\SalesLeadSlikAttempt;
 use App\Models\User;
+use App\Services\AppSettingResolver;
 use App\Services\SalesLeadLifecycleService;
 use App\Services\SalesLeadSpreadsheetWriter;
 use App\ValueObjects\SalesLeadSpreadsheetWriteResult;
@@ -108,6 +110,8 @@ class SalesLeadLifecycleOperationsTest extends TestCase
 
     public function test_br23_pre_utj_conversion_requires_exception_reason_and_records_audit_metadata(): void
     {
+        AppSetting::query()->updateOrCreate(['key' => 'lead_stages_v3'], ['value' => true, 'group' => 'feature_flags']);
+        app(AppSettingResolver::class)->forget('lead_stages_v3');
         [$project, $sales, $lead] = array_slice($this->context(), 1);
         $admin = $this->user('admin', $lead->branch, 'Admin Cabang');
         $admin->assignedProjects()->attach($project->id, ['is_primary' => true, 'is_active' => true]);
@@ -121,6 +125,8 @@ class SalesLeadLifecycleOperationsTest extends TestCase
 
     public function test_br23_primary_sales_with_supplemental_role_cannot_convert_pre_utj_by_direct_json_or_url(): void
     {
+        AppSetting::query()->updateOrCreate(['key' => 'lead_stages_v3'], ['value' => true, 'group' => 'feature_flags']);
+        app(AppSettingResolver::class)->forget('lead_stages_v3');
         [$project, $sales, $lead] = array_slice($this->context(), 1);
         $sales->roles()->attach(Role::query()->where('slug', 'admin')->value('id'));
         $payload = ['project_id' => $project->id, 'nik' => '0123456789012345', 'id_kavling' => 'A-1', 'pre_utj_exception_reason' => 'Bypass'];

@@ -374,7 +374,7 @@ class SalesLead extends Model
                 default => 'Lead Buku Saku diperbarui',
             },
             // Deliberately limited to identifiers and stage metadata; never persist lead PII here.
-            'properties' => array_intersect_key($properties, array_flip(['branch_id', 'project_id', 'sales_user_id', 'stage', 'stage_label', 'changed_fields'])),
+            'properties' => array_intersect_key($properties, array_flip(['branch_id', 'project_id', 'sales_user_id', 'stage', 'stage_label', 'changed_fields', 'reason'])),
         ]);
     }
 }

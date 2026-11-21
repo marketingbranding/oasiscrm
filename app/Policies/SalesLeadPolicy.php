@@ -240,7 +240,7 @@ class SalesLeadPolicy
             return false;
         }
 
-        if ($lead->resolveStageV3() !== 'utj') {
+        if (FeatureFlag::enabled('lead_stages_v3') && $lead->resolveStageV3() !== 'utj') {
             if (! $user->isAdminCabang() && ! $user->hasPrimaryRole(['sas', 'sales_coordinator'])) {
                 return false;
             }

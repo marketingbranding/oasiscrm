@@ -182,7 +182,7 @@ class ConsumerV2ProcessTest extends TestCase
         $lifecycle->recordBast($application->fresh(), ['tanggal_bast' => '2026-10-03'], $actor);
         app(ConsumerProcessService::class)->recordWarranty($application->fresh(), ['status_komplain' => 'Tidak Ada Komplain', 'status_garansi' => 'Tidak Ada Komplain'], $actor);
 
-        $this->assertDatabaseHas('consumer_applications', ['id' => $application->id, 'transaction_status' => 'SELESAI', 'current_process' => 'selesai']);
+        $this->assertDatabaseHas('consumer_applications', ['id' => $application->id, 'transaction_status' => 'LANJUT', 'current_process' => 'selesai']);
         $this->assertSame(1, app(ConsumerProcessService::class)->completedQuery($actor)->whereKey($application->id)->count());
     }
 

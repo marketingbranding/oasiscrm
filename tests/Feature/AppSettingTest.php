@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\ActivityLog;
+use App\Models\Branch;
 use App\Models\Role;
 use App\Models\User;
 use App\Services\AppSettingResolver;
@@ -53,6 +54,32 @@ class AppSettingTest extends TestCase
         $this->assertSame(20, app(AppSettingResolver::class)->int('sales_agenda.reminder_lead_minutes'));
         $this->assertSame(5, app(AppSettingResolver::class)->int('sales_monitoring.stale_lead_days'));
         $this->assertTrue(app(AppSettingResolver::class)->bool('org_hierarchical_monitoring'));
+    }
+
+    public function test_superadmin_can_update_branch_scoped_rollout_and_audit_it(): void
+    {
+        $superadmin = $this->user('superadmin');
+        $branch = Branch::create(['code' => 'SET', 'name' => 'Settings', 'is_active' => true]);
+
+        $this->actingAs($superadmin)->put(route('admin.app-settings.update'), [
+            'settings' => [
+                'lead_stages_v3__mode' => 'branches',
+                'lead_stages_v3__branch_ids' => [$branch->id],
+            ],
+        ])->assertRedirect(route('admin.app-settings.index'));
+
+        $this->assertSame(['mode' => 'branches', 'branch_ids' => [$branch->id]], app(AppSettingResolver::class)->value('lead_stages_v3'));
+        $this->assertDatabaseHas('activity_log', ['event' => 'app_setting_updated']);
+    }
+
+    public function test_branch_scoped_rollout_requires_active_branch_for_branches_mode(): void
+    {
+        $superadmin = $this->user('superadmin');
+        $response = $this->actingAs($superadmin)->from(route('admin.app-settings.index'))->put(route('admin.app-settings.update'), [
+            'settings' => ['lead_stages_v3__mode' => 'branches'],
+        ]);
+
+        $response->assertRedirect()->assertSessionHasErrors('settings.lead_stages_v3.branch_ids');
     }
 
     public function test_non_superadmin_cannot_read_or_update_settings(): void

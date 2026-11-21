@@ -101,7 +101,7 @@ final class ConsumerDatabaseWorkspaceService
             'customer:id,name,phone',
             'sales:id,name',
             'kavling:id,project_id,name,kavling_code',
-            'stageEvents:id,consumer_application_id,stage,event_date,status,decision,occurred_at,completed_at,notes,reason',
+            'processStageEvents:id,consumer_application_id,event_type,stage,event_date,status,decision,occurred_at,completed_at,notes,reason',
             'bankProcesses:id,consumer_application_id,attempt_no,bank_name,status,response_type,no_sp3k,approved_plafond,approved_tenor,sp3k_at,rejected_at,rejection_reason,submitted_at,verified_at',
             'psjbs:id,consumer_application_id,consumer_stage_event_id,id_psjb,tanggal_psjb,status',
             'ppjbDevelopers:id,consumer_application_id,consumer_stage_event_id,tanggal_sp3k,tanggal_ttd_ppjb,status',
@@ -162,7 +162,7 @@ final class ConsumerDatabaseWorkspaceService
                 'akad_date' => $application->akad_date?->toDateString(),
                 'updated_at' => $application->updated_at?->toIso8601String(),
             ],
-            'process' => $application->stageEvents->sortByDesc('occurred_at')->map(function (ConsumerStageEvent $event) use ($stageLabels, $psjbByEvent, $ppjbByEvent, $akadByEvent, $bastByEvent): array {
+            'process' => $application->processStageEvents->sortByDesc('occurred_at')->map(function (ConsumerStageEvent $event) use ($stageLabels, $psjbByEvent, $ppjbByEvent, $akadByEvent, $bastByEvent): array {
                 $summary = match ($event->stage) {
                     'PSJB' => ($psjbByEvent->get($event->id)?->id_psjb ? 'ID PSJB: '.$psjbByEvent->get($event->id)->id_psjb : null),
                     'ppjb_dev' => $ppjbByEvent->get($event->id)?->tanggal_ttd_ppjb?->format('d M Y') ? 'PPJB ditandatangani '.$ppjbByEvent->get($event->id)->tanggal_ttd_ppjb->format('d M Y') : null,
@@ -198,7 +198,7 @@ final class ConsumerDatabaseWorkspaceService
                 'verified_at' => $attempt->verified_at?->toIso8601String(),
             ])->values()->all(),
             'counts' => [
-                'process' => $application->stageEvents->count(),
+                'process' => $application->processStageEvents->count(),
                 'payment' => $application->bankProcesses->count(),
                 'files' => $application->documents()->count(),
                 'activity' => count($activities),
@@ -230,7 +230,7 @@ final class ConsumerDatabaseWorkspaceService
                 'kavling:id,project_id,name,kavling_code',
                 'bankProcesses:id,consumer_application_id,attempt_no,bank_name,status,response_type',
             ])
-            ->withCount(['stageEvents', 'bankProcesses', 'documents']);
+            ->withCount(['processStageEvents', 'bankProcesses', 'documents']);
 
         $search = trim($request->string('search')->toString());
         if ($search !== '') {

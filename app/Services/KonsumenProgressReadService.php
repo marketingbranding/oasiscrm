@@ -40,7 +40,7 @@ class KonsumenProgressReadService
     {
         $pipeline = array_fill_keys(array_keys(KonsumenPipelineService::STAGES), []);
         $applications = ConsumerApplication::query()
-            ->with(['customer', 'sales', 'project', 'kavling', 'promo', 'stageEvents', 'bankProcesses'])
+            ->with(['customer', 'sales', 'project', 'kavling', 'promo', 'processStageEvents', 'bankProcesses'])
             ->where('branch_id', $branch->id)
             ->when($project, fn ($query) => $query->where('project_id', $project->id))
             ->get();
@@ -95,7 +95,7 @@ class KonsumenProgressReadService
             return $stage;
         }
 
-        return $application->stageEvents
+        return $application->processStageEvents
             ->sort(function ($left, $right): int {
                 return [$right->occurred_at?->timestamp ?? PHP_INT_MIN, $right->id]
                     <=> [$left->occurred_at?->timestamp ?? PHP_INT_MIN, $left->id];

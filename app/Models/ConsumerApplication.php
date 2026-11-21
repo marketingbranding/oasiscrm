@@ -173,6 +173,11 @@ class ConsumerApplication extends Model
         return $this->hasMany(ConsumerStageEvent::class, 'consumer_application_id');
     }
 
+    public function processStageEvents(): HasMany
+    {
+        return $this->stageEvents()->whereNull('event_type');
+    }
+
     public function transactionEvents(): HasMany
     {
         return $this->stageEvents()->whereNotNull('event_type');

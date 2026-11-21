@@ -103,6 +103,22 @@ class ConsumerV2ProcessTest extends TestCase
         $this->assertNull($nup->source_application_id);
     }
 
+    public function test_br22_nup_conversion_rejects_occupied_kavling_without_mutation(): void
+    {
+        $application = ConsumerApplication::factory()->create();
+        $actor = $this->superadmin($application);
+        $kavling = Kavling::create(['project_id' => $application->project_id, 'kavling_code' => 'N-02', 'name' => 'N-02']);
+        $occupied = ConsumerApplication::factory()->create(['branch_id' => $application->branch_id, 'project_id' => $application->project_id]);
+        app(ConsumerKavlingLifecycleService::class)->assign($occupied, $kavling);
+        $nup = ConsumerNup::factory()->create(['branch_id' => $application->branch_id, 'project_id' => $application->project_id]);
+
+        $this->expectException(\DomainException::class);
+        app(ConsumerNupService::class)->convert($nup, ['kavling_id' => $kavling->id], $actor);
+
+        $this->assertDatabaseHas('consumer_nups', ['id' => $nup->id, 'status' => 'waiting', 'converted_application_id' => null]);
+        $this->assertDatabaseCount('consumer_applications', 2);
+    }
+
     public function test_br21_return_to_nup_releases_kavling_closes_transaction_and_links_issue(): void
     {
         $application = ConsumerApplication::factory()->create();

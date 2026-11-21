@@ -11,11 +11,12 @@ use App\Models\User;
 use App\Services\SalesPocketbookOnboardingService;
 use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Tests\Concerns\FreezesSalesAgendaTime;
 use Tests\TestCase;
 
 class SalesAgendaWorkspaceInteractionMarkupTest extends TestCase
 {
-    use RefreshDatabase;
+    use FreezesSalesAgendaTime, RefreshDatabase;
 
     public function test_week_navigation_uses_week_controls_without_a_date_picker(): void
     {

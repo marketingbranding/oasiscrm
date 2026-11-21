@@ -12,11 +12,12 @@ use App\Services\SalesAgendaReceiptService;
 use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
+use Tests\Concerns\FreezesSalesAgendaTime;
 use Tests\TestCase;
 
 class SalesAgendaReceiptWorkflowTest extends TestCase
 {
-    use RefreshDatabase;
+    use FreezesSalesAgendaTime, RefreshDatabase;
 
     public function test_summary_excludes_cancelled_carried_forward_and_extra_agendas(): void
     {

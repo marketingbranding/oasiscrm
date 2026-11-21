@@ -12,11 +12,12 @@ use App\Services\SalesPocketbookOnboardingService;
 use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
+use Tests\Concerns\FreezesSalesAgendaTime;
 use Tests\TestCase;
 
 class SalesAgendaWorkspaceRenderTest extends TestCase
 {
-    use RefreshDatabase;
+    use FreezesSalesAgendaTime, RefreshDatabase;
 
     public function test_receipt_heading_matches_today_tomorrow_and_other_planned_dates(): void
     {

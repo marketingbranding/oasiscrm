@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Crm;
 use App\Http\Controllers\Controller;
 use App\Models\Branch;
 use App\Models\SalesLead;
+use App\Services\CoordinatorLeadTeamService;
 use App\Services\OrganizationScopeService;
 use App\Services\SalesLeadSheetOptionService;
 use App\Services\WorkspaceAccessService;
@@ -19,6 +20,7 @@ class SalesLeadOptionController extends Controller
         Branch $branch,
         WorkspaceAccessService $access,
         OrganizationScopeService $organizationScope,
+        CoordinatorLeadTeamService $coordinatorTeam,
     ): JsonResponse {
         $this->authorize('create', SalesLead::class);
         abort_unless($access->canViewBranch($request->user(), $branch), 403);
@@ -30,6 +32,15 @@ class SalesLeadOptionController extends Controller
             return response()->json(['message' => 'Sinkronisasi Google Sheets Lead Sales sedang dinonaktifkan.'], 503);
         }
 
-        return response()->json(['options' => app(SalesLeadSheetOptionService::class)->forBranch($branch)]);
+        $options = app(SalesLeadSheetOptionService::class)->forBranch($branch);
+        if (FeatureFlag::enabled('org_hierarchical_monitoring') && $coordinatorTeam->isCoordinator($request->user())) {
+            $salesNames = $coordinatorTeam->currentSales($request->user())
+                ->filter(fn ($sales) => (int) $sales->branch_id === (int) $branch->id)
+                ->pluck('name')
+                ->all();
+            $options['sales'] = array_values(array_intersect($options['sales'], $salesNames));
+        }
+
+        return response()->json(['options' => $options]);
     }
 }

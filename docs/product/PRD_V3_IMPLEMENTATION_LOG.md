@@ -28,7 +28,7 @@ PRD sumber kebenaran: `docs/product/PRD_OASIS_CRM_V3.md` versi 3.3 (D30–D33)
 | WP-1.1 | 1 | Pengaturan Aturan: `app_settings`, resolver bertipe, audit perubahan | Selesai untuk consumer awal; aturan lain pindah bersama consumer. Commits `b2c351c`, `4ee24eb`, `fe565dd` | BR-06; semua BR bertanda ⚙ pada consumer terkait |
 | WP-1.2 | 1 | Feature flag PRD v3 dan helper pembacaan tunggal | Selesai; four registered flags default mati. Commit `47526ee` | BR-50–BR-53, risiko transisi |
 | WP-1.3 | 1 | Role `ass_manager`, atribut user, migrasi pemetaan role lama | Selesai untuk fondasi role, atribut, parity, dan command dry-run; form/import/legacy-check ditunda | §4.1, BR-21, BR-25, D6, D21, D25; D32 ditunda |
-| WP-1.4 | 1 | Graf organisasi kanonis dan pemantauan berjenjang | Desain disetujui; irisan 1.4a–1.4f sedang berjalan | BR-50–BR-53 |
+| WP-1.4 | 1 | Graf organisasi kanonis dan pemantauan berjenjang | Selesai; irisan 1.4a–1.4f selesai. Tidak ada cutover produksi atau backfill write oleh agent | BR-50–BR-53 |
 | WP-1.5 | 1 | Jam kerja, target 480, Jumat, akhir pekan, hari libur | Belum mulai | BR-01–BR-09 |
 | WP-1.6 | 1 | Tahap Lead Baru–UTJ, Gugur, kunci setelah UTJ | Belum mulai | BR-10–BR-16 |
 | WP-1.7 | 1 | Status/event transaksi, alasan Mundur, NUP baru | Belum mulai | BR-20–BR-36 |
@@ -273,6 +273,14 @@ Status: selesai. Saat `org_hierarchical_monitoring` aktif, `SalesLeadPolicy` men
 - Modul Work Planner dan modul non-pemantauan tidak diubah.
 - Tes BR-51: `tests/Feature/SalesMonitoringReadOnlyMutationTest.php`, suite terkait 59 tes lulus.
 - Changelog: migrasi idempoten `2026_11_21_000003_add_sales_monitoring_read_only_changelog.php`.
+
+#### WP-1.4 Task 6 — Isolasi Koordinator lintas endpoint (1.4f)
+
+Status: selesai. Saat `org_hierarchical_monitoring` aktif, Coordinator hanya menerima pilihan Sales dari tim aktifnya pada autocomplete Lead. URL langsung dan JSON untuk export, komentar, serta monitoring Lead asing tetap ditolak oleh scope yang sudah ada. Tidak ada tool AI khusus pemantauan Sales atau route Team History; keduanya tidak ditambahkan.
+
+- Bypass ditemukan: `SalesLeadOptionController` mengembalikan daftar Sales dari sheet tingkat cabang tanpa penyaringan tim. Saat flag aktif, daftar `sales` kini diiriskan dengan `CoordinatorLeadTeamService::currentSales()` dan cabang target. Flag mati tidak berubah.
+- Tes BR-53: `SalesMonitoringScopeBoundaryTest` menguji autocomplete JSON, export direct/JSON, komentar direct/JSON, dan Lead options cabang luar.
+- Changelog: migrasi idempoten `2026_11_21_000004_add_sales_monitoring_coordinator_isolation_changelog.php`.
 
 ### WP-1.5 — Kalender kerja
 

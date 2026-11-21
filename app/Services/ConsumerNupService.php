@@ -5,6 +5,8 @@ namespace App\Services;
 use App\Models\ActivityLog;
 use App\Models\ConsumerApplication;
 use App\Models\ConsumerNup;
+use App\Models\Kavling;
+use App\Models\SalesLead;
 use App\Models\User;
 use DomainException;
 use Illuminate\Auth\Access\AuthorizationException;
@@ -16,6 +18,7 @@ class ConsumerNupService
     public function __construct(
         private readonly OrganizationScopeService $scope,
         private readonly ConsumerEntryService $entry,
+        private readonly ConsumerKavlingLifecycleService $kavlingLifecycle,
     ) {}
 
     public function visibleQuery(User $user): Builder
@@ -43,6 +46,7 @@ class ConsumerNupService
                 'nup_number' => $data['nup_number'],
                 'registered_at' => $data['registered_at'],
                 'status' => 'waiting',
+                'entry_type' => $data['entry_type'] ?? 'legacy',
                 'source' => $data['source'] ?? 'manual',
                 'notes' => $data['notes'] ?? null,
             ]);
@@ -53,6 +57,54 @@ class ConsumerNupService
                 'event' => 'consumer_nup_created',
                 'description' => 'NUP baru dicatat.',
                 'properties' => ['action' => 'nup_created', 'source' => 'manual'],
+            ]);
+
+            return $nup->fresh(['customer', 'branch', 'project']);
+        });
+    }
+
+    public function createFromLead(SalesLead $lead, array $data, User $actor): ConsumerNup
+    {
+        if ($lead->resolveStageV3() !== 'utj') {
+            throw new DomainException('Lead harus berada pada tahap UTJ sebelum dibuat menjadi NUP.');
+        }
+
+        $this->assertScope($actor, (int) $lead->branch_id, (int) $lead->project_id);
+
+        return DB::transaction(function () use ($lead, $data, $actor): ConsumerNup {
+            $existing = ConsumerNup::query()
+                ->where('source', 'lead')
+                ->where('source_id', (string) $lead->id)
+                ->lockForUpdate()
+                ->first();
+            if ($existing !== null) {
+                return $existing;
+            }
+
+            $customer = $this->entry->resolveOrCreateCustomer([
+                'name' => $lead->customer_name,
+                'phone' => $lead->phone,
+                'nik' => $data['nik'] ?? null,
+            ]);
+            $nup = ConsumerNup::create([
+                'customer_id' => $customer->id,
+                'branch_id' => $lead->branch_id,
+                'project_id' => $lead->project_id,
+                'nup_number' => $data['nup_number'],
+                'registered_at' => $data['registered_at'] ?? today()->toDateString(),
+                'status' => 'waiting',
+                'entry_type' => 'from_lead',
+                'source' => 'lead',
+                'source_id' => (string) $lead->id,
+                'notes' => $data['notes'] ?? $lead->notes,
+            ]);
+            ActivityLog::create([
+                'causer_id' => $actor->id,
+                'subject_type' => ConsumerNup::class,
+                'subject_id' => $nup->id,
+                'event' => 'consumer_nup_created_from_lead',
+                'description' => 'NUP dibuat dari lead UTJ.',
+                'properties' => ['action' => 'nup_created_from_lead', 'lead_id' => $lead->id],
             ]);
 
             return $nup->fresh(['customer', 'branch', 'project']);
@@ -75,6 +127,13 @@ class ConsumerNupService
             if ($projectId === null) {
                 throw new DomainException('Proyek wajib dipilih saat NUP dilanjutkan menjadi konsumen.');
             }
+            if (empty($data['kavling_id'])) {
+                throw new DomainException('Kavling wajib dipilih saat NUP dilanjutkan menjadi konsumen.');
+            }
+            $kavling = Kavling::query()->whereKey($data['kavling_id'])->firstOrFail();
+            if ((int) $kavling->project_id !== (int) $projectId) {
+                throw new DomainException('Kavling harus berada pada proyek NUP.');
+            }
 
             $application = $this->entry->create([
                 'name' => $locked->customer->name,
@@ -93,13 +152,14 @@ class ConsumerNupService
                 'branch_id' => $locked->branch_id,
                 'project_id' => $projectId,
                 'sales_user_id' => $data['sales_user_id'] ?? null,
-                'kavling_id' => $data['kavling_id'] ?? null,
+                'kavling_id' => null,
                 'payment_method' => $data['payment_method'] ?? null,
                 'entry_mode' => 'new',
                 'acquisition_source' => 'nup',
                 'source_nup_id' => $locked->id,
                 'notes' => $data['notes'] ?? $locked->notes,
             ], $actor);
+            $this->kavlingLifecycle->assign($application, $kavling);
             $locked->update(['status' => 'converted', 'converted_application_id' => $application->id]);
             ActivityLog::create([
                 'causer_id' => $actor->id,

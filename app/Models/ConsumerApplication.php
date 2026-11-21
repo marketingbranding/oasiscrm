@@ -123,6 +123,11 @@ class ConsumerApplication extends Model
         return $this->belongsTo(ConsumerNup::class, 'source_nup_id');
     }
 
+    public function returnedNups(): HasMany
+    {
+        return $this->hasMany(ConsumerNup::class, 'source_application_id');
+    }
+
     public function historicalEnteredBy(): BelongsTo
     {
         return $this->belongsTo(User::class, 'historical_entered_by');

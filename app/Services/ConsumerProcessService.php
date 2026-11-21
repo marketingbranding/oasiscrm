@@ -63,7 +63,7 @@ class ConsumerProcessService
             $updates = ['current_process' => 'garansi', 'current_process_source' => 'operational'];
             if (in_array($warranty->status_garansi, ['Selesai', 'Tidak Ada Komplain'], true)) {
                 $updates['current_process'] = 'selesai';
-                $updates['transaction_status'] = 'SELESAI';
+                $updates['transaction_status'] = 'LANJUT';
                 $updates['consumer_status'] = 'Selesai';
             }
             $application->update($updates);
@@ -111,7 +111,7 @@ class ConsumerProcessService
             ->when($this->scope->requiresProjectScope($user, 'consumer_progress'), fn (Builder $query): Builder => $query->whereIn('project_id', $projectIds))
             ->when(! $this->scope->requiresProjectScope($user, 'consumer_progress'), fn (Builder $query): Builder => $query->where(fn (Builder $nested): Builder => $nested->whereNull('project_id')->orWhereIn('project_id', $projectIds)))
             ->where(function (Builder $query): void {
-                $query->where('transaction_status', 'SELESAI')
+                $query->whereIn('transaction_status', ['LANJUT', 'SELESAI'])
                     ->orWhere(function (Builder $nested): void {
                         $nested->whereHas('bastRecords')->whereHas('warranties', fn (Builder $warranty): Builder => $warranty->whereIn('status_garansi', ['Selesai', 'Tidak Ada Komplain']));
                     });

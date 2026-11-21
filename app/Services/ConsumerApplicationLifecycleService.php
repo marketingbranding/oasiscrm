@@ -82,7 +82,7 @@ final class ConsumerApplicationLifecycleService
             $this->kavlingLifecycle->mundur($locked);
             $locked->update(['withdraw_reason' => $withdrawReason]);
             $result = $locked->fresh();
-            $this->audit($actor, $result, $before, $this->snapshot($result));
+            $this->audit($actor, $result, $before, $this->snapshot($result), 'consumer_mundur', 'mundur');
 
             return $result;
         });
@@ -176,7 +176,7 @@ final class ConsumerApplicationLifecycleService
 
             $oldApplication->update([
                 'application_status' => 'REPLACED',
-                'transaction_status' => 'DIGANTI_KONSUMEN',
+                'transaction_status' => 'DITUTUP',
                 'replacement_application_id' => $replacement->id,
                 'kavling_id' => null,
             ]);
@@ -184,7 +184,7 @@ final class ConsumerApplicationLifecycleService
             $this->audit($actor, $oldApplication, $before, [
                 'old_application' => $this->snapshot($oldApplication->fresh()),
                 'replacement_application' => $this->snapshot($replacement->fresh()),
-            ]);
+            ], 'consumer_ganti_konsumen', 'ganti_konsumen');
 
             return $replacement->fresh(['customer', 'kavling', 'project', 'sales', 'promo']);
         });
@@ -206,16 +206,16 @@ final class ConsumerApplicationLifecycleService
         })->all();
     }
 
-    private function audit(User $actor, ConsumerApplication $application, array $before, array $after): void
+    private function audit(User $actor, ConsumerApplication $application, array $before, array $after, string $event, string $action): void
     {
         ActivityLog::query()->create([
             'causer_id' => $actor->id,
             'subject_type' => ConsumerApplication::class,
             'subject_id' => $application->id,
-            'event' => 'consumer_ganti_konsumen',
-            'description' => 'Konsumen aplikasi diganti dengan aplikasi pengganti.',
+            'event' => $event,
+            'description' => 'Perubahan lifecycle aplikasi konsumen: '.$action.'.',
             'properties' => [
-                'action' => 'ganti_konsumen',
+                'action' => $action,
                 'source' => 'manual',
                 'before' => $before,
                 'after' => $after,

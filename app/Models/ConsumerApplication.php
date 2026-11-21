@@ -10,6 +10,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Str;
+use DomainException;
 use LogicException;
 
 class ConsumerApplication extends Model
@@ -224,11 +225,25 @@ class ConsumerApplication extends Model
 
     public function canonicalTransactionStatus(): string
     {
-        return match (strtoupper(trim((string) $this->transaction_status))) {
+        $status = strtoupper(trim((string) $this->transaction_status));
+
+        return match ($status) {
             'MUNDUR', 'REJECT', 'REJECTED', 'CANCELLED', 'WITHDRAWN' => 'MUNDUR',
             'DITUTUP', 'REPLACED', 'DIGANTI_KONSUMEN', 'CLOSED', 'COMPLETED', 'SELESAI' => 'DITUTUP',
-            default => 'LANJUT',
+            'LANJUT', 'PINDAH KAVLING' => 'LANJUT',
+            '' => 'LANJUT',
+            default => throw new DomainException('Status transaksi legacy tidak dikenali: '.$this->transaction_status),
         };
+    }
+
+    public static function validateNewTransactionStatus(?string $status): string
+    {
+        $canonical = strtoupper(trim((string) ($status ?? 'LANJUT')));
+        if (! in_array($canonical, ['LANJUT', 'MUNDUR'], true)) {
+            throw new DomainException('Status transaksi baru hanya boleh LANJUT atau MUNDUR.');
+        }
+
+        return $canonical;
     }
 
     public static function generateTransactionIdentity(?int $branchId): string

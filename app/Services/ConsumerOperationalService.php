@@ -68,10 +68,7 @@ final class ConsumerOperationalService
 
     public function create(array $data, User $actor, ConsumerKavlingLifecycleService $lifecycle): ConsumerApplication
     {
-        $transactionStatus = strtoupper(trim((string) ($data['transaction_status'] ?? 'LANJUT')));
-        if (($data['entry_mode'] ?? 'new') === 'new' && ($transactionStatus === 'DITUTUP' || ! in_array($transactionStatus, ['LANJUT', 'MUNDUR'], true))) {
-            throw new DomainException('Status transaksi baru hanya boleh LANJUT atau MUNDUR.');
-        }
+        $transactionStatus = ConsumerApplication::validateNewTransactionStatus($data['transaction_status'] ?? 'LANJUT');
 
         return DB::transaction(function () use ($data, $actor, $lifecycle, $transactionStatus): ConsumerApplication {
             $application = ConsumerApplication::create([

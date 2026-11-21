@@ -21,6 +21,7 @@ use App\Services\SalesMonitoringProjectionService;
 use App\Services\SalesTeamScopeService;
 use App\Services\SalesWeeklyMetricsService;
 use App\Services\WorkspaceAccessService;
+use App\Support\FeatureFlag;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
@@ -167,6 +168,12 @@ class SalesPocketbookController extends Controller
                 ->whereDate($reportMetric ? SalesWeeklyMetricsService::METRIC_COLUMNS[$reportMetric] : 'lead_date', '<=', $reportPeriod['end']->toDateString()))
             ->when($request->filled('stage'), function (Builder $query) use ($request) {
                 $stage = (string) $request->query('stage');
+                if (FeatureFlag::enabled('lead_stages_v3')) {
+                    abort_unless(array_key_exists($stage, SalesLead::STAGE_V3_LABELS), 422);
+                    $query->where('lead_stage', $stage);
+
+                    return;
+                }
                 abort_unless(array_key_exists($stage, SalesLead::STAGES), 422);
                 $query->whereNotNull($stage);
                 $later = array_slice(SalesLead::STAGE_ORDER, array_search($stage, SalesLead::STAGE_ORDER, true) + 1);
@@ -447,6 +454,12 @@ class SalesPocketbookController extends Controller
             ->when($leadSourceFilter, fn (Builder $query) => $query->whereEffectiveSource($leadSourceFilter))
             ->when($request->filled('stage'), function (Builder $query) use ($request) {
                 $stage = (string) $request->query('stage');
+                if (FeatureFlag::enabled('lead_stages_v3')) {
+                    abort_unless(array_key_exists($stage, SalesLead::STAGE_V3_LABELS), 422);
+                    $query->where('lead_stage', $stage);
+
+                    return;
+                }
                 abort_unless(array_key_exists($stage, SalesLead::STAGES), 422);
                 $query->whereNotNull($stage);
                 $laterStages = array_slice(SalesLead::STAGE_ORDER, array_search($stage, SalesLead::STAGE_ORDER, true) + 1);

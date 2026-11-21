@@ -322,7 +322,7 @@
             <x-crm.field label="Proyek" for="lead-filter-project"><select id="lead-filter-project" class="sales-input" name="project_id" x-model="project" @change="projectChanged()"><option value="">Semua proyek</option>@foreach($projects as $project)<option value="{{ $project->id }}" x-show="projectVisible('{{ $project->id }}')" :disabled="!projectVisible('{{ $project->id }}')">{{ $project->project_name }}</option>@endforeach</select></x-crm.field>
             <x-crm.field label="Sales" for="lead-filter-sales"><select id="lead-filter-sales" class="sales-input" name="sales_user_id" x-model="sales"><option value="">Semua sales</option>@foreach($salesUsers as $sales)<option value="{{ $sales->id }}" x-show="salesVisible('{{ $sales->id }}')" :disabled="!salesVisible('{{ $sales->id }}')">{{ $sales->name }}</option>@endforeach</select></x-crm.field>
             <x-crm.field label="Sumber Lead" for="lead-filter-source"><select id="lead-filter-source" class="sales-input" name="lead_source"><option value="">Semua sumber</option>@foreach($leadSourceOptions as $source)<option value="{{ $source }}" @selected($selectedLeadSource === $source)>{{ $source }}</option>@endforeach</select></x-crm.field>
-            <x-crm.field label="Tahap Saat Ini" for="lead-filter-stage"><select id="lead-filter-stage" class="sales-input" name="stage"><option value="">Semua tahap</option>@foreach(\App\Models\SalesLead::STAGES as $stage => $label)<option value="{{ $stage }}" @selected(request('stage') === $stage)>{{ $label }}</option>@endforeach</select></x-crm.field>
+            <x-crm.field label="Tahap Saat Ini" for="lead-filter-stage"><select id="lead-filter-stage" class="sales-input" name="stage"><option value="">Semua tahap</option>@foreach(\App\Support\FeatureFlag::enabled('lead_stages_v3') ? \App\Models\SalesLead::STAGE_V3_LABELS : \App\Models\SalesLead::STAGES as $stage => $label)<option value="{{ $stage }}" @selected(request('stage') === $stage)>{{ $label }}</option>@endforeach</select></x-crm.field>
             <div class="crm-field"><span class="crm-field-label" id="lead-period-label">Periode</span><div class="crm-field-control">@include('crm.sales-pocketbook._period-picker', ['periodPickerId' => 'lead-period'])</div></div>
             <div class="sales-lead-filter-actions">
                 <x-crm.button type="submit" variant="primary" accent="sales">Terapkan Filter</x-crm.button>
@@ -337,9 +337,9 @@
         <div class="sales-lead-list">
             @forelse($leads as $lead)
             @php
-                $leadStage = $lead->currentStage();
+                $leadStage = \App\Support\FeatureFlag::enabled('lead_stages_v3') ? $lead->resolveStageV3() : $lead->currentStage();
                 $leadActivityAt = $lead->lastActivityAt();
-                $leadStageVariant = $leadStage === 'akad_at' ? 'success' : ($leadStage ? 'processing' : 'pending');
+                $leadStageVariant = in_array($leadStage, ['utj', 'gugur'], true) ? 'success' : ($leadStage ? 'processing' : 'pending');
                 $leadEditPayload = ['id' => $lead->id, 'url' => route('sales-leads.update', $lead), 'fallback_url' => route('sales-leads.edit', $lead), 'site_visit_modal' => 'lead-site-visit-'.$lead->id, 'token' => app(\App\Services\OptimisticLockService::class)->token($lead), 'branch_id' => (string) $lead->branch_id, 'project_id' => (string) $lead->project_id, 'sales_user_id' => (string) $lead->sales_user_id, 'source' => $lead->source, 'platform' => $lead->platform, 'campaign_name' => $lead->campaign_name, 'id_promo' => $lead->id_promo, 'current_status' => $lead->current_status->value, 'current_status_label' => $lead->current_status->label(), 'status_manual' => $lead->current_status->isManual(), 'lead_date' => $lead->lead_date->toDateString(), 'customer_name' => $lead->customer_name, 'phone' => $lead->phone, 'notes' => $lead->notes, 'linked_consumer_reference' => $lead->linked_consumer_reference];
             @endphp
             <article class="sales-lead-item" data-lead-row="{{ $lead->id }}">
@@ -356,7 +356,7 @@
                     <div class="sales-lead-activity"><dt>Aktivitas terbaru</dt><dd><strong data-lead-activity-label="{{ $lead->id }}">{{ $leadStage ? 'Tahap '.$lead->currentStageLabel() : 'Lead dicatat' }}</strong><span data-lead-activity-time="{{ $lead->id }}" data-activity-stage="{{ $leadStage }}" data-lead-baseline="{{ $lead->lead_date->format('d/m/Y') }} 00:00">{{ $leadActivityAt?->format('d/m/Y H:i') ?: '—' }}</span></dd></div>
                 </dl>
                 @include('crm.sales-pocketbook._lead-lifecycle', ['lead' => $lead])
-                @can('updateStage', $lead)<div class="sales-lead-progress"><span class="sales-lead-section-label">Perbarui progres</span>@include('crm.sales-pocketbook._stage-controls', ['lead' => $lead])</div>@endcan
+                @can(\App\Support\FeatureFlag::enabled('lead_stages_v3') ? 'updateStageV3' : 'updateStage', $lead)<div class="sales-lead-progress"><span class="sales-lead-section-label">Perbarui progres</span>@include('crm.sales-pocketbook._stage-controls', ['lead' => $lead])</div>@endcan
                 <footer class="sales-lead-actions">
                     @can('viewSiteVisit', $lead)<x-crm.button variant="text" :href="route('sales-leads.show', $lead)">Detail</x-crm.button>@endcan
                     @if(auth()->user()->hasPermission('comments.view'))<x-crm.button variant="text" :href="route('comments.thread', ['alias' => 'sales-lead', 'id' => $lead->id])">Komentar ({{ $lead->comments_count }})</x-crm.button>@endif
@@ -423,8 +423,8 @@
 window.salesPocketbook = function salesPocketbook() {
     const projects = @js($cascadeProjects);
     const salesUsers = @js($cascadeSales);
-    const leadStages = @js(array_keys(\App\Models\SalesLead::STAGES));
-    const leadStageLabels = @js(\App\Models\SalesLead::STAGES);
+    const leadStages = @js(\App\Support\FeatureFlag::enabled('lead_stages_v3') ? \App\Models\SalesLead::STAGE_V3_ORDER : array_keys(\App\Models\SalesLead::STAGES));
+    const leadStageLabels = @js(\App\Support\FeatureFlag::enabled('lead_stages_v3') ? \App\Models\SalesLead::STAGE_V3_LABELS : \App\Models\SalesLead::STAGES);
     const localParts = value => {
         const date = value ? new Date(value.replace(' ', 'T')) : new Date()
         return {
@@ -628,7 +628,7 @@ window.salesPocketbook = function salesPocketbook() {
                 const response = await fetch(button.dataset.url, {
                     method: 'PATCH',
                     headers: { 'Content-Type': 'application/json', Accept: 'application/json', 'X-CSRF-TOKEN': @json(csrf_token()) },
-                    body: JSON.stringify({ stage: button.dataset.stage, action: reverse ? 'reverse' : 'set', timestamp: reverse ? null : `${this.stageEdit.date} ${this.stageEdit.time}`, reversal_confirmed: reverse ? 1 : null, expected_updated_at: controls.dataset.token }),
+                    body: JSON.stringify({ stage: button.dataset.stage, action: reverse ? 'reverse' : 'set', reason: reverse ? 'Koreksi Data dari Buku Saku' : null, timestamp: reverse ? null : `${this.stageEdit.date} ${this.stageEdit.time}`, reversal_confirmed: reverse ? 1 : null, expected_updated_at: controls.dataset.token }),
                 })
                 const data = await this.responseData(response)
                 if (response.status === 409) {
@@ -650,7 +650,7 @@ window.salesPocketbook = function salesPocketbook() {
                 document.querySelectorAll(`[data-stage-label="${controls.dataset.leadId}"]`).forEach(el => {
                     el.textContent = data.current_stage_label
                     el.classList.remove('crm-status-badge--pending', 'crm-status-badge--processing', 'crm-status-badge--success')
-                    el.classList.add(currentStage === 'akad_at' ? 'crm-status-badge--success' : (currentStage ? 'crm-status-badge--processing' : 'crm-status-badge--pending'))
+                    el.classList.add(['utj', 'gugur'].includes(currentStage) ? 'crm-status-badge--success' : (currentStage ? 'crm-status-badge--processing' : 'crm-status-badge--pending'))
                 })
                 document.querySelectorAll(`[data-lead-activity-label="${controls.dataset.leadId}"]`).forEach(el => { el.textContent = currentStage ? `Tahap ${leadStageLabels[currentStage]}` : 'Lead dicatat' })
                 document.querySelectorAll(`[data-lead-activity-time="${controls.dataset.leadId}"]`).forEach(el => {

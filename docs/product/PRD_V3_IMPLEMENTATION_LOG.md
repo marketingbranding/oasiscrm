@@ -30,7 +30,7 @@ PRD sumber kebenaran: `docs/product/PRD_OASIS_CRM_V3.md` versi 3.3 (D30–D33)
 | WP-1.3 | 1 | Role `ass_manager`, atribut user, migrasi pemetaan role lama | Selesai untuk fondasi role, atribut, parity, dan command dry-run; form/import/legacy-check ditunda | §4.1, BR-21, BR-25, D6, D21, D25; D32 ditunda |
 | WP-1.4 | 1 | Graf organisasi kanonis dan pemantauan berjenjang | Selesai; irisan 1.4a–1.4f selesai. Tidak ada cutover produksi atau backfill write oleh agent | BR-50–BR-53 |
 | WP-1.5 | 1 | Jam kerja, target 480, Jumat, akhir pekan, hari libur | Selesai; kalender Receipt/Agenda settings-backed, holiday nasional/cabang, free-day submission marker, reminder, UI, dan verifikasi penuh selesai | BR-01–BR-09 |
-| WP-1.6 | 1 | Tahap Lead Baru–UTJ, Gugur, kunci setelah UTJ | Belum mulai | BR-10–BR-16 |
+| WP-1.6 | 1 | Tahap Lead Baru–UTJ, Gugur, kunci setelah UTJ | Selesai implementasi; flag default mati, belum cutover produksi | BR-10–BR-14 |
 | WP-1.7 | 1 | Status/event transaksi, alasan Mundur, NUP baru | Belum mulai | BR-20–BR-36 |
 | WP-1.8 | 1 | Istilah glosarium dan navigasi | Belum mulai | §3, D15 |
 | WP-1.9 | 1 | Privasi AI dan backup terpisah | Belum mulai | BR-70–BR-73 |
@@ -50,6 +50,20 @@ PRD sumber kebenaran: `docs/product/PRD_OASIS_CRM_V3.md` versi 3.3 (D30–D33)
 | WP-3.5 | 3 | Dashboard Pimpinan dan laporan rapat | Belum mulai | §7.12 |
 | WP-3.6 | 3 | Pensiun modul transisi per cabang lulus | Belum mulai; operator menjalankan cutover | §9.3 |
 | WP-3.7 | 3 | Penutup akhir: runbook cutover, dokumentasi, log | Belum mulai | Semua fase |
+
+## WP-1.6 — Tahap Lead v3
+
+Status: implementasi selesai di branch `prd-v3/fase-1-wp-1-6-lead-stages`. Flag `lead_stages_v3` tetap default mati; operator belum melakukan cutover produksi.
+
+- BR-10–BR-11: kolom `lead_stage` additive, tahap kanonis Lead Baru–UTJ, Gugur, backfill kompatibilitas tanpa riwayat palsu, serta Berkas/Akad tetap fakta historis.
+- BR-12: Follow-up tidak ditambahkan sebagai tahap; jalur kegiatan lama tetap dipakai.
+- BR-13: Gugur memakai daftar alasan `sales_lead.gugur_reasons`, audit `sales_lead_stage_histories`, idempotensi operation UUID, dan penolakan setelah UTJ.
+- BR-14: Sales tidak dapat mengubah Lead setelah UTJ/Gugur; policy tetap memeriksa scope workspace dan permission. Role tambahan tidak menaikkan hak.
+- Spreadsheet: kontrak `lead` menerima status `UTJ`/`Gugur`; ID sinkronisasi tetap dipertahankan.
+- Tes fokus: stage migration/model 5, transition 3, Gugur 3, authorization 4, spreadsheet compatibility 2.
+- Migration changelog idempoten: `2026_11_21_130000_add_lead_stages_v3_changelog.php`.
+
+Batas: tidak mengubah alih Lead, NUP, event transaksi, role migration, pemadaman sinkronisasi Sheet, atau aktivasi flag produksi.
 
 ## WP-1.5 — Kalender kerja Receipt/Agenda
 

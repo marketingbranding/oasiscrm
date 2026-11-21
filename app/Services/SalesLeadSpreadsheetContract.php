@@ -31,7 +31,7 @@ class SalesLeadSpreadsheetContract
                     'aktivitas_lead' => ['type' => 'select', 'strict' => true],
                     'proyek' => ['type' => 'select', 'strict' => true],
                     'sales_pic' => ['type' => 'select', 'strict' => false],
-                    'status_lead' => ['type' => 'select', 'strict' => true, 'values' => ['No Respon', 'Diskusi', 'Tatap Muka', 'Cek Lokasi', 'UTJ', 'Tidak Lolos BI Checking', 'Cek Slik', 'Jadi Freelance', 'Akad']],
+                    'status_lead' => ['type' => 'select', 'strict' => true, 'values' => ['No Respon', 'Diskusi', 'Tatap Muka', 'Cek Lokasi', 'UTJ', 'Gugur', 'Tidak Lolos BI Checking', 'Cek Slik', 'Jadi Freelance', 'Akad']],
                 ],
                 ['nama_promo' => ['nama_promo', 'id_promo']],
             ),
@@ -179,6 +179,18 @@ class SalesLeadSpreadsheetContract
         return $this->normalizeValidationValue('status_lead', $value) === 'cek_slik'
             ? 'Cek Slik'
             : trim($value);
+    }
+
+    public function statusForLead(SalesLead $lead): string
+    {
+        return match ($lead->resolveStageV3()) {
+            'utj' => 'UTJ',
+            'gugur' => 'Gugur',
+            'dihubungi' => 'Dihubungi',
+            'tatap_muka' => 'Tatap Muka',
+            'survey' => 'Survey',
+            default => 'No Respon',
+        };
     }
 
     public function valueForWrite(ResolvedSalesLeadSpreadsheetContract $contract, string $header, mixed $value): mixed

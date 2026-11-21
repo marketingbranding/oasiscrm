@@ -141,7 +141,7 @@ class SalesLeadPolicy
         }
 
         $stage = $lead->resolveStageV3();
-        if ($stage === 'gugur') {
+        if ($stage === 'gugur' || $stage === 'utj') {
             return false;
         }
 
@@ -160,6 +160,10 @@ class SalesLeadPolicy
 
     public function updateLifecycleStatus(User $user, SalesLead $lead): bool
     {
+        if (FeatureFlag::enabled('lead_stages_v3') && $user->isSales()) {
+            return $this->updateStageV3($user, $lead);
+        }
+
         return ! $this->canEditHistoricalOwnedLead($user, $lead)
             && $this->update($user, $lead);
     }

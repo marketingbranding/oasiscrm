@@ -1,5 +1,7 @@
 @php
     $status = $lead->current_status;
+     $stageV3 = \App\Support\FeatureFlag::enabled('lead_stages_v3');
+     $currentStageV3 = $stageV3 ? $lead->resolveStageV3() : null;
     $latestVisit = $lead->siteVisits->first();
     $normalConsumer = $lead->consumerLinks->first(fn ($link) => $link->sheet_type === 'data_konsumen' && $link->status === 'completed');
     $nupConsumer = $lead->consumerLinks->first(fn ($link) => $link->sheet_type === 'data_konsumen_nup' && $link->status === 'completed');
@@ -15,7 +17,7 @@
     $consumerAvailable = ($sheetCapabilities[$consumerSheet] ?? false) === true;
     $slikAvailable = ($sheetCapabilities['bi_checking'] ?? false) === true;
     $freelanceAvailable = ($sheetCapabilities['data_sales'] ?? false) === true;
-    $statusVariant = match ($status) {
+    $statusVariant = $stageV3 && in_array($currentStageV3, ['utj', 'gugur'], true) ? 'success' : match ($status) {
         \App\Enums\SalesLeadStatus::Akad => 'success',
         \App\Enums\SalesLeadStatus::SlikRejected => 'danger',
         \App\Enums\SalesLeadStatus::NoResponse => 'pending',
@@ -25,7 +27,7 @@
 
 <section class="mt-3 border-t border-black/20 pt-3" aria-label="Siklus lead {{ $lead->customer_name }}">
     <div class="flex flex-wrap items-center gap-2">
-        <x-crm.status-badge :variant="$statusVariant">{{ $status->label() }}</x-crm.status-badge>
+        <x-crm.status-badge :variant="$statusVariant">{{ $stageV3 ? $lead->stageV3Label() : $status->label() }}</x-crm.status-badge>
         <span class="text-xs text-gray-600">{{ $lead->current_status_source ? 'Sumber: '.str_replace('_', ' ', $lead->current_status_source) : 'Status awal' }}{{ $lead->current_status_changed_at ? ' / '.$lead->current_status_changed_at->format('d/m/Y H:i') : '' }}</span>
         <x-crm.status-badge :variant="$lead->external_sync_id ? 'success' : (filled($lead->branch?->sheet_id) ? 'warning' : 'inactive')">
             {{ $lead->external_sync_id ? 'Tersinkron UUID' : (filled($lead->branch?->sheet_id) ? 'Lokal / belum tersinkron' : 'Spreadsheet belum dikonfigurasi') }}
@@ -40,7 +42,15 @@
     </dl>
 
     @can('updateLifecycleStatus', $lead)
-        <div class="mt-3 flex flex-wrap gap-2" aria-label="Tindakan siklus lead">
+        @if($stageV3)
+             <div class="mt-3 flex flex-wrap gap-2" aria-label="Tahap Lead v3">
+                 <span class="text-xs font-bold">Tahap: {{ $lead->stageV3Label() }}</span>
+                 @if(!in_array($currentStageV3, ['utj', 'gugur'], true))
+                     <x-crm.button type="button" variant="danger" size="sm" @click="$dispatch('oasis:modal-open', { name: 'lead-gugur-{{ $lead->id }}' })">Tutup sebagai Gugur</x-crm.button>
+                 @endif
+             </div>
+         @else
+         <div class="mt-3 flex flex-wrap gap-2" aria-label="Tindakan siklus lead">
             @if($status->isManual())
                 @foreach(\App\Enums\SalesLeadStatus::MANUAL as $manualStatus)
                     @if($status !== $manualStatus)
@@ -72,11 +82,23 @@
         @if($sheetCapabilities === [])
             <p class="mt-2 text-xs text-amber-800">Kontrak spreadsheet cabang belum diverifikasi. Minta pengguna berwenang menjalankan Sinkronkan sebelum memakai tindakan siklus.</p>
         @endif
-    @endcan
+    @endif
+@endcan
 </section>
 
+@if($stageV3 && !in_array($currentStageV3, ['utj', 'gugur'], true) && auth()->user()->can('updateLifecycleStatus', $lead))
+<x-crm.modal name="lead-gugur-{{ $lead->id }}" title="Tutup Lead sebagai Gugur" description="Pilih alasan Gugur dari Pengaturan.">
+    <form method="POST" action="{{ route('sales-leads.lifecycle-status.update', $lead) }}" class="space-y-3">
+        @csrf @method('PATCH')
+        <input type="hidden" name="status" value="gugur">
+        <x-crm.field label="Alasan Gugur" for="lead-gugur-reason-{{ $lead->id }}" required><select id="lead-gugur-reason-{{ $lead->id }}" name="reason" class="sales-input" required>@foreach(app(\App\Services\AppSettingResolver::class)->list('sales_lead.gugur_reasons') as $reason)<option value="{{ $reason }}">{{ $reason }}</option>@endforeach</select></x-crm.field>
+        <x-crm.button type="submit" variant="danger">Simpan Gugur</x-crm.button>
+    </form>
+</x-crm.modal>
+@endif
+
 @can('updateLifecycleStatus', $lead)
-@if($status->isManual())
+@if(!$stageV3 && $status->isManual())
 @foreach(\App\Enums\SalesLeadStatus::MANUAL as $manualStatus)
 @if($status !== $manualStatus)
 <x-crm.modal name="lead-status-confirm-{{ $manualStatus->value }}-{{ $lead->id }}" title="Ubah Status: {{ $lead->customer_name }}" description="Konfirmasi perubahan status lead.">
@@ -98,7 +120,7 @@
 @endcan
 
 @can('markUtjDirect', $lead)
-@if($status->isManual())
+@if(!$stageV3 && $status->isManual())
 <x-crm.modal name="lead-utj-confirm-{{ $lead->id }}" title="Tandai UTJ: {{ $lead->customer_name }}" description="Lead langsung ditandai UTJ tanpa mencatat data cek lokasi atau konsumen.">
     <form method="POST" action="{{ route('sales-leads.utj.store', $lead) }}" x-data="{ submitting: false }" @submit="submitting = true" class="space-y-3" :aria-busy="submitting">
         @csrf

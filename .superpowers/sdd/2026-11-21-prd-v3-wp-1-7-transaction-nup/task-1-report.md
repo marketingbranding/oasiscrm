@@ -28,3 +28,4 @@
 - Added BR-30 manual DITUTUP regression and BR-31 held-kavling/custom-setting coverage.
 - PHP syntax checks and git diff --check run; PHPUnit/Pint blocked because vendor is absent.
 
+Fix round 3: corrected custom Mundur success, held-kavling rollback, historical legacy-status preservation, and manual DITUTUP tests. PHP syntax and git diff --check pass; PHPUnit/Pint blocked by absent vendor.

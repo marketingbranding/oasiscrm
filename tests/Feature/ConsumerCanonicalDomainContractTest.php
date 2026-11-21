@@ -6,6 +6,7 @@ use App\Models\AppSetting;
 use App\Models\ConsumerApplication;
 use App\Models\ConsumerBastRecord;
 use App\Models\Kavling;
+use App\Models\Role;
 use App\Models\User;
 use App\Services\ConsumerEntryService;
 use App\Services\ConsumerKavlingLifecycleService;
@@ -29,15 +30,14 @@ class ConsumerCanonicalDomainContractTest extends TestCase
         $this->assertSame('LANJUT', ConsumerApplication::factory()->create(['transaction_status' => 'Pindah Kavling'])->canonicalTransactionStatus());
     }
 
-    /** BR-30: manual DITUTUP is rejected for new entry writes but legacy status is preserved. */
-    public function test_br30_new_entry_rejects_ditutup_and_historical_entry_preserves_legacy_status(): void
+    /** BR-30: manual DITUTUP is rejected for new entry writes. */
+    public function test_br30_new_entry_rejects_ditutup(): void
     {
         $application = ConsumerApplication::factory()->create();
         $actor = User::factory()->create(['branch_id' => $application->branch_id]);
-        $entry = app(ConsumerEntryService::class);
 
         $this->expectException(\DomainException::class);
-        $entry->create([
+        app(ConsumerEntryService::class)->create([
             'name' => 'New status guard',
             'phone' => '08123456789',
             'branch_id' => $application->branch_id,
@@ -46,24 +46,47 @@ class ConsumerCanonicalDomainContractTest extends TestCase
         ], $actor);
     }
 
-    /** BR-31: configured withdrawal reasons drive Mundur validation. */
-    public function test_br31_mundur_uses_default_and_changed_configured_reasons(): void
+    /** BR-30: historical entries preserve supplied legacy transaction status. */
+    public function test_br30_historical_entry_preserves_legacy_transaction_status(): void
+    {
+        $application = ConsumerApplication::factory()->create();
+        $actor = User::factory()->create(['branch_id' => $application->branch_id]);
+
+        $historical = app(ConsumerEntryService::class)->create([
+            'name' => 'Historical status',
+            'phone' => '08123456780',
+            'branch_id' => $application->branch_id,
+            'project_id' => $application->project_id,
+            'entry_mode' => 'historical',
+            'transaction_status' => 'REPLACED',
+        ], $actor, true);
+
+        $this->assertSame('REPLACED', $historical->fresh()->transaction_status);
+    }
+
+    /** BR-31: configured withdrawal reasons drive Mundur validation and rollback. */
+    public function test_br31_mundur_uses_custom_reason_and_invalid_reason_rolls_back_held_kavling(): void
     {
         $application = ConsumerApplication::factory()->create();
         $actor = User::factory()->create(['branch_id' => $application->branch_id]);
         $service = app(\App\Services\ConsumerApplicationLifecycleService::class);
-
-        $service->mundur($application, 'Reject SLIK', $actor);
-        $this->assertSame('Reject SLIK', $application->fresh()->withdraw_reason);
-
-        $held = ConsumerApplication::factory()->create(['branch_id' => $application->branch_id, 'project_id' => $application->project_id]);
-        $heldKavling = Kavling::create(['project_id' => $held->project_id, 'kavling_code' => 'ROUND2-01', 'name' => 'ROUND2-01']);
-        app(ConsumerKavlingLifecycleService::class)->assign($held, $heldKavling);
-        $second = ConsumerApplication::factory()->create(['branch_id' => $application->branch_id, 'project_id' => $application->project_id]);
         AppSetting::query()->create(['key' => 'consumer_progress.mundur_reasons', 'value' => ['Custom reason'], 'group' => 'consumer_progress']);
         app(\App\Services\AppSettingResolver::class)->forget('consumer_progress.mundur_reasons');
+
+        $service->mundur($application, 'Custom reason', $actor);
+        $this->assertSame('Custom reason', $application->fresh()->withdraw_reason);
+
+        $held = ConsumerApplication::factory()->create(['branch_id' => $application->branch_id, 'project_id' => $application->project_id]);
+        $heldKavling = Kavling::create(['project_id' => $held->project_id, 'kavling_code' => 'ROUND3-01', 'name' => 'ROUND3-01']);
+        app(ConsumerKavlingLifecycleService::class)->assign($held, $heldKavling);
+        $before = $held->fresh();
+
         $this->expectException(\Illuminate\Validation\ValidationException::class);
-        $service->mundur($second, 'Reject Bank', $actor);
+        $service->mundur($held, 'Invalid reason', $actor);
+
+        $this->assertSame('LANJUT', $held->fresh()->transaction_status);
+        $this->assertSame($before->kavling_id, $held->fresh()->kavling_id);
+        $this->assertSame('active', $held->fresh()->kavling?->consumerAssignments()->latest('id')->first()?->assignment_status);
     }
 
     public function test_customer_can_have_multiple_applications_with_distinct_immutable_transaction_identities(): void

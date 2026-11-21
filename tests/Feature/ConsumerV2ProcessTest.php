@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Models\AppSetting;
 use App\Models\ConsumerApplication;
 use App\Models\ConsumerIssue;
 use App\Models\ConsumerKavlingAssignment;
@@ -11,6 +12,7 @@ use App\Models\LeadMaster;
 use App\Models\Role;
 use App\Models\SalesLead;
 use App\Models\User;
+use App\Services\AppSettingResolver;
 use App\Services\ConsumerApplicationLifecycleService;
 use App\Services\ConsumerEntryService;
 use App\Services\ConsumerKavlingLifecycleService;
@@ -272,8 +274,27 @@ class ConsumerV2ProcessTest extends TestCase
         app(ConsumerOperationalService::class)->recordProsesBank($created, ['bank_name' => 'BTN'], $actor);
     }
 
+    public function test_warranty_after_bast_keeps_legacy_selesai_status_when_transaction_events_flag_is_off(): void
+    {
+        AppSetting::query()->updateOrCreate(['key' => 'transaction_events_v3'], ['value' => false, 'group' => 'feature_flags']);
+        app(AppSettingResolver::class)->forget('transaction_events_v3');
+        $application = ConsumerApplication::factory()->create();
+        $actor = $this->superadmin($application);
+        $operational = app(ConsumerOperationalService::class);
+        $lifecycle = app(ConsumerApplicationLifecycleService::class);
+        $operational->recordAkad($application, ['tanggal_akad' => '2026-10-01'], $actor, app(ConsumerKavlingLifecycleService::class));
+        $operational->recordReady100($application->fresh(), ['ready_100_at' => '2026-10-02'], $actor);
+        $lifecycle->recordBast($application->fresh(), ['tanggal_bast' => '2026-10-03'], $actor);
+        app(ConsumerProcessService::class)->recordWarranty($application->fresh(), ['status_komplain' => 'Tidak Ada Komplain', 'status_garansi' => 'Tidak Ada Komplain'], $actor);
+
+        $this->assertSame('SELESAI', $application->fresh()->transaction_status);
+        $this->assertSame(1, app(ConsumerProcessService::class)->completedQuery($actor)->whereKey($application->id)->count());
+    }
+
     public function test_warranty_after_bast_can_complete_transaction_and_appears_in_selesai(): void
     {
+        AppSetting::query()->updateOrCreate(['key' => 'transaction_events_v3'], ['value' => true, 'group' => 'feature_flags']);
+        app(AppSettingResolver::class)->forget('transaction_events_v3');
         $application = ConsumerApplication::factory()->create();
         $actor = $this->superadmin($application);
         $operational = app(ConsumerOperationalService::class);

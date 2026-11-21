@@ -83,7 +83,7 @@ final class WorkspaceController extends Controller
 
         return view('workspace-v2.dashboard.index', [
             'activeTransactions' => (clone $applications)->where('transaction_status', 'LANJUT')->count(),
-            'completedTransactions' => (clone $applications)->whereIn('transaction_status', ['SELESAI', 'selesai', 'completed'])->count(),
+            'completedTransactions' => (clone $applications)->whereIn('transaction_status', ['LANJUT', 'SELESAI', 'selesai', 'COMPLETED', 'completed'])->count(),
             'attentionCount' => $issues + $overdue,
             'processCounts' => (clone $applications)
                 ->selectRaw("COALESCE(NULLIF(current_process, ''), NULLIF(current_stage, ''), 'data_konsumen') as process_key, COUNT(*) as total")
@@ -254,7 +254,7 @@ final class WorkspaceController extends Controller
         return view('workspace-v2.reports.index', [
             'total' => (clone $applications)->count(),
             'active' => (clone $applications)->where('transaction_status', 'LANJUT')->count(),
-            'completed' => (clone $applications)->whereIn('transaction_status', ['SELESAI', 'selesai', 'completed'])->count(),
+            'completed' => (clone $applications)->whereIn('transaction_status', ['LANJUT', 'SELESAI', 'selesai', 'COMPLETED', 'completed'])->count(),
             'branches' => $this->workspaceAccess->accessibleBranches($request->user()),
         ]);
     }

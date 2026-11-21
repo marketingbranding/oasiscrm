@@ -38,6 +38,13 @@ class ConsumerCanonicalDomainContractTest extends TestCase
         $this->assertSame('DITUTUP', ConsumerApplication::factory()->create(['transaction_status' => 'REPLACED'])->canonicalTransactionStatus());
         $this->assertSame('MUNDUR', ConsumerApplication::factory()->create(['transaction_status' => 'Reject'])->canonicalTransactionStatus());
         $this->assertSame('LANJUT', ConsumerApplication::factory()->create(['transaction_status' => 'Pindah Kavling'])->canonicalTransactionStatus());
+        $this->assertSame('MUNDUR', ConsumerApplication::factory()->create(['transaction_status' => 'REJECT SLIK'])->canonicalTransactionStatus());
+        $this->assertSame('MUNDUR', ConsumerApplication::factory()->create(['transaction_status' => 'REJECT BANK'])->canonicalTransactionStatus());
+        $this->assertSame('DITUTUP', ConsumerApplication::factory()->create(['transaction_status' => 'GANTI NAMA'])->canonicalTransactionStatus());
+        $this->assertSame('LANJUT', ConsumerApplication::factory()->create(['transaction_status' => 'SELESAI'])->canonicalTransactionStatus());
+        $unknown = ConsumerApplication::factory()->create(['transaction_status' => 'STATUS ACAK']);
+        $this->assertSame('LANJUT', $unknown->canonicalTransactionStatus());
+        $this->assertTrue($unknown->canonicalTransactionStatusNeedsReview());
     }
 
     /** BR-30: manual DITUTUP is rejected for new entry writes. */

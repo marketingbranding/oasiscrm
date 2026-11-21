@@ -44,6 +44,18 @@ class BackfillConsumerTransactionStatusV3 extends Command
         ];
         $mappings = [];
         $reviewCases = [];
+        $distinctStatuses = ConsumerApplication::query()
+            ->select('transaction_status')
+            ->selectRaw('COUNT(*) as total')
+            ->groupBy('transaction_status')
+            ->orderBy('transaction_status')
+            ->get()
+            ->map(fn (object $row): array => [
+                'transaction_status' => $row->transaction_status,
+                'count' => (int) $row->total,
+                'mapping' => $this->distinctStatusMapping($row->transaction_status),
+            ])
+            ->all();
 
         ConsumerApplication::query()
             ->with('migrationReconciliation')
@@ -67,6 +79,7 @@ class BackfillConsumerTransactionStatusV3 extends Command
                 'source' => 'consumer_applications.transaction_status/consumer_status',
             ],
             'counts' => $counts,
+            'distinct_transaction_statuses' => $distinctStatuses,
             'mappings' => $mappings,
             'review_cases' => $reviewCases,
         ];
@@ -78,6 +91,14 @@ class BackfillConsumerTransactionStatusV3 extends Command
             collect($counts)->map(fn (int $count, string $category): array => [$category, $count])->values()->all(),
         );
         $this->line('Kasus perlu tinjau: '.count($reviewCases));
+        $this->table(
+            ['Status legacy', 'Jumlah', 'Pemetaan'],
+            collect($distinctStatuses)->map(fn (array $status): array => [
+                $status['transaction_status'] ?? '(kosong)',
+                $status['count'],
+                $status['mapping']['transaction_status'].($status['mapping']['needs_review'] ? ' (perlu tinjau)' : ''),
+            ])->all(),
+        );
         $this->info('Laporan tersimpan: '.$output);
 
         return self::SUCCESS;
@@ -123,7 +144,7 @@ class BackfillConsumerTransactionStatusV3 extends Command
             ];
         }
 
-        if (in_array($normalized, ['DIGANTI KONSUMEN', 'DIGANTI_KONSUMEN', 'REPLACED'], true)) {
+        if (in_array($normalized, ['DIGANTI KONSUMEN', 'DIGANTI_KONSUMEN', 'REPLACED', 'GANTI NAMA', 'GANTI_NAMA'], true)) {
             return [
                 'category' => 'diganti_konsumen_ke_ditutup',
                 'mapping' => $base + ['transaction_status' => 'DITUTUP', 'closed_by_event' => 'GANTI_NAMA'],
@@ -131,18 +152,32 @@ class BackfillConsumerTransactionStatusV3 extends Command
             ];
         }
 
-        if (in_array($normalized, ['LANJUT', 'MUNDUR', 'DITUTUP'], true)) {
+        if (in_array($normalized, ['LANJUT', 'MUNDUR', 'DITUTUP', 'COMPLETED', 'SELESAI'], true)) {
+            $mappedStatus = in_array($normalized, ['COMPLETED', 'SELESAI'], true) ? 'LANJUT' : $normalized;
+
             return [
                 'category' => 'sudah_kanonis',
-                'mapping' => $base + ['transaction_status' => $normalized],
+                'mapping' => $base + ['transaction_status' => $mappedStatus],
                 'review' => null,
             ];
         }
 
         return [
             'category' => 'perlu_tinjau',
-            'mapping' => $base + ['transaction_status' => null],
+            'mapping' => $base + ['transaction_status' => 'LANJUT', 'needs_review' => true],
             'review' => $base + ['case' => 'legacy_status_unknown'],
+        ];
+    }
+
+    /** @return array{transaction_status: string|null, needs_review: bool} */
+    private function distinctStatusMapping(?string $legacyStatus): array
+    {
+        $application = new ConsumerApplication(['transaction_status' => $legacyStatus]);
+        $details = $application->canonicalTransactionStatusDetails();
+
+        return [
+            'transaction_status' => $details['status'],
+            'needs_review' => $details['needs_review'],
         ];
     }
 

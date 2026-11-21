@@ -25,6 +25,8 @@ class ConsumerTransactionStatusBackfillCommandTest extends TestCase
         $replaced = $this->application($branch, $project, 'DIGANTI_KONSUMEN');
         $unknown = $this->application($branch, $project, 'Status Lama Tidak Dikenal');
         $canonical = $this->application($branch, $project, 'LANJUT');
+        $completed = $this->application($branch, $project, 'SELESAI');
+        $closed = $this->application($branch, $project, 'CLOSED');
         ConsumerMigrationReconciliation::query()->create([
             'consumer_application_id' => $rejectSlik->id,
             'branch_id' => $branch->id,
@@ -54,7 +56,7 @@ class ConsumerTransactionStatusBackfillCommandTest extends TestCase
             '--dry-run' => true,
             '--output' => 'reports/transaction-status-map.json',
         ])->assertSuccessful()
-            ->expectsOutputToContain('Kasus perlu tinjau: 2')
+            ->expectsOutputToContain('Kasus perlu tinjau: 3')
             ->expectsOutputToContain('Laporan tersimpan: reports/transaction-status-map.json');
 
         $report = json_decode(Storage::disk('local')->get('reports/transaction-status-map.json'), true, flags: JSON_THROW_ON_ERROR);
@@ -64,9 +66,14 @@ class ConsumerTransactionStatusBackfillCommandTest extends TestCase
         $this->assertSame(1, $report['counts']['reject_bank_ke_mundur']);
         $this->assertSame(1, $report['counts']['reject_data_lama_ke_mundur']);
         $this->assertSame(1, $report['counts']['diganti_konsumen_ke_ditutup']);
-        $this->assertSame(1, $report['counts']['sudah_kanonis']);
-        $this->assertSame(1, $report['counts']['perlu_tinjau']);
-        $this->assertSame(2, count($report['review_cases']));
+        $this->assertSame(2, $report['counts']['sudah_kanonis']);
+        $this->assertSame(2, $report['counts']['perlu_tinjau']);
+        $this->assertSame(3, count($report['review_cases']));
+        $this->assertSame('LANJUT', $this->mapping($report, $completed->id)['transaction_status']);
+        $this->assertSame('LANJUT', $this->mapping($report, $closed->id)['transaction_status']);
+        $this->assertTrue($this->mapping($report, $closed->id)['needs_review']);
+        $this->assertSame('legacy_status_unknown', collect($report['review_cases'])->firstWhere('application_id', $closed->id)['case']);
+        $this->assertNotEmpty($report['distinct_transaction_statuses']);
         $this->assertSame('PINDAH_KAVLING', $this->mapping($report, $pindah->id)['event_type']);
         $this->assertSame('LANJUT', $this->mapping($report, $pindah->id)['transaction_status']);
         $this->assertSame('Reject SLIK', $this->mapping($report, $rejectSlik->id)['withdraw_reason']);

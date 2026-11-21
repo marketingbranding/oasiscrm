@@ -240,15 +240,47 @@ class ConsumerApplication extends Model
 
     public function canonicalTransactionStatus(): string
     {
-        $status = strtoupper(trim((string) $this->transaction_status));
+        return $this->canonicalTransactionStatusDetails()['status'];
+    }
+
+    /** @return array{status: string, needs_review: bool, legacy_status: string|null} */
+    public function canonicalTransactionStatusDetails(): array
+    {
+        $legacyStatus = trim((string) $this->transaction_status);
+        $status = strtoupper($legacyStatus);
 
         return match ($status) {
-            'MUNDUR', 'REJECT', 'REJECTED', 'CANCELLED', 'WITHDRAWN' => 'MUNDUR',
-            'DITUTUP', 'REPLACED', 'DIGANTI_KONSUMEN', 'CLOSED', 'COMPLETED', 'SELESAI' => 'DITUTUP',
-            'LANJUT', 'PINDAH KAVLING' => 'LANJUT',
-            '' => 'LANJUT',
-            default => throw new DomainException('Status transaksi legacy tidak dikenali: '.$this->transaction_status),
+            'MUNDUR', 'REJECT', 'REJECTED', 'CANCELLED', 'WITHDRAWN', 'REJECT SLIK', 'REJECT BANK' => [
+                'status' => 'MUNDUR',
+                'needs_review' => false,
+                'legacy_status' => $legacyStatus === '' ? null : $legacyStatus,
+            ],
+            'DITUTUP', 'REPLACED', 'DIGANTI KONSUMEN', 'DIGANTI_KONSUMEN', 'GANTI NAMA', 'GANTI_NAMA' => [
+                'status' => 'DITUTUP',
+                'needs_review' => false,
+                'legacy_status' => $legacyStatus === '' ? null : $legacyStatus,
+            ],
+            'LANJUT', 'PINDAH KAVLING', 'PINDAH_KAVLING', 'COMPLETED', 'SELESAI' => [
+                'status' => 'LANJUT',
+                'needs_review' => false,
+                'legacy_status' => $legacyStatus === '' ? null : $legacyStatus,
+            ],
+            '' => [
+                'status' => 'LANJUT',
+                'needs_review' => false,
+                'legacy_status' => null,
+            ],
+            default => [
+                'status' => 'LANJUT',
+                'needs_review' => true,
+                'legacy_status' => $legacyStatus,
+            ],
         };
+    }
+
+    public function canonicalTransactionStatusNeedsReview(): bool
+    {
+        return $this->canonicalTransactionStatusDetails()['needs_review'];
     }
 
     public static function validateNewTransactionStatus(?string $status): string

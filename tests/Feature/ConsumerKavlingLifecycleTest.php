@@ -123,6 +123,28 @@ class ConsumerKavlingLifecycleTest extends TestCase
         $this->assertSame('SOLD', $service->availability($kavling->fresh()));
     }
 
+    public function test_kavling_assignment_migration_aborts_before_dropping_old_index_when_duplicates_exist(): void
+    {
+        [$application, $kavling] = $this->records();
+        $second = ConsumerApplication::factory()->create(['branch_id' => $application->branch_id, 'project_id' => $application->project_id]);
+        DB::statement('DROP INDEX IF EXISTS consumer_kavling_assignments_active_unique');
+        DB::statement('DROP INDEX IF EXISTS consumer_kavling_assignments_active_sold_unique');
+        DB::statement('CREATE INDEX consumer_kavling_assignments_active_unique ON consumer_kavling_assignments (kavling_id)');
+        DB::table('consumer_kavling_assignments')->insert([
+            ['consumer_application_id' => $application->id, 'kavling_id' => $kavling->id, 'assigned_at' => now(), 'assignment_status' => 'active'],
+            ['consumer_application_id' => $second->id, 'kavling_id' => $kavling->id, 'assigned_at' => now(), 'assignment_status' => 'sold'],
+        ]);
+        $migration = require database_path('migrations/2026_11_21_164320_enforce_active_and_sold_kavling_assignment_uniqueness.php');
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage((string) $kavling->id);
+        try {
+            $migration->up();
+        } finally {
+            $this->assertTrue(Schema::hasIndex('consumer_kavling_assignments', 'consumer_kavling_assignments_active_unique'));
+        }
+    }
+
     public function test_kavling_assignment_uniqueness_migration_is_idempotent_and_has_honest_down(): void
     {
         $migration = require database_path('migrations/2026_11_21_164320_enforce_active_and_sold_kavling_assignment_uniqueness.php');
@@ -130,7 +152,7 @@ class ConsumerKavlingLifecycleTest extends TestCase
         $migration->up();
         $migration->up();
 
-        $this->assertTrue(Schema::hasIndex('consumer_kavling_assignments', 'consumer_kavling_assignments_active_unique'));
+        $this->assertTrue(Schema::hasIndex('consumer_kavling_assignments', 'consumer_kavling_assignments_active_sold_unique'));
         $this->assertSame(1, DB::table('changelogs')->whereNull('version')->where('title', 'Kunci tunggal kavling untuk transaksi aktif dan terjual')->count());
 
         $migration->down();

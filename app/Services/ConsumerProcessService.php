@@ -7,6 +7,7 @@ use App\Models\ConsumerApplication;
 use App\Models\ConsumerIssue;
 use App\Models\ConsumerWarranty;
 use App\Models\User;
+use App\Support\FeatureFlag;
 use DomainException;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Database\Eloquent\Builder;
@@ -63,7 +64,7 @@ class ConsumerProcessService
             $updates = ['current_process' => 'garansi', 'current_process_source' => 'operational'];
             if (in_array($warranty->status_garansi, ['Selesai', 'Tidak Ada Komplain'], true)) {
                 $updates['current_process'] = 'selesai';
-                $updates['transaction_status'] = 'LANJUT';
+                $updates['transaction_status'] = FeatureFlag::enabled('transaction_events_v3') ? 'LANJUT' : 'SELESAI';
                 $updates['consumer_status'] = 'Selesai';
             }
             $application->update($updates);
@@ -111,7 +112,7 @@ class ConsumerProcessService
             ->when($this->scope->requiresProjectScope($user, 'consumer_progress'), fn (Builder $query): Builder => $query->whereIn('project_id', $projectIds))
             ->when(! $this->scope->requiresProjectScope($user, 'consumer_progress'), fn (Builder $query): Builder => $query->where(fn (Builder $nested): Builder => $nested->whereNull('project_id')->orWhereIn('project_id', $projectIds)))
             ->where(function (Builder $query): void {
-                $query->where('transaction_status', 'SELESAI')
+                $query->whereIn('transaction_status', ['SELESAI', 'selesai', 'COMPLETED', 'completed'])
                     ->orWhere(function (Builder $nested): void {
                         $nested->where('transaction_status', 'LANJUT')
                             ->whereHas('bastRecords')

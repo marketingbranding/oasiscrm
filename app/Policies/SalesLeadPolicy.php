@@ -4,6 +4,7 @@ namespace App\Policies;
 
 use App\Models\SalesLead;
 use App\Models\User;
+use App\Services\AppSettingResolver;
 use App\Services\CoordinatorLeadTeamService;
 use App\Services\CrmAuthorizationService;
 use App\Services\OrganizationScopeService;
@@ -127,6 +128,27 @@ class SalesLeadPolicy
     {
         return ! $this->canEditHistoricalOwnedLead($user, $lead)
             && $this->update($user, $lead);
+    }
+
+    public function updateStageV3(User $user, SalesLead $lead): bool
+    {
+        if (! FeatureFlag::enabled('lead_stages_v3') || $this->canEditHistoricalOwnedLead($user, $lead) || ! $this->update($user, $lead)) {
+            return false;
+        }
+
+        if (! $user->isSales()) {
+            return true;
+        }
+
+        $stage = $lead->resolveStageV3();
+        if ($stage === 'gugur') {
+            return false;
+        }
+
+        $allowed = SalesLead::STAGE_V3_ORDER;
+        $limit = app(AppSettingResolver::class)->string('sales_lead.sales_max_edit_stage');
+
+        return array_search($stage, $allowed, true) <= array_search($limit, $allowed, true);
     }
 
     public function reverseStage(User $user, SalesLead $lead): bool

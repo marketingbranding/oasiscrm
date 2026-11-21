@@ -15,7 +15,10 @@ class SalesAgendaReceiptService
 {
     public const TARGET_MINUTES = SalesAgendaDaySubmission::TARGET_MINUTES;
 
-    public function __construct(private readonly CrmAuthorizationService $authorization) {}
+    public function __construct(
+        private readonly CrmAuthorizationService $authorization,
+        private readonly SalesWorkCalendarService $calendar,
+    ) {}
 
     /**
      * @return array{
@@ -88,31 +91,9 @@ class SalesAgendaReceiptService
         return $now->gte($endAt);
     }
 
-    public function schedule(CarbonImmutable $date): array
+    public function schedule(CarbonImmutable $date, ?int $branchId = null): array
     {
-        if ($date->isWeekend()) {
-            return [
-                'is_weekend' => true,
-                'start_time' => null,
-                'end_time' => null,
-                'break_start' => null,
-                'break_end' => null,
-                'target_minutes' => 0,
-                'requires_target' => false,
-            ];
-        }
-
-        $isFriday = $date->dayOfWeekIso === 5;
-
-        return [
-            'is_weekend' => false,
-            'start_time' => $isFriday ? '07:30' : '08:00',
-            'end_time' => '17:00',
-            'break_start' => $isFriday ? '11:30' : '12:00',
-            'break_end' => '13:00',
-            'target_minutes' => self::TARGET_MINUTES,
-            'requires_target' => true,
-        ];
+        return $this->calendar->schedule($date, $branchId);
     }
 
     public function assertTimeSlotAvailable(User $owner, CarbonImmutable $date, string $startTime, string $endTime, ?int $ignoreAgendaId = null): void
@@ -383,24 +364,7 @@ class SalesAgendaReceiptService
 
     public function effectiveMinutes(CarbonImmutable $date, ?string $startTime, ?string $endTime): int
     {
-        if ($startTime === null || $endTime === null) {
-            return 0;
-        }
-
-        $startMinute = $this->timeToMinutes($startTime);
-        $endMinute = $this->timeToMinutes($endTime);
-        $duration = max(0, $endMinute - $startMinute);
-
-        if ($duration === 0 || $date->isWeekend()) {
-            return $duration;
-        }
-
-        $schedule = $this->schedule($date);
-        $breakStart = $this->timeToMinutes($schedule['break_start']);
-        $breakEnd = $this->timeToMinutes($schedule['break_end']);
-        $breakMinutes = max(0, min($endMinute, $breakEnd) - max($startMinute, $breakStart));
-
-        return max(0, $duration - $breakMinutes);
+        return $this->calendar->effectiveMinutes($date, $startTime, $endTime);
     }
 
     public function isBreakAgenda(CarbonImmutable $date, ?string $startTime, ?string $endTime): bool

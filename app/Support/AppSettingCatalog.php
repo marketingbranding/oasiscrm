@@ -20,6 +20,15 @@ class AppSettingCatalog
                 'description' => 'Menit sebelum kegiatan untuk mengirim pengingat (BR-06).',
                 'rules' => ['integer', 'min:1', 'max:1440'],
             ],
+            'sales_agenda.target_minutes' => self::timeInteger('Target menit agenda', 480, 1, 1440),
+            'sales_agenda.weekday_start_time' => self::timeString('Jam masuk Senin–Kamis', '08:00'),
+            'sales_agenda.weekday_end_time' => self::timeString('Jam pulang Senin–Kamis', '17:00'),
+            'sales_agenda.weekday_break_start' => self::timeString('Mulai istirahat Senin–Kamis', '12:00'),
+            'sales_agenda.weekday_break_end' => self::timeString('Selesai istirahat Senin–Kamis', '13:00'),
+            'sales_agenda.friday_start_time' => self::timeString('Jam masuk Jumat', '07:30'),
+            'sales_agenda.friday_end_time' => self::timeString('Jam pulang Jumat', '17:00'),
+            'sales_agenda.friday_break_start' => self::timeString('Mulai istirahat Jumat', '11:30'),
+            'sales_agenda.friday_break_end' => self::timeString('Selesai istirahat Jumat', '13:00'),
             'sales_monitoring.stale_lead_days' => [
                 'group' => 'sales_monitoring',
                 'type' => 'integer',
@@ -52,6 +61,36 @@ class AppSettingCatalog
     /**
      * @return array{group:string,type:string,default:bool,label:string,description:string,rules:array<int, string>,feature_flag:bool}
      */
+    /**
+     * @return array{group:string,type:string,default:int,label:string,description:string,rules:array<int, string>}
+     */
+    private static function timeInteger(string $label, int $default, int $min, int $max): array
+    {
+        return [
+            'group' => 'sales_agenda',
+            'type' => 'integer',
+            'default' => $default,
+            'label' => $label,
+            'description' => 'Pengaturan kalender kerja Receipt/Agenda.',
+            'rules' => ['integer', "min:{$min}", "max:{$max}"],
+        ];
+    }
+
+    /**
+     * @return array{group:string,type:string,default:string,label:string,description:string,rules:array<int, string>}
+     */
+    private static function timeString(string $label, string $default): array
+    {
+        return [
+            'group' => 'sales_agenda',
+            'type' => 'string',
+            'default' => $default,
+            'label' => $label,
+            'description' => 'Format HH:MM untuk kalender kerja Receipt/Agenda.',
+            'rules' => ['string', 'regex:/^([01]\\d|2[0-3]):[0-5]\\d$/'],
+        ];
+    }
+
     private static function featureFlag(string $label): array
     {
         return [

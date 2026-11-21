@@ -21,6 +21,7 @@ use App\Services\SalesMonitoringProjectionService;
 use App\Services\SalesTeamScopeService;
 use App\Services\SalesWeeklyMetricsService;
 use App\Services\WorkspaceAccessService;
+use App\Support\FeatureFlag;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
@@ -150,12 +151,14 @@ class SalesPocketbookController extends Controller
         $filterLeadPeriod = $reportMetric || $request->filled('period_type') || $request->filled('week') || ($request->filled('date_from') && $request->filled('date_to'));
         $leads = ($canonicalScope
             ? $this->weeklyMetrics->canonicalLeadQuery($canonicalScope)
-            : SalesLead::query()->visibleTo($user)->whereIn('sales_user_id', $visibleSalesIds))
+            : SalesLead::query()->visibleTo($user)->whereIn('sales_user_id', $visibleSalesIds)->activeForLeadViews())
             ->with([
                 'branch:id,name,sheet_id', 'project:id,project_name,is_nup_eligible', 'sales:id,name,supervisor_user_id',
                 'leadSource:id,name,is_active', 'siteVisits' => fn ($query) => $query->latest('id'),
                 'consumerLinks' => fn ($query) => $query->latest('id'), 'slikAttempts' => fn ($query) => $query->latest('id'),
-                'freelanceLinks' => fn ($query) => $query->latest('id'), 'akadLinks' => fn ($query) => $query->latest('id'),
+                'freelanceLinks' => fn ($query) => $query->latest('id'),
+                'akadLinks' => fn ($query) => $query->latest('id'),
+                'consumerLinks.consumerApplication.documents',
             ])
             ->withCount('comments')
             ->when($selectedBranchId, fn (Builder $query) => $query->where('branch_id', $selectedBranchId))
@@ -167,6 +170,12 @@ class SalesPocketbookController extends Controller
                 ->whereDate($reportMetric ? SalesWeeklyMetricsService::METRIC_COLUMNS[$reportMetric] : 'lead_date', '<=', $reportPeriod['end']->toDateString()))
             ->when($request->filled('stage'), function (Builder $query) use ($request) {
                 $stage = (string) $request->query('stage');
+                if (FeatureFlag::enabled('lead_stages_v3')) {
+                    abort_unless(array_key_exists($stage, SalesLead::STAGE_V3_LABELS), 422);
+                    $query->where('lead_stage', $stage);
+
+                    return;
+                }
                 abort_unless(array_key_exists($stage, SalesLead::STAGES), 422);
                 $query->whereNotNull($stage);
                 $later = array_slice(SalesLead::STAGE_ORDER, array_search($stage, SalesLead::STAGE_ORDER, true) + 1);
@@ -292,7 +301,7 @@ class SalesPocketbookController extends Controller
         $coordinators = User::query()->where('is_active', true)->whereIn('id', $visibleSalesIds)
             ->whereHas('role', fn (Builder $query) => $query->whereIn('slug', ['sales_coordinator', 'supervisor', 'manager', 'branch_manager']))
             ->orderBy('name')->get(['id', 'name', 'branch_id']);
-        $sourceOptionQuery = SalesLead::query()->visibleTo($user)
+        $sourceOptionQuery = SalesLead::query()->visibleTo($user)->activeForLeadViews()
             ->whereIn('sales_user_id', $visibleSalesIds)
             ->when($selectedBranchId, fn (Builder $query) => $query->where('branch_id', $selectedBranchId))
             ->when($selectedProjectId, fn (Builder $query) => $query->where('project_id', $selectedProjectId))
@@ -447,6 +456,12 @@ class SalesPocketbookController extends Controller
             ->when($leadSourceFilter, fn (Builder $query) => $query->whereEffectiveSource($leadSourceFilter))
             ->when($request->filled('stage'), function (Builder $query) use ($request) {
                 $stage = (string) $request->query('stage');
+                if (FeatureFlag::enabled('lead_stages_v3')) {
+                    abort_unless(array_key_exists($stage, SalesLead::STAGE_V3_LABELS), 422);
+                    $query->where('lead_stage', $stage);
+
+                    return;
+                }
                 abort_unless(array_key_exists($stage, SalesLead::STAGES), 422);
                 $query->whereNotNull($stage);
                 $laterStages = array_slice(SalesLead::STAGE_ORDER, array_search($stage, SalesLead::STAGE_ORDER, true) + 1);

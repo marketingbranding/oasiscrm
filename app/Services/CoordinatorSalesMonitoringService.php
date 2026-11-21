@@ -371,7 +371,7 @@ class CoordinatorSalesMonitoringService
 
     private function leadBase(array $salesIds, array $scope): Builder
     {
-        return SalesLead::query()
+        return SalesLead::query()->activeForLeadViews()
             ->whereIn('sales_user_id', $salesIds)
             ->whereIn('branch_id', $scope['branch_ids'])
             ->whereIn('project_id', $scope['project_ids']);

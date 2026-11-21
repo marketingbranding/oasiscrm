@@ -22,11 +22,20 @@ class UpdateAppSettingsRequest extends FormRequest
             $settings = [];
         }
 
-        $this->merge([
-            'settings' => collect($settings)
-                ->mapWithKeys(fn (mixed $value, string $key): array => [$this->decodeKey($key) => $value])
-                ->all(),
-        ]);
+        $settings = collect($settings)
+            ->mapWithKeys(function (mixed $value, string $key): array {
+                $decodedKey = $this->decodeKey($key);
+                $definition = AppSettingCatalog::definitions()[$decodedKey] ?? null;
+
+                if (($definition['type'] ?? null) === 'list' && is_string($value)) {
+                    $value = array_values(array_filter(array_map('trim', preg_split('/\R/', $value) ?: [])));
+                }
+
+                return [$decodedKey => $value];
+            })
+            ->all();
+
+        $this->merge(['settings' => $settings]);
     }
 
     private function decodeKey(string $key): string

@@ -47,6 +47,28 @@ class SalesLeadSiteVisitResultsTest extends TestCase
             ->assertSeeText('Belum ada riwayat hasil.');
     }
 
+    public function test_br12_follow_up_visit_appears_in_perlu_dihubungi_list_without_new_lead_stage(): void
+    {
+        [$sales, $lead] = $this->context();
+        SalesLeadSiteVisit::create([
+            'sales_lead_id' => $lead->id,
+            'branch_id' => $lead->branch_id,
+            'actor_id' => $sales->id,
+            'operation_uuid' => (string) Str::uuid(),
+            'status' => 'completed',
+            'is_completed' => true,
+            'visit_date' => '2026-08-13',
+            'visit_status' => 'follow up',
+            'visited_at' => '2026-08-13 14:00:00',
+        ]);
+
+        $this->actingAs($sales)->get(route('sales-agendas.index', ['tab' => 'agenda']))
+            ->assertOk()
+            ->assertSeeText('Perlu dihubungi')
+            ->assertSeeText($lead->customer_name);
+        $this->assertNull($lead->fresh()->lead_stage);
+    }
+
     public function test_lead_detail_maps_lifecycle_statuses_to_the_five_reference_steps(): void
     {
         [$sales, $lead] = $this->context();

@@ -10,15 +10,22 @@
     $canComplete = Auth::user()->isSales() && (int) $lead->sales_user_id === (int) Auth::id() && Auth::user()->hasPermission('sales_pocketbook.manage_own');
     $canUpdateLifecycle = Auth::user()->can('updateLifecycleStatus', $lead);
     $canMarkUtj = Auth::user()->can('markUtjDirect', $lead);
-    $statusVariant = $lead->current_status === \App\Enums\SalesLeadStatus::Akad ? 'success' : 'neutral';
-    $currentStep = match ($lead->current_status) {
-        \App\Enums\SalesLeadStatus::NoResponse => 1,
-        \App\Enums\SalesLeadStatus::Discussion, \App\Enums\SalesLeadStatus::FaceToFace => 2,
-        \App\Enums\SalesLeadStatus::SiteVisit, \App\Enums\SalesLeadStatus::Utj => 3,
-        \App\Enums\SalesLeadStatus::SlikCheck, \App\Enums\SalesLeadStatus::SlikRejected => 4,
-        \App\Enums\SalesLeadStatus::Akad => 5,
-        default => 1,
-    };
+    $normalConsumer = $lead->consumerLinks->first(fn ($link) => $link->sheet_type === 'data_konsumen' && $link->status === 'completed');
+    $akad = $lead->akadLinks->firstWhere('status', 'completed');
+    $consumerApplication = $normalConsumer?->consumerApplication;
+    $documentsComplete = $lead->documents_completed_at !== null || ($consumerApplication?->documents?->isNotEmpty() && $consumerApplication->documents->every(fn ($document) => $document->status === 'completed' || $document->verified_at !== null));
+    $stageV3 = \App\Support\FeatureFlag::enabled('lead_stages_v3');
+    $statusVariant = $stageV3 && in_array($lead->resolveStageV3(), ['utj', 'gugur'], true) ? 'success' : ($lead->current_status === \App\Enums\SalesLeadStatus::Akad ? 'success' : 'neutral');
+    $currentStep = $stageV3
+        ? min(array_search($lead->resolveStageV3(), \App\Models\SalesLead::STAGE_V3_ORDER, true) + 1, 5)
+        : match ($lead->current_status) {
+            \App\Enums\SalesLeadStatus::NoResponse => 1,
+            \App\Enums\SalesLeadStatus::Discussion, \App\Enums\SalesLeadStatus::FaceToFace => 2,
+            \App\Enums\SalesLeadStatus::SiteVisit, \App\Enums\SalesLeadStatus::Utj => 3,
+            \App\Enums\SalesLeadStatus::SlikCheck, \App\Enums\SalesLeadStatus::SlikRejected => 4,
+            \App\Enums\SalesLeadStatus::Akad => 5,
+            default => 1,
+        };
     if ($lead->completed_at) {
         $currentStep = 5;
     }
@@ -28,6 +35,11 @@
             'label' => $history->status instanceof \App\Enums\SalesLeadStatus ? $history->status->label() : ucfirst(str_replace('_', ' ', (string) $history->status)),
             'detail' => null,
         ]))
+        ->concat($stageV3 ? $lead->stageHistories->map(fn ($history) => [
+            'date' => $history->changed_at,
+            'label' => \App\Models\SalesLead::STAGE_V3_LABELS[$history->to_stage] ?? $history->to_stage,
+            'detail' => $history->reason,
+        ]) : collect())
         ->concat($lead->siteVisits->filter(fn ($visit) => $visit->is_completed)->map(fn ($visit) => [
             'date' => $visit->visited_at ?? $visit->visit_date,
             'label' => 'Cek Lokasi · '.ucfirst($visit->visit_status),
@@ -45,7 +57,7 @@
     <header class="sales-lead-detail-mobile-header">
         <p>{{ $lead->branch?->name ?: '-' }} <span aria-hidden="true">·</span> {{ $lead->project?->project_name ?: '-' }}</p>
         <h1>{{ $lead->customer_name }}</h1>
-        <x-crm.status-badge :variant="$statusVariant">{{ $lead->current_status->label() }}</x-crm.status-badge>
+        <x-crm.status-badge :variant="$statusVariant">{{ $stageV3 ? $lead->stageV3Label() : $lead->current_status->label() }}</x-crm.status-badge>
         @if($lead->completed_at)<span class="sales-lead-detail-independent-status">Selesai</span>@endif
         @if($lead->current_status === \App\Enums\SalesLeadStatus::Freelance)<span class="sales-lead-detail-independent-status">Freelance</span>@endif
     </header>
@@ -53,15 +65,18 @@
     <section class="sales-lead-detail-progress" aria-label="Progres lead" data-current-step="{{ $currentStep }}">
         <div class="sales-lead-detail-progress-label"><strong>PROGRES LEAD</strong><span>LANGKAH {{ $currentStep }} DARI 5</span></div>
         <ol>
-            @foreach(['No Respon', 'Diskusi', 'Cek Lokasi', 'Cek SLIK', 'Akad'] as $index => $stepLabel)
+            @foreach($stageV3 ? ['Lead Baru', 'Dihubungi', 'Tatap Muka', 'Survey', 'UTJ'] : ['No Respon', 'Diskusi', 'Cek Lokasi', 'Cek SLIK', 'Akad'] as $index => $stepLabel)
                 <li class="{{ $currentStep >= $index + 1 ? 'is-active' : '' }}" aria-label="{{ $stepLabel }}{{ $currentStep === $index + 1 ? ', saat ini' : '' }}"></li>
             @endforeach
         </ol>
-        <div class="sales-lead-detail-progress-steps"><span>No Respon</span><span>Diskusi</span><span>Cek Lokasi</span><span>Cek SLIK</span><span>Akad</span></div>
+        <div class="sales-lead-detail-progress-steps">@foreach($stageV3 ? ['Lead Baru', 'Dihubungi', 'Tatap Muka', 'Survey', 'UTJ'] : ['No Respon', 'Diskusi', 'Cek Lokasi', 'Cek SLIK', 'Akad'] as $stepLabel)<span>{{ $stepLabel }}</span>@endforeach</div>
     </section>
 
     <section class="sales-lead-detail-information" aria-labelledby="sales-lead-information-title">
         <h2 id="sales-lead-information-title">Informasi</h2>
+        @if($stageV3)
+            <p class="mt-2 text-sm"><strong>Keterangan transaksi:</strong> {{ $documentsComplete ? 'Berkas Awal Lengkap' : 'Berkas belum lengkap' }}; {{ $akad ? 'Akad tercatat dari transaksi tertaut' : 'Akad belum tercatat' }}.</p>
+        @endif
         <dl>
             <div><dt>Telepon</dt><dd>{{ $lead->phone ?: '-' }}</dd></div>
             <div><dt>Sumber</dt><dd>{{ $lead->effective_source ?: '-' }}</dd></div>

@@ -82,6 +82,9 @@ class SalesLeadController extends Controller
             'project',
             'sales',
             'statusHistories' => fn ($query) => $query->latest('id'),
+            'stageHistories' => fn ($query) => $query->latest('id'),
+            'consumerLinks.consumerApplication.documents',
+            'akadLinks',
             'siteVisits' => fn ($query) => $query->latest('id'),
         ]);
 

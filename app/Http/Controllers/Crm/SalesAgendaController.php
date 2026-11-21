@@ -159,6 +159,7 @@ class SalesAgendaController extends Controller
         $leadStatus = $request->query('lead_status', 'open');
         $leadQuery = SalesLead::query()
             ->visibleTo($request->user())
+            ->activeForLeadViews()
             ->where('sales_user_id', $request->user()->id)
             ->with(['branch:id,name', 'project:id,project_name']);
         $openLeadCount = (clone $leadQuery)->whereNull('completed_at')->count();
@@ -169,6 +170,17 @@ class SalesAgendaController extends Controller
             ->latest('id')
             ->paginate(20, ['*'], 'lead_page')
             ->withQueryString();
+        $followUpLeads = SalesLead::query()
+            ->visibleTo($request->user())
+            ->activeForLeadViews()
+            ->where('sales_user_id', $request->user()->id)
+            ->whereNull('completed_at')
+            ->whereHas('latestFollowUpSiteVisit')
+            ->with(['project:id,project_name', 'latestFollowUpSiteVisit'])
+            ->latest('lead_date')
+            ->latest('id')
+            ->limit(10)
+            ->get();
         $projects = $this->workspaceAccess->accessibleProjects($request->user())->where('is_active', true)->values();
         $defaultProjectId = old('project_id', $request->query('project_id', $project?->id));
         $leadDate = $this->normalizeLeadDate(old('lead_date', $request->query('lead_date', today()->toDateString())));
@@ -188,7 +200,7 @@ class SalesAgendaController extends Controller
         ];
         $canExport = $request->user()->hasPermission('sales_pocketbook.export_own');
 
-        return view('crm.sales-pocketbook.sales-agenda', compact('project', 'agendas', 'allAgendas', 'agendaView', 'incompleteAgendaCount', 'agendaGroups', 'leads', 'leadStatus', 'openLeadCount', 'completedLeadCount', 'tab', 'projects', 'defaultProjectId', 'cascadeProjects', 'leadOptionsEndpoint', 'leadDate', 'promos', 'dailyReminder', 'canExport', 'agendaDate', 'agendaWeek', 'receiptSummary', 'daySubmission', 'incompletePreviousAgendas', 'showSalesTour', 'resumeReceipt'));
+        return view('crm.sales-pocketbook.sales-agenda', compact('project', 'agendas', 'allAgendas', 'agendaView', 'incompleteAgendaCount', 'agendaGroups', 'leads', 'followUpLeads', 'leadStatus', 'openLeadCount', 'completedLeadCount', 'tab', 'projects', 'defaultProjectId', 'cascadeProjects', 'leadOptionsEndpoint', 'leadDate', 'promos', 'dailyReminder', 'canExport', 'agendaDate', 'agendaWeek', 'receiptSummary', 'daySubmission', 'incompletePreviousAgendas', 'showSalesTour', 'resumeReceipt'));
     }
 
     private function normalizeLeadDate(mixed $value): string

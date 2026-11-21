@@ -29,7 +29,7 @@
                         <x-crm.field
                             :label="$definition['label']"
                             :for="$inputId"
-                            :hint="$definition['description'].' Bawaan: '.(is_bool($definition['default']) ? ($definition['default'] ? 'Aktif' : 'Mati') : $definition['default'])"
+                            :hint="$definition['description'].' Bawaan: '.(is_bool($definition['default']) ? ($definition['default'] ? 'Aktif' : 'Mati') : (is_array($definition['default']) ? implode(', ', $definition['default']) : $definition['default']))"
                             :error="$errors->first($oldKey)"
                         >
                             @if($definition['type'] === 'boolean')
@@ -37,6 +37,8 @@
                                     <option value="0" @selected(old($oldKey, $definition['value']) === false || old($oldKey, $definition['value']) === '0')>Mati</option>
                                     <option value="1" @selected(old($oldKey, $definition['value']) === true || old($oldKey, $definition['value']) === '1')>Aktif</option>
                                 </select>
+                            @elseif($definition['type'] === 'list')
+                                <textarea id="{{ $inputId }}" name="settings[{{ $inputKey }}]" rows="5" class="crm-control">{{ old($oldKey, implode("\n", $definition['value'])) }}</textarea>
                             @else
                                 <input
                                     id="{{ $inputId }}"

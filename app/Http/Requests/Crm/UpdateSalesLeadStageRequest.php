@@ -3,6 +3,7 @@
 namespace App\Http\Requests\Crm;
 
 use App\Models\SalesLead;
+use App\Support\FeatureFlag;
 use Carbon\Carbon;
 use Illuminate\Contracts\Validation\Validator;
 use Illuminate\Foundation\Http\FormRequest;
@@ -18,11 +19,26 @@ class UpdateSalesLeadStageRequest extends FormRequest
             return false;
         }
 
+        if (FeatureFlag::enabled('lead_stages_v3')) {
+            return $this->user()?->can('updateStageV3', $lead) ?? false;
+        }
+
         return $this->user()?->can($this->input('action') === 'reverse' ? 'reverseStage' : 'updateStage', $lead) ?? false;
     }
 
     public function rules(): array
     {
+        if (FeatureFlag::enabled('lead_stages_v3')) {
+            return [
+                'stage' => ['required', Rule::in(SalesLead::STAGE_V3_ORDER)],
+                'action' => ['required', Rule::in(['set', 'reverse'])],
+                'reason' => ['nullable', 'string', 'max:500', 'required_if:action,reverse'],
+                'reversal_confirmed' => ['nullable', 'accepted_if:action,reverse'],
+                'expected_updated_at' => ['required', 'string', 'max:40'],
+                'operation_uuid' => ['nullable', 'uuid'],
+            ];
+        }
+
         return [
             'stage' => ['required', Rule::in(SalesLead::STAGE_ORDER)],
             'action' => ['required', Rule::in(['set', 'reverse'])],
@@ -34,8 +50,8 @@ class UpdateSalesLeadStageRequest extends FormRequest
 
     public function after(): array
     {
-        return [function (Validator $validator) {
-            if ($validator->errors()->isNotEmpty() || $this->input('action') !== 'set') {
+        return [function (Validator $validator): void {
+            if ($validator->errors()->isNotEmpty() || $this->input('action') !== 'set' || FeatureFlag::enabled('lead_stages_v3')) {
                 return;
             }
 

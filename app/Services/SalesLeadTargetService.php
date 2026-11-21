@@ -50,7 +50,7 @@ class SalesLeadTargetService
         $ids = $sales->pluck('id');
         $targets = SalesLeadTarget::query()->whereIn('sales_user_id', $ids)
             ->where('period_year', $yearOrMonth)->where('period_month', $month)->get()->keyBy('sales_user_id');
-        $actuals = SalesLead::query()->whereIn('sales_user_id', $ids)
+        $actuals = SalesLead::query()->activeForLeadViews()->whereIn('sales_user_id', $ids)
             ->whereYear('lead_date', $yearOrMonth)->whereMonth('lead_date', $month)
             ->selectRaw('sales_user_id, COUNT(*) AS total')->groupBy('sales_user_id')->pluck('total', 'sales_user_id');
 
@@ -119,7 +119,7 @@ class SalesLeadTargetService
             })
             ->first();
         $targetValue = $target?->target_leads ?? $target?->lead_target;
-        $actual = SalesLead::query()
+        $actual = SalesLead::query()->activeForLeadViews()
             ->where('sales_user_id', $sales->id)
             ->whereDate('lead_date', '>=', $monthStart->toDateString())
             ->whereDate('lead_date', '<=', $monthEnd->toDateString())

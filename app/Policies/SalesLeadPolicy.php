@@ -4,6 +4,7 @@ namespace App\Policies;
 
 use App\Models\SalesLead;
 use App\Models\User;
+use App\Services\AppSettingResolver;
 use App\Services\CoordinatorLeadTeamService;
 use App\Services\CrmAuthorizationService;
 use App\Services\OrganizationScopeService;
@@ -77,6 +78,10 @@ class SalesLeadPolicy
 
     public function update(User $user, SalesLead $lead): bool
     {
+        if (FeatureFlag::enabled('lead_stages_v3') && $user->isSales() && in_array($lead->resolveStageV3(), ['utj', 'gugur'], true)) {
+            return false;
+        }
+
         if (FeatureFlag::enabled('org_hierarchical_monitoring')
             && $this->isReadOnlySalesMonitor($user)
             && ! $this->canEditHistoricalOwnedLead($user, $lead)) {
@@ -129,6 +134,27 @@ class SalesLeadPolicy
             && $this->update($user, $lead);
     }
 
+    public function updateStageV3(User $user, SalesLead $lead): bool
+    {
+        if (! FeatureFlag::enabled('lead_stages_v3') || $this->canEditHistoricalOwnedLead($user, $lead) || ! $this->update($user, $lead)) {
+            return false;
+        }
+
+        if (! $user->isSales()) {
+            return true;
+        }
+
+        $stage = $lead->resolveStageV3();
+        if ($stage === 'gugur' || $stage === 'utj') {
+            return false;
+        }
+
+        $allowed = SalesLead::STAGE_V3_ORDER;
+        $limit = app(AppSettingResolver::class)->string('sales_lead.sales_max_edit_stage');
+
+        return array_search($stage, $allowed, true) <= array_search($limit, $allowed, true);
+    }
+
     public function reverseStage(User $user, SalesLead $lead): bool
     {
         return ! $user->isSales()
@@ -138,6 +164,12 @@ class SalesLeadPolicy
 
     public function updateLifecycleStatus(User $user, SalesLead $lead): bool
     {
+        if (FeatureFlag::enabled('lead_stages_v3')) {
+            if ($user->isSales()) {
+                return $this->updateStageV3($user, $lead);
+            }
+        }
+
         return ! $this->canEditHistoricalOwnedLead($user, $lead)
             && $this->update($user, $lead);
     }
@@ -151,6 +183,10 @@ class SalesLeadPolicy
 
     public function recordSiteVisit(User $user, SalesLead $lead): bool
     {
+        if (FeatureFlag::enabled('lead_stages_v3')
+            && ($lead->lead_stage === 'gugur' || ($user->isSales() && $lead->lead_stage === 'utj'))) {
+            return false;
+        }
         if ($this->canEditHistoricalOwnedLead($user, $lead)) {
             return false;
         }
@@ -172,6 +208,10 @@ class SalesLeadPolicy
 
     public function markUtjDirect(User $user, SalesLead $lead): bool
     {
+        if (FeatureFlag::enabled('lead_stages_v3')
+            && ($lead->lead_stage === 'gugur' || ($user->isSales() && $lead->lead_stage === 'utj'))) {
+            return false;
+        }
         if ($this->canEditHistoricalOwnedLead($user, $lead)) {
             return false;
         }
@@ -193,25 +233,29 @@ class SalesLeadPolicy
 
     public function convertToConsumer(User $user, SalesLead $lead): bool
     {
-        return ! $this->canEditHistoricalOwnedLead($user, $lead)
+        return (! FeatureFlag::enabled('lead_stages_v3') || $lead->lead_stage !== 'gugur')
+            && ! $this->canEditHistoricalOwnedLead($user, $lead)
             && $this->update($user, $lead);
     }
 
     public function submitToSlik(User $user, SalesLead $lead): bool
     {
-        return ! $this->canEditHistoricalOwnedLead($user, $lead)
+        return (! FeatureFlag::enabled('lead_stages_v3') || $lead->lead_stage !== 'gugur')
+            && ! $this->canEditHistoricalOwnedLead($user, $lead)
             && $this->update($user, $lead);
     }
 
     public function markSlikRejected(User $user, SalesLead $lead): bool
     {
-        return ! $this->canEditHistoricalOwnedLead($user, $lead)
+        return (! FeatureFlag::enabled('lead_stages_v3') || $lead->lead_stage !== 'gugur')
+            && ! $this->canEditHistoricalOwnedLead($user, $lead)
             && $this->update($user, $lead);
     }
 
     public function convertToFreelance(User $user, SalesLead $lead): bool
     {
-        return ! $this->canEditHistoricalOwnedLead($user, $lead)
+        return (! FeatureFlag::enabled('lead_stages_v3') || $lead->lead_stage !== 'gugur')
+            && ! $this->canEditHistoricalOwnedLead($user, $lead)
             && $this->update($user, $lead);
     }
 

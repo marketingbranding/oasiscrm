@@ -25,7 +25,7 @@ class SalesDailyReminderService
 
         $hasAssignedProject = $this->workspaceAccess->accessibleProjectsQuery($user)->exists();
         $isFreeDay = $this->calendar->isFreeDay(CarbonImmutable::parse($today), $user->branch_id);
-        $todayLeadCount = SalesLead::query()->visibleTo($user)
+        $todayLeadCount = SalesLead::query()->visibleTo($user)->activeForLeadViews()
             ->where('sales_user_id', $user->id)
             ->whereDate('lead_date', $today)
             ->count();

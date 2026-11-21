@@ -168,7 +168,7 @@ class DashboardController extends Controller
             return $query->whereKey([]);
         }
 
-        return $query
+        return $query->activeForLeadViews()
             ->whereIn('branch_id', $this->organizationScope->branchIds($user, 'database'))
             ->whereIn('project_id', $this->organizationScope->projectIds($user, 'database'))
             ->when($branchId, fn ($query) => $query->where('branch_id', $branchId))
@@ -259,7 +259,7 @@ class DashboardController extends Controller
             ]));
 
         if ($user->hasScopedPermission('sales_pocketbook')) {
-            SalesLead::query()->visibleTo($user)
+            SalesLead::query()->visibleTo($user)->activeForLeadViews()
                 ->whereDate('lead_date', today())
                 ->when($branchId, fn ($query) => $query->where('branch_id', $branchId))
                 ->when($projectId !== null, fn ($query) => $query->where('project_id', $projectId))

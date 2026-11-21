@@ -3,7 +3,6 @@
 namespace App\Models;
 
 use App\Enums\SalesLeadStatus;
-use App\Services\AppSettingResolver;
 use App\Services\CrmAuthorizationService;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
@@ -262,20 +261,8 @@ class SalesLead extends Model
 
     public function scopeActiveForLeadViews(Builder $query): Builder
     {
-        $value = app(AppSettingResolver::class)->value('lead_stages_v3');
-        $branchIds = is_array($value) && ($value['mode'] ?? null) === 'branches'
-            ? array_map('intval', $value['branch_ids'] ?? [])
-            : null;
-
-        if ($value === false || (is_array($value) && ($value['mode'] ?? null) === 'off') || $branchIds === []) {
-            return $query;
-        }
-
-        return $query->where(function (Builder $query) use ($branchIds): void {
+        return $query->where(function (Builder $query): void {
             $query->whereNull('lead_stage')->orWhere('lead_stage', '!=', 'gugur');
-            if ($branchIds !== null) {
-                $query->orWhereNotIn('branch_id', $branchIds);
-            }
         });
     }
 

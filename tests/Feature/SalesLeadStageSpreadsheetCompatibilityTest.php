@@ -7,10 +7,12 @@ use App\Models\LeadMaster;
 use App\Models\Role;
 use App\Models\SalesLead;
 use App\Models\User;
+use App\Services\AppSettingResolver;
 use App\Services\SalesLeadSpreadsheetContract;
 use App\ValueObjects\ResolvedSalesLeadSpreadsheetContract;
 use App\ValueObjects\SalesLeadSheetDefinition;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Tests\TestCase;
 
@@ -25,6 +27,25 @@ class SalesLeadStageSpreadsheetCompatibilityTest extends TestCase
 
         $this->assertContains('UTJ', $definition->validations['status_lead']['values']);
         $this->assertContains('Gugur', $definition->validations['status_lead']['values']);
+    }
+
+    public function test_br13_active_lead_scope_excludes_gugur_even_when_rollout_is_off(): void
+    {
+        $gugur = $this->lead('gugur');
+        $active = $this->lead('survey');
+        $this->assertNotContains($gugur->id, SalesLead::query()->activeForLeadViews()->pluck('id')->all());
+        $this->assertContains($active->id, SalesLead::query()->activeForLeadViews()->pluck('id')->all());
+    }
+
+    public function test_br13_rolled_back_branch_keeps_gugur_out_of_active_scope(): void
+    {
+        $gugur = $this->lead('gugur');
+        DB::table('app_settings')->updateOrInsert(
+            ['key' => 'lead_stages_v3'],
+            ['value' => json_encode(['mode' => 'off', 'branch_ids' => []], JSON_THROW_ON_ERROR), 'group' => 'feature_flags', 'created_at' => now(), 'updated_at' => now()],
+        );
+        app(AppSettingResolver::class)->forget('lead_stages_v3');
+        $this->assertNotContains($gugur->id, SalesLead::query()->activeForLeadViews()->pluck('id')->all());
     }
 
     public function test_br11_transaction_fact_is_not_derived_from_lead_stage(): void

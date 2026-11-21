@@ -89,10 +89,18 @@ Mundur: jangan aktifkan mode graf kanonis atau pemantauan berjenjang.
 
 ### B1. Merge dan deploy
 
+Merge wajib berurutan. Jangan merge work package langsung ke `main`.
+
 ```bash
-git switch main
 git fetch origin
-git merge --no-ff origin/prd-v3/wp-1.10-fase1-closeout -m "merge: rilis fondasi Fase 1 PRD v3"
+git switch prd-v3/fase-1-fondasi
+git pull --ff-only origin prd-v3/fase-1-fondasi
+git merge --no-ff origin/prd-v3/wp-1.10-fase1-closeout -m "merge: tutup WP-1.10 Fase 1 PRD v3"
+git push origin prd-v3/fase-1-fondasi
+
+git switch main
+git pull --ff-only origin main
+git merge --no-ff origin/prd-v3/fase-1-fondasi -m "merge: rilis fondasi Fase 1 PRD v3"
 git push origin main
 ```
 
@@ -144,11 +152,34 @@ Mundur: jangan menghapus role lama; restore DB bila pemetaan sudah menulis state
 
 Prasyarat: parity bersih dan observasi legacy minimal 7 hari.
 
-Aktifkan mode graf kanonis melalui Pengaturan sesuai prosedur admin. Jangan mengubah flag lain.
+1. Set konfigurasi server: `ORGANIZATION_GRAPH_MODE=graph` pada `.env` (nilai sah: `legacy`, `shadow`, atau `graph`). Jangan mengaktifkan `shadow`/`graph` lewat database setting.
+2. Reload konfigurasi dan cache aplikasi:
+
+```bash
+php artisan optimize:clear
+php artisan config:cache
+php artisan route:cache
+php artisan view:cache
+php artisan organization:parity
+php artisan organization:cutover-health
+```
+
+3. Verifikasi `config('organization.graph_mode')` bernilai `graph`, parity bersih, tidak ada siklus, dan health gate lulus.
 
 Go: health gate dan parity tetap bersih selama jeda.
 No-go: mismatch scope, siklus, atau akses lintas cabang.
-Mundur: matikan mode graf kanonis; kembali ke read source legacy.
+
+Mundur: ubah `.env` menjadi `ORGANIZATION_GRAPH_MODE=legacy`, lalu jalankan:
+
+```bash
+php artisan optimize:clear
+php artisan config:cache
+php artisan route:cache
+php artisan view:cache
+php artisan organization:cutover-health
+```
+
+Kembali ke read source legacy; jangan rollback migrasi graf.
 
 ### C3. Pemantauan hierarkis
 
@@ -168,19 +199,25 @@ Mundur: kembalikan dropdown Sheet; flag `lead_stages_v3` tetap mati.
 
 ### C5. Tahap Lead v3 satu cabang uji
 
-Aktifkan `lead_stages_v3` untuk satu cabang uji melalui Pengaturan.
+Di Pengaturan → Pengaturan Aturan → Feature flags:
+1. Pilih mode `Cabang tertentu` pada `Tahap Lead v3`.
+2. Pilih satu cabang uji pada `Cabang rollout`.
+3. Simpan, cek audit `app_setting_updated`, lalu lakukan smoke test hanya pada cabang itu.
 
 Go: lead baru ke UTJ/Gugur, lock setelah terminal, dan sinkronisasi lulus.
 No-go: downgrade, bypass lock, atau status asing.
-Mundur: matikan `lead_stages_v3`; jangan hapus data/riwayat.
+Mundur: pilih mode `Mati` pada `Tahap Lead v3`, kosongkan cabang bila diperlukan, simpan, lalu jalankan smoke test legacy; jangan hapus data/riwayat.
 
 ### C6. Event transaksi satu cabang uji
 
-Aktifkan `transaction_events_v3` untuk satu cabang uji melalui Pengaturan.
+Di Pengaturan → Pengaturan Aturan → Feature flags:
+1. Pilih mode `Cabang tertentu` pada `Event transaksi v3`.
+2. Pilih satu cabang uji pada `Cabang rollout`.
+3. Simpan, cek audit `app_setting_updated`, lalu lakukan smoke test hanya pada cabang itu.
 
 Go: status/event audit, NUP, kavling holder, dan scope lulus.
 No-go: duplikat holder, event tanpa audit, atau transaksi berubah ID.
-Mundur: matikan `transaction_events_v3`; restore hanya bila state transaksi tidak dapat dikoreksi aman.
+Mundur: pilih mode `Mati` pada `Event transaksi v3`, kosongkan cabang bila diperlukan, simpan, lalu smoke test legacy; restore hanya bila state transaksi tidak dapat dikoreksi aman.
 
 ## D. Rollback umum
 

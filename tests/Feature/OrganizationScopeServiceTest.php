@@ -18,6 +18,28 @@ class OrganizationScopeServiceTest extends TestCase
 {
     use RefreshDatabase;
 
+    public function test_d32_consumer_manage_scope_parity_excludes_non_sas_role_widening(): void
+    {
+        $branch = $this->branch('D32P');
+        $otherBranch = $this->branch('D32Q');
+        $project = LeadMaster::create(['branch_id' => $branch->id, 'project_name' => 'D32P Project', 'is_active' => true]);
+        $otherProject = LeadMaster::create(['branch_id' => $otherBranch->id, 'project_name' => 'D32Q Project', 'is_active' => true]);
+
+        foreach (['admin', 'staff', 'branch_manager', 'manager', 'supervisor', 'sales_coordinator', 'sales'] as $role) {
+            $viewer = $this->user($role, $branch);
+            $scope = app(OrganizationScopeService::class);
+            $this->assertNotContains($otherBranch->id, $scope->branchIds($viewer, 'consumer_progress', 'manage'), $role);
+            $this->assertNotContains($otherProject->id, $scope->projectIds($viewer, 'consumer_progress', 'manage'), $role);
+            $this->assertFalse($viewer->fresh()->hasPermission('consumer_progress.manage'), $role);
+        }
+
+        $sas = $this->user('sas', $branch);
+        $sas->assignedProjects()->attach($project->id, ['is_primary' => true, 'is_active' => true]);
+        $this->assertContains($branch->id, app(OrganizationScopeService::class)->branchIds($sas, 'consumer_progress', 'manage'));
+        $this->assertContains($project->id, app(OrganizationScopeService::class)->projectIds($sas, 'consumer_progress', 'manage'));
+        $this->assertNotContains($otherProject->id, app(OrganizationScopeService::class)->projectIds($sas, 'consumer_progress', 'manage'));
+    }
+
     public function test_team_scope_includes_direct_reports_and_descendants_without_cross_branch_leakage(): void
     {
         $branch = $this->branch('SLO');

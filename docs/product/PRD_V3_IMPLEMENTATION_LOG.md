@@ -395,6 +395,12 @@ Status: selesai pada branch `prd-v3/wp-1.10-fase1-closeout`; merge phase branch 
 - `composer test`: 2003 tests, 14163 assertions; Pint, diff check, build, migrasi kosong, dan graphify pass.
 - Backup Hostinger menjadi backup utama; command OASIS hanya backup manual pra-cutover.
 
+### WP-2.4 — Paritas status transaksi Workspace
+
+Status: dicatat sebagai risiko tindak lanjut.
+
+Tab dan hitungan Mundur di Workspace masih membaca `consumer_applications.transaction_status` mentah. Laporan paritas dan dashboard wajib memakai pemetaan kanonis per baris: `REJECT SLIK`/`REJECT BANK` dan status reject terkait → `MUNDUR`, status Ganti Nama/Kembali ke NUP → `DITUTUP`, dan status aktif → `LANJUT`; nilai tak dikenal masuk `needs_review`. Perbaikan harus menjaga laporan gabungan lintas cabang dan tidak mengubah kolom legacy sebagai efek samping.
+
 ## Konflik, risiko, dan keputusan yang harus dijaga
 
 | ID | Temuan | Dampak | Keputusan kerja |

@@ -135,7 +135,7 @@ class AdminBranchSalesMonitoringTest extends TestCase
         $response->assertOk();
         $workbook = IOFactory::load($response->baseResponse->getFile()->getPathname());
         $leadSheet = $workbook->getSheetByName('LEAD HARIAN');
-        $agendaSheet = $workbook->getSheetByName('AGENDA HARIAN');
+        $agendaSheet = $workbook->getSheetByName('RENCANA HARIAN SALES');
         $this->assertSame('Nama Konsumen', $leadSheet->getCell('E1')->getValue());
         $this->assertSame('Agenda', $agendaSheet->getCell('I1')->getValue());
         $values = collect($workbook->getSheetNames())->flatMap(fn (string $sheetName) => $workbook->getSheetByName($sheetName)->toArray())->flatten()->implode('|');

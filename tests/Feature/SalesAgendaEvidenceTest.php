@@ -57,7 +57,7 @@ class SalesAgendaEvidenceTest extends TestCase
         $this->assertSame(3, ActivityLog::where('event', 'agenda_evidence_uploaded')->count());
         $this->assertSame(1, ActivityLog::where('event', 'agenda_result_recorded')->where('subject_id', $agendas[1]->id)->count());
         $audit = ActivityLog::where('event', 'agenda_evidence_uploaded')->firstOrFail();
-        $this->assertSame('Bukti foto Agenda Sales diunggah.', $audit->description);
+        $this->assertSame('Bukti foto Kegiatan Sales diunggah.', $audit->description);
         $this->assertSame($sales->id, $audit->causer_id);
         $this->assertSame(SalesAgendaEvidence::class, $audit->subject_type);
     }

@@ -82,6 +82,9 @@ final class ConsumerApplicationLifecycleService
             $before = $this->snapshot($locked);
             $this->kavlingLifecycle->mundur($locked);
             $locked->update(['withdraw_reason' => $withdrawReason]);
+            if (FeatureFlag::enabled('transaction_events_v3')) {
+                $this->operational->appendTransactionEvent($locked->fresh(), 'MUNDUR', $actor, 'manual', $withdrawReason, [], $withdrawReason);
+            }
             $result = $locked->fresh();
             $this->audit($actor, $result, $before, $this->snapshot($result), 'consumer_mundur', 'mundur');
 

@@ -74,6 +74,37 @@ class ConsumerCanonicalDomainContractTest extends TestCase
         $this->assertSame('REPLACED', $historical->fresh()->transaction_status);
     }
 
+    /** BR-31: default withdrawal reasons are configured and available to validation. */
+    public function test_br31_default_mundur_reasons_are_configured(): void
+    {
+        $this->assertSame([
+            'Mundur atas permintaan konsumen',
+            'Reject SLIK',
+            'Reject Bank',
+            'Lainnya',
+        ], app(AppSettingResolver::class)->list('consumer_progress.mundur_reasons'));
+    }
+
+    /** BR-30 and BR-32: Mundur closes no process stage and records only typed event history. */
+    public function test_br30_mundur_sets_canonical_status_only_through_typed_event_without_process_change(): void
+    {
+        $application = ConsumerApplication::factory()->create([
+            'current_stage' => 'pemberkasan',
+            'current_process' => 'pemberkasan',
+        ]);
+        $actor = $this->superadmin($application);
+
+        $result = app(ConsumerApplicationLifecycleService::class)->mundur($application, 'Reject Bank', $actor);
+
+        $this->assertSame('MUNDUR', $result->transaction_status);
+        $this->assertSame('pemberkasan', $result->current_stage);
+        $this->assertSame('pemberkasan', $result->current_process);
+        $event = $result->transactionEvents()->sole();
+        $this->assertSame('MUNDUR', $event->event_type);
+        $this->assertSame('Reject Bank', $event->reason);
+        $this->assertSame(0, $result->processStageEvents()->where('event_type', 'MUNDUR')->count());
+    }
+
     /** BR-31: configured withdrawal reasons drive Mundur validation and rollback. */
     public function test_br31_mundur_uses_custom_reason_and_invalid_reason_rolls_back_held_kavling(): void
     {

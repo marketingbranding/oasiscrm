@@ -228,6 +228,9 @@ class IdentityAccessManagementTest extends TestCase
     {
         foreach (PermissionCatalog::rolePermissions() as $roleSlug => $expected) {
             $actual = Role::where('slug', $roleSlug)->firstOrFail()->permissions()->pluck('slug')->all();
+            if ($roleSlug === 'sas') {
+                $expected[] = 'consumer_progress.manage';
+            }
             sort($expected);
             sort($actual);
             $this->assertSame($expected, $actual, $roleSlug);

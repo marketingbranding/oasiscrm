@@ -627,6 +627,60 @@ class AiChatTest extends TestCase
         $this->assertStringNotContainsString('Alamat Rahasia', $conversationJson);
     }
 
+    public function test_br70_real_tool_results_are_filtered_while_protocol_fields_and_branch_names_remain(): void
+    {
+        [$branch, $user] = $this->branchAndUser();
+        AppSetting::query()->create(['key' => 'ai.send_names', 'value' => false, 'group' => 'ai']);
+        config(['ai.routing_mode' => 'provider', 'ai.primary.api_key' => 'test-key']);
+        DatabaseSheetRecord::create([
+            'branch_id' => $branch->id,
+            'sheet_id' => 'sheet-'.$branch->id,
+            'sheet_name' => 'Leads',
+            'row_number' => 2,
+            'oasis_sync_id' => 'real-tool-target',
+            'headers' => ['nama_konsumen', 'nik', 'no_hp', 'email', 'alamat'],
+            'row_data' => [
+                'nama_konsumen' => 'Budi Konsumen',
+                'nik' => '1234 5678 9012 3456',
+                'no_hp' => '0812-3456-7890',
+                'email' => 'person@example.com',
+                'alamat' => 'Jalan Merdeka 10',
+            ],
+            'sync_status' => 'synced',
+            'last_synced_at' => now(),
+        ]);
+
+        $requests = [];
+        Http::fake(function ($request) use (&$requests, $branch) {
+            $requests[] = $request->data();
+            if (count($requests) === 1) {
+                return Http::response(['choices' => [['message' => [
+                    'role' => 'assistant',
+                    'content' => null,
+                    'tool_calls' => [
+                        ['id' => 'call-search', 'type' => 'function', 'function' => ['name' => 'search_customer', 'arguments' => json_encode(['query' => 'Budi'])]],
+                        ['id' => 'call-branch', 'type' => 'function', 'function' => ['name' => 'get_branch_info', 'arguments' => json_encode(['branch_id' => $branch->id])]],
+                    ],
+                ]]]]);
+            }
+
+            return Http::response(['choices' => [['message' => ['role' => 'assistant', 'content' => 'Data sudah disaring.']]]]);
+        });
+
+        $this->actingAs($user)->postJson(route('ai-chat.chat'), ['message' => 'Cari Budi dan info cabang.'])->assertOk();
+
+        $this->assertCount(2, $requests);
+        $secondPayload = json_encode($requests[1], JSON_UNESCAPED_UNICODE);
+        $this->assertStringNotContainsString('1234 5678 9012 3456', $secondPayload);
+        $this->assertStringNotContainsString('0812-3456-7890', $secondPayload);
+        $this->assertStringNotContainsString('person@example.com', $secondPayload);
+        $this->assertStringNotContainsString('Jalan Merdeka 10', $secondPayload);
+        $this->assertStringNotContainsString('Budi Konsumen', $secondPayload);
+        $this->assertStringContainsString('search_customer', $secondPayload);
+        $this->assertStringContainsString('get_branch_info', $secondPayload);
+        $this->assertStringContainsString($branch->name, $secondPayload);
+    }
+
     public function test_provider_tool_calls_are_allowlisted_limited_deduplicated_and_sanitized(): void
     {
         [$branch, $user] = $this->branchAndUser();

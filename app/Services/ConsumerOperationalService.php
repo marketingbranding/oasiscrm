@@ -224,7 +224,7 @@ final class ConsumerOperationalService
 
     public function appendTransactionEvent(ConsumerApplication $application, string $eventType, User $actor, string $source = 'manual', ?string $notes = null, array $metadata = [], ?string $reason = null): ConsumerStageEvent
     {
-        if (! FeatureFlag::enabled('transaction_events_v3')) {
+        if (! FeatureFlag::enabledForBranch('transaction_events_v3', $application->branch_id)) {
             throw new DomainException('Event transaksi v3 belum aktif.');
         }
 
@@ -267,7 +267,7 @@ final class ConsumerOperationalService
             $before = $this->snapshot($application);
             $date = $data['tanggal_terima_bank'] ?? now()->toDateString();
             $event = $this->appendEvent($application, $stage, $data['status'] ?? $data['response_type'] ?? null, $data['notes'] ?? null, $date, $actor, $data);
-            if ($startNewAttempt && FeatureFlag::enabled('transaction_events_v3')) {
+            if ($startNewAttempt && FeatureFlag::enabledForBranch('transaction_events_v3', $application->branch_id)) {
                 $this->appendTransactionEvent($application, 'GANTI_BANK', $actor, 'manual', $data['notes'] ?? null, $data);
             }
             $record = $startNewAttempt ? null : $this->resolveBankAttempt($application, $data, $reuseLatestAttempt);

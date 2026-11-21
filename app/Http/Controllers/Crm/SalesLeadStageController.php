@@ -26,8 +26,9 @@ class SalesLeadStageController extends Controller
     public function update(UpdateSalesLeadStageRequest $request, SalesLead $salesLead)
     {
         $data = $request->validated();
-        $result = $this->optimisticLock->execute($request, $salesLead, $data['expected_updated_at'], function (SalesLead $current) use ($request, $data) {
-            if (FeatureFlag::enabled('lead_stages_v3')) {
+        $stageV3Enabled = FeatureFlag::enabledForBranch('lead_stages_v3', $salesLead->branch_id);
+        $result = $this->optimisticLock->execute($request, $salesLead, $data['expected_updated_at'], function (SalesLead $current) use ($request, $data, $stageV3Enabled) {
+            if ($stageV3Enabled) {
                 $this->authorize('updateStageV3', $current);
 
                 return $data['action'] === 'reverse'
@@ -55,12 +56,12 @@ class SalesLeadStageController extends Controller
         return response()->json([
             'ok' => true,
             'message' => $data['action'] === 'reverse' ? 'Tahap lead berhasil dibatalkan.' : 'Tahap lead berhasil diperbarui.',
-            'current_stage' => FeatureFlag::enabled('lead_stages_v3') ? $result->resolveStageV3() : $result->currentStage(),
-            'current_stage_label' => FeatureFlag::enabled('lead_stages_v3') ? $result->stageV3Label() : $result->currentStageLabel(),
+            'current_stage' => $stageV3Enabled ? $result->resolveStageV3() : $result->currentStage(),
+            'current_stage_label' => $stageV3Enabled ? $result->stageV3Label() : $result->currentStageLabel(),
             'lead_stage' => $result->lead_stage,
             'updated_at' => $this->optimisticLock->token($result),
-            'stages' => collect(FeatureFlag::enabled('lead_stages_v3') ? SalesLead::STAGE_V3_ORDER : SalesLead::STAGE_ORDER)->mapWithKeys(fn (string $stage) => [
-                $stage => FeatureFlag::enabled('lead_stages_v3') ? ($result->lead_stage === $stage ? $result->lead_stage_changed_at?->toIso8601String() : null) : $result->{$stage}?->toIso8601String(),
+            'stages' => collect($stageV3Enabled ? SalesLead::STAGE_V3_ORDER : SalesLead::STAGE_ORDER)->mapWithKeys(fn (string $stage) => [
+                $stage => $stageV3Enabled ? ($result->lead_stage === $stage ? $result->lead_stage_changed_at?->toIso8601String() : null) : $result->{$stage}?->toIso8601String(),
             ]),
         ]);
     }

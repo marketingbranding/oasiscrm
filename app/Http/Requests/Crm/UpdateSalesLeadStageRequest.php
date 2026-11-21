@@ -19,7 +19,7 @@ class UpdateSalesLeadStageRequest extends FormRequest
             return false;
         }
 
-        if (FeatureFlag::enabled('lead_stages_v3')) {
+        if (FeatureFlag::enabledForBranch('lead_stages_v3', $this->route('sales_lead')?->branch_id)) {
             return $this->user()?->can('updateStageV3', $lead) ?? false;
         }
 
@@ -28,7 +28,7 @@ class UpdateSalesLeadStageRequest extends FormRequest
 
     public function rules(): array
     {
-        if (FeatureFlag::enabled('lead_stages_v3')) {
+        if (FeatureFlag::enabledForBranch('lead_stages_v3', $this->route('sales_lead')?->branch_id)) {
             return [
                 'stage' => ['required', Rule::in(SalesLead::STAGE_V3_ORDER)],
                 'action' => ['required', Rule::in(['set', 'reverse'])],
@@ -51,7 +51,7 @@ class UpdateSalesLeadStageRequest extends FormRequest
     public function after(): array
     {
         return [function (Validator $validator): void {
-            if ($validator->errors()->isNotEmpty() || $this->input('action') !== 'set' || FeatureFlag::enabled('lead_stages_v3')) {
+            if ($validator->errors()->isNotEmpty() || $this->input('action') !== 'set' || FeatureFlag::enabledForBranch('lead_stages_v3', $this->route('sales_lead')?->branch_id)) {
                 return;
             }
 

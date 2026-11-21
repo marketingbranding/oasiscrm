@@ -457,7 +457,7 @@ class SalesLeadLifecycleSyncService
     private function reconcileLeadStatus(Branch $branch, SalesLead $lead, array $row, string $operationUuid, ?User $actor, array &$summary): void
     {
         $raw = trim((string) ($row['status_lead'] ?? ''));
-        if (FeatureFlag::enabled('lead_stages_v3') && mb_strtolower($raw) === 'gugur') {
+        if (FeatureFlag::enabledForBranch('lead_stages_v3', $lead->branch_id) && mb_strtolower($raw) === 'gugur') {
             if ($lead->resolveStageV3() === 'gugur') {
                 return;
             }
@@ -483,7 +483,7 @@ class SalesLeadLifecycleSyncService
             return;
         }
         $allowed = match ($target) {
-            SalesLeadStatus::Utj => FeatureFlag::enabled('lead_stages_v3')
+            SalesLeadStatus::Utj => FeatureFlag::enabledForBranch('lead_stages_v3', $lead->branch_id)
                 || $lead->consumerLinks()->where('sheet_type', 'data_konsumen')->where('status', 'completed')->exists(),
             SalesLeadStatus::SlikCheck, SalesLeadStatus::SlikRejected => $lead->slikAttempts()->exists(),
             SalesLeadStatus::Akad => $lead->akadLinks()->whereNotNull('akad_at')->exists(),
@@ -500,7 +500,7 @@ class SalesLeadLifecycleSyncService
 
             return;
         }
-        if (FeatureFlag::enabled('lead_stages_v3')) {
+        if (FeatureFlag::enabledForBranch('lead_stages_v3', $lead->branch_id)) {
             $v3Target = $target;
             if (in_array($v3Target, [SalesLeadStatus::Akad, SalesLeadStatus::SlikCheck, SalesLeadStatus::SlikRejected], true)) {
                 $v3Target = SalesLeadStatus::Utj;

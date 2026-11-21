@@ -26,7 +26,7 @@ class SyncSalesLeadLifecycle extends Command
             return self::SUCCESS;
         }
         $branchId = $this->option('branch') ? (int) $this->option('branch') : null;
-        if (FeatureFlag::enabled('lead_stages_v3')) {
+        if ($branchId !== null && FeatureFlag::enabledForBranch('lead_stages_v3', $branchId)) {
             $this->warn('Tahap Lead v3 aktif: pull status Gugur dari sheet tidak membuka kunci Lead; status Gugur dikelola OASIS.');
         }
         $enabledBranchIds = SalesLeadBridgeSetting::query()->where('mode', '!=', 'off')->pluck('branch_id')->map(fn ($id) => (int) $id)->all();

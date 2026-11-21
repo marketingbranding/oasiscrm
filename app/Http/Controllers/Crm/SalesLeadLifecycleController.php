@@ -34,7 +34,7 @@ class SalesLeadLifecycleController extends Controller
     public function updateStatus(UpdateSalesLeadLifecycleStatusRequest $request, SalesLead $salesLead): RedirectResponse|Response
     {
         $operationUuid = $request->validated('operation_uuid') ?? (string) Str::uuid();
-        if (FeatureFlag::enabled('lead_stages_v3') && $request->validated('status') === 'gugur') {
+        if (FeatureFlag::enabledForBranch('lead_stages_v3', $salesLead->branch_id) && $request->validated('status') === 'gugur') {
             $lead = $this->run(fn () => $this->stageV3->closeAsGugur(
                 $salesLead, $request->validated('reason'), $request->user(), $operationUuid,
             ));

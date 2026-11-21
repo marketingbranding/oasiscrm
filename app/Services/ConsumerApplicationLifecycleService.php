@@ -99,6 +99,9 @@ final class ConsumerApplicationLifecycleService
             $actor,
             $this->kavlingLifecycle,
         );
+        $this->operational->appendTransactionEvent($result, 'PINDAH_KAVLING', $actor, 'manual', 'Pindah kavling', [
+            'kavling_id' => $targetKavling->id,
+        ]);
         $this->audit($actor, $result, $before, $this->snapshot($result->fresh()), 'consumer_kavling_moved', 'pindah_kavling');
 
         return $result;
@@ -179,6 +182,10 @@ final class ConsumerApplicationLifecycleService
                 'transaction_status' => 'DITUTUP',
                 'replacement_application_id' => $replacement->id,
                 'kavling_id' => null,
+            ]);
+
+            $this->operational->appendTransactionEvent($oldApplication, 'GANTI_NAMA', $actor, 'manual', 'Ganti nama konsumen', [
+                'replacement_application_id' => $replacement->id,
             ]);
 
             $this->audit($actor, $oldApplication, $before, [

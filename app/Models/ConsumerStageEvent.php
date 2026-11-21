@@ -8,11 +8,16 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class ConsumerStageEvent extends Model
 {
+    public const array TRANSACTION_EVENT_TYPES = [
+        'PINDAH_KAVLING', 'GANTI_NAMA', 'GANTI_BANK', 'KEMBALI_KE_NUP', 'KOREKSI_DATA', 'MUNDUR',
+    ];
+
     use HasFactory;
 
     protected $fillable = [
         'consumer_application_id',
         'stage',
+        'event_type',
         'source_id',
         'source',
         'event_date',

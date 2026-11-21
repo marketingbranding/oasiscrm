@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Support\ConsumerIdentity;
+use DomainException;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -10,7 +11,6 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Str;
-use DomainException;
 use LogicException;
 
 class ConsumerApplication extends Model
@@ -171,6 +171,11 @@ class ConsumerApplication extends Model
     public function stageEvents(): HasMany
     {
         return $this->hasMany(ConsumerStageEvent::class, 'consumer_application_id');
+    }
+
+    public function transactionEvents(): HasMany
+    {
+        return $this->stageEvents()->whereNotNull('event_type');
     }
 
     public function psjbs(): HasMany

@@ -213,6 +213,24 @@ final class ConsumerOperationalService
         });
     }
 
+    public function appendTransactionEvent(ConsumerApplication $application, string $eventType, User $actor, string $source = 'manual', ?string $notes = null, array $metadata = [], ?string $reason = null): ConsumerStageEvent
+    {
+        if (! in_array($eventType, ConsumerStageEvent::TRANSACTION_EVENT_TYPES, true)) {
+            throw new DomainException('Tipe event transaksi tidak valid.');
+        }
+
+        return $application->stageEvents()->create([
+            'stage' => 'transaction_event',
+            'event_type' => $eventType,
+            'source' => $source,
+            'notes' => $notes,
+            'reason' => $reason,
+            'occurred_at' => now(),
+            'actor_id' => $actor->id,
+            'metadata' => $metadata,
+        ]);
+    }
+
     private function recordBankStage(ConsumerApplication $application, string $stage, array $data, User $actor, bool $startNewAttempt, bool $reuseLatestAttempt): ConsumerBankProcess
     {
         return DB::transaction(function () use ($application, $stage, $data, $actor, $startNewAttempt, $reuseLatestAttempt): ConsumerBankProcess {
@@ -230,6 +248,9 @@ final class ConsumerOperationalService
             $before = $this->snapshot($application);
             $date = $data['tanggal_terima_bank'] ?? now()->toDateString();
             $event = $this->appendEvent($application, $stage, $data['status'] ?? $data['response_type'] ?? null, $data['notes'] ?? null, $date, $actor, $data);
+            if ($startNewAttempt) {
+                $this->appendTransactionEvent($application, 'GANTI_BANK', $actor, 'manual', $data['notes'] ?? null, $data);
+            }
             $record = $startNewAttempt ? null : $this->resolveBankAttempt($application, $data, $reuseLatestAttempt);
             $attributes = $this->bankAttributes($data);
 

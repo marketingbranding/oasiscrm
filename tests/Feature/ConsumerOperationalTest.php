@@ -18,6 +18,36 @@ class ConsumerOperationalTest extends TestCase
 {
     use RefreshDatabase;
 
+    public function test_br32_transaction_events_are_excluded_from_process_history_and_do_not_change_process(): void
+    {
+        [$application, , $actor] = $this->records();
+        $application->update(['current_stage' => 'pemberkasan', 'current_process' => 'pemberkasan']);
+        $service = app(ConsumerOperationalService::class);
+
+        $service->recordPemberkasan($application, ['tanggal_terima_bank' => '2026-10-01', 'bank_name' => 'BTN'], $actor);
+        $beforeStage = $application->fresh()->current_stage;
+        $beforeProcess = $application->fresh()->current_process;
+        $event = $service->appendTransactionEvent($application->fresh(), 'KOREKSI_DATA', $actor, 'manual', 'Koreksi alamat', ['field' => 'address']);
+
+        $this->assertSame('KOREKSI_DATA', $event->event_type);
+        $this->assertSame($beforeStage, $application->fresh()->current_stage);
+        $this->assertSame($beforeProcess, $application->fresh()->current_process);
+        $this->assertSame(1, $application->fresh()->transactionEvents()->count());
+        $this->assertSame(1, $application->fresh()->stageEvents()->whereNull('event_type')->count());
+    }
+
+    public function test_br34_ganti_bank_records_typed_event_without_replacing_bank_process_history(): void
+    {
+        [$application, , $actor] = $this->records();
+        $service = app(ConsumerOperationalService::class);
+        $service->recordPemberkasan($application, ['tanggal_terima_bank' => '2026-10-01', 'bank_name' => 'BTN'], $actor);
+        $service->gantiBank($application->fresh(), ['tanggal_terima_bank' => '2026-10-02', 'bank_name' => 'BSN'], $actor);
+
+        $this->assertSame(2, $application->fresh()->bankProcesses()->count());
+        $this->assertSame('GANTI_BANK', $application->fresh()->transactionEvents()->sole()->event_type);
+        $this->assertSame(2, $application->fresh()->stageEvents()->whereNull('event_type')->count());
+    }
+
     public function test_bi_checking_and_psjb_are_manual_append_only_records_with_canonical_ids(): void
     {
         [$application, $kavling, $actor] = $this->records();

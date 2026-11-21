@@ -29,7 +29,7 @@
                         <x-crm.field
                             :label="$definition['label']"
                             :for="$inputId"
-                            :hint="$definition['description'].' Bawaan: '.(is_bool($definition['default']) ? ($definition['default'] ? 'Aktif' : 'Mati') : $definition['default'])"
+                            :hint="$definition['description'].' Bawaan: '.(is_bool($definition['default']) ? ($definition['default'] ? 'Aktif' : 'Mati') : (is_array($definition['default']) ? implode(', ', $definition['default']) : $definition['default']))"
                             :error="$errors->first($oldKey)"
                         >
                             @if($definition['type'] === 'boolean')

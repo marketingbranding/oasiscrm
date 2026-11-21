@@ -78,6 +78,15 @@ Keduanya berupa assertion markup HTML, bukan exception aplikasi:
 
 WP-0 tidak memperbaiki failure. WP-1.5 akan mengunci tanggal tes memakai `Carbon::setTestNow`, karena perilaku ini terkait aturan akhir pekan BR-08.
 
+Verifikasi WP-1.4 pada Sabtu, 21 November 2026:
+
+- Baseline `f1702ca` (sebelum WP-1.4): 8 tes gagal dari 8 tes yang diuji.
+- WP-1.4 `3284c69`: 8 tes gagal dari 8 tes yang diuji.
+- Nama dan hasil identik pada kedua commit: `SalesAgendaEvidenceTest::test_agenda_records_and_evidence_are_preserved_in_the_direct_workspace`, `SalesAgendaOnlyWorkspaceTest::test_sales_workspace_renders_receipt_date_context_and_add_plan_action`, `SalesAgendaWorkspaceInteractionMarkupTest::test_mobile_modal_transitions_cover_shared_modal_and_agenda_sheet`, `SalesAgendaWorkspaceInteractionMarkupTest::test_draft_receipt_exposes_edit_delete_actions_and_submitted_receipt_hides_them`, `SalesAgendaWorkspaceRenderTest::test_receipt_heading_matches_today_tomorrow_and_other_planned_dates`, `SalesAgendaWorkspaceRenderTest::test_existing_draft_shows_a_resume_action_and_resume_query_opens_receipt`, `SalesAgendaWorkspaceRenderTest::test_populated_receipt_keeps_weekly_navigation_with_exact_date_links`, dan `SalesAgendaWorkspaceRenderTest::test_today_navigation_marks_only_the_selected_week_day_as_active`.
+- WP-1.4 dengan waktu dikunci sementara ke `2026-11-18 10:00:00` memakai bootstrap PHPUnit tidak di-commit: 8 tes lulus dari 8 tes yang diuji.
+- Kesimpulan: 8 failure adalah baseline bergantung hari Sabtu, bukan regresi WP-1.4 atau perubahan `OrganizationScopeService`.
+- Kriteria WP-1.5: semua tes agenda wajib menetapkan waktu uji sendiri dengan `Carbon::setTestNow` dan suite agenda harus kembali ke 0 failure tanpa bergantung hari eksekusi.
+
 Latest verification after WP-1.1/WP-1.2 and review fixes:
 
 - Focused settings/flags suite: 13 passed, 46 assertions.

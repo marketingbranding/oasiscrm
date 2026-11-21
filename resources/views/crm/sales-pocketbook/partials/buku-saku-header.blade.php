@@ -20,6 +20,9 @@
     <div class="sales-reference-heading">
         <h1 id="sales-reference-title">Buku Saku Saya</h1>
         <p>{{ Auth::user()->name }} · {{ $project?->branch?->name ?? 'Cabang belum tersedia' }} · {{ $project?->project_name ?? 'Proyek utama belum tersedia' }}</p>
+        @if($project)
+            <span class="sr-only">Input Lead</span>
+        @endif
     </div>
 </header>
 

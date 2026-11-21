@@ -68,8 +68,8 @@ export function calculateAgendaSlot({
     let start = timeToMinutes(requestedStart);
     const automaticStart = start === null;
     if (start === null) {
-        if (schedule.isWeekend) {
-            return invalidResult('Pilih jam mulai untuk agenda akhir pekan.');
+            if (schedule.isFreeDay || schedule.isWeekend) {
+            return invalidResult('Pilih jam mulai untuk agenda hari bebas.');
         }
 
         start = existingAgendas.reduce(
@@ -78,7 +78,7 @@ export function calculateAgendaSlot({
         );
     }
 
-    if (!schedule.isWeekend && !allowOutsideSchedule) {
+    if (!schedule.isFreeDay && !schedule.isWeekend && !allowOutsideSchedule) {
         const workStart = timeToMinutes(schedule.startTime);
         const workEnd = timeToMinutes(schedule.endTime);
         const breakStart = timeToMinutes(schedule.breakStart);
@@ -112,7 +112,7 @@ export function calculateAgendaSlot({
         startTime: formatAgendaTime(start),
         endTime: formatAgendaTime(end),
         durationMinutes: duration,
-        remainingMinutes: schedule.isWeekend
+        remainingMinutes: schedule.isFreeDay || schedule.isWeekend
             ? null
             : Math.max(0, (schedule.targetMinutes ?? WEEKDAY_TARGET_MINUTES) - normalMinutes - (allowOutsideSchedule ? 0 : effectiveDuration)),
         message: '',
@@ -134,7 +134,7 @@ function timeToMinutes(value) {
 
 function effectiveMinutes(start, end, schedule) {
     const duration = Math.max(0, end - start);
-    if (duration === 0 || schedule.isWeekend) {
+    if (duration === 0 || schedule.isFreeDay || schedule.isWeekend) {
         return duration;
     }
 

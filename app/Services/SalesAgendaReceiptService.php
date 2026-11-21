@@ -15,7 +15,10 @@ class SalesAgendaReceiptService
 {
     public const TARGET_MINUTES = SalesAgendaDaySubmission::TARGET_MINUTES;
 
-    public function __construct(private readonly CrmAuthorizationService $authorization) {}
+    public function __construct(
+        private readonly CrmAuthorizationService $authorization,
+        private readonly SalesWorkCalendarService $calendar,
+    ) {}
 
     /**
      * @return array{
@@ -28,21 +31,22 @@ class SalesAgendaReceiptService
      *     extra_count: int,
      *     late_activity_count: int,
      *     is_weekend: bool,
+     *     is_free_day: bool,
      *     requires_target: bool,
-     *     schedule: array{is_weekend: bool, start_time: ?string, end_time: ?string, break_start: ?string, break_end: ?string, target_minutes: int, requires_target: bool},
+     *     schedule: array{is_weekend: bool, is_free_day: bool, start_time: ?string, end_time: ?string, break_start: ?string, break_end: ?string, target_minutes: int, requires_target: bool},
      * }
      */
     public function summarize(User $owner, CarbonImmutable $date): array
     {
-        $schedule = $this->schedule($date);
-        $normalAgendas = ($schedule['is_weekend'] ? $this->agendaQuery($owner, $date) : $this->normalAgendaQuery($owner, $date))
+        $schedule = $this->schedule($date, $owner->branch_id);
+        $normalAgendas = ($schedule['is_free_day'] ? $this->agendaQuery($owner, $date) : $this->normalAgendaQuery($owner, $date))
             ->whereNotIn('status', ['cancelled', 'rescheduled'])
             ->get(['id', 'duration_minutes', 'status', 'start_time', 'end_time']);
         $extraAgendas = $this->agendaQuery($owner, $date)
             ->where('is_outside_schedule', true)
             ->whereNotIn('status', ['cancelled', 'rescheduled'])
             ->count();
-        $normalMinutes = (int) $normalAgendas->sum(fn (ContentItem $agenda): int => $this->effectiveMinutes($date, $agenda->start_time, $agenda->end_time));
+        $normalMinutes = (int) $normalAgendas->sum(fn (ContentItem $agenda): int => $this->effectiveMinutes($date, $agenda->start_time, $agenda->end_time, $owner->branch_id));
         $submission = $this->submissionQuery($owner, $date)->first();
         if ($submission) {
             $normalMinutes = (int) $submission->normal_minutes_at_submission;
@@ -56,16 +60,17 @@ class SalesAgendaReceiptService
             'completed_count' => $normalAgendas->where('status', 'done')->count(),
             'agenda_count' => $normalAgendas->count(),
             'submitted' => $submission !== null,
-            'extra_count' => $schedule['is_weekend'] ? 0 : $extraAgendas,
+            'extra_count' => $schedule['is_free_day'] ? 0 : $extraAgendas,
             'late_activity_count' => $normalAgendas->filter(fn (ContentItem $agenda): bool => $this->isLate($date, $agenda))->count(),
             'is_weekend' => $schedule['is_weekend'],
+            'is_free_day' => $schedule['is_free_day'],
             'requires_target' => $schedule['requires_target'],
             'schedule' => $schedule,
         ];
     }
 
     /**
-     * @return array{is_weekend: bool, start_time: ?string, end_time: ?string, break_start: ?string, break_end: ?string, target_minutes: int, requires_target: bool}
+     * @return array{is_weekend: bool, is_free_day: bool, start_time: ?string, end_time: ?string, break_start: ?string, break_end: ?string, target_minutes: int, requires_target: bool}
      */
     private function isLate(CarbonImmutable $date, ContentItem $agenda): bool
     {
@@ -88,40 +93,21 @@ class SalesAgendaReceiptService
         return $now->gte($endAt);
     }
 
-    public function schedule(CarbonImmutable $date): array
+    /**
+     * @return array{is_weekend: bool, is_free_day: bool, start_time: ?string, end_time: ?string, break_start: ?string, break_end: ?string, target_minutes: int, requires_target: bool}
+     */
+    public function schedule(CarbonImmutable $date, ?int $branchId = null): array
     {
-        if ($date->isWeekend()) {
-            return [
-                'is_weekend' => true,
-                'start_time' => null,
-                'end_time' => null,
-                'break_start' => null,
-                'break_end' => null,
-                'target_minutes' => 0,
-                'requires_target' => false,
-            ];
-        }
-
-        $isFriday = $date->dayOfWeekIso === 5;
-
-        return [
-            'is_weekend' => false,
-            'start_time' => $isFriday ? '07:30' : '08:00',
-            'end_time' => '17:00',
-            'break_start' => $isFriday ? '11:30' : '12:00',
-            'break_end' => '13:00',
-            'target_minutes' => self::TARGET_MINUTES,
-            'requires_target' => true,
-        ];
+        return $this->calendar->schedule($date, $branchId);
     }
 
     public function assertTimeSlotAvailable(User $owner, CarbonImmutable $date, string $startTime, string $endTime, ?int $ignoreAgendaId = null): void
     {
-        $schedule = $this->schedule($date);
+        $schedule = $this->schedule($date, $owner->branch_id);
         $startMinute = $this->timeToMinutes($startTime);
         $endMinute = $this->timeToMinutes($endTime);
 
-        if (! $schedule['is_weekend']) {
+        if (! $schedule['is_free_day']) {
             $scheduleStart = $this->timeToMinutes($schedule['start_time']);
             $scheduleEnd = $this->timeToMinutes($schedule['end_time']);
 
@@ -176,8 +162,10 @@ class SalesAgendaReceiptService
 
         $duration = $this->durationMinutes($data['start_time'], $data['end_time']);
         $effectiveMinutes = $this->effectiveMinutes($date, $data['start_time'], $data['end_time']);
-        if (! $this->canUpdateNormal($actor, $date, $agenda->id, $duration, $effectiveMinutes)) {
-            throw new RuntimeException('Durasi agenda melebihi sisa waktu kerja '.self::TARGET_MINUTES.' menit.');
+        $submission = $this->submission($actor, $date);
+        if (! $this->canUpdateNormal($actor, $date, $agenda->id, $duration, $effectiveMinutes, $submission?->target_minutes)) {
+            $targetMinutes = $submission?->target_minutes ?? $this->schedule($date)['target_minutes'];
+            throw new RuntimeException('Durasi agenda melebihi sisa waktu kerja '.$targetMinutes.' menit.');
         }
 
         $agenda->update([
@@ -199,20 +187,21 @@ class SalesAgendaReceiptService
         $agenda->delete();
     }
 
-    public function canUpdateNormal(User $owner, CarbonImmutable $date, int $ignoreAgendaId, int $durationMinutes, int $effectiveMinutes): bool
+    public function canUpdateNormal(User $owner, CarbonImmutable $date, int $ignoreAgendaId, int $durationMinutes, int $effectiveMinutes, ?int $targetMinutes = null): bool
     {
-        if ($durationMinutes < 1 || $this->submissionQuery($owner, $date)->exists()) {
+        if ($durationMinutes < 1) {
             return false;
         }
 
-        $schedule = $this->schedule($date);
+        $schedule = $this->schedule($date, $owner->branch_id);
         if (! $schedule['requires_target']) {
             return true;
         }
 
         $normalMinutes = $this->normalAgendaMinutes($owner, $date, $ignoreAgendaId);
+        $targetMinutes ??= $this->submission($owner, $date)?->target_minutes ?? $schedule['target_minutes'];
 
-        return $schedule['target_minutes'] >= $normalMinutes + $effectiveMinutes;
+        return $targetMinutes >= $normalMinutes + $effectiveMinutes;
     }
 
     public function submission(User $owner, CarbonImmutable $date): ?SalesAgendaDaySubmission
@@ -235,11 +224,11 @@ class SalesAgendaReceiptService
 
             $summary = $this->summarize($owner, $date);
             if (! $summary['requires_target'] && $summary['agenda_count'] < 1) {
-                throw new RuntimeException('Agenda akhir pekan harus memiliki minimal satu agenda sebelum dikirim ke Koordinator.');
+                throw new RuntimeException(($summary['is_weekend'] ? 'Agenda akhir pekan' : 'Agenda hari libur').' harus memiliki minimal satu agenda sebelum dikirim ke Koordinator.');
             }
 
-            if ($summary['requires_target'] && $summary['normal_minutes'] !== self::TARGET_MINUTES) {
-                throw new RuntimeException('Agenda harus mencapai 480 menit sebelum dikirim ke Koordinator.');
+            if ($summary['requires_target'] && $summary['normal_minutes'] !== $summary['target_minutes']) {
+                throw new RuntimeException('Agenda harus mencapai '.$summary['target_minutes'].' menit sebelum dikirim ke Koordinator.');
             }
 
             return SalesAgendaDaySubmission::create([
@@ -248,6 +237,7 @@ class SalesAgendaReceiptService
                 'target_minutes' => $summary['target_minutes'],
                 'normal_minutes_at_submission' => $summary['normal_minutes'],
                 'is_weekend' => $summary['is_weekend'],
+                'is_free_day' => $summary['schedule']['is_free_day'],
                 'submitted_at' => now(),
             ]);
         });
@@ -371,7 +361,7 @@ class SalesAgendaReceiptService
         return (int) $this->normalAgendaQuery($owner, $date)
             ->when($ignoreAgendaId !== null, fn (Builder $query) => $query->where('id', '<>', $ignoreAgendaId))
             ->get(['start_time', 'end_time'])
-            ->sum(fn (ContentItem $agenda): int => $this->effectiveMinutes($date, $agenda->start_time, $agenda->end_time));
+            ->sum(fn (ContentItem $agenda): int => $this->effectiveMinutes($date, $agenda->start_time, $agenda->end_time, $owner->branch_id));
     }
 
     private function submissionQuery(User $owner, CarbonImmutable $date): Builder
@@ -381,37 +371,20 @@ class SalesAgendaReceiptService
             ->whereDate('scheduled_date', $date->toDateString());
     }
 
-    public function effectiveMinutes(CarbonImmutable $date, ?string $startTime, ?string $endTime): int
+    public function effectiveMinutes(CarbonImmutable $date, ?string $startTime, ?string $endTime, ?int $branchId = null): int
     {
-        if ($startTime === null || $endTime === null) {
-            return 0;
-        }
-
-        $startMinute = $this->timeToMinutes($startTime);
-        $endMinute = $this->timeToMinutes($endTime);
-        $duration = max(0, $endMinute - $startMinute);
-
-        if ($duration === 0 || $date->isWeekend()) {
-            return $duration;
-        }
-
-        $schedule = $this->schedule($date);
-        $breakStart = $this->timeToMinutes($schedule['break_start']);
-        $breakEnd = $this->timeToMinutes($schedule['break_end']);
-        $breakMinutes = max(0, min($endMinute, $breakEnd) - max($startMinute, $breakStart));
-
-        return max(0, $duration - $breakMinutes);
+        return $this->calendar->effectiveMinutes($date, $startTime, $endTime, $branchId);
     }
 
-    public function isBreakAgenda(CarbonImmutable $date, ?string $startTime, ?string $endTime): bool
+    public function isBreakAgenda(CarbonImmutable $date, ?string $startTime, ?string $endTime, ?int $branchId = null): bool
     {
-        if ($date->isWeekend() || $startTime === null || $endTime === null) {
+        if ($this->calendar->isFreeDay($date, $branchId) || $startTime === null || $endTime === null) {
             return false;
         }
 
         $startMinute = $this->timeToMinutes($startTime);
         $endMinute = $this->timeToMinutes($endTime);
-        $schedule = $this->schedule($date);
+        $schedule = $this->schedule($date, $branchId);
 
         return $startMinute < $this->timeToMinutes($schedule['break_end'])
             && $endMinute > $this->timeToMinutes($schedule['break_start']);

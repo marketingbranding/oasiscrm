@@ -27,6 +27,7 @@ use App\Http\Controllers\Crm\ExpenseCategoryController;
 use App\Http\Controllers\Crm\ExpenseController;
 use App\Http\Controllers\Crm\FeedbackReportController;
 use App\Http\Controllers\Crm\HistoricalProcessImportController;
+use App\Http\Controllers\Crm\HolidayController;
 use App\Http\Controllers\Crm\ImpersonationController;
 use App\Http\Controllers\Crm\KavlingController;
 use App\Http\Controllers\Crm\KonsumenProgressController;
@@ -88,6 +89,12 @@ Route::middleware(['auth', 'active', 'verified', 'password.changed', 'operationa
     Route::prefix('admin/pengaturan-aturan')->name('admin.app-settings.')->middleware(['permission:system.settings_manage', 'system.admin:settings'])->group(function () {
         Route::get('/', [AppSettingController::class, 'index'])->name('index');
         Route::put('/', [AppSettingController::class, 'update'])->middleware('not.impersonating')->name('update');
+    });
+
+    Route::prefix('admin/hari-libur')->name('admin.holidays.')->middleware(['permission:system.settings_manage', 'system.admin:settings'])->group(function (): void {
+        Route::get('/', [HolidayController::class, 'index'])->name('index');
+        Route::post('/', [HolidayController::class, 'store'])->middleware('not.impersonating')->name('store');
+        Route::delete('/{holiday}', [HolidayController::class, 'destroy'])->middleware('not.impersonating')->name('destroy');
     });
 
     Route::prefix('admin/roles')->name('roles.')->middleware(['permission:roles.view', 'system.admin:roles'])->group(function () {

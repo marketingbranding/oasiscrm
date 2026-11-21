@@ -10,6 +10,7 @@ use App\Services\AppSettingService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Validation\ValidationException;
+use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
 class AppSettingTest extends TestCase
@@ -126,6 +127,175 @@ class AppSettingTest extends TestCase
 
         app(AppSettingService::class)->update($superadmin, [
             'sales_agenda.reminder_lead_minutes' => 0,
+        ]);
+    }
+
+    #[DataProvider('calendarValidationCases')]
+    public function test_br01_to_br04_reject_each_calendar_validation_violation(array $settings, array $errorKeys): void
+    {
+        $superadmin = $this->user('superadmin');
+
+        $response = $this->actingAs($superadmin)
+            ->from(route('admin.app-settings.index'))
+            ->put(route('admin.app-settings.update'), ['settings' => $settings]);
+
+        $response->assertRedirect(route('admin.app-settings.index'))
+            ->assertSessionHasErrors($errorKeys);
+        $this->assertDatabaseCount('app_settings', 0);
+    }
+
+    public static function calendarValidationCases(): array
+    {
+        return [
+            'weekday start before break' => [[
+                'sales_agenda__weekday_start_time' => '12:00',
+                'sales_agenda__weekday_break_start' => '12:00',
+                'sales_agenda__weekday_break_end' => '13:00',
+                'sales_agenda__weekday_end_time' => '17:00',
+                'sales_agenda__target_minutes' => 240,
+            ], ['settings.sales_agenda__weekday_start_time', 'settings.sales_agenda__weekday_break_start']],
+            'weekday break order' => [[
+                'sales_agenda__weekday_start_time' => '08:00',
+                'sales_agenda__weekday_break_start' => '13:00',
+                'sales_agenda__weekday_break_end' => '12:00',
+                'sales_agenda__weekday_end_time' => '17:00',
+                'sales_agenda__target_minutes' => 360,
+            ], ['settings.sales_agenda__weekday_break_start', 'settings.sales_agenda__weekday_break_end']],
+            'weekday end after break' => [[
+                'sales_agenda__weekday_start_time' => '08:00',
+                'sales_agenda__weekday_break_start' => '12:00',
+                'sales_agenda__weekday_break_end' => '13:00',
+                'sales_agenda__weekday_end_time' => '12:00',
+                'sales_agenda__target_minutes' => 1,
+            ], ['settings.sales_agenda__weekday_break_end', 'settings.sales_agenda__weekday_end_time']],
+            'weekday target within effective minutes' => [[
+                'sales_agenda__weekday_start_time' => '08:00',
+                'sales_agenda__weekday_break_start' => '12:00',
+                'sales_agenda__weekday_break_end' => '13:00',
+                'sales_agenda__weekday_end_time' => '16:00',
+                'sales_agenda__target_minutes' => 421,
+            ], ['settings.sales_agenda__target_minutes']],
+            'friday start before break' => [[
+                'sales_agenda__friday_start_time' => '11:30',
+                'sales_agenda__friday_break_start' => '11:30',
+                'sales_agenda__friday_break_end' => '13:00',
+                'sales_agenda__friday_end_time' => '17:00',
+                'sales_agenda__target_minutes' => 300,
+            ], ['settings.sales_agenda__friday_start_time', 'settings.sales_agenda__friday_break_start']],
+            'friday break order' => [[
+                'sales_agenda__friday_start_time' => '07:30',
+                'sales_agenda__friday_break_start' => '13:00',
+                'sales_agenda__friday_break_end' => '12:00',
+                'sales_agenda__friday_end_time' => '17:00',
+                'sales_agenda__target_minutes' => 360,
+            ], ['settings.sales_agenda__friday_break_start', 'settings.sales_agenda__friday_break_end']],
+            'friday end after break' => [[
+                'sales_agenda__friday_start_time' => '07:30',
+                'sales_agenda__friday_break_start' => '11:30',
+                'sales_agenda__friday_break_end' => '13:00',
+                'sales_agenda__friday_end_time' => '12:00',
+                'sales_agenda__target_minutes' => 1,
+            ], ['settings.sales_agenda__friday_break_end', 'settings.sales_agenda__friday_end_time']],
+            'friday target within effective minutes' => [[
+                'sales_agenda__friday_start_time' => '07:30',
+                'sales_agenda__friday_break_start' => '11:30',
+                'sales_agenda__friday_break_end' => '13:00',
+                'sales_agenda__friday_end_time' => '16:30',
+                'sales_agenda__target_minutes' => 451,
+            ], ['settings.sales_agenda__target_minutes']],
+        ];
+    }
+
+    public function test_br01_to_br04_reject_invalid_weekday_calendar_order_and_target(): void
+    {
+        $superadmin = $this->user('superadmin');
+
+        $response = $this->actingAs($superadmin)
+            ->from(route('admin.app-settings.index'))
+            ->put(route('admin.app-settings.update'), [
+                'settings' => [
+                    'sales_agenda__weekday_start_time' => '13:00',
+                    'sales_agenda__weekday_break_start' => '12:00',
+                    'sales_agenda__weekday_break_end' => '12:00',
+                    'sales_agenda__weekday_end_time' => '11:00',
+                    'sales_agenda__target_minutes' => 480,
+                ],
+            ]);
+
+        $response->assertRedirect(route('admin.app-settings.index'))
+            ->assertSessionHasErrors([
+                'settings.sales_agenda__weekday_start_time',
+                'settings.sales_agenda__weekday_break_start',
+                'settings.sales_agenda__weekday_break_end',
+                'settings.sales_agenda__weekday_end_time',
+                'settings.sales_agenda__target_minutes',
+            ]);
+        $this->assertDatabaseCount('app_settings', 0);
+    }
+
+    public function test_br01_to_br04_reject_invalid_friday_calendar_order_and_target(): void
+    {
+        $superadmin = $this->user('superadmin');
+
+        $response = $this->actingAs($superadmin)
+            ->from(route('admin.app-settings.index'))
+            ->put(route('admin.app-settings.update'), [
+                'settings' => [
+                    'sales_agenda__friday_start_time' => '14:00',
+                    'sales_agenda__friday_break_start' => '13:00',
+                    'sales_agenda__friday_break_end' => '13:00',
+                    'sales_agenda__friday_end_time' => '12:00',
+                    'sales_agenda__target_minutes' => 480,
+                ],
+            ]);
+
+        $response->assertRedirect(route('admin.app-settings.index'))
+            ->assertSessionHasErrors([
+                'settings.sales_agenda__friday_start_time',
+                'settings.sales_agenda__friday_break_start',
+                'settings.sales_agenda__friday_break_end',
+                'settings.sales_agenda__friday_end_time',
+                'settings.sales_agenda__target_minutes',
+            ]);
+        $this->assertDatabaseCount('app_settings', 0);
+    }
+
+    public function test_br01_to_br04_accept_changed_valid_calendar_and_target(): void
+    {
+        $superadmin = $this->user('superadmin');
+
+        $this->actingAs($superadmin)
+            ->put(route('admin.app-settings.update'), [
+                'settings' => [
+                    'sales_agenda__weekday_start_time' => '08:00',
+                    'sales_agenda__weekday_break_start' => '12:00',
+                    'sales_agenda__weekday_break_end' => '13:00',
+                    'sales_agenda__weekday_end_time' => '16:00',
+                    'sales_agenda__friday_start_time' => '07:30',
+                    'sales_agenda__friday_break_start' => '11:30',
+                    'sales_agenda__friday_break_end' => '13:00',
+                    'sales_agenda__friday_end_time' => '17:00',
+                    'sales_agenda__target_minutes' => 420,
+                ],
+            ])
+            ->assertRedirect(route('admin.app-settings.index'));
+
+        $this->assertSame(420, app(AppSettingResolver::class)->int('sales_agenda.target_minutes'));
+        $this->assertSame('16:00', app(AppSettingResolver::class)->string('sales_agenda.weekday_end_time'));
+    }
+
+    public function test_br01_to_br04_service_rejects_invalid_calendar_before_database_write(): void
+    {
+        $superadmin = $this->user('superadmin');
+
+        $this->expectException(ValidationException::class);
+
+        app(AppSettingService::class)->update($superadmin, [
+            'sales_agenda.target_minutes' => 480,
+            'sales_agenda.weekday_start_time' => '08:00',
+            'sales_agenda.weekday_break_start' => '12:00',
+            'sales_agenda.weekday_break_end' => '13:00',
+            'sales_agenda.weekday_end_time' => '15:00',
         ]);
     }
 

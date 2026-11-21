@@ -19,7 +19,6 @@ class FeatureFlagTest extends TestCase
         $this->assertSame([
             'org_hierarchical_monitoring' => false,
             'lead_stages_v3' => false,
-            'work_hours_v3' => false,
             'transaction_events_v3' => false,
         ], $flags);
     }

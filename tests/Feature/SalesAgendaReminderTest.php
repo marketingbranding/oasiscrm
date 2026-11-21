@@ -10,11 +10,12 @@ use App\Services\SalesAgendaReminderService;
 use App\Services\SalesDailyPlanService;
 use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Tests\Concerns\FreezesSalesAgendaTime;
 use Tests\TestCase;
 
 class SalesAgendaReminderTest extends TestCase
 {
-    use RefreshDatabase;
+    use FreezesSalesAgendaTime, RefreshDatabase;
 
     public function test_four_in_app_reminders_are_sent_once_at_their_schedule_points(): void
     {

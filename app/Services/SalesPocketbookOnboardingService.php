@@ -16,7 +16,7 @@ class SalesPocketbookOnboardingService
     /** @var array<int, array{title: string, description: string, mark: string}> */
     public const STEPS = [
         ['title' => 'Selamat datang, Sales', 'description' => 'Tour singkat ini menunjukkan cara mencatat rencana kerja dan lead. Hanya sekitar satu menit.', 'mark' => 'Sambutan'],
-        ['title' => 'Target harian: 420 menit', 'description' => 'Senin–Kamis 09:00–17:00 dan Jumat 08:30–17:00, dengan waktu istirahat. Rencanamu harus pas 420 menit.', 'mark' => 'Jam kerja'],
+        ['title' => 'Target harian: 480 menit', 'description' => 'Senin–Kamis 08:00–17:00 dan Jumat 07:30–17:00, dengan waktu istirahat. Rencanamu harus pas 480 menit.', 'mark' => 'Jam kerja'],
         ['title' => 'Tulis rencana, lalu sobek', 'description' => 'Tambahkan aktivitas ke struk, lengkapi sampai target, lalu kirim ke Koordinator Sales.', 'mark' => 'Tambah rencana'],
         ['title' => 'Bukti foto dan hasil per agenda', 'description' => 'Buka agenda yang berjalan, unggah bukti foto, tulis hasil aktivitas, lalu selesaikan.', 'mark' => 'Bukti'],
         ['title' => 'Catat lead di tab Lead Saya', 'description' => 'Tambah calon konsumen, perbarui statusnya, dan tekan Tandai selesai bila prosesnya tuntas.', 'mark' => 'Lead Saya'],

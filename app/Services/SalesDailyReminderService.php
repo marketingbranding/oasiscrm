@@ -11,7 +11,10 @@ class SalesDailyReminderService
 {
     public const KEY = 'sales_daily_pocketbook_reminder';
 
-    public function __construct(private readonly WorkspaceAccessService $workspaceAccess) {}
+    public function __construct(
+        private readonly WorkspaceAccessService $workspaceAccess,
+        private readonly SalesWorkCalendarService $calendar,
+    ) {}
 
     public function state(User $user): array
     {
@@ -21,6 +24,7 @@ class SalesDailyReminderService
         }
 
         $hasAssignedProject = $this->workspaceAccess->accessibleProjectsQuery($user)->exists();
+        $isFreeDay = $this->calendar->isFreeDay(CarbonImmutable::parse($today), $user->branch_id);
         $todayLeadCount = SalesLead::query()->visibleTo($user)
             ->where('sales_user_id', $user->id)
             ->whereDate('lead_date', $today)
@@ -41,7 +45,8 @@ class SalesDailyReminderService
             ->where('reminder_key', self::KEY)
             ->whereDate('dismissed_for_date', $today)
             ->exists();
-        $needsReminder = $todayLeadCount === 0 || $todayAgendaCount === 0 || $missingAgendaResultCount > 0;
+        $needsReminder = $missingAgendaResultCount > 0
+            || (! $isFreeDay && ($todayLeadCount === 0 || $todayAgendaCount === 0));
 
         return [
             'shouldShow' => $needsReminder && ! $dismissed,

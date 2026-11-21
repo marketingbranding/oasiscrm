@@ -107,7 +107,6 @@ class AppSettingResolverTest extends TestCase
 
         $this->assertFalse($resolver->bool('org_hierarchical_monitoring'));
         $this->assertFalse($resolver->bool('lead_stages_v3'));
-        $this->assertFalse($resolver->bool('work_hours_v3'));
         $this->assertFalse($resolver->bool('transaction_events_v3'));
     }
 }

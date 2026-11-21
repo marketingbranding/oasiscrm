@@ -11,11 +11,12 @@ use App\Services\SalesAgendaWeekNavigationService;
 use App\Services\SalesPocketbookOnboardingService;
 use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Tests\Concerns\FreezesSalesAgendaTime;
 use Tests\TestCase;
 
 class SalesAgendaWeekNavigationServiceTest extends TestCase
 {
-    use RefreshDatabase;
+    use FreezesSalesAgendaTime, RefreshDatabase;
 
     public function test_week_starts_on_monday_and_exposes_per_day_plan_states(): void
     {

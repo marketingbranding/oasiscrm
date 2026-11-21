@@ -4,8 +4,10 @@ namespace Tests\Feature;
 
 use App\Models\Branch;
 use App\Models\ContentItem;
+use App\Models\Holiday;
 use App\Models\LeadMaster;
 use App\Models\Role;
+use App\Models\SalesLead;
 use App\Models\User;
 use App\Services\SalesDailyReminderService;
 use App\Services\SalesPocketbookOnboardingService;
@@ -34,6 +36,25 @@ class SalesDailyReminderTest extends TestCase
             ->assertSee('Belum ada lead yang dicatat hari ini.')
             ->assertSee('tab=leads', false)
             ->assertDontSee('<title>Buku Saku Sales - Oasis CRM</title>', false);
+    }
+
+    public function test_br08_holiday_does_not_show_missing_agenda_plan_reminder(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-07-27 09:00:00', config('app.timezone')));
+        [, , $sales] = $this->salesContext();
+        Holiday::create(['date' => '2026-07-27', 'name' => 'Libur nasional']);
+
+        $lead = LeadMaster::query()->firstOrFail();
+        SalesLead::create([
+            'branch_id' => $sales->branch_id,
+            'project_id' => $lead->id,
+            'sales_user_id' => $sales->id,
+            'lead_date' => '2026-07-27',
+            'customer_name' => 'Konsumen',
+            'phone' => '081234567890',
+        ]);
+
+        $this->assertFalse(app(SalesDailyReminderService::class)->state($sales)['shouldShow']);
     }
 
     public function test_daily_reminder_service_still_counts_sales_agenda(): void

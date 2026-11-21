@@ -214,7 +214,7 @@
                                 <strong>{{ $plan['sales']->name }}</strong>
                                 <span>{{ $plan['summary']['submitted'] ? 'Terkirim' : ($plan['summary']['agenda_count'] ? 'Draft' : 'Belum ada') }}</span>
                                 <p>
-                                    {{ $plan['summary']['normal_minutes'] }} / {{ $plan['summary']['requires_target'] ? '480 menit' : '—' }}
+                                    {{ $plan['summary']['normal_minutes'] }} / {{ $plan['summary']['requires_target'] ? $plan['summary']['target_minutes'].' menit' : '—' }} {{-- Receipt default: 480 menit --}}
                                     @if($plan['summary']['remaining_minutes'] > 0)
                                         · kurang {{ $plan['summary']['remaining_minutes'] }} menit
                                     @endif

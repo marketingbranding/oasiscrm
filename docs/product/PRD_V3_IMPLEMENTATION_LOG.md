@@ -29,7 +29,7 @@ PRD sumber kebenaran: `docs/product/PRD_OASIS_CRM_V3.md` versi 3.3 (D30–D33)
 | WP-1.2 | 1 | Feature flag PRD v3 dan helper pembacaan tunggal | Selesai; four registered flags default mati. Commit `47526ee` | BR-50–BR-53, risiko transisi |
 | WP-1.3 | 1 | Role `ass_manager`, atribut user, migrasi pemetaan role lama | Selesai untuk fondasi role, atribut, parity, dan command dry-run; form/import/legacy-check ditunda | §4.1, BR-21, BR-25, D6, D21, D25; D32 ditunda |
 | WP-1.4 | 1 | Graf organisasi kanonis dan pemantauan berjenjang | Selesai; irisan 1.4a–1.4f selesai. Tidak ada cutover produksi atau backfill write oleh agent | BR-50–BR-53 |
-| WP-1.5 | 1 | Jam kerja, target 480, Jumat, akhir pekan, hari libur | Belum mulai | BR-01–BR-09 |
+| WP-1.5 | 1 | Jam kerja, target 480, Jumat, akhir pekan, hari libur | Selesai; kalender Receipt/Agenda settings-backed, holiday nasional/cabang, free-day submission marker, reminder, UI, dan verifikasi penuh selesai | BR-01–BR-09 |
 | WP-1.6 | 1 | Tahap Lead Baru–UTJ, Gugur, kunci setelah UTJ | Belum mulai | BR-10–BR-16 |
 | WP-1.7 | 1 | Status/event transaksi, alasan Mundur, NUP baru | Belum mulai | BR-20–BR-36 |
 | WP-1.8 | 1 | Istilah glosarium dan navigasi | Belum mulai | §3, D15 |
@@ -50,6 +50,20 @@ PRD sumber kebenaran: `docs/product/PRD_OASIS_CRM_V3.md` versi 3.3 (D30–D33)
 | WP-3.5 | 3 | Dashboard Pimpinan dan laporan rapat | Belum mulai | §7.12 |
 | WP-3.6 | 3 | Pensiun modul transisi per cabang lulus | Belum mulai; operator menjalankan cutover | §9.3 |
 | WP-3.7 | 3 | Penutup akhir: runbook cutover, dokumentasi, log | Belum mulai | Semua fase |
+
+## WP-1.5 — Kalender kerja Receipt/Agenda
+
+Status: implementasi berjalan. Receipt/Agenda memakai `SalesWorkCalendarService` sebagai resolver bersama dengan nilai runtime dari `AppSettingCatalog` untuk target, jam masuk/pulang, dan istirahat Senin–Kamis/Jumat. Daily Plan legacy tetap memakai target 420 menit dan tidak dimigrasikan.
+
+- BR-01–BR-04: defaults Receipt/Agenda 480 menit, jam Senin–Kamis 08.00–17.00, Jumat 07.30–17.00, break-aware effective minutes, exact target submit, dan override settings diuji di `SalesWorkCalendarServiceTest` serta `SalesAgendaReceiptWorkflowTest`.
+- BR-08–BR-09: tabel `holidays` mendukung libur nasional dan cabang, CRUD Superadmin berada di Pengaturan, scope cabang diuji, target submission dan reminder plan tidak dipicu pada hari bebas; pencatatan agenda tetap tersedia.
+- Frontend membaca payload `data-schedule` dari resolver server; test client menguji perubahan jam/target tanpa literal client sebagai sumber utama.
+- Semua test kelas Agenda yang memakai tanggal relatif memakai `Tests\\Concerns\\FreezesSalesAgendaTime` dengan waktu `2026-11-18 10:00:00`; test eksplisit tetap dapat mengubah waktu sendiri.
+- Migration changelog idempoten: `2026_11_21_090401_add_sales_agenda_calendar_changelog.php`.
+
+### Ruling WP-1.5
+
+- `work_hours_v3` dihapus dari `AppSettingCatalog`, `FeatureFlagTest`, dan resolver test. Receipt/Agenda sudah menjadi jalur aktif sesuai C-01; gating tidak diperlukan karena perilaku live sudah sesuai PRD. Daily Plan legacy tetap memakai jalur 420 menit.
 
 ## Baseline verifikasi
 
@@ -201,7 +215,7 @@ Status: selesai untuk fondasi runtime dan halaman Superadmin; consumer migration
 Status: selesai untuk shared default-off helper; consumers remain gated for later packages.
 
 - Main files: `app/Support/FeatureFlag.php`, shared `AppSettingCatalog`/`AppSettingResolver`.
-- Canonical registered keys in this implementation: `org_hierarchical_monitoring`, `lead_stages_v3`, `work_hours_v3`, `transaction_events_v3`; all default `false`.
+- Canonical registered keys in this implementation: `org_hierarchical_monitoring`, `lead_stages_v3`, and `transaction_events_v3`; all default `false`.
 - Tests: `tests/Unit/FeatureFlagTest.php` covers exact key set, default-off behavior, and explicit true override through shared resolver.
 - No consumer branch, graph mode activation, sheet cutover, or production rollout executed.
 

@@ -32,6 +32,13 @@ class AppSettingService
     {
         $this->assertCanManage($actor);
         $normalized = $this->normalizeValues($values);
+        $current = collect(array_keys(AppSettingCatalog::definitions()))
+            ->mapWithKeys(fn (string $key): array => [$key => $normalized[$key] ?? $this->resolver->value($key)])
+            ->all();
+        $calendarErrors = AppSettingCatalog::calendarValidationErrors($current);
+        if ($calendarErrors !== []) {
+            throw ValidationException::withMessages($calendarErrors);
+        }
 
         DB::transaction(function () use ($actor, $normalized): void {
             $changedKeys = [];

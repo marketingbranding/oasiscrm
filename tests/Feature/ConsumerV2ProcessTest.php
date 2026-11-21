@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\ConsumerApplication;
 use App\Models\ConsumerIssue;
+use App\Models\ConsumerKavlingAssignment;
 use App\Models\ConsumerNup;
 use App\Models\Kavling;
 use App\Models\LeadMaster;
@@ -119,6 +120,7 @@ class ConsumerV2ProcessTest extends TestCase
         app(ConsumerNupService::class)->convert($nup, ['kavling_id' => $kavling->id], $actor);
 
         $this->assertDatabaseHas('consumer_nups', ['id' => $nup->id, 'status' => 'waiting', 'converted_application_id' => null]);
+        $this->assertDatabaseCount('consumer_applications', 2);
     }
 
     /**
@@ -147,8 +149,6 @@ class ConsumerV2ProcessTest extends TestCase
         $this->assertDatabaseHas('consumer_nups', ['id' => $first->id, 'status' => 'converted', 'converted_application_id' => $holder->id]);
         $this->assertDatabaseHas('consumer_nups', ['id' => $second->id, 'status' => 'waiting', 'converted_application_id' => null]);
         $this->assertSame(1, ConsumerKavlingAssignment::query()->where('kavling_id', $kavling->id)->whereNull('released_at')->count());
-    }
-        $this->assertDatabaseCount('consumer_applications', 2);
     }
 
     public function test_br22_nup_conversion_rejects_selected_project_outside_actor_scope(): void

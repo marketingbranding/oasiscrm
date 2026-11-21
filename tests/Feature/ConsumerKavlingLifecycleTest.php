@@ -131,6 +131,26 @@ class ConsumerKavlingLifecycleTest extends TestCase
         ConsumerKavlingAssignment::create(['consumer_application_id' => $second->id, 'kavling_id' => $kavling->id, 'assigned_at' => now(), 'assignment_status' => 'active']);
     }
 
+    public function test_sold_assignment_constraint_is_database_enforced(): void
+    {
+        [$application, $kavling] = $this->records();
+        ConsumerKavlingAssignment::create([
+            'consumer_application_id' => $application->id,
+            'kavling_id' => $kavling->id,
+            'assigned_at' => now(),
+            'assignment_status' => 'sold',
+        ]);
+        $second = ConsumerApplication::factory()->create(['branch_id' => $application->branch_id, 'project_id' => $application->project_id]);
+
+        $this->expectException(QueryException::class);
+        ConsumerKavlingAssignment::create([
+            'consumer_application_id' => $second->id,
+            'kavling_id' => $kavling->id,
+            'assigned_at' => now(),
+            'assignment_status' => 'sold',
+        ]);
+    }
+
     public function test_released_assignments_remain_queryable(): void
     {
         [$application, $kavling] = $this->records();

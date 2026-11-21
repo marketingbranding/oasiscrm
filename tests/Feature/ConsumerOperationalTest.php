@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Models\ActivityLog;
 use App\Models\AppSetting;
 use App\Models\ConsumerAkadRecord;
 use App\Models\ConsumerApplication;
@@ -65,6 +66,12 @@ class ConsumerOperationalTest extends TestCase
         app(ConsumerOperationalService::class)->appendTransactionEvent($application, 'KOREKSI_DATA', $actor);
     }
 
+    private function disableTransactionEventsV3(): void
+    {
+        AppSetting::query()->updateOrCreate(['key' => 'transaction_events_v3'], ['value' => false, 'group' => 'feature_flags']);
+        app(AppSettingResolver::class)->forget('transaction_events_v3');
+    }
+
     public function test_transaction_event_writes_require_manage_scope(): void
     {
         [$application] = $this->records();
@@ -75,6 +82,25 @@ class ConsumerOperationalTest extends TestCase
 
         $this->expectException(AuthorizationException::class);
         app(ConsumerOperationalService::class)->appendTransactionEvent($application, 'KOREKSI_DATA', $actor);
+    }
+
+    public function test_transaction_events_v3_off_keeps_ganti_bank_legacy_bank_history_process_and_audit_behavior(): void
+    {
+        [$application, , $actor] = $this->records();
+        $service = app(ConsumerOperationalService::class);
+        $this->disableTransactionEventsV3();
+
+        $first = $service->recordPemberkasan($application, ['tanggal_terima_bank' => '2026-10-01', 'bank_name' => 'BTN'], $actor);
+        $second = $service->gantiBank($application->fresh(), ['tanggal_terima_bank' => '2026-10-02', 'bank_name' => 'BSN'], $actor);
+
+        $fresh = $application->fresh();
+        $this->assertSame(1, $first->attempt_no);
+        $this->assertSame(2, $second->attempt_no);
+        $this->assertSame(2, $fresh->bankProcesses()->count());
+        $this->assertSame('pemberkasan', $fresh->current_stage);
+        $this->assertSame('pemberkasan', $fresh->current_process);
+        $this->assertSame(0, $fresh->transactionEvents()->count());
+        $this->assertSame(1, ActivityLog::query()->where('event', 'consumer_bank_attempt_created')->where('subject_id', $fresh->id)->count());
     }
 
     public function test_br34_ganti_bank_records_typed_event_without_replacing_bank_process_history(): void

@@ -31,7 +31,7 @@ PRD sumber kebenaran: `docs/product/PRD_OASIS_CRM_V3.md` versi 3.3 (D30–D33)
 | WP-1.4 | 1 | Graf organisasi kanonis dan pemantauan berjenjang | Selesai; irisan 1.4a–1.4f selesai. Tidak ada cutover produksi atau backfill write oleh agent | BR-50–BR-53 |
 | WP-1.5 | 1 | Jam kerja, target 480, Jumat, akhir pekan, hari libur | Selesai; kalender Receipt/Agenda settings-backed, holiday nasional/cabang, free-day submission marker, reminder, UI, dan verifikasi penuh selesai | BR-01–BR-09 |
 | WP-1.6 | 1 | Tahap Lead Baru–UTJ, Gugur, kunci setelah UTJ | Selesai implementasi; flag default mati, belum cutover produksi | BR-10–BR-14 |
-| WP-1.7 | 1 | Status/event transaksi, alasan Mundur, NUP baru | Belum mulai | BR-20–BR-36 |
+| WP-1.7 | 1 | Status/event transaksi, alasan Mundur, NUP baru | Selesai implementasi; flag default mati; belum cutover produksi | BR-20–BR-36 |
 | WP-1.8 | 1 | Istilah glosarium dan navigasi | Belum mulai | §3, D15 |
 | WP-1.9 | 1 | Privasi AI dan backup terpisah | Belum mulai | BR-70–BR-73 |
 | WP-1.10 | 1 | Penutup Fase 1: changelog, dokumentasi, verifikasi penuh | Belum mulai | Semua fase 1 |
@@ -355,6 +355,20 @@ Status: selesai. Saat `org_hierarchical_monitoring` aktif, Coordinator hanya men
 - Service: `ConsumerApplicationLifecycleService`, `ConsumerOperationalService`, `ConsumerNupService`, `ConsumerEntryService`, `ConsumerKavlingLifecycleService`.
 - Controller/request/view: Workspace Konsumen lifecycle forms and direct routes.
 - Test: BR-20–BR-36, exact status set, reason required, event audit, kavling release/atomic move, immutable `id_transaksi`, historical import without fake history.
+
+### WP-1.7 — Status/event transaksi dan NUP
+
+Status: implementasi selesai di branch `prd-v3/wp-1.7-transaction-nup`. Flag `transaction_events_v3` tetap default mati; tidak ada production cutover.
+
+- BR-20–BR-25: NUP dan lifecycle transaksional tersedia. NUP dari Lead wajib berasal dari Lead berstatus UTJ dan tidak memegang kavling; konversi NUP ke transaksi membutuhkan kavling, idempoten melalui `converted_application_id`, menolak kavling di luar scope atau yang sudah dipegang transaksi Lanjut, dan Kembali ke NUP hanya menerima transaksi Lanjut. NUP menyimpan provenance `entry_type`, `source_application_id`, dan `issue_id`; data lama tanpa provenance dibaca sebagai `legacy`. Bukti: `tests/Feature/ConsumerV2ProcessTest.php`.
+- BR-30–BR-32: status transaksi kanonis `LANJUT`, `MUNDUR`, `DITUTUP`; status legacy dipetakan untuk pembacaan tanpa menghapus kolom lama. `Mundur` memerlukan alasan dari Pengaturan, melepas kavling, mempertahankan tahap/proses, dan menulis event bertipe terpisah dari histori proses. Bukti: `tests/Feature/ConsumerCanonicalDomainContractTest.php`, `tests/Feature/ConsumerLifecycleHttpTest.php`, `tests/Feature/ConsumerOperationalTest.php`.
+- BR-33–BR-34: Ganti Nama dan Pindah Kavling menulis event transaksi bertipe, mempertahankan `id_transaksi`, menjaga relasi replacement, dan menolak perpindahan ke kavling terisi tanpa mutasi setengah jalan. Ganti Bank juga menulis event tanpa mengganti histori proses bank. Bukti: `tests/Feature/ConsumerLifecycleOrchestrationTest.php`, `tests/Feature/ConsumerOperationalTest.php`.
+- BR-35–BR-36: PSJB dan SLIK dapat dicatat dalam urutan fleksibel; data historis masuk dari posisi proses saat ini tanpa membuat riwayat palsu. Pemetaan status transaksi legacy hanya tersedia sebagai laporan read-only. Bukti: `tests/Feature/ConsumerV2ProcessTest.php`, `tests/Feature/ConsumerTransactionStatusBackfillCommandTest.php`.
+- Exact migrations: `database/migrations/2026_11_21_140000_add_canonical_transaction_status_fields.php` menambah `closed_by_event` dan `withdraw_reason` pada `consumer_applications` serta changelog idempoten; `database/migrations/2026_11_21_150000_add_transaction_event_types.php` menambah `event_type` dan index `consumer_stage_events_application_event_time_index` serta changelog idempoten; `database/migrations/2026_11_21_160000_add_nup_provenance_fields.php` menambah `entry_type`, `source_application_id`, `issue_id`, index, FK nullable, dan changelog idempoten; `database/migrations/2026_11_21_164320_enforce_active_and_sold_kavling_assignment_uniqueness.php` menegakkan satu assignment `active`/`sold` yang belum dilepas per kavling serta changelog idempoten.
+- Feature flag: `transaction_events_v3` terdaftar di `app/Support/AppSettingCatalog.php` dengan default `false`; jalur flag-off mempertahankan perilaku legacy dan menolak penulisan event transaksi v3. Bukti: `tests/Unit/FeatureFlagTest.php`, `tests/Feature/ConsumerOperationalTest.php`, `tests/Feature/ConsumerLifecycleOrchestrationTest.php`.
+- Dry-run: `php artisan consumer:transaction-status-v3-backfill --dry-run` menghasilkan JSON pemetaan status legacy, kategori, dan kasus perlu tinjau; command menolak eksekusi tanpa `--dry-run`. Tidak ada command write/backfill yang dijalankan.
+- Verification: focused consumer suite 88 tests passed, 346 assertions. Tidak ada production cutover: flag tidak diaktifkan, status legacy tidak di-backfill, sinkronisasi Sheet tidak dimatikan, dan data produksi tidak disentuh.
+- Conflicts/open limits: C-04/C-05 tetap berlaku sampai mapping dry-run ditinjau per cabang; status legacy dan kolom lama dipertahankan. NUP legacy tanpa provenance tetap `legacy` dan perlu review; data lama tidak diberi riwayat palsu. Pengaturan alasan Mundur memakai resolver yang sudah ada, tetapi migrasi belum memindahkan seluruh aturan transaksi lain ke Pengaturan. Batas assignment DB memakai implementasi driver-specific SQLite partial index/MySQL generated column; laporan dry-run belum menjadi migration write.
 
 ### WP-1.8/WP-1.9 — Istilah, AI privacy, backup evidence
 

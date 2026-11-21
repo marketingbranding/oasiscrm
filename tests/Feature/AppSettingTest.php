@@ -79,7 +79,7 @@ class AppSettingTest extends TestCase
             'settings' => ['lead_stages_v3__mode' => 'branches'],
         ]);
 
-        $response->assertRedirect()->assertSessionHasErrors('settings.lead_stages_v3.branch_ids');
+        $response->assertRedirect()->assertSessionHasErrors('lead_stages_v3.branch_ids');
     }
 
     public function test_non_superadmin_cannot_read_or_update_settings(): void

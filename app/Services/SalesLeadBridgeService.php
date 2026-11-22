@@ -45,7 +45,7 @@ class SalesLeadBridgeService
     public const BRIDGE_ISSUES = [
         'invalid_uuid', 'duplicate_uuid', 'duplicate_id_lead', 'lead_id_missing', 'lead_identity_conflict',
         'orphan_remote_uuid', 'baseline_missing', 'lead_remote_conflict', 'remote_tombstone_conflict',
-        'tombstone_remote_conflict', 'claim_unverified', 'claim_failed', 'sheet_missing_gugur_option',
+        'tombstone_remote_conflict', 'claim_unverified', 'claim_failed', 'sheet_missing_gugur_option', 'remote_owner_conflicts_local_transfer',
     ];
 
     public function __construct(
@@ -284,8 +284,13 @@ class SalesLeadBridgeService
 
                         continue;
                     }
-                    if ($lead !== null && ((int) $lead->project_id !== (int) $project->id || (int) $lead->sales_user_id !== (int) $sales->id)) {
-                        $this->reconcile($branch, $lead, 'remote_assignment_owned_by_oasis', $row, $dryRun, ['field_names' => ['proyek', 'sales_pic']]);
+                    if ($lead !== null && (int) $lead->sales_user_id !== (int) $sales->id) {
+                        $this->reconcile($branch, $lead, 'remote_owner_conflicts_local_transfer', $row, $dryRun, ['field_names' => ['sales_pic']]);
+                        $summary['unresolved']++;
+                        $sales = $lead->sales;
+                    }
+                    if ($lead !== null && (int) $lead->project_id !== (int) $project->id) {
+                        $this->reconcile($branch, $lead, 'remote_assignment_owned_by_oasis', $row, $dryRun, ['field_names' => ['proyek']]);
                         $summary['unresolved']++;
 
                         continue;

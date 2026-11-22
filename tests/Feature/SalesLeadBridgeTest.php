@@ -230,6 +230,22 @@ class SalesLeadBridgeTest extends TestCase
         $this->assertSame('baseline_missing', SalesLeadLifecycleReconciliationItem::where('branch_id', $branch->id)->value('issue_code'));
     }
 
+    public function test_br54_pull_does_not_overwrite_owner_after_local_transfer(): void
+    {
+        [$branch, $project, $sales, $lead] = $this->context('OwnerConflict');
+        $this->enable($branch, 'bidirectional');
+        $newOwner = User::factory()->create(['name' => 'New Owner', 'branch_id' => $branch->id, 'role_id' => Role::where('slug', 'sales')->value('id'), 'password_changed_at' => now()]);
+        $lead->update(['sales_user_id' => $newOwner->id, 'sync_status' => 'synced']);
+        $row = $this->row($lead, 'OWNER-CONFLICT');
+        $row['sales_pic'] = $sales->name;
+
+        $result = $this->pullBridge($branch, $project, $sales, [$row])->pull($branch);
+
+        $this->assertSame($newOwner->id, $lead->fresh()->sales_user_id);
+        $this->assertSame('remote_owner_conflicts_local_transfer', SalesLeadLifecycleReconciliationItem::where('sales_lead_id', $lead->id)->value('issue_code'));
+        $this->assertGreaterThanOrEqual(1, $result['summary']['unresolved']);
+    }
+
     public function test_pull_dirty_divergence_conflicts_without_mutation(): void
     {
         [$branch, $project, $sales, $lead] = $this->context('Dirty');

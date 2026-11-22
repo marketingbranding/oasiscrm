@@ -37,6 +37,19 @@ class AppSettingCatalog
                 'description' => 'Jumlah hari tanpa aktivitas sebelum Lead ditandai perlu perhatian.',
                 'rules' => ['integer', 'min:1', 'max:14'],
             ],
+            'sales_lead.transfer_reasons' => [
+                'group' => 'sales_lead',
+                'type' => 'list',
+                'default' => [
+                    'Tidak dapat dihubungi',
+                    'Penyesuaian pembagian tim',
+                    'Permintaan konsumen',
+                    'Lainnya',
+                ],
+                'label' => 'Alasan Alih Lead',
+                'description' => 'Daftar alasan yang sah saat Lead dialihkan (BR-54).',
+                'rules' => ['array', 'min:1'],
+            ],
             'sales_lead.gugur_reasons' => [
                 'group' => 'sales_lead',
                 'type' => 'list',

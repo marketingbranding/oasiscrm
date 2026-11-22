@@ -3,6 +3,9 @@
 namespace App\Services;
 
 use App\Enums\AccountStatus;
+use App\Models\SalesCoordinatorSales;
+use App\Models\SalesLead;
+use App\Models\SalesLeadUnownedQueue;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -66,6 +69,7 @@ class UserAccountService
             $user = User::whereKey($user->id)->lockForUpdate()->firstOrFail();
             $this->lifecycle->assertCriticalCapabilityContinuity($user);
             $old = $user->account_status->value;
+            $this->queueActiveSalesLeads($user);
             $user->update([
                 'account_status' => AccountStatus::Inactive,
                 'deactivated_at' => now(),
@@ -74,6 +78,50 @@ class UserAccountService
             $this->lifecycle->revokeUserTokens($user);
             $this->audit->log('account_deactivated', $user, $actor, ['account_status' => $old], ['account_status' => AccountStatus::Inactive->value]);
         });
+    }
+
+    public function activeLeadCount(User $sales): int
+    {
+        return SalesLead::query()->where('sales_user_id', $sales->id)->activeForLeadViews()->where(fn ($query) => $query->whereNull('lead_stage')->orWhereNotIn('lead_stage', ['utj', 'gugur']))->count();
+    }
+
+    private function queueActiveSalesLeads(User $sales): void
+    {
+        $activeCoordinatorId = SalesCoordinatorSales::query()
+            ->where('sales_user_id', $sales->id)
+            ->where('is_active', true)
+            ->whereNull('ended_at')
+            ->orderByDesc('id')
+            ->value('coordinator_user_id');
+        $lastCoordinatorId = $activeCoordinatorId ?? SalesCoordinatorSales::query()
+            ->where('sales_user_id', $sales->id)
+            ->orderByDesc('ended_at')
+            ->orderByDesc('id')
+            ->value('coordinator_user_id');
+        $coordinatorId = User::query()
+            ->whereKey($lastCoordinatorId)
+            ->where('account_status', AccountStatus::Active->value)
+            ->where('is_active', true)
+            ->value('id');
+
+        SalesLead::query()
+            ->where('sales_user_id', $sales->id)
+            ->activeForLeadViews()
+            ->where(function ($query): void {
+                $query->whereNull('lead_stage')->orWhereNotIn('lead_stage', ['utj', 'gugur']);
+            })
+            ->lockForUpdate()
+            ->get()
+            ->each(function (SalesLead $lead) use ($sales, $coordinatorId, $lastCoordinatorId): void {
+                SalesLeadUnownedQueue::query()->updateOrCreate(
+                    ['sales_lead_id' => $lead->id, 'status' => 'open'],
+                    [
+                        'former_sales_user_id' => $sales->id,
+                        'last_active_coordinator_user_id' => $lastCoordinatorId,
+                        'queue_coordinator_user_id' => $coordinatorId,
+                    ],
+                );
+            });
     }
 
     public function reactivate(User $user, User $actor): void

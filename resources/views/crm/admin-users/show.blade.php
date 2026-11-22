@@ -64,6 +64,7 @@
                 <div><dt class="font-bold">Atasan</dt><dd>{{ $user->supervisor?->name ?: '-' }}</dd></div>
                 @if($user->hasPrimaryRole('sales_coordinator'))<div><dt class="font-bold">Tim Sales Aktif</dt><dd>{{ $user->currentCoordinatorSales->pluck('name')->join(', ') ?: '-' }}</dd></div>@endif
                 <div><dt class="font-bold">Status Akun</dt><dd><x-crm.status-badge :variant="$statusVariant">{{ $statusLabel }}</x-crm.status-badge></dd></div>
+                @if($user->isSales() && $activeLeadCount > 0)<p class="mb-3 border-2 border-red-700 bg-red-50 p-3 text-sm font-bold">Deaktivasi akan menempatkan {{ $activeLeadCount }} Lead aktif ke antrean. Pemilik Lead tetap tercatat atas nama Sales ini sampai dialihkan.</p>@endif
                 @if($user->account_status === \App\Enums\AccountStatus::Active && $user->must_change_password)<div><dt class="font-bold">Akses</dt><dd><x-crm.status-badge variant="warning">Menunggu ganti password pertama</x-crm.status-badge><p class="mt-1 text-xs font-['Times_New_Roman']">Pengguna wajib mengganti password sementara sebelum mengakses OASIS.</p></dd></div>@endif
                 <div><dt class="font-bold">Email Terverifikasi</dt><dd>{{ $user->email_verified_at ? $user->email_verified_at->format('d/m/Y H:i') : 'Belum' }}</dd></div>
                 <div><dt class="font-bold">Password Diubah</dt><dd>{{ $user->password_changed_at ? $user->password_changed_at->format('d/m/Y H:i') : 'Belum' }}</dd></div>

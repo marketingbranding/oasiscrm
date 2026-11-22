@@ -35,6 +35,9 @@ class NavigationService
                 $user->hasScopedPermission('sales_pocketbook')
                     ? $this->item('Buku Saku Sales', 'sales-pocketbook.index', 'sales', 'sales', ['sales-pocketbook.*', 'sales-leads.*', 'sales-agendas.*', 'sales-reminders.*'], $routeName, 'sales_pocketbook', $moduleMaintenance)
                     : null,
+                ! $isSales && ($user->isSuperadmin() || ($user->hasPrimaryRole('sales_coordinator') && $user->hasPermission('sales_pocketbook.manage_team')))
+                    ? $this->item('Antrean Lead', 'sales-leads.unowned-queue', 'sales', 'sales', ['sales-leads.unowned-queue'], $routeName, 'sales_pocketbook', $moduleMaintenance)
+                    : null,
                 ! $isSales && config('oasis.consumer_progress_operational_enabled') && $user->hasPermission('consumer_progress.view') && $user->hasScopedPermission('consumer_progress')
                     ? $this->item('Database Konsumen', 'consumer-database.workspace', 'customers', 'consumer-progress', ['consumer-database.*'], $routeName, 'consumer_progress', $moduleMaintenance)
                     : null,

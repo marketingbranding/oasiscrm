@@ -46,9 +46,7 @@ class SalesLeadTransferController extends Controller
 
         $query = SalesLeadUnownedQueue::query()->with(['lead.sales', 'lead.project', 'formerSales', 'coordinator'])->where('status', 'open');
         if (! $user->isSuperadmin()) {
-            $query->where(function ($scope) use ($user): void {
-                $scope->where('queue_coordinator_user_id', $user->id)->orWhereNull('queue_coordinator_user_id');
-            });
+            $query->where('queue_coordinator_user_id', $user->id);
         }
         $queue = $query->latest()->get();
         $targets = $user->isSuperadmin()
@@ -58,6 +56,7 @@ class SalesLeadTransferController extends Controller
             'queue' => $queue,
             'queueTransferTargets' => $targets,
             'transferReasons' => $this->settings->value('sales_lead.transfer_reasons') ?? [],
+            'queueCanTransfer' => $queue->mapWithKeys(fn (SalesLeadUnownedQueue $item): array => [$item->id => $this->transfers->canTransferQueueEntry($user, $item)]),
         ];
 
         return $request->expectsJson()

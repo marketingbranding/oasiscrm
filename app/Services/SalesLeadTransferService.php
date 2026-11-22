@@ -18,6 +18,19 @@ class SalesLeadTransferService
         private readonly CollaborationNotificationService $notifications,
     ) {}
 
+    public function canTransferQueueEntry(User $actor, SalesLeadUnownedQueue $queue): bool
+    {
+        if ($queue->status !== 'open') {
+            return false;
+        }
+
+        return $actor->isSuperadmin()
+            ? $queue->queue_coordinator_user_id === null
+            : $this->teams->isCoordinator($actor)
+                && $actor->hasPermission('sales_pocketbook.manage_team')
+                && (int) $queue->queue_coordinator_user_id === (int) $actor->id;
+    }
+
     /**
      * @param  list<int>  $leadIds
      * @return list<SalesLeadTransfer>
@@ -42,11 +55,8 @@ class SalesLeadTransferService
                     ->firstOrFail();
             $queueLeadIds = $queue === null ? [] : [$queue->sales_lead_id];
             $leadIds = array_values(array_unique([...$leadIds, ...$queueLeadIds]));
-            if ($queue !== null && ! $actor->isSuperadmin() && (int) $queue->queue_coordinator_user_id !== (int) $actor->id) {
-                throw ValidationException::withMessages(['queue_id' => 'Antrean bukan milik Koordinator ini.']);
-            }
-            if ($queue !== null && $actor->isSuperadmin() && $queue->queue_coordinator_user_id !== null) {
-                throw ValidationException::withMessages(['queue_id' => 'Superadmin hanya dapat mengambil antrean tanpa Koordinator aktif.']);
+            if ($queue !== null && ! $this->canTransferQueueEntry($actor, $queue)) {
+                throw ValidationException::withMessages(['queue_id' => 'Antrean tidak dapat dialihkan oleh akun ini.']);
             }
             $targetAllowed = $queue !== null
                 ? $this->canTransferQueueTo($actor, $target, $queue)

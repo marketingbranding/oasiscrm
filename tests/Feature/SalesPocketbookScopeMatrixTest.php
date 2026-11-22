@@ -10,6 +10,7 @@ use App\Models\SalesCoordinatorSales;
 use App\Models\SalesLead;
 use App\Models\SalesLeadUnownedQueue;
 use App\Models\User;
+use App\Services\AppSettingResolver;
 use App\Services\OptimisticLockService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
@@ -350,19 +351,36 @@ class SalesPocketbookScopeMatrixTest extends TestCase
         $this->assertStringNotContainsString('name="queue_id"', $content);
     }
 
-    public function test_br55_coordinator_queue_page_shows_owned_queue_and_transfer_form_http(): void
+    public function test_br55_coordinator_sees_only_own_queue_and_form_http(): void
     {
         $context = $this->context();
-        SalesLeadUnownedQueue::create([
-            'sales_lead_id' => $context['lead']->id,
-            'former_sales_user_id' => $context['sales']->id,
-            'queue_coordinator_user_id' => $context['coordinator']->id,
-            'last_active_coordinator_user_id' => $context['coordinator']->id,
-            'status' => 'open',
-        ]);
+        $ownLead = $context['lead'];
+        $outsiderCoordinator = $this->user('sales_coordinator', $context['branch'], 'Koordinator B');
+        $foreignLead = $this->lead($context['foreignSales'], $context['project'], 'Lead Koordinator B');
+        $unassignedLead = $this->lead($context['sales'], $context['project'], 'Lead Tanpa Koordinator');
+        SalesLeadUnownedQueue::create(['sales_lead_id' => $ownLead->id, 'former_sales_user_id' => $context['sales']->id, 'queue_coordinator_user_id' => $context['coordinator']->id, 'last_active_coordinator_user_id' => $context['coordinator']->id, 'status' => 'open']);
+        SalesLeadUnownedQueue::create(['sales_lead_id' => $foreignLead->id, 'former_sales_user_id' => $context['foreignSales']->id, 'queue_coordinator_user_id' => $outsiderCoordinator->id, 'last_active_coordinator_user_id' => $outsiderCoordinator->id, 'status' => 'open']);
+        SalesLeadUnownedQueue::create(['sales_lead_id' => $unassignedLead->id, 'former_sales_user_id' => $context['sales']->id, 'queue_coordinator_user_id' => null, 'last_active_coordinator_user_id' => $context['coordinator']->id, 'status' => 'open']);
 
-        $this->actingAs($context['coordinator'])->get(route('sales-leads.unowned-queue'))
-            ->assertOk()->assertSee('Ditangani Koordinator Tim')->assertDontSee('name="queue_id"', false);
+        $response = $this->actingAs($context['coordinator'])->get(route('sales-leads.unowned-queue'))->assertOk();
+        $content = html_entity_decode($response->getContent());
+        $this->assertStringContainsString('Lead Tim', $content);
+        $this->assertStringContainsString('name="queue_id"', $content);
+        $this->assertStringNotContainsString('Lead Koordinator B', $content);
+        $this->assertStringNotContainsString('Lead Tanpa Koordinator', $content);
+    }
+
+    public function test_br55_coordinator_transfers_own_queue_entry_through_page_form_http(): void
+    {
+        $context = $this->context();
+        SalesCoordinatorSales::create(['coordinator_user_id' => $context['coordinator']->id, 'sales_user_id' => $context['foreignSales']->id]);
+        $queue = SalesLeadUnownedQueue::create(['sales_lead_id' => $context['lead']->id, 'former_sales_user_id' => $context['sales']->id, 'queue_coordinator_user_id' => $context['coordinator']->id, 'last_active_coordinator_user_id' => $context['coordinator']->id, 'status' => 'open']);
+        $reason = app(AppSettingResolver::class)->value('sales_lead.transfer_reasons')[0];
+
+        $this->actingAs($context['coordinator'])->post(route('coordinator-leads.transfers.store'), ['queue_id' => $queue->id, 'lead_ids' => [$context['lead']->id], 'target_user_id' => $context['foreignSales']->id, 'reason' => $reason])
+            ->assertRedirect();
+        $this->assertSame('closed', $queue->fresh()->status);
+        $this->assertSame($context['foreignSales']->id, $context['lead']->fresh()->sales_user_id);
     }
 
     public function test_br55_non_coordinator_roles_cannot_open_queue_page_http(): void

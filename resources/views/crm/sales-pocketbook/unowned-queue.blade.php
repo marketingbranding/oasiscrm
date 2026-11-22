@@ -15,9 +15,7 @@
                     <div class="flex flex-wrap items-center gap-2">
                         <strong>{{ $item->lead?->customer_name }}</strong>
                         <span class="text-sm">{{ $item->lead?->sales?->name ?? $item->formerSales?->name ?? '-' }}</span>
-                        @if($item->queue_coordinator_user_id)
-                            <span class="text-sm">Ditangani Koordinator {{ $item->coordinator?->name }}</span>
-                        @else
+                        @if($queueCanTransfer[$item->id] ?? false)
                             <form method="POST" action="{{ route('coordinator-leads.transfers.store') }}" class="flex flex-wrap items-end gap-2">
                                 @csrf
                                 <input type="hidden" name="queue_id" value="{{ $item->id }}">
@@ -27,6 +25,8 @@
                                 <label class="text-xs font-bold">Catatan<input name="notes" class="sales-input mt-1"></label>
                                 <x-crm.button type="submit" variant="primary" accent="sales">Alih Lead</x-crm.button>
                             </form>
+                        @else
+                            <span class="text-sm">Ditangani Koordinator {{ $item->coordinator?->name ?? 'lain' }}</span>
                         @endif
                     </div>
                 </div>

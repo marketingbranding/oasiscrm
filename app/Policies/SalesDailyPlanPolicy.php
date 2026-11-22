@@ -4,6 +4,7 @@ namespace App\Policies;
 
 use App\Models\SalesDailyPlan;
 use App\Models\User;
+use App\Services\OrganizationScopeService;
 use App\Services\SalesTeamScopeService;
 use App\Services\WorkspaceAccessService;
 
@@ -34,6 +35,10 @@ class SalesDailyPlanPolicy
             return true;
         }
 
+        if (app(OrganizationScopeService::class)->hasSpecialMonitoringGrant($user, 'sales_daily_plans', (int) $salesDailyPlan->sales_user_id)) {
+            return true;
+        }
+
         if ($user->isSales()) {
             return $user->hasPermission('sales_daily_plans.view_own')
                 && (int) $salesDailyPlan->sales_user_id === (int) $user->id;
@@ -60,6 +65,12 @@ class SalesDailyPlanPolicy
     {
         if (! $this->view($user, $salesDailyPlan)) {
             return false;
+        }
+
+        if (app(OrganizationScopeService::class)->hasSpecialMonitoringGrant($user, 'sales_daily_plans', (int) $salesDailyPlan->sales_user_id)) {
+            return $salesDailyPlan->status === 'submitted'
+                && $user->hasPrimaryRole('sales_coordinator')
+                && $user->hasPermission('sales_daily_plans.manage_team');
         }
 
         if ($user->isSales()) {

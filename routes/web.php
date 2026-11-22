@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Auth\PasswordChangeController;
+use App\Http\Controllers\Crm\AccessGrantController;
 use App\Http\Controllers\Crm\AdminUserController;
 use App\Http\Controllers\Crm\AdminUserImportController;
 use App\Http\Controllers\Crm\AiChatController;
@@ -86,6 +87,12 @@ Route::middleware(['auth', 'active', 'verified'])->group(function () {
 Route::middleware(['auth', 'active', 'verified', 'password.changed', 'operational.maintenance', 'crm.read-only', 'sales.access'])->group(function () {
     Route::bind('comment', fn ($value) => Comment::withTrashed()->findOrFail($value));
     Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
+
+    Route::prefix('admin/izin-akses-khusus')->name('admin.access-grants.')->middleware(['permission:system.settings_manage', 'system.admin:settings'])->group(function (): void {
+        Route::get('/', [AccessGrantController::class, 'index'])->name('index');
+        Route::post('/', [AccessGrantController::class, 'store'])->middleware('not.impersonating')->name('store');
+        Route::patch('/{accessGrant}/revoke', [AccessGrantController::class, 'revoke'])->middleware('not.impersonating')->name('revoke');
+    });
 
     Route::prefix('admin/pengaturan-aturan')->name('admin.app-settings.')->middleware(['permission:system.settings_manage', 'system.admin:settings'])->group(function () {
         Route::get('/', [AppSettingController::class, 'index'])->name('index');

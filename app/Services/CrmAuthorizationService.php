@@ -120,6 +120,11 @@ class CrmAuthorizationService
                     || $this->workspaceAccess->canViewHistoricalBranch($actor, (int) $lead->branch_id));
         }
 
+        if ($this->organizationScope->hasSpecialMonitoringGrant($actor, 'sales_leads', (int) $lead->sales_user_id)) {
+            return $this->workspaceAccess->canViewBranch($actor, (int) $lead->branch_id)
+                && in_array((int) $lead->project_id, $this->workspaceAccess->accessibleProjectIds($actor), true);
+        }
+
         if ($actor->hasPrimaryRole('sales_coordinator')) {
             return $this->can($actor, 'sales_pocketbook.view_team')
                 && $this->salesTeamScope->contains($actor, (int) $lead->sales_user_id)

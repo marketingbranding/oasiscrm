@@ -37,6 +37,14 @@ class AppSettingCatalog
                 'description' => 'Jumlah hari tanpa aktivitas sebelum Lead ditandai perlu perhatian.',
                 'rules' => ['integer', 'min:1', 'max:14'],
             ],
+            'access_grants.max_days' => [
+                'group' => 'access_grants',
+                'type' => 'integer',
+                'default' => 90,
+                'label' => 'Maksimal masa Izin Akses Khusus',
+                'description' => 'Batas masa berlaku grant akses khusus dalam hari (BR-53).',
+                'rules' => ['integer', 'min:1', 'max:365'],
+            ],
             'sales_lead.transfer_reasons' => [
                 'group' => 'sales_lead',
                 'type' => 'list',

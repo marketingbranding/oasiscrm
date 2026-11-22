@@ -83,7 +83,7 @@ class SalesMonitoringProjectionService
         };
     }
 
-    /** @return array{lead_date:?string, name:string, sales_name:?string, project_name:?string, stage:?string, last_active_at:?string} */
+    /** @return array{lead_date:?string, name:string, sales_name:?string, project_name:?string, stage:?string, last_active_at:?string, needs_attention:bool, has_unowned_queue:bool} */
     private function lead(SalesLead|array $lead): array
     {
         $status = data_get($lead, 'current_status');
@@ -100,6 +100,8 @@ class SalesMonitoringProjectionService
             'project_name' => data_get($lead, 'project.project_name'),
             'stage' => $stage,
             'last_active_at' => $this->dateTimeString($lastActiveAt),
+            'needs_attention' => (bool) data_get($lead, 'needs_attention', false),
+            'has_unowned_queue' => (bool) data_get($lead, 'has_unowned_queue', false),
         ];
     }
 

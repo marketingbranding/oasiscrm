@@ -19,6 +19,7 @@ class SupervisorSalesMonitoringService
         private readonly WorkspaceAccessService $workspaceAccess,
         private readonly SalesTeamScopeService $salesTeamScope,
         private readonly SalesMonitoringProjectionService $projection,
+        private readonly LeadAttentionService $leadAttention,
     ) {}
 
     public function isSupervisor(User $user): bool
@@ -50,8 +51,9 @@ class SupervisorSalesMonitoringService
         $agendaAggregate = $this->agendaBase($salesIds, $period, $scope)
             ->selectRaw("owner_user_id, COUNT(*) AS total, SUM(CASE WHEN status = 'done' THEN 1 ELSE 0 END) AS done, SUM(CASE WHEN COALESCE(activity_result, '') = '' AND status NOT IN ('cancelled', 'rescheduled') THEN 1 ELSE 0 END) AS missing")
             ->groupBy('owner_user_id')->get()->keyBy('owner_user_id');
-        $leadAggregate = $this->leadBase($salesIds, $period, $scope)
-            ->selectRaw("sales_user_id, COUNT(*) AS total, SUM(CASE WHEN sync_status = 'pending_create' THEN 1 ELSE 0 END) AS pending_create, SUM(CASE WHEN sync_status = 'pending_update' THEN 1 ELSE 0 END) AS pending_update, SUM(CASE WHEN sync_status = 'sync_failed' THEN 1 ELSE 0 END) AS sync_failed, MAX(COALESCE(current_status_changed_at, lead_date)) AS latest_activity_at")
+        $leadAggregate = $this->leadAttention->decorate($this->leadBase($salesIds, $period, $scope))
+            ->select('sales_leads.sales_user_id')
+            ->selectRaw("COUNT(*) AS total, SUM(CASE WHEN sync_status = 'pending_create' THEN 1 ELSE 0 END) AS pending_create, SUM(CASE WHEN sync_status = 'pending_update' THEN 1 ELSE 0 END) AS pending_update, SUM(CASE WHEN sync_status = 'sync_failed' THEN 1 ELSE 0 END) AS sync_failed, MAX({$this->leadAttention->latestActivityExpression()}) AS latest_activity_at")
             ->groupBy('sales_user_id')->get()->keyBy('sales_user_id');
 
         $salesRows = $sales->map(function (User $user) use ($agendaAggregate, $leadAggregate, $team) {
@@ -102,7 +104,7 @@ class SupervisorSalesMonitoringService
             ? $this->agendaBase($salesIds, $period, $scope)->with(['owner:id,name', 'branch:id,name', 'salesProject:id,project_name', 'evidence'])->orderByDesc('scheduled_date')->orderByDesc('id')
             : null;
         $leads = ($salesId || ! $paginate)
-            ? $this->leadBase($salesIds, $period, $scope)->with([
+            ? $this->leadAttention->decorate($this->leadBase($salesIds, $period, $scope))->with([
                 'sales:id,name',
                 'branch:id,name',
                 'project:id,project_name',
@@ -119,10 +121,8 @@ class SupervisorSalesMonitoringService
             $agendaCollection = $this->projection->projectCollection($actor, 'agenda', $agendaCollection, 'owner_user_id');
         }
         if ($leadCollection instanceof LengthAwarePaginator) {
-            $leadCollection->getCollection()->each(fn (SalesLead $lead) => $lead->setAttribute('latest_activity_at', $lead->latestStatusHistory?->changed_at ?? $lead->current_status_changed_at ?? $lead->lead_date));
             $leadCollection->setCollection($this->projection->projectCollection($actor, 'lead', $leadCollection->getCollection(), 'sales_user_id'));
         } elseif ($leadCollection instanceof Collection) {
-            $leadCollection->each(fn (SalesLead $lead) => $lead->setAttribute('latest_activity_at', $lead->latestStatusHistory?->changed_at ?? $lead->current_status_changed_at ?? $lead->lead_date));
             $leadCollection = $this->projection->projectCollection($actor, 'lead', $leadCollection, 'sales_user_id');
         }
 

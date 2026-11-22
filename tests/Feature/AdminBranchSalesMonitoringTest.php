@@ -150,7 +150,7 @@ class AdminBranchSalesMonitoringTest extends TestCase
         $workbook->disconnectWorksheets();
     }
 
-    public function test_primary_admin_leads_are_compact_read_only_and_use_latest_status_activity(): void
+    public function test_primary_admin_leads_keep_latest_status_label_and_activity_definition(): void
     {
         $lead = $this->lead($this->sales, $this->project, 'Konsumen Admin', 'Referensi', 'Instagram', SalesLeadStatus::Discussion);
         $this->history($lead, SalesLeadStatus::FaceToFace, '2026-08-05 09:00:00', 'older');
@@ -162,8 +162,8 @@ class AdminBranchSalesMonitoringTest extends TestCase
             ->assertSee('Admin Cabang · Monitoring Read Only')
             ->assertSeeTextInOrder(['Tanggal Lead', 'Nama Konsumen', 'Sales', 'Koordinator', 'Proyek', 'Sumber', 'Kanal / Aktivitas', 'Status Lead', 'Aktivitas Terbaru', 'Detail'])
             ->assertSee('Leads')->assertSee('Rencana Harian Sales')->assertDontSee('tab=report', false)
-            ->assertSee('Konsumen Admin')->assertSee('Koordinator Aktif')->assertSee('09/08/2026 15:30')
-            ->assertDontSee('Koordinator Historis')->assertDontSee('Koordinator Nonaktif')
+            ->assertSee('Konsumen Admin')->assertSee('Koordinator Aktif')->assertSee('10/08/2026 00:00')
+            ->assertDontSee('09/08/2026 15:30')->assertDontSee('Koordinator Historis')->assertDontSee('Koordinator Nonaktif')
             ->assertDontSee('Sinkronisasi Lifecycle')->assertDontSee('Status Sync')->assertDontSee('Sync Lead')
             ->assertDontSee('Tambah Lead')->assertDontSee('Edit Lead')->assertDontSee('Hapus Lead')
             ->assertDontSee('Catat Site Visit')->assertDontSee('Konversi Konsumen')->assertDontSee('Ajukan SLIK');

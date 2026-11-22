@@ -17,6 +17,7 @@ class AdminBranchSalesMonitoringService
         private readonly OrganizationScopeService $organizationScope,
         private readonly WorkspaceAccessService $workspaceAccess,
         private readonly SalesMonitoringProjectionService $projection,
+        private readonly LeadAttentionService $leadAttention,
     ) {}
 
     public function resolve(User $actor, array $filters): array
@@ -57,16 +58,14 @@ class AdminBranchSalesMonitoringService
             ])
             ->orderByDesc('lead_date')->orderByDesc('id')
             ->paginate(20, ['*'], 'lead_page')->withQueryString();
-        $leads->getCollection()->each(function (SalesLead $lead) {
-            $lead->setAttribute('latest_activity_status', $lead->latestStatusHistory?->status ?? $lead->current_status);
-            $lead->setAttribute('latest_activity_at', $lead->latestStatusHistory?->changed_at ?? $lead->current_status_changed_at ?? $lead->lead_date);
-        });
-
         $agendas = $this->agendaQuery($scope, $period, $salesIds, $filters, $projectId)
             ->with(['owner:id,name', 'salesProject:id,project_name', 'evidence'])
             ->orderByDesc('scheduled_date')->orderByDesc('id')
             ->paginate(20, ['*'], 'agenda_page')->withQueryString();
 
+        $leads->getCollection()->each(function (SalesLead $lead): void {
+            $lead->setAttribute('latest_activity_status', $lead->latestStatusHistory?->status ?? $lead->current_status);
+        });
         $leads->setCollection($this->projection->projectCollection($actor, 'lead', $leads->getCollection(), 'sales_user_id'));
         $agendas->setCollection($this->projection->projectCollection($actor, 'agenda', $agendas->getCollection(), 'owner_user_id'));
 
@@ -147,7 +146,7 @@ class AdminBranchSalesMonitoringService
 
     private function leadQuery(array $scope, array $period, array $salesIds, array $filters, ?int $projectId): Builder
     {
-        return SalesLead::query()->activeForLeadViews()->where('branch_id', $scope['branch_id'])->whereIn('project_id', $scope['project_ids'])->whereIn('sales_user_id', $salesIds)
+        return $this->leadAttention->decorate(SalesLead::query()->activeForLeadViews())->where('branch_id', $scope['branch_id'])->whereIn('project_id', $scope['project_ids'])->whereIn('sales_user_id', $salesIds)
             ->whereDate('lead_date', '>=', $period['from']->toDateString())->whereDate('lead_date', '<=', $period['to']->toDateString())
             ->when($projectId, fn (Builder $query) => $query->where('project_id', $projectId))
             ->when(filled($filters['source'] ?? null), fn (Builder $query) => $query->whereEffectiveSource($filters['source']))

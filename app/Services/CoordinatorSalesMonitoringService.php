@@ -21,6 +21,7 @@ class CoordinatorSalesMonitoringService
         private readonly WorkspaceAccessService $workspaceAccess,
         private readonly SalesAgendaReceiptService $receiptService,
         private readonly SalesMonitoringProjectionService $projection,
+        private readonly LeadAttentionService $leadAttention,
     ) {}
 
     public function canViewAgenda(User $actor, ContentItem $agenda): bool
@@ -211,6 +212,8 @@ class CoordinatorSalesMonitoringService
             ->with(['owner:id,name', 'branch:id,name', 'salesProject:id,project_name', 'evidence'])
             ->orderByDesc('scheduled_date')->orderByDesc('id');
         $leads = $this->leadBase($salesIds, $scope)
+            ->when(in_array($filters['focus'] ?? null, ['attention', 'stale'], true), fn (Builder $query) => $this->leadAttention->attentionQueryFor($query))
+            ->when(! in_array($filters['focus'] ?? null, ['attention', 'stale'], true), fn (Builder $query) => $this->leadAttention->decorate($query))
             ->whereDate('lead_date', '>=', $period['from']->toDateString())
             ->whereDate('lead_date', '<=', $period['to']->toDateString())
             ->with([
@@ -221,31 +224,22 @@ class CoordinatorSalesMonitoringService
                 'latestStatusHistory:id,sales_lead_id,status,changed_at',
             ])
             ->latest('lead_date')->latest('id');
-        $staleDays = max(1, min(14, (int) ($filters['stale_days'] ?? 2)));
-        $actionableLeads = $this->leadBase($salesIds, $scope)
-            ->whereIn('current_status', array_map(fn (SalesLeadStatus $status): string => $status->value, SalesLeadStatus::MANUAL))
-            ->whereRaw(
-                'COALESCE((SELECT MAX(sales_lead_status_histories.changed_at) FROM sales_lead_status_histories WHERE sales_lead_status_histories.sales_lead_id = sales_leads.id), sales_leads.current_status_changed_at, sales_leads.lead_date) <= ?',
-                [now(config('app.timezone'))->subDays($staleDays)],
-            )
+        $staleDays = $this->leadAttention->staleDays();
+        $actionableLeads = $this->leadAttention->attentionQueryFor($this->leadBase($salesIds, $scope))
             ->with([
                 'branch:id,name',
                 'project:id,project_name',
                 'sales:id,name',
-                'latestStatusHistory:id,sales_lead_id,status,changed_at',
             ])
             ->latest('lead_date')->get();
-        $failedSyncLeads = $this->leadBase($salesIds, $scope)
+        $failedSyncLeads = $this->leadAttention->decorate($this->leadBase($salesIds, $scope))
             ->where('sync_status', 'sync_failed')
             ->with([
                 'branch:id,name',
                 'project:id,project_name',
                 'sales:id,name',
-                'latestStatusHistory:id,sales_lead_id,status,changed_at',
             ])
             ->latest('lead_date')->get();
-        $actionableLeads->each(fn (SalesLead $lead) => $lead->setAttribute('latest_activity_at', $lead->latestStatusHistory?->changed_at ?? $lead->current_status_changed_at ?? $lead->lead_date));
-        $failedSyncLeads->each(fn (SalesLead $lead) => $lead->setAttribute('latest_activity_at', $lead->latestStatusHistory?->changed_at ?? $lead->current_status_changed_at ?? $lead->lead_date));
         $actionableLeads = $this->projection->projectCollection($actor, 'lead', $actionableLeads, 'sales_user_id');
         $failedSyncLeads = $this->projection->projectCollection($actor, 'lead', $failedSyncLeads, 'sales_user_id');
 
@@ -256,11 +250,9 @@ class CoordinatorSalesMonitoringService
             ? $agendas->paginate(15, ['*'], 'agenda_page')->withQueryString()
             : $agendas->get();
         if ($paginate) {
-            $leadsCollection->getCollection()->each(fn (SalesLead $lead) => $lead->setAttribute('latest_activity_at', $lead->latestStatusHistory?->changed_at ?? $lead->current_status_changed_at ?? $lead->lead_date));
             $leadsCollection->setCollection($this->projection->projectCollection($actor, 'lead', $leadsCollection->getCollection(), 'sales_user_id'));
             $agendasCollection->setCollection($this->projection->projectCollection($actor, 'agenda', $agendasCollection->getCollection(), 'owner_user_id'));
         } else {
-            $leadsCollection->each(fn (SalesLead $lead) => $lead->setAttribute('latest_activity_at', $lead->latestStatusHistory?->changed_at ?? $lead->current_status_changed_at ?? $lead->lead_date));
             $leadsCollection = $this->projection->projectCollection($actor, 'lead', $leadsCollection, 'sales_user_id');
             $agendasCollection = $this->projection->projectCollection($actor, 'agenda', $agendasCollection, 'owner_user_id');
         }
@@ -268,6 +260,7 @@ class CoordinatorSalesMonitoringService
         $result = [
             'period' => $period,
             'filters' => [
+                'focus' => $filters['focus'] ?? null,
                 'period' => $period['key'],
                 'date_from' => $period['from']->toDateString(),
                 'date_to' => $period['to']->toDateString(),
@@ -275,6 +268,7 @@ class CoordinatorSalesMonitoringService
             ],
             'salesUsers' => $filterSalesUsers,
             'actionableLeads' => $actionableLeads,
+            'attentionCount' => $this->leadAttention->attentionQueryFor($this->leadBase($salesIds, $scope))->count(),
             'failedSyncLeads' => $failedSyncLeads,
             'staleDays' => $staleDays,
             'selectedSalesUsers' => $salesUsers,
@@ -292,9 +286,7 @@ class CoordinatorSalesMonitoringService
             $result['exportData'] = $this->projection->projectCollection(
                 $actor,
                 'lead',
-                (clone $leads)->reorder('lead_date')->orderBy('id')->with('latestStatusHistory:id,sales_lead_id,status,changed_at')->get()->each(
-                    fn (SalesLead $lead) => $lead->setAttribute('latest_activity_at', $lead->latestStatusHistory?->changed_at ?? $lead->current_status_changed_at ?? $lead->lead_date)
-                ),
+                (clone $leads)->reorder('lead_date')->orderBy('id')->get(),
                 'sales_user_id',
             );
         }

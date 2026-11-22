@@ -62,6 +62,7 @@ class CoordinatorSalesLeadWorkspaceController extends Controller
             'detail_date' => ['nullable', 'date_format:Y-m-d'],
             'target_month' => ['nullable', 'date_format:Y-m'],
             'stale_days' => ['nullable', 'integer', 'between:1,14'],
+            'focus' => ['nullable', 'in:attention,stale'],
         ]);
         $tab = $filters['tab'] ?? 'today';
         $todayView = $filters['view'] ?? 'today';
@@ -204,6 +205,7 @@ class CoordinatorSalesLeadWorkspaceController extends Controller
             'date_from' => ['nullable', 'required_if:period,custom', 'date'],
             'date_to' => ['nullable', 'required_if:period,custom', 'date', 'after_or_equal:date_from'],
             'sales_id' => ['nullable', 'integer'],
+            'focus' => ['nullable', 'in:attention,stale'],
         ]);
         $data = $this->monitoring->resolve($user, $filters, false);
 

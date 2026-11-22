@@ -37,6 +37,14 @@ class AppSettingCatalog
                 'description' => 'Jumlah hari tanpa aktivitas sebelum Lead ditandai perlu perhatian.',
                 'rules' => ['integer', 'min:1', 'max:14'],
             ],
+            'sales_monitoring.daily_plan_cutoff_time' => [
+                'group' => 'sales_monitoring',
+                'type' => 'string',
+                'default' => '10:00',
+                'label' => 'Batas penanda Rencana Harian',
+                'description' => 'Jam mulai penanda Rencana Harian belum dikirim pada hari kerja.',
+                'rules' => ['string', 'regex:/^([01]\\d|2[0-3]):[0-5]\\d$/'],
+            ],
             'access_grants.max_days' => [
                 'group' => 'access_grants',
                 'type' => 'integer',
@@ -167,6 +175,19 @@ class AppSettingCatalog
                     'sales_agenda.target_minutes',
                     "Target menit agenda tidak boleh melebihi menit kerja efektif ({$effectiveMinutes} menit).",
                 );
+            }
+        }
+
+        if (isset($values['sales_monitoring.daily_plan_cutoff_time'])) {
+            $cutoff = self::minutes((string) $values['sales_monitoring.daily_plan_cutoff_time']);
+            foreach (['weekday', 'friday'] as $day) {
+                $ruleSet = self::calendarRuleSet($values, $day);
+                if ($cutoff < self::minutes((string) $values[$ruleSet[0]])) {
+                    self::addCalendarError($errors, 'sales_monitoring.daily_plan_cutoff_time', 'Batas penanda tidak boleh sebelum jam masuk.');
+                }
+                if ($cutoff > self::minutes((string) $values[$ruleSet[3]])) {
+                    self::addCalendarError($errors, 'sales_monitoring.daily_plan_cutoff_time', 'Batas penanda tidak boleh setelah jam pulang.');
+                }
             }
         }
 

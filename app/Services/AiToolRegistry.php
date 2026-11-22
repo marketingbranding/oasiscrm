@@ -23,6 +23,7 @@ class AiToolRegistry
         private readonly KonsumenPipelineService $pipelineService,
         private readonly WorkspaceAccessService $workspaceAccess,
         private readonly OrganizationScopeService $organizationScope,
+        private readonly LeadAttentionService $leadAttention,
     ) {}
 
     public function allowedToolNames(): array
@@ -552,6 +553,7 @@ class AiToolRegistry
                         ->orWhere('platform', 'like', '%'.$term.'%');
                 })
                 ->with(['branch:id,name', 'project:id,project_name', 'sales:id,name'])
+                ->tap(fn (Builder $query) => $this->leadAttention->decorate($query))
                 ->latest('lead_date')
                 ->limit(10)
                 ->get()
@@ -565,6 +567,9 @@ class AiToolRegistry
                     'status' => $lead->current_status?->value ?? $lead->current_status,
                     'source' => $lead->effective_source,
                     'platform' => $lead->platform,
+                    'latest_activity_at' => $lead->latest_activity_at,
+                    'needs_attention' => (bool) $lead->needs_attention,
+                    'has_unowned_queue' => (bool) $lead->has_unowned_queue,
                 ]);
         }
 

@@ -4,21 +4,140 @@ namespace Tests\Feature;
 
 use App\Models\AccessGrant;
 use App\Models\Branch;
+use App\Models\ContentItem;
 use App\Models\LeadMaster;
 use App\Models\Role;
 use App\Models\SalesCoordinatorSales;
+use App\Models\SalesDailyPlan;
 use App\Models\SalesLead;
 use App\Models\User;
 use App\Services\AccessGrantService;
+use App\Services\OptimisticLockService;
 use App\Services\OrganizationScopeService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\ValidationException;
+use PhpOffice\PhpSpreadsheet\IOFactory;
 use Tests\TestCase;
 
 class AccessGrantScopeTest extends TestCase
 {
     use RefreshDatabase;
+
+    public function test_br53_coordinator_view_grant_renders_foreign_lead_and_xlsx_export_contains_it(): void
+    {
+        $context = $this->context();
+
+        $this->actingAs($context['coordinator'])
+            ->get(route('sales-pocketbook.index', ['tab' => 'lead']))
+            ->assertOk()
+            ->assertDontSee('Lead Sales Lain');
+
+        $this->grant($context['coordinator'], $context['foreignSales'], false);
+
+        $this->actingAs($context['coordinator'])
+            ->get(route('sales-pocketbook.index', ['tab' => 'lead']))
+            ->assertOk()
+            ->assertSee('Lead Sales Lain');
+
+        $response = $this->actingAs($context['coordinator'])
+            ->get(route('coordinator-leads.export'))
+            ->assertOk();
+        $workbook = IOFactory::load($response->baseResponse->getFile()->getPathname());
+        $rows = collect($workbook->getActiveSheet()->toArray());
+
+        $this->assertTrue($rows->flatten()->contains('Lead Sales Lain'));
+    }
+
+    public function test_br53_view_only_agenda_grant_renders_detail_but_forbids_submitted_correction(): void
+    {
+        Storage::fake('agenda_evidence');
+        $context = $this->context();
+        $agenda = $this->agenda($context['foreignSales'], $context['project'], 'Agenda Grant', 'planned');
+        $plan = SalesDailyPlan::create([
+            'branch_id' => $context['branch']->id,
+            'sales_user_id' => $context['foreignSales']->id,
+            'work_date' => today(),
+            'status' => 'submitted',
+        ]);
+        $agenda->update(['daily_plan_id' => $plan->id]);
+        $this->grant($context['coordinator'], $context['foreignSales'], false, 'sales_daily_plans');
+
+        $this->actingAs($context['coordinator'])
+            ->get(route('sales-agendas.show', $agenda))
+            ->assertOk()
+            ->assertSee('Agenda Grant');
+
+        $this->actingAs($context['coordinator'])
+            ->patch(route('sales-agendas.update', $agenda), [
+                'activity_result' => 'Tidak boleh',
+                'expected_updated_at' => app(OptimisticLockService::class)->token($agenda),
+            ])
+            ->assertForbidden();
+
+        $this->assertSame('planned', $agenda->fresh()->status);
+        $this->assertNull($agenda->fresh()->activity_result);
+    }
+
+    public function test_br53_edit_agenda_grant_updates_submitted_agenda(): void
+    {
+        Storage::fake('agenda_evidence');
+        $context = $this->context();
+        $agenda = $this->agenda($context['foreignSales'], $context['project'], 'Agenda Grant Edit', 'planned');
+        $plan = SalesDailyPlan::create([
+            'branch_id' => $context['branch']->id,
+            'sales_user_id' => $context['foreignSales']->id,
+            'work_date' => today(),
+            'status' => 'submitted',
+        ]);
+        $agenda->update(['daily_plan_id' => $plan->id]);
+        $this->grant($context['coordinator'], $context['foreignSales'], true, 'sales_daily_plans');
+        Storage::disk('agenda_evidence')->put('grant-edit.jpg', 'evidence');
+        $agenda->evidence()->create([
+            'uploaded_by_user_id' => $context['foreignSales']->id,
+            'storage_path' => 'grant-edit.jpg',
+            'original_name' => 'grant-edit.jpg',
+            'mime_type' => 'image/jpeg',
+            'width' => 10,
+            'height' => 10,
+            'size_bytes' => 8,
+            'sha256' => hash('sha256', 'evidence'),
+        ]);
+
+        $this->actingAs($context['coordinator'])
+            ->patch(route('sales-agendas.update', $agenda), [
+                'activity_result' => 'Hasil agenda diperbaiki',
+                'expected_updated_at' => app(OptimisticLockService::class)->token($agenda),
+            ])
+            ->assertRedirect();
+
+        $this->assertDatabaseHas('content_items', [
+            'id' => $agenda->id,
+            'activity_result' => 'Hasil agenda diperbaiki',
+            'status' => 'done',
+        ]);
+    }
+
+    public function test_br53_missing_expiry_returns_422_with_inline_error(): void
+    {
+        $context = $this->context();
+        $superadmin = $this->user('superadmin', $context['branch'], 'Superadmin');
+
+        $this->actingAs($superadmin)
+            ->from(route('admin.access-grants.index'))
+            ->post(route('admin.access-grants.store'), [
+                'grantee_user_id' => $context['coordinator']->id,
+                'subject_user_id' => $context['foreignSales']->id,
+                'module' => 'sales_leads',
+                'can_view' => 1,
+                'can_edit' => 0,
+                'reason' => 'Cuti',
+            ])
+            ->assertSessionHasErrors('expires_at');
+
+        $this->assertDatabaseCount('access_grants', 0);
+    }
 
     public function test_br53_expired_grant_is_not_active_at_query_time(): void
     {
@@ -154,5 +273,26 @@ class AccessGrantScopeTest extends TestCase
     private function lead(User $sales, LeadMaster $project, string $name): SalesLead
     {
         return SalesLead::create(['branch_id' => $project->branch_id, 'project_id' => $project->id, 'sales_user_id' => $sales->id, 'lead_date' => today(), 'customer_name' => $name, 'phone' => '081234567890', 'source' => 'Online', 'platform' => 'Instagram', 'current_status' => 'no_response', 'created_by' => $sales->id, 'updated_by' => $sales->id]);
+    }
+
+    private function agenda(User $sales, LeadMaster $project, string $title, string $status): ContentItem
+    {
+        return ContentItem::create([
+            'branch_id' => $project->branch_id,
+            'project_name' => $project->project_name,
+            'sales_project_id' => $project->id,
+            'item_type' => 'agenda',
+            'agenda_type' => ContentItem::SALES_AGENDA_TYPE,
+            'visibility' => 'personal',
+            'title' => $title,
+            'sales_activity_category' => 'Follow-up',
+            'scheduled_date' => today(),
+            'start_time' => '09:00:00',
+            'end_time' => '10:00:00',
+            'duration_minutes' => 60,
+            'status' => $status,
+            'owner_user_id' => $sales->id,
+            'created_by' => $sales->id,
+        ]);
     }
 }

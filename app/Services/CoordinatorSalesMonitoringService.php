@@ -43,7 +43,7 @@ class CoordinatorSalesMonitoringService
 
     public function weeklyIncompleteAgendas(User $actor, ?CarbonImmutable $referenceDate = null)
     {
-        abort_unless($actor->isSuperadmin() || $this->coordinatorTeam->isCoordinator($actor), 403);
+        abort_unless($this->coordinatorTeam->isCoordinator($actor), 403);
 
         $today = ($referenceDate ?? CarbonImmutable::today(config('app.timezone')))->startOfDay();
         $scope = $this->scope($actor);
@@ -77,7 +77,7 @@ class CoordinatorSalesMonitoringService
 
     public function todayWorkspace(User $actor, ?CarbonImmutable $referenceDate = null, ?int $requestedSalesId = null): array
     {
-        abort_unless($actor->isSuperadmin() || $this->coordinatorTeam->isCoordinator($actor), 403);
+        abort_unless($this->coordinatorTeam->isCoordinator($actor), 403);
 
         $date = ($referenceDate ?? CarbonImmutable::today(config('app.timezone')))->startOfDay();
         $scope = $this->scope($actor);
@@ -122,7 +122,7 @@ class CoordinatorSalesMonitoringService
 
     public function salesDetail(User $actor, int $salesId, ?CarbonImmutable $selectedDate = null): array
     {
-        abort_unless($actor->isSuperadmin() || $this->coordinatorTeam->isCoordinator($actor), 403);
+        abort_unless($this->coordinatorTeam->isCoordinator($actor), 403);
 
         $scope = $this->scope($actor);
         $sales = $this->salesUsers($actor, $scope)->firstWhere('id', $salesId);
@@ -170,7 +170,7 @@ class CoordinatorSalesMonitoringService
 
     public function resolve(User $actor, array $filters, bool $paginate = true): array
     {
-        abort_unless($actor->isSuperadmin() || $this->coordinatorTeam->isCoordinator($actor), 403);
+        abort_unless($this->coordinatorTeam->isCoordinator($actor), 403);
 
         $period = $this->period($filters);
         $scope = $this->scope($actor);

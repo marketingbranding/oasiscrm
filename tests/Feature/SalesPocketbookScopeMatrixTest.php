@@ -332,10 +332,10 @@ class SalesPocketbookScopeMatrixTest extends TestCase
         }
     }
 
-    public function test_br55_superadmin_queue_owned_by_coordinator_is_read_only_on_lead_workspace_http(): void
+    public function test_br55_superadmin_queue_page_is_read_only_for_assigned_entries_http(): void
     {
         $context = $this->context();
-        $queue = SalesLeadUnownedQueue::create([
+        SalesLeadUnownedQueue::create([
             'sales_lead_id' => $context['lead']->id,
             'former_sales_user_id' => $context['sales']->id,
             'queue_coordinator_user_id' => $context['coordinator']->id,
@@ -343,17 +343,44 @@ class SalesPocketbookScopeMatrixTest extends TestCase
             'status' => 'open',
         ]);
         $superadmin = $this->user('superadmin', $context['branch'], 'Superadmin');
-        $superadmin->refresh();
-        $this->assertTrue($superadmin->isSuperadmin());
-        $this->assertTrue($superadmin->hasPermission('sales_pocketbook.view_all'));
 
-        $response = $this->actingAs($superadmin)
-            ->get(route('sales-pocketbook.index', ['tab' => 'lead']))
-            ->assertOk();
-
+        $response = $this->actingAs($superadmin)->get(route('sales-leads.unowned-queue'))->assertOk();
         $content = html_entity_decode($response->getContent());
-        $this->assertStringContainsString('Ditangani', $content);
+        $this->assertStringContainsString('Ditangani Koordinator Tim', $content);
         $this->assertStringNotContainsString('name="queue_id"', $content);
+    }
+
+    public function test_br55_coordinator_queue_page_shows_owned_queue_and_transfer_form_http(): void
+    {
+        $context = $this->context();
+        SalesLeadUnownedQueue::create([
+            'sales_lead_id' => $context['lead']->id,
+            'former_sales_user_id' => $context['sales']->id,
+            'queue_coordinator_user_id' => $context['coordinator']->id,
+            'last_active_coordinator_user_id' => $context['coordinator']->id,
+            'status' => 'open',
+        ]);
+
+        $this->actingAs($context['coordinator'])->get(route('sales-leads.unowned-queue'))
+            ->assertOk()->assertSee('Ditangani Koordinator Tim')->assertDontSee('name="queue_id"', false);
+    }
+
+    public function test_br55_non_coordinator_roles_cannot_open_queue_page_http(): void
+    {
+        $context = $this->context();
+
+        foreach ([$context['branchManager'], $context['supervisor'], $context['sales']] as $actor) {
+            $this->actingAs($actor)->get(route('sales-leads.unowned-queue'))->assertForbidden();
+        }
+    }
+
+    public function test_superadmin_sales_pocketbook_keeps_original_monitoring_view_http(): void
+    {
+        $context = $this->context();
+        $superadmin = $this->user('superadmin', $context['branch'], 'Superadmin');
+
+        $this->actingAs($superadmin)->get(route('sales-pocketbook.index', ['tab' => 'leads']))
+            ->assertOk()->assertViewIs('crm.sales-pocketbook.index');
     }
 
     public function test_supervisor_admin_and_branch_manager_cannot_update_sales_agendas(): void

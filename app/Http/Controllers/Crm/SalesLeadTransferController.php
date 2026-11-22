@@ -6,13 +6,21 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Crm\TransferSalesLeadRequest;
 use App\Models\SalesLeadUnownedQueue;
 use App\Models\User;
+use App\Services\AppSettingResolver;
+use App\Services\CoordinatorLeadTeamService;
 use App\Services\SalesLeadTransferService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
+use Illuminate\View\View;
 
 class SalesLeadTransferController extends Controller
 {
-    public function __construct(private readonly SalesLeadTransferService $transfers) {}
+    public function __construct(
+        private readonly SalesLeadTransferService $transfers,
+        private readonly CoordinatorLeadTeamService $teams,
+        private readonly AppSettingResolver $settings,
+    ) {}
 
     public function store(TransferSalesLeadRequest $request): JsonResponse|RedirectResponse
     {
@@ -31,16 +39,29 @@ class SalesLeadTransferController extends Controller
             : redirect()->back()->with('success', count($transfers).' Lead berhasil dialihkan.');
     }
 
-    public function queue(): JsonResponse
+    public function queue(Request $request): View|JsonResponse
     {
-        $user = request()->user();
-        abort_unless($user->hasPermission('sales_pocketbook.manage_team') || $user->isSuperadmin(), 403);
+        $user = $request->user();
+        abort_unless($user->isSuperadmin() || ($this->teams->isCoordinator($user) && $user->hasPermission('sales_pocketbook.manage_team')), 403);
 
-        $query = SalesLeadUnownedQueue::query()->with(['lead', 'formerSales', 'coordinator'])->where('status', 'open');
+        $query = SalesLeadUnownedQueue::query()->with(['lead.sales', 'lead.project', 'formerSales', 'coordinator'])->where('status', 'open');
         if (! $user->isSuperadmin()) {
-            $query->where('queue_coordinator_user_id', $user->id);
+            $query->where(function ($scope) use ($user): void {
+                $scope->where('queue_coordinator_user_id', $user->id)->orWhereNull('queue_coordinator_user_id');
+            });
         }
+        $queue = $query->latest()->get();
+        $targets = $user->isSuperadmin()
+            ? User::query()->whereHas('role', fn ($role) => $role->where('slug', 'sales'))->where('account_status', 'active')->where('is_active', true)->orderBy('name')->get()
+            : $this->teams->currentSales($user);
+        $data = [
+            'queue' => $queue,
+            'queueTransferTargets' => $targets,
+            'transferReasons' => $this->settings->value('sales_lead.transfer_reasons') ?? [],
+        ];
 
-        return response()->json(['queue' => $query->latest()->get()]);
+        return $request->expectsJson()
+            ? response()->json(['queue' => $queue])
+            : view('crm.sales-pocketbook.unowned-queue', $data);
     }
 }

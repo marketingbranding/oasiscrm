@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Models\AccessGrant;
 use App\Models\AiChatConversation;
 use App\Models\AppSetting;
 use App\Models\Branch;
@@ -14,7 +15,9 @@ use App\Models\KonsumenProgressSyncStatus;
 use App\Models\LeadMaster;
 use App\Models\Permission;
 use App\Models\Role;
+use App\Models\SalesLead;
 use App\Models\User;
+use App\Services\AccessGrantService;
 use App\Services\AiProviderService;
 use App\Services\AiToolRegistry;
 use App\Services\KonsumenProgressSyncService;
@@ -28,6 +31,78 @@ use Tests\TestCase;
 class AiChatTest extends TestCase
 {
     use RefreshDatabase;
+
+    public function test_br53_ai_search_customer_honors_explicit_branch_filter(): void
+    {
+        $branchOne = Branch::create(['name' => 'Jepara', 'code' => 'JPR', 'is_active' => true]);
+        $branchTwo = Branch::create(['name' => 'Kudus', 'code' => 'KDS', 'is_active' => true]);
+        $projectOne = $this->makeProject($branchOne, 'Oasis Jepara');
+        $projectTwo = $this->makeProject($branchTwo, 'Oasis Kudus');
+        $salesRole = Role::query()->where('slug', 'sales')->firstOrFail();
+        $salesOne = User::factory()->create(['role_id' => $salesRole->id, 'branch_id' => $branchOne->id, 'password_changed_at' => now()]);
+        $salesTwo = User::factory()->create(['role_id' => $salesRole->id, 'branch_id' => $branchTwo->id, 'password_changed_at' => now()]);
+        foreach ([[$salesOne, $projectOne], [$salesTwo, $projectTwo]] as [$sales, $project]) {
+            $sales->assignedProjects()->attach($project, ['is_primary' => true, 'is_active' => true]);
+            SalesLead::create([
+                'branch_id' => $project->branch_id,
+                'project_id' => $project->id,
+                'sales_user_id' => $sales->id,
+                'lead_date' => today(),
+                'customer_name' => 'Nama Sama',
+                'phone' => '081234567890',
+                'created_by' => $sales->id,
+                'updated_by' => $sales->id,
+            ]);
+        }
+        [, $superadmin] = $this->superadminUser();
+
+        $result = app(AiToolRegistry::class)->execute('search_customer', [
+            'query' => 'Nama Sama',
+            'branch_id' => $branchTwo->id,
+        ], $superadmin);
+
+        $rows = collect($result['results'])->where('source_module', 'Lead Sales');
+        $this->assertCount(1, $rows);
+        $this->assertSame($branchTwo->name, $rows->first()['branch']);
+    }
+
+    public function test_br53_ai_search_customer_hides_foreign_lead_without_grant(): void
+    {
+        [$branch, $user, $lead] = $this->br53LeadSearchContext();
+
+        $result = app(AiToolRegistry::class)->execute('search_customer', ['query' => 'Lead Rahasia'], $user);
+
+        $this->assertFalse(collect($result['results'])->contains(fn (array $row): bool => ($row['customer_name'] ?? null) === $lead->customer_name));
+    }
+
+    public function test_br53_ai_search_customer_exposes_foreign_lead_with_active_sales_leads_grant(): void
+    {
+        [$branch, $user, $lead, $subject] = $this->br53LeadSearchContext();
+        $this->grantAiLeadAccess($user, $subject);
+
+        $result = app(AiToolRegistry::class)->execute('search_customer', ['query' => 'Lead Rahasia'], $user);
+
+        $row = collect($result['results'])->first(fn (array $item): bool => ($item['customer_name'] ?? null) === $lead->customer_name);
+        $this->assertNotNull($row);
+        $this->assertSame('Lead Sales', $row['source_module']);
+        $this->assertArrayNotHasKey('phone', $row);
+        $this->assertArrayNotHasKey('address', $row);
+        $this->assertArrayNotHasKey('nik', $row);
+    }
+
+    public function test_br53_ai_search_customer_removes_foreign_lead_after_grant_revoke(): void
+    {
+        [$branch, $user, $lead, $subject] = $this->br53LeadSearchContext();
+        $grant = $this->grantAiLeadAccess($user, $subject);
+
+        $this->assertTrue(collect(app(AiToolRegistry::class)->execute('search_customer', ['query' => 'Lead Rahasia'], $user)['results'])
+            ->contains(fn (array $row): bool => ($row['customer_name'] ?? null) === $lead->customer_name));
+
+        app(AccessGrantService::class)->revoke($this->superadminUser()[1], $grant, 'Selesai');
+        $result = app(AiToolRegistry::class)->execute('search_customer', ['query' => 'Lead Rahasia'], $user);
+
+        $this->assertFalse(collect($result['results'])->contains(fn (array $row): bool => ($row['customer_name'] ?? null) === $lead->customer_name));
+    }
 
     public function test_br70_c06_all_ai_tools_payloads_filter_personal_data(): void
     {
@@ -1396,6 +1471,55 @@ class AiChatTest extends TestCase
         ]);
 
         return [$role, $user];
+    }
+
+    /** @return array{0: Branch, 1: User, 2: SalesLead, 3: User} */
+    private function br53LeadSearchContext(): array
+    {
+        $branch = Branch::create(['name' => 'Jepara', 'code' => 'JPR', 'is_active' => true]);
+        $project = $this->makeProject($branch, 'Oasis Jepara');
+        $role = Role::create(['name' => 'BR53 Coordinator', 'slug' => 'br53_coordinator', 'is_active' => true]);
+        $role->permissions()->sync(Permission::whereIn('slug', [
+            'sales_pocketbook.view_team',
+            'sales_pocketbook.export_team',
+        ])->pluck('id'));
+        $user = User::factory()->create([
+            'role_id' => $role->id,
+            'branch_id' => $branch->id,
+            'password_changed_at' => now(),
+        ]);
+        $subject = User::factory()->create([
+            'role_id' => Role::query()->where('slug', 'sales')->value('id'),
+            'branch_id' => $branch->id,
+            'password_changed_at' => now(),
+        ]);
+        $subject->assignedProjects()->attach($project, ['is_primary' => true, 'is_active' => true]);
+        $lead = SalesLead::create([
+            'branch_id' => $branch->id,
+            'project_id' => $project->id,
+            'sales_user_id' => $subject->id,
+            'lead_date' => today(),
+            'customer_name' => 'Lead Rahasia',
+            'phone' => '081234567890',
+            'created_by' => $subject->id,
+            'updated_by' => $subject->id,
+        ]);
+
+        return [$branch, $user, $lead, $subject];
+    }
+
+    private function grantAiLeadAccess(User $grantee, User $subject): AccessGrant
+    {
+        return AccessGrant::create([
+            'grantee_user_id' => $grantee->id,
+            'subject_user_id' => $subject->id,
+            'module' => 'sales_leads',
+            'can_view' => true,
+            'can_edit' => false,
+            'expires_at' => now()->addDays(2),
+            'reason' => 'BR-53',
+            'granted_by' => $grantee->id,
+        ]);
     }
 
     private function pipelineCustomer(Branch $branch, string $idKavling, string $name, string $stage): void

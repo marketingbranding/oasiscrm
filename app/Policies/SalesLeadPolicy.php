@@ -82,6 +82,16 @@ class SalesLeadPolicy
             return false;
         }
 
+        $organizationScope = app(OrganizationScopeService::class);
+        if ($user->hasPrimaryRole('sales_coordinator')
+            && $user->hasPermission('sales_pocketbook.manage_team')
+            && $organizationScope->hasSpecialMonitoringGrant($user, 'sales_leads', (int) $lead->sales_user_id)
+            && in_array((int) $lead->sales_user_id, $organizationScope->specialGrantUserIds($user, 'sales_leads', 'edit'), true)
+            && app(WorkspaceAccessService::class)->canEditBranch($user, (int) $lead->branch_id)
+            && in_array((int) $lead->project_id, app(WorkspaceAccessService::class)->accessibleProjectIds($user), true)) {
+            return true;
+        }
+
         if (FeatureFlag::enabled('org_hierarchical_monitoring')
             && $this->isReadOnlySalesMonitor($user)
             && ! $this->canEditHistoricalOwnedLead($user, $lead)) {

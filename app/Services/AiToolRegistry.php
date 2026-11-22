@@ -9,6 +9,7 @@ use App\Models\DanaTalanganSyncStatus;
 use App\Models\DatabaseSheetRecord;
 use App\Models\DatabaseSheetSyncStatus;
 use App\Models\KonsumenProgressSyncStatus;
+use App\Models\SalesLead;
 use App\Models\User;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Builder;
@@ -51,7 +52,7 @@ class AiToolRegistry
                 'date_to' => ['type' => 'string', 'description' => 'Tanggal akhir YYYY-MM-DD. Opsional.'],
                 'branch_id' => ['type' => 'integer', 'description' => 'ID cabang. Hanya berlaku untuk superadmin/pusat.'],
             ]),
-            $this->tool('search_customer', 'Cari konsumen/customer berdasarkan nama di pipeline, database sheet, dan Dana Talangan.', [
+            $this->tool('search_customer', 'Cari konsumen/customer berdasarkan nama di pipeline, Lead Sales, database sheet, dan Dana Talangan.', [
                 'query' => ['type' => 'string', 'description' => 'Nama konsumen atau kata kunci.'],
                 'branch_id' => ['type' => 'integer', 'description' => 'ID cabang. Hanya berlaku untuk superadmin/pusat.'],
             ], ['query']),
@@ -537,6 +538,36 @@ class AiToolRegistry
                 ->values();
         }
 
+        $leads = collect();
+        if ($user->hasScopedPermission('sales_pocketbook')) {
+            $leads = SalesLead::query()
+                ->activeForLeadViews()
+                ->when($branchId, fn (Builder $query) => $query->where('branch_id', $branchId))
+                ->whereIn('sales_user_id', $this->organizationScope->visibleUserIds($user, 'sales_pocketbook', 'view', 'sales_leads'))
+                ->whereIn('branch_id', $this->organizationScope->branchIds($user, 'sales_pocketbook', 'view', 'sales_leads'))
+                ->whereIn('project_id', $this->organizationScope->projectIds($user, 'sales_pocketbook', 'view', 'sales_leads'))
+                ->where(function (Builder $query) use ($term): void {
+                    $query->where('customer_name', 'like', '%'.$term.'%')
+                        ->orWhere('source', 'like', '%'.$term.'%')
+                        ->orWhere('platform', 'like', '%'.$term.'%');
+                })
+                ->with(['branch:id,name', 'project:id,project_name', 'sales:id,name'])
+                ->latest('lead_date')
+                ->limit(10)
+                ->get()
+                ->map(fn (SalesLead $lead): array => [
+                    'source_module' => 'Lead Sales',
+                    'customer_name' => $lead->customer_name,
+                    'project_name' => $lead->project?->project_name,
+                    'branch' => $lead->branch?->name,
+                    'sales' => $lead->sales?->name,
+                    'lead_date' => $lead->lead_date?->toDateString(),
+                    'status' => $lead->current_status?->value ?? $lead->current_status,
+                    'source' => $lead->effective_source,
+                    'platform' => $lead->platform,
+                ]);
+        }
+
         $dana = collect();
         if ($user->hasPermission('bridge_fund.view') && $user->hasScopedPermission('bridge_fund')) {
             $dana = DanaTalangan::query()
@@ -562,7 +593,7 @@ class AiToolRegistry
             'branch_id' => $branchId,
             'branch' => $this->branchName($branchId),
             'query' => $queryText,
-            'results' => $pipeline->concat($database)->concat($dana)->take(20)->values()->all(),
+            'results' => $pipeline->concat($database)->concat($leads)->concat($dana)->take(20)->values()->all(),
             'freshness' => [
                 'database' => $this->syncMeta('database', $branchId),
                 'konsumen_progress' => $this->syncMeta('konsumen_progress', $branchId ?: $user->branch_id),

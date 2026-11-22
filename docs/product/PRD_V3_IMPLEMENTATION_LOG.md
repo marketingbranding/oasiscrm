@@ -36,7 +36,7 @@ PRD sumber kebenaran: `docs/product/PRD_OASIS_CRM_V3.md` versi 3.3 (D30–D33)
 | WP-1.9 | 1 | Privasi AI dan backup terpisah | Selesai implementasi; perlu verifikasi operator restore | BR-70–BR-73, BR-81 |
 | WP-1.10 | 1 | Penutup Fase 1: changelog, dokumentasi, verifikasi penuh | Selesai; laporan fase dan operator handoff tersedia; cutover produksi tetap menunggu operator | Semua fase 1 |
 | WP-2.1 | 2 | Alih Lead dan antrean lead tanpa pemilik | Berjalan | BR-54–BR-55 |
-| WP-2.2 | 2 | Izin Akses Khusus | Belum mulai | BR-53 |
+| WP-2.2 | 2 | Izin Akses Khusus | Selesai; grant Lead Sales/agenda dengan expiry, turunan, workspace, edit, revoke, export, dan AI scope; commit `32a4c37`, coverage `5713bd2`, `6a8f034`, `e557619`; menunggu merge | BR-53 |
 | WP-2.3 | 2 | Penanda perhatian | Belum mulai | §7.4 |
 | WP-2.4 | 2 | Status peralihan cabang dan laporan paritas | Belum mulai | §9.3 |
 | WP-2.5 | 2 | Dana Talangan di OASIS dan cicilan | Belum mulai | BR-42–BR-44 |
@@ -50,6 +50,13 @@ PRD sumber kebenaran: `docs/product/PRD_OASIS_CRM_V3.md` versi 3.3 (D30–D33)
 | WP-3.5 | 3 | Dashboard Pimpinan dan laporan rapat | Belum mulai | §7.12 |
 | WP-3.6 | 3 | Pensiun modul transisi per cabang lulus | Belum mulai; operator menjalankan cutover | §9.3 |
 | WP-3.7 | 3 | Penutup akhir: runbook cutover, dokumentasi, log | Belum mulai | Semua fase |
+
+## Keputusan WP-2.2
+
+- Subjek grant memakai `subject_user_id` dan `include_descendants`; kasus utama pengganti Koordinator saat cuti.
+- Modul hanya `sales_leads` dan `sales_daily_plans`; `can_edit` hanya Koordinator Sales, tanpa Alih Lead.
+- `expires_at` wajib, dibatasi `access_grants.max_days` default 90 hari; grant aktif dievaluasi saat query.
+- Cabut memakai `revoked_at`, `revoked_by`, alasan, audit, dan notifikasi in-app. Grant tidak melewati workspace grantee dan tidak bergantung pada flag pemantauan hierarki.
 
 ## WP-1.6 — Tahap Lead v3
 

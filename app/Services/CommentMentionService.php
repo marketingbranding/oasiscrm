@@ -113,7 +113,7 @@ class CommentMentionService
             return [];
         }
 
-        $ids = $this->scope->visibleUserIds($viewer, $module);
+        $ids = $this->scope->visibleUserIds($viewer, $module, 'view', $module === 'sales_pocketbook' ? 'sales_leads' : null);
         $ids[] = (int) $viewer->id;
         if ($viewer->supervisor_user_id) {
             $ids[] = (int) $viewer->supervisor_user_id;

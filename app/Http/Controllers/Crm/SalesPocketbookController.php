@@ -106,7 +106,7 @@ class SalesPocketbookController extends Controller
             : null;
         $visibleSalesIds = $managerHierarchy
             ? $managerHierarchy['sales']->pluck('id')->map(fn ($id) => (int) $id)->all()
-            : $this->organizationScope->visibleUserIds($user, 'sales_pocketbook');
+            : $this->organizationScope->visibleUserIds($user, 'sales_pocketbook', 'view', 'sales_leads');
         $canonicalScope = $managerHierarchy ? ['owner_ids' => $visibleSalesIds, 'branch_ids' => $allowedBranchIds, 'project_ids' => $allowedProjectIds] : null;
         $branches = $this->workspaceAccess->accessibleBranches($user)->whereIn('id', $allowedBranchIds)->values();
         $projects = $this->workspaceAccess->accessibleProjects($user)->whereIn('id', $allowedProjectIds)->where('is_active', true)->values();
@@ -381,7 +381,7 @@ class SalesPocketbookController extends Controller
             : null;
         $visibleSalesIds = $managerHierarchy
             ? $managerHierarchy['sales']->pluck('id')->map(fn ($id) => (int) $id)->all()
-            : $this->organizationScope->visibleUserIds($user, 'sales_pocketbook', 'export');
+            : $this->organizationScope->visibleUserIds($user, 'sales_pocketbook', 'export', 'sales_leads');
         $canonicalScope = $managerHierarchy ? ['owner_ids' => $visibleSalesIds, 'branch_ids' => $allowedBranchIds, 'project_ids' => $allowedProjectIds] : null;
         $branches = $this->workspaceAccess->accessibleBranches($user)->whereIn('id', $allowedBranchIds)->values();
         $projects = $this->workspaceAccess->accessibleProjects($user)->whereIn('id', $allowedProjectIds)->where('is_active', true)->values();

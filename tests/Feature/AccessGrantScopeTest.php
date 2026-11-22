@@ -6,6 +6,7 @@ use App\Models\AccessGrant;
 use App\Models\Branch;
 use App\Models\ContentItem;
 use App\Models\LeadMaster;
+use App\Models\OrganizationAssignment;
 use App\Models\Role;
 use App\Models\SalesCoordinatorSales;
 use App\Models\SalesDailyPlan;
@@ -137,6 +138,80 @@ class AccessGrantScopeTest extends TestCase
             ->assertSessionHasErrors('expires_at');
 
         $this->assertDatabaseCount('access_grants', 0);
+    }
+
+    public function test_br53_include_descendants_true_includes_subordinate_leads(): void
+    {
+        $context = $this->context();
+        $subordinate = $this->user('sales', $context['branch'], 'Sales Turunan');
+        $subordinate->assignedProjects()->attach($context['project'], ['is_primary' => true, 'is_active' => true]);
+        OrganizationAssignment::create([
+            'user_id' => $subordinate->id,
+            'parent_user_id' => $context['foreignSales']->id,
+            'relationship_type' => OrganizationAssignment::REPORTS_TO,
+            'branch_id' => $context['branch']->id,
+            'started_at' => today(),
+            'is_active' => true,
+            'is_primary' => true,
+            'source' => 'test',
+        ]);
+        $subordinateLead = $this->lead($subordinate, $context['project'], 'Lead Turunan');
+        $grant = $this->grant($context['coordinator'], $context['foreignSales'], false);
+        $grant->update(['include_descendants' => true]);
+
+        $this->actingAs($context['coordinator'])
+            ->get(route('sales-pocketbook.index', ['tab' => 'lead']))
+            ->assertOk()
+            ->assertSee('Lead Sales Lain')
+            ->assertSee($subordinateLead->customer_name);
+    }
+
+    public function test_br53_include_descendants_false_excludes_subordinate_leads(): void
+    {
+        $context = $this->context();
+        $subordinate = $this->user('sales', $context['branch'], 'Sales Turunan');
+        $subordinate->assignedProjects()->attach($context['project'], ['is_primary' => true, 'is_active' => true]);
+        OrganizationAssignment::create([
+            'user_id' => $subordinate->id,
+            'parent_user_id' => $context['foreignSales']->id,
+            'relationship_type' => OrganizationAssignment::REPORTS_TO,
+            'branch_id' => $context['branch']->id,
+            'started_at' => today(),
+            'is_active' => true,
+            'is_primary' => true,
+            'source' => 'test',
+        ]);
+        $subordinateLead = $this->lead($subordinate, $context['project'], 'Lead Turunan');
+        $this->grant($context['coordinator'], $context['foreignSales'], false);
+
+        $this->actingAs($context['coordinator'])
+            ->get(route('sales-pocketbook.index', ['tab' => 'lead']))
+            ->assertOk()
+            ->assertSee('Lead Sales Lain')
+            ->assertDontSee($subordinateLead->customer_name);
+    }
+
+    public function test_br53_out_of_workspace_subject_denies_lead_and_agenda_access(): void
+    {
+        Storage::fake('agenda_evidence');
+        $context = $this->context();
+        $outsideBranch = Branch::create(['name' => 'Magelang', 'code' => 'MGL', 'is_active' => true]);
+        $outsideProject = LeadMaster::create(['branch_id' => $outsideBranch->id, 'project_name' => 'Magelang Project', 'is_active' => true]);
+        $outsideSales = $this->user('sales', $outsideBranch, 'Sales Luar Workspace');
+        $outsideSales->assignedProjects()->attach($outsideProject, ['is_primary' => true, 'is_active' => true]);
+        $outsideLead = $this->lead($outsideSales, $outsideProject, 'Lead Luar Workspace');
+        $outsideAgenda = $this->agenda($outsideSales, $outsideProject, 'Agenda Luar Workspace', 'planned');
+        $this->grant($context['coordinator'], $outsideSales, true);
+        $this->grant($context['coordinator'], $outsideSales, true, 'sales_daily_plans');
+
+        $this->actingAs($context['coordinator'])->get(route('sales-leads.edit', $outsideLead))->assertForbidden();
+        $this->actingAs($context['coordinator'])->get(route('sales-agendas.show', $outsideAgenda))->assertForbidden();
+        $this->actingAs($context['coordinator'])->get(route('sales-pocketbook.index', ['tab' => 'lead']))
+            ->assertOk()
+            ->assertDontSee('Lead Luar Workspace');
+        $response = $this->actingAs($context['coordinator'])->get(route('coordinator-leads.export'))->assertOk();
+        $rows = collect(IOFactory::load($response->baseResponse->getFile()->getPathname())->getActiveSheet()->toArray());
+        $this->assertFalse($rows->flatten()->contains('Lead Luar Workspace'));
     }
 
     public function test_br53_expired_grant_is_not_active_at_query_time(): void

@@ -26,10 +26,10 @@ class StoreAccessGrantRequest extends FormRequest
             'subject_user_id' => ['required', 'integer', 'exists:users,id'],
             'include_descendants' => ['boolean'],
             'module' => ['required', Rule::in(AccessGrantService::MODULES)],
-            'can_view' => ['boolean'],
             'can_edit' => ['boolean'],
             'expires_at' => ['required', 'date'],
             'reason' => ['required', 'string', 'max:2000'],
+            'can_view' => ['required', 'boolean'],
         ];
     }
 

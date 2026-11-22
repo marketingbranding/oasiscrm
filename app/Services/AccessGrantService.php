@@ -21,10 +21,14 @@ class AccessGrantService
 
     public function create(User $actor, array $data): AccessGrant
     {
+        abort_unless($actor->isSuperadmin(), 403);
         $expiresAt = $data['expires_at'];
         $maxDays = (int) $this->settings->value('access_grants.max_days');
         if (! $expiresAt instanceof CarbonInterface || $expiresAt->lte(now()) || $expiresAt->gt(now()->addDays($maxDays))) {
             throw ValidationException::withMessages(['expires_at' => "Masa berlaku wajib di antara sekarang dan {$maxDays} hari."]);
+        }
+        if (($data['can_edit'] ?? false) && ! ($data['can_view'] ?? false)) {
+            throw ValidationException::withMessages(['can_edit' => 'Akses ubah wajib disertai akses lihat.']);
         }
         if (($data['can_edit'] ?? false) && ! $data['grantee']->hasPrimaryRole('sales_coordinator')) {
             throw ValidationException::withMessages(['can_edit' => 'Akses ubah hanya dapat diberikan kepada Koordinator Sales.']);
@@ -49,6 +53,7 @@ class AccessGrantService
 
     public function revoke(User $actor, AccessGrant $grant, string $reason): void
     {
+        abort_unless($actor->isSuperadmin(), 403);
         DB::transaction(function () use ($actor, $grant, $reason): void {
             $grant->update(['revoked_at' => now(), 'revoked_by' => $actor->id, 'revocation_reason' => $reason]);
             ActivityLog::create(['causer_id' => $actor->id, 'subject_type' => AccessGrant::class, 'subject_id' => $grant->id, 'event' => 'access_grant_revoked', 'description' => 'Izin Akses Khusus dicabut.', 'properties' => ['reason' => $reason]]);
@@ -59,7 +64,7 @@ class AccessGrantService
     /** @return array<int, AccessGrant> */
     public function activeFor(User $grantee, string $module): array
     {
-        return AccessGrant::query()->active()->where('grantee_user_id', $grantee->id)->where('module', $module)->get()->all();
+        return AccessGrant::query()->active()->where('grantee_user_id', $grantee->id)->whereIn('module', AccessGrant::grantModulesForScope($module))->get()->all();
     }
 
     /** @return array<int> */

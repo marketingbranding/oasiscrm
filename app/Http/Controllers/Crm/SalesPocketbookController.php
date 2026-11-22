@@ -50,7 +50,7 @@ class SalesPocketbookController extends Controller
             return app(SalesAgendaController::class)->index($request);
         }
 
-        if ($user->hasPrimaryRole('sales_coordinator')) {
+        if ($user->hasPrimaryRole('sales_coordinator') || $user->isSuperadmin()) {
             return app(CoordinatorSalesLeadWorkspaceController::class)->index($request);
         }
 

@@ -8,6 +8,7 @@ use App\Models\LeadMaster;
 use App\Models\Role;
 use App\Models\SalesCoordinatorSales;
 use App\Models\SalesLead;
+use App\Models\SalesLeadUnownedQueue;
 use App\Models\User;
 use App\Services\OptimisticLockService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -298,6 +299,63 @@ class SalesPocketbookScopeMatrixTest extends TestCase
         }
     }
 
+    public function test_br54_coordinator_sees_transfer_form_and_checkbox_on_lead_workspace_http(): void
+    {
+        $context = $this->context();
+
+        $this->actingAs($context['coordinator'])
+            ->get(route('sales-pocketbook.index', ['tab' => 'lead']))
+            ->assertOk()
+            ->assertSee('Alih Lead')
+            ->assertSee('name="target_user_id"', false)
+            ->assertSee('type="checkbox"', false);
+    }
+
+    public function test_br54_non_coordinator_roles_see_no_transfer_or_queue_forms_on_lead_workspace_http(): void
+    {
+        $context = $this->context();
+        $queue = SalesLeadUnownedQueue::create([
+            'sales_lead_id' => $context['lead']->id,
+            'former_sales_user_id' => $context['sales']->id,
+            'queue_coordinator_user_id' => $context['coordinator']->id,
+            'last_active_coordinator_user_id' => $context['coordinator']->id,
+            'status' => 'open',
+        ]);
+
+        foreach ([$context['branchManager'], $context['supervisor'], $context['admin']] as $actor) {
+            $response = $this->actingAs($actor)->get(route('sales-pocketbook.index', ['tab' => 'leads']));
+
+            $response->assertOk()
+                ->assertDontSee('Alih Lead')
+                ->assertDontSee('Lead tanpa pemilik aktif')
+                ->assertDontSee('name="queue_id"', false);
+        }
+    }
+
+    public function test_br55_superadmin_queue_owned_by_coordinator_is_read_only_on_lead_workspace_http(): void
+    {
+        $context = $this->context();
+        $queue = SalesLeadUnownedQueue::create([
+            'sales_lead_id' => $context['lead']->id,
+            'former_sales_user_id' => $context['sales']->id,
+            'queue_coordinator_user_id' => $context['coordinator']->id,
+            'last_active_coordinator_user_id' => $context['coordinator']->id,
+            'status' => 'open',
+        ]);
+        $superadmin = $this->user('superadmin', $context['branch'], 'Superadmin');
+        $superadmin->refresh();
+        $this->assertTrue($superadmin->isSuperadmin());
+        $this->assertTrue($superadmin->hasPermission('sales_pocketbook.view_all'));
+
+        $response = $this->actingAs($superadmin)
+            ->get(route('sales-pocketbook.index', ['tab' => 'lead']))
+            ->assertOk();
+
+        $content = html_entity_decode($response->getContent());
+        $this->assertStringContainsString('Ditangani', $content);
+        $this->assertStringNotContainsString('name="queue_id"', $content);
+    }
+
     public function test_supervisor_admin_and_branch_manager_cannot_update_sales_agendas(): void
     {
         $context = $this->context();
@@ -321,7 +379,7 @@ class SalesPocketbookScopeMatrixTest extends TestCase
         $project = LeadMaster::create(['branch_id' => $branch->id, 'project_name' => 'Solo Project', 'is_active' => true]);
         $sales = $this->user('sales', $branch, 'Sales Tim');
         $foreignSales = $this->user('sales', $branch, 'Sales Lain');
-        $coordinator = $this->user('sales_coordinator', $branch, 'Koordinator Tim');
+        $coordinator = $this->user('sales_coordinator', $branch, 'Tim');
         $outsiderCoordinator = $this->user('sales_coordinator', $branch, 'Koordinator Lain');
         $supervisor = $this->user('supervisor', $branch, 'Supervisor Tim');
         $admin = $this->user('admin', $branch, 'Admin Cabang');

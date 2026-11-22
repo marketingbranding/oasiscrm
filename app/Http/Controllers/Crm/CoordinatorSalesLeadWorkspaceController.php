@@ -106,7 +106,7 @@ class CoordinatorSalesLeadWorkspaceController extends Controller
             ? User::query()->whereHas('role', fn ($query) => $query->where('slug', 'sales'))->where('account_status', 'active')->where('is_active', true)->get()
             : $data['transferTargets'];
         $data['unownedQueue'] = $data['canManageQueue']
-            ? SalesLeadUnownedQueue::query()->with(['lead.sales', 'lead.project'])->where('status', 'open')->when(! $request->user()->isSuperadmin(), fn ($query) => $query->where('queue_coordinator_user_id', $request->user()->id))->latest()->get()
+            ? SalesLeadUnownedQueue::query()->with(['lead.sales', 'lead.project', 'coordinator'])->where('status', 'open')->when(! $request->user()->isSuperadmin(), fn ($query) => $query->where('queue_coordinator_user_id', $request->user()->id))->latest()->get()
             : collect();
         $data['canExport'] = $request->user()->hasPermission('sales_pocketbook.export_team');
         $data['canSync'] = config('oasis.spreadsheet_sync_enabled')

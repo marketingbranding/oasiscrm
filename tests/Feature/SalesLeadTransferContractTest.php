@@ -60,7 +60,7 @@ class SalesLeadTransferContractTest extends TestCase
         $this->assertDatabaseMissing('sales_lead_unowned_queues', ['sales_lead_id' => $terminal->id]);
     }
 
-    public function test_br54_transfer_history_cannot_be_deleted(): void
+    public function test_br54_transfer_history_cannot_be_changed_or_deleted(): void
     {
         $transfer = SalesLeadTransfer::create([
             'sales_lead_id' => $this->lead()->id,
@@ -69,6 +69,13 @@ class SalesLeadTransferContractTest extends TestCase
             'actor_user_id' => $this->user('actor-delete@example.test', 'sales_coordinator')->id,
             'reason' => 'Alasan tes',
         ]);
+
+        try {
+            $transfer->update(['notes' => 'Diubah']);
+            $this->fail('Expected immutable transfer history update to fail.');
+        } catch (\LogicException) {
+            $this->assertTrue(true);
+        }
 
         $this->expectException(\LogicException::class);
         $transfer->delete();

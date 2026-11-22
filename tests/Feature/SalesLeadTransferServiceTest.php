@@ -49,6 +49,24 @@ class SalesLeadTransferServiceTest extends TestCase
         app(SalesLeadTransferService::class)->transfer($coordinator, [$lead->id], $outside, 'Tidak dapat dihubungi');
     }
 
+    public function test_br54_sales_supervisor_branch_manager_manager_and_admin_cabang_cannot_transfer_by_direct_url_or_json(): void
+    {
+        [, $source, $target] = $this->team();
+        $lead = $this->lead($source);
+
+        foreach (['sales', 'supervisor', 'branch_manager', 'manager', 'admin'] as $role) {
+            $user = $this->user("{$role}-transfer-denied@example.test", $role);
+            $payload = [
+                'lead_ids' => [$lead->id],
+                'target_user_id' => $target->id,
+                'reason' => 'Tidak dapat dihubungi',
+            ];
+
+            $this->actingAs($user)->post(route('sales-leads.transfers.store'), $payload)->assertRedirect();
+            $this->actingAs($user)->postJson(route('sales-leads.transfers.store'), $payload)->assertForbidden();
+        }
+    }
+
     public function test_br54_bulk_transfer_is_atomic_and_names_invalid_lead(): void
     {
         [$coordinator, $source, $target] = $this->team();

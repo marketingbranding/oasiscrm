@@ -35,6 +35,9 @@ class SalesLeadDeactivationQueueTest extends TestCase
         app(UserAccountService::class)->deactivate($sales, $actor);
 
         $this->assertSame(AccountStatus::Inactive, $sales->fresh()->account_status);
+        $this->actingAs($sales->fresh())->getJson(route('notifications.index'))
+            ->assertForbidden()
+            ->assertJsonPath('code', 'account_inactive');
         $this->assertNull($lead->fresh()->sales_user_id);
         $this->assertDatabaseHas('sales_lead_unowned_queues', [
             'sales_lead_id' => $lead->id,
@@ -59,6 +62,34 @@ class SalesLeadDeactivationQueueTest extends TestCase
         $this->assertSame($sales->id, $utj->fresh()->sales_user_id);
     }
 
+    public function test_br55_without_active_coordinator_leaves_queue_for_superadmin_only(): void
+    {
+        $sales = $this->user('fallback-sales@example.test', 'sales');
+        $coordinator = $this->user('fallback-coordinator@example.test', 'sales_coordinator');
+        $coordinator->update(['account_status' => AccountStatus::Inactive, 'is_active' => false]);
+        $actor = $this->user('fallback-actor@example.test', 'superadmin');
+        SalesCoordinatorSales::create([
+            'coordinator_user_id' => $coordinator->id,
+            'sales_user_id' => $sales->id,
+            'is_active' => false,
+            'started_at' => Carbon::today()->subMonths(2),
+            'ended_at' => Carbon::yesterday(),
+        ]);
+        $lead = $this->lead($sales);
+
+        app(UserAccountService::class)->deactivate($sales, $actor);
+
+        $this->assertDatabaseHas('sales_lead_unowned_queues', [
+            'sales_lead_id' => $lead->id,
+            'queue_coordinator_user_id' => null,
+            'status' => 'open',
+        ]);
+        $this->assertTrue($actor->fresh()->isSuperadmin());
+        $this->actingAs($actor)->getJson(route('sales-leads.unowned-queue'))
+            ->assertOk()
+            ->assertJsonPath('queue.0.sales_lead_id', $lead->id);
+    }
+
     private function lead(User $owner, array $attributes = []): SalesLead
     {
         $branch = Branch::query()->first() ?? Branch::create(['name' => 'Cabang Deactivate', 'code' => 'DCT']);
@@ -77,7 +108,7 @@ class SalesLeadDeactivationQueueTest extends TestCase
 
     private function user(string $email, string $roleSlug): User
     {
-        return User::create([
+        $user = User::create([
             'name' => $roleSlug,
             'email' => $email,
             'password' => 'password',
@@ -86,5 +117,8 @@ class SalesLeadDeactivationQueueTest extends TestCase
             'is_active' => true,
             'password_changed_at' => Carbon::now(),
         ]);
+        $user->forceFill(['email_verified_at' => Carbon::now()])->saveQuietly();
+
+        return $user;
     }
 }

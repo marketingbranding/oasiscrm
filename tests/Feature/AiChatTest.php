@@ -32,6 +32,40 @@ class AiChatTest extends TestCase
 {
     use RefreshDatabase;
 
+    public function test_br53_ai_search_customer_honors_explicit_branch_filter(): void
+    {
+        $branchOne = Branch::create(['name' => 'Jepara', 'code' => 'JPR', 'is_active' => true]);
+        $branchTwo = Branch::create(['name' => 'Kudus', 'code' => 'KDS', 'is_active' => true]);
+        $projectOne = $this->makeProject($branchOne, 'Oasis Jepara');
+        $projectTwo = $this->makeProject($branchTwo, 'Oasis Kudus');
+        $salesRole = Role::query()->where('slug', 'sales')->firstOrFail();
+        $salesOne = User::factory()->create(['role_id' => $salesRole->id, 'branch_id' => $branchOne->id, 'password_changed_at' => now()]);
+        $salesTwo = User::factory()->create(['role_id' => $salesRole->id, 'branch_id' => $branchTwo->id, 'password_changed_at' => now()]);
+        foreach ([[$salesOne, $projectOne], [$salesTwo, $projectTwo]] as [$sales, $project]) {
+            $sales->assignedProjects()->attach($project, ['is_primary' => true, 'is_active' => true]);
+            SalesLead::create([
+                'branch_id' => $project->branch_id,
+                'project_id' => $project->id,
+                'sales_user_id' => $sales->id,
+                'lead_date' => today(),
+                'customer_name' => 'Nama Sama',
+                'phone' => '081234567890',
+                'created_by' => $sales->id,
+                'updated_by' => $sales->id,
+            ]);
+        }
+        [, $superadmin] = $this->superadminUser();
+
+        $result = app(AiToolRegistry::class)->execute('search_customer', [
+            'query' => 'Nama Sama',
+            'branch_id' => $branchTwo->id,
+        ], $superadmin);
+
+        $rows = collect($result['results'])->where('source_module', 'Lead Sales');
+        $this->assertCount(1, $rows);
+        $this->assertSame($branchTwo->name, $rows->first()['branch']);
+    }
+
     public function test_br53_ai_search_customer_hides_foreign_lead_without_grant(): void
     {
         [$branch, $user, $lead] = $this->br53LeadSearchContext();

@@ -52,7 +52,7 @@ class AiToolRegistry
                 'date_to' => ['type' => 'string', 'description' => 'Tanggal akhir YYYY-MM-DD. Opsional.'],
                 'branch_id' => ['type' => 'integer', 'description' => 'ID cabang. Hanya berlaku untuk superadmin/pusat.'],
             ]),
-            $this->tool('search_customer', 'Cari konsumen/customer berdasarkan nama di pipeline, database sheet, dan Dana Talangan.', [
+            $this->tool('search_customer', 'Cari konsumen/customer berdasarkan nama di pipeline, Lead Sales, database sheet, dan Dana Talangan.', [
                 'query' => ['type' => 'string', 'description' => 'Nama konsumen atau kata kunci.'],
                 'branch_id' => ['type' => 'integer', 'description' => 'ID cabang. Hanya berlaku untuk superadmin/pusat.'],
             ], ['query']),
@@ -539,9 +539,10 @@ class AiToolRegistry
         }
 
         $leads = collect();
-        if ($user->hasPermission('sales_pocketbook.view_team') && $user->hasScopedPermission('sales_pocketbook')) {
+        if ($user->hasScopedPermission('sales_pocketbook')) {
             $leads = SalesLead::query()
                 ->activeForLeadViews()
+                ->when($branchId, fn (Builder $query) => $query->where('branch_id', $branchId))
                 ->whereIn('sales_user_id', $this->organizationScope->visibleUserIds($user, 'sales_pocketbook', 'view', 'sales_leads'))
                 ->whereIn('branch_id', $this->organizationScope->branchIds($user, 'sales_pocketbook', 'view', 'sales_leads'))
                 ->whereIn('project_id', $this->organizationScope->projectIds($user, 'sales_pocketbook', 'view', 'sales_leads'))

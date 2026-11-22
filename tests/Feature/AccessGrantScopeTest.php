@@ -10,6 +10,7 @@ use App\Models\SalesCoordinatorSales;
 use App\Models\SalesLead;
 use App\Models\User;
 use App\Services\AccessGrantService;
+use App\Services\OrganizationScopeService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
 use Illuminate\Validation\ValidationException;
@@ -25,7 +26,7 @@ class AccessGrantScopeTest extends TestCase
         $subject = User::factory()->create();
         AccessGrant::create(['grantee_user_id' => $grantee->id, 'subject_user_id' => $subject->id, 'module' => 'sales_leads', 'can_view' => true, 'expires_at' => now()->addDay(), 'reason' => 'cuti', 'granted_by' => $grantee->id]);
         Carbon::setTestNow(now()->addDays(2));
-        $this->assertSame([], app(AccessGrantService::class)->grantedUserIds($grantee, 'sales_pocketbook'));
+        $this->assertSame([], app(AccessGrantService::class)->grantedUserIds($grantee, 'sales_leads'));
         Carbon::setTestNow();
     }
 
@@ -42,6 +43,26 @@ class AccessGrantScopeTest extends TestCase
     {
         $context = $this->context();
         $this->actingAs($context['coordinator'])->get(route('sales-leads.edit', $context['foreignLead']))->assertForbidden();
+    }
+
+    public function test_br53_daily_plan_grant_does_not_open_lead_or_work_planner_scope(): void
+    {
+        $context = $this->context();
+        $this->grant($context['coordinator'], $context['foreignSales'], false, 'sales_daily_plans');
+
+        $scope = app(OrganizationScopeService::class);
+        $this->assertNotContains($context['foreignSales']->id, $scope->visibleUserIds($context['coordinator'], 'sales_pocketbook', 'view', 'sales_leads'));
+        $this->assertNotContains($context['foreignSales']->id, $scope->visibleUserIds($context['coordinator'], 'work_planner', 'view'));
+    }
+
+    public function test_br53_lead_grant_does_not_open_daily_plan_or_work_planner_scope(): void
+    {
+        $context = $this->context();
+        $this->grant($context['coordinator'], $context['foreignSales'], false, 'sales_leads');
+
+        $scope = app(OrganizationScopeService::class);
+        $this->assertNotContains($context['foreignSales']->id, $scope->visibleUserIds($context['coordinator'], 'sales_pocketbook', 'view', 'sales_daily_plans'));
+        $this->assertNotContains($context['foreignSales']->id, $scope->visibleUserIds($context['coordinator'], 'work_planner', 'view'));
     }
 
     public function test_br53_active_view_grant_exposes_foreign_lead_but_not_edit(): void
@@ -104,9 +125,9 @@ class AccessGrantScopeTest extends TestCase
         $this->assertDatabaseHas('user_notifications', ['user_id' => $context['coordinator']->id, 'type' => 'access_grant_revoked']);
     }
 
-    private function grant(User $grantee, User $subject, bool $edit): AccessGrant
+    private function grant(User $grantee, User $subject, bool $edit, string $module = 'sales_leads'): AccessGrant
     {
-        return AccessGrant::create(['grantee_user_id' => $grantee->id, 'subject_user_id' => $subject->id, 'module' => 'sales_leads', 'can_view' => true, 'can_edit' => $edit, 'expires_at' => now()->addDays(2), 'reason' => 'cuti', 'granted_by' => $grantee->id]);
+        return AccessGrant::create(['grantee_user_id' => $grantee->id, 'subject_user_id' => $subject->id, 'module' => $module, 'can_view' => true, 'can_edit' => $edit, 'expires_at' => now()->addDays(2), 'reason' => 'cuti', 'granted_by' => $grantee->id]);
     }
 
     /** @return array<string, mixed> */

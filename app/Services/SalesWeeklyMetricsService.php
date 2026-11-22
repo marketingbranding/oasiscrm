@@ -174,7 +174,7 @@ class SalesWeeklyMetricsService
             ->whereIn('branch_id', $this->organizationScope->branchIds($viewer, 'sales_pocketbook'))
             ->where(fn (Builder $query) => $query->whereIn('sales_project_id', $projectIds)
                 ->orWhere(fn (Builder $legacy) => $legacy->whereNull('sales_project_id')->whereIn('project_name', $projectNames)))
-            ->whereIn('owner_user_id', $this->organizationScope->visibleUserIds($viewer, 'sales_pocketbook'))
+            ->whereIn('owner_user_id', $this->organizationScope->visibleUserIds($viewer, 'sales_pocketbook', 'view', 'sales_leads'))
             ->when(! empty($filters['branch_id']), fn (Builder $query) => $query->where('branch_id', $filters['branch_id']))
             ->when(! empty($filters['project_id']), fn (Builder $query) => $query->where('sales_project_id', $filters['project_id']))
             ->when(! empty($filters['sales_user_id']), fn (Builder $query) => $query->where('owner_user_id', $filters['sales_user_id']));

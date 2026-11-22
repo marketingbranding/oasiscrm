@@ -62,9 +62,9 @@ class AccessGrantService
     }
 
     /** @return array<int, AccessGrant> */
-    public function activeFor(User $grantee, string $module): array
+    public function activeFor(User $grantee, string $grantModule): array
     {
-        return AccessGrant::query()->active()->where('grantee_user_id', $grantee->id)->whereIn('module', AccessGrant::grantModulesForScope($module))->get()->all();
+        return AccessGrant::query()->active()->where('grantee_user_id', $grantee->id)->where('module', $grantModule)->get()->all();
     }
 
     /** @return array<int> */

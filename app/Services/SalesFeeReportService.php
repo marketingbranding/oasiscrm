@@ -162,7 +162,7 @@ class SalesFeeReportService
                 $this->workspace->accessibleProjectIds($actor),
             ))
             ->pluck('id')->map(fn ($id) => (int) $id)->all();
-        $visibleUserIds = $this->scope->visibleUserIds($actor, 'sales_pocketbook', 'export');
+        $visibleUserIds = $this->scope->visibleUserIds($actor, 'sales_pocketbook', 'export', 'sales_leads');
         $salesIds = User::query()->where('branch_id', $branchId)->where('is_active', true)->whereIn('id', $visibleUserIds)
             ->whereHas('role', fn ($query) => $query->where('slug', 'sales')->where('is_active', true))
             ->pluck('id')->map(fn ($id) => (int) $id)->all();

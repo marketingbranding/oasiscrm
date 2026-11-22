@@ -32,30 +32,30 @@ class CrmAuthorizationService
     }
 
     /** @return array<int> */
-    public function visibleUserIds(User $actor, string $module = 'sales_pocketbook', string $action = 'view'): array
+    public function visibleUserIds(User $actor, string $module = 'sales_pocketbook', string $action = 'view', ?string $grantModule = null): array
     {
         return $this->isActive($actor)
-            ? $this->organizationScope->visibleUserIds($actor, $module, $action)
+            ? $this->organizationScope->visibleUserIds($actor, $module, $action, $grantModule)
             : [];
     }
 
     /** @return array<int> */
-    public function visibleBranchIds(User $actor, string $module = 'sales_pocketbook', string $action = 'view'): array
+    public function visibleBranchIds(User $actor, string $module = 'sales_pocketbook', string $action = 'view', ?string $grantModule = null): array
     {
         return $this->isActive($actor)
             ? array_values(array_intersect(
-                $this->organizationScope->branchIds($actor, $module, $action),
+                $this->organizationScope->branchIds($actor, $module, $action, $grantModule),
                 $this->workspaceAccess->accessibleBranchIds($actor),
             ))
             : [];
     }
 
     /** @return array<int> */
-    public function visibleProjectIds(User $actor, string $module = 'sales_pocketbook', string $action = 'view'): array
+    public function visibleProjectIds(User $actor, string $module = 'sales_pocketbook', string $action = 'view', ?string $grantModule = null): array
     {
         return $this->isActive($actor)
             ? array_values(array_intersect(
-                $this->organizationScope->projectIds($actor, $module, $action),
+                $this->organizationScope->projectIds($actor, $module, $action, $grantModule),
                 $this->workspaceAccess->accessibleProjectIds($actor),
             ))
             : [];
@@ -73,6 +73,7 @@ class CrmAuthorizationService
         int $branchId,
         ?int $projectId = null,
         ?int $ownerId = null,
+        ?string $grantModule = null,
     ): bool {
         if (! $this->isActive($actor) || ! $this->workspaceAccess->canViewBranch($actor, $branchId)) {
             return false;
@@ -82,7 +83,7 @@ class CrmAuthorizationService
             return true;
         }
 
-        $branchIds = $this->visibleBranchIds($actor, $module, $action);
+        $branchIds = $this->visibleBranchIds($actor, $module, $action, $grantModule);
         if (! in_array($branchId, $branchIds, true)) {
             return false;
         }
@@ -93,18 +94,18 @@ class CrmAuthorizationService
         }
 
         if ($ownerId !== null && $this->hasScope($actor, $module, $action, 'own') && (int) $ownerId === (int) $actor->id) {
-            return $projectId === null || in_array($projectId, $this->visibleProjectIds($actor, $module, $action), true);
+            return $projectId === null || in_array($projectId, $this->visibleProjectIds($actor, $module, $action, $grantModule), true);
         }
 
         if ($ownerId !== null && $this->hasScope($actor, $module, $action, 'team')
-            && in_array((int) $ownerId, $this->visibleUserIds($actor, $module, $action), true)) {
-            return $projectId === null || in_array($projectId, $this->visibleProjectIds($actor, $module, $action), true);
+            && in_array((int) $ownerId, $this->visibleUserIds($actor, $module, $action, $grantModule), true)) {
+            return $projectId === null || in_array($projectId, $this->visibleProjectIds($actor, $module, $action, $grantModule), true);
         }
 
         return $projectId !== null
             && $this->hasScope($actor, $module, $action, 'assigned')
-            && in_array($projectId, $this->visibleProjectIds($actor, $module, $action), true)
-            && ($ownerId === null || in_array((int) $ownerId, $this->visibleUserIds($actor, $module, $action), true));
+            && in_array($projectId, $this->visibleProjectIds($actor, $module, $action, $grantModule), true)
+            && ($ownerId === null || in_array((int) $ownerId, $this->visibleUserIds($actor, $module, $action, $grantModule), true));
     }
 
     public function canViewSalesLead(User $actor, SalesLead $lead): bool
@@ -128,7 +129,7 @@ class CrmAuthorizationService
         if ($actor->hasPrimaryRole('sales_coordinator')) {
             return $this->can($actor, 'sales_pocketbook.view_team')
                 && $this->salesTeamScope->contains($actor, (int) $lead->sales_user_id)
-                && $this->allowsRecord($actor, 'sales_pocketbook', 'view', (int) $lead->branch_id, (int) $lead->project_id, (int) $lead->sales_user_id);
+                && $this->allowsRecord($actor, 'sales_pocketbook', 'view', (int) $lead->branch_id, (int) $lead->project_id, (int) $lead->sales_user_id, 'sales_leads');
         }
 
         return $this->allowsRecord($actor, 'sales_pocketbook', 'view', (int) $lead->branch_id, (int) $lead->project_id, (int) $lead->sales_user_id);
@@ -143,16 +144,17 @@ class CrmAuthorizationService
         if ($actor->isSales()) {
             return $this->can($actor, 'sales_pocketbook.view_own')
                 && (int) $agenda->owner_user_id === (int) $actor->id
-                && $this->allowsRecord($actor, 'sales_pocketbook', 'view', (int) $agenda->branch_id, $this->agendaProjectId($agenda), (int) $agenda->owner_user_id);
+                && $this->allowsRecord($actor, 'sales_pocketbook', 'view', (int) $agenda->branch_id, $this->agendaProjectId($agenda), (int) $agenda->owner_user_id, 'sales_daily_plans');
         }
 
         if ($actor->hasPrimaryRole('sales_coordinator')) {
             return $this->can($actor, 'sales_pocketbook.view_team')
-                && $this->salesTeamScope->contains($actor, (int) $agenda->owner_user_id)
-                && $this->allowsRecord($actor, 'sales_pocketbook', 'view', (int) $agenda->branch_id, $this->agendaProjectId($agenda), (int) $agenda->owner_user_id);
+                && ($this->salesTeamScope->contains($actor, (int) $agenda->owner_user_id)
+                || in_array((int) $agenda->owner_user_id, $this->organizationScope->specialGrantUserIds($actor, 'sales_daily_plans'), true))
+                && $this->allowsRecord($actor, 'sales_pocketbook', 'view', (int) $agenda->branch_id, $this->agendaProjectId($agenda), (int) $agenda->owner_user_id, 'sales_daily_plans');
         }
 
-        return $this->allowsRecord($actor, 'sales_pocketbook', 'view', (int) $agenda->branch_id, $this->agendaProjectId($agenda), (int) $agenda->owner_user_id);
+        return $this->allowsRecord($actor, 'sales_pocketbook', 'view', (int) $agenda->branch_id, $this->agendaProjectId($agenda), (int) $agenda->owner_user_id, 'sales_daily_plans');
     }
 
     public function canCreateSalesAgenda(User $actor): bool
@@ -162,6 +164,14 @@ class CrmAuthorizationService
 
     public function canUpdateSalesAgenda(User $actor, ContentItem $agenda): bool
     {
+        if ($actor->hasPrimaryRole('sales_coordinator')
+            && $actor->hasPermission('sales_pocketbook.manage_team')
+            && in_array((int) $agenda->owner_user_id, $this->organizationScope->specialGrantUserIds($actor, 'sales_daily_plans', 'edit'), true)
+            && $this->workspaceAccess->canEditBranch($actor, (int) $agenda->branch_id)
+            && in_array($this->agendaProjectId($agenda), $this->workspaceAccess->accessibleProjectIds($actor), true)) {
+            return true;
+        }
+
         if ($agenda->daily_plan_id && $agenda->dailyPlan?->status === 'submitted') {
             return $this->can($actor, 'sales_pocketbook.view_own')
                 && $actor->isSales()
@@ -195,7 +205,7 @@ class CrmAuthorizationService
                     $scoped->whereIn('branch_id', $historicalBranchIds)
                         ->orWhere(function (Builder $current) use ($actor): void {
                             $current
-                                ->whereIn('sales_user_id', $this->visibleUserIds($actor, 'sales_pocketbook', 'view'))
+                                ->whereIn('sales_user_id', $this->visibleUserIds($actor, 'sales_pocketbook', 'view', 'sales_leads'))
                                 ->whereIn('branch_id', $this->visibleBranchIds($actor, 'sales_pocketbook', 'view'))
                                 ->when(
                                     $this->organizationScope->requiresProjectScope($actor, 'sales_pocketbook', 'view'),
@@ -206,7 +216,7 @@ class CrmAuthorizationService
         }
 
         return $query
-            ->whereIn('sales_user_id', $this->visibleUserIds($actor, 'sales_pocketbook', $action))
+            ->whereIn('sales_user_id', $this->visibleUserIds($actor, 'sales_pocketbook', $action, 'sales_leads'))
             ->whereIn('branch_id', $this->visibleBranchIds($actor, 'sales_pocketbook', $action))
             ->when(
                 $this->organizationScope->requiresProjectScope($actor, 'sales_pocketbook', $action),

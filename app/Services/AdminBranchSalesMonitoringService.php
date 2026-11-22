@@ -107,7 +107,7 @@ class AdminBranchSalesMonitoringService
                 $this->workspaceAccess->accessibleProjectIds($actor),
                 LeadMaster::query()->where('branch_id', $actor->branch_id)->where('is_active', true)->pluck('id')->map(fn ($id) => (int) $id)->all(),
             )),
-            'user_ids' => $this->organizationScope->visibleUserIds($actor, 'sales_pocketbook', 'view'),
+            'user_ids' => $this->organizationScope->visibleUserIds($actor, 'sales_pocketbook', 'view', 'sales_leads'),
         ];
     }
 

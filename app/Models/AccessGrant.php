@@ -9,25 +9,6 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 class AccessGrant extends Model
 {
     /** @return array<int, string> */
-    public static function scopeModules(string $grantModule): array
-    {
-        return match ($grantModule) {
-            'sales_leads' => ['sales_pocketbook'],
-            'sales_daily_plans' => ['sales_pocketbook', 'work_planner'],
-            default => [],
-        };
-    }
-
-    /** @return array<int, string> */
-    public static function grantModulesForScope(string $scopeModule): array
-    {
-        return match ($scopeModule) {
-            'sales_pocketbook' => ['sales_leads'],
-            'work_planner' => ['sales_daily_plans'],
-            default => in_array($scopeModule, self::MODULES, true) ? [$scopeModule] : [],
-        };
-    }
-
     public const MODULES = ['sales_leads', 'sales_daily_plans'];
 
     protected $fillable = [

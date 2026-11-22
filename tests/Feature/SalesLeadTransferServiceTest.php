@@ -7,6 +7,7 @@ use App\Models\LeadMaster;
 use App\Models\Role;
 use App\Models\SalesCoordinatorSales;
 use App\Models\SalesLead;
+use App\Models\SalesLeadUnownedQueue;
 use App\Models\User;
 use App\Services\SalesLeadTransferService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -37,6 +38,45 @@ class SalesLeadTransferServiceTest extends TestCase
             'type' => 'lead_transferred_to_me',
             'related_id' => $lead->id,
         ]);
+    }
+
+    public function test_br55_coordinator_transfers_queued_lead_and_closes_queue(): void
+    {
+        [$coordinator, $source, $target] = $this->team();
+        $lead = $this->lead($source);
+        $queue = SalesLeadUnownedQueue::create([
+            'sales_lead_id' => $lead->id,
+            'former_sales_user_id' => $source->id,
+            'queue_coordinator_user_id' => $coordinator->id,
+            'last_active_coordinator_user_id' => $coordinator->id,
+            'status' => 'open',
+        ]);
+
+        app(SalesLeadTransferService::class)->transfer($coordinator, [], $target, 'Tidak dapat dihubungi', null, $queue->id);
+
+        $this->assertSame($target->id, $lead->fresh()->sales_user_id);
+        $this->assertDatabaseHas('sales_lead_unowned_queues', ['id' => $queue->id, 'status' => 'closed', 'closed_by' => $coordinator->id]);
+        $this->assertDatabaseHas('sales_lead_transfers', ['sales_lead_id' => $lead->id]);
+    }
+
+    public function test_br55_superadmin_transfers_queue_without_coordinator_in_lead_branch(): void
+    {
+        [$coordinator, $source, $target] = $this->team();
+        $actor = $this->user('queue-superadmin@example.test', 'superadmin');
+        $lead = $this->lead($source);
+        $target->update(['branch_id' => $lead->branch_id]);
+        $queue = SalesLeadUnownedQueue::create([
+            'sales_lead_id' => $lead->id,
+            'former_sales_user_id' => $source->id,
+            'queue_coordinator_user_id' => null,
+            'last_active_coordinator_user_id' => $coordinator->id,
+            'status' => 'open',
+        ]);
+
+        app(SalesLeadTransferService::class)->transfer($actor, [], $target, 'Tidak dapat dihubungi', null, $queue->id);
+
+        $this->assertSame($target->id, $lead->fresh()->sales_user_id);
+        $this->assertDatabaseHas('sales_lead_unowned_queues', ['id' => $queue->id, 'status' => 'closed', 'closed_by' => $actor->id]);
     }
 
     public function test_d27_coordinator_cannot_transfer_to_sales_outside_active_team(): void

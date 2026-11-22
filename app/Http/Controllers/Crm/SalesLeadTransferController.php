@@ -8,12 +8,13 @@ use App\Models\SalesLeadUnownedQueue;
 use App\Models\User;
 use App\Services\SalesLeadTransferService;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\RedirectResponse;
 
 class SalesLeadTransferController extends Controller
 {
     public function __construct(private readonly SalesLeadTransferService $transfers) {}
 
-    public function store(TransferSalesLeadRequest $request): JsonResponse
+    public function store(TransferSalesLeadRequest $request): JsonResponse|RedirectResponse
     {
         $target = User::query()->findOrFail($request->integer('target_user_id'));
         $transfers = $this->transfers->transfer(
@@ -22,9 +23,12 @@ class SalesLeadTransferController extends Controller
             $target,
             $request->string('reason')->toString(),
             $request->input('notes'),
+            $request->integer('queue_id') ?: null,
         );
 
-        return response()->json(['transferred' => count($transfers)]);
+        return $request->expectsJson()
+            ? response()->json(['transferred' => count($transfers)])
+            : redirect()->back()->with('success', count($transfers).' Lead berhasil dialihkan.');
     }
 
     public function queue(): JsonResponse

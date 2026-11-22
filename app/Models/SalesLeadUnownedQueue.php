@@ -15,12 +15,15 @@ class SalesLeadUnownedQueue extends Model
         'status',
         'resolved_at',
         'resolved_by_user_id',
+        'closed_by',
+        'closed_at',
     ];
 
     protected function casts(): array
     {
         return [
             'resolved_at' => 'datetime',
+            'closed_at' => 'datetime',
         ];
     }
 

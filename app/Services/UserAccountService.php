@@ -80,9 +80,20 @@ class UserAccountService
         });
     }
 
+    public function activeLeadCount(User $sales): int
+    {
+        return SalesLead::query()->where('sales_user_id', $sales->id)->activeForLeadViews()->where(fn ($query) => $query->whereNull('lead_stage')->orWhereNotIn('lead_stage', ['utj', 'gugur']))->count();
+    }
+
     private function queueActiveSalesLeads(User $sales): void
     {
-        $lastCoordinatorId = SalesCoordinatorSales::query()
+        $activeCoordinatorId = SalesCoordinatorSales::query()
+            ->where('sales_user_id', $sales->id)
+            ->where('is_active', true)
+            ->whereNull('ended_at')
+            ->orderByDesc('id')
+            ->value('coordinator_user_id');
+        $lastCoordinatorId = $activeCoordinatorId ?? SalesCoordinatorSales::query()
             ->where('sales_user_id', $sales->id)
             ->orderByDesc('ended_at')
             ->orderByDesc('id')
@@ -96,7 +107,9 @@ class UserAccountService
         SalesLead::query()
             ->where('sales_user_id', $sales->id)
             ->activeForLeadViews()
-            ->whereNotIn('lead_stage', ['utj', 'gugur'])
+            ->where(function ($query): void {
+                $query->whereNull('lead_stage')->orWhereNotIn('lead_stage', ['utj', 'gugur']);
+            })
             ->lockForUpdate()
             ->get()
             ->each(function (SalesLead $lead) use ($sales, $coordinatorId, $lastCoordinatorId): void {
@@ -108,7 +121,6 @@ class UserAccountService
                         'queue_coordinator_user_id' => $coordinatorId,
                     ],
                 );
-                $lead->update(['sales_user_id' => null]);
             });
     }
 

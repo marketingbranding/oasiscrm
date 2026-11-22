@@ -17,6 +17,7 @@ class TransferSalesLeadRequest extends FormRequest
             'lead_ids' => ['required', 'array', 'min:1'],
             'lead_ids.*' => ['integer', 'distinct', 'exists:sales_leads,id'],
             'target_user_id' => ['required', 'integer', 'exists:users,id'],
+            'queue_id' => ['nullable', 'integer', 'exists:sales_lead_unowned_queues,id'],
             'reason' => ['required', 'string'],
             'notes' => ['nullable', 'string', 'max:5000'],
         ];

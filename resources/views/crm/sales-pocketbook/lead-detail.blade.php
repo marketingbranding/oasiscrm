@@ -72,6 +72,8 @@
         <div class="sales-lead-detail-progress-steps">@foreach($stageV3 ? ['Lead Baru', 'Dihubungi', 'Tatap Muka', 'Survey', 'UTJ'] : ['No Respon', 'Diskusi', 'Cek Lokasi', 'Cek SLIK', 'Akad'] as $stepLabel)<span>{{ $stepLabel }}</span>@endforeach</div>
     </section>
 
+    <section class="sales-lead-detail-information" aria-labelledby="sales-lead-transfer-history-title"><h2 id="sales-lead-transfer-history-title">Riwayat alih Lead</h2>@forelse($lead->transfers as $transfer)<p class="mt-2 text-sm">{{ $transfer->created_at?->format('d/m/Y H:i') }} · {{ $transfer->fromSales?->name ?? '-' }} → {{ $transfer->toSales?->name ?? '-' }} · {{ $transfer->reason }}</p>@empty<p class="mt-2 text-sm">Belum ada riwayat alih.</p>@endforelse</section>
+
     <section class="sales-lead-detail-information" aria-labelledby="sales-lead-information-title">
         <h2 id="sales-lead-information-title">Informasi</h2>
         @if($stageV3)

@@ -164,7 +164,7 @@ class AdminUserController extends Controller
             ? $this->lifecycle->deletionBlockers($admin_user)
             : [];
 
-        return view('crm.admin-users.show', ['user' => $admin_user, 'deletionBlockers' => $deletionBlockers]);
+        return view('crm.admin-users.show', ['user' => $admin_user, 'deletionBlockers' => $deletionBlockers, 'activeLeadCount' => $this->accounts->activeLeadCount($admin_user)]);
     }
 
     public function edit(User $admin_user): View
@@ -375,7 +375,11 @@ class AdminUserController extends Controller
         }
         $this->audit->log("account_{$action}_reason", $user, $request->user(), [], ['reason' => $request->validated('reason')]);
 
-        return back()->with('success', 'Status akun berhasil diperbarui.');
+        $message = $action === 'deactivate'
+            ? 'Status akun berhasil diperbarui. Lead aktif: '.$this->accounts->activeLeadCount($user).'. Lead tetap tercatat atas nama Sales lama sampai dialihkan.'
+            : 'Status akun berhasil diperbarui.';
+
+        return back()->with('success', $message);
     }
 
     private function options(User $actor, ?User $target = null): array

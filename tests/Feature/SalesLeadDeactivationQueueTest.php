@@ -38,7 +38,7 @@ class SalesLeadDeactivationQueueTest extends TestCase
         $this->actingAs($sales->fresh())->getJson(route('notifications.index'))
             ->assertForbidden()
             ->assertJsonPath('code', 'account_inactive');
-        $this->assertNull($lead->fresh()->sales_user_id);
+        $this->assertSame($sales->id, $lead->fresh()->sales_user_id);
         $this->assertDatabaseHas('sales_lead_unowned_queues', [
             'sales_lead_id' => $lead->id,
             'former_sales_user_id' => $sales->id,
@@ -54,12 +54,45 @@ class SalesLeadDeactivationQueueTest extends TestCase
         $actor = $this->user('terminal-actor@example.test', 'superadmin');
         $utj = $this->lead($sales, ['lead_stage' => 'utj']);
         $gugur = $this->lead($sales, ['lead_stage' => 'gugur', 'gugur_at' => Carbon::now()]);
+        $nullStage = $this->lead($sales, ['lead_stage' => null]);
 
         app(UserAccountService::class)->deactivate($sales, $actor);
 
         $this->assertDatabaseMissing('sales_lead_unowned_queues', ['sales_lead_id' => $utj->id]);
         $this->assertDatabaseMissing('sales_lead_unowned_queues', ['sales_lead_id' => $gugur->id]);
+        $this->assertDatabaseHas('sales_lead_unowned_queues', ['sales_lead_id' => $nullStage->id]);
         $this->assertSame($sales->id, $utj->fresh()->sales_user_id);
+    }
+
+    public function test_br55_active_assignment_wins_over_latest_historical_assignment(): void
+    {
+        $sales = $this->user('active-assignment-sales@example.test', 'sales');
+        $activeCoordinator = $this->user('active-assignment-current@example.test', 'sales_coordinator');
+        $historicalCoordinator = $this->user('active-assignment-old@example.test', 'sales_coordinator');
+        $actor = $this->user('active-assignment-actor@example.test', 'superadmin');
+        SalesCoordinatorSales::create([
+            'coordinator_user_id' => $historicalCoordinator->id,
+            'sales_user_id' => $sales->id,
+            'is_active' => false,
+            'started_at' => Carbon::today()->subMonths(3),
+            'ended_at' => Carbon::yesterday(),
+        ]);
+        SalesCoordinatorSales::create([
+            'coordinator_user_id' => $activeCoordinator->id,
+            'sales_user_id' => $sales->id,
+            'is_active' => true,
+            'started_at' => Carbon::today()->subMonth(),
+            'ended_at' => null,
+        ]);
+        $lead = $this->lead($sales);
+
+        app(UserAccountService::class)->deactivate($sales, $actor);
+
+        $this->assertDatabaseHas('sales_lead_unowned_queues', [
+            'sales_lead_id' => $lead->id,
+            'last_active_coordinator_user_id' => $activeCoordinator->id,
+            'queue_coordinator_user_id' => $activeCoordinator->id,
+        ]);
     }
 
     public function test_br55_without_active_coordinator_leaves_queue_for_superadmin_only(): void
@@ -102,7 +135,7 @@ class SalesLeadDeactivationQueueTest extends TestCase
             'customer_name' => 'Konsumen Deactivate',
             'phone' => '081234567890',
             'lead_date' => Carbon::today(),
-            'lead_stage' => 'lead_baru',
+            'lead_stage' => null,
         ], $attributes));
     }
 

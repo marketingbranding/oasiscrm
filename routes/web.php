@@ -215,6 +215,7 @@ Route::middleware(['auth', 'active', 'verified', 'password.changed', 'operationa
         Route::get('/buku-saku-sales/projects/{project}/promo-options', [CoordinatorSalesLeadWorkspaceController::class, 'promoOptions'])->name('coordinator-leads.promo-options');
         Route::post('/buku-saku-sales/leads/sync', [CoordinatorSalesLeadWorkspaceController::class, 'push'])->middleware(['operational.module:spreadsheet_sync', 'permission:sales_pocketbook.sync'])->name('coordinator-leads.sync');
         Route::post('/buku-saku-sales/leads/transfers', [SalesLeadTransferController::class, 'store'])->middleware(['permission:sales_pocketbook.manage_team', 'not.impersonating'])->name('sales-leads.transfers.store');
+        Route::post('/buku-saku-sales/coordinator/leads/transfers', [CoordinatorSalesLeadWorkspaceController::class, 'transfer'])->middleware(['permission:sales_pocketbook.manage_team', 'not.impersonating'])->name('coordinator-leads.transfers.store');
         Route::get('/buku-saku-sales/leads/unowned-queue', [SalesLeadTransferController::class, 'queue'])->name('sales-leads.unowned-queue');
         Route::post('/buku-saku-sales/leads', [SalesLeadController::class, 'store'])->name('sales-leads.store');
         Route::get('/buku-saku-sales/leads/{sales_lead}', [SalesLeadController::class, 'show'])->name('sales-leads.show');

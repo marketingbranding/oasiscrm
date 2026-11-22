@@ -105,6 +105,18 @@ class CoordinatorLeadWorkspaceTest extends TestCase
         $this->assertStringNotContainsString('type="date"', $view);
     }
 
+    public function test_lead_team_table_exposes_aligned_cells_and_transfer_visibility_contract(): void
+    {
+        $view = file_get_contents(resource_path('views/crm/sales-pocketbook/coordinator-leads.blade.php'));
+
+        $this->assertStringContainsString('<th>Pilih</th><th>Tanggal</th><th>Konsumen</th>', $view);
+        $this->assertStringContainsString("<td>-</td><td>{{ \$lead['lead_date']", $view);
+        $this->assertStringContainsString('<td>{{ $lead->customer_name }}</td><td>{{ $lead->sales?->name }}</td>', $view);
+        $this->assertStringContainsString('@if($canTransferTeam)', $view);
+        $this->assertStringContainsString('@if($canManageQueue)', $view);
+        $this->assertStringContainsString('colspan="10"', $view);
+    }
+
     public function test_lead_team_table_exposes_safe_sync_status_contract(): void
     {
         $view = file_get_contents(resource_path('views/crm/sales-pocketbook/coordinator-leads.blade.php'));

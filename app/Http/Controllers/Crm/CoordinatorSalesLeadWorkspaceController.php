@@ -95,16 +95,19 @@ class CoordinatorSalesLeadWorkspaceController extends Controller
         $data['statuses'] = SalesLeadStatus::MANUAL;
         $data['canCreate'] = $request->user()->can('create', SalesLead::class);
         $data['canManageAgenda'] = $request->user()->hasPermission('sales_pocketbook.manage_team');
+        $data['canTransferTeam'] = $this->teams->isCoordinator($request->user())
+            && $request->user()->hasPermission('sales_pocketbook.manage_team');
+        $data['canManageQueue'] = $data['canTransferTeam'] || $request->user()->isSuperadmin();
         $data['transferReasons'] = app(AppSettingResolver::class)->value('sales_lead.transfer_reasons') ?? [];
-        $data['transferTargets'] = $request->user()->isSuperadmin()
+        $data['transferTargets'] = $data['canTransferTeam']
+            ? $this->teams->currentSales($request->user())
+            : collect();
+        $data['queueTransferTargets'] = $request->user()->isSuperadmin()
             ? User::query()->whereHas('role', fn ($query) => $query->where('slug', 'sales'))->where('account_status', 'active')->where('is_active', true)->get()
-            : $this->teams->currentSales($request->user());
-        $data['unownedQueue'] = SalesLeadUnownedQueue::query()->with(['lead.sales', 'lead.project'])->where('status', 'open')->when(! $request->user()->isSuperadmin(), fn ($query) => $query->where('queue_coordinator_user_id', $request->user()->id))->latest()->get();
-        $data['transferReasons'] = app(AppSettingResolver::class)->value('sales_lead.transfer_reasons') ?? [];
-        $data['transferTargets'] = $request->user()->isSuperadmin()
-            ? User::query()->whereHas('role', fn ($query) => $query->where('slug', 'sales'))->where('account_status', 'active')->where('is_active', true)->get()
-            : $this->teams->currentSales($request->user());
-        $data['unownedQueue'] = SalesLeadUnownedQueue::query()->with(['lead.sales', 'lead.project'])->where('status', 'open')->when(! $request->user()->isSuperadmin(), fn ($query) => $query->where('queue_coordinator_user_id', $request->user()->id))->latest()->get();
+            : $data['transferTargets'];
+        $data['unownedQueue'] = $data['canManageQueue']
+            ? SalesLeadUnownedQueue::query()->with(['lead.sales', 'lead.project'])->where('status', 'open')->when(! $request->user()->isSuperadmin(), fn ($query) => $query->where('queue_coordinator_user_id', $request->user()->id))->latest()->get()
+            : collect();
         $data['canExport'] = $request->user()->hasPermission('sales_pocketbook.export_team');
         $data['canSync'] = config('oasis.spreadsheet_sync_enabled')
             && config('services.google_sheets.sales_lead_sync_enabled')

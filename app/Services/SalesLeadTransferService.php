@@ -33,7 +33,13 @@ class SalesLeadTransferService
         }
 
         return DB::transaction(function () use ($actor, $leadIds, $target, $reason, $notes, $queueId): array {
-            $queue = $queueId === null ? null : SalesLeadUnownedQueue::query()->whereKey($queueId)->where('status', 'open')->lockForUpdate()->firstOrFail();
+            $queue = $queueId === null
+                ? null
+                : SalesLeadUnownedQueue::query()
+                    ->whereKey($queueId)
+                    ->where('status', 'open')
+                    ->lockForUpdate()
+                    ->firstOrFail();
             $queueLeadIds = $queue === null ? [] : [$queue->sales_lead_id];
             $leadIds = array_values(array_unique([...$leadIds, ...$queueLeadIds]));
             if ($queue !== null && ! $actor->isSuperadmin() && (int) $queue->queue_coordinator_user_id !== (int) $actor->id) {
@@ -43,7 +49,7 @@ class SalesLeadTransferService
                 throw ValidationException::withMessages(['queue_id' => 'Superadmin hanya dapat mengambil antrean tanpa Koordinator aktif.']);
             }
             $targetAllowed = $queue !== null
-                ? ($actor->isSuperadmin() ? $target->hasPrimaryRole('sales') && $target->isAccountActive() && $target->is_active && (int) $target->branch_id === (int) $queue->lead()->value('branch_id') : $this->teams->contains($actor, $target))
+                ? $this->canTransferQueueTo($actor, $target, $queue)
                 : $this->teams->isCoordinator($actor) && $this->teams->contains($actor, $target);
             if (! $targetAllowed) {
                 throw ValidationException::withMessages(['target_user_id' => 'Sales tujuan tidak valid untuk konteks alih.']);
@@ -76,5 +82,17 @@ class SalesLeadTransferService
 
             return $transfers;
         });
+    }
+
+    private function canTransferQueueTo(User $actor, User $target, SalesLeadUnownedQueue $queue): bool
+    {
+        if (! $actor->isSuperadmin()) {
+            return $this->teams->contains($actor, $target);
+        }
+
+        return $target->hasPrimaryRole('sales')
+            && $target->isAccountActive()
+            && $target->is_active
+            && (int) $target->branch_id === (int) $queue->lead()->value('branch_id');
     }
 }

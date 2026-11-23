@@ -22,6 +22,7 @@ class ConsumerNupService
         private readonly OrganizationScopeService $scope,
         private readonly ConsumerEntryService $entry,
         private readonly ConsumerKavlingLifecycleService $kavlingLifecycle,
+        private readonly BranchMigrationStateService $migrationStates,
     ) {}
 
     public function visibleQuery(User $user): Builder
@@ -38,6 +39,7 @@ class ConsumerNupService
 
     public function create(array $data, User $actor): ConsumerNup
     {
+        $this->migrationStates->assertOasisConsumerInputAllowed((int) $data['branch_id']);
         $this->assertScope($actor, (int) $data['branch_id'], isset($data['project_id']) ? (int) $data['project_id'] : null);
 
         return DB::transaction(function () use ($data, $actor): ConsumerNup {
@@ -68,6 +70,7 @@ class ConsumerNupService
 
     public function createFromLead(SalesLead $lead, array $data, User $actor): ConsumerNup
     {
+        $this->migrationStates->assertOasisConsumerInputAllowed((int) $lead->branch_id);
         if ($lead->resolveStageV3() !== 'utj') {
             throw new DomainException('Lead harus berada pada tahap UTJ sebelum dibuat menjadi NUP.');
         }
@@ -116,6 +119,7 @@ class ConsumerNupService
 
     public function returnFromTransaction(ConsumerApplication $application, ConsumerIssue $issue, array $data, User $actor): ConsumerNup
     {
+        $this->migrationStates->assertOasisConsumerInputAllowed((int) $application->branch_id);
         $this->assertScope($actor, (int) $application->branch_id, $application->project_id === null ? null : (int) $application->project_id);
         if ((int) $issue->consumer_application_id !== (int) $application->id) {
             throw new DomainException('Kendala harus berasal dari transaksi yang dikembalikan ke NUP.');
@@ -162,6 +166,7 @@ class ConsumerNupService
 
     public function convert(ConsumerNup $nup, array $data, User $actor): ConsumerApplication
     {
+        $this->migrationStates->assertOasisConsumerInputAllowed((int) $nup->branch_id);
         $this->assertScope($actor, (int) $nup->branch_id, $nup->project_id === null ? null : (int) $nup->project_id);
 
         return DB::transaction(function () use ($nup, $data, $actor): ConsumerApplication {

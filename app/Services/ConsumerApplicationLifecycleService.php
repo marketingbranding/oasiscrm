@@ -25,6 +25,7 @@ final class ConsumerApplicationLifecycleService
         private ConsumerOperationalService $operational,
         private OrganizationScopeService $scope,
         private AppSettingResolver $settings,
+        private BranchMigrationStateService $migrationStates,
     ) {}
 
     public function recordPemberkasan(ConsumerApplication $application, array $data, User $actor): ConsumerBankProcess
@@ -71,6 +72,7 @@ final class ConsumerApplicationLifecycleService
 
     public function mundur(ConsumerApplication $application, string $withdrawReason, User $actor): ConsumerApplication
     {
+        $this->migrationStates->assertOasisConsumerInputAllowed((int) $application->branch_id);
         $this->authorize($actor, $application);
         $reasons = $this->settings->list('consumer_progress.mundur_reasons');
         if (! in_array($withdrawReason, $reasons, true)) {
@@ -94,6 +96,7 @@ final class ConsumerApplicationLifecycleService
 
     public function pindahKavling(ConsumerApplication $application, Kavling $targetKavling, User $actor): ConsumerApplication
     {
+        $this->migrationStates->assertOasisConsumerInputAllowed((int) $application->branch_id);
         $this->authorize($actor, $application);
 
         return DB::transaction(function () use ($application, $targetKavling, $actor): ConsumerApplication {
@@ -149,6 +152,7 @@ final class ConsumerApplicationLifecycleService
 
     public function gantiKonsumen(ConsumerApplication $application, Customer $replacementCustomer, User $actor, ?Kavling $targetKavling = null): ConsumerApplication
     {
+        $this->migrationStates->assertOasisConsumerInputAllowed((int) $application->branch_id);
         $this->authorize($actor, $application);
 
         return DB::transaction(function () use ($application, $replacementCustomer, $actor, $targetKavling): ConsumerApplication {

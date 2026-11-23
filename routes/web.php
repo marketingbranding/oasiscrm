@@ -7,6 +7,8 @@ use App\Http\Controllers\Crm\AdminUserImportController;
 use App\Http\Controllers\Crm\AiChatController;
 use App\Http\Controllers\Crm\AppSettingController;
 use App\Http\Controllers\Crm\BranchController;
+use App\Http\Controllers\Crm\BranchMigrationStateController;
+use App\Http\Controllers\Crm\BranchParityController;
 use App\Http\Controllers\Crm\ChangelogController;
 use App\Http\Controllers\Crm\CommentController;
 use App\Http\Controllers\Crm\CommentModerationController;
@@ -97,6 +99,17 @@ Route::middleware(['auth', 'active', 'verified', 'password.changed', 'operationa
     Route::prefix('admin/pengaturan-aturan')->name('admin.app-settings.')->middleware(['permission:system.settings_manage', 'system.admin:settings'])->group(function () {
         Route::get('/', [AppSettingController::class, 'index'])->name('index');
         Route::put('/', [AppSettingController::class, 'update'])->middleware('not.impersonating')->name('update');
+    });
+
+    Route::prefix('admin/status-migrasi-cabang')->name('admin.branch-migration-states.')->middleware(['permission:system.branch_migration_manage', 'system.admin:settings'])->group(function (): void {
+        Route::get('/', [BranchMigrationStateController::class, 'index'])->name('index');
+        Route::put('/{branch}', [BranchMigrationStateController::class, 'update'])->middleware('not.impersonating')->name('update');
+    });
+
+    Route::prefix('admin/laporan-paritas')->name('admin.branch-parity.')->middleware(['permission:system.branch_migration_manage', 'system.admin:settings'])->group(function (): void {
+        Route::get('/', [BranchParityController::class, 'index'])->name('index');
+        Route::post('/{branch}/jalankan', [BranchParityController::class, 'run'])->middleware('not.impersonating')->name('run');
+        Route::get('/{branch}/xlsx', [BranchParityController::class, 'export'])->name('export');
     });
 
     Route::prefix('admin/hari-libur')->name('admin.holidays.')->middleware(['permission:system.settings_manage', 'system.admin:settings'])->group(function (): void {

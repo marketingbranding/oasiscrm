@@ -77,6 +77,11 @@ class Branch extends Model
         return $this->hasOne(OrganizationUnit::class);
     }
 
+    public function migrationState(): HasOne
+    {
+        return $this->hasOne(BranchMigrationState::class);
+    }
+
     public function contentItems(): HasMany
     {
         return $this->hasMany(ContentItem::class);

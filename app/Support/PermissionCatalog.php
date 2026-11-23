@@ -156,6 +156,7 @@ class PermissionCatalog
             ['name' => 'Melewati pemeliharaan operasional', 'slug' => 'system.maintenance_bypass', 'description' => 'Tetap mengakses OASIS selama pemeliharaan operasional berlangsung.', 'group_name' => 'Administrasi Sistem'],
             ['name' => 'Mengelola pemeliharaan operasional', 'slug' => 'system.maintenance_manage', 'description' => 'Mengaktifkan dan menonaktifkan pemeliharaan operasional OASIS.', 'group_name' => 'Administrasi Sistem'],
             ['name' => 'Mengelola pengaturan aturan', 'slug' => 'system.settings_manage', 'description' => 'Melihat dan mengubah pengaturan aturan serta feature flag OASIS.', 'group_name' => 'Administrasi Sistem'],
+            ['name' => 'Mengelola status migrasi cabang', 'slug' => 'system.branch_migration_manage', 'description' => 'Melihat dan mengubah status migrasi data per cabang.', 'group_name' => 'Administrasi Sistem'],
         ];
     }
 

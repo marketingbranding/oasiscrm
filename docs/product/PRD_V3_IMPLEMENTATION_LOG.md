@@ -50,7 +50,7 @@ PRD sumber kebenaran: `docs/product/PRD_OASIS_CRM_V3.md` versi 3.3 (D30–D33)
 - Bukti tes: `CoordinatorSalesMonitoringServiceTest`, `SalesAgendaSubmissionAttentionServiceTest`, `AttentionSummaryNotificationTest`, `SalesMonitoringProjectionTest`, dan tes AI fokus; mencakup badge/filter scope, aktivitas terakhir, hari libur/akhir pekan, cutoff settings-backed, UTJ/Gugur, antrean tanpa pemilik, dan idempotensi notifikasi.
 - Changelog: migrasi `2026_11_22_231500_add_wp23_attention_changelog.php`; migrasi index aktivitas dan kunci unik notifikasi: `2026_11_22_224300_add_wp23_lead_attention_activity_indexes.php`.
 - Sumber komentar kini tersimpan di kolom `comments.source`; migrasi mengklasifikasikan komentar lama berbasis `user_id` (`human` bila terisi, `system` bila NULL) secara idempoten. Agregat tetap hanya menghitung `human` dan mengecualikan soft-delete.
-| WP-2.4 | 2 | Status peralihan cabang dan laporan paritas | Belum mulai | §9.3 |
+| WP-2.4 | 2 | Status peralihan cabang dan laporan paritas | Paket A selesai; menunggu review | §9.3 |
 | WP-2.5 | 2 | Dana Talangan di OASIS dan cicilan | Belum mulai | BR-42–BR-44 |
 | WP-2.6 | 2 | Kembali ke NUP di Workspace Konsumen | Belum mulai | BR-20–BR-22 |
 | WP-2.7 | 2 | Penutup Fase 2: changelog, dokumentasi, verifikasi penuh | Belum mulai | Semua fase 2 |
@@ -435,7 +435,22 @@ Status: selesai pada branch `prd-v3/wp-1.10-fase1-closeout`; merge phase branch 
 
 ### WP-2.4 — Paritas status transaksi Workspace
 
-Status: dicatat sebagai risiko tindak lanjut.
+Status: Selesai setelah Paket A, B, dan C.
+
+Ringkasan Paket WP-2.4:
+- Paket A — state migrasi cabang dan guard input/sinkron: `e574127`.
+- Paket B — laporan paritas cabang, snapshot, matching bertingkat, metrik, UI, ekspor, dan tes: `adb4642`.
+- Paket C — gate cutover berbasis snapshot LULUS/freshness, override pemilik dengan audit, rollback, status paritas di halaman migrasi, dan runbook: `c9412b5`.
+
+WP-2.4 ditutup pada branch `prd-v3/wp-2.4-c-cutover-gate`. Cutover produksi tetap dilakukan operator, bukan agent.
+
+Guard input OASIS kini mencakup `ConsumerEntryService`, `ConsumerNupService`, seluruh mutasi publik `ConsumerOperationalService`, `ConsumerApplicationLifecycleService` (Mundur, Pindah Kavling, Ganti Konsumen), dan `ConsumerProcessService` (Garansi, Kendala). Pengecualian sengaja: `ConsumerPasteImportService`, importer proses historis, importer Marison, dan `ConsumerMigrationReconciliationService` tetap boleh menulis data status `migrasi` sebagai jalur migrasi/impor; jalur ini bukan input Workspace manual.
+
+Paket A branch migration state (`e574127`) menetapkan state cabang dan blokir input Workspace berdasarkan status cabang; hash lama `bfc4c28` diperbaiki. Workspace Konsumen bawaan OASIS tetap dapat menulis pada status yang diizinkan. Inventaris boundary untuk Paket B/C dan WP-3.6:
+
+- Cermin sheet: `DatabaseSheetSyncService`, `DatabaseSheetWriteService`, `KonsumenProgressSyncService`, `SalesLeadLifecycleSyncService`; `oasis_penuh` menolak tulis sheet atau melewati sinkronisasi/cache sheet.
+- Bawaan OASIS: `ConsumerEntryService`, `ConsumerOperationalService`, `ConsumerNupService`, `ConsumerApplicationLifecycleService`, `ConsumerKavlingLifecycleService`; `oasis_penuh` tidak memblokir input `consumer_*`.
+- Default state `sheet`; resolver read-only fallback tidak menulis; operator transition only.
 
 Tab dan hitungan Mundur di Workspace masih membaca `consumer_applications.transaction_status` mentah. Laporan paritas dan dashboard wajib memakai pemetaan kanonis per baris: `REJECT SLIK`/`REJECT BANK` dan status reject terkait → `MUNDUR`, status Ganti Nama/Kembali ke NUP → `DITUTUP`, dan status aktif → `LANJUT`; nilai tak dikenal masuk `needs_review`. Perbaikan harus menjaga laporan gabungan lintas cabang dan tidak mengubah kolom legacy sebagai efek samping.
 

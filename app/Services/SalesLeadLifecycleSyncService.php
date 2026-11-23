@@ -40,6 +40,7 @@ class SalesLeadLifecycleSyncService
 
     public function __construct(
         private readonly GoogleSheetsApiService $googleSheets,
+        private readonly BranchMigrationStateService $migrationStates,
         private readonly SyncLockService $locks,
         private readonly PhoneNormalizationService $phones,
         private readonly SalesSheetIdentityService $sheetIdentities,
@@ -49,6 +50,12 @@ class SalesLeadLifecycleSyncService
 
     public function sync(Branch $branch, ?User $actor = null): array
     {
+        if (! $this->migrationStates->allowsSheetSync($branch)) {
+            $this->migrationStates->logSkip($branch, 'sales_lead_lifecycle');
+
+            return ['ok' => true, 'status' => 'skipped', 'branch' => $branch->name, 'message' => 'Cabang berstatus oasis_penuh.', 'reason' => 'oasis_penuh', 'summary' => []];
+        }
+
         $result = $this->locks->run('sales-lead-lifecycle:branch:'.$branch->id, function () use ($branch, $actor): array {
             $operationUuid = (string) Str::uuid();
             $status = SalesLeadLifecycleSyncStatus::query()->updateOrCreate(

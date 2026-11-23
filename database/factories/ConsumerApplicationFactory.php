@@ -3,6 +3,7 @@
 namespace Database\Factories;
 
 use App\Models\Branch;
+use App\Models\BranchMigrationState;
 use App\Models\ConsumerApplication;
 use App\Models\Customer;
 use App\Models\LeadMaster;
@@ -18,6 +19,7 @@ class ConsumerApplicationFactory extends Factory
     {
         $branch = Branch::create(['name' => fake()->city(), 'code' => Str::upper(Str::random(8)), 'is_active' => true]);
         $project = LeadMaster::create(['branch_id' => $branch->id, 'project_name' => fake()->company(), 'is_active' => true]);
+        BranchMigrationState::query()->updateOrCreate(['branch_id' => $branch->id], ['state' => BranchMigrationState::STATE_PARALEL]);
 
         return [
             'customer_id' => Customer::factory(),

@@ -6,6 +6,7 @@ use App\Enums\SalesLeadStatus;
 use App\Exceptions\SalesLeadSpreadsheetContractException;
 use App\Models\AppSetting;
 use App\Models\Branch;
+use App\Models\BranchMigrationState;
 use App\Models\LeadMaster;
 use App\Models\Role;
 use App\Models\SalesCoordinatorSales;
@@ -485,6 +486,7 @@ class SalesLeadLifecycleOperationsTest extends TestCase
     {
         $branch = Branch::create(['name' => 'Branch '.Str::random(6), 'code' => strtoupper(Str::random(5)), 'sheet_id' => 'sheet-'.Str::random(8), 'is_active' => true]);
         $project = LeadMaster::create(['branch_id' => $branch->id, 'project_name' => 'Project '.Str::random(6), 'is_active' => true]);
+        BranchMigrationState::query()->create(['branch_id' => $branch->id, 'state' => BranchMigrationState::STATE_PARALEL]);
         $sales = $this->user('manager', $branch, 'Manager '.Str::random(5));
         $sales->assignedProjects()->attach($project->id, ['is_primary' => true, 'is_active' => true]);
         $lead = $this->lead($sales, $project);

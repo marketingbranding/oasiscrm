@@ -15,13 +15,20 @@ class DatabaseSheetSyncService
 
     private SyncLockService $locks;
 
-    public function __construct(private GoogleSheetsApiService $googleSheets, ?SyncLockService $locks = null)
+    public function __construct(private GoogleSheetsApiService $googleSheets, ?SyncLockService $locks = null, private ?BranchMigrationStateService $migrationStates = null)
     {
         $this->locks = $locks ?? app(SyncLockService::class);
+        $this->migrationStates ??= app(BranchMigrationStateService::class);
     }
 
     public function syncBranch(Branch $branch, ?int $initiatedBy = null): array
     {
+        if (! $this->migrationStates->allowsSheetSync($branch)) {
+            $this->migrationStates->logSkip($branch, 'database');
+
+            return ['ok' => true, 'status' => 'skipped', 'branch' => $branch->name, 'message' => 'Cabang berstatus oasis_penuh.', 'reason' => 'oasis_penuh', 'summary' => []];
+        }
+
         return $this->locks->run('database:branch:'.$branch->id, fn () => $this->performSync($branch, $initiatedBy));
     }
 

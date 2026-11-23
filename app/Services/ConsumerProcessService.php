@@ -25,10 +25,12 @@ class ConsumerProcessService
     public function __construct(
         private readonly OrganizationScopeService $scope,
         private readonly ConsumerOperationalService $operational,
+        private readonly BranchMigrationStateService $migrationStates,
     ) {}
 
     public function recordWarranty(ConsumerApplication $application, array $data, User $actor): ConsumerWarranty
     {
+        $this->migrationStates->assertOasisConsumerInputAllowed((int) $application->branch_id);
         $this->authorize($actor, $application);
         if (! $application->bastRecords()->exists()) {
             throw new DomainException('Form Garansi hanya dapat dicatat setelah BAST.');
@@ -76,6 +78,7 @@ class ConsumerProcessService
 
     public function createIssue(ConsumerApplication $application, array $data, User $actor): ConsumerIssue
     {
+        $this->migrationStates->assertOasisConsumerInputAllowed((int) $application->branch_id);
         $this->authorize($actor, $application);
         $this->assertPicScope($application, $data, $actor);
 
@@ -94,6 +97,7 @@ class ConsumerProcessService
     public function resolveIssue(ConsumerIssue $issue, array $data, User $actor): ConsumerIssue
     {
         $issue->loadMissing('application');
+        $this->migrationStates->assertOasisConsumerInputAllowed((int) $issue->application->branch_id);
         $this->authorize($actor, $issue->application);
         $issue->update(['status' => 'resolved', 'resolution' => $data['resolution'], 'resolved_at' => now(), 'resolved_by' => $actor->id]);
         $this->audit($actor, $issue->application, 'consumer_issue_resolved', ['issue_id' => $issue->id], ['resolution' => $issue->resolution], 'manual');

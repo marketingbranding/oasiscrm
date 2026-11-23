@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\Branch;
+use App\Models\BranchMigrationState;
 use App\Models\ConsumerApplication;
 use App\Models\ConsumerKavlingAssignment;
 use App\Models\ConsumerMigrationReconciliation;
@@ -34,6 +35,7 @@ class ConsumerMigrationReconciliationTest extends TestCase
         parent::setUp();
         $this->branch = Branch::create(['code' => 'MGL', 'name' => 'Magelang', 'is_active' => true]);
         $this->project = LeadMaster::create(['branch_id' => $this->branch->id, 'project_name' => 'Proyek Migrasi', 'is_active' => true]);
+        BranchMigrationState::query()->create(['branch_id' => $this->branch->id, 'state' => BranchMigrationState::STATE_PARALEL]);
         $this->admin = User::factory()->create(['role_id' => Role::where('slug', 'superadmin')->value('id'), 'branch_id' => $this->branch->id, 'email_verified_at' => now(), 'password_changed_at' => now()]);
     }
 

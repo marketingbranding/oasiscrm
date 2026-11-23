@@ -3,11 +3,13 @@
 namespace Tests\Feature;
 
 use App\Models\Branch;
+use App\Models\BranchMigrationState;
 use App\Models\ConsumerApplication;
 use App\Models\LeadMaster;
 use App\Models\Role;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
 class PrdV3D32ConsumerInputTest extends TestCase
@@ -32,6 +34,21 @@ class PrdV3D32ConsumerInputTest extends TestCase
             'nup_number' => 'D32-NUP-001',
             'registered_at' => '2026-11-21',
             'name' => 'Konsumen SAS',
+            'branch_id' => $branch->id,
+            'project_id' => $project->id,
+        ])->assertCreated();
+    }
+
+    public function test_br32_oasis_full_branch_keeps_workspace_nup_input_available(): void
+    {
+        [$branch, $project, $sas] = $this->context();
+
+        DB::table('branch_migration_states')->where('branch_id', $branch->id)->update(['state' => 'oasis_penuh', 'updated_at' => now()]);
+
+        $this->actingAs($sas)->postJson(route('consumer-nups.store'), [
+            'nup_number' => 'D32-NUP-OASIS',
+            'registered_at' => '2026-11-21',
+            'name' => 'Konsumen OASIS Penuh',
             'branch_id' => $branch->id,
             'project_id' => $project->id,
         ])->assertCreated();
@@ -74,6 +91,7 @@ class PrdV3D32ConsumerInputTest extends TestCase
     {
         $branch = Branch::create(['code' => 'D32', 'name' => 'Cabang D32', 'is_active' => true]);
         $project = LeadMaster::create(['branch_id' => $branch->id, 'project_name' => 'Proyek D32', 'is_active' => true]);
+        BranchMigrationState::query()->create(['branch_id' => $branch->id, 'state' => BranchMigrationState::STATE_PARALEL]);
         $sas = User::factory()->create([
             'role_id' => Role::query()->where('slug', 'sas')->value('id'),
             'branch_id' => $branch->id,

@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Crm;
 use App\Http\Controllers\Controller;
 use App\Models\Branch;
 use App\Models\BranchMigrationState;
+use App\Models\ConsumerParitySnapshot;
 use App\Services\BranchMigrationStateService;
 use Illuminate\Http\Request;
 
@@ -17,8 +18,9 @@ class BranchMigrationStateController extends Controller
         abort_unless(request()->user()?->isSuperadmin(), 403);
 
         $branches = Branch::query()->with(['migrationState.changedBy'])->orderBy('name')->paginate(25);
+        $paritySnapshots = ConsumerParitySnapshot::query()->whereIn('branch_id', $branches->getCollection()->pluck('id'))->latest('checked_at')->get()->unique('branch_id')->keyBy('branch_id');
 
-        return view('crm.branch-migration-states.index', compact('branches'));
+        return view('crm.branch-migration-states.index', compact('branches', 'paritySnapshots'));
     }
 
     public function update(Request $request, Branch $branch)

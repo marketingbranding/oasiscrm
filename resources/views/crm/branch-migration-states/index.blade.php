@@ -12,7 +12,7 @@
         <div class="overflow-x-auto rounded border border-slate-200 bg-white">
             <table class="min-w-full text-left text-sm">
                 <thead class="bg-slate-100">
-                    <tr><th class="px-4 py-3">Cabang</th><th class="px-4 py-3">Status</th><th class="px-4 py-3">Diubah</th><th class="px-4 py-3">Oleh</th><th class="px-4 py-3">Alasan</th><th class="px-4 py-3">Aksi</th></tr>
+                    <tr><th class="px-4 py-3">Cabang</th><th class="px-4 py-3">Status</th><th class="px-4 py-3">Paritas terakhir</th><th class="px-4 py-3">Diubah</th><th class="px-4 py-3">Oleh</th><th class="px-4 py-3">Alasan</th><th class="px-4 py-3">Aksi</th></tr>
                 </thead>
                 <tbody>
                     @foreach ($branches as $branch)
@@ -20,6 +20,8 @@
                         <tr class="border-t border-slate-200" x-data="{ open: false, confirm: false }">
                             <td class="px-4 py-3">{{ $branch->name }}</td>
                             <td class="px-4 py-3 font-medium">{{ $state }}</td>
+                            @php($parity = $paritySnapshots->get($branch->id))
+                            <td class="px-4 py-3"><span>{{ $parity?->status ?? 'Belum ada' }}</span><br><span class="text-xs text-slate-500">{{ $parity?->checked_at?->format('d M Y H:i') ?? '—' }}</span><br><a class="underline" href="{{ route('admin.branch-parity.index', ['branch' => $branch->id]) }}">Laporan paritas</a></td>
                             <td class="px-4 py-3">{{ $branch->migrationState?->changed_at?->format('d M Y H:i') ?? 'Belum diubah' }}</td>
                             <td class="px-4 py-3">{{ $branch->migrationState?->changedBy?->name ?? '—' }}</td>
                             <td class="max-w-xs px-4 py-3">{{ $branch->migrationState?->notes ?? '—' }}</td>

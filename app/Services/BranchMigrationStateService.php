@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\ActivityLog;
 use App\Models\Branch;
 use App\Models\BranchMigrationState;
+use App\Models\ConsumerParitySnapshot;
 use App\Models\User;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Support\Facades\Cache;
@@ -86,7 +87,7 @@ class BranchMigrationStateService
         }
     }
 
-    public function transition(User $actor, Branch $branch, string $expectedState, string $targetState, string $reason): BranchMigrationState
+    public function transition(User $actor, Branch $branch, string $expectedState, string $targetState, string $reason, bool $override = false): BranchMigrationState
     {
         if (! $actor->isSuperadmin() || ! $actor->isAccountActive() || ! $actor->is_active) {
             throw new AuthorizationException('Hanya Superadmin aktif yang dapat mengubah status migrasi cabang.');
@@ -96,11 +97,14 @@ class BranchMigrationStateService
         if ($reason === '' || mb_strlen($reason) > 1000) {
             throw ValidationException::withMessages(['reason' => 'Alasan wajib diisi dan maksimal 1000 karakter.']);
         }
+        if ($override && ! app(SystemAdministrationAuthorizationService::class)->canManage($actor, SystemAdministrationAuthorizationService::SETTINGS)) {
+            throw new AuthorizationException('Override cutover hanya boleh dilakukan pemilik produk.');
+        }
         if (! in_array($expectedState, BranchMigrationState::STATES, true) || ! in_array($targetState, BranchMigrationState::STATES, true)) {
             throw ValidationException::withMessages(['state' => 'Status migrasi tidak valid.']);
         }
 
-        return DB::transaction(function () use ($actor, $branch, $expectedState, $targetState, $reason): BranchMigrationState {
+        return DB::transaction(function () use ($actor, $branch, $expectedState, $targetState, $reason, $override): BranchMigrationState {
             Branch::query()->whereKey($branch->id)->lockForUpdate()->firstOrFail();
             $state = BranchMigrationState::query()->where('branch_id', $branch->id)->lockForUpdate()->first();
             if ($state === null) {
@@ -113,6 +117,17 @@ class BranchMigrationStateService
             $targetIndex = array_search($targetState, BranchMigrationState::STATES, true);
             if ($targetIndex === $fromIndex || abs($targetIndex - $fromIndex) !== 1) {
                 throw ValidationException::withMessages(['state' => 'Perubahan status hanya boleh satu tahap maju atau mundur.']);
+            }
+
+            $paritySnapshot = null;
+            if ($state->state === BranchMigrationState::STATE_PARALEL && $targetState === BranchMigrationState::STATE_OASIS_FULL) {
+                $paritySnapshot = ConsumerParitySnapshot::query()->where('branch_id', $branch->id)->latest('checked_at')->first();
+                $freshnessHours = app(AppSettingResolver::class)->int('consumer_parity.cutover_freshness_hours');
+                if (! $override && ($paritySnapshot === null || $paritySnapshot->status !== 'LULUS' || $paritySnapshot->checked_at?->lt(now()->subHours($freshnessHours)))) {
+                    $status = $paritySnapshot?->status ?? 'BELUM ADA';
+                    $checkedAt = $paritySnapshot?->checked_at?->format('d-m-Y H:i:s') ?? 'belum ada';
+                    throw ValidationException::withMessages(['state' => "Cutover ditolak: snapshot paritas terakhir berstatus {$status}, diperiksa {$checkedAt}."]);
+                }
             }
 
             $changedAt = now();
@@ -131,6 +146,8 @@ class BranchMigrationStateService
                     'reason' => $reason,
                     'actor_id' => $actor->id,
                     'changed_at' => $changedAt->toIso8601String(),
+                    'parity_snapshot_id' => $paritySnapshot?->id,
+                    'parity_override' => $override,
                 ],
             ]);
 

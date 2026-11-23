@@ -12,6 +12,14 @@ class AppSettingCatalog
     public static function definitions(): array
     {
         return [
+            'consumer_parity.cutover_freshness_hours' => [
+                'group' => 'consumer_parity',
+                'type' => 'integer',
+                'default' => 24,
+                'label' => 'Batas kesegaran paritas cutover',
+                'description' => 'Jam maksimum usia snapshot paritas sebelum cutover oasis_penuh.',
+                'rules' => ['integer', 'min:1', 'max:168'],
+            ],
             'sales_agenda.reminder_lead_minutes' => [
                 'group' => 'sales_agenda',
                 'type' => 'integer',

@@ -6,6 +6,7 @@ use App\Models\Traits\LogsActivity;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Support\Facades\Storage;
 
 class DanaTalanganPayment extends Model
 {
@@ -33,6 +34,15 @@ class DanaTalanganPayment extends Model
     public function creator(): BelongsTo
     {
         return $this->belongsTo(User::class, 'created_by');
+    }
+
+    protected static function booted(): void
+    {
+        static::forceDeleted(function (self $payment): void {
+            if ($payment->evidence_path !== null) {
+                Storage::disk('local')->delete($payment->evidence_path);
+            }
+        });
     }
 
     protected function activityLabel(): string

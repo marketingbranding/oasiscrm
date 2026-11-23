@@ -50,6 +50,8 @@ class DanaTalangan extends Model
         'id_transaksi',
         'id_psjb',
         'status',
+        'status_auto_lunas',
+        'status_before_auto_lunas',
         'created_by',
         'updated_by',
     ];
@@ -62,6 +64,7 @@ class DanaTalangan extends Model
             'nominal' => 'decimal:2',
             'pinjam_nama' => 'boolean',
             'konfirmasi_keuangan' => 'boolean',
+            'status_auto_lunas' => 'boolean',
             'umur' => 'integer',
             'last_synced_field_hashes' => 'array',
             'delivery_attempted_at' => 'datetime',

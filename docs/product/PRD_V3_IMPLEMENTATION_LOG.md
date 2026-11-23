@@ -462,7 +462,9 @@ Paket B berjalan:
 - Dry-run backfill tidak menulis audit. `--confirm` menampilkan `DITOLAK` untuk ID tidak ada, sudah tertaut, atau bukan `KANDIDAT`, lalu mengembalikan exit code gagal.
 - Workspace Konsumen menyediakan pencarian nama/kavling dengan scope cabang/proyek; pemilihan mengisi relasi dan data Dana Talangan. Input manual tetap tersedia.
 - Pembayaran mendukung verifikasi langsung default, edit, soft delete, audit, status `lunas` otomatis dari total terverifikasi, pencabutan saat total turun, lebih bayar, dan bukti privat.
-- Tes penuh baseline Paket A: 2144 tes / 14607 assertions. Tes fokus Paket B saat ini: 3 tes / 14 assertions.
+- Baseline suite sebelum Paket B: 2147 tes / 14618 assertions. Setelah perbaikan ini: 2158 tes / 14674 assertions.
+- Tes fokus Dana Talangan saat ini: 9 tes pembayaran, seluruhnya lulus.
+- Pembayaran memakai integer sen, tanpa ketergantungan bcmath. Nominal kosong tidak memicu Lunas; pembayaran belum terverifikasi tidak dihitung; Lunas manual tidak disentuh; status otomatis menyimpan status manual sebelumnya; bukti lama dihapus saat diganti dan dipertahankan saat soft delete.
 
 Paket A review fix sudah di-push untuk review.
 

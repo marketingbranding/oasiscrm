@@ -225,6 +225,23 @@ class DanaTalanganBridgeService
                     continue;
                 }
                 if ($syncId === '') {
+                    [$remoteProject] = $this->resolveRemoteProject($this->normalizeRemote($row));
+                    $remoteBranchId = $remoteProject?->branch_id;
+                    if ($remoteBranchId !== null && FeatureFlag::enabledForBranch('dana_talangan_primary_source', (int) $remoteBranchId)) {
+                        if (! $dryRun) {
+                            ActivityLog::query()->create([
+                                'causer_id' => $actor?->id,
+                                'subject_type' => DanaTalangan::class,
+                                'subject_id' => null,
+                                'event' => 'bridge_skipped_primary_source',
+                                'description' => 'Baris Dana Talangan tidak ditarik dari sheet karena OASIS menjadi sumber utama cabang.',
+                                'properties' => ['branch_id' => $remoteBranchId, 'row_number' => $row['_row_number'], 'direction' => 'pull'],
+                            ]);
+                        }
+                        $summary['skipped_primary_source'] = ($summary['skipped_primary_source'] ?? 0) + 1;
+
+                        continue;
+                    }
                     if ($business) {
                         $this->reconcile(null, 'remote_create_pending_review', $row, $dryRun, [], ['payload_hash' => $this->payloadHash($this->normalizeRemote($row))]);
                         $summary['remote_create_pending_review']++;
@@ -240,15 +257,20 @@ class DanaTalanganBridgeService
                     continue;
                 }
                 $record = DanaTalangan::withTrashed()->where('oasis_sync_id', $syncId)->first();
-                if ($record !== null && FeatureFlag::enabledForBranch('dana_talangan_primary_source', (int) $record->branch_id)) {
+                $remoteBranchId = $record?->branch_id;
+                if ($remoteBranchId === null) {
+                    [$remoteProject] = $this->resolveRemoteProject($this->normalizeRemote($row));
+                    $remoteBranchId = $remoteProject?->branch_id;
+                }
+                if ($remoteBranchId !== null && FeatureFlag::enabledForBranch('dana_talangan_primary_source', (int) $remoteBranchId)) {
                     if (! $dryRun) {
                         ActivityLog::query()->create([
                             'causer_id' => $actor?->id,
                             'subject_type' => DanaTalangan::class,
-                            'subject_id' => $record->id,
+                            'subject_id' => $record?->id,
                             'event' => 'bridge_skipped_primary_source',
                             'description' => 'Baris Dana Talangan tidak ditarik dari sheet karena OASIS menjadi sumber utama cabang.',
-                            'properties' => ['branch_id' => $record->branch_id, 'row_number' => $row['_row_number'], 'direction' => 'pull'],
+                            'properties' => ['branch_id' => $remoteBranchId, 'row_number' => $row['_row_number'], 'direction' => 'pull'],
                         ]);
                     }
                     $summary['skipped_primary_source'] = ($summary['skipped_primary_source'] ?? 0) + 1;

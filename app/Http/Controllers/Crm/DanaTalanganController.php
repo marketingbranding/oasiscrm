@@ -359,30 +359,48 @@ class DanaTalanganController extends Controller
             ->with('success', 'Data dana talangan berhasil diperbarui.');
     }
 
-    public function report(Request $request, DanaTalanganReportService $service): JsonResponse
+    public function report(Request $request, DanaTalanganReportService $service): Response|JsonResponse
     {
         $user = Auth::user();
         abort_unless($user->hasPermission('bridge_fund.view'), 403);
-        $branchId = $request->integer('branch_id') ?: null;
-        $projectId = $request->integer('project_id') ?: null;
-        $this->assertReportScope($user, $branchId, $projectId);
-        $from = $request->filled('from') ? Carbon::parse($request->string('from')) : null;
-        $to = $request->filled('to') ? Carbon::parse($request->string('to')) : null;
+        [$branchId, $projectId, $from, $to] = $this->reportFilters($request, $user);
+        $report = $service->report($user, $branchId, $projectId, $from, $to);
 
-        return response()->json($service->report($user, $branchId, $projectId, $from, $to));
+        if ($request->expectsJson()) {
+            return response()->json($report);
+        }
+
+        $branches = Branch::query()->whereIn('id', $this->organizationScope->branchIds($user, 'bridge_fund', 'view'))->orderBy('name')->get();
+        $projects = LeadMaster::query()->whereIn('id', $this->organizationScope->projectIds($user, 'bridge_fund', 'view'))->where('is_active', true)->orderBy('project_name')->get();
+
+        return response()->view('crm.dana-talangan.report', compact('report', 'branches', 'projects', 'branchId', 'projectId', 'from', 'to'));
     }
 
     public function exportReport(Request $request, DanaTalanganReportService $service): BinaryFileResponse
     {
         $user = Auth::user();
         abort_unless($user->hasPermission('bridge_fund.export'), 403);
-        $branchId = $request->integer('branch_id') ?: null;
-        $projectId = $request->integer('project_id') ?: null;
-        $this->assertReportScope($user, $branchId, $projectId);
-        $report = $service->report($user, $branchId, $projectId, $request->filled('from') ? Carbon::parse($request->string('from')) : null, $request->filled('to') ? Carbon::parse($request->string('to')) : null);
+        [$branchId, $projectId, $from, $to] = $this->reportFilters($request, $user);
+        $report = $service->report($user, $branchId, $projectId, $from, $to);
         $filename = 'laporan-dana-talangan-'.now()->format('Ymd-His').'.xlsx';
 
         return DanaTalanganExport::summaryToBrowser($report, $filename);
+    }
+
+    /** @return array{0:?int,1:?int,2:Carbon,3:Carbon} */
+    private function reportFilters(Request $request, User $user): array
+    {
+        $data = $request->validate([
+            'branch_id' => ['nullable', 'integer'],
+            'project_id' => ['nullable', 'integer'],
+            'from' => ['nullable', 'date'],
+            'to' => ['nullable', 'date', 'after_or_equal:from'],
+        ]);
+        $branchId = isset($data['branch_id']) ? (int) $data['branch_id'] : null;
+        $projectId = isset($data['project_id']) ? (int) $data['project_id'] : null;
+        $this->assertReportScope($user, $branchId, $projectId);
+
+        return [$branchId, $projectId, Carbon::parse($data['from'] ?? now()->startOfMonth()->toDateString())->startOfDay(), Carbon::parse($data['to'] ?? now()->toDateString())->endOfDay()];
     }
 
     private function assertReportScope(User $user, ?int $branchId, ?int $projectId): void

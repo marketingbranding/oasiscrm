@@ -62,6 +62,8 @@ class DanaTalanganExport
             ['Total Nominal', $report['nominal']],
             ['Total Pembayaran Terverifikasi', $report['verified']],
             ['Total Pembayaran Belum Terverifikasi', $report['unverified']],
+            ['Pembayaran Terverifikasi Diterima dalam Periode', $report['received_verified']],
+            ['Pembayaran Belum Terverifikasi Diterima dalam Periode', $report['received_unverified']],
             ['Sisa', $report['remaining']],
             ['Lebih Bayar', $report['overpaid']],
         ];
@@ -70,7 +72,7 @@ class DanaTalanganExport
         }
         foreach ($rows as $row => $values) {
             foreach ($values as $column => $value) {
-                $sheet->setCellValueByColumnAndRow($column + 1, $row + 1, $value);
+                $sheet->setCellValue(Coordinate::stringFromColumnIndex($column + 1).($row + 1), $value);
             }
         }
         $path = tempnam(sys_get_temp_dir(), 'dana-report-').'.xlsx';

@@ -9,35 +9,42 @@ use Illuminate\Support\Collection;
 
 class DanaTalanganReportService
 {
-    public function report(User $user, ?int $branchId, ?int $projectId, ?Carbon $from, ?Carbon $to): array
+    public function report(User $user, ?int $branchId, ?int $projectId, Carbon $from, Carbon $to): array
     {
-        if ($branchId !== null && ! in_array($branchId, app(OrganizationScopeService::class)->branchIds($user, 'bridge_fund', 'view'), true)) {
-            abort(403);
-        }
-        if ($projectId !== null && ! in_array($projectId, app(OrganizationScopeService::class)->projectIds($user, 'bridge_fund', 'view'), true)) {
-            abort(403);
-        }
+        $scope = app(OrganizationScopeService::class);
+        abort_if($branchId !== null && ! in_array($branchId, $scope->branchIds($user, 'bridge_fund', 'view'), true), 403);
+        abort_if($projectId !== null && ! in_array($projectId, $scope->projectIds($user, 'bridge_fund', 'view'), true), 403);
 
-        $records = DanaTalangan::query()->visibleTo($user, 'view')
+        $baseQuery = DanaTalangan::query()->visibleTo($user, 'view')
             ->when($branchId, fn ($query) => $query->where('branch_id', $branchId))
-            ->when($projectId, fn ($query) => $query->where('project_id', $projectId))
-            ->with(['payments' => fn ($query) => $query->whereBetween('paid_at', [$from?->toDateString() ?? '1900-01-01', $to?->toDateString() ?? '2999-12-31'])])
+            ->when($projectId, fn ($query) => $query->where('project_id', $projectId));
+        $records = (clone $baseQuery)
+            ->whereDate('tanggal', '>=', $from)
+            ->whereDate('tanggal', '<=', $to)
+            ->with(['payments' => fn ($query) => $query->whereDate('paid_at', '<=', $to)])
             ->get();
-        $talanganRecords = $records->filter(fn (DanaTalangan $record): bool => ($from === null || $record->tanggal?->gte($from)) && ($to === null || $record->tanggal?->lte($to)));
+        $paymentRecords = (clone $baseQuery)
+            ->with(['payments' => fn ($query) => $query->whereBetween('paid_at', [$from, $to])])
+            ->get();
 
         $verified = $records->sum(fn (DanaTalangan $record): int => $this->sumCents($record->payments->where('is_verified', true)));
         $unverified = $records->sum(fn (DanaTalangan $record): int => $this->sumCents($record->payments->where('is_verified', false)));
-        $nominal = $talanganRecords->sum(fn (DanaTalangan $record): int => $this->toCents($record->nominal));
+        $receivedVerified = $paymentRecords->sum(fn (DanaTalangan $record): int => $this->sumCents($record->payments->where('is_verified', true)));
+        $receivedUnverified = $paymentRecords->sum(fn (DanaTalangan $record): int => $this->sumCents($record->payments->where('is_verified', false)));
+        $nominal = $records->sum(fn (DanaTalangan $record): int => $this->toCents($record->nominal));
+        $remaining = $records->sum(fn (DanaTalangan $record): int => max(0, $this->toCents($record->nominal) - $this->sumCents($record->payments->where('is_verified', true))));
+        $overpaid = $records->sum(fn (DanaTalangan $record): int => max(0, $this->sumCents($record->payments->where('is_verified', true)) - $this->toCents($record->nominal)));
 
         return [
-            'records' => $talanganRecords,
-            'count' => $talanganRecords->count(),
+            'count' => $records->count(),
             'nominal' => $this->formatCents($nominal),
             'verified' => $this->formatCents($verified),
             'unverified' => $this->formatCents($unverified),
-            'remaining' => $this->formatCents(max(0, $nominal - $verified)),
-            'overpaid' => $this->formatCents(max(0, $verified - $nominal)),
-            'by_status' => $talanganRecords->groupBy('status')->map->count()->all(),
+            'received_verified' => $this->formatCents($receivedVerified),
+            'received_unverified' => $this->formatCents($receivedUnverified),
+            'remaining' => $this->formatCents($remaining),
+            'overpaid' => $this->formatCents($overpaid),
+            'by_status' => $records->groupBy('status')->map->count()->all(),
         ];
     }
 

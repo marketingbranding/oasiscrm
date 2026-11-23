@@ -88,13 +88,24 @@ final class BranchParityReportService
 
     private function metricDelta(array $metrics): array
     {
-        return ['kavling' => $metrics['oasis']['kavling'] - $metrics['sheet']['kavling']];
+        return [
+            'status' => $this->subtractCounts($metrics['oasis']['status'], $metrics['sheet']['status']),
+            'akad' => $this->subtractCounts($metrics['oasis']['akad'], $metrics['sheet']['akad']),
+            'process' => $this->subtractCounts($metrics['oasis']['process'], $metrics['sheet']['process']),
+            'kavling' => $metrics['oasis']['kavling'] - $metrics['sheet']['kavling'],
+        ];
+    }
+
+    private function subtractCounts(array $left, array $right): array
+    {
+        return collect(array_unique([...array_keys($left), ...array_keys($right)]))->mapWithKeys(fn (string $key): array => [$key => ($left[$key] ?? 0) - ($right[$key] ?? 0)])->all();
     }
 
     private function addSideMetrics(array &$metrics, array $records): void
     {
         foreach ($records as $record) {
-            $status = strtoupper((string) ($record->applicationStatus ?? 'LANJUT'));
+            $details = ConsumerApplication::canonicalTransactionStatusDetailsFor($record->applicationStatus);
+            $status = $record->applicationStatus === null || trim($record->applicationStatus) === '' ? 'TANPA STATUS' : $details['status'];
             $metrics['status'][$status] = ($metrics['status'][$status] ?? 0) + 1;
             if ($record->akadDate) {
                 $month = substr($record->akadDate, 0, 7);

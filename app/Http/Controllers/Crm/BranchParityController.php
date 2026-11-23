@@ -10,6 +10,7 @@ use App\Services\BranchParityReportService;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
+use Symfony\Component\HttpFoundation\RedirectResponse;
 
 class BranchParityController extends Controller
 {
@@ -27,7 +28,7 @@ class BranchParityController extends Controller
         return view('crm.branch-parity.index', compact('branches', 'branch', 'report', 'snapshot'));
     }
 
-    public function run(Request $request, Branch $branch): View
+    public function run(Request $request, Branch $branch): RedirectResponse
     {
         abort_unless($request->user()->isSuperadmin(), 403);
         $this->service->report($branch);

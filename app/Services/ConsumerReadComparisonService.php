@@ -24,6 +24,17 @@ final class ConsumerReadComparisonService
         $local = $this->local->records($branch, $project);
         $identityIndexes = array_fill_keys(['transaction', 'consumer', 'psjb', 'external', 'external_raw'], []);
         $duplicateKeys = [];
+        $legacyIdentityCounts = [];
+        foreach ($legacy as $record) {
+            foreach ($this->identities($record, true) as $type => $key) {
+                $legacyIdentityCounts[$type.':'.$key] = ($legacyIdentityCounts[$type.':'.$key] ?? 0) + 1;
+            }
+        }
+        foreach ($legacyIdentityCounts as $key => $count) {
+            if ($count > 1) {
+                $duplicateKeys['legacy:'.$key] = true;
+            }
+        }
         foreach ($local as $record) {
             foreach ($this->identities($record, false) as $type => $key) {
                 $identityIndexes[$type][$key][] = $record;
@@ -45,7 +56,9 @@ final class ConsumerReadComparisonService
         foreach ($legacy as $legacyRecord) {
             [$candidates, $matchKey] = $this->findCandidates($legacyRecord, $identityIndexes, $duplicateKeys);
             $resolutionSource = $matchKey;
-            if (count($candidates) > 1) {
+            $legacyIdentities = $this->identities($legacyRecord, true);
+            $legacyDuplicate = collect($legacyIdentities)->contains(fn (string $key, string $type): bool => isset($duplicateKeys['legacy:'.$type.':'.$key]));
+            if (count($candidates) > 1 || $legacyDuplicate) {
                 foreach ($candidates as $candidate) {
                     $usedLocal[$candidate->localApplicationId] = true;
                 }

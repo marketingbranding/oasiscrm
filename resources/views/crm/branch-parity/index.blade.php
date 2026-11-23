@@ -11,8 +11,11 @@
     </x-crm.field>
 </form>
 @php($report = $snapshot ? new \App\Data\BranchParityReport($branch, $snapshot->status, $snapshot->summary, $snapshot->metrics, $snapshot->differences) : null)
-@if($report)
+@if($branch)
     <form method="POST" action="{{ route('admin.branch-parity.run', $branch) }}" class="mb-4">@csrf<x-crm.button type="submit" variant="primary">Jalankan pemeriksaan</x-crm.button></form>
+    @if(! $report)
+        <x-crm.card>Belum pernah diperiksa.</x-crm.card>
+    @else
     <div class="mb-4 grid gap-4 md:grid-cols-4">
         <x-crm.card><div class="crm-label">Status</div><strong>{{ $report->status }}</strong></x-crm.card>
         <x-crm.card><div class="crm-label">Sheet only</div><strong>{{ $report->summary['sheet_only'] }}</strong></x-crm.card>
@@ -23,5 +26,6 @@
     <x-crm.card class="mt-4"><div class="overflow-x-auto"><table class="w-full text-sm"><thead><tr><th>Status</th><th>Kunci Legacy</th><th>ID Aplikasi OASIS</th><th>Kavling</th><th>Kolom Berbeda</th></tr></thead><tbody>
         @forelse($report->differences as $difference)<tr><td>{{ $difference['status'] }}</td><td>{{ $difference['legacy_key'] ?? '—' }}</td><td>{{ $difference['oasis_application_id'] ?? '—' }}</td><td>{{ $difference['kavling'] ?? '—' }}</td><td>{{ implode(', ', $difference['mismatch_fields'] ?? []) ?: '—' }}</td></tr>@empty<tr><td colspan="5">Tidak ada selisih.</td></tr>@endforelse
     </tbody></table></div></x-crm.card>
+    @endif
 @endif
 @endsection

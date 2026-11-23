@@ -32,7 +32,7 @@ class LegacyConsumerReadService
             $data = $this->data($row->row_data);
             $key = $this->value($data, ['id_kavling', 'id kavling', 'kavling', 'kav']);
             if ($key !== '') {
-                $customers[$key] = $data;
+                $customers[$key][] = $data;
             }
         }
 
@@ -60,51 +60,53 @@ class LegacyConsumerReadService
         }
 
         $records = [];
-        foreach ($customers as $kavling => $customer) {
+        foreach ($customers as $kavling => $customerRows) {
             [$sheet, $stageData] = $byKavling[$kavling] ?? [null, []];
-            $name = $this->value($customer, ['nama_konsumen', 'nama konsumen', 'nama']);
-            if ($name === '') {
-                continue;
-            }
-            $stage = $sheet ?: null;
-            $projectName = $this->value($customer, ['project_name', 'proyek', 'project']);
-            $kavlingModel = $kavlings[Str::lower($kavling)] ?? null;
-            if (! $this->matchProject($project, $projectName, $kavlingModel)) {
-                continue;
-            }
-            $salesName = $this->value($stageData + $customer, ['sales', 'sales_pic', 'nama_sales', 'sales name']);
-            $salesModel = $salesName === '' ? null : $sales->get(Str::lower($salesName));
-            $bank = $this->value($stageData + $customer, ['bank', 'nama_bank', 'bank_name']);
-            $bankStatus = $this->value($stageData + $customer, ['status_bank', 'bank_status']);
-            $external = $this->value($customer, ['external_id', 'external_key', 'id_konsumen', 'id_customer', 'id_lead']);
-            $transactionId = $this->value($customer, ['id_transaksi', 'id transaksi']);
-            $consumerId = $this->value($customer, ['id_konsumen', 'id konsumen', 'id_kons']);
-            $psjbId = $this->value($stageData + $customer, ['id_psjb', 'id psjb']);
-            $legacyKey = $external !== '' ? 'external:'.Str::lower($external) : 'kavling:'.Str::lower($kavling);
+            foreach ($customerRows as $customer) {
+                $name = $this->value($customer, ['nama_konsumen', 'nama konsumen', 'nama']);
+                if ($name === '') {
+                    continue;
+                }
+                $stage = $sheet ?: null;
+                $projectName = $this->value($customer, ['project_name', 'proyek', 'project']);
+                $kavlingModel = $kavlings[Str::lower($kavling)] ?? null;
+                if (! $this->matchProject($project, $projectName, $kavlingModel)) {
+                    continue;
+                }
+                $salesName = $this->value($stageData + $customer, ['sales', 'sales_pic', 'nama_sales', 'sales name']);
+                $salesModel = $salesName === '' ? null : $sales->get(Str::lower($salesName));
+                $bank = $this->value($stageData + $customer, ['bank', 'nama_bank', 'bank_name']);
+                $bankStatus = $this->value($stageData + $customer, ['status_bank', 'bank_status']);
+                $external = $this->value($customer, ['external_id', 'external_key', 'id_konsumen', 'id_customer', 'id_lead']);
+                $transactionId = $this->value($customer, ['id_transaksi', 'id transaksi']);
+                $consumerId = $this->value($customer, ['id_konsumen', 'id konsumen', 'id_kons']);
+                $psjbId = $this->value($stageData + $customer, ['id_psjb', 'id psjb']);
+                $legacyKey = $external !== '' ? 'external:'.Str::lower($external) : 'kavling:'.Str::lower($kavling);
 
-            $records[] = new ConsumerComparisonRecord(
-                legacyKey: $legacyKey,
-                localApplicationId: null,
-                customerName: $name,
-                phone: $this->phone($this->value($customer, ['no_hp', 'no hp', 'phone', 'nomor hp'])),
-                branchId: $branch->id,
-                projectId: $project->id,
-                salesLabel: $salesName ?: null,
-                salesUserId: $salesModel?->id,
-                kavlingLabel: $kavling,
-                kavlingId: $kavlingModel?->id,
-                applicationStatus: $this->value($stageData + $customer, ['transaction_status', 'status_transaksi', 'status transaksi']) ?: null,
-                transactionId: $transactionId ?: null,
-                consumerId: $consumerId ?: null,
-                psjbId: $psjbId ?: null,
-                currentStage: $stage,
-                bookingDate: $this->date($this->value($customer, ['tanggal_booking', 'booking_date'])),
-                akadDate: $this->date($this->value($stageData + $customer, ['tanggal_akad', 'akad_date', 'tgl_akad'])),
-                bankName: $bank ?: null,
-                bankStatus: $bankStatus ?: null,
-                values: ['project_name' => $projectName ?: null],
-                notes: $unknownStages === [] ? [] : ['Tahap legacy tidak dikenal: '.implode(', ', array_keys($unknownStages)).'.'],
-            );
+                $records[] = new ConsumerComparisonRecord(
+                    legacyKey: $legacyKey,
+                    localApplicationId: null,
+                    customerName: $name,
+                    phone: $this->phone($this->value($customer, ['no_hp', 'no hp', 'phone', 'nomor hp'])),
+                    branchId: $branch->id,
+                    projectId: $project->id,
+                    salesLabel: $salesName ?: null,
+                    salesUserId: $salesModel?->id,
+                    kavlingLabel: $kavling,
+                    kavlingId: $kavlingModel?->id,
+                    applicationStatus: $this->value($stageData + $customer, ['transaction_status', 'status_transaksi', 'status transaksi']) ?: null,
+                    transactionId: $transactionId ?: null,
+                    consumerId: $consumerId ?: null,
+                    psjbId: $psjbId ?: null,
+                    currentStage: $stage,
+                    bookingDate: $this->date($this->value($customer, ['tanggal_booking', 'booking_date'])),
+                    akadDate: $this->date($this->value($stageData + $customer, ['tanggal_akad', 'akad_date', 'tgl_akad'])),
+                    bankName: $bank ?: null,
+                    bankStatus: $bankStatus ?: null,
+                    values: ['project_name' => $projectName ?: null],
+                    notes: $unknownStages === [] ? [] : ['Tahap legacy tidak dikenal: '.implode(', ', array_keys($unknownStages)).'.'],
+                );
+            }
         }
 
         return $records;

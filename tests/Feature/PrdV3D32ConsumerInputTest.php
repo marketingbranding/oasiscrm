@@ -8,6 +8,7 @@ use App\Models\LeadMaster;
 use App\Models\Role;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
 class PrdV3D32ConsumerInputTest extends TestCase
@@ -32,6 +33,26 @@ class PrdV3D32ConsumerInputTest extends TestCase
             'nup_number' => 'D32-NUP-001',
             'registered_at' => '2026-11-21',
             'name' => 'Konsumen SAS',
+            'branch_id' => $branch->id,
+            'project_id' => $project->id,
+        ])->assertCreated();
+    }
+
+    public function test_br32_oasis_full_branch_keeps_workspace_nup_input_available(): void
+    {
+        [$branch, $project, $sas] = $this->context();
+
+        DB::table('branch_migration_states')->insert([
+            'branch_id' => $branch->id,
+            'state' => 'oasis_penuh',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $this->actingAs($sas)->postJson(route('consumer-nups.store'), [
+            'nup_number' => 'D32-NUP-OASIS',
+            'registered_at' => '2026-11-21',
+            'name' => 'Konsumen OASIS Penuh',
             'branch_id' => $branch->id,
             'project_id' => $project->id,
         ])->assertCreated();

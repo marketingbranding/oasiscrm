@@ -33,13 +33,20 @@ class KonsumenProgressSyncService
         'bast',
     ];
 
-    public function __construct(private GoogleSheetsApiService $googleSheets, ?SyncLockService $locks = null)
+    public function __construct(private GoogleSheetsApiService $googleSheets, ?SyncLockService $locks = null, private ?BranchMigrationStateService $migrationStates = null)
     {
         $this->locks = $locks ?? app(SyncLockService::class);
+        $this->migrationStates ??= app(BranchMigrationStateService::class);
     }
 
     public function syncBranch(Branch $branch, ?int $initiatedBy = null): array
     {
+        if ($this->migrationStates->isOasisFull($branch)) {
+            $this->migrationStates->logSkip($branch, 'konsumen_progress');
+
+            return ['ok' => true, 'status' => 'skipped', 'branch' => $branch->name, 'message' => 'Cabang berstatus oasis_penuh.', 'reason' => 'oasis_penuh', 'summary' => []];
+        }
+
         return $this->locks->run('konsumen-progress:branch:'.$branch->id, fn () => $this->performSync($branch, $initiatedBy));
     }
 

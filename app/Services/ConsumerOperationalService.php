@@ -110,6 +110,7 @@ final class ConsumerOperationalService
 
     public function update(ConsumerApplication $application, array $data, User $actor, ConsumerKavlingLifecycleService $lifecycle): ConsumerApplication
     {
+
         return DB::transaction(function () use ($application, $data, $actor, $lifecycle): ConsumerApplication {
             $previousConsumerStatus = $application->consumer_status;
             $application->update(array_intersect_key($data, array_flip(['sales_user_id', 'promo_id', 'status_cash', 'notes', 'payment_method'])));
@@ -134,6 +135,7 @@ final class ConsumerOperationalService
 
     public function recordBiChecking(ConsumerApplication $application, array $data, User $actor): ConsumerStageEvent
     {
+
         return DB::transaction(function () use ($application, $data, $actor): ConsumerStageEvent {
             $before = $this->snapshot($application->fresh());
             $date = CarbonImmutable::parse($data['tanggal_slik']);
@@ -154,6 +156,7 @@ final class ConsumerOperationalService
 
     public function recordPsjb(ConsumerApplication $application, array $data, User $actor): ConsumerPsjb
     {
+
         return DB::transaction(function () use ($application, $data, $actor): ConsumerPsjb {
             $before = $this->snapshot($application->fresh());
             $bi = $application->stageEvents()->where('stage', 'bi_checking')->latest('occurred_at')->latest('id')->first();
@@ -200,6 +203,7 @@ final class ConsumerOperationalService
 
     public function recordReady100(ConsumerApplication $application, array $data, User $actor): ConsumerStageEvent
     {
+
         return DB::transaction(function () use ($application, $data, $actor): ConsumerStageEvent {
             $date = CarbonImmutable::parse($data['ready_100_at']);
             $before = $this->snapshot($application->fresh());
@@ -224,6 +228,7 @@ final class ConsumerOperationalService
 
     public function appendTransactionEvent(ConsumerApplication $application, string $eventType, User $actor, string $source = 'manual', ?string $notes = null, array $metadata = [], ?string $reason = null): ConsumerStageEvent
     {
+
         if (! FeatureFlag::enabledForBranch('transaction_events_v3', $application->branch_id)) {
             throw new DomainException('Event transaksi v3 belum aktif.');
         }
@@ -343,6 +348,7 @@ final class ConsumerOperationalService
 
     public function recordPpjb(ConsumerApplication $application, array $data, User $actor): ConsumerPpjbDeveloper
     {
+
         return DB::transaction(function () use ($application, $data, $actor): ConsumerPpjbDeveloper {
             $before = $this->snapshot($application->fresh());
             $date = $data['tanggal_ttd_ppjb'] ?? $data['tanggal_sp3k'] ?? now()->toDateString();
@@ -357,6 +363,7 @@ final class ConsumerOperationalService
 
     public function recordAkad(ConsumerApplication $application, array $data, User $actor, ConsumerKavlingLifecycleService $lifecycle): ConsumerAkadRecord
     {
+
         return DB::transaction(function () use ($application, $data, $actor, $lifecycle): ConsumerAkadRecord {
             $before = $this->snapshot($application->fresh());
             $event = $this->appendEvent($application, 'akad', $data['status_konsumen'] ?? null, $data['keterangan_terlambat'] ?? null, $data['tanggal_akad'] ?? now()->toDateString(), $actor, $data);
@@ -372,6 +379,7 @@ final class ConsumerOperationalService
 
     public function recordBast(ConsumerApplication $application, array $data, User $actor, ConsumerKavlingLifecycleService $lifecycle): ConsumerBastRecord
     {
+
         return DB::transaction(function () use ($application, $data, $actor, $lifecycle): ConsumerBastRecord {
             $application = ConsumerApplication::query()->lockForUpdate()->findOrFail($application->id);
             $this->assertBastReady($application);

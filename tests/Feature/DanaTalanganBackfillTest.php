@@ -1,0 +1,186 @@
+<?php
+
+namespace Tests\Feature;
+
+use App\Models\Branch;
+use App\Models\ConsumerApplication;
+use App\Models\Customer;
+use App\Models\DanaTalangan;
+use App\Models\Kavling;
+use App\Models\LeadMaster;
+use App\Models\Role;
+use App\Models\User;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use Tests\TestCase;
+
+class DanaTalanganBackfillTest extends TestCase
+{
+    use RefreshDatabase;
+
+    public function test_br42_dry_run_does_not_write_activity_log(): void
+    {
+        [$branch, $project, $user] = $this->makeContext();
+        $record = $this->makeRecord($branch, $project, 'Konsumen Dry Run');
+
+        $this->artisan('dana-talangan:backfill-relations')->assertExitCode(0);
+
+        $this->assertDatabaseMissing('activity_log', ['subject_id' => $record->id, 'event' => 'relation_backfill_dry-run']);
+    }
+
+    public function test_br42_dry_run_reports_strong_match_as_pasti_and_does_not_write(): void
+    {
+        [$branch, $project, $user] = $this->makeContext();
+        $application = $this->makeApplication($branch, $project, 'Konsumen Pasti', 'TRX-PASTI');
+        $psjb = $application->psjbs()->create([
+            'id_psjb' => 'PSJB-PASTI',
+            'tanggal_psjb' => '2026-11-01',
+        ]);
+        $record = $this->makeRecord($branch, $project, 'Nama Berbeda', [
+            'id_transaksi' => $application->id_transaksi,
+            'id_psjb' => $psjb->id_psjb,
+        ]);
+        $this->assertSame($application->id_transaksi, $record->id_transaksi);
+
+        $this->artisan('dana-talangan:backfill-relations')
+            ->expectsOutputToContain('PASTI')
+            ->assertExitCode(0);
+
+        $this->assertNull($record->fresh()->consumer_application_id);
+    }
+
+    public function test_br42_kavling_and_name_match_is_candidate_and_apply_does_not_write(): void
+    {
+        [$branch, $project, $user] = $this->makeContext();
+        $kavling = Kavling::create(['project_id' => $project->id, 'kavling_code' => 'A-01', 'name' => 'A-01']);
+        $this->makeApplication($branch, $project, 'Konsumen Kandidat', null, $kavling);
+        $record = $this->makeRecord($branch, $project, 'Konsumen Kandidat', ['kav' => 'A01']);
+
+        $this->artisan('dana-talangan:backfill-relations --apply')
+            ->expectsOutputToContain('KANDIDAT')
+            ->assertExitCode(0);
+
+        $this->assertNull($record->fresh()->consumer_application_id);
+    }
+
+    public function test_br42_apply_writes_pasti_relations_and_audit(): void
+    {
+        [$branch, $project, $user] = $this->makeContext();
+        $kavling = Kavling::create(['project_id' => $project->id, 'kavling_code' => 'A-01', 'name' => 'A-01']);
+        $application = $this->makeApplication($branch, $project, 'Konsumen Pasti', 'TRX-APPLY', $kavling);
+        $record = $this->makeRecord($branch, $project, 'Nama Lain', ['id_transaksi' => 'TRX-APPLY']);
+
+        $this->artisan('dana-talangan:backfill-relations --apply')->assertExitCode(0);
+
+        $record->refresh();
+        $this->assertSame($application->id, $record->consumer_application_id);
+        $this->assertSame($kavling->id, $record->kavling_id);
+        $this->assertDatabaseHas('activity_log', ['subject_id' => $record->id, 'event' => 'relation_backfill_--apply']);
+    }
+
+    public function test_br42_different_transaction_and_psjb_matches_are_perlu_ditinjau(): void
+    {
+        [$branch, $project, $user] = $this->makeContext();
+        $first = $this->makeApplication($branch, $project, 'Konsumen Satu', 'TRX-SATU');
+        $second = $this->makeApplication($branch, $project, 'Konsumen Dua', 'TRX-DUA');
+        $first->psjbs()->create(['id_psjb' => 'PSJB-SATU', 'tanggal_psjb' => '2026-11-01']);
+        $second->psjbs()->create(['id_psjb' => 'PSJB-DUA', 'tanggal_psjb' => '2026-11-01']);
+        $record = $this->makeRecord($branch, $project, 'Nama Berbeda', ['id_transaksi' => 'TRX-SATU', 'id_psjb' => 'PSJB-DUA']);
+
+        $this->artisan('dana-talangan:backfill-relations')
+            ->expectsOutputToContain('PERLU DITINJAU')
+            ->assertExitCode(0);
+
+        $this->assertNull($record->fresh()->consumer_application_id);
+    }
+
+    public function test_br42_confirm_unknown_id_is_rejected_with_failure_exit(): void
+    {
+        [$branch, $project, $user] = $this->makeContext();
+
+        $this->artisan('dana-talangan:backfill-relations --confirm=999999')
+            ->expectsOutputToContain('DITOLAK')
+            ->assertExitCode(1);
+
+        $this->assertDatabaseHas('activity_log', ['event' => 'relation_backfill_--confirm']);
+    }
+
+    public function test_br42_confirm_writes_candidate_but_rejects_non_candidate(): void
+    {
+        [$branch, $project, $user] = $this->makeContext();
+        $kavling = Kavling::create(['project_id' => $project->id, 'kavling_code' => 'A-01', 'name' => 'A-01']);
+        $application = $this->makeApplication($branch, $project, 'Konsumen Kandidat', null, $kavling);
+        $candidate = $this->makeRecord($branch, $project, 'Konsumen Kandidat', ['kav' => 'a 01']);
+        $notFound = $this->makeRecord($branch, $project, 'Tidak Ada');
+
+        $this->artisan('dana-talangan:backfill-relations --confirm='.$candidate->id.','.$notFound->id)
+            ->expectsOutputToContain('DITOLAK')
+            ->assertExitCode(1);
+
+        $this->assertSame($application->id, $candidate->fresh()->consumer_application_id);
+        $this->assertNull($notFound->fresh()->consumer_application_id);
+        $this->assertDatabaseHas('activity_log', ['subject_id' => $candidate->id, 'event' => 'relation_backfill_--confirm']);
+    }
+
+    public function test_br42_name_only_is_not_found_and_apply_writes_no_relation(): void
+    {
+        [$branch, $project, $user] = $this->makeContext();
+        $this->makeApplication($branch, $project, 'Konsumen Nama');
+        $record = $this->makeRecord($branch, $project, 'Konsumen Nama');
+
+        $this->artisan('dana-talangan:backfill-relations --apply')
+            ->expectsOutputToContain('TIDAK DITEMUKAN')
+            ->assertExitCode(0);
+
+        $this->assertNull($record->fresh()->consumer_application_id);
+    }
+
+    public function test_br42_empty_strong_identifiers_never_match_application_with_null_identifier(): void
+    {
+        [$branch, $project, $user] = $this->makeContext();
+        $this->makeApplication($branch, $project, 'Konsumen Lain');
+        $record = $this->makeRecord($branch, $project, 'Konsumen Lain', ['kav' => null]);
+
+        $this->artisan('dana-talangan:backfill-relations --apply')
+            ->expectsOutputToContain('TIDAK DITEMUKAN')
+            ->assertExitCode(0);
+
+        $this->assertNull($record->fresh()->consumer_application_id);
+    }
+
+    private function makeContext(): array
+    {
+        $branch = Branch::create(['name' => 'Cabang Backfill', 'code' => 'BFL', 'is_active' => true]);
+        $project = LeadMaster::create(['branch_id' => $branch->id, 'project_name' => 'Proyek Backfill', 'is_active' => true]);
+        $user = User::factory()->create([
+            'role_id' => Role::query()->where('slug', 'admin')->value('id'),
+            'branch_id' => $branch->id,
+        ]);
+
+        return [$branch, $project, $user];
+    }
+
+    private function makeApplication(Branch $branch, LeadMaster $project, string $name, ?string $transactionId = null, ?Kavling $kavling = null): ConsumerApplication
+    {
+        return ConsumerApplication::create([
+            'customer_id' => Customer::create(['name' => $name])->id,
+            'branch_id' => $branch->id,
+            'project_id' => $project->id,
+            'kavling_id' => $kavling?->id,
+            'id_transaksi' => $transactionId,
+            'application_status' => 'draft',
+            'transaction_status' => 'LANJUT',
+        ]);
+    }
+
+    private function makeRecord(Branch $branch, LeadMaster $project, string $name, array $attributes = []): DanaTalangan
+    {
+        return DanaTalangan::create(array_merge([
+            'tanggal' => '2026-11-01',
+            'nama_konsumen' => $name,
+            'project_name' => $project->project_name,
+            'branch_id' => $branch->id,
+            'project_id' => $project->id,
+            'created_by' => User::query()->latest('id')->value('id'),
+        ], $attributes));
+    }
+}

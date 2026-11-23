@@ -20,7 +20,20 @@ class FeatureFlagTest extends TestCase
             'org_hierarchical_monitoring' => false,
             'lead_stages_v3' => false,
             'transaction_events_v3' => false,
+            'dana_talangan_primary_source' => false,
         ], $flags);
+    }
+
+    public function test_dana_talangan_primary_source_supports_off_branches_and_all_modes(): void
+    {
+        $this->assertFalse(FeatureFlag::enabledForBranch('dana_talangan_primary_source', 1));
+        DB::table('app_settings')->insert(['key' => 'dana_talangan_primary_source', 'value' => json_encode(['mode' => 'branches', 'branch_ids' => [1]], JSON_THROW_ON_ERROR), 'group' => 'feature_flags', 'created_at' => now(), 'updated_at' => now()]);
+        app(AppSettingResolver::class)->forget('dana_talangan_primary_source');
+        $this->assertTrue(FeatureFlag::enabledForBranch('dana_talangan_primary_source', 1));
+        $this->assertFalse(FeatureFlag::enabledForBranch('dana_talangan_primary_source', 2));
+        DB::table('app_settings')->where('key', 'dana_talangan_primary_source')->update(['value' => json_encode(['mode' => 'all', 'branch_ids' => []], JSON_THROW_ON_ERROR)]);
+        app(AppSettingResolver::class)->forget('dana_talangan_primary_source');
+        $this->assertTrue(FeatureFlag::enabledForBranch('dana_talangan_primary_source', 2));
     }
 
     public function test_scoped_flag_defaults_off_and_supports_branch_rollout_modes(): void

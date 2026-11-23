@@ -116,6 +116,14 @@
 
                 <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
                     <div>
+                        <label class="font-[Helvetica] font-bold text-xs uppercase block mb-1">ID Transaksi</label>
+                        <input name="id_transaksi" value="{{ old('id_transaksi') }}" maxlength="80" class="w-full border-2 border-black px-3 py-2 text-sm font-['Times_New_Roman']">
+                    </div>
+                    <div>
+                        <label class="font-[Helvetica] font-bold text-xs uppercase block mb-1">ID PSJB</label>
+                        <input name="id_psjb" value="{{ old('id_psjb') }}" maxlength="150" class="w-full border-2 border-black px-3 py-2 text-sm font-['Times_New_Roman']">
+                    </div>
+                    <div>
                         <label class="font-[Helvetica] font-bold text-xs uppercase block mb-1">Kav</label>
                         <div class="select-wrapper" data-accent="#f1c40f" style="position:relative">
                             <div class="select-display w-full border-2 px-3 py-2 text-sm font-['Times_New_Roman'] bg-white cursor-pointer select-none flex items-center justify-between border-black @error('kav') border-[#e91d2a] @enderror" tabindex="0">

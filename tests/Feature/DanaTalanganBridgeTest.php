@@ -10,6 +10,7 @@ use App\Models\DanaTalanganReconciliationItem;
 use App\Models\LeadMaster;
 use App\Models\Role;
 use App\Models\User;
+use App\Services\AppSettingResolver;
 use App\Services\DanaTalanganBridgeModeService;
 use App\Services\DanaTalanganBridgeService;
 use App\Services\DanaTalanganService;
@@ -21,6 +22,7 @@ use App\Services\SyncLockService;
 use App\ValueObjects\DanaTalanganSpreadsheetWriteResult;
 use App\ValueObjects\ResolvedDanaTalanganSpreadsheetContract;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Mockery;
 use Tests\TestCase;
@@ -186,6 +188,58 @@ class DanaTalanganBridgeTest extends TestCase
         $this->assertSame('sync_failed', $fresh->sync_status);
         $this->assertSame('Konsumen Test', $fresh->nama_konsumen);
         $this->assertSame('Sinkronisasi spreadsheet gagal.', $fresh->last_sync_error);
+    }
+
+    public function test_primary_source_flag_skips_push_and_records_audit(): void
+    {
+        [$record, $actor] = $this->record();
+        DB::table('app_settings')->insert(['key' => 'dana_talangan_primary_source', 'value' => json_encode(['mode' => 'branches', 'branch_ids' => [$record->branch_id]], JSON_THROW_ON_ERROR), 'group' => 'feature_flags', 'created_at' => now(), 'updated_at' => now()]);
+        app(AppSettingResolver::class)->forget('dana_talangan_primary_source');
+        $result = $this->bridge($this->contracts([]))->push($record, $actor);
+        $this->assertSame('skipped_primary_source', $result['status']);
+        $this->assertDatabaseHas('activity_log', ['event' => 'bridge_skipped_primary_source', 'subject_id' => $record->id]);
+    }
+
+    public function test_primary_source_flag_skips_new_pull_row_by_project_branch_and_records_audit(): void
+    {
+        [$record, $actor] = $this->record();
+        $this->enable('bidirectional');
+        $row = $this->row($record);
+        $row['_row_number'] = 3;
+        $row['oasis_sync_id'] = '';
+        DB::table('app_settings')->insert(['key' => 'dana_talangan_primary_source', 'value' => json_encode(['mode' => 'all', 'branch_ids' => []], JSON_THROW_ON_ERROR), 'group' => 'feature_flags', 'created_at' => now(), 'updated_at' => now()]);
+        app(AppSettingResolver::class)->forget('dana_talangan_primary_source');
+        $result = $this->bridge($this->contracts([$row]))->pull($actor);
+        $this->assertSame(1, $result['summary']['skipped_primary_source']);
+        $this->assertDatabaseCount('dana_talangans', 1);
+        $this->assertDatabaseHas('activity_log', ['event' => 'bridge_skipped_primary_source', 'subject_id' => null]);
+    }
+
+    public function test_primary_source_flag_skips_existing_pull_and_records_audit(): void
+    {
+        [$record, $actor] = $this->record();
+        $this->enable('bidirectional');
+        $baseline = $this->row($record);
+        $this->baseline($record, $baseline);
+        DB::table('app_settings')->insert(['key' => 'dana_talangan_primary_source', 'value' => json_encode(['mode' => 'all', 'branch_ids' => []], JSON_THROW_ON_ERROR), 'group' => 'feature_flags', 'created_at' => now(), 'updated_at' => now()]);
+        app(AppSettingResolver::class)->forget('dana_talangan_primary_source');
+        $result = $this->bridge($this->contracts([$baseline]))->pull($actor);
+        $this->assertSame(1, $result['summary']['skipped_primary_source']);
+        $this->assertDatabaseHas('activity_log', ['event' => 'bridge_skipped_primary_source', 'subject_id' => $record->id]);
+    }
+
+    public function test_pull_status_change_clears_auto_lunas_marker(): void
+    {
+        [$record, $actor] = $this->record();
+        $this->enable('bidirectional');
+        $record->update(['status' => 'lunas', 'status_auto_lunas' => true, 'status_before_auto_lunas' => 'sanggup']);
+        $baseline = $this->row($record);
+        $this->baseline($record, $baseline);
+        $remote = $baseline;
+        $remote['Status Cicilan'] = 'sanggup';
+        $result = $this->bridge($this->contracts([$remote]))->pull($actor);
+        $this->assertSame(1, $result['summary']['updated']);
+        $this->assertFalse((bool) $record->fresh()->status_auto_lunas);
     }
 
     public function test_pull_updates_only_clean_shared_fields(): void

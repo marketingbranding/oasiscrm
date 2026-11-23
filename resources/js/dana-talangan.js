@@ -8,11 +8,16 @@ export default function registerDanaTalangan(Alpine) {
         tableFrozen: true,
         updateBaseUrl: '',
         kavlingOptionsUrl: '',
+        consumerOptionsUrl: '',
+        consumerOptions: [],
+        consumerSearch: '',
+        selectedConsumer: null,
         projectCatalog: [],
         addForm: {
             branch_id: '',
             project_name: '',
             kav: '',
+            consumer_application_id: '',
         },
         addKavlings: [],
         editKavlings: [],
@@ -43,6 +48,36 @@ export default function registerDanaTalangan(Alpine) {
 
         normalizeKav(value) {
             return String(value || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+        },
+
+        async fetchConsumers(branchId, projectId, search = '') {
+            if (!branchId || !projectId) return [];
+            const params = new URLSearchParams({ branch_id: branchId, project_id: projectId, search });
+            const response = await fetch(`${this.consumerOptionsUrl}?${params.toString()}`, { headers: { Accept: 'application/json' } });
+            if (!response.ok) return [];
+            return (await response.json()).options || [];
+        },
+
+        async selectConsumer(option, editing = false) {
+            const target = editing ? this.editingRecord : this.addForm;
+            target.consumer_application_id = option.id;
+            target.kavling_id = option.kavling_id;
+            target.kav = option.kavling || '';
+            target.nama_konsumen = option.name || '';
+            target.id_transaksi = option.id_transaksi || '';
+            if (!editing) {
+                target.branch_id = String(option.branch_id);
+                const project = this.projectCatalog.find(item => Number(item.id) === Number(option.project_id));
+                target.project_name = project?.name || target.project_name;
+                await this.loadAddKavlings(true);
+            }
+            this.selectedConsumer = option;
+        },
+
+        async searchConsumers(editing = false) {
+            const target = editing ? this.editingRecord : this.addForm;
+            const project = this.projectCatalog.find(item => item.name === target.project_name && String(item.branch_id) === String(target.branch_id));
+            this.consumerOptions = await this.fetchConsumers(target.branch_id, project?.id, this.consumerSearch);
         },
 
         async fetchKavlings(branchId, projectName) {

@@ -65,6 +65,8 @@ class DanaTalanganImport
                 }
             }
 
+            $idTransaksi = self::cell($cells, $headerMap, 'id transaksi', -1);
+            $idPsjb = self::cell($cells, $headerMap, 'id psjb', -1);
             $tanggalRaw = self::cell($cells, $headerMap, 'tanggal', 1);
             $namaKonsumen = self::cell($cells, $headerMap, 'nama konsumen', 2);
             $kav = self::cell($cells, $headerMap, 'kav', 3);
@@ -183,6 +185,8 @@ class DanaTalanganImport
                 'tanggal' => $tanggal,
                 'nama_konsumen' => $namaKonsumen,
                 'kav' => $kav ?: null,
+                'id_transaksi' => $idTransaksi ?: null,
+                'id_psjb' => $idPsjb ?: null,
                 'project_name' => $project->project_name,
                 'pinjam_nama' => $pinjamNama,
                 'pekerjaan' => $pekerjaan ?: null,
@@ -247,6 +251,9 @@ class DanaTalanganImport
     private static function rawCell(array $cells, array $headerMap, string $header, int $fallback): mixed
     {
         $index = $headerMap[$header] ?? $fallback;
+        if ($index < 0) {
+            return null;
+        }
 
         return $cells[$index] ?? null;
     }

@@ -2,12 +2,14 @@
 
 namespace App\Services;
 
+use App\Models\ActivityLog;
 use App\Models\Branch;
 use App\Models\DanaTalangan;
 use App\Models\DanaTalanganSyncStatus;
 use App\Models\LeadMaster;
 use App\Models\User;
 use App\Support\DanaTalanganMoney;
+use App\Support\FeatureFlag;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -133,6 +135,23 @@ class DanaTalanganGoogleService
                     continue;
                 }
                 [$data, $projectInferred] = $resolved;
+                if (FeatureFlag::enabledForBranch('dana_talangan_primary_source', (int) $data['branch_id'])) {
+                    $summary['warnings'][] = "{$sheetName} baris {$rowNumber}: dilewati karena OASIS menjadi sumber utama cabang.";
+                    $summary['skipped_primary_source'] = ($summary['skipped_primary_source'] ?? 0) + 1;
+                    if ($syncId !== '') {
+                        $activeIds[$syncId] = true;
+                    }
+                    ActivityLog::query()->create([
+                        'causer_id' => $actorId,
+                        'subject_type' => DanaTalangan::class,
+                        'subject_id' => null,
+                        'event' => 'bridge_skipped_primary_source',
+                        'description' => 'Baris sheet Dana Talangan dilewati karena OASIS menjadi sumber utama cabang.',
+                        'properties' => ['actor_type' => 'console', 'branch_id' => $data['branch_id'], 'row_number' => $rowNumber, 'direction' => 'pull'],
+                    ]);
+
+                    continue;
+                }
                 if ($projectInferred) {
                     $summary['inferred_projects']++;
                 }
@@ -199,7 +218,11 @@ class DanaTalanganGoogleService
                         DB::table('dana_talangans')->where('id', $record->id)->update($syncMetadata);
                         $record->refresh();
                     } else {
-                        $record->fill($data + ['updated_by' => null] + $syncMetadata)->saveQuietly();
+                        $record->fill($data + ['updated_by' => null] + $syncMetadata);
+                        $nominalChanged = $record->isDirty('nominal');
+                        $statusChanged = $record->isDirty('status');
+                        $record->saveQuietly();
+                        app(DanaTalanganPaymentService::class)->handleQuietSave($record, $nominalChanged, $statusChanged);
                     }
 
                     if ($metadataStale || ($cells[16] ?? '') === '') {
@@ -283,6 +306,19 @@ class DanaTalanganGoogleService
 
     public function push(DanaTalangan $record, ?int $actorId = null): bool
     {
+        if (FeatureFlag::enabledForBranch('dana_talangan_primary_source', (int) $record->branch_id)) {
+            ActivityLog::query()->create([
+                'causer_id' => $actorId,
+                'subject_type' => DanaTalangan::class,
+                'subject_id' => $record->id,
+                'event' => 'bridge_skipped_primary_source',
+                'description' => 'Baris Dana Talangan tidak ditulis ke sheet karena OASIS menjadi sumber utama cabang.',
+                'properties' => ['actor_type' => 'console', 'branch_id' => $record->branch_id, 'direction' => 'push'],
+            ]);
+
+            return true;
+        }
+
         try {
             $spreadsheetId = $this->spreadsheetId();
             $sheetName = $this->sheetName();

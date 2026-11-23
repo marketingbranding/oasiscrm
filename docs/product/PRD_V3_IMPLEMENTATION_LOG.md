@@ -37,7 +37,7 @@ PRD sumber kebenaran: `docs/product/PRD_OASIS_CRM_V3.md` versi 3.3 (D30–D33)
 | WP-1.10 | 1 | Penutup Fase 1: changelog, dokumentasi, verifikasi penuh | Selesai; laporan fase dan operator handoff tersedia; cutover produksi tetap menunggu operator | Semua fase 1 |
 | WP-2.1 | 2 | Alih Lead dan antrean lead tanpa pemilik | Berjalan | BR-54–BR-55 |
 | WP-2.2 | 2 | Izin Akses Khusus | Selesai; grant Lead Sales/agenda dengan expiry, turunan, workspace, edit, revoke, export, dan AI scope; commit `32a4c37`, coverage `5713bd2`, `6a8f034`, `e557619`; menunggu merge | BR-53 |
-| WP-2.3 | 2 | Penanda perhatian | Selesai implementasi di branch `prd-v3/wp-2.3-penanda-perhatian`; menunggu review dan merge | §7.4, BR-08, BR-09 |
+| WP-2.3 | 2 | Penanda perhatian | Selesai; commit `8956ebf` sudah di-merge ke `prd-v3/fase-2-pemantauan-data` | §7.4, BR-08, BR-09 |
 
 ### Desain singkat WP-2.3
 
@@ -49,7 +49,7 @@ PRD sumber kebenaran: `docs/product/PRD_OASIS_CRM_V3.md` versi 3.3 (D30–D33)
 - Kandidat berikutnya, bukan WP-2.3: “Kegiatan tertaut Lead” melalui `content_items.sales_lead_id` dan picker Lead pada form kegiatan.
 - Bukti tes: `CoordinatorSalesMonitoringServiceTest`, `SalesAgendaSubmissionAttentionServiceTest`, `AttentionSummaryNotificationTest`, `SalesMonitoringProjectionTest`, dan tes AI fokus; mencakup badge/filter scope, aktivitas terakhir, hari libur/akhir pekan, cutoff settings-backed, UTJ/Gugur, antrean tanpa pemilik, dan idempotensi notifikasi.
 - Changelog: migrasi `2026_11_22_231500_add_wp23_attention_changelog.php`; migrasi index aktivitas dan kunci unik notifikasi: `2026_11_22_224300_add_wp23_lead_attention_activity_indexes.php`.
-- Konflik terbuka: tabel `comments` saat ini tidak memiliki penanda sumber/system/import. Jalur komentar aplikasi selalu melalui `CommentService` dan impor Lead tidak membuat komentar, sehingga agregat mengecualikan soft-delete tetapi belum dapat membedakan baris historis system/import tanpa kontrak data atau migrasi kolom. Tidak menebak klasifikasi; perlu keputusan produk sebelum perubahan skema.
+- Sumber komentar kini tersimpan di kolom `comments.source`; migrasi mengklasifikasikan komentar lama berbasis `user_id` (`human` bila terisi, `system` bila NULL) secara idempoten. Agregat tetap hanya menghitung `human` dan mengecualikan soft-delete.
 | WP-2.4 | 2 | Status peralihan cabang dan laporan paritas | Belum mulai | §9.3 |
 | WP-2.5 | 2 | Dana Talangan di OASIS dan cicilan | Belum mulai | BR-42–BR-44 |
 | WP-2.6 | 2 | Kembali ke NUP di Workspace Konsumen | Belum mulai | BR-20–BR-22 |

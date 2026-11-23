@@ -20,6 +20,14 @@ class AppSettingCatalog
                 'description' => 'Jam maksimum usia snapshot paritas sebelum cutover oasis_penuh.',
                 'rules' => ['integer', 'min:1', 'max:168'],
             ],
+            'consumer_parity.parallel_min_days' => [
+                'group' => 'consumer_parity',
+                'type' => 'integer',
+                'default' => 14,
+                'label' => 'Masa paralel minimum',
+                'description' => 'Hari minimum cabang berada dalam status paralel sebelum cutover oasis_penuh.',
+                'rules' => ['integer', 'min:0', 'max:90'],
+            ],
             'sales_agenda.reminder_lead_minutes' => [
                 'group' => 'sales_agenda',
                 'type' => 'integer',

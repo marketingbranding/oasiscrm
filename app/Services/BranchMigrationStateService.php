@@ -123,6 +123,12 @@ class BranchMigrationStateService
             if ($state->state === BranchMigrationState::STATE_PARALEL && $targetState === BranchMigrationState::STATE_OASIS_FULL) {
                 $paritySnapshot = ConsumerParitySnapshot::query()->where('branch_id', $branch->id)->latest('checked_at')->first();
                 $freshnessHours = app(AppSettingResolver::class)->int('consumer_parity.cutover_freshness_hours');
+                $minimumParallelDays = app(AppSettingResolver::class)->int('consumer_parity.parallel_min_days');
+                $parallelSince = $state->changed_at ?? $state->updated_at;
+                $earliestCutover = $parallelSince?->copy()->addDays($minimumParallelDays);
+                if (! $override && $earliestCutover?->isFuture()) {
+                    throw ValidationException::withMessages(['state' => 'Cutover ditolak: masa paralel minimum belum terpenuhi. Cutover paling cepat pada '.$earliestCutover->format('d-m-Y H:i:s').'.']);
+                }
                 if (! $override && ($paritySnapshot === null || $paritySnapshot->status !== 'LULUS' || $paritySnapshot->checked_at?->lt(now()->subHours($freshnessHours)))) {
                     $status = $paritySnapshot?->status ?? 'BELUM ADA';
                     $checkedAt = $paritySnapshot?->checked_at?->format('d-m-Y H:i:s') ?? 'belum ada';

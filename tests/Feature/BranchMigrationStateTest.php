@@ -41,9 +41,10 @@ class BranchMigrationStateTest extends TestCase
     {
         $branch = Branch::create(['name' => 'Cabang Parity UI', 'code' => 'CUI', 'is_active' => true]);
         ConsumerParitySnapshot::create(['branch_id' => $branch->id, 'checked_at' => now(), 'status' => 'TIDAK_LENGKAP', 'summary' => [], 'metrics' => [], 'differences' => []]);
+        DB::table('branch_migration_states')->insert(['branch_id' => $branch->id, 'state' => 'paralel', 'changed_at' => now()->subDays(14), 'created_at' => now(), 'updated_at' => now()]);
         $actor = User::factory()->create(['role_id' => Role::where('slug', 'superadmin')->value('id'), 'password_changed_at' => now(), 'account_status' => 'active', 'is_active' => true]);
 
-        $this->actingAs($actor)->get(route('admin.branch-migration-states.index'))->assertOk()->assertSeeText('TIDAK_LENGKAP')->assertSee(route('admin.branch-parity.index', ['branch' => $branch->id]));
+        $this->actingAs($actor)->get(route('admin.branch-migration-states.index'))->assertOk()->assertSeeText('TIDAK_LENGKAP')->assertSeeText('Lewati gerbang paritas')->assertSee(route('admin.branch-parity.index', ['branch' => $branch->id]));
     }
 
     public function test_wp24_superadmin_can_move_one_state_forward_and_audit_change(): void
@@ -62,7 +63,7 @@ class BranchMigrationStateTest extends TestCase
     public function test_wp24_oasis_full_requires_fresh_latest_lulus_parity_snapshot(): void
     {
         $branch = Branch::create(['name' => 'Cabang Gate', 'code' => 'CG', 'is_active' => true]);
-        DB::table('branch_migration_states')->insert(['branch_id' => $branch->id, 'state' => 'paralel', 'created_at' => now(), 'updated_at' => now()]);
+        DB::table('branch_migration_states')->insert(['branch_id' => $branch->id, 'state' => 'paralel', 'changed_at' => now()->subDays(14), 'created_at' => now(), 'updated_at' => now()]);
         $actor = User::factory()->create(['role_id' => Role::where('slug', 'superadmin')->value('id'), 'password_changed_at' => now(), 'account_status' => 'active', 'is_active' => true]);
         ConsumerParitySnapshot::create(['branch_id' => $branch->id, 'checked_at' => now()->subHours(25), 'status' => 'LULUS', 'summary' => [], 'metrics' => [], 'differences' => []]);
 
@@ -74,7 +75,7 @@ class BranchMigrationStateTest extends TestCase
     public function test_wp24_oasis_full_accepts_latest_fresh_lulus_snapshot_and_audits_it(): void
     {
         $branch = Branch::create(['name' => 'Cabang Gate Pass', 'code' => 'CGP', 'is_active' => true]);
-        DB::table('branch_migration_states')->insert(['branch_id' => $branch->id, 'state' => 'paralel', 'created_at' => now(), 'updated_at' => now()]);
+        DB::table('branch_migration_states')->insert(['branch_id' => $branch->id, 'state' => 'paralel', 'changed_at' => now()->subDays(14), 'created_at' => now(), 'updated_at' => now()]);
         $actor = User::factory()->create(['role_id' => Role::where('slug', 'superadmin')->value('id'), 'password_changed_at' => now(), 'account_status' => 'active', 'is_active' => true]);
         $snapshot = ConsumerParitySnapshot::create(['branch_id' => $branch->id, 'checked_at' => now()->subHour(), 'status' => 'LULUS', 'summary' => [], 'metrics' => [], 'differences' => []]);
 
@@ -87,7 +88,7 @@ class BranchMigrationStateTest extends TestCase
     public function test_wp24_oasis_full_rejects_latest_failed_snapshot(): void
     {
         $branch = Branch::create(['name' => 'Cabang Gate Failed', 'code' => 'CGF', 'is_active' => true]);
-        DB::table('branch_migration_states')->insert(['branch_id' => $branch->id, 'state' => 'paralel', 'created_at' => now(), 'updated_at' => now()]);
+        DB::table('branch_migration_states')->insert(['branch_id' => $branch->id, 'state' => 'paralel', 'changed_at' => now()->subDays(14), 'created_at' => now(), 'updated_at' => now()]);
         $actor = User::factory()->create(['role_id' => Role::where('slug', 'superadmin')->value('id'), 'password_changed_at' => now(), 'account_status' => 'active', 'is_active' => true]);
         ConsumerParitySnapshot::create(['branch_id' => $branch->id, 'checked_at' => now()->subHour(), 'status' => 'GAGAL', 'summary' => [], 'metrics' => [], 'differences' => []]);
 
@@ -110,7 +111,7 @@ class BranchMigrationStateTest extends TestCase
     public function test_wp24_cutover_override_requires_primary_owner_and_reason(): void
     {
         $branch = Branch::create(['name' => 'Cabang Override', 'code' => 'COV', 'is_active' => true]);
-        DB::table('branch_migration_states')->insert(['branch_id' => $branch->id, 'state' => 'paralel', 'created_at' => now(), 'updated_at' => now()]);
+        DB::table('branch_migration_states')->insert(['branch_id' => $branch->id, 'state' => 'paralel', 'changed_at' => now()->subDays(14), 'created_at' => now(), 'updated_at' => now()]);
         $actor = User::factory()->create(['role_id' => Role::where('slug', 'superadmin')->value('id'), 'password_changed_at' => now(), 'account_status' => 'active', 'is_active' => true]);
 
         $this->expectException(ValidationException::class);
@@ -120,7 +121,7 @@ class BranchMigrationStateTest extends TestCase
     public function test_wp24_owner_can_override_cutover_with_reason_and_snapshot_audit(): void
     {
         $branch = Branch::create(['name' => 'Cabang Owner', 'code' => 'COW', 'is_active' => true]);
-        DB::table('branch_migration_states')->insert(['branch_id' => $branch->id, 'state' => 'paralel', 'created_at' => now(), 'updated_at' => now()]);
+        DB::table('branch_migration_states')->insert(['branch_id' => $branch->id, 'state' => 'paralel', 'changed_at' => now()->subDays(14), 'created_at' => now(), 'updated_at' => now()]);
         $actor = User::factory()->create(['role_id' => Role::where('slug', 'superadmin')->value('id'), 'password_changed_at' => now(), 'account_status' => 'active', 'is_active' => true]);
         $snapshot = ConsumerParitySnapshot::create(['branch_id' => $branch->id, 'checked_at' => now()->subDays(2), 'status' => 'GAGAL', 'summary' => [], 'metrics' => [], 'differences' => []]);
 
@@ -131,10 +132,50 @@ class BranchMigrationStateTest extends TestCase
         $this->assertTrue(data_get($properties, 'parity_override'));
     }
 
+    public function test_wp24_owner_can_override_cutover_through_http_with_reason(): void
+    {
+        $branch = Branch::create(['name' => 'Cabang HTTP Override', 'code' => 'CHO', 'is_active' => true]);
+        DB::table('branch_migration_states')->insert(['branch_id' => $branch->id, 'state' => 'paralel', 'changed_at' => now()->subDays(14), 'created_at' => now(), 'updated_at' => now()]);
+        $actor = User::factory()->create(['role_id' => Role::where('slug', 'superadmin')->value('id'), 'password_changed_at' => now(), 'account_status' => 'active', 'is_active' => true]);
+
+        $this->actingAs($actor)->put(route('admin.branch-migration-states.update', $branch), ['expected_state' => 'paralel', 'state' => 'oasis_penuh', 'reason' => 'Override pemilik.', 'override' => '1'])->assertRedirect();
+        $this->assertDatabaseHas('branch_migration_states', ['branch_id' => $branch->id, 'state' => 'oasis_penuh']);
+    }
+
+    public function test_wp24_supplemental_superadmin_cannot_override_through_http(): void
+    {
+        $branch = Branch::create(['name' => 'Cabang HTTP Non Owner', 'code' => 'CHN', 'is_active' => true]);
+        DB::table('branch_migration_states')->insert(['branch_id' => $branch->id, 'state' => 'paralel', 'changed_at' => now()->subDays(14), 'created_at' => now(), 'updated_at' => now()]);
+        $actor = User::factory()->create(['role_id' => Role::where('slug', 'staff')->value('id'), 'password_changed_at' => now(), 'account_status' => 'active', 'is_active' => true]);
+        $actor->roles()->attach(Role::where('slug', 'superadmin')->firstOrFail());
+
+        $this->actingAs($actor)->put(route('admin.branch-migration-states.update', $branch), ['expected_state' => 'paralel', 'state' => 'oasis_penuh', 'reason' => 'Tidak sah.', 'override' => '1'])->assertForbidden();
+    }
+
+    public function test_wp24_http_override_without_reason_returns_422(): void
+    {
+        $branch = Branch::create(['name' => 'Cabang HTTP Reason', 'code' => 'CHR', 'is_active' => true]);
+        DB::table('branch_migration_states')->insert(['branch_id' => $branch->id, 'state' => 'paralel', 'changed_at' => now()->subDays(14), 'created_at' => now(), 'updated_at' => now()]);
+        $actor = User::factory()->create(['role_id' => Role::where('slug', 'superadmin')->value('id'), 'password_changed_at' => now(), 'account_status' => 'active', 'is_active' => true]);
+
+        $this->actingAs($actor)->putJson(route('admin.branch-migration-states.update', $branch), ['expected_state' => 'paralel', 'state' => 'oasis_penuh', 'override' => '1'])->assertUnprocessable()->assertJsonValidationErrors('reason');
+    }
+
+    public function test_wp24_parallel_minimum_days_rejects_early_cutover_and_override_bypasses_it(): void
+    {
+        $branch = Branch::create(['name' => 'Cabang Minimum', 'code' => 'CMN', 'is_active' => true]);
+        DB::table('branch_migration_states')->insert(['branch_id' => $branch->id, 'state' => 'paralel', 'changed_at' => now()->subDays(2), 'created_at' => now(), 'updated_at' => now()]);
+        $actor = User::factory()->create(['role_id' => Role::where('slug', 'superadmin')->value('id'), 'password_changed_at' => now(), 'account_status' => 'active', 'is_active' => true]);
+        ConsumerParitySnapshot::create(['branch_id' => $branch->id, 'checked_at' => now(), 'status' => 'LULUS', 'summary' => [], 'metrics' => [], 'differences' => []]);
+
+        $this->expectException(ValidationException::class);
+        app(BranchMigrationStateService::class)->transition($actor, $branch, 'paralel', 'oasis_penuh', 'Terlalu cepat.');
+    }
+
     public function test_wp24_non_owner_cannot_override_cutover(): void
     {
         $branch = Branch::create(['name' => 'Cabang Non Owner', 'code' => 'CNO', 'is_active' => true]);
-        DB::table('branch_migration_states')->insert(['branch_id' => $branch->id, 'state' => 'paralel', 'created_at' => now(), 'updated_at' => now()]);
+        DB::table('branch_migration_states')->insert(['branch_id' => $branch->id, 'state' => 'paralel', 'changed_at' => now()->subDays(14), 'created_at' => now(), 'updated_at' => now()]);
         $actor = User::factory()->create(['role_id' => Role::where('slug', 'pusat')->value('id'), 'password_changed_at' => now(), 'account_status' => 'active', 'is_active' => true]);
 
         $this->expectException(AuthorizationException::class);
@@ -144,7 +185,7 @@ class BranchMigrationStateTest extends TestCase
     public function test_wp24_superadmin_can_move_one_state_backward_with_reason(): void
     {
         $branch = Branch::create(['name' => 'Cabang Mundur', 'code' => 'CM', 'is_active' => true]);
-        DB::table('branch_migration_states')->insert(['branch_id' => $branch->id, 'state' => 'paralel', 'created_at' => now(), 'updated_at' => now()]);
+        DB::table('branch_migration_states')->insert(['branch_id' => $branch->id, 'state' => 'paralel', 'changed_at' => now()->subDays(14), 'created_at' => now(), 'updated_at' => now()]);
         $actor = User::factory()->create(['role_id' => Role::where('slug', 'superadmin')->value('id'), 'password_changed_at' => now(), 'account_status' => 'active', 'is_active' => true]);
 
         $state = app(BranchMigrationStateService::class)->transition($actor, $branch, 'paralel', 'migrasi', 'Parity belum bersih.');
@@ -195,6 +236,40 @@ class BranchMigrationStateTest extends TestCase
 
         Log::shouldHaveReceived('info')->once();
         $this->assertSame(0, ActivityLog::query()->count());
+    }
+
+    public function test_wp24_end_to_end_cutover_and_rollback_controls_input_and_sync(): void
+    {
+        $branch = Branch::create(['name' => 'Cabang E2E', 'code' => 'CE2', 'is_active' => true]);
+        $actor = User::factory()->create(['role_id' => Role::where('slug', 'superadmin')->value('id'), 'password_changed_at' => now(), 'account_status' => 'active', 'is_active' => true]);
+        $service = app(BranchMigrationStateService::class);
+        DB::table('branch_migration_states')->insert(['branch_id' => $branch->id, 'state' => 'sheet', 'created_at' => now(), 'updated_at' => now()]);
+
+        $service->transition($actor, $branch, 'sheet', 'migrasi', 'Mulai migrasi.');
+        $service->transition($actor, $branch, 'migrasi', 'paralel', 'Mulai paralel.');
+        $service->assertOasisConsumerInputAllowed($branch);
+        try {
+            $service->assertSheetWriteAllowed($branch);
+            $this->fail('Input sheet harus ditolak pada status paralel.');
+        } catch (AuthorizationException) {
+            $this->addToAssertionCount(1);
+        }
+
+        ConsumerParitySnapshot::create(['branch_id' => $branch->id, 'checked_at' => now(), 'status' => 'GAGAL', 'summary' => [], 'metrics' => [], 'differences' => []]);
+        try {
+            $service->transition($actor, $branch, 'paralel', 'oasis_penuh', 'Paritas gagal.');
+            $this->fail('Paritas GAGAL harus menolak cutover.');
+        } catch (ValidationException) {
+            $this->addToAssertionCount(1);
+        }
+
+        $this->travelTo(now()->addDays(15));
+        ConsumerParitySnapshot::create(['branch_id' => $branch->id, 'checked_at' => now(), 'status' => 'LULUS', 'summary' => [], 'metrics' => [], 'differences' => []]);
+        $service->transition($actor, $branch, 'paralel', 'oasis_penuh', 'Paritas lulus.');
+        $this->assertSame('skipped', app(DatabaseSheetSyncService::class)->syncBranch($branch)['status']);
+        $service->transition($actor, $branch, 'oasis_penuh', 'paralel', 'Rollback untuk validasi.');
+        $this->assertTrue($service->allowsSheetSync($branch));
+        $this->travelBack();
     }
 
     public function test_wp24_oasis_full_syncs_skip_database_konsumen_and_lifecycle(): void

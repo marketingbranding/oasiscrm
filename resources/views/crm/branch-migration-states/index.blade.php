@@ -17,7 +17,7 @@
                 <tbody>
                     @foreach ($branches as $branch)
                         @php($state = $branch->migrationState?->state ?? 'sheet')
-                        <tr class="border-t border-slate-200" x-data="{ open: false, confirm: false }">
+                        <tr class="border-t border-slate-200" x-data="{ open: false, confirm: false, newState: '{{ $state }}' }">
                             <td class="px-4 py-3">{{ $branch->name }}</td>
                             <td class="px-4 py-3 font-medium">{{ $state }}</td>
                             @php($parity = $paritySnapshots->get($branch->id))
@@ -34,7 +34,7 @@
                                             @csrf @method('PUT')
                                             <input type="hidden" name="expected_state" value="{{ $state }}">
                                             <label class="block">Status baru
-                                                <select name="state" class="mt-1 block w-full rounded border p-2" required>
+                                                <select name="state" x-model="newState" class="mt-1 block w-full rounded border p-2" required>
                                                     @foreach (['sheet', 'migrasi', 'paralel', 'oasis_penuh'] as $option)
                                                         <option value="{{ $option }}">{{ $option }}</option>
                                                     @endforeach
@@ -43,6 +43,15 @@
                                             <label class="block">Alasan wajib
                                                 <textarea name="reason" required maxlength="1000" class="mt-1 block w-full rounded border p-2">{{ old('reason') }}</textarea>
                                             </label>
+                                            @if (auth()->user()?->isSuperadmin() && app(\App\Services\SystemAdministrationAuthorizationService::class)->canManage(auth()->user(), \App\Services\SystemAdministrationAuthorizationService::SETTINGS) && $state === 'paralel')
+                                                <div x-show="newState === 'oasis_penuh'" x-cloak>
+                                                <label class="flex items-start gap-2">
+                                                    <input type="hidden" name="override" value="0">
+                                                    <input type="checkbox" name="override" value="1" class="mt-1">
+                                                    <span>Lewati gerbang paritas</span>
+                                                </label>
+                                                </div>
+                                            @endif
                                             @error('reason') <p class="text-sm text-red-700">{{ $message }}</p> @enderror
                                             @error('state') <p class="text-sm text-red-700">{{ $message }}</p> @enderror
                                             <div class="flex justify-end gap-2"><button type="button" class="rounded border px-3 py-2" @click="open = false">Batal</button><button type="button" class="rounded bg-slate-900 px-3 py-2 text-white" @click="confirm = true">Tinjau perubahan</button></div>

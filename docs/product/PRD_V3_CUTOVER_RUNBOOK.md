@@ -8,7 +8,7 @@ Langkah ini dijalankan pemilik produk per cabang. Agent tidak menjalankan cutove
 
 ### C1. Audit input A7
 
-Periksa daftar input aktif, data tertunda, dan hasil sinkronisasi cabang. Simpan bukti audit.
+Jalankan `php artisan consumer:workspace-input-audit --days=30`. Periksa daftar input aktif, data tertunda, dan hasil sinkronisasi cabang. Simpan bukti audit.
 
 Go: input dan anomali tertangani; tidak ada koreksi tanpa pemilik.
 No-go: data belum lengkap atau anomali belum diputuskan. Mundur: hentikan cutover dan koreksi sumber.
@@ -20,9 +20,9 @@ Ubah status melalui halaman **Status Migrasi Cabang**, satu tahap dari `migrasi`
 Go: OASIS menjadi input aktif dan sheet terkunci untuk tulis.
 No-go: state bukan `migrasi` atau akses input belum sesuai. Mundur: kembalikan ke `migrasi` dengan alasan.
 
-### C3. Masa paralel minimal X hari
+### C3. Masa paralel minimal 14 hari
 
-Pertahankan status `paralel` selama minimal X hari sesuai keputusan operasional. Jalankan pemeriksaan paritas berkala.
+Pertahankan status `paralel` selama minimal 14 hari, sesuai Pengaturan `consumer_parity.parallel_min_days` (default 14, dapat diubah 0–90). Jalankan pemeriksaan paritas berkala.
 
 Go: data OASIS dan cermin sheet stabil; hasil pemeriksaan dapat ditelusuri.
 No-go: selisih belum dijelaskan atau sinkron gagal. Mundur: tetap `paralel`, perbaiki data, ulangi pemeriksaan.

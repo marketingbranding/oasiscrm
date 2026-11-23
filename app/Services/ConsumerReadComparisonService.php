@@ -26,25 +26,27 @@ final class ConsumerReadComparisonService
         $duplicateKeys = [];
         $legacyIdentityCounts = [];
         foreach ($legacy as $record) {
-            foreach ($this->identities($record, true) as $type => $key) {
-                $legacyIdentityCounts[$type.':'.$key] = ($legacyIdentityCounts[$type.':'.$key] ?? 0) + 1;
+            if (($identity = $this->primaryIdentity($record, true)) !== null) {
+                $legacyIdentityCounts['legacy:'.$identity['type'].':'.$identity['key']] = ($legacyIdentityCounts['legacy:'.$identity['type'].':'.$identity['key']] ?? 0) + 1;
             }
         }
         foreach ($legacyIdentityCounts as $key => $count) {
             if ($count > 1) {
-                $duplicateKeys['legacy:'.$key] = true;
+                $duplicateKeys[$key] = true;
             }
         }
+        $localIdentityCounts = [];
         foreach ($local as $record) {
             foreach ($this->identities($record, false) as $type => $key) {
                 $identityIndexes[$type][$key][] = $record;
             }
+            if (($identity = $this->primaryIdentity($record, false)) !== null) {
+                $localIdentityCounts[$identity['type'].':'.$identity['key']] = ($localIdentityCounts[$identity['type'].':'.$identity['key']] ?? 0) + 1;
+            }
         }
-        foreach ($identityIndexes as $type => $index) {
-            foreach ($index as $key => $records) {
-                if (count($records) > 1) {
-                    $duplicateKeys[$type.':'.$key] = true;
-                }
+        foreach ($localIdentityCounts as $key => $count) {
+            if ($count > 1) {
+                $duplicateKeys[$key] = true;
             }
         }
         $rows = [];
@@ -56,8 +58,8 @@ final class ConsumerReadComparisonService
         foreach ($legacy as $legacyRecord) {
             [$candidates, $matchKey] = $this->findCandidates($legacyRecord, $identityIndexes, $duplicateKeys);
             $resolutionSource = $matchKey;
-            $legacyIdentities = $this->identities($legacyRecord, true);
-            $legacyDuplicate = collect($legacyIdentities)->contains(fn (string $key, string $type): bool => isset($duplicateKeys['legacy:'.$type.':'.$key]));
+            $legacyIdentity = $this->primaryIdentity($legacyRecord, true);
+            $legacyDuplicate = $legacyIdentity !== null && isset($duplicateKeys['legacy:'.$legacyIdentity['type'].':'.$legacyIdentity['key']]);
             if (count($candidates) > 1 || $legacyDuplicate) {
                 foreach ($candidates as $candidate) {
                     $usedLocal[$candidate->localApplicationId] = true;
@@ -120,7 +122,7 @@ final class ConsumerReadComparisonService
         foreach ($this->identities($legacy, true) as $type => $key) {
             $compound = $type.':'.$key;
             if (isset($duplicates[$compound])) {
-                return [$indexes[$type][$key] ?? [], $type === 'external' ? 'EXISTING_PROVENANCE' : strtoupper($type)];
+                return [$indexes[$type][$key] ?? [], $type === 'external' || $type === 'external_raw' ? 'EXISTING_PROVENANCE' : strtoupper($type)];
             }
             if (($indexes[$type][$key] ?? []) !== []) {
                 return [$indexes[$type][$key], $type === 'external' || $type === 'external_raw' ? 'EXISTING_PROVENANCE' : strtoupper($type)];
@@ -128,6 +130,18 @@ final class ConsumerReadComparisonService
         }
 
         return [[], null];
+    }
+
+    private function primaryIdentity(ConsumerComparisonRecord $record, bool $legacy): ?array
+    {
+        foreach (['transaction', 'consumer', 'psjb', 'external', 'external_raw'] as $type) {
+            $key = $this->identities($record, $legacy)[$type] ?? null;
+            if ($key !== null) {
+                return ['type' => $type, 'key' => $key];
+            }
+        }
+
+        return null;
     }
 
     private function identities(ConsumerComparisonRecord $record, bool $legacy): array

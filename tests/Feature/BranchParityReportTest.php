@@ -102,6 +102,52 @@ class BranchParityReportTest extends TestCase
         $this->assertContains('akad_date', $report->differences[0]['mismatch_fields']);
     }
 
+    public function test_br32_two_sheet_rows_same_kavling_with_distinct_transaction_ids_match_all(): void
+    {
+        [$branch, $project] = $this->context();
+        foreach ([['Satu', 'TRX-1'], ['Dua', 'TRX-2']] as [$name, $transactionId]) {
+            $application = ConsumerApplication::create(['customer_id' => Customer::create(['name' => $name])->id, 'branch_id' => $branch->id, 'project_id' => $project->id, 'id_transaksi' => $transactionId, 'kavling_id' => Kavling::where('project_id', $project->id)->value('id'), 'transaction_status' => 'LANJUT']);
+            ConsumerLegacyIdentity::create(['consumer_application_id' => $application->id, 'legacy_source' => 'manual_spreadsheet_paste', 'external_key' => 'external:'.$transactionId]);
+            KonsumenProgressSheetRow::create(['branch_id' => $branch->id, 'sheet_id' => $branch->sheet_id, 'sheet_name' => 'data_konsumen', 'row_hash' => $transactionId, 'row_data' => ['id_kavling' => 'K-01', 'nama_konsumen' => $name, 'id_transaksi' => $transactionId, 'external_id' => $transactionId]]);
+        }
+        $report = app(ConsumerReadComparisonService::class)->compare($branch, $project);
+        $this->assertSame(2, $report->summary['matched']);
+        $this->assertSame(0, $report->summary['ambiguous']);
+    }
+
+    public function test_br32_same_consumer_two_transactions_match_via_transaction(): void
+    {
+        [$branch, $project] = $this->context();
+        foreach ([['Satu', 'TRX-1'], ['Dua', 'TRX-2']] as [$name, $transactionId]) {
+            $application = ConsumerApplication::create(['customer_id' => Customer::create(['name' => $name])->id, 'branch_id' => $branch->id, 'project_id' => $project->id, 'id_transaksi' => $transactionId]);
+            ConsumerPsjb::create(['consumer_application_id' => $application->id, 'id_kons' => 'KONS-SAMA', 'id_psjb' => 'PSJB-SAMA', 'tanggal_psjb' => '2026-01-01']);
+            KonsumenProgressSheetRow::create(['branch_id' => $branch->id, 'sheet_id' => $branch->sheet_id, 'sheet_name' => 'data_konsumen', 'row_hash' => $transactionId, 'row_data' => ['id_kavling' => 'K-01', 'nama_konsumen' => $name, 'id_transaksi' => $transactionId, 'id_konsumen' => 'KONS-SAMA']]);
+        }
+        $report = app(ConsumerReadComparisonService::class)->compare($branch, $project);
+        $this->assertSame(['TRANSACTION', 'TRANSACTION'], array_column($report->rows, 'match_key'));
+    }
+
+    public function test_br32_stage_data_does_not_leak_between_same_kavling_consumers(): void
+    {
+        [$branch, $project] = $this->context();
+        KonsumenProgressSheetRow::create(['branch_id' => $branch->id, 'sheet_id' => $branch->sheet_id, 'sheet_name' => 'data_konsumen', 'row_hash' => 'mundur', 'row_data' => ['id_kavling' => 'K-01', 'nama_konsumen' => 'Mundur', 'id_transaksi' => 'TRX-MUNDUR', 'transaction_status' => 'MUNDUR']]);
+        KonsumenProgressSheetRow::create(['branch_id' => $branch->id, 'sheet_id' => $branch->sheet_id, 'sheet_name' => 'data_konsumen', 'row_hash' => 'baru', 'row_data' => ['id_kavling' => 'K-01', 'nama_konsumen' => 'Baru', 'id_transaksi' => 'TRX-BARU', 'transaction_status' => 'LANJUT']]);
+        KonsumenProgressSheetRow::create(['branch_id' => $branch->id, 'sheet_id' => $branch->sheet_id, 'sheet_name' => 'akad', 'row_hash' => 'akad-baru', 'row_data' => ['id_kavling' => 'K-01', 'id_transaksi' => 'TRX-BARU', 'tanggal_akad' => '2026-01-10']]);
+        $records = app(LegacyConsumerReadService::class)->records($branch, $project);
+        $this->assertNull(collect($records)->firstWhere('transactionId', 'TRX-MUNDUR')->akadDate);
+        $this->assertSame('2026-01-10', collect($records)->firstWhere('transactionId', 'TRX-BARU')->akadDate);
+    }
+
+    public function test_br32_sheet_only_and_oasis_only_are_counted_separately(): void
+    {
+        [$branch, $project] = $this->context();
+        KonsumenProgressSheetRow::create(['branch_id' => $branch->id, 'sheet_id' => $branch->sheet_id, 'sheet_name' => 'data_konsumen', 'row_hash' => 'sheet-only', 'row_data' => ['id_kavling' => 'K-01', 'nama_konsumen' => 'Sheet Only', 'external_id' => 'SHEET-ONLY']]);
+        $application = ConsumerApplication::create(['customer_id' => Customer::create(['name' => 'Oasis Only'])->id, 'branch_id' => $branch->id, 'project_id' => $project->id, 'id_transaksi' => 'OASIS-ONLY']);
+        $report = app(ConsumerReadComparisonService::class)->compare($branch, $project);
+        $this->assertSame(1, $report->summary['legacy_only']);
+        $this->assertSame(1, $report->summary['local_only']);
+    }
+
     public function test_br32_legacy_status_selesai_matches_oasis_lanjut_without_mismatch(): void
     {
         [$branch, $project] = $this->context();
@@ -120,7 +166,17 @@ class BranchParityReportTest extends TestCase
         KonsumenProgressSheetRow::create(['branch_id' => $branch->id, 'sheet_id' => $branch->sheet_id, 'sheet_name' => 'data_konsumen', 'row_hash' => 'id-match', 'row_data' => ['id_kavling' => 'K-01', 'nama_konsumen' => 'ID Match', 'id_konsumen' => 'KONS-1', 'id_psjb' => 'PSJB-1']]);
         KonsumenProgressSyncStatus::create(['branch_id' => $branch->id, 'status' => 'success', 'finished_at' => now()]);
         $report = app(ConsumerReadComparisonService::class)->compare($branch, $project);
-        $this->assertContains($report->rows[0]['match_key'], ['CONSUMER', 'PSJB']);
+        $this->assertSame('CONSUMER', $report->rows[0]['match_key']);
+    }
+
+    public function test_br32_psjb_is_highest_available_fallback_after_empty_transaction_and_consumer(): void
+    {
+        [$branch, $project] = $this->context();
+        $application = ConsumerApplication::create(['customer_id' => Customer::create(['name' => 'PSJB Match'])->id, 'branch_id' => $branch->id, 'project_id' => $project->id]);
+        ConsumerPsjb::create(['consumer_application_id' => $application->id, 'id_psjb' => 'PSJB-ONLY', 'tanggal_psjb' => '2026-01-01']);
+        KonsumenProgressSheetRow::create(['branch_id' => $branch->id, 'sheet_id' => $branch->sheet_id, 'sheet_name' => 'data_konsumen', 'row_hash' => 'psjb-only', 'row_data' => ['id_kavling' => 'K-01', 'nama_konsumen' => 'PSJB Match', 'id_psjb' => 'PSJB-ONLY']]);
+        $report = app(ConsumerReadComparisonService::class)->compare($branch, $project);
+        $this->assertSame('PSJB', $report->rows[0]['match_key']);
     }
 
     public function test_br32_duplicate_oasis_identity_is_ambiguous(): void

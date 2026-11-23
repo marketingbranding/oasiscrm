@@ -26,7 +26,7 @@ class LegacyConsumerReadService
             ->orderBy('id')
             ->get(['sheet_name', 'row_data']);
 
-        $byKavling = [];
+        $byIdentity = [];
         $customers = [];
         foreach ($rows->where('sheet_name', 'data_konsumen') as $row) {
             $data = $this->data($row->row_data);
@@ -43,6 +43,7 @@ class LegacyConsumerReadService
         ]))->all();
         $sales = User::query()->where('branch_id', $branch->id)->get()->keyBy(fn (User $user) => Str::lower($user->name));
         $unknownStages = [];
+        $stageRows = [];
         foreach ($rows->whereNotIn('sheet_name', ['data_konsumen']) as $row) {
             $data = $this->data($row->row_data);
             $key = $this->value($data, ['id_kavling', 'id kavling', 'kavling', 'kav']);
@@ -52,17 +53,21 @@ class LegacyConsumerReadService
 
                 continue;
             }
-            $rank = $stageOrder[$canonicalStage] ?? -1;
-            $currentRank = $stageOrder[$byKavling[$key][0] ?? null] ?? -1;
-            if ($key !== '' && $rank >= $currentRank) {
-                $byKavling[$key] = [$canonicalStage, $data];
-            }
+            $stageRows[$key][] = [$canonicalStage, $data];
         }
 
         $records = [];
         foreach ($customers as $kavling => $customerRows) {
-            [$sheet, $stageData] = $byKavling[$kavling] ?? [null, []];
+            $stageCandidates = $stageRows[$kavling] ?? [];
             foreach ($customerRows as $customer) {
+                $transactionId = $this->value($customer, ['id_transaksi', 'id transaksi']);
+                $psjbId = $this->value($customer, ['id_psjb', 'id psjb']);
+                $matchingStages = array_values(array_filter($stageCandidates, fn (array $candidate): bool => ($transactionId !== '' && $this->value($candidate[1], ['id_transaksi', 'id transaksi']) === $transactionId) || ($psjbId !== '' && $this->value($candidate[1], ['id_psjb', 'id psjb']) === $psjbId)));
+                if ($matchingStages === [] && count($customerRows) === 1) {
+                    $matchingStages = $stageCandidates;
+                }
+                usort($matchingStages, fn (array $left, array $right): int => ($stageOrder[$right[0]] ?? -1) <=> ($stageOrder[$left[0]] ?? -1));
+                [$sheet, $stageData] = $matchingStages[0] ?? [null, []];
                 $name = $this->value($customer, ['nama_konsumen', 'nama konsumen', 'nama']);
                 if ($name === '') {
                     continue;
@@ -104,7 +109,10 @@ class LegacyConsumerReadService
                     bankName: $bank ?: null,
                     bankStatus: $bankStatus ?: null,
                     values: ['project_name' => $projectName ?: null],
-                    notes: $unknownStages === [] ? [] : ['Tahap legacy tidak dikenal: '.implode(', ', array_keys($unknownStages)).'.'],
+                    notes: array_values(array_filter([
+                        ...($unknownStages === [] ? [] : ['Tahap legacy tidak dikenal: '.implode(', ', array_keys($unknownStages)).'.']),
+                        $stageCandidates !== [] && $matchingStages === [] ? 'Tahap legacy tidak dapat dipetakan ke konsumen karena terdapat beberapa baris pada kavling yang sama.' : null,
+                    ])),
                 );
             }
         }

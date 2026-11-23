@@ -51,6 +51,7 @@ class ConsumerApplication extends Model
         'booking_date',
         'akad_date',
         'notes',
+        'id_transaksi',
     ];
 
     protected static function booted(): void

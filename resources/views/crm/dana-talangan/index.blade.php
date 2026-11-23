@@ -44,6 +44,7 @@
         'filterMode' => $filterMode,
         'updateBaseUrl' => url('dana-talangan'),
         'kavlingOptionsUrl' => route('dana-talangan.kavling-options'),
+        'consumerOptionsUrl' => route('dana-talangan.consumer-options'),
         'projectCatalog' => $formProjects->map(fn ($project) => [
             'id' => $project->id,
             'name' => $project->project_name,
@@ -53,6 +54,7 @@
             'branch_id' => (string) old('branch_id', $selectedBranchId),
             'project_name' => old('project_name', ''),
             'kav' => old('kav', ''),
+            'consumer_application_id' => old('consumer_application_id', ''),
         ],
         'modalFocusSelector' => 'a[href], button:not([disabled]), input:not([type="hidden"]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
     ];
@@ -276,6 +278,17 @@
                         </form>
                         @endif
                         <div class="flex items-center justify-center gap-1">
+                             <details class="relative">
+                                 <summary class="cursor-pointer font-[Helvetica] font-bold underline text-[11px]">Bayar</summary>
+                                 <form method="POST" action="{{ route('dana-talangan.payments.store', $r) }}" enctype="multipart/form-data" class="absolute right-0 z-20 mt-1 w-64 border-2 border-black bg-white p-2 text-left shadow-[4px_4px_0_0_#000]">
+                                     @csrf
+                                     <label class="block text-[11px] font-bold">Tanggal<input type="date" name="paid_at" value="{{ now()->format('Y-m-d') }}" required class="w-full border border-black px-1 py-1"></label>
+                                     <label class="mt-1 block text-[11px] font-bold">Nominal<input type="number" name="amount" min="0.01" step="0.01" required class="w-full border border-black px-1 py-1"></label>
+                                     <label class="mt-1 block text-[11px] font-bold">Bukti<input type="file" name="evidence" accept=".jpg,.jpeg,.png,.pdf" class="w-full text-[11px]"></label>
+                                     <label class="mt-1 block text-[11px]"><input type="hidden" name="is_verified" value="0"><input type="checkbox" name="is_verified" value="1" checked> Langsung terverifikasi</label>
+                                     <button class="mt-2 border-2 border-black bg-yellow-400 px-2 py-1 text-[11px] font-bold">Simpan Pembayaran</button>
+                                 </form>
+                             </details>
                             <button type="button" @click="openEdit(@js([
                                 "id" => $r->id,
                                 "tanggal" => $r->tanggal?->format("Y-m-d"),
@@ -365,6 +378,14 @@
                             <option value="">— Pilih Proyek —</option>
                             <template x-for="project in projectsFor(addForm.branch_id, addForm.project_name)" :key="project.id || project.name"><option :value="project.name" x-text="project.name"></option></template>
                         </select>
+                    </div>
+                    <div class="sm:col-span-2">
+                        <label for="consumer_search" class="font-[Helvetica] font-bold text-xs uppercase block mb-1">Pilih Konsumen Workspace (opsional)</label>
+                        <input id="consumer_search" type="search" x-model="consumerSearch" @input.debounce.300ms="searchConsumers()" placeholder="Cari nama atau kavling" class="w-full border-2 border-black px-3 py-2 text-sm font-['Times_New_Roman']">
+                        <div class="mt-1 border-2 border-black bg-white" x-show="consumerOptions.length" x-cloak>
+                            <template x-for="option in consumerOptions" :key="option.id"><button type="button" class="block w-full px-3 py-2 text-left text-sm hover:bg-yellow-100" @click="selectConsumer(option)"><span x-text="option.name"></span> — <span x-text="option.kavling || 'Tanpa kavling'"></span></button></template>
+                        </div>
+                        <input type="hidden" name="consumer_application_id" x-model="addForm.consumer_application_id">
                     </div>
                     <div>
                         <label class="font-[Helvetica] font-bold text-xs uppercase block mb-1">ID Transaksi</label>

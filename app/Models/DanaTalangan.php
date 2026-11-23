@@ -125,6 +125,11 @@ class DanaTalangan extends Model
         return $this->hasMany(DanaTalanganReconciliationItem::class);
     }
 
+    public function payments(): HasMany
+    {
+        return $this->hasMany(DanaTalanganPayment::class);
+    }
+
     protected function activityLabel(): string
     {
         return $this->nama_konsumen.' (Dana Talangan)';

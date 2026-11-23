@@ -24,6 +24,7 @@ use App\Http\Controllers\Crm\ConsumerProcessController;
 use App\Http\Controllers\Crm\ContentCalendarController;
 use App\Http\Controllers\Crm\CoordinatorSalesLeadWorkspaceController;
 use App\Http\Controllers\Crm\DanaTalanganController;
+use App\Http\Controllers\Crm\DanaTalanganPaymentController;
 use App\Http\Controllers\Crm\DashboardController;
 use App\Http\Controllers\Crm\DatabaseController;
 use App\Http\Controllers\Crm\ExpenseCategoryController;
@@ -395,6 +396,11 @@ Route::middleware(['auth', 'active', 'verified', 'password.changed', 'operationa
     Route::bind('dana_talangan', fn ($v) => DanaTalangan::findOrFail($v));
     Route::middleware('module.maintenance:dana_talangan')->group(function () {
         Route::get('dana-talangan/kavling-options', [DanaTalanganController::class, 'kavlingOptions'])->middleware('permission:bridge_fund.view')->name('dana-talangan.kavling-options');
+        Route::get('dana-talangan/consumer-options', [DanaTalanganController::class, 'consumerOptions'])->middleware('permission:bridge_fund.view')->name('dana-talangan.consumer-options');
+        Route::post('dana-talangan/{dana_talangan}/payments', [DanaTalanganPaymentController::class, 'store'])->middleware(['permission:bridge_fund.manage', 'not.impersonating'])->name('dana-talangan.payments.store');
+        Route::put('dana-talangan/{dana_talangan}/payments/{payment}', [DanaTalanganPaymentController::class, 'update'])->middleware(['permission:bridge_fund.manage', 'not.impersonating'])->name('dana-talangan.payments.update');
+        Route::delete('dana-talangan/{dana_talangan}/payments/{payment}', [DanaTalanganPaymentController::class, 'destroy'])->middleware(['permission:bridge_fund.manage', 'not.impersonating'])->name('dana-talangan.payments.destroy');
+        Route::get('dana-talangan/{dana_talangan}/payments/{payment}/evidence', [DanaTalanganPaymentController::class, 'evidence'])->middleware('permission:bridge_fund.view')->name('dana-talangan.payments.evidence');
         Route::post('dana-talangan/sync', [DanaTalanganController::class, 'sync'])->middleware(['operational.module:spreadsheet_sync', 'permission:bridge_fund.manage_all', 'can:manageAll,App\\Models\\DanaTalangan', 'not.impersonating'])->name('dana-talangan.sync');
         Route::get('dana-talangan/sync/status', [DanaTalanganController::class, 'syncStatus'])->middleware(['operational.module:spreadsheet_sync', 'permission:bridge_fund.manage_all', 'can:manageAll,App\\Models\\DanaTalangan'])->name('dana-talangan.sync-status');
         Route::get('dana-talangan/reconciliation', [DanaTalanganController::class, 'reconciliation'])->middleware(['operational.module:spreadsheet_sync', 'permission:bridge_fund.manage_all', 'can:manageAll,App\\Models\\DanaTalangan'])->name('dana-talangan.reconciliation');

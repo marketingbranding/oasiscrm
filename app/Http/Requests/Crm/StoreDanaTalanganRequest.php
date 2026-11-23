@@ -22,6 +22,8 @@ class StoreDanaTalanganRequest extends FormRequest
             'kav' => 'nullable|string|max:100',
             'id_transaksi' => 'nullable|string|max:80',
             'id_psjb' => 'nullable|string|max:150',
+            'consumer_application_id' => 'nullable|integer|exists:consumer_applications,id',
+            'kavling_id' => 'nullable|integer|exists:kavlings,id',
             'branch_id' => $user->canViewAllBranches() ? 'required|exists:branches,id' : 'nullable',
             'project_name' => 'required|string|max:255',
             'pinjam_nama' => 'nullable|boolean',

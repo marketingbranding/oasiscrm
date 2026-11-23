@@ -456,7 +456,15 @@ Tab dan hitungan Mundur di Workspace masih membaca `consumer_applications.transa
 
 ## WP-2.5 — Dana Talangan di OASIS
 
-Status: Paket A selesai; review fix sudah di-push untuk review.
+Status: Paket B berjalan; dry-run/confirm dan pembayaran awal sudah diimplementasikan.
+
+Paket B berjalan:
+- Dry-run backfill tidak menulis audit. `--confirm` menampilkan `DITOLAK` untuk ID tidak ada, sudah tertaut, atau bukan `KANDIDAT`, lalu mengembalikan exit code gagal.
+- Workspace Konsumen menyediakan pencarian nama/kavling dengan scope cabang/proyek; pemilihan mengisi relasi dan data Dana Talangan. Input manual tetap tersedia.
+- Pembayaran mendukung verifikasi langsung default, edit, soft delete, audit, status `lunas` otomatis dari total terverifikasi, pencabutan saat total turun, lebih bayar, dan bukti privat.
+- Tes penuh baseline Paket A: 2144 tes / 14607 assertions. Tes fokus Paket B saat ini: 3 tes / 14 assertions.
+
+Paket A review fix sudah di-push untuk review.
 
 Review fix Paket A:
 - Suite awal branch: 2144 tes / 14607 assertions.

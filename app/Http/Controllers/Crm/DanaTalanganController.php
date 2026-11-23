@@ -13,15 +13,18 @@ use App\Http\Requests\Crm\StoreDanaTalanganRequest;
 use App\Http\Requests\Crm\UpdateDanaTalanganRequest;
 use App\Imports\DanaTalanganImport;
 use App\Models\Branch;
+use App\Models\ConsumerApplication;
 use App\Models\DanaTalangan;
 use App\Models\DanaTalanganBridgeSetting;
 use App\Models\DanaTalanganReconciliationItem;
 use App\Models\DanaTalanganSyncStatus;
 use App\Models\Kavling;
 use App\Models\LeadMaster;
+use App\Models\User;
 use App\Services\CollaborationNotificationService;
 use App\Services\DanaTalanganBridgeService;
 use App\Services\DanaTalanganOptionService;
+use App\Services\DanaTalanganPaymentService;
 use App\Services\DanaTalanganService;
 use App\Services\OptimisticLockService;
 use App\Services\OrganizationScopeService;
@@ -31,6 +34,7 @@ use App\Services\WorkspaceAccessService;
 use App\Support\DanaTalanganMoney;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Symfony\Component\HttpFoundation\Response;
@@ -250,6 +254,7 @@ class DanaTalanganController extends Controller
         }
         $data['project_id'] = $project->id;
         $data['project_name'] = $project->project_name;
+        $this->applyConsumerSelection($data, $user);
         $branch = Branch::findOrFail($project->branch_id);
         abort_unless($this->organizationScope->allowsProjectRecord($user, 'bridge_fund', 'manage', (int) $branch->id, (int) $project->id), 403);
         abort_unless($this->workspaceAccess->canEditBranch($user, $branch), 403);
@@ -309,6 +314,7 @@ class DanaTalanganController extends Controller
         $data['branch_id'] = $project->branch_id;
         $data['project_id'] = $project->id;
         $data['project_name'] = $project->project_name;
+        $this->applyConsumerSelection($data, $user);
         $branch = Branch::findOrFail($project->branch_id);
         abort_unless($this->organizationScope->allowsProjectRecord($user, 'bridge_fund', 'manage', (int) $branch->id, (int) $project->id), 403);
         abort_unless($this->workspaceAccess->canEditBranch($user, $branch), 403);
@@ -385,7 +391,8 @@ class DanaTalanganController extends Controller
         abort_unless($user->can('view', $danaTalangan), 403);
         abort_unless($this->organizationScope->allowsProjectRecord($user, 'bridge_fund', 'view', (int) $danaTalangan->branch_id, $danaTalangan->project_id ? (int) $danaTalangan->project_id : null), 403);
 
-        $danaTalangan->load('creator')->loadCount('comments');
+        $danaTalangan->load(['creator', 'payments' => fn ($query) => $query->latest('paid_at')])->loadCount('comments');
+        $danaTalangan->setAttribute('payment_summary', app(DanaTalanganPaymentService::class)->summary($danaTalangan));
 
         return response()->json($danaTalangan);
     }
@@ -463,6 +470,49 @@ class DanaTalanganController extends Controller
         $payload['status_url'] = route('dana-talangan.sync-status');
 
         return response()->json($payload);
+    }
+
+    public function consumerOptions(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'branch_id' => ['required', 'integer', 'exists:branches,id'],
+            'project_id' => ['required', 'integer', 'exists:lead_master,id'],
+            'search' => ['nullable', 'string', 'max:100'],
+        ]);
+        $user = Auth::user();
+        $branchId = (int) $validated['branch_id'];
+        $projectId = (int) $validated['project_id'];
+        abort_unless(in_array($branchId, $this->organizationScope->branchIds($user, 'bridge_fund', 'view'), true), 403);
+        abort_unless($this->organizationScope->allowsProjectRecord($user, 'bridge_fund', 'view', $branchId, $projectId), 403);
+
+        $search = trim((string) ($validated['search'] ?? ''));
+        $applications = ConsumerApplication::query()
+            ->with(['customer:id,name', 'kavling:id,kavling_code,name'])
+            ->where('branch_id', $branchId)
+            ->where('project_id', $projectId)
+            ->where(function ($query): void {
+                $query->whereNull('deleted_at')->whereNotIn('transaction_status', ['MUNDUR', 'DITUTUP']);
+            })
+            ->when($search !== '', function ($query) use ($search): void {
+                $query->where(function ($query) use ($search): void {
+                    $query->whereHas('customer', fn ($customer) => $customer->where('name', 'like', '%'.$search.'%'))
+                        ->orWhereHas('kavling', fn ($kavling) => $kavling->where('kavling_code', 'like', '%'.$search.'%')->orWhere('name', 'like', '%'.$search.'%'));
+                });
+            })
+            ->latest('id')
+            ->limit(30)
+            ->get()
+            ->map(fn (ConsumerApplication $application): array => [
+                'id' => $application->id,
+                'name' => $application->customer?->name ?? $application->nama_konsumen,
+                'kavling_id' => $application->kavling_id,
+                'kavling' => $application->kavling?->kavling_code ?? $application->id_kavling,
+                'branch_id' => $application->branch_id,
+                'project_id' => $application->project_id,
+                'id_transaksi' => $application->id_transaksi,
+            ])->values();
+
+        return response()->json(['options' => $applications]);
     }
 
     public function kavlingOptions(Request $request, DanaTalanganService $service, DanaTalanganOptionService $optionService)
@@ -555,6 +605,24 @@ class DanaTalanganController extends Controller
         }
 
         return back()->with('success', 'Baris remote berhasil disetujui dan masuk ke OASIS.');
+    }
+
+    private function applyConsumerSelection(array &$data, User $user): void
+    {
+        if (blank($data['consumer_application_id'] ?? null)) {
+            return;
+        }
+
+        $application = ConsumerApplication::query()->with('kavling')->findOrFail((int) $data['consumer_application_id']);
+        abort_unless((int) $application->branch_id === (int) ($data['branch_id'] ?? 0), 422, 'Konsumen tidak berada pada cabang terpilih.');
+        abort_unless((int) $application->project_id === (int) ($data['project_id'] ?? 0), 422, 'Konsumen tidak berada pada proyek terpilih.');
+        abort_unless(in_array((int) $application->branch_id, $this->organizationScope->branchIds($user, 'bridge_fund', 'manage'), true), 403);
+        abort_unless($this->organizationScope->allowsProjectRecord($user, 'bridge_fund', 'manage', (int) $application->branch_id, (int) $application->project_id), 403);
+
+        $data['kavling_id'] = $application->kavling_id;
+        $data['kav'] = $application->kavling?->kavling_code ?? $application->id_kavling;
+        $data['nama_konsumen'] = $application->customer?->name ?? $application->nama_konsumen;
+        $data['id_transaksi'] = $application->id_transaksi;
     }
 
     private function bulkRecords(Request $request)

@@ -50,7 +50,7 @@ PRD sumber kebenaran: `docs/product/PRD_OASIS_CRM_V3.md` versi 3.3 (D30–D33)
 - Bukti tes: `CoordinatorSalesMonitoringServiceTest`, `SalesAgendaSubmissionAttentionServiceTest`, `AttentionSummaryNotificationTest`, `SalesMonitoringProjectionTest`, dan tes AI fokus; mencakup badge/filter scope, aktivitas terakhir, hari libur/akhir pekan, cutoff settings-backed, UTJ/Gugur, antrean tanpa pemilik, dan idempotensi notifikasi.
 - Changelog: migrasi `2026_11_22_231500_add_wp23_attention_changelog.php`; migrasi index aktivitas dan kunci unik notifikasi: `2026_11_22_224300_add_wp23_lead_attention_activity_indexes.php`.
 - Sumber komentar kini tersimpan di kolom `comments.source`; migrasi mengklasifikasikan komentar lama berbasis `user_id` (`human` bila terisi, `system` bila NULL) secara idempoten. Agregat tetap hanya menghitung `human` dan mengecualikan soft-delete.
-| WP-2.4 | 2 | Status peralihan cabang dan laporan paritas | Paket A selesai; menunggu review | §9.3 |
+| WP-2.4 | 2 | Status peralihan cabang dan laporan paritas | Merged ke fase-2 pada `6479a081` | §9.3 |
 | WP-2.5 | 2 | Dana Talangan di OASIS dan cicilan | Belum mulai | BR-42–BR-44 |
 | WP-2.6 | 2 | Kembali ke NUP di Workspace Konsumen | Belum mulai | BR-20–BR-22 |
 | WP-2.7 | 2 | Penutup Fase 2: changelog, dokumentasi, verifikasi penuh | Belum mulai | Semua fase 2 |

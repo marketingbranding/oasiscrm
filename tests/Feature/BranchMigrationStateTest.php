@@ -248,6 +248,7 @@ class BranchMigrationStateTest extends TestCase
         $service->transition($actor, $branch, 'sheet', 'migrasi', 'Mulai migrasi.');
         $service->transition($actor, $branch, 'migrasi', 'paralel', 'Mulai paralel.');
         $service->assertOasisConsumerInputAllowed($branch);
+        $this->assertTrue($service->allowsSheetSync($branch));
         try {
             $service->assertSheetWriteAllowed($branch);
             $this->fail('Input sheet harus ditolak pada status paralel.');

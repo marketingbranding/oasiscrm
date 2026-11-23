@@ -20,6 +20,7 @@ class FeatureFlagTest extends TestCase
             'org_hierarchical_monitoring' => false,
             'lead_stages_v3' => false,
             'transaction_events_v3' => false,
+            'dana_talangan_primary_source' => false,
         ], $flags);
     }
 

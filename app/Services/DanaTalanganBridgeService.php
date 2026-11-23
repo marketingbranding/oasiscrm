@@ -12,6 +12,7 @@ use App\Models\DanaTalanganSyncStatus;
 use App\Models\LeadMaster;
 use App\Models\User;
 use App\Support\DanaTalanganMoney;
+use App\Support\FeatureFlag;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
@@ -63,6 +64,19 @@ class DanaTalanganBridgeService
 
     public function push(DanaTalangan $record, ?User $actor = null): array
     {
+        if (FeatureFlag::enabledForBranch('dana_talangan_primary_source', (int) $record->branch_id)) {
+            ActivityLog::query()->create([
+                'causer_id' => $actor?->id,
+                'subject_type' => DanaTalangan::class,
+                'subject_id' => $record->id,
+                'event' => 'bridge_skipped_primary_source',
+                'description' => 'Baris Dana Talangan tidak ditulis ke sheet karena OASIS menjadi sumber utama cabang.',
+                'properties' => ['branch_id' => $record->branch_id, 'direction' => 'push'],
+            ]);
+
+            return ['ok' => true, 'status' => 'skipped_primary_source'];
+        }
+
         if (! $this->modes->isPushEnabled()) {
             return ['ok' => false, 'status' => 'disabled'];
         }
@@ -226,6 +240,21 @@ class DanaTalanganBridgeService
                     continue;
                 }
                 $record = DanaTalangan::withTrashed()->where('oasis_sync_id', $syncId)->first();
+                if ($record !== null && FeatureFlag::enabledForBranch('dana_talangan_primary_source', (int) $record->branch_id)) {
+                    if (! $dryRun) {
+                        ActivityLog::query()->create([
+                            'causer_id' => $actor?->id,
+                            'subject_type' => DanaTalangan::class,
+                            'subject_id' => $record->id,
+                            'event' => 'bridge_skipped_primary_source',
+                            'description' => 'Baris Dana Talangan tidak ditarik dari sheet karena OASIS menjadi sumber utama cabang.',
+                            'properties' => ['branch_id' => $record->branch_id, 'row_number' => $row['_row_number'], 'direction' => 'pull'],
+                        ]);
+                    }
+                    $summary['skipped_primary_source'] = ($summary['skipped_primary_source'] ?? 0) + 1;
+
+                    continue;
+                }
                 if ($record === null) {
                     if (filled($row['oasis_deleted_at'])) {
                         $summary['ignored_tombstones']++;

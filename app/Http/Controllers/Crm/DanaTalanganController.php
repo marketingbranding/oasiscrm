@@ -38,8 +38,8 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Symfony\Component\HttpFoundation\BinaryFileResponse;
 use Symfony\Component\HttpFoundation\Response;
-use Symfony\Component\HttpFoundation\StreamedResponse;
 use Throwable;
 
 class DanaTalanganController extends Controller
@@ -363,20 +363,36 @@ class DanaTalanganController extends Controller
     {
         $user = Auth::user();
         abort_unless($user->hasPermission('bridge_fund.view'), 403);
+        $branchId = $request->integer('branch_id') ?: null;
+        $projectId = $request->integer('project_id') ?: null;
+        $this->assertReportScope($user, $branchId, $projectId);
         $from = $request->filled('from') ? Carbon::parse($request->string('from')) : null;
         $to = $request->filled('to') ? Carbon::parse($request->string('to')) : null;
 
-        return response()->json($service->report($user, $request->integer('branch_id') ?: null, $request->integer('project_id') ?: null, $from, $to));
+        return response()->json($service->report($user, $branchId, $projectId, $from, $to));
     }
 
-    public function exportReport(Request $request, DanaTalanganReportService $service): StreamedResponse
+    public function exportReport(Request $request, DanaTalanganReportService $service): BinaryFileResponse
     {
         $user = Auth::user();
         abort_unless($user->hasPermission('bridge_fund.export'), 403);
-        $report = $service->report($user, $request->integer('branch_id') ?: null, $request->integer('project_id') ?: null, $request->filled('from') ? Carbon::parse($request->string('from')) : null, $request->filled('to') ? Carbon::parse($request->string('to')) : null);
+        $branchId = $request->integer('branch_id') ?: null;
+        $projectId = $request->integer('project_id') ?: null;
+        $this->assertReportScope($user, $branchId, $projectId);
+        $report = $service->report($user, $branchId, $projectId, $request->filled('from') ? Carbon::parse($request->string('from')) : null, $request->filled('to') ? Carbon::parse($request->string('to')) : null);
         $filename = 'laporan-dana-talangan-'.now()->format('Ymd-His').'.xlsx';
 
         return DanaTalanganExport::summaryToBrowser($report, $filename);
+    }
+
+    private function assertReportScope(User $user, ?int $branchId, ?int $projectId): void
+    {
+        if ($branchId !== null && ! in_array($branchId, $this->organizationScope->branchIds($user, 'bridge_fund', 'view'), true)) {
+            abort(403);
+        }
+        if ($projectId !== null && ! in_array($projectId, $this->organizationScope->projectIds($user, 'bridge_fund', 'view'), true)) {
+            abort(403);
+        }
     }
 
     public function export(Request $request)

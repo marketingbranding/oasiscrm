@@ -4,6 +4,8 @@ namespace App\Models;
 
 use App\Enums\SalesLeadStatus;
 use App\Services\CrmAuthorizationService;
+use App\Services\LeadAttentionService;
+use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -89,6 +91,7 @@ class SalesLead extends Model
             'delivery_attempted_at' => 'datetime',
             'delete_pending_at' => 'datetime',
             'last_synced_field_hashes' => 'array',
+            'latest_activity_at' => 'datetime',
         ];
     }
 
@@ -350,11 +353,17 @@ class SalesLead extends Model
         return $this->currentStageLabel();
     }
 
-    public function lastActivityAt()
+    public function lastActivityAt(): ?CarbonImmutable
     {
-        $dates = collect(self::STAGE_ORDER)->map(fn (string $stage) => $this->{$stage})->filter();
+        if ($this->hasAttribute('latest_activity_at')) {
+            $value = $this->getAttribute('latest_activity_at');
 
-        return $dates->sortDesc()->first() ?? $this->lead_date?->startOfDay();
+            return $value instanceof CarbonImmutable
+                ? $value
+                : ($value !== null ? CarbonImmutable::parse((string) $value, config('app.timezone')) : null);
+        }
+
+        return app(LeadAttentionService::class)->latestActivityAt($this);
     }
 
     public function getLastActivityAtAttribute()

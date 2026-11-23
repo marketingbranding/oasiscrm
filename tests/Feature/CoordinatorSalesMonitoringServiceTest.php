@@ -11,12 +11,15 @@ use App\Models\Role;
 use App\Models\SalesAgendaEvidence;
 use App\Models\SalesCoordinatorSales;
 use App\Models\SalesLead;
+use App\Models\SalesLeadSiteVisit;
 use App\Models\SalesLeadStatusHistory;
+use App\Models\SalesLeadUnownedQueue;
 use App\Models\User;
 use App\Models\UserNotification;
 use App\Services\AppSettingResolver;
 use App\Services\CoordinatorAgendaReminderService;
 use App\Services\CoordinatorSalesMonitoringService;
+use App\Services\LeadAttentionService;
 use App\Services\SalesMonitoringProjectionService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
@@ -288,6 +291,230 @@ class CoordinatorSalesMonitoringServiceTest extends TestCase
         $workbook->disconnectWorksheets();
     }
 
+    public function test_wp23_activity_uses_all_human_sources_and_marks_open_queue(): void
+    {
+        $lead = $this->lead($this->sales, 'Lead perhatian', '2026-08-01', $this->project, $this->branch);
+        SalesLeadStatusHistory::create([
+            'sales_lead_id' => $lead->id,
+            'branch_id' => $lead->branch_id,
+            'status' => SalesLeadStatus::Discussion,
+            'source' => 'test',
+            'changed_at' => '2026-08-02 09:00:00',
+        ]);
+        SalesLeadSiteVisit::create([
+            'sales_lead_id' => $lead->id,
+            'branch_id' => $lead->branch_id,
+            'actor_id' => $this->sales->id,
+            'status' => 'incomplete',
+            'created_at' => '2026-08-03 09:00:00',
+            'updated_at' => '2026-08-03 09:00:00',
+        ]);
+        DB::table('sales_lead_transfers')->insert([
+            'sales_lead_id' => $lead->id,
+            'from_sales_user_id' => $this->sales->id,
+            'to_sales_user_id' => $this->sales->id,
+            'actor_user_id' => $this->coordinator->id,
+            'reason' => 'Tidak dapat dihubungi',
+            'created_at' => '2026-08-04 09:00:00',
+            'updated_at' => '2026-08-04 09:00:00',
+        ]);
+        DB::table('comments')->insert([
+            'commentable_type' => SalesLead::class,
+            'commentable_id' => $lead->id,
+            'user_id' => $this->sales->id,
+            'body' => 'Catatan manusia',
+            'body_plain' => 'Catatan manusia',
+            'source' => 'human',
+            'lock_version' => 0,
+            'created_at' => '2026-08-05 09:00:00',
+            'updated_at' => '2026-08-05 09:00:00',
+        ]);
+        DB::table('comments')->insert([
+            'commentable_type' => SalesLead::class,
+            'commentable_id' => $lead->id,
+            'user_id' => $this->sales->id,
+            'body' => 'Komentar sistem',
+            'body_plain' => 'Komentar sistem',
+            'source' => 'system',
+            'lock_version' => 0,
+            'created_at' => '2026-08-10 09:00:00',
+            'updated_at' => '2026-08-10 09:00:00',
+        ]);
+        DB::table('comments')->insert([
+            'commentable_type' => SalesLead::class,
+            'commentable_id' => $lead->id,
+            'user_id' => $this->sales->id,
+            'body' => 'Komentar impor',
+            'body_plain' => 'Komentar impor',
+            'source' => 'import',
+            'lock_version' => 0,
+            'created_at' => '2026-08-11 09:00:00',
+            'updated_at' => '2026-08-11 09:00:00',
+        ]);
+        SalesLeadUnownedQueue::create([
+            'sales_lead_id' => $lead->id,
+            'queue_coordinator_user_id' => $this->coordinator->id,
+            'status' => 'open',
+        ]);
+
+        $result = app(LeadAttentionService::class)->queryFor($this->coordinator)->get();
+
+        $row = $result->firstWhere('id', $lead->id);
+        $this->assertNotNull($row);
+        $this->assertSame('2026-08-05 09:00:00', Carbon::parse($row->latest_activity_at)->format('Y-m-d H:i:s'));
+        $this->assertTrue((bool) $row->needs_attention);
+        $this->assertTrue((bool) $row->has_unowned_queue);
+    }
+
+    public function test_wp23_system_and_import_comments_do_not_override_human_activity(): void
+    {
+        $lead = $this->lead($this->sales, 'Lead komentar', '2026-08-01', $this->project, $this->branch);
+        DB::table('comments')->insert([
+            'commentable_type' => SalesLead::class,
+            'commentable_id' => $lead->id,
+            'user_id' => $this->sales->id,
+            'body' => 'Manusia',
+            'body_plain' => 'Manusia',
+            'source' => 'human',
+            'lock_version' => 0,
+            'created_at' => '2026-08-02 09:00:00',
+            'updated_at' => '2026-08-02 09:00:00',
+        ]);
+        DB::table('comments')->insert([
+            'commentable_type' => SalesLead::class,
+            'commentable_id' => $lead->id,
+            'user_id' => $this->sales->id,
+            'body' => 'Sistem',
+            'body_plain' => 'Sistem',
+            'source' => 'system',
+            'lock_version' => 0,
+            'created_at' => '2026-08-11 09:00:00',
+            'updated_at' => '2026-08-11 09:00:00',
+        ]);
+        DB::table('comments')->insert([
+            'commentable_type' => SalesLead::class,
+            'commentable_id' => $lead->id,
+            'user_id' => $this->sales->id,
+            'body' => 'Komentar historis tanpa sumber',
+            'body_plain' => 'Komentar historis tanpa sumber',
+            'source' => null,
+            'lock_version' => 0,
+            'created_at' => '2026-08-12 09:00:00',
+            'updated_at' => '2026-08-12 09:00:00',
+        ]);
+
+        $row = app(LeadAttentionService::class)->queryFor($this->coordinator)->find($lead->id);
+
+        $this->assertSame('2026-08-02 09:00:00', Carbon::parse($row->latest_activity_at)->format('Y-m-d H:i:s'));
+        $this->assertNotSame('2026-08-12 09:00:00', Carbon::parse($row->latest_activity_at)->format('Y-m-d H:i:s'));
+    }
+
+    public function test_wp23_legacy_closed_statuses_are_closed_when_v3_flag_is_off(): void
+    {
+        foreach (['utj', 'slik_check', 'slik_rejected', 'akad'] as $status) {
+            $lead = $this->lead($this->sales, 'Legacy '.$status, '2026-08-01', $this->project, $this->branch);
+            $lead->forceFill(['current_status' => $status])->save();
+        }
+        $lead = $this->lead($this->sales, 'Legacy UTJ Date', '2026-08-01', $this->project, $this->branch);
+        $lead->forceFill(['utj_at' => '2026-08-02 09:00:00'])->save();
+
+        $rows = app(LeadAttentionService::class)->queryFor($this->coordinator)->get();
+        $this->assertSame([], $rows->filter(fn ($row): bool => (bool) $row->needs_attention)->pluck('customer_name')->all());
+        $this->assertSame(0, app(LeadAttentionService::class)->attentionQuery($this->coordinator)->count());
+    }
+
+    public function test_wp23_per_lead_attention_matches_sql_for_v3_flag_states_and_statuses(): void
+    {
+        foreach ([false, true] as $enabled) {
+            DB::table('app_settings')->updateOrInsert(
+                ['key' => 'lead_stages_v3'],
+                ['value' => json_encode($enabled ? ['mode' => 'all', 'branch_ids' => []] : ['mode' => 'off', 'branch_ids' => []]), 'group' => 'feature_flags', 'updated_at' => now(), 'created_at' => now()],
+            );
+            app(AppSettingResolver::class)->forget('lead_stages_v3');
+            foreach (['lead_baru', 'utj', 'gugur'] as $stage) {
+                $lead = $this->lead($this->sales, "Stage {$enabled} {$stage}", '2026-08-01', $this->project, $this->branch);
+                $lead->forceFill(['lead_stage' => $stage])->save();
+                $this->assertSame(
+                    app(LeadAttentionService::class)->attentionQuery($this->coordinator)->whereKey($lead->id)->exists(),
+                    app(LeadAttentionService::class)->isAttentionNeeded($lead->fresh()),
+                    "Mismatch for flag {$enabled}, stage {$stage}",
+                );
+            }
+        }
+    }
+
+    public function test_wp23_old_human_comment_backfill_resets_activity_after_migration(): void
+    {
+        $lead = $this->lead($this->sales, 'Komentar lama', '2026-08-01', $this->project, $this->branch);
+        $commentId = DB::table('comments')->insertGetId([
+            'commentable_type' => SalesLead::class, 'commentable_id' => $lead->id, 'user_id' => $this->sales->id,
+            'body' => 'Komentar lama', 'body_plain' => 'Komentar lama', 'source' => null, 'lock_version' => 0,
+            'created_at' => '2026-08-10 09:00:00', 'updated_at' => '2026-08-10 09:00:00',
+        ]);
+        $migration = require database_path('migrations/2026_11_22_234524_add_source_to_comments_table.php');
+        $migration->up();
+
+        $this->assertSame('human', DB::table('comments')->where('id', $commentId)->value('source'));
+        $this->assertSame('2026-08-10 09:00:00', Carbon::parse(app(LeadAttentionService::class)->latestActivityAt($lead->fresh()))->format('Y-m-d H:i:s'));
+    }
+
+    public function test_wp23_old_system_comment_backfill_does_not_reset_activity(): void
+    {
+        $lead = $this->lead($this->sales, 'Komentar sistem lama', '2026-08-01', $this->project, $this->branch);
+        $commentId = DB::table('comments')->insertGetId([
+            'commentable_type' => SalesLead::class, 'commentable_id' => $lead->id, 'user_id' => $this->sales->id,
+            'body' => 'Komentar sistem', 'body_plain' => 'Komentar sistem', 'source' => null, 'lock_version' => 0,
+            'created_at' => '2026-08-10 09:00:00', 'updated_at' => '2026-08-10 09:00:00',
+        ]);
+        $migration = require database_path('migrations/2026_11_22_234524_add_source_to_comments_table.php');
+        $migration->up();
+        DB::table('comments')->where('id', $commentId)->update(['user_id' => null, 'source' => null]);
+        $migration->up();
+
+        $this->assertSame('system', DB::table('comments')->where('id', $commentId)->value('source'));
+    }
+
+    public function test_wp23_closed_v3_leads_do_not_need_attention(): void
+    {
+        $lead = $this->lead($this->sales, 'Lead UTJ', '2026-08-01', $this->project, $this->branch);
+        $lead->forceFill(['lead_stage' => 'utj'])->save();
+
+        DB::table('app_settings')->insert([
+            'key' => 'lead_stages_v3',
+            'value' => json_encode(['mode' => 'all', 'branch_ids' => []], JSON_THROW_ON_ERROR),
+            'group' => 'feature_flags',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        app(AppSettingResolver::class)->forget('lead_stages_v3');
+
+        $row = app(LeadAttentionService::class)->queryFor($this->coordinator)->find($lead->id);
+
+        $this->assertFalse((bool) $row->needs_attention);
+    }
+
+    public function test_wp23_lead_attention_list_uses_constant_query_count(): void
+    {
+        foreach (range(1, 4) as $index) {
+            $this->lead($this->sales, "Lead {$index}", '2026-08-01', $this->project, $this->branch);
+        }
+
+        DB::flushQueryLog();
+        DB::enableQueryLog();
+        app(LeadAttentionService::class)->queryFor($this->coordinator)->get();
+        $firstCount = collect(DB::getQueryLog())->filter(fn (array $query): bool => str_contains(strtolower($query['query']), 'from "sales_leads"'))->count();
+
+        foreach (range(5, 8) as $index) {
+            $this->lead($this->sales, "Lead {$index}", '2026-08-01', $this->project, $this->branch);
+        }
+        DB::flushQueryLog();
+        app(LeadAttentionService::class)->queryFor($this->coordinator)->get();
+        $secondCount = collect(DB::getQueryLog())->filter(fn (array $query): bool => str_contains(strtolower($query['query']), 'from "sales_leads"'))->count();
+        DB::disableQueryLog();
+
+        $this->assertSame($firstCount, $secondCount);
+    }
+
     public function test_br51_coordinator_actionable_and_failed_leads_use_projection_contract(): void
     {
         $stale = $this->lead($this->sales, 'Lead lama', '2026-08-01', $this->project, $this->branch);
@@ -348,6 +575,47 @@ class CoordinatorSalesMonitoringServiceTest extends TestCase
         $this->assertSame(['Lead lama'], $default['actionableLeads']->pluck('customer_name')->all());
         $this->assertSame(['Lead gagal sync'], $default['failedSyncLeads']->pluck('customer_name')->all());
         $this->assertSame(['Lead lama'], $custom['actionableLeads']->pluck('customer_name')->all());
+    }
+
+    public function test_wp23_actionable_lead_link_uses_supported_attention_focus(): void
+    {
+        $view = file_get_contents(resource_path('views/crm/sales-pocketbook/coordinator-leads.blade.php'));
+
+        $this->assertStringContainsString("'focus' => 'attention'", $view);
+        $this->assertStringNotContainsString("'focus' => 'stale'", $view);
+    }
+
+    public function test_wp23_coordinator_lead_screen_shows_attention_badge_and_focus_filter(): void
+    {
+        $stale = $this->lead($this->sales, 'Lead Perhatian', '2026-08-01', $this->project, $this->branch);
+        $stale->forceFill(['current_status_changed_at' => Carbon::parse('2026-08-01 09:00:00')])->save();
+        $fresh = $this->lead($this->sales, 'Lead Aktif', '2026-08-10', $this->project, $this->branch);
+        $fresh->forceFill(['current_status_changed_at' => Carbon::parse('2026-08-11 09:00:00')])->save();
+
+        $period = ['period' => 'custom', 'date_from' => '2026-08-01', 'date_to' => '2026-08-11'];
+
+        $this->actingAs($this->coordinator)
+            ->get(route('sales-pocketbook.index', ['tab' => 'lead', ...$period]))
+            ->assertOk()
+            ->assertSeeText('Perlu perhatian');
+
+        $this->actingAs($this->coordinator)
+            ->get(route('sales-pocketbook.index', ['tab' => 'lead', 'focus' => 'attention', ...$period]))
+            ->assertOk()
+            ->assertSeeText('Lead Perhatian')
+            ->assertDontSeeText('Lead Aktif');
+    }
+
+    public function test_wp23_sales_lead_screen_shows_own_attention_badge(): void
+    {
+        $lead = $this->lead($this->sales, 'Lead Sales Perhatian', '2026-08-01', $this->project, $this->branch);
+        $lead->forceFill(['current_status_changed_at' => Carbon::parse('2026-08-01 09:00:00')])->save();
+
+        $this->actingAs($this->sales)
+            ->get(route('sales-pocketbook.index', ['tab' => 'leads']))
+            ->assertOk()
+            ->assertSeeText('Lead Sales Perhatian')
+            ->assertSeeText('Perlu perhatian');
     }
 
     private function user(string $role, string $name, Branch $branch, ?User $supervisor = null): User

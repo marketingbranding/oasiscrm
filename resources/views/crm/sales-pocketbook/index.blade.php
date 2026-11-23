@@ -35,9 +35,9 @@
         ['tab' => 'leads'],
     ));
     $hasLeadPeriodFilter = request()->filled('period_type') || request()->filled('week') || request()->filled('date_from') || request()->filled('date_to');
-    $hasLeadFilters = collect(['branch_id', 'project_id', 'sales_user_id', 'lead_source', 'lead_source_id', 'stage', 'report_metric'])
+    $hasLeadFilters = collect(['branch_id', 'project_id', 'sales_user_id', 'lead_source', 'lead_source_id', 'stage', 'needs_attention', 'report_metric'])
         ->contains(fn (string $key) => request()->filled($key)) || $hasLeadPeriodFilter;
-    $activeLeadFilterCount = collect(['branch_id', 'project_id', 'sales_user_id', 'lead_source', 'lead_source_id', 'stage', 'report_metric'])
+    $activeLeadFilterCount = collect(['branch_id', 'project_id', 'sales_user_id', 'lead_source', 'lead_source_id', 'stage', 'needs_attention', 'report_metric'])
         ->filter(fn (string $key) => request()->filled($key))->count() + ($hasLeadPeriodFilter ? 1 : 0);
     $selectedLeadSource = $leadSourceFilter;
     $selectedLeadStage = request()->filled('stage') ? (\App\Models\SalesLead::STAGES[request('stage')] ?? null) : null;
@@ -310,7 +310,8 @@
         @if($selectedSales)<x-crm.filter-chip label="Sales: {{ $selectedSales->name }}" :remove-href="$leadFilterUrl(['sales_user_id'])" remove-label="Hapus filter sales" />@endif
         @if($selectedLeadSource)<x-crm.filter-chip label="Sumber: {{ $selectedLeadSource }}" :remove-href="$leadFilterUrl(['lead_source', 'lead_source_id'])" remove-label="Hapus filter sumber lead" />@endif
         @if($selectedLeadStage)<x-crm.filter-chip label="Tahap: {{ $selectedLeadStage }}" :remove-href="$leadFilterUrl(['stage'])" remove-label="Hapus filter tahap" />@endif
-        @if($selectedReportMetric)<x-crm.filter-chip label="Drilldown: {{ $selectedReportMetric }}" :remove-href="$leadFilterUrl(['report_metric'])" remove-label="Hapus drilldown laporan" />@endif
+        @if(request()->boolean('needs_attention'))<x-crm.filter-chip label="Perlu perhatian" :remove-href="$leadFilterUrl(['needs_attention'])" remove-label="Hapus penanda perhatian" />@endif
+         @if($selectedReportMetric)<x-crm.filter-chip label="Drilldown: {{ $selectedReportMetric }}" :remove-href="$leadFilterUrl(['report_metric'])" remove-label="Hapus drilldown laporan" />@endif
         @if($hasLeadPeriodFilter)<x-crm.filter-chip label="Periode: {{ $reportPeriod['start']->format('d/m/Y') }} - {{ $reportPeriod['end']->format('d/m/Y') }}" :remove-href="$leadFilterUrl(['period_type', 'week', 'date_from', 'date_to'])" remove-label="Hapus filter periode" />@endif
         <x-slot:actions>
             @if($hasLeadFilters)<x-crm.button variant="text" :href="$leadResetUrl">Hapus semua filter</x-crm.button>@endif
@@ -322,11 +323,13 @@
         <form method="GET" action="{{ route('sales-pocketbook.index') }}" x-data="salesCascade(@js($cascadeProjects), @js($cascadeSales), @js(['branch' => request('branch_id'), 'project' => request('project_id'), 'sales' => request('sales_user_id')]))" class="sales-lead-filter-form">
             <input type="hidden" name="tab" value="leads">
             @if(request()->filled('report_metric'))<input type="hidden" name="report_metric" value="{{ request('report_metric') }}">@endif
+            @if(request()->boolean('needs_attention'))<input type="hidden" name="needs_attention" value="1">@endif
             <x-crm.field label="Cabang" for="lead-filter-branch"><select id="lead-filter-branch" class="sales-input" name="branch_id" x-model="branch" @change="branchChanged()"><option value="">Semua cabang</option>@foreach($branches as $branch)<option value="{{ $branch->id }}">{{ $branch->name }}</option>@endforeach</select></x-crm.field>
             <x-crm.field label="Proyek" for="lead-filter-project"><select id="lead-filter-project" class="sales-input" name="project_id" x-model="project" @change="projectChanged()"><option value="">Semua proyek</option>@foreach($projects as $project)<option value="{{ $project->id }}" x-show="projectVisible('{{ $project->id }}')" :disabled="!projectVisible('{{ $project->id }}')">{{ $project->project_name }}</option>@endforeach</select></x-crm.field>
             <x-crm.field label="Sales" for="lead-filter-sales"><select id="lead-filter-sales" class="sales-input" name="sales_user_id" x-model="sales"><option value="">Semua sales</option>@foreach($salesUsers as $sales)<option value="{{ $sales->id }}" x-show="salesVisible('{{ $sales->id }}')" :disabled="!salesVisible('{{ $sales->id }}')">{{ $sales->name }}</option>@endforeach</select></x-crm.field>
             <x-crm.field label="Sumber Lead" for="lead-filter-source"><select id="lead-filter-source" class="sales-input" name="lead_source"><option value="">Semua sumber</option>@foreach($leadSourceOptions as $source)<option value="{{ $source }}" @selected($selectedLeadSource === $source)>{{ $source }}</option>@endforeach</select></x-crm.field>
             <x-crm.field label="Tahap Saat Ini" for="lead-filter-stage"><select id="lead-filter-stage" class="sales-input" name="stage"><option value="">Semua tahap</option>@foreach($stageLabels as $stage => $label)<option value="{{ $stage }}" @selected(request('stage') === $stage)>{{ $label }}</option>@endforeach</select></x-crm.field>
+            <x-crm.field label="Penanda perhatian" for="lead-filter-attention"><select id="lead-filter-attention" class="sales-input" name="needs_attention"><option value="">Semua Lead</option><option value="1" @selected(request()->boolean('needs_attention'))>Perlu perhatian</option></select></x-crm.field>
             <div class="crm-field"><span class="crm-field-label" id="lead-period-label">Periode</span><div class="crm-field-control">@include('crm.sales-pocketbook._period-picker', ['periodPickerId' => 'lead-period'])</div></div>
             <div class="sales-lead-filter-actions">
                 <x-crm.button type="submit" variant="primary" accent="sales">Terapkan Filter</x-crm.button>

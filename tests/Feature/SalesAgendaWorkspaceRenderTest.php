@@ -1134,7 +1134,8 @@ class SalesAgendaWorkspaceRenderTest extends TestCase
             ->assertSee('Selesai')
             ->assertSee('+ Tambah lead')
             ->assertSee('Tambah lead')
-            ->assertDontSee('Struk Agenda');
+            ->assertSee('Rencana Harian belum dikirim.')
+            ->assertSee('Struk Agenda');
     }
 
     private function salesContext(): array

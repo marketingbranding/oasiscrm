@@ -12,6 +12,7 @@ use App\Models\SalesLead;
 use App\Models\SalesLeadLifecycleReconciliationItem;
 use App\Models\SalesLeadLifecycleSyncStatus;
 use App\Models\User;
+use App\Services\LeadAttentionService;
 use App\Services\OrganizationScopeService;
 use App\Services\SalesDailyReminderService;
 use App\Services\SalesLeadSheetOptionService;
@@ -39,6 +40,7 @@ class SalesPocketbookController extends Controller
         private readonly OrganizationScopeService $organizationScope,
         private readonly SalesTeamScopeService $salesTeamScope,
         private readonly SalesMonitoringProjectionService $projection,
+        private readonly LeadAttentionService $leadAttention,
     ) {}
 
     public function index(Request $request)
@@ -149,9 +151,10 @@ class SalesPocketbookController extends Controller
 
         $reportMetric = $request->query('report_metric');
         $filterLeadPeriod = $reportMetric || $request->filled('period_type') || $request->filled('week') || ($request->filled('date_from') && $request->filled('date_to'));
-        $leads = ($canonicalScope
+        $leadQuery = $canonicalScope
             ? $this->weeklyMetrics->canonicalLeadQuery($canonicalScope)
-            : SalesLead::query()->visibleTo($user)->whereIn('sales_user_id', $visibleSalesIds)->activeForLeadViews())
+            : $this->leadAttention->decorate(SalesLead::query()->visibleTo($user)->whereIn('sales_user_id', $visibleSalesIds)->activeForLeadViews());
+        $leads = $leadQuery
             ->with([
                 'branch:id,name,sheet_id', 'project:id,project_name,is_nup_eligible', 'sales:id,name,supervisor_user_id',
                 'leadSource:id,name,is_active', 'siteVisits' => fn ($query) => $query->latest('id'),
@@ -168,11 +171,11 @@ class SalesPocketbookController extends Controller
             ->when($filterLeadPeriod, fn (Builder $query) => $query
                 ->whereDate($reportMetric ? SalesWeeklyMetricsService::METRIC_COLUMNS[$reportMetric] : 'lead_date', '>=', $reportPeriod['start']->toDateString())
                 ->whereDate($reportMetric ? SalesWeeklyMetricsService::METRIC_COLUMNS[$reportMetric] : 'lead_date', '<=', $reportPeriod['end']->toDateString()))
+            ->when($request->boolean('needs_attention'), fn (Builder $query) => $this->leadAttention->whereNeedsAttention($query))
             ->when($request->filled('stage'), function (Builder $query) use ($request) {
                 $this->applyStageFilter($query, (string) $request->query('stage'));
             })
             ->latest('lead_date')->latest('id')->paginate(20)->withQueryString();
-        $leads->getCollection()->each(fn (SalesLead $lead) => $lead->setAttribute('latest_activity_at', $lead->latestStatusHistory?->changed_at ?? $lead->current_status_changed_at ?? $lead->lead_date));
         $leads->setCollection($this->projection->projectCollection($user, 'lead', $leads->getCollection(), 'sales_user_id'));
 
         $agendaDateFrom = $reportPeriod['start']->toDateString();
@@ -429,7 +432,8 @@ class SalesPocketbookController extends Controller
             'branch_id' => $branchId,
             'project_id' => $projectId,
             'sales_user_id' => $salesId,
-        ]);
+            'needs_attention' => $request->boolean('needs_attention'),
+        ], fn (mixed $value): bool => $value !== null && $value !== false);
         $reportMetric = $request->query('report_metric');
         $leadDateColumn = $reportMetric ? SalesWeeklyMetricsService::METRIC_COLUMNS[$reportMetric] : 'lead_date';
         $completedAgendaDrilldown = $request->boolean('report_agenda_completed');
@@ -442,13 +446,13 @@ class SalesPocketbookController extends Controller
             ->whereDate($leadDateColumn, '>=', $period['start']->toDateString())
             ->whereDate($leadDateColumn, '<=', $period['end']->toDateString())
             ->when($leadSourceFilter, fn (Builder $query) => $query->whereEffectiveSource($leadSourceFilter))
+            ->when($request->boolean('needs_attention'), fn (Builder $query) => $this->leadAttention->whereNeedsAttention($query))
             ->when($request->filled('stage'), function (Builder $query) use ($request) {
                 $this->applyStageFilter($query, (string) $request->query('stage'));
             })
             ->orderBy('lead_date')
             ->orderBy('id')
             ->get();
-        $leads->each(fn (SalesLead $lead) => $lead->setAttribute('latest_activity_at', $lead->latestStatusHistory?->changed_at ?? $lead->current_status_changed_at ?? $lead->lead_date));
         $leads = $this->projection->projectCollection($user, 'lead', $leads, 'sales_user_id');
 
         $agendas = ($canonicalScope
@@ -522,7 +526,8 @@ class SalesPocketbookController extends Controller
             'sales_user_id' => ['nullable', 'integer'],
             'lead_source' => ['nullable', 'string', 'max:255'],
             'lead_source_id' => ['nullable', 'integer', 'exists:lead_sources,id'],
-            'stage' => ['nullable', Rule::in(array_keys(SalesLead::STAGES))],
+            'stage' => ['nullable', 'string'],
+            'needs_attention' => ['nullable', 'boolean'],
             'period_type' => ['nullable', 'required_with:week,date_from,date_to', Rule::in(['week', 'custom'])],
             'week' => ['nullable', 'date', 'required_if:period_type,week', 'prohibited_if:period_type,custom'],
             'date_from' => ['nullable', 'date', 'required_if:period_type,custom', 'prohibited_if:period_type,week'],

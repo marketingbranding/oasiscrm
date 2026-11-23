@@ -4,6 +4,9 @@
         <h2 id="lead-saya-title">Lead Saya</h2>
         <p>Pantau lead yang perlu ditindaklanjuti dan yang sudah selesai.</p>
     </header>
+    @if($submissionAttention['requires_submission'])
+        <x-crm.alert variant="warning" title="Rencana Harian belum dikirim.">Kirim Struk Agenda Harian untuk {{ $submissionAttention['cutoff_time'] }} agar tercatat sebagai aktivitas hari ini.</x-crm.alert>
+    @endif
     <nav class="sales-lead-status-tabs" aria-label="Status Lead Saya">
         <a href="{{ route('sales-agendas.index', ['tab' => 'leads', 'lead_status' => 'open']) }}" class="{{ $leadStatus === 'open' ? 'is-active' : '' }}">Belum selesai ({{ $openLeadCount }})</a>
         <a href="{{ route('sales-agendas.index', ['tab' => 'leads', 'lead_status' => 'completed']) }}" class="{{ $leadStatus === 'completed' ? 'is-active' : '' }}">Selesai ({{ $completedLeadCount }})</a>
@@ -67,11 +70,11 @@
         </details>
     @endif
 
-    <div class="crm-table-scroll hidden md:block"><table class="crm-data-table"><thead><tr><th>Tanggal</th><th>Konsumen</th><th>Cabang</th><th>Proyek</th><th>Status</th><th>Aksi</th></tr></thead><tbody>@forelse($leads as $lead)<tr><td>{{ $lead->lead_date->format('d/m/Y') }}</td><td>{{ $lead->customer_name }}</td><td>{{ $lead->branch?->name ?: '-' }}</td><td>{{ $lead->project?->project_name ?: '-' }}</td><td><x-crm.status-badge :variant="$lead->completed_at ? 'success' : 'neutral'">{{ $lead->completed_at ? 'Selesai' : $lead->current_status->label() }}</x-crm.status-badge></td><td><x-crm.button variant="text" size="sm" :href="route('sales-leads.show', $lead)">Detail</x-crm.button>@can('update', $lead)<x-crm.button variant="text" size="sm" :href="route('sales-leads.edit', $lead)">Edit</x-crm.button>@endcan</td></tr>@empty<tr><td colspan="6"><x-crm.empty-state title="Belum ada lead" description="Lead Anda akan tampil di sini." /></td></tr>@endforelse</tbody></table></div>
+    <div class="crm-table-scroll hidden md:block"><table class="crm-data-table"><thead><tr><th>Tanggal</th><th>Konsumen</th><th>Cabang</th><th>Proyek</th><th>Status</th><th>Aksi</th></tr></thead><tbody>@forelse($leads as $lead)<tr><td>{{ $lead->lead_date->format('d/m/Y') }}</td><td>{{ $lead->customer_name }}</td><td>{{ $lead->branch?->name ?: '-' }}</td><td>{{ $lead->project?->project_name ?: '-' }}</td><td><x-crm.status-badge :variant="$lead->completed_at ? 'success' : ($lead->needs_attention ? 'warning' : 'neutral')">{{ $lead->completed_at ? 'Selesai' : $lead->current_status->label() }}</x-crm.status-badge>@if($lead->needs_attention)<span class="ml-1 text-xs font-bold text-red-700">Perlu perhatian</span>@endif</td><td><x-crm.button variant="text" size="sm" :href="route('sales-leads.show', $lead)">Detail</x-crm.button>@can('update', $lead)<x-crm.button variant="text" size="sm" :href="route('sales-leads.edit', $lead)">Edit</x-crm.button>@endcan</td></tr>@empty<tr><td colspan="6"><x-crm.empty-state title="Belum ada lead" description="Lead Anda akan tampil di sini." /></td></tr>@endforelse</tbody></table></div>
     <div id="sales-lead-mobile-list" class="sales-lead-mobile-list md:hidden">
         @forelse($leads as $lead)
             <article class="sales-pocketbook-record sales-lead-mobile-card {{ $lead->completed_at ? 'is-completed' : '' }}">
-                <div class="sales-lead-mobile-card-header"><div><span>Tanggal lead</span><strong>{{ $lead->lead_date->format('d/m/Y') }}</strong></div><x-crm.status-badge :variant="$lead->completed_at ? 'success' : ($lead->current_status->isManual() ? 'pending' : 'neutral')">{{ $lead->completed_at ? 'Selesai' : $lead->current_status->label() }}</x-crm.status-badge></div>
+                <div class="sales-lead-mobile-card-header"><div><span>Tanggal lead</span><strong>{{ $lead->lead_date->format('d/m/Y') }}</strong></div><x-crm.status-badge :variant="$lead->completed_at ? 'success' : ($lead->needs_attention ? 'warning' : ($lead->current_status->isManual() ? 'pending' : 'neutral'))">{{ $lead->completed_at ? 'Selesai' : $lead->current_status->label() }}</x-crm.status-badge>@if($lead->needs_attention)<span class="text-xs font-bold text-red-700">Perlu perhatian</span>@endif</div>
                 <h3>{{ $lead->customer_name }}</h3>
                 <dl><div><dt>Proyek</dt><dd>{{ $lead->project?->project_name ?: '-' }}</dd></div><div><dt>Cabang</dt><dd>{{ $lead->branch?->name ?: '-' }}</dd></div></dl>
                 <div class="sales-lead-mobile-card-actions flex flex-wrap gap-2"><x-crm.button variant="text" size="sm" :href="route('sales-leads.show', $lead)" class="sales-lead-mobile-detail-action">Lihat detail lead</x-crm.button>@can('update', $lead)<x-crm.button variant="text" size="sm" :href="route('sales-leads.edit', $lead)">Edit lead</x-crm.button>@endcan</div>

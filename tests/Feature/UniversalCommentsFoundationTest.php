@@ -27,7 +27,7 @@ class UniversalCommentsFoundationTest extends TestCase
 
     public function test_comment_schema_and_explicit_relations_persist_canonical_model_class(): void
     {
-        foreach (['commentable_type', 'commentable_id', 'user_id', 'parent_id', 'body', 'body_plain', 'edited_at', 'lock_version', 'deleted_at'] as $column) {
+        foreach (['commentable_type', 'commentable_id', 'user_id', 'parent_id', 'body', 'body_plain', 'source', 'edited_at', 'lock_version', 'deleted_at'] as $column) {
             $this->assertTrue(Schema::hasColumn('comments', $column), $column);
         }
         $this->assertTrue(Schema::hasTable('comment_mentions'));

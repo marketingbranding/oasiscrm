@@ -203,6 +203,18 @@ class ConsumerV2ProcessTest extends TestCase
         }
     }
 
+    public function test_br21_return_to_nup_requires_reason_and_confirmation(): void
+    {
+        $application = ConsumerApplication::factory()->create();
+        $actor = $this->superadmin($application);
+        $issue = ConsumerIssue::factory()->create(['consumer_application_id' => $application->id]);
+
+        $this->actingAs($actor)->postJson(route('consumer-nups.return', $application), [
+            'issue_id' => $issue->id,
+            'nup_number' => 'NUP-REQUIRED',
+        ])->assertUnprocessable();
+    }
+
     public function test_br21_return_to_nup_releases_kavling_closes_transaction_and_links_issue(): void
     {
         $application = ConsumerApplication::factory()->create();

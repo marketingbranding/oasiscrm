@@ -125,7 +125,13 @@ final class WorkspaceController extends Controller
     {
         $this->authorizeConsumerView($request->user());
 
-        return response()->json(['ok' => true, 'data' => $this->consumerWorkspace->detail($request->user(), $consumerApplication)]);
+        $detail = $this->consumerWorkspace->detail($request->user(), $consumerApplication);
+        $detail['actions'] = [
+            'return_to_nup' => route('consumer-nups.return', $consumerApplication),
+            'resolve_issue' => route('consumer-issues.resolve', ['consumerIssue' => '__ISSUE__']),
+        ];
+
+        return response()->json(['ok' => true, 'data' => $detail]);
     }
 
     public function consumerForm(Request $request): View

@@ -28,7 +28,10 @@ const detailMarkup = (data, detailUrl) => {
     const process = data.process || [];
     const payment = data.payment || [];
     const activity = data.activity || [];
+    const issues = data.issues || [];
+    const nupHistory = data.nup_history || [];
     const applicability = data.process_applicability || {};
+    const actions = data.actions || {};
     const formBase = `${detailUrl.replace(/\/$/, '')}/input/`;
     const paymentMethod = String(overview.payment_method_key || '').toLowerCase();
     const isCash = paymentMethod === 'cash';
@@ -44,7 +47,7 @@ const detailMarkup = (data, detailUrl) => {
         .filter((action) => action.key !== nextAction?.key)
         .map((action) => `<a class="workspace-v2-button workspace-v2-button--quiet" href="${escapeHtml(formBase + action.slug)}">${escapeHtml(action.label)}</a>`)
         .join('');
-    const actionMenu = `${actionLinks}<a class="workspace-v2-button workspace-v2-button--quiet" href="${escapeHtml(formBase + 'kendala')}">Kendala</a>`;
+    const actionMenu = `${actionLinks}<a class="workspace-v2-button workspace-v2-button--quiet" href="${escapeHtml(formBase + 'kendala')}">Kendala</a>${overview.transaction_status === 'Lanjut' && actions.return_to_nup ? `<a class="workspace-v2-button workspace-v2-button--quiet" href="${escapeHtml(actions.return_to_nup)}">Kembali ke NUP</a>` : ''}`;
     const fields = [
         ['Konsumen', overview.customer_name], ['ID Transaksi', overview.id_transaksi], ['Proyek', overview.project],
         ['Kavling', overview.kavling], ['Sales', overview.sales], ['Cara Pembayaran', overview.payment_method],
@@ -59,9 +62,15 @@ const detailMarkup = (data, detailUrl) => {
     const primaryAction = nextAction
         ? `<a class="workspace-v2-button workspace-v2-button--primary" href="${escapeHtml(formBase + nextAction.slug)}">Lanjutkan Proses: ${escapeHtml(nextAction.label)}</a>`
         : '';
+    const openIssues = issues.filter((issue) => issue.status !== 'resolved');
+    const returnForm = overview.transaction_status === 'Lanjut' && actions.return_to_nup
+        ? `<section class="workspace-v2-drawer-section"><h3>Kembali ke NUP</h3><form class="workspace-v2-inline-form" data-return-nup-form action="${escapeHtml(actions.return_to_nup)}"><label>Kendala<select name="issue_id" required><option value="">Pilih kendala</option>${openIssues.map((issue) => `<option value="${escapeHtml(issue.id)}">${escapeHtml(issue.category || issue.description)}</option>`).join('')}</select></label><label>Nomor NUP<input name="nup_number" required maxlength="80"></label><label>Alasan kembali<textarea name="reason" required maxlength="5000"></textarea></label><label><input type="checkbox" name="confirmation" value="1" required> Saya konfirmasi transaksi ditutup dan kavling dilepas.</label><button class="workspace-v2-button workspace-v2-button--primary" type="submit">Kembalikan ke NUP</button><p data-return-nup-message role="status"></p></form></section>`
+        : '';
+    const issueMarkup = issues.length ? issues.map((issue) => `<div class="workspace-v2-activity-row"><span><strong>${escapeHtml(issue.category || issue.process)}</strong><small>${escapeHtml(issue.description)} · ${escapeHtml(issue.status)}</small>${issue.status !== 'resolved' && actions.resolve_issue ? `<form data-resolve-issue-form action="${escapeHtml(actions.resolve_issue.replace('__ISSUE__', issue.id))}"><input name="resolution" required placeholder="Penyelesaian wajib"><button class="workspace-v2-button workspace-v2-button--quiet" type="submit">Selesaikan Kendala</button></form>` : ''}</span></div>`).join('') : '<p class="workspace-v2-muted">Belum ada kendala.</p>';
+    const nupMarkup = nupHistory.length ? nupHistory.map((nup) => `<div class="workspace-v2-activity-row"><span><strong>${escapeHtml(nup.nup_number)}</strong><small>${escapeHtml(nup.registered_at)} · ${escapeHtml(nup.entry_type)} · ${escapeHtml(nup.reason)}</small><small>Transaksi lama: ${escapeHtml(nup.source_transaction)} · Transaksi baru: ${escapeHtml(nup.converted_transaction)}</small></span></div>`).join('') : '<p class="workspace-v2-muted">Belum ada riwayat NUP.</p>';
     return `<section class="workspace-v2-drawer-section"><h3>Ringkasan</h3><dl class="workspace-v2-detail-grid">${fields.map(([label, value]) => `<div><dt>${escapeHtml(label)}</dt><dd>${escapeHtml(value)}</dd></div>`).join('')}</dl>${skippedNotice}<div class="workspace-v2-drawer-actions">${primaryAction}<details class="workspace-v2-action-menu"><summary class="workspace-v2-button workspace-v2-button--quiet">Tindakan</summary><div>${actionMenu}</div></details></div></section>
          <section class="workspace-v2-drawer-section"><h3>Proses</h3>${process.length ? `<div>${process.map((item) => `<div class="workspace-v2-timeline-item"><strong>${escapeHtml(item.stage)}</strong><small>${escapeHtml(item.event_date || item.occurred_at || '')} · ${escapeHtml(item.status || item.decision || 'Dicatat')}${item.summary ? ` · ${escapeHtml(item.summary)}` : ''}</small>${item.notes ? `<small>${escapeHtml(item.notes)}</small>` : ''}</div>`).join('')}</div>` : '<p class="workspace-v2-muted">Belum ada riwayat proses.</p>'}</section>
-         <section class="workspace-v2-drawer-section"><h3>Pembayaran</h3>${isCash ? '<p class="workspace-v2-muted">Cash tidak menggunakan pengajuan bank atau SP3K. Tahap bank ditandai Tidak Berlaku.</p>' : payment.length ? payment.map((item) => `<div class="workspace-v2-activity-row"><span><strong>Pengajuan ${escapeHtml(item.attempt_no)}</strong><small>${escapeHtml(item.bank_name)} · ${escapeHtml(item.status || item.response_type)}${item.no_sp3k ? ` · No. SP3K: ${escapeHtml(item.no_sp3k)}` : ''}${item.sp3k_at ? ` · SP3K terbit ${escapeHtml(item.sp3k_at)}` : ''}${item.approved_plafond ? ` · Plafond ${escapeHtml(item.approved_plafond)}` : ''}</small></span></div>`).join('') : '<p class="workspace-v2-muted">Belum ada pengajuan bank.</p>'}</section>
+         ${returnForm}<section class="workspace-v2-drawer-section"><h3>Kendala</h3>${issueMarkup}</section><section class="workspace-v2-drawer-section"><h3>Riwayat NUP</h3>${nupMarkup}</section><section class="workspace-v2-drawer-section"><h3>Pembayaran</h3>${isCash ? '<p class="workspace-v2-muted">Cash tidak menggunakan pengajuan bank atau SP3K. Tahap bank ditandai Tidak Berlaku.</p>' : payment.length ? payment.map((item) => `<div class="workspace-v2-activity-row"><span><strong>Pengajuan ${escapeHtml(item.attempt_no)}</strong><small>${escapeHtml(item.bank_name)} · ${escapeHtml(item.status || item.response_type)}${item.no_sp3k ? ` · No. SP3K: ${escapeHtml(item.no_sp3k)}` : ''}${item.sp3k_at ? ` · SP3K terbit ${escapeHtml(item.sp3k_at)}` : ''}${item.approved_plafond ? ` · Plafond ${escapeHtml(item.approved_plafond)}` : ''}</small></span></div>`).join('') : '<p class="workspace-v2-muted">Belum ada pengajuan bank.</p>'}</section>
          <section class="workspace-v2-drawer-section"><h3>Riwayat</h3>${activity.length ? activity.map((item) => `<div class="workspace-v2-activity-row"><span><strong>${escapeHtml(item.description)}</strong><small>${escapeHtml(item.created_at)}${item.source ? ` · ${escapeHtml(item.source)}` : ''}</small></span></div>`).join('') : '<p class="workspace-v2-muted">Belum ada aktivitas.</p>'}</section>`;
 };
 
@@ -119,5 +128,15 @@ document.addEventListener('DOMContentLoaded', () => {
         if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); if (drawer) openDetail(element.dataset.detailUrl, drawer); }
     }));
     document.querySelector('[data-drawer-close]')?.addEventListener('click', () => { drawer.hidden = true; drawer.setAttribute('aria-hidden', 'true'); });
+    drawer?.addEventListener('submit', async (event) => {
+        const form = event.target.closest('[data-return-nup-form], [data-resolve-issue-form]');
+        if (!form) return;
+        event.preventDefault();
+        const response = await fetch(form.action, { method: form.matches('[data-return-nup-form]') ? 'POST' : 'PATCH', headers: { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest', 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.content || '' }, body: new FormData(form) });
+        const payload = await response.json();
+        const message = form.querySelector('[data-return-nup-message]') || document.createElement('p');
+        message.textContent = payload.message || (response.ok ? 'Berhasil disimpan.' : 'Gagal menyimpan.');
+        if (response.ok) openDetail(form.closest('[data-detail-drawer]')?.dataset.detailUrl || '', drawer);
+    });
     document.addEventListener('keydown', (event) => { if (event.key === 'Escape') { closeSidebar(); if (drawer && !drawer.hidden) { drawer.hidden = true; drawer.setAttribute('aria-hidden', 'true'); } } });
 });

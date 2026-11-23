@@ -6,6 +6,7 @@ use App\Models\ActivityLog;
 use App\Models\Branch;
 use App\Models\ConsumerApplication;
 use App\Models\ConsumerBankProcess;
+use App\Models\ConsumerNup;
 use App\Models\Customer;
 use App\Models\LeadMaster;
 use App\Models\Role;
@@ -125,6 +126,29 @@ class ConsumerDatabaseWorkspaceTest extends TestCase
             ->assertJsonPath('data.counts.process', 1)
             ->assertJsonPath('data.counts.payment', 1)
             ->assertJsonMissingPath('data.overview.nik');
+    }
+
+    public function test_detail_exposes_nup_history_for_returned_and_reconverted_transactions(): void
+    {
+        [$user, $branch, $project] = $this->context();
+        $application = $this->application($branch, $project, 'Riwayat NUP', 'Lanjut');
+        $returned = ConsumerNup::factory()->create([
+            'customer_id' => $application->customer_id,
+            'branch_id' => $branch->id,
+            'project_id' => $project->id,
+            'source_application_id' => $application->id,
+            'converted_application_id' => $application->id,
+            'entry_type' => 'returned',
+            'notes' => 'Kendala pembayaran',
+        ]);
+
+        $this->actingAs($user)
+            ->getJson(route('consumer-database.workspace.show', $application))
+            ->assertOk()
+            ->assertJsonPath('data.nup_history.0.id', $returned->id)
+            ->assertJsonPath('data.nup_history.0.source_transaction', $application->id_transaksi)
+            ->assertJsonPath('data.nup_history.0.converted_transaction', $application->id_transaksi)
+            ->assertJsonPath('data.nup_history.0.reason', 'Kendala pembayaran');
     }
 
     public function test_detail_returns_human_readable_activity_and_process_labels(): void

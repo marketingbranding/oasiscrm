@@ -5,12 +5,13 @@ namespace App\Services;
 use App\Data\ConsumerComparisonRecord;
 use App\Data\ConsumerComparisonResult;
 use App\Models\Branch;
+use App\Models\ConsumerApplication;
 use App\Models\LeadMaster;
 use Illuminate\Support\Str;
 
 final class ConsumerReadComparisonService
 {
-    private const FIELDS = ['name', 'phone', 'sales', 'kavling', 'stage', 'booking_date', 'akad_date', 'bank', 'bank_status'];
+    private const FIELDS = ['name', 'phone', 'sales', 'kavling', 'status', 'stage', 'booking_date', 'akad_date', 'bank', 'bank_status'];
 
     public function __construct(
         private readonly LegacyConsumerReadService $legacy,
@@ -120,6 +121,7 @@ final class ConsumerReadComparisonService
             'phone' => [$legacy->phone, $local->phone],
             'sales' => [$legacy->salesUserId ?: $legacy->salesLabel, $local->salesUserId ?: $local->salesLabel],
             'kavling' => [$legacy->kavlingId ?: $legacy->kavlingLabel, $local->kavlingId ?: $local->kavlingLabel],
+            'status' => [ConsumerApplication::canonicalTransactionStatusDetailsFor($legacy->applicationStatus)['status'], ConsumerApplication::canonicalTransactionStatusDetailsFor($local->applicationStatus)['status']],
             'stage' => [$this->stage($legacy->currentStage), $this->stage($local->currentStage)],
             'booking_date' => [$legacy->bookingDate, $local->bookingDate],
             'akad_date' => [$legacy->akadDate, $local->akadDate],

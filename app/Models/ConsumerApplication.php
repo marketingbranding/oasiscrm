@@ -246,7 +246,13 @@ class ConsumerApplication extends Model
     /** @return array{status: string, needs_review: bool, legacy_status: string|null} */
     public function canonicalTransactionStatusDetails(): array
     {
-        $legacyStatus = trim((string) $this->transaction_status);
+        return self::canonicalTransactionStatusDetailsFor($this->transaction_status);
+    }
+
+    /** @return array{status: string, needs_review: bool, legacy_status: string|null} */
+    public static function canonicalTransactionStatusDetailsFor(?string $transactionStatus): array
+    {
+        $legacyStatus = trim((string) $transactionStatus);
         $status = strtoupper($legacyStatus);
 
         return match ($status) {

@@ -439,7 +439,7 @@ Status: Paket A selesai, menunggu review lanjutan.
 
 Guard input OASIS kini mencakup `ConsumerEntryService`, `ConsumerNupService`, seluruh mutasi publik `ConsumerOperationalService`, `ConsumerApplicationLifecycleService` (Mundur, Pindah Kavling, Ganti Konsumen), dan `ConsumerProcessService` (Garansi, Kendala). Pengecualian sengaja: `ConsumerPasteImportService`, importer proses historis, importer Marison, dan `ConsumerMigrationReconciliationService` tetap boleh menulis data status `migrasi` sebagai jalur migrasi/impor; jalur ini bukan input Workspace manual.
 
-Paket A branch migration state (`bfc4c28`) menetapkan state cabang dan blokir hanya pada cermin sheet saat `oasis_penuh`. Workspace Konsumen bawaan OASIS tetap dapat menulis. Inventaris boundary untuk Paket B/C dan WP-3.6:
+Paket A branch migration state (`e574127`) menetapkan state cabang dan blokir input Workspace berdasarkan status cabang; hash lama `bfc4c28` diperbaiki. Workspace Konsumen bawaan OASIS tetap dapat menulis pada status yang diizinkan. Inventaris boundary untuk Paket B/C dan WP-3.6:
 
 - Cermin sheet: `DatabaseSheetSyncService`, `DatabaseSheetWriteService`, `KonsumenProgressSyncService`, `SalesLeadLifecycleSyncService`; `oasis_penuh` menolak tulis sheet atau melewati sinkronisasi/cache sheet.
 - Bawaan OASIS: `ConsumerEntryService`, `ConsumerOperationalService`, `ConsumerNupService`, `ConsumerApplicationLifecycleService`, `ConsumerKavlingLifecycleService`; `oasis_penuh` tidak memblokir input `consumer_*`.

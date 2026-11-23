@@ -77,7 +77,10 @@ class LegacyConsumerReadService
             $bank = $this->value($stageData + $customer, ['bank', 'nama_bank', 'bank_name']);
             $bankStatus = $this->value($stageData + $customer, ['status_bank', 'bank_status']);
             $external = $this->value($customer, ['external_id', 'external_key', 'id_konsumen', 'id_customer', 'id_lead']);
-            $legacyKey = $external !== '' ? 'external:'.Str::lower($external) : 'kavling:'.Str::lower($kavling);
+            $transactionId = $this->value($customer, ['id_transaksi', 'id transaksi']);
+            $consumerId = $this->value($customer, ['id_konsumen', 'id konsumen', 'id_kons']);
+            $psjbId = $this->value($stageData + $customer, ['id_psjb', 'id psjb']);
+            $legacyKey = $transactionId !== '' ? 'transaction:'.Str::lower($transactionId) : ($consumerId !== '' ? 'consumer:'.Str::lower($consumerId) : ($psjbId !== '' ? 'psjb:'.Str::lower($psjbId) : ($external !== '' ? 'external:'.Str::lower($external) : 'kavling:'.Str::lower($kavling))));
 
             $records[] = new ConsumerComparisonRecord(
                 legacyKey: $legacyKey,
@@ -90,7 +93,10 @@ class LegacyConsumerReadService
                 salesUserId: $salesModel?->id,
                 kavlingLabel: $kavling,
                 kavlingId: $kavlingModel?->id,
-                applicationStatus: null,
+                applicationStatus: $this->value($stageData + $customer, ['transaction_status', 'status_transaksi', 'status transaksi']) ?: null,
+                transactionId: $transactionId ?: null,
+                consumerId: $consumerId ?: null,
+                psjbId: $psjbId ?: null,
                 currentStage: $stage,
                 bookingDate: $this->date($this->value($customer, ['tanggal_booking', 'booking_date'])),
                 akadDate: $this->date($this->value($stageData + $customer, ['tanggal_akad', 'akad_date', 'tgl_akad'])),

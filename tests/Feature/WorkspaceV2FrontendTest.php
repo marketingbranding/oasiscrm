@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\Branch;
+use App\Models\BranchMigrationState;
 use App\Models\ConsumerApplication;
 use App\Models\Customer;
 use App\Models\LeadMaster;
@@ -230,6 +231,7 @@ class WorkspaceV2FrontendTest extends TestCase
         config(['app.workspace_v2_enabled' => true]);
         $branch = Branch::query()->create(['name' => 'Workspace Submit', 'code' => 'WSP', 'is_active' => true]);
         $project = LeadMaster::query()->create(['branch_id' => $branch->id, 'project_name' => 'Proyek Submit UAT', 'is_active' => true]);
+        BranchMigrationState::query()->create(['branch_id' => $branch->id, 'state' => BranchMigrationState::STATE_PARALEL]);
         $user = $this->superadmin();
 
         $response = $this->actingAs($user)->post(route('workspace-v2.transactions.data-konsumen.store'), [

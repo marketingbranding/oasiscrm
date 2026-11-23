@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\Branch;
+use App\Models\BranchMigrationState;
 use App\Models\ConsumerApplication;
 use App\Models\LeadMaster;
 use App\Models\Role;
@@ -42,12 +43,7 @@ class PrdV3D32ConsumerInputTest extends TestCase
     {
         [$branch, $project, $sas] = $this->context();
 
-        DB::table('branch_migration_states')->insert([
-            'branch_id' => $branch->id,
-            'state' => 'oasis_penuh',
-            'created_at' => now(),
-            'updated_at' => now(),
-        ]);
+        DB::table('branch_migration_states')->where('branch_id', $branch->id)->update(['state' => 'oasis_penuh', 'updated_at' => now()]);
 
         $this->actingAs($sas)->postJson(route('consumer-nups.store'), [
             'nup_number' => 'D32-NUP-OASIS',
@@ -95,6 +91,7 @@ class PrdV3D32ConsumerInputTest extends TestCase
     {
         $branch = Branch::create(['code' => 'D32', 'name' => 'Cabang D32', 'is_active' => true]);
         $project = LeadMaster::create(['branch_id' => $branch->id, 'project_name' => 'Proyek D32', 'is_active' => true]);
+        BranchMigrationState::query()->create(['branch_id' => $branch->id, 'state' => BranchMigrationState::STATE_PARALEL]);
         $sas = User::factory()->create([
             'role_id' => Role::query()->where('slug', 'sas')->value('id'),
             'branch_id' => $branch->id,

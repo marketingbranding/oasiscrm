@@ -34,13 +34,42 @@ class BranchMigrationStateService
         return $this->stateFor($branch) === BranchMigrationState::STATE_OASIS_FULL;
     }
 
-    public function assertWritable(Branch|int $branch): void
+    public function allowsOasisConsumerInput(Branch|int $branch): bool
     {
-        if (! $this->isOasisFull($branch)) {
+        return in_array($this->stateFor($branch), [BranchMigrationState::STATE_PARALEL, BranchMigrationState::STATE_OASIS_FULL], true);
+    }
+
+    public function allowsSheetWrite(Branch|int $branch): bool
+    {
+        return in_array($this->stateFor($branch), [BranchMigrationState::STATE_SHEET, BranchMigrationState::STATE_MIGRASI], true);
+    }
+
+    public function allowsSheetSync(Branch|int $branch): bool
+    {
+        return ! $this->isOasisFull($branch);
+    }
+
+    public function assertOasisConsumerInputAllowed(Branch|int $branch): void
+    {
+        if ($this->allowsOasisConsumerInput($branch)) {
             return;
         }
 
-        throw new AuthorizationException('Cabang sudah berstatus OASIS penuh dan modul transisi hanya dapat dibaca.');
+        throw new AuthorizationException('Cabang ini masih memakai spreadsheet untuk proses penjualan.');
+    }
+
+    public function assertSheetWriteAllowed(Branch|int $branch): void
+    {
+        if ($this->allowsSheetWrite($branch)) {
+            return;
+        }
+
+        throw new AuthorizationException('Input cabang ini sudah diarahkan ke OASIS; perubahan spreadsheet dikunci.');
+    }
+
+    public function assertWritable(Branch|int $branch): void
+    {
+        $this->assertSheetWriteAllowed($branch);
     }
 
     public function logSkip(Branch $branch, string $syncType): void

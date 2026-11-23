@@ -122,6 +122,32 @@ class BranchMigrationStateTest extends TestCase
         $this->assertDatabaseMissing('database_sheet_sync_statuses', ['branch_id' => $branch->id]);
     }
 
+    public function test_wp24_state_matrix_allows_input_and_controls_sheet_boundaries(): void
+    {
+        $branch = Branch::create(['name' => 'Cabang Matrix', 'code' => 'CMX', 'is_active' => true]);
+        $service = app(BranchMigrationStateService::class);
+
+        foreach (['sheet', 'migrasi', 'paralel', 'oasis_penuh'] as $state) {
+            DB::table('branch_migration_states')->updateOrInsert(
+                ['branch_id' => $branch->id],
+                ['state' => $state, 'created_at' => now(), 'updated_at' => now()],
+            );
+
+            $this->assertSame(in_array($state, ['paralel', 'oasis_penuh'], true), $service->allowsOasisConsumerInput($branch));
+            $this->assertSame(in_array($state, ['sheet', 'migrasi'], true), $service->allowsSheetWrite($branch));
+            $this->assertSame($state !== 'oasis_penuh', $service->allowsSheetSync($branch));
+        }
+    }
+
+    public function test_wp24_sheet_input_rejection_uses_friendly_message(): void
+    {
+        $branch = Branch::create(['name' => 'Cabang Sheet', 'code' => 'CSH', 'is_active' => true]);
+        DB::table('branch_migration_states')->insert(['branch_id' => $branch->id, 'state' => 'sheet', 'created_at' => now(), 'updated_at' => now()]);
+
+        $this->expectExceptionMessage('Cabang ini masih memakai spreadsheet untuk proses penjualan.');
+        app(BranchMigrationStateService::class)->assertOasisConsumerInputAllowed($branch);
+    }
+
     public function test_wp24_oasis_full_branch_rejects_writes(): void
     {
         $branch = Branch::create(['name' => 'Cabang Penuh', 'code' => 'CP', 'is_active' => true]);

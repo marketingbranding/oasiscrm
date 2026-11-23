@@ -22,10 +22,12 @@ class ConsumerEntryService
         private readonly OrganizationScopeService $scope,
         private readonly ConsumerOperationalService $operational,
         private readonly ConsumerKavlingLifecycleService $kavlingLifecycle,
+        private readonly BranchMigrationStateService $migrationStates,
     ) {}
 
     public function create(array $data, User $actor, bool $skipAuthorization = false): ConsumerApplication
     {
+        $this->migrationStates->assertOasisConsumerInputAllowed((int) $data['branch_id']);
         if (! $skipAuthorization) {
             $this->assertManageScope($actor, (int) $data['branch_id'], (int) $data['project_id']);
         }

@@ -41,7 +41,7 @@ class KonsumenProgressSyncService
 
     public function syncBranch(Branch $branch, ?int $initiatedBy = null): array
     {
-        if ($this->migrationStates->isOasisFull($branch)) {
+        if (! $this->migrationStates->allowsSheetSync($branch)) {
             $this->migrationStates->logSkip($branch, 'konsumen_progress');
 
             return ['ok' => true, 'status' => 'skipped', 'branch' => $branch->name, 'message' => 'Cabang berstatus oasis_penuh.', 'reason' => 'oasis_penuh', 'summary' => []];

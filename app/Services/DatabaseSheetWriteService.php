@@ -16,7 +16,7 @@ class DatabaseSheetWriteService
 
     public function updateRecord(DatabaseSheetRecord $record, array $input): bool
     {
-        $this->migrationStates->assertWritable($record->branch);
+        $this->migrationStates->assertSheetWriteAllowed($record->branch);
         if (! config('oasis.spreadsheet_sync_enabled')) {
             return false;
         }
@@ -69,7 +69,7 @@ class DatabaseSheetWriteService
 
     public function createRecord(Branch $branch, string $sheetName, array $input): bool
     {
-        $this->migrationStates->assertWritable($branch);
+        $this->migrationStates->assertSheetWriteAllowed($branch);
         if (! config('oasis.spreadsheet_sync_enabled')) {
             return false;
         }
@@ -133,7 +133,7 @@ class DatabaseSheetWriteService
 
     public function softDelete(DatabaseSheetRecord $record, int $userId): bool
     {
-        $this->migrationStates->assertWritable($record->branch);
+        $this->migrationStates->assertSheetWriteAllowed($record->branch);
         if (! config('oasis.spreadsheet_sync_enabled')) {
             return false;
         }

@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\AppSetting;
 use App\Models\Branch;
+use App\Models\BranchMigrationState;
 use App\Models\LeadMaster;
 use App\Models\Role;
 use App\Models\SalesLead;
@@ -179,6 +180,7 @@ class SalesLeadStageAuthorizationTest extends TestCase
             'project_name' => 'Project '.Str::random(8),
             'is_active' => true,
         ]);
+        BranchMigrationState::query()->create(['branch_id' => $branch->id, 'state' => BranchMigrationState::STATE_PARALEL]);
         $sales = User::factory()->create([
             'branch_id' => $branch->id,
             'role_id' => Role::query()->where('slug', 'sales')->value('id'),

@@ -50,7 +50,7 @@ class SalesLeadLifecycleSyncService
 
     public function sync(Branch $branch, ?User $actor = null): array
     {
-        if ($this->migrationStates->isOasisFull($branch)) {
+        if (! $this->migrationStates->allowsSheetSync($branch)) {
             $this->migrationStates->logSkip($branch, 'sales_lead_lifecycle');
 
             return ['ok' => true, 'status' => 'skipped', 'branch' => $branch->name, 'message' => 'Cabang berstatus oasis_penuh.', 'reason' => 'oasis_penuh', 'summary' => []];

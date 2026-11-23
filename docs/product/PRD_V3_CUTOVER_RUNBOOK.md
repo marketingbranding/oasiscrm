@@ -85,6 +85,19 @@ Go: parity bersih, tidak ada siklus, assignment lengkap, dan laporan disimpan.
 No-go: parity berbeda, siklus, assignment hilang, atau health gate gagal.
 Mundur: jangan aktifkan mode graf kanonis atau pemantauan berjenjang.
 
+## A7. Prasyarat cabang pertama ke paralel
+
+Sebelum status cabang diubah ke `paralel`, cek pengaturan produksi:
+
+```bash
+php artisan config:show app.workspace_v2_enabled
+```
+
+Pastikan `OASIS_NEW_WORKSPACE_ENABLED=true` di environment produksi, lalu clear config cache dan smoke-test input Workspace Konsumen. Saklar ini global; status cabang tetap menentukan izin input.
+
+Go: fitur Workspace aktif dan smoke-test berhasil.
+No-go: saklar false atau smoke-test gagal. Jangan pindahkan cabang ke `paralel`.
+
 ## B. Rilis Fase 1
 
 ### B1. Merge dan deploy

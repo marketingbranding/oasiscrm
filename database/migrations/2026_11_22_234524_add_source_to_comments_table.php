@@ -11,10 +11,17 @@ return new class extends Migration
     {
         if (! Schema::hasColumn('comments', 'source')) {
             Schema::table('comments', function (Blueprint $table): void {
-                $table->string('source', 32)->nullable()->after('body_plain');
+                $table->string('source', 32)->nullable()->default(null)->after('body_plain');
                 $table->index(['commentable_type', 'commentable_id', 'source', 'created_at'], 'comments_activity_source_index');
             });
         }
+
+        Schema::table('comments', function (Blueprint $table): void {
+            $table->foreignId('user_id')->nullable()->change();
+        });
+
+        DB::table('comments')->whereNull('source')->whereNotNull('user_id')->update(['source' => 'human']);
+        DB::table('comments')->whereNull('source')->whereNull('user_id')->update(['source' => 'system']);
 
         DB::table('changelogs')->updateOrInsert(
             ['version' => null, 'title' => 'Sumber komentar untuk penanda perhatian'],

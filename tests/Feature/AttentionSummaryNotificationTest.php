@@ -7,6 +7,7 @@ use App\Models\LeadMaster;
 use App\Models\Role;
 use App\Models\SalesCoordinatorSales;
 use App\Models\SalesLead;
+use App\Models\SalesLeadUnownedQueue;
 use App\Models\User;
 use App\Models\UserNotification;
 use App\Services\AttentionSummaryNotificationService;
@@ -42,6 +43,24 @@ class AttentionSummaryNotificationTest extends TestCase
         $this->assertSame(1, $service->sendForDate($date));
         $this->assertSame(0, $service->sendForDate($date));
         $this->assertSame(1, UserNotification::query()->where('type', AttentionSummaryNotificationService::TYPE)->count());
+    }
+
+    public function test_wp23_summary_includes_owned_open_queue_count_and_sends_queue_only(): void
+    {
+        $branch = Branch::create(['name' => 'Queue', 'code' => 'QU', 'is_active' => true]);
+        $project = LeadMaster::create(['branch_id' => $branch->id, 'project_name' => 'Proyek Queue', 'is_active' => true]);
+        $coordinator = $this->user('sales_coordinator', $branch);
+        $sales = $this->user('sales', $branch);
+        $sales->assignedProjects()->attach($project, ['is_primary' => true, 'is_active' => true]);
+        SalesCoordinatorSales::create(['coordinator_user_id' => $coordinator->id, 'sales_user_id' => $sales->id, 'is_active' => true]);
+        $lead = SalesLead::create(['branch_id' => $branch->id, 'project_id' => $project->id, 'sales_user_id' => $sales->id, 'lead_date' => '2026-11-23', 'customer_name' => 'Lead Queue', 'created_by' => $sales->id]);
+        SalesLeadUnownedQueue::create(['sales_lead_id' => $lead->id, 'queue_coordinator_user_id' => $coordinator->id, 'status' => 'open']);
+
+        $this->assertSame(1, app(AttentionSummaryNotificationService::class)->sendForDate(now()->setDate(2026, 11, 23)->setTime(11, 0)->toImmutable()));
+        $notification = UserNotification::query()->where('type', AttentionSummaryNotificationService::TYPE)->sole();
+        $this->assertStringContainsString('1 Lead di antrean tanpa pemilik', $notification->message);
+        $this->assertSame(1, data_get($notification->data, 'unowned_queue_count'));
+        $this->assertStringContainsString('1 Lead di antrean tanpa pemilik aktif', $notification->message);
     }
 
     public function test_wp23_summary_waits_for_cutoff(): void

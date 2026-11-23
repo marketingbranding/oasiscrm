@@ -54,13 +54,20 @@ class AttentionSummaryNotificationService
                 $missingSubmissionCount = $this->submissionAttention
                     ->missingForMany($sales, $date->endOfDay())
                     ->count();
+                $unownedQueueCount = DB::table('sales_lead_unowned_queues')
+                    ->join('sales_leads', 'sales_leads.id', '=', 'sales_lead_unowned_queues.sales_lead_id')
+                    ->where('sales_lead_unowned_queues.queue_coordinator_user_id', $coordinator->id)
+                    ->where('sales_lead_unowned_queues.status', 'open')
+                    ->whereIn('sales_leads.branch_id', $sales->pluck('branch_id'))
+                    ->whereNull('sales_leads.deleted_at')
+                    ->count();
 
-                if ($leadCount < 1 && $missingSubmissionCount < 1) {
+                if ($leadCount < 1 && $missingSubmissionCount < 1 && $unownedQueueCount < 1) {
                     return;
                 }
 
                 $relatedId = (int) $date->format('Ymd');
-                $created = DB::transaction(function () use ($coordinator, $date, $relatedId, $leadCount, $missingSubmissionCount): bool {
+                $created = DB::transaction(function () use ($coordinator, $date, $relatedId, $leadCount, $missingSubmissionCount, $unownedQueueCount): bool {
                     $notification = UserNotification::query()->firstOrCreate(
                         ['dedupe_key' => self::TYPE.':'.$coordinator->id.':'.$relatedId],
                         [
@@ -69,9 +76,9 @@ class AttentionSummaryNotificationService
                             'related_type' => 'attention_summary_date',
                             'related_id' => $relatedId,
                             'title' => 'Ringkasan Perlu Perhatian',
-                            'message' => "{$leadCount} Lead perlu perhatian; {$missingSubmissionCount} Sales belum mengirim Rencana Harian.",
+                            'message' => "{$leadCount} Lead perlu perhatian; {$missingSubmissionCount} Sales belum mengirim Rencana Harian; {$unownedQueueCount} Lead di antrean tanpa pemilik aktif.",
                             'action_url' => route('sales-pocketbook.index', ['tab' => 'lead', 'focus' => 'attention']),
-                            'data' => ['date' => $date->toDateString(), 'lead_count' => $leadCount, 'missing_submission_count' => $missingSubmissionCount],
+                            'data' => ['date' => $date->toDateString(), 'lead_count' => $leadCount, 'missing_submission_count' => $missingSubmissionCount, 'unowned_queue_count' => $unownedQueueCount],
                         ],
                     );
 

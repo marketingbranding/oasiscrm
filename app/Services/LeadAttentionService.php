@@ -99,14 +99,7 @@ class LeadAttentionService
 
     public function isAttentionNeeded(SalesLead $lead, ?CarbonImmutable $now = null): bool
     {
-        if ($this->isClosedV3Stage($lead)) {
-            return false;
-        }
-
-        $now ??= CarbonImmutable::now(config('app.timezone'));
-        $lastActivity = $this->latestActivityAt($lead);
-
-        return $lastActivity?->lte($now->subDays($this->settings->int('sales_monitoring.stale_lead_days'))) ?? true;
+        return $this->attentionQueryFor(SalesLead::query()->activeForLeadViews()->whereKey($lead->getKey()), $now)->exists();
     }
 
     private function activityQuery(): Builder
@@ -182,24 +175,17 @@ class LeadAttentionService
 
     private function closedStageCondition(): string
     {
+        $legacyClosed = "(sales_leads.current_status IN ('utj', 'slik_check', 'slik_rejected', 'akad') OR sales_leads.utj_at IS NOT NULL)";
         $scope = FeatureFlag::branchScope('lead_stages_v3');
+
         if ($scope === 'none') {
-            return '0 = 1';
+            return $legacyClosed;
         }
 
-        $closed = "(sales_leads.lead_stage IN ('utj', 'gugur') OR sales_leads.gugur_at IS NOT NULL OR sales_leads.utj_at IS NOT NULL OR sales_leads.current_status IN ('utj', 'slik_check', 'slik_rejected', 'akad'))";
+        $v3Closed = "(sales_leads.lead_stage IN ('utj', 'gugur') OR sales_leads.gugur_at IS NOT NULL)";
 
         return $scope === 'all'
-            ? $closed
-            : '(sales_leads.branch_id IN ('.implode(',', array_map('intval', $scope)).") AND {$closed})";
-    }
-
-    private function isClosedV3Stage(SalesLead $lead): bool
-    {
-        if (! FeatureFlag::enabledForBranch('lead_stages_v3', (int) $lead->branch_id)) {
-            return false;
-        }
-
-        return in_array($lead->resolveStageV3(), ['utj', 'gugur'], true);
+            ? "({$legacyClosed} OR {$v3Closed})"
+            : "({$legacyClosed} OR (sales_leads.branch_id IN (".implode(',', array_map('intval', $scope)).") AND {$v3Closed}))";
     }
 }

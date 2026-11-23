@@ -409,6 +409,71 @@ class CoordinatorSalesMonitoringServiceTest extends TestCase
         $this->assertNotSame('2026-08-12 09:00:00', Carbon::parse($row->latest_activity_at)->format('Y-m-d H:i:s'));
     }
 
+    public function test_wp23_legacy_closed_statuses_are_closed_when_v3_flag_is_off(): void
+    {
+        foreach (['utj', 'slik_check', 'slik_rejected', 'akad'] as $status) {
+            $lead = $this->lead($this->sales, 'Legacy '.$status, '2026-08-01', $this->project, $this->branch);
+            $lead->forceFill(['current_status' => $status])->save();
+        }
+        $lead = $this->lead($this->sales, 'Legacy UTJ Date', '2026-08-01', $this->project, $this->branch);
+        $lead->forceFill(['utj_at' => '2026-08-02 09:00:00'])->save();
+
+        $rows = app(LeadAttentionService::class)->queryFor($this->coordinator)->get();
+        $this->assertSame([], $rows->filter(fn ($row): bool => (bool) $row->needs_attention)->pluck('customer_name')->all());
+        $this->assertSame(0, app(LeadAttentionService::class)->attentionQuery($this->coordinator)->count());
+    }
+
+    public function test_wp23_per_lead_attention_matches_sql_for_v3_flag_states_and_statuses(): void
+    {
+        foreach ([false, true] as $enabled) {
+            DB::table('app_settings')->updateOrInsert(
+                ['key' => 'lead_stages_v3'],
+                ['value' => json_encode($enabled ? ['mode' => 'all', 'branch_ids' => []] : ['mode' => 'off', 'branch_ids' => []]), 'group' => 'feature_flags', 'updated_at' => now(), 'created_at' => now()],
+            );
+            app(AppSettingResolver::class)->forget('lead_stages_v3');
+            foreach (['lead_baru', 'utj', 'gugur'] as $stage) {
+                $lead = $this->lead($this->sales, "Stage {$enabled} {$stage}", '2026-08-01', $this->project, $this->branch);
+                $lead->forceFill(['lead_stage' => $stage])->save();
+                $this->assertSame(
+                    app(LeadAttentionService::class)->attentionQuery($this->coordinator)->whereKey($lead->id)->exists(),
+                    app(LeadAttentionService::class)->isAttentionNeeded($lead->fresh()),
+                    "Mismatch for flag {$enabled}, stage {$stage}",
+                );
+            }
+        }
+    }
+
+    public function test_wp23_old_human_comment_backfill_resets_activity_after_migration(): void
+    {
+        $lead = $this->lead($this->sales, 'Komentar lama', '2026-08-01', $this->project, $this->branch);
+        $commentId = DB::table('comments')->insertGetId([
+            'commentable_type' => SalesLead::class, 'commentable_id' => $lead->id, 'user_id' => $this->sales->id,
+            'body' => 'Komentar lama', 'body_plain' => 'Komentar lama', 'source' => null, 'lock_version' => 0,
+            'created_at' => '2026-08-10 09:00:00', 'updated_at' => '2026-08-10 09:00:00',
+        ]);
+        $migration = require database_path('migrations/2026_11_22_234524_add_source_to_comments_table.php');
+        $migration->up();
+
+        $this->assertSame('human', DB::table('comments')->where('id', $commentId)->value('source'));
+        $this->assertSame('2026-08-10 09:00:00', Carbon::parse(app(LeadAttentionService::class)->latestActivityAt($lead->fresh()))->format('Y-m-d H:i:s'));
+    }
+
+    public function test_wp23_old_system_comment_backfill_does_not_reset_activity(): void
+    {
+        $lead = $this->lead($this->sales, 'Komentar sistem lama', '2026-08-01', $this->project, $this->branch);
+        $commentId = DB::table('comments')->insertGetId([
+            'commentable_type' => SalesLead::class, 'commentable_id' => $lead->id, 'user_id' => $this->sales->id,
+            'body' => 'Komentar sistem', 'body_plain' => 'Komentar sistem', 'source' => null, 'lock_version' => 0,
+            'created_at' => '2026-08-10 09:00:00', 'updated_at' => '2026-08-10 09:00:00',
+        ]);
+        $migration = require database_path('migrations/2026_11_22_234524_add_source_to_comments_table.php');
+        $migration->up();
+        DB::table('comments')->where('id', $commentId)->update(['user_id' => null, 'source' => null]);
+        $migration->up();
+
+        $this->assertSame('system', DB::table('comments')->where('id', $commentId)->value('source'));
+    }
+
     public function test_wp23_closed_v3_leads_do_not_need_attention(): void
     {
         $lead = $this->lead($this->sales, 'Lead UTJ', '2026-08-01', $this->project, $this->branch);

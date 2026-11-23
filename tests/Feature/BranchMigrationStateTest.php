@@ -131,6 +131,16 @@ class BranchMigrationStateTest extends TestCase
         $this->assertTrue(data_get($properties, 'parity_override'));
     }
 
+    public function test_wp24_non_owner_cannot_override_cutover(): void
+    {
+        $branch = Branch::create(['name' => 'Cabang Non Owner', 'code' => 'CNO', 'is_active' => true]);
+        DB::table('branch_migration_states')->insert(['branch_id' => $branch->id, 'state' => 'paralel', 'created_at' => now(), 'updated_at' => now()]);
+        $actor = User::factory()->create(['role_id' => Role::where('slug', 'pusat')->value('id'), 'password_changed_at' => now(), 'account_status' => 'active', 'is_active' => true]);
+
+        $this->expectException(AuthorizationException::class);
+        app(BranchMigrationStateService::class)->transition($actor, $branch, 'paralel', 'oasis_penuh', 'Override tidak sah.', true);
+    }
+
     public function test_wp24_superadmin_can_move_one_state_backward_with_reason(): void
     {
         $branch = Branch::create(['name' => 'Cabang Mundur', 'code' => 'CM', 'is_active' => true]);

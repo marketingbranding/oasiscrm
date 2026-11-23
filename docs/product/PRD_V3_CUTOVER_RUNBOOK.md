@@ -2,6 +2,59 @@
 
 Runbook ini operator-only. Agent tidak menjalankan cutover produksi, backfill produksi, aktivasi flag, atau restore.
 
+## Cutover per cabang
+
+Langkah ini dijalankan pemilik produk per cabang. Agent tidak menjalankan cutover produksi.
+
+### C1. Audit input A7
+
+Periksa daftar input aktif, data tertunda, dan hasil sinkronisasi cabang. Simpan bukti audit.
+
+Go: input dan anomali tertangani; tidak ada koreksi tanpa pemilik.
+No-go: data belum lengkap atau anomali belum diputuskan. Mundur: hentikan cutover dan koreksi sumber.
+
+### C2. Set status `paralel`
+
+Ubah status melalui halaman **Status Migrasi Cabang**, satu tahap dari `migrasi`. Alasan wajib.
+
+Go: OASIS menjadi input aktif dan sheet terkunci untuk tulis.
+No-go: state bukan `migrasi` atau akses input belum sesuai. Mundur: kembalikan ke `migrasi` dengan alasan.
+
+### C3. Masa paralel minimal X hari
+
+Pertahankan status `paralel` selama minimal X hari sesuai keputusan operasional. Jalankan pemeriksaan paritas berkala.
+
+Go: data OASIS dan cermin sheet stabil; hasil pemeriksaan dapat ditelusuri.
+No-go: selisih belum dijelaskan atau sinkron gagal. Mundur: tetap `paralel`, perbaiki data, ulangi pemeriksaan.
+
+### C4. Pemeriksaan paritas
+
+Jalankan **Jalankan pemeriksaan** pada laporan paritas cabang. Snapshot terbaru harus `LULUS` dan masih dalam ambang Pengaturan, default 24 jam.
+
+Go: snapshot terbaru `LULUS`, segar, dan tidak ada selisih.
+No-go: `GAGAL`, `TIDAK_LENGKAP`, tidak ada snapshot, atau snapshot basi. Mundur: perbaiki data dan jalankan pemeriksaan ulang.
+
+### C5. Set `oasis_penuh`
+
+Pilih `oasis_penuh` melalui halaman migrasi. Sistem memvalidasi snapshot terbaru. Override hanya pemilik produk, dengan alasan tertulis dan audit snapshot yang dilewati.
+
+Go: status berubah dan sinkron sheet berhenti untuk cabang.
+No-go: gate menolak. Mundur: tetap `paralel`; jangan mematikan sinkron manual.
+
+### C6. Pantau
+
+Pantau input OASIS, log sinkron yang dilewati, error, dan laporan operasional cabang.
+
+Go: tidak ada error kritis dan data operasional berjalan.
+No-go: kehilangan data, error berulang, atau selisih baru. Mundur: rollback ke `paralel` dengan alasan.
+
+### C7. Rollback bila perlu
+
+Ubah `oasis_penuh` kembali ke `paralel` melalui halaman migrasi dengan alasan tertulis.
+
+Go: status `paralel` dan sinkron sheet aktif lagi.
+No-go: rollback gagal atau sinkron tetap berhenti. Mundur: hentikan input berisiko dan eskalasi pemilik produk.
+
 ## A. Sebelum deploy
 
 ### A1. Backup manual

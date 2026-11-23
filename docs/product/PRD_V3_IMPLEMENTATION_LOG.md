@@ -435,7 +435,14 @@ Status: selesai pada branch `prd-v3/wp-1.10-fase1-closeout`; merge phase branch 
 
 ### WP-2.4 — Paritas status transaksi Workspace
 
-Status: Paket A selesai, menunggu review lanjutan.
+Status: Selesai setelah Paket A, B, dan C.
+
+Ringkasan Paket WP-2.4:
+- Paket A — state migrasi cabang dan guard input/sinkron: `e574127`.
+- Paket B — laporan paritas cabang, snapshot, matching bertingkat, metrik, UI, ekspor, dan tes: `adb4642`.
+- Paket C — gate cutover berbasis snapshot LULUS/freshness, override pemilik dengan audit, rollback, status paritas di halaman migrasi, dan runbook: `c9412b5`.
+
+WP-2.4 ditutup pada branch `prd-v3/wp-2.4-c-cutover-gate`. Cutover produksi tetap dilakukan operator, bukan agent.
 
 Guard input OASIS kini mencakup `ConsumerEntryService`, `ConsumerNupService`, seluruh mutasi publik `ConsumerOperationalService`, `ConsumerApplicationLifecycleService` (Mundur, Pindah Kavling, Ganti Konsumen), dan `ConsumerProcessService` (Garansi, Kendala). Pengecualian sengaja: `ConsumerPasteImportService`, importer proses historis, importer Marison, dan `ConsumerMigrationReconciliationService` tetap boleh menulis data status `migrasi` sebagai jalur migrasi/impor; jalur ini bukan input Workspace manual.
 

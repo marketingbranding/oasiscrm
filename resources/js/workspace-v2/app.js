@@ -78,6 +78,7 @@ const openDetail = async (url, drawer) => {
     const title = drawer.querySelector('[data-detail-title]');
     const body = drawer.querySelector('[data-detail-body]');
     drawer.hidden = false;
+    drawer.dataset.detailUrl = url;
     drawer.setAttribute('aria-hidden', 'false');
     body.innerHTML = '<div class="workspace-v2-drawer-loading">Memuat detail transaksi...</div>';
     try {

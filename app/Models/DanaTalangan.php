@@ -45,6 +45,10 @@ class DanaTalangan extends Model
         'konfirmasi_keuangan',
         'branch_id',
         'project_id',
+        'consumer_application_id',
+        'kavling_id',
+        'id_transaksi',
+        'id_psjb',
         'status',
         'created_by',
         'updated_by',
@@ -84,6 +88,16 @@ class DanaTalangan extends Model
     public function project(): BelongsTo
     {
         return $this->belongsTo(LeadMaster::class, 'project_id');
+    }
+
+    public function consumerApplication(): BelongsTo
+    {
+        return $this->belongsTo(ConsumerApplication::class);
+    }
+
+    public function kavling(): BelongsTo
+    {
+        return $this->belongsTo(Kavling::class);
     }
 
     public function creator(): BelongsTo

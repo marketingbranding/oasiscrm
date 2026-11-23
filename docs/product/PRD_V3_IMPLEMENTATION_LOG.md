@@ -456,7 +456,7 @@ Tab dan hitungan Mundur di Workspace masih membaca `consumer_applications.transa
 
 ## WP-2.5 — Dana Talangan di OASIS
 
-Status: Paket A siap dikerjakan; desain disetujui pemilik produk.
+Status: Paket A selesai; implementasi sudah di-push untuk review.
 
 Kondisi yang sudah ada:
 - `DanaTalangan` sudah menyediakan CRUD, import, export, scope cabang/proyek, soft delete, activity log, dan `project_id`.

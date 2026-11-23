@@ -102,6 +102,52 @@ class BranchParityReportTest extends TestCase
         $this->assertContains('akad_date', $report->differences[0]['mismatch_fields']);
     }
 
+    public function test_br32_higher_transaction_mismatch_does_not_cascade_to_consumer(): void
+    {
+        [$branch, $project] = $this->context();
+        $application = ConsumerApplication::create(['customer_id' => Customer::create(['name' => 'T1'])->id, 'branch_id' => $branch->id, 'project_id' => $project->id, 'id_transaksi' => 'T1', 'kavling_id' => Kavling::where('project_id', $project->id)->value('id'), 'transaction_status' => 'LANJUT']);
+        ConsumerPsjb::create(['consumer_application_id' => $application->id, 'id_kons' => 'KONS-SAMA', 'id_psjb' => 'PSJB-T1', 'tanggal_psjb' => '2026-01-01']);
+        foreach ([['T1', 'T1'], ['T2', 'T2']] as [$name, $transactionId]) {
+            KonsumenProgressSheetRow::create(['branch_id' => $branch->id, 'sheet_id' => $branch->sheet_id, 'sheet_name' => 'data_konsumen', 'row_hash' => $transactionId, 'row_data' => ['id_kavling' => 'K-01', 'nama_konsumen' => $name, 'id_transaksi' => $transactionId, 'id_konsumen' => 'KONS-SAMA']]);
+        }
+        $report = app(ConsumerReadComparisonService::class)->compare($branch, $project);
+        $this->assertSame(['MATCHED', 'LEGACY_ONLY'], array_column($report->rows, 'status'));
+        $this->assertSame(1, $report->summary['legacy_only']);
+    }
+
+    public function test_br32_empty_oasis_transaction_allows_consumer_match(): void
+    {
+        [$branch, $project] = $this->context();
+        $application = ConsumerApplication::create(['customer_id' => Customer::create(['name' => 'Consumer Match'])->id, 'branch_id' => $branch->id, 'project_id' => $project->id]);
+        ConsumerPsjb::create(['consumer_application_id' => $application->id, 'id_kons' => 'KONS-ONLY', 'id_psjb' => 'PSJB-ONLY', 'tanggal_psjb' => '2026-01-01']);
+        KonsumenProgressSheetRow::create(['branch_id' => $branch->id, 'sheet_id' => $branch->sheet_id, 'sheet_name' => 'data_konsumen', 'row_hash' => 'consumer-match', 'row_data' => ['id_kavling' => 'K-01', 'nama_konsumen' => 'Consumer Match', 'id_konsumen' => 'KONS-ONLY']]);
+        $report = app(ConsumerReadComparisonService::class)->compare($branch, $project);
+        $this->assertSame('CONSUMER', $report->rows[0]['match_key']);
+    }
+
+    public function test_br32_two_sheet_rows_to_one_oasis_application_are_both_ambiguous(): void
+    {
+        [$branch, $project] = $this->context();
+        $application = ConsumerApplication::create(['customer_id' => Customer::create(['name' => 'One App'])->id, 'branch_id' => $branch->id, 'project_id' => $project->id]);
+        ConsumerPsjb::create(['consumer_application_id' => $application->id, 'id_kons' => 'KONS-ONE', 'id_psjb' => 'PSJB-ONE', 'tanggal_psjb' => '2026-01-01']);
+        foreach (['Satu', 'Dua'] as $name) {
+            KonsumenProgressSheetRow::create(['branch_id' => $branch->id, 'sheet_id' => $branch->sheet_id, 'sheet_name' => 'data_konsumen', 'row_hash' => $name, 'row_data' => ['id_kavling' => 'K-01', 'nama_konsumen' => $name, 'id_konsumen' => 'KONS-ONE']]);
+        }
+        $report = app(ConsumerReadComparisonService::class)->compare($branch, $project);
+        $this->assertSame(['AMBIGUOUS', 'AMBIGUOUS'], array_column($report->rows, 'status'));
+    }
+
+    public function test_br32_two_sheet_rows_without_ids_same_kavling_are_not_ambiguous(): void
+    {
+        [$branch, $project] = $this->context();
+        foreach (['Satu', 'Dua'] as $name) {
+            KonsumenProgressSheetRow::create(['branch_id' => $branch->id, 'sheet_id' => $branch->sheet_id, 'sheet_name' => 'data_konsumen', 'row_hash' => $name, 'row_data' => ['id_kavling' => 'K-01', 'nama_konsumen' => $name]]);
+        }
+        $report = app(ConsumerReadComparisonService::class)->compare($branch, $project);
+        $this->assertSame(['LEGACY_ONLY', 'LEGACY_ONLY'], array_column($report->rows, 'status'));
+        $this->assertSame(0, $report->summary['ambiguous']);
+    }
+
     public function test_br32_two_sheet_rows_same_kavling_with_distinct_transaction_ids_match_all(): void
     {
         [$branch, $project] = $this->context();

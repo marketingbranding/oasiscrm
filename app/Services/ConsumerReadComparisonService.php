@@ -49,6 +49,13 @@ final class ConsumerReadComparisonService
                 $duplicateKeys[$key] = true;
             }
         }
+        $candidateCounts = [];
+        foreach ($legacy as $legacyRecord) {
+            [$candidates] = $this->findCandidates($legacyRecord, $identityIndexes, $duplicateKeys);
+            if (count($candidates) === 1) {
+                $candidateCounts[$candidates[0]->localApplicationId] = ($candidateCounts[$candidates[0]->localApplicationId] ?? 0) + 1;
+            }
+        }
         $rows = [];
         $usedLocal = [];
         $fieldMismatches = array_fill_keys(self::FIELDS, 0);
@@ -60,7 +67,8 @@ final class ConsumerReadComparisonService
             $resolutionSource = $matchKey;
             $legacyIdentity = $this->primaryIdentity($legacyRecord, true);
             $legacyDuplicate = $legacyIdentity !== null && isset($duplicateKeys['legacy:'.$legacyIdentity['type'].':'.$legacyIdentity['key']]);
-            if (count($candidates) > 1 || $legacyDuplicate) {
+            $applicationDuplicate = count($candidates) === 1 && ($candidateCounts[$candidates[0]->localApplicationId] ?? 0) > 1;
+            if (count($candidates) > 1 || $legacyDuplicate || $applicationDuplicate) {
                 foreach ($candidates as $candidate) {
                     $usedLocal[$candidate->localApplicationId] = true;
                 }
@@ -119,13 +127,32 @@ final class ConsumerReadComparisonService
 
     private function findCandidates(ConsumerComparisonRecord $legacy, array $indexes, array $duplicates): array
     {
-        foreach ($this->identities($legacy, true) as $type => $key) {
+        $levels = ['transaction', 'consumer', 'psjb', 'external', 'external_raw'];
+        $legacyIdentities = $this->identities($legacy, true);
+        foreach ($levels as $position => $type) {
+            $key = $legacyIdentities[$type] ?? null;
+            if ($key === null) {
+                continue;
+            }
+            $candidates = $indexes[$type][$key] ?? [];
+            $candidates = array_values(array_filter($candidates, function (ConsumerComparisonRecord $candidate) use ($levels, $position, $legacyIdentities): bool {
+                $candidateIdentities = $this->identities($candidate, false);
+                foreach (array_slice($levels, 0, $position) as $higherType) {
+                    $legacyKey = $legacyIdentities[$higherType] ?? null;
+                    $candidateKey = $candidateIdentities[$higherType] ?? null;
+                    if ($legacyKey !== null && $candidateKey !== null && $legacyKey !== $candidateKey) {
+                        return false;
+                    }
+                }
+
+                return true;
+            }));
             $compound = $type.':'.$key;
             if (isset($duplicates[$compound])) {
-                return [$indexes[$type][$key] ?? [], $type === 'external' || $type === 'external_raw' ? 'EXISTING_PROVENANCE' : strtoupper($type)];
+                return [$candidates, $type === 'external' || $type === 'external_raw' ? 'EXISTING_PROVENANCE' : strtoupper($type)];
             }
-            if (($indexes[$type][$key] ?? []) !== []) {
-                return [$indexes[$type][$key], $type === 'external' || $type === 'external_raw' ? 'EXISTING_PROVENANCE' : strtoupper($type)];
+            if ($candidates !== []) {
+                return [$candidates, $type === 'external' || $type === 'external_raw' ? 'EXISTING_PROVENANCE' : strtoupper($type)];
             }
         }
 
@@ -152,7 +179,7 @@ final class ConsumerReadComparisonService
                 $identities[$type] = Str::lower(trim((string) $value));
             }
         }
-        if ($record->legacyKey !== '') {
+        if ($record->legacyKey !== '' && ! Str::startsWith(Str::lower($record->legacyKey), 'kavling:')) {
             $identities['external'] = Str::lower($record->legacyKey);
         }
         foreach ($record->values['provenance'] ?? [] as $provenance) {

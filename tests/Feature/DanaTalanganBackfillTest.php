@@ -38,12 +38,12 @@ class DanaTalanganBackfillTest extends TestCase
         $this->assertNull($record->fresh()->consumer_application_id);
     }
 
-    public function test_br43_kavling_and_name_match_is_candidate_and_apply_does_not_write(): void
+    public function test_br42_kavling_and_name_match_is_candidate_and_apply_does_not_write(): void
     {
         [$branch, $project, $user] = $this->makeContext();
         $kavling = Kavling::create(['project_id' => $project->id, 'kavling_code' => 'A-01', 'name' => 'A-01']);
         $this->makeApplication($branch, $project, 'Konsumen Kandidat', null, $kavling);
-        $record = $this->makeRecord($branch, $project, 'Konsumen Kandidat', ['kav' => 'A-01']);
+        $record = $this->makeRecord($branch, $project, 'Konsumen Kandidat', ['kav' => 'A01']);
 
         $this->artisan('dana-talangan:backfill-relations --apply')
             ->expectsOutputToContain('KANDIDAT')
@@ -52,7 +52,53 @@ class DanaTalanganBackfillTest extends TestCase
         $this->assertNull($record->fresh()->consumer_application_id);
     }
 
-    public function test_br44_name_only_is_not_found_and_apply_writes_no_relation(): void
+    public function test_br42_apply_writes_pasti_relations_and_audit(): void
+    {
+        [$branch, $project, $user] = $this->makeContext();
+        $kavling = Kavling::create(['project_id' => $project->id, 'kavling_code' => 'A-01', 'name' => 'A-01']);
+        $application = $this->makeApplication($branch, $project, 'Konsumen Pasti', 'TRX-APPLY', $kavling);
+        $record = $this->makeRecord($branch, $project, 'Nama Lain', ['id_transaksi' => 'TRX-APPLY']);
+
+        $this->artisan('dana-talangan:backfill-relations --apply')->assertExitCode(0);
+
+        $record->refresh();
+        $this->assertSame($application->id, $record->consumer_application_id);
+        $this->assertSame($kavling->id, $record->kavling_id);
+        $this->assertDatabaseHas('activity_log', ['subject_id' => $record->id, 'event' => 'relation_backfill_--apply']);
+    }
+
+    public function test_br42_different_transaction_and_psjb_matches_are_perlu_ditinjau(): void
+    {
+        [$branch, $project, $user] = $this->makeContext();
+        $first = $this->makeApplication($branch, $project, 'Konsumen Satu', 'TRX-SATU');
+        $second = $this->makeApplication($branch, $project, 'Konsumen Dua', 'TRX-DUA');
+        $first->psjbs()->create(['id_psjb' => 'PSJB-SATU', 'tanggal_psjb' => '2026-11-01']);
+        $second->psjbs()->create(['id_psjb' => 'PSJB-DUA', 'tanggal_psjb' => '2026-11-01']);
+        $record = $this->makeRecord($branch, $project, 'Nama Berbeda', ['id_transaksi' => 'TRX-SATU', 'id_psjb' => 'PSJB-DUA']);
+
+        $this->artisan('dana-talangan:backfill-relations')
+            ->expectsOutputToContain('PERLU DITINJAU')
+            ->assertExitCode(0);
+
+        $this->assertNull($record->fresh()->consumer_application_id);
+    }
+
+    public function test_br42_confirm_writes_candidate_but_rejects_non_candidate(): void
+    {
+        [$branch, $project, $user] = $this->makeContext();
+        $kavling = Kavling::create(['project_id' => $project->id, 'kavling_code' => 'A-01', 'name' => 'A-01']);
+        $application = $this->makeApplication($branch, $project, 'Konsumen Kandidat', null, $kavling);
+        $candidate = $this->makeRecord($branch, $project, 'Konsumen Kandidat', ['kav' => 'a 01']);
+        $notFound = $this->makeRecord($branch, $project, 'Tidak Ada');
+
+        $this->artisan('dana-talangan:backfill-relations --confirm='.$candidate->id.','.$notFound->id)->assertExitCode(0);
+
+        $this->assertSame($application->id, $candidate->fresh()->consumer_application_id);
+        $this->assertNull($notFound->fresh()->consumer_application_id);
+        $this->assertDatabaseHas('activity_log', ['subject_id' => $candidate->id, 'event' => 'relation_backfill_--confirm']);
+    }
+
+    public function test_br42_name_only_is_not_found_and_apply_writes_no_relation(): void
     {
         [$branch, $project, $user] = $this->makeContext();
         $this->makeApplication($branch, $project, 'Konsumen Nama');
@@ -65,7 +111,7 @@ class DanaTalanganBackfillTest extends TestCase
         $this->assertNull($record->fresh()->consumer_application_id);
     }
 
-    public function test_br44_empty_strong_identifiers_never_match_application_with_null_identifier(): void
+    public function test_br42_empty_strong_identifiers_never_match_application_with_null_identifier(): void
     {
         [$branch, $project, $user] = $this->makeContext();
         $this->makeApplication($branch, $project, 'Konsumen Lain');

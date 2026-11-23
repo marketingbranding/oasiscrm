@@ -456,7 +456,15 @@ Tab dan hitungan Mundur di Workspace masih membaca `consumer_applications.transa
 
 ## WP-2.5 — Dana Talangan di OASIS
 
-Status: Paket A selesai; implementasi sudah di-push untuk review.
+Status: Paket A selesai; review fix sudah di-push untuk review.
+
+Review fix Paket A:
+- Suite awal branch: 2144 tes / 14607 assertions.
+- Form dan import sekarang menerima `id_transaksi`/`id_psjb` opsional. Audit bridge menunjukkan kontrak/fixture sheet `Talangan` saat ini hanya memiliki 16 header bisnis tanpa kedua kolom ID; bridge tetap kompatibel dan tidak memetakan header yang belum ada.
+- `--apply` menerapkan `PASTI`; `--confirm=ID,ID` hanya menerapkan `KANDIDAT`. `PERLU DITINJAU` dan `TIDAK DITEMUKAN` ditolak.
+- Setiap dry-run/apply/confirm dicatat di `activity_log` dengan ID talangan, aplikasi, kavling, kategori, alasan, dan aktor console.
+- Kode kavling dinormalisasi dengan trim, huruf besar, dan penghapusan spasi/tanda hubung.
+- Tes backfill menggunakan label BR-42; mencakup apply nyata, kandidat confirm, penolakan non-kandidat, konflik ID, dan normalisasi kavling.
 
 Kondisi yang sudah ada:
 - `DanaTalangan` sudah menyediakan CRUD, import, export, scope cabang/proyek, soft delete, activity log, dan `project_id`.

@@ -367,6 +367,14 @@
                         </select>
                     </div>
                     <div>
+                        <label class="font-[Helvetica] font-bold text-xs uppercase block mb-1">ID Transaksi</label>
+                        <input name="id_transaksi" value="{{ old('id_transaksi') }}" maxlength="80" class="w-full border-2 border-black px-3 py-2 text-sm font-['Times_New_Roman']">
+                    </div>
+                    <div>
+                        <label class="font-[Helvetica] font-bold text-xs uppercase block mb-1">ID PSJB</label>
+                        <input name="id_psjb" value="{{ old('id_psjb') }}" maxlength="150" class="w-full border-2 border-black px-3 py-2 text-sm font-['Times_New_Roman']">
+                    </div>
+                    <div>
                         <label class="font-[Helvetica] font-bold text-xs uppercase block mb-1">Kav</label>
                         <select name="kav" x-model="addForm.kav" :disabled="!addForm.project_name || addKavLoading" class="w-full border-2 border-black px-3 py-2 text-sm font-['Times_New_Roman'] bg-white disabled:bg-gray-100">
                             <option value="" x-text="addKavLoading ? 'Memuat kavling...' : (!addForm.project_name ? '— Pilih proyek terlebih dahulu —' : (addKavlings.length ? '— Pilih Kav —' : '— Tidak ada kavling —'))"></option>
@@ -445,6 +453,8 @@
                     <div><label class="font-[Helvetica] font-bold text-xs uppercase block mb-1">Cabang</label><select name="branch_id" x-model="editingRecord.branch_id" @change="changeEditBranch()" required class="w-full border-2 border-black px-3 py-2 text-sm font-['Times_New_Roman'] bg-white">@foreach($branches as $branch)<option value="{{ $branch->id }}" @if(str_contains(mb_strtolower($branch->name), 'pusat')) style="color:#b8860b;font-weight:700;background:#fff3b0" @endif>{{ $branch->name }}</option>@endforeach</select></div>
                     @endif
                     <div><label class="font-[Helvetica] font-bold text-xs uppercase block mb-1">Proyek</label><select name="project_name" x-model="editingRecord.project_name" @change="changeEditProject()" required class="w-full border-2 border-black px-3 py-2 text-sm font-['Times_New_Roman'] bg-white"><template x-for="project in projectsFor(editingRecord.branch_id, editingRecord.project_name)" :key="project.id || project.name"><option :value="project.name" x-text="project.name"></option></template></select></div>
+                    <div><label class="font-[Helvetica] font-bold text-xs uppercase block mb-1">ID Transaksi</label><input name="id_transaksi" x-model="editingRecord.id_transaksi" maxlength="80" class="w-full border-2 border-black px-3 py-2 text-sm font-['Times_New_Roman']"></div>
+                    <div><label class="font-[Helvetica] font-bold text-xs uppercase block mb-1">ID PSJB</label><input name="id_psjb" x-model="editingRecord.id_psjb" maxlength="150" class="w-full border-2 border-black px-3 py-2 text-sm font-['Times_New_Roman']"></div>
                     <div><label class="font-[Helvetica] font-bold text-xs uppercase block mb-1">Kav</label><select name="kav" x-model="editingRecord.kav" :disabled="editKavLoading" class="w-full border-2 border-black px-3 py-2 text-sm font-['Times_New_Roman'] bg-white disabled:bg-gray-100"><option value="" x-text="editKavLoading ? 'Memuat kavling...' : (editKavlings.length ? '— Pilih Kav —' : '— Tidak ada kavling —')"></option><template x-for="code in editKavlings" :key="code"><option :value="code" x-text="code"></option></template></select></div>
                     <div><label class="font-[Helvetica] font-bold text-xs uppercase block mb-1">Marketing</label><input name="nama_marketing" x-model="editingRecord.nama_marketing" class="w-full border-2 border-black px-3 py-2 text-sm font-['Times_New_Roman']"></div>
                     <div><label class="font-[Helvetica] font-bold text-xs uppercase block mb-1">Pekerjaan</label><input name="pekerjaan" x-model="editingRecord.pekerjaan" class="w-full border-2 border-black px-3 py-2 text-sm font-['Times_New_Roman']"></div>

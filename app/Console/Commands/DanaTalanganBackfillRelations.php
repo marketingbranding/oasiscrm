@@ -2,6 +2,7 @@
 
 namespace App\Console\Commands;
 
+use App\Models\ActivityLog;
 use App\Models\ConsumerApplication;
 use App\Models\DanaTalangan;
 use Illuminate\Console\Command;
@@ -9,27 +10,44 @@ use Illuminate\Support\Str;
 
 class DanaTalanganBackfillRelations extends Command
 {
-    protected $signature = 'dana-talangan:backfill-relations {--apply : Terapkan hanya hasil PASTI}';
+    protected $signature = 'dana-talangan:backfill-relations {--apply : Terapkan hanya hasil PASTI} {--confirm= : Terapkan KANDIDAT yang sudah dikonfirmasi, contoh 12,15}';
 
     protected $description = 'Menilai dan, bila diminta, menerapkan relasi Dana Talangan ke Konsumen dan Kavling.';
 
     public function handle(): int
     {
+        $confirmedIds = collect(explode(',', (string) $this->option('confirm')))
+            ->map(fn (string $id): string => trim($id))
+            ->filter(fn (string $id): bool => ctype_digit($id))
+            ->map(fn (string $id): int => (int) $id)
+            ->unique()
+            ->values()
+            ->all();
+        $apply = (bool) $this->option('apply');
+        $confirm = $confirmedIds !== [];
         $rows = DanaTalangan::query()->whereNull('consumer_application_id')->with('project')->orderBy('id')->get();
         $summary = ['PASTI' => 0, 'KANDIDAT' => 0, 'PERLU DITINJAU' => 0, 'TIDAK DITEMUKAN' => 0];
 
         foreach ($rows as $record) {
             [$category, $reason, $application] = $this->match($record);
             $summary[$category]++;
+            $action = $apply ? '--apply' : ($confirm ? '--confirm' : 'dry-run');
+            $written = false;
 
-            if ($category === 'PASTI' && $this->option('apply')) {
-                $record->forceFill([
-                    'consumer_application_id' => $application->id,
-                    'kavling_id' => $application->kavling_id,
-                ])->save();
+            if ($apply && $category === 'PASTI' && $application !== null) {
+                $this->writeRelation($record, $application);
+                $written = true;
+            } elseif ($confirm && in_array($record->id, $confirmedIds, true)) {
+                if ($category === 'KANDIDAT' && $application !== null) {
+                    $this->writeRelation($record, $application);
+                    $written = true;
+                } else {
+                    $reason .= ' --confirm hanya boleh untuk KANDIDAT.';
+                }
             }
 
-            $this->line(sprintf('#%d | %s | %s', $record->id, $category, $reason));
+            $this->audit($record, $category, $application, $action, $written, $reason);
+            $this->line(sprintf('#%d | %s | %s%s', $record->id, $category, $reason, $written ? ' | DITERAPKAN' : ''));
         }
 
         foreach ($summary as $category => $count) {
@@ -61,28 +79,30 @@ class DanaTalanganBackfillRelations extends Command
         }
 
         if ($strongMatches->count() > 1) {
-            return ['PERLU DITINJAU', 'ID Transaksi/PSJB menghasilkan lebih dari satu aplikasi.', null];
+            return ['PERLU DITINJAU', 'ID Transaksi/PSJB menunjuk aplikasi berbeda atau lebih dari satu aplikasi.', null];
         }
 
         if (blank($record->kav) || blank($record->nama_konsumen)) {
             return ['TIDAK DITEMUKAN', 'Data kavling atau nama konsumen tidak lengkap.', null];
         }
 
+        $normalizedKav = $this->normalizeKavling($record->kav);
         $matches = ConsumerApplication::query()
             ->where('branch_id', $record->branch_id)
             ->where('project_id', $record->project_id)
             ->whereHas('customer', fn ($query) => $query->whereRaw('lower(name) = ?', [Str::lower(trim($record->nama_konsumen))]))
-            ->whereHas('kavling', function ($query) use ($record): void {
+            ->whereHas('kavling', function ($query) use ($record, $normalizedKav): void {
                 $query->where('project_id', $record->project_id)
-                    ->where(function ($query) use ($record): void {
-                        $query->where('kavling_code', $record->kav)->orWhere('name', $record->kav);
+                    ->where(function ($query) use ($normalizedKav): void {
+                        $query->whereRaw("upper(replace(replace(trim(kavling_code), '-', ''), ' ', '')) = ?", [$normalizedKav])
+                            ->orWhereRaw("upper(replace(replace(trim(name), '-', ''), ' ', '')) = ?", [$normalizedKav]);
                     });
             })
             ->with('kavling')
             ->get();
 
         if ($matches->count() === 1) {
-            return ['KANDIDAT', 'Kavling dan nama cocok; perlu tinjauan sebelum diterapkan.', $matches->first()];
+            return ['KANDIDAT', 'Kavling dan nama cocok setelah normalisasi; perlu konfirmasi manusia.', $matches->first()];
         }
 
         if ($matches->count() > 1) {
@@ -90,5 +110,38 @@ class DanaTalanganBackfillRelations extends Command
         }
 
         return ['TIDAK DITEMUKAN', 'Tidak ada kecocokan kuat atau kandidat kavling dan nama.', null];
+    }
+
+    private function writeRelation(DanaTalangan $record, ConsumerApplication $application): void
+    {
+        $record->forceFill([
+            'consumer_application_id' => $application->id,
+            'kavling_id' => $application->kavling_id,
+        ])->save();
+    }
+
+    private function audit(DanaTalangan $record, string $category, ?ConsumerApplication $application, string $action, bool $written, string $reason): void
+    {
+        ActivityLog::query()->create([
+            'causer_id' => null,
+            'subject_type' => DanaTalangan::class,
+            'subject_id' => $record->id,
+            'event' => 'relation_backfill_'.$action,
+            'description' => 'Backfill relasi Dana Talangan '.$action.'.',
+            'properties' => [
+                'actor_type' => 'console',
+                'dana_talangan_id' => $record->id,
+                'consumer_application_id' => $application?->id,
+                'kavling_id' => $application?->kavling_id,
+                'category' => $category,
+                'written' => $written,
+                'reason' => $reason,
+            ],
+        ]);
+    }
+
+    private function normalizeKavling(string $value): string
+    {
+        return Str::upper((string) preg_replace('/[\s-]+/', '', trim($value)));
     }
 }

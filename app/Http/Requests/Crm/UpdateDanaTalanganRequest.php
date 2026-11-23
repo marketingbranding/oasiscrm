@@ -24,6 +24,8 @@ class UpdateDanaTalanganRequest extends FormRequest
             'tanggal' => 'required|date',
             'nama_konsumen' => 'required|string|max:255',
             'kav' => 'nullable|string|max:100',
+            'id_transaksi' => 'nullable|string|max:80',
+            'id_psjb' => 'nullable|string|max:150',
             'branch_id' => 'nullable|exists:branches,id',
             'expected_updated_at' => 'required|string|max:40',
             'project_name' => 'required|string|max:255',

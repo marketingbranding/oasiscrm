@@ -120,6 +120,7 @@ class AppSettingCatalog
             'org_hierarchical_monitoring' => self::featureFlag('Pemantauan graf organisasi'),
             'lead_stages_v3' => self::scopedFeatureFlag('Tahap Lead v3'),
             'transaction_events_v3' => self::scopedFeatureFlag('Event transaksi v3'),
+            'dana_talangan_primary_source' => self::scopedFeatureFlag('Sumber utama Dana Talangan per cabang'),
             'ai.send_names' => [
                 'group' => 'ai',
                 'type' => 'boolean',

@@ -68,6 +68,22 @@ class DanaTalanganPaymentService
         $this->syncStatus($record, null);
     }
 
+    public function handleQuietSave(DanaTalangan $record, bool $nominalChanged, bool $statusChanged): void
+    {
+        if ($statusChanged) {
+            $record->newQuery()->whereKey($record->getKey())->update([
+                'status_auto_lunas' => false,
+                'status_before_auto_lunas' => null,
+            ]);
+
+            return;
+        }
+
+        if ($nominalChanged) {
+            $this->recalculateStatus($record->fresh());
+        }
+    }
+
     private function syncStatus(DanaTalangan $record, ?User $actor): void
     {
         $verified = $this->sumCents($record, true);

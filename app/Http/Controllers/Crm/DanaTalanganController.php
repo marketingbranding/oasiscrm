@@ -25,6 +25,7 @@ use App\Services\CollaborationNotificationService;
 use App\Services\DanaTalanganBridgeService;
 use App\Services\DanaTalanganOptionService;
 use App\Services\DanaTalanganPaymentService;
+use App\Services\DanaTalanganReportService;
 use App\Services\DanaTalanganService;
 use App\Services\OptimisticLockService;
 use App\Services\OrganizationScopeService;
@@ -38,6 +39,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Symfony\Component\HttpFoundation\Response;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 use Throwable;
 
 class DanaTalanganController extends Controller
@@ -355,6 +357,26 @@ class DanaTalanganController extends Controller
 
         return redirect()->route('dana-talangan.index')
             ->with('success', 'Data dana talangan berhasil diperbarui.');
+    }
+
+    public function report(Request $request, DanaTalanganReportService $service): JsonResponse
+    {
+        $user = Auth::user();
+        abort_unless($user->hasPermission('bridge_fund.view'), 403);
+        $from = $request->filled('from') ? Carbon::parse($request->string('from')) : null;
+        $to = $request->filled('to') ? Carbon::parse($request->string('to')) : null;
+
+        return response()->json($service->report($user, $request->integer('branch_id') ?: null, $request->integer('project_id') ?: null, $from, $to));
+    }
+
+    public function exportReport(Request $request, DanaTalanganReportService $service): StreamedResponse
+    {
+        $user = Auth::user();
+        abort_unless($user->hasPermission('bridge_fund.export'), 403);
+        $report = $service->report($user, $request->integer('branch_id') ?: null, $request->integer('project_id') ?: null, $request->filled('from') ? Carbon::parse($request->string('from')) : null, $request->filled('to') ? Carbon::parse($request->string('to')) : null);
+        $filename = 'laporan-dana-talangan-'.now()->format('Ymd-His').'.xlsx';
+
+        return DanaTalanganExport::summaryToBrowser($report, $filename);
     }
 
     public function export(Request $request)

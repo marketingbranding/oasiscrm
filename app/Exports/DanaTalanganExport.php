@@ -51,6 +51,34 @@ class DanaTalanganExport
         ];
     }
 
+    public static function summaryToBrowser(array $report, string $filename): BinaryFileResponse
+    {
+        $spreadsheet = new Spreadsheet;
+        $sheet = $spreadsheet->getActiveSheet();
+        $sheet->setTitle('Laporan Dana Talangan');
+        $rows = [
+            ['Metrik', 'Nilai'],
+            ['Jumlah Talangan', $report['count']],
+            ['Total Nominal', $report['nominal']],
+            ['Total Pembayaran Terverifikasi', $report['verified']],
+            ['Total Pembayaran Belum Terverifikasi', $report['unverified']],
+            ['Sisa', $report['remaining']],
+            ['Lebih Bayar', $report['overpaid']],
+        ];
+        foreach ($report['by_status'] as $status => $count) {
+            $rows[] = ['Status: '.$status, $count];
+        }
+        foreach ($rows as $row => $values) {
+            foreach ($values as $column => $value) {
+                $sheet->setCellValueByColumnAndRow($column + 1, $row + 1, $value);
+            }
+        }
+        $path = tempnam(sys_get_temp_dir(), 'dana-report-').'.xlsx';
+        (new Xlsx($spreadsheet))->save($path);
+
+        return response()->download($path, $filename)->deleteFileAfterSend(true);
+    }
+
     public static function toBrowser(Collection $records, string $filename): BinaryFileResponse
     {
         $spreadsheet = new Spreadsheet;

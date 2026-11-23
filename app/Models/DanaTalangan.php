@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Models\Traits\LogsActivity;
+use App\Services\DanaTalanganPaymentService;
 use App\Services\OrganizationScopeService;
 use App\Support\DanaTalanganMoney;
 use Illuminate\Database\Eloquent\Builder;
@@ -15,6 +16,22 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 class DanaTalangan extends Model
 {
     use LogsActivity, SoftDeletes;
+
+    protected static function booted(): void
+    {
+        static::saved(function (self $record): void {
+            if ($record->wasChanged('status') && ! $record->wasChanged('status_auto_lunas')) {
+                $record->newQuery()->whereKey($record->getKey())->update([
+                    'status_auto_lunas' => false,
+                    'status_before_auto_lunas' => null,
+                ]);
+            }
+
+            if ($record->wasChanged('nominal')) {
+                app(DanaTalanganPaymentService::class)->recalculateStatus($record->fresh());
+            }
+        });
+    }
 
     protected $fillable = [
         'oasis_sync_id',

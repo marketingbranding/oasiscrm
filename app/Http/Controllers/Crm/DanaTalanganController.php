@@ -326,7 +326,7 @@ class DanaTalanganController extends Controller
         $data['pinjam_nama'] = $request->boolean('pinjam_nama');
         $data['konfirmasi_keuangan'] = $request->boolean('konfirmasi_keuangan');
         $data['updated_by'] = $user->id;
-        if (array_key_exists('status', $data)) {
+        if (array_key_exists('status', $data) && $data['status'] !== $danaTalangan->getOriginal('status')) {
             $data['status_auto_lunas'] = false;
             $data['status_before_auto_lunas'] = null;
         }

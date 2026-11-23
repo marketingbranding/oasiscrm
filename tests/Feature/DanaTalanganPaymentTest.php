@@ -7,6 +7,7 @@ use App\Models\DanaTalangan;
 use App\Models\DanaTalanganPayment;
 use App\Models\Role;
 use App\Models\User;
+use App\Services\OptimisticLockService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
@@ -63,6 +64,23 @@ class DanaTalanganPaymentTest extends TestCase
         $this->assertSame('lunas', $record->fresh()->status);
     }
 
+    public function test_br43_nominal_increase_revokes_auto_lunas_and_nominal_decrease_restores_it(): void
+    {
+        [$record, $user] = $this->makeRecord('100.00', 'tidak_sanggup');
+        $this->actingAs($user)->post(route('dana-talangan.payments.store', $record), [
+            'paid_at' => '2026-11-23', 'amount' => '100.00', 'is_verified' => '1',
+        ])->assertRedirect();
+        $this->assertTrue((bool) $record->fresh()->status_auto_lunas);
+
+        $record->update(['nominal' => '101.00']);
+        $this->assertSame('tidak_sanggup', $record->fresh()->status);
+        $this->assertFalse((bool) $record->fresh()->status_auto_lunas);
+
+        $record->update(['nominal' => '99.00']);
+        $this->assertSame('lunas', $record->fresh()->status);
+        $this->assertTrue((bool) $record->fresh()->status_auto_lunas);
+    }
+
     public function test_br43_auto_lunas_restores_manual_status_after_payment_delete(): void
     {
         [$record, $user] = $this->makeRecord('100.00', 'tidak_sanggup');
@@ -75,6 +93,30 @@ class DanaTalanganPaymentTest extends TestCase
         $this->actingAs($user)->delete(route('dana-talangan.payments.destroy', [$record, $payment]))->assertRedirect();
 
         $this->assertSame('tidak_sanggup', $record->fresh()->status);
+    }
+
+    public function test_br43_editing_note_keeps_auto_lunas_marker(): void
+    {
+        [$record, $user] = $this->makeRecord('100.00', 'tidak_sanggup');
+        $this->actingAs($user)->post(route('dana-talangan.payments.store', $record), [
+            'paid_at' => '2026-11-23', 'amount' => '100.00', 'is_verified' => '1',
+        ])->assertRedirect();
+        $this->assertTrue((bool) $record->fresh()->status_auto_lunas);
+
+        $this->actingAs($user)->put(route('dana-talangan.update', $record), $this->editPayload($record, ['penyelesaian' => 'Catatan baru']))->assertRedirect();
+
+        $this->assertTrue((bool) $record->fresh()->status_auto_lunas);
+    }
+
+    public function test_br43_manual_status_change_clears_auto_lunas_marker(): void
+    {
+        [$record, $user] = $this->makeRecord('100.00', 'tidak_sanggup');
+        $record->update(['status' => 'lunas', 'status_auto_lunas' => true, 'status_before_auto_lunas' => 'tidak_sanggup']);
+
+        $record->refresh();
+        $record->update(['status' => 'sanggup']);
+
+        $this->assertFalse((bool) $record->fresh()->status_auto_lunas);
     }
 
     public function test_br45_edit_and_delete_payment_updates_status_and_audit(): void
@@ -141,6 +183,19 @@ class DanaTalanganPaymentTest extends TestCase
         $this->assertSame(50.0, (float) $record->fresh()->payments()->where('is_verified', false)->sum('amount'));
         $this->assertNotNull($payment->evidence_path);
         Storage::disk('local')->assertExists($payment->evidence_path);
+    }
+
+    private function editPayload(DanaTalangan $record, array $overrides = []): array
+    {
+        return array_merge([
+            'tanggal' => $record->tanggal->format('Y-m-d'),
+            'nama_konsumen' => $record->nama_konsumen,
+            'kav' => $record->kav,
+            'project_name' => $record->project_name,
+            'nominal' => $record->nominal,
+            'status' => $record->status,
+            'expected_updated_at' => app(OptimisticLockService::class)->token($record),
+        ], $overrides);
     }
 
     private function makeRecord(?string $nominal, string $status = 'sanggup'): array

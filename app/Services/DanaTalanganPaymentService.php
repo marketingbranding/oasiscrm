@@ -53,7 +53,7 @@ class DanaTalanganPaymentService
         $verified = $this->sumCents($record, true);
         $unverified = $this->sumCents($record, false);
         $nominal = $this->toCents($record->nominal);
-        $remaining = $nominal - $verified;
+        $remaining = max(0, $nominal - $verified);
 
         return [
             'verified' => $this->formatCents($verified),
@@ -63,7 +63,12 @@ class DanaTalanganPaymentService
         ];
     }
 
-    private function syncStatus(DanaTalangan $record, User $actor): void
+    public function recalculateStatus(DanaTalangan $record): void
+    {
+        $this->syncStatus($record, null);
+    }
+
+    private function syncStatus(DanaTalangan $record, ?User $actor): void
     {
         $verified = $this->sumCents($record, true);
         $nominal = $this->toCents($record->nominal);

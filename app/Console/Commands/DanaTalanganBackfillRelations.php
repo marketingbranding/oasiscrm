@@ -48,10 +48,11 @@ class DanaTalanganBackfillRelations extends Command
             ->where('branch_id', $record->branch_id)
             ->where('project_id', $record->project_id)
             ->where(function ($query) use ($record): void {
-                $query->where('id_transaksi', $record->id_transaksi)
-                    ->when($record->id_psjb, function ($query) use ($record): void {
-                        $query->orWhereHas('psjbs', fn ($psjbs) => $psjbs->where('id_psjb', $record->id_psjb));
-                    });
+                $query->where(function ($query) use ($record): void {
+                    $query->whereNotNull('id_transaksi')->where('id_transaksi', $record->id_transaksi);
+                })->when($record->id_psjb, function ($query) use ($record): void {
+                    $query->orWhereHas('psjbs', fn ($psjbs) => $psjbs->whereNotNull('id_psjb')->where('id_psjb', $record->id_psjb));
+                });
             })
             ->get();
 

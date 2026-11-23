@@ -65,6 +65,19 @@ class DanaTalanganBackfillTest extends TestCase
         $this->assertNull($record->fresh()->consumer_application_id);
     }
 
+    public function test_br44_empty_strong_identifiers_never_match_application_with_null_identifier(): void
+    {
+        [$branch, $project, $user] = $this->makeContext();
+        $this->makeApplication($branch, $project, 'Konsumen Lain');
+        $record = $this->makeRecord($branch, $project, 'Konsumen Lain', ['kav' => null]);
+
+        $this->artisan('dana-talangan:backfill-relations --apply')
+            ->expectsOutputToContain('TIDAK DITEMUKAN')
+            ->assertExitCode(0);
+
+        $this->assertNull($record->fresh()->consumer_application_id);
+    }
+
     private function makeContext(): array
     {
         $branch = Branch::create(['name' => 'Cabang Backfill', 'code' => 'BFL', 'is_active' => true]);

@@ -17,6 +17,16 @@ class DanaTalanganBackfillTest extends TestCase
 {
     use RefreshDatabase;
 
+    public function test_br42_dry_run_does_not_write_activity_log(): void
+    {
+        [$branch, $project, $user] = $this->makeContext();
+        $record = $this->makeRecord($branch, $project, 'Konsumen Dry Run');
+
+        $this->artisan('dana-talangan:backfill-relations')->assertExitCode(0);
+
+        $this->assertDatabaseMissing('activity_log', ['subject_id' => $record->id, 'event' => 'relation_backfill_dry-run']);
+    }
+
     public function test_br42_dry_run_reports_strong_match_as_pasti_and_does_not_write(): void
     {
         [$branch, $project, $user] = $this->makeContext();
@@ -83,6 +93,17 @@ class DanaTalanganBackfillTest extends TestCase
         $this->assertNull($record->fresh()->consumer_application_id);
     }
 
+    public function test_br42_confirm_unknown_id_is_rejected_with_failure_exit(): void
+    {
+        [$branch, $project, $user] = $this->makeContext();
+
+        $this->artisan('dana-talangan:backfill-relations --confirm=999999')
+            ->expectsOutputToContain('DITOLAK')
+            ->assertExitCode(1);
+
+        $this->assertDatabaseHas('activity_log', ['event' => 'relation_backfill_--confirm']);
+    }
+
     public function test_br42_confirm_writes_candidate_but_rejects_non_candidate(): void
     {
         [$branch, $project, $user] = $this->makeContext();
@@ -91,7 +112,9 @@ class DanaTalanganBackfillTest extends TestCase
         $candidate = $this->makeRecord($branch, $project, 'Konsumen Kandidat', ['kav' => 'a 01']);
         $notFound = $this->makeRecord($branch, $project, 'Tidak Ada');
 
-        $this->artisan('dana-talangan:backfill-relations --confirm='.$candidate->id.','.$notFound->id)->assertExitCode(0);
+        $this->artisan('dana-talangan:backfill-relations --confirm='.$candidate->id.','.$notFound->id)
+            ->expectsOutputToContain('DITOLAK')
+            ->assertExitCode(1);
 
         $this->assertSame($application->id, $candidate->fresh()->consumer_application_id);
         $this->assertNull($notFound->fresh()->consumer_application_id);

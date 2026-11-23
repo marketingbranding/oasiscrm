@@ -27,6 +27,8 @@ class DanaTalanganBackfillRelations extends Command
         $confirm = $confirmedIds !== [];
         $rows = DanaTalangan::query()->whereNull('consumer_application_id')->with('project')->orderBy('id')->get();
         $summary = ['PASTI' => 0, 'KANDIDAT' => 0, 'PERLU DITINJAU' => 0, 'TIDAK DITEMUKAN' => 0];
+        $rejected = false;
+        $seenConfirmedIds = [];
 
         foreach ($rows as $record) {
             [$category, $reason, $application] = $this->match($record);
@@ -38,23 +40,46 @@ class DanaTalanganBackfillRelations extends Command
                 $this->writeRelation($record, $application);
                 $written = true;
             } elseif ($confirm && in_array($record->id, $confirmedIds, true)) {
+                $seenConfirmedIds[] = $record->id;
                 if ($category === 'KANDIDAT' && $application !== null) {
                     $this->writeRelation($record, $application);
                     $written = true;
                 } else {
-                    $reason .= ' --confirm hanya boleh untuk KANDIDAT.';
+                    $reason .= ' --confirm ditolak: hanya boleh untuk KANDIDAT.';
+                    $rejected = true;
                 }
             }
 
-            $this->audit($record, $category, $application, $action, $written, $reason);
-            $this->line(sprintf('#%d | %s | %s%s', $record->id, $category, $reason, $written ? ' | DITERAPKAN' : ''));
+            if ($written || ($confirm && in_array($record->id, $confirmedIds, true))) {
+                $this->audit($record, $category, $application, $action, $written, $reason);
+            }
+            $displayCategory = $rejected && $confirm && in_array($record->id, $confirmedIds, true) && ! $written ? 'DITOLAK' : $category;
+            $this->line(sprintf('#%d | %s | %s%s', $record->id, $displayCategory, $reason, $written ? ' | DITERAPKAN' : ''));
+        }
+
+        foreach ($confirmedIds as $confirmedId) {
+            if (in_array($confirmedId, $seenConfirmedIds, true)) {
+                continue;
+            }
+
+            $rejected = true;
+            $reason = 'ID tidak ada, sudah tertaut, atau tidak termasuk hasil backfill.';
+            $this->line('#'.$confirmedId.' | DITOLAK | '.$reason);
+            ActivityLog::query()->create([
+                'causer_id' => null,
+                'subject_type' => DanaTalangan::class,
+                'subject_id' => $confirmedId,
+                'event' => 'relation_backfill_--confirm',
+                'description' => 'Konfirmasi backfill relasi Dana Talangan ditolak.',
+                'properties' => ['actor_type' => 'console', 'dana_talangan_id' => $confirmedId, 'category' => null, 'written' => false, 'reason' => $reason],
+            ]);
         }
 
         foreach ($summary as $category => $count) {
             $this->line($category.': '.$count);
         }
 
-        return self::SUCCESS;
+        return $rejected ? self::FAILURE : self::SUCCESS;
     }
 
     /**

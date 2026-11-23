@@ -13,7 +13,7 @@ final class LocalConsumerReadService
     public function records(Branch $branch, LeadMaster $project): array
     {
         $applications = ConsumerApplication::query()
-            ->with(['customer', 'sales', 'kavling', 'legacyIdentities', 'processStageEvents', 'bankProcesses'])
+            ->with(['customer', 'sales', 'kavling', 'legacyIdentities', 'processStageEvents', 'bankProcesses', 'psjbs'])
             ->where('branch_id', $branch->id)
             ->where('project_id', $project->id)
             ->get();

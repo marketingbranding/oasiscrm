@@ -7,6 +7,7 @@ use App\Models\Branch;
 use App\Models\ConsumerApplication;
 use App\Models\ConsumerParitySnapshot;
 use App\Models\KonsumenProgressSheetRow;
+use App\Models\KonsumenProgressSyncStatus;
 use Illuminate\Support\Carbon;
 
 final class BranchParityReportService
@@ -14,14 +15,21 @@ final class BranchParityReportService
     public function __construct(
         private readonly ConsumerReadComparisonService $comparison,
         private readonly ConsumerReadinessService $readiness,
+        private readonly LegacyConsumerReadService $legacy,
+        private readonly LocalConsumerReadService $local,
     ) {}
 
     public function report(Branch $branch): BranchParityReport
     {
         $differences = collect();
         $comparisonSummary = collect(['legacy_only' => 0, 'local_only' => 0, 'mismatch' => 0, 'ambiguous' => 0]);
+        $sideMetrics = ['sheet' => ['status' => [], 'akad' => [], 'process' => [], 'kavling' => 0], 'oasis' => ['status' => [], 'akad' => [], 'process' => [], 'kavling' => 0]];
 
         foreach ($branch->projects()->get() as $project) {
+            $legacyRecords = $this->legacy->records($branch, $project);
+            $localRecords = $this->local->records($branch, $project);
+            $this->addSideMetrics($sideMetrics['sheet'], $legacyRecords);
+            $this->addSideMetrics($sideMetrics['oasis'], $localRecords);
             $result = $this->comparison->compare($branch, $project);
             $readiness = $this->readiness->summarize($result);
             foreach ($comparisonSummary->keys() as $key) {
@@ -47,6 +55,8 @@ final class BranchParityReportService
             'occupied_kavling' => $occupied,
             'sheet_rows' => KonsumenProgressSheetRow::query()->where('branch_id', $branch->id)->count(),
             'oasis_transactions' => $applications->count(),
+            'per_side' => $sideMetrics,
+            'delta' => $this->metricDelta($sideMetrics),
         ];
         $summary = [
             ...$comparisonSummary->all(),
@@ -55,7 +65,13 @@ final class BranchParityReportService
             'unavailable' => $branch->sheet_id ? 0 : 1,
             'duplicate' => $comparisonSummary['ambiguous'],
         ];
-        $status = array_sum($summary) === 0 ? 'LULUS' : 'GAGAL';
+        $sync = KonsumenProgressSyncStatus::query()->where('branch_id', $branch->id)->latest('finished_at')->first();
+        $fresh = $sync?->status === 'success' && $sync->finished_at?->gte(now()->subHours(24));
+        $complete = $fresh && $metrics['sheet_rows'] > 0;
+        if (! $complete) {
+            $summary['alasan_tidak_lengkap'] = $metrics['sheet_rows'] === 0 ? 'Cermin sheet kosong.' : 'Sinkronisasi terakhir tidak sukses atau sudah basi.';
+        }
+        $status = ! $complete ? 'TIDAK_LENGKAP' : (array_sum(array_diff_key($summary, ['alasan_tidak_lengkap' => true])) === 0 ? 'LULUS' : 'GAGAL');
 
         $differences = $differences->values()->all();
         ConsumerParitySnapshot::create([
@@ -68,5 +84,27 @@ final class BranchParityReportService
         ]);
 
         return new BranchParityReport($branch, $status, $summary, $metrics, $differences);
+    }
+
+    private function metricDelta(array $metrics): array
+    {
+        return ['kavling' => $metrics['oasis']['kavling'] - $metrics['sheet']['kavling']];
+    }
+
+    private function addSideMetrics(array &$metrics, array $records): void
+    {
+        foreach ($records as $record) {
+            $status = strtoupper((string) ($record->applicationStatus ?? 'LANJUT'));
+            $metrics['status'][$status] = ($metrics['status'][$status] ?? 0) + 1;
+            if ($record->akadDate) {
+                $month = substr($record->akadDate, 0, 7);
+                $metrics['akad'][$month] = ($metrics['akad'][$month] ?? 0) + 1;
+            }
+            $stage = $record->currentStage ?: 'BELUM ADA';
+            $metrics['process'][$stage] = ($metrics['process'][$stage] ?? 0) + 1;
+            if ($record->kavlingId || $record->kavlingLabel) {
+                $metrics['kavling']++;
+            }
+        }
     }
 }

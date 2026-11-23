@@ -10,7 +10,9 @@
         </select>
     </x-crm.field>
 </form>
+@php($report = $snapshot ? new \App\Data\BranchParityReport($branch, $snapshot->status, $snapshot->summary, $snapshot->metrics, $snapshot->differences) : null)
 @if($report)
+    <form method="POST" action="{{ route('admin.branch-parity.run', $branch) }}" class="mb-4">@csrf<x-crm.button type="submit" variant="primary">Jalankan pemeriksaan</x-crm.button></form>
     <div class="mb-4 grid gap-4 md:grid-cols-4">
         <x-crm.card><div class="crm-label">Status</div><strong>{{ $report->status }}</strong></x-crm.card>
         <x-crm.card><div class="crm-label">Sheet only</div><strong>{{ $report->summary['sheet_only'] }}</strong></x-crm.card>

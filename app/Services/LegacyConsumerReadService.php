@@ -80,7 +80,7 @@ class LegacyConsumerReadService
             $transactionId = $this->value($customer, ['id_transaksi', 'id transaksi']);
             $consumerId = $this->value($customer, ['id_konsumen', 'id konsumen', 'id_kons']);
             $psjbId = $this->value($stageData + $customer, ['id_psjb', 'id psjb']);
-            $legacyKey = $transactionId !== '' ? 'transaction:'.Str::lower($transactionId) : ($consumerId !== '' ? 'consumer:'.Str::lower($consumerId) : ($psjbId !== '' ? 'psjb:'.Str::lower($psjbId) : ($external !== '' ? 'external:'.Str::lower($external) : 'kavling:'.Str::lower($kavling))));
+            $legacyKey = $external !== '' ? 'external:'.Str::lower($external) : 'kavling:'.Str::lower($kavling);
 
             $records[] = new ConsumerComparisonRecord(
                 legacyKey: $legacyKey,

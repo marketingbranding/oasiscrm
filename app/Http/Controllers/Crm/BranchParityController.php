@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Crm;
 use App\Exports\BranchParityReportExport;
 use App\Http\Controllers\Controller;
 use App\Models\Branch;
+use App\Models\ConsumerParitySnapshot;
 use App\Services\BranchParityReportService;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
@@ -20,9 +21,18 @@ class BranchParityController extends Controller
         $branches = Branch::query()->orderBy('name')->get();
         $branch = $request->filled('branch') ? $branches->firstWhere('id', $request->integer('branch')) : null;
         abort_if($request->filled('branch') && ! $branch, 404);
-        $report = $branch ? $this->service->report($branch) : null;
+        $snapshot = $branch ? ConsumerParitySnapshot::query()->where('branch_id', $branch->id)->latest('checked_at')->first() : null;
+        $report = null;
 
-        return view('crm.branch-parity.index', compact('branches', 'branch', 'report'));
+        return view('crm.branch-parity.index', compact('branches', 'branch', 'report', 'snapshot'));
+    }
+
+    public function run(Request $request, Branch $branch): View
+    {
+        abort_unless($request->user()->isSuperadmin(), 403);
+        $this->service->report($branch);
+
+        return redirect()->route('admin.branch-parity.index', ['branch' => $branch->id]);
     }
 
     public function export(Request $request, Branch $branch): BinaryFileResponse

@@ -22,30 +22,20 @@ final class ConsumerReadComparisonService
     {
         $legacy = $this->legacy->records($branch, $project);
         $local = $this->local->records($branch, $project);
-        $localByKey = [];
-        $provenanceByKey = [];
+        $identityIndexes = array_fill_keys(['transaction', 'consumer', 'psjb', 'external', 'external_raw'], []);
         $duplicateKeys = [];
         foreach ($local as $record) {
-            $localByKey[$record->legacyKey][] = $record;
-            foreach ($record->values['provenance'] ?? [] as $provenance) {
-                if (($provenance['legacy_source'] ?? null) !== 'manual_spreadsheet_paste' || ! filled($provenance['external_key'] ?? null)) {
-                    continue;
+            foreach ($this->identities($record, false) as $type => $key) {
+                $identityIndexes[$type][$key][] = $record;
+            }
+        }
+        foreach ($identityIndexes as $type => $index) {
+            foreach ($index as $key => $records) {
+                if (count($records) > 1) {
+                    $duplicateKeys[$type.':'.$key] = true;
                 }
-                $key = Str::lower($provenance['external_key']);
-                $provenanceByKey[$key][] = $record;
             }
         }
-        foreach ($localByKey as $key => $records) {
-            if (count($records) > 1) {
-                $duplicateKeys[$key] = true;
-            }
-        }
-        foreach ($provenanceByKey as $key => $records) {
-            if (count($records) > 1 || count(array_unique(array_map(fn ($record) => $record->localApplicationId, $records))) > 1) {
-                $duplicateKeys[$key] = true;
-            }
-        }
-
         $rows = [];
         $usedLocal = [];
         $fieldMismatches = array_fill_keys(self::FIELDS, 0);
@@ -53,14 +43,12 @@ final class ConsumerReadComparisonService
         $exact = 0;
 
         foreach ($legacy as $legacyRecord) {
-            $provenanceKey = Str::lower($legacyRecord->legacyKey);
-            $candidates = $localByKey[$legacyRecord->legacyKey] ?? [];
-            $resolutionSource = $candidates !== [] ? 'EXISTING_PROVENANCE' : null;
-            if ($candidates === []) {
-                $candidates = $provenanceByKey[$provenanceKey] ?? [];
-                $resolutionSource = $candidates !== [] ? 'EXISTING_PROVENANCE' : null;
-            }
-            if (count($candidates) > 1 || isset($duplicateKeys[$legacyRecord->legacyKey])) {
+            [$candidates, $matchKey] = $this->findCandidates($legacyRecord, $identityIndexes, $duplicateKeys);
+            $resolutionSource = $matchKey;
+            if (count($candidates) > 1) {
+                foreach ($candidates as $candidate) {
+                    $usedLocal[$candidate->localApplicationId] = true;
+                }
                 $summary['AMBIGUOUS']++;
                 $rows[] = $this->row('AMBIGUOUS', $legacyRecord, null, [], ['Multiple local applications share stable identity.']);
 
@@ -114,6 +102,44 @@ final class ConsumerReadComparisonService
         );
     }
 
+    private function findCandidates(ConsumerComparisonRecord $legacy, array $indexes, array $duplicates): array
+    {
+        foreach ($this->identities($legacy, true) as $type => $key) {
+            $compound = $type.':'.$key;
+            if (isset($duplicates[$compound])) {
+                return [$indexes[$type][$key] ?? [], $type === 'external' ? 'EXISTING_PROVENANCE' : strtoupper($type)];
+            }
+            if (($indexes[$type][$key] ?? []) !== []) {
+                return [$indexes[$type][$key], $type === 'external' || $type === 'external_raw' ? 'EXISTING_PROVENANCE' : strtoupper($type)];
+            }
+        }
+
+        return [[], null];
+    }
+
+    private function identities(ConsumerComparisonRecord $record, bool $legacy): array
+    {
+        $identities = [];
+        foreach (['transaction' => $record->transactionId, 'consumer' => $record->consumerId, 'psjb' => $record->psjbId] as $type => $value) {
+            if (filled($value)) {
+                $identities[$type] = Str::lower(trim((string) $value));
+            }
+        }
+        if ($record->legacyKey !== '') {
+            $identities['external'] = Str::lower($record->legacyKey);
+        }
+        foreach ($record->values['provenance'] ?? [] as $provenance) {
+            if (filled($provenance['external_key'] ?? null)) {
+                $external = Str::lower(trim((string) $provenance['external_key']));
+                $identities['external'] = Str::startsWith($external, 'external:') ? $external : 'external:'.$external;
+                $identities['external_raw'] = Str::startsWith($external, 'external:') ? Str::after($external, 'external:') : $external;
+                break;
+            }
+        }
+
+        return $identities;
+    }
+
     private function mismatches(ConsumerComparisonRecord $legacy, ConsumerComparisonRecord $local): array
     {
         $pairs = [
@@ -156,6 +182,7 @@ final class ConsumerReadComparisonService
             'legacy_values' => $legacy?->toArray(),
             'local_values' => $local?->toArray(),
             'mismatch_fields' => $mismatches,
+            'match_key' => $resolutionSource,
             'notes' => array_values(array_unique(array_filter([...$notes, $resolutionSource]))),
         ];
     }

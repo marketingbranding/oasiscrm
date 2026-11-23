@@ -8,6 +8,7 @@ use App\Models\ConsumerLegacyIdentity;
 use App\Models\Customer;
 use App\Models\Kavling;
 use App\Models\KonsumenProgressSheetRow;
+use App\Models\KonsumenProgressSyncStatus;
 use App\Models\LeadMaster;
 use App\Services\BranchParityReportService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -32,6 +33,7 @@ class BranchParityReportTest extends TestCase
         ConsumerLegacyIdentity::create(['consumer_application_id' => $application->id, 'customer_id' => $application->customer_id, 'legacy_source' => 'manual_spreadsheet_paste', 'external_key' => 'external:PARITY-1']);
         KonsumenProgressSheetRow::create(['branch_id' => $branch->id, 'sheet_id' => $branch->sheet_id, 'sheet_name' => 'data_konsumen', 'row_hash' => 'matching-row', 'row_data' => ['id_kavling' => 'K-01', 'nama_konsumen' => 'Rahasia', 'no_hp' => '0812345678', 'project_name' => $project->project_name, 'external_id' => 'PARITY-1', 'tanggal_akad' => '2026-11-01']]);
         KonsumenProgressSheetRow::create(['branch_id' => $branch->id, 'sheet_id' => $branch->sheet_id, 'sheet_name' => 'akad', 'row_hash' => 'matching-stage', 'row_data' => ['id_kavling' => 'K-01', 'tanggal_akad' => '2026-11-01']]);
+        KonsumenProgressSyncStatus::create(['branch_id' => $branch->id, 'status' => 'success', 'finished_at' => now()]);
 
         $report = app(BranchParityReportService::class)->report($branch);
 
@@ -54,6 +56,7 @@ class BranchParityReportTest extends TestCase
             'row_hash' => 'branch-parity-row',
             'row_data' => ['id_kavling' => 'K-01', 'nama_konsumen' => 'Sheet Only', 'project_name' => $project->project_name, 'external_id' => 'SHEET-1'],
         ]);
+        KonsumenProgressSyncStatus::create(['branch_id' => $branch->id, 'status' => 'success', 'finished_at' => now()]);
 
         $report = app(BranchParityReportService::class)->report($branch);
 

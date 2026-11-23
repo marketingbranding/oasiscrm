@@ -108,6 +108,7 @@ Route::middleware(['auth', 'active', 'verified', 'password.changed', 'operationa
 
     Route::prefix('admin/laporan-paritas')->name('admin.branch-parity.')->middleware(['permission:system.branch_migration_manage', 'system.admin:settings'])->group(function (): void {
         Route::get('/', [BranchParityController::class, 'index'])->name('index');
+        Route::post('/{branch}/jalankan', [BranchParityController::class, 'run'])->middleware('not.impersonating')->name('run');
         Route::get('/{branch}/xlsx', [BranchParityController::class, 'export'])->name('export');
     });
 

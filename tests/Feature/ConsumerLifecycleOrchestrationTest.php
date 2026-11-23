@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\ActivityLog;
 use App\Models\AppSetting;
+use App\Models\BranchMigrationState;
 use App\Models\ConsumerApplication;
 use App\Models\ConsumerBastRecord;
 use App\Models\ConsumerKavlingAssignment;
@@ -328,6 +329,7 @@ class ConsumerLifecycleOrchestrationTest extends TestCase
     private function applicationAndActor(string $role = 'superadmin'): array
     {
         $application = ConsumerApplication::factory()->create();
+        BranchMigrationState::query()->updateOrCreate(['branch_id' => $application->branch_id], ['state' => BranchMigrationState::STATE_PARALEL]);
         $actor = User::factory()->create([
             'role_id' => Role::query()->where('slug', $role)->value('id'),
             'branch_id' => $application->branch_id,

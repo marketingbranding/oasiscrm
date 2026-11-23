@@ -435,7 +435,9 @@ Status: selesai pada branch `prd-v3/wp-1.10-fase1-closeout`; merge phase branch 
 
 ### WP-2.4 — Paritas status transaksi Workspace
 
-Status: Paket A selesai, menunggu review.
+Status: Paket A selesai, menunggu review lanjutan.
+
+Guard input OASIS kini mencakup `ConsumerEntryService`, `ConsumerNupService`, seluruh mutasi publik `ConsumerOperationalService`, `ConsumerApplicationLifecycleService` (Mundur, Pindah Kavling, Ganti Konsumen), dan `ConsumerProcessService` (Garansi, Kendala). Pengecualian sengaja: `ConsumerPasteImportService`, importer proses historis, importer Marison, dan `ConsumerMigrationReconciliationService` tetap boleh menulis data status `migrasi` sebagai jalur migrasi/impor; jalur ini bukan input Workspace manual.
 
 Paket A branch migration state (`bfc4c28`) menetapkan state cabang dan blokir hanya pada cermin sheet saat `oasis_penuh`. Workspace Konsumen bawaan OASIS tetap dapat menulis. Inventaris boundary untuk Paket B/C dan WP-3.6:
 

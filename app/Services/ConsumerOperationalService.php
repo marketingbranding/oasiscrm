@@ -358,6 +358,7 @@ final class ConsumerOperationalService
 
     public function recordPpjb(ConsumerApplication $application, array $data, User $actor): ConsumerPpjbDeveloper
     {
+        $this->assertOasisInput($application);
 
         return DB::transaction(function () use ($application, $data, $actor): ConsumerPpjbDeveloper {
             $before = $this->snapshot($application->fresh());
@@ -373,6 +374,7 @@ final class ConsumerOperationalService
 
     public function recordAkad(ConsumerApplication $application, array $data, User $actor, ConsumerKavlingLifecycleService $lifecycle): ConsumerAkadRecord
     {
+        $this->assertOasisInput($application);
 
         return DB::transaction(function () use ($application, $data, $actor, $lifecycle): ConsumerAkadRecord {
             $before = $this->snapshot($application->fresh());
@@ -389,6 +391,7 @@ final class ConsumerOperationalService
 
     public function recordBast(ConsumerApplication $application, array $data, User $actor, ConsumerKavlingLifecycleService $lifecycle): ConsumerBastRecord
     {
+        $this->assertOasisInput($application);
 
         return DB::transaction(function () use ($application, $data, $actor, $lifecycle): ConsumerBastRecord {
             $application = ConsumerApplication::query()->lockForUpdate()->findOrFail($application->id);

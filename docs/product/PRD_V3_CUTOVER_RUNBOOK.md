@@ -85,7 +85,17 @@ Go: parity bersih, tidak ada siklus, assignment lengkap, dan laporan disimpan.
 No-go: parity berbeda, siklus, assignment hilang, atau health gate gagal.
 Mundur: jangan aktifkan mode graf kanonis atau pemantauan berjenjang.
 
-## A7. Prasyarat cabang pertama ke paralel
+## A7. Audit input Workspace sebelum deploy guard cabang
+
+Sebelum deploy kode guard ini, jalankan command read-only berikut di produksi:
+
+```bash
+php artisan consumer:workspace-input-audit --days=30
+```
+
+Command hanya membaca `consumer_applications` dan `consumer_nups`, lalu merangkum sumber manual Workspace per cabang dalam 30 hari terakhir. Cabang dengan input manual harus ditinjau pemilik produk dan di-set ke `paralel` sebelum deploy atau sebelum guard diaktifkan, agar input tidak terkunci mendadak. Command tidak mengubah status cabang maupun data konsumen.
+
+## A8. Prasyarat cabang pertama ke paralel
 
 Sebelum status cabang diubah ke `paralel`, cek pengaturan produksi:
 

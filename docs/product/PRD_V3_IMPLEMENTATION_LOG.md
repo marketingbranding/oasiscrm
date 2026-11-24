@@ -56,7 +56,7 @@ PRD sumber kebenaran: `docs/product/PRD_OASIS_CRM_V3.md` versi 3.3 (D30–D33)
 | WP-2.7 | 2 | Penutup Fase 2: changelog, dokumentasi, verifikasi penuh | Sisa browser dan dokumentasi penutup dipindah dari WP-2.9b; dikerjakan pada sub-branch `prd-v3/wp-2.7-penutup-fase-2` | Semua fase 2 |
 | WP-2.8 | 2 | Riwayat Tim: gabungan perubahan Lead dan agenda seluruh turunan | Merged ke fase-2 pada `395fcad` melalui merge `--no-ff`; review scope dan batas 92 hari selesai | BR-50–BR-52 |
 | WP-2.9 | 2 | Penautan Lead ↔ Konsumen | Merged ke fase-2 pada `dea710e` melalui merge `--no-ff`; review diterima, kandidat HP diprioritaskan, cakupan Sheet dicatat. | BR terkait penautan Lead ↔ Konsumen |
-| WP-2.9b | 2 | Penautan Lead untuk cermin Sheet dan NUP | Paket A–C selesai di branch `prd-v3/wp-2.9b-penautan-sheet`; commit `2f72c86` dipush. Filter daftar, halaman konflik HTML, keputusan konflik, regresi scope/rollback/filter/NUP/cross-type, cache view, build frontend, dan suite fokus selesai. | BR terkait penautan Lead ↔ Konsumen |
+| WP-2.9b | 2 | Penautan Lead untuk cermin Sheet dan NUP | Merged ke fase-2 pada `15bdbde` melalui merge `--no-ff`; carry-over lima jalur teruji dan browser lengkap dipindah ke WP-2.7. | BR terkait penautan Lead ↔ Konsumen |
 | WP-3.1 | 3 | WhatsApp satu nomor | Belum mulai | BR-60–BR-64 |
 
 ### Rencana singkat sisa WP-2.9b — 24 November 2026

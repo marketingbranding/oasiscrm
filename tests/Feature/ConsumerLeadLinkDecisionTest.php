@@ -401,6 +401,14 @@ class ConsumerLeadLinkDecisionTest extends TestCase
         $this->assertDatabaseCount('consumer_lead_link_decisions', 0);
     }
 
+    public function test_br_bulk_legacy_rejects_missing_before_with_validation_error(): void
+    {
+        [$branch, , $actor] = $this->bulkContext();
+
+        $this->expectException(ValidationException::class);
+        app(ConsumerLeadLinkDecisionService::class)->previewBulkLegacy($actor, ['branch_id' => $branch->id]);
+    }
+
     public function test_br_bulk_legacy_rejects_expired_token_and_changed_data_without_mutation(): void
     {
         [$branch, $project, $actor] = $this->bulkContext();
@@ -411,6 +419,18 @@ class ConsumerLeadLinkDecisionTest extends TestCase
 
         $this->expectException(ValidationException::class);
         app(ConsumerLeadLinkDecisionService::class)->markBulkLegacy($actor, [...$filters, 'token' => $preview['token']], 'Verifikasi');
+        $this->assertDatabaseCount('consumer_lead_link_decisions', 0);
+    }
+
+    public function test_br_bulk_legacy_rejects_token_for_other_user_without_mutation(): void
+    {
+        [$branch, , $actor] = $this->bulkContext();
+        $other = User::factory()->create(['role_id' => $actor->role_id, 'branch_id' => $branch->id]);
+        $filters = ['branch_id' => $branch->id, 'before' => '2026-01-01'];
+        $preview = app(ConsumerLeadLinkDecisionService::class)->previewBulkLegacy($actor, $filters);
+
+        $this->expectException(ValidationException::class);
+        app(ConsumerLeadLinkDecisionService::class)->markBulkLegacy($other, [...$filters, 'token' => $preview['token']], 'Verifikasi');
         $this->assertDatabaseCount('consumer_lead_link_decisions', 0);
     }
 

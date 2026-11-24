@@ -18,6 +18,7 @@ use App\Services\WorkspaceAccessService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\View\View;
 
 final class ConsumerDatabaseController extends Controller
@@ -90,6 +91,36 @@ final class ConsumerDatabaseController extends Controller
             'decidable' => $subject->isDecidable,
             'note' => $subject->note,
         ]]]);
+    }
+
+    public function linkConflicts(Request $request): JsonResponse
+    {
+        abort_unless($request->user()->hasPermission('consumer_progress.manage'), 403);
+
+        $branchIds = app(OrganizationScopeService::class)->branchIds($request->user(), 'consumer_progress');
+        $conflicts = DB::table('consumer_lead_link_conflicts as conflict')
+            ->join('consumer_applications as application', 'application.id', '=', 'conflict.consumer_application_id')
+            ->whereIn('application.branch_id', $branchIds)
+            ->orderByDesc('conflict.id')
+            ->limit(250)
+            ->get(['conflict.id', 'conflict.source_decision_id', 'conflict.target_decision_id', 'conflict.consumer_application_id', 'conflict.conflict_type', 'conflict.status', 'conflict.details', 'conflict.created_at']);
+
+        return response()->json(['ok' => true, 'data' => $conflicts]);
+    }
+
+    public function previewBulkLegacy(Request $request): JsonResponse
+    {
+        abort_unless($request->user()->hasPermission('consumer_progress.manage'), 403);
+
+        return response()->json(['ok' => true, 'data' => $this->leadLinkDecisions->previewBulkLegacy($request->user(), $request->only(['branch_id', 'project_id', 'before']))]);
+    }
+
+    public function storeBulkLegacy(Request $request): JsonResponse
+    {
+        abort_unless($request->user()->hasPermission('consumer_progress.manage'), 403);
+        $data = $request->validate(['reason' => ['required', 'string', 'max:2000'], 'branch_id' => ['nullable', 'integer']]);
+
+        return response()->json(['ok' => true, 'data' => $this->leadLinkDecisions->markBulkLegacy($request->user(), $data, $data['reason'])]);
     }
 
     public function storeLeadLinkDecision(StoreConsumerLeadLinkDecisionRequest $request, ?ConsumerApplication $consumerApplication = null): RedirectResponse|JsonResponse

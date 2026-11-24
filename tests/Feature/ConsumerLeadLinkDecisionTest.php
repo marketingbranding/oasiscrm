@@ -127,6 +127,37 @@ class ConsumerLeadLinkDecisionTest extends TestCase
         $this->actingAs($actor)->postJson(route('consumer-database.workspace.link-subject.lead-link-decision.store', ['subjectType' => 'sheet', 'subjectId' => $row->id]), ['status' => 'without_lead', 'reason' => 'uji'])->assertForbidden();
     }
 
+    public function test_br_bulk_legacy_http_normalizes_js_filter_types_between_preview_and_store(): void
+    {
+        [$branch, $project, $actor] = $this->bulkContext();
+        $actor->update(['role_id' => Role::query()->where('slug', 'superadmin')->value('id')]);
+        KonsumenProgressSheetRow::create(['branch_id' => $branch->id, 'sheet_id' => 'sheet', 'sheet_name' => 'data_konsumen', 'row_hash' => 'http-filter', 'row_data' => ['[SYS] ID Konsumen' => 'HTTP-FILTER', 'Tanggal' => '2025-01-01', 'Proyek' => $project->project_name]]);
+
+        $preview = $this->actingAs($actor)->getJson(route('consumer-database.workspace.bulk-legacy.preview', ['branch_id' => (string) $branch->id, 'project_id' => '', 'before' => '2026-01-01']))->assertOk()->json('data');
+
+        $this->actingAs($actor)->postJson(route('consumer-database.workspace.bulk-legacy.store'), ['reason' => 'Uji HTTP JS', 'token' => $preview['token'], 'branch_id' => (string) $branch->id, 'project_id' => null, 'before' => '2026-01-01'])->assertOk()->assertJsonPath('data.created', 1);
+    }
+
+    public function test_br_subject_endpoints_return_json_for_sheet_and_nup_and_index_uses_panel_button(): void
+    {
+        [$branch, $project, $actor] = $this->bulkContext();
+        $row = KonsumenProgressSheetRow::create(['branch_id' => $branch->id, 'sheet_id' => 'sheet', 'sheet_name' => 'data_konsumen', 'row_hash' => 'http-subject', 'row_data' => ['[SYS] ID Konsumen' => 'HTTP-SUBJECT', 'Proyek' => $project->project_name]]);
+        $nup = ConsumerNup::create(['customer_id' => ConsumerApplication::factory()->create(['branch_id' => $branch->id, 'project_id' => $project->id])->customer_id, 'branch_id' => $branch->id, 'project_id' => $project->id, 'nup_number' => 'NUP-HTTP', 'registered_at' => today(), 'status' => 'waiting']);
+
+        $this->actingAs($actor)->getJson(route('consumer-database.workspace.link-subject.show', ['subjectType' => 'sheet', 'subjectId' => $row->id]))->assertOk()->assertJsonPath('data.subject.subject_type', 'sheet');
+        $this->actingAs($actor)->getJson(route('consumer-database.workspace.link-subject.show', ['subjectType' => 'nup', 'subjectId' => $nup->id]))->assertOk()->assertJsonPath('data.subject.subject_type', 'nup');
+        $this->actingAs($actor)->get(route('consumer-database.workspace', ['branch_id' => $branch->id]))->assertOk()->assertSee('openSubject(')->assertDontSee('href="'.route('consumer-database.workspace.link-subject.show', ['subjectType' => 'sheet', 'subjectId' => $row->id]).'"');
+    }
+
+    public function test_br_bulk_legacy_excludes_converted_nup_from_http_preview(): void
+    {
+        [$branch, $project, $actor] = $this->bulkContext();
+        $actor->update(['role_id' => Role::query()->where('slug', 'superadmin')->value('id')]);
+        $application = ConsumerApplication::factory()->create(['branch_id' => $branch->id, 'project_id' => $project->id]);
+        ConsumerNup::create(['customer_id' => $application->customer_id, 'branch_id' => $branch->id, 'project_id' => $project->id, 'nup_number' => 'NUP-CONVERTED-HTTP', 'converted_application_id' => $application->id, 'registered_at' => today(), 'status' => 'converted']);
+        $this->actingAs($actor)->getJson(route('consumer-database.workspace.bulk-legacy.preview', ['branch_id' => $branch->id, 'project_id' => $project->id, 'before' => '2026-01-01']))->assertOk()->assertJsonPath('data.count', 0);
+    }
+
     public function test_br_bulk_legacy_rejects_changed_filter_after_valid_preview(): void
     {
         [$branch, $project, $actor] = $this->bulkContext();

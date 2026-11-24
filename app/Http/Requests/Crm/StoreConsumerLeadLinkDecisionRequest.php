@@ -48,7 +48,7 @@ class StoreConsumerLeadLinkDecisionRequest extends FormRequest
         $resolver = app(ConsumerLeadLinkSubjectResolver::class);
 
         return match ($type) {
-            'nup' => $resolver->fromNup(ConsumerNup::query()->findOrFail((int) $id)),
+            'nup' => $resolver->fromNup(ConsumerNup::query()->with('customer')->findOrFail((int) $id)),
             'sheet' => $resolver->fromSheetRow(KonsumenProgressSheetRow::query()->findOrFail((int) $id)),
             default => null,
         };

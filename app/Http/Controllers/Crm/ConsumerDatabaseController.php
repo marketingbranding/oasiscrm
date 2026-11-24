@@ -16,6 +16,7 @@ use App\Services\ConsumerDatabaseWorkspaceService;
 use App\Services\ConsumerEntryService;
 use App\Services\ConsumerLeadLinkDecisionService;
 use App\Services\ConsumerLeadLinkSubjectResolver;
+use App\Services\ConsumerLeadLinkSuggestionService;
 use App\Services\OrganizationScopeService;
 use App\Services\WorkspaceAccessService;
 use Illuminate\Http\JsonResponse;
@@ -31,6 +32,7 @@ final class ConsumerDatabaseController extends Controller
         private readonly ConsumerDatabaseWorkspaceService $workspace,
         private readonly ConsumerEntryService $entry,
         private readonly ConsumerLeadLinkDecisionService $leadLinkDecisions,
+        private readonly ConsumerLeadLinkSuggestionService $leadLinkSuggestions,
         private readonly OrganizationScopeService $organizationScope,
     ) {}
 
@@ -75,13 +77,17 @@ final class ConsumerDatabaseController extends Controller
     {
         $resolver = app(ConsumerLeadLinkSubjectResolver::class);
         $subject = match ($subjectType) {
-            'nup' => $resolver->fromNup(ConsumerNup::query()->findOrFail($subjectId)),
+            'nup' => $resolver->fromNup(ConsumerNup::query()->with('customer')->findOrFail($subjectId)),
             'sheet' => $resolver->fromSheetRow(KonsumenProgressSheetRow::query()->findOrFail($subjectId)),
             default => abort(404),
         };
-        abort_unless($request->user()->isAccountActive() && $this->organizationScope->allowsProjectRecord($request->user(), 'consumer_progress', 'view', $subject->branchId, $subject->projectId), 403);
+        abort_unless($request->user()->isAccountActive() && $request->user()->hasPermission('consumer_progress.view') && $this->organizationScope->allowsProjectRecord($request->user(), 'consumer_progress', 'view', $subject->branchId, $subject->projectId), 403);
+        $decisions = ConsumerLeadLinkDecision::query()->with('salesLead:id,customer_name')->where('subject_key', $subject->subjectKey())->latest('decided_at')->get();
+        $active = $decisions->firstWhere('is_active', true);
+        $suggestions = $this->leadLinkSuggestions->suggestSubject($subject, $request->user());
 
         return response()->json(['ok' => true, 'data' => ['subject' => [
+
             'subject_type' => $subject->subjectType,
             'subject_id' => $subject->subjectId ?? $subject->sheetRowId,
             'subject_key' => $subject->subjectKey(),
@@ -94,6 +100,10 @@ final class ConsumerDatabaseController extends Controller
             'legacy_consumer_key' => $subject->legacyConsumerKey,
             'decidable' => $subject->isDecidable,
             'note' => $subject->note,
+            'suggestions' => $suggestions->map(fn (array $item): array => ['lead_id' => $item['lead_id'], 'lead_name' => $item['lead']->customer_name, 'sales_name' => $item['lead']->sales?->name, 'score' => $item['score'], 'rationale' => $item['rationale']])->values()->all(),
+            'current' => $active ? ['id' => $active->id, 'status' => $active->status, 'sales_lead_id' => $active->sales_lead_id, 'lead_name' => $active->salesLead?->customer_name, 'reason' => $active->reason] : null,
+            'history' => $decisions->map(fn (ConsumerLeadLinkDecision $decision): array => ['id' => $decision->id, 'status' => $decision->status, 'sales_lead_id' => $decision->sales_lead_id, 'lead_name' => $decision->salesLead?->customer_name, 'reason' => $decision->reason, 'decided_at' => $decision->decided_at?->toIso8601String()])->values()->all(),
+            'allowed_actions' => ['can_decide' => $request->user()->hasPermission('consumer_progress.manage')],
         ]]]);
     }
 

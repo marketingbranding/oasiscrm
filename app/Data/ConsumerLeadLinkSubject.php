@@ -20,6 +20,7 @@ final readonly class ConsumerLeadLinkSubject
         public ?string $name,
         public ?string $phone,
         public ?int $salesUserId,
+        public ?string $kavling,
         public ?CarbonImmutable $enteredAt,
         public bool $isDecidable,
         public ?string $note = null,
@@ -53,6 +54,7 @@ final readonly class ConsumerLeadLinkSubject
             $application->customer?->name ?: $application->nama_konsumen,
             app(PhoneNormalizationService::class)->normalize($application->customer?->phone),
             $application->sales_user_id === null ? null : (int) $application->sales_user_id,
+            $application->kavling?->kavling_code ?: $application->kavling?->name ?: $application->id_kavling,
             self::date($application->booking_date ?? $application->historical_entered_at ?? $application->created_at),
             true,
         );
@@ -70,6 +72,7 @@ final readonly class ConsumerLeadLinkSubject
             $nup->customer?->name,
             app(PhoneNormalizationService::class)->normalize($nup->customer?->phone),
             isset($nup->metadata['sales_user_id']) ? (int) $nup->metadata['sales_user_id'] : null,
+            data_get($nup->metadata, 'kavling'),
             self::date($nup->registered_at),
             true,
         );
@@ -101,6 +104,7 @@ final readonly class ConsumerLeadLinkSubject
             $name,
             $phone,
             $salesUserId,
+            $data->get('kavling', $data->get('kav', null)) ?: null,
             $enteredAt,
             $key !== null,
             $key === null ? 'ID Konsumen kosong di sheet' : null,

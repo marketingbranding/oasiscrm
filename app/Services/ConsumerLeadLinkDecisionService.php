@@ -69,7 +69,8 @@ final class ConsumerLeadLinkDecisionService
         return DB::transaction(function () use ($actor, $filters, $reason, $preview): array {
             $subjects = $this->bulkLegacySubjects($actor, $filters, true, $preview['keys'] ?? []);
             $keys = $subjects->map(fn (ConsumerLeadLinkSubject $subject): string => $subject->subjectKey())->values()->all();
-            if ($keys !== ($preview['keys'] ?? [])) {
+            $previewKeys = $preview['keys'] ?? [];
+            if (array_diff($keys, $previewKeys) !== []) {
                 throw ValidationException::withMessages(['token' => 'Data berubah, pratinjau ulang.']);
             }
             $result = ['created' => 0, 'skipped' => 0, 'empty_id' => 0];
@@ -141,14 +142,9 @@ final class ConsumerLeadLinkDecisionService
             $data = collect($row->row_data ?? [])->mapWithKeys(fn ($value, $key): array => [strtolower(trim((string) $key)) => trim((string) $value)]);
 
             return $resolver->fromSheetRow($row, $maps['project_ids'][strtolower($data->get('proyek', $data->get('project', '')))] ?? null, $maps['sales_ids'][strtolower($data->get('sales', $data->get('nama sales', '')))] ?? null, false);
-        })->merge($nups->map(fn ($nup) => $resolver->fromNup($nup)))->filter(fn (ConsumerLeadLinkSubject $subject): bool => $subject->isDecidable && ($subject->enteredAt?->lt($before) ?? false))->filter(fn (ConsumerLeadLinkSubject $subject): bool => $expectedKeys !== [] || ! ConsumerLeadLinkDecision::query()->where('subject_key', $subject->subjectKey())->where('is_active', true)->exists())->sortBy(fn (ConsumerLeadLinkSubject $subject): string => $subject->subjectKey())->values();
+        })->merge($nups->map(fn ($nup) => $resolver->fromNup($nup)))->filter(fn (ConsumerLeadLinkSubject $subject): bool => $subject->isDecidable && ($subject->enteredAt?->lt($before) ?? false))->filter(fn (ConsumerLeadLinkSubject $subject): bool => ! ConsumerLeadLinkDecision::query()->where('subject_key', $subject->subjectKey())->where('is_active', true)->exists())->sortBy(fn (ConsumerLeadLinkSubject $subject): string => $subject->subjectKey())->values();
 
         if ($expectedKeys !== []) {
-            $unexpected = $subjects->filter(fn (ConsumerLeadLinkSubject $subject): bool => ! in_array($subject->subjectKey(), $expectedKeys, true));
-            if ($unexpected->isNotEmpty()) {
-                return $subjects;
-            }
-
             $subjects = $subjects->filter(fn (ConsumerLeadLinkSubject $subject): bool => in_array($subject->subjectKey(), $expectedKeys, true))->values();
         }
 

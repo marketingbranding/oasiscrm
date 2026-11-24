@@ -532,6 +532,32 @@ class ConsumerLeadLinkDecisionTest extends TestCase
         return $request;
     }
 
+    public function test_br_bulk_legacy_skips_subject_decided_after_preview_and_marks_remaining_subjects(): void
+    {
+        [$branch, $project, $actor] = $this->bulkContext();
+        for ($index = 1; $index <= 7; $index++) {
+            KonsumenProgressSheetRow::create([
+                'branch_id' => $branch->id,
+                'sheet_id' => 'sheet',
+                'sheet_name' => 'data_konsumen',
+                'row_hash' => 'bulk-'.$index,
+                'row_data' => ['[SYS] ID Konsumen' => 'BULK-'.$index, 'Nama Konsumen' => 'Bulk '.$index, 'Tanggal' => '2025-01-01', 'Proyek' => $project->project_name],
+            ]);
+        }
+
+        $service = app(ConsumerLeadLinkDecisionService::class);
+        $preview = $service->previewBulkLegacy($actor, ['branch_id' => $branch->id, 'project_id' => $project->id, 'before' => '2026-01-01']);
+        $row = KonsumenProgressSheetRow::query()->where('row_hash', 'bulk-1')->firstOrFail();
+        $subject = app(ConsumerLeadLinkSubjectResolver::class)->fromSheetRow($row, $project->id, null, false);
+        $service->decideForSubject($subject, ConsumerLeadLinkDecision::STATUS_WITHOUT_LEAD, null, ['reason' => 'Sudah diputuskan'], $actor);
+
+        $result = $service->markBulkLegacy($actor, ['branch_id' => $branch->id, 'project_id' => $project->id, 'before' => '2026-01-01', 'token' => $preview['token']], 'Data lama');
+
+        $this->assertSame(6, $result['created']);
+        $this->assertSame(0, $result['skipped']);
+        $this->assertDatabaseCount('consumer_lead_link_decisions', 7);
+    }
+
     public function test_br_bulk_legacy_marks_only_subjects_before_date(): void
     {
         [$branch, $project, $actor] = $this->bulkContext();

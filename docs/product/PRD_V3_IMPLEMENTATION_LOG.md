@@ -56,6 +56,7 @@ PRD sumber kebenaran: `docs/product/PRD_OASIS_CRM_V3.md` versi 3.3 (D30–D33)
 | WP-2.7 | 2 | Penutup Fase 2: changelog, dokumentasi, verifikasi penuh | Belum mulai; dikerjakan setelah WP-2.8 lalu WP-2.9 | Semua fase 2 |
 | WP-2.8 | 2 | Riwayat Tim: gabungan perubahan Lead dan agenda seluruh turunan | Merged ke fase-2 pada `395fcad` melalui merge `--no-ff`; review scope dan batas 92 hari selesai | BR-50–BR-52 |
 | WP-2.9 | 2 | Penautan Lead ↔ Konsumen | Merged ke fase-2 pada `dea710e` melalui merge `--no-ff`; review diterima, kandidat HP diprioritaskan, cakupan Sheet dicatat. | BR terkait penautan Lead ↔ Konsumen |
+| WP-2.9b | 2 | Penautan Lead untuk cermin Sheet dan NUP | Berjalan; Paket A subject adapter dimulai sebelum WP-2.7. | BR terkait penautan Lead ↔ Konsumen |
 | WP-3.1 | 3 | WhatsApp satu nomor | Belum mulai | BR-60–BR-64 |
 | WP-3.2 | 3 | Asisten AI per peran | Belum mulai | BR-70–BR-72 |
 | WP-3.3 | 3 | Push PWA dan preferensi notifikasi | Belum mulai | §7.11 |

@@ -6,6 +6,7 @@ use App\Models\ActivityLog;
 use App\Models\Branch;
 use App\Models\ConsumerApplication;
 use App\Models\ConsumerBankProcess;
+use App\Models\ConsumerLeadLinkDecision;
 use App\Models\ConsumerNup;
 use App\Models\ConsumerStageEvent;
 use App\Models\Customer;
@@ -25,6 +26,7 @@ final class ConsumerDatabaseWorkspaceService
         private readonly WorkspaceAccessService $workspaceAccess,
         private readonly BranchMigrationStateService $migrationStates,
         private readonly KonsumenPipelineService $pipeline,
+        private readonly ConsumerLeadLinkSuggestionService $leadLinkSuggestions,
     ) {}
 
     /** @return array<string, mixed> */
@@ -112,6 +114,10 @@ final class ConsumerDatabaseWorkspaceService
             'warranties:id,consumer_application_id,consumer_bast_record_id,status_komplain,tanggal_selesai,status_garansi,detail_garansi',
             'issues:id,consumer_application_id,process_key,category,description,status,opened_at,resolution,resolved_at,pic_user_id',
             'processApplicabilities:id,consumer_application_id,process_key,applicability,reason',
+            'linkDecisions' => fn ($query) => $query
+                ->with(['salesLead:id,customer_name,sales_user_id', 'decidedBy:id,name'])
+                ->latest('decided_at')
+                ->latest('id'),
         ]);
 
         $stageLabels = [
@@ -124,6 +130,11 @@ final class ConsumerDatabaseWorkspaceService
         $ppjbByEvent = $application->ppjbDevelopers->keyBy('consumer_stage_event_id');
         $akadByEvent = $application->akadRecords->keyBy('consumer_stage_event_id');
         $bastByEvent = $application->bastRecords->keyBy('consumer_stage_event_id');
+        $linkDecisionAudits = ActivityLog::query()
+            ->where('subject_type', ConsumerApplication::class)
+            ->where('subject_id', $application->id)
+            ->where('event', 'consumer_lead_link_decision_confirmed')
+            ->get(['properties']);
         $activities = ActivityLog::query()
             ->with('causer:id,name')
             ->where('subject_type', ConsumerApplication::class)
@@ -141,8 +152,47 @@ final class ConsumerDatabaseWorkspaceService
             ->values()
             ->all();
 
+        $leadLinkDecisions = $application->linkDecisions;
+        $activeLeadLinkDecision = $leadLinkDecisions->firstWhere('is_active', true);
+        $leadLinkHistory = $leadLinkDecisions->map(function (ConsumerLeadLinkDecision $decision) use ($linkDecisionAudits): array {
+            $audit = $linkDecisionAudits->first(fn (ActivityLog $activity): bool => (int) data_get($activity->properties, 'decision_id') === (int) $decision->id);
+
+            return [
+                'id' => $decision->id,
+                'status' => $decision->status,
+                'sales_lead_id' => $decision->sales_lead_id,
+                'lead_name' => $decision->salesLead?->customer_name,
+                'reason' => $decision->reason,
+                'legacy_anchor' => data_get($audit?->properties, 'legacy_anchor'),
+                'decided_by' => $decision->decidedBy?->name,
+                'decided_at' => $decision->decided_at?->toIso8601String(),
+                'is_active' => (bool) $decision->is_active,
+            ];
+        })->values()->all();
+
         return [
             'can_input' => $this->migrationStates->allowsOasisConsumerInput((int) $application->branch_id),
+            'lead_link' => [
+                'consumer' => [
+                    'id' => $application->id,
+                    'id_transaksi' => $application->id_transaksi,
+                    'customer_name' => $application->customer?->name,
+                    'project' => $application->project?->project_name,
+                    'branch' => $application->branch?->name,
+                ],
+                'suggestions' => $this->leadLinkSuggestions->suggest($application, $user, 10)->map(fn (array $suggestion): array => [
+                    'lead_id' => $suggestion['lead_id'],
+                    'lead_name' => $suggestion['lead']->customer_name,
+                    'sales_name' => $suggestion['lead']->sales?->name,
+                    'score' => $suggestion['score'],
+                    'rationale' => $suggestion['rationale'],
+                ])->values()->all(),
+                'current' => $activeLeadLinkDecision ? $leadLinkHistory[array_search($activeLeadLinkDecision->id, array_column($leadLinkHistory, 'id'), true)] : null,
+                'history' => $leadLinkHistory,
+                'allowed_actions' => [
+                    'can_decide' => $this->canManageApplication($user, $application) && $this->migrationStates->allowsOasisConsumerInput((int) $application->branch_id),
+                ],
+            ],
             'overview' => [
                 'id' => $application->id,
                 'id_transaksi' => $application->id_transaksi,
@@ -445,12 +495,27 @@ final class ConsumerDatabaseWorkspaceService
 
     private function canViewApplication(User $user, ConsumerApplication $application): bool
     {
-        $action = $user->hasPermission('consumer_progress.manage') ? 'manage' : 'view';
+        $action = $this->canManageApplication($user, $application) ? 'manage' : 'view';
 
         return $this->organizationScope->allowsProjectRecord(
             $user,
             'consumer_progress',
             $action,
+            (int) $application->branch_id,
+            $application->project_id,
+        );
+    }
+
+    private function canManageApplication(User $user, ConsumerApplication $application): bool
+    {
+        if (! $user->hasPermission('consumer_progress.manage') && ! $user->hasScopedPermission('consumer_progress', 'manage')) {
+            return false;
+        }
+
+        return $this->organizationScope->allowsProjectRecord(
+            $user,
+            'consumer_progress',
+            'manage',
             (int) $application->branch_id,
             $application->project_id,
         );

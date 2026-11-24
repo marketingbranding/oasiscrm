@@ -10,6 +10,8 @@ use Illuminate\Support\Str;
 
 final class ConsumerLeadLinkSuggestionService
 {
+    private const MIN_NAME_SIMILARITY = 0.5;
+
     public function __construct(
         private readonly OrganizationScopeService $organizationScope,
         private readonly WorkspaceAccessService $workspaceAccess,
@@ -18,7 +20,7 @@ final class ConsumerLeadLinkSuggestionService
 
     public function suggest(ConsumerApplication $consumer, User $viewer, int $limit = 10): Collection
     {
-        if (! $viewer->isAccountActive() || ! $viewer->is_active) {
+        if (! $this->isFullyAuthorized($viewer)) {
             return collect();
         }
 
@@ -59,6 +61,7 @@ final class ConsumerLeadLinkSuggestionService
             ->whereIn('project_id', $projectIds)
             ->whereIn('sales_user_id', $salesUserIds)
             ->with(['sales:id,name', 'branch:id,name', 'project:id,project_name'])
+            ->orderBy('id')
             ->get()
             ->map(fn (SalesLead $lead): ?array => $this->score(
                 $lead,
@@ -69,7 +72,10 @@ final class ConsumerLeadLinkSuggestionService
                 $consumer->sales_user_id,
             ))
             ->filter()
-            ->sortByDesc(fn (array $suggestion): float => $suggestion['score'])
+            ->sortBy([
+                ['score', 'desc'],
+                ['lead_id', 'asc'],
+            ])
             ->take($limit)
             ->values();
     }
@@ -79,13 +85,17 @@ final class ConsumerLeadLinkSuggestionService
     {
         $leadName = $this->normalizedName($lead->customer_name);
         $nameSimilarity = $this->nameSimilarity($consumerName, $leadName);
-        $leadPhone = $this->phones->normalize($lead->phone) ?? $lead->normalized_phone;
+        $leadPhone = $this->phones->normalize($lead->phone)
+            ?? $this->phones->normalize($lead->normalized_phone);
         $phoneMatch = $consumerPhone !== null && $leadPhone !== null && $consumerPhone === $leadPhone;
         $sameProject = $consumerProjectId !== null && (int) $lead->project_id === $consumerProjectId;
         $sameSales = $consumerSalesId !== null && (int) $lead->sales_user_id === $consumerSalesId;
         $chronological = $consumerDate === null || $lead->lead_date === null || $lead->lead_date->startOfDay()->lte($consumerDate);
 
-        if (! $phoneMatch && $nameSimilarity === 0.0 && ! $sameProject && ! $sameSales) {
+        if (! $phoneMatch
+            && $nameSimilarity < self::MIN_NAME_SIMILARITY
+            && ! $sameProject
+            && ! $sameSales) {
             return null;
         }
 
@@ -116,6 +126,15 @@ final class ConsumerLeadLinkSuggestionService
         similar_text($left, $right, $percentage);
 
         return min(1.0, max(0.0, $percentage / 100));
+    }
+
+    private function isFullyAuthorized(User $viewer): bool
+    {
+        return $viewer->isAccountActive()
+            && $viewer->is_active
+            && $viewer->hasVerifiedEmail()
+            && ! $viewer->must_change_password
+            && $viewer->password_changed_at !== null;
     }
 
     private function normalizedName(?string $name): string

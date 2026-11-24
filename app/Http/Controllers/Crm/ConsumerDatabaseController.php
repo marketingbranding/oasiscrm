@@ -4,9 +4,12 @@ namespace App\Http\Controllers\Crm;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\ConsumerEntryRequest;
+use App\Http\Requests\Crm\StoreConsumerLeadLinkDecisionRequest;
 use App\Models\ConsumerApplication;
+use App\Models\SalesLead;
 use App\Services\ConsumerDatabaseWorkspaceService;
 use App\Services\ConsumerEntryService;
+use App\Services\ConsumerLeadLinkDecisionService;
 use App\Services\WorkspaceAccessService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -18,6 +21,7 @@ final class ConsumerDatabaseController extends Controller
     public function __construct(
         private readonly ConsumerDatabaseWorkspaceService $workspace,
         private readonly ConsumerEntryService $entry,
+        private readonly ConsumerLeadLinkDecisionService $leadLinkDecisions,
     ) {}
 
     public function index(Request $request): View
@@ -55,5 +59,31 @@ final class ConsumerDatabaseController extends Controller
             'ok' => true,
             'data' => $detail,
         ]);
+    }
+
+    public function storeLeadLinkDecision(StoreConsumerLeadLinkDecisionRequest $request, ConsumerApplication $consumerApplication): RedirectResponse|JsonResponse
+    {
+        $validated = $request->validated();
+        $lead = isset($validated['sales_lead_id']) ? SalesLead::query()->findOrFail($validated['sales_lead_id']) : null;
+        $decision = $this->leadLinkDecisions->decide(
+            $consumerApplication,
+            $validated['status'],
+            $lead,
+            $validated,
+            $request->user(),
+        );
+
+        if ($request->expectsJson()) {
+            return response()->json([
+                'ok' => true,
+                'message' => 'Keputusan penautan Lead berhasil disimpan.',
+                'data' => [
+                    'id' => $decision->id,
+                    'status' => $decision->status,
+                ],
+            ]);
+        }
+
+        return back()->with('success', 'Keputusan penautan Lead berhasil disimpan.');
     }
 }

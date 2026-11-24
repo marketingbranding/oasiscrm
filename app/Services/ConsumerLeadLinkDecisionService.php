@@ -3,6 +3,8 @@
 namespace App\Services;
 
 use App\Models\ActivityLog;
+use App\Models\Branch;
+use App\Models\BranchMigrationState;
 use App\Models\ConsumerApplication;
 use App\Models\ConsumerLeadLinkDecision;
 use App\Models\SalesLead;
@@ -18,6 +20,18 @@ final class ConsumerLeadLinkDecisionService
         private readonly BranchMigrationStateService $branchMigrationState,
     ) {}
 
+    private const MAX_REASON_LENGTH = 2000;
+
+    private const MAX_SUGGESTION_COUNT = 20;
+
+    private const MAX_RATIONALE_KEYS = 12;
+
+    private const MAX_RATIONALE_KEY_LENGTH = 64;
+
+    private const MAX_RATIONALE_VALUE_LENGTH = 200;
+
+    private const SAFE_REASON_PATTERN = '/^[\\p{L}\\p{N}\\s.,:;!?()\\[\\]\\/_+%\'-]+$/u';
+
     public function decide(
         ConsumerApplication $consumer,
         string $status,
@@ -27,15 +41,21 @@ final class ConsumerLeadLinkDecisionService
     ): ConsumerLeadLinkDecision {
         $status = trim($status);
         $this->validateStatus($status);
-        $this->branchMigrationState->assertOasisConsumerInputAllowed((int) $consumer->branch_id);
-        $this->authorize($actor, $consumer);
+        $this->validateLeadArgument($lead, $status);
         $reason = $this->assertReason($attributes, $status);
         $legacyAnchor = $this->legacyAnchor($attributes, $status);
         $suggestions = $this->safeSuggestions($attributes['suggestions'] ?? null);
 
         return DB::transaction(function () use ($consumer, $status, $lead, $actor, $reason, $legacyAnchor, $suggestions): ConsumerLeadLinkDecision {
             $lockedConsumer = ConsumerApplication::query()->lockForUpdate()->findOrFail($consumer->id);
+            Branch::query()->whereKey($lockedConsumer->branch_id)->lockForUpdate()->firstOrFail();
+            BranchMigrationState::query()
+                ->where('branch_id', $lockedConsumer->branch_id)
+                ->lockForUpdate()
+                ->first();
+            $this->branchMigrationState->assertOasisConsumerInputAllowed((int) $lockedConsumer->branch_id);
             $this->authorize($actor, $lockedConsumer);
+            $this->assertSuggestionScope($actor, $lockedConsumer, $suggestions);
 
             $lockedLead = null;
             if ($status === ConsumerLeadLinkDecision::STATUS_LINKED) {
@@ -57,6 +77,11 @@ final class ConsumerLeadLinkDecisionService
                 ->first();
 
             if ($active !== null && $this->isSameDecision($active, $status, $lockedLead?->id, $reason, $legacyAnchor)) {
+                $expectedSalesLeadId = $lockedLead?->id;
+                if ((int) ($lockedConsumer->sales_lead_id ?? 0) !== (int) ($expectedSalesLeadId ?? 0)) {
+                    $lockedConsumer->update(['sales_lead_id' => $expectedSalesLeadId]);
+                }
+
                 return $active->fresh(['consumerApplication', 'salesLead', 'decidedBy']);
             }
 
@@ -86,6 +111,17 @@ final class ConsumerLeadLinkDecisionService
         });
     }
 
+    private function validateLeadArgument(?SalesLead $lead, string $status): void
+    {
+        if ($status === ConsumerLeadLinkDecision::STATUS_LINKED && ! $lead instanceof SalesLead) {
+            throw ValidationException::withMessages(['sales_lead_id' => 'Lead wajib dipilih untuk keputusan Lead.']);
+        }
+
+        if ($status !== ConsumerLeadLinkDecision::STATUS_LINKED && $lead instanceof SalesLead) {
+            throw ValidationException::withMessages(['sales_lead_id' => 'Lead tidak boleh dikirim untuk keputusan ini.']);
+        }
+    }
+
     private function authorize(User $actor, ConsumerApplication $consumer): void
     {
         if (! $actor->isAccountActive()
@@ -113,6 +149,22 @@ final class ConsumerLeadLinkDecisionService
     {
         if (! in_array($status, ConsumerLeadLinkDecision::STATUSES, true)) {
             throw ValidationException::withMessages(['status' => 'Status keputusan penautan Lead tidak valid.']);
+        }
+    }
+
+    private function assertSuggestionScope(User $actor, ConsumerApplication $consumer, ?array $suggestions): void
+    {
+        foreach ($suggestions ?? [] as $suggestion) {
+            if (! isset($suggestion['lead_id'])) {
+                continue;
+            }
+
+            $lead = SalesLead::query()->find($suggestion['lead_id']);
+            if (! $lead instanceof SalesLead) {
+                throw ValidationException::withMessages(['suggestions' => 'Lead pada snapshot saran tidak ditemukan.']);
+            }
+
+            $this->assertLinkedLeadScope($actor, $consumer, $lead);
         }
     }
 
@@ -150,14 +202,23 @@ final class ConsumerLeadLinkDecisionService
 
     private function assertReason(array $attributes, string $status): ?string
     {
-        $reason = trim((string) ($attributes['reason'] ?? ''));
+        $rawReason = $attributes['reason'] ?? null;
+        if ($rawReason !== null && ! is_string($rawReason)) {
+            throw ValidationException::withMessages(['reason' => 'Alasan harus berupa teks.']);
+        }
+
+        $reason = trim($rawReason ?? '');
         if (in_array($status, [ConsumerLeadLinkDecision::STATUS_WITHOUT_LEAD, ConsumerLeadLinkDecision::STATUS_LEGACY], true)
             && $reason === '') {
             throw ValidationException::withMessages(['reason' => 'Alasan wajib diisi untuk keputusan tanpa Lead.']);
         }
 
-        if (mb_strlen($reason) > 2000) {
+        if (mb_strlen($reason) > self::MAX_REASON_LENGTH) {
             throw ValidationException::withMessages(['reason' => 'Alasan maksimal 2000 karakter.']);
+        }
+
+        if ($reason !== '' && preg_match(self::SAFE_REASON_PATTERN, $reason) !== 1) {
+            throw ValidationException::withMessages(['reason' => 'Alasan memuat karakter yang tidak didukung.']);
         }
 
         return $reason === '' ? null : $reason;
@@ -165,8 +226,16 @@ final class ConsumerLeadLinkDecisionService
 
     private function legacyAnchor(array $attributes, string $status): ?string
     {
-        $anchor = trim((string) ($attributes['legacy_anchor'] ?? ''));
+        $rawAnchor = $attributes['legacy_anchor'] ?? null;
+        if ($rawAnchor !== null && ! is_string($rawAnchor)) {
+            throw ValidationException::withMessages(['legacy_anchor' => 'Jangkar Data Lama tidak valid.']);
+        }
+
+        $anchor = trim($rawAnchor ?? '');
         $allowed = ['[SYS] ID Konsumen', 'ID Konsumen Awal'];
+        if ($status !== ConsumerLeadLinkDecision::STATUS_LEGACY && $anchor !== '') {
+            throw ValidationException::withMessages(['legacy_anchor' => 'Jangkar Data Lama hanya boleh untuk keputusan Data Lama.']);
+        }
         if ($status === ConsumerLeadLinkDecision::STATUS_LEGACY && ! in_array($anchor, $allowed, true)) {
             throw ValidationException::withMessages(['legacy_anchor' => 'Jangkar Data Lama harus [SYS] ID Konsumen atau ID Konsumen Awal.']);
         }
@@ -179,8 +248,8 @@ final class ConsumerLeadLinkDecisionService
         if ($suggestions === null) {
             return null;
         }
-        if (! is_array($suggestions) || ! array_is_list($suggestions)) {
-            throw ValidationException::withMessages(['suggestions' => 'Snapshot saran tidak valid.']);
+        if (! is_array($suggestions) || ! array_is_list($suggestions) || count($suggestions) > self::MAX_SUGGESTION_COUNT) {
+            throw ValidationException::withMessages(['suggestions' => 'Snapshot saran tidak valid atau terlalu besar.']);
         }
 
         return collect($suggestions)->map(function (mixed $suggestion): array {
@@ -202,11 +271,14 @@ final class ConsumerLeadLinkDecisionService
                 $snapshot['score'] = (float) $suggestion['score'];
             }
             if (isset($suggestion['rationale'])) {
-                if (! is_array($suggestion['rationale'])) {
-                    throw ValidationException::withMessages(['suggestions' => 'Alasan snapshot saran tidak valid.']);
+                if (! is_array($suggestion['rationale']) || count($suggestion['rationale']) > self::MAX_RATIONALE_KEYS) {
+                    throw ValidationException::withMessages(['suggestions' => 'Alasan snapshot saran tidak valid atau terlalu besar.']);
                 }
                 $snapshot['rationale'] = collect($suggestion['rationale'])->mapWithKeys(function (mixed $value, mixed $key): array {
-                    if (! is_string($key) || mb_strlen($key) > 64 || (! is_scalar($value) && $value !== null)) {
+                    if (! is_string($key)
+                        || mb_strlen($key) > self::MAX_RATIONALE_KEY_LENGTH
+                        || (! is_scalar($value) && $value !== null)
+                        || ($value !== null && mb_strlen((string) $value) > self::MAX_RATIONALE_VALUE_LENGTH)) {
                         throw ValidationException::withMessages(['suggestions' => 'Snapshot saran memuat data tidak aman.']);
                     }
 
@@ -215,7 +287,7 @@ final class ConsumerLeadLinkDecisionService
             }
 
             return $snapshot;
-        })->take(20)->values()->all();
+        })->values()->all();
     }
 
     private function isSameDecision(
@@ -263,7 +335,7 @@ final class ConsumerLeadLinkDecisionService
                 'previous_decision_id' => $previous?->id,
                 'status' => $decision->status,
                 'sales_lead_id' => $decision->sales_lead_id,
-                'reason' => $decision->reason,
+                'reason_present' => $decision->reason !== null,
                 'legacy_anchor' => $legacyAnchor,
                 'decision_source' => $decision->decision_source,
                 'actor_id' => $actor->id,

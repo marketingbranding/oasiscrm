@@ -8,6 +8,10 @@ export default function registerConsumerWorkspace(Alpine) {
         detail: null,
         recordId: null,
         activeTab: 'overview',
+        leadLink: { status: 'linked', sales_lead_id: '', reason: '', legacy_anchor: '' },
+        leadLinkSaving: false,
+        leadLinkError: '',
+        leadLinkSuccess: '',
         trigger: null,
         controller: null,
         lockOwner: 'consumer-workspace-drawer',
@@ -35,6 +39,7 @@ export default function registerConsumerWorkspace(Alpine) {
                     throw new Error(response.status === 403 ? 'Kamu tidak memiliki akses ke data ini.' : 'Detail konsumen belum dapat dimuat.');
                 }
                 this.detail = payload.data;
+                this.syncLeadLinkForm();
             } catch (exception) {
                 if (exception.name !== 'AbortError') {
                     this.error = exception.message === 'Kamu tidak memiliki akses ke data ini.'
@@ -43,6 +48,54 @@ export default function registerConsumerWorkspace(Alpine) {
                 }
             } finally {
                 this.loading = false;
+            }
+        },
+
+        syncLeadLinkForm() {
+            const current = this.detail?.lead_link?.current;
+            this.leadLink = {
+                status: current?.status || 'linked',
+                sales_lead_id: current?.sales_lead_id ? String(current.sales_lead_id) : '',
+                reason: current?.reason || '',
+                legacy_anchor: current?.legacy_anchor || '',
+            };
+            this.leadLinkError = '';
+            this.leadLinkSuccess = '';
+        },
+
+        leadLinkStatusLabel(status) {
+            return { linked: 'Lead', without_lead: 'Tanpa Lead', legacy: 'Data Lama' }[status] || status || '—';
+        },
+
+        async submitLeadLinkDecision() {
+            if (this.leadLinkSaving) return;
+
+            this.leadLinkSaving = true;
+            this.leadLinkError = '';
+            this.leadLinkSuccess = '';
+            const body = { ...this.leadLink, suggestions: this.detail?.lead_link?.suggestions || [] };
+            if (body.sales_lead_id) body.sales_lead_id = Number(body.sales_lead_id);
+            if (body.status !== 'linked') delete body.sales_lead_id;
+            if (body.status !== 'legacy') delete body.legacy_anchor;
+
+            try {
+                const response = await fetch(config.leadLinkDecisionUrl.replace('__ID__', encodeURIComponent(this.recordId)), {
+                    method: 'POST',
+                    headers: { Accept: 'application/json', 'Content-Type': 'application/json', 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.content || '' },
+                    body: JSON.stringify(body),
+                });
+                const payload = await response.json().catch(() => ({}));
+                if (!response.ok) {
+                    const messages = Object.values(payload.errors || {}).flat();
+                    throw new Error(messages[0] || payload.message || 'Keputusan belum dapat disimpan.');
+                }
+                this.leadLinkSuccess = payload.message || 'Keputusan penautan Lead berhasil disimpan.';
+                await this.openDetail(this.recordId, this.trigger);
+                this.activeTab = 'lead_link';
+            } catch (exception) {
+                this.leadLinkError = exception.message;
+            } finally {
+                this.leadLinkSaving = false;
             }
         },
 

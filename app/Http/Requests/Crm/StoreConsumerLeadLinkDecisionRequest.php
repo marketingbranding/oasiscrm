@@ -4,6 +4,7 @@ namespace App\Http\Requests\Crm;
 
 use App\Models\ConsumerApplication;
 use App\Models\ConsumerLeadLinkDecision;
+use App\Services\BranchMigrationStateService;
 use App\Services\OrganizationScopeService;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
@@ -13,7 +14,7 @@ class StoreConsumerLeadLinkDecisionRequest extends FormRequest
     public function authorize(): bool
     {
         $user = $this->user();
-        $consumer = $this->route('consumer');
+        $consumer = $this->route('consumerApplication');
 
         if (! $user || ! $consumer instanceof ConsumerApplication) {
             return false;
@@ -31,7 +32,8 @@ class StoreConsumerLeadLinkDecisionRequest extends FormRequest
                 'manage',
                 (int) $consumer->branch_id,
                 $consumer->project_id,
-            );
+            )
+            && app(BranchMigrationStateService::class)->allowsOasisConsumerInput((int) $consumer->branch_id);
     }
 
     public function rules(): array
@@ -64,8 +66,8 @@ class StoreConsumerLeadLinkDecisionRequest extends FormRequest
             'suggestions.*' => ['array:lead_id,score,rationale'],
             'suggestions.*.lead_id' => ['nullable', 'integer', 'exists:sales_leads,id'],
             'suggestions.*.score' => ['nullable', 'numeric', 'between:0,1'],
-            'suggestions.*.rationale' => ['nullable', 'array'],
-            'suggestions.*.rationale.*' => ['nullable', 'scalar'],
+            'suggestions.*.rationale' => ['nullable', 'array', 'max:12'],
+            'suggestions.*.rationale.*' => ['nullable', 'scalar', 'max:200'],
             'decision_source' => ['prohibited'],
         ];
     }

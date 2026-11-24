@@ -10,10 +10,15 @@ use App\Models\Kavling;
 use App\Models\KonsumenProgressSheetRow;
 use App\Models\LeadMaster;
 use App\Models\Role;
+use App\Models\SalesLead;
 use App\Models\User;
 use App\Services\ConsumerIdentityBridgeAuditService;
+use App\Services\ConsumerLeadLinkSuggestionService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Str;
+use PhpOffice\PhpSpreadsheet\IOFactory;
+use PhpOffice\PhpSpreadsheet\Spreadsheet;
+use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
 use Tests\TestCase;
 
 class ConsumerIdentityBridgeAuditTest extends TestCase
@@ -187,6 +192,78 @@ class ConsumerIdentityBridgeAuditTest extends TestCase
         $this->assertSame(0, $audit['legacy']['total']);
         $this->assertStringNotContainsString('Hidden Consumer', $json);
         $this->assertStringNotContainsString('Ghost Consumer', $json);
+    }
+
+    public function test_br_wp29_workbook_copy_suggests_dummy_lead_without_auto_link_or_sheet_mutation(): void
+    {
+        [$branch, $project] = $this->context();
+        $kavling = Kavling::query()->where('project_id', $project->id)->firstOrFail();
+        $customer = Customer::create(['name' => 'Budi Workbook', 'phone' => '0812345678']);
+        $consumer = ConsumerApplication::create([
+            'customer_id' => $customer->id,
+            'branch_id' => $branch->id,
+            'project_id' => $project->id,
+            'kavling_id' => $kavling->id,
+            'application_status' => 'draft',
+        ]);
+        $viewer = User::factory()->create([
+            'role_id' => Role::query()->where('slug', 'superadmin')->value('id'),
+            'email_verified_at' => now(),
+            'password_changed_at' => now(),
+            'must_change_password' => false,
+        ]);
+        $lead = SalesLead::create([
+            'branch_id' => $branch->id,
+            'project_id' => $project->id,
+            'sales_user_id' => $viewer->id,
+            'lead_date' => '2026-11-10',
+            'customer_name' => 'Budi Workbook',
+            'phone' => '+62 812 3456 78',
+        ]);
+        $path = tempnam(sys_get_temp_dir(), 'wp29-workbook-copy-');
+        $this->assertNotFalse($path);
+
+        try {
+            $workbook = new Spreadsheet;
+            $sheet = $workbook->getActiveSheet()->setTitle('data_konsumen');
+            $sheet->fromArray([[
+                'project_name', 'id_kavling', 'nama_konsumen', 'no_hp', 'external_id',
+            ], [
+                $project->project_name, $kavling->kavling_code, 'Budi Workbook', '+62 812 3456 78', 'COPY-1',
+            ]]);
+            (new Xlsx($workbook))->save($path);
+            $workbook->disconnectWorksheets();
+
+            $sourceBefore = IOFactory::load($path);
+            $sheetBefore = $sourceBefore->getSheetByName('data_konsumen');
+            $sourceRows = $sheetBefore->toArray();
+            $sourceBefore->disconnectWorksheets();
+
+            $copy = IOFactory::load($path);
+            $row = $copy->getSheetByName('data_konsumen')->rangeToArray('A2:E2', null, true, false)[0];
+            $copy->disconnectWorksheets();
+            KonsumenProgressSheetRow::create([
+                'branch_id' => $branch->id,
+                'sheet_id' => $branch->sheet_id,
+                'sheet_name' => 'data_konsumen',
+                'row_hash' => 'workbook-copy-row',
+                'row_data' => array_combine(['project_name', 'id_kavling', 'nama_konsumen', 'no_hp', 'external_id'], $row),
+            ]);
+
+            $audit = app(ConsumerIdentityBridgeAuditService::class)->audit($branch, $project);
+            $suggestions = app(ConsumerLeadLinkSuggestionService::class)->suggest($consumer, $viewer);
+
+            $this->assertSame(1, $audit['legacy']['total']);
+            $this->assertSame($lead->id, $suggestions->first()['lead_id']);
+            $this->assertNull($consumer->fresh()->sales_lead_id);
+            $this->assertDatabaseCount('consumer_lead_link_decisions', 0);
+
+            $sourceAfter = IOFactory::load($path);
+            $this->assertSame($sourceRows, $sourceAfter->getSheetByName('data_konsumen')->toArray());
+            $sourceAfter->disconnectWorksheets();
+        } finally {
+            @unlink($path);
+        }
     }
 
     private function legacy(Branch $branch, array $data): void

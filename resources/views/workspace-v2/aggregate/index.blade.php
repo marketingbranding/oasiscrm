@@ -2,7 +2,7 @@
 @section('title', $title.' | Workspace OASIS')
 @section('content')
     @php($processLabels = ['data_konsumen' => 'Data Konsumen', 'proses_bank' => 'Proses Bank', 'sp3k' => 'Proses Bank', 'ppjb' => 'PPJB Dev', 'ppjb_dev' => 'PPJB Dev', 'bi_checking' => 'BI Checking', 'slik' => 'BI Checking'])
-    @include('workspace-v2.components.page-header, ['eyebrow' => 'PENJUALAN / AGGREGATE WORKSPACE', 'title' => $title, 'description' => match ($workspace) { 'mundur' => 'Transaksi dengan status Mundur, tetap merujuk pada transaksi canonical.', 'kendala' => 'Kendala lintas proses dalam area kerja Anda.', 'garansi' => 'Pekerjaan after-sales setelah BAST.', default => 'Transaksi yang sudah menyelesaikan lifecycle operasional.' }])
+    @include('workspace-v2.components.page-header', ['eyebrow' => 'PENJUALAN / AGGREGATE WORKSPACE', 'title' => $title, 'description' => match ($workspace) { 'mundur' => 'Transaksi dengan status Mundur, tetap merujuk pada transaksi canonical.', 'kendala' => 'Kendala lintas proses dalam area kerja Anda.', 'garansi' => 'Pekerjaan after-sales setelah BAST.', default => 'Transaksi yang sudah menyelesaikan lifecycle operasional.' }])
     <form method="GET" class="workspace-v2-toolbar"><label class="workspace-v2-search"><span>⌕</span><input type="search" name="search" placeholder="Cari nama atau ID transaksi..." aria-label="Cari data"></label><button class="workspace-v2-button workspace-v2-button--secondary">Cari</button></form>
     <section class="workspace-v2-table-panel">
         @if($records->count())

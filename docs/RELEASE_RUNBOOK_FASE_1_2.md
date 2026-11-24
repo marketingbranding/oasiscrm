@@ -14,9 +14,29 @@ Panduan operator. Agent tidak menjalankan cutover produksi.
 4. Backup database penuh, storage bukti, `.env` terenkripsi, dan konfigurasi web server. Uji restore pada lingkungan terpisah. Dump DB produksi tidak boleh dibagikan atau di-commit; hapus setelah gladi.
 5. Pastikan branch deploy bersih, migrasi direview, queue/worker siap, dan scheduler dipanggil tiap menit.
 
-## Gladi dry-run pada salinan DB produksi
+## Gladi migrasi dan dry-run pada salinan DB produksi
 
-Jalankan berurutan. Ganti `{cabang}` dengan ID atau kode cabang yang sedang diperiksa.
+Jalankan berurutan. Ganti `{cabang}` dengan ID atau kode cabang yang sedang diperiksa. Jangan menjalankan langkah gladi pada produksi.
+
+1. Restore dump produksi ke DB salinan. Arahkan `.env` salinan ke DB tersebut. Pastikan kredensial, URL, queue, mail, Google Sheets, gateway WhatsApp, AI, dan Web Push memakai endpoint aman untuk gladi atau mock; jangan mengarah ke layanan produksi.
+2. Jalankan query read-only berikut untuk mencari duplikat assignment kavling aktif/terjual:
+
+```sql
+SELECT
+    kavling_id,
+    COUNT(*) AS jumlah_assignment
+FROM consumer_kavling_assignments
+WHERE assignment_status IN ('active', 'sold')
+  AND released_at IS NULL
+GROUP BY kavling_id
+HAVING COUNT(*) > 1
+ORDER BY kavling_id;
+```
+
+   Jika hasil query berisi baris: **STOP**. Selesaikan duplikat melalui prosedur data yang disetujui; jangan mengubah migrasi untuk melewati pemeriksaan.
+3. Simpan output `php artisan migrate --pretend`.
+4. Jalankan `php artisan migrate` hanya pada DB salinan. Catat durasi tiap migrasi dan setiap error. Secara khusus catat jumlah baris serta waktu yang diproses oleh `2026_11_21_120000_backfill_sales_lead_stage_v3`; migrasi ini mengisi `lead_stage` NULL walau flag `lead_stages_v3` mati.
+5. Setelah migrasi salinan selesai, jalankan perintah pratinjau berikut:
 
 ```powershell
 php artisan organization:backfill --dry-run
@@ -33,7 +53,7 @@ php artisan consumer:parity-report {cabang} --xlsx
 
 `consumer-kavling:backfill preview` dan `dana-talangan:backfill-relations` tanpa `--apply` hanya pratinjau. Jangan memakai `execute`, `--apply`, `--confirm`, `--write`, atau opsi mutasi pada gladi.
 
-6. Tinjau seluruh output: paritas, assignment kavling, permission, konflik penautan, status migrasi, dan kasus perlu tinjau. Jangan lanjut jika hasil tidak jelas.
+6. Tinjau seluruh output: paritas, assignment kavling, permission, konflik penautan, status migrasi, jumlah backfill, durasi, dan kasus perlu tinjau. Jangan lanjut jika hasil tidak jelas.
 
 ## Rilis
 
@@ -43,6 +63,8 @@ php artisan consumer:parity-report {cabang} --xlsx
 4. Jalankan `php artisan optimize:clear`, lalu cache config/route/view sesuai prosedur hosting.
 5. Restart worker queue dan pastikan scheduler berjalan tiap menit.
 6. Biarkan flag tetap mati sampai smoke test dan approval pemilik produk selesai.
+
+Jika migrate produksi gagal di tengah: hentikan rilis dan jangan mengulangi migrate secara membabi buta; jangan rollback migrasi yang tidak reversibel atau migrasi yang sudah memiliki data produksi; pertahankan flag mati; simpan error, migrasi terakhir, dan durasi; hubungi rollback owner serta pemilik produk; restore backup tervalidasi bila ada kerusakan data; lalu reconcile queue, audit log, storage bukti, dan status sinkronisasi sebelum keputusan pemulihan.
 
 ## Pemeriksaan pasca-rilis
 

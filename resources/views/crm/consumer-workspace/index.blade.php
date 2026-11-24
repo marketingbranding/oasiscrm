@@ -16,6 +16,8 @@
         $workspaceConfig = [
             'detailUrl' => route('consumer-database.workspace.show', ['consumerApplication' => '__ID__']),
             'leadLinkDecisionUrl' => route('consumer-database.workspace.lead-link-decision.store', ['consumerApplication' => '__ID__']),
+             'bulkLegacyPreviewUrl' => route('consumer-database.workspace.bulk-legacy.preview'),
+             'bulkLegacyStoreUrl' => route('consumer-database.workspace.bulk-legacy.store'),
             'processUrls' => [
                 'slik' => route('consumer-process.slik', ['consumerApplication' => '__ID__']),
                 'psjb' => route('consumer-process.psjb', ['consumerApplication' => '__ID__']),
@@ -84,6 +86,18 @@
                         </tbody>
                     </table>
                 </div>
+            </section>
+        @endif
+
+        @if(auth()->user()->hasPermission('consumer_progress.manage'))
+            <section class="mb-4 flex flex-wrap items-end gap-2 border-2 border-black bg-[#fff8cf] p-3" aria-labelledby="bulk-legacy-title">
+                <h2 id="bulk-legacy-title" class="w-full font-bold">Data Lama</h2>
+                <button type="button" class="crm-button crm-button--secondary" x-on:click="previewBulkLegacy()">Pratinjau Data Lama</button>
+                <label for="bulk-legacy-reason" class="sr-only">Alasan Data Lama</label>
+                <input id="bulk-legacy-reason" type="text" class="crm-control" placeholder="Alasan wajib" x-model="bulkLegacyReason">
+                <button type="button" class="crm-button crm-button--danger" x-on:click="submitBulkLegacy(bulkLegacyReason)">Konfirmasi Data Lama</button>
+                <span class="text-sm text-red-700" x-text="bulkLegacyError"></span>
+                <a class="crm-button crm-button--secondary" href="{{ route('consumer-database.workspace.lead-link-conflicts') }}">Daftar konflik</a>
             </section>
         @endif
 

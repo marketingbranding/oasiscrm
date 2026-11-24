@@ -10,6 +10,9 @@ export default function registerConsumerWorkspace(Alpine) {
         activeTab: 'overview',
         leadLink: { status: 'linked', sales_lead_id: '', reason: '', legacy_anchor: '' },
         leadLinkSaving: false,
+        bulkLegacyResult: null,
+        bulkLegacyReason: '',
+        bulkLegacyError: '',
         leadLinkError: '',
         leadLinkSuccess: '',
         trigger: null,
@@ -49,6 +52,29 @@ export default function registerConsumerWorkspace(Alpine) {
             } finally {
                 this.loading = false;
             }
+        },
+
+        async previewBulkLegacy() {
+            this.bulkLegacyError = '';
+            try {
+                const response = await fetch(config.bulkLegacyPreviewUrl, { headers: { Accept: 'application/json' } });
+                const payload = await response.json();
+                if (!response.ok) throw new Error(payload.message || 'Pratinjau gagal.');
+                this.bulkLegacyResult = payload.data;
+            } catch (exception) {
+                this.bulkLegacyError = exception.message;
+            }
+        },
+
+        async submitBulkLegacy(reason) {
+            const response = await fetch(config.bulkLegacyStoreUrl, {
+                method: 'POST',
+                headers: { Accept: 'application/json', 'Content-Type': 'application/json', 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.content || '' },
+                body: JSON.stringify({ reason }),
+            });
+            const payload = await response.json();
+            if (!response.ok) throw new Error(payload.message || 'Data Lama belum dapat disimpan.');
+            this.bulkLegacyResult = payload.data;
         },
 
         syncLeadLinkForm() {

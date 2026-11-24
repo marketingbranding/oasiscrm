@@ -23,6 +23,7 @@ final class ConsumerDatabaseWorkspaceService
     public function __construct(
         private readonly OrganizationScopeService $organizationScope,
         private readonly WorkspaceAccessService $workspaceAccess,
+        private readonly BranchMigrationStateService $migrationStates,
         private readonly KonsumenPipelineService $pipeline,
     ) {}
 
@@ -141,6 +142,7 @@ final class ConsumerDatabaseWorkspaceService
             ->all();
 
         return [
+            'can_input' => $this->migrationStates->allowsOasisConsumerInput((int) $application->branch_id),
             'overview' => [
                 'id' => $application->id,
                 'id_transaksi' => $application->id_transaksi,
@@ -219,7 +221,7 @@ final class ConsumerDatabaseWorkspaceService
             'nup_history' => ConsumerNup::query()
                 ->where('customer_id', $application->customer_id)
                 ->where('branch_id', $application->branch_id)
-                ->with(['sourceApplication:id,id_transaksi,kavling_id,id_kavling,transaction_status', 'convertedApplication:id,id_transaksi,kavling_id,id_kavling,transaction_status', 'issue:id,description'])
+                ->with(['sourceApplication:id,id_transaksi,kavling_id,id_kavling,transaction_status', 'sourceApplication.kavling:id,project_id,name,kavling_code', 'convertedApplication:id,id_transaksi,kavling_id,id_kavling,transaction_status', 'convertedApplication.kavling:id,project_id,name,kavling_code', 'issue:id,description'])
                 ->orderBy('registered_at')
                 ->orderBy('id')
                 ->get()
@@ -230,7 +232,9 @@ final class ConsumerDatabaseWorkspaceService
                     'entry_type' => $nup->provenanceType(),
                     'reason' => $nup->notes ?: $nup->issue?->description,
                     'source_transaction' => $nup->sourceApplication?->id_transaksi,
+                    'source_kavling' => $nup->sourceApplication?->kavling?->kavling_code ?: $nup->sourceApplication?->kavling?->name ?: $nup->sourceApplication?->id_kavling,
                     'converted_transaction' => $nup->convertedApplication?->id_transaksi,
+                    'converted_kavling' => $nup->convertedApplication?->kavling?->kavling_code ?: $nup->convertedApplication?->kavling?->name ?: $nup->convertedApplication?->id_kavling,
                 ])->values()->all(),
         ];
     }

@@ -11,6 +11,7 @@ use App\Models\ConsumerWarranty;
 use App\Models\SalesLead;
 use App\Models\User;
 use App\Models\UserNotification;
+use App\Services\BranchMigrationStateService;
 use App\Services\ConsumerDatabaseWorkspaceService;
 use App\Services\ConsumerEntryService;
 use App\Services\ConsumerNupService;
@@ -63,6 +64,7 @@ final class WorkspaceController extends Controller
         private readonly ConsumerOperationalService $consumerOperations,
         private readonly ConsumerProcessService $consumerProcesses,
         private readonly ConsumerNupService $nups,
+        private readonly BranchMigrationStateService $migrationStates,
         private readonly OrganizationScopeService $organizationScope,
         private readonly WorkspaceAccessService $workspaceAccess,
     ) {}
@@ -126,9 +128,11 @@ final class WorkspaceController extends Controller
         $this->authorizeConsumerView($request->user());
 
         $detail = $this->consumerWorkspace->detail($request->user(), $consumerApplication);
+        $canInput = $this->migrationStates->allowsOasisConsumerInput((int) $consumerApplication->branch_id);
+        $detail['can_input'] = $canInput;
         $detail['actions'] = [
-            'return_to_nup' => route('consumer-nups.return', $consumerApplication),
-            'resolve_issue' => route('consumer-issues.resolve', ['consumerIssue' => '__ISSUE__']),
+            'return_to_nup' => $canInput ? route('consumer-nups.return', $consumerApplication) : null,
+            'resolve_issue' => $canInput ? route('consumer-issues.resolve', ['consumerIssue' => '__ISSUE__']) : null,
         ];
 
         return response()->json(['ok' => true, 'data' => $detail]);

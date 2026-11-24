@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\ActivityLog;
 use App\Models\Branch;
+use App\Models\BranchMigrationState;
 use App\Models\ConsumerApplication;
 use App\Models\ConsumerBankProcess;
 use App\Models\ConsumerNup;
@@ -125,7 +126,22 @@ class ConsumerDatabaseWorkspaceTest extends TestCase
             ->assertJsonPath('data.payment.0.no_sp3k', 'SP3K-TEST-001')
             ->assertJsonPath('data.counts.process', 1)
             ->assertJsonPath('data.counts.payment', 1)
-            ->assertJsonMissingPath('data.overview.nik');
+            ->assertJsonMissingPath('data.overview.nik')
+            ->assertJsonPath('data.can_input', false);
+    }
+
+    public function test_detail_exposes_can_input_false_for_sheet_branch(): void
+    {
+        [$user, $branch, $project] = $this->context();
+        $application = $this->application($branch, $project, 'Cabang Sheet', 'Lanjut');
+        BranchMigrationState::query()->create(['branch_id' => $branch->id, 'state' => BranchMigrationState::STATE_SHEET]);
+
+        $this->actingAs($user)
+            ->getJson(route('consumer-database.workspace.show', $application))
+            ->assertOk()
+            ->assertJsonPath('data.can_input', false)
+            ->assertJsonPath('data.actions.return_to_nup', null)
+            ->assertJsonPath('data.actions.resolve_issue', null);
     }
 
     public function test_detail_exposes_nup_history_for_returned_and_reconverted_transactions(): void
@@ -148,6 +164,8 @@ class ConsumerDatabaseWorkspaceTest extends TestCase
             ->assertJsonPath('data.nup_history.0.id', $returned->id)
             ->assertJsonPath('data.nup_history.0.source_transaction', $application->id_transaksi)
             ->assertJsonPath('data.nup_history.0.converted_transaction', $application->id_transaksi)
+            ->assertJsonPath('data.nup_history.0.source_kavling', null)
+            ->assertJsonPath('data.nup_history.0.converted_kavling', null)
             ->assertJsonPath('data.nup_history.0.reason', 'Kendala pembayaran');
     }
 

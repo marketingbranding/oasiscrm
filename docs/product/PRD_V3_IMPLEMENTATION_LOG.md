@@ -87,6 +87,14 @@ Komit dan push setelah setiap irisan selesai. Laporan wajib Bahasa Indonesia, me
 - Browser lengkap untuk saran/keputusan, Tanpa Lead, pratinjau/eksekusi bulk, dan konflik dipindah ke WP-2.7. Tidak dianggap sebagai bukti selesai WP-2.9b.
 - Carry-over teruji pada form entry, paste import, impor historis, rekonsiliasi migrasi, dan konversi NUP. Jalur paste import, impor historis, dan rekonsiliasi diperbaiki agar memanggil carry-over setelah identitas aplikasi tersedia.
 
+### WP-2.7 — Rencana verifikasi penutup Fase 2
+
+- Branch: `prd-v3/wp-2.7-penutup-fase-2`, dibuat dari fase-2 setelah merge WP-2.9b `15bdbde`.
+- Cakupan browser wajib: alih Lead/antrean tanpa pemilik, akses sementara, penanda perhatian, status migrasi/paritas/gerbang cutover, Dana Talangan, Kembali ke NUP/Selesaikan Kendala, Riwayat Tim, dan seluruh penautan Lead.
+- Uji visual memakai desktop sekitar 1440x900 dan HP sekitar 390x844. Jika screenshot tidak tersedia, bukti DOM/teks dan console menjadi bukti pengganti.
+- Flag default mati dan aktivasi operator: `org_hierarchical_monitoring`, `lead_stages_v3`, `transaction_events_v3`, `dana_talangan_primary_source`; agent tidak mengaktifkan flag atau cutover produksi.
+- Ditunda ke Fase 3: WhatsApp satu nomor, Asisten AI, Push PWA, kalender gabungan, dashboard pimpinan, dan cutover sumber utama per cabang. Pemetaan NUP lama serta cutover produksi tetap pekerjaan operator.
+
 | WP-3.1 | 3 | WhatsApp satu nomor | Belum mulai | BR-60–BR-64 |
 | WP-3.2 | 3 | Asisten AI per peran | Belum mulai | BR-70–BR-72 |
 | WP-3.3 | 3 | Push PWA dan preferensi notifikasi | Belum mulai | §7.11 |

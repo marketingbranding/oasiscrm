@@ -38,8 +38,10 @@ export default function registerDanaTalangan(Alpine) {
         },
 
         projectsFor(branchId, current = '') {
-            const projects = this.projectCatalog.filter(project => String(project.branch_id) === String(branchId || ''));
-            if (current && !projects.some(project => project.name === current)) {
+            const projects = this.projectCatalog
+                .filter(project => String(project.branch_id) === String(branchId || ''))
+                .filter((project, index, values) => values.findIndex(candidate => candidate.name.trim().toLowerCase() === project.name.trim().toLowerCase()) === index);
+            if (current && !projects.some(project => project.name.trim().toLowerCase() === current.trim().toLowerCase())) {
                 projects.push({ id: null, name: current, branch_id: branchId });
             }
 

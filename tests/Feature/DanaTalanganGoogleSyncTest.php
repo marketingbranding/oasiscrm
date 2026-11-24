@@ -109,6 +109,28 @@ class DanaTalanganGoogleSyncTest extends TestCase
         $this->assertNotNull($record->oasis_sync_id);
     }
 
+    public function test_bug10_dana_talangan_uses_consistent_ui_labels(): void
+    {
+        [$branch, $user] = $this->makeBranchAndUser();
+        LeadMaster::create(['branch_id' => $branch->id, 'project_name' => 'Proyek Label', 'is_active' => true]);
+
+        $response = $this->actingAs($user)->get(route('dana-talangan.index'));
+
+        $response->assertOk()->assertSee('Progress Penagihan')->assertSee('Konfirmasi Keuangan')->assertDontSee('> Konfirmasi</label>', false);
+    }
+
+    public function test_bug11_dana_project_dropdown_deduplicates_same_branch_names(): void
+    {
+        [$branch, $user] = $this->makeBranchAndUser();
+        LeadMaster::create(['branch_id' => $branch->id, 'project_name' => 'Proyek Kembar', 'is_active' => true]);
+        LeadMaster::create(['branch_id' => $branch->id, 'project_name' => ' proyek kembar ', 'is_active' => true]);
+
+        $response = $this->actingAs($user)->get(route('dana-talangan.index'));
+        $contents = $response->getContent();
+
+        $this->assertSame(2, substr_count($contents, 'Proyek Kembar'));
+    }
+
     public function test_branch_user_can_open_tracking_filters_and_modals(): void
     {
         [$branch, $user] = $this->makeBranchAndUser();

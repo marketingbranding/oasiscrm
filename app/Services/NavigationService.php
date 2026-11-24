@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\Promo;
 use App\Models\User;
+use App\Support\FeatureFlag;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Str;
 use LogicException;
@@ -35,7 +36,7 @@ class NavigationService
                 $user->hasScopedPermission('sales_pocketbook')
                     ? $this->item('Buku Saku Sales', 'sales-pocketbook.index', 'sales', 'sales', ['sales-pocketbook.*', 'sales-leads.*', 'sales-agendas.*', 'sales-reminders.*'], $routeName, 'sales_pocketbook', $moduleMaintenance)
                     : null,
-                ! $isSales && ($user->hasPermission('sales_pocketbook.view_team') || $user->hasPermission('sales_pocketbook.view_branch'))
+                ! $isSales && FeatureFlag::enabled('org_hierarchical_monitoring') && ($user->hasPermission('sales_pocketbook.view_team') || $user->hasPermission('sales_pocketbook.view_branch'))
                     ? $this->item('Riwayat Tim', 'team-history.index', 'history', 'sales', ['team-history.*'], $routeName, 'sales_pocketbook', $moduleMaintenance)
                     : null,
                 ! $isSales && ($user->isSuperadmin() || ($user->hasPrimaryRole('sales_coordinator') && $user->hasPermission('sales_pocketbook.manage_team')))

@@ -117,7 +117,7 @@ final class ConsumerDatabaseWorkspaceService
 
             return app(ConsumerLeadLinkSubjectResolver::class)->fromSheetRow($row, $maps['project_ids'][$projectName] ?? null, $maps['sales_ids'][$salesName] ?? null, false);
         })->filter(fn ($subject): bool => $subject->projectId !== null && in_array($subject->projectId, $scopedProjectIds, true) && ($branch === null || $subject->branchId === $branch->id) && ($project === null || $subject->projectId === $project->id));
-        $nupSubjects = ConsumerNup::query()->with('customer')->whereIn('branch_id', $branchIds)->when($branch, fn (Builder $query): Builder => $query->where('branch_id', $branch->id))->when($project, fn (Builder $query): Builder => $query->where('project_id', $project->id))->whereIn('project_id', $scopedProjectIds)->limit(250)->get()->map(fn (ConsumerNup $nup): array => $resolver->fromNup($nup));
+        $nupSubjects = ConsumerNup::query()->with('customer')->whereIn('branch_id', $branchIds)->when($branch, fn (Builder $query): Builder => $query->where('branch_id', $branch->id))->when($project, fn (Builder $query): Builder => $query->where('project_id', $project->id))->whereIn('project_id', $scopedProjectIds)->limit(250)->get()->map(fn (ConsumerNup $nup): ConsumerLeadLinkSubject => $resolver->fromNup($nup));
 
         return $sheetSubjects->merge($nupSubjects)->map(fn ($subject): array => [
             'source' => $subject->subjectType, 'subject_key' => $subject->subjectKey(), 'subject_id' => $subject->subjectId ?? $subject->sheetRowId, 'name' => $subject->name, 'project_id' => $subject->projectId, 'branch_id' => $subject->branchId, 'decidable' => $subject->isDecidable, 'note' => $subject->note,

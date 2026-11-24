@@ -119,6 +119,11 @@ class ConsumerApplication extends Model
         return $this->belongsTo(SalesLead::class);
     }
 
+    public function linkDecisions(): HasMany
+    {
+        return $this->hasMany(ConsumerLeadLinkDecision::class, 'consumer_application_id');
+    }
+
     public function sourceNup(): BelongsTo
     {
         return $this->belongsTo(ConsumerNup::class, 'source_nup_id');

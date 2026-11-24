@@ -2,7 +2,9 @@
 
 namespace App\Services;
 
+use App\Data\ConsumerLeadLinkSubject;
 use App\Models\ConsumerApplication;
+use App\Models\ConsumerLeadLinkDecision;
 use App\Models\SalesLead;
 use App\Models\User;
 use Illuminate\Support\Collection;
@@ -21,6 +23,40 @@ final class ConsumerLeadLinkSuggestionService
         private readonly WorkspaceAccessService $workspaceAccess,
         private readonly PhoneNormalizationService $phones,
     ) {}
+
+    public function suggestSubject(ConsumerLeadLinkSubject $subject, User $viewer, int $limit = 10): Collection
+    {
+        if (! $subject->isDecidable || ! $this->isFullyAuthorized($viewer) || $limit <= 0) {
+            return collect();
+        }
+
+        $salesUserIds = $this->organizationScope->visibleUserIds($viewer, 'sales_pocketbook', 'view', 'sales_leads');
+        if (! $this->organizationScope->allowsProjectRecord($viewer, 'consumer_progress', 'view', $subject->branchId, $subject->projectId) || $salesUserIds === []) {
+            return collect();
+        }
+
+        $name = $this->normalizedName($subject->name);
+        $phone = $subject->phone;
+        $query = SalesLead::query()
+            ->where('branch_id', $subject->branchId)
+            ->where('project_id', $subject->projectId)
+            ->whereIn('sales_user_id', $salesUserIds)
+            ->whereDoesntHave('linkDecisions', fn ($builder) => $builder->where('status', ConsumerLeadLinkDecision::STATUS_LINKED)->where('is_active', true));
+        $query->where(function ($builder) use ($phone, $name): void {
+            if ($phone !== null) {
+                $builder->where('normalized_phone', $phone);
+            }
+            foreach ($this->nameTokens($name) as $token) {
+                $builder->orWhere('customer_name', 'like', '%'.$token.'%');
+            }
+        });
+
+        return $query->with(['sales:id,name', 'branch:id,name', 'project:id,project_name'])
+            ->orderByRaw('normalized_phone = ? DESC', [$phone])
+            ->orderByDesc('id')->limit(self::MAX_CANDIDATES)->get()
+            ->map(fn (SalesLead $lead): ?array => $this->score($lead, $name, $phone, $subject->enteredAt, $subject->salesUserId))
+            ->filter()->sortBy([['score', 'desc'], ['lead_id', 'asc']])->take($limit)->values();
+    }
 
     public function suggest(ConsumerApplication $consumer, User $viewer, int $limit = 10): Collection
     {

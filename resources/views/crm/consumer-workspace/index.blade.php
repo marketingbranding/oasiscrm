@@ -8,6 +8,7 @@
             $showBranchFilter && $selectedBranch ? 'Cabang: '.$selectedBranch->name : null,
             $selectedProject ? 'Proyek: '.$selectedProject->project_name : null,
             $selectedStatus !== '' ? 'Status: '.$selectedStatus : null,
+            $selectedLinkStatus !== '' ? 'Penautan: '.($linkStatusOptions[$selectedLinkStatus] ?? $selectedLinkStatus) : null,
             $selectedStage !== '' ? 'Tahap: '.($stageOptions[$selectedStage] ?? $selectedStage) : null,
             $selectedSales ? 'Sales: '.($salesOptions->firstWhere('id', $selectedSales)?->name ?? $selectedSales) : null,
             $selectedBank !== '' ? 'Bank: '.$selectedBank : null,
@@ -16,6 +17,11 @@
         $workspaceConfig = [
             'detailUrl' => route('consumer-database.workspace.show', ['consumerApplication' => '__ID__']),
             'leadLinkDecisionUrl' => route('consumer-database.workspace.lead-link-decision.store', ['consumerApplication' => '__ID__']),
+             'bulkLegacyPreviewUrl' => route('consumer-database.workspace.bulk-legacy.preview'),
+             'bulkLegacyStoreUrl' => route('consumer-database.workspace.bulk-legacy.store'),
+             'bulkLegacyBranchId' => $selectedBranch?->id,
+             'bulkLegacyProjectId' => $selectedProject?->id,
+             'bulkLegacyBefore' => now()->toDateString(),
             'processUrls' => [
                 'slik' => route('consumer-process.slik', ['consumerApplication' => '__ID__']),
                 'psjb' => route('consumer-process.psjb', ['consumerApplication' => '__ID__']),
@@ -60,6 +66,96 @@
 
         <x-crm.page-presence page-key="consumer-database-workspace" :branch-id="$selectedBranch?->id" />
 
+        @if($linkSubjects->isNotEmpty())
+            <section class="mb-4 border-2 border-black bg-white p-3" aria-labelledby="lead-link-subjects-title">
+                <div class="flex flex-wrap items-center justify-between gap-2">
+                    <h2 id="lead-link-subjects-title" class="font-bold">Penautan Lead — Sheet dan NUP</h2>
+                    <span class="crm-type-label">{{ $linkSubjectPaginator->total() }} subjek</span>
+                </div>
+                <div class="mt-2 flex flex-wrap gap-2 text-xs">
+                    @foreach($linkStatusOptions as $value => $label)
+                        <a href="{{ request()->fullUrlWithQuery(['link_status' => $value, 'link_page' => 1]) }}" class="crm-filter-chip">{{ $label }}: {{ $linkSubjectTotals[$value] }}</a>
+                    @endforeach
+                </div>
+                <div class="mt-2 overflow-x-auto">
+                    <table class="crm-table min-w-full">
+                        <thead><tr><th>Sumber</th><th>Nama</th><th>Status data</th><th>Aksi</th></tr></thead>
+                        <tbody>
+                            @foreach($linkSubjects as $subject)
+                                <tr>
+                                    <td>{{ $subject['source'] === 'sheet' ? 'Sheet' : 'NUP' }}</td>
+                                    <td>{{ $subject['name'] ?: 'Tanpa nama' }}</td>
+                                    <td>{{ $subject['decidable'] ? 'Belum diputuskan' : ($subject['note'] ?: 'Tidak dapat diputuskan') }}</td>
+                                    <td>
+                                        @if($subject['decidable'])
+                                            <a class="font-bold text-[#0000ee] underline" href="{{ route('consumer-database.workspace.link-subject.show', ['subjectType' => $subject['source'], 'subjectId' => $subject['subject_id']]) }}">Buka</a>
+                                        @else
+                                            <span class="text-gray-600">ID kosong</span>
+                                        @endif
+                                    </td>
+                                </tr>
+                            @endforeach
+                        </tbody>
+                    </table>
+                </div>
+                @if($linkSubjectPaginator->hasPages())
+                    <div class="mt-3">{{ $linkSubjectPaginator->links() }}</div>
+                @endif
+            </section>
+        @endif
+
+        @if(auth()->user()->hasPermission('consumer_progress.manage') && $linkSubjects->isNotEmpty())
+            <section class="mb-4" aria-labelledby="bulk-legacy-title" x-data="{ bulkOpen: false }">
+                <button type="button" class="crm-button crm-button--secondary" x-on:click="bulkOpen = !bulkOpen" :aria-expanded="bulkOpen.toString()">Tandai Data Lama (massal)</button>
+                <div x-show="bulkOpen" x-cloak class="mt-3 border-2 border-black bg-[#fff8cf] p-3" role="region" aria-labelledby="bulk-legacy-title">
+                    <h2 id="bulk-legacy-title" class="font-sans font-bold">Tandai Data Lama</h2>
+                    <div class="mt-3 grid gap-3 sm:grid-cols-2">
+                        <div>
+                            <label for="bulk-legacy-branch" class="crm-type-label font-sans">Cabang <span aria-hidden="true">*</span></label>
+                            <select id="bulk-legacy-branch" class="crm-control font-sans" x-model="bulkLegacyBranchId" required>
+                                <option value="">Pilih cabang</option>
+                                @foreach($branches as $branch)
+                                    <option value="{{ $branch->id }}">{{ $branch->name }}</option>
+                                @endforeach
+                            </select>
+                        </div>
+                        <div>
+                            <label for="bulk-legacy-project" class="crm-type-label font-sans">Proyek</label>
+                            <select id="bulk-legacy-project" class="crm-control font-sans" x-model="bulkLegacyProjectId">
+                                <option value="">Semua proyek</option>
+                                @foreach($projects as $project)
+                                    <option value="{{ $project->id }}">{{ $project->project_name }}</option>
+                                @endforeach
+                            </select>
+                        </div>
+                        <div>
+                            <label for="bulk-legacy-before" class="crm-type-label font-sans">Masuk sebelum tanggal <span aria-hidden="true">*</span></label>
+                            <input id="bulk-legacy-before" type="date" class="crm-control font-sans" x-model="bulkLegacyBefore" required>
+                        </div>
+                        <div>
+                            <label for="bulk-legacy-reason" class="crm-type-label font-sans">Alasan <span aria-hidden="true">*</span></label>
+                            <input id="bulk-legacy-reason" type="text" class="crm-control font-sans" placeholder="Alasan wajib" x-model="bulkLegacyReason" required>
+                        </div>
+                    </div>
+                    <div class="mt-3 flex flex-wrap items-center gap-2">
+                        <button type="button" class="crm-button crm-button--secondary font-sans" x-on:click="previewBulkLegacy()">Pratinjau</button>
+                        <button type="button" class="crm-button crm-button--danger font-sans" x-on:click="submitBulkLegacy(bulkLegacyReason)" :disabled="!bulkLegacyResult?.token || !bulkLegacyReason.trim()">Konfirmasi</button>
+                        <a class="crm-button crm-button--secondary font-sans" href="{{ route('consumer-database.workspace.lead-link-conflicts') }}">Daftar konflik</a>
+                    </div>
+                    <p class="mt-2 text-sm font-sans text-red-700" x-text="bulkLegacyError"></p>
+                    <template x-if="bulkLegacyResult?.token">
+                        <div class="mt-3 border-t border-black pt-3 font-sans" role="status">
+                            <p x-text="`Tandai ${bulkLegacyResult.count} konsumen sebagai Data Lama?`"></p>
+                            <ul class="mt-2 list-disc pl-5 text-sm"><template x-for="example in bulkLegacyResult.examples" :key="example.subject_key"><li x-text="`${example.name || 'Tanpa nama'} — ${example.source}`"></li></template></ul>
+                        </div>
+                    </template>
+                    <template x-if="bulkLegacySummary">
+                        <p class="mt-3 border-t border-black pt-3 font-sans text-sm" role="status" x-text="`Selesai — dibuat: ${bulkLegacySummary.created}, dilewati: ${bulkLegacySummary.skipped}, ID kosong: ${bulkLegacySummary.empty_id}`"></p>
+                    </template>
+                </div>
+            </section>
+        @endif
+
         <x-crm.toolbar label="Pencarian dan filter Database Konsumen" class="mb-3">
             <form method="GET" action="{{ route('consumer-database.workspace') }}" class="flex min-w-0 flex-1 flex-wrap items-end gap-2">
                 <div class="min-w-[220px] flex-1">
@@ -92,6 +188,15 @@
                         <option value="">Semua status</option>
                         @foreach($statusOptions as $value => $label)
                             <option value="{{ $value }}" @selected($selectedStatus === $value)>{{ $label }}</option>
+                        @endforeach
+                    </select>
+                </div>
+                <div class="w-full sm:w-auto">
+                    <label for="consumer-workspace-link-status" class="crm-type-label">Status penautan Lead</label>
+                    <select id="consumer-workspace-link-status" name="link_status" class="crm-control">
+                        <option value="">Semua status penautan</option>
+                        @foreach($linkStatusOptions as $value => $label)
+                            <option value="{{ $value }}" @selected($selectedLinkStatus === $value)>{{ $label }}</option>
                         @endforeach
                     </select>
                 </div>
@@ -142,7 +247,7 @@
         <div class="mb-3 flex items-center justify-between gap-3">
             <div>
                 <h2 class="font-[Helvetica] text-sm font-bold uppercase">Daftar konsumen</h2>
-                <p class="text-sm text-gray-600">Buka detail untuk melihat proses, pembayaran, riwayat, dan tindakan operasional.</p>
+                <p class="font-sans text-sm text-gray-600">Buka detail untuk melihat proses, pembayaran, riwayat, dan tindakan operasional.</p>
             </div>
             <span class="text-xs text-gray-600">{{ $applications->firstItem() ?? 0 }}–{{ $applications->lastItem() ?? 0 }} dari {{ $applications->total() }}</span>
         </div>

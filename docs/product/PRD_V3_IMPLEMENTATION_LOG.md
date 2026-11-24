@@ -53,9 +53,40 @@ PRD sumber kebenaran: `docs/product/PRD_OASIS_CRM_V3.md` versi 3.3 (D30–D33)
 | WP-2.4 | 2 | Status peralihan cabang dan laporan paritas | Merged ke fase-2 pada `6479a081` | §9.3 |
 | WP-2.5 | 2 | Dana Talangan di OASIS dan cicilan | Paket A berjalan; desain disetujui | BR-42–BR-44 |
 | WP-2.6 | 2 | Kembali ke NUP di Workspace Konsumen | Merged ke fase-2 pada `657f0ac` | BR-20–BR-22 |
-| WP-2.7 | 2 | Penutup Fase 2: changelog, dokumentasi, verifikasi penuh | Belum mulai; dikerjakan setelah WP-2.8 lalu WP-2.9 | Semua fase 2 |
+| WP-2.7 | 2 | Penutup Fase 2: changelog, dokumentasi, verifikasi penuh | Sisa browser dan dokumentasi penutup dipindah dari WP-2.9b; dikerjakan pada sub-branch `prd-v3/wp-2.7-penutup-fase-2` | Semua fase 2 |
 | WP-2.8 | 2 | Riwayat Tim: gabungan perubahan Lead dan agenda seluruh turunan | Merged ke fase-2 pada `395fcad` melalui merge `--no-ff`; review scope dan batas 92 hari selesai | BR-50–BR-52 |
 | WP-2.9 | 2 | Penautan Lead ↔ Konsumen | Merged ke fase-2 pada `dea710e` melalui merge `--no-ff`; review diterima, kandidat HP diprioritaskan, cakupan Sheet dicatat. | BR terkait penautan Lead ↔ Konsumen |
+| WP-2.9b | 2 | Penautan Lead untuk cermin Sheet dan NUP | Paket A–C selesai di branch `prd-v3/wp-2.9b-penautan-sheet`; commit `2f72c86` dipush. Filter daftar, halaman konflik HTML, keputusan konflik, regresi scope/rollback/filter/NUP/cross-type, cache view, build frontend, dan suite fokus selesai. | BR terkait penautan Lead ↔ Konsumen |
+| WP-3.1 | 3 | WhatsApp satu nomor | Belum mulai | BR-60–BR-64 |
+
+### Rencana singkat sisa WP-2.9b — 24 November 2026
+
+Urutan kerja pada branch `prd-v3/wp-2.9b-penautan-sheet`:
+
+1. **Kontrak dan regresi:** tambah tes rollback atomik saat satu subjek gagal, token pratinjau menolak filter berubah, keputusan subjek NUP, satu Lead tidak boleh tertaut ke dua subjek lintas jenis, 403 pada endpoint keputusan/pratinjau/bulk/konflik, serta carry-over dari entry, paste import, impor historis, rekonsiliasi, dan konversi NUP. Perbaikan hanya pada service/policy yang sudah menjadi pintu scope.
+2. **Daftar subjek:** lengkapi filter server-side `Belum diputuskan`, `Tertaut`, `Tanpa Lead`, `Data Lama`, dan `ID kosong`, dengan pencarian/status tetap scope-safe serta form mutasi POST + `_method`.
+3. **Konflik:** tambah halaman HTML daftar/detail konflik yang menampilkan sumber dan tujuan, pilihan keputusan yang dipakai, alasan wajib, audit, dan 403 di luar scope. Gunakan komponen CRM dan pola feedback konflik yang sudah ada.
+4. **Verifikasi:** jalankan suite terfokus, Pint, diff check, cache view, build frontend bila berubah, suite penuh dengan perbandingan sebelum/sesudah, lalu uji browser desktop/mobile memakai sesi Super Admin yang sudah login. Data dummy lokal sementara saja; tidak ada workbook cabang asli, cutover produksi, atau data dummy yang dikomit.
+
+Komit dan push setelah setiap irisan selesai. Laporan wajib Bahasa Indonesia, mencantumkan hash, suite penuh sebelum/sesudah, hasil browser dan console, serta sisa yang belum selesai.
+
+### Verifikasi WP-2.9b — 24 November 2026
+
+- Commit sebelumnya: `2f72c86` (`feat: lengkapi penautan Lead workspace`), dipush ke `origin/prd-v3/wp-2.9b-penautan-sheet`.
+- Perubahan irisan: filter status membaca seluruh baris cabang, satu query keputusan aktif, pagination 50, total per status, badge total, dan regresi 300 baris (280 diputuskan, 20 belum diputuskan).
+- Tes fokus carry-over/workspace: 108 tes, 107 lulus, 1 skip; 631 assertions.
+- `vendor/bin/pint --dirty --format agent`: lulus.
+- `git diff --check`: lulus.
+- `php artisan optimize:clear`: lulus.
+- `php artisan view:cache`: lulus.
+- `npm run build`: lulus.
+- Suite penuh sebelum: 2260 tes, 2259 lulus, 1 skip; 15011 assertions.
+- Suite penuh sesudah: 2261 tes, 2260 lulus, 1 skip; 15295 assertions.
+- Browser: halaman `http://127.0.0.1:8000/consumer-workspace` terbuka pada sesi login tersedia; snapshot DOM berhasil dan console error kosong. Screenshot tidak terbaca karena tab Review tidak terlihat pada runtime browser.
+- Sisa: verifikasi visual desktop/mobile saat tab browser terlihat; review konflik lintas data produksi tetap operator, tanpa cutover produksi.
+- Browser lengkap untuk saran/keputusan, Tanpa Lead, pratinjau/eksekusi bulk, dan konflik dipindah ke WP-2.7. Tidak dianggap sebagai bukti selesai WP-2.9b.
+- Carry-over teruji pada form entry, paste import, impor historis, rekonsiliasi migrasi, dan konversi NUP. Jalur paste import, impor historis, dan rekonsiliasi diperbaiki agar memanggil carry-over setelah identitas aplikasi tersedia.
+
 | WP-3.1 | 3 | WhatsApp satu nomor | Belum mulai | BR-60–BR-64 |
 | WP-3.2 | 3 | Asisten AI per peran | Belum mulai | BR-70–BR-72 |
 | WP-3.3 | 3 | Push PWA dan preferensi notifikasi | Belum mulai | §7.11 |

@@ -220,6 +220,7 @@ class ConsumerNupService
             ], $actor);
             $this->kavlingLifecycle->assign($application, $kavling);
             $locked->update(['status' => 'converted', 'converted_application_id' => $application->id]);
+            app(ConsumerLeadLinkCarryOverService::class)->carryNupConversion($locked, $application);
             ActivityLog::create([
                 'causer_id' => $actor->id,
                 'subject_type' => ConsumerNup::class,

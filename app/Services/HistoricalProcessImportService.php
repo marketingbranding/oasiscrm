@@ -400,6 +400,7 @@ class HistoricalProcessImportService
                 'current_process_source' => 'import',
             ])->id;
             ConsumerLegacyIdentity::create(['consumer_application_id' => $application, 'id_kons' => $idKons, 'legacy_source' => 'historical_import']);
+            app(ConsumerLeadLinkCarryOverService::class)->carryApplication(ConsumerApplication::findOrFail($application));
 
             return ['application' => $application];
         }

@@ -63,6 +63,25 @@ class ConsumerV2ProcessTest extends TestCase
             ->assertSee('Transaksi tidak tersedia');
     }
 
+    public function test_nups_index_uses_success_badge_and_transaction_link_on_mobile_for_converted_nup(): void
+    {
+        $application = ConsumerApplication::factory()->create();
+        $actor = $this->superadmin($application);
+        $nup = ConsumerNup::factory()->create([
+            'branch_id' => $application->branch_id,
+            'project_id' => $application->project_id,
+            'status' => 'converted',
+            'converted_application_id' => $application->id,
+        ]);
+
+        $this->actingAs($actor)
+            ->get(route('consumer-nups.index'))
+            ->assertOk()
+            ->assertSee('crm-button--secondary')
+            ->assertSee('Buka transaksi')
+            ->assertSee(route('consumer-database.workspace.show', $application));
+    }
+
     public function test_br20_nup_conversion_requires_kavling_and_reuses_it_idempotently(): void
     {
         $application = ConsumerApplication::factory()->create();

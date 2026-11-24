@@ -105,7 +105,17 @@ class TeamHistoryTest extends TestCase
         [, , $viewer] = $this->graph();
         $this->enableFlag();
 
-        $this->actingAs($viewer)->get(route('team-history.index', ['date_from' => '2026-01-01', 'date_to' => '2026-04-04']))->assertStatus(422)->assertSee('Rentang tanggal maksimal 92 hari.');
+        $this->actingAs($viewer)->getJson(route('team-history.index', ['date_from' => '2026-01-01', 'date_to' => '2026-04-04']))->assertStatus(422)->assertJsonValidationErrors(['date_to']);
+    }
+
+    public function test_br52_old_date_from_without_date_to_returns_422(): void
+    {
+        [, , $viewer] = $this->graph();
+        $this->enableFlag();
+
+        $this->actingAs($viewer)->getJson(route('team-history.index', ['date_from' => '2020-01-01']))
+            ->assertStatus(422)
+            ->assertJsonValidationErrors(['date_to']);
     }
 
     public function test_br52_date_and_direct_child_filters_keep_scope(): void

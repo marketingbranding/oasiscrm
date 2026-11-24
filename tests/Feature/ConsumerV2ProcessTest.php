@@ -65,6 +65,7 @@ class ConsumerV2ProcessTest extends TestCase
 
     public function test_nups_index_uses_success_badge_and_transaction_link_on_mobile_for_converted_nup(): void
     {
+        config(['app.workspace_v2_enabled' => false]);
         $application = ConsumerApplication::factory()->create();
         $actor = $this->superadmin($application);
         $nup = ConsumerNup::factory()->create([
@@ -79,7 +80,26 @@ class ConsumerV2ProcessTest extends TestCase
             ->assertOk()
             ->assertSee('crm-button--secondary')
             ->assertSee('Buka transaksi')
-            ->assertSee(route('consumer-database.workspace.show', $application));
+            ->assertSee(route('consumer-database.workspace', ['search' => $application->id_transaksi]));
+    }
+
+    public function test_nups_index_uses_workspace_transactions_page_when_workspace_flag_is_enabled(): void
+    {
+        config(['app.workspace_v2_enabled' => true]);
+        $application = ConsumerApplication::factory()->create();
+        $actor = $this->superadmin($application);
+        ConsumerNup::factory()->create([
+            'branch_id' => $application->branch_id,
+            'project_id' => $application->project_id,
+            'status' => 'converted',
+            'converted_application_id' => $application->id,
+        ]);
+
+        $this->actingAs($actor)
+            ->get(route('consumer-nups.index'))
+            ->assertOk()
+            ->assertSee(route('workspace-v2.transactions', ['search' => $application->id_transaksi]))
+            ->assertDontSee(route('consumer-database.workspace.show', $application));
     }
 
     public function test_br20_nup_conversion_requires_kavling_and_reuses_it_idempotently(): void

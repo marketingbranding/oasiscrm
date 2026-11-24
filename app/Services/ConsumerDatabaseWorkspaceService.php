@@ -50,6 +50,8 @@ final class ConsumerDatabaseWorkspaceService
             ->paginate(25)
             ->withQueryString();
         $linkSubjects = $this->linkSubjects($user, $branchIds, $projectIds, $selectedBranch, $selectedProject, $request);
+        $selectedLinkStatus = $request->string('link_status')->toString();
+        $linkSubjects = $this->filterLinkSubjects($linkSubjects, $selectedLinkStatus);
         $salesOptions = $this->salesOptions($user, $branchIds, $projectIds, $selectedBranch, $selectedProject);
         $bankOptions = $this->bankOptions($branchIds, $projectIds, $selectedBranch, $selectedProject, $user);
         $selectedSales = $request->integer('sales_id') ?: null;
@@ -77,6 +79,14 @@ final class ConsumerDatabaseWorkspaceService
             'linkSubjects' => $linkSubjects,
             'search' => trim($request->string('search')->toString()),
             'selectedStatus' => $request->string('status')->toString(),
+            'selectedLinkStatus' => $selectedLinkStatus,
+            'linkStatusOptions' => [
+                'undecided' => 'Belum diputuskan',
+                'linked' => 'Tertaut',
+                'without_lead' => 'Tanpa Lead',
+                'legacy' => 'Data Lama',
+                'empty_id' => 'ID kosong',
+            ],
             'selectedStage' => $request->string('stage')->toString(),
             'selectedSort' => $this->sortValue($request),
             'selectedPaymentMethod' => $request->string('payment_method')->toString(),
@@ -120,8 +130,24 @@ final class ConsumerDatabaseWorkspaceService
         $nupSubjects = ConsumerNup::query()->with('customer')->whereIn('branch_id', $branchIds)->when($branch, fn (Builder $query): Builder => $query->where('branch_id', $branch->id))->when($project, fn (Builder $query): Builder => $query->where('project_id', $project->id))->whereIn('project_id', $scopedProjectIds)->limit(250)->get()->map(fn (ConsumerNup $nup): ConsumerLeadLinkSubject => $resolver->fromNup($nup));
 
         return $sheetSubjects->merge($nupSubjects)->map(fn ($subject): array => [
-            'source' => $subject->subjectType, 'subject_key' => $subject->subjectKey(), 'subject_id' => $subject->subjectId ?? $subject->sheetRowId, 'name' => $subject->name, 'project_id' => $subject->projectId, 'branch_id' => $subject->branchId, 'decidable' => $subject->isDecidable, 'note' => $subject->note,
+            'source' => $subject->subjectType, 'subject_key' => $subject->subjectKey(), 'subject_id' => $subject->subjectId ?? $subject->sheetRowId, 'name' => $subject->name, 'project_id' => $subject->projectId, 'branch_id' => $subject->branchId, 'decidable' => $subject->isDecidable, 'note' => $subject->note, 'decision_status' => ConsumerLeadLinkDecision::query()->where('subject_key', $subject->subjectKey())->where('is_active', true)->value('status'),
         ])->values();
+    }
+
+    /** @return Collection<int, array<string, mixed>> */
+    private function filterLinkSubjects(Collection $subjects, string $status): Collection
+    {
+        return $subjects->when($status !== '', function (Collection $items) use ($status): Collection {
+            return $items->filter(function (array $subject) use ($status): bool {
+                $current = $subject['decision_status'] ?? null;
+
+                return match ($status) {
+                    'undecided' => $current === null && $subject['decidable'],
+                    'empty_id' => ! $subject['decidable'],
+                    default => $current === $status,
+                };
+            })->values();
+        });
     }
 
     /** @return array<string, mixed> */

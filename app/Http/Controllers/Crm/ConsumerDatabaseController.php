@@ -5,10 +5,13 @@ namespace App\Http\Controllers\Crm;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\ConsumerEntryRequest;
 use App\Http\Requests\Crm\StoreConsumerLeadLinkDecisionRequest;
+use App\Models\ActivityLog;
 use App\Models\ConsumerApplication;
+use App\Models\ConsumerLeadLinkDecision;
 use App\Models\ConsumerNup;
 use App\Models\KonsumenProgressSheetRow;
 use App\Models\SalesLead;
+use App\Models\User;
 use App\Services\ConsumerDatabaseWorkspaceService;
 use App\Services\ConsumerEntryService;
 use App\Services\ConsumerLeadLinkDecisionService;
@@ -18,6 +21,7 @@ use App\Services\WorkspaceAccessService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\View\View;
 
@@ -93,19 +97,61 @@ final class ConsumerDatabaseController extends Controller
         ]]]);
     }
 
-    public function linkConflicts(Request $request): JsonResponse
+    public function linkConflicts(Request $request): JsonResponse|View
     {
         abort_unless($request->user()->hasPermission('consumer_progress.manage'), 403);
+        $conflicts = $this->scopedConflicts($request->user());
 
-        $branchIds = app(OrganizationScopeService::class)->branchIds($request->user(), 'consumer_progress');
-        $conflicts = DB::table('consumer_lead_link_conflicts as conflict')
+        if (! $request->expectsJson()) {
+            return view('crm.consumer-workspace.lead-link-conflicts', ['conflicts' => $conflicts]);
+        }
+
+        return response()->json(['ok' => true, 'data' => $conflicts]);
+    }
+
+    public function showLinkConflict(Request $request, int $conflict): View
+    {
+        abort_unless($request->user()->hasPermission('consumer_progress.manage'), 403);
+        $item = $this->scopedConflicts($request->user())->firstWhere('id', $conflict);
+        abort_unless($item !== null, 404);
+
+        return view('crm.consumer-workspace.lead-link-conflict', ['conflict' => $item]);
+    }
+
+    public function resolveLinkConflict(Request $request, int $conflict): RedirectResponse
+    {
+        abort_unless($request->user()->hasPermission('consumer_progress.manage'), 403);
+        $item = $this->scopedConflicts($request->user())->firstWhere('id', $conflict);
+        abort_unless($item !== null, 404);
+        $data = $request->validate(['decision' => ['required', 'in:source,target'], 'reason' => ['required', 'string', 'max:2000']]);
+        DB::transaction(function () use ($item, $data, $request): void {
+            $sourceId = (int) $item->source_decision_id;
+            $targetId = $item->target_decision_id === null ? null : (int) $item->target_decision_id;
+            $selectedId = $data['decision'] === 'source' ? $sourceId : $targetId;
+            abort_unless($selectedId !== null, 422, 'Keputusan tujuan tidak tersedia.');
+            $decisions = ConsumerLeadLinkDecision::query()->whereIn('id', array_values(array_filter([$sourceId, $targetId])))->lockForUpdate()->get()->keyBy('id');
+            $selected = $decisions->get($selectedId);
+            abort_unless($selected !== null, 404);
+            $decisions->each(fn (ConsumerLeadLinkDecision $decision): int => $decision->update(['is_active' => $decision->id === $selected->id]));
+            DB::table('consumer_lead_link_conflicts')->where('id', $item->id)->update(['status' => 'resolved', 'details' => json_encode([...((array) $item->details), 'review_decision' => $data['decision'], 'review_reason_present' => true, 'reviewed_by' => $request->user()->id]), 'updated_at' => now()]);
+            ActivityLog::create(['causer_id' => $request->user()->id, 'subject_type' => ConsumerApplication::class, 'subject_id' => $item->consumer_application_id, 'event' => 'consumer_lead_link_conflict_reviewed', 'description' => 'Konflik penautan Lead ditinjau.', 'properties' => ['conflict_id' => $item->id, 'decision' => $data['decision'], 'selected_decision_id' => $selected->id, 'reason_present' => true]]);
+        });
+
+        return redirect()->route('consumer-database.workspace.lead-link-conflict.show', $item->id)->with('success', 'Konflik berhasil ditinjau.');
+    }
+
+    private function scopedConflicts(User $user): Collection
+    {
+        $branchIds = $this->organizationScope->branchIds($user, 'consumer_progress');
+
+        return DB::table('consumer_lead_link_conflicts as conflict')
             ->join('consumer_applications as application', 'application.id', '=', 'conflict.consumer_application_id')
+            ->leftJoin('consumer_lead_link_decisions as source', 'source.id', '=', 'conflict.source_decision_id')
+            ->leftJoin('consumer_lead_link_decisions as target', 'target.id', '=', 'conflict.target_decision_id')
             ->whereIn('application.branch_id', $branchIds)
             ->orderByDesc('conflict.id')
             ->limit(250)
-            ->get(['conflict.id', 'conflict.source_decision_id', 'conflict.target_decision_id', 'conflict.consumer_application_id', 'conflict.conflict_type', 'conflict.status', 'conflict.details', 'conflict.created_at']);
-
-        return response()->json(['ok' => true, 'data' => $conflicts]);
+            ->get(['conflict.id', 'conflict.source_decision_id', 'conflict.target_decision_id', 'conflict.consumer_application_id', 'conflict.conflict_type', 'conflict.status', 'conflict.details', 'conflict.created_at', 'source.status as source_status', 'source.sales_lead_id as source_lead_id', 'target.status as target_status', 'target.sales_lead_id as target_lead_id']);
     }
 
     public function previewBulkLegacy(Request $request): JsonResponse

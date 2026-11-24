@@ -8,12 +8,14 @@ use App\Models\Branch;
 use App\Models\BranchMigrationState;
 use App\Models\ConsumerApplication;
 use App\Models\ConsumerLeadLinkDecision;
+use App\Models\ConsumerNup;
 use App\Models\KonsumenProgressSheetRow;
 use App\Models\LeadMaster;
 use App\Models\Role;
 use App\Models\SalesLead;
 use App\Models\User;
 use App\Services\ConsumerLeadLinkDecisionService;
+use App\Services\ConsumerLeadLinkSubjectResolver;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -38,6 +40,126 @@ class ConsumerLeadLinkDecisionTest extends TestCase
 
         $this->assertSame(ConsumerLeadLinkDecision::STATUS_LINKED, $decision->status);
         $this->assertDatabaseHas('consumer_applications', ['id' => $consumer->id, 'sales_lead_id' => $lead->id]);
+    }
+
+    public function test_br22_nup_subject_accepts_linked_lead_inside_same_scope(): void
+    {
+        [$consumer, $actor] = $this->decisionContext();
+        $nup = ConsumerNup::create([
+            'customer_id' => $consumer->customer_id,
+            'branch_id' => $consumer->branch_id,
+            'project_id' => $consumer->project_id,
+            'nup_number' => 'NUP-TEST',
+            'registered_at' => today(),
+            'status' => 'active',
+            'entry_type' => 'from_lead',
+        ]);
+        $subject = app(ConsumerLeadLinkSubjectResolver::class)->fromNup($nup->load('customer'));
+        $lead = $this->lead($consumer, $actor);
+
+        $decision = app(ConsumerLeadLinkDecisionService::class)->decideForSubject($subject, 'linked', $lead, [], $actor);
+
+        $this->assertSame($nup->id, $decision->consumer_nup_id);
+        $this->assertSame('nup:'.$nup->id, $decision->subject_key);
+    }
+
+    public function test_br24_one_lead_cannot_link_to_nup_after_application_link(): void
+    {
+        [$consumer, $actor] = $this->decisionContext();
+        $lead = $this->lead($consumer, $actor);
+        app(ConsumerLeadLinkDecisionService::class)->decide($consumer, 'linked', $lead, [], $actor);
+        $nup = ConsumerNup::create([
+            'customer_id' => $consumer->customer_id,
+            'branch_id' => $consumer->branch_id,
+            'project_id' => $consumer->project_id,
+            'nup_number' => 'NUP-COLLISION',
+            'registered_at' => today(),
+            'status' => 'active',
+            'entry_type' => 'from_lead',
+        ]);
+        $subject = app(ConsumerLeadLinkSubjectResolver::class)->fromNup($nup->load('customer'));
+
+        $this->expectException(ValidationException::class);
+        app(ConsumerLeadLinkDecisionService::class)->decideForSubject($subject, 'linked', $lead, [], $actor);
+        $this->assertDatabaseCount('consumer_lead_link_decisions', 1);
+    }
+
+    public function test_br24_failed_subject_decision_rolls_back_previous_decision_change(): void
+    {
+        [$consumer, $actor] = $this->decisionContext();
+        $first = app(ConsumerLeadLinkDecisionService::class)->decide($consumer, 'without_lead', null, ['reason' => 'Pertama'], $actor);
+
+        try {
+            app(ConsumerLeadLinkDecisionService::class)->decide($consumer, 'linked', null, [], $actor);
+        } catch (ValidationException) {
+        }
+
+        $this->assertDatabaseHas('consumer_lead_link_decisions', ['id' => $first->id, 'is_active' => true]);
+        $this->assertDatabaseCount('consumer_lead_link_decisions', 1);
+    }
+
+    public function test_br53_direct_subject_decision_denies_foreign_nup_scope(): void
+    {
+        [$consumer, $actor] = $this->decisionContext();
+        $foreign = ConsumerNup::factory()->create();
+        $subject = app(ConsumerLeadLinkSubjectResolver::class)->fromNup($foreign->load('customer'));
+
+        $this->expectException(AuthorizationException::class);
+        app(ConsumerLeadLinkDecisionService::class)->decideForSubject($subject, 'without_lead', null, ['reason' => 'Di luar scope'], $actor);
+    }
+
+    public function test_br53_direct_preview_bulk_and_conflict_endpoints_deny_foreign_scope(): void
+    {
+        [$branch, $project, $actor] = $this->bulkContext();
+        $foreign = Branch::create(['code' => 'ENDPOINT-FOREIGN', 'name' => 'Asing Endpoint', 'is_active' => true]);
+
+        $this->actingAs($actor)->getJson(route('consumer-database.workspace.bulk-legacy.preview', ['branch_id' => $foreign->id, 'before' => '2026-01-01']))->assertForbidden();
+        $this->actingAs($actor)->postJson(route('consumer-database.workspace.bulk-legacy.store'), ['branch_id' => $foreign->id, 'before' => '2026-01-01', 'reason' => 'uji', 'token' => 'x'])->assertForbidden();
+        $this->actingAs($actor)->getJson(route('consumer-database.workspace.lead-link-conflicts', ['branch_id' => $foreign->id]))->assertForbidden();
+    }
+
+    public function test_br_decision_endpoint_rejects_foreign_sheet_scope(): void
+    {
+        [$branch, , $actor] = $this->bulkContext();
+        $foreign = Branch::create(['code' => 'SHEET-FOREIGN', 'name' => 'Asing Sheet', 'is_active' => true]);
+        $row = KonsumenProgressSheetRow::create(['branch_id' => $foreign->id, 'sheet_id' => 'foreign', 'sheet_name' => 'data_konsumen', 'row_hash' => 'foreign-row', 'row_data' => ['[SYS] ID Konsumen' => 'FOREIGN-1']]);
+
+        $this->actingAs($actor)->postJson(route('consumer-database.workspace.link-subject.lead-link-decision.store', ['subjectType' => 'sheet', 'subjectId' => $row->id]), ['status' => 'without_lead', 'reason' => 'uji'])->assertForbidden();
+    }
+
+    public function test_br_bulk_legacy_rejects_changed_filter_after_valid_preview(): void
+    {
+        [$branch, $project, $actor] = $this->bulkContext();
+        KonsumenProgressSheetRow::create(['branch_id' => $branch->id, 'sheet_id' => 'sheet', 'sheet_name' => 'data_konsumen', 'row_hash' => 'filter-change', 'row_data' => ['[SYS] ID Konsumen' => 'FILTER-1', 'Tanggal' => '2025-01-01', 'Proyek' => $project->project_name]]);
+        $preview = app(ConsumerLeadLinkDecisionService::class)->previewBulkLegacy($actor, ['branch_id' => $branch->id, 'project_id' => $project->id, 'before' => '2026-01-01']);
+
+        $this->expectException(ValidationException::class);
+        app(ConsumerLeadLinkDecisionService::class)->markBulkLegacy($actor, ['branch_id' => $branch->id, 'project_id' => $project->id, 'before' => '2025-01-01', 'token' => $preview['token']], 'Uji filter berubah');
+    }
+
+    public function test_br80_conflict_review_applies_selected_decision_and_audits_reason(): void
+    {
+        [$consumer, $actor] = $this->decisionContext();
+        $actor->assignedProjects()->syncWithoutDetaching([$consumer->project_id => ['is_active' => true, 'is_primary' => true]]);
+        $actor->update(['role_id' => Role::query()->where('slug', 'superadmin')->value('id')]);
+        $source = ConsumerLeadLinkDecision::create(['consumer_application_id' => $consumer->id, 'branch_id' => $consumer->branch_id, 'subject_type' => 'application', 'subject_key' => 'application:'.$consumer->id, 'status' => 'legacy', 'reason' => 'Sumber', 'decision_source' => 'manual', 'is_active' => true, 'decided_by' => $actor->id, 'decided_at' => now()]);
+        $target = ConsumerLeadLinkDecision::create(['consumer_application_id' => $consumer->id, 'branch_id' => $consumer->branch_id, 'subject_type' => 'application', 'subject_key' => 'application:'.$consumer->id, 'status' => 'without_lead', 'reason' => 'Tujuan', 'decision_source' => 'manual', 'is_active' => false, 'decided_by' => $actor->id, 'decided_at' => now()]);
+        $conflict = DB::table('consumer_lead_link_conflicts')->insertGetId(['source_decision_id' => $source->id, 'target_decision_id' => $target->id, 'consumer_application_id' => $consumer->id, 'conflict_type' => 'status', 'details' => json_encode([]), 'created_at' => now(), 'updated_at' => now()]);
+
+        $this->actingAs($actor)->post(route('consumer-database.workspace.lead-link-conflict.resolve', $conflict), ['decision' => 'target', 'reason' => 'Verifikasi tujuan'])->assertRedirect();
+
+        $this->assertDatabaseHas('consumer_lead_link_decisions', ['id' => $source->id, 'is_active' => false]);
+        $this->assertDatabaseHas('consumer_lead_link_decisions', ['id' => $target->id, 'is_active' => true]);
+        $this->assertDatabaseHas('consumer_lead_link_conflicts', ['id' => $conflict, 'status' => 'resolved']);
+        $this->assertDatabaseHas('activity_log', ['event' => 'consumer_lead_link_conflict_reviewed']);
+    }
+
+    public function test_br_decision_endpoint_returns_forbidden_for_foreign_application(): void
+    {
+        [, $actor] = $this->decisionContext();
+        $foreign = ConsumerApplication::factory()->create();
+
+        $this->actingAs($actor)->postJson(route('consumer-database.workspace.lead-link-decision.store', $foreign), ['status' => 'without_lead', 'reason' => 'uji'])->assertForbidden();
     }
 
     public function test_br_without_lead_decision_requires_manage_permission_and_consumer_scope(): void

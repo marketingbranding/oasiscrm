@@ -8,6 +8,7 @@
             $showBranchFilter && $selectedBranch ? 'Cabang: '.$selectedBranch->name : null,
             $selectedProject ? 'Proyek: '.$selectedProject->project_name : null,
             $selectedStatus !== '' ? 'Status: '.$selectedStatus : null,
+            $selectedLinkStatus !== '' ? 'Penautan: '.($linkStatusOptions[$selectedLinkStatus] ?? $selectedLinkStatus) : null,
             $selectedStage !== '' ? 'Tahap: '.($stageOptions[$selectedStage] ?? $selectedStage) : null,
             $selectedSales ? 'Sales: '.($salesOptions->firstWhere('id', $selectedSales)?->name ?? $selectedSales) : null,
             $selectedBank !== '' ? 'Bank: '.$selectedBank : null,
@@ -176,6 +177,15 @@
                         <option value="">Semua status</option>
                         @foreach($statusOptions as $value => $label)
                             <option value="{{ $value }}" @selected($selectedStatus === $value)>{{ $label }}</option>
+                        @endforeach
+                    </select>
+                </div>
+                <div class="w-full sm:w-auto">
+                    <label for="consumer-workspace-link-status" class="crm-type-label">Status penautan Lead</label>
+                    <select id="consumer-workspace-link-status" name="link_status" class="crm-control">
+                        <option value="">Semua status penautan</option>
+                        @foreach($linkStatusOptions as $value => $label)
+                            <option value="{{ $value }}" @selected($selectedLinkStatus === $value)>{{ $label }}</option>
                         @endforeach
                     </select>
                 </div>

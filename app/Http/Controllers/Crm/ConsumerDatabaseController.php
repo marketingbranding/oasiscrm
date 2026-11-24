@@ -112,15 +112,17 @@ final class ConsumerDatabaseController extends Controller
     {
         abort_unless($request->user()->hasPermission('consumer_progress.manage'), 403);
 
-        return response()->json(['ok' => true, 'data' => $this->leadLinkDecisions->previewBulkLegacy($request->user(), $request->only(['branch_id', 'project_id', 'before']))]);
+        $data = $request->validate(['branch_id' => ['required', 'integer'], 'project_id' => ['nullable', 'integer'], 'before' => ['required', 'date']]);
+
+        return response()->json(['ok' => true, 'data' => $this->leadLinkDecisions->previewBulkLegacy($request->user(), array_replace($data, ['before' => (string) $data['before'], 'project_id' => isset($data['project_id']) ? (int) $data['project_id'] : null]))]);
     }
 
     public function storeBulkLegacy(Request $request): JsonResponse
     {
         abort_unless($request->user()->hasPermission('consumer_progress.manage'), 403);
-        $data = $request->validate(['reason' => ['required', 'string', 'max:2000'], 'branch_id' => ['nullable', 'integer']]);
+        $data = $request->validate(['reason' => ['required', 'string', 'max:2000'], 'branch_id' => ['required', 'integer'], 'project_id' => ['nullable', 'integer'], 'before' => ['required', 'date'], 'token' => ['required', 'string']]);
 
-        return response()->json(['ok' => true, 'data' => $this->leadLinkDecisions->markBulkLegacy($request->user(), $data, $data['reason'])]);
+        return response()->json(['ok' => true, 'data' => $this->leadLinkDecisions->markBulkLegacy($request->user(), array_replace($data, ['before' => (string) $data['before'], 'branch_id' => (int) $data['branch_id'], 'project_id' => isset($data['project_id']) ? (int) $data['project_id'] : null]), $data['reason'])]);
     }
 
     public function storeLeadLinkDecision(StoreConsumerLeadLinkDecisionRequest $request, ?ConsumerApplication $consumerApplication = null): RedirectResponse|JsonResponse

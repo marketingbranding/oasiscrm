@@ -12,7 +12,9 @@ use App\Models\ConsumerNup;
 use App\Models\KonsumenProgressSheetRow;
 use App\Models\SalesLead;
 use App\Models\User;
+use Carbon\CarbonImmutable;
 use Illuminate\Auth\Access\AuthorizationException;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
@@ -33,15 +35,17 @@ final class ConsumerLeadLinkDecisionService
 
     private const MAX_RATIONALE_VALUE_LENGTH = 200;
 
-    /** @return array{count: int, examples: array<int, array<string, mixed>>} */
+    /** @return array{count: int, examples: array<int, array<string, mixed>>, token: string, expires_at: string} */
     public function previewBulkLegacy(User $actor, array $filters): array
     {
-        $rows = KonsumenProgressSheetRow::query()->where('sheet_name', 'data_konsumen')->when($filters['branch_id'] ?? null, fn ($q, $id) => $q->where('branch_id', $id))->limit(500)->get();
-        $nups = ConsumerNup::query()->when($filters['branch_id'] ?? null, fn ($q, $id) => $q->where('branch_id', $id))->limit(500)->get();
-        $resolver = app(ConsumerLeadLinkSubjectResolver::class);
-        $subjects = $rows->map(fn ($row) => $resolver->fromSheetRow($row))->merge($nups->map(fn ($nup) => $resolver->fromNup($nup)))->filter(fn ($subject): bool => $subject->isDecidable && (($filters['before'] ?? null) === null || ($subject->enteredAt?->lt($filters['before']) ?? false)))->filter(fn ($subject): bool => ! ConsumerLeadLinkDecision::query()->where('subject_key', $subject->subjectKey())->where('is_active', true)->exists());
+        $this->validateBulkFilters($actor, $filters);
+        $subjects = $this->bulkLegacySubjects($actor, $filters);
+        $keys = $subjects->map(fn (ConsumerLeadLinkSubject $subject): string => $subject->subjectKey())->values()->all();
+        $expiresAt = now()->addMinutes(15);
+        $token = hash_hmac('sha256', json_encode(['user_id' => $actor->id, 'filters' => collect($filters)->only(['branch_id', 'project_id', 'before'])->all(), 'keys' => $keys, 'expires_at' => $expiresAt->timestamp]), config('app.key'));
+        cache()->put('consumer-lead-link:bulk:'.$token, ['user_id' => $actor->id, 'filters' => $filters, 'keys' => $keys, 'expires_at' => $expiresAt->timestamp], $expiresAt);
 
-        return ['count' => $subjects->count(), 'examples' => $subjects->take(10)->map(fn ($subject): array => ['source' => $subject->subjectType, 'name' => $subject->name, 'subject_key' => $subject->subjectKey()])->all()];
+        return ['count' => $subjects->count(), 'examples' => $subjects->take(10)->map(fn ($subject): array => ['source' => $subject->subjectType, 'name' => $subject->name, 'subject_key' => $subject->subjectKey()])->all(), 'token' => $token, 'expires_at' => $expiresAt->toIso8601String()];
     }
 
     public function markBulkLegacy(User $actor, array $filters, string $reason): array
@@ -49,27 +53,84 @@ final class ConsumerLeadLinkDecisionService
         if (trim($reason) === '') {
             throw ValidationException::withMessages(['reason' => 'Alasan wajib diisi untuk Data Lama.']);
         }
-        $rows = KonsumenProgressSheetRow::query()->where('sheet_name', 'data_konsumen')->when($filters['branch_id'] ?? null, fn ($q, $id) => $q->where('branch_id', $id))->limit(500)->get();
-        $nups = ConsumerNup::query()->when($filters['branch_id'] ?? null, fn ($q, $id) => $q->where('branch_id', $id))->limit(500)->get();
-        $resolver = app(ConsumerLeadLinkSubjectResolver::class);
-        $subjects = $rows->map(fn ($row) => $resolver->fromSheetRow($row))->merge($nups->map(fn ($nup) => $resolver->fromNup($nup)));
-        $result = ['created' => 0, 'skipped' => 0, 'empty_id' => 0];
-        foreach ($subjects as $subject) {
-            if (! $subject->isDecidable) {
-                $result['empty_id']++;
-
-                continue;
-            }
-            if (ConsumerLeadLinkDecision::query()->where('subject_key', $subject->subjectKey())->where('is_active', true)->exists()) {
-                $result['skipped']++;
-
-                continue;
-            }
-            $this->decideForSubject($subject, ConsumerLeadLinkDecision::STATUS_LEGACY, null, ['reason' => $reason, 'legacy_anchor' => '[SYS] ID Konsumen'], $actor);
-            $result['created']++;
+        $this->validateBulkFilters($actor, $filters);
+        $token = (string) ($filters['token'] ?? '');
+        $preview = cache()->get('consumer-lead-link:bulk:'.$token);
+        if (! is_array($preview) || ($preview['user_id'] ?? null) !== $actor->id || ($preview['expires_at'] ?? 0) < now()->timestamp) {
+            throw ValidationException::withMessages(['token' => 'Pratinjau kedaluwarsa.']);
+        }
+        $currentFilters = collect($filters)->only(['branch_id', 'project_id', 'before'])->all();
+        if (($preview['filters'] ?? []) !== $currentFilters) {
+            throw ValidationException::withMessages(['token' => 'Filter berubah, pratinjau ulang.']);
         }
 
-        return $result;
+        return DB::transaction(function () use ($actor, $filters, $reason, $preview): array {
+            $subjects = $this->bulkLegacySubjects($actor, $filters, true);
+            $keys = $subjects->map(fn (ConsumerLeadLinkSubject $subject): string => $subject->subjectKey())->values()->all();
+            if ($keys !== ($preview['keys'] ?? [])) {
+                throw ValidationException::withMessages(['token' => 'Data berubah, pratinjau ulang.']);
+            }
+            $result = ['created' => 0, 'skipped' => 0, 'empty_id' => 0];
+            foreach ($subjects as $subject) {
+                if (! $subject->isDecidable) {
+                    $result['empty_id']++;
+
+                    continue;
+                }
+                $active = ConsumerLeadLinkDecision::query()->where('subject_key', $subject->subjectKey())->where('is_active', true)->lockForUpdate()->exists();
+                if ($active) {
+                    $result['skipped']++;
+
+                    continue;
+                }
+                $this->decideForSubject($subject, ConsumerLeadLinkDecision::STATUS_LEGACY, null, ['reason' => $reason, 'legacy_anchor' => '[SYS] ID Konsumen'], $actor);
+                $result['created']++;
+            }
+
+            return $result;
+        });
+    }
+
+    private function validateBulkFilters(User $actor, array $filters): void
+    {
+        $branchId = (int) ($filters['branch_id'] ?? 0);
+        if ($branchId < 1) {
+            throw ValidationException::withMessages(['branch_id' => 'Cabang wajib dipilih.']);
+        }
+        if (! $this->organizationScope->allowsProjectRecord($actor, 'consumer_progress', 'manage', $branchId, null)) {
+            throw new AuthorizationException('Cabang berada di luar lingkup akses Anda.');
+        }
+        if (! isset($filters['before']) || ! strtotime((string) $filters['before'])) {
+            throw ValidationException::withMessages(['before' => 'Tanggal batas wajib diisi.']);
+        }
+        if (isset($filters['project_id']) && $filters['project_id'] !== null && ! $this->organizationScope->allowsProjectRecord($actor, 'consumer_progress', 'manage', $branchId, (int) $filters['project_id'])) {
+            throw new AuthorizationException('Proyek berada di luar lingkup akses Anda.');
+        }
+    }
+
+    /** @return Collection<int, object> */
+    private function bulkLegacySubjects(User $actor, array $filters, bool $lock = false): Collection
+    {
+        $branchId = (int) $filters['branch_id'];
+        $projectId = isset($filters['project_id']) ? (int) $filters['project_id'] : null;
+        $before = CarbonImmutable::parse($filters['before']);
+        $rowQuery = KonsumenProgressSheetRow::query()->where('branch_id', $branchId)->where('sheet_name', 'data_konsumen');
+        $nupQuery = ConsumerNup::query()->where('branch_id', $branchId)->when($projectId, fn ($query) => $query->where('project_id', $projectId));
+        if ($lock) {
+            $rowQuery->lockForUpdate();
+            $nupQuery->lockForUpdate();
+        }
+        $rows = $rowQuery->get();
+        $nups = $nupQuery->get();
+        $resolver = app(ConsumerLeadLinkSubjectResolver::class);
+        $projectIds = $nups->pluck('project_id')->filter()->merge([$projectId])->filter()->unique()->values()->all();
+        $maps = $resolver->lookupMaps($rows, $projectIds);
+
+        return $rows->map(function ($row) use ($resolver, $maps): ConsumerLeadLinkSubject {
+            $data = collect($row->row_data ?? [])->mapWithKeys(fn ($value, $key): array => [strtolower(trim((string) $key)) => trim((string) $value)]);
+
+            return $resolver->fromSheetRow($row, $maps['project_ids'][strtolower($data->get('proyek', $data->get('project', '')))] ?? null, $maps['sales_ids'][strtolower($data->get('sales', $data->get('nama sales', '')))] ?? null, false);
+        })->merge($nups->map(fn ($nup) => $resolver->fromNup($nup)))->filter(fn (ConsumerLeadLinkSubject $subject): bool => $subject->isDecidable && ($subject->enteredAt?->lt($before) ?? false))->filter(fn (ConsumerLeadLinkSubject $subject): bool => ! ConsumerLeadLinkDecision::query()->where('subject_key', $subject->subjectKey())->where('is_active', true)->exists())->sortBy('subjectKey')->values();
     }
 
     public function decideForSubject(

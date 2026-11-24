@@ -11,6 +11,9 @@ export default function registerConsumerWorkspace(Alpine) {
         leadLink: { status: 'linked', sales_lead_id: '', reason: '', legacy_anchor: '' },
         leadLinkSaving: false,
         bulkLegacyResult: null,
+        bulkLegacyBranchId: '',
+        bulkLegacyProjectId: '',
+        bulkLegacyBefore: '',
         bulkLegacyReason: '',
         bulkLegacyError: '',
         leadLinkError: '',
@@ -57,7 +60,7 @@ export default function registerConsumerWorkspace(Alpine) {
         async previewBulkLegacy() {
             this.bulkLegacyError = '';
             try {
-                const response = await fetch(config.bulkLegacyPreviewUrl, { headers: { Accept: 'application/json' } });
+                const response = await fetch(`${config.bulkLegacyPreviewUrl}?branch_id=${this.bulkLegacyBranchId}&project_id=${this.bulkLegacyProjectId}&before=${this.bulkLegacyBefore}`,  { headers: { Accept: 'application/json' } });
                 const payload = await response.json();
                 if (!response.ok) throw new Error(payload.message || 'Pratinjau gagal.');
                 this.bulkLegacyResult = payload.data;
@@ -70,7 +73,7 @@ export default function registerConsumerWorkspace(Alpine) {
             const response = await fetch(config.bulkLegacyStoreUrl, {
                 method: 'POST',
                 headers: { Accept: 'application/json', 'Content-Type': 'application/json', 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.content || '' },
-                body: JSON.stringify({ reason }),
+                body: JSON.stringify({ reason, token: this.bulkLegacyResult?.token, branch_id: this.bulkLegacyBranchId, project_id: this.bulkLegacyProjectId || null, before: this.bulkLegacyBefore }),
             });
             const payload = await response.json();
             if (!response.ok) throw new Error(payload.message || 'Data Lama belum dapat disimpan.');

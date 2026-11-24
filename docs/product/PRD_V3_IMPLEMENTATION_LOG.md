@@ -56,7 +56,7 @@ PRD sumber kebenaran: `docs/product/PRD_OASIS_CRM_V3.md` versi 3.3 (D30–D33)
 | WP-2.7 | 2 | Penutup Fase 2: changelog, dokumentasi, verifikasi penuh | Belum mulai; dikerjakan setelah WP-2.8 lalu WP-2.9 | Semua fase 2 |
 | WP-2.8 | 2 | Riwayat Tim: gabungan perubahan Lead dan agenda seluruh turunan | Merged ke fase-2 pada `395fcad` melalui merge `--no-ff`; review scope dan batas 92 hari selesai | BR-50–BR-52 |
 | WP-2.9 | 2 | Penautan Lead ↔ Konsumen | Merged ke fase-2 pada `dea710e` melalui merge `--no-ff`; review diterima, kandidat HP diprioritaskan, cakupan Sheet dicatat. | BR terkait penautan Lead ↔ Konsumen |
-| WP-2.9b | 2 | Penautan Lead untuk cermin Sheet dan NUP | Berjalan; Paket A dan fondasi Paket B/C dipush di branch `prd-v3/wp-2.9b-penautan-sheet`; sisa verifikasi dan halaman konflik dikerjakan dalam irisan berurutan sebelum review. | BR terkait penautan Lead ↔ Konsumen |
+| WP-2.9b | 2 | Penautan Lead untuk cermin Sheet dan NUP | Paket A–C selesai di branch `prd-v3/wp-2.9b-penautan-sheet`; commit `2f72c86` dipush. Filter daftar, halaman konflik HTML, keputusan konflik, regresi scope/rollback/filter/NUP/cross-type, cache view, build frontend, dan suite fokus selesai. | BR terkait penautan Lead ↔ Konsumen |
 | WP-3.1 | 3 | WhatsApp satu nomor | Belum mulai | BR-60–BR-64 |
 
 ### Rencana singkat sisa WP-2.9b — 24 November 2026
@@ -69,6 +69,18 @@ Urutan kerja pada branch `prd-v3/wp-2.9b-penautan-sheet`:
 4. **Verifikasi:** jalankan suite terfokus, Pint, diff check, cache view, build frontend bila berubah, suite penuh dengan perbandingan sebelum/sesudah, lalu uji browser desktop/mobile memakai sesi Super Admin yang sudah login. Data dummy lokal sementara saja; tidak ada workbook cabang asli, cutover produksi, atau data dummy yang dikomit.
 
 Komit dan push setelah setiap irisan selesai. Laporan wajib Bahasa Indonesia, mencantumkan hash, suite penuh sebelum/sesudah, hasil browser dan console, serta sisa yang belum selesai.
+
+### Verifikasi WP-2.9b — 24 November 2026
+
+- Commit: `2f72c86` (`feat: lengkapi penautan Lead workspace`), dipush ke `origin/prd-v3/wp-2.9b-penautan-sheet`.
+- Tes fokus setelah perubahan: 75 tes, 74 lulus, 1 skip; 214 assertions.
+- `vendor/bin/pint --dirty --format agent`: lulus.
+- `git diff --check`: lulus.
+- `php artisan view:cache`: lulus.
+- `npm run build`: lulus.
+- Browser: `http://127.0.0.1:8000/consumer-workspace` terbuka pada sesi login tersedia; console error kosong. Screenshot desktop/mobile tidak terbaca karena tab Review tidak terlihat pada runtime browser.
+- Suite penuh sebelum/sesudah: belum dijalankan pada irisan ini.
+- Sisa: jalankan suite penuh dan verifikasi visual desktop/mobile saat tab browser terlihat; review konflik lintas data produksi tetap operator, tanpa cutover produksi.
 
 | WP-3.1 | 3 | WhatsApp satu nomor | Belum mulai | BR-60–BR-64 |
 | WP-3.2 | 3 | Asisten AI per peran | Belum mulai | BR-70–BR-72 |

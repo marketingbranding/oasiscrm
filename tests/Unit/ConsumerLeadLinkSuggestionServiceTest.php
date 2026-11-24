@@ -208,6 +208,31 @@ class ConsumerLeadLinkSuggestionServiceTest extends TestCase
         $this->assertCount(0, app(ConsumerLeadLinkSuggestionService::class)->suggest($consumer, $permissionless));
     }
 
+    public function test_br_link_suggestion_prioritizes_phone_match_before_two_hundred_name_candidates(): void
+    {
+        $viewer = $this->superadmin();
+        $consumer = ConsumerApplication::factory()->create(['nama_konsumen' => 'Muhammad Rahman']);
+        $consumer->customer()->update(['name' => 'Muhammad Rahman', 'phone' => '081234567890']);
+        $sales = User::factory()->create(['branch_id' => $consumer->branch_id]);
+
+        foreach (range(1, 201) as $number) {
+            $this->lead($consumer, $sales, [
+                'customer_name' => 'Muhammad Nama '.$number,
+                'phone' => '089900000'.$number,
+            ]);
+        }
+
+        $phoneLead = $this->lead($consumer, $sales, [
+            'customer_name' => 'Nama Tidak Mirip',
+            'phone' => '081234567890',
+            'normalized_phone' => '6281234567890',
+        ]);
+
+        $suggestions = app(ConsumerLeadLinkSuggestionService::class)->suggest($consumer, $viewer);
+
+        $this->assertTrue($suggestions->contains('lead_id', $phoneLead->id));
+    }
+
     public function test_br_link_suggestion_orders_equal_scores_by_lead_id(): void
     {
         $viewer = $this->superadmin();

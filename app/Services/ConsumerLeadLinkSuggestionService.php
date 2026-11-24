@@ -82,7 +82,8 @@ final class ConsumerLeadLinkSuggestionService
 
         return $candidateQuery
             ->with(['sales:id,name', 'branch:id,name', 'project:id,project_name'])
-            ->orderBy('id')
+            ->orderByRaw('normalized_phone = ? DESC', [$consumerPhone])
+            ->orderByDesc('id')
             ->limit(self::MAX_CANDIDATES)
             ->get()
             ->map(fn (SalesLead $lead): ?array => $this->score(

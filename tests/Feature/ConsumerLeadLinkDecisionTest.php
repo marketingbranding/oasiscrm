@@ -138,6 +138,13 @@ class ConsumerLeadLinkDecisionTest extends TestCase
         $this->actingAs($actor)->postJson(route('consumer-database.workspace.bulk-legacy.store'), ['reason' => 'Uji HTTP JS', 'token' => $preview['token'], 'branch_id' => (string) $branch->id, 'project_id' => null, 'before' => '2026-01-01'])->assertOk()->assertJsonPath('data.created', 1);
     }
 
+    public function test_uat_labels_hide_raw_conflict_module_and_workspace_process_values(): void
+    {
+        $this->assertStringContainsString('Jenis Konflik', file_get_contents(resource_path('views/crm/consumer-workspace/lead-link-conflicts.blade.php')));
+        $this->assertStringContainsString('$moduleLabels[$grant->module]', file_get_contents(resource_path('views/crm/access-grants/index.blade.php')));
+        $this->assertStringContainsString('$processLabels[$record->process_key]', file_get_contents(resource_path('views/workspace-v2/aggregate/index.blade.php')));
+    }
+
     public function test_br_subject_endpoints_return_json_for_sheet_and_nup_and_index_uses_panel_button(): void
     {
         [$branch, $project, $actor] = $this->bulkContext();

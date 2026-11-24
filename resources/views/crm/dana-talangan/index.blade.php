@@ -47,8 +47,8 @@
             'name' => $oldPaymentRecord->nama_konsumen,
             'kav' => $oldPaymentRecord->kav,
             'nominal' => $oldPaymentRecord->formattedNominal(),
-            'paid' => data_get($oldPaymentRecord->payment_summary ?? [], 'verified', '0.00'),
-            'remaining' => data_get($oldPaymentRecord->payment_summary ?? [], 'remaining', $oldPaymentRecord->formattedNominal()),
+            'paid' => \App\Support\DanaTalanganMoney::format(data_get($oldPaymentRecord->payment_summary ?? [], 'verified', '0.00')),
+            'remaining' => \App\Support\DanaTalanganMoney::format(data_get($oldPaymentRecord->payment_summary ?? [], 'remaining', $oldPaymentRecord->nominal)),
             'action' => route('dana-talangan.payments.store', $oldPaymentRecord),
         ] : null,
         'filterMode' => $filterMode,
@@ -288,7 +288,7 @@
                         </form>
                         @endif
                         <div class="flex items-center justify-center gap-1">
-                            <button type="button" class="font-[Helvetica] font-bold underline text-[11px]" @click="openPayment(@js(['id' => $r->id, 'name' => $r->nama_konsumen, 'kav' => $r->kav, 'nominal' => $r->formattedNominal(), 'paid' => data_get($r->payment_summary ?? [], 'verified', '0.00'), 'remaining' => data_get($r->payment_summary ?? [], 'remaining', $r->formattedNominal()), 'action' => route('dana-talangan.payments.store', $r)]))">Bayar</button>
+                            <button type="button" class="font-[Helvetica] font-bold underline text-[11px]" @click="openPayment(@js(['id' => $r->id, 'name' => $r->nama_konsumen, 'kav' => $r->kav, 'nominal' => $r->formattedNominal(), 'paid' => \App\Support\DanaTalanganMoney::format(data_get($r->payment_summary ?? [], 'verified', '0.00')), 'remaining' => \App\Support\DanaTalanganMoney::format(data_get($r->payment_summary ?? [], 'remaining', $r->nominal)), 'action' => route('dana-talangan.payments.store', $r)]))">Bayar</button>
                             <button type="button" @click="openEdit(@js([
                                 "id" => $r->id,
                                 "tanggal" => $r->tanggal?->format("Y-m-d"),

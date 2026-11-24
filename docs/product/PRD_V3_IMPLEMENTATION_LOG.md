@@ -53,7 +53,7 @@ PRD sumber kebenaran: `docs/product/PRD_OASIS_CRM_V3.md` versi 3.3 (D30–D33)
 | WP-2.4 | 2 | Status peralihan cabang dan laporan paritas | Merged ke fase-2 pada `6479a081` | §9.3 |
 | WP-2.5 | 2 | Dana Talangan di OASIS dan cicilan | Paket A berjalan; desain disetujui | BR-42–BR-44 |
 | WP-2.6 | 2 | Kembali ke NUP di Workspace Konsumen | Merged ke fase-2 pada `657f0ac` | BR-20–BR-22 |
-| WP-2.7 | 2 | Penutup Fase 2: changelog, dokumentasi, verifikasi penuh | Sedang dikerjakan pada sub-branch `prd-v3/wp-2.7-penutup-fase-2`; uji browser interaktif belum selesai | Semua fase 2 |
+| WP-2.7 | 2 | Penutup Fase 2: changelog, dokumentasi, verifikasi penuh | Selesai pada `prd-v3/wp-2.7-penutup-fase-2`; sisa: uji lebar HP oleh pemilik | Semua fase 2 |
 | WP-2.8 | 2 | Riwayat Tim: gabungan perubahan Lead dan agenda seluruh turunan | Merged ke fase-2 pada `395fcad` melalui merge `--no-ff`; review scope dan batas 92 hari selesai | BR-50–BR-52 |
 | WP-2.9 | 2 | Penautan Lead ↔ Konsumen | Merged ke fase-2 pada `dea710e` melalui merge `--no-ff`; review diterima, kandidat HP diprioritaskan, cakupan Sheet dicatat. | BR terkait penautan Lead ↔ Konsumen |
 | WP-2.9b | 2 | Penautan Lead untuk cermin Sheet dan NUP | Merged ke fase-2 pada `15bdbde` melalui merge `--no-ff`; carry-over lima jalur teruji dan browser lengkap dipindah ke WP-2.7. | BR terkait penautan Lead ↔ Konsumen |
@@ -75,6 +75,14 @@ PRD sumber kebenaran: `docs/product/PRD_OASIS_CRM_V3.md` versi 3.3 (D30–D33)
 - Browser: halaman `http://127.0.0.1:8000/consumer-workspace` terbuka pada sesi login tersedia; snapshot DOM berhasil dan console error kosong. Screenshot tidak terbaca karena tab Review tidak terlihat pada runtime browser.
 - Sisa: verifikasi visual desktop/mobile saat tab browser terlihat; review konflik lintas data produksi tetap operator, tanpa cutover produksi.
 - Browser lengkap untuk saran/keputusan, Tanpa Lead, pratinjau/eksekusi bulk, dan konflik dipindah ke WP-2.7. Tidak dianggap sebagai bukti selesai WP-2.9b.
+
+### Penutupan WP-2.7 — 24 November 2026
+
+- Status: selesai; commit penutup terakhir `125f99e` pada branch `prd-v3/wp-2.7-penutup-fase-2`.
+- Ringkasan: UAT ulang lulus untuk modal pembayaran, format Rupiah, bulk Data Lama, keputusan Tanpa Lead, label Konflik/Kendala, dan panel Sheet/NUP setelah perbaikan kontrol Lead tunggal, pembersihan field non-Lead, toast, serta HP tersamar.
+- Verifikasi: suite penuh sesudah 2287 tes, 2286 lulus, 1 skip, 15371 assertions; Pint lulus; build lulus; `git diff --check` lulus.
+- UAT seed terakhir: cabang ID 18 setelah cleanup dan seed ulang, 6 Sheet, 2 NUP, 2 Dana Talangan. UAT manual pemilik terakhir memakai cabang ID 17.
+- Sisa: uji lebar HP oleh pemilik.
 - Carry-over teruji pada form entry, paste import, impor historis, rekonsiliasi migrasi, dan konversi NUP. Jalur paste import, impor historis, dan rekonsiliasi diperbaiki agar memanggil carry-over setelah identitas aplikasi tersedia.
 - UAT interaktif dicoba sekali pada sesi browser baru `http://127.0.0.1:8000`; sesi masuk ke `/login`, bukan sesi Super Admin terautentikasi. Tidak ada retry. Checklist manual lengkap tersedia di `docs/UAT_FASE_2.md`.
 - Bug ditemukan dan diperbaiki: NUP mobile memakai badge `warning` dan tidak menampilkan tautan transaksi. Commit `c7613c6`, regresi mobile/converted ditambahkan.

@@ -92,15 +92,55 @@
             </section>
         @endif
 
-        @if(auth()->user()->hasPermission('consumer_progress.manage'))
-            <section class="mb-4 flex flex-wrap items-end gap-2 border-2 border-black bg-[#fff8cf] p-3" aria-labelledby="bulk-legacy-title">
-                <h2 id="bulk-legacy-title" class="w-full font-bold">Data Lama</h2>
-                <button type="button" class="crm-button crm-button--secondary" x-on:click="previewBulkLegacy()">Pratinjau Data Lama</button>
-                <label for="bulk-legacy-reason" class="sr-only">Alasan Data Lama</label>
-                <input id="bulk-legacy-reason" type="text" class="crm-control" placeholder="Alasan wajib" x-model="bulkLegacyReason">
-                <button type="button" class="crm-button crm-button--danger" x-on:click="submitBulkLegacy(bulkLegacyReason)">Konfirmasi Data Lama</button>
-                <span class="text-sm text-red-700" x-text="bulkLegacyError"></span>
-                <a class="crm-button crm-button--secondary" href="{{ route('consumer-database.workspace.lead-link-conflicts') }}">Daftar konflik</a>
+        @if(auth()->user()->hasPermission('consumer_progress.manage') && $linkSubjects->isNotEmpty())
+            <section class="mb-4" aria-labelledby="bulk-legacy-title" x-data="{ bulkOpen: false }">
+                <button type="button" class="crm-button crm-button--secondary" x-on:click="bulkOpen = !bulkOpen" :aria-expanded="bulkOpen.toString()">Tandai Data Lama (massal)</button>
+                <div x-show="bulkOpen" x-cloak class="mt-3 border-2 border-black bg-[#fff8cf] p-3" role="region" aria-labelledby="bulk-legacy-title">
+                    <h2 id="bulk-legacy-title" class="font-sans font-bold">Tandai Data Lama</h2>
+                    <div class="mt-3 grid gap-3 sm:grid-cols-2">
+                        <div>
+                            <label for="bulk-legacy-branch" class="crm-type-label font-sans">Cabang <span aria-hidden="true">*</span></label>
+                            <select id="bulk-legacy-branch" class="crm-control font-sans" x-model="bulkLegacyBranchId" required>
+                                <option value="">Pilih cabang</option>
+                                @foreach($branches as $branch)
+                                    <option value="{{ $branch->id }}">{{ $branch->name }}</option>
+                                @endforeach
+                            </select>
+                        </div>
+                        <div>
+                            <label for="bulk-legacy-project" class="crm-type-label font-sans">Proyek</label>
+                            <select id="bulk-legacy-project" class="crm-control font-sans" x-model="bulkLegacyProjectId">
+                                <option value="">Semua proyek</option>
+                                @foreach($projects as $project)
+                                    <option value="{{ $project->id }}">{{ $project->project_name }}</option>
+                                @endforeach
+                            </select>
+                        </div>
+                        <div>
+                            <label for="bulk-legacy-before" class="crm-type-label font-sans">Masuk sebelum tanggal <span aria-hidden="true">*</span></label>
+                            <input id="bulk-legacy-before" type="date" class="crm-control font-sans" x-model="bulkLegacyBefore" required>
+                        </div>
+                        <div>
+                            <label for="bulk-legacy-reason" class="crm-type-label font-sans">Alasan <span aria-hidden="true">*</span></label>
+                            <input id="bulk-legacy-reason" type="text" class="crm-control font-sans" placeholder="Alasan wajib" x-model="bulkLegacyReason" required>
+                        </div>
+                    </div>
+                    <div class="mt-3 flex flex-wrap items-center gap-2">
+                        <button type="button" class="crm-button crm-button--secondary font-sans" x-on:click="previewBulkLegacy()">Pratinjau</button>
+                        <button type="button" class="crm-button crm-button--danger font-sans" x-on:click="submitBulkLegacy(bulkLegacyReason)" :disabled="!bulkLegacyResult?.token || !bulkLegacyReason.trim()">Konfirmasi</button>
+                        <a class="crm-button crm-button--secondary font-sans" href="{{ route('consumer-database.workspace.lead-link-conflicts') }}">Daftar konflik</a>
+                    </div>
+                    <p class="mt-2 text-sm font-sans text-red-700" x-text="bulkLegacyError"></p>
+                    <template x-if="bulkLegacyResult?.token">
+                        <div class="mt-3 border-t border-black pt-3 font-sans" role="status">
+                            <p x-text="`Tandai ${bulkLegacyResult.count} konsumen sebagai Data Lama?`"></p>
+                            <ul class="mt-2 list-disc pl-5 text-sm"><template x-for="example in bulkLegacyResult.examples" :key="example.subject_key"><li x-text="`${example.name || 'Tanpa nama'} — ${example.source}`"></li></template></ul>
+                        </div>
+                    </template>
+                    <template x-if="bulkLegacySummary">
+                        <p class="mt-3 border-t border-black pt-3 font-sans text-sm" role="status" x-text="`Selesai — dibuat: ${bulkLegacySummary.created}, dilewati: ${bulkLegacySummary.skipped}, ID kosong: ${bulkLegacySummary.empty_id}`"></p>
+                    </template>
+                </div>
             </section>
         @endif
 
@@ -186,7 +226,7 @@
         <div class="mb-3 flex items-center justify-between gap-3">
             <div>
                 <h2 class="font-[Helvetica] text-sm font-bold uppercase">Daftar konsumen</h2>
-                <p class="text-sm text-gray-600">Buka detail untuk melihat proses, pembayaran, riwayat, dan tindakan operasional.</p>
+                <p class="font-sans text-sm text-gray-600">Buka detail untuk melihat proses, pembayaran, riwayat, dan tindakan operasional.</p>
             </div>
             <span class="text-xs text-gray-600">{{ $applications->firstItem() ?? 0 }}–{{ $applications->lastItem() ?? 0 }} dari {{ $applications->total() }}</span>
         </div>

@@ -16,6 +16,7 @@ export default function registerConsumerWorkspace(Alpine) {
         bulkLegacyBefore: '',
         bulkLegacyReason: '',
         bulkLegacyError: '',
+        bulkLegacySummary: null,
         leadLinkError: '',
         leadLinkSuccess: '',
         trigger: null,
@@ -65,6 +66,7 @@ export default function registerConsumerWorkspace(Alpine) {
 
         async previewBulkLegacy() {
             this.bulkLegacyError = '';
+            this.bulkLegacySummary = null;
             try {
                 const response = await fetch(`${config.bulkLegacyPreviewUrl}?branch_id=${this.bulkLegacyBranchId}&project_id=${this.bulkLegacyProjectId}&before=${this.bulkLegacyBefore}`,  { headers: { Accept: 'application/json' } });
                 const payload = await response.json();
@@ -83,7 +85,8 @@ export default function registerConsumerWorkspace(Alpine) {
             });
             const payload = await response.json();
             if (!response.ok) throw new Error(payload.message || 'Data Lama belum dapat disimpan.');
-            this.bulkLegacyResult = payload.data;
+            this.bulkLegacySummary = payload.data;
+            this.bulkLegacyResult = null;
         },
 
         syncLeadLinkForm() {

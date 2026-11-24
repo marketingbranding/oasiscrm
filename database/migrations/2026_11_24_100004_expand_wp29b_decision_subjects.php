@@ -62,7 +62,7 @@ return new class extends Migration
             DB::statement('DROP INDEX IF EXISTS '.self::ACTIVE_SUBJECT_INDEX);
             DB::statement('CREATE UNIQUE INDEX '.self::ACTIVE_SUBJECT_INDEX.' ON consumer_lead_link_decisions (active_subject_key)');
             $this->createPartialIndex(self::ACTIVE_LEAD_INDEX, 'sales_lead_id', "is_active = 1 AND status = 'linked' AND sales_lead_id IS NOT NULL");
-            DB::statement('CREATE UNIQUE INDEX consumer_lead_link_decisions_active_unique ON consumer_lead_link_decisions (active_consumer_application_key)');
+            // Application uniqueness is rebuilt after consumer_application_id becomes nullable.
         }
 
         DB::table('changelogs')->updateOrInsert(

@@ -22,6 +22,12 @@ export default function registerConsumerWorkspace(Alpine) {
         controller: null,
         lockOwner: 'consumer-workspace-drawer',
 
+        init() {
+            this.bulkLegacyBranchId = config.bulkLegacyBranchId || '';
+            this.bulkLegacyProjectId = config.bulkLegacyProjectId || '';
+            this.bulkLegacyBefore = config.bulkLegacyBefore || '';
+        },
+
         async openDetail(id, trigger = null) {
             this.trigger = trigger || document.activeElement;
             this.recordId = id;

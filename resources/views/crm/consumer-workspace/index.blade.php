@@ -18,6 +18,9 @@
             'leadLinkDecisionUrl' => route('consumer-database.workspace.lead-link-decision.store', ['consumerApplication' => '__ID__']),
              'bulkLegacyPreviewUrl' => route('consumer-database.workspace.bulk-legacy.preview'),
              'bulkLegacyStoreUrl' => route('consumer-database.workspace.bulk-legacy.store'),
+             'bulkLegacyBranchId' => $selectedBranch?->id,
+             'bulkLegacyProjectId' => $selectedProject?->id,
+             'bulkLegacyBefore' => now()->toDateString(),
             'processUrls' => [
                 'slik' => route('consumer-process.slik', ['consumerApplication' => '__ID__']),
                 'psjb' => route('consumer-process.psjb', ['consumerApplication' => '__ID__']),

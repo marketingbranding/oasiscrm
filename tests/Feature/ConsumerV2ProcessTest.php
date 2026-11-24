@@ -251,6 +251,20 @@ class ConsumerV2ProcessTest extends TestCase
         ])->assertUnprocessable();
     }
 
+    public function test_br21_return_to_nup_json_includes_success_feedback(): void
+    {
+        $application = ConsumerApplication::factory()->create();
+        $actor = $this->superadmin($application);
+        $issue = ConsumerIssue::factory()->create(['consumer_application_id' => $application->id]);
+
+        $this->actingAs($actor)->postJson(route('consumer-nups.return', $application), [
+            'issue_id' => $issue->id,
+            'nup_number' => 'NUP-FEEDBACK',
+            'reason' => 'Koreksi UAT',
+            'confirmation' => '1',
+        ])->assertCreated()->assertJsonPath('message', 'Transaksi berhasil dikembalikan ke NUP.');
+    }
+
     public function test_br21_return_to_nup_route_accepts_method_override_payload(): void
     {
         $application = ConsumerApplication::factory()->create();

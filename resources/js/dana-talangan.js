@@ -3,6 +3,7 @@ export default function registerDanaTalangan(Alpine) {
         ...detailModal,
         adding: false,
         editingRecord: null,
+        paymentRecord: null,
         filterMode: 'date',
         filterOpen: false,
         tableFrozen: true,
@@ -35,6 +36,15 @@ export default function registerDanaTalangan(Alpine) {
             if (this.addForm.project_name) {
                 this.loadAddKavlings(true);
             }
+        },
+
+        openPayment(record) {
+            this.paymentRecord = record;
+            this.$nextTick(() => this.$refs.paymentAmount?.focus());
+        },
+
+        closePayment() {
+            this.paymentRecord = null;
         },
 
         projectsFor(branchId, current = '') {

@@ -131,6 +131,25 @@ class DanaTalanganGoogleSyncTest extends TestCase
         $this->assertSame(2, substr_count($contents, 'Proyek Kembar'));
     }
 
+    public function test_bug3_payment_modal_posts_multipart_payment_and_shows_record_summary(): void
+    {
+        [$branch, $user] = $this->makeBranchAndUser();
+        $record = $this->makeRecord($branch, $user);
+        $record->update(['nominal' => '22000000.00']);
+
+        $this->actingAs($user)->get(route('dana-talangan.index'))->assertOk()->assertSee('openPayment', false)->assertSee('Nominal Talangan')->assertSee(':action="paymentRecord?.action"', false)->assertSee('name="payment_record_id"', false)->assertSee('name="form_mode" value="payment"', false);
+        $this->actingAs($user)->post(route('dana-talangan.payments.store', $record), ['paid_at' => '2026-11-24', 'amount' => '22000000.00', 'is_verified' => '1'])->assertRedirect();
+        $this->assertDatabaseHas('dana_talangan_payments', ['dana_talangan_id' => $record->id, 'amount' => '22000000.00']);
+    }
+
+    public function test_bug3_payment_validation_error_returns_to_payment_context(): void
+    {
+        [$branch, $user] = $this->makeBranchAndUser();
+        $record = $this->makeRecord($branch, $user);
+
+        $this->actingAs($user)->from(route('dana-talangan.index'))->post(route('dana-talangan.payments.store', $record), ['paid_at' => '2026-11-24', 'amount' => ''])->assertRedirect()->assertSessionHasErrors('amount');
+    }
+
     public function test_branch_user_can_open_tracking_filters_and_modals(): void
     {
         [$branch, $user] = $this->makeBranchAndUser();

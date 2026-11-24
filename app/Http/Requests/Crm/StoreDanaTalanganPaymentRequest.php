@@ -11,6 +11,16 @@ class StoreDanaTalanganPaymentRequest extends FormRequest
         return $this->user()?->can('update', $this->route('dana_talangan')) ?? false;
     }
 
+    protected function prepareForValidation(): void
+    {
+        $record = $this->route('danaTalangan');
+
+        $this->merge([
+            'form_mode' => 'payment',
+            'payment_record_id' => $record?->getKey(),
+        ]);
+    }
+
     public function rules(): array
     {
         return [

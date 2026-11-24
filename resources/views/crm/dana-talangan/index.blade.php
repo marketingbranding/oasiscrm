@@ -4,6 +4,7 @@
 
 @section('content')
 @php
+    $oldPaymentRecord = old('form_mode') === 'payment' ? $records->firstWhere('id', (int) old('payment_record_id')) : null;
     $oldEditingRecord = old('form_mode') === 'edit' ? [
         'id' => old('record_id'),
         'tanggal' => old('tanggal'),
@@ -39,8 +40,17 @@
         $activeFilters[] = 'Bulan: '.($monthFrom ?: 'awal').' - '.($monthTo ?: 'akhir');
     }
     $danaTalanganConfig = [
-        'adding' => $errors->any() && old('form_mode') !== 'edit',
+        'adding' => $errors->any() && ! in_array(old('form_mode'), ['edit', 'payment'], true),
         'editingRecord' => $oldEditingRecord,
+        'paymentRecord' => $oldPaymentRecord ? [
+            'id' => $oldPaymentRecord->id,
+            'name' => $oldPaymentRecord->nama_konsumen,
+            'kav' => $oldPaymentRecord->kav,
+            'nominal' => $oldPaymentRecord->formattedNominal(),
+            'paid' => data_get($oldPaymentRecord->payment_summary ?? [], 'verified', '0.00'),
+            'remaining' => data_get($oldPaymentRecord->payment_summary ?? [], 'remaining', $oldPaymentRecord->formattedNominal()),
+            'action' => route('dana-talangan.payments.store', $oldPaymentRecord),
+        ] : null,
         'filterMode' => $filterMode,
         'updateBaseUrl' => url('dana-talangan'),
         'kavlingOptionsUrl' => route('dana-talangan.kavling-options'),
@@ -278,17 +288,7 @@
                         </form>
                         @endif
                         <div class="flex items-center justify-center gap-1">
-                             <details class="relative">
-                                 <summary class="cursor-pointer font-[Helvetica] font-bold underline text-[11px]">Bayar</summary>
-                                 <form method="POST" action="{{ route('dana-talangan.payments.store', $r) }}" enctype="multipart/form-data" class="absolute right-0 z-20 mt-1 w-64 border-2 border-black bg-white p-2 text-left shadow-[4px_4px_0_0_#000]">
-                                     @csrf
-                                     <label class="block text-[11px] font-bold">Tanggal<input type="date" name="paid_at" value="{{ now()->format('Y-m-d') }}" required class="w-full border border-black px-1 py-1"></label>
-                                     <label class="mt-1 block text-[11px] font-bold">Nominal<input type="number" name="amount" min="0.01" step="0.01" required class="w-full border border-black px-1 py-1"></label>
-                                     <label class="mt-1 block text-[11px] font-bold">Bukti<input type="file" name="evidence" accept=".jpg,.jpeg,.png,.pdf" class="w-full text-[11px]"></label>
-                                     <label class="mt-1 block text-[11px]"><input type="hidden" name="is_verified" value="0"><input type="checkbox" name="is_verified" value="1" checked> Langsung terverifikasi</label>
-                                     <button class="mt-2 border-2 border-black bg-yellow-400 px-2 py-1 text-[11px] font-bold">Simpan Pembayaran</button>
-                                 </form>
-                             </details>
+                            <button type="button" class="font-[Helvetica] font-bold underline text-[11px]" @click="openPayment(@js(['id' => $r->id, 'name' => $r->nama_konsumen, 'kav' => $r->kav, 'nominal' => $r->formattedNominal(), 'paid' => data_get($r->payment_summary ?? [], 'verified', '0.00'), 'remaining' => data_get($r->payment_summary ?? [], 'remaining', $r->formattedNominal()), 'action' => route('dana-talangan.payments.store', $r)]))">Bayar</button>
                             <button type="button" @click="openEdit(@js([
                                 "id" => $r->id,
                                 "tanggal" => $r->tanggal?->format("Y-m-d"),
@@ -334,6 +334,24 @@
     </div>
 
     <x-crm.pagination :collection="$records" :per-page="$perPage" />
+
+    <div x-cloak x-show="paymentRecord" class="fixed inset-0 z-[60] flex items-center justify-center bg-black/70 px-4" role="dialog" aria-modal="true" @keydown.escape.window="closePayment()">
+        <div class="w-full max-w-lg max-h-[90vh] overflow-y-auto border-2 border-black bg-white p-5 shadow-[8px_8px_0_0_#000]" @click.away="closePayment()">
+            <div class="flex items-center justify-between border-b-2 border-black pb-3"><h2 class="font-bold uppercase">Bayar Dana Talangan</h2><button type="button" class="text-xl font-bold" @click="closePayment()" aria-label="Tutup">&times;</button></div>
+            <dl class="my-4 grid grid-cols-2 gap-2 text-sm"><div><dt class="font-bold">Konsumen</dt><dd x-text="paymentRecord?.name || '—'"></dd></div><div><dt class="font-bold">Kavling</dt><dd x-text="paymentRecord?.kav || '—'"></dd></div><div><dt class="font-bold">Nominal Talangan</dt><dd x-text="paymentRecord?.nominal || '—'"></dd></div><div><dt class="font-bold">Total Terbayar</dt><dd x-text="paymentRecord?.paid || '0.00'"></dd></div><div><dt class="font-bold">Sisa</dt><dd x-text="paymentRecord?.remaining || '0.00'"></dd></div></dl>
+            <form method="POST" :action="paymentRecord?.action" enctype="multipart/form-data" class="space-y-3" @submit="closePayment()">
+                @csrf
+                <input type="hidden" name="form_mode" value="payment">
+                <input type="hidden" name="payment_record_id" :value="paymentRecord?.id || ''">
+                <label class="block text-sm font-bold">Tanggal<input type="date" name="paid_at" value="{{ now()->format('Y-m-d') }}" required class="crm-control mt-1"></label>
+                <label class="block text-sm font-bold">Nominal<input x-ref="paymentAmount" type="number" name="amount" min="0.01" step="0.01" required class="crm-control mt-1"></label>
+                <label class="block text-sm font-bold">Bukti<input type="file" name="evidence" accept=".jpg,.jpeg,.png,.pdf" class="mt-1 block w-full text-sm"></label>
+                <label class="block text-sm"><input type="hidden" name="is_verified" value="0"><input type="checkbox" name="is_verified" value="1" checked> Langsung terverifikasi</label>
+                @if($errors->any() && old('form_mode') !== 'edit')<div class="border-2 border-red-700 bg-red-50 p-2 text-sm text-red-800" role="alert">{{ $errors->first() }}</div>@endif
+                <button class="crm-button crm-button--primary">Simpan Pembayaran</button>
+            </form>
+        </div>
+    </div>
 
     {{-- Add Modal --}}
     <div x-cloak x-show="adding" x-ref="addModalPanel" class="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4"

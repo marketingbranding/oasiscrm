@@ -4,6 +4,12 @@
 @section('page-title', 'Status Migrasi Cabang')
 @section('content')
     <div class="space-y-6">
+        @if ($errors->any())
+            <div class="border-2 border-red-700 bg-red-50 p-3 text-red-800" role="alert">
+                <p class="font-semibold">Status migrasi belum disimpan.</p>
+                <ul class="list-disc pl-5">@foreach ($errors->all() as $error)<li>{{ $error }}</li>@endforeach</ul>
+            </div>
+        @endif
         <div>
             <h1 class="text-2xl font-semibold">Status Migrasi Cabang</h1>
             <p class="mt-1 text-sm text-slate-600">Perubahan status wajib berurutan dan memakai alasan.</p>
@@ -17,9 +23,14 @@
                 <tbody>
                     @foreach ($branches as $branch)
                         @php($state = $branch->migrationState?->state ?? 'sheet')
-                        <tr class="border-t border-slate-200" x-data="{ open: false, confirm: false, newState: '{{ $state }}' }">
+                        <tr class="border-t border-slate-200" x-data="{ open: {{ $errors->any() && (string) old('branch_id') === (string) $branch->id ? 'true' : 'false' }}, confirm: false, newState: '{{ $state }}' }">
                             <td class="px-4 py-3">{{ $branch->name }}</td>
-                            <td class="px-4 py-3 font-medium">{{ $state }}</td>
+                            <td class="px-4 py-3 font-medium">
+                                {{ $state }}
+                                @if (data_get($migrationOverrides ?? [], $branch->id, false))
+                                    <x-crm.status-badge variant="warning">Override</x-crm.status-badge>
+                                @endif
+                            </td>
                             @php($parity = $paritySnapshots->get($branch->id))
                             <td class="px-4 py-3"><span>{{ $parity?->status ?? 'Belum ada' }}</span><br><span class="text-xs text-slate-500">{{ $parity?->checked_at?->format('d M Y H:i') ?? '—' }}</span><br><a class="underline" href="{{ route('admin.branch-parity.index', ['branch' => $branch->id]) }}">Laporan paritas</a></td>
                             <td class="px-4 py-3">{{ $branch->migrationState?->changed_at?->format('d M Y H:i') ?? 'Belum diubah' }}</td>
@@ -33,6 +44,7 @@
                                         <form method="POST" action="{{ route('admin.branch-migration-states.update', $branch) }}" class="mt-4 space-y-4">
                                             @csrf @method('PUT')
                                             <input type="hidden" name="expected_state" value="{{ $state }}">
+                                            <input type="hidden" name="branch_id" value="{{ $branch->id }}">
                                             <label class="block">Status baru
                                                 <select name="state" x-model="newState" class="mt-1 block w-full rounded border p-2" required>
                                                     @foreach (['sheet', 'migrasi', 'paralel', 'oasis_penuh'] as $option)

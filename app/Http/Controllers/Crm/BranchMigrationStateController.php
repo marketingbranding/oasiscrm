@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Crm;
 
 use App\Http\Controllers\Controller;
+use App\Models\ActivityLog;
 use App\Models\Branch;
 use App\Models\BranchMigrationState;
 use App\Models\ConsumerParitySnapshot;
@@ -19,9 +20,18 @@ class BranchMigrationStateController extends Controller
         abort_unless(request()->user()?->isSuperadmin(), 403);
 
         $branches = Branch::query()->with(['migrationState.changedBy'])->orderBy('name')->paginate(25);
-        $paritySnapshots = ConsumerParitySnapshot::query()->whereIn('branch_id', $branches->getCollection()->pluck('id'))->latest('checked_at')->get()->unique('branch_id')->keyBy('branch_id');
+        $branchIds = $branches->getCollection()->pluck('id');
+        $paritySnapshots = ConsumerParitySnapshot::query()->whereIn('branch_id', $branchIds)->latest('checked_at')->get()->unique('branch_id')->keyBy('branch_id');
+        $migrationOverrides = ActivityLog::query()
+            ->where('event', 'branch_migration_state_changed')
+            ->whereIn('subject_id', $branchIds)
+            ->latest('id')
+            ->get()
+            ->unique('subject_id')
+            ->filter(fn (ActivityLog $log): bool => (bool) data_get($log->properties, 'parity_override', false))
+            ->mapWithKeys(fn (ActivityLog $log): array => [(int) $log->subject_id => true]);
 
-        return view('crm.branch-migration-states.index', compact('branches', 'paritySnapshots'));
+        return view('crm.branch-migration-states.index', compact('branches', 'paritySnapshots', 'migrationOverrides'));
     }
 
     public function update(Request $request, Branch $branch)
@@ -33,6 +43,7 @@ class BranchMigrationStateController extends Controller
             'state' => ['required', 'string', 'in:'.implode(',', BranchMigrationState::STATES)],
             'reason' => ['required', 'string', 'max:1000', 'not_regex:/^\s*$/'],
             'override' => ['sometimes', 'boolean'],
+            'branch_id' => ['nullable', 'integer'],
         ]);
         $override = (bool) ($data['override'] ?? false);
         if ($override && ! ($data['expected_state'] === BranchMigrationState::STATE_PARALEL && $data['state'] === BranchMigrationState::STATE_OASIS_FULL)) {

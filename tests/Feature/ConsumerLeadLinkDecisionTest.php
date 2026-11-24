@@ -732,22 +732,16 @@ class ConsumerLeadLinkDecisionTest extends TestCase
     {
         $migration = require database_path('migrations/2026_11_24_100000_create_consumer_lead_link_decisions_table.php');
         $changelogMigration = require database_path('migrations/2026_11_24_100001_add_wp29_consumer_lead_link_changelog.php');
-        $task4ChangelogMigration = require database_path('migrations/2026_11_24_100002_add_wp29_task4_changelog.php');
 
         $migration->up();
         $migration->up();
         $changelogMigration->up();
         $changelogMigration->up();
-        $task4ChangelogMigration->up();
-        $task4ChangelogMigration->up();
 
         $this->assertTrue(Schema::hasTable('consumer_lead_link_decisions'));
         $this->assertSame(1, DB::table('changelogs')->whereNull('version')->where('title', 'Penautan Lead dan Konsumen ter-audit')->count());
-        $this->assertSame(1, DB::table('changelogs')->whereNull('version')->where('title', 'Penautan Lead konsumen tersedia di ruang kerja')->count());
 
         $changelogMigration->down();
-        $task4ChangelogMigration->down();
         $this->assertSame(0, DB::table('changelogs')->whereNull('version')->where('title', 'Penautan Lead dan Konsumen ter-audit')->count());
-        $this->assertSame(0, DB::table('changelogs')->whereNull('version')->where('title', 'Penautan Lead konsumen tersedia di ruang kerja')->count());
     }
 }

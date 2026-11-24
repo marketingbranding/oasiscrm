@@ -15,6 +15,15 @@ use Illuminate\Validation\Rule;
 
 class StoreConsumerLeadLinkDecisionRequest extends FormRequest
 {
+    public function messages(): array
+    {
+        return [
+            'sales_lead_id.prohibited' => 'Lead hanya boleh diisi untuk keputusan Tertaut.',
+            'sales_lead_id.required' => 'Lead wajib dipilih untuk keputusan Tertaut.',
+            'status.required' => 'Keputusan wajib dipilih.',
+        ];
+    }
+
     public function authorize(): bool
     {
         $user = $this->user();

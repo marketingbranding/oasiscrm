@@ -73,6 +73,13 @@ final class ConsumerDatabaseController extends Controller
         ]);
     }
 
+    private function maskPhone(?string $phone): string
+    {
+        $value = preg_replace('/\D+/', '', (string) $phone) ?? '';
+
+        return mb_strlen($value) < 4 ? '—' : mb_substr($value, 0, 3).'••••'.mb_substr($value, -2);
+    }
+
     public function linkSubjectLeadOptions(Request $request, string $subjectType, int $subjectId): JsonResponse
     {
         $resolver = app(ConsumerLeadLinkSubjectResolver::class);
@@ -90,7 +97,7 @@ final class ConsumerDatabaseController extends Controller
             $query->where('customer_name', 'like', '%'.$search.'%')->orWhere('phone', 'like', '%'.$search.'%')->orWhere('normalized_phone', 'like', '%'.$search.'%');
         })->limit(20)->get(['id', 'customer_name', 'phone', 'sales_user_id']);
 
-        return response()->json(['ok' => true, 'data' => $leads->map(fn (SalesLead $lead): array => ['id' => $lead->id, 'name' => $lead->customer_name, 'phone' => $lead->phone, 'sales_name' => $lead->sales?->name])->values()->all()]);
+        return response()->json(['ok' => true, 'data' => $leads->map(fn (SalesLead $lead): array => ['id' => $lead->id, 'name' => $lead->customer_name, 'phone_masked' => $this->maskPhone($lead->phone), 'sales_name' => $lead->sales?->name])->values()->all()]);
     }
 
     public function showLinkSubject(Request $request, string $subjectType, int $subjectId): JsonResponse
@@ -220,7 +227,7 @@ final class ConsumerDatabaseController extends Controller
                     'id' => $decision->id,
                     'status' => $decision->status,
                 ],
-            ]);
+            ], $subject !== null ? 201 : 200);
         }
 
         return back()->with('success', 'Keputusan penautan Lead berhasil disimpan.');

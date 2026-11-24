@@ -138,13 +138,16 @@ class ConsumerLeadLinkDecisionTest extends TestCase
         $this->actingAs($actor)->postJson(route('consumer-database.workspace.bulk-legacy.store'), ['reason' => 'Uji HTTP JS', 'token' => $preview['token'], 'branch_id' => (string) $branch->id, 'project_id' => null, 'before' => '2026-01-01'])->assertOk()->assertJsonPath('data.created', 1);
     }
 
-    public function test_subject_panel_offers_manual_lead_search_and_success_refresh(): void
+    public function test_subject_panel_has_one_required_lead_control_and_clears_lead_when_status_changes(): void
     {
         $view = file_get_contents(resource_path('views/crm/consumer-workspace/index.blade.php'));
         $script = file_get_contents(resource_path('js/consumer-workspace.js'));
 
+        $this->assertSame(1, substr_count($view, ':required="subjectDecision.status === \'linked\'"'));
         $this->assertStringContainsString('Cari Lead berdasarkan nama atau HP', $view);
-        $this->assertStringContainsString('searchSubjectLeads', $script);
+        $this->assertStringContainsString("if (body.status !== 'linked')", $script);
+        $this->assertStringContainsString('delete body.sales_lead_id', $script);
+        $this->assertStringContainsString('delete body.lead_search', $script);
         $this->assertStringContainsString("window.oasisToast?.('Keputusan subjek berhasil disimpan.', 'success')", $script);
     }
 
@@ -714,6 +717,17 @@ class ConsumerLeadLinkDecisionTest extends TestCase
             ->assertJsonPath('data.lead_link.history.0.status', 'without_lead')
             ->assertJsonPath('data.lead_link.history.1.status', 'legacy')
             ->assertJsonPath('data.lead_link.history.1.legacy_anchor', '[SYS] ID Konsumen');
+    }
+
+    public function test_br_subject_without_lead_accepts_json_without_sales_lead_id(): void
+    {
+        [$branch, $project, $actor] = $this->bulkContext();
+        $row = KonsumenProgressSheetRow::create(['branch_id' => $branch->id, 'sheet_id' => 'subject', 'sheet_name' => 'data_konsumen', 'row_hash' => 'subject', 'row_data' => ['[SYS] ID Konsumen' => 'SUBJECT-1', 'Nama Konsumen' => 'Subjek', 'Tanggal' => '2025-01-01', 'Proyek' => $project->project_name]]);
+
+        $this->actingAs($actor)
+            ->postJson(route('consumer-database.workspace.link-subject.lead-link-decision.store', ['subjectType' => 'sheet', 'subjectId' => $row->id]), ['status' => 'without_lead', 'reason' => 'Lead tidak ditemukan'])
+            ->assertCreated()
+            ->assertJsonPath('data.status', 'without_lead');
     }
 
     public function test_br_task4_workspace_decision_endpoint_accepts_json_and_is_idempotent(): void

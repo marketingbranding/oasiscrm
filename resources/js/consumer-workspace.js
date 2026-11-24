@@ -139,10 +139,15 @@ export default function registerConsumerWorkspace(Alpine) {
             this.subjectError = '';
             try {
                 const url = config.subjectDecisionUrl.replace('__TYPE__', encodeURIComponent(this.subject.subject_type)).replace('__ID__', encodeURIComponent(this.subject.subject_id));
+                const body = { ...this.subjectDecision };
+                if (body.status !== 'linked') {
+                    delete body.sales_lead_id;
+                    delete body.lead_search;
+                }
                 const response = await fetch(url, {
                     method: 'POST',
                     headers: { Accept: 'application/json', 'Content-Type': 'application/json', 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.content || '' },
-                    body: JSON.stringify(this.subjectDecision),
+                    body: JSON.stringify(body),
                 });
                 const payload = await response.json().catch(() => ({}));
                 if (!response.ok) throw new Error(Object.values(payload.errors || {}).flat()[0] || payload.message || 'Keputusan belum dapat disimpan.');

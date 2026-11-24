@@ -39,7 +39,7 @@
 <x-crm.section id="dana-talangan-report-summary" title="Ringkasan" description="Pembayaran diterima dalam periode dipisahkan dari total pembayaran sampai akhir periode.">
     <div class="grid grid-cols-2 gap-3 md:grid-cols-4">
         @foreach(['count' => 'Jumlah Talangan', 'nominal' => 'Total Nominal', 'verified' => 'Terverifikasi s.d. akhir periode', 'unverified' => 'Belum Terverifikasi s.d. akhir periode', 'received_verified' => 'Terverifikasi diterima dalam periode', 'received_unverified' => 'Belum terverifikasi diterima dalam periode', 'remaining' => 'Sisa', 'overpaid' => 'Lebih Bayar'] as $key => $label)
-            <x-crm.card><div class="text-xs">{{ $label }}</div><div class="text-lg font-semibold">{{ $report[$key] }}</div></x-crm.card>
+            <x-crm.card><div class="text-xs">{{ $label }}</div><div class="text-lg font-semibold">{{ in_array($key, ['nominal', 'verified', 'unverified', 'received_verified', 'received_unverified', 'remaining', 'overpaid'], true) ? \App\Support\DanaTalanganMoney::format($report[$key]) : number_format($report[$key]) }}</div></x-crm.card>
         @endforeach
     </div>
 </x-crm.section>

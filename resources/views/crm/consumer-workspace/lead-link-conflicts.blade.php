@@ -15,9 +15,9 @@
                     <tr>
                         <td>{{ $item->id }}</td><td>{{ $item->consumer_application_id }}</td>
                         <td>{{ $conflictTypeLabels[$item->conflict_type] ?? 'Konflik penautan' }}</td>
-                        <td>{{ $item->source_status ?: '—' }} / Lead {{ $item->source_lead_id ?: '—' }}</td>
-                        <td>{{ $item->target_status ?: '—' }} / Lead {{ $item->target_lead_id ?: '—' }}</td>
-                        <td>{{ $item->status }}</td>
+                        <td>{{ ['linked' => 'Tertaut', 'without_lead' => 'Tanpa Lead', 'legacy' => 'Data Lama'][$item->source_status] ?? '—' }} / {{ $item->source_lead_name ?: '—' }}</td>
+                        <td>{{ ['linked' => 'Tertaut', 'without_lead' => 'Tanpa Lead', 'legacy' => 'Data Lama'][$item->target_status] ?? '—' }} / {{ $item->target_lead_name ?: '—' }}</td>
+                        <td>{{ $item->status === 'open' ? 'Terbuka' : ($item->status === 'resolved' ? 'Selesai' : $item->status) }}</td>
                         <td><a class="font-bold text-[#0000ee] underline" href="{{ route('consumer-database.workspace.lead-link-conflict.show', $item->id) }}">Tinjau</a></td>
                     </tr>
                 @empty

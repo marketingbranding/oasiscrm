@@ -21,7 +21,8 @@ export default function registerConsumerWorkspace(Alpine) {
         subjectLoading: false,
         subjectError: '',
         subject: null,
-        subjectDecision: { status: 'without_lead', reason: '', sales_lead_id: '' },
+        subjectDecision: { status: 'without_lead', reason: '', sales_lead_id: '', lead_search: '' },
+        subjectLeadSearchResults: [],
         subjectDecisionSaving: false,
         leadLinkError: '',
         leadLinkSuccess: '',
@@ -105,7 +106,8 @@ export default function registerConsumerWorkspace(Alpine) {
             this.subjectLoading = true;
             this.subjectError = '';
             this.subject = null;
-            this.subjectDecision = { status: 'without_lead', reason: '', sales_lead_id: '' };
+            this.subjectDecision = { status: 'without_lead', reason: '', sales_lead_id: '', lead_search: '' };
+            this.subjectLeadSearchResults = [];
             this.$nextTick(() => this.$refs.subjectClose?.focus());
             try {
                 const url = config.subjectUrl.replace('__TYPE__', encodeURIComponent(subjectType)).replace('__ID__', encodeURIComponent(subjectId));
@@ -118,6 +120,18 @@ export default function registerConsumerWorkspace(Alpine) {
             } finally {
                 this.subjectLoading = false;
             }
+        },
+
+        async searchSubjectLeads() {
+            const search = this.subjectDecision.lead_search.trim();
+            if (search.length < 2 || !this.subject) {
+                this.subjectLeadSearchResults = [];
+                return;
+            }
+            const url = config.subjectLeadOptionsUrl.replace('__TYPE__', encodeURIComponent(this.subject.subject_type)).replace('__ID__', encodeURIComponent(this.subject.subject_id)) + `?search=${encodeURIComponent(search)}`;
+            const response = await fetch(url, { headers: { Accept: 'application/json' } });
+            const payload = await response.json();
+            this.subjectLeadSearchResults = response.ok && payload.ok ? payload.data : [];
         },
 
         async submitSubjectDecision() {
@@ -133,6 +147,7 @@ export default function registerConsumerWorkspace(Alpine) {
                 const payload = await response.json().catch(() => ({}));
                 if (!response.ok) throw new Error(Object.values(payload.errors || {}).flat()[0] || payload.message || 'Keputusan belum dapat disimpan.');
                 await this.openSubject(this.subject.subject_type, this.subject.subject_id);
+                window.oasisToast?.('Keputusan subjek berhasil disimpan.', 'success');
             } catch (exception) {
                 this.subjectError = exception.message || 'Keputusan belum dapat disimpan.';
             } finally {

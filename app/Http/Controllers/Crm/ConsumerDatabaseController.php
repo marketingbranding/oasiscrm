@@ -73,6 +73,26 @@ final class ConsumerDatabaseController extends Controller
         ]);
     }
 
+    public function linkSubjectLeadOptions(Request $request, string $subjectType, int $subjectId): JsonResponse
+    {
+        $resolver = app(ConsumerLeadLinkSubjectResolver::class);
+        $subject = match ($subjectType) {
+            'nup' => $resolver->fromNup(ConsumerNup::query()->with('customer')->findOrFail($subjectId)),
+            'sheet' => $resolver->fromSheetRow(KonsumenProgressSheetRow::query()->findOrFail($subjectId)),
+            default => abort(404),
+        };
+        abort_unless($request->user()->isAccountActive() && $request->user()->hasPermission('consumer_progress.view') && $this->organizationScope->allowsProjectRecord($request->user(), 'consumer_progress', 'view', $subject->branchId, $subject->projectId), 403);
+        $search = trim((string) $request->query('search', ''));
+        if (mb_strlen($search) < 2) {
+            return response()->json(['ok' => true, 'data' => []]);
+        }
+        $leads = SalesLead::query()->with('sales:id,name')->where('branch_id', $subject->branchId)->where('project_id', $subject->projectId)->where(function ($query) use ($search): void {
+            $query->where('customer_name', 'like', '%'.$search.'%')->orWhere('phone', 'like', '%'.$search.'%')->orWhere('normalized_phone', 'like', '%'.$search.'%');
+        })->limit(20)->get(['id', 'customer_name', 'phone', 'sales_user_id']);
+
+        return response()->json(['ok' => true, 'data' => $leads->map(fn (SalesLead $lead): array => ['id' => $lead->id, 'name' => $lead->customer_name, 'phone' => $lead->phone, 'sales_name' => $lead->sales?->name])->values()->all()]);
+    }
+
     public function showLinkSubject(Request $request, string $subjectType, int $subjectId): JsonResponse
     {
         $resolver = app(ConsumerLeadLinkSubjectResolver::class);
@@ -158,10 +178,12 @@ final class ConsumerDatabaseController extends Controller
             ->join('consumer_applications as application', 'application.id', '=', 'conflict.consumer_application_id')
             ->leftJoin('consumer_lead_link_decisions as source', 'source.id', '=', 'conflict.source_decision_id')
             ->leftJoin('consumer_lead_link_decisions as target', 'target.id', '=', 'conflict.target_decision_id')
+            ->leftJoin('sales_leads as source_lead', 'source_lead.id', '=', 'source.sales_lead_id')
+            ->leftJoin('sales_leads as target_lead', 'target_lead.id', '=', 'target.sales_lead_id')
             ->whereIn('application.branch_id', $branchIds)
             ->orderByDesc('conflict.id')
             ->limit(250)
-            ->get(['conflict.id', 'conflict.source_decision_id', 'conflict.target_decision_id', 'conflict.consumer_application_id', 'conflict.conflict_type', 'conflict.status', 'conflict.details', 'conflict.created_at', 'source.status as source_status', 'source.sales_lead_id as source_lead_id', 'target.status as target_status', 'target.sales_lead_id as target_lead_id']);
+            ->get(['conflict.id', 'conflict.source_decision_id', 'conflict.target_decision_id', 'conflict.consumer_application_id', 'conflict.conflict_type', 'conflict.status', 'conflict.details', 'conflict.created_at', 'source.status as source_status', 'source.sales_lead_id as source_lead_id', 'source_lead.customer_name as source_lead_name', 'target.status as target_status', 'target.sales_lead_id as target_lead_id', 'target_lead.customer_name as target_lead_name']);
     }
 
     public function previewBulkLegacy(Request $request): JsonResponse

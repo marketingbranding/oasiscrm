@@ -138,6 +138,16 @@ class ConsumerLeadLinkDecisionTest extends TestCase
         $this->actingAs($actor)->postJson(route('consumer-database.workspace.bulk-legacy.store'), ['reason' => 'Uji HTTP JS', 'token' => $preview['token'], 'branch_id' => (string) $branch->id, 'project_id' => null, 'before' => '2026-01-01'])->assertOk()->assertJsonPath('data.created', 1);
     }
 
+    public function test_subject_panel_offers_manual_lead_search_and_success_refresh(): void
+    {
+        $view = file_get_contents(resource_path('views/crm/consumer-workspace/index.blade.php'));
+        $script = file_get_contents(resource_path('js/consumer-workspace.js'));
+
+        $this->assertStringContainsString('Cari Lead berdasarkan nama atau HP', $view);
+        $this->assertStringContainsString('searchSubjectLeads', $script);
+        $this->assertStringContainsString("window.oasisToast?.('Keputusan subjek berhasil disimpan.', 'success')", $script);
+    }
+
     public function test_uat_labels_hide_raw_conflict_module_and_workspace_process_values(): void
     {
         $this->assertStringContainsString('Jenis Konflik', file_get_contents(resource_path('views/crm/consumer-workspace/lead-link-conflicts.blade.php')));

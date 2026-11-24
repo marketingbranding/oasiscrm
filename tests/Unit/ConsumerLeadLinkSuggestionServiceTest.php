@@ -44,14 +44,12 @@ class ConsumerLeadLinkSuggestionServiceTest extends TestCase
             'lead_date' => '2026-11-10',
         ]);
         $phoneOnly = $this->lead($consumer, $otherSales, [
-            'project_id' => $otherProject->id,
             'customer_name' => 'Nama Berbeda',
-            'phone' => null,
-            'normalized_phone' => '0812 3456 7890',
+            'phone' => '+62 812 3456 7890',
+            'normalized_phone' => '6281234567890',
             'lead_date' => '2026-11-10',
         ]);
         $nameOnly = $this->lead($consumer, $otherSales, [
-            'project_id' => $otherProject->id,
             'customer_name' => 'Budi Sntoso',
             'phone' => '0899-1111-2222',
             'normalized_phone' => '6289911112222',
@@ -64,29 +62,27 @@ class ConsumerLeadLinkSuggestionServiceTest extends TestCase
             'lead_date' => '2026-11-01',
         ]);
         $salesOnly = $this->lead($consumer, $sales, [
-            'project_id' => $otherProject->id,
             'customer_name' => 'Nama Sales',
             'phone' => '0899-3333-4444',
             'normalized_phone' => '6289933334444',
             'lead_date' => '2026-11-01',
         ]);
         $late = $this->lead($consumer, $otherSales, [
-            'project_id' => $otherProject->id,
             'customer_name' => 'Nama Berbeda',
             'phone' => '+62 812 3456 7890',
             'normalized_phone' => '6281234567890',
             'lead_date' => '2026-12-01',
         ]);
-        $weakName = $this->lead($consumer, $otherSales, [
+        $otherProjectLead = $this->lead($consumer, $otherSales, [
             'project_id' => $otherProject->id,
-            'customer_name' => 'Zed',
-            'phone' => '0899-4444-5555',
-            'normalized_phone' => '6289944445555',
+            'customer_name' => 'Budi Santoso',
+            'phone' => '0812-3456-7890',
+            'normalized_phone' => '6281234567890',
             'lead_date' => '2026-11-01',
         ]);
         $before = $consumer->getAttributes();
         $snapshotKeys = ['branch_id', 'project_id', 'sales_user_id', 'lead_date', 'customer_name', 'phone', 'normalized_phone'];
-        $leadSnapshots = collect([$best, $phoneOnly, $nameOnly, $projectOnly, $salesOnly, $late, $weakName])
+        $leadSnapshots = collect([$best, $phoneOnly, $nameOnly, $projectOnly, $salesOnly, $late, $otherProjectLead])
             ->mapWithKeys(fn (SalesLead $lead): array => [$lead->id => $lead->only($snapshotKeys)])
             ->all();
 
@@ -108,7 +104,7 @@ class ConsumerLeadLinkSuggestionServiceTest extends TestCase
         $this->assertFalse($suggestions->firstWhere('lead_id', $late->id)['rationale']['chronological_plausibility']);
         $this->assertTrue($suggestions->firstWhere('lead_id', $projectOnly->id)['rationale']['same_project']);
         $this->assertTrue($suggestions->firstWhere('lead_id', $salesOnly->id)['rationale']['same_sales']);
-        $this->assertFalse($suggestions->contains('lead_id', $weakName->id));
+        $this->assertFalse($suggestions->contains('lead_id', $otherProjectLead->id));
         $this->assertSame($before, $consumer->fresh()->getAttributes());
         foreach ($leadSnapshots as $leadId => $attributes) {
             $this->assertEquals($attributes, SalesLead::query()->findOrFail($leadId)->only($snapshotKeys));

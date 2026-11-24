@@ -73,7 +73,12 @@ export default function registerConsumerWorkspace(Alpine) {
             this.leadLinkSaving = true;
             this.leadLinkError = '';
             this.leadLinkSuccess = '';
-            const body = { ...this.leadLink, suggestions: this.detail?.lead_link?.suggestions || [] };
+            const suggestions = (this.detail?.lead_link?.suggestions || []).map((suggestion) => ({
+                lead_id: suggestion.lead_id,
+                score: suggestion.score,
+                rationale: suggestion.rationale,
+            }));
+            const body = { ...this.leadLink, suggestions };
             if (body.sales_lead_id) body.sales_lead_id = Number(body.sales_lead_id);
             if (body.status !== 'linked') delete body.sales_lead_id;
             if (body.status !== 'legacy') delete body.legacy_anchor;
@@ -89,9 +94,10 @@ export default function registerConsumerWorkspace(Alpine) {
                     const messages = Object.values(payload.errors || {}).flat();
                     throw new Error(messages[0] || payload.message || 'Keputusan belum dapat disimpan.');
                 }
-                this.leadLinkSuccess = payload.message || 'Keputusan penautan Lead berhasil disimpan.';
+                const successMessage = payload.message || 'Keputusan penautan Lead berhasil disimpan.';
                 await this.openDetail(this.recordId, this.trigger);
                 this.activeTab = 'lead_link';
+                this.leadLinkSuccess = successMessage;
             } catch (exception) {
                 this.leadLinkError = exception.message;
             } finally {

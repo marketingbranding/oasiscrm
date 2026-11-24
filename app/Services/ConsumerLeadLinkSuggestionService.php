@@ -57,8 +57,8 @@ final class ConsumerLeadLinkSuggestionService
             ?? $consumer->created_at?->startOfDay();
 
         return SalesLead::query()
-            ->whereIn('branch_id', $branchIds)
-            ->whereIn('project_id', $projectIds)
+            ->where('branch_id', $consumer->branch_id)
+            ->where('project_id', $consumer->project_id)
             ->whereIn('sales_user_id', $salesUserIds)
             ->with(['sales:id,name', 'branch:id,name', 'project:id,project_name'])
             ->orderBy('id')

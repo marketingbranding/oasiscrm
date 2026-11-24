@@ -435,6 +435,37 @@ class ConsumerLeadLinkDecisionTest extends TestCase
         $this->assertDatabaseCount('activity_log', 1);
     }
 
+    public function test_br_task4_ui_echoed_suggestion_payload_is_accepted_and_snapshot_stays_minimal(): void
+    {
+        [$consumer, $actor] = $this->decisionContext();
+        $actor->update(['role_id' => Role::query()->where('slug', 'admin')->value('id')]);
+        $actor = $actor->fresh();
+        $lead = $this->lead($consumer, $actor);
+
+        $suggestions = $this->actingAs($actor)
+            ->getJson(route('consumer-database.workspace.show', $consumer))
+            ->assertOk()
+            ->json('data.lead_link.suggestions');
+
+        $this->assertNotEmpty($suggestions);
+        $this->assertArrayHasKey('lead_name', $suggestions[0]);
+        $this->assertArrayHasKey('sales_name', $suggestions[0]);
+
+        $this->actingAs($actor)
+            ->postJson(route('consumer-database.workspace.lead-link-decision.store', $consumer), [
+                'status' => 'without_lead',
+                'reason' => 'Lead belum ditemukan',
+                'suggestions' => $suggestions,
+            ])
+            ->assertOk();
+
+        $snapshot = ConsumerLeadLinkDecision::query()->sole()->suggestions;
+
+        $this->assertSame($lead->id, $snapshot[0]['lead_id']);
+        $this->assertArrayNotHasKey('lead_name', $snapshot[0]);
+        $this->assertArrayNotHasKey('sales_name', $snapshot[0]);
+    }
+
     public function test_br_task4_workspace_decision_endpoint_returns_json_validation_errors_without_mutation(): void
     {
         [$consumer, $actor] = $this->decisionContext();

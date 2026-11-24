@@ -27,7 +27,8 @@ class ConsumerNupRequest extends FormRequest
                 'issue_id' => ['required', 'integer', 'exists:consumer_issues,id'],
                 'nup_number' => ['required', 'string', 'max:80'],
                 'registered_at' => ['nullable', 'date'],
-                'reason' => ['nullable', 'string', 'max:5000'],
+                'reason' => ['required', 'string', 'max:5000'],
+                'confirmation' => ['accepted'],
             ];
         }
 

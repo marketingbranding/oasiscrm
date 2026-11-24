@@ -45,9 +45,15 @@ final class ConsumerDatabaseController extends Controller
 
     public function show(Request $request, ConsumerApplication $consumerApplication): JsonResponse
     {
+        $detail = $this->workspace->detail($request->user(), $consumerApplication);
+        $detail['actions'] = [
+            'return_to_nup' => $detail['can_input'] ? route('consumer-nups.return', $consumerApplication) : null,
+            'resolve_issue' => $detail['can_input'] ? route('consumer-issues.resolve', ['consumerIssue' => '__ISSUE__']) : null,
+        ];
+
         return response()->json([
             'ok' => true,
-            'data' => $this->workspace->detail($request->user(), $consumerApplication),
+            'data' => $detail,
         ]);
     }
 }

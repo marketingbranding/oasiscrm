@@ -6,6 +6,7 @@ use App\Models\ActivityLog;
 use App\Models\Branch;
 use App\Models\ConsumerApplication;
 use App\Models\ConsumerBankProcess;
+use App\Models\ConsumerNup;
 use App\Models\ConsumerStageEvent;
 use App\Models\Customer;
 use App\Models\LeadMaster;
@@ -22,6 +23,7 @@ final class ConsumerDatabaseWorkspaceService
     public function __construct(
         private readonly OrganizationScopeService $organizationScope,
         private readonly WorkspaceAccessService $workspaceAccess,
+        private readonly BranchMigrationStateService $migrationStates,
         private readonly KonsumenPipelineService $pipeline,
     ) {}
 
@@ -140,6 +142,7 @@ final class ConsumerDatabaseWorkspaceService
             ->all();
 
         return [
+            'can_input' => $this->migrationStates->allowsOasisConsumerInput((int) $application->branch_id),
             'overview' => [
                 'id' => $application->id,
                 'id_transaksi' => $application->id_transaksi,
@@ -214,7 +217,25 @@ final class ConsumerDatabaseWorkspaceService
                 ->all(),
             'activity' => $activities,
             'warranty' => $application->warranties->map(fn ($warranty): array => ['status_komplain' => $warranty->status_komplain, 'status_garansi' => $warranty->status_garansi, 'tanggal_selesai' => $warranty->tanggal_selesai?->toDateString(), 'detail_garansi' => $warranty->detail_garansi])->values()->all(),
-            'issues' => $application->issues->map(fn ($issue): array => ['process' => $issue->process_key, 'category' => $issue->category, 'description' => $issue->description, 'status' => $issue->status, 'opened_at' => $issue->opened_at?->toIso8601String(), 'resolution' => $issue->resolution])->values()->all(),
+            'issues' => $application->issues->map(fn ($issue): array => ['id' => $issue->id, 'process' => $issue->process_key, 'category' => $issue->category, 'description' => $issue->description, 'status' => $issue->status, 'opened_at' => $issue->opened_at?->toIso8601String(), 'resolution' => $issue->resolution])->values()->all(),
+            'nup_history' => ConsumerNup::query()
+                ->where('customer_id', $application->customer_id)
+                ->where('branch_id', $application->branch_id)
+                ->with(['sourceApplication:id,id_transaksi,kavling_id,id_kavling,transaction_status', 'sourceApplication.kavling:id,project_id,name,kavling_code', 'convertedApplication:id,id_transaksi,kavling_id,id_kavling,transaction_status', 'convertedApplication.kavling:id,project_id,name,kavling_code', 'issue:id,description'])
+                ->orderBy('registered_at')
+                ->orderBy('id')
+                ->get()
+                ->map(fn (ConsumerNup $nup): array => [
+                    'id' => $nup->id,
+                    'nup_number' => $nup->nup_number,
+                    'registered_at' => $nup->registered_at?->toDateString(),
+                    'entry_type' => $nup->provenanceType(),
+                    'reason' => $nup->notes ?: $nup->issue?->description,
+                    'source_transaction' => $nup->sourceApplication?->id_transaksi,
+                    'source_kavling' => $nup->sourceApplication?->kavling?->kavling_code ?: $nup->sourceApplication?->kavling?->name ?: $nup->sourceApplication?->id_kavling,
+                    'converted_transaction' => $nup->convertedApplication?->id_transaksi,
+                    'converted_kavling' => $nup->convertedApplication?->kavling?->kavling_code ?: $nup->convertedApplication?->kavling?->name ?: $nup->convertedApplication?->id_kavling,
+                ])->values()->all(),
         ];
     }
 

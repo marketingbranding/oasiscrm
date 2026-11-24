@@ -6,6 +6,7 @@ use App\Models\ActivityLog;
 use App\Models\Branch;
 use App\Models\ConsumerApplication;
 use App\Models\ConsumerBankProcess;
+use App\Models\ConsumerLeadLinkDecision;
 use App\Models\ConsumerLegacyIdentity;
 use App\Models\ConsumerStageEvent;
 use App\Models\HistoricalProcessImportBatch;
@@ -116,6 +117,16 @@ class HistoricalProcessImportTest extends TestCase
         $this->assertStringNotContainsString('0123456789012345', $event->notes);
         $audit = ActivityLog::where('event', 'historical_process_imported')->sole();
         $this->assertStringNotContainsString('0123456789012345', json_encode($audit->properties));
+    }
+
+    public function test_br_carry_over_historical_import_moves_sheet_decision_to_new_application(): void
+    {
+        [$branch, $superadmin] = $this->context();
+        ConsumerLeadLinkDecision::create(['branch_id' => $branch->id, 'subject_type' => 'sheet', 'subject_key' => 'sheet:'.$branch->id.':k-001', 'legacy_consumer_key' => 'K-001', 'status' => 'linked', 'decision_source' => 'manual', 'reason' => 'Sheet', 'decided_at' => now(), 'is_active' => true]);
+        $this->stage($superadmin, $branch->id, "id_kavling\tnama_konsumen\tno_ktp\tid_kons\ttanggal_slik\thasil_slik\tketerangan\nKAV-1\tBudi\t0123456789012345\tK-001\t8/1/2026\tLancar\t");
+
+        $application = ConsumerApplication::sole();
+        $this->assertDatabaseHas('consumer_lead_link_decisions', ['subject_key' => 'application:'.$application->id, 'status' => 'linked', 'is_active' => true]);
     }
 
     public function test_downstream_stages_follow_canonical_id_chain_not_kavling(): void

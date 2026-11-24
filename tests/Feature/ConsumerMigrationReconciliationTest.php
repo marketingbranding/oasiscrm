@@ -6,6 +6,8 @@ use App\Models\Branch;
 use App\Models\BranchMigrationState;
 use App\Models\ConsumerApplication;
 use App\Models\ConsumerKavlingAssignment;
+use App\Models\ConsumerLeadLinkDecision;
+use App\Models\ConsumerLegacyIdentity;
 use App\Models\ConsumerMigrationReconciliation;
 use App\Models\ConsumerStageEvent;
 use App\Models\Kavling;
@@ -60,6 +62,17 @@ class ConsumerMigrationReconciliationTest extends TestCase
         app(ConsumerMigrationReconciliationService::class)->apply($item, $this->admin, ['decision' => 'REJECT', 'new_customer_name' => 'Konsumen Baru']);
         $this->assertCount(0, app(ConsumerMigrationReconciliationService::class)->visibleQuery($this->admin)->get());
         $this->assertSame('RESOLVED', $item->fresh()->reconciliation_status);
+    }
+
+    public function test_br_carry_over_reconciliation_moves_existing_decision_to_application(): void
+    {
+        [$item, $app] = $this->context();
+        ConsumerLegacyIdentity::create(['consumer_application_id' => $app->id, 'legacy_source' => 'marison_v2', 'external_key' => 'transaction:'.$item->source_transaction_id, 'source_payload_hash' => $item->source_payload_hash, 'first_seen_at' => now(), 'last_seen_at' => now(), 'mapping_status' => 'pending']);
+        ConsumerLeadLinkDecision::create(['branch_id' => $item->branch_id, 'subject_type' => 'sheet', 'subject_key' => 'sheet:'.$item->branch_id.':transaction:'.strtolower($item->source_transaction_id), 'legacy_consumer_key' => $item->source_transaction_id, 'status' => 'linked', 'decision_source' => 'manual', 'reason' => 'Sheet', 'decided_at' => now(), 'is_active' => true]);
+
+        app(ConsumerMigrationReconciliationService::class)->apply($item, $this->admin, ['decision' => 'REJECT', 'new_customer_name' => 'Carry Customer']);
+
+        $this->assertDatabaseHas('consumer_lead_link_decisions', ['subject_key' => 'application:'.$app->id, 'status' => 'linked', 'is_active' => true]);
     }
 
     public function test_lanjut_creates_customer_and_active_assignment(): void

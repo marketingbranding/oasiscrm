@@ -112,7 +112,12 @@ final class ConsumerLeadLinkCarryOverService
     private function legacyKey(ConsumerApplication $application): ?string
     {
         $identity = $application->legacyIdentities()->whereNotNull('id_kons')->orderBy('id')->value('id_kons');
+        if ($identity !== null) {
+            return ConsumerLeadLinkSubject::normalizeLegacyConsumerKey($identity);
+        }
 
-        return ConsumerLeadLinkSubject::normalizeLegacyConsumerKey($identity);
+        $externalKey = $application->legacyIdentities()->whereNotNull('external_key')->orderBy('id')->value('external_key');
+
+        return ConsumerLeadLinkSubject::normalizeLegacyConsumerKey($externalKey);
     }
 }

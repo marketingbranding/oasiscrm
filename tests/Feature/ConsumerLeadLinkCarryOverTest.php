@@ -3,14 +3,19 @@
 namespace Tests\Feature;
 
 use App\Models\Branch;
+use App\Models\BranchMigrationState;
 use App\Models\ConsumerApplication;
 use App\Models\ConsumerLeadLinkDecision;
 use App\Models\ConsumerLegacyIdentity;
+use App\Models\ConsumerNup;
+use App\Models\Kavling;
 use App\Models\KonsumenProgressSheetRow;
 use App\Models\LeadMaster;
 use App\Models\Role;
 use App\Models\User;
+use App\Services\ConsumerEntryService;
 use App\Services\ConsumerLeadLinkCarryOverService;
+use App\Services\ConsumerNupService;
 use App\Services\ConsumerPasteImportService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Str;
@@ -51,6 +56,38 @@ class ConsumerLeadLinkCarryOverTest extends TestCase
         $this->assertDatabaseHas('consumer_legacy_identities', ['id_kons' => 'KSM-003']);
         $this->assertDatabaseHas('consumer_lead_link_decisions', ['id' => $decision->id, 'is_active' => false]);
         $this->assertDatabaseHas('consumer_lead_link_decisions', ['subject_type' => 'application', 'status' => 'legacy', 'is_active' => true]);
+    }
+
+    public function test_br_carry_over_form_entry_moves_nup_decision_to_application(): void
+    {
+        $application = ConsumerApplication::factory()->create();
+        $actor = User::factory()->create(['role_id' => Role::query()->where('slug', 'superadmin')->value('id'), 'branch_id' => $application->branch_id, 'password_changed_at' => now()]);
+        $nup = ConsumerNup::factory()->create(['customer_id' => $application->customer_id, 'branch_id' => $application->branch_id, 'project_id' => $application->project_id]);
+        ConsumerLeadLinkDecision::create(['branch_id' => $nup->branch_id, 'subject_type' => 'nup', 'subject_key' => 'nup:'.$nup->id, 'status' => 'linked', 'decision_source' => 'manual', 'reason' => 'NUP', 'decided_at' => now(), 'is_active' => true]);
+
+        $created = app(ConsumerEntryService::class)->create([
+            'name' => $nup->customer->name,
+            'phone' => $nup->customer->phone,
+            'branch_id' => $nup->branch_id,
+            'project_id' => $nup->project_id,
+            'source_nup_id' => $nup->id,
+            'entry_mode' => 'new',
+        ], $actor, true);
+
+        $this->assertDatabaseHas('consumer_lead_link_decisions', ['subject_key' => 'application:'.$created->id, 'status' => 'linked', 'is_active' => true]);
+    }
+
+    public function test_br_carry_over_nup_conversion_moves_decision_to_transaction(): void
+    {
+        $nup = ConsumerNup::factory()->create();
+        BranchMigrationState::query()->updateOrCreate(['branch_id' => $nup->branch_id], ['state' => BranchMigrationState::STATE_PARALEL]);
+        $actor = User::factory()->create(['role_id' => Role::query()->where('slug', 'superadmin')->value('id'), 'branch_id' => $nup->branch_id, 'password_changed_at' => now()]);
+        $kavling = Kavling::create(['project_id' => $nup->project_id, 'kavling_code' => 'CARRY-NUP', 'name' => 'CARRY-NUP']);
+        ConsumerLeadLinkDecision::create(['branch_id' => $nup->branch_id, 'subject_type' => 'nup', 'subject_key' => 'nup:'.$nup->id, 'status' => 'linked', 'decision_source' => 'manual', 'reason' => 'NUP', 'decided_at' => now(), 'is_active' => true]);
+
+        $application = app(ConsumerNupService::class)->convert($nup, ['kavling_id' => $kavling->id], $actor);
+
+        $this->assertDatabaseHas('consumer_lead_link_decisions', ['subject_key' => 'application:'.$application->id, 'status' => 'linked', 'is_active' => true]);
     }
 
     public function test_br_carry_over_repeat_deactivates_source_and_does_not_duplicate_target(): void

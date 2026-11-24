@@ -76,6 +76,8 @@ final class ConsumerMigrationReconciliationService
                 $application->update(['customer_id' => $customer->id, 'consumer_status' => 'Selesai', 'application_status' => 'active']);
             }
             $item->update(['decision' => $decision, 'customer_id' => $customer->id, 'target_kavling_id' => $target?->id, 'reconciliation_status' => 'RESOLVED', 'resolved_by' => $actor->id, 'resolved_at' => now()]);
+            $application->legacyIdentities()->firstOrCreate(['legacy_source' => 'marison_v2', 'external_key' => 'transaction:'.$item->source_transaction_id], ['source_payload_hash' => $item->source_payload_hash, 'first_seen_at' => now(), 'last_seen_at' => now(), 'mapping_status' => 'reconciled']);
+            app(ConsumerLeadLinkCarryOverService::class)->carryApplication($application->fresh());
             $item->load('application');
             $item->application->load('customer');
             ActivityLog::query()->create(['causer_id' => $actor->id, 'subject_type' => ConsumerMigrationReconciliation::class, 'subject_id' => $item->id, 'event' => 'marison_reconciliation_applied', 'description' => 'Rekonsiliasi Marison V2 diterapkan.', 'properties' => ['decision' => $decision, 'customer_id' => $customer->id, 'target_kavling_id' => $target?->id]]);

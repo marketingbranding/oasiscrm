@@ -12,6 +12,10 @@ final class ConsumerLeadLinkSuggestionService
 {
     private const MIN_NAME_SIMILARITY = 0.5;
 
+    private const MIN_SALES_NAME_SIMILARITY = 0.3;
+
+    private const MAX_CANDIDATES = 200;
+
     public function __construct(
         private readonly OrganizationScopeService $organizationScope,
         private readonly WorkspaceAccessService $workspaceAccess,
@@ -56,19 +60,36 @@ final class ConsumerLeadLinkSuggestionService
             ?? $consumer->historical_entered_at?->startOfDay()
             ?? $consumer->created_at?->startOfDay();
 
-        return SalesLead::query()
+        $candidateQuery = SalesLead::query()
             ->where('branch_id', $consumer->branch_id)
             ->where('project_id', $consumer->project_id)
             ->whereIn('sales_user_id', $salesUserIds)
+            ->whereDoesntHave('linkDecisions', function ($query): void {
+                $query->where('status', 'linked')->where('is_active', true);
+            });
+
+        if ($consumerPhone !== null || $consumerName !== '') {
+            $candidateQuery->where(function ($query) use ($consumerPhone, $consumerName): void {
+                if ($consumerPhone !== null) {
+                    $query->where('normalized_phone', $consumerPhone);
+                }
+
+                foreach ($this->nameTokens($consumerName) as $token) {
+                    $query->orWhere('customer_name', 'like', '%'.$token.'%');
+                }
+            });
+        }
+
+        return $candidateQuery
             ->with(['sales:id,name', 'branch:id,name', 'project:id,project_name'])
             ->orderBy('id')
+            ->limit(self::MAX_CANDIDATES)
             ->get()
             ->map(fn (SalesLead $lead): ?array => $this->score(
                 $lead,
                 $consumerName,
                 $consumerPhone,
                 $consumerDate,
-                $consumer->project_id,
                 $consumer->sales_user_id,
             ))
             ->filter()
@@ -80,41 +101,46 @@ final class ConsumerLeadLinkSuggestionService
             ->values();
     }
 
-    /** @return array{lead_id: int, lead: SalesLead, score: float, rationale: array{normalized_phone_match: bool, name_similarity: float, same_project: bool, same_sales: bool, chronological_plausibility: bool}}|null */
-    private function score(SalesLead $lead, string $consumerName, ?string $consumerPhone, mixed $consumerDate, ?int $consumerProjectId, ?int $consumerSalesId): ?array
+    /** @return array{lead_id: int, lead: SalesLead, score: float, rationale: array{normalized_phone_match: bool, name_similarity: float, same_sales: bool, chronological_plausibility: bool}}|null */
+    private function score(SalesLead $lead, string $consumerName, ?string $consumerPhone, mixed $consumerDate, ?int $consumerSalesId): ?array
     {
         $leadName = $this->normalizedName($lead->customer_name);
         $nameSimilarity = $this->nameSimilarity($consumerName, $leadName);
         $leadPhone = $this->phones->normalize($lead->phone)
             ?? $this->phones->normalize($lead->normalized_phone);
         $phoneMatch = $consumerPhone !== null && $leadPhone !== null && $consumerPhone === $leadPhone;
-        $sameProject = $consumerProjectId !== null && (int) $lead->project_id === $consumerProjectId;
         $sameSales = $consumerSalesId !== null && (int) $lead->sales_user_id === $consumerSalesId;
         $chronological = $consumerDate === null || $lead->lead_date === null || $lead->lead_date->startOfDay()->lte($consumerDate);
 
         if (! $phoneMatch
             && $nameSimilarity < self::MIN_NAME_SIMILARITY
-            && ! $sameProject
-            && ! $sameSales) {
+            && ! ($sameSales && $nameSimilarity >= self::MIN_SALES_NAME_SIMILARITY)) {
             return null;
         }
 
         return [
             'lead_id' => (int) $lead->id,
             'lead' => $lead,
-            'score' => round(($phoneMatch ? 0.5 : 0.0)
-                + ($nameSimilarity * 0.25)
-                + ($sameProject ? 0.1 : 0.0)
-                + ($sameSales ? 0.1 : 0.0)
+            'score' => round(($phoneMatch ? 0.6 : 0.0)
+                + ($nameSimilarity * 0.3)
+                + ($sameSales ? 0.05 : 0.0)
                 + ($chronological ? 0.05 : 0.0), 6),
             'rationale' => [
                 'normalized_phone_match' => $phoneMatch,
                 'name_similarity' => round($nameSimilarity, 6),
-                'same_project' => $sameProject,
                 'same_sales' => $sameSales,
                 'chronological_plausibility' => $chronological,
             ],
         ];
+    }
+
+    /** @return list<string> */
+    private function nameTokens(string $name): array
+    {
+        return array_values(array_filter(
+            explode(' ', $name),
+            fn (string $token): bool => mb_strlen($token) >= 3,
+        ));
     }
 
     private function nameSimilarity(string $left, string $right): float

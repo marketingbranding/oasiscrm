@@ -92,7 +92,6 @@ class ConsumerLeadLinkSuggestionServiceTest extends TestCase
         $this->assertSame($best->id, $suggestions->first()['lead']->id);
         $this->assertTrue($suggestions->first()['rationale']['normalized_phone_match']);
         $this->assertTrue($suggestions->firstWhere('lead_id', $phoneOnly->id)['rationale']['normalized_phone_match']);
-        $this->assertTrue($suggestions->first()['rationale']['same_project']);
         $this->assertTrue($suggestions->first()['rationale']['same_sales']);
         $this->assertTrue($suggestions->first()['rationale']['chronological_plausibility']);
         $this->assertGreaterThan(0.9, $suggestions->first()['rationale']['name_similarity']);
@@ -102,9 +101,8 @@ class ConsumerLeadLinkSuggestionServiceTest extends TestCase
         );
         $this->assertGreaterThan(0.5, $suggestions->firstWhere('lead_id', $nameOnly->id)['rationale']['name_similarity']);
         $this->assertFalse($suggestions->firstWhere('lead_id', $late->id)['rationale']['chronological_plausibility']);
-        $this->assertTrue($suggestions->firstWhere('lead_id', $projectOnly->id)['rationale']['same_project']);
-        $this->assertTrue($suggestions->firstWhere('lead_id', $salesOnly->id)['rationale']['same_sales']);
         $this->assertFalse($suggestions->contains('lead_id', $otherProjectLead->id));
+        $this->assertFalse($suggestions->contains('lead_id', $projectOnly->id));
         $this->assertSame($before, $consumer->fresh()->getAttributes());
         foreach ($leadSnapshots as $leadId => $attributes) {
             $this->assertEquals($attributes, SalesLead::query()->findOrFail($leadId)->only($snapshotKeys));
@@ -217,10 +215,10 @@ class ConsumerLeadLinkSuggestionServiceTest extends TestCase
             'nama_konsumen' => 'Dewi Lestari',
             'booking_date' => '2026-11-20',
         ]);
-        $consumer->customer()->update(['name' => 'Dewi Lestari', 'phone' => null]);
+        $consumer->customer()->update(['name' => 'Nama', 'phone' => null]);
         $sales = User::factory()->create(['branch_id' => $consumer->branch_id]);
-        $first = $this->lead($consumer, $sales, ['customer_name' => 'Nama Satu', 'phone' => '081100000001']);
-        $second = $this->lead($consumer, $sales, ['customer_name' => 'Nama Dua', 'phone' => '081100000002']);
+        $first = $this->lead($consumer, $sales, ['customer_name' => 'Nama', 'phone' => '081100000001']);
+        $second = $this->lead($consumer, $sales, ['customer_name' => 'Nama', 'phone' => '081100000002']);
 
         $suggestions = app(ConsumerLeadLinkSuggestionService::class)->suggest($consumer, $viewer);
 
@@ -238,7 +236,7 @@ class ConsumerLeadLinkSuggestionServiceTest extends TestCase
         $sales = User::factory()->create(['branch_id' => $consumer->branch_id]);
         foreach (range(1, 3) as $number) {
             $this->lead($consumer, $sales, [
-                'customer_name' => 'Dewi Lestari '.$number,
+                'customer_name' => 'Dewi Lestari Satu '.$number,
                 'phone' => '08120000000'.$number,
                 'normalized_phone' => '628120000000'.$number,
             ]);

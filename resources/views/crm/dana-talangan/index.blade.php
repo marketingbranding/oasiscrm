@@ -339,7 +339,7 @@
         <div class="w-full max-w-lg max-h-[90vh] overflow-y-auto border-2 border-black bg-white p-5 shadow-[8px_8px_0_0_#000]" @click.away="closePayment()">
             <div class="flex items-center justify-between border-b-2 border-black pb-3"><h2 class="font-bold uppercase">Bayar Dana Talangan</h2><button type="button" class="text-xl font-bold" @click="closePayment()" aria-label="Tutup">&times;</button></div>
             <dl class="my-4 grid grid-cols-2 gap-2 text-sm"><div><dt class="font-bold">Konsumen</dt><dd x-text="paymentRecord?.name || '—'"></dd></div><div><dt class="font-bold">Kavling</dt><dd x-text="paymentRecord?.kav || '—'"></dd></div><div><dt class="font-bold">Nominal Talangan</dt><dd x-text="paymentRecord?.nominal || '—'"></dd></div><div><dt class="font-bold">Total Terbayar</dt><dd x-text="paymentRecord?.paid || '0.00'"></dd></div><div><dt class="font-bold">Sisa</dt><dd x-text="paymentRecord?.remaining || '0.00'"></dd></div></dl>
-            <form method="POST" :action="paymentRecord?.action" enctype="multipart/form-data" class="space-y-3" @submit="closePayment()">
+            <form method="POST" :action="paymentRecord?.action" enctype="multipart/form-data" class="space-y-3">
                 @csrf
                 <input type="hidden" name="form_mode" value="payment">
                 <input type="hidden" name="payment_record_id" :value="paymentRecord?.id || ''">

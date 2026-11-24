@@ -31,4 +31,27 @@ class StoreDanaTalanganPaymentRequest extends FormRequest
             'evidence' => ['nullable', 'file', 'mimes:jpg,jpeg,png,pdf', 'max:5120'],
         ];
     }
+
+    public function attributes(): array
+    {
+        return [
+            'paid_at' => 'tanggal pembayaran',
+            'amount' => 'nominal pembayaran',
+            'evidence' => 'bukti pembayaran',
+        ];
+    }
+
+    public function messages(): array
+    {
+        return [
+            'paid_at.required' => 'Tanggal pembayaran wajib diisi.',
+            'paid_at.date' => 'Tanggal pembayaran tidak valid.',
+            'amount.required' => 'Nominal pembayaran wajib diisi.',
+            'amount.numeric' => 'Nominal pembayaran harus berupa angka.',
+            'amount.gt' => 'Nominal pembayaran harus lebih besar dari nol.',
+            'amount.decimal' => 'Nominal pembayaran maksimal memiliki dua angka desimal.',
+            'evidence.mimes' => 'Bukti pembayaran harus berupa JPG, PNG, atau PDF.',
+            'evidence.max' => 'Ukuran bukti pembayaran maksimal 5 MB.',
+        ];
+    }
 }

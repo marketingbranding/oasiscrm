@@ -76,6 +76,8 @@ PRD sumber kebenaran: `docs/product/PRD_OASIS_CRM_V3.md` versi 3.3 (D30–D33)
 - Sisa: verifikasi visual desktop/mobile saat tab browser terlihat; review konflik lintas data produksi tetap operator, tanpa cutover produksi.
 - Browser lengkap untuk saran/keputusan, Tanpa Lead, pratinjau/eksekusi bulk, dan konflik dipindah ke WP-2.7. Tidak dianggap sebagai bukti selesai WP-2.9b.
 - Carry-over teruji pada form entry, paste import, impor historis, rekonsiliasi migrasi, dan konversi NUP. Jalur paste import, impor historis, dan rekonsiliasi diperbaiki agar memanggil carry-over setelah identitas aplikasi tersedia.
+- UAT interaktif dicoba sekali pada sesi browser baru `http://127.0.0.1:8000`; sesi masuk ke `/login`, bukan sesi Super Admin terautentikasi. Tidak ada retry. Checklist manual lengkap tersedia di `docs/UAT_FASE_2.md`.
+- Bug ditemukan dan diperbaiki: NUP mobile memakai badge `warning` dan tidak menampilkan tautan transaksi. Commit `c7613c6`, regresi mobile/converted ditambahkan.
 
 | WP-3.2 | 3 | Asisten AI per peran | Belum mulai | BR-70–BR-72 |
 | WP-3.3 | 3 | Push PWA dan preferensi notifikasi | Belum mulai | §7.11 |

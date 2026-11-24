@@ -447,6 +447,34 @@ class ConsumerLeadLinkDecisionTest extends TestCase
         $this->assertDatabaseCount('consumer_lead_link_decisions', 0);
     }
 
+    public function test_br_task4_workspace_decision_endpoint_redirects_normal_form_validation_failure_with_reason_error(): void
+    {
+        [$consumer, $actor] = $this->decisionContext();
+
+        $this->actingAs($actor)
+            ->from(route('consumer-database.workspace'))
+            ->post(route('consumer-database.workspace.lead-link-decision.store', $consumer), ['status' => 'without_lead'])
+            ->assertRedirect(route('consumer-database.workspace'))
+            ->assertSessionHasErrors(['reason']);
+
+        $this->assertDatabaseCount('consumer_lead_link_decisions', 0);
+    }
+
+    public function test_br_task4_workspace_detail_endpoint_rejects_out_of_scope_consumer_direct_get(): void
+    {
+        [$consumer, $actor] = $this->decisionContext();
+        $foreignBranch = Branch::create(['code' => 'FOREIGN-GET', 'name' => 'Cabang Asing GET', 'is_active' => true]);
+        $foreignProject = LeadMaster::create(['branch_id' => $foreignBranch->id, 'project_name' => 'Proyek Asing GET', 'is_active' => true]);
+        $foreignConsumer = ConsumerApplication::factory()->create([
+            'branch_id' => $foreignBranch->id,
+            'project_id' => $foreignProject->id,
+        ]);
+
+        $this->actingAs($actor)
+            ->getJson(route('consumer-database.workspace.show', $foreignConsumer))
+            ->assertForbidden();
+    }
+
     public function test_br_task4_workspace_decision_endpoint_rejects_foreign_consumer_and_view_only_actor(): void
     {
         [$consumer, $actor] = $this->decisionContext();
@@ -704,16 +732,22 @@ class ConsumerLeadLinkDecisionTest extends TestCase
     {
         $migration = require database_path('migrations/2026_11_24_100000_create_consumer_lead_link_decisions_table.php');
         $changelogMigration = require database_path('migrations/2026_11_24_100001_add_wp29_consumer_lead_link_changelog.php');
+        $task4ChangelogMigration = require database_path('migrations/2026_11_24_100002_add_wp29_task4_changelog.php');
 
         $migration->up();
         $migration->up();
         $changelogMigration->up();
         $changelogMigration->up();
+        $task4ChangelogMigration->up();
+        $task4ChangelogMigration->up();
 
         $this->assertTrue(Schema::hasTable('consumer_lead_link_decisions'));
         $this->assertSame(1, DB::table('changelogs')->whereNull('version')->where('title', 'Penautan Lead dan Konsumen ter-audit')->count());
+        $this->assertSame(1, DB::table('changelogs')->whereNull('version')->where('title', 'Penautan Lead konsumen tersedia di ruang kerja')->count());
 
         $changelogMigration->down();
+        $task4ChangelogMigration->down();
         $this->assertSame(0, DB::table('changelogs')->whereNull('version')->where('title', 'Penautan Lead dan Konsumen ter-audit')->count());
+        $this->assertSame(0, DB::table('changelogs')->whereNull('version')->where('title', 'Penautan Lead konsumen tersedia di ruang kerja')->count());
     }
 }

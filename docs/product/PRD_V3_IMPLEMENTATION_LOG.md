@@ -80,6 +80,7 @@ Status: selesai pada branch `prd-v3/wp-2.9-penautan-lead`. Keputusan manusia men
 - Regression bridge yang sudah ada tetap memastikan kandidat ambigu/unmatched tidak dibuat tautan otomatis dan audit bridge tidak menulis `ConsumerLegacyIdentity`. Tidak ada source behavior berubah pada Task 5.
 - Verifikasi Task 5: focused bridge/link suite `61 tests, 60 passed, 1 skipped, 213 assertions`; Pint dan diff check lulus. Full suite dicatat pada laporan Task 5.
 - Konflik terbuka: tidak ada konflik baru. Cutover sheet/OASIS tetap operator-controlled; Task 5 tidak mengeksekusi sinkronisasi atau perubahan workbook produksi.
+- Cakupan penautan: jalur ini hanya menerima `ConsumerApplication` yang sudah ada di OASIS. Konsumen cabang yang masih memakai Sheet hanya bisa ditautkan bila cerminnya sudah menjadi `ConsumerApplication`; status migrasi Sheet tidak lagi memblokir keputusan karena keputusan tidak menulis Sheet. NUP tanpa transaksi belum dipastikan seluruhnya direpresentasikan sebagai `ConsumerApplication`; inventaris dan pemetaan NUP tersebut belum dikerjakan. Usulan: paket terpisah memetakan NUP legacy/aktif ke entitas keputusan dengan provenance, tanpa mengarang riwayat.
 
 ## WP-1.6 — Tahap Lead v3
 

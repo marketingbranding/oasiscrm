@@ -30,8 +30,6 @@ final class ConsumerLeadLinkDecisionService
 
     private const MAX_RATIONALE_VALUE_LENGTH = 200;
 
-    private const SAFE_REASON_PATTERN = '/^[\\p{L}\\p{N}\\s.,:;!?()\\[\\]\\/_+%\'-]+$/u';
-
     public function decide(
         ConsumerApplication $consumer,
         string $status,
@@ -53,7 +51,6 @@ final class ConsumerLeadLinkDecisionService
                 ->where('branch_id', $lockedConsumer->branch_id)
                 ->lockForUpdate()
                 ->first();
-            $this->branchMigrationState->assertOasisConsumerInputAllowed((int) $lockedConsumer->branch_id);
             $this->authorize($actor, $lockedConsumer);
             $this->assertSuggestionScope($actor, $lockedConsumer, $suggestions);
 
@@ -217,8 +214,8 @@ final class ConsumerLeadLinkDecisionService
             throw ValidationException::withMessages(['reason' => 'Alasan maksimal 2000 karakter.']);
         }
 
-        if ($reason !== '' && preg_match(self::SAFE_REASON_PATTERN, $reason) !== 1) {
-            throw ValidationException::withMessages(['reason' => 'Alasan memuat karakter yang tidak didukung.']);
+        if ($reason !== '' && preg_match('/[\\x00-\\x1F\\x7F]/u', $reason) === 1) {
+            throw ValidationException::withMessages(['reason' => 'Alasan memuat karakter kontrol yang tidak didukung.']);
         }
 
         return $reason === '' ? null : $reason;

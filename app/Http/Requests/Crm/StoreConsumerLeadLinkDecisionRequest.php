@@ -4,7 +4,6 @@ namespace App\Http\Requests\Crm;
 
 use App\Models\ConsumerApplication;
 use App\Models\ConsumerLeadLinkDecision;
-use App\Services\BranchMigrationStateService;
 use App\Services\OrganizationScopeService;
 use Illuminate\Contracts\Validation\Validator;
 use Illuminate\Foundation\Http\FormRequest;
@@ -33,8 +32,7 @@ class StoreConsumerLeadLinkDecisionRequest extends FormRequest
                 'manage',
                 (int) $consumer->branch_id,
                 $consumer->project_id,
-            )
-            && app(BranchMigrationStateService::class)->allowsOasisConsumerInput((int) $consumer->branch_id);
+            );
     }
 
     public function withValidator(Validator $validator): void

@@ -240,6 +240,21 @@ class ConsumerLeadLinkDecisionTest extends TestCase
         );
     }
 
+    public function test_br_reason_accepts_ampersand_and_at_sign(): void
+    {
+        [$consumer, $actor] = $this->decisionContext();
+
+        $decision = app(ConsumerLeadLinkDecisionService::class)->decide(
+            $consumer,
+            'without_lead',
+            null,
+            ['reason' => 'Diperiksa oleh A&B @ kantor'],
+            $actor,
+        );
+
+        $this->assertSame('Diperiksa oleh A&B @ kantor', $decision->reason);
+    }
+
     public function test_br_legacy_anchor_is_rejected_for_nonlegacy_decision(): void
     {
         [$consumer, $actor] = $this->decisionContext();
@@ -273,14 +288,14 @@ class ConsumerLeadLinkDecisionTest extends TestCase
         $this->assertDatabaseCount('consumer_lead_link_decisions', 1);
     }
 
-    public function test_br_migration_guard_rejects_blocked_branch_without_mutation(): void
+    public function test_br_link_decision_allows_sheet_branch_without_oasis_input_migration(): void
     {
         [$consumer, $actor] = $this->decisionContext();
         BranchMigrationState::query()->where('branch_id', $consumer->branch_id)->update(['state' => BranchMigrationState::STATE_SHEET]);
 
-        $this->expectException(AuthorizationException::class);
         app(ConsumerLeadLinkDecisionService::class)->decide($consumer, 'without_lead', null, ['reason' => 'Tidak ditemukan'], $actor);
-        $this->assertDatabaseCount('consumer_lead_link_decisions', 0);
+
+        $this->assertDatabaseCount('consumer_lead_link_decisions', 1);
     }
 
     public function test_br_request_validates_status_requirements_and_forbidden_fields(): void
@@ -317,13 +332,13 @@ class ConsumerLeadLinkDecisionTest extends TestCase
         $this->assertTrue($request->authorize());
     }
 
-    public function test_br_request_rejects_blocked_migration_branch(): void
+    public function test_br_request_allows_sheet_branch_for_link_decision(): void
     {
         [$consumer, $actor] = $this->decisionContext();
         BranchMigrationState::query()->where('branch_id', $consumer->branch_id)->update(['state' => BranchMigrationState::STATE_SHEET]);
         $request = $this->decisionRequest($consumer, $actor, ['status' => 'without_lead', 'reason' => 'Tidak ditemukan']);
 
-        $this->assertFalse($request->authorize());
+        $this->assertTrue($request->authorize());
     }
 
     public function test_br_request_rejects_unbounded_suggestion_rationale(): void
@@ -386,6 +401,8 @@ class ConsumerLeadLinkDecisionTest extends TestCase
     {
         [$consumer, $actor] = $this->decisionContext();
         $actor->update(['role_id' => Role::query()->where('slug', 'admin')->value('id')]);
+        $consumer->customer()->update(['name' => 'Lead Test', 'phone' => '089000000000']);
+        $consumer->refresh();
         $lead = $this->lead($consumer, $actor);
 
         $this->actingAs($actor->fresh())
@@ -440,6 +457,8 @@ class ConsumerLeadLinkDecisionTest extends TestCase
         [$consumer, $actor] = $this->decisionContext();
         $actor->update(['role_id' => Role::query()->where('slug', 'admin')->value('id')]);
         $actor = $actor->fresh();
+        $consumer->customer()->update(['name' => 'Lead Test', 'phone' => '089000000000']);
+        $consumer->refresh();
         $lead = $this->lead($consumer, $actor);
 
         $suggestions = $this->actingAs($actor)

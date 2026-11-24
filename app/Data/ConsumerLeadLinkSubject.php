@@ -25,6 +25,15 @@ final readonly class ConsumerLeadLinkSubject
         public ?string $note = null,
     ) {}
 
+    public function subjectKey(): string
+    {
+        return match ($this->subjectType) {
+            'application', 'nup' => $this->subjectType.':'.$this->subjectId,
+            'sheet' => 'sheet:'.$this->branchId.':'.$this->legacyConsumerKey,
+            default => throw new \LogicException('Jenis subjek penautan Lead tidak valid.'),
+        };
+    }
+
     public static function fromApplication(ConsumerApplication $application): self
     {
         return new self(

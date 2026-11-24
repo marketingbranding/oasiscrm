@@ -207,6 +207,40 @@ class OrganizationScopeService
         });
     }
 
+    /** @return array<int> */
+    private function hasBranchScope(User $viewer, string $module, string $action): bool
+    {
+        return $this->hasScope($viewer, $module, $action, 'branch');
+    }
+
+    private function isPusatScopeRole(User $viewer): bool
+    {
+        return $viewer->hasPrimaryRole(['manager', 'ass_manager', 'supervisor']);
+    }
+
+    public function projectIdsForBranchScope(User $viewer, string $module, string $action = 'view'): array
+    {
+        if ($viewer->scope_level === 'pusat' && $this->isPusatScopeRole($viewer)) {
+            return LeadMaster::query()->where('is_active', true)->pluck('id')->map(fn ($id): int => (int) $id)->all();
+        }
+        $projectIds = $this->projectIds($viewer, $module, $action);
+        if ($projectIds !== [] || (! $this->hasBranchScope($viewer, $module, $action) && ! $this->hasScope($viewer, $module, $action, 'team'))) {
+            return $projectIds;
+        }
+
+        $branchIds = $this->branchIds($viewer, $module, $action);
+        if ($branchIds === []) {
+            return [];
+        }
+
+        return LeadMaster::query()
+            ->where('is_active', true)
+            ->whereIn('branch_id', $branchIds)
+            ->pluck('id')
+            ->map(fn ($id): int => (int) $id)
+            ->all();
+    }
+
     public function requiresProjectScope(User $viewer, string $module, string $action = 'view'): bool
     {
         $scopes = $this->scopes($viewer, $module, $action);

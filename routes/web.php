@@ -67,6 +67,7 @@ use App\Http\Controllers\Crm\SalesPocketbookOnboardingController;
 use App\Http\Controllers\Crm\SalesSheetIdentityController;
 use App\Http\Controllers\Crm\SupervisorSalesPocketbookController;
 use App\Http\Controllers\Crm\SystemHealthController;
+use App\Http\Controllers\Crm\TeamHistoryController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\WorkspaceV2\WorkspaceController;
 use App\Models\Comment;
@@ -90,6 +91,7 @@ Route::middleware(['auth', 'active', 'verified'])->group(function () {
 Route::middleware(['auth', 'active', 'verified', 'password.changed', 'operational.maintenance', 'crm.read-only', 'sales.access'])->group(function () {
     Route::bind('comment', fn ($value) => Comment::withTrashed()->findOrFail($value));
     Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
+    Route::get('/team-history', [TeamHistoryController::class, 'index'])->name('team-history.index');
 
     Route::prefix('admin/izin-akses-khusus')->name('admin.access-grants.')->middleware(['permission:system.settings_manage', 'system.admin:settings'])->group(function (): void {
         Route::get('/', [AccessGrantController::class, 'index'])->name('index');

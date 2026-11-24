@@ -76,7 +76,20 @@ final class ConsumerDatabaseController extends Controller
         };
         abort_unless($request->user()->isAccountActive() && $this->organizationScope->allowsProjectRecord($request->user(), 'consumer_progress', 'view', $subject->branchId, $subject->projectId), 403);
 
-        return response()->json(['ok' => true, 'data' => ['subject' => get_object_vars($subject)]]);
+        return response()->json(['ok' => true, 'data' => ['subject' => [
+            'subject_type' => $subject->subjectType,
+            'subject_id' => $subject->subjectId ?? $subject->sheetRowId,
+            'subject_key' => $subject->subjectKey(),
+            'branch_id' => $subject->branchId,
+            'project_id' => $subject->projectId,
+            'name' => $subject->name,
+            'phone' => $subject->phone,
+            'kavling' => $subject->kavling,
+            'sales_user_id' => $subject->salesUserId,
+            'legacy_consumer_key' => $subject->legacyConsumerKey,
+            'decidable' => $subject->isDecidable,
+            'note' => $subject->note,
+        ]]]);
     }
 
     public function storeLeadLinkDecision(StoreConsumerLeadLinkDecisionRequest $request, ?ConsumerApplication $consumerApplication = null): RedirectResponse|JsonResponse

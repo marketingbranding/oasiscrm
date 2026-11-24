@@ -8,6 +8,8 @@ use App\Models\Branch;
 use App\Models\BranchMigrationState;
 use App\Models\ConsumerApplication;
 use App\Models\ConsumerLeadLinkDecision;
+use App\Models\ConsumerNup;
+use App\Models\KonsumenProgressSheetRow;
 use App\Models\SalesLead;
 use App\Models\User;
 use Illuminate\Auth\Access\AuthorizationException;
@@ -35,10 +37,11 @@ final class ConsumerLeadLinkDecisionService
     public function previewBulkLegacy(User $actor, array $filters): array
     {
         $rows = KonsumenProgressSheetRow::query()->where('sheet_name', 'data_konsumen')->when($filters['branch_id'] ?? null, fn ($q, $id) => $q->where('branch_id', $id))->limit(500)->get();
+        $nups = ConsumerNup::query()->when($filters['branch_id'] ?? null, fn ($q, $id) => $q->where('branch_id', $id))->limit(500)->get();
         $resolver = app(ConsumerLeadLinkSubjectResolver::class);
-        $subjects = $rows->map(fn ($row) => $resolver->fromSheetRow($row))->filter(fn ($subject) => $subject->isDecidable && ($filters['before'] ?? null) === null || ($subject->enteredAt?->lt($filters['before']) ?? false));
+        $subjects = $rows->map(fn ($row) => $resolver->fromSheetRow($row))->merge($nups->map(fn ($nup) => $resolver->fromNup($nup)))->filter(fn ($subject): bool => $subject->isDecidable && (($filters['before'] ?? null) === null || ($subject->enteredAt?->lt($filters['before']) ?? false)))->filter(fn ($subject): bool => ! ConsumerLeadLinkDecision::query()->where('subject_key', $subject->subjectKey())->where('is_active', true)->exists());
 
-        return ['count' => $subjects->count(), 'examples' => $subjects->take(10)->map(fn ($subject) => ['source' => 'sheet', 'name' => $subject->name, 'subject_key' => $subject->subjectKey()])->all()];
+        return ['count' => $subjects->count(), 'examples' => $subjects->take(10)->map(fn ($subject): array => ['source' => $subject->subjectType, 'name' => $subject->name, 'subject_key' => $subject->subjectKey()])->all()];
     }
 
     public function markBulkLegacy(User $actor, array $filters, string $reason): array
@@ -47,10 +50,11 @@ final class ConsumerLeadLinkDecisionService
             throw ValidationException::withMessages(['reason' => 'Alasan wajib diisi untuk Data Lama.']);
         }
         $rows = KonsumenProgressSheetRow::query()->where('sheet_name', 'data_konsumen')->when($filters['branch_id'] ?? null, fn ($q, $id) => $q->where('branch_id', $id))->limit(500)->get();
+        $nups = ConsumerNup::query()->when($filters['branch_id'] ?? null, fn ($q, $id) => $q->where('branch_id', $id))->limit(500)->get();
         $resolver = app(ConsumerLeadLinkSubjectResolver::class);
+        $subjects = $rows->map(fn ($row) => $resolver->fromSheetRow($row))->merge($nups->map(fn ($nup) => $resolver->fromNup($nup)));
         $result = ['created' => 0, 'skipped' => 0, 'empty_id' => 0];
-        foreach ($rows as $row) {
-            $subject = $resolver->fromSheetRow($row);
+        foreach ($subjects as $subject) {
             if (! $subject->isDecidable) {
                 $result['empty_id']++;
 
@@ -61,7 +65,7 @@ final class ConsumerLeadLinkDecisionService
 
                 continue;
             }
-            $this->decideForSubject($subject, ConsumerLeadLinkDecision::STATUS_LEGACY, null, ['reason' => $reason], $actor);
+            $this->decideForSubject($subject, ConsumerLeadLinkDecision::STATUS_LEGACY, null, ['reason' => $reason, 'legacy_anchor' => '[SYS] ID Konsumen'], $actor);
             $result['created']++;
         }
 

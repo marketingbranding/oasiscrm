@@ -56,8 +56,11 @@ return new class extends Migration
             $this->createIndexIfMissing(self::ACTIVE_SUBJECT_INDEX, 'active_subject_key');
             $this->createIndexIfMissing(self::ACTIVE_LEAD_INDEX, 'active_lead_key');
         } else {
+            if (! Schema::hasColumn('consumer_lead_link_decisions', 'active_subject_key')) {
+                DB::statement('ALTER TABLE consumer_lead_link_decisions ADD active_subject_key VARCHAR(255) GENERATED ALWAYS AS (CASE WHEN is_active = 1 THEN subject_key ELSE NULL END) STORED');
+            }
             DB::statement('DROP INDEX IF EXISTS '.self::ACTIVE_SUBJECT_INDEX);
-            DB::statement('CREATE INDEX '.self::ACTIVE_SUBJECT_INDEX.' ON consumer_lead_link_decisions (subject_key, is_active)');
+            DB::statement('CREATE UNIQUE INDEX '.self::ACTIVE_SUBJECT_INDEX.' ON consumer_lead_link_decisions (active_subject_key)');
             $this->createPartialIndex(self::ACTIVE_LEAD_INDEX, 'sales_lead_id', "is_active = 1 AND status = 'linked' AND sales_lead_id IS NOT NULL");
             DB::statement('CREATE UNIQUE INDEX consumer_lead_link_decisions_active_unique ON consumer_lead_link_decisions (active_consumer_application_key)');
         }

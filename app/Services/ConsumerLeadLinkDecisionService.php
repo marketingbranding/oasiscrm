@@ -39,6 +39,7 @@ final class ConsumerLeadLinkDecisionService
     public function previewBulkLegacy(User $actor, array $filters): array
     {
         $this->validateBulkFilters($actor, $filters);
+        $filters = [...$filters, ...$this->normalizeBulkFilters($filters)];
         $subjects = $this->bulkLegacySubjects($actor, $filters);
         $keys = $subjects->map(fn (ConsumerLeadLinkSubject $subject): string => $subject->subjectKey())->values()->all();
         $expiresAt = now()->addMinutes(15);
@@ -54,6 +55,7 @@ final class ConsumerLeadLinkDecisionService
             throw ValidationException::withMessages(['reason' => 'Alasan wajib diisi untuk Data Lama.']);
         }
         $this->validateBulkFilters($actor, $filters);
+        $filters = [...$filters, ...$this->normalizeBulkFilters($filters)];
         $token = (string) ($filters['token'] ?? '');
         $preview = cache()->get('consumer-lead-link:bulk:'.$token);
         if (! is_array($preview) || ($preview['user_id'] ?? null) !== $actor->id || ($preview['expires_at'] ?? 0) < now()->timestamp) {
@@ -91,6 +93,15 @@ final class ConsumerLeadLinkDecisionService
         });
     }
 
+    private function normalizeBulkFilters(array $filters): array
+    {
+        return [
+            'branch_id' => (int) ($filters['branch_id'] ?? 0),
+            'project_id' => blank($filters['project_id'] ?? null) ? null : (int) $filters['project_id'],
+            'before' => CarbonImmutable::parse((string) ($filters['before'] ?? ''))->toDateString(),
+        ];
+    }
+
     private function validateBulkFilters(User $actor, array $filters): void
     {
         $branchId = (int) ($filters['branch_id'] ?? 0);
@@ -115,7 +126,7 @@ final class ConsumerLeadLinkDecisionService
         $projectId = isset($filters['project_id']) ? (int) $filters['project_id'] : null;
         $before = CarbonImmutable::parse($filters['before']);
         $rowQuery = KonsumenProgressSheetRow::query()->where('branch_id', $branchId)->where('sheet_name', 'data_konsumen');
-        $nupQuery = ConsumerNup::query()->where('branch_id', $branchId)->when($projectId, fn ($query) => $query->where('project_id', $projectId));
+        $nupQuery = ConsumerNup::query()->where('branch_id', $branchId)->where('status', 'waiting')->when($projectId, fn ($query) => $query->where('project_id', $projectId));
         if ($lock) {
             $rowQuery->lockForUpdate();
             $nupQuery->lockForUpdate();

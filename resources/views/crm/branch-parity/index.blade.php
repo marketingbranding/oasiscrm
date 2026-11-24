@@ -18,9 +18,9 @@
     @else
     <div class="mb-4 grid gap-4 md:grid-cols-4">
         <x-crm.card><div class="crm-label">Status</div><strong>{{ $report->status }}</strong></x-crm.card>
-        <x-crm.card><div class="crm-label">Sheet only</div><strong>{{ $report->summary['sheet_only'] }}</strong></x-crm.card>
-        <x-crm.card><div class="crm-label">OASIS only</div><strong>{{ $report->summary['oasis_only'] }}</strong></x-crm.card>
-        <x-crm.card><div class="crm-label">Mismatch</div><strong>{{ $report->summary['mismatch'] }}</strong></x-crm.card>
+        <x-crm.card><div class="crm-label">Sheet only</div><strong>{{ data_get($report->summary, 'sheet_only', 0) }}</strong></x-crm.card>
+        <x-crm.card><div class="crm-label">OASIS only</div><strong>{{ data_get($report->summary, 'oasis_only', 0) }}</strong></x-crm.card>
+        <x-crm.card><div class="crm-label">Mismatch</div><strong>{{ data_get($report->summary, 'mismatch', 0) }}</strong></x-crm.card>
     </div>
     <x-crm.button href="{{ route('admin.branch-parity.export', $branch) }}" variant="secondary">Unduh XLSX</x-crm.button>
     <x-crm.card class="mt-4"><div class="overflow-x-auto"><table class="w-full text-sm"><thead><tr><th>Status</th><th>Kunci Legacy</th><th>ID Aplikasi OASIS</th><th>Kavling</th><th>Kolom Berbeda</th></tr></thead><tbody>

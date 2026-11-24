@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\Permission;
 use App\Models\Role;
 use App\Models\User;
+use App\Services\AppSettingResolver;
 use App\Services\NavigationService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
@@ -30,6 +31,7 @@ class NavigationServiceTest extends TestCase
 
     public function test_operational_roles_receive_only_groups_granted_by_primary_role_permissions(): void
     {
+        $this->setMonitoringFlag(true);
         $coordinator = $this->navigationFor('sales_coordinator');
         $branchManager = $this->navigationFor('branch_manager');
         $pusat = $this->navigationFor('pusat');
@@ -42,6 +44,17 @@ class NavigationServiceTest extends TestCase
         $this->assertNotContains('Proyek', $this->labels($branchManager));
         $this->assertNotContains('Review Laporan', $this->labels($pusat));
         $this->assertNotContains('System Health', $this->labels($pusat));
+    }
+
+    public function test_br_team_history_navigation_hides_when_hierarchical_monitoring_is_disabled(): void
+    {
+        $this->setMonitoringFlag(false);
+
+        $this->assertNotContains('Riwayat Tim', $this->labels($this->navigationFor('superadmin')));
+
+        $this->setMonitoringFlag(true);
+
+        $this->assertContains('Riwayat Tim', $this->labels($this->navigationFor('superadmin')));
     }
 
     public function test_buku_saku_destination_is_present_without_manual_sync_destinations_for_monitoring_roles(): void
@@ -146,6 +159,7 @@ class NavigationServiceTest extends TestCase
 
     public function test_database_is_direct_group_and_sales_keeps_buku_saku_and_consumer_workspaces(): void
     {
+        $this->setMonitoringFlag(true);
         $navigation = $this->navigationFor('superadmin', 'consumer-database.workspace');
         $database = collect($navigation)->firstWhere('key', 'database');
         $sales = collect($navigation)->firstWhere('key', 'sales');
@@ -194,6 +208,12 @@ class NavigationServiceTest extends TestCase
     private function navigationFor(string $role, ?string $routeName = null): array
     {
         return app(NavigationService::class)->forUser($this->user($role), $routeName);
+    }
+
+    private function setMonitoringFlag(bool $enabled): void
+    {
+        DB::table('app_settings')->updateOrInsert(['key' => 'org_hierarchical_monitoring'], ['value' => json_encode($enabled), 'group' => 'feature_flags', 'created_at' => now(), 'updated_at' => now()]);
+        app(AppSettingResolver::class)->forget('org_hierarchical_monitoring');
     }
 
     private function user(string $role): User

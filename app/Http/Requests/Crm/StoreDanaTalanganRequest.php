@@ -4,6 +4,7 @@ namespace App\Http\Requests\Crm;
 
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Validation\ValidationException;
 
 class StoreDanaTalanganRequest extends FormRequest
 {
@@ -14,6 +15,10 @@ class StoreDanaTalanganRequest extends FormRequest
 
     public function rules(): array
     {
+        if ($this->input('form_mode') === 'payment') {
+            throw ValidationException::withMessages(['form_mode' => 'Mode pembayaran tidak dapat membuat Dana Talangan baru.']);
+        }
+
         $user = Auth::user();
 
         return [

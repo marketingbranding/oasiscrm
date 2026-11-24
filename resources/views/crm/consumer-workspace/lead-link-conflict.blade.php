@@ -7,8 +7,8 @@
         <x-slot:actions><a class="crm-button crm-button--secondary" href="{{ route('consumer-database.workspace.lead-link-conflicts') }}">Daftar konflik</a></x-slot:actions>
     </x-crm.page-header>
     <section class="mt-4 grid gap-4 md:grid-cols-2">
-        <div class="border-2 border-black bg-white p-4"><h2 class="font-bold">Keputusan sumber</h2><p class="mt-2">Status: {{ $conflict->source_status ?: '—' }}</p><p>Lead: {{ $conflict->source_lead_id ?: '—' }}</p></div>
-        <div class="border-2 border-black bg-white p-4"><h2 class="font-bold">Keputusan tujuan</h2><p class="mt-2">Status: {{ $conflict->target_status ?: '—' }}</p><p>Lead: {{ $conflict->target_lead_id ?: '—' }}</p></div>
+        <div class="border-2 border-black bg-white p-4"><h2 class="font-bold">Keputusan sumber</h2><p class="mt-2">Status: {{ ['linked' => 'Tertaut', 'without_lead' => 'Tanpa Lead', 'legacy' => 'Data Lama'][$conflict->source_status] ?? '—' }}</p><p>Lead: {{ $conflict->source_lead_name ?: '—' }}</p></div>
+        <div class="border-2 border-black bg-white p-4"><h2 class="font-bold">Keputusan tujuan</h2><p class="mt-2">Status: {{ ['linked' => 'Tertaut', 'without_lead' => 'Tanpa Lead', 'legacy' => 'Data Lama'][$conflict->target_status] ?? '—' }}</p><p>Lead: {{ $conflict->target_lead_name ?: '—' }}</p></div>
     </section>
     <form method="POST" action="{{ route('consumer-database.workspace.lead-link-conflict.resolve', $conflict->id) }}" class="mt-4 grid gap-3 border-2 border-black bg-white p-4">
         @csrf

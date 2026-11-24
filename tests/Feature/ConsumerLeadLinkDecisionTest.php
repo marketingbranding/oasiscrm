@@ -127,6 +127,57 @@ class ConsumerLeadLinkDecisionTest extends TestCase
         $this->actingAs($actor)->postJson(route('consumer-database.workspace.link-subject.lead-link-decision.store', ['subjectType' => 'sheet', 'subjectId' => $row->id]), ['status' => 'without_lead', 'reason' => 'uji'])->assertForbidden();
     }
 
+    public function test_br_bulk_legacy_http_normalizes_js_filter_types_between_preview_and_store(): void
+    {
+        [$branch, $project, $actor] = $this->bulkContext();
+        $actor->update(['role_id' => Role::query()->where('slug', 'superadmin')->value('id')]);
+        KonsumenProgressSheetRow::create(['branch_id' => $branch->id, 'sheet_id' => 'sheet', 'sheet_name' => 'data_konsumen', 'row_hash' => 'http-filter', 'row_data' => ['[SYS] ID Konsumen' => 'HTTP-FILTER', 'Tanggal' => '2025-01-01', 'Proyek' => $project->project_name]]);
+
+        $preview = $this->actingAs($actor)->getJson(route('consumer-database.workspace.bulk-legacy.preview', ['branch_id' => (string) $branch->id, 'project_id' => '', 'before' => '2026-01-01']))->assertOk()->json('data');
+
+        $this->actingAs($actor)->postJson(route('consumer-database.workspace.bulk-legacy.store'), ['reason' => 'Uji HTTP JS', 'token' => $preview['token'], 'branch_id' => (string) $branch->id, 'project_id' => null, 'before' => '2026-01-01'])->assertOk()->assertJsonPath('data.created', 1);
+    }
+
+    public function test_subject_panel_has_one_required_lead_control_and_clears_lead_when_status_changes(): void
+    {
+        $view = file_get_contents(resource_path('views/crm/consumer-workspace/index.blade.php'));
+        $script = file_get_contents(resource_path('js/consumer-workspace.js'));
+
+        $this->assertSame(1, substr_count($view, ':required="subjectDecision.status === \'linked\'"'));
+        $this->assertStringContainsString('Cari Lead berdasarkan nama atau HP', $view);
+        $this->assertStringContainsString("if (body.status !== 'linked')", $script);
+        $this->assertStringContainsString('delete body.sales_lead_id', $script);
+        $this->assertStringContainsString('delete body.lead_search', $script);
+        $this->assertStringContainsString("window.oasisToast?.('Keputusan subjek berhasil disimpan.', 'success')", $script);
+    }
+
+    public function test_uat_labels_hide_raw_conflict_module_and_workspace_process_values(): void
+    {
+        $this->assertStringContainsString('Jenis Konflik', file_get_contents(resource_path('views/crm/consumer-workspace/lead-link-conflicts.blade.php')));
+        $this->assertStringContainsString('$moduleLabels[$grant->module]', file_get_contents(resource_path('views/crm/access-grants/index.blade.php')));
+        $this->assertStringContainsString('$processLabels[$record->process_key]', file_get_contents(resource_path('views/workspace-v2/aggregate/index.blade.php')));
+    }
+
+    public function test_br_subject_endpoints_return_json_for_sheet_and_nup_and_index_uses_panel_button(): void
+    {
+        [$branch, $project, $actor] = $this->bulkContext();
+        $row = KonsumenProgressSheetRow::create(['branch_id' => $branch->id, 'sheet_id' => 'sheet', 'sheet_name' => 'data_konsumen', 'row_hash' => 'http-subject', 'row_data' => ['[SYS] ID Konsumen' => 'HTTP-SUBJECT', 'Proyek' => $project->project_name]]);
+        $nup = ConsumerNup::create(['customer_id' => ConsumerApplication::factory()->create(['branch_id' => $branch->id, 'project_id' => $project->id])->customer_id, 'branch_id' => $branch->id, 'project_id' => $project->id, 'nup_number' => 'NUP-HTTP', 'registered_at' => today(), 'status' => 'waiting']);
+
+        $this->actingAs($actor)->getJson(route('consumer-database.workspace.link-subject.show', ['subjectType' => 'sheet', 'subjectId' => $row->id]))->assertOk()->assertJsonPath('data.subject.subject_type', 'sheet');
+        $this->actingAs($actor)->getJson(route('consumer-database.workspace.link-subject.show', ['subjectType' => 'nup', 'subjectId' => $nup->id]))->assertOk()->assertJsonPath('data.subject.subject_type', 'nup');
+        $this->actingAs($actor)->get(route('consumer-database.workspace', ['branch_id' => $branch->id]))->assertOk()->assertSee('openSubject(')->assertDontSee('href="'.route('consumer-database.workspace.link-subject.show', ['subjectType' => 'sheet', 'subjectId' => $row->id]).'"');
+    }
+
+    public function test_br_bulk_legacy_excludes_converted_nup_from_http_preview(): void
+    {
+        [$branch, $project, $actor] = $this->bulkContext();
+        $actor->update(['role_id' => Role::query()->where('slug', 'superadmin')->value('id')]);
+        $application = ConsumerApplication::factory()->create(['branch_id' => $branch->id, 'project_id' => $project->id]);
+        ConsumerNup::create(['customer_id' => $application->customer_id, 'branch_id' => $branch->id, 'project_id' => $project->id, 'nup_number' => 'NUP-CONVERTED-HTTP', 'converted_application_id' => $application->id, 'registered_at' => today(), 'status' => 'converted']);
+        $this->actingAs($actor)->getJson(route('consumer-database.workspace.bulk-legacy.preview', ['branch_id' => $branch->id, 'project_id' => $project->id, 'before' => '2026-01-01']))->assertOk()->assertJsonPath('data.count', 0);
+    }
+
     public function test_br_bulk_legacy_rejects_changed_filter_after_valid_preview(): void
     {
         [$branch, $project, $actor] = $this->bulkContext();
@@ -494,6 +545,32 @@ class ConsumerLeadLinkDecisionTest extends TestCase
         return $request;
     }
 
+    public function test_br_bulk_legacy_skips_subject_decided_after_preview_and_marks_remaining_subjects(): void
+    {
+        [$branch, $project, $actor] = $this->bulkContext();
+        for ($index = 1; $index <= 7; $index++) {
+            KonsumenProgressSheetRow::create([
+                'branch_id' => $branch->id,
+                'sheet_id' => 'sheet',
+                'sheet_name' => 'data_konsumen',
+                'row_hash' => 'bulk-'.$index,
+                'row_data' => ['[SYS] ID Konsumen' => 'BULK-'.$index, 'Nama Konsumen' => 'Bulk '.$index, 'Tanggal' => '2025-01-01', 'Proyek' => $project->project_name],
+            ]);
+        }
+
+        $service = app(ConsumerLeadLinkDecisionService::class);
+        $preview = $service->previewBulkLegacy($actor, ['branch_id' => $branch->id, 'project_id' => $project->id, 'before' => '2026-01-01']);
+        $row = KonsumenProgressSheetRow::query()->where('row_hash', 'bulk-1')->firstOrFail();
+        $subject = app(ConsumerLeadLinkSubjectResolver::class)->fromSheetRow($row, $project->id, null, false);
+        $service->decideForSubject($subject, ConsumerLeadLinkDecision::STATUS_WITHOUT_LEAD, null, ['reason' => 'Sudah diputuskan'], $actor);
+
+        $result = $service->markBulkLegacy($actor, ['branch_id' => $branch->id, 'project_id' => $project->id, 'before' => '2026-01-01', 'token' => $preview['token']], 'Data lama');
+
+        $this->assertSame(6, $result['created']);
+        $this->assertSame(0, $result['skipped']);
+        $this->assertDatabaseCount('consumer_lead_link_decisions', 7);
+    }
+
     public function test_br_bulk_legacy_marks_only_subjects_before_date(): void
     {
         [$branch, $project, $actor] = $this->bulkContext();
@@ -640,6 +717,17 @@ class ConsumerLeadLinkDecisionTest extends TestCase
             ->assertJsonPath('data.lead_link.history.0.status', 'without_lead')
             ->assertJsonPath('data.lead_link.history.1.status', 'legacy')
             ->assertJsonPath('data.lead_link.history.1.legacy_anchor', '[SYS] ID Konsumen');
+    }
+
+    public function test_br_subject_without_lead_accepts_json_without_sales_lead_id(): void
+    {
+        [$branch, $project, $actor] = $this->bulkContext();
+        $row = KonsumenProgressSheetRow::create(['branch_id' => $branch->id, 'sheet_id' => 'subject', 'sheet_name' => 'data_konsumen', 'row_hash' => 'subject', 'row_data' => ['[SYS] ID Konsumen' => 'SUBJECT-1', 'Nama Konsumen' => 'Subjek', 'Tanggal' => '2025-01-01', 'Proyek' => $project->project_name]]);
+
+        $this->actingAs($actor)
+            ->postJson(route('consumer-database.workspace.link-subject.lead-link-decision.store', ['subjectType' => 'sheet', 'subjectId' => $row->id]), ['status' => 'without_lead', 'reason' => 'Lead tidak ditemukan'])
+            ->assertCreated()
+            ->assertJsonPath('data.status', 'without_lead');
     }
 
     public function test_br_task4_workspace_decision_endpoint_accepts_json_and_is_idempotent(): void

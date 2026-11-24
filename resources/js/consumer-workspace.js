@@ -17,6 +17,13 @@ export default function registerConsumerWorkspace(Alpine) {
         bulkLegacyReason: '',
         bulkLegacyError: '',
         bulkLegacySummary: null,
+        subjectPanelOpen: false,
+        subjectLoading: false,
+        subjectError: '',
+        subject: null,
+        subjectDecision: { status: 'without_lead', reason: '', sales_lead_id: '', lead_search: '' },
+        subjectLeadSearchResults: [],
+        subjectDecisionSaving: false,
         leadLinkError: '',
         leadLinkSuccess: '',
         trigger: null,
@@ -78,15 +85,85 @@ export default function registerConsumerWorkspace(Alpine) {
         },
 
         async submitBulkLegacy(reason) {
-            const response = await fetch(config.bulkLegacyStoreUrl, {
-                method: 'POST',
-                headers: { Accept: 'application/json', 'Content-Type': 'application/json', 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.content || '' },
-                body: JSON.stringify({ reason, token: this.bulkLegacyResult?.token, branch_id: this.bulkLegacyBranchId, project_id: this.bulkLegacyProjectId || null, before: this.bulkLegacyBefore }),
-            });
+            this.bulkLegacyError = '';
+            try {
+                const response = await fetch(config.bulkLegacyStoreUrl, {
+                    method: 'POST',
+                    headers: { Accept: 'application/json', 'Content-Type': 'application/json', 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.content || '' },
+                    body: JSON.stringify({ reason, token: this.bulkLegacyResult?.token, branch_id: Number(this.bulkLegacyBranchId), project_id: this.bulkLegacyProjectId ? Number(this.bulkLegacyProjectId) : null, before: this.bulkLegacyBefore }),
+                });
+                const payload = await response.json();
+                if (!response.ok) throw new Error(Object.values(payload.errors || {}).flat()[0] || payload.message || 'Data Lama belum dapat disimpan.');
+                this.bulkLegacySummary = payload.data;
+                this.bulkLegacyResult = null;
+            } catch (exception) {
+                this.bulkLegacyError = exception.message || 'Data Lama belum dapat disimpan.';
+            }
+        },
+
+        async openSubject(subjectType, subjectId, trigger = null) {
+            this.subjectPanelOpen = true;
+            this.subjectLoading = true;
+            this.subjectError = '';
+            this.subject = null;
+            this.subjectDecision = { status: 'without_lead', reason: '', sales_lead_id: '', lead_search: '' };
+            this.subjectLeadSearchResults = [];
+            this.$nextTick(() => this.$refs.subjectClose?.focus());
+            try {
+                const url = config.subjectUrl.replace('__TYPE__', encodeURIComponent(subjectType)).replace('__ID__', encodeURIComponent(subjectId));
+                const response = await fetch(url, { headers: { Accept: 'application/json' } });
+                const payload = await response.json();
+                if (!response.ok || !payload.ok) throw new Error(payload.message || 'Subjek belum dapat dimuat.');
+                this.subject = payload.data.subject;
+            } catch (exception) {
+                this.subjectError = exception.message || 'Subjek belum dapat dimuat.';
+            } finally {
+                this.subjectLoading = false;
+            }
+        },
+
+        async searchSubjectLeads() {
+            const search = this.subjectDecision.lead_search.trim();
+            if (search.length < 2 || !this.subject) {
+                this.subjectLeadSearchResults = [];
+                return;
+            }
+            const url = config.subjectLeadOptionsUrl.replace('__TYPE__', encodeURIComponent(this.subject.subject_type)).replace('__ID__', encodeURIComponent(this.subject.subject_id)) + `?search=${encodeURIComponent(search)}`;
+            const response = await fetch(url, { headers: { Accept: 'application/json' } });
             const payload = await response.json();
-            if (!response.ok) throw new Error(payload.message || 'Data Lama belum dapat disimpan.');
-            this.bulkLegacySummary = payload.data;
-            this.bulkLegacyResult = null;
+            this.subjectLeadSearchResults = response.ok && payload.ok ? payload.data : [];
+        },
+
+        async submitSubjectDecision() {
+            this.subjectDecisionSaving = true;
+            this.subjectError = '';
+            try {
+                const url = config.subjectDecisionUrl.replace('__TYPE__', encodeURIComponent(this.subject.subject_type)).replace('__ID__', encodeURIComponent(this.subject.subject_id));
+                const body = { ...this.subjectDecision };
+                if (body.status !== 'linked') {
+                    delete body.sales_lead_id;
+                    delete body.lead_search;
+                }
+                const response = await fetch(url, {
+                    method: 'POST',
+                    headers: { Accept: 'application/json', 'Content-Type': 'application/json', 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.content || '' },
+                    body: JSON.stringify(body),
+                });
+                const payload = await response.json().catch(() => ({}));
+                if (!response.ok) throw new Error(Object.values(payload.errors || {}).flat()[0] || payload.message || 'Keputusan belum dapat disimpan.');
+                await this.openSubject(this.subject.subject_type, this.subject.subject_id);
+                window.oasisToast?.('Keputusan subjek berhasil disimpan.', 'success');
+            } catch (exception) {
+                this.subjectError = exception.message || 'Keputusan belum dapat disimpan.';
+            } finally {
+                this.subjectDecisionSaving = false;
+            }
+        },
+
+        closeSubject() {
+            this.subjectPanelOpen = false;
+            this.subject = null;
+            this.subjectError = '';
         },
 
         syncLeadLinkForm() {

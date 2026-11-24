@@ -210,6 +210,10 @@ class DanaTalanganController extends Controller
             $records = $query->orderBy($sortField, $sortDir)->paginate((int) $perPage)->withQueryString();
         }
 
+        foreach ($records as $record) {
+            $record->setAttribute('payment_summary', app(DanaTalanganPaymentService::class)->summary($record));
+        }
+
         $spreadsheetId = config('services.google_sheets.dana_talangan_spreadsheet_id');
         $syncStatus = DanaTalanganSyncStatus::where('spreadsheet_id', $spreadsheetId)->first();
         $bridgeSetting = DanaTalanganBridgeSetting::where('spreadsheet_id', $spreadsheetId)->first();

@@ -16,6 +16,7 @@ use App\Services\ConsumerDatabaseWorkspaceService;
 use App\Services\ConsumerEntryService;
 use App\Services\ConsumerLeadLinkDecisionService;
 use App\Services\ConsumerLeadLinkSubjectResolver;
+use App\Services\ConsumerLeadLinkSuggestionService;
 use App\Services\OrganizationScopeService;
 use App\Services\WorkspaceAccessService;
 use Illuminate\Http\JsonResponse;
@@ -31,6 +32,7 @@ final class ConsumerDatabaseController extends Controller
         private readonly ConsumerDatabaseWorkspaceService $workspace,
         private readonly ConsumerEntryService $entry,
         private readonly ConsumerLeadLinkDecisionService $leadLinkDecisions,
+        private readonly ConsumerLeadLinkSuggestionService $leadLinkSuggestions,
         private readonly OrganizationScopeService $organizationScope,
     ) {}
 
@@ -71,17 +73,48 @@ final class ConsumerDatabaseController extends Controller
         ]);
     }
 
+    private function maskPhone(?string $phone): string
+    {
+        $value = preg_replace('/\D+/', '', (string) $phone) ?? '';
+
+        return mb_strlen($value) < 4 ? '—' : mb_substr($value, 0, 3).'••••'.mb_substr($value, -2);
+    }
+
+    public function linkSubjectLeadOptions(Request $request, string $subjectType, int $subjectId): JsonResponse
+    {
+        $resolver = app(ConsumerLeadLinkSubjectResolver::class);
+        $subject = match ($subjectType) {
+            'nup' => $resolver->fromNup(ConsumerNup::query()->with('customer')->findOrFail($subjectId)),
+            'sheet' => $resolver->fromSheetRow(KonsumenProgressSheetRow::query()->findOrFail($subjectId)),
+            default => abort(404),
+        };
+        abort_unless($request->user()->isAccountActive() && $request->user()->hasPermission('consumer_progress.view') && $this->organizationScope->allowsProjectRecord($request->user(), 'consumer_progress', 'view', $subject->branchId, $subject->projectId), 403);
+        $search = trim((string) $request->query('search', ''));
+        if (mb_strlen($search) < 2) {
+            return response()->json(['ok' => true, 'data' => []]);
+        }
+        $leads = SalesLead::query()->with('sales:id,name')->where('branch_id', $subject->branchId)->where('project_id', $subject->projectId)->where(function ($query) use ($search): void {
+            $query->where('customer_name', 'like', '%'.$search.'%')->orWhere('phone', 'like', '%'.$search.'%')->orWhere('normalized_phone', 'like', '%'.$search.'%');
+        })->limit(20)->get(['id', 'customer_name', 'phone', 'sales_user_id']);
+
+        return response()->json(['ok' => true, 'data' => $leads->map(fn (SalesLead $lead): array => ['id' => $lead->id, 'name' => $lead->customer_name, 'phone_masked' => $this->maskPhone($lead->phone), 'sales_name' => $lead->sales?->name])->values()->all()]);
+    }
+
     public function showLinkSubject(Request $request, string $subjectType, int $subjectId): JsonResponse
     {
         $resolver = app(ConsumerLeadLinkSubjectResolver::class);
         $subject = match ($subjectType) {
-            'nup' => $resolver->fromNup(ConsumerNup::query()->findOrFail($subjectId)),
+            'nup' => $resolver->fromNup(ConsumerNup::query()->with('customer')->findOrFail($subjectId)),
             'sheet' => $resolver->fromSheetRow(KonsumenProgressSheetRow::query()->findOrFail($subjectId)),
             default => abort(404),
         };
-        abort_unless($request->user()->isAccountActive() && $this->organizationScope->allowsProjectRecord($request->user(), 'consumer_progress', 'view', $subject->branchId, $subject->projectId), 403);
+        abort_unless($request->user()->isAccountActive() && $request->user()->hasPermission('consumer_progress.view') && $this->organizationScope->allowsProjectRecord($request->user(), 'consumer_progress', 'view', $subject->branchId, $subject->projectId), 403);
+        $decisions = ConsumerLeadLinkDecision::query()->with('salesLead:id,customer_name')->where('subject_key', $subject->subjectKey())->latest('decided_at')->get();
+        $active = $decisions->firstWhere('is_active', true);
+        $suggestions = $this->leadLinkSuggestions->suggestSubject($subject, $request->user());
 
         return response()->json(['ok' => true, 'data' => ['subject' => [
+
             'subject_type' => $subject->subjectType,
             'subject_id' => $subject->subjectId ?? $subject->sheetRowId,
             'subject_key' => $subject->subjectKey(),
@@ -94,6 +127,10 @@ final class ConsumerDatabaseController extends Controller
             'legacy_consumer_key' => $subject->legacyConsumerKey,
             'decidable' => $subject->isDecidable,
             'note' => $subject->note,
+            'suggestions' => $suggestions->map(fn (array $item): array => ['lead_id' => $item['lead_id'], 'lead_name' => $item['lead']->customer_name, 'sales_name' => $item['lead']->sales?->name, 'score' => $item['score'], 'rationale' => $item['rationale']])->values()->all(),
+            'current' => $active ? ['id' => $active->id, 'status' => $active->status, 'sales_lead_id' => $active->sales_lead_id, 'lead_name' => $active->salesLead?->customer_name, 'reason' => $active->reason] : null,
+            'history' => $decisions->map(fn (ConsumerLeadLinkDecision $decision): array => ['id' => $decision->id, 'status' => $decision->status, 'sales_lead_id' => $decision->sales_lead_id, 'lead_name' => $decision->salesLead?->customer_name, 'reason' => $decision->reason, 'decided_at' => $decision->decided_at?->toIso8601String()])->values()->all(),
+            'allowed_actions' => ['can_decide' => $request->user()->hasPermission('consumer_progress.manage')],
         ]]]);
     }
 
@@ -148,10 +185,12 @@ final class ConsumerDatabaseController extends Controller
             ->join('consumer_applications as application', 'application.id', '=', 'conflict.consumer_application_id')
             ->leftJoin('consumer_lead_link_decisions as source', 'source.id', '=', 'conflict.source_decision_id')
             ->leftJoin('consumer_lead_link_decisions as target', 'target.id', '=', 'conflict.target_decision_id')
+            ->leftJoin('sales_leads as source_lead', 'source_lead.id', '=', 'source.sales_lead_id')
+            ->leftJoin('sales_leads as target_lead', 'target_lead.id', '=', 'target.sales_lead_id')
             ->whereIn('application.branch_id', $branchIds)
             ->orderByDesc('conflict.id')
             ->limit(250)
-            ->get(['conflict.id', 'conflict.source_decision_id', 'conflict.target_decision_id', 'conflict.consumer_application_id', 'conflict.conflict_type', 'conflict.status', 'conflict.details', 'conflict.created_at', 'source.status as source_status', 'source.sales_lead_id as source_lead_id', 'target.status as target_status', 'target.sales_lead_id as target_lead_id']);
+            ->get(['conflict.id', 'conflict.source_decision_id', 'conflict.target_decision_id', 'conflict.consumer_application_id', 'conflict.conflict_type', 'conflict.status', 'conflict.details', 'conflict.created_at', 'source.status as source_status', 'source.sales_lead_id as source_lead_id', 'source_lead.customer_name as source_lead_name', 'target.status as target_status', 'target.sales_lead_id as target_lead_id', 'target_lead.customer_name as target_lead_name']);
     }
 
     public function previewBulkLegacy(Request $request): JsonResponse
@@ -188,7 +227,7 @@ final class ConsumerDatabaseController extends Controller
                     'id' => $decision->id,
                     'status' => $decision->status,
                 ],
-            ]);
+            ], $subject !== null ? 201 : 200);
         }
 
         return back()->with('success', 'Keputusan penautan Lead berhasil disimpan.');

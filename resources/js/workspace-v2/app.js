@@ -145,8 +145,16 @@ document.addEventListener('DOMContentLoaded', () => {
         if (method !== 'POST') {
             formData.append('_method', method);
         }
-        const response = await fetch(form.action, { method: 'POST', headers: { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest', 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.content || '' }, body: formData });
+        let response;
         let payload = {};
+        try {
+            response = await fetch(form.action, { method: 'POST', headers: { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest', 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.content || '' }, body: formData });
+        } catch {
+            const message = form.querySelector('[data-return-nup-message], [data-resolve-issue-message]') || document.createElement('p');
+            if (!message.parentNode) form.append(message);
+            message.textContent = 'Tidak dapat menghubungi server. Periksa koneksi lalu coba lagi.';
+            return;
+        }
         try {
             payload = await response.json();
         } catch {

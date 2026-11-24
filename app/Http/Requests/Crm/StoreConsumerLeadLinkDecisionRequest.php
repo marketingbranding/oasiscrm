@@ -15,6 +15,15 @@ use Illuminate\Validation\Rule;
 
 class StoreConsumerLeadLinkDecisionRequest extends FormRequest
 {
+    public function messages(): array
+    {
+        return [
+            'sales_lead_id.prohibited' => 'Lead hanya boleh diisi untuk keputusan Tertaut.',
+            'sales_lead_id.required' => 'Lead wajib dipilih untuk keputusan Tertaut.',
+            'status.required' => 'Keputusan wajib dipilih.',
+        ];
+    }
+
     public function authorize(): bool
     {
         $user = $this->user();
@@ -48,7 +57,7 @@ class StoreConsumerLeadLinkDecisionRequest extends FormRequest
         $resolver = app(ConsumerLeadLinkSubjectResolver::class);
 
         return match ($type) {
-            'nup' => $resolver->fromNup(ConsumerNup::query()->findOrFail((int) $id)),
+            'nup' => $resolver->fromNup(ConsumerNup::query()->with('customer')->findOrFail((int) $id)),
             'sheet' => $resolver->fromSheetRow(KonsumenProgressSheetRow::query()->findOrFail((int) $id)),
             default => null,
         };

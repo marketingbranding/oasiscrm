@@ -17,6 +17,9 @@
         $workspaceConfig = [
             'detailUrl' => route('consumer-database.workspace.show', ['consumerApplication' => '__ID__']),
             'leadLinkDecisionUrl' => route('consumer-database.workspace.lead-link-decision.store', ['consumerApplication' => '__ID__']),
+             'subjectUrl' => route('consumer-database.workspace.link-subject.show', ['subjectType' => '__TYPE__', 'subjectId' => '__ID__']),
+             'subjectDecisionUrl' => route('consumer-database.workspace.link-subject.lead-link-decision.store', ['subjectType' => '__TYPE__', 'subjectId' => '__ID__']),
+             'subjectLeadOptionsUrl' => route('consumer-database.workspace.link-subject.lead-options', ['subjectType' => '__TYPE__', 'subjectId' => '__ID__']),
              'bulkLegacyPreviewUrl' => route('consumer-database.workspace.bulk-legacy.preview'),
              'bulkLegacyStoreUrl' => route('consumer-database.workspace.bulk-legacy.store'),
              'bulkLegacyBranchId' => $selectedBranch?->id,
@@ -66,6 +69,24 @@
 
         <x-crm.page-presence page-key="consumer-database-workspace" :branch-id="$selectedBranch?->id" />
 
+        <div x-show="subjectPanelOpen" x-cloak class="crm-modal-backdrop crm-modal-backdrop--right" role="presentation" @click.self="closeSubject()">
+            <section class="crm-modal-panel crm-modal-panel--lg crm-modal-panel--right" role="dialog" aria-modal="true" aria-labelledby="subject-panel-title">
+                <header class="crm-modal-header"><h2 id="subject-panel-title" class="crm-modal-title">Penautan Lead — Subjek</h2><x-crm.icon-button label="Tutup subjek" x-ref="subjectClose" @click="closeSubject()"><span aria-hidden="true">×</span></x-crm.icon-button></header>
+                <div class="crm-modal-body">
+                    <div x-show="subjectLoading" role="status">Memuat subjek...</div>
+                    <div x-show="subjectError" x-cloak role="alert" class="crm-alert crm-alert--error" x-text="subjectError"></div>
+                    <template x-if="subject && !subjectLoading">
+                        <div class="grid gap-3">
+                            <dl class="grid gap-2 text-sm sm:grid-cols-2"><div><dt class="crm-type-label">Sumber</dt><dd x-text="subject.subject_type === 'sheet' ? 'Sheet' : 'NUP'"></dd></div><div><dt class="crm-type-label">Nama</dt><dd x-text="subject.name || 'Tanpa nama'"></dd></div><div><dt class="crm-type-label">ID Konsumen</dt><dd x-text="subject.legacy_consumer_key || '—'"></dd></div><div><dt class="crm-type-label">Kavling</dt><dd x-text="subject.kavling || '—'"></dd></div></dl>
+                            <form x-show="subject.decidable && subject.allowed_actions?.can_decide" @submit.prevent="submitSubjectDecision()" class="grid gap-3 border-2 border-black bg-white p-3"><label class="crm-type-label">Keputusan<select x-model="subjectDecision.status" class="crm-control mt-1"><option value="linked">Lead</option><option value="without_lead">Tanpa Lead</option><option value="legacy">Data Lama</option></select></label><div x-show="subjectDecision.status === 'linked'"><label class="crm-type-label">Lead<select x-model="subjectDecision.sales_lead_id" class="crm-control mt-1" :required="subjectDecision.status === 'linked'"><option value="">Pilih Lead</option><template x-for="suggestion in subject.suggestions" :key="suggestion.lead_id"><option :value="suggestion.lead_id" x-text="suggestion.lead_name + (suggestion.sales_name ? ' · ' + suggestion.sales_name : '')"></option></template><template x-for="lead in subjectLeadSearchResults" :key="'manual-' + lead.id"><option :value="lead.id" x-text="lead.name + (lead.sales_name ? ' · ' + lead.sales_name : '') + (lead.phone_masked ? ' · ' + lead.phone_masked : '')"></option></template></select><input x-model.trim="subjectDecision.lead_search" @input.debounce.300ms="searchSubjectLeads()" type="search" class="crm-control mt-1" placeholder="Cari Lead berdasarkan nama atau HP" aria-label="Cari Lead berdasarkan nama atau HP"></label></div><label class="crm-type-label">Alasan<textarea x-model.trim="subjectDecision.reason" class="crm-control mt-1" required></textarea></label><button class="crm-button crm-button--primary" :disabled="subjectDecisionSaving">Simpan Keputusan</button></form>
+                            <p x-show="!subject.decidable" class="text-sm text-gray-600" x-text="subject.note || 'Subjek tidak dapat diputuskan.'"></p>
+                            <section class="border border-gray-400 p-3"><h3 class="font-bold">Riwayat Keputusan</h3><template x-for="item in subject.history" :key="item.id"><p class="mt-2 text-sm"><strong x-text="{linked: 'Lead', without_lead: 'Tanpa Lead', legacy: 'Data Lama'}[item.status] || item.status"></strong><span x-show="item.lead_name" x-text="' · ' + item.lead_name"></span><span x-show="item.reason" x-text="' — ' + item.reason"></span></p></template></section>
+                        </div>
+                    </template>
+                </div>
+            </section>
+        </div>
+
         @if($linkSubjects->isNotEmpty())
             <section class="mb-4 border-2 border-black bg-white p-3" aria-labelledby="lead-link-subjects-title">
                 <div class="flex flex-wrap items-center justify-between gap-2">
@@ -88,7 +109,7 @@
                                     <td>{{ $subject['decidable'] ? 'Belum diputuskan' : ($subject['note'] ?: 'Tidak dapat diputuskan') }}</td>
                                     <td>
                                         @if($subject['decidable'])
-                                            <a class="font-bold text-[#0000ee] underline" href="{{ route('consumer-database.workspace.link-subject.show', ['subjectType' => $subject['source'], 'subjectId' => $subject['subject_id']]) }}">Buka</a>
+                                            <button type="button" class="font-bold text-[#0000ee] underline" @click="openSubject(@js($subject['source']), {{ $subject['subject_id'] }}, $el)">Buka</button>
                                         @else
                                             <span class="text-gray-600">ID kosong</span>
                                         @endif

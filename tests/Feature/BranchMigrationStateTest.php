@@ -37,6 +37,35 @@ class BranchMigrationStateTest extends TestCase
         $this->actingAs($user)->get(route('admin.branch-migration-states.index'))->assertOk();
     }
 
+    public function test_wp24_migration_page_defaults_incomplete_parity_summary_to_zero(): void
+    {
+        $branch = Branch::create(['name' => 'Cabang Parity Detail', 'code' => 'CPD', 'is_active' => true]);
+        ConsumerParitySnapshot::create(['branch_id' => $branch->id, 'checked_at' => now(), 'status' => 'TIDAK_LENGKAP', 'summary' => [], 'metrics' => [], 'differences' => []]);
+        $actor = User::factory()->create(['role_id' => Role::where('slug', 'superadmin')->value('id'), 'password_changed_at' => now(), 'account_status' => 'active', 'is_active' => true]);
+
+        $this->actingAs($actor)->get(route('admin.branch-parity.index', ['branch' => $branch->id]))->assertOk()->assertSee('<strong>0</strong>', false);
+    }
+
+    public function test_wp24_migration_validation_error_is_visible_and_reopens_submitted_branch(): void
+    {
+        $branch = Branch::create(['name' => 'Cabang Error Modal', 'code' => 'CEM', 'is_active' => true]);
+        DB::table('branch_migration_states')->insert(['branch_id' => $branch->id, 'state' => 'sheet', 'created_at' => now(), 'updated_at' => now()]);
+        $actor = User::factory()->create(['role_id' => Role::where('slug', 'superadmin')->value('id'), 'password_changed_at' => now(), 'account_status' => 'active', 'is_active' => true]);
+
+        $this->actingAs($actor)->from(route('admin.branch-migration-states.index'))->put(route('admin.branch-migration-states.update', $branch), ['expected_state' => 'sheet', 'state' => 'migrasi', 'branch_id' => $branch->id])->assertRedirect();
+        $this->actingAs($actor)->get(route('admin.branch-migration-states.index'))->assertSeeText('Status migrasi belum disimpan.')->assertSee('open: true', false);
+    }
+
+    public function test_wp24_override_is_badged_on_migration_page(): void
+    {
+        $branch = Branch::create(['name' => 'Cabang Badge Override', 'code' => 'CBO', 'is_active' => true]);
+        DB::table('branch_migration_states')->insert(['branch_id' => $branch->id, 'state' => 'paralel', 'changed_at' => now()->subDays(14), 'created_at' => now(), 'updated_at' => now()]);
+        $actor = User::factory()->create(['role_id' => Role::where('slug', 'superadmin')->value('id'), 'password_changed_at' => now(), 'account_status' => 'active', 'is_active' => true]);
+        app(BranchMigrationStateService::class)->transition($actor, $branch, 'paralel', 'oasis_penuh', 'Uji badge.', true);
+
+        $this->actingAs($actor)->get(route('admin.branch-migration-states.index'))->assertOk()->assertSeeText('Override');
+    }
+
     public function test_wp24_migration_page_shows_latest_parity_status_and_report_link(): void
     {
         $branch = Branch::create(['name' => 'Cabang Parity UI', 'code' => 'CUI', 'is_active' => true]);

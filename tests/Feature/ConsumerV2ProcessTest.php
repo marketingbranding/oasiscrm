@@ -46,6 +46,62 @@ class ConsumerV2ProcessTest extends TestCase
         $this->assertSame(0, $created->stageEvents()->count());
     }
 
+    public function test_nups_index_handles_converted_nup_without_application_reference(): void
+    {
+        $application = ConsumerApplication::factory()->create();
+        $actor = $this->superadmin($application);
+        ConsumerNup::factory()->create([
+            'branch_id' => $application->branch_id,
+            'project_id' => $application->project_id,
+            'status' => 'converted',
+            'converted_application_id' => null,
+        ]);
+
+        $this->actingAs($actor)
+            ->get(route('consumer-nups.index'))
+            ->assertOk()
+            ->assertSee('Transaksi tidak tersedia');
+    }
+
+    public function test_nups_index_uses_success_badge_and_transaction_link_on_mobile_for_converted_nup(): void
+    {
+        config(['app.workspace_v2_enabled' => false]);
+        $application = ConsumerApplication::factory()->create();
+        $actor = $this->superadmin($application);
+        $nup = ConsumerNup::factory()->create([
+            'branch_id' => $application->branch_id,
+            'project_id' => $application->project_id,
+            'status' => 'converted',
+            'converted_application_id' => $application->id,
+        ]);
+
+        $this->actingAs($actor)
+            ->get(route('consumer-nups.index'))
+            ->assertOk()
+            ->assertSee('crm-button--secondary')
+            ->assertSee('Buka transaksi')
+            ->assertSee(route('consumer-database.workspace', ['search' => $application->id_transaksi]));
+    }
+
+    public function test_nups_index_uses_workspace_transactions_page_when_workspace_flag_is_enabled(): void
+    {
+        config(['app.workspace_v2_enabled' => true]);
+        $application = ConsumerApplication::factory()->create();
+        $actor = $this->superadmin($application);
+        ConsumerNup::factory()->create([
+            'branch_id' => $application->branch_id,
+            'project_id' => $application->project_id,
+            'status' => 'converted',
+            'converted_application_id' => $application->id,
+        ]);
+
+        $this->actingAs($actor)
+            ->get(route('consumer-nups.index'))
+            ->assertOk()
+            ->assertSee(route('workspace-v2.transactions', ['search' => $application->id_transaksi]))
+            ->assertDontSee(route('consumer-database.workspace.show', $application));
+    }
+
     public function test_br20_nup_conversion_requires_kavling_and_reuses_it_idempotently(): void
     {
         $application = ConsumerApplication::factory()->create();
@@ -213,6 +269,20 @@ class ConsumerV2ProcessTest extends TestCase
             'issue_id' => $issue->id,
             'nup_number' => 'NUP-REQUIRED',
         ])->assertUnprocessable();
+    }
+
+    public function test_br21_return_to_nup_json_includes_success_feedback(): void
+    {
+        $application = ConsumerApplication::factory()->create();
+        $actor = $this->superadmin($application);
+        $issue = ConsumerIssue::factory()->create(['consumer_application_id' => $application->id]);
+
+        $this->actingAs($actor)->postJson(route('consumer-nups.return', $application), [
+            'issue_id' => $issue->id,
+            'nup_number' => 'NUP-FEEDBACK',
+            'reason' => 'Koreksi UAT',
+            'confirmation' => '1',
+        ])->assertCreated()->assertJsonPath('message', 'Transaksi berhasil dikembalikan ke NUP.');
     }
 
     public function test_br21_return_to_nup_route_accepts_method_override_payload(): void

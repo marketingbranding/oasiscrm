@@ -3,6 +3,7 @@ export default function registerDanaTalangan(Alpine) {
         ...detailModal,
         adding: false,
         editingRecord: null,
+        paymentRecord: null,
         filterMode: 'date',
         filterOpen: false,
         tableFrozen: true,
@@ -37,9 +38,20 @@ export default function registerDanaTalangan(Alpine) {
             }
         },
 
+        openPayment(record) {
+            this.paymentRecord = record;
+            this.$nextTick(() => this.$refs.paymentAmount?.focus());
+        },
+
+        closePayment() {
+            this.paymentRecord = null;
+        },
+
         projectsFor(branchId, current = '') {
-            const projects = this.projectCatalog.filter(project => String(project.branch_id) === String(branchId || ''));
-            if (current && !projects.some(project => project.name === current)) {
+            const projects = this.projectCatalog
+                .filter(project => String(project.branch_id) === String(branchId || ''))
+                .filter((project, index, values) => values.findIndex(candidate => candidate.name.trim().toLowerCase() === project.name.trim().toLowerCase()) === index);
+            if (current && !projects.some(project => project.name.trim().toLowerCase() === current.trim().toLowerCase())) {
                 projects.push({ id: null, name: current, branch_id: branchId });
             }
 

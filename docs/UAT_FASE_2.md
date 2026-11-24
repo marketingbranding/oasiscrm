@@ -63,7 +63,7 @@ URL: `/dana-talangan`, `/dana-talangan/create`, `/dana-talangan/report`
 
 ## Kembali ke NUP dan Selesaikan Kendala
 
-URL: `/consumer-workspace/{id}`, `/konsumen-progress/applications/{id}/kembali-ke-nup`, `/consumer-process/{process}`
+URL: `/consumer-workspace/{id}`, `/consumer-process/{process}`
 
 1. [ ] Buat transaksi dummy status `LANJUT` dengan kendala.
 2. [ ] Selesaikan kendala. Hasil: issue resolved, audit tercatat.
@@ -121,15 +121,47 @@ URL: `/consumer-workspace/lead-link/conflicts`
 | Bulk Data Lama | ☐ | ☐ | ☐ | ☐ | ☐ | |
 | Konflik | ☐ | ☐ | ☐ | ☐ | ☐ | |
 
-## Perintah dummy lokal
+## Data dummy DB lokal pemilik
 
-Tidak ada seeder baru yang di-commit untuk UAT. Pemilik dapat memakai test DB terisolasi dan factory melalui test terarah:
+Skrip seed tidak disimpan di repo. Simpan sementara di `C:\Users\FAIZAL\AppData\Local\Temp\uat_fase2_seed.php`, atau lokasi temp lokal lain. Skrip hanya boleh dijalankan terhadap DB lokal pemilik.
+
+Set password akun UAT lewat environment proses. Jangan menulis password ke skrip, shell history, laporan, atau chat:
 
 ```powershell
-php artisan test --compact tests/Feature/ConsumerLeadLinkDecisionTest.php
-php artisan test --compact tests/Feature/ConsumerMigrationReconciliationTest.php
-php artisan test --compact tests/Feature/ConsumerV2ProcessTest.php
-php artisan test --compact tests/Feature/DanaTalanganTest.php
+$env:UAT_PASSWORD='isi-sementara-di-shell-lokal'
+php artisan tinker --execute="require 'C:/Users/FAIZAL/AppData/Local/Temp/uat_fase2_seed.php';"
 ```
 
-Perintah tersebut membuat data di DB test sesuai konfigurasi PHPUnit, bukan DB produksi. Hapus dump/export hasil gladi setelah review.
+Perintah seed memakai DB aktif aplikasi (`database/database.sqlite` pada setup lokal saat ini), bukan DB PHPUnit. Skrip menolak jalan jika `UAT_PASSWORD` kosong, membuat semua nama/nomor/HP berprefix `UAT-`, mencetak ID record dan URL langsung, serta tidak mengubah record tanpa prefix tersebut.
+
+Setelah UAT, bersihkan hanya data UAT:
+
+```powershell
+$env:UAT_MODE='cleanup'
+php artisan tinker --execute="require 'C:/Users/FAIZAL/AppData/Local/Temp/uat_fase2_seed.php';"
+Remove-Item Env:UAT_MODE
+Remove-Item Env:UAT_PASSWORD
+Remove-Item 'C:\Users\FAIZAL\AppData\Local\Temp\uat_fase2_seed.php'
+```
+
+Simpan output seed secara lokal. Output memuat ID record dan URL, tetapi tidak memuat password. Jangan commit skrip, output, dump, credential, workbook, atau data dummy. Jangan menjalankan `migrate:fresh`, `db:wipe`, `RefreshDatabase`, atau `php artisan test` untuk membuat data browser; perintah test memakai DB test terpisah dan di-refresh.
+
+### ID record dan URL hasil seed
+
+Tempel output seed di bawah tabel ini setelah seed lokal berhasil. Jangan tempel password atau data produksi.
+
+| Alur | ID record dummy | URL langsung |
+|---|---:|---|
+| Alih Lead / antrean tanpa pemilik | `unownedOne`, `unownedTwo` | `/workspace/lead`, `/buku-saku-sales/leads/unowned-queue` |
+| Akses sementara | `grantee`, `grant` | `/admin/izin-akses-khusus` |
+| Penanda perhatian | `attentionLead` | `/workspace/lead`, `/team-history` |
+| Status migrasi | `branch` | `/admin/status-migrasi-cabang` |
+| Paritas | `branch` | `/admin/laporan-paritas/{branch}` |
+| Rekonsiliasi | `reconciliation` | `/admin/migrations/marison/reconciliation/{reconciliation}` |
+| Dana Talangan | `talanganFull`, `talanganPartial` | `/dana-talangan`, `/dana-talangan/report` |
+| Transaksi dengan kendala | `application`, `issue` | `/consumer-workspace/{application}`, `/consumer-process/proses-bank` |
+| NUP | `waitingNup`, `convertedNup`, `convertedApp` | `/nups`, `/consumer-workspace/{convertedApp}` |
+| Penautan Sheet dan Data Lama | `sheetRows` | `/consumer-workspace`, `/consumer-workspace/link-subject/sheet/{sheetRows[0]}` |
+| Konflik penautan | `sourceDecision`, `targetDecision` | `/consumer-workspace/lead-link/conflicts` |
+
+Ganti placeholder `{id}` dengan ID yang dicetak skrip. URL kanonis tanpa trailing slash. Jika route lokal berbeda, gunakan route yang tercetak/terdaftar oleh `php artisan route:list`; jangan mengarang URL.

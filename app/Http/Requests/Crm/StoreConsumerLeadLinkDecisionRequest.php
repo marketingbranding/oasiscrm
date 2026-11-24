@@ -6,6 +6,7 @@ use App\Models\ConsumerApplication;
 use App\Models\ConsumerLeadLinkDecision;
 use App\Services\BranchMigrationStateService;
 use App\Services\OrganizationScopeService;
+use Illuminate\Contracts\Validation\Validator;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -34,6 +35,23 @@ class StoreConsumerLeadLinkDecisionRequest extends FormRequest
                 $consumer->project_id,
             )
             && app(BranchMigrationStateService::class)->allowsOasisConsumerInput((int) $consumer->branch_id);
+    }
+
+    public function withValidator(Validator $validator): void
+    {
+        $validator->after(function (Validator $validator): void {
+            foreach ((array) $this->input('suggestions', []) as $index => $suggestion) {
+                $rationale = is_array($suggestion) ? ($suggestion['rationale'] ?? []) : [];
+                foreach ((array) $rationale as $key => $value) {
+                    if (! is_string($key) || mb_strlen($key) > 64) {
+                        $validator->errors()->add("suggestions.{$index}.rationale", 'Kunci alasan snapshot saran maksimal 64 karakter.');
+                    }
+                    if ((! is_scalar($value) && $value !== null) || ($value !== null && mb_strlen((string) $value) > 200)) {
+                        $validator->errors()->add("suggestions.{$index}.rationale", 'Nilai alasan snapshot saran maksimal 200 karakter.');
+                    }
+                }
+            }
+        });
     }
 
     public function rules(): array
@@ -67,7 +85,7 @@ class StoreConsumerLeadLinkDecisionRequest extends FormRequest
             'suggestions.*.lead_id' => ['nullable', 'integer', 'exists:sales_leads,id'],
             'suggestions.*.score' => ['nullable', 'numeric', 'between:0,1'],
             'suggestions.*.rationale' => ['nullable', 'array', 'max:12'],
-            'suggestions.*.rationale.*' => ['nullable', 'scalar', 'max:200'],
+            'suggestions.*.rationale.*' => ['nullable'],
             'decision_source' => ['prohibited'],
         ];
     }

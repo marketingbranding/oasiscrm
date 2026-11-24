@@ -137,6 +137,20 @@ class ConsumerLeadLinkDecisionTest extends TestCase
         $this->assertDatabaseCount('activity_log', 1);
     }
 
+    public function test_br_idempotent_reconfirmation_repairs_stale_sales_lead_id(): void
+    {
+        [$consumer, $actor] = $this->decisionContext();
+        $lead = $this->lead($consumer, $actor);
+        $decision = app(ConsumerLeadLinkDecisionService::class)->decide($consumer, 'linked', $lead, [], $actor);
+        $consumer->update(['sales_lead_id' => null]);
+
+        $reconfirmed = app(ConsumerLeadLinkDecisionService::class)->decide($consumer, 'linked', $lead, [], $actor);
+
+        $this->assertSame($decision->id, $reconfirmed->id);
+        $this->assertDatabaseHas('consumer_applications', ['id' => $consumer->id, 'sales_lead_id' => $lead->id]);
+        $this->assertDatabaseCount('activity_log', 1);
+    }
+
     public function test_br_correction_closes_previous_decision_without_deleting_history_and_audits_change(): void
     {
         [$consumer, $actor] = $this->decisionContext();
@@ -194,6 +208,52 @@ class ConsumerLeadLinkDecisionTest extends TestCase
         $this->assertArrayNotHasKey('reason', $properties);
     }
 
+    public function test_br_submitted_suggestion_lead_must_match_consumer_scope(): void
+    {
+        [$consumer, $actor] = $this->decisionContext();
+        $foreign = ConsumerApplication::factory()->create();
+        $foreignLead = $this->lead($foreign, $actor);
+
+        $this->expectException(AuthorizationException::class);
+        app(ConsumerLeadLinkDecisionService::class)->decide(
+            $consumer,
+            'without_lead',
+            null,
+            ['reason' => 'Tidak ditemukan', 'suggestions' => [['lead_id' => $foreignLead->id]]],
+            $actor,
+        );
+        $this->assertDatabaseCount('consumer_lead_link_decisions', 0);
+    }
+
+    public function test_br_suggestion_snapshot_rejects_unbounded_rationale(): void
+    {
+        [$consumer, $actor] = $this->decisionContext();
+        $rationale = array_fill_keys(array_map(fn (int $index): string => "k{$index}", range(1, 13)), 'ok');
+
+        $this->expectException(ValidationException::class);
+        app(ConsumerLeadLinkDecisionService::class)->decide(
+            $consumer,
+            'without_lead',
+            null,
+            ['reason' => 'Tidak ditemukan', 'suggestions' => [['rationale' => $rationale]]],
+            $actor,
+        );
+    }
+
+    public function test_br_legacy_anchor_is_rejected_for_nonlegacy_decision(): void
+    {
+        [$consumer, $actor] = $this->decisionContext();
+
+        $this->expectException(ValidationException::class);
+        app(ConsumerLeadLinkDecisionService::class)->decide(
+            $consumer,
+            'without_lead',
+            null,
+            ['reason' => 'Tidak ditemukan', 'legacy_anchor' => 'ID Konsumen Awal'],
+            $actor,
+        );
+    }
+
     public function test_br_supplemental_role_does_not_escalate_decision_access(): void
     {
         [$consumer, $actor] = $this->decisionContext();
@@ -226,18 +286,12 @@ class ConsumerLeadLinkDecisionTest extends TestCase
     public function test_br_request_validates_status_requirements_and_forbidden_fields(): void
     {
         [$consumer, $actor] = $this->decisionContext();
-        $request = StoreConsumerLeadLinkDecisionRequest::create('/consumer', 'POST', [
+        $request = $this->decisionRequest($consumer, $actor, [
             'status' => 'without_lead',
             'sales_lead_id' => 1,
             'legacy_anchor' => 'ID Konsumen Awal',
             'decision_source' => 'system',
         ]);
-        $request->setUserResolver(fn (): User => $actor);
-        $route = new Route('POST', '/consumer', []);
-        $route->bind($request);
-        $route->setParameter('consumerApplication', $consumer);
-        $route->setContainer($this->app);
-        $request->setRouteResolver(fn () => $route);
 
         $validator = Validator::make($request->all(), $request->rules());
 
@@ -251,17 +305,11 @@ class ConsumerLeadLinkDecisionTest extends TestCase
     public function test_br_request_accepts_legacy_anchor_only_for_legacy_status(): void
     {
         [$consumer, $actor] = $this->decisionContext();
-        $request = StoreConsumerLeadLinkDecisionRequest::create('/consumer', 'POST', [
+        $request = $this->decisionRequest($consumer, $actor, [
             'status' => 'legacy',
             'reason' => 'Data lama',
             'legacy_anchor' => 'ID Konsumen Awal',
         ]);
-        $request->setUserResolver(fn (): User => $actor);
-        $route = new Route('POST', '/consumer', []);
-        $route->bind($request);
-        $route->setParameter('consumerApplication', $consumer);
-        $route->setContainer($this->app);
-        $request->setRouteResolver(fn () => $route);
 
         $validator = Validator::make($request->all(), $request->rules());
 
@@ -273,7 +321,30 @@ class ConsumerLeadLinkDecisionTest extends TestCase
     {
         [$consumer, $actor] = $this->decisionContext();
         BranchMigrationState::query()->where('branch_id', $consumer->branch_id)->update(['state' => BranchMigrationState::STATE_SHEET]);
-        $request = StoreConsumerLeadLinkDecisionRequest::create('/consumer', 'POST', ['status' => 'without_lead', 'reason' => 'Tidak ditemukan']);
+        $request = $this->decisionRequest($consumer, $actor, ['status' => 'without_lead', 'reason' => 'Tidak ditemukan']);
+
+        $this->assertFalse($request->authorize());
+    }
+
+    public function test_br_request_rejects_unbounded_suggestion_rationale(): void
+    {
+        [$consumer, $actor] = $this->decisionContext();
+        $key = str_repeat('k', 65);
+        $request = $this->decisionRequest($consumer, $actor, [
+            'status' => 'without_lead',
+            'reason' => 'Tidak ditemukan',
+            'suggestions' => [['rationale' => [$key => 'ok']]],
+        ]);
+        $validator = Validator::make($request->all(), $request->rules());
+        $request->withValidator($validator);
+
+        $this->assertTrue($validator->fails());
+        $this->assertArrayHasKey('suggestions.0.rationale', $validator->errors()->toArray());
+    }
+
+    private function decisionRequest(ConsumerApplication $consumer, User $actor, array $payload): StoreConsumerLeadLinkDecisionRequest
+    {
+        $request = StoreConsumerLeadLinkDecisionRequest::create('/consumer', 'POST', $payload);
         $request->setUserResolver(fn (): User => $actor);
         $route = new Route('POST', '/consumer', []);
         $route->bind($request);
@@ -281,7 +352,7 @@ class ConsumerLeadLinkDecisionTest extends TestCase
         $route->setContainer($this->app);
         $request->setRouteResolver(fn () => $route);
 
-        $this->assertFalse($request->authorize());
+        return $request;
     }
 
     private function decisionContext(): array

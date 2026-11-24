@@ -6,10 +6,14 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\ConsumerEntryRequest;
 use App\Http\Requests\Crm\StoreConsumerLeadLinkDecisionRequest;
 use App\Models\ConsumerApplication;
+use App\Models\ConsumerNup;
+use App\Models\KonsumenProgressSheetRow;
 use App\Models\SalesLead;
 use App\Services\ConsumerDatabaseWorkspaceService;
 use App\Services\ConsumerEntryService;
 use App\Services\ConsumerLeadLinkDecisionService;
+use App\Services\ConsumerLeadLinkSubjectResolver;
+use App\Services\OrganizationScopeService;
 use App\Services\WorkspaceAccessService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -22,6 +26,7 @@ final class ConsumerDatabaseController extends Controller
         private readonly ConsumerDatabaseWorkspaceService $workspace,
         private readonly ConsumerEntryService $entry,
         private readonly ConsumerLeadLinkDecisionService $leadLinkDecisions,
+        private readonly OrganizationScopeService $organizationScope,
     ) {}
 
     public function index(Request $request): View
@@ -59,6 +64,19 @@ final class ConsumerDatabaseController extends Controller
             'ok' => true,
             'data' => $detail,
         ]);
+    }
+
+    public function showLinkSubject(Request $request, string $subjectType, int $subjectId): JsonResponse
+    {
+        $resolver = app(ConsumerLeadLinkSubjectResolver::class);
+        $subject = match ($subjectType) {
+            'nup' => $resolver->fromNup(ConsumerNup::query()->findOrFail($subjectId)),
+            'sheet' => $resolver->fromSheetRow(KonsumenProgressSheetRow::query()->findOrFail($subjectId)),
+            default => abort(404),
+        };
+        abort_unless($request->user()->isAccountActive() && $this->organizationScope->allowsProjectRecord($request->user(), 'consumer_progress', 'view', $subject->branchId, $subject->projectId), 403);
+
+        return response()->json(['ok' => true, 'data' => ['subject' => get_object_vars($subject)]]);
     }
 
     public function storeLeadLinkDecision(StoreConsumerLeadLinkDecisionRequest $request, ConsumerApplication $consumerApplication): RedirectResponse|JsonResponse

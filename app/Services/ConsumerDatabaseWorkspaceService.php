@@ -10,6 +10,7 @@ use App\Models\ConsumerLeadLinkDecision;
 use App\Models\ConsumerNup;
 use App\Models\ConsumerStageEvent;
 use App\Models\Customer;
+use App\Models\KonsumenProgressSheetRow;
 use App\Models\LeadMaster;
 use App\Models\User;
 use App\Support\ConsumerIdentity;
@@ -47,6 +48,7 @@ final class ConsumerDatabaseWorkspaceService
         $applications = $this->query($user, $branchIds, $projectIds, $selectedBranch, $selectedProject, $request)
             ->paginate(25)
             ->withQueryString();
+        $linkSubjects = $this->linkSubjects($user, $branchIds, $projectIds, $selectedBranch, $selectedProject, $request);
         $salesOptions = $this->salesOptions($user, $branchIds, $projectIds, $selectedBranch, $selectedProject);
         $bankOptions = $this->bankOptions($branchIds, $projectIds, $selectedBranch, $selectedProject, $user);
         $selectedSales = $request->integer('sales_id') ?: null;
@@ -71,6 +73,7 @@ final class ConsumerDatabaseWorkspaceService
             'selectedSales' => $selectedSales,
             'selectedBank' => $selectedBank,
             'applications' => $applications,
+            'linkSubjects' => $linkSubjects,
             'search' => trim($request->string('search')->toString()),
             'selectedStatus' => $request->string('status')->toString(),
             'selectedStage' => $request->string('stage')->toString(),
@@ -92,6 +95,17 @@ final class ConsumerDatabaseWorkspaceService
                 'selesai' => 'Selesai', 'ready_100' => 'Rumah Siap 100%',
             ] + $this->pipeline->stages(),
         ];
+    }
+
+    /** @return Collection<int, array<string, mixed>> */
+    private function linkSubjects(User $user, array $branchIds, array $projectIds, ?Branch $branch, ?LeadMaster $project, Request $request): Collection
+    {
+        $resolver = app(ConsumerLeadLinkSubjectResolver::class);
+        $rows = KonsumenProgressSheetRow::query()->whereIn('branch_id', $branchIds)->where('sheet_name', 'data_konsumen')->get();
+
+        return $rows->map(fn (KonsumenProgressSheetRow $row): array => $resolver->fromSheetRow($row))->filter(fn ($subject): bool => ($branch === null || $subject->branchId === $branch->id) && ($project === null || $subject->projectId === $project->id))->map(fn ($subject): array => [
+            'source' => 'sheet', 'subject_key' => $subject->subjectKey(), 'name' => $subject->name, 'project_id' => $subject->projectId, 'branch_id' => $subject->branchId, 'decidable' => $subject->isDecidable, 'note' => $subject->note,
+        ])->values();
     }
 
     /** @return array<string, mixed> */

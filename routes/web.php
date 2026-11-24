@@ -325,6 +325,7 @@ Route::middleware(['auth', 'active', 'verified', 'password.changed', 'operationa
         Route::get('/consumer-workspace/create', [ConsumerDatabaseController::class, 'create'])->middleware('permission:consumer_progress.manage')->name('consumer-database.workspace.create');
         Route::post('/consumer-workspace', [ConsumerDatabaseController::class, 'store'])->middleware('not.impersonating')->name('consumer-database.workspace.store');
         Route::post('/consumer-workspace/{consumerApplication}/lead-link-decision', [ConsumerDatabaseController::class, 'storeLeadLinkDecision'])->middleware('not.impersonating')->name('consumer-database.workspace.lead-link-decision.store');
+        Route::get('/consumer-workspace/link-subject/{subjectType}/{subjectId}', [ConsumerDatabaseController::class, 'showLinkSubject'])->name('consumer-database.workspace.link-subject.show');
         Route::get('/consumer-workspace/{consumerApplication}', [ConsumerDatabaseController::class, 'show'])->middleware('permission:consumer_progress.view')->name('consumer-database.workspace.show');
         Route::get('/nups', [ConsumerNupController::class, 'index'])->middleware('permission:consumer_progress.view')->name('consumer-nups.index');
         Route::get('/nups/create', [ConsumerNupController::class, 'create'])->middleware('permission:consumer_progress.manage')->name('consumer-nups.create');

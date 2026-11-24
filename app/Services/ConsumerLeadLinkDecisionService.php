@@ -31,6 +31,43 @@ final class ConsumerLeadLinkDecisionService
 
     private const MAX_RATIONALE_VALUE_LENGTH = 200;
 
+    /** @return array{count: int, examples: array<int, array<string, mixed>>} */
+    public function previewBulkLegacy(User $actor, array $filters): array
+    {
+        $rows = KonsumenProgressSheetRow::query()->where('sheet_name', 'data_konsumen')->when($filters['branch_id'] ?? null, fn ($q, $id) => $q->where('branch_id', $id))->limit(500)->get();
+        $resolver = app(ConsumerLeadLinkSubjectResolver::class);
+        $subjects = $rows->map(fn ($row) => $resolver->fromSheetRow($row))->filter(fn ($subject) => $subject->isDecidable && ($filters['before'] ?? null) === null || ($subject->enteredAt?->lt($filters['before']) ?? false));
+
+        return ['count' => $subjects->count(), 'examples' => $subjects->take(10)->map(fn ($subject) => ['source' => 'sheet', 'name' => $subject->name, 'subject_key' => $subject->subjectKey()])->all()];
+    }
+
+    public function markBulkLegacy(User $actor, array $filters, string $reason): array
+    {
+        if (trim($reason) === '') {
+            throw ValidationException::withMessages(['reason' => 'Alasan wajib diisi untuk Data Lama.']);
+        }
+        $rows = KonsumenProgressSheetRow::query()->where('sheet_name', 'data_konsumen')->when($filters['branch_id'] ?? null, fn ($q, $id) => $q->where('branch_id', $id))->limit(500)->get();
+        $resolver = app(ConsumerLeadLinkSubjectResolver::class);
+        $result = ['created' => 0, 'skipped' => 0, 'empty_id' => 0];
+        foreach ($rows as $row) {
+            $subject = $resolver->fromSheetRow($row);
+            if (! $subject->isDecidable) {
+                $result['empty_id']++;
+
+                continue;
+            }
+            if (ConsumerLeadLinkDecision::query()->where('subject_key', $subject->subjectKey())->where('is_active', true)->exists()) {
+                $result['skipped']++;
+
+                continue;
+            }
+            $this->decideForSubject($subject, ConsumerLeadLinkDecision::STATUS_LEGACY, null, ['reason' => $reason], $actor);
+            $result['created']++;
+        }
+
+        return $result;
+    }
+
     public function decideForSubject(
         ConsumerLeadLinkSubject $subject,
         string $status,

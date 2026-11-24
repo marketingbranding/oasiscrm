@@ -4,6 +4,7 @@ namespace App\Providers;
 
 use App\Auth\ActiveUserProvider;
 use App\Models\Comment;
+use App\Models\ConsumerApplication;
 use App\Models\ContentItem;
 use App\Models\DanaTalangan;
 use App\Models\Permission;
@@ -11,6 +12,7 @@ use App\Models\SalesDailyPlan;
 use App\Models\SalesLead;
 use App\Models\SalesLeadTarget;
 use App\Models\User;
+use App\Observers\ConsumerApplicationObserver;
 use App\Policies\CommentPolicy;
 use App\Policies\ContentItemPolicy;
 use App\Policies\DanaTalanganPolicy;
@@ -42,6 +44,8 @@ class AppServiceProvider extends ServiceProvider
     public function boot(): void
     {
         Auth::provider('active-eloquent', fn ($app, array $config) => new ActiveUserProvider($app['hash'], $config['model']));
+
+        ConsumerApplication::observe(ConsumerApplicationObserver::class);
 
         Gate::policy(User::class, UserPolicy::class);
         Gate::policy(Comment::class, CommentPolicy::class);

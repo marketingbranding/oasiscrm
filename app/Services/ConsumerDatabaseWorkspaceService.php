@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Data\ConsumerLeadLinkSubject;
 use App\Models\ActivityLog;
 use App\Models\Branch;
 use App\Models\ConsumerApplication;
@@ -101,10 +102,22 @@ final class ConsumerDatabaseWorkspaceService
     private function linkSubjects(User $user, array $branchIds, array $projectIds, ?Branch $branch, ?LeadMaster $project, Request $request): Collection
     {
         $resolver = app(ConsumerLeadLinkSubjectResolver::class);
-        $rows = KonsumenProgressSheetRow::query()->whereIn('branch_id', $branchIds)->where('sheet_name', 'data_konsumen')->get();
+        $scopedProjectIds = array_values(array_intersect($projectIds, $this->organizationScope->projectIds($user, 'consumer_progress', 'view')));
+        $rows = KonsumenProgressSheetRow::query()
+            ->whereIn('branch_id', $branchIds)
+            ->where('sheet_name', 'data_konsumen')
+            ->orderByDesc('id')
+            ->limit(250)
+            ->get();
+        $maps = $resolver->lookupMaps($rows, $scopedProjectIds);
+        $sheetSubjects = $rows->map(function (KonsumenProgressSheetRow $row) use ($maps): ConsumerLeadLinkSubject {
+            $data = collect($row->row_data ?? [])->mapWithKeys(fn ($value, $key): array => [Str::lower(trim((string) $key)) => is_scalar($value) ? trim((string) $value) : '']);
+            $projectName = Str::lower($data->get('proyek', $data->get('project', $data->get('project_name', ''))));
+            $salesName = Str::lower($data->get('sales', $data->get('nama sales', $data->get('sales_pic', ''))));
 
-        $sheetSubjects = $rows->map(fn (KonsumenProgressSheetRow $row): array => $resolver->fromSheetRow($row))->filter(fn ($subject): bool => ($branch === null || $subject->branchId === $branch->id) && ($project === null || $subject->projectId === $project->id));
-        $nupSubjects = ConsumerNup::query()->with('customer')->whereIn('branch_id', $branchIds)->when($branch, fn (Builder $query): Builder => $query->whereKey($branch->id))->when($project, fn (Builder $query): Builder => $query->where('project_id', $project->id))->get()->map(fn (ConsumerNup $nup): array => $resolver->fromNup($nup));
+            return app(ConsumerLeadLinkSubjectResolver::class)->fromSheetRow($row, $maps['project_ids'][$projectName] ?? null, $maps['sales_ids'][$salesName] ?? null);
+        })->filter(fn ($subject): bool => $subject->projectId !== null && in_array($subject->projectId, $scopedProjectIds, true) && ($branch === null || $subject->branchId === $branch->id) && ($project === null || $subject->projectId === $project->id));
+        $nupSubjects = ConsumerNup::query()->with('customer')->whereIn('branch_id', $branchIds)->when($branch, fn (Builder $query): Builder => $query->where('branch_id', $branch->id))->when($project, fn (Builder $query): Builder => $query->where('project_id', $project->id))->whereIn('project_id', $scopedProjectIds)->limit(250)->get()->map(fn (ConsumerNup $nup): array => $resolver->fromNup($nup));
 
         return $sheetSubjects->merge($nupSubjects)->map(fn ($subject): array => [
             'source' => $subject->subjectType, 'subject_key' => $subject->subjectKey(), 'subject_id' => $subject->subjectId ?? $subject->sheetRowId, 'name' => $subject->name, 'project_id' => $subject->projectId, 'branch_id' => $subject->branchId, 'decidable' => $subject->isDecidable, 'note' => $subject->note,

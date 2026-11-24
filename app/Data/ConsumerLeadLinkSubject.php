@@ -25,6 +25,13 @@ final readonly class ConsumerLeadLinkSubject
         public ?string $note = null,
     ) {}
 
+    public static function normalizeLegacyConsumerKey(?string $value): ?string
+    {
+        $normalized = mb_strtolower(trim((string) $value));
+
+        return $normalized === '' ? null : $normalized;
+    }
+
     public function subjectKey(): string
     {
         return match ($this->subjectType) {
@@ -74,7 +81,7 @@ final readonly class ConsumerLeadLinkSubject
         $key = null;
         foreach (['[sys] id konsumen', 'id konsumen', 'id konsumen awal'] as $alias) {
             if (($value = $data->get($alias, '')) !== '') {
-                $key = mb_strtolower($value);
+                $key = self::normalizeLegacyConsumerKey($value);
                 break;
             }
         }

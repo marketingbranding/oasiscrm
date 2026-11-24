@@ -56,7 +56,20 @@ PRD sumber kebenaran: `docs/product/PRD_OASIS_CRM_V3.md` versi 3.3 (D30–D33)
 | WP-2.7 | 2 | Penutup Fase 2: changelog, dokumentasi, verifikasi penuh | Belum mulai; dikerjakan setelah WP-2.8 lalu WP-2.9 | Semua fase 2 |
 | WP-2.8 | 2 | Riwayat Tim: gabungan perubahan Lead dan agenda seluruh turunan | Merged ke fase-2 pada `395fcad` melalui merge `--no-ff`; review scope dan batas 92 hari selesai | BR-50–BR-52 |
 | WP-2.9 | 2 | Penautan Lead ↔ Konsumen | Merged ke fase-2 pada `dea710e` melalui merge `--no-ff`; review diterima, kandidat HP diprioritaskan, cakupan Sheet dicatat. | BR terkait penautan Lead ↔ Konsumen |
-| WP-2.9b | 2 | Penautan Lead untuk cermin Sheet dan NUP | Berjalan; Paket A dan fondasi Paket B/C dipush di branch `prd-v3/wp-2.9b-penautan-sheet`; bulk Data Lama, filter status lengkap, konflik carry-over ter-audit, dan tes subject lintas jenis masih tersisa sebelum review. | BR terkait penautan Lead ↔ Konsumen |
+| WP-2.9b | 2 | Penautan Lead untuk cermin Sheet dan NUP | Berjalan; Paket A dan fondasi Paket B/C dipush di branch `prd-v3/wp-2.9b-penautan-sheet`; sisa verifikasi dan halaman konflik dikerjakan dalam irisan berurutan sebelum review. | BR terkait penautan Lead ↔ Konsumen |
+| WP-3.1 | 3 | WhatsApp satu nomor | Belum mulai | BR-60–BR-64 |
+
+### Rencana singkat sisa WP-2.9b — 24 November 2026
+
+Urutan kerja pada branch `prd-v3/wp-2.9b-penautan-sheet`:
+
+1. **Kontrak dan regresi:** tambah tes rollback atomik saat satu subjek gagal, token pratinjau menolak filter berubah, keputusan subjek NUP, satu Lead tidak boleh tertaut ke dua subjek lintas jenis, 403 pada endpoint keputusan/pratinjau/bulk/konflik, serta carry-over dari entry, paste import, impor historis, rekonsiliasi, dan konversi NUP. Perbaikan hanya pada service/policy yang sudah menjadi pintu scope.
+2. **Daftar subjek:** lengkapi filter server-side `Belum diputuskan`, `Tertaut`, `Tanpa Lead`, `Data Lama`, dan `ID kosong`, dengan pencarian/status tetap scope-safe serta form mutasi POST + `_method`.
+3. **Konflik:** tambah halaman HTML daftar/detail konflik yang menampilkan sumber dan tujuan, pilihan keputusan yang dipakai, alasan wajib, audit, dan 403 di luar scope. Gunakan komponen CRM dan pola feedback konflik yang sudah ada.
+4. **Verifikasi:** jalankan suite terfokus, Pint, diff check, cache view, build frontend bila berubah, suite penuh dengan perbandingan sebelum/sesudah, lalu uji browser desktop/mobile memakai sesi Super Admin yang sudah login. Data dummy lokal sementara saja; tidak ada workbook cabang asli, cutover produksi, atau data dummy yang dikomit.
+
+Komit dan push setelah setiap irisan selesai. Laporan wajib Bahasa Indonesia, mencantumkan hash, suite penuh sebelum/sesudah, hasil browser dan console, serta sisa yang belum selesai.
+
 | WP-3.1 | 3 | WhatsApp satu nomor | Belum mulai | BR-60–BR-64 |
 | WP-3.2 | 3 | Asisten AI per peran | Belum mulai | BR-70–BR-72 |
 | WP-3.3 | 3 | Push PWA dan preferensi notifikasi | Belum mulai | §7.11 |

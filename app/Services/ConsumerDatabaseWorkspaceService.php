@@ -107,7 +107,7 @@ final class ConsumerDatabaseWorkspaceService
         $nupSubjects = ConsumerNup::query()->with('customer')->whereIn('branch_id', $branchIds)->when($branch, fn (Builder $query): Builder => $query->whereKey($branch->id))->when($project, fn (Builder $query): Builder => $query->where('project_id', $project->id))->get()->map(fn (ConsumerNup $nup): array => $resolver->fromNup($nup));
 
         return $sheetSubjects->merge($nupSubjects)->map(fn ($subject): array => [
-            'source' => $subject->subjectType, 'subject_key' => $subject->subjectKey(), 'name' => $subject->name, 'project_id' => $subject->projectId, 'branch_id' => $subject->branchId, 'decidable' => $subject->isDecidable, 'note' => $subject->note,
+            'source' => $subject->subjectType, 'subject_key' => $subject->subjectKey(), 'subject_id' => $subject->subjectId ?? $subject->sheetRowId, 'name' => $subject->name, 'project_id' => $subject->projectId, 'branch_id' => $subject->branchId, 'decidable' => $subject->isDecidable, 'note' => $subject->note,
         ])->values();
     }
 

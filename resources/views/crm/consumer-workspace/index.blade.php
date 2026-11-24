@@ -74,7 +74,7 @@
                                     <td>{{ $subject['decidable'] ? 'Belum diputuskan' : ($subject['note'] ?: 'Tidak dapat diputuskan') }}</td>
                                     <td>
                                         @if($subject['decidable'])
-                                            <a class="font-bold text-[#0000ee] underline" href="{{ route('consumer-database.workspace.link-subject.show', ['subjectType' => $subject['source'], 'subjectId' => last(explode(':', $subject['subject_key']))]) }}">Buka</a>
+                                            <a class="font-bold text-[#0000ee] underline" href="{{ route('consumer-database.workspace.link-subject.show', ['subjectType' => $subject['source'], 'subjectId' => $subject['subject_id']]) }}">Buka</a>
                                         @else
                                             <span class="text-gray-600">ID kosong</span>
                                         @endif

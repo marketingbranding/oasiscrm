@@ -8,6 +8,7 @@ use App\Models\LeadMaster;
 use App\Models\OrganizationAssignment;
 use App\Models\Role;
 use App\Models\SalesLead;
+use App\Models\SalesLeadTransfer;
 use App\Models\User;
 use App\Services\AppSettingResolver;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -48,6 +49,63 @@ class TeamHistoryTest extends TestCase
         DB::table('app_settings')->updateOrInsert(['key' => 'org_hierarchical_monitoring'], ['value' => json_encode(false), 'group' => 'feature_flags', 'created_at' => now(), 'updated_at' => now()]);
         app(AppSettingResolver::class)->forget('org_hierarchical_monitoring');
         $this->actingAs($viewer)->get(route('team-history.index'))->assertNotFound();
+    }
+
+    public function test_br52_pusat_viewer_sees_descendants_across_branches(): void
+    {
+        [$branch, $project, $viewer, $direct] = $this->graph();
+        $viewer->forceFill(['role_id' => Role::query()->where('slug', 'supervisor')->value('id'), 'scope_level' => 'pusat'])->saveQuietly();
+        $otherBranch = Branch::create(['name' => 'Cabang Lain', 'code' => 'RWL', 'is_active' => true]);
+        $otherProject = LeadMaster::create(['branch_id' => $otherBranch->id, 'project_name' => 'Proyek Lain', 'is_active' => true]);
+        $direct->forceFill(['branch_id' => $otherBranch->id])->saveQuietly();
+        OrganizationAssignment::query()->where('user_id', $direct->id)->update(['branch_id' => $otherBranch->id]);
+        $lead = $this->lead($direct, $otherProject, 'Lead Lintas Cabang');
+        DB::table('sales_lead_status_histories')->insert(['sales_lead_id' => $lead->id, 'branch_id' => $otherBranch->id, 'status' => 'new', 'source' => 'test', 'changed_at' => now(), 'created_at' => now(), 'updated_at' => now()]);
+        $this->enableFlag();
+
+        $this->actingAs($viewer)->get(route('team-history.index'))->assertOk()->assertSee('Lead Lintas Cabang');
+    }
+
+    public function test_br52_distant_activity_outside_viewer_project_scope_is_hidden(): void
+    {
+        [$branch, $project, $viewer, $direct, $distant] = $this->graph();
+        $outsideBranch = Branch::create(['name' => 'Cabang Di Luar', 'code' => 'RWO', 'is_active' => true]);
+        $outsideProject = LeadMaster::create(['branch_id' => $outsideBranch->id, 'project_name' => 'Proyek Di Luar', 'is_active' => true]);
+        $lead = $this->lead($direct, $outsideProject, 'Lead Di Luar Scope');
+        DB::table('sales_lead_status_histories')->insert(['sales_lead_id' => $lead->id, 'branch_id' => $branch->id, 'status' => 'new', 'source' => 'test', 'changed_at' => now(), 'created_at' => now(), 'updated_at' => now()]);
+        $this->enableFlag();
+
+        $this->actingAs($viewer)->get(route('team-history.index'))->assertOk()->assertDontSee('Lead Di Luar Scope');
+    }
+
+    public function test_br50_transfer_shows_incoming_and_outgoing_for_each_owner(): void
+    {
+        [$branch, $project, $viewer, $direct, $distant] = $this->graph();
+        $lead = $this->lead($direct, $project, 'Lead Alih');
+        SalesLeadTransfer::create(['sales_lead_id' => $lead->id, 'from_sales_user_id' => $direct->id, 'to_sales_user_id' => $distant->id, 'actor_user_id' => $viewer->id, 'reason' => 'Test']);
+        $this->enableFlag();
+
+        $this->actingAs($viewer)->get(route('team-history.index', ['type' => 'lead_transfer']))->assertOk()->assertSee('Alih Lead')->assertSee('Bawahan Langsung')->assertSee('Turunan Jauh');
+    }
+
+    public function test_br50_pagination_exposes_second_page(): void
+    {
+        [$branch, $project, $viewer, $direct] = $this->graph();
+        for ($index = 0; $index < 51; $index++) {
+            $lead = $this->lead($direct, $project, 'Lead Halaman '.$index);
+            DB::table('sales_lead_status_histories')->insert(['sales_lead_id' => $lead->id, 'branch_id' => $branch->id, 'status' => 'new', 'source' => 'test', 'changed_at' => now(), 'created_at' => now(), 'updated_at' => now()]);
+        }
+        $this->enableFlag();
+
+        $this->actingAs($viewer)->get(route('team-history.index', ['type' => 'lead_status', 'page' => 2]))->assertOk()->assertSee('page=1')->assertSee('Lead Halaman');
+    }
+
+    public function test_br52_date_range_over_92_days_returns_422(): void
+    {
+        [, , $viewer] = $this->graph();
+        $this->enableFlag();
+
+        $this->actingAs($viewer)->get(route('team-history.index', ['date_from' => '2026-01-01', 'date_to' => '2026-04-04']))->assertStatus(422)->assertSee('Rentang tanggal maksimal 92 hari.');
     }
 
     public function test_br52_date_and_direct_child_filters_keep_scope(): void

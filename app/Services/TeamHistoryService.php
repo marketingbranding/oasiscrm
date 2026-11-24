@@ -38,9 +38,9 @@ final class TeamHistoryService
 
         $userIds = $selected === null ? $descendantIds : [$selected, ...$this->graph->descendantIds(User::query()->findOrFail($selected))];
         $leadBranchIds = $this->scope->branchIds($viewer, 'sales_pocketbook', 'view');
-        $leadProjectIds = $this->accessibleProjectIds($viewer, 'sales_pocketbook', $userIds);
+        $leadProjectIds = $this->scope->projectIdsForBranchScope($viewer, 'sales_pocketbook', 'view');
         $agendaBranchIds = $this->scope->branchIds($viewer, 'work_planner', 'view');
-        $agendaProjectIds = $this->accessibleProjectIds($viewer, 'work_planner', $userIds);
+        $agendaProjectIds = $this->scope->projectIdsForBranchScope($viewer, 'work_planner', 'view');
         $from = CarbonImmutable::parse($filters['date_from'] ?? now()->subDays(30)->toDateString())->startOfDay();
         $to = CarbonImmutable::parse($filters['date_to'] ?? now()->toDateString())->endOfDay();
 
@@ -68,22 +68,6 @@ final class TeamHistoryService
     private function canMonitor(User $viewer): bool
     {
         return $viewer->hasPermission('sales_pocketbook.view_team') || $viewer->hasPermission('sales_pocketbook.view_branch');
-    }
-
-    /** @param array<int> $userIds @return array<int> */
-    private function accessibleProjectIds(User $viewer, string $module, array $userIds): array
-    {
-        $projectIds = $this->scope->projectIds($viewer, $module, 'view');
-        $assignedProjectIds = DB::table('project_user')
-            ->join('lead_master', 'lead_master.id', '=', 'project_user.project_id')
-            ->whereIn('project_user.user_id', $userIds)
-            ->where('project_user.is_active', true)
-            ->where('lead_master.is_active', true)
-            ->pluck('project_user.project_id')
-            ->map(fn ($id): int => (int) $id)
-            ->all();
-
-        return array_values(array_unique([...$projectIds, ...$assignedProjectIds]));
     }
 
     /** @param array<int> $userIds @param array<int> $directIds @param array<int> $leadBranchIds @param array<int> $leadProjectIds @param array<int> $agendaBranchIds @param array<int> $agendaProjectIds */

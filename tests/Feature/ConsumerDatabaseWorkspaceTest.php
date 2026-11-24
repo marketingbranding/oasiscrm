@@ -7,8 +7,10 @@ use App\Models\Branch;
 use App\Models\BranchMigrationState;
 use App\Models\ConsumerApplication;
 use App\Models\ConsumerBankProcess;
+use App\Models\ConsumerLeadLinkDecision;
 use App\Models\ConsumerNup;
 use App\Models\Customer;
+use App\Models\KonsumenProgressSheetRow;
 use App\Models\LeadMaster;
 use App\Models\Role;
 use App\Models\User;
@@ -43,6 +45,29 @@ class ConsumerDatabaseWorkspaceTest extends TestCase
             ->assertOk()
             ->assertSee('Konsumen Terlihat')
             ->assertDontSee('Konsumen Rahasia');
+    }
+
+    public function test_br_link_status_filter_counts_and_paginates_all_300_sheet_rows_after_decisions(): void
+    {
+        [$user, $branch, $project] = $this->context();
+        $user->assignedProjects()->syncWithoutDetaching([$project->id => ['is_active' => true, 'is_primary' => true]]);
+        $rows = collect(range(1, 300))->map(function (int $number) use ($branch, $project, $user): KonsumenProgressSheetRow {
+            $key = 'BULK-'.$number;
+            $row = KonsumenProgressSheetRow::create(['branch_id' => $branch->id, 'sheet_id' => 'sheet', 'sheet_name' => 'data_konsumen', 'row_hash' => 'bulk-'.$number, 'row_data' => ['[SYS] ID Konsumen' => $key, 'Proyek' => $project->project_name, 'Sales' => $user->name, 'Nama Konsumen' => 'Konsumen '.$number]]);
+            if ($number <= 280) {
+                ConsumerLeadLinkDecision::create(['branch_id' => $branch->id, 'legacy_consumer_key' => strtolower($key), 'legacy_sheet_row_id' => $row->id, 'subject_type' => 'sheet', 'subject_key' => 'sheet:'.$branch->id.':'.strtolower($key), 'status' => 'legacy', 'decision_source' => 'manual', 'reason' => 'Data lama', 'decided_at' => now(), 'is_active' => true]);
+            }
+
+            return $row;
+        });
+
+        $response = $this->actingAs($user)->get(route('consumer-database.workspace', ['branch_id' => $branch->id, 'link_status' => 'undecided']));
+
+        $response->assertOk()->assertSee('Konsumen 300')->assertSee('20 subjek')->assertSee('0–0 dari 0');
+        foreach ($rows->take(280) as $row) {
+            $number = (int) str_replace('bulk-', '', $row->row_hash);
+            $this->assertStringNotContainsString('>Konsumen '.$number.'<', $response->getContent());
+        }
     }
 
     public function test_workspace_rejects_requested_foreign_context_and_detail(): void

@@ -68,7 +68,15 @@
 
         @if($linkSubjects->isNotEmpty())
             <section class="mb-4 border-2 border-black bg-white p-3" aria-labelledby="lead-link-subjects-title">
-                <h2 id="lead-link-subjects-title" class="font-bold">Penautan Lead — Sheet dan NUP</h2>
+                <div class="flex flex-wrap items-center justify-between gap-2">
+                    <h2 id="lead-link-subjects-title" class="font-bold">Penautan Lead — Sheet dan NUP</h2>
+                    <span class="crm-type-label">{{ $linkSubjectPaginator->total() }} subjek</span>
+                </div>
+                <div class="mt-2 flex flex-wrap gap-2 text-xs">
+                    @foreach($linkStatusOptions as $value => $label)
+                        <a href="{{ request()->fullUrlWithQuery(['link_status' => $value, 'link_page' => 1]) }}" class="crm-filter-chip">{{ $label }}: {{ $linkSubjectTotals[$value] }}</a>
+                    @endforeach
+                </div>
                 <div class="mt-2 overflow-x-auto">
                     <table class="crm-table min-w-full">
                         <thead><tr><th>Sumber</th><th>Nama</th><th>Status data</th><th>Aksi</th></tr></thead>
@@ -90,6 +98,9 @@
                         </tbody>
                     </table>
                 </div>
+                @if($linkSubjectPaginator->hasPages())
+                    <div class="mt-3">{{ $linkSubjectPaginator->links() }}</div>
+                @endif
             </section>
         @endif
 

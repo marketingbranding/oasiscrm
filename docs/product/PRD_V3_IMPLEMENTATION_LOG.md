@@ -72,15 +72,18 @@ Komit dan push setelah setiap irisan selesai. Laporan wajib Bahasa Indonesia, me
 
 ### Verifikasi WP-2.9b — 24 November 2026
 
-- Commit: `2f72c86` (`feat: lengkapi penautan Lead workspace`), dipush ke `origin/prd-v3/wp-2.9b-penautan-sheet`.
-- Tes fokus setelah perubahan: 75 tes, 74 lulus, 1 skip; 214 assertions.
+- Commit sebelumnya: `2f72c86` (`feat: lengkapi penautan Lead workspace`), dipush ke `origin/prd-v3/wp-2.9b-penautan-sheet`.
+- Perubahan irisan: filter status membaca seluruh baris cabang, satu query keputusan aktif, pagination 50, total per status, badge total, dan regresi 300 baris (280 diputuskan, 20 belum diputuskan).
+- Tes fokus carry-over/workspace: 108 tes, 107 lulus, 1 skip; 631 assertions.
 - `vendor/bin/pint --dirty --format agent`: lulus.
 - `git diff --check`: lulus.
+- `php artisan optimize:clear`: lulus.
 - `php artisan view:cache`: lulus.
 - `npm run build`: lulus.
-- Browser: `http://127.0.0.1:8000/consumer-workspace` terbuka pada sesi login tersedia; console error kosong. Screenshot desktop/mobile tidak terbaca karena tab Review tidak terlihat pada runtime browser.
-- Suite penuh sebelum/sesudah: belum dijalankan pada irisan ini.
-- Sisa: jalankan suite penuh dan verifikasi visual desktop/mobile saat tab browser terlihat; review konflik lintas data produksi tetap operator, tanpa cutover produksi.
+- Suite penuh sebelum: 2260 tes, 2259 lulus, 1 skip; 15011 assertions.
+- Suite penuh sesudah: 2261 tes, 2260 lulus, 1 skip; 15295 assertions.
+- Browser: halaman `http://127.0.0.1:8000/consumer-workspace` terbuka pada sesi login tersedia; snapshot DOM berhasil dan console error kosong. Screenshot tidak terbaca karena tab Review tidak terlihat pada runtime browser.
+- Sisa: verifikasi visual desktop/mobile saat tab browser terlihat; review konflik lintas data produksi tetap operator, tanpa cutover produksi.
 
 | WP-3.1 | 3 | WhatsApp satu nomor | Belum mulai | BR-60–BR-64 |
 | WP-3.2 | 3 | Asisten AI per peran | Belum mulai | BR-70–BR-72 |

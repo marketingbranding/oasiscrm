@@ -17,6 +17,7 @@ use App\Models\User;
 use App\Support\ConsumerIdentity;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
+use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
 use Symfony\Component\HttpFoundation\Response;
@@ -49,9 +50,9 @@ final class ConsumerDatabaseWorkspaceService
         $applications = $this->query($user, $branchIds, $projectIds, $selectedBranch, $selectedProject, $request)
             ->paginate(25)
             ->withQueryString();
-        $linkSubjects = $this->linkSubjects($user, $branchIds, $projectIds, $selectedBranch, $selectedProject, $request);
         $selectedLinkStatus = $request->string('link_status')->toString();
-        $linkSubjects = $this->filterLinkSubjects($linkSubjects, $selectedLinkStatus);
+        $linkSubjectResult = $this->linkSubjects($user, $branchIds, $projectIds, $selectedBranch, $selectedProject, $request, $selectedLinkStatus);
+        $linkSubjects = $linkSubjectResult['items'];
         $salesOptions = $this->salesOptions($user, $branchIds, $projectIds, $selectedBranch, $selectedProject);
         $bankOptions = $this->bankOptions($branchIds, $projectIds, $selectedBranch, $selectedProject, $user);
         $selectedSales = $request->integer('sales_id') ?: null;
@@ -77,6 +78,8 @@ final class ConsumerDatabaseWorkspaceService
             'selectedBank' => $selectedBank,
             'applications' => $applications,
             'linkSubjects' => $linkSubjects,
+            'linkSubjectTotals' => $linkSubjectResult['totals'],
+            'linkSubjectPaginator' => $linkSubjectResult['paginator'],
             'search' => trim($request->string('search')->toString()),
             'selectedStatus' => $request->string('status')->toString(),
             'selectedLinkStatus' => $selectedLinkStatus,
@@ -108,46 +111,48 @@ final class ConsumerDatabaseWorkspaceService
         ];
     }
 
-    /** @return Collection<int, array<string, mixed>> */
-    private function linkSubjects(User $user, array $branchIds, array $projectIds, ?Branch $branch, ?LeadMaster $project, Request $request): Collection
+    /** @return array{items: Collection<int, array<string, mixed>>, totals: array<string, int>, paginator: LengthAwarePaginator} */
+    private function linkSubjects(User $user, array $branchIds, array $projectIds, ?Branch $branch, ?LeadMaster $project, Request $request, string $status): array
     {
+        if ($branch === null) {
+            return [
+                'items' => collect(),
+                'totals' => ['undecided' => 0, 'linked' => 0, 'without_lead' => 0, 'legacy' => 0, 'empty_id' => 0],
+                'paginator' => new LengthAwarePaginator([], 0, 50, 1, ['path' => $request->url(), 'query' => $request->query()]),
+            ];
+        }
+
         $resolver = app(ConsumerLeadLinkSubjectResolver::class);
         $scopedProjectIds = array_values(array_intersect($projectIds, $this->organizationScope->projectIds($user, 'consumer_progress', 'view')));
-        $rows = KonsumenProgressSheetRow::query()
-            ->whereIn('branch_id', $branchIds)
-            ->where('sheet_name', 'data_konsumen')
-            ->orderByDesc('id')
-            ->limit(250)
-            ->get();
+        $rows = KonsumenProgressSheetRow::query()->where('branch_id', $branch->id)->where('sheet_name', 'data_konsumen')->orderByDesc('id')->get();
         $maps = $resolver->lookupMaps($rows, $scopedProjectIds);
-        $sheetSubjects = $rows->map(function (KonsumenProgressSheetRow $row) use ($maps): ConsumerLeadLinkSubject {
+        $sheetSubjects = $rows->map(function (KonsumenProgressSheetRow $row) use ($maps, $resolver): ConsumerLeadLinkSubject {
             $data = collect($row->row_data ?? [])->mapWithKeys(fn ($value, $key): array => [Str::lower(trim((string) $key)) => is_scalar($value) ? trim((string) $value) : '']);
             $projectName = Str::lower($data->get('proyek', $data->get('project', $data->get('project_name', ''))));
             $salesName = Str::lower($data->get('sales', $data->get('nama sales', $data->get('sales_pic', ''))));
 
-            return app(ConsumerLeadLinkSubjectResolver::class)->fromSheetRow($row, $maps['project_ids'][$projectName] ?? null, $maps['sales_ids'][$salesName] ?? null, false);
-        })->filter(fn ($subject): bool => $subject->projectId !== null && in_array($subject->projectId, $scopedProjectIds, true) && ($branch === null || $subject->branchId === $branch->id) && ($project === null || $subject->projectId === $project->id));
-        $nupSubjects = ConsumerNup::query()->with('customer')->whereIn('branch_id', $branchIds)->when($branch, fn (Builder $query): Builder => $query->where('branch_id', $branch->id))->when($project, fn (Builder $query): Builder => $query->where('project_id', $project->id))->whereIn('project_id', $scopedProjectIds)->limit(250)->get()->map(fn (ConsumerNup $nup): ConsumerLeadLinkSubject => $resolver->fromNup($nup));
-
-        return $sheetSubjects->merge($nupSubjects)->map(fn ($subject): array => [
-            'source' => $subject->subjectType, 'subject_key' => $subject->subjectKey(), 'subject_id' => $subject->subjectId ?? $subject->sheetRowId, 'name' => $subject->name, 'project_id' => $subject->projectId, 'branch_id' => $subject->branchId, 'decidable' => $subject->isDecidable, 'note' => $subject->note, 'decision_status' => ConsumerLeadLinkDecision::query()->where('subject_key', $subject->subjectKey())->where('is_active', true)->value('status'),
+            return $resolver->fromSheetRow($row, $maps['project_ids'][$projectName] ?? null, $maps['sales_ids'][$salesName] ?? null, false);
+        })->filter(fn (ConsumerLeadLinkSubject $subject): bool => $subject->projectId !== null && in_array($subject->projectId, $scopedProjectIds, true) && ($project === null || $subject->projectId === $project->id));
+        $nupSubjects = ConsumerNup::query()->with('customer')->where('branch_id', $branch->id)->when($project, fn (Builder $query): Builder => $query->where('project_id', $project->id))->whereIn('project_id', $scopedProjectIds)->get()->map(fn (ConsumerNup $nup): ConsumerLeadLinkSubject => $resolver->fromNup($nup));
+        $subjects = $sheetSubjects->merge($nupSubjects)->map(fn (ConsumerLeadLinkSubject $subject): array => [
+            'source' => $subject->subjectType, 'subject_key' => $subject->subjectKey(), 'subject_id' => $subject->subjectId ?? $subject->sheetRowId, 'name' => $subject->name, 'project_id' => $subject->projectId, 'branch_id' => $subject->branchId, 'decidable' => $subject->isDecidable, 'note' => $subject->note,
         ])->values();
-    }
+        $statuses = ConsumerLeadLinkDecision::query()->whereIn('subject_key', $subjects->pluck('subject_key'))->where('is_active', true)->pluck('status', 'subject_key');
+        $subjects = $subjects->map(function (array $subject) use ($statuses): array {
+            $subject['decision_status'] = $statuses->get($subject['subject_key']);
 
-    /** @return Collection<int, array<string, mixed>> */
-    private function filterLinkSubjects(Collection $subjects, string $status): Collection
-    {
-        return $subjects->when($status !== '', function (Collection $items) use ($status): Collection {
-            return $items->filter(function (array $subject) use ($status): bool {
-                $current = $subject['decision_status'] ?? null;
-
-                return match ($status) {
-                    'undecided' => $current === null && $subject['decidable'],
-                    'empty_id' => ! $subject['decidable'],
-                    default => $current === $status,
-                };
-            })->values();
+            return $subject;
         });
+        $totals = ['undecided' => $subjects->filter(fn (array $subject): bool => $subject['decidable'] && $subject['decision_status'] === null)->count(), 'linked' => $subjects->where('decision_status', 'linked')->count(), 'without_lead' => $subjects->where('decision_status', 'without_lead')->count(), 'legacy' => $subjects->where('decision_status', 'legacy')->count(), 'empty_id' => $subjects->where('decidable', false)->count()];
+        $filtered = $status === '' ? $subjects : $subjects->filter(fn (array $subject): bool => match ($status) {
+            'undecided' => $subject['decidable'] && $subject['decision_status'] === null,
+            'empty_id' => ! $subject['decidable'],
+            default => $subject['decision_status'] === $status,
+        });
+        $page = max(1, $request->integer('link_page', 1));
+        $paginator = new LengthAwarePaginator($filtered->forPage($page, 50)->values(), $filtered->count(), 50, $page, ['path' => $request->url(), 'query' => $request->query()]);
+
+        return ['items' => collect($paginator->items()), 'totals' => $totals, 'paginator' => $paginator];
     }
 
     /** @return array<string, mixed> */

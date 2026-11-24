@@ -23,6 +23,7 @@ class ConsumerEntryService
         private readonly ConsumerOperationalService $operational,
         private readonly ConsumerKavlingLifecycleService $kavlingLifecycle,
         private readonly BranchMigrationStateService $migrationStates,
+        private readonly ConsumerLeadLinkCarryOverService $leadLinkCarryOver,
     ) {}
 
     public function create(array $data, User $actor, bool $skipAuthorization = false): ConsumerApplication
@@ -68,6 +69,8 @@ class ConsumerEntryService
             if ($paymentMethod === 'cash') {
                 $this->markCashNotApplicable($application, $actor);
             }
+
+            $this->leadLinkCarryOver->carryApplication($application);
 
             return $application->fresh(['customer', 'kavling', 'project', 'sales']);
         });

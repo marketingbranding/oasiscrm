@@ -8,6 +8,7 @@ use App\Models\Branch;
 use App\Models\BranchMigrationState;
 use App\Models\ConsumerApplication;
 use App\Models\ConsumerLeadLinkDecision;
+use App\Models\KonsumenProgressSheetRow;
 use App\Models\LeadMaster;
 use App\Models\Role;
 use App\Models\SalesLead;
@@ -17,6 +18,7 @@ use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Routing\Route;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Validator;
@@ -368,6 +370,70 @@ class ConsumerLeadLinkDecisionTest extends TestCase
         $request->setRouteResolver(fn () => $route);
 
         return $request;
+    }
+
+    public function test_br_bulk_legacy_marks_only_subjects_before_date(): void
+    {
+        [$branch, $project, $actor] = $this->bulkContext();
+        KonsumenProgressSheetRow::create(['branch_id' => $branch->id, 'sheet_id' => 'sheet', 'sheet_name' => 'data_konsumen', 'row_hash' => 'before', 'row_data' => ['[SYS] ID Konsumen' => 'OLD-1', 'Nama Konsumen' => 'Lama', 'Tanggal' => '2025-01-01', 'Proyek' => $project->project_name]]);
+        KonsumenProgressSheetRow::create(['branch_id' => $branch->id, 'sheet_id' => 'sheet', 'sheet_name' => 'data_konsumen', 'row_hash' => 'after', 'row_data' => ['[SYS] ID Konsumen' => 'NEW-1', 'Nama Konsumen' => 'Baru', 'Tanggal' => '2027-01-01', 'Proyek' => $project->project_name]]);
+        $preview = app(ConsumerLeadLinkDecisionService::class)->previewBulkLegacy($actor, ['branch_id' => $branch->id, 'project_id' => $project->id, 'before' => '2026-01-01']);
+        app(ConsumerLeadLinkDecisionService::class)->markBulkLegacy($actor, ['branch_id' => $branch->id, 'project_id' => $project->id, 'before' => '2026-01-01', 'token' => $preview['token']], 'Verifikasi data lama');
+
+        $this->assertDatabaseHas('consumer_lead_link_decisions', ['legacy_consumer_key' => 'old-1', 'status' => 'legacy']);
+        $this->assertDatabaseMissing('consumer_lead_link_decisions', ['legacy_consumer_key' => 'new-1']);
+    }
+
+    public function test_br_bulk_legacy_requires_branch_and_before(): void
+    {
+        [, $project, $actor] = $this->bulkContext();
+        $service = app(ConsumerLeadLinkDecisionService::class);
+        $this->expectException(ValidationException::class);
+        $service->previewBulkLegacy($actor, ['project_id' => $project->id]);
+    }
+
+    public function test_br_bulk_legacy_rejects_branch_outside_scope_without_changes(): void
+    {
+        [, , $actor] = $this->bulkContext();
+        $foreign = Branch::create(['code' => 'BULK-FOREIGN', 'name' => 'Asing', 'is_active' => true]);
+        $this->expectException(AuthorizationException::class);
+        app(ConsumerLeadLinkDecisionService::class)->previewBulkLegacy($actor, ['branch_id' => $foreign->id, 'before' => '2026-01-01']);
+        $this->assertDatabaseCount('consumer_lead_link_decisions', 0);
+    }
+
+    public function test_br_bulk_legacy_rejects_expired_token_and_changed_data_without_mutation(): void
+    {
+        [$branch, $project, $actor] = $this->bulkContext();
+        KonsumenProgressSheetRow::create(['branch_id' => $branch->id, 'sheet_id' => 'sheet', 'sheet_name' => 'data_konsumen', 'row_hash' => 'changed', 'row_data' => ['[SYS] ID Konsumen' => 'CHANGED-1', 'Tanggal' => '2025-01-01', 'Proyek' => $project->project_name]]);
+        $filters = ['branch_id' => $branch->id, 'project_id' => $project->id, 'before' => '2026-01-01'];
+        $preview = app(ConsumerLeadLinkDecisionService::class)->previewBulkLegacy($actor, $filters);
+        Cache::put('consumer-lead-link:bulk:'.$preview['token'], ['user_id' => $actor->id, 'filters' => $filters, 'keys' => ['other:key'], 'expires_at' => now()->subMinute()->timestamp], now()->addMinute());
+
+        $this->expectException(ValidationException::class);
+        app(ConsumerLeadLinkDecisionService::class)->markBulkLegacy($actor, [...$filters, 'token' => $preview['token']], 'Verifikasi');
+        $this->assertDatabaseCount('consumer_lead_link_decisions', 0);
+    }
+
+    public function test_br_bulk_legacy_rerun_same_token_is_idempotent(): void
+    {
+        [$branch, $project, $actor] = $this->bulkContext();
+        KonsumenProgressSheetRow::create(['branch_id' => $branch->id, 'sheet_id' => 'sheet', 'sheet_name' => 'data_konsumen', 'row_hash' => 'once', 'row_data' => ['[SYS] ID Konsumen' => 'ONCE-1', 'Tanggal' => '2025-01-01', 'Proyek' => $project->project_name]]);
+        $filters = ['branch_id' => $branch->id, 'project_id' => $project->id, 'before' => '2026-01-01'];
+        $preview = app(ConsumerLeadLinkDecisionService::class)->previewBulkLegacy($actor, $filters);
+        app(ConsumerLeadLinkDecisionService::class)->markBulkLegacy($actor, [...$filters, 'token' => $preview['token']], 'Verifikasi');
+        app(ConsumerLeadLinkDecisionService::class)->markBulkLegacy($actor, [...$filters, 'token' => $preview['token']], 'Verifikasi');
+
+        $this->assertDatabaseCount('consumer_lead_link_decisions', 1);
+    }
+
+    private function bulkContext(): array
+    {
+        $branch = Branch::create(['code' => 'BULK', 'name' => 'Bulk', 'is_active' => true]);
+        $project = LeadMaster::create(['branch_id' => $branch->id, 'project_name' => 'Bulk Project', 'is_active' => true]);
+        $actor = User::factory()->create(['role_id' => Role::query()->where('slug', 'branch_manager')->value('id'), 'branch_id' => $branch->id, 'email_verified_at' => now(), 'password_changed_at' => now(), 'must_change_password' => false]);
+        $actor->branches()->sync([$branch->id => ['is_current' => true, 'can_view' => true, 'can_edit' => true, 'can_sync' => true, 'can_manage_members' => true]]);
+
+        return [$branch, $project, $actor->fresh()];
     }
 
     private function decisionContext(): array

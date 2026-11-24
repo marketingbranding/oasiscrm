@@ -65,7 +65,7 @@ final class ConsumerLeadLinkDecisionService
         }
 
         return DB::transaction(function () use ($actor, $filters, $reason, $preview): array {
-            $subjects = $this->bulkLegacySubjects($actor, $filters, true);
+            $subjects = $this->bulkLegacySubjects($actor, $filters, true, $preview['keys'] ?? []);
             $keys = $subjects->map(fn (ConsumerLeadLinkSubject $subject): string => $subject->subjectKey())->values()->all();
             if ($keys !== ($preview['keys'] ?? [])) {
                 throw ValidationException::withMessages(['token' => 'Data berubah, pratinjau ulang.']);
@@ -97,19 +97,19 @@ final class ConsumerLeadLinkDecisionService
         if ($branchId < 1) {
             throw ValidationException::withMessages(['branch_id' => 'Cabang wajib dipilih.']);
         }
-        if (! $this->organizationScope->allowsProjectRecord($actor, 'consumer_progress', 'manage', $branchId, null)) {
+        if (! $this->organizationScope->allowsProjectRecord($actor, 'consumer_progress', 'view', $branchId, null)) {
             throw new AuthorizationException('Cabang berada di luar lingkup akses Anda.');
         }
         if (! isset($filters['before']) || ! strtotime((string) $filters['before'])) {
             throw ValidationException::withMessages(['before' => 'Tanggal batas wajib diisi.']);
         }
-        if (isset($filters['project_id']) && $filters['project_id'] !== null && ! $this->organizationScope->allowsProjectRecord($actor, 'consumer_progress', 'manage', $branchId, (int) $filters['project_id'])) {
+        if (isset($filters['project_id']) && $filters['project_id'] !== null && ! $this->organizationScope->allowsProjectRecord($actor, 'consumer_progress', 'view', $branchId, (int) $filters['project_id'])) {
             throw new AuthorizationException('Proyek berada di luar lingkup akses Anda.');
         }
     }
 
     /** @return Collection<int, object> */
-    private function bulkLegacySubjects(User $actor, array $filters, bool $lock = false): Collection
+    private function bulkLegacySubjects(User $actor, array $filters, bool $lock = false, array $expectedKeys = []): Collection
     {
         $branchId = (int) $filters['branch_id'];
         $projectId = isset($filters['project_id']) ? (int) $filters['project_id'] : null;
@@ -126,11 +126,22 @@ final class ConsumerLeadLinkDecisionService
         $projectIds = $nups->pluck('project_id')->filter()->merge([$projectId])->filter()->unique()->values()->all();
         $maps = $resolver->lookupMaps($rows, $projectIds);
 
-        return $rows->map(function ($row) use ($resolver, $maps): ConsumerLeadLinkSubject {
+        $subjects = $rows->map(function ($row) use ($resolver, $maps): ConsumerLeadLinkSubject {
             $data = collect($row->row_data ?? [])->mapWithKeys(fn ($value, $key): array => [strtolower(trim((string) $key)) => trim((string) $value)]);
 
             return $resolver->fromSheetRow($row, $maps['project_ids'][strtolower($data->get('proyek', $data->get('project', '')))] ?? null, $maps['sales_ids'][strtolower($data->get('sales', $data->get('nama sales', '')))] ?? null, false);
-        })->merge($nups->map(fn ($nup) => $resolver->fromNup($nup)))->filter(fn (ConsumerLeadLinkSubject $subject): bool => $subject->isDecidable && ($subject->enteredAt?->lt($before) ?? false))->filter(fn (ConsumerLeadLinkSubject $subject): bool => ! ConsumerLeadLinkDecision::query()->where('subject_key', $subject->subjectKey())->where('is_active', true)->exists())->sortBy('subjectKey')->values();
+        })->merge($nups->map(fn ($nup) => $resolver->fromNup($nup)))->filter(fn (ConsumerLeadLinkSubject $subject): bool => $subject->isDecidable && ($subject->enteredAt?->lt($before) ?? false))->filter(fn (ConsumerLeadLinkSubject $subject): bool => $expectedKeys !== [] || ! ConsumerLeadLinkDecision::query()->where('subject_key', $subject->subjectKey())->where('is_active', true)->exists())->sortBy(fn (ConsumerLeadLinkSubject $subject): string => $subject->subjectKey())->values();
+
+        if ($expectedKeys !== []) {
+            $unexpected = $subjects->filter(fn (ConsumerLeadLinkSubject $subject): bool => ! in_array($subject->subjectKey(), $expectedKeys, true));
+            if ($unexpected->isNotEmpty()) {
+                return $subjects;
+            }
+
+            $subjects = $subjects->filter(fn (ConsumerLeadLinkSubject $subject): bool => in_array($subject->subjectKey(), $expectedKeys, true))->values();
+        }
+
+        return $subjects;
     }
 
     public function decideForSubject(

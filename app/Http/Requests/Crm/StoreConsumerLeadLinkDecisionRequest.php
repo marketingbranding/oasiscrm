@@ -2,8 +2,12 @@
 
 namespace App\Http\Requests\Crm;
 
+use App\Data\ConsumerLeadLinkSubject;
 use App\Models\ConsumerApplication;
 use App\Models\ConsumerLeadLinkDecision;
+use App\Models\ConsumerNup;
+use App\Models\KonsumenProgressSheetRow;
+use App\Services\ConsumerLeadLinkSubjectResolver;
 use App\Services\OrganizationScopeService;
 use Illuminate\Contracts\Validation\Validator;
 use Illuminate\Foundation\Http\FormRequest;
@@ -15,10 +19,14 @@ class StoreConsumerLeadLinkDecisionRequest extends FormRequest
     {
         $user = $this->user();
         $consumer = $this->route('consumerApplication');
+        $subject = $this->linkSubject();
 
-        if (! $user || ! $consumer instanceof ConsumerApplication) {
+        if (! $user || (! $consumer instanceof ConsumerApplication && $subject === null)) {
             return false;
         }
+
+        $branchId = $consumer instanceof ConsumerApplication ? (int) $consumer->branch_id : $subject->branchId;
+        $projectId = $consumer instanceof ConsumerApplication ? $consumer->project_id : $subject->projectId;
 
         return $user->isAccountActive()
             && $user->is_active
@@ -26,13 +34,24 @@ class StoreConsumerLeadLinkDecisionRequest extends FormRequest
             && ! $user->must_change_password
             && $user->password_changed_at !== null
             && ($user->hasPermission('consumer_progress.manage') || $user->hasScopedPermission('consumer_progress', 'manage'))
-            && app(OrganizationScopeService::class)->allowsProjectRecord(
-                $user,
-                'consumer_progress',
-                'manage',
-                (int) $consumer->branch_id,
-                $consumer->project_id,
-            );
+            && app(OrganizationScopeService::class)->allowsProjectRecord($user, 'consumer_progress', 'manage', $branchId, $projectId);
+    }
+
+    public function linkSubject(): ?ConsumerLeadLinkSubject
+    {
+        $type = $this->route('subjectType');
+        $id = $this->route('subjectId');
+        if (! is_string($type) || ! is_numeric($id)) {
+            return null;
+        }
+
+        $resolver = app(ConsumerLeadLinkSubjectResolver::class);
+
+        return match ($type) {
+            'nup' => $resolver->fromNup(ConsumerNup::query()->findOrFail((int) $id)),
+            'sheet' => $resolver->fromSheetRow(KonsumenProgressSheetRow::query()->findOrFail((int) $id)),
+            default => null,
+        };
     }
 
     public function withValidator(Validator $validator): void

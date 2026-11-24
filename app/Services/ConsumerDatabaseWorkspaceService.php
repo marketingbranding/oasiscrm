@@ -103,8 +103,11 @@ final class ConsumerDatabaseWorkspaceService
         $resolver = app(ConsumerLeadLinkSubjectResolver::class);
         $rows = KonsumenProgressSheetRow::query()->whereIn('branch_id', $branchIds)->where('sheet_name', 'data_konsumen')->get();
 
-        return $rows->map(fn (KonsumenProgressSheetRow $row): array => $resolver->fromSheetRow($row))->filter(fn ($subject): bool => ($branch === null || $subject->branchId === $branch->id) && ($project === null || $subject->projectId === $project->id))->map(fn ($subject): array => [
-            'source' => 'sheet', 'subject_key' => $subject->subjectKey(), 'name' => $subject->name, 'project_id' => $subject->projectId, 'branch_id' => $subject->branchId, 'decidable' => $subject->isDecidable, 'note' => $subject->note,
+        $sheetSubjects = $rows->map(fn (KonsumenProgressSheetRow $row): array => $resolver->fromSheetRow($row))->filter(fn ($subject): bool => ($branch === null || $subject->branchId === $branch->id) && ($project === null || $subject->projectId === $project->id));
+        $nupSubjects = ConsumerNup::query()->with('customer')->whereIn('branch_id', $branchIds)->when($branch, fn (Builder $query): Builder => $query->whereKey($branch->id))->when($project, fn (Builder $query): Builder => $query->where('project_id', $project->id))->get()->map(fn (ConsumerNup $nup): array => $resolver->fromNup($nup));
+
+        return $sheetSubjects->merge($nupSubjects)->map(fn ($subject): array => [
+            'source' => $subject->subjectType, 'subject_key' => $subject->subjectKey(), 'name' => $subject->name, 'project_id' => $subject->projectId, 'branch_id' => $subject->branchId, 'decidable' => $subject->isDecidable, 'note' => $subject->note,
         ])->values();
     }
 

@@ -79,17 +79,14 @@ final class ConsumerDatabaseController extends Controller
         return response()->json(['ok' => true, 'data' => ['subject' => get_object_vars($subject)]]);
     }
 
-    public function storeLeadLinkDecision(StoreConsumerLeadLinkDecisionRequest $request, ConsumerApplication $consumerApplication): RedirectResponse|JsonResponse
+    public function storeLeadLinkDecision(StoreConsumerLeadLinkDecisionRequest $request, ?ConsumerApplication $consumerApplication = null): RedirectResponse|JsonResponse
     {
         $validated = $request->validated();
         $lead = isset($validated['sales_lead_id']) ? SalesLead::query()->findOrFail($validated['sales_lead_id']) : null;
-        $decision = $this->leadLinkDecisions->decide(
-            $consumerApplication,
-            $validated['status'],
-            $lead,
-            $validated,
-            $request->user(),
-        );
+        $subject = $request->linkSubject();
+        $decision = $subject !== null
+            ? $this->leadLinkDecisions->decideForSubject($subject, $validated['status'], $lead, $validated, $request->user())
+            : $this->leadLinkDecisions->decide($consumerApplication, $validated['status'], $lead, $validated, $request->user());
 
         if ($request->expectsJson()) {
             return response()->json([

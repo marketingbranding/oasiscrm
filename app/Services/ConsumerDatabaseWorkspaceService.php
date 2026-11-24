@@ -115,7 +115,7 @@ final class ConsumerDatabaseWorkspaceService
             $projectName = Str::lower($data->get('proyek', $data->get('project', $data->get('project_name', ''))));
             $salesName = Str::lower($data->get('sales', $data->get('nama sales', $data->get('sales_pic', ''))));
 
-            return app(ConsumerLeadLinkSubjectResolver::class)->fromSheetRow($row, $maps['project_ids'][$projectName] ?? null, $maps['sales_ids'][$salesName] ?? null);
+            return app(ConsumerLeadLinkSubjectResolver::class)->fromSheetRow($row, $maps['project_ids'][$projectName] ?? null, $maps['sales_ids'][$salesName] ?? null, false);
         })->filter(fn ($subject): bool => $subject->projectId !== null && in_array($subject->projectId, $scopedProjectIds, true) && ($branch === null || $subject->branchId === $branch->id) && ($project === null || $subject->projectId === $project->id));
         $nupSubjects = ConsumerNup::query()->with('customer')->whereIn('branch_id', $branchIds)->when($branch, fn (Builder $query): Builder => $query->where('branch_id', $branch->id))->when($project, fn (Builder $query): Builder => $query->where('project_id', $project->id))->whereIn('project_id', $scopedProjectIds)->limit(250)->get()->map(fn (ConsumerNup $nup): array => $resolver->fromNup($nup));
 

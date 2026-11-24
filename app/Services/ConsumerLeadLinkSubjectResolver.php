@@ -22,9 +22,9 @@ final class ConsumerLeadLinkSubjectResolver
         return ConsumerLeadLinkSubject::fromNup($nup);
     }
 
-    public function fromSheetRow(KonsumenProgressSheetRow $row, ?int $projectId = null, ?int $salesUserId = null): ConsumerLeadLinkSubject
+    public function fromSheetRow(KonsumenProgressSheetRow $row, ?int $projectId = null, ?int $salesUserId = null, bool $resolveMissing = true): ConsumerLeadLinkSubject
     {
-        if ($projectId === null || $salesUserId === null) {
+        if ($resolveMissing && ($projectId === null || $salesUserId === null)) {
             $data = collect($row->row_data ?? [])->mapWithKeys(fn ($value, $key): array => [Str::lower(trim((string) $key)) => is_scalar($value) ? trim((string) $value) : '']);
             $projectName = $data->get('proyek', $data->get('project', $data->get('project_name', '')));
             $projectId ??= $projectName === '' ? null : $this->projects->resolveExact($row->branch_id, $projectName)?->id;

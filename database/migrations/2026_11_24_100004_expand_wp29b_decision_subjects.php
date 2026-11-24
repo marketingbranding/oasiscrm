@@ -27,6 +27,8 @@ return new class extends Migration
             });
         }
 
+        DB::statement('DROP INDEX IF EXISTS consumer_lead_link_decisions_active_unique');
+
         DB::table('consumer_lead_link_decisions')
             ->whereNull('subject_type')
             ->orderBy('id')
@@ -44,12 +46,6 @@ return new class extends Migration
                 ]);
             });
 
-        if (Schema::hasIndex('consumer_lead_link_decisions', 'consumer_lead_link_decisions_active_unique')) {
-            Schema::table('consumer_lead_link_decisions', function (Blueprint $table): void {
-                $table->dropIndex('consumer_lead_link_decisions_active_unique');
-            });
-        }
-
         if (DB::connection()->getDriverName() === 'mysql') {
             if (! Schema::hasColumn('consumer_lead_link_decisions', 'active_subject_key')) {
                 DB::statement('ALTER TABLE consumer_lead_link_decisions ADD active_subject_key VARCHAR(255) GENERATED ALWAYS AS (IF(is_active = 1, subject_key, NULL)) STORED');
@@ -60,11 +56,10 @@ return new class extends Migration
             $this->createIndexIfMissing(self::ACTIVE_SUBJECT_INDEX, 'active_subject_key');
             $this->createIndexIfMissing(self::ACTIVE_LEAD_INDEX, 'active_lead_key');
         } else {
-            $this->createPartialIndex(self::ACTIVE_SUBJECT_INDEX, 'subject_key');
+            DB::statement('DROP INDEX IF EXISTS '.self::ACTIVE_SUBJECT_INDEX);
+            DB::statement('CREATE INDEX '.self::ACTIVE_SUBJECT_INDEX.' ON consumer_lead_link_decisions (subject_key, is_active)');
             $this->createPartialIndex(self::ACTIVE_LEAD_INDEX, 'sales_lead_id', "is_active = 1 AND status = 'linked' AND sales_lead_id IS NOT NULL");
-            if (! Schema::hasIndex('consumer_lead_link_decisions', 'consumer_lead_link_decisions_active_unique')) {
-                DB::statement('CREATE INDEX consumer_lead_link_decisions_active_unique ON consumer_lead_link_decisions (consumer_application_id, is_active)');
-            }
+            DB::statement('CREATE UNIQUE INDEX consumer_lead_link_decisions_active_unique ON consumer_lead_link_decisions (active_consumer_application_key)');
         }
 
         DB::table('changelogs')->updateOrInsert(

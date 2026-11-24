@@ -14,7 +14,7 @@ return new class extends Migration
         if (! Schema::hasTable('consumer_lead_link_decisions')) {
             Schema::create('consumer_lead_link_decisions', function (Blueprint $table): void {
                 $table->id();
-                $table->foreignId('consumer_application_id')->constrained('consumer_applications')->restrictOnDelete();
+                $table->foreignId('consumer_application_id')->nullable()->constrained('consumer_applications')->restrictOnDelete();
                 $table->string('status', 30);
                 $table->foreignId('sales_lead_id')->nullable()->constrained('sales_leads')->nullOnDelete();
                 $table->string('decision_source', 64);
@@ -38,7 +38,8 @@ return new class extends Migration
 
                 DB::statement('CREATE UNIQUE INDEX '.self::ACTIVE_INDEX.' ON consumer_lead_link_decisions (active_consumer_application_key)');
             } else {
-                DB::statement('CREATE UNIQUE INDEX '.self::ACTIVE_INDEX.' ON consumer_lead_link_decisions (consumer_application_id) WHERE is_active = 1');
+                DB::statement('ALTER TABLE consumer_lead_link_decisions ADD active_consumer_application_key INTEGER GENERATED ALWAYS AS (CASE WHEN is_active = 1 THEN consumer_application_id ELSE NULL END) STORED');
+                DB::statement('CREATE UNIQUE INDEX '.self::ACTIVE_INDEX.' ON consumer_lead_link_decisions (active_consumer_application_key)');
             }
         }
     }

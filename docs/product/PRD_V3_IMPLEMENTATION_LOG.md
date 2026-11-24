@@ -53,22 +53,12 @@ PRD sumber kebenaran: `docs/product/PRD_OASIS_CRM_V3.md` versi 3.3 (D30–D33)
 | WP-2.4 | 2 | Status peralihan cabang dan laporan paritas | Merged ke fase-2 pada `6479a081` | §9.3 |
 | WP-2.5 | 2 | Dana Talangan di OASIS dan cicilan | Paket A berjalan; desain disetujui | BR-42–BR-44 |
 | WP-2.6 | 2 | Kembali ke NUP di Workspace Konsumen | Merged ke fase-2 pada `657f0ac` | BR-20–BR-22 |
-| WP-2.7 | 2 | Penutup Fase 2: changelog, dokumentasi, verifikasi penuh | Sisa browser dan dokumentasi penutup dipindah dari WP-2.9b; dikerjakan pada sub-branch `prd-v3/wp-2.7-penutup-fase-2` | Semua fase 2 |
+| WP-2.7 | 2 | Penutup Fase 2: changelog, dokumentasi, verifikasi penuh | Sedang dikerjakan pada sub-branch `prd-v3/wp-2.7-penutup-fase-2`; uji browser interaktif belum selesai | Semua fase 2 |
 | WP-2.8 | 2 | Riwayat Tim: gabungan perubahan Lead dan agenda seluruh turunan | Merged ke fase-2 pada `395fcad` melalui merge `--no-ff`; review scope dan batas 92 hari selesai | BR-50–BR-52 |
 | WP-2.9 | 2 | Penautan Lead ↔ Konsumen | Merged ke fase-2 pada `dea710e` melalui merge `--no-ff`; review diterima, kandidat HP diprioritaskan, cakupan Sheet dicatat. | BR terkait penautan Lead ↔ Konsumen |
 | WP-2.9b | 2 | Penautan Lead untuk cermin Sheet dan NUP | Merged ke fase-2 pada `15bdbde` melalui merge `--no-ff`; carry-over lima jalur teruji dan browser lengkap dipindah ke WP-2.7. | BR terkait penautan Lead ↔ Konsumen |
 | WP-3.1 | 3 | WhatsApp satu nomor | Belum mulai | BR-60–BR-64 |
 
-### Rencana singkat sisa WP-2.9b — 24 November 2026
-
-Urutan kerja pada branch `prd-v3/wp-2.9b-penautan-sheet`:
-
-1. **Kontrak dan regresi:** tambah tes rollback atomik saat satu subjek gagal, token pratinjau menolak filter berubah, keputusan subjek NUP, satu Lead tidak boleh tertaut ke dua subjek lintas jenis, 403 pada endpoint keputusan/pratinjau/bulk/konflik, serta carry-over dari entry, paste import, impor historis, rekonsiliasi, dan konversi NUP. Perbaikan hanya pada service/policy yang sudah menjadi pintu scope.
-2. **Daftar subjek:** lengkapi filter server-side `Belum diputuskan`, `Tertaut`, `Tanpa Lead`, `Data Lama`, dan `ID kosong`, dengan pencarian/status tetap scope-safe serta form mutasi POST + `_method`.
-3. **Konflik:** tambah halaman HTML daftar/detail konflik yang menampilkan sumber dan tujuan, pilihan keputusan yang dipakai, alasan wajib, audit, dan 403 di luar scope. Gunakan komponen CRM dan pola feedback konflik yang sudah ada.
-4. **Verifikasi:** jalankan suite terfokus, Pint, diff check, cache view, build frontend bila berubah, suite penuh dengan perbandingan sebelum/sesudah, lalu uji browser desktop/mobile memakai sesi Super Admin yang sudah login. Data dummy lokal sementara saja; tidak ada workbook cabang asli, cutover produksi, atau data dummy yang dikomit.
-
-Komit dan push setelah setiap irisan selesai. Laporan wajib Bahasa Indonesia, mencantumkan hash, suite penuh sebelum/sesudah, hasil browser dan console, serta sisa yang belum selesai.
 
 ### Verifikasi WP-2.9b — 24 November 2026
 
@@ -87,15 +77,6 @@ Komit dan push setelah setiap irisan selesai. Laporan wajib Bahasa Indonesia, me
 - Browser lengkap untuk saran/keputusan, Tanpa Lead, pratinjau/eksekusi bulk, dan konflik dipindah ke WP-2.7. Tidak dianggap sebagai bukti selesai WP-2.9b.
 - Carry-over teruji pada form entry, paste import, impor historis, rekonsiliasi migrasi, dan konversi NUP. Jalur paste import, impor historis, dan rekonsiliasi diperbaiki agar memanggil carry-over setelah identitas aplikasi tersedia.
 
-### WP-2.7 — Rencana verifikasi penutup Fase 2
-
-- Branch: `prd-v3/wp-2.7-penutup-fase-2`, dibuat dari fase-2 setelah merge WP-2.9b `15bdbde`.
-- Cakupan browser wajib: alih Lead/antrean tanpa pemilik, akses sementara, penanda perhatian, status migrasi/paritas/gerbang cutover, Dana Talangan, Kembali ke NUP/Selesaikan Kendala, Riwayat Tim, dan seluruh penautan Lead.
-- Uji visual memakai desktop sekitar 1440x900 dan HP sekitar 390x844. Jika screenshot tidak tersedia, bukti DOM/teks dan console menjadi bukti pengganti.
-- Flag default mati dan aktivasi operator: `org_hierarchical_monitoring`, `lead_stages_v3`, `transaction_events_v3`, `dana_talangan_primary_source`; agent tidak mengaktifkan flag atau cutover produksi.
-- Ditunda ke Fase 3: WhatsApp satu nomor, Asisten AI, Push PWA, kalender gabungan, dashboard pimpinan, dan cutover sumber utama per cabang. Pemetaan NUP lama serta cutover produksi tetap pekerjaan operator.
-
-| WP-3.1 | 3 | WhatsApp satu nomor | Belum mulai | BR-60–BR-64 |
 | WP-3.2 | 3 | Asisten AI per peran | Belum mulai | BR-70–BR-72 |
 | WP-3.3 | 3 | Push PWA dan preferensi notifikasi | Belum mulai | §7.11 |
 | WP-3.4 | 3 | Kalender gabungan | Belum mulai | §7.11 |

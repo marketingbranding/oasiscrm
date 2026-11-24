@@ -60,6 +60,33 @@
 
         <x-crm.page-presence page-key="consumer-database-workspace" :branch-id="$selectedBranch?->id" />
 
+        @if($linkSubjects->isNotEmpty())
+            <section class="mb-4 border-2 border-black bg-white p-3" aria-labelledby="lead-link-subjects-title">
+                <h2 id="lead-link-subjects-title" class="font-bold">Penautan Lead — Sheet dan NUP</h2>
+                <div class="mt-2 overflow-x-auto">
+                    <table class="crm-table min-w-full">
+                        <thead><tr><th>Sumber</th><th>Nama</th><th>Status data</th><th>Aksi</th></tr></thead>
+                        <tbody>
+                            @foreach($linkSubjects as $subject)
+                                <tr>
+                                    <td>{{ $subject['source'] === 'sheet' ? 'Sheet' : 'NUP' }}</td>
+                                    <td>{{ $subject['name'] ?: 'Tanpa nama' }}</td>
+                                    <td>{{ $subject['decidable'] ? 'Belum diputuskan' : ($subject['note'] ?: 'Tidak dapat diputuskan') }}</td>
+                                    <td>
+                                        @if($subject['decidable'])
+                                            <a class="font-bold text-[#0000ee] underline" href="{{ route('consumer-database.workspace.link-subject.show', ['subjectType' => $subject['source'], 'subjectId' => last(explode(':', $subject['subject_key']))]) }}">Buka</a>
+                                        @else
+                                            <span class="text-gray-600">ID kosong</span>
+                                        @endif
+                                    </td>
+                                </tr>
+                            @endforeach
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+        @endif
+
         <x-crm.toolbar label="Pencarian dan filter Database Konsumen" class="mb-3">
             <form method="GET" action="{{ route('consumer-database.workspace') }}" class="flex min-w-0 flex-1 flex-wrap items-end gap-2">
                 <div class="min-w-[220px] flex-1">

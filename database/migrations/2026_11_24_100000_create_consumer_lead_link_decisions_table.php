@@ -32,7 +32,10 @@ return new class extends Migration
 
         if (! Schema::hasIndex('consumer_lead_link_decisions', self::ACTIVE_INDEX)) {
             if (DB::connection()->getDriverName() === 'mysql') {
-                DB::statement('ALTER TABLE consumer_lead_link_decisions ADD active_consumer_application_key BIGINT GENERATED ALWAYS AS (IF(is_active = 1, consumer_application_id, NULL)) STORED');
+                if (! Schema::hasColumn('consumer_lead_link_decisions', 'active_consumer_application_key')) {
+                    DB::statement('ALTER TABLE consumer_lead_link_decisions ADD active_consumer_application_key BIGINT GENERATED ALWAYS AS (IF(is_active = 1, consumer_application_id, NULL)) STORED');
+                }
+
                 DB::statement('CREATE UNIQUE INDEX '.self::ACTIVE_INDEX.' ON consumer_lead_link_decisions (active_consumer_application_key)');
             } else {
                 DB::statement('CREATE UNIQUE INDEX '.self::ACTIVE_INDEX.' ON consumer_lead_link_decisions (consumer_application_id) WHERE is_active = 1');

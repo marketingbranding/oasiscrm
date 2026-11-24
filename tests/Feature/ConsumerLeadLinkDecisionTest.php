@@ -65,7 +65,7 @@ class ConsumerLeadLinkDecisionTest extends TestCase
         $this->assertTrue($lead->linkDecisions->first()->is($decision));
     }
 
-    public function test_br_foreign_keys_reject_unknown_consumer_and_actor_references(): void
+    public function test_br_foreign_key_rejects_unknown_consumer_reference_independently(): void
     {
         $this->expectException(QueryException::class);
 
@@ -75,8 +75,130 @@ class ConsumerLeadLinkDecisionTest extends TestCase
             'decision_source' => 'manual',
             'reason' => 'Belum ada Lead',
             'decided_at' => now(),
+        ]);
+    }
+
+    public function test_br_foreign_key_rejects_unknown_sales_lead_reference_independently(): void
+    {
+        $application = ConsumerApplication::factory()->create();
+
+        $this->expectException(QueryException::class);
+
+        ConsumerLeadLinkDecision::create([
+            'consumer_application_id' => $application->id,
+            'status' => ConsumerLeadLinkDecision::STATUS_LINKED,
+            'sales_lead_id' => 999999,
+            'decision_source' => 'manual',
+            'reason' => 'Konfirmasi pemilik data',
+            'decided_at' => now(),
+        ]);
+    }
+
+    public function test_br_foreign_key_rejects_unknown_decided_by_reference_independently(): void
+    {
+        $application = ConsumerApplication::factory()->create();
+
+        $this->expectException(QueryException::class);
+
+        ConsumerLeadLinkDecision::create([
+            'consumer_application_id' => $application->id,
+            'status' => ConsumerLeadLinkDecision::STATUS_WITHOUT_LEAD,
+            'decision_source' => 'manual',
+            'reason' => 'Belum ada Lead',
+            'decided_at' => now(),
             'decided_by' => 999999,
         ]);
+    }
+
+    public function test_br_sales_lead_delete_nulls_decision_reference(): void
+    {
+        $application = ConsumerApplication::factory()->create();
+        $actor = User::factory()->create();
+        $lead = SalesLead::create([
+            'branch_id' => $application->branch_id,
+            'project_id' => $application->project_id,
+            'sales_user_id' => $actor->id,
+            'lead_date' => today(),
+            'customer_name' => 'Lead Delete Test',
+        ]);
+        $decision = ConsumerLeadLinkDecision::create([
+            'consumer_application_id' => $application->id,
+            'status' => ConsumerLeadLinkDecision::STATUS_LINKED,
+            'sales_lead_id' => $lead->id,
+            'decision_source' => 'manual',
+            'decided_at' => now(),
+        ]);
+
+        $lead->forceDelete();
+
+        $this->assertDatabaseHas('consumer_lead_link_decisions', [
+            'id' => $decision->id,
+            'sales_lead_id' => null,
+        ]);
+    }
+
+    public function test_br_decided_by_delete_nulls_decision_reference(): void
+    {
+        $application = ConsumerApplication::factory()->create();
+        $actor = User::factory()->create();
+        $decision = ConsumerLeadLinkDecision::create([
+            'consumer_application_id' => $application->id,
+            'status' => ConsumerLeadLinkDecision::STATUS_WITHOUT_LEAD,
+            'decision_source' => 'manual',
+            'decided_at' => now(),
+            'decided_by' => $actor->id,
+        ]);
+
+        $actor->delete();
+
+        $this->assertDatabaseHas('consumer_lead_link_decisions', [
+            'id' => $decision->id,
+            'decided_by' => null,
+        ]);
+    }
+
+    public function test_br_consumer_delete_is_restricted_by_decision_reference(): void
+    {
+        $application = ConsumerApplication::factory()->create();
+        ConsumerLeadLinkDecision::create([
+            'consumer_application_id' => $application->id,
+            'status' => ConsumerLeadLinkDecision::STATUS_WITHOUT_LEAD,
+            'decision_source' => 'manual',
+            'decided_at' => now(),
+        ]);
+
+        $this->expectException(QueryException::class);
+        DB::table('consumer_applications')->where('id', $application->id)->delete();
+    }
+
+    public function test_br_mysql_generated_active_key_rejects_duplicate_active_decision_and_recovers_partial_migration(): void
+    {
+        if (DB::connection()->getDriverName() !== 'mysql') {
+            $this->markTestSkipped('MySQL-only generated-column coverage.');
+        }
+
+        $this->assertTrue(Schema::hasColumn('consumer_lead_link_decisions', 'active_consumer_application_key'));
+        DB::statement('DROP INDEX consumer_lead_link_decisions_active_unique ON consumer_lead_link_decisions');
+
+        $migration = require database_path('migrations/2026_11_24_100000_create_consumer_lead_link_decisions_table.php');
+        $migration->up();
+
+        $this->assertTrue(Schema::hasColumn('consumer_lead_link_decisions', 'active_consumer_application_key'));
+        $this->assertTrue(Schema::hasIndex('consumer_lead_link_decisions', 'consumer_lead_link_decisions_active_unique'));
+
+        $application = ConsumerApplication::factory()->create();
+        $attributes = [
+            'consumer_application_id' => $application->id,
+            'status' => ConsumerLeadLinkDecision::STATUS_WITHOUT_LEAD,
+            'decision_source' => 'manual',
+            'reason' => 'Belum ada Lead',
+            'decided_at' => now(),
+            'is_active' => true,
+        ];
+        ConsumerLeadLinkDecision::create($attributes);
+
+        $this->expectException(QueryException::class);
+        ConsumerLeadLinkDecision::create($attributes);
     }
 
     public function test_br_database_allows_only_one_active_decision_per_consumer(): void

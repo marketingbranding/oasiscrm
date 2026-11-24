@@ -214,6 +214,11 @@ class SalesLead extends Model
         return $this->hasMany(ConsumerApplication::class, 'sales_lead_id');
     }
 
+    public function linkDecisions(): HasMany
+    {
+        return $this->hasMany(ConsumerLeadLinkDecision::class, 'sales_lead_id');
+    }
+
     public function slikAttempts(): HasMany
     {
         return $this->hasMany(SalesLeadSlikAttempt::class);

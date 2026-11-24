@@ -55,7 +55,7 @@ PRD sumber kebenaran: `docs/product/PRD_OASIS_CRM_V3.md` versi 3.3 (D30–D33)
 | WP-2.6 | 2 | Kembali ke NUP di Workspace Konsumen | Merged ke fase-2 pada `657f0ac` | BR-20–BR-22 |
 | WP-2.7 | 2 | Penutup Fase 2: changelog, dokumentasi, verifikasi penuh | Belum mulai; dikerjakan setelah WP-2.8 lalu WP-2.9 | Semua fase 2 |
 | WP-2.8 | 2 | Riwayat Tim: gabungan perubahan Lead dan agenda seluruh turunan | Merged ke fase-2 pada `395fcad` melalui merge `--no-ff`; review scope dan batas 92 hari selesai | BR-50–BR-52 |
-| WP-2.9 | 2 | Penautan Lead ↔ Konsumen | Direncanakan setelah WP-2.8, sebelum WP-2.7; saran + konfirmasi manusia dari OASIS, pilihan Tanpa Lead/Data Lama, jangkar `[SYS] ID Konsumen`/`ID Konsumen Awal`, uji di SALINAN workbook dengan lead dummy | BR terkait penautan Lead ↔ Konsumen |
+| WP-2.9 | 2 | Penautan Lead ↔ Konsumen | Selesai; keputusan ter-audit, saran hanya baca, konfirmasi `linked`/`without_lead`/`legacy`, UI/workspace endpoint, dan bridge regression workbook salinan selesai. Spreadsheet tetap mirror dan tidak berubah tanpa konfirmasi. | BR terkait penautan Lead ↔ Konsumen |
 | WP-3.1 | 3 | WhatsApp satu nomor | Belum mulai | BR-60–BR-64 |
 | WP-3.2 | 3 | Asisten AI per peran | Belum mulai | BR-70–BR-72 |
 | WP-3.3 | 3 | Push PWA dan preferensi notifikasi | Belum mulai | §7.11 |
@@ -70,6 +70,17 @@ PRD sumber kebenaran: `docs/product/PRD_OASIS_CRM_V3.md` versi 3.3 (D30–D33)
 - Modul hanya `sales_leads` dan `sales_daily_plans`; `can_edit` hanya Koordinator Sales, tanpa Alih Lead.
 - `expires_at` wajib, dibatasi `access_grants.max_days` default 90 hari; grant aktif dievaluasi saat query.
 - Cabut memakai `revoked_at`, `revoked_by`, alasan, audit, dan notifikasi in-app. Grant tidak melewati workspace grantee dan tidak bergantung pada flag pemantauan hierarki.
+
+## WP-2.9 — Penautan Lead ↔ Konsumen
+
+Status: selesai pada branch `prd-v3/wp-2.9-penautan-lead`. Keputusan manusia menjadi sumber penautan; spreadsheet hanya mirror.
+
+- Paket Task 1–4 selesai pada commit `4aaa148`, `8b7eae6`, `a51232a`, `1e9baaf`, `6d31602`, `3263afc`, dan `9247ce2`: tabel keputusan satu aktif per konsumen, saran scoped read-only, konfirmasi/koreksi ter-audit, endpoint workspace, validasi, dan UI.
+- Task 5 menambah `tests/Feature/ConsumerIdentityBridgeAuditTest.php::test_br_wp29_workbook_copy_suggests_dummy_lead_without_auto_link_or_sheet_mutation`. Tes membuat workbook `.xlsx` salinan lokal, memuat baris dummy ke cache Konsumen Progress, memeriksa saran Lead, memastikan `sales_lead_id` dan keputusan tetap kosong sebelum konfirmasi, lalu membandingkan isi sheet sebelum/sesudah. Workbook Jepara asli tidak dibaca.
+- Regression bridge yang sudah ada tetap memastikan kandidat ambigu/unmatched tidak dibuat tautan otomatis dan audit bridge tidak menulis `ConsumerLegacyIdentity`. Tidak ada source behavior berubah pada Task 5.
+- Verifikasi Task 5: focused bridge/link suite `61 tests, 60 passed, 1 skipped, 213 assertions`; Pint dan diff check lulus. Full suite dicatat pada laporan Task 5.
+- Konflik terbuka: tidak ada konflik baru. Cutover sheet/OASIS tetap operator-controlled; Task 5 tidak mengeksekusi sinkronisasi atau perubahan workbook produksi.
+- Cakupan penautan: jalur ini hanya menerima `ConsumerApplication` yang sudah ada di OASIS. Konsumen cabang yang masih memakai Sheet hanya bisa ditautkan bila cerminnya sudah menjadi `ConsumerApplication`; status migrasi Sheet tidak lagi memblokir keputusan karena keputusan tidak menulis Sheet. Pengukuran pada database lokal saat review (`2026-11-24`) menemukan `0` cabang berstatus `STATE_SHEET`, `0` baris cermin yang dapat dihitung, dan `0` `ConsumerApplication`/NUP pada cabang Sheet; tidak ada workbook salinan dianonimkan di repo, sehingga angka produksi tidak diklaim. Jawaban operasional: Sheet-only consumer belum bisa dibuka/ditautkan; consumer yang sudah menjadi `ConsumerApplication` bisa. NUP tanpa transaksi belum punya jalur penautan ke workspace. Usulan: paket terpisah memetakan NUP legacy/aktif dan Sheet-only consumer ke entitas keputusan dengan provenance, tanpa mengarang riwayat.
 
 ## WP-1.6 — Tahap Lead v3
 

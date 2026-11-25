@@ -106,7 +106,17 @@
                                 <tr>
                                     <td>{{ $subject['source'] === 'sheet' ? 'Sheet' : 'NUP' }}</td>
                                     <td>{{ $subject['name'] ?: 'Tanpa nama' }}</td>
-                                    <td>{{ $subject['decidable'] ? 'Belum diputuskan' : ($subject['note'] ?: 'Tidak dapat diputuskan') }}</td>
+                                    <td>
+                                        @if($subject['decision_status'] === 'linked')
+                                            Tertaut{{ $subject['decision_lead_name'] ? ' · '.$subject['decision_lead_name'] : '' }}
+                                        @elseif($subject['decision_status'] === 'without_lead')
+                                            Tanpa Lead
+                                        @elseif($subject['decision_status'] === 'legacy')
+                                            Data Lama
+                                        @else
+                                            {{ $subject['decidable'] ? 'Belum diputuskan' : ($subject['note'] ?: 'Tidak dapat diputuskan') }}
+                                        @endif
+                                    </td>
                                     <td>
                                         @if($subject['decidable'])
                                             <button type="button" class="font-bold text-[#0000ee] underline" @click="openSubject(@js($subject['source']), {{ $subject['subject_id'] }}, $el)">Buka</button>

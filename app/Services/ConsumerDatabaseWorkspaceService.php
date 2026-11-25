@@ -137,9 +137,16 @@ final class ConsumerDatabaseWorkspaceService
         $subjects = $sheetSubjects->merge($nupSubjects)->map(fn (ConsumerLeadLinkSubject $subject): array => [
             'source' => $subject->subjectType, 'subject_key' => $subject->subjectKey(), 'subject_id' => $subject->subjectId ?? $subject->sheetRowId, 'name' => $subject->name, 'project_id' => $subject->projectId, 'branch_id' => $subject->branchId, 'decidable' => $subject->isDecidable, 'note' => $subject->note,
         ])->values();
-        $statuses = ConsumerLeadLinkDecision::query()->whereIn('subject_key', $subjects->pluck('subject_key'))->where('is_active', true)->pluck('status', 'subject_key');
+        $statuses = ConsumerLeadLinkDecision::query()
+            ->with('salesLead:id,customer_name')
+            ->whereIn('subject_key', $subjects->pluck('subject_key'))
+            ->where('is_active', true)
+            ->get(['subject_key', 'status', 'sales_lead_id'])
+            ->keyBy('subject_key');
         $subjects = $subjects->map(function (array $subject) use ($statuses): array {
-            $subject['decision_status'] = $statuses->get($subject['subject_key']);
+            $decision = $statuses->get($subject['subject_key']);
+            $subject['decision_status'] = $decision?->status;
+            $subject['decision_lead_name'] = $decision?->salesLead?->customer_name;
 
             return $subject;
         });

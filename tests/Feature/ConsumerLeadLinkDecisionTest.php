@@ -138,6 +138,27 @@ class ConsumerLeadLinkDecisionTest extends TestCase
         $this->actingAs($actor)->postJson(route('consumer-database.workspace.bulk-legacy.store'), ['reason' => 'Uji HTTP JS', 'token' => $preview['token'], 'branch_id' => (string) $branch->id, 'project_id' => null, 'before' => '2026-01-01'])->assertOk()->assertJsonPath('data.created', 1);
     }
 
+    public function test_subject_panel_renders_active_decision_status_and_linked_lead_name(): void
+    {
+        [$branch, $project, $actor] = $this->bulkContext();
+        $row = KonsumenProgressSheetRow::create([
+            'branch_id' => $branch->id,
+            'sheet_id' => 'status-sheet',
+            'sheet_name' => 'data_konsumen',
+            'row_hash' => 'status-row',
+            'row_data' => ['[SYS] ID Konsumen' => 'STATUS-1', 'Nama' => 'Subjek Status', 'Tanggal' => '2025-01-01', 'Proyek' => $project->project_name],
+        ]);
+        $lead = SalesLead::create(['branch_id' => $branch->id, 'project_id' => $project->id, 'sales_user_id' => $actor->id, 'lead_date' => today(), 'customer_name' => 'Lead Tertaut']);
+        $subject = app(ConsumerLeadLinkSubjectResolver::class)->fromSheetRow($row, $project->id, null, false);
+        app(ConsumerLeadLinkDecisionService::class)->decideForSubject($subject, 'linked', $lead, [], $actor);
+
+        $this->actingAs($actor)->get(route('consumer-database.workspace', ['branch_id' => $branch->id]))
+            ->assertOk()
+            ->assertSee('Tertaut')
+            ->assertSee('Lead Tertaut')
+            ->assertDontSee('Subjek Status</td><td>Tertaut');
+    }
+
     public function test_subject_panel_has_one_required_lead_control_and_clears_lead_when_status_changes(): void
     {
         $view = file_get_contents(resource_path('views/crm/consumer-workspace/index.blade.php'));

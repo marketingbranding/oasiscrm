@@ -164,6 +164,7 @@
 @media (max-width: 767px) {
     .workspace-v2-content { min-width: 0; overflow-x: hidden; }
     .workspace-v2-page-header > div { min-width: 0; width: 100%; }
+    .workspace-v2-page-action { width: 100%; }
     .workspace-v2-page-header h1, .workspace-v2-page-header p { overflow-wrap: anywhere; }
     .workspace-v2-toolbar--compact { min-width: 0; }
     .workspace-v2-search { box-sizing: border-box; width: 100%; min-width: 0; }

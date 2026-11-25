@@ -3659,6 +3659,11 @@ body.sales-pocketbook-onboarding-shell .crm-page-body {
 .crm-field-hint { color: var(--oasis-text-muted); font: var(--oasis-type-caption-size)/1.4 var(--oasis-font-controls); }
 .crm-input-error { font: 700 var(--oasis-type-caption-size)/1.4 var(--oasis-font-controls); }
 
+input[type='checkbox'],
+input[type='radio'] {
+    min-height: 0;
+}
+
 .crm-field-control > :is(input:not([type='checkbox']):not([type='radio']), select, textarea),
 .crm-control {
     min-height: var(--oasis-control-height);

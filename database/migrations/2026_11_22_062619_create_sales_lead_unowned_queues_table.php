@@ -13,7 +13,7 @@ return new class extends Migration
             $table->foreignId('sales_lead_id')->constrained('sales_leads')->restrictOnDelete();
             $table->foreignId('former_sales_user_id')->nullable()->constrained('users')->nullOnDelete();
             $table->foreignId('queue_coordinator_user_id')->nullable()->constrained('users')->nullOnDelete();
-            $table->foreignId('last_active_coordinator_user_id')->nullable()->constrained('users')->nullOnDelete();
+            $table->foreignId('last_active_coordinator_user_id')->nullable()->constrained('users', indexName: 'slu_queues_last_active_coord_fk')->nullOnDelete();
             $table->string('status')->default('open');
             $table->timestamp('resolved_at')->nullable();
             $table->foreignId('resolved_by_user_id')->nullable()->constrained('users')->nullOnDelete();

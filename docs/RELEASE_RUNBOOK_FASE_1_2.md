@@ -4,9 +4,21 @@ Panduan operator. Agent tidak menjalankan cutover produksi.
 
 ## Sebelum rilis
 
-1. Jadwalkan maintenance window, rollback owner, dan kontak pemilik produk.
-2. Cek `.env` server: `OASIS_NEW_WORKSPACE_ENABLED=true` sebelum cabang pertama masuk status `paralel`. Jalankan `php artisan optimize:clear` setelah perubahan environment.
-3. Catat flag dan nilai default. Semua default berikut tetap mati; operator mengaktifkan setelah gerbang lulus:
+1. Jadwalkan maintenance window minimal 15 menit, rollback owner, dan kontak pemilik produk. Acuan gladi: `migrate` 319 detik. Sebelum migrasi jalankan `php artisan down`; sesudah migrasi dan smoke test lulus jalankan `php artisan up`.
+2. Tepat sebelum migrasi, jalankan query duplikat kavling read-only di produksi melalui phpMyAdmin. Data produksi dapat berubah setelah dump gladi dibuat.
+
+```sql
+SELECT kavling_id, COUNT(*) AS jumlah_assignment
+FROM consumer_kavling_assignments
+WHERE assignment_status IN ('active', 'sold')
+  AND released_at IS NULL
+GROUP BY kavling_id
+HAVING COUNT(*) > 1
+ORDER BY kavling_id;
+```
+
+3. Cek `.env` server: `OASIS_NEW_WORKSPACE_ENABLED=true` sebelum cabang pertama masuk status `paralel`. Jalankan `php artisan optimize:clear` setelah perubahan environment.
+4. Catat flag dan nilai default. Semua default berikut tetap mati; operator mengaktifkan setelah gerbang lulus:
    - `org_hierarchical_monitoring=false`
    - `lead_stages_v3=false`
    - `transaction_events_v3=false`
@@ -86,6 +98,8 @@ Jika migrate produksi gagal di tengah: hentikan rilis dan jangan mengulangi migr
 6. Catat insiden, dampak, keputusan, dan perbaikan sebelum membuka maintenance.
 
 ## Cutover per cabang
+
+Sebelum cutover cabang, selesaikan atau terima secara tertulis: 39 konflik kavling, 245 transaksi perlu tinjau, 20 Dana Talangan tidak ditemukan, dan unresolved struktur organisasi. Jalankan ulang seluruh pemeriksaan pada data terbaru; hasil gladi hanya acuan.
 
 1. Operator memastikan laporan paritas bersih dan freshness memenuhi Pengaturan.
 2. Operator mengubah status cabang berurutan dengan alasan dan audit.

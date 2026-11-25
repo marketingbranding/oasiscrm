@@ -13,6 +13,10 @@ Tanggal gladi: 25 November 2026.
 - Duplikat kavling aktif/terjual: 0.
 - Portable MariaDB dihentikan setelah pemeriksaan.
 - XAMPP 3306 tidak disentuh.
+- Uji hosting-like: user non-root `gladi_app`, hak hanya pada `oasis_mysql_check` dan `oasis_gladi`, tanpa hak global; binary logging aktif (`11.8.10-MariaDB-log`, `log_bin=1`).
+- `migrate:fresh` sebagai `gladi_app`: lulus.
+- Restore dump sebagai `gladi_app`: lulus.
+- `migrate` sebagai `gladi_app`: lulus.
 
 ## Parity cabang
 

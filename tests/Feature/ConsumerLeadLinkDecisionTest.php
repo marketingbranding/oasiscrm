@@ -890,6 +890,12 @@ class ConsumerLeadLinkDecisionTest extends TestCase
             'is_active',
         ]));
         $this->assertTrue(Schema::hasIndex('consumer_lead_link_decisions', 'consumer_lead_link_decisions_active_unique'));
+        if (DB::connection()->getDriverName() === 'mysql') {
+            $this->assertTrue(Schema::hasColumn('consumer_lead_link_decisions', 'active_lead_key'));
+        }
+        $migrationSource = file_get_contents(database_path('migrations/2026_11_24_100004_expand_wp29b_decision_subjects.php'));
+        $this->assertStringNotContainsString('CREATE TRIGGER', $migrationSource);
+        $this->assertStringNotContainsString('sales_lead_unique_source', $migrationSource);
     }
 
     public function test_br_link_decision_casts_and_relations_are_defined(): void

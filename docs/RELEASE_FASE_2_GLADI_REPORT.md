@@ -47,15 +47,13 @@ GROUP BY branch_id, id_kavling
 HAVING COUNT(*) > 1
 ORDER BY id_kavling;
 
--- Kandidat carry-over per cabang: aplikasi dengan keputusan aktif pada subjek NUP/Sheet.
-SELECT application.branch_id, COUNT(DISTINCT application.id) AS total
-FROM consumer_applications AS application
-JOIN consumer_lead_link_decisions AS decision
-  ON decision.is_active = 1
- AND (decision.consumer_application_id = application.id
-      OR decision.branch_id = application.branch_id)
-GROUP BY application.branch_id
-ORDER BY application.branch_id;
+-- Kandidat carry-over per cabang; keputusan aktif adalah sumber Sheet/NUP.
+SELECT branch_id, COUNT(*) AS total
+FROM consumer_lead_link_decisions
+WHERE is_active = 1
+  AND subject_type IN ('sheet', 'nup')
+GROUP BY branch_id
+ORDER BY branch_id;
 
 -- Dana Talangan belum ditemukan, dikelompokkan alasan umum
 SELECT branch_id,
@@ -80,7 +78,7 @@ Catatan hasil yang tersedia dari command/output gladi:
 
 - Transaksi per cabang: branch ID 4 = `draft` 117 dan `migration_pending` 129; total perlu tinjau 245 jika 1 status `Lanjut` ikut dihitung.
 - Preview kavling branch ID 4: 39 conflict dari 246 kandidat. Service memakai ID kavling legacy sebagai kunci konflik; alasan umum: ID kavling muncul lebih dari sekali. Query menemukan 18 ID kavling legacy duplikat: 15 grup berjumlah 2 dan 3 grup berjumlah 3, total 39 kandidat konflik.
-- Carry-over: 239 kandidat global. Command tidak menyediakan agregasi branch. Query agregasi branch ada di atas; distribusi branch belum terverifikasi.
+- Carry-over: 239 kandidat global. Query per branch memakai `subject_type IN ('sheet', 'nup')`; distribusi per branch belum terverifikasi pada DB yang sudah dibersihkan.
 - Dana Talangan tidak ditemukan: branch ID 6 = 5 tanpa kavling; branch ID 7 = 12 tanpa kavling; branch ID 8 = 3 tanpa kavling. Total 20.
 - Organization unresolved `sales_team_member_of`: branch ID 2 = 3, branch ID 3 = 9, branch ID 7 = 1, branch ID 8 = 4. Total 17 relasi. Schema tidak memiliki kolom `classification`; jenis masalah yang tersedia hanya `relationship_type`.
 

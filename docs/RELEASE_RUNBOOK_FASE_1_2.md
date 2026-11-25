@@ -25,6 +25,7 @@ ORDER BY kavling_id;
    - `dana_talangan_primary_source=false`
 4. Backup database penuh, storage bukti, `.env` terenkripsi, dan konfigurasi web server. Uji restore pada lingkungan terpisah. Dump DB produksi tidak boleh dibagikan atau di-commit; hapus setelah gladi.
 5. Pastikan branch deploy bersih, migrasi direview, queue/worker siap, dan scheduler dipanggil tiap menit.
+6. `public/build` wajib di-build ulang dan di-commit setiap ada perubahan `resources/js` atau `resources/css`.
 
 ## Gladi migrasi dan dry-run pada salinan DB produksi
 

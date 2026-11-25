@@ -16,6 +16,8 @@ Panduan operator. Agent tidak menjalankan cutover produksi.
 
 ## Gladi migrasi dan dry-run pada salinan DB produksi
 
+Sebelum gladi: wajib jalankan `php artisan migrate:fresh` pada DB MySQL kosong memakai engine dan versi mayor yang sama dengan produksi. Perintah ini harus lulus dari nol; gunakan environment khusus yang tidak di-commit. Jika gagal, perbaiki migrasi dan ulangi sampai lulus. Setelah itu jalankan gladi salinan DB berikut.
+
 Jalankan berurutan. Ganti `{cabang}` dengan ID atau kode cabang yang sedang diperiksa. Jangan menjalankan langkah gladi pada produksi.
 
 1. Restore dump produksi ke DB salinan. Arahkan `.env` salinan ke DB tersebut. Pastikan kredensial, URL, queue, mail, Google Sheets, gateway WhatsApp, AI, dan Web Push memakai endpoint aman untuk gladi atau mock; jangan mengarah ke layanan produksi.

@@ -101,7 +101,7 @@
     </x-crm.sync-status-panel>
     @endif
 
-    <div class="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+    <div class="mb-4 grid grid-cols-2 gap-3 xl:grid-cols-4">
          <x-crm.card padding="sm">        <div class="font-[Helvetica] text-[10px] font-bold uppercase">Total Record Filter</div><div class="mt-1 text-xl font-bold">{{ number_format($summary['total']) }}</div></x-crm.card>
          <x-crm.card padding="sm"><div class="font-[Helvetica] text-[10px] font-bold uppercase">Total Nominal</div><div class="mt-1 text-xl font-bold">{{ \App\Support\DanaTalanganMoney::format($summary['nominal']) }}</div></x-crm.card>
          <x-crm.card padding="sm"><div class="font-[Helvetica] text-[10px] font-bold uppercase">Status Sanggup</div><div class="mt-1 text-xl font-bold">{{ number_format($summary['sanggup']) }}</div></x-crm.card>
@@ -201,7 +201,31 @@
     </div>
     @endif
 
-    <div class="crm-table-scroll">
+    <div class="grid grid-cols-1 gap-3 md:hidden" data-dana-mobile-cards>
+        @forelse($records as $r)
+            <article class="dana-mobile-card border-2 border-black bg-white p-3">
+                <div class="flex items-start justify-between gap-3 border-b-2 border-black pb-2">
+                    <div class="min-w-0"><h2 class="truncate font-bold">{{ $r->nama_konsumen }}</h2><p class="text-sm">Kavling: {{ $r->kav ?? '—' }}</p></div>
+                    <x-crm.status-badge :variant="$r->status === 'lunas' ? 'success' : ($r->status === 'tidak_sanggup' ? 'danger' : ($r->status === 'belum_ditentukan' ? 'neutral' : 'info'))">
+                        {{ ['belum_ditentukan' => 'BELUM DITENTUKAN', 'sanggup' => 'SANGGUP', 'tidak_sanggup' => 'TIDAK SANGGUP', 'lunas' => 'LUNAS'][$r->status] ?? 'BELUM DITENTUKAN' }}
+                    </x-crm.status-badge>
+                </div>
+                <dl class="mt-3 grid grid-cols-2 gap-2 text-sm"><div><dt class="crm-type-label">Nominal</dt><dd class="font-bold">{{ $r->formattedNominal() }}</dd></div><div><dt class="crm-type-label">Sisa</dt><dd>{{ \App\Support\DanaTalanganMoney::format(data_get($r->payment_summary ?? [], 'remaining', $r->nominal)) }}</dd></div></dl>
+                <div class="dana-mobile-actions mt-3 grid grid-cols-2 gap-2">
+                    @if($canManage)
+                        <button type="button" class="crm-button crm-button--primary" @click="openPayment(@js(['id' => $r->id, 'name' => $r->nama_konsumen, 'kav' => $r->kav, 'nominal' => $r->formattedNominal(), 'paid' => \App\Support\DanaTalanganMoney::format(data_get($r->payment_summary ?? [], 'verified', '0.00')), 'remaining' => \App\Support\DanaTalanganMoney::format(data_get($r->payment_summary ?? [], 'remaining', $r->nominal)), 'action' => route('dana-talangan.payments.store', $r)]))">Bayar</button>
+                        <button type="button" class="crm-button crm-button--secondary" @click="openEdit(@js(['id' => $r->id, 'tanggal' => $r->tanggal?->format('Y-m-d'), 'nama_konsumen' => $r->nama_konsumen, 'kav' => $r->kav, 'project_name' => $r->project_name, 'nominal' => $r->nominal, 'pinjam_nama' => $r->pinjam_nama, 'pekerjaan' => $r->pekerjaan, 'status_perkawinan' => $r->status_perkawinan, 'umur' => $r->umur, 'nama_marketing' => $r->nama_marketing, 'tgl_komitmen' => $r->tgl_komitmen?->format('Y-m-d'), 'penyelesaian' => $r->penyelesaian, 'konfirmasi_keuangan' => $r->konfirmasi_keuangan, 'branch_id' => $r->branch_id, 'status' => $r->status, 'updated_at' => $r->updated_at?->copy()->utc()->format('Y-m-d H:i:s')]), $event.currentTarget)">Edit</button>
+                        @if(auth()->user()->hasPermission('comments.view'))<a href="{{ route('comments.thread', ['alias' => 'bridge-fund', 'id' => $r->id]) }}" class="crm-button crm-button--secondary text-center">Komentar ({{ $r->comments_count }})</a>@endif
+                        <form method="POST" action="{{ route('dana-talangan.destroy', ['dana_talangan' => $r->id]) }}" class="contents" @submit.prevent="confirm('Hapus data ini?') && $el.submit()">@csrf @method('DELETE')<button type="submit" class="crm-button crm-button--danger w-full">Hapus</button></form>
+                    @endif
+                </div>
+            </article>
+        @empty
+            <x-crm.empty-state title="Belum ada data dana talangan." description="Ubah filter atau tambahkan data dana talangan baru melalui tombol utama." />
+        @endforelse
+    </div>
+
+    <div class="hidden md:block crm-table-scroll">
         <table class="crm-data-table dana-table" :class="{ frozen: tableFrozen }">
             <thead>
                 <tr>
@@ -346,7 +370,7 @@
                 <label class="block text-sm font-bold">Tanggal<input type="date" name="paid_at" value="{{ now()->format('Y-m-d') }}" required class="crm-control mt-1"></label>
                 <label class="block text-sm font-bold">Nominal<input x-ref="paymentAmount" type="number" name="amount" min="0.01" step="0.01" required class="crm-control mt-1"></label>
                 <label class="block text-sm font-bold">Bukti<input type="file" name="evidence" accept=".jpg,.jpeg,.png,.pdf" class="mt-1 block w-full text-sm"></label>
-                <label class="block text-sm"><input type="hidden" name="is_verified" value="0"><input type="checkbox" name="is_verified" value="1" checked> Langsung terverifikasi</label>
+                <label class="block text-sm"><input type="hidden" name="is_verified" value="0"><input type="checkbox" name="is_verified" value="1" checked class="w-4 h-4 shrink-0"> Langsung terverifikasi</label>
                 @if($errors->any() && old('form_mode') !== 'edit')<div class="border-2 border-red-700 bg-red-50 p-2 text-sm text-red-800" role="alert">{{ $errors->first() }}</div>@endif
                 <button class="crm-button crm-button--primary">Simpan Pembayaran</button>
             </form>

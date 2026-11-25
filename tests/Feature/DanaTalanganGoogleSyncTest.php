@@ -131,6 +131,20 @@ class DanaTalanganGoogleSyncTest extends TestCase
         $this->assertSame(2, substr_count($contents, 'Proyek Kembar'));
     }
 
+    public function test_mobile_dana_cards_keep_actions_and_single_payment_form(): void
+    {
+        [$branch, $user] = $this->makeBranchAndUser();
+        $record = $this->makeRecord($branch, $user);
+        $html = $this->actingAs($user)->get(route('dana-talangan.index'))->getContent();
+
+        $this->assertStringContainsString('dana-mobile-card', $html);
+        $this->assertStringContainsString('dana-mobile-actions', $html);
+        $this->assertStringContainsString('grid grid-cols-2 gap-3', $html);
+        $this->assertSame(1, substr_count($html, 'name="form_mode" value="payment"'));
+        $this->assertStringContainsString('w-4 h-4 shrink-0', $html);
+        $this->assertStringContainsString('Komentar (', $html);
+    }
+
     public function test_bug3_payment_modal_posts_multipart_payment_and_shows_record_summary(): void
     {
         [$branch, $user] = $this->makeBranchAndUser();

@@ -9,7 +9,11 @@ return new class extends Migration
 {
     public function up(): void
     {
-        DB::statement('DROP INDEX IF EXISTS consumer_lead_link_decisions_active_unique');
+        if (Schema::hasIndex('consumer_lead_link_decisions', 'consumer_lead_link_decisions_active_unique')) {
+            Schema::table('consumer_lead_link_decisions', function (Blueprint $table): void {
+                $table->dropIndex('consumer_lead_link_decisions_active_unique');
+            });
+        }
 
         if (DB::connection()->getDriverName() === 'sqlite') {
             DB::statement('PRAGMA foreign_keys=OFF');
@@ -36,7 +40,6 @@ return new class extends Migration
                 DB::statement('CREATE UNIQUE INDEX consumer_lead_link_decisions_active_unique ON consumer_lead_link_decisions (active_consumer_application_key)');
             }
         } else {
-            DB::statement('DROP INDEX IF EXISTS consumer_lead_link_decisions_active_unique');
             DB::statement('ALTER TABLE consumer_lead_link_decisions ADD active_consumer_application_key INTEGER GENERATED ALWAYS AS (CASE WHEN is_active = 1 THEN consumer_application_id ELSE NULL END) STORED');
             DB::statement('CREATE UNIQUE INDEX consumer_lead_link_decisions_active_unique ON consumer_lead_link_decisions (active_consumer_application_key)');
         }

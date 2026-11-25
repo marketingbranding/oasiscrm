@@ -27,7 +27,11 @@ return new class extends Migration
             });
         }
 
-        DB::statement('DROP INDEX IF EXISTS consumer_lead_link_decisions_active_unique');
+        if (Schema::hasIndex('consumer_lead_link_decisions', 'consumer_lead_link_decisions_active_unique')) {
+            Schema::table('consumer_lead_link_decisions', function (Blueprint $table): void {
+                $table->dropIndex('consumer_lead_link_decisions_active_unique');
+            });
+        }
 
         DB::table('consumer_lead_link_decisions')
             ->whereNull('subject_type')

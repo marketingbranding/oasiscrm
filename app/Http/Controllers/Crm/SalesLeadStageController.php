@@ -9,6 +9,8 @@ use App\Services\CollaborationNotificationService;
 use App\Services\OptimisticLockService;
 use App\Services\PresenceService;
 use App\Services\SalesLeadService;
+use App\Services\SalesLeadStageV3Service;
+use App\Support\FeatureFlag;
 use Symfony\Component\HttpFoundation\Response;
 
 class SalesLeadStageController extends Controller
@@ -18,12 +20,22 @@ class SalesLeadStageController extends Controller
         private readonly OptimisticLockService $optimisticLock,
         private readonly CollaborationNotificationService $notifications,
         private readonly PresenceService $presence,
+        private readonly SalesLeadStageV3Service $stageV3,
     ) {}
 
     public function update(UpdateSalesLeadStageRequest $request, SalesLead $salesLead)
     {
         $data = $request->validated();
-        $result = $this->optimisticLock->execute($request, $salesLead, $data['expected_updated_at'], function (SalesLead $current) use ($request, $data) {
+        $stageV3Enabled = FeatureFlag::enabledForBranch('lead_stages_v3', $salesLead->branch_id);
+        $result = $this->optimisticLock->execute($request, $salesLead, $data['expected_updated_at'], function (SalesLead $current) use ($request, $data, $stageV3Enabled) {
+            if ($stageV3Enabled) {
+                $this->authorize('updateStageV3', $current);
+
+                return $data['action'] === 'reverse'
+                    ? $this->stageV3->correctStage($current, $data['stage'], $data['reason'], $request->user(), $data['operation_uuid'] ?? null)
+                    : $this->stageV3->setStage($current, $data['stage'], $request->user(), $data['operation_uuid'] ?? null);
+            }
+
             if ($data['action'] === 'reverse') {
                 $this->authorize('reverseStage', $current);
 
@@ -44,11 +56,12 @@ class SalesLeadStageController extends Controller
         return response()->json([
             'ok' => true,
             'message' => $data['action'] === 'reverse' ? 'Tahap lead berhasil dibatalkan.' : 'Tahap lead berhasil diperbarui.',
-            'current_stage' => $result->currentStage(),
-            'current_stage_label' => $result->currentStageLabel(),
+            'current_stage' => $stageV3Enabled ? $result->resolveStageV3() : $result->currentStage(),
+            'current_stage_label' => $stageV3Enabled ? $result->stageV3Label() : $result->currentStageLabel(),
+            'lead_stage' => $result->lead_stage,
             'updated_at' => $this->optimisticLock->token($result),
-            'stages' => collect(SalesLead::STAGE_ORDER)->mapWithKeys(fn (string $stage) => [
-                $stage => $result->{$stage}?->toIso8601String(),
+            'stages' => collect($stageV3Enabled ? SalesLead::STAGE_V3_ORDER : SalesLead::STAGE_ORDER)->mapWithKeys(fn (string $stage) => [
+                $stage => $stageV3Enabled ? ($result->lead_stage === $stage ? $result->lead_stage_changed_at?->toIso8601String() : null) : $result->{$stage}?->toIso8601String(),
             ]),
         ]);
     }

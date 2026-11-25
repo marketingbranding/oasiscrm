@@ -24,6 +24,15 @@ This checklist is a release gate, not proof of acceptance. Record evidence and s
 6. Record the installed cron entry and hosting timezone.
 7. Confirm a tested restore path and responsible operator.
 
+## Kavling Holder Preflight
+
+Before deploying migration `2026_11_21_164320_enforce_active_and_sold_kavling_assignment_uniqueness.php`:
+
+1. Run `php artisan consumer:kavling-holder-audit` against production database copy.
+2. Exit code `0` and empty report required before migration.
+3. Non-zero result lists every `kavling_id` with duplicate `active`/`sold` assignments where `released_at IS NULL`; stop deployment and resolve data first.
+4. Migration repeats preflight inside `up()` and aborts before dropping old index when duplicates remain.
+
 ## Authentication
 
 1. Open two isolated browser profiles and log in with two separate active accounts. Both sessions must remain independent.

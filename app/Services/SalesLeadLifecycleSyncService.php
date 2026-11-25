@@ -15,9 +15,11 @@ use App\Models\SalesLeadSiteVisit;
 use App\Models\SalesLeadSlikAttempt;
 use App\Models\SalesLeadStatusHistory;
 use App\Models\User;
+use App\Support\FeatureFlag;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
 use Throwable;
 
 class SalesLeadLifecycleSyncService
@@ -38,14 +40,22 @@ class SalesLeadLifecycleSyncService
 
     public function __construct(
         private readonly GoogleSheetsApiService $googleSheets,
+        private readonly BranchMigrationStateService $migrationStates,
         private readonly SyncLockService $locks,
         private readonly PhoneNormalizationService $phones,
         private readonly SalesSheetIdentityService $sheetIdentities,
         private readonly ProjectIdentityResolver $projects,
+        private readonly SalesLeadStageV3Service $stageV3,
     ) {}
 
     public function sync(Branch $branch, ?User $actor = null): array
     {
+        if (! $this->migrationStates->allowsSheetSync($branch)) {
+            $this->migrationStates->logSkip($branch, 'sales_lead_lifecycle');
+
+            return ['ok' => true, 'status' => 'skipped', 'branch' => $branch->name, 'message' => 'Cabang berstatus oasis_penuh.', 'reason' => 'oasis_penuh', 'summary' => []];
+        }
+
         $result = $this->locks->run('sales-lead-lifecycle:branch:'.$branch->id, function () use ($branch, $actor): array {
             $operationUuid = (string) Str::uuid();
             $status = SalesLeadLifecycleSyncStatus::query()->updateOrCreate(
@@ -454,6 +464,14 @@ class SalesLeadLifecycleSyncService
     private function reconcileLeadStatus(Branch $branch, SalesLead $lead, array $row, string $operationUuid, ?User $actor, array &$summary): void
     {
         $raw = trim((string) ($row['status_lead'] ?? ''));
+        if (FeatureFlag::enabledForBranch('lead_stages_v3', $lead->branch_id) && mb_strtolower($raw) === 'gugur') {
+            if ($lead->resolveStageV3() === 'gugur') {
+                return;
+            }
+            $this->issue($branch, $lead, 'lead_status', $this->rowIdentity('lead', $row), 'remote_gugur_owned_by_oasis', ['remote_status' => $raw], $operationUuid, $summary);
+
+            return;
+        }
         $target = match (mb_strtolower($raw)) {
             '', 'no respon', 'no response' => SalesLeadStatus::NoResponse,
             'diskusi' => SalesLeadStatus::Discussion,
@@ -472,7 +490,8 @@ class SalesLeadLifecycleSyncService
             return;
         }
         $allowed = match ($target) {
-            SalesLeadStatus::Utj => $lead->consumerLinks()->where('sheet_type', 'data_konsumen')->where('status', 'completed')->exists(),
+            SalesLeadStatus::Utj => FeatureFlag::enabledForBranch('lead_stages_v3', $lead->branch_id)
+                || $lead->consumerLinks()->where('sheet_type', 'data_konsumen')->where('status', 'completed')->exists(),
             SalesLeadStatus::SlikCheck, SalesLeadStatus::SlikRejected => $lead->slikAttempts()->exists(),
             SalesLeadStatus::Akad => $lead->akadLinks()->whereNotNull('akad_at')->exists(),
             SalesLeadStatus::Freelance => $lead->freelanceLinks()->where('status', 'completed')->exists(),
@@ -487,6 +506,32 @@ class SalesLeadLifecycleSyncService
             $this->recordHistory($lead, $target, 'lead_sheet_sync', $this->stableSourceId('lead', $row), now(), $actor);
 
             return;
+        }
+        if (FeatureFlag::enabledForBranch('lead_stages_v3', $lead->branch_id)) {
+            $v3Target = $target;
+            if (in_array($v3Target, [SalesLeadStatus::Akad, SalesLeadStatus::SlikCheck, SalesLeadStatus::SlikRejected], true)) {
+                $v3Target = SalesLeadStatus::Utj;
+            }
+            $stage = match ($v3Target) {
+                SalesLeadStatus::NoResponse => 'lead_baru',
+                SalesLeadStatus::Discussion => 'dihubungi',
+                SalesLeadStatus::FaceToFace => 'tatap_muka',
+                SalesLeadStatus::SiteVisit => 'survey',
+                SalesLeadStatus::Utj,
+                SalesLeadStatus::SlikCheck,
+                SalesLeadStatus::SlikRejected,
+                SalesLeadStatus::Akad => 'utj',
+                default => null,
+            };
+            if ($stage !== null) {
+                try {
+                    $this->stageV3->syncFromSheet($lead, $stage, $this->stableSourceId('lead', $row), (string) Str::uuid(), $actor);
+                } catch (ValidationException $exception) {
+                    $this->issue($branch, $lead, 'lead_status', $this->rowIdentity('lead', $row), 'lead_stage_backward', ['remote_status' => $raw], $operationUuid, $summary);
+                }
+
+                return;
+            }
         }
         $this->applyStatus($lead, $target, 'lead_sheet_sync', $this->stableSourceId('lead', $row), now(), $actor);
     }

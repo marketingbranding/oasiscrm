@@ -1,10 +1,14 @@
+@php
+    $freeDayLabel = $freeDayLabel ?? 'akhir pekan';
+    $freeDayTitle = ucfirst($freeDayLabel);
+@endphp
 <div class="sales-weekend-plan sales-submitted-plan is-weekend" data-tour-target="work-summary">
     <div class="sales-submitted-meter">
-        <strong>{{ $agendas->count() }} rencana akhir pekan</strong>
+        <strong>{{ $agendas->count() }} rencana {{ $freeDayLabel }}</strong>
         <span>Tersimpan</span>
-        <b class="sales-weekend-inline-stamp">AKHIR PEKAN</b>
+        <b class="sales-weekend-inline-stamp">{{ strtoupper($freeDayTitle) }}</b>
     </div>
-    <p class="sales-submitted-note">Akhir pekan bebas jam dan menit. Rencana langsung tersimpan tanpa proses kirim.</p>
+    <p class="sales-submitted-note">{{ $freeDayTitle }} bebas jam dan menit. Rencana langsung tersimpan tanpa proses kirim.</p>
     <div class="sales-submitted-count">{{ $receiptSummary['completed_count'] }} dari {{ $receiptSummary['agenda_count'] }} agenda selesai</div>
     <ol class="sales-submitted-list">
         @foreach($agendas as $agenda)
@@ -27,5 +31,5 @@
 </div>
 
 @if($project)
-    <div id="agenda-input" class="sales-receipt-add-panel sales-reference-bottom-action" data-tour-target="add-plan-action"><button type="button" class="sales-receipt-add-trigger" @click="openAgendaSheet($event)" aria-haspopup="dialog" aria-controls="sales-agenda-create-sheet"><span>+ Tambah rencana akhir pekan</span></button></div>
+    <div id="agenda-input" class="sales-receipt-add-panel sales-reference-bottom-action" data-tour-target="add-plan-action"><button type="button" class="sales-receipt-add-trigger" @click="openAgendaSheet($event)" aria-haspopup="dialog" aria-controls="sales-agenda-create-sheet"><span>+ Tambah rencana {{ $freeDayLabel }}</span></button></div>
 @endif

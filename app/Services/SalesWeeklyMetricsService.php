@@ -9,6 +9,7 @@ use App\Models\User;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 
 class SalesWeeklyMetricsService
 {
@@ -24,6 +25,7 @@ class SalesWeeklyMetricsService
 
     public function __construct(
         private readonly OrganizationScopeService $organizationScope,
+        private readonly LeadAttentionService $leadAttention,
     ) {}
 
     public function period(?string $week = null, ?string $dateFrom = null, ?string $dateTo = null): array
@@ -70,8 +72,8 @@ class SalesWeeklyMetricsService
             'documents_akad' => $this->conversion($metrics['akad'], $metrics['documents_completed']),
         ];
 
-        $leadInput = (clone $leadQuery)->max('created_at');
-        $agendaInput = (clone $agendaQuery)->max('created_at');
+        $leadInput = (clone $leadQuery)->max(DB::raw('COALESCE(current_status_changed_at, lead_date)'));
+        $agendaInput = (clone $agendaQuery)->max(DB::raw('COALESCE(completed_at, scheduled_date)'));
         $lastInput = collect([$leadInput, $agendaInput])->filter()->max();
         $metrics['last_input'] = $lastInput ? CarbonImmutable::parse($lastInput, config('app.timezone')) : null;
 
@@ -113,7 +115,6 @@ class SalesWeeklyMetricsService
         $today = CarbonImmutable::now(config('app.timezone'));
         $agendas = $this->agendaQuery($sales, $filters);
         $leads = $this->leadQuery($sales, $filters);
-        $staleThreshold = $today->subDays(3);
 
         $duplicateGroups = (clone $leads)->whereNotNull('normalized_phone')
             ->select('normalized_phone')->groupBy('normalized_phone')->havingRaw('COUNT(*) > 1')->get()->count();
@@ -124,15 +125,14 @@ class SalesWeeklyMetricsService
             'done_without_result' => (clone $agendas)->where('status', 'done')
                 ->where(fn (Builder $query) => $query->whereNull('activity_result')->orWhere('activity_result', ''))->count(),
             'never_contacted' => (clone $leads)->whereNull('contacted_at')->count(),
-            'stale_progress' => (clone $leads)->whereNull('akad_at')->get()
-                ->filter(fn (SalesLead $lead) => $lead->lastActivityAt()?->lte($staleThreshold))->count(),
+            'stale_progress' => $this->leadAttention->whereNeedsAttention((clone $leads)->whereNull('akad_at'), $today)->count(),
             'duplicate_phone_groups' => $duplicateGroups,
         ];
     }
 
     public function leadQuery(User $viewer, array $filters = []): Builder
     {
-        return SalesLead::query()->visibleTo($viewer)
+        return $this->leadAttention->decorate(SalesLead::query()->visibleTo($viewer)->activeForLeadViews())
             ->when(! empty($filters['branch_id']), fn (Builder $query) => $query->where('branch_id', $filters['branch_id']))
             ->when(! empty($filters['project_id']), fn (Builder $query) => $query->where('project_id', $filters['project_id']))
             ->when(! empty($filters['sales_user_id']), fn (Builder $query) => $query->where('sales_user_id', $filters['sales_user_id']));
@@ -140,7 +140,7 @@ class SalesWeeklyMetricsService
 
     public function canonicalLeadQuery(array $scope, array $filters = []): Builder
     {
-        return SalesLead::query()
+        return $this->leadAttention->decorate(SalesLead::query()->activeForLeadViews())
             ->whereIn('sales_user_id', $scope['owner_ids'])
             ->whereIn('branch_id', $scope['branch_ids'])
             ->whereIn('project_id', $scope['project_ids'])
@@ -173,7 +173,7 @@ class SalesWeeklyMetricsService
             ->whereIn('branch_id', $this->organizationScope->branchIds($viewer, 'sales_pocketbook'))
             ->where(fn (Builder $query) => $query->whereIn('sales_project_id', $projectIds)
                 ->orWhere(fn (Builder $legacy) => $legacy->whereNull('sales_project_id')->whereIn('project_name', $projectNames)))
-            ->whereIn('owner_user_id', $this->organizationScope->visibleUserIds($viewer, 'sales_pocketbook'))
+            ->whereIn('owner_user_id', $this->organizationScope->visibleUserIds($viewer, 'sales_pocketbook', 'view', 'sales_leads'))
             ->when(! empty($filters['branch_id']), fn (Builder $query) => $query->where('branch_id', $filters['branch_id']))
             ->when(! empty($filters['project_id']), fn (Builder $query) => $query->where('sales_project_id', $filters['project_id']))
             ->when(! empty($filters['sales_user_id']), fn (Builder $query) => $query->where('owner_user_id', $filters['sales_user_id']));

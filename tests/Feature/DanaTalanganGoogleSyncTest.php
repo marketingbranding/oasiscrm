@@ -14,6 +14,7 @@ use App\Services\DanaTalanganOptionService;
 use App\Services\GoogleSheetsApiService;
 use App\Services\ProjectIdentityResolver;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Str;
 use Mockery;
 use Tests\TestCase;
 
@@ -30,6 +31,23 @@ class DanaTalanganGoogleSyncTest extends TestCase
             'services.google_sheets.dana_talangan_sheet_name' => '2026',
             'services.google_sheets.dana_talangan_project_branches' => [],
         ]);
+    }
+
+    public function test_sync_sheet_nominal_increase_revokes_auto_lunas(): void
+    {
+        [$branch, $user] = $this->makeBranchAndUser();
+        $record = $this->makeRecord($branch, $user);
+        $record->update(['nominal' => '100.00']);
+        $record->payments()->create(['paid_at' => '2026-11-23', 'amount' => '100.00', 'is_verified' => true, 'created_by' => $user->id, 'verified_by' => $user->id, 'verified_at' => now()]);
+        $record->refresh();
+        $record->update(['status_auto_lunas' => true, 'status_before_auto_lunas' => 'sanggup', 'status' => 'lunas']);
+        $record->update(['oasis_sync_id' => (string) Str::uuid(), 'source_hash' => null]);
+        $google = Mockery::mock(GoogleSheetsApiService::class);
+        $google->shouldReceive('sheetIds')->once()->andReturn(['2026' => 123]);
+        $google->shouldReceive('quoteSheetName')->atLeast()->once()->with('2026')->andReturn("'2026'");
+        $google->shouldReceive('batchGetRaw')->once()->andReturn(['2026' => [DanaTalanganGoogleService::VISIBLE_HEADERS, [1, '07/07/2026', 'Konsumen Test', '', 'Cabang Test', 'Proyek Test', 'TIDAK', '', '', '', '', '', '150.00', '', false, 'LUNAS', $record->oasis_sync_id, '', '']]]);
+        $result = (new DanaTalanganGoogleService($google))->sync($user->id, true);
+        $this->assertTrue($result['ok']);
     }
 
     public function test_service_uses_single_talangan_sheet(): void
@@ -89,6 +107,85 @@ class DanaTalanganGoogleSyncTest extends TestCase
         $this->assertSame(2, $record->sheet_row_number);
         $this->assertSame('synced', $record->sync_status);
         $this->assertNotNull($record->oasis_sync_id);
+    }
+
+    public function test_bug10_dana_talangan_uses_consistent_ui_labels(): void
+    {
+        [$branch, $user] = $this->makeBranchAndUser();
+        LeadMaster::create(['branch_id' => $branch->id, 'project_name' => 'Proyek Label', 'is_active' => true]);
+
+        $response = $this->actingAs($user)->get(route('dana-talangan.index'));
+
+        $response->assertOk()->assertSee('Progress Penagihan')->assertSee('Konfirmasi Keuangan')->assertDontSee('> Konfirmasi</label>', false);
+    }
+
+    public function test_bug11_dana_project_dropdown_deduplicates_same_branch_names(): void
+    {
+        [$branch, $user] = $this->makeBranchAndUser();
+        LeadMaster::create(['branch_id' => $branch->id, 'project_name' => 'Proyek Kembar', 'is_active' => true]);
+        LeadMaster::create(['branch_id' => $branch->id, 'project_name' => ' proyek kembar ', 'is_active' => true]);
+
+        $response = $this->actingAs($user)->get(route('dana-talangan.index'));
+        $contents = $response->getContent();
+
+        $this->assertSame(2, substr_count($contents, 'Proyek Kembar'));
+    }
+
+    public function test_mobile_dana_cards_keep_actions_and_single_payment_form(): void
+    {
+        [$branch, $user] = $this->makeBranchAndUser();
+        $record = $this->makeRecord($branch, $user);
+        $html = $this->actingAs($user)->get(route('dana-talangan.index'))->getContent();
+
+        $this->assertStringContainsString('dana-mobile-card', $html);
+        $this->assertStringContainsString('dana-mobile-actions', $html);
+        $this->assertStringContainsString('grid grid-cols-2 gap-3', $html);
+        $this->assertSame(1, substr_count($html, 'name="form_mode" value="payment"'));
+        $this->assertStringContainsString('w-4 h-4 shrink-0', $html);
+        $this->assertStringContainsString('Komentar (', $html);
+    }
+
+    public function test_bug3_payment_modal_posts_multipart_payment_and_shows_record_summary(): void
+    {
+        [$branch, $user] = $this->makeBranchAndUser();
+        $record = $this->makeRecord($branch, $user);
+        $record->update(['nominal' => '22000000.00']);
+
+        $this->actingAs($user)->get(route('dana-talangan.index'))->assertOk()->assertSee('openPayment', false)->assertSee('Nominal Talangan')->assertSee(':action="paymentRecord?.action"', false)->assertSee('name="payment_record_id"', false)->assertSee('name="form_mode" value="payment"', false);
+        $this->actingAs($user)->post(route('dana-talangan.payments.store', $record), ['paid_at' => '2026-11-24', 'amount' => '22000000.00', 'is_verified' => '1'])->assertRedirect();
+        $this->assertDatabaseHas('dana_talangan_payments', ['dana_talangan_id' => $record->id, 'amount' => '22000000.00']);
+    }
+
+    public function test_payment_mode_cannot_create_a_new_dana_talangan_record(): void
+    {
+        [$branch, $user] = $this->makeBranchAndUser();
+
+        $this->actingAs($user)
+            ->post(route('dana-talangan.store'), [
+                'form_mode' => 'payment',
+                'payment_record_id' => '999',
+            ])
+            ->assertSessionHasErrors('form_mode');
+
+        $this->assertDatabaseCount('dana_talangans', 0);
+    }
+
+    public function test_payment_form_keeps_static_action_without_submit_state_reset(): void
+    {
+        [$branch, $user] = $this->makeBranchAndUser();
+        $record = $this->makeRecord($branch, $user);
+        $html = $this->actingAs($user)->get(route('dana-talangan.index'))->getContent();
+
+        $this->assertStringContainsString(':action="paymentRecord?.action"', $html);
+        $this->assertStringNotContainsString('@submit="closePayment()"', $html);
+    }
+
+    public function test_bug3_payment_validation_error_returns_to_payment_context(): void
+    {
+        [$branch, $user] = $this->makeBranchAndUser();
+        $record = $this->makeRecord($branch, $user);
+
+        $this->actingAs($user)->from(route('dana-talangan.index'))->post(route('dana-talangan.payments.store', $record), ['paid_at' => '2026-11-24', 'amount' => ''])->assertRedirect()->assertSessionHasErrors('amount')->assertSessionHasErrorsIn('default', ['amount' => 'Nominal pembayaran wajib diisi.']);
     }
 
     public function test_branch_user_can_open_tracking_filters_and_modals(): void

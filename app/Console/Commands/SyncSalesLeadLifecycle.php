@@ -4,6 +4,7 @@ namespace App\Console\Commands;
 
 use App\Models\SalesLeadBridgeSetting;
 use App\Services\SalesLeadLifecycleSyncService;
+use App\Support\FeatureFlag;
 use Illuminate\Console\Command;
 
 class SyncSalesLeadLifecycle extends Command
@@ -25,6 +26,9 @@ class SyncSalesLeadLifecycle extends Command
             return self::SUCCESS;
         }
         $branchId = $this->option('branch') ? (int) $this->option('branch') : null;
+        if ($branchId !== null && FeatureFlag::enabledForBranch('lead_stages_v3', $branchId)) {
+            $this->warn('Tahap Lead v3 aktif: pull status Gugur dari sheet tidak membuka kunci Lead; status Gugur dikelola OASIS.');
+        }
         $enabledBranchIds = SalesLeadBridgeSetting::query()->where('mode', '!=', 'off')->pluck('branch_id')->map(fn ($id) => (int) $id)->all();
         if ($branchId !== null && in_array($branchId, $enabledBranchIds, true)) {
             $this->warn('Cabang bridge aktif dilewati agar tab lead tidak dimutasi otomatis. Sinkronisasi lifecycle downstream manual masih menjadi debt.');

@@ -5,16 +5,19 @@ namespace Tests\Feature;
 use App\Models\Branch;
 use App\Models\ContentItem;
 use App\Models\LeadMaster;
+use App\Models\OrganizationAssignment;
 use App\Models\Role;
 use App\Models\SalesCoordinatorSales;
 use App\Models\SalesLead;
 use App\Models\User;
+use App\Services\AppSettingResolver;
 use App\Services\CrmAuthorizationService;
 use App\Services\OrganizationScopeService;
 use App\Services\SalesPocketbookOnboardingService;
 use App\Services\SupervisorSalesMonitoringService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
 use PhpOffice\PhpSpreadsheet\IOFactory;
 use Tests\TestCase;
 
@@ -560,6 +563,58 @@ class SupervisorSalesPocketbookTest extends TestCase
             ->assertSee('crm-section', false)
             ->assertSee('date-wrapper', false);
         $this->assertStringNotContainsString('type="date"', file_get_contents(resource_path('views/crm/sales-pocketbook/supervisor-monitoring.blade.php')));
+    }
+
+    public function test_br51_flag_on_supervisor_http_screen_and_exports_project_distant_details(): void
+    {
+        $this->setHierarchicalMonitoring(true);
+        config(['organization.graph_mode' => 'graph']);
+        $distantCoordinator = $this->user('sales_coordinator', 'Koordinator Jarak', $this->branch, $this->supervisor);
+        $distantSales = $this->user('sales', 'Sales Jarak', $this->branch, $distantCoordinator);
+        $distantSales->assignedProjects()->attach($this->project, ['is_primary' => true, 'is_active' => true]);
+        SalesCoordinatorSales::create(['coordinator_user_id' => $distantCoordinator->id, 'sales_user_id' => $distantSales->id]);
+        OrganizationAssignment::create([
+            'user_id' => $distantCoordinator->id, 'parent_user_id' => $this->supervisor->id, 'relationship_type' => OrganizationAssignment::REPORTS_TO,
+            'branch_id' => $this->branch->id, 'started_at' => today(), 'is_active' => true, 'is_primary' => true,
+        ]);
+        OrganizationAssignment::create([
+            'user_id' => $distantSales->id, 'parent_user_id' => $distantCoordinator->id, 'relationship_type' => OrganizationAssignment::REPORTS_TO,
+            'branch_id' => $this->branch->id, 'started_at' => today(), 'is_active' => true, 'is_primary' => true,
+        ]);
+        OrganizationAssignment::create([
+            'user_id' => $distantSales->id, 'parent_user_id' => $distantCoordinator->id, 'relationship_type' => OrganizationAssignment::SALES_TEAM_MEMBER_OF,
+            'branch_id' => $this->branch->id, 'started_at' => today(), 'is_active' => true, 'is_primary' => true,
+        ]);
+        $lead = $this->lead($distantSales, 'Lead BR-51 Jauh', '2026-08-10', 'synced');
+        $lead->update(['phone' => '08123456789', 'notes' => 'Catatan BR-51 rahasia', 'current_status_changed_at' => '2026-08-10 10:00:00']);
+        $agenda = $this->agenda($distantSales, 'Agenda BR-51 Rahasia', '2026-08-10');
+        $agenda->update(['location' => 'Lokasi Rahasia', 'activity_result' => 'Hasil Rahasia']);
+
+        $screen = $this->actingAs($this->supervisor)->get(route('sales-pocketbook.index', ['period' => 'today', 'sales_id' => $distantSales->id]));
+        $screen->assertOk()->assertSee('Lead BR-51 Jauh');
+        $screen->assertDontSee('08123456789')->assertDontSee('Catatan BR-51 rahasia');
+        $screen->assertDontSee('Agenda BR-51 Rahasia')->assertDontSee('Lokasi Rahasia')->assertDontSee('Hasil Rahasia');
+
+        foreach (['sales-pocketbook.supervisor-monitoring.lead-export', 'sales-pocketbook.supervisor-monitoring.agenda-export'] as $route) {
+            $response = $this->actingAs($this->supervisor)->get(route($route, ['period' => 'custom', 'date_from' => '2026-08-10', 'date_to' => '2026-08-10', 'sales_id' => $distantSales->id]));
+            $response->assertOk();
+            $workbook = IOFactory::load($response->baseResponse->getFile()->getPathname());
+            $values = collect($workbook->getActiveSheet()->toArray())->flatten()->implode('|');
+            $this->assertStringNotContainsString('08123456789', $values);
+            $this->assertStringNotContainsString('Catatan BR-51 rahasia', $values);
+            $this->assertStringNotContainsString('Agenda BR-51 Rahasia', $values);
+            $this->assertStringNotContainsString('Lokasi Rahasia', $values);
+            $this->assertStringNotContainsString('Hasil Rahasia', $values);
+            $workbook->disconnectWorksheets();
+        }
+    }
+
+    private function setHierarchicalMonitoring(bool $enabled): void
+    {
+        DB::table('app_settings')->updateOrInsert(['key' => 'org_hierarchical_monitoring'], [
+            'value' => json_encode($enabled, JSON_THROW_ON_ERROR), 'group' => 'feature_flags', 'created_at' => now(), 'updated_at' => now(),
+        ]);
+        app(AppSettingResolver::class)->forget('org_hierarchical_monitoring');
     }
 
     public function test_selected_sales_detail_contains_only_selected_records_and_no_write_or_sync_routes(): void

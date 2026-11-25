@@ -7,13 +7,16 @@ use App\Exports\CoordinatorSalesLeadExport;
 use App\Http\Controllers\Controller;
 use App\Models\LeadMaster;
 use App\Models\SalesLead;
+use App\Models\SalesLeadUnownedQueue;
 use App\Models\User;
+use App\Services\AppSettingResolver;
 use App\Services\CoordinatorAgendaReminderService;
 use App\Services\CoordinatorLeadPushService;
 use App\Services\CoordinatorLeadTeamService;
 use App\Services\CoordinatorSalesMonitoringService;
 use App\Services\PromoOptionService;
 use App\Services\SalesLeadTargetService;
+use App\Services\SalesLeadTransferService;
 use App\Services\WorkspaceAccessService;
 use App\Support\SalesLeadMasterData;
 use Carbon\CarbonImmutable;
@@ -33,7 +36,18 @@ class CoordinatorSalesLeadWorkspaceController extends Controller
         private readonly PromoOptionService $promoOptions,
         private readonly WorkspaceAccessService $workspaceAccess,
         private readonly SalesLeadTargetService $leadTargets,
+        private readonly SalesLeadTransferService $transfers,
     ) {}
+
+    public function transfer(Request $request): JsonResponse|RedirectResponse
+    {
+        $data = $request->validate(['lead_ids' => ['required', 'array', 'min:1'], 'lead_ids.*' => ['integer'], 'target_user_id' => ['required', 'integer'], 'queue_id' => ['nullable', 'integer'], 'reason' => ['required', 'string'], 'notes' => ['nullable', 'string', 'max:5000']]);
+        $count = count($this->transfers->transfer($request->user(), array_map('intval', $data['lead_ids']), User::query()->findOrFail($data['target_user_id']), $data['reason'], $data['notes'] ?? null, $data['queue_id'] ?? null));
+
+        return $request->expectsJson()
+            ? response()->json(['transferred' => $count])
+            : redirect()->back()->with('success', $count.' Lead berhasil dialihkan.');
+    }
 
     public function index(Request $request): View
     {
@@ -48,6 +62,7 @@ class CoordinatorSalesLeadWorkspaceController extends Controller
             'detail_date' => ['nullable', 'date_format:Y-m-d'],
             'target_month' => ['nullable', 'date_format:Y-m'],
             'stale_days' => ['nullable', 'integer', 'between:1,14'],
+            'focus' => ['nullable', 'in:attention,stale'],
         ]);
         $tab = $filters['tab'] ?? 'today';
         $todayView = $filters['view'] ?? 'today';
@@ -81,6 +96,19 @@ class CoordinatorSalesLeadWorkspaceController extends Controller
         $data['statuses'] = SalesLeadStatus::MANUAL;
         $data['canCreate'] = $request->user()->can('create', SalesLead::class);
         $data['canManageAgenda'] = $request->user()->hasPermission('sales_pocketbook.manage_team');
+        $data['canTransferTeam'] = $this->teams->isCoordinator($request->user())
+            && $request->user()->hasPermission('sales_pocketbook.manage_team');
+        $data['canManageQueue'] = $data['canTransferTeam'] || $request->user()->isSuperadmin();
+        $data['transferReasons'] = app(AppSettingResolver::class)->value('sales_lead.transfer_reasons') ?? [];
+        $data['transferTargets'] = $data['canTransferTeam']
+            ? $this->teams->currentSales($request->user())
+            : collect();
+        $data['queueTransferTargets'] = $request->user()->isSuperadmin()
+            ? User::query()->whereHas('role', fn ($query) => $query->where('slug', 'sales'))->where('account_status', 'active')->where('is_active', true)->get()
+            : $data['transferTargets'];
+        $data['unownedQueue'] = $data['canManageQueue']
+            ? SalesLeadUnownedQueue::query()->with(['lead.sales', 'lead.project', 'coordinator'])->where('status', 'open')->when(! $request->user()->isSuperadmin(), fn ($query) => $query->where('queue_coordinator_user_id', $request->user()->id))->latest()->get()
+            : collect();
         $data['canExport'] = $request->user()->hasPermission('sales_pocketbook.export_team');
         $data['canSync'] = config('oasis.spreadsheet_sync_enabled')
             && config('services.google_sheets.sales_lead_sync_enabled')
@@ -177,6 +205,7 @@ class CoordinatorSalesLeadWorkspaceController extends Controller
             'date_from' => ['nullable', 'required_if:period,custom', 'date'],
             'date_to' => ['nullable', 'required_if:period,custom', 'date', 'after_or_equal:date_from'],
             'sales_id' => ['nullable', 'integer'],
+            'focus' => ['nullable', 'in:attention,stale'],
         ]);
         $data = $this->monitoring->resolve($user, $filters, false);
 

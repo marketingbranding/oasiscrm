@@ -16,6 +16,8 @@ class AdminBranchSalesMonitoringService
     public function __construct(
         private readonly OrganizationScopeService $organizationScope,
         private readonly WorkspaceAccessService $workspaceAccess,
+        private readonly SalesMonitoringProjectionService $projection,
+        private readonly LeadAttentionService $leadAttention,
     ) {}
 
     public function resolve(User $actor, array $filters): array
@@ -56,15 +58,16 @@ class AdminBranchSalesMonitoringService
             ])
             ->orderByDesc('lead_date')->orderByDesc('id')
             ->paginate(20, ['*'], 'lead_page')->withQueryString();
-        $leads->getCollection()->each(function (SalesLead $lead) {
-            $lead->setAttribute('latest_activity_status', $lead->latestStatusHistory?->status ?? $lead->current_status);
-            $lead->setAttribute('latest_activity_at', $lead->latestStatusHistory?->changed_at ?? $lead->current_status_changed_at ?? $lead->updated_at);
-        });
-
         $agendas = $this->agendaQuery($scope, $period, $salesIds, $filters, $projectId)
             ->with(['owner:id,name', 'salesProject:id,project_name', 'evidence'])
             ->orderByDesc('scheduled_date')->orderByDesc('id')
             ->paginate(20, ['*'], 'agenda_page')->withQueryString();
+
+        $leads->getCollection()->each(function (SalesLead $lead): void {
+            $lead->setAttribute('latest_activity_status', $lead->latestStatusHistory?->status ?? $lead->current_status);
+        });
+        $leads->setCollection($this->projection->projectCollection($actor, 'lead', $leads->getCollection(), 'sales_user_id'));
+        $agendas->setCollection($this->projection->projectCollection($actor, 'agenda', $agendas->getCollection(), 'owner_user_id'));
 
         return [
             'tab' => $filters['tab'] ?? 'leads',
@@ -103,7 +106,7 @@ class AdminBranchSalesMonitoringService
                 $this->workspaceAccess->accessibleProjectIds($actor),
                 LeadMaster::query()->where('branch_id', $actor->branch_id)->where('is_active', true)->pluck('id')->map(fn ($id) => (int) $id)->all(),
             )),
-            'user_ids' => $this->organizationScope->visibleUserIds($actor, 'sales_pocketbook', 'view'),
+            'user_ids' => $this->organizationScope->visibleUserIds($actor, 'sales_pocketbook', 'view', 'sales_leads'),
         ];
     }
 
@@ -143,7 +146,7 @@ class AdminBranchSalesMonitoringService
 
     private function leadQuery(array $scope, array $period, array $salesIds, array $filters, ?int $projectId): Builder
     {
-        return SalesLead::query()->where('branch_id', $scope['branch_id'])->whereIn('project_id', $scope['project_ids'])->whereIn('sales_user_id', $salesIds)
+        return $this->leadAttention->decorate(SalesLead::query()->activeForLeadViews())->where('branch_id', $scope['branch_id'])->whereIn('project_id', $scope['project_ids'])->whereIn('sales_user_id', $salesIds)
             ->whereDate('lead_date', '>=', $period['from']->toDateString())->whereDate('lead_date', '<=', $period['to']->toDateString())
             ->when($projectId, fn (Builder $query) => $query->where('project_id', $projectId))
             ->when(filled($filters['source'] ?? null), fn (Builder $query) => $query->whereEffectiveSource($filters['source']))
@@ -163,7 +166,7 @@ class AdminBranchSalesMonitoringService
 
     private function distinctLeadOptions(array $scope, string $column): array
     {
-        return SalesLead::query()->where('branch_id', $scope['branch_id'])->whereIn('project_id', $scope['project_ids'])
+        return SalesLead::query()->activeForLeadViews()->where('branch_id', $scope['branch_id'])->whereIn('project_id', $scope['project_ids'])
             ->whereNotNull($column)->where($column, '<>', '')->distinct()->orderBy($column)->pluck($column)->all();
     }
 }

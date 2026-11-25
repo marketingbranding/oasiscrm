@@ -39,11 +39,11 @@ class SalesPocketbookExportTest extends TestCase
         ]))->assertOk();
 
         $workbook = IOFactory::load($response->baseResponse->getFile()->getPathname());
-        $this->assertSame(['REKAP MINGGUAN', 'LEAD HARIAN', 'AGENDA HARIAN'], $workbook->getSheetNames());
+        $this->assertSame(['REKAP MINGGUAN', 'LEAD HARIAN', 'RENCANA HARIAN SALES'], $workbook->getSheetNames());
         $leadValues = collect($workbook->getSheetByName('LEAD HARIAN')->toArray())->flatten()->implode('|');
         $this->assertStringContainsString('Lead Dalam Periode', $leadValues);
         $this->assertStringNotContainsString('Lead Di Luar Periode', $leadValues);
-        $this->assertSame('Agenda Konsumen', $workbook->getSheetByName('AGENDA HARIAN')->getCell('I2')->getValue());
+        $this->assertSame('Agenda Konsumen', $workbook->getSheetByName('RENCANA HARIAN SALES')->getCell('I2')->getValue());
         $workbook->disconnectWorksheets();
     }
 

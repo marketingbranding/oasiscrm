@@ -15,11 +15,12 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
+use Tests\Concerns\FreezesSalesAgendaTime;
 use Tests\TestCase;
 
 class SalesAgendaEvidenceAuthorizationTest extends TestCase
 {
-    use RefreshDatabase;
+    use FreezesSalesAgendaTime, RefreshDatabase;
 
     public function test_primary_roles_control_mutation_branch_read_and_archive_authority_without_supplemental_elevation(): void
     {

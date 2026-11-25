@@ -1,10 +1,14 @@
 <?php
 
 use App\Http\Controllers\Auth\PasswordChangeController;
+use App\Http\Controllers\Crm\AccessGrantController;
 use App\Http\Controllers\Crm\AdminUserController;
 use App\Http\Controllers\Crm\AdminUserImportController;
 use App\Http\Controllers\Crm\AiChatController;
+use App\Http\Controllers\Crm\AppSettingController;
 use App\Http\Controllers\Crm\BranchController;
+use App\Http\Controllers\Crm\BranchMigrationStateController;
+use App\Http\Controllers\Crm\BranchParityController;
 use App\Http\Controllers\Crm\ChangelogController;
 use App\Http\Controllers\Crm\CommentController;
 use App\Http\Controllers\Crm\CommentModerationController;
@@ -20,12 +24,14 @@ use App\Http\Controllers\Crm\ConsumerProcessController;
 use App\Http\Controllers\Crm\ContentCalendarController;
 use App\Http\Controllers\Crm\CoordinatorSalesLeadWorkspaceController;
 use App\Http\Controllers\Crm\DanaTalanganController;
+use App\Http\Controllers\Crm\DanaTalanganPaymentController;
 use App\Http\Controllers\Crm\DashboardController;
 use App\Http\Controllers\Crm\DatabaseController;
 use App\Http\Controllers\Crm\ExpenseCategoryController;
 use App\Http\Controllers\Crm\ExpenseController;
 use App\Http\Controllers\Crm\FeedbackReportController;
 use App\Http\Controllers\Crm\HistoricalProcessImportController;
+use App\Http\Controllers\Crm\HolidayController;
 use App\Http\Controllers\Crm\ImpersonationController;
 use App\Http\Controllers\Crm\KavlingController;
 use App\Http\Controllers\Crm\KonsumenProgressController;
@@ -54,12 +60,14 @@ use App\Http\Controllers\Crm\SalesLeadLifecycleSyncController;
 use App\Http\Controllers\Crm\SalesLeadOptionController;
 use App\Http\Controllers\Crm\SalesLeadStageController;
 use App\Http\Controllers\Crm\SalesLeadTargetController;
+use App\Http\Controllers\Crm\SalesLeadTransferController;
 use App\Http\Controllers\Crm\SalesOnboardingProposalController;
 use App\Http\Controllers\Crm\SalesPocketbookController;
 use App\Http\Controllers\Crm\SalesPocketbookOnboardingController;
 use App\Http\Controllers\Crm\SalesSheetIdentityController;
 use App\Http\Controllers\Crm\SupervisorSalesPocketbookController;
 use App\Http\Controllers\Crm\SystemHealthController;
+use App\Http\Controllers\Crm\TeamHistoryController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\WorkspaceV2\WorkspaceController;
 use App\Models\Comment;
@@ -83,6 +91,35 @@ Route::middleware(['auth', 'active', 'verified'])->group(function () {
 Route::middleware(['auth', 'active', 'verified', 'password.changed', 'operational.maintenance', 'crm.read-only', 'sales.access'])->group(function () {
     Route::bind('comment', fn ($value) => Comment::withTrashed()->findOrFail($value));
     Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
+    Route::get('/team-history', [TeamHistoryController::class, 'index'])->name('team-history.index');
+
+    Route::prefix('admin/izin-akses-khusus')->name('admin.access-grants.')->middleware(['permission:system.settings_manage', 'system.admin:settings'])->group(function (): void {
+        Route::get('/', [AccessGrantController::class, 'index'])->name('index');
+        Route::post('/', [AccessGrantController::class, 'store'])->middleware('not.impersonating')->name('store');
+        Route::patch('/{accessGrant}/revoke', [AccessGrantController::class, 'revoke'])->middleware('not.impersonating')->name('revoke');
+    });
+
+    Route::prefix('admin/pengaturan-aturan')->name('admin.app-settings.')->middleware(['permission:system.settings_manage', 'system.admin:settings'])->group(function () {
+        Route::get('/', [AppSettingController::class, 'index'])->name('index');
+        Route::put('/', [AppSettingController::class, 'update'])->middleware('not.impersonating')->name('update');
+    });
+
+    Route::prefix('admin/status-migrasi-cabang')->name('admin.branch-migration-states.')->middleware(['permission:system.branch_migration_manage', 'system.admin:settings'])->group(function (): void {
+        Route::get('/', [BranchMigrationStateController::class, 'index'])->name('index');
+        Route::put('/{branch}', [BranchMigrationStateController::class, 'update'])->middleware('not.impersonating')->name('update');
+    });
+
+    Route::prefix('admin/laporan-paritas')->name('admin.branch-parity.')->middleware(['permission:system.branch_migration_manage', 'system.admin:settings'])->group(function (): void {
+        Route::get('/', [BranchParityController::class, 'index'])->name('index');
+        Route::post('/{branch}/jalankan', [BranchParityController::class, 'run'])->middleware('not.impersonating')->name('run');
+        Route::get('/{branch}/xlsx', [BranchParityController::class, 'export'])->name('export');
+    });
+
+    Route::prefix('admin/hari-libur')->name('admin.holidays.')->middleware(['permission:system.settings_manage', 'system.admin:settings'])->group(function (): void {
+        Route::get('/', [HolidayController::class, 'index'])->name('index');
+        Route::post('/', [HolidayController::class, 'store'])->middleware('not.impersonating')->name('store');
+        Route::delete('/{holiday}', [HolidayController::class, 'destroy'])->middleware('not.impersonating')->name('destroy');
+    });
 
     Route::prefix('admin/roles')->name('roles.')->middleware(['permission:roles.view', 'system.admin:roles'])->group(function () {
         Route::get('/', [RoleAdministrationController::class, 'index'])->name('index');
@@ -200,6 +237,9 @@ Route::middleware(['auth', 'active', 'verified', 'password.changed', 'operationa
         Route::post('/buku-saku-sales/coordinator/agenda-reminders', [CoordinatorSalesLeadWorkspaceController::class, 'remind'])->middleware('permission:sales_pocketbook.manage_team')->name('coordinator-agenda-reminders.store');
         Route::get('/buku-saku-sales/projects/{project}/promo-options', [CoordinatorSalesLeadWorkspaceController::class, 'promoOptions'])->name('coordinator-leads.promo-options');
         Route::post('/buku-saku-sales/leads/sync', [CoordinatorSalesLeadWorkspaceController::class, 'push'])->middleware(['operational.module:spreadsheet_sync', 'permission:sales_pocketbook.sync'])->name('coordinator-leads.sync');
+        Route::post('/buku-saku-sales/leads/transfers', [SalesLeadTransferController::class, 'store'])->middleware(['permission:sales_pocketbook.manage_team', 'not.impersonating'])->name('sales-leads.transfers.store');
+        Route::post('/buku-saku-sales/coordinator/leads/transfers', [CoordinatorSalesLeadWorkspaceController::class, 'transfer'])->middleware(['permission:sales_pocketbook.manage_team', 'not.impersonating'])->name('coordinator-leads.transfers.store');
+        Route::get('/buku-saku-sales/leads/unowned-queue', [SalesLeadTransferController::class, 'queue'])->name('sales-leads.unowned-queue');
         Route::post('/buku-saku-sales/leads', [SalesLeadController::class, 'store'])->name('sales-leads.store');
         Route::get('/buku-saku-sales/leads/{sales_lead}', [SalesLeadController::class, 'show'])->name('sales-leads.show');
         Route::patch('/buku-saku-sales/leads/{sales_lead}/complete', SalesLeadCompletionController::class)->middleware('permission:sales_pocketbook.manage_own')->name('sales-leads.complete');
@@ -274,7 +314,7 @@ Route::middleware(['auth', 'active', 'verified', 'password.changed', 'operationa
         Route::post('/batches/{marisonImportBatch}/confirm', [MarisonMigrationController::class, 'confirm'])->middleware('not.impersonating')->name('batches.confirm');
     });
 
-    Route::prefix('admin/migrations/marison')->name('admin.marison-migrations.')->middleware(['module.maintenance:consumer_progress', 'operational.module:consumer_progress', 'permission:consumer_progress.manage'])->group(function () {
+    Route::prefix('admin/migrations/marison')->name('admin.marison-migrations.')->middleware(['module.maintenance:consumer_progress', 'operational.module:consumer_progress', 'permission:consumer_migration.reconcile'])->group(function () {
         Route::get('/reconciliation', [ConsumerMigrationReconciliationController::class, 'index'])->name('reconciliation.index');
         Route::get('/reconciliation/{reconciliation}', [ConsumerMigrationReconciliationController::class, 'show'])->name('reconciliation.show');
         Route::post('/reconciliation/{reconciliation}', [ConsumerMigrationReconciliationController::class, 'resolve'])->middleware('not.impersonating')->name('reconciliation.resolve');
@@ -282,13 +322,23 @@ Route::middleware(['auth', 'active', 'verified', 'password.changed', 'operationa
 
     Route::middleware(['module.maintenance:consumer_progress', 'operational.module:consumer_progress'])->group(function () {
         Route::get('/consumer-workspace', [ConsumerDatabaseController::class, 'index'])->middleware('permission:consumer_progress.view')->name('consumer-database.workspace');
-        Route::get('/consumer-workspace/create', [ConsumerDatabaseController::class, 'create'])->middleware('permission:consumer_progress.view')->name('consumer-database.workspace.create');
+        Route::get('/consumer-workspace/create', [ConsumerDatabaseController::class, 'create'])->middleware('permission:consumer_progress.manage')->name('consumer-database.workspace.create');
         Route::post('/consumer-workspace', [ConsumerDatabaseController::class, 'store'])->middleware('not.impersonating')->name('consumer-database.workspace.store');
+        Route::get('/consumer-workspace/lead-link/conflicts', [ConsumerDatabaseController::class, 'linkConflicts'])->middleware('permission:consumer_progress.manage')->name('consumer-database.workspace.lead-link-conflicts');
+        Route::get('/consumer-workspace/lead-link/conflicts/{conflict}', [ConsumerDatabaseController::class, 'showLinkConflict'])->middleware('permission:consumer_progress.manage')->name('consumer-database.workspace.lead-link-conflict.show');
+        Route::post('/consumer-workspace/lead-link/conflicts/{conflict}', [ConsumerDatabaseController::class, 'resolveLinkConflict'])->middleware(['permission:consumer_progress.manage', 'not.impersonating'])->name('consumer-database.workspace.lead-link-conflict.resolve');
+        Route::get('/consumer-workspace/lead-link/bulk-legacy/preview', [ConsumerDatabaseController::class, 'previewBulkLegacy'])->middleware('permission:consumer_progress.manage')->name('consumer-database.workspace.bulk-legacy.preview');
+        Route::post('/consumer-workspace/lead-link/bulk-legacy', [ConsumerDatabaseController::class, 'storeBulkLegacy'])->middleware(['permission:consumer_progress.manage', 'not.impersonating'])->name('consumer-database.workspace.bulk-legacy.store');
+        Route::post('/consumer-workspace/{consumerApplication}/lead-link-decision', [ConsumerDatabaseController::class, 'storeLeadLinkDecision'])->middleware('not.impersonating')->name('consumer-database.workspace.lead-link-decision.store');
+        Route::get('/consumer-workspace/link-subject/{subjectType}/{subjectId}', [ConsumerDatabaseController::class, 'showLinkSubject'])->name('consumer-database.workspace.link-subject.show');
+        Route::get('/consumer-workspace/link-subject/{subjectType}/{subjectId}/lead-options', [ConsumerDatabaseController::class, 'linkSubjectLeadOptions'])->name('consumer-database.workspace.link-subject.lead-options');
+        Route::post('/consumer-workspace/link-subject/{subjectType}/{subjectId}/lead-link-decision', [ConsumerDatabaseController::class, 'storeLeadLinkDecision'])->middleware('not.impersonating')->name('consumer-database.workspace.link-subject.lead-link-decision.store');
         Route::get('/consumer-workspace/{consumerApplication}', [ConsumerDatabaseController::class, 'show'])->middleware('permission:consumer_progress.view')->name('consumer-database.workspace.show');
         Route::get('/nups', [ConsumerNupController::class, 'index'])->middleware('permission:consumer_progress.view')->name('consumer-nups.index');
-        Route::get('/nups/create', [ConsumerNupController::class, 'create'])->middleware('permission:consumer_progress.view')->name('consumer-nups.create');
+        Route::get('/nups/create', [ConsumerNupController::class, 'create'])->middleware('permission:consumer_progress.manage')->name('consumer-nups.create');
         Route::post('/nups', [ConsumerNupController::class, 'store'])->middleware('not.impersonating')->name('consumer-nups.store');
         Route::post('/nups/{consumerNup}/convert', [ConsumerNupController::class, 'convert'])->middleware('not.impersonating')->name('consumer-nups.convert');
+        Route::post('/konsumen-progress/applications/{consumerApplication}/kembali-ke-nup', [ConsumerNupController::class, 'returnToNup'])->middleware('not.impersonating')->name('consumer-nups.return');
         Route::get('/consumer-process/selesai', [ConsumerProcessController::class, 'selesai'])->middleware('permission:consumer_progress.view')->name('consumer-process.selesai');
         Route::get('/consumer-process/{process}', [ConsumerProcessController::class, 'index'])->middleware('permission:consumer_progress.view')->name('consumer-process.index');
         Route::post('/consumer-process/applications/{consumerApplication}/slik', [ConsumerProcessController::class, 'slik'])->middleware('not.impersonating')->name('consumer-process.slik');
@@ -357,11 +407,18 @@ Route::middleware(['auth', 'active', 'verified', 'password.changed', 'operationa
     Route::bind('dana_talangan', fn ($v) => DanaTalangan::findOrFail($v));
     Route::middleware('module.maintenance:dana_talangan')->group(function () {
         Route::get('dana-talangan/kavling-options', [DanaTalanganController::class, 'kavlingOptions'])->middleware('permission:bridge_fund.view')->name('dana-talangan.kavling-options');
+        Route::get('dana-talangan/consumer-options', [DanaTalanganController::class, 'consumerOptions'])->middleware('permission:bridge_fund.view')->name('dana-talangan.consumer-options');
+        Route::post('dana-talangan/{dana_talangan}/payments', [DanaTalanganPaymentController::class, 'store'])->middleware(['permission:bridge_fund.manage', 'not.impersonating'])->name('dana-talangan.payments.store');
+        Route::put('dana-talangan/{dana_talangan}/payments/{payment}', [DanaTalanganPaymentController::class, 'update'])->middleware(['permission:bridge_fund.manage', 'not.impersonating'])->name('dana-talangan.payments.update');
+        Route::delete('dana-talangan/{dana_talangan}/payments/{payment}', [DanaTalanganPaymentController::class, 'destroy'])->middleware(['permission:bridge_fund.manage', 'not.impersonating'])->name('dana-talangan.payments.destroy');
+        Route::get('dana-talangan/{dana_talangan}/payments/{payment}/evidence', [DanaTalanganPaymentController::class, 'evidence'])->middleware('permission:bridge_fund.view')->name('dana-talangan.payments.evidence');
         Route::post('dana-talangan/sync', [DanaTalanganController::class, 'sync'])->middleware(['operational.module:spreadsheet_sync', 'permission:bridge_fund.manage_all', 'can:manageAll,App\\Models\\DanaTalangan', 'not.impersonating'])->name('dana-talangan.sync');
         Route::get('dana-talangan/sync/status', [DanaTalanganController::class, 'syncStatus'])->middleware(['operational.module:spreadsheet_sync', 'permission:bridge_fund.manage_all', 'can:manageAll,App\\Models\\DanaTalangan'])->name('dana-talangan.sync-status');
         Route::get('dana-talangan/reconciliation', [DanaTalanganController::class, 'reconciliation'])->middleware(['operational.module:spreadsheet_sync', 'permission:bridge_fund.manage_all', 'can:manageAll,App\\Models\\DanaTalangan'])->name('dana-talangan.reconciliation');
         Route::post('dana-talangan/reconciliation/{reconciliationItem}/approve', [DanaTalanganController::class, 'approveReconciliation'])->middleware(['operational.module:spreadsheet_sync', 'permission:bridge_fund.manage_all', 'can:manageAll,App\\Models\\DanaTalangan', 'not.impersonating'])->name('dana-talangan.reconciliation.approve');
         Route::post('dana-talangan/{dana_talangan}/retry', [DanaTalanganController::class, 'retry'])->middleware(['operational.module:spreadsheet_sync', 'permission:bridge_fund.manage', 'not.impersonating'])->name('dana-talangan.retry');
+        Route::get('dana-talangan/report', [DanaTalanganController::class, 'report'])->middleware('permission:bridge_fund.view')->name('dana-talangan.report');
+        Route::get('dana-talangan/report/export', [DanaTalanganController::class, 'exportReport'])->middleware('permission:bridge_fund.export')->name('dana-talangan.report.export');
         Route::get('dana-talangan/export', [DanaTalanganController::class, 'export'])->middleware('permission:bridge_fund.export')->name('dana-talangan.export');
         Route::get('dana-talangan/export-template', [DanaTalanganController::class, 'exportTemplate'])->middleware('permission:bridge_fund.export')->name('dana-talangan.export-template');
         Route::get('dana-talangan/import', [DanaTalanganController::class, 'import'])->middleware('permission:bridge_fund.manage')->name('dana-talangan.import');

@@ -13,14 +13,14 @@ final class LocalConsumerReadService
     public function records(Branch $branch, LeadMaster $project): array
     {
         $applications = ConsumerApplication::query()
-            ->with(['customer', 'sales', 'kavling', 'legacyIdentities', 'stageEvents', 'bankProcesses'])
+            ->with(['customer', 'sales', 'kavling', 'legacyIdentities', 'processStageEvents', 'bankProcesses', 'psjbs'])
             ->where('branch_id', $branch->id)
             ->where('project_id', $project->id)
             ->get();
 
         return $applications->map(function (ConsumerApplication $application) use ($branch) {
             $identity = $application->legacyIdentities->whereNotNull('external_key')->sortByDesc('updated_at')->first();
-            $stage = $application->current_stage ?: $application->stageEvents->sortByDesc('occurred_at')->first()?->stage;
+            $stage = $application->current_stage ?: $application->processStageEvents->sortByDesc('occurred_at')->first()?->stage;
             $bank = $application->bankProcesses->sort(function ($left, $right): int {
                 $leftKey = [$left->submitted_at?->timestamp ?? PHP_INT_MIN, $left->updated_at?->timestamp ?? PHP_INT_MIN, $left->id];
                 $rightKey = [$right->submitted_at?->timestamp ?? PHP_INT_MIN, $right->updated_at?->timestamp ?? PHP_INT_MIN, $right->id];
@@ -39,7 +39,10 @@ final class LocalConsumerReadService
                 salesUserId: $application->sales_user_id,
                 kavlingLabel: $application->kavling?->kavling_code ?: $application->kavling?->name,
                 kavlingId: $application->kavling_id,
-                applicationStatus: $application->application_status,
+                applicationStatus: $application->transaction_status,
+                transactionId: $application->id_transaksi,
+                consumerId: $application->psjbs->sortByDesc('created_at')->first()?->id_kons,
+                psjbId: $application->psjbs->sortByDesc('created_at')->first()?->id_psjb,
                 currentStage: $stage,
                 bookingDate: $application->booking_date?->format('Y-m-d'),
                 akadDate: $application->akad_date?->format('Y-m-d'),

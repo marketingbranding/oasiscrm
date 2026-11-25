@@ -11,7 +11,7 @@ class CoordinatorAgendaTeamTest extends TestCase
         $view = file_get_contents(resource_path('views/crm/sales-pocketbook/coordinator-leads.blade.php'));
         $service = file_get_contents(app_path('Services/CoordinatorSalesMonitoringService.php'));
 
-        $this->assertStringContainsString('Agenda Sales Tim', $view);
+        $this->assertStringContainsString('Rencana Harian Tim', $view);
         $this->assertStringContainsString('sales_activity_category', $view);
         $this->assertStringContainsString("route('sales-agendas.store')", $view);
         $this->assertStringContainsString('route(\'sales-agendas.update\', $agenda)', $view);
@@ -33,7 +33,7 @@ class CoordinatorAgendaTeamTest extends TestCase
             'coordinator-agenda-table',
             'coordinator-agenda-mobile-cards',
             'coordinator-agenda-card',
-            'Agenda perlu diperbarui',
+            'Kegiatan perlu diperbarui',
             'coordinator-agenda-updates-count',
             'Sales PIC',
             'Lihat detail agenda',

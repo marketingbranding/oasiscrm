@@ -116,6 +116,14 @@
 
                 <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
                     <div>
+                        <label class="font-[Helvetica] font-bold text-xs uppercase block mb-1">ID Transaksi</label>
+                        <input name="id_transaksi" value="{{ old('id_transaksi') }}" maxlength="80" class="w-full border-2 border-black px-3 py-2 text-sm font-['Times_New_Roman']">
+                    </div>
+                    <div>
+                        <label class="font-[Helvetica] font-bold text-xs uppercase block mb-1">ID PSJB</label>
+                        <input name="id_psjb" value="{{ old('id_psjb') }}" maxlength="150" class="w-full border-2 border-black px-3 py-2 text-sm font-['Times_New_Roman']">
+                    </div>
+                    <div>
                         <label class="font-[Helvetica] font-bold text-xs uppercase block mb-1">Kav</label>
                         <div class="select-wrapper" data-accent="#f1c40f" style="position:relative">
                             <div class="select-display w-full border-2 px-3 py-2 text-sm font-['Times_New_Roman'] bg-white cursor-pointer select-none flex items-center justify-between border-black @error('kav') border-[#e91d2a] @enderror" tabindex="0">
@@ -222,7 +230,7 @@
                     </div>
                     <div>
                         <label class="font-[Helvetica] font-bold text-xs uppercase block mb-1">Progress Penagihan</label>
-                        <textarea name="penyelesaian" rows="3" placeholder="Contoh: Follow up WA 08 Jul, konsumen janji bayar 12 Jul, menunggu bukti transfer."
+                        <textarea name="penyelesaian" rows="3" placeholder="Contoh: Follow-up WA 08 Jul, konsumen janji bayar 12 Jul, menunggu bukti transfer."
                                   class="w-full border-2 border-black px-3 py-2 text-sm font-['Times_New_Roman'] bg-white rounded-none @error('penyelesaian') border-[#e91d2a] @enderror">{{ old('penyelesaian') }}</textarea>
                         @error('penyelesaian') <p class="text-[#e91d2a] text-xs mt-1 font-[Helvetica] font-bold">{{ $message }}</p> @enderror
                     </div>

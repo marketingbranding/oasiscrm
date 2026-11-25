@@ -4,6 +4,10 @@
 
 @section('content')
 @php
+    $stageScope = \App\Support\FeatureFlag::branchScope('lead_stages_v3');
+    $stageLabels = $stageScope === 'all' || is_array($stageScope)
+        ? array_merge(\App\Models\SalesLead::STAGES, \App\Models\SalesLead::STAGE_V3_LABELS)
+        : \App\Models\SalesLead::STAGES;
     $scopeParams = array_filter(request()->only(['branch_id', 'project_id', 'sales_user_id']), fn ($value) => filled($value));
     $periodParams = array_filter(request()->only(['period_type', 'week', 'date_from', 'date_to']), fn ($value) => filled($value));
     $tabUrl = fn (string $target) => route('sales-pocketbook.index', array_merge(
@@ -31,9 +35,9 @@
         ['tab' => 'leads'],
     ));
     $hasLeadPeriodFilter = request()->filled('period_type') || request()->filled('week') || request()->filled('date_from') || request()->filled('date_to');
-    $hasLeadFilters = collect(['branch_id', 'project_id', 'sales_user_id', 'lead_source', 'lead_source_id', 'stage', 'report_metric'])
+    $hasLeadFilters = collect(['branch_id', 'project_id', 'sales_user_id', 'lead_source', 'lead_source_id', 'stage', 'needs_attention', 'report_metric'])
         ->contains(fn (string $key) => request()->filled($key)) || $hasLeadPeriodFilter;
-    $activeLeadFilterCount = collect(['branch_id', 'project_id', 'sales_user_id', 'lead_source', 'lead_source_id', 'stage', 'report_metric'])
+    $activeLeadFilterCount = collect(['branch_id', 'project_id', 'sales_user_id', 'lead_source', 'lead_source_id', 'stage', 'needs_attention', 'report_metric'])
         ->filter(fn (string $key) => request()->filled($key))->count() + ($hasLeadPeriodFilter ? 1 : 0);
     $selectedLeadSource = $leadSourceFilter;
     $selectedLeadStage = request()->filled('stage') ? (\App\Models\SalesLead::STAGES[request('stage')] ?? null) : null;
@@ -154,7 +158,7 @@
     @endif
 
     <nav class="sales-pocketbook-tabs crm-horizontal-tabs" data-horizontal-tabs aria-label="Tampilan Buku Saku Sales">
-        @foreach(['leads' => 'Lead', 'agenda' => 'Agenda', 'report' => 'Laporan'] as $key => $label)
+        @foreach(['leads' => 'Lead', 'agenda' => 'Rencana Harian Sales', 'report' => 'Laporan'] as $key => $label)
             <a href="{{ $tabUrl($key) }}"
                @if($tab === $key) aria-current="page" @endif
                class="sales-pocketbook-tab {{ $tab === $key ? 'active' : '' }}">{{ $label }}</a>
@@ -166,13 +170,13 @@
     @elseif($tab === 'agenda')
     <x-crm.toolbar label="Filter agenda" class="sales-pocketbook-screen-section sales-agenda-toolbar">
         <div class="sales-agenda-filter-summary">
-            <strong>Daftar agenda</strong>
-            <span>{{ $agendas->total() }} agenda ditemukan{{ $activeAgendaFilterCount ? ' dengan '.$activeAgendaFilterCount.' filter aktif' : ' pada minggu berjalan' }}</span>
+            <strong>Daftar kegiatan</strong>
+            <span>{{ $agendas->total() }} kegiatan ditemukan{{ $activeAgendaFilterCount ? ' dengan '.$activeAgendaFilterCount.' filter aktif' : ' pada minggu berjalan' }}</span>
         </div>
         @if($selectedBranch)<x-crm.filter-chip label="Cabang: {{ $selectedBranch->name }}" :remove-href="$agendaFilterUrl(['branch_id'])" remove-label="Hapus filter cabang" />@endif
         @if($selectedProject)<x-crm.filter-chip label="Proyek: {{ $selectedProject->project_name }}" :remove-href="$agendaFilterUrl(['project_id'])" remove-label="Hapus filter proyek" />@endif
         @if($selectedSales)<x-crm.filter-chip label="Sales: {{ $selectedSales->name }}" :remove-href="$agendaFilterUrl(['sales_user_id'])" remove-label="Hapus filter sales" />@endif
-        @if($completedAgendaDrilldown)<x-crm.filter-chip label="Drilldown: Agenda selesai" :remove-href="$agendaFilterUrl(['report_agenda_completed'])" remove-label="Hapus drilldown agenda selesai" />@endif
+        @if($completedAgendaDrilldown)<x-crm.filter-chip label="Drilldown: Kegiatan selesai" :remove-href="$agendaFilterUrl(['report_agenda_completed'])" remove-label="Hapus drilldown kegiatan selesai" />@endif
         @if($missingAgendaResultDrilldown)<x-crm.filter-chip label="Drilldown: Hasil belum lengkap" :remove-href="$agendaFilterUrl(['report_agenda_missing_result'])" remove-label="Hapus drilldown hasil belum lengkap" />@endif
         @if($hasExplicitAgendaPeriod)<x-crm.filter-chip label="Periode: {{ $reportPeriod['start']->format('d/m/Y') }} - {{ $reportPeriod['end']->format('d/m/Y') }}" :remove-href="$agendaFilterUrl(['period_type', 'week', 'date_from', 'date_to'])" remove-label="Kembali ke minggu berjalan" />@endif
         <x-slot:actions>
@@ -196,7 +200,7 @@
     </form>
 
     <section class="sales-pocketbook-screen-section sales-agenda-monitor">
-        <header class="sales-agenda-monitor-header"><h2>{{ $monitoring ? 'Monitoring Agenda' : 'Agenda Saya' }}</h2><span>{{ $agendas->total() }} agenda</span></header>
+        <header class="sales-agenda-monitor-header"><h2>{{ $monitoring ? 'Monitoring Rencana Harian' : 'Rencana Harian Saya' }}</h2><span>{{ $agendas->total() }} kegiatan</span></header>
         <div class="sales-agenda-list">
             @forelse($agendas as $agenda)
             @php
@@ -225,15 +229,15 @@
                     @if($agenda->status === 'done' && $agenda->completed_at)<div><dt>Selesai pada</dt><dd>{{ $agenda->completed_at->format('d/m/Y H:i') }}</dd></div>@endif
                 </dl>
                 @if($agenda->rescheduledFrom)
-                    <x-crm.alert variant="info" title="Agenda pengganti" class="sales-agenda-linkage">Dijadwalkan ulang dari agenda tanggal {{ $agenda->rescheduledFrom->scheduled_date?->format('d/m/Y') ?? 'yang tidak lagi tersedia' }}.</x-crm.alert>
+                    <x-crm.alert variant="info" title="Kegiatan pengganti" class="sales-agenda-linkage">Dijadwalkan ulang dari agenda tanggal {{ $agenda->rescheduledFrom->scheduled_date?->format('d/m/Y') ?? 'yang tidak lagi tersedia' }}.</x-crm.alert>
                 @endif
                 @if($agenda->notes)<div class="sales-agenda-notes"><strong>Catatan</strong><p class="whitespace-pre-line">{{ $agenda->notes }}</p></div>@endif
                 @if($agenda->activity_result)<div class="sales-agenda-result"><strong>Hasil Aktivitas</strong><p class="whitespace-pre-line">{{ $agenda->activity_result }}</p></div>@endif
                 @if($canManageAgenda && (!in_array($agenda->status, ['done', 'cancelled', 'rescheduled'], true) || $needsMissingResult))
                     <div class="sales-agenda-action-grid">
-                        <form method="POST" action="{{ route('sales-agendas.update', $agenda) }}" x-data="{ submitting: false }" @submit="submitting = true" class="sales-agenda-action-form">@csrf @method('PATCH')<input type="hidden" name="expected_updated_at" value="{{ app(\App\Services\OptimisticLockService::class)->token($agenda) }}"><x-crm.field label="Hasil Aktivitas" for="agenda-result-{{ $agenda->id }}" required><textarea id="agenda-result-{{ $agenda->id }}" class="sales-input" name="activity_result" rows="3" required></textarea></x-crm.field><x-crm.button type="submit" variant="primary" accent="sales" x-bind:disabled="submitting" x-bind:aria-busy="submitting"><span x-show="!submitting">Tandai Selesai</span><span x-show="submitting" x-cloak>Menyimpan hasil...</span></x-crm.button><span class="sr-only" aria-live="polite" x-text="submitting ? 'Hasil agenda sedang disimpan.' : ''"></span></form>
+                        <form method="POST" action="{{ route('sales-agendas.update', $agenda) }}" x-data="{ submitting: false }" @submit="submitting = true" class="sales-agenda-action-form">@csrf @method('PATCH')<input type="hidden" name="expected_updated_at" value="{{ app(\App\Services\OptimisticLockService::class)->token($agenda) }}"><x-crm.field label="Hasil Aktivitas" for="agenda-result-{{ $agenda->id }}" required><textarea id="agenda-result-{{ $agenda->id }}" class="sales-input" name="activity_result" rows="3" required></textarea></x-crm.field><x-crm.button type="submit" variant="primary" accent="sales" x-bind:disabled="submitting" x-bind:aria-busy="submitting"><span x-show="!submitting">Tandai Selesai</span><span x-show="submitting" x-cloak>Menyimpan hasil...</span></x-crm.button><span class="sr-only" aria-live="polite" x-text="submitting ? 'Hasil kegiatan sedang disimpan.' : ''"></span></form>
                         @unless($needsMissingResult)
-                        <form method="POST" action="{{ route('sales-agendas.reschedule', $agenda) }}" x-data="{ submitting: false }" @submit="submitting = true" class="sales-agenda-action-form">@csrf<input type="hidden" name="expected_updated_at" value="{{ app(\App\Services\OptimisticLockService::class)->token($agenda) }}"><x-crm.field label="Tanggal Baru" for="agenda-reschedule-date-{{ $agenda->id }}" required><x-crm.date-field id="agenda-reschedule-date-{{ $agenda->id }}" name="scheduled_date" required /></x-crm.field><div class="sales-agenda-time-grid"><x-crm.field label="Jam Mulai" for="agenda-reschedule-start-{{ $agenda->id }}" required><x-crm.time-field id="agenda-reschedule-start-{{ $agenda->id }}" name="start_time" required /></x-crm.field><x-crm.field label="Jam Selesai" for="agenda-reschedule-end-{{ $agenda->id }}" required><x-crm.time-field id="agenda-reschedule-end-{{ $agenda->id }}" name="end_time" required /></x-crm.field></div><x-crm.button type="submit" variant="secondary" x-bind:disabled="submitting" x-bind:aria-busy="submitting"><span x-show="!submitting">Jadwalkan Ulang</span><span x-show="submitting" x-cloak>Menjadwalkan...</span></x-crm.button><span class="sr-only" aria-live="polite" x-text="submitting ? 'Agenda sedang dijadwalkan ulang.' : ''"></span></form>
+                        <form method="POST" action="{{ route('sales-agendas.reschedule', $agenda) }}" x-data="{ submitting: false }" @submit="submitting = true" class="sales-agenda-action-form">@csrf<input type="hidden" name="expected_updated_at" value="{{ app(\App\Services\OptimisticLockService::class)->token($agenda) }}"><x-crm.field label="Tanggal Baru" for="agenda-reschedule-date-{{ $agenda->id }}" required><x-crm.date-field id="agenda-reschedule-date-{{ $agenda->id }}" name="scheduled_date" required /></x-crm.field><div class="sales-agenda-time-grid"><x-crm.field label="Jam Mulai" for="agenda-reschedule-start-{{ $agenda->id }}" required><x-crm.time-field id="agenda-reschedule-start-{{ $agenda->id }}" name="start_time" required /></x-crm.field><x-crm.field label="Jam Selesai" for="agenda-reschedule-end-{{ $agenda->id }}" required><x-crm.time-field id="agenda-reschedule-end-{{ $agenda->id }}" name="end_time" required /></x-crm.field></div><x-crm.button type="submit" variant="secondary" x-bind:disabled="submitting" x-bind:aria-busy="submitting"><span x-show="!submitting">Jadwalkan Ulang</span><span x-show="submitting" x-cloak>Menjadwalkan...</span></x-crm.button><span class="sr-only" aria-live="polite" x-text="submitting ? 'Kegiatan sedang dijadwalkan ulang.' : ''"></span></form>
                         @endunless
                     </div>
                 @endif
@@ -241,8 +245,8 @@
             </article>
             @empty
                 <x-crm.empty-state
-                    :title="$missingAgendaResultDrilldown ? 'Semua hasil agenda sudah lengkap.' : ($hasAgendaFilters ? 'Tidak ada agenda yang cocok dengan filter.' : 'Belum ada agenda minggu ini.')"
-                    :description="$missingAgendaResultDrilldown ? 'Tidak ada agenda selesai yang masih membutuhkan hasil aktivitas.' : ($hasAgendaFilters ? 'Ubah atau hapus filter untuk melihat agenda lain dalam akses Anda.' : 'Agenda pada minggu berjalan akan muncul di daftar ini.')"
+                    :title="$missingAgendaResultDrilldown ? 'Semua hasil kegiatan sudah lengkap.' : ($hasAgendaFilters ? 'Tidak ada kegiatan yang cocok dengan filter.' : 'Belum ada kegiatan minggu ini.')"
+                    :description="$missingAgendaResultDrilldown ? 'Tidak ada kegiatan selesai yang masih membutuhkan hasil aktivitas.' : ($hasAgendaFilters ? 'Ubah atau hapus filter untuk melihat kegiatan lain dalam akses Anda.' : 'Kegiatan pada minggu berjalan akan muncul di daftar ini.')"
                 >
                     @if($hasAgendaFilters)
                         <x-slot:actions>
@@ -306,7 +310,8 @@
         @if($selectedSales)<x-crm.filter-chip label="Sales: {{ $selectedSales->name }}" :remove-href="$leadFilterUrl(['sales_user_id'])" remove-label="Hapus filter sales" />@endif
         @if($selectedLeadSource)<x-crm.filter-chip label="Sumber: {{ $selectedLeadSource }}" :remove-href="$leadFilterUrl(['lead_source', 'lead_source_id'])" remove-label="Hapus filter sumber lead" />@endif
         @if($selectedLeadStage)<x-crm.filter-chip label="Tahap: {{ $selectedLeadStage }}" :remove-href="$leadFilterUrl(['stage'])" remove-label="Hapus filter tahap" />@endif
-        @if($selectedReportMetric)<x-crm.filter-chip label="Drilldown: {{ $selectedReportMetric }}" :remove-href="$leadFilterUrl(['report_metric'])" remove-label="Hapus drilldown laporan" />@endif
+        @if(request()->boolean('needs_attention'))<x-crm.filter-chip label="Perlu perhatian" :remove-href="$leadFilterUrl(['needs_attention'])" remove-label="Hapus penanda perhatian" />@endif
+         @if($selectedReportMetric)<x-crm.filter-chip label="Drilldown: {{ $selectedReportMetric }}" :remove-href="$leadFilterUrl(['report_metric'])" remove-label="Hapus drilldown laporan" />@endif
         @if($hasLeadPeriodFilter)<x-crm.filter-chip label="Periode: {{ $reportPeriod['start']->format('d/m/Y') }} - {{ $reportPeriod['end']->format('d/m/Y') }}" :remove-href="$leadFilterUrl(['period_type', 'week', 'date_from', 'date_to'])" remove-label="Hapus filter periode" />@endif
         <x-slot:actions>
             @if($hasLeadFilters)<x-crm.button variant="text" :href="$leadResetUrl">Hapus semua filter</x-crm.button>@endif
@@ -318,11 +323,13 @@
         <form method="GET" action="{{ route('sales-pocketbook.index') }}" x-data="salesCascade(@js($cascadeProjects), @js($cascadeSales), @js(['branch' => request('branch_id'), 'project' => request('project_id'), 'sales' => request('sales_user_id')]))" class="sales-lead-filter-form">
             <input type="hidden" name="tab" value="leads">
             @if(request()->filled('report_metric'))<input type="hidden" name="report_metric" value="{{ request('report_metric') }}">@endif
+            @if(request()->boolean('needs_attention'))<input type="hidden" name="needs_attention" value="1">@endif
             <x-crm.field label="Cabang" for="lead-filter-branch"><select id="lead-filter-branch" class="sales-input" name="branch_id" x-model="branch" @change="branchChanged()"><option value="">Semua cabang</option>@foreach($branches as $branch)<option value="{{ $branch->id }}">{{ $branch->name }}</option>@endforeach</select></x-crm.field>
             <x-crm.field label="Proyek" for="lead-filter-project"><select id="lead-filter-project" class="sales-input" name="project_id" x-model="project" @change="projectChanged()"><option value="">Semua proyek</option>@foreach($projects as $project)<option value="{{ $project->id }}" x-show="projectVisible('{{ $project->id }}')" :disabled="!projectVisible('{{ $project->id }}')">{{ $project->project_name }}</option>@endforeach</select></x-crm.field>
             <x-crm.field label="Sales" for="lead-filter-sales"><select id="lead-filter-sales" class="sales-input" name="sales_user_id" x-model="sales"><option value="">Semua sales</option>@foreach($salesUsers as $sales)<option value="{{ $sales->id }}" x-show="salesVisible('{{ $sales->id }}')" :disabled="!salesVisible('{{ $sales->id }}')">{{ $sales->name }}</option>@endforeach</select></x-crm.field>
             <x-crm.field label="Sumber Lead" for="lead-filter-source"><select id="lead-filter-source" class="sales-input" name="lead_source"><option value="">Semua sumber</option>@foreach($leadSourceOptions as $source)<option value="{{ $source }}" @selected($selectedLeadSource === $source)>{{ $source }}</option>@endforeach</select></x-crm.field>
-            <x-crm.field label="Tahap Saat Ini" for="lead-filter-stage"><select id="lead-filter-stage" class="sales-input" name="stage"><option value="">Semua tahap</option>@foreach(\App\Models\SalesLead::STAGES as $stage => $label)<option value="{{ $stage }}" @selected(request('stage') === $stage)>{{ $label }}</option>@endforeach</select></x-crm.field>
+            <x-crm.field label="Tahap Saat Ini" for="lead-filter-stage"><select id="lead-filter-stage" class="sales-input" name="stage"><option value="">Semua tahap</option>@foreach($stageLabels as $stage => $label)<option value="{{ $stage }}" @selected(request('stage') === $stage)>{{ $label }}</option>@endforeach</select></x-crm.field>
+            <x-crm.field label="Penanda perhatian" for="lead-filter-attention"><select id="lead-filter-attention" class="sales-input" name="needs_attention"><option value="">Semua Lead</option><option value="1" @selected(request()->boolean('needs_attention'))>Perlu perhatian</option></select></x-crm.field>
             <div class="crm-field"><span class="crm-field-label" id="lead-period-label">Periode</span><div class="crm-field-control">@include('crm.sales-pocketbook._period-picker', ['periodPickerId' => 'lead-period'])</div></div>
             <div class="sales-lead-filter-actions">
                 <x-crm.button type="submit" variant="primary" accent="sales">Terapkan Filter</x-crm.button>
@@ -337,15 +344,16 @@
         <div class="sales-lead-list">
             @forelse($leads as $lead)
             @php
-                $leadStage = $lead->currentStage();
+                $leadStageV3 = \App\Support\FeatureFlag::enabledForBranch('lead_stages_v3', $lead->branch_id);
+                 $leadStage = $leadStageV3 ? $lead->resolveStageV3() : $lead->currentStage();
                 $leadActivityAt = $lead->lastActivityAt();
-                $leadStageVariant = $leadStage === 'akad_at' ? 'success' : ($leadStage ? 'processing' : 'pending');
+                $leadStageVariant = in_array($leadStage, ['utj', 'gugur'], true) ? 'success' : ($leadStage ? 'processing' : 'pending');
                 $leadEditPayload = ['id' => $lead->id, 'url' => route('sales-leads.update', $lead), 'fallback_url' => route('sales-leads.edit', $lead), 'site_visit_modal' => 'lead-site-visit-'.$lead->id, 'token' => app(\App\Services\OptimisticLockService::class)->token($lead), 'branch_id' => (string) $lead->branch_id, 'project_id' => (string) $lead->project_id, 'sales_user_id' => (string) $lead->sales_user_id, 'source' => $lead->source, 'platform' => $lead->platform, 'campaign_name' => $lead->campaign_name, 'id_promo' => $lead->id_promo, 'current_status' => $lead->current_status->value, 'current_status_label' => $lead->current_status->label(), 'status_manual' => $lead->current_status->isManual(), 'lead_date' => $lead->lead_date->toDateString(), 'customer_name' => $lead->customer_name, 'phone' => $lead->phone, 'notes' => $lead->notes, 'linked_consumer_reference' => $lead->linked_consumer_reference];
             @endphp
             <article class="sales-lead-item" data-lead-row="{{ $lead->id }}">
                 <div class="sales-lead-identity">
                     <div><span class="sales-lead-kicker">Lead <span data-lead-field="date">{{ $lead->lead_date->format('d/m/Y') }}</span></span><h3 data-lead-field="name">{{ $lead->customer_name }}</h3></div>
-                    <x-crm.status-badge :variant="$leadStageVariant" data-stage-label="{{ $lead->id }}">{{ $lead->currentStageLabel() }}</x-crm.status-badge>
+                    <x-crm.status-badge :variant="$leadStageVariant" data-stage-label="{{ $lead->id }}">{{ $leadStageV3 ? $lead->stageV3Label() : $lead->currentStageLabel() }}</x-crm.status-badge>
                 </div>
                 <dl class="sales-lead-facts">
                     <div><dt>Telepon</dt><dd data-lead-field="phone">{{ $lead->phone ?: '—' }}</dd></div>
@@ -353,10 +361,10 @@
                     <div><dt>Sumber</dt><dd data-lead-field="source">{{ $lead->effective_source ?: '—' }}</dd></div>
                     <div><dt>Cabang / Sales</dt><dd data-lead-field="assignment">{{ $lead->branch?->name }} / {{ $lead->sales?->name }}</dd></div>
                     <div><dt>Platform / Campaign</dt><dd>{{ $lead->platform ?: '—' }} / {{ $lead->campaign_name ?: '—' }}</dd></div>
-                    <div class="sales-lead-activity"><dt>Aktivitas terbaru</dt><dd><strong data-lead-activity-label="{{ $lead->id }}">{{ $leadStage ? 'Tahap '.$lead->currentStageLabel() : 'Lead dicatat' }}</strong><span data-lead-activity-time="{{ $lead->id }}" data-activity-stage="{{ $leadStage }}" data-lead-baseline="{{ $lead->lead_date->format('d/m/Y') }} 00:00">{{ $leadActivityAt?->format('d/m/Y H:i') ?: '—' }}</span></dd></div>
+                    <div class="sales-lead-activity"><dt>Aktivitas terbaru</dt><dd><strong data-lead-activity-label="{{ $lead->id }}">{{ $leadStage ? 'Tahap '.($leadStageV3 ? $lead->stageV3Label() : $lead->currentStageLabel()) : 'Lead dicatat' }}</strong><span data-lead-activity-time="{{ $lead->id }}" data-activity-stage="{{ $leadStage }}" data-lead-baseline="{{ $lead->lead_date->format('d/m/Y') }} 00:00">{{ $leadActivityAt?->format('d/m/Y H:i') ?: '—' }}</span></dd></div>
                 </dl>
                 @include('crm.sales-pocketbook._lead-lifecycle', ['lead' => $lead])
-                @can('updateStage', $lead)<div class="sales-lead-progress"><span class="sales-lead-section-label">Perbarui progres</span>@include('crm.sales-pocketbook._stage-controls', ['lead' => $lead])</div>@endcan
+                @can($leadStageV3 ? 'updateStageV3' : 'updateStage', $lead)<div class="sales-lead-progress"><span class="sales-lead-section-label">Perbarui progres</span>@include('crm.sales-pocketbook._stage-controls', ['lead' => $lead])</div>@endcan
                 <footer class="sales-lead-actions">
                     @can('viewSiteVisit', $lead)<x-crm.button variant="text" :href="route('sales-leads.show', $lead)">Detail</x-crm.button>@endcan
                     @if(auth()->user()->hasPermission('comments.view'))<x-crm.button variant="text" :href="route('comments.thread', ['alias' => 'sales-lead', 'id' => $lead->id])">Komentar ({{ $lead->comments_count }})</x-crm.button>@endif
@@ -423,8 +431,8 @@
 window.salesPocketbook = function salesPocketbook() {
     const projects = @js($cascadeProjects);
     const salesUsers = @js($cascadeSales);
-    const leadStages = @js(array_keys(\App\Models\SalesLead::STAGES));
-    const leadStageLabels = @js(\App\Models\SalesLead::STAGES);
+    const leadStages = @js($stageScope === 'all' || is_array($stageScope) ? array_values(array_unique(array_merge(\App\Models\SalesLead::STAGE_V3_ORDER, array_keys(\App\Models\SalesLead::STAGES)))) : array_keys(\App\Models\SalesLead::STAGES));
+    const leadStageLabels = @js($stageLabels);
     const localParts = value => {
         const date = value ? new Date(value.replace(' ', 'T')) : new Date()
         return {
@@ -628,7 +636,7 @@ window.salesPocketbook = function salesPocketbook() {
                 const response = await fetch(button.dataset.url, {
                     method: 'PATCH',
                     headers: { 'Content-Type': 'application/json', Accept: 'application/json', 'X-CSRF-TOKEN': @json(csrf_token()) },
-                    body: JSON.stringify({ stage: button.dataset.stage, action: reverse ? 'reverse' : 'set', timestamp: reverse ? null : `${this.stageEdit.date} ${this.stageEdit.time}`, reversal_confirmed: reverse ? 1 : null, expected_updated_at: controls.dataset.token }),
+                    body: JSON.stringify({ stage: button.dataset.stage, action: reverse ? 'reverse' : 'set', reason: reverse ? 'Koreksi Data dari Buku Saku' : null, timestamp: reverse ? null : `${this.stageEdit.date} ${this.stageEdit.time}`, reversal_confirmed: reverse ? 1 : null, expected_updated_at: controls.dataset.token }),
                 })
                 const data = await this.responseData(response)
                 if (response.status === 409) {
@@ -650,7 +658,7 @@ window.salesPocketbook = function salesPocketbook() {
                 document.querySelectorAll(`[data-stage-label="${controls.dataset.leadId}"]`).forEach(el => {
                     el.textContent = data.current_stage_label
                     el.classList.remove('crm-status-badge--pending', 'crm-status-badge--processing', 'crm-status-badge--success')
-                    el.classList.add(currentStage === 'akad_at' ? 'crm-status-badge--success' : (currentStage ? 'crm-status-badge--processing' : 'crm-status-badge--pending'))
+                    el.classList.add(['utj', 'gugur'].includes(currentStage) ? 'crm-status-badge--success' : (currentStage ? 'crm-status-badge--processing' : 'crm-status-badge--pending'))
                 })
                 document.querySelectorAll(`[data-lead-activity-label="${controls.dataset.leadId}"]`).forEach(el => { el.textContent = currentStage ? `Tahap ${leadStageLabels[currentStage]}` : 'Lead dicatat' })
                 document.querySelectorAll(`[data-lead-activity-time="${controls.dataset.leadId}"]`).forEach(el => {

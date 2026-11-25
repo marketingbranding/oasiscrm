@@ -18,6 +18,9 @@
             <span class="hidden h-5 w-px bg-white/25 lg:block" aria-hidden="true"></span>
             <span class="hidden truncate text-xs font-normal text-gray-300 lg:block">{{ $activeGroup['label'] }}</span>
         @endif
+        @if($user->isSales())
+            <span class="sr-only">Aktivitas</span>
+        @endif
     </div>
 
     <div class="flex shrink-0 items-center gap-1">

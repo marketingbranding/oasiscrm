@@ -192,7 +192,7 @@ class CollaborationNotificationService
     {
         return match (true) {
             $record instanceof DanaTalangan => 'Dana Talangan atas nama '.($record->nama_konsumen ?: 'tanpa nama'),
-            $record instanceof ContentItem => 'Work Planner "'.($record->title ?: 'tanpa judul').'"',
+            $record instanceof ContentItem => 'Tugas & Konten "'.($record->title ?: 'tanpa judul').'"',
             $record instanceof DatabaseSheetRecord => 'baris Database '.$record->sheet_name,
             $record instanceof SalesLead => 'lead Buku Saku',
             $record instanceof SalesDailyPlan => 'Daily Plan tanggal '.($record->plan_date?->format('d/m/Y') ?: 'tanpa tanggal'),

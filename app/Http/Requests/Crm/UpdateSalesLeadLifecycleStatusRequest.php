@@ -3,6 +3,7 @@
 namespace App\Http\Requests\Crm;
 
 use App\Enums\SalesLeadStatus;
+use App\Support\FeatureFlag;
 use Illuminate\Validation\Rule;
 
 class UpdateSalesLeadLifecycleStatusRequest extends SalesLeadLifecycleRequest
@@ -14,6 +15,14 @@ class UpdateSalesLeadLifecycleStatusRequest extends SalesLeadLifecycleRequest
 
     public function rules(): array
     {
+        if (FeatureFlag::enabledForBranch('lead_stages_v3', $this->lead()?->branch_id)) {
+            return $this->operationRules() + [
+                'status' => ['required', 'in:gugur'],
+                'reason' => ['required', 'string', 'max:255'],
+                'project_id' => ['prohibited'],
+            ];
+        }
+
         return $this->operationRules() + [
             'status' => ['required', Rule::in(array_map(fn (SalesLeadStatus $status) => $status->value, SalesLeadStatus::MANUAL))],
             'project_id' => ['prohibited'],

@@ -15,12 +15,14 @@ use App\Models\User;
 use App\Services\CoordinatorLeadTeamService;
 use App\Services\CoordinatorSalesMonitoringService;
 use App\Services\CrmAuthorizationService;
+use App\Services\LeadAttentionService;
 use App\Services\OptimisticLockService;
 use App\Services\PromoOptionService;
 use App\Services\SalesAgendaEvidenceAuthorizationService;
 use App\Services\SalesAgendaEvidenceUploadService;
 use App\Services\SalesAgendaProjectResolver;
 use App\Services\SalesAgendaReceiptService;
+use App\Services\SalesAgendaSubmissionAttentionService;
 use App\Services\SalesAgendaWeekNavigationService;
 use App\Services\SalesDailyReminderService;
 use App\Services\SalesPocketbookOnboardingService;
@@ -52,6 +54,8 @@ class SalesAgendaController extends Controller
         private readonly PromoOptionService $promoOptions,
         private readonly SalesDailyReminderService $dailyReminder,
         private readonly SalesPocketbookOnboardingService $onboarding,
+        private readonly LeadAttentionService $leadAttention,
+        private readonly SalesAgendaSubmissionAttentionService $submissionAttention,
         private readonly SalesAgendaReceiptService $receiptService,
         private readonly SalesAgendaWeekNavigationService $weekNavigation,
     ) {}
@@ -120,7 +124,7 @@ class SalesAgendaController extends Controller
         $resumeReceipt = $request->boolean('resume_receipt')
             && $agendaView === 'day'
             && ! $daySubmission
-            && ! $receiptSummary['is_weekend']
+            && $receiptSummary['requires_target']
             && $agendas->isNotEmpty();
         $allAgendas = $agendaView === 'all'
             ? (clone $agendaBaseQuery)
@@ -157,9 +161,10 @@ class SalesAgendaController extends Controller
             ]];
         });
         $leadStatus = $request->query('lead_status', 'open');
-        $leadQuery = SalesLead::query()
+        $leadQuery = $this->leadAttention->decorate(SalesLead::query()
             ->visibleTo($request->user())
-            ->where('sales_user_id', $request->user()->id)
+            ->activeForLeadViews()
+            ->where('sales_user_id', $request->user()->id))
             ->with(['branch:id,name', 'project:id,project_name']);
         $openLeadCount = (clone $leadQuery)->whereNull('completed_at')->count();
         $completedLeadCount = (clone $leadQuery)->whereNotNull('completed_at')->count();
@@ -169,6 +174,17 @@ class SalesAgendaController extends Controller
             ->latest('id')
             ->paginate(20, ['*'], 'lead_page')
             ->withQueryString();
+        $followUpLeads = $this->leadAttention->decorate(SalesLead::query()
+            ->visibleTo($request->user())
+            ->activeForLeadViews())
+            ->where('sales_user_id', $request->user()->id)
+            ->whereNull('completed_at')
+            ->whereHas('latestFollowUpSiteVisit')
+            ->with(['project:id,project_name', 'latestFollowUpSiteVisit'])
+            ->latest('lead_date')
+            ->latest('id')
+            ->limit(10)
+            ->get();
         $projects = $this->workspaceAccess->accessibleProjects($request->user())->where('is_active', true)->values();
         $defaultProjectId = old('project_id', $request->query('project_id', $project?->id));
         $leadDate = $this->normalizeLeadDate(old('lead_date', $request->query('lead_date', today()->toDateString())));
@@ -187,8 +203,9 @@ class SalesAgendaController extends Controller
             'missingResultUrl' => route('sales-agendas.index', ['tab' => 'agenda']).'#agenda-list',
         ];
         $canExport = $request->user()->hasPermission('sales_pocketbook.export_own');
+        $submissionAttention = $this->submissionAttention->summaryFor($request->user(), CarbonImmutable::now(config('app.timezone')));
 
-        return view('crm.sales-pocketbook.sales-agenda', compact('project', 'agendas', 'allAgendas', 'agendaView', 'incompleteAgendaCount', 'agendaGroups', 'leads', 'leadStatus', 'openLeadCount', 'completedLeadCount', 'tab', 'projects', 'defaultProjectId', 'cascadeProjects', 'leadOptionsEndpoint', 'leadDate', 'promos', 'dailyReminder', 'canExport', 'agendaDate', 'agendaWeek', 'receiptSummary', 'daySubmission', 'incompletePreviousAgendas', 'showSalesTour', 'resumeReceipt'));
+        return view('crm.sales-pocketbook.sales-agenda', compact('project', 'agendas', 'allAgendas', 'agendaView', 'incompleteAgendaCount', 'agendaGroups', 'leads', 'followUpLeads', 'leadStatus', 'openLeadCount', 'completedLeadCount', 'tab', 'projects', 'defaultProjectId', 'cascadeProjects', 'leadOptionsEndpoint', 'leadDate', 'promos', 'dailyReminder', 'canExport', 'agendaDate', 'agendaWeek', 'receiptSummary', 'daySubmission', 'incompletePreviousAgendas', 'showSalesTour', 'resumeReceipt', 'submissionAttention'));
     }
 
     private function normalizeLeadDate(mixed $value): string

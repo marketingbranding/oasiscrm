@@ -13,11 +13,12 @@ use App\Services\SalesPocketbookOnboardingService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Route;
+use Tests\Concerns\FreezesSalesAgendaTime;
 use Tests\TestCase;
 
 class SalesAgendaOnlyWorkspaceTest extends TestCase
 {
-    use RefreshDatabase;
+    use FreezesSalesAgendaTime, RefreshDatabase;
 
     public function test_daily_planning_is_not_an_active_route_or_navigation_destination(): void
     {
@@ -59,7 +60,7 @@ class SalesAgendaOnlyWorkspaceTest extends TestCase
 
         $response->assertOk()
             ->assertSee($agenda->title)
-            ->assertSee('+ Tambah agenda ke struk')
+            ->assertSee('+ Tambah kegiatan ke rencana')
             ->assertDontSee('Daily Planning')
             ->assertDontSee('Kertas Agenda Harian')
             ->assertSee('480 menit');
@@ -90,7 +91,7 @@ class SalesAgendaOnlyWorkspaceTest extends TestCase
             ->assertSee('sales-receipt-workspace', false)
             ->assertSee('data-agenda-week-navigation', false)
             ->assertSeeText('Minggu agenda')
-            ->assertSeeText('+ Tambah agenda ke struk');
+            ->assertSeeText('+ Tambah kegiatan ke rencana');
     }
 
     public function test_coordinator_sees_only_buku_saku_agendas_owned_by_current_team_sales(): void

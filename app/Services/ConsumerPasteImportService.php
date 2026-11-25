@@ -50,6 +50,7 @@ class ConsumerPasteImportService
         'bank' => 'bank', 'bank name' => 'bank', 'status bank' => 'bank_status', 'bank status' => 'bank_status',
         'external id' => 'external_id', 'external_id' => 'external_id', 'id lead' => 'external_id', 'id_lead' => 'external_id',
         'external sync id' => 'external_id', 'external_sync_id' => 'external_id', 'oasis sync id' => 'external_id', 'oasis_sync_id' => 'external_id',
+        '[sys] id konsumen' => 'id_kons', 'id konsumen' => 'id_kons', 'id_kons' => 'id_kons',
     ];
 
     private const STAGE_ALIASES = [
@@ -201,7 +202,8 @@ class ConsumerPasteImportService
         $customer = $this->resolveCustomer($data, $sensitiveData);
         $customerCreated = $customer->wasRecentlyCreated;
         $application = ConsumerApplication::create(['customer_id' => $customer->id, 'branch_id' => $batch->branch_id, 'project_id' => $batch->project_id, 'sales_user_id' => $data['sales_user_id'] ?? null, 'kavling_id' => $data['kavling_id'] ?? null, 'promo_id' => $data['promo_id'] ?? null, 'application_status' => 'draft', 'consumer_status' => $data['consumer_status'] ?? null, 'transaction_status' => $data['transaction_status'] ?? null, 'payment_method' => $data['payment_method'] ?? (isset($data['status_cash']) ? ((bool) $data['status_cash'] ? 'cash' : 'kpr') : null), 'entry_mode' => 'historical', 'acquisition_source' => 'import', 'status_cash' => $data['status_cash'] ?? null, 'current_stage' => $data['current_stage'] ?? null, 'current_process' => $data['current_process'] ?? $this->canonicalProcess($data['current_stage'] ?? null), 'current_process_source' => 'import', 'source_last_process' => $data['source_last_process'] ?? null, 'source_completeness_status' => $data['source_completeness_status'] ?? null, 'booking_date' => $data['booking_date'] ?? null, 'akad_date' => $data['akad_date'] ?? null, 'notes' => $data['notes'] ?? null, 'sales_lead_id' => $data['sales_lead_id'] ?? null]);
-        ConsumerLegacyIdentity::create(['consumer_application_id' => $application->id, 'customer_id' => $customer->id, 'legacy_source' => self::SOURCE, 'spreadsheet_id' => 'manual-paste', 'sheet_name' => (string) $batch->project_id, 'external_key' => $data['external_key'], 'source_payload_hash' => hash('sha256', json_encode($data)), 'first_seen_at' => now(), 'last_seen_at' => now(), 'mapping_status' => 'imported']);
+        ConsumerLegacyIdentity::create(['consumer_application_id' => $application->id, 'customer_id' => $customer->id, 'legacy_source' => self::SOURCE, 'spreadsheet_id' => 'manual-paste', 'sheet_name' => (string) $batch->project_id, 'external_key' => $data['external_key'], 'id_kons' => $data['id_kons'] ?? null, 'source_payload_hash' => hash('sha256', json_encode($data)), 'first_seen_at' => now(), 'last_seen_at' => now(), 'mapping_status' => 'imported']);
+        app(ConsumerLeadLinkCarryOverService::class)->carryApplication($application);
         if (! empty($data['current_stage'])) {
             ConsumerStageEvent::create(['consumer_application_id' => $application->id, 'stage' => $data['current_stage'], 'status' => 'current', 'source' => self::SOURCE, 'source_id' => $data['external_key']]);
         }
@@ -302,7 +304,7 @@ class ConsumerPasteImportService
             if ($raw['name'] === '') {
                 $errors[] = 'Nama Konsumen wajib diisi.';
             }
-            $normalized = ['name' => $raw['name'], 'phone' => $raw['phone'] ?? null, 'project' => $raw['project'] ?? null, 'sales' => $raw['sales'] ?? null, 'kavling' => $raw['kavling'] ?? null, 'promo' => $raw['promo'] ?? null, 'application_status' => 'draft', 'consumer_status' => $raw['consumer_status'] ?? null, 'current_stage' => $this->stage($raw['stage'] ?? null), 'source_last_process' => $raw['source_last_process'] ?? null, 'source_completeness_status' => $raw['status'] ?? null, 'booking_date' => $this->date($raw['booking_date'] ?? null), 'akad_date' => $this->date($raw['akad_date'] ?? null), 'bank' => $raw['bank'] ?? null, 'bank_status' => $raw['bank_status'] ?? null, 'external_id' => $raw['external_id'] ?? null, 'date_of_birth' => $this->date($raw['date_of_birth'] ?? null), 'occupation' => $raw['occupation'] ?? null, 'occupation_detail' => $raw['occupation_detail'] ?? null, 'address' => $raw['address'] ?? null, 'kelurahan' => $raw['kelurahan'] ?? null, 'kecamatan' => $raw['kecamatan'] ?? null, 'kabupaten_kota' => $raw['kabupaten_kota'] ?? null, 'emergency_contact_name' => $raw['emergency_contact_name'] ?? null, 'emergency_contact_phone' => $raw['emergency_contact_phone'] ?? null, 'status_cash' => $this->boolean($raw['status_cash'] ?? null), 'notes' => $raw['notes'] ?? null];
+            $normalized = ['name' => $raw['name'], 'phone' => $raw['phone'] ?? null, 'project' => $raw['project'] ?? null, 'sales' => $raw['sales'] ?? null, 'kavling' => $raw['kavling'] ?? null, 'promo' => $raw['promo'] ?? null, 'application_status' => 'draft', 'consumer_status' => $raw['consumer_status'] ?? null, 'current_stage' => $this->stage($raw['stage'] ?? null), 'source_last_process' => $raw['source_last_process'] ?? null, 'source_completeness_status' => $raw['status'] ?? null, 'booking_date' => $this->date($raw['booking_date'] ?? null), 'akad_date' => $this->date($raw['akad_date'] ?? null), 'bank' => $raw['bank'] ?? null, 'bank_status' => $raw['bank_status'] ?? null, 'external_id' => $raw['external_id'] ?? null, 'id_kons' => $raw['id_kons'] ?? null, 'date_of_birth' => $this->date($raw['date_of_birth'] ?? null), 'occupation' => $raw['occupation'] ?? null, 'occupation_detail' => $raw['occupation_detail'] ?? null, 'address' => $raw['address'] ?? null, 'kelurahan' => $raw['kelurahan'] ?? null, 'kecamatan' => $raw['kecamatan'] ?? null, 'kabupaten_kota' => $raw['kabupaten_kota'] ?? null, 'emergency_contact_name' => $raw['emergency_contact_name'] ?? null, 'emergency_contact_phone' => $raw['emergency_contact_phone'] ?? null, 'status_cash' => $this->boolean($raw['status_cash'] ?? null), 'notes' => $raw['notes'] ?? null];
             $sensitiveData = ['nik' => $this->normalizeNik($raw['nik'] ?? null)];
             if ($sensitiveData['nik'] !== null && ! preg_match('/^\d{16}$/', $sensitiveData['nik'])) {
                 $errors[] = 'NIK harus berupa 16 digit.';
@@ -464,7 +466,7 @@ class ConsumerPasteImportService
 
     private function identityStable(array $data): bool
     {
-        return trim((string) ($data['external_id'] ?? '')) !== '' || trim((string) ($data['phone'] ?? '')) !== '' || trim((string) ($data['kavling'] ?? '')) !== '';
+        return trim((string) ($data['external_id'] ?? '')) !== '' || trim((string) ($data['id_kons'] ?? '')) !== '' || trim((string) ($data['phone'] ?? '')) !== '' || trim((string) ($data['kavling'] ?? '')) !== '';
     }
 
     private function counts(array $rows): array

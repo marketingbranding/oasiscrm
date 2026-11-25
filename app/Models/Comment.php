@@ -14,7 +14,7 @@ class Comment extends Model
     use SoftDeletes;
 
     protected $fillable = [
-        'commentable_type', 'commentable_id', 'user_id', 'parent_id', 'body', 'body_plain', 'edited_at', 'lock_version',
+        'commentable_type', 'commentable_id', 'user_id', 'parent_id', 'body', 'body_plain', 'source', 'edited_at', 'lock_version',
     ];
 
     protected function casts(): array

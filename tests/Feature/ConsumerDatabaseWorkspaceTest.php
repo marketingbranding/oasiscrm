@@ -4,14 +4,19 @@ namespace Tests\Feature;
 
 use App\Models\ActivityLog;
 use App\Models\Branch;
+use App\Models\BranchMigrationState;
 use App\Models\ConsumerApplication;
 use App\Models\ConsumerBankProcess;
+use App\Models\ConsumerLeadLinkDecision;
+use App\Models\ConsumerNup;
 use App\Models\Customer;
+use App\Models\KonsumenProgressSheetRow;
 use App\Models\LeadMaster;
 use App\Models\Role;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Tests\TestCase;
 
 class ConsumerDatabaseWorkspaceTest extends TestCase
@@ -40,6 +45,29 @@ class ConsumerDatabaseWorkspaceTest extends TestCase
             ->assertOk()
             ->assertSee('Konsumen Terlihat')
             ->assertDontSee('Konsumen Rahasia');
+    }
+
+    public function test_br_link_status_filter_counts_and_paginates_all_300_sheet_rows_after_decisions(): void
+    {
+        [$user, $branch, $project] = $this->context();
+        $user->assignedProjects()->syncWithoutDetaching([$project->id => ['is_active' => true, 'is_primary' => true]]);
+        $rows = collect(range(1, 300))->map(function (int $number) use ($branch, $project, $user): KonsumenProgressSheetRow {
+            $key = 'BULK-'.$number;
+            $row = KonsumenProgressSheetRow::create(['branch_id' => $branch->id, 'sheet_id' => 'sheet', 'sheet_name' => 'data_konsumen', 'row_hash' => 'bulk-'.$number, 'row_data' => ['[SYS] ID Konsumen' => $key, 'Proyek' => $project->project_name, 'Sales' => $user->name, 'Nama Konsumen' => 'Konsumen '.$number]]);
+            if ($number <= 280) {
+                ConsumerLeadLinkDecision::create(['branch_id' => $branch->id, 'legacy_consumer_key' => strtolower($key), 'legacy_sheet_row_id' => $row->id, 'subject_type' => 'sheet', 'subject_key' => 'sheet:'.$branch->id.':'.strtolower($key), 'status' => 'legacy', 'decision_source' => 'manual', 'reason' => 'Data lama', 'decided_at' => now(), 'is_active' => true]);
+            }
+
+            return $row;
+        });
+
+        $response = $this->actingAs($user)->get(route('consumer-database.workspace', ['branch_id' => $branch->id, 'link_status' => 'undecided']));
+
+        $response->assertOk()->assertSee('Konsumen 300')->assertSee('20 subjek')->assertSee('0–0 dari 0');
+        foreach ($rows->take(280) as $row) {
+            $number = (int) str_replace('bulk-', '', $row->row_hash);
+            $this->assertStringNotContainsString('>Konsumen '.$number.'<', $response->getContent());
+        }
     }
 
     public function test_workspace_rejects_requested_foreign_context_and_detail(): void
@@ -99,6 +127,11 @@ class ConsumerDatabaseWorkspaceTest extends TestCase
             'status' => 'complete',
             'occurred_at' => now(),
         ]);
+        $application->stageEvents()->create([
+            'stage' => 'transaction_event',
+            'event_type' => 'KOREKSI_DATA',
+            'occurred_at' => now(),
+        ]);
         $application->bankProcesses()->create([
             'bank_name' => 'Bank Contoh',
             'status' => 'approved',
@@ -113,11 +146,52 @@ class ConsumerDatabaseWorkspaceTest extends TestCase
             ->assertOk()
             ->assertJsonPath('data.overview.customer_name', 'Detail Konsumen')
             ->assertJsonPath('data.process.0.stage', 'PSJB')
+            ->assertJsonCount(1, 'data.process')
             ->assertJsonPath('data.payment.0.bank_name', 'Bank Contoh')
             ->assertJsonPath('data.payment.0.no_sp3k', 'SP3K-TEST-001')
             ->assertJsonPath('data.counts.process', 1)
             ->assertJsonPath('data.counts.payment', 1)
-            ->assertJsonMissingPath('data.overview.nik');
+            ->assertJsonMissingPath('data.overview.nik')
+            ->assertJsonPath('data.can_input', false);
+    }
+
+    public function test_detail_exposes_can_input_false_for_sheet_branch(): void
+    {
+        [$user, $branch, $project] = $this->context();
+        $application = $this->application($branch, $project, 'Cabang Sheet', 'Lanjut');
+        BranchMigrationState::query()->create(['branch_id' => $branch->id, 'state' => BranchMigrationState::STATE_SHEET]);
+
+        $this->actingAs($user)
+            ->getJson(route('consumer-database.workspace.show', $application))
+            ->assertOk()
+            ->assertJsonPath('data.can_input', false)
+            ->assertJsonPath('data.actions.return_to_nup', null)
+            ->assertJsonPath('data.actions.resolve_issue', null);
+    }
+
+    public function test_detail_exposes_nup_history_for_returned_and_reconverted_transactions(): void
+    {
+        [$user, $branch, $project] = $this->context();
+        $application = $this->application($branch, $project, 'Riwayat NUP', 'Lanjut');
+        $returned = ConsumerNup::factory()->create([
+            'customer_id' => $application->customer_id,
+            'branch_id' => $branch->id,
+            'project_id' => $project->id,
+            'source_application_id' => $application->id,
+            'converted_application_id' => $application->id,
+            'entry_type' => 'returned',
+            'notes' => 'Kendala pembayaran',
+        ]);
+
+        $this->actingAs($user)
+            ->getJson(route('consumer-database.workspace.show', $application))
+            ->assertOk()
+            ->assertJsonPath('data.nup_history.0.id', $returned->id)
+            ->assertJsonPath('data.nup_history.0.source_transaction', $application->id_transaksi)
+            ->assertJsonPath('data.nup_history.0.converted_transaction', $application->id_transaksi)
+            ->assertJsonPath('data.nup_history.0.source_kavling', null)
+            ->assertJsonPath('data.nup_history.0.converted_kavling', null)
+            ->assertJsonPath('data.nup_history.0.reason', 'Kendala pembayaran');
     }
 
     public function test_detail_returns_human_readable_activity_and_process_labels(): void
@@ -147,6 +221,17 @@ class ConsumerDatabaseWorkspaceTest extends TestCase
             ->assertJsonPath('data.activity.0.description', $user->name.' - Rumah Siap 100% dicatat')
             ->assertJsonPath('data.activity.0.source', 'Manual')
             ->assertJsonMissingPath('data.activity.0.properties');
+    }
+
+    public function test_transaction_event_migration_is_idempotent(): void
+    {
+        $migration = require database_path('migrations/2026_11_21_150000_add_transaction_event_types.php');
+        $migration->up();
+        $migration->up();
+
+        $this->assertTrue(Schema::hasColumn('consumer_stage_events', 'event_type'));
+        $this->assertTrue(Schema::hasIndex('consumer_stage_events', 'consumer_stage_events_application_event_time_index'));
+        $this->assertSame(1, DB::table('changelogs')->whereNull('version')->where('title', 'Menambahkan histori event transaksi bertipe')->count());
     }
 
     public function test_workspace_changelog_is_idempotent_and_visible(): void

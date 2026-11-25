@@ -11,7 +11,7 @@ class SalesFeeReportRequest extends FormRequest
         $user = $this->user();
 
         return $user !== null
-            && ($user->hasPrimaryRole('admin') || $user->isSuperadmin())
+            && ($user->isAdminCabang() || $user->isSuperadmin())
             && $user->hasPermission('sales_pocketbook.export')
             && $user->hasScopedPermission('sales_pocketbook', 'export');
     }

@@ -10,15 +10,22 @@
     $canComplete = Auth::user()->isSales() && (int) $lead->sales_user_id === (int) Auth::id() && Auth::user()->hasPermission('sales_pocketbook.manage_own');
     $canUpdateLifecycle = Auth::user()->can('updateLifecycleStatus', $lead);
     $canMarkUtj = Auth::user()->can('markUtjDirect', $lead);
-    $statusVariant = $lead->current_status === \App\Enums\SalesLeadStatus::Akad ? 'success' : 'neutral';
-    $currentStep = match ($lead->current_status) {
-        \App\Enums\SalesLeadStatus::NoResponse => 1,
-        \App\Enums\SalesLeadStatus::Discussion, \App\Enums\SalesLeadStatus::FaceToFace => 2,
-        \App\Enums\SalesLeadStatus::SiteVisit, \App\Enums\SalesLeadStatus::Utj => 3,
-        \App\Enums\SalesLeadStatus::SlikCheck, \App\Enums\SalesLeadStatus::SlikRejected => 4,
-        \App\Enums\SalesLeadStatus::Akad => 5,
-        default => 1,
-    };
+    $normalConsumer = $lead->consumerLinks->first(fn ($link) => $link->sheet_type === 'data_konsumen' && $link->status === 'completed');
+    $akad = $lead->akadLinks->firstWhere('status', 'completed');
+    $consumerApplication = $normalConsumer?->consumerApplication;
+    $documentsComplete = $lead->documents_completed_at !== null || ($consumerApplication?->documents?->isNotEmpty() && $consumerApplication->documents->every(fn ($document) => $document->status === 'completed' || $document->verified_at !== null));
+    $stageV3 = \App\Support\FeatureFlag::enabledForBranch('lead_stages_v3', $lead->branch_id);
+    $statusVariant = $stageV3 && in_array($lead->resolveStageV3(), ['utj', 'gugur'], true) ? 'success' : ($lead->current_status === \App\Enums\SalesLeadStatus::Akad ? 'success' : 'neutral');
+    $currentStep = $stageV3
+        ? min(array_search($lead->resolveStageV3(), \App\Models\SalesLead::STAGE_V3_ORDER, true) + 1, 5)
+        : match ($lead->current_status) {
+            \App\Enums\SalesLeadStatus::NoResponse => 1,
+            \App\Enums\SalesLeadStatus::Discussion, \App\Enums\SalesLeadStatus::FaceToFace => 2,
+            \App\Enums\SalesLeadStatus::SiteVisit, \App\Enums\SalesLeadStatus::Utj => 3,
+            \App\Enums\SalesLeadStatus::SlikCheck, \App\Enums\SalesLeadStatus::SlikRejected => 4,
+            \App\Enums\SalesLeadStatus::Akad => 5,
+            default => 1,
+        };
     if ($lead->completed_at) {
         $currentStep = 5;
     }
@@ -28,6 +35,11 @@
             'label' => $history->status instanceof \App\Enums\SalesLeadStatus ? $history->status->label() : ucfirst(str_replace('_', ' ', (string) $history->status)),
             'detail' => null,
         ]))
+        ->concat($stageV3 ? $lead->stageHistories->map(fn ($history) => [
+            'date' => $history->changed_at,
+            'label' => \App\Models\SalesLead::STAGE_V3_LABELS[$history->to_stage] ?? $history->to_stage,
+            'detail' => $history->reason,
+        ]) : collect())
         ->concat($lead->siteVisits->filter(fn ($visit) => $visit->is_completed)->map(fn ($visit) => [
             'date' => $visit->visited_at ?? $visit->visit_date,
             'label' => 'Cek Lokasi · '.ucfirst($visit->visit_status),
@@ -45,7 +57,7 @@
     <header class="sales-lead-detail-mobile-header">
         <p>{{ $lead->branch?->name ?: '-' }} <span aria-hidden="true">·</span> {{ $lead->project?->project_name ?: '-' }}</p>
         <h1>{{ $lead->customer_name }}</h1>
-        <x-crm.status-badge :variant="$statusVariant">{{ $lead->current_status->label() }}</x-crm.status-badge>
+        <x-crm.status-badge :variant="$statusVariant">{{ $stageV3 ? $lead->stageV3Label() : $lead->current_status->label() }}</x-crm.status-badge>
         @if($lead->completed_at)<span class="sales-lead-detail-independent-status">Selesai</span>@endif
         @if($lead->current_status === \App\Enums\SalesLeadStatus::Freelance)<span class="sales-lead-detail-independent-status">Freelance</span>@endif
     </header>
@@ -53,15 +65,20 @@
     <section class="sales-lead-detail-progress" aria-label="Progres lead" data-current-step="{{ $currentStep }}">
         <div class="sales-lead-detail-progress-label"><strong>PROGRES LEAD</strong><span>LANGKAH {{ $currentStep }} DARI 5</span></div>
         <ol>
-            @foreach(['No Respon', 'Diskusi', 'Cek Lokasi', 'Cek SLIK', 'Akad'] as $index => $stepLabel)
+            @foreach($stageV3 ? ['Lead Baru', 'Dihubungi', 'Tatap Muka', 'Survey', 'UTJ'] : ['No Respon', 'Diskusi', 'Cek Lokasi', 'Cek SLIK', 'Akad'] as $index => $stepLabel)
                 <li class="{{ $currentStep >= $index + 1 ? 'is-active' : '' }}" aria-label="{{ $stepLabel }}{{ $currentStep === $index + 1 ? ', saat ini' : '' }}"></li>
             @endforeach
         </ol>
-        <div class="sales-lead-detail-progress-steps"><span>No Respon</span><span>Diskusi</span><span>Cek Lokasi</span><span>Cek SLIK</span><span>Akad</span></div>
+        <div class="sales-lead-detail-progress-steps">@foreach($stageV3 ? ['Lead Baru', 'Dihubungi', 'Tatap Muka', 'Survey', 'UTJ'] : ['No Respon', 'Diskusi', 'Cek Lokasi', 'Cek SLIK', 'Akad'] as $stepLabel)<span>{{ $stepLabel }}</span>@endforeach</div>
     </section>
+
+    <section class="sales-lead-detail-information" aria-labelledby="sales-lead-transfer-history-title"><h2 id="sales-lead-transfer-history-title">Riwayat alih Lead</h2>@forelse($lead->transfers as $transfer)<p class="mt-2 text-sm">{{ $transfer->created_at?->format('d/m/Y H:i') }} · {{ $transfer->fromSales?->name ?? '-' }} → {{ $transfer->toSales?->name ?? '-' }} · {{ $transfer->reason }}</p>@empty<p class="mt-2 text-sm">Belum ada riwayat alih.</p>@endforelse</section>
 
     <section class="sales-lead-detail-information" aria-labelledby="sales-lead-information-title">
         <h2 id="sales-lead-information-title">Informasi</h2>
+        @if($stageV3)
+            <p class="mt-2 text-sm"><strong>Keterangan transaksi:</strong> {{ $documentsComplete ? 'Berkas Awal Lengkap' : 'Berkas belum lengkap' }}; {{ $akad ? 'Akad tercatat dari transaksi tertaut' : 'Akad belum tercatat' }}.</p>
+        @endif
         <dl>
             <div><dt>Telepon</dt><dd>{{ $lead->phone ?: '-' }}</dd></div>
             <div><dt>Sumber</dt><dd>{{ $lead->effective_source ?: '-' }}</dd></div>
@@ -150,7 +167,7 @@
                 <input type="hidden" name="completion" value="complete">
                 <x-crm.field label="Tanggal" for="mobile-site-visit-date" required><x-crm.date-field id="mobile-site-visit-date" name="tanggal" :value="$latestVisit?->visit_date?->toDateString() ?? now()->toDateString()" required /></x-crm.field>
                 <x-crm.field label="Waktu" for="mobile-site-visit-time" required><select id="mobile-site-visit-time" name="waktu" class="sales-input" required>@foreach(['pagi' => 'Pagi', 'siang' => 'Siang', 'sore' => 'Sore', 'malam' => 'Malam'] as $value => $label)<option value="{{ $value }}" {{ $latestVisit?->visit_time === $value ? 'selected' : '' }}>{{ $label }}</option>@endforeach</select></x-crm.field>
-                <x-crm.field label="Hasil" for="mobile-site-visit-status" required><select id="mobile-site-visit-status" name="status" class="sales-input" required>@foreach(['follow up' => 'Follow Up', 'non ok' => 'Non OK', 'utj' => 'UTJ'] as $value => $label)<option value="{{ $value }}" {{ $latestVisit?->visit_status === $value ? 'selected' : '' }}>{{ $label }}</option>@endforeach</select></x-crm.field>
+                <x-crm.field label="Hasil" for="mobile-site-visit-status" required><select id="mobile-site-visit-status" name="status" class="sales-input" required>@foreach(['follow up' => 'Follow-up', 'non ok' => 'Non OK', 'utj' => 'UTJ'] as $value => $label)<option value="{{ $value }}" {{ $latestVisit?->visit_status === $value ? 'selected' : '' }}>{{ $label }}</option>@endforeach</select></x-crm.field>
                 <x-crm.field label="Catatan" for="mobile-site-visit-notes"><textarea id="mobile-site-visit-notes" name="keterangan" class="sales-input" rows="3">{{ $latestVisit?->notes }}</textarea></x-crm.field>
                 <x-crm.button type="submit" variant="primary" accent="sales">Simpan Hasil Cek Lokasi</x-crm.button>
             </form>
@@ -220,7 +237,7 @@
                             <input type="hidden" name="completion" value="complete">
                             <x-crm.field label="Tanggal" :for="$modal.'-date'" required><x-crm.date-field :id="$modal.'-date'" name="tanggal" :value="$visit?->visit_date?->toDateString() ?? now()->toDateString()" required /></x-crm.field>
                             <x-crm.field label="Waktu" :for="$modal.'-time'" required><select id="{{ $modal.'-time' }}" name="waktu" class="sales-input" required>@foreach(['pagi' => 'Pagi', 'siang' => 'Siang', 'sore' => 'Sore', 'malam' => 'Malam'] as $value => $label)<option value="{{ $value }}" {{ $visit?->visit_time === $value ? 'selected' : '' }}>{{ $label }}</option>@endforeach</select></x-crm.field>
-                            <x-crm.field label="Hasil" :for="$modal.'-status'" required><select id="{{ $modal.'-status' }}" name="status" class="sales-input" required>@foreach(['follow up' => 'Follow Up', 'non ok' => 'Non OK', 'utj' => 'UTJ'] as $value => $label)<option value="{{ $value }}" {{ $visit?->visit_status === $value ? 'selected' : '' }}>{{ $label }}</option>@endforeach</select></x-crm.field>
+                            <x-crm.field label="Hasil" :for="$modal.'-status'" required><select id="{{ $modal.'-status' }}" name="status" class="sales-input" required>@foreach(['follow up' => 'Follow-up', 'non ok' => 'Non OK', 'utj' => 'UTJ'] as $value => $label)<option value="{{ $value }}" {{ $visit?->visit_status === $value ? 'selected' : '' }}>{{ $label }}</option>@endforeach</select></x-crm.field>
                             <x-crm.field label="Catatan" :for="$modal.'-notes'"><textarea id="{{ $modal.'-notes' }}" name="keterangan" class="sales-input" rows="3">{{ $visit?->notes }}</textarea></x-crm.field>
                             <div class="sm:col-span-2"><x-crm.button type="submit" variant="primary" accent="sales">Simpan Hasil</x-crm.button></div>
                         </form>

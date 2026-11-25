@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\Branch;
 use App\Models\ContentItem;
+use App\Models\Holiday;
 use App\Models\Role;
 use App\Models\SalesAgendaDaySubmission;
 use App\Models\SalesAgendaEvidence;
@@ -12,11 +13,12 @@ use App\Services\SalesAgendaReceiptService;
 use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
+use Tests\Concerns\FreezesSalesAgendaTime;
 use Tests\TestCase;
 
 class SalesAgendaReceiptWorkflowTest extends TestCase
 {
-    use RefreshDatabase;
+    use FreezesSalesAgendaTime, RefreshDatabase;
 
     public function test_summary_excludes_cancelled_carried_forward_and_extra_agendas(): void
     {
@@ -36,6 +38,20 @@ class SalesAgendaReceiptWorkflowTest extends TestCase
         $this->assertSame(1, $summary['completed_count']);
         $this->assertSame(1, $summary['extra_count']);
         $this->assertFalse($summary['submitted']);
+    }
+
+    public function test_br51_late_activity_count_uses_scheduled_end_time_for_today(): void
+    {
+        [$owner, $branch] = $this->salesContext();
+        $this->travelTo(CarbonImmutable::parse('2026-10-29 10:00:00', config('app.timezone')));
+        $date = CarbonImmutable::parse('2026-10-29');
+        $this->agendaAt($owner, $branch, $date, '08:00', '09:00');
+        $this->agendaAt($owner, $branch, $date, '10:30', '11:30');
+        $this->agendaAt($owner, $branch, $date->subDay(), '10:00', '11:00');
+
+        $summary = app(SalesAgendaReceiptService::class)->summarize($owner, $date);
+
+        $this->assertSame(1, $summary['late_activity_count']);
     }
 
     public function test_capacity_allows_remaining_minutes_but_rejects_overflow(): void
@@ -200,6 +216,24 @@ class SalesAgendaReceiptWorkflowTest extends TestCase
 
         $this->assertSame(450, $summary['normal_minutes']);
         $this->assertSame(30, $summary['remaining_minutes']);
+    }
+
+    public function test_br08_holiday_submission_requires_one_agenda_and_persists_free_day_marker(): void
+    {
+        [$owner, $branch] = $this->salesContext();
+        Holiday::create(['date' => '2026-11-27', 'name' => 'Libur nasional']);
+        $date = CarbonImmutable::parse('2026-11-27');
+        $service = app(SalesAgendaReceiptService::class);
+
+        $this->expectExceptionMessage('Agenda hari libur harus memiliki minimal satu agenda sebelum dikirim ke Koordinator.');
+        $service->submit($owner, $date);
+
+        $this->agendaAt($owner, $branch, $date, '10:00', '11:00');
+        $submission = $service->submit($owner, $date);
+
+        $this->assertFalse($submission->is_weekend);
+        $this->assertTrue($submission->is_free_day);
+        $this->assertSame(0, $submission->target_minutes);
     }
 
     public function test_weekend_submission_requires_one_agenda_and_persists_weekend_marker(): void

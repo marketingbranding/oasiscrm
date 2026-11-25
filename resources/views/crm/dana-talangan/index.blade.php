@@ -4,6 +4,7 @@
 
 @section('content')
 @php
+    $oldPaymentRecord = old('form_mode') === 'payment' ? $records->firstWhere('id', (int) old('payment_record_id')) : null;
     $oldEditingRecord = old('form_mode') === 'edit' ? [
         'id' => old('record_id'),
         'tanggal' => old('tanggal'),
@@ -39,12 +40,22 @@
         $activeFilters[] = 'Bulan: '.($monthFrom ?: 'awal').' - '.($monthTo ?: 'akhir');
     }
     $danaTalanganConfig = [
-        'adding' => $errors->any() && old('form_mode') !== 'edit',
+        'adding' => $errors->any() && ! in_array(old('form_mode'), ['edit', 'payment'], true),
         'editingRecord' => $oldEditingRecord,
+        'paymentRecord' => $oldPaymentRecord ? [
+            'id' => $oldPaymentRecord->id,
+            'name' => $oldPaymentRecord->nama_konsumen,
+            'kav' => $oldPaymentRecord->kav,
+            'nominal' => $oldPaymentRecord->formattedNominal(),
+            'paid' => \App\Support\DanaTalanganMoney::format(data_get($oldPaymentRecord->payment_summary ?? [], 'verified', '0.00')),
+            'remaining' => \App\Support\DanaTalanganMoney::format(data_get($oldPaymentRecord->payment_summary ?? [], 'remaining', $oldPaymentRecord->nominal)),
+            'action' => route('dana-talangan.payments.store', $oldPaymentRecord),
+        ] : null,
         'filterMode' => $filterMode,
         'updateBaseUrl' => url('dana-talangan'),
         'kavlingOptionsUrl' => route('dana-talangan.kavling-options'),
-        'projectCatalog' => $formProjects->map(fn ($project) => [
+        'consumerOptionsUrl' => route('dana-talangan.consumer-options'),
+        'projectCatalog' => $formProjects->unique(fn ($project) => $project->branch_id.'|'.mb_strtolower(trim($project->project_name)))->map(fn ($project) => [
             'id' => $project->id,
             'name' => $project->project_name,
             'branch_id' => $project->branch_id,
@@ -53,6 +64,7 @@
             'branch_id' => (string) old('branch_id', $selectedBranchId),
             'project_name' => old('project_name', ''),
             'kav' => old('kav', ''),
+            'consumer_application_id' => old('consumer_application_id', ''),
         ],
         'modalFocusSelector' => 'a[href], button:not([disabled]), input:not([type="hidden"]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
     ];
@@ -89,7 +101,7 @@
     </x-crm.sync-status-panel>
     @endif
 
-    <div class="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+    <div class="mb-4 grid grid-cols-2 gap-3 xl:grid-cols-4">
          <x-crm.card padding="sm">        <div class="font-[Helvetica] text-[10px] font-bold uppercase">Total Record Filter</div><div class="mt-1 text-xl font-bold">{{ number_format($summary['total']) }}</div></x-crm.card>
          <x-crm.card padding="sm"><div class="font-[Helvetica] text-[10px] font-bold uppercase">Total Nominal</div><div class="mt-1 text-xl font-bold">{{ \App\Support\DanaTalanganMoney::format($summary['nominal']) }}</div></x-crm.card>
          <x-crm.card padding="sm"><div class="font-[Helvetica] text-[10px] font-bold uppercase">Status Sanggup</div><div class="mt-1 text-xl font-bold">{{ number_format($summary['sanggup']) }}</div></x-crm.card>
@@ -189,7 +201,31 @@
     </div>
     @endif
 
-    <div class="crm-table-scroll">
+    <div class="grid grid-cols-1 gap-3 md:hidden" data-dana-mobile-cards>
+        @forelse($records as $r)
+            <article class="dana-mobile-card border-2 border-black bg-white p-3">
+                <div class="flex items-start justify-between gap-3 border-b-2 border-black pb-2">
+                    <div class="min-w-0"><h2 class="truncate font-bold">{{ $r->nama_konsumen }}</h2><p class="text-sm">Kavling: {{ $r->kav ?? '—' }}</p></div>
+                    <x-crm.status-badge :variant="$r->status === 'lunas' ? 'success' : ($r->status === 'tidak_sanggup' ? 'danger' : ($r->status === 'belum_ditentukan' ? 'neutral' : 'info'))">
+                        {{ ['belum_ditentukan' => 'BELUM DITENTUKAN', 'sanggup' => 'SANGGUP', 'tidak_sanggup' => 'TIDAK SANGGUP', 'lunas' => 'LUNAS'][$r->status] ?? 'BELUM DITENTUKAN' }}
+                    </x-crm.status-badge>
+                </div>
+                <dl class="mt-3 grid grid-cols-2 gap-2 text-sm"><div><dt class="crm-type-label">Nominal</dt><dd class="font-bold">{{ $r->formattedNominal() }}</dd></div><div><dt class="crm-type-label">Sisa</dt><dd>{{ \App\Support\DanaTalanganMoney::format(data_get($r->payment_summary ?? [], 'remaining', $r->nominal)) }}</dd></div></dl>
+                <div class="dana-mobile-actions mt-3 grid grid-cols-2 gap-2">
+                    @if($canManage)
+                        <button type="button" class="crm-button crm-button--primary" @click="openPayment(@js(['id' => $r->id, 'name' => $r->nama_konsumen, 'kav' => $r->kav, 'nominal' => $r->formattedNominal(), 'paid' => \App\Support\DanaTalanganMoney::format(data_get($r->payment_summary ?? [], 'verified', '0.00')), 'remaining' => \App\Support\DanaTalanganMoney::format(data_get($r->payment_summary ?? [], 'remaining', $r->nominal)), 'action' => route('dana-talangan.payments.store', $r)]))">Bayar</button>
+                        <button type="button" class="crm-button crm-button--secondary" @click="openEdit(@js(['id' => $r->id, 'tanggal' => $r->tanggal?->format('Y-m-d'), 'nama_konsumen' => $r->nama_konsumen, 'kav' => $r->kav, 'project_name' => $r->project_name, 'nominal' => $r->nominal, 'pinjam_nama' => $r->pinjam_nama, 'pekerjaan' => $r->pekerjaan, 'status_perkawinan' => $r->status_perkawinan, 'umur' => $r->umur, 'nama_marketing' => $r->nama_marketing, 'tgl_komitmen' => $r->tgl_komitmen?->format('Y-m-d'), 'penyelesaian' => $r->penyelesaian, 'konfirmasi_keuangan' => $r->konfirmasi_keuangan, 'branch_id' => $r->branch_id, 'status' => $r->status, 'updated_at' => $r->updated_at?->copy()->utc()->format('Y-m-d H:i:s')]), $event.currentTarget)">Edit</button>
+                        @if(auth()->user()->hasPermission('comments.view'))<a href="{{ route('comments.thread', ['alias' => 'bridge-fund', 'id' => $r->id]) }}" class="crm-button crm-button--secondary text-center">Komentar ({{ $r->comments_count }})</a>@endif
+                        <form method="POST" action="{{ route('dana-talangan.destroy', ['dana_talangan' => $r->id]) }}" class="contents" @submit.prevent="confirm('Hapus data ini?') && $el.submit()">@csrf @method('DELETE')<button type="submit" class="crm-button crm-button--danger w-full">Hapus</button></form>
+                    @endif
+                </div>
+            </article>
+        @empty
+            <x-crm.empty-state title="Belum ada data dana talangan." description="Ubah filter atau tambahkan data dana talangan baru melalui tombol utama." />
+        @endforelse
+    </div>
+
+    <div class="hidden md:block crm-table-scroll">
         <table class="crm-data-table dana-table" :class="{ frozen: tableFrozen }">
             <thead>
                 <tr>
@@ -214,7 +250,7 @@
                     <x-crm.click-sort-th field="nama_marketing" route="dana-talangan.index" label="Marketing" :currentSort="$sortField" :currentDir="$sortDir" />
                     <x-crm.click-sort-th field="tgl_komitmen" route="dana-talangan.index" label="TGL Komitmen" :currentSort="$sortField" :currentDir="$sortDir" />
                     <th>Progress Penagihan</th>
-                    <th>Konfirmasi</th>
+                    <th>Konfirmasi Keuangan</th>
                     <x-crm.click-sort-th field="status" route="dana-talangan.index" label="Status Cicilan" :currentSort="$sortField" :currentDir="$sortDir" align="center" />
                     <th>Bridge</th>
                     <th class="crm-actions">Aksi</th>
@@ -276,6 +312,7 @@
                         </form>
                         @endif
                         <div class="flex items-center justify-center gap-1">
+                            <button type="button" class="font-[Helvetica] font-bold underline text-[11px]" @click="openPayment(@js(['id' => $r->id, 'name' => $r->nama_konsumen, 'kav' => $r->kav, 'nominal' => $r->formattedNominal(), 'paid' => \App\Support\DanaTalanganMoney::format(data_get($r->payment_summary ?? [], 'verified', '0.00')), 'remaining' => \App\Support\DanaTalanganMoney::format(data_get($r->payment_summary ?? [], 'remaining', $r->nominal)), 'action' => route('dana-talangan.payments.store', $r)]))">Bayar</button>
                             <button type="button" @click="openEdit(@js([
                                 "id" => $r->id,
                                 "tanggal" => $r->tanggal?->format("Y-m-d"),
@@ -322,6 +359,24 @@
 
     <x-crm.pagination :collection="$records" :per-page="$perPage" />
 
+    <div x-cloak x-show="paymentRecord" class="fixed inset-0 z-[60] flex items-center justify-center bg-black/70 px-4" role="dialog" aria-modal="true" @keydown.escape.window="closePayment()">
+        <div class="w-full max-w-lg max-h-[90vh] overflow-y-auto border-2 border-black bg-white p-5 shadow-[8px_8px_0_0_#000]" @click.away="closePayment()">
+            <div class="flex items-center justify-between border-b-2 border-black pb-3"><h2 class="font-bold uppercase">Bayar Dana Talangan</h2><button type="button" class="text-xl font-bold" @click="closePayment()" aria-label="Tutup">&times;</button></div>
+            <dl class="my-4 grid grid-cols-2 gap-2 text-sm"><div><dt class="font-bold">Konsumen</dt><dd x-text="paymentRecord?.name || '—'"></dd></div><div><dt class="font-bold">Kavling</dt><dd x-text="paymentRecord?.kav || '—'"></dd></div><div><dt class="font-bold">Nominal Talangan</dt><dd x-text="paymentRecord?.nominal || '—'"></dd></div><div><dt class="font-bold">Total Terbayar</dt><dd x-text="paymentRecord?.paid || '0.00'"></dd></div><div><dt class="font-bold">Sisa</dt><dd x-text="paymentRecord?.remaining || '0.00'"></dd></div></dl>
+            <form method="POST" :action="paymentRecord?.action" enctype="multipart/form-data" class="space-y-3">
+                @csrf
+                <input type="hidden" name="form_mode" value="payment">
+                <input type="hidden" name="payment_record_id" :value="paymentRecord?.id || ''">
+                <label class="block text-sm font-bold">Tanggal<input type="date" name="paid_at" value="{{ now()->format('Y-m-d') }}" required class="crm-control mt-1"></label>
+                <label class="block text-sm font-bold">Nominal<input x-ref="paymentAmount" type="number" name="amount" min="0.01" step="0.01" required class="crm-control mt-1"></label>
+                <label class="block text-sm font-bold">Bukti<input type="file" name="evidence" accept=".jpg,.jpeg,.png,.pdf" class="mt-1 block w-full text-sm"></label>
+                <label class="block text-sm"><input type="hidden" name="is_verified" value="0"><input type="checkbox" name="is_verified" value="1" checked class="w-4 h-4 shrink-0"> Langsung terverifikasi</label>
+                @if($errors->any() && old('form_mode') !== 'edit')<div class="border-2 border-red-700 bg-red-50 p-2 text-sm text-red-800" role="alert">{{ $errors->first() }}</div>@endif
+                <button class="crm-button crm-button--primary">Simpan Pembayaran</button>
+            </form>
+        </div>
+    </div>
+
     {{-- Add Modal --}}
     <div x-cloak x-show="adding" x-ref="addModalPanel" class="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4"
          @keydown.escape.window="closeAddModal()" @keydown.tab="trapModalFocus($event, 'addModalPanel')">
@@ -365,6 +420,22 @@
                             <option value="">— Pilih Proyek —</option>
                             <template x-for="project in projectsFor(addForm.branch_id, addForm.project_name)" :key="project.id || project.name"><option :value="project.name" x-text="project.name"></option></template>
                         </select>
+                    </div>
+                    <div class="sm:col-span-2">
+                        <label for="consumer_search" class="font-[Helvetica] font-bold text-xs uppercase block mb-1">Pilih Konsumen Workspace (opsional)</label>
+                        <input id="consumer_search" type="search" x-model="consumerSearch" @input.debounce.300ms="searchConsumers()" placeholder="Cari nama atau kavling" class="w-full border-2 border-black px-3 py-2 text-sm font-['Times_New_Roman']">
+                        <div class="mt-1 border-2 border-black bg-white" x-show="consumerOptions.length" x-cloak>
+                            <template x-for="option in consumerOptions" :key="option.id"><button type="button" class="block w-full px-3 py-2 text-left text-sm hover:bg-yellow-100" @click="selectConsumer(option)"><span x-text="option.name"></span> — <span x-text="option.kavling || 'Tanpa kavling'"></span></button></template>
+                        </div>
+                        <input type="hidden" name="consumer_application_id" x-model="addForm.consumer_application_id">
+                    </div>
+                    <div>
+                        <label class="font-[Helvetica] font-bold text-xs uppercase block mb-1">ID Transaksi</label>
+                        <input name="id_transaksi" value="{{ old('id_transaksi') }}" maxlength="80" class="w-full border-2 border-black px-3 py-2 text-sm font-['Times_New_Roman']">
+                    </div>
+                    <div>
+                        <label class="font-[Helvetica] font-bold text-xs uppercase block mb-1">ID PSJB</label>
+                        <input name="id_psjb" value="{{ old('id_psjb') }}" maxlength="150" class="w-full border-2 border-black px-3 py-2 text-sm font-['Times_New_Roman']">
                     </div>
                     <div>
                         <label class="font-[Helvetica] font-bold text-xs uppercase block mb-1">Kav</label>
@@ -411,7 +482,7 @@
                     </div>
                     <div class="flex items-center gap-6 pt-5">
                         <label class="flex items-center gap-2 font-['Times_New_Roman'] text-sm"><input type="hidden" name="pinjam_nama" value="0"><input type="checkbox" name="pinjam_nama" value="1" class="w-5 h-5 accent-[#f1c40f]"> Pinjam Nama</label>
-                        <label class="flex items-center gap-2 font-['Times_New_Roman'] text-sm"><input type="hidden" name="konfirmasi_keuangan" value="0"><input type="checkbox" name="konfirmasi_keuangan" value="1" class="w-5 h-5 accent-[#f1c40f]"> Konfirmasi</label>
+                        <label class="flex items-center gap-2 font-['Times_New_Roman'] text-sm"><input type="hidden" name="konfirmasi_keuangan" value="0"><input type="checkbox" name="konfirmasi_keuangan" value="1" class="w-5 h-5 accent-[#f1c40f]"> Konfirmasi Keuangan</label>
                     </div>
                     <div class="sm:col-span-2">
                         <label class="font-[Helvetica] font-bold text-xs uppercase block mb-1">Penyelesaian</label>
@@ -445,6 +516,8 @@
                     <div><label class="font-[Helvetica] font-bold text-xs uppercase block mb-1">Cabang</label><select name="branch_id" x-model="editingRecord.branch_id" @change="changeEditBranch()" required class="w-full border-2 border-black px-3 py-2 text-sm font-['Times_New_Roman'] bg-white">@foreach($branches as $branch)<option value="{{ $branch->id }}" @if(str_contains(mb_strtolower($branch->name), 'pusat')) style="color:#b8860b;font-weight:700;background:#fff3b0" @endif>{{ $branch->name }}</option>@endforeach</select></div>
                     @endif
                     <div><label class="font-[Helvetica] font-bold text-xs uppercase block mb-1">Proyek</label><select name="project_name" x-model="editingRecord.project_name" @change="changeEditProject()" required class="w-full border-2 border-black px-3 py-2 text-sm font-['Times_New_Roman'] bg-white"><template x-for="project in projectsFor(editingRecord.branch_id, editingRecord.project_name)" :key="project.id || project.name"><option :value="project.name" x-text="project.name"></option></template></select></div>
+                    <div><label class="font-[Helvetica] font-bold text-xs uppercase block mb-1">ID Transaksi</label><input name="id_transaksi" x-model="editingRecord.id_transaksi" maxlength="80" class="w-full border-2 border-black px-3 py-2 text-sm font-['Times_New_Roman']"></div>
+                    <div><label class="font-[Helvetica] font-bold text-xs uppercase block mb-1">ID PSJB</label><input name="id_psjb" x-model="editingRecord.id_psjb" maxlength="150" class="w-full border-2 border-black px-3 py-2 text-sm font-['Times_New_Roman']"></div>
                     <div><label class="font-[Helvetica] font-bold text-xs uppercase block mb-1">Kav</label><select name="kav" x-model="editingRecord.kav" :disabled="editKavLoading" class="w-full border-2 border-black px-3 py-2 text-sm font-['Times_New_Roman'] bg-white disabled:bg-gray-100"><option value="" x-text="editKavLoading ? 'Memuat kavling...' : (editKavlings.length ? '— Pilih Kav —' : '— Tidak ada kavling —')"></option><template x-for="code in editKavlings" :key="code"><option :value="code" x-text="code"></option></template></select></div>
                     <div><label class="font-[Helvetica] font-bold text-xs uppercase block mb-1">Marketing</label><input name="nama_marketing" x-model="editingRecord.nama_marketing" class="w-full border-2 border-black px-3 py-2 text-sm font-['Times_New_Roman']"></div>
                     <div><label class="font-[Helvetica] font-bold text-xs uppercase block mb-1">Pekerjaan</label><input name="pekerjaan" x-model="editingRecord.pekerjaan" class="w-full border-2 border-black px-3 py-2 text-sm font-['Times_New_Roman']"></div>
@@ -453,7 +526,7 @@
                      <div><label class="font-[Helvetica] font-bold text-xs uppercase block mb-1">TGL Komitmen</label><div class="date-wrapper" data-accent="#f1c40f" style="position:relative"><div class="date-display w-full border-2 border-black px-3 py-2 text-sm font-['Times_New_Roman'] bg-white cursor-pointer select-none flex items-center justify-between" tabindex="0"><span class="date-text">— Pilih Tanggal —</span><span class="date-arrow">▼</span></div><input type="date" name="tgl_komitmen" x-model="editingRecord.tgl_komitmen" style="position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0"></div></div>
                      <div><label class="font-[Helvetica] font-bold text-xs uppercase block mb-1">Nominal</label><input type="number" name="nominal" x-model="editingRecord.nominal" min="0" step="0.01" inputmode="decimal" class="w-full border-2 border-black px-3 py-2 text-sm font-['Times_New_Roman']"></div>
                      <div><label class="font-[Helvetica] font-bold text-xs uppercase block mb-1">Status Cicilan</label><select name="status" x-model="editingRecord.status" required class="w-full border-2 border-black px-3 py-2 text-sm font-['Times_New_Roman'] bg-white"><option value="belum_ditentukan">Belum Ditentukan</option><option value="sanggup">Sanggup</option><option value="tidak_sanggup">Tidak Sanggup</option><option value="lunas">Lunas</option></select></div>
-                    <div class="flex items-center gap-6 pt-5"><label class="flex items-center gap-2 text-sm font-['Times_New_Roman']"><input type="hidden" name="pinjam_nama" value="0"><input type="checkbox" name="pinjam_nama" value="1" x-model="editingRecord.pinjam_nama" class="w-5 h-5 accent-[#f1c40f]"> Pinjam Nama</label><label class="flex items-center gap-2 text-sm font-['Times_New_Roman']"><input type="hidden" name="konfirmasi_keuangan" value="0"><input type="checkbox" name="konfirmasi_keuangan" value="1" x-model="editingRecord.konfirmasi_keuangan" class="w-5 h-5 accent-[#f1c40f]"> Konfirmasi</label></div>
+                    <div class="flex items-center gap-6 pt-5"><label class="flex items-center gap-2 text-sm font-['Times_New_Roman']"><input type="hidden" name="pinjam_nama" value="0"><input type="checkbox" name="pinjam_nama" value="1" x-model="editingRecord.pinjam_nama" class="w-5 h-5 accent-[#f1c40f]"> Pinjam Nama</label><label class="flex items-center gap-2 text-sm font-['Times_New_Roman']"><input type="hidden" name="konfirmasi_keuangan" value="0"><input type="checkbox" name="konfirmasi_keuangan" value="1" x-model="editingRecord.konfirmasi_keuangan" class="w-5 h-5 accent-[#f1c40f]"> Konfirmasi Keuangan</label></div>
                     <div class="sm:col-span-2"><label class="font-[Helvetica] font-bold text-xs uppercase block mb-1">Penyelesaian</label><textarea name="penyelesaian" x-model="editingRecord.penyelesaian" rows="3" class="w-full border-2 border-black px-3 py-2 text-sm font-['Times_New_Roman']"></textarea></div>
                 </div>
                 @if($errors->any() && old('form_mode') === 'edit')

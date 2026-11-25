@@ -14,7 +14,7 @@ class SalesOnboardingProposalRequest extends FormRequest
 {
     public function authorize(): bool
     {
-        return $this->user()?->hasPrimaryRole('admin') === true
+        return $this->user()?->isAdminCabang() === true
             && $this->user()->hasPermission('users.propose_sales');
     }
 

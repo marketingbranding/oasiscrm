@@ -15,14 +15,14 @@ class SalesAgendaExport
     use ExcelStyle;
 
     private const HEADERS = [
-        'Tanggal Agenda', 'Kategori Aktivitas', 'Sales', 'Cabang', 'Proyek', 'Agenda', 'Lokasi', 'Hasil', 'Status',
+        'Tanggal Rencana', 'Kategori Aktivitas', 'Sales', 'Cabang', 'Proyek', 'Kegiatan', 'Lokasi', 'Hasil', 'Status',
     ];
 
     public static function toBrowser(Collection $agendas, string $filename): BinaryFileResponse
     {
         $spreadsheet = new Spreadsheet;
         $sheet = $spreadsheet->getActiveSheet();
-        $sheet->setTitle('AGENDA SALES');
+        $sheet->setTitle('RENCANA HARIAN SALES');
         self::writeHeaderRow($sheet, self::HEADERS);
 
         foreach ($agendas->values() as $index => $agenda) {

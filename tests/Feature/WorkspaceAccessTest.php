@@ -77,7 +77,7 @@ class WorkspaceAccessTest extends TestCase
     public function test_admin_can_create_user_with_primary_and_multiple_memberships(): void
     {
         $admin = $this->userWithRole('superadmin', true);
-        $role = Role::firstOrCreate(['slug' => 'admin'], ['name' => 'Admin', 'is_superadmin' => false]);
+        $role = Role::where('slug', 'staff')->firstOrFail();
         $pusat = Branch::create(['name' => 'Kantor Pusat', 'code' => 'PST', 'is_active' => true]);
         $magelang = Branch::create(['name' => 'Magelang', 'code' => 'MGL', 'is_active' => true]);
 
@@ -85,6 +85,7 @@ class WorkspaceAccessTest extends TestCase
             'name' => 'Robby',
             'email' => 'robby@example.com',
             'role_id' => $role->id,
+            'staff_type' => 'admin_cabang',
             'branch_id' => $pusat->id,
             'branch_ids' => [$magelang->id],
             'provisioning_mode' => 'direct',

@@ -4,11 +4,13 @@ namespace App\Policies;
 
 use App\Models\SalesLead;
 use App\Models\User;
+use App\Services\AppSettingResolver;
 use App\Services\CoordinatorLeadTeamService;
 use App\Services\CrmAuthorizationService;
 use App\Services\OrganizationScopeService;
 use App\Services\SalesTeamScopeService;
 use App\Services\WorkspaceAccessService;
+use App\Support\FeatureFlag;
 
 class SalesLeadPolicy
 {
@@ -57,7 +59,7 @@ class SalesLeadPolicy
 
     public function create(User $user): bool
     {
-        if ($user->hasPrimaryRole(['admin', 'branch_manager', 'supervisor'])) {
+        if ($user->isAdminCabang() || $user->hasPrimaryRole(['branch_manager', 'supervisor'])) {
             return false;
         }
 
@@ -76,6 +78,26 @@ class SalesLeadPolicy
 
     public function update(User $user, SalesLead $lead): bool
     {
+        if (FeatureFlag::enabledForBranch('lead_stages_v3', $lead->branch_id) && $user->isSales() && in_array($lead->resolveStageV3(), ['utj', 'gugur'], true)) {
+            return false;
+        }
+
+        $organizationScope = app(OrganizationScopeService::class);
+        if ($user->hasPrimaryRole('sales_coordinator')
+            && $user->hasPermission('sales_pocketbook.manage_team')
+            && $organizationScope->hasSpecialMonitoringGrant($user, 'sales_leads', (int) $lead->sales_user_id)
+            && in_array((int) $lead->sales_user_id, $organizationScope->specialGrantUserIds($user, 'sales_leads', 'edit'), true)
+            && app(WorkspaceAccessService::class)->canEditBranch($user, (int) $lead->branch_id)
+            && in_array((int) $lead->project_id, app(WorkspaceAccessService::class)->accessibleProjectIds($user), true)) {
+            return true;
+        }
+
+        if (FeatureFlag::enabled('org_hierarchical_monitoring')
+            && $this->isReadOnlySalesMonitor($user)
+            && ! $this->canEditHistoricalOwnedLead($user, $lead)) {
+            return false;
+        }
+
         if (! $this->authorization->canViewSalesLead($user, $lead)) {
             return false;
         }
@@ -122,6 +144,27 @@ class SalesLeadPolicy
             && $this->update($user, $lead);
     }
 
+    public function updateStageV3(User $user, SalesLead $lead): bool
+    {
+        if (! FeatureFlag::enabledForBranch('lead_stages_v3', $lead->branch_id) || $this->canEditHistoricalOwnedLead($user, $lead) || ! $this->update($user, $lead)) {
+            return false;
+        }
+
+        if (! $user->isSales()) {
+            return true;
+        }
+
+        $stage = $lead->resolveStageV3();
+        if ($stage === 'gugur' || $stage === 'utj') {
+            return false;
+        }
+
+        $allowed = SalesLead::STAGE_V3_ORDER;
+        $limit = app(AppSettingResolver::class)->string('sales_lead.sales_max_edit_stage');
+
+        return array_search($stage, $allowed, true) <= array_search($limit, $allowed, true);
+    }
+
     public function reverseStage(User $user, SalesLead $lead): bool
     {
         return ! $user->isSales()
@@ -131,6 +174,12 @@ class SalesLeadPolicy
 
     public function updateLifecycleStatus(User $user, SalesLead $lead): bool
     {
+        if (FeatureFlag::enabledForBranch('lead_stages_v3', $lead->branch_id)) {
+            if ($user->isSales()) {
+                return $this->updateStageV3($user, $lead);
+            }
+        }
+
         return ! $this->canEditHistoricalOwnedLead($user, $lead)
             && $this->update($user, $lead);
     }
@@ -144,6 +193,10 @@ class SalesLeadPolicy
 
     public function recordSiteVisit(User $user, SalesLead $lead): bool
     {
+        if (FeatureFlag::enabledForBranch('lead_stages_v3', $lead->branch_id)
+            && ($lead->lead_stage === 'gugur' || ($user->isSales() && $lead->lead_stage === 'utj'))) {
+            return false;
+        }
         if ($this->canEditHistoricalOwnedLead($user, $lead)) {
             return false;
         }
@@ -165,6 +218,10 @@ class SalesLeadPolicy
 
     public function markUtjDirect(User $user, SalesLead $lead): bool
     {
+        if (FeatureFlag::enabledForBranch('lead_stages_v3', $lead->branch_id)
+            && ($lead->lead_stage === 'gugur' || ($user->isSales() && $lead->lead_stage === 'utj'))) {
+            return false;
+        }
         if ($this->canEditHistoricalOwnedLead($user, $lead)) {
             return false;
         }
@@ -186,33 +243,53 @@ class SalesLeadPolicy
 
     public function convertToConsumer(User $user, SalesLead $lead): bool
     {
-        return ! $this->canEditHistoricalOwnedLead($user, $lead)
-            && $this->update($user, $lead);
+        if (FeatureFlag::enabledForBranch('lead_stages_v3', $lead->branch_id) && $lead->lead_stage === 'gugur') {
+            return false;
+        }
+        if ($this->canEditHistoricalOwnedLead($user, $lead)) {
+            return false;
+        }
+
+        if (FeatureFlag::enabledForBranch('lead_stages_v3', $lead->branch_id) && $lead->resolveStageV3() !== 'utj') {
+            if (! $user->isAdminCabang() && ! $user->hasPrimaryRole(['sas', 'sales_coordinator'])) {
+                return false;
+            }
+
+            return $this->authorization->canViewSalesLead($user, $lead);
+        }
+
+        return $this->update($user, $lead);
     }
 
     public function submitToSlik(User $user, SalesLead $lead): bool
     {
-        return ! $this->canEditHistoricalOwnedLead($user, $lead)
+        return (! FeatureFlag::enabledForBranch('lead_stages_v3', $lead->branch_id) || $lead->lead_stage !== 'gugur')
+            && ! $this->canEditHistoricalOwnedLead($user, $lead)
             && $this->update($user, $lead);
     }
 
     public function markSlikRejected(User $user, SalesLead $lead): bool
     {
-        return ! $this->canEditHistoricalOwnedLead($user, $lead)
+        return (! FeatureFlag::enabledForBranch('lead_stages_v3', $lead->branch_id) || $lead->lead_stage !== 'gugur')
+            && ! $this->canEditHistoricalOwnedLead($user, $lead)
             && $this->update($user, $lead);
     }
 
     public function convertToFreelance(User $user, SalesLead $lead): bool
     {
-        return ! $this->canEditHistoricalOwnedLead($user, $lead)
+        return (! FeatureFlag::enabledForBranch('lead_stages_v3', $lead->branch_id) || $lead->lead_stage !== 'gugur')
+            && ! $this->canEditHistoricalOwnedLead($user, $lead)
             && $this->update($user, $lead);
     }
 
     public function canEditHistoricalOwnedLead(User $user, SalesLead $lead): bool
     {
-        return $user->hasPrimaryRole(['admin', 'branch_manager'])
-            && app(WorkspaceAccessService::class)->canEditBranch($user, $lead->branch_id)
-            && $lead->sales !== null
-            && app(WorkspaceAccessService::class)->canViewHistoricalBranch($lead->sales, $lead->branch_id);
+        return false;
+    }
+
+    private function isReadOnlySalesMonitor(User $user): bool
+    {
+        return $user->hasPrimaryRole(['supervisor', 'manager', 'ass_manager', 'branch_manager'])
+            || $user->isAdminCabang();
     }
 }

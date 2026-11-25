@@ -154,7 +154,7 @@ class CommentableAccessService
         $scope = app(OrganizationScopeService::class);
         $workspace = app(WorkspaceAccessService::class);
         if (! $workspace->canViewBranch($user, $agenda->branch_id)
-            || ! in_array((int) $agenda->owner_user_id, $scope->visibleUserIds($user, 'sales_pocketbook'), true)) {
+            || ! in_array((int) $agenda->owner_user_id, $scope->visibleUserIds($user, 'sales_pocketbook', 'view', 'sales_daily_plans'), true)) {
             return false;
         }
 

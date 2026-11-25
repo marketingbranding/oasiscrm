@@ -40,7 +40,7 @@
     </x-crm.toolbar>
 
     <section aria-label="Ringkasan monitoring" class="grid grid-cols-2 gap-3 md:grid-cols-4">
-        @foreach (['coordinator_count' => 'Koordinator', 'sales_count' => 'Sales Aktif', 'lead_count' => 'Lead Masuk', 'agenda_count' => 'Agenda'] as $key => $label)
+        @foreach (['coordinator_count' => 'Koordinator', 'sales_count' => 'Sales Aktif', 'lead_count' => 'Lead Masuk', 'agenda_count' => 'Kegiatan'] as $key => $label)
             <x-crm.card padding="sm"><div class="text-[10px] font-bold uppercase">{{ $label }}</div><div class="mt-1 text-2xl font-black">{{ $kpi[$key] }}</div></x-crm.card>
         @endforeach
     </section>
@@ -50,11 +50,11 @@
     @else
         <x-crm.section id="supervisor-attention" title="Perlu Perhatian" description="Orang dan data yang perlu ditindaklanjuti pada periode terpilih.">
             <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
-                <x-crm.card padding="sm"><x-crm.status-badge variant="warning">Sales Tanpa Agenda</x-crm.status-badge><p class="mt-2 text-sm font-bold">{{ $attention['without_agenda']->count() }} Sales</p>@foreach($attention['without_agenda'] as $row)<a class="mt-2 block font-bold text-[#0000ee] underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2" href="{{ route('sales-pocketbook.index', $query(['sales_id' => $row->id])) }}">{{ $row->name }}</a>@endforeach</x-crm.card>
+                <x-crm.card padding="sm"><x-crm.status-badge variant="warning">Sales Tanpa Kegiatan</x-crm.status-badge><p class="mt-2 text-sm font-bold">{{ $attention['without_agenda']->count() }} Sales</p>@foreach($attention['without_agenda'] as $row)<a class="mt-2 block font-bold text-[#0000ee] underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2" href="{{ route('sales-pocketbook.index', $query(['sales_id' => $row->id])) }}">{{ $row->name }}</a>@endforeach</x-crm.card>
                 @foreach (['pending_create' => 'Belum Sync', 'pending_update' => 'Perlu Sync Ulang', 'sync_failed' => 'Sync Gagal'] as $key => $label)
                     <x-crm.card padding="sm"><x-crm.status-badge variant="warning">{{ $label }}</x-crm.status-badge><p class="mt-2 text-sm font-bold">{{ $kpi[$key] }} Lead</p>@foreach($attention['pending']->where($key, '>', 0) as $row)<a class="mt-2 block text-[#0000ee] underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2" href="{{ route('sales-pocketbook.index', $query(['sales_id' => $row->id])) }}">{{ $row->name }}: {{ $row->{$key} }}</a>@endforeach</x-crm.card>
                 @endforeach
-                <x-crm.card padding="sm"><x-crm.status-badge variant="warning">Agenda Belum Hasil</x-crm.status-badge><p class="mt-2 text-sm font-bold">{{ $attention['missing_result']->sum('missing_result') }} Agenda</p>@foreach($attention['missing_result'] as $row)<a class="mt-2 block text-[#0000ee] underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2" href="{{ route('sales-pocketbook.index', $query(['sales_id' => $row->id])) }}">{{ $row->name }}: {{ $row->missing_result }}</a>@endforeach</x-crm.card>
+                <x-crm.card padding="sm"><x-crm.status-badge variant="warning">Kegiatan Belum Hasil</x-crm.status-badge><p class="mt-2 text-sm font-bold">{{ $attention['missing_result']->sum('missing_result') }} Agenda</p>@foreach($attention['missing_result'] as $row)<a class="mt-2 block text-[#0000ee] underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2" href="{{ route('sales-pocketbook.index', $query(['sales_id' => $row->id])) }}">{{ $row->name }}: {{ $row->missing_result }}</a>@endforeach</x-crm.card>
             </div>
         </x-crm.section>
 
@@ -76,7 +76,7 @@
                 <div class="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
                     @foreach($salesRows as $row)
                         <x-crm.card padding="sm"><a href="{{ route('sales-pocketbook.index', $query(['sales_id' => $row->id])) }}" class="block focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--oasis-focus)]">
-                            <strong>{{ $row->name }}</strong><span class="block text-xs">{{ implode('; ', $row->coordinator_names) }} · {{ $row->branch_name ?: '-' }} · {{ $row->project_name ?: '-' }}</span><span class="mt-2 block text-sm">{{ $row->agenda_count }} Agenda · {{ $row->agenda_done }} Selesai · {{ $row->lead_count }} Lead</span>@if($row->agenda_count === 0)<x-crm.status-badge variant="warning">Belum Ada Agenda</x-crm.status-badge>@endif
+                            <strong>{{ $row->name }}</strong><span class="block text-xs">{{ implode('; ', $row->coordinator_names) }} · {{ $row->branch_name ?: '-' }} · {{ $row->project_name ?: '-' }}</span><span class="mt-2 block text-sm">{{ $row->agenda_count }} Kegiatan · {{ $row->agenda_done }} Selesai · {{ $row->lead_count }} Lead</span>@if($row->agenda_count === 0)<x-crm.status-badge variant="warning">Belum Ada Kegiatan</x-crm.status-badge>@endif
                         </a></x-crm.card>
                     @endforeach
                 </div>
@@ -87,10 +87,35 @@
     @if($filters['sales_id'])
         @php($selectedSales = $salesRows->first())
         <x-crm.section id="sales-detail" :title="$selectedSales?->name ?? 'Detail Sales'" :description="'Koordinator: '.implode('; ', $selectedSales?->coordinator_names ?? []).' · Cabang: '.($selectedSales?->branch_name ?? '-').' · Proyek: '.($selectedSales?->project_name ?? '-')">
-            <h3 class="mb-2 text-xs font-bold uppercase">Agenda</h3>
-            <div class="crm-table-scroll"><table class="crm-data-table"><thead><tr><th>Tanggal</th><th>Kategori Aktivitas</th><th>Agenda</th><th>Lokasi</th><th>Hasil</th><th>Bukti</th><th>Status</th></tr></thead><tbody>@forelse($agendas as $agenda)<tr><td>{{ $agenda->scheduled_date->format('d/m/Y') }}</td><td>{{ $agenda->sales_activity_category ?: '-' }}</td><td>{{ $agenda->title }}</td><td>{{ $agenda->location ?: '-' }}</td><td>{{ $agenda->activity_result ?: '-' }}</td><td>@forelse($agenda->evidence as $evidence)@if($evidence->purged_at)<span>Bukti foto telah dipindahkan ke arsip.</span>@else<a class="text-[#0000ee] underline" href="{{ route('sales-agendas.evidence.show', [$agenda, $evidence]) }}">{{ $evidence->original_name }}</a>@endif<br>@empty-@endforelse</td><td>{{ $agenda->status === 'done' ? 'Selesai' : 'Belum Selesai' }}</td></tr>@empty<tr><td colspan="7">Belum ada agenda pada periode ini.</td></tr>@endforelse</tbody></table></div><x-crm.pagination :collection="$agendas" :show-per-page="false" />
+            <h3 class="mb-2 text-xs font-bold uppercase">Kegiatan</h3>
+            <div class="crm-table-scroll"><table class="crm-data-table"><thead><tr><th>Tanggal</th><th>Kategori Aktivitas</th><th>Kegiatan</th><th>Lokasi</th><th>Hasil</th><th>Bukti</th><th>Status</th></tr></thead><tbody>
+                @forelse($agendas as $agenda)
+                    @php($isSummary = is_array($agenda))
+                    <tr>
+                        <td>{{ \Illuminate\Support\Carbon::parse($isSummary ? data_get($agenda, 'date') : data_get($agenda, 'scheduled_date'))->format('d/m/Y') }}</td>
+                        <td>{{ $isSummary ? 'Ringkasan kegiatan' : (data_get($agenda, 'sales_activity_category') ?: '-') }}</td>
+                        <td>{{ $isSummary ? ((data_get($agenda, 'total_minutes', 0)).' / '.(data_get($agenda, 'target_minutes', 0)).' menit') : data_get($agenda, 'title') }}</td>
+                        <td>{{ $isSummary ? '-' : (data_get($agenda, 'location') ?: '-') }}</td>
+                        <td>{{ $isSummary ? ((data_get($agenda, 'activity_count', 0)).' kegiatan · '.(data_get($agenda, 'late_activity_count', 0)).' terlambat') : (data_get($agenda, 'activity_result') ?: '-') }}</td>
+                        <td>
+                            @if(! $isSummary)
+                                @forelse(data_get($agenda, 'evidence', []) as $evidence)
+                                    @if($evidence->purged_at)<span>Bukti foto telah dipindahkan ke arsip.</span>@else<a class="text-[#0000ee] underline" href="{{ route('sales-agendas.evidence.show', [$agenda, $evidence]) }}">{{ $evidence->original_name }}</a>@endif<br>
+                                @empty
+                                    -
+                                @endforelse
+                            @else
+                                -
+                            @endif
+                        </td>
+                        <td>{{ $isSummary ? (data_get($agenda, 'submitted') ? 'Terkirim' : 'Belum Terkirim') : (data_get($agenda, 'status') === 'done' ? 'Selesai' : 'Belum Selesai') }}</td>
+                    </tr>
+                @empty
+                    <tr><td colspan="7">Belum ada agenda pada periode ini.</td></tr>
+                @endforelse
+            </tbody></table></div><x-crm.pagination :collection="$agendas" :show-per-page="false" />
             <h3 class="mb-2 mt-5 text-xs font-bold uppercase">Lead</h3>
-            <div class="crm-table-scroll"><table class="crm-data-table"><thead><tr><th>Tanggal</th><th>Konsumen</th><th>Sumber</th><th>Kanal</th><th>Aktivitas</th><th>Status Lead</th><th>Status Sync</th><th>Aksi</th></tr></thead><tbody>@forelse($leads as $lead)<tr><td>{{ $lead->lead_date->format('d/m/Y') }}</td><td>{{ $lead->customer_name }}</td><td>{{ $lead->effective_source }}</td><td>{{ $lead->platform }}</td><td>{{ $lead->campaign_name }}</td><td>{{ $lead->current_status?->label() }}</td><td>{{ $syncLabels[$lead->sync_status] ?? 'Belum Sync' }}</td><td><x-crm.button variant="text" size="sm" :href="route('sales-leads.show', $lead)">Detail</x-crm.button></td></tr>@empty<tr><td colspan="8">Belum ada lead pada periode ini.</td></tr>@endforelse</tbody></table></div><x-crm.pagination :collection="$leads" :show-per-page="false" />
+            <div class="crm-table-scroll"><table class="crm-data-table"><thead><tr><th>Tanggal</th><th>Konsumen</th><th>Sumber</th><th>Kanal</th><th>Aktivitas</th><th>Status Lead</th><th>Aktivitas Terbaru</th><th>Status Sync</th><th>Aksi</th></tr></thead><tbody>@forelse($leads as $lead)<tr><td>{{ is_array($lead) ? \Illuminate\Support\Carbon::parse($lead['lead_date'])->format('d/m/Y') : $lead->lead_date->format('d/m/Y') }}</td><td>{{ is_array($lead) ? $lead['name'] : $lead->customer_name }}</td><td>{{ is_array($lead) ? '-' : $lead->effective_source }}</td><td>{{ is_array($lead) ? $lead['project_name'] : $lead->platform }}</td><td>{{ is_array($lead) ? '-' : $lead->campaign_name }}</td><td>{{ is_array($lead) ? $lead['stage'] : $lead->current_status?->label() }}</td><td>{{ is_array($lead) ? $lead['last_active_at'] : ($lead->latest_activity_at?->format('d/m/Y H:i') ?? '-') }}</td><td>{{ is_array($lead) ? '-' : ($syncLabels[$lead->sync_status] ?? 'Belum Sync') }}</td><td>@if(! is_array($lead))<x-crm.button variant="text" size="sm" :href="route('sales-leads.show', $lead)">Detail</x-crm.button>@endif</td></tr>@empty<tr><td colspan="9">Belum ada lead pada periode ini.</td></tr>@endforelse</tbody></table></div><x-crm.pagination :collection="$leads" :show-per-page="false" />
         </x-crm.section>
     @endif
 </div>

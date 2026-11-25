@@ -43,7 +43,7 @@ class SalesAgendaEvidenceAuthorizationService
         if ($user->hasPrimaryRole('superadmin')) {
             return true;
         }
-        if ($user->hasPrimaryRole('admin')) {
+        if ($user->isAdminCabang()) {
             return (int) $agenda->branch_id === (int) $user->branch_id
                 && $this->workspaceAccess->canViewBranch($user, (int) $agenda->branch_id);
         }
@@ -53,21 +53,21 @@ class SalesAgendaEvidenceAuthorizationService
 
     public function canManageArchives(User $user): bool
     {
-        return ($user->hasPrimaryRole('admin') || $user->hasPrimaryRole('superadmin'))
+        return ($user->isAdminCabang() || $user->hasPrimaryRole('superadmin'))
             && $user->hasAnyPermission(['sales_pocketbook.manage_branch', 'sales_pocketbook.manage_all']);
     }
 
     public function canBuildArchive(User $user, int $branchId): bool
     {
         return ($user->hasPrimaryRole('superadmin') && $user->hasPermission('sales_pocketbook.manage_all'))
-            || ($user->hasPrimaryRole('admin') && $user->hasPermission('sales_pocketbook.manage_branch')
+            || ($user->isAdminCabang() && $user->hasPermission('sales_pocketbook.manage_branch')
                 && (int) $user->branch_id === $branchId && $this->workspaceAccess->canViewBranch($user, $branchId));
     }
 
     public function canDownloadArchive(User $user, SalesAgendaEvidenceArchive $archive): bool
     {
         return ($user->hasPrimaryRole('superadmin') && $user->hasPermission('sales_pocketbook.view_all'))
-            || ($user->hasPrimaryRole('admin') && $user->hasPermission('sales_pocketbook.view_branch')
+            || ($user->isAdminCabang() && $user->hasPermission('sales_pocketbook.view_branch')
                 && (int) $user->branch_id === (int) $archive->branch_id
                 && $this->workspaceAccess->canViewBranch($user, (int) $archive->branch_id));
     }

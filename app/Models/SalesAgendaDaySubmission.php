@@ -15,6 +15,7 @@ class SalesAgendaDaySubmission extends Model
         'target_minutes',
         'normal_minutes_at_submission',
         'is_weekend',
+        'is_free_day',
         'submitted_at',
     ];
 
@@ -25,6 +26,7 @@ class SalesAgendaDaySubmission extends Model
             'target_minutes' => 'integer',
             'normal_minutes_at_submission' => 'integer',
             'is_weekend' => 'boolean',
+            'is_free_day' => 'boolean',
             'submitted_at' => 'datetime',
         ];
     }

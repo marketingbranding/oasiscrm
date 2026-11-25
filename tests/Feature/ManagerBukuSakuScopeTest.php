@@ -53,7 +53,7 @@ class ManagerBukuSakuScopeTest extends TestCase
             $page->assertSee('Buku Saku Sales');
 
             $agendaPage = $this->actingAs($manager)->get(route('sales-pocketbook.index', ['tab' => 'agenda']))->assertOk()
-                ->assertSee('Monitoring Agenda')
+                ->assertSee('Monitoring Rencana Harian')
                 ->assertSee('Hierarki Tim Sales')
                 ->assertDontSee('Isi Agenda Baru')
                 ->assertDontSee('Jam Mulai')

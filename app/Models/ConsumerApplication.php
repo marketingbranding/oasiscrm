@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Support\ConsumerIdentity;
+use DomainException;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -14,6 +15,8 @@ use LogicException;
 
 class ConsumerApplication extends Model
 {
+    public const array TRANSACTION_STATUSES = ['LANJUT', 'MUNDUR', 'DITUTUP'];
+
     use HasFactory, SoftDeletes;
 
     protected $fillable = [
@@ -32,6 +35,8 @@ class ConsumerApplication extends Model
         'replacement_application_id',
         'consumer_status',
         'transaction_status',
+        'closed_by_event',
+        'withdraw_reason',
         'current_stage',
         'current_process',
         'current_process_source',
@@ -46,6 +51,7 @@ class ConsumerApplication extends Model
         'booking_date',
         'akad_date',
         'notes',
+        'id_transaksi',
     ];
 
     protected static function booted(): void
@@ -113,9 +119,19 @@ class ConsumerApplication extends Model
         return $this->belongsTo(SalesLead::class);
     }
 
+    public function linkDecisions(): HasMany
+    {
+        return $this->hasMany(ConsumerLeadLinkDecision::class, 'consumer_application_id');
+    }
+
     public function sourceNup(): BelongsTo
     {
         return $this->belongsTo(ConsumerNup::class, 'source_nup_id');
+    }
+
+    public function returnedNups(): HasMany
+    {
+        return $this->hasMany(ConsumerNup::class, 'source_application_id');
     }
 
     public function historicalEnteredBy(): BelongsTo
@@ -168,6 +184,16 @@ class ConsumerApplication extends Model
         return $this->hasMany(ConsumerStageEvent::class, 'consumer_application_id');
     }
 
+    public function processStageEvents(): HasMany
+    {
+        return $this->stageEvents()->whereNull('event_type');
+    }
+
+    public function transactionEvents(): HasMany
+    {
+        return $this->stageEvents()->whereNotNull('event_type');
+    }
+
     public function psjbs(): HasMany
     {
         return $this->hasMany(ConsumerPsjb::class, 'consumer_application_id');
@@ -216,6 +242,67 @@ class ConsumerApplication extends Model
     public function hasReady100(): bool
     {
         return $this->ready100Events()->exists();
+    }
+
+    public function canonicalTransactionStatus(): string
+    {
+        return $this->canonicalTransactionStatusDetails()['status'];
+    }
+
+    /** @return array{status: string, needs_review: bool, legacy_status: string|null} */
+    public function canonicalTransactionStatusDetails(): array
+    {
+        return self::canonicalTransactionStatusDetailsFor($this->transaction_status);
+    }
+
+    /** @return array{status: string, needs_review: bool, legacy_status: string|null} */
+    public static function canonicalTransactionStatusDetailsFor(?string $transactionStatus): array
+    {
+        $legacyStatus = trim((string) $transactionStatus);
+        $status = strtoupper($legacyStatus);
+
+        return match ($status) {
+            'MUNDUR', 'REJECT', 'REJECTED', 'CANCELLED', 'WITHDRAWN', 'REJECT SLIK', 'REJECT BANK' => [
+                'status' => 'MUNDUR',
+                'needs_review' => false,
+                'legacy_status' => $legacyStatus === '' ? null : $legacyStatus,
+            ],
+            'DITUTUP', 'REPLACED', 'DIGANTI KONSUMEN', 'DIGANTI_KONSUMEN', 'GANTI NAMA', 'GANTI_NAMA' => [
+                'status' => 'DITUTUP',
+                'needs_review' => false,
+                'legacy_status' => $legacyStatus === '' ? null : $legacyStatus,
+            ],
+            'LANJUT', 'PINDAH KAVLING', 'PINDAH_KAVLING', 'COMPLETED', 'SELESAI' => [
+                'status' => 'LANJUT',
+                'needs_review' => false,
+                'legacy_status' => $legacyStatus === '' ? null : $legacyStatus,
+            ],
+            '' => [
+                'status' => 'LANJUT',
+                'needs_review' => false,
+                'legacy_status' => null,
+            ],
+            default => [
+                'status' => 'LANJUT',
+                'needs_review' => true,
+                'legacy_status' => $legacyStatus,
+            ],
+        };
+    }
+
+    public function canonicalTransactionStatusNeedsReview(): bool
+    {
+        return $this->canonicalTransactionStatusDetails()['needs_review'];
+    }
+
+    public static function validateNewTransactionStatus(?string $status): string
+    {
+        $canonical = strtoupper(trim((string) ($status ?? 'LANJUT')));
+        if (! in_array($canonical, ['LANJUT', 'MUNDUR'], true)) {
+            throw new DomainException('Status transaksi baru hanya boleh LANJUT atau MUNDUR.');
+        }
+
+        return $canonical;
     }
 
     public static function generateTransactionIdentity(?int $branchId): string

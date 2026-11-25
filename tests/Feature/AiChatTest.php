@@ -2,7 +2,9 @@
 
 namespace Tests\Feature;
 
+use App\Models\AccessGrant;
 use App\Models\AiChatConversation;
+use App\Models\AppSetting;
 use App\Models\Branch;
 use App\Models\ContentItem;
 use App\Models\DanaTalangan;
@@ -13,7 +15,10 @@ use App\Models\KonsumenProgressSyncStatus;
 use App\Models\LeadMaster;
 use App\Models\Permission;
 use App\Models\Role;
+use App\Models\SalesLead;
 use App\Models\User;
+use App\Services\AccessGrantService;
+use App\Services\AiProviderService;
 use App\Services\AiToolRegistry;
 use App\Services\KonsumenProgressSyncService;
 use App\Services\WorkspaceAccessService;
@@ -26,6 +31,140 @@ use Tests\TestCase;
 class AiChatTest extends TestCase
 {
     use RefreshDatabase;
+
+    public function test_br53_ai_search_customer_honors_explicit_branch_filter(): void
+    {
+        $branchOne = Branch::create(['name' => 'Jepara', 'code' => 'JPR', 'is_active' => true]);
+        $branchTwo = Branch::create(['name' => 'Kudus', 'code' => 'KDS', 'is_active' => true]);
+        $projectOne = $this->makeProject($branchOne, 'Oasis Jepara');
+        $projectTwo = $this->makeProject($branchTwo, 'Oasis Kudus');
+        $salesRole = Role::query()->where('slug', 'sales')->firstOrFail();
+        $salesOne = User::factory()->create(['role_id' => $salesRole->id, 'branch_id' => $branchOne->id, 'password_changed_at' => now()]);
+        $salesTwo = User::factory()->create(['role_id' => $salesRole->id, 'branch_id' => $branchTwo->id, 'password_changed_at' => now()]);
+        foreach ([[$salesOne, $projectOne], [$salesTwo, $projectTwo]] as [$sales, $project]) {
+            $sales->assignedProjects()->attach($project, ['is_primary' => true, 'is_active' => true]);
+            SalesLead::create([
+                'branch_id' => $project->branch_id,
+                'project_id' => $project->id,
+                'sales_user_id' => $sales->id,
+                'lead_date' => today(),
+                'customer_name' => 'Nama Sama',
+                'phone' => '081234567890',
+                'created_by' => $sales->id,
+                'updated_by' => $sales->id,
+            ]);
+        }
+        [, $superadmin] = $this->superadminUser();
+
+        $result = app(AiToolRegistry::class)->execute('search_customer', [
+            'query' => 'Nama Sama',
+            'branch_id' => $branchTwo->id,
+        ], $superadmin);
+
+        $rows = collect($result['results'])->where('source_module', 'Lead Sales');
+        $this->assertCount(1, $rows);
+        $this->assertSame($branchTwo->name, $rows->first()['branch']);
+    }
+
+    public function test_br53_ai_search_customer_hides_foreign_lead_without_grant(): void
+    {
+        [$branch, $user, $lead] = $this->br53LeadSearchContext();
+
+        $result = app(AiToolRegistry::class)->execute('search_customer', ['query' => 'Lead Rahasia'], $user);
+
+        $this->assertFalse(collect($result['results'])->contains(fn (array $row): bool => ($row['customer_name'] ?? null) === $lead->customer_name));
+    }
+
+    public function test_br53_ai_search_customer_exposes_foreign_lead_with_active_sales_leads_grant(): void
+    {
+        [$branch, $user, $lead, $subject] = $this->br53LeadSearchContext();
+        $this->grantAiLeadAccess($user, $subject);
+
+        $result = app(AiToolRegistry::class)->execute('search_customer', ['query' => 'Lead Rahasia'], $user);
+
+        $row = collect($result['results'])->first(fn (array $item): bool => ($item['customer_name'] ?? null) === $lead->customer_name);
+        $this->assertNotNull($row);
+        $this->assertSame('Lead Sales', $row['source_module']);
+        $this->assertArrayNotHasKey('phone', $row);
+        $this->assertArrayNotHasKey('address', $row);
+        $this->assertArrayNotHasKey('nik', $row);
+    }
+
+    public function test_br53_ai_search_customer_removes_foreign_lead_after_grant_revoke(): void
+    {
+        [$branch, $user, $lead, $subject] = $this->br53LeadSearchContext();
+        $grant = $this->grantAiLeadAccess($user, $subject);
+
+        $this->assertTrue(collect(app(AiToolRegistry::class)->execute('search_customer', ['query' => 'Lead Rahasia'], $user)['results'])
+            ->contains(fn (array $row): bool => ($row['customer_name'] ?? null) === $lead->customer_name));
+
+        app(AccessGrantService::class)->revoke($this->superadminUser()[1], $grant, 'Selesai');
+        $result = app(AiToolRegistry::class)->execute('search_customer', ['query' => 'Lead Rahasia'], $user);
+
+        $this->assertFalse(collect($result['results'])->contains(fn (array $row): bool => ($row['customer_name'] ?? null) === $lead->customer_name));
+    }
+
+    public function test_br70_c06_all_ai_tools_payloads_filter_personal_data(): void
+    {
+        [$branch, $user] = $this->branchAndUser();
+        config(['ai.primary.api_key' => 'test-key']);
+        $registry = app(AiToolRegistry::class);
+        foreach ($registry->allowedToolNames() as $toolName) {
+            Http::fake(function ($request) {
+                $encoded = json_encode($request->data(), JSON_UNESCAPED_UNICODE);
+                $this->assertStringNotContainsString('1234 5678 9012 3456', $encoded);
+                $this->assertStringNotContainsString('0812-3456-7890', $encoded);
+                $this->assertStringNotContainsString('person@example.com', $encoded);
+                $this->assertStringNotContainsString('Jalan Merdeka 10', $encoded);
+
+                return Http::response(['choices' => [['message' => ['content' => 'ok']]]]);
+            });
+
+            app(AiProviderService::class)->chat([
+                ['role' => 'user', 'content' => 'Budi Santoso NIK 1234 5678 9012 3456 HP 0812-3456-7890 person@example.com alamat Jalan Merdeka 10'],
+            ], [[
+                'type' => 'function',
+                'function' => ['name' => $toolName, 'arguments' => json_encode(['nomor_hp' => '0812-3456-7890', 'alamat_rumah' => 'Jalan Merdeka 10'])],
+            ]]);
+        }
+    }
+
+    public function test_br70_c06_provider_payload_filters_personal_data_and_keeps_name_by_default(): void
+    {
+        [$branch, $user] = $this->branchAndUser();
+        config(['ai.primary.api_key' => 'test-key']);
+        Http::fake(function ($request) {
+            $payload = $request->data();
+            $encoded = json_encode($payload, JSON_UNESCAPED_UNICODE);
+            $this->assertStringNotContainsString('1234567890123456', $encoded);
+            $this->assertStringNotContainsString('081234567890', $encoded);
+            $this->assertStringNotContainsString('person@example.com', $encoded);
+            $this->assertStringNotContainsString('Jalan Merdeka 10', $encoded);
+            $this->assertStringContainsString('Budi Santoso', $encoded);
+
+            return Http::response(['choices' => [['message' => ['content' => 'ok']]]]);
+        });
+
+        $this->actingAs($user)->postJson(route('ai-chat.chat'), [
+            'message' => 'Budi Santoso, NIK 1234567890123456, HP 081234567890, email person@example.com, alamat Jalan Merdeka 10',
+        ])->assertOk();
+    }
+
+    public function test_br70_names_are_removed_when_setting_disabled(): void
+    {
+        [$branch, $user] = $this->branchAndUser();
+        AppSetting::query()->create(['key' => 'ai.send_names', 'value' => false, 'group' => 'ai']);
+        config(['ai.primary.api_key' => 'test-key']);
+        Http::fake(function ($request) {
+            $this->assertStringNotContainsString('Budi Santoso', json_encode($request->data(), JSON_UNESCAPED_UNICODE));
+
+            return Http::response(['choices' => [['message' => ['content' => 'ok']]]]);
+        });
+
+        $this->actingAs($user)->postJson(route('ai-chat.chat'), [
+            'message' => 'Budi Santoso perlu tindak lanjut.',
+        ])->assertOk();
+    }
 
     public function test_branch_user_gets_read_only_local_answer_when_provider_is_unavailable(): void
     {
@@ -561,6 +700,60 @@ class AiChatTest extends TestCase
         $this->assertStringContainsString('Indra Maulana Adi Yudanto', $conversationJson);
         $this->assertStringNotContainsString('3374123456789999', $conversationJson);
         $this->assertStringNotContainsString('Alamat Rahasia', $conversationJson);
+    }
+
+    public function test_br70_real_tool_results_are_filtered_while_protocol_fields_and_branch_names_remain(): void
+    {
+        [$branch, $user] = $this->branchAndUser();
+        AppSetting::query()->create(['key' => 'ai.send_names', 'value' => false, 'group' => 'ai']);
+        config(['ai.routing_mode' => 'provider', 'ai.primary.api_key' => 'test-key']);
+        DatabaseSheetRecord::create([
+            'branch_id' => $branch->id,
+            'sheet_id' => 'sheet-'.$branch->id,
+            'sheet_name' => 'Leads',
+            'row_number' => 2,
+            'oasis_sync_id' => 'real-tool-target',
+            'headers' => ['nama_konsumen', 'nik', 'no_hp', 'email', 'alamat'],
+            'row_data' => [
+                'nama_konsumen' => 'Budi Konsumen',
+                'nik' => '1234 5678 9012 3456',
+                'no_hp' => '0812-3456-7890',
+                'email' => 'person@example.com',
+                'alamat' => 'Jalan Merdeka 10',
+            ],
+            'sync_status' => 'synced',
+            'last_synced_at' => now(),
+        ]);
+
+        $requests = [];
+        Http::fake(function ($request) use (&$requests, $branch) {
+            $requests[] = $request->data();
+            if (count($requests) === 1) {
+                return Http::response(['choices' => [['message' => [
+                    'role' => 'assistant',
+                    'content' => null,
+                    'tool_calls' => [
+                        ['id' => 'call-search', 'type' => 'function', 'function' => ['name' => 'search_customer', 'arguments' => json_encode(['query' => 'Budi'])]],
+                        ['id' => 'call-branch', 'type' => 'function', 'function' => ['name' => 'get_branch_info', 'arguments' => json_encode(['branch_id' => $branch->id])]],
+                    ],
+                ]]]]);
+            }
+
+            return Http::response(['choices' => [['message' => ['role' => 'assistant', 'content' => 'Data sudah disaring.']]]]);
+        });
+
+        $this->actingAs($user)->postJson(route('ai-chat.chat'), ['message' => 'Cari Budi dan info cabang.'])->assertOk();
+
+        $this->assertCount(2, $requests);
+        $secondPayload = json_encode($requests[1], JSON_UNESCAPED_UNICODE);
+        $this->assertStringNotContainsString('1234 5678 9012 3456', $secondPayload);
+        $this->assertStringNotContainsString('0812-3456-7890', $secondPayload);
+        $this->assertStringNotContainsString('person@example.com', $secondPayload);
+        $this->assertStringNotContainsString('Jalan Merdeka 10', $secondPayload);
+        $this->assertStringNotContainsString('Budi Konsumen', $secondPayload);
+        $this->assertStringContainsString('search_customer', $secondPayload);
+        $this->assertStringContainsString('get_branch_info', $secondPayload);
+        $this->assertStringContainsString($branch->name, $secondPayload);
     }
 
     public function test_provider_tool_calls_are_allowlisted_limited_deduplicated_and_sanitized(): void
@@ -1278,6 +1471,55 @@ class AiChatTest extends TestCase
         ]);
 
         return [$role, $user];
+    }
+
+    /** @return array{0: Branch, 1: User, 2: SalesLead, 3: User} */
+    private function br53LeadSearchContext(): array
+    {
+        $branch = Branch::create(['name' => 'Jepara', 'code' => 'JPR', 'is_active' => true]);
+        $project = $this->makeProject($branch, 'Oasis Jepara');
+        $role = Role::create(['name' => 'BR53 Coordinator', 'slug' => 'br53_coordinator', 'is_active' => true]);
+        $role->permissions()->sync(Permission::whereIn('slug', [
+            'sales_pocketbook.view_team',
+            'sales_pocketbook.export_team',
+        ])->pluck('id'));
+        $user = User::factory()->create([
+            'role_id' => $role->id,
+            'branch_id' => $branch->id,
+            'password_changed_at' => now(),
+        ]);
+        $subject = User::factory()->create([
+            'role_id' => Role::query()->where('slug', 'sales')->value('id'),
+            'branch_id' => $branch->id,
+            'password_changed_at' => now(),
+        ]);
+        $subject->assignedProjects()->attach($project, ['is_primary' => true, 'is_active' => true]);
+        $lead = SalesLead::create([
+            'branch_id' => $branch->id,
+            'project_id' => $project->id,
+            'sales_user_id' => $subject->id,
+            'lead_date' => today(),
+            'customer_name' => 'Lead Rahasia',
+            'phone' => '081234567890',
+            'created_by' => $subject->id,
+            'updated_by' => $subject->id,
+        ]);
+
+        return [$branch, $user, $lead, $subject];
+    }
+
+    private function grantAiLeadAccess(User $grantee, User $subject): AccessGrant
+    {
+        return AccessGrant::create([
+            'grantee_user_id' => $grantee->id,
+            'subject_user_id' => $subject->id,
+            'module' => 'sales_leads',
+            'can_view' => true,
+            'can_edit' => false,
+            'expires_at' => now()->addDays(2),
+            'reason' => 'BR-53',
+            'granted_by' => $grantee->id,
+        ]);
     }
 
     private function pipelineCustomer(Branch $branch, string $idKavling, string $name, string $stage): void

@@ -12,8 +12,10 @@ use App\Models\ConsumerPsjb;
 use App\Models\ConsumerStageEvent;
 use App\Models\Kavling;
 use App\Models\User;
+use App\Support\FeatureFlag;
 use Carbon\CarbonImmutable;
 use DomainException;
+use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\DB;
@@ -21,6 +23,11 @@ use Illuminate\Support\Str;
 
 final class ConsumerOperationalService
 {
+    public function __construct(
+        private readonly OrganizationScopeService $scope,
+        private readonly BranchMigrationStateService $migrationStates,
+    ) {}
+
     private const CONSUMER_STATUSES = ['Lanjut', 'Mundur', 'Pindah Kavling', 'Reject'];
 
     private const TERMINAL_STATUSES = ['replaced', 'mundur', 'reject', 'rejected', 'cancelled', 'withdrawn', 'completed', 'selesai', 'closed', 'diganti_konsumen'];
@@ -34,7 +41,7 @@ final class ConsumerOperationalService
 
     public function statuses(): array
     {
-        return self::CONSUMER_STATUSES;
+        return ConsumerApplication::TRANSACTION_STATUSES;
     }
 
     public function visibleQuery(User $user, OrganizationScopeService $scope): Builder
@@ -61,20 +68,29 @@ final class ConsumerOperationalService
     {
         $order = ['PSJB' => 'PSJB', 'bi_checking' => 'BI Checking', 'pemberkasan' => 'Pemberkasan', 'proses_bank' => 'Proses Bank', 'sp3k' => 'SP3K', 'ppjb_dev' => 'PPJB', 'akad' => 'Akad', 'bast' => 'BAST', 'garansi' => 'Form Garansi'];
         $rank = array_flip(array_keys($order));
-        $stage = $application->stageEvents->sortByDesc(fn ($event) => [$rank[$event->stage] ?? -1, $event->occurred_at?->timestamp ?? 0, $event->id])->first()?->stage;
+        $stage = $application->stageEvents
+            ->whereNull('event_type')
+            ->sortByDesc(fn ($event) => [$rank[$event->stage] ?? -1, $event->occurred_at?->timestamp ?? 0, $event->id])
+            ->first()?->stage;
 
         return $stage === null ? null : ($order[$stage] ?? $stage);
     }
 
     public function create(array $data, User $actor, ConsumerKavlingLifecycleService $lifecycle): ConsumerApplication
     {
-        return DB::transaction(function () use ($data, $actor, $lifecycle): ConsumerApplication {
+        $this->migrationStates->assertOasisConsumerInputAllowed((int) $data['branch_id']);
+        $historical = ($data['entry_mode'] ?? 'new') !== 'new';
+        $transactionStatus = $historical
+            ? ($data['transaction_status'] ?? 'LANJUT')
+            : ConsumerApplication::validateNewTransactionStatus($data['transaction_status'] ?? 'LANJUT');
+
+        return DB::transaction(function () use ($data, $actor, $lifecycle, $transactionStatus): ConsumerApplication {
             $application = ConsumerApplication::create([
                 'customer_id' => $data['customer_id'], 'branch_id' => $data['branch_id'], 'project_id' => $data['project_id'],
                 'sales_user_id' => $data['sales_user_id'] ?? null, 'promo_id' => $data['promo_id'] ?? null,
                 'application_status' => 'draft', 'status_cash' => $data['status_cash'] ?? null,
                 'consumer_status' => $data['consumer_status'] ?? 'Lanjut', 'notes' => $data['notes'] ?? null,
-                'transaction_status' => $data['transaction_status'] ?? 'LANJUT',
+                'transaction_status' => $transactionStatus,
                 'payment_method' => $data['payment_method'] ?? (($data['status_cash'] ?? false) ? 'cash' : null),
                 'current_process' => $data['current_process'] ?? 'data_konsumen',
                 'current_process_source' => $data['current_process_source'] ?? 'operational',
@@ -96,6 +112,8 @@ final class ConsumerOperationalService
 
     public function update(ConsumerApplication $application, array $data, User $actor, ConsumerKavlingLifecycleService $lifecycle): ConsumerApplication
     {
+        $this->assertOasisInput($application);
+
         return DB::transaction(function () use ($application, $data, $actor, $lifecycle): ConsumerApplication {
             $previousConsumerStatus = $application->consumer_status;
             $application->update(array_intersect_key($data, array_flip(['sales_user_id', 'promo_id', 'status_cash', 'notes', 'payment_method'])));
@@ -120,6 +138,8 @@ final class ConsumerOperationalService
 
     public function recordBiChecking(ConsumerApplication $application, array $data, User $actor): ConsumerStageEvent
     {
+        $this->assertOasisInput($application);
+
         return DB::transaction(function () use ($application, $data, $actor): ConsumerStageEvent {
             $before = $this->snapshot($application->fresh());
             $date = CarbonImmutable::parse($data['tanggal_slik']);
@@ -140,6 +160,8 @@ final class ConsumerOperationalService
 
     public function recordPsjb(ConsumerApplication $application, array $data, User $actor): ConsumerPsjb
     {
+        $this->assertOasisInput($application);
+
         return DB::transaction(function () use ($application, $data, $actor): ConsumerPsjb {
             $before = $this->snapshot($application->fresh());
             $bi = $application->stageEvents()->where('stage', 'bi_checking')->latest('occurred_at')->latest('id')->first();
@@ -186,6 +208,8 @@ final class ConsumerOperationalService
 
     public function recordReady100(ConsumerApplication $application, array $data, User $actor): ConsumerStageEvent
     {
+        $this->assertOasisInput($application);
+
         return DB::transaction(function () use ($application, $data, $actor): ConsumerStageEvent {
             $date = CarbonImmutable::parse($data['ready_100_at']);
             $before = $this->snapshot($application->fresh());
@@ -208,8 +232,41 @@ final class ConsumerOperationalService
         });
     }
 
+    public function appendTransactionEvent(ConsumerApplication $application, string $eventType, User $actor, string $source = 'manual', ?string $notes = null, array $metadata = [], ?string $reason = null): ConsumerStageEvent
+    {
+
+        $this->assertOasisInput($application);
+
+        if (! FeatureFlag::enabledForBranch('transaction_events_v3', $application->branch_id)) {
+            throw new DomainException('Event transaksi v3 belum aktif.');
+        }
+
+        if (! in_array($eventType, ConsumerStageEvent::TRANSACTION_EVENT_TYPES, true)) {
+            throw new DomainException('Tipe event transaksi tidak valid.');
+        }
+
+        $hasManagePermission = $actor->hasPermission('consumer_progress.manage')
+            || $actor->hasScopedPermission('consumer_progress', 'manage');
+        if (! $hasManagePermission || ! $this->scope->allowsProjectRecord($actor, 'consumer_progress', 'manage', (int) $application->branch_id, $application->project_id)) {
+            throw new AuthorizationException('Anda tidak berwenang melakukan tindakan pada transaksi ini.');
+        }
+
+        return $application->stageEvents()->create([
+            'stage' => ConsumerStageEvent::TRANSACTION_EVENT_STAGE,
+            'event_type' => $eventType,
+            'source' => $source,
+            'notes' => $notes,
+            'reason' => $reason,
+            'occurred_at' => now(),
+            'actor_id' => $actor->id,
+            'metadata' => $metadata,
+        ]);
+    }
+
     private function recordBankStage(ConsumerApplication $application, string $stage, array $data, User $actor, bool $startNewAttempt, bool $reuseLatestAttempt): ConsumerBankProcess
     {
+        $this->assertOasisInput($application);
+
         return DB::transaction(function () use ($application, $stage, $data, $actor, $startNewAttempt, $reuseLatestAttempt): ConsumerBankProcess {
             $application = ConsumerApplication::query()->lockForUpdate()->findOrFail($application->id);
             if (in_array($application->payment_method, ['cash', 'cash_bertahap'], true) && in_array($stage, ['proses_bank', 'sp3k'], true)) {
@@ -225,6 +282,9 @@ final class ConsumerOperationalService
             $before = $this->snapshot($application);
             $date = $data['tanggal_terima_bank'] ?? now()->toDateString();
             $event = $this->appendEvent($application, $stage, $data['status'] ?? $data['response_type'] ?? null, $data['notes'] ?? null, $date, $actor, $data);
+            if ($startNewAttempt && FeatureFlag::enabledForBranch('transaction_events_v3', $application->branch_id)) {
+                $this->appendTransactionEvent($application, 'GANTI_BANK', $actor, 'manual', $data['notes'] ?? null, $data);
+            }
             $record = $startNewAttempt ? null : $this->resolveBankAttempt($application, $data, $reuseLatestAttempt);
             $attributes = $this->bankAttributes($data);
 
@@ -298,6 +358,8 @@ final class ConsumerOperationalService
 
     public function recordPpjb(ConsumerApplication $application, array $data, User $actor): ConsumerPpjbDeveloper
     {
+        $this->assertOasisInput($application);
+
         return DB::transaction(function () use ($application, $data, $actor): ConsumerPpjbDeveloper {
             $before = $this->snapshot($application->fresh());
             $date = $data['tanggal_ttd_ppjb'] ?? $data['tanggal_sp3k'] ?? now()->toDateString();
@@ -312,6 +374,8 @@ final class ConsumerOperationalService
 
     public function recordAkad(ConsumerApplication $application, array $data, User $actor, ConsumerKavlingLifecycleService $lifecycle): ConsumerAkadRecord
     {
+        $this->assertOasisInput($application);
+
         return DB::transaction(function () use ($application, $data, $actor, $lifecycle): ConsumerAkadRecord {
             $before = $this->snapshot($application->fresh());
             $event = $this->appendEvent($application, 'akad', $data['status_konsumen'] ?? null, $data['keterangan_terlambat'] ?? null, $data['tanggal_akad'] ?? now()->toDateString(), $actor, $data);
@@ -327,6 +391,8 @@ final class ConsumerOperationalService
 
     public function recordBast(ConsumerApplication $application, array $data, User $actor, ConsumerKavlingLifecycleService $lifecycle): ConsumerBastRecord
     {
+        $this->assertOasisInput($application);
+
         return DB::transaction(function () use ($application, $data, $actor, $lifecycle): ConsumerBastRecord {
             $application = ConsumerApplication::query()->lockForUpdate()->findOrFail($application->id);
             $this->assertBastReady($application);
@@ -389,6 +455,11 @@ final class ConsumerOperationalService
         if (! $this->bastReadiness($application)['ready']) {
             throw new DomainException('BAST hanya dapat dibuat setelah Akad dan Ready100 tersedia.');
         }
+    }
+
+    private function assertOasisInput(ConsumerApplication $application): void
+    {
+        $this->migrationStates->assertOasisConsumerInputAllowed((int) $application->branch_id);
     }
 
     private function appendEvent(ConsumerApplication $application, string $stage, ?string $status, ?string $notes, string $date, User $actor, array $metadata): ConsumerStageEvent

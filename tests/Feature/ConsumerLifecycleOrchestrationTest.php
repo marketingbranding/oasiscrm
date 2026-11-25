@@ -3,6 +3,8 @@
 namespace Tests\Feature;
 
 use App\Models\ActivityLog;
+use App\Models\AppSetting;
+use App\Models\BranchMigrationState;
 use App\Models\ConsumerApplication;
 use App\Models\ConsumerBastRecord;
 use App\Models\ConsumerKavlingAssignment;
@@ -10,6 +12,7 @@ use App\Models\Customer;
 use App\Models\Kavling;
 use App\Models\Role;
 use App\Models\User;
+use App\Services\AppSettingResolver;
 use App\Services\ConsumerApplicationLifecycleService;
 use App\Services\ConsumerKavlingLifecycleService;
 use App\Services\ConsumerOperationalService;
@@ -21,6 +24,13 @@ use Tests\TestCase;
 class ConsumerLifecycleOrchestrationTest extends TestCase
 {
     use RefreshDatabase;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+        AppSetting::query()->updateOrCreate(['key' => 'transaction_events_v3'], ['value' => true, 'group' => 'feature_flags']);
+        app(AppSettingResolver::class)->forget('transaction_events_v3');
+    }
 
     public function test_phase_2_changelog_is_present_and_visible_to_superadmin(): void
     {
@@ -130,13 +140,83 @@ class ConsumerLifecycleOrchestrationTest extends TestCase
         $service->recordProsesBank($application->fresh(), ['status' => 'approved'], $actor);
     }
 
-    public function test_ganti_konsumen_preserves_old_application_and_moves_kavling_effects(): void
+    public function test_transaction_events_v3_off_keeps_mundur_legacy_status_process_kavling_and_audit_behavior(): void
+    {
+        [$application, $actor] = $this->applicationAndActor('superadmin');
+        $application->update(['current_stage' => 'pemberkasan', 'current_process' => 'pemberkasan']);
+        $kavling = Kavling::create(['project_id' => $application->project_id, 'kavling_code' => 'OFF-01', 'name' => 'OFF-01']);
+        app(ConsumerKavlingLifecycleService::class)->assign($application, $kavling);
+        $this->disableTransactionEventsV3();
+
+        $result = app(ConsumerApplicationLifecycleService::class)->mundur($application->fresh(), 'Mundur atas permintaan konsumen', $actor);
+
+        $this->assertSame('Mundur', $result->consumer_status);
+        $this->assertSame('MUNDUR', $result->transaction_status);
+        $this->assertNull($result->kavling_id);
+        $this->assertSame('pemberkasan', $result->current_stage);
+        $this->assertSame('pemberkasan', $result->current_process);
+        $this->assertSame(0, $result->transactionEvents()->count());
+        $this->assertSame(1, ActivityLog::query()->where('event', 'consumer_mundur')->where('subject_id', $result->id)->count());
+    }
+
+    public function test_transaction_events_v3_off_keeps_pindah_kavling_legacy_status_process_kavling_and_audit_behavior(): void
+    {
+        [$application, $actor] = $this->applicationAndActor('superadmin');
+        $application->update(['current_stage' => 'pemberkasan', 'current_process' => 'pemberkasan']);
+        $oldKavling = Kavling::create(['project_id' => $application->project_id, 'kavling_code' => 'OFF-02', 'name' => 'OFF-02']);
+        $targetKavling = Kavling::create(['project_id' => $application->project_id, 'kavling_code' => 'OFF-03', 'name' => 'OFF-03']);
+        app(ConsumerKavlingLifecycleService::class)->assign($application, $oldKavling);
+        $this->disableTransactionEventsV3();
+
+        $result = app(ConsumerApplicationLifecycleService::class)->pindahKavling($application->fresh(), $targetKavling, $actor);
+
+        $this->assertSame('Pindah Kavling', $result->consumer_status);
+        $this->assertSame('LANJUT', $result->transaction_status);
+        $this->assertSame($targetKavling->id, $result->kavling_id);
+        $this->assertSame('pemberkasan', $result->current_stage);
+        $this->assertSame('pemberkasan', $result->current_process);
+        $this->assertSame(0, $result->transactionEvents()->count());
+        $this->assertSame(1, ActivityLog::query()->where('event', 'consumer_kavling_moved')->where('subject_id', $result->id)->count());
+    }
+
+    /** BR-33: Ganti Nama closes old transaction and records replacement history. */
+    public function test_transaction_events_v3_off_keeps_ganti_nama_legacy_status_process_kavling_and_audit_behavior(): void
+    {
+        [$application, $actor] = $this->applicationAndActor('superadmin');
+        $application->update(['current_stage' => 'pemberkasan', 'current_process' => 'pemberkasan']);
+        $oldKavling = Kavling::create(['project_id' => $application->project_id, 'kavling_code' => 'OFF-04', 'name' => 'OFF-04']);
+        app(ConsumerKavlingLifecycleService::class)->assign($application, $oldKavling);
+        $replacementCustomer = Customer::factory()->create(['name' => 'Konsumen Pengganti Flag Off']);
+        $this->disableTransactionEventsV3();
+
+        $replacement = app(ConsumerApplicationLifecycleService::class)->gantiKonsumen($application->fresh(), $replacementCustomer, $actor);
+        $old = $application->fresh();
+
+        $this->assertSame('REPLACED', $old->application_status);
+        $this->assertSame('DITUTUP', $old->transaction_status);
+        $this->assertNull($old->kavling_id);
+        $this->assertSame('pemberkasan', $old->current_stage);
+        $this->assertSame('pemberkasan', $old->current_process);
+        $this->assertSame($oldKavling->id, $replacement->kavling_id);
+        $this->assertSame(0, $old->transactionEvents()->count());
+        $this->assertSame(1, ActivityLog::query()->where('event', 'consumer_ganti_konsumen')->where('subject_id', $old->id)->count());
+    }
+
+    /** BR-33: Ganti Nama closes old transaction and transfers relevant process history. */
+    public function test_br33_ganti_konsumen_closes_old_transaction_links_active_replacement_and_transfers_process_history(): void
     {
         [$application, $actor] = $this->applicationAndActor('superadmin');
         $oldCustomer = $application->customer;
         $replacementCustomer = Customer::factory()->create(['name' => 'Konsumen Pengganti']);
         $kavling = Kavling::create(['project_id' => $application->project_id, 'kavling_code' => 'A-20', 'name' => 'A-20']);
         app(ConsumerKavlingLifecycleService::class)->assign($application, $kavling);
+        $history = $application->stageEvents()->create([
+            'stage' => 'pemberkasan',
+            'status' => 'completed',
+            'source' => 'manual',
+            'occurred_at' => now()->subDay(),
+            'actor_id' => $actor->id,
+        ]);
         $service = app(ConsumerApplicationLifecycleService::class);
 
         $replacement = $service->gantiKonsumen($application, $replacementCustomer, $actor);
@@ -144,14 +224,72 @@ class ConsumerLifecycleOrchestrationTest extends TestCase
 
         $this->assertNotSame($old->id_transaksi, $replacement->id_transaksi);
         $this->assertSame('REPLACED', $old->application_status);
+        $this->assertSame('DITUTUP', $old->transaction_status);
+        $this->assertSame('GANTI_NAMA', $old->closed_by_event);
         $this->assertSame($replacement->id, $old->replacement_application_id);
         $this->assertSame($oldCustomer->id, $old->customer_id);
         $this->assertSame($replacementCustomer->id, $replacement->customer_id);
+        $this->assertSame('LANJUT', $replacement->transaction_status);
+        $this->assertSame($old->sales_user_id, $replacement->sales_user_id);
         $this->assertSame($kavling->id, $replacement->kavling_id);
+        $this->assertSame($replacement->id, $history->fresh()->consumer_application_id);
         $this->assertSame('released', ConsumerKavlingAssignment::query()->where('consumer_application_id', $old->id)->sole()->assignment_status);
         $this->assertSame('active', ConsumerKavlingAssignment::query()->where('consumer_application_id', $replacement->id)->sole()->assignment_status);
         $this->assertDatabaseHas('activity_log', ['event' => 'consumer_ganti_konsumen', 'subject_id' => $old->id, 'causer_id' => $actor->id]);
         $this->assertSame('ganti_konsumen', ActivityLog::query()->where('event', 'consumer_ganti_konsumen')->sole()->properties['action']);
+        $event = $old->stageEvents()->where('event_type', 'GANTI_NAMA')->sole();
+        $this->assertSame('transaction_event', $event->stage);
+        $this->assertSame($replacement->id, $event->metadata['replacement_application_id']);
+        $this->assertSame($application->id_transaksi, $old->id_transaksi);
+        $this->assertNotSame($old->id_transaksi, $replacement->id_transaksi);
+        $this->assertSame(0, $replacement->stageEvents()->where('event_type', 'GANTI_NAMA')->count());
+    }
+
+    /** BR-34: Pindah Kavling through lifecycle writes typed event and audit. */
+    public function test_br34_pindah_kavling_through_lifecycle_creates_typed_event_and_audit(): void
+    {
+        [$application, $actor] = $this->applicationAndActor('superadmin');
+        $lifecycle = app(ConsumerKavlingLifecycleService::class);
+        $oldKavling = Kavling::create(['project_id' => $application->project_id, 'kavling_code' => 'A-21', 'name' => 'A-21']);
+        $targetKavling = Kavling::create(['project_id' => $application->project_id, 'kavling_code' => 'A-22', 'name' => 'A-22']);
+        $lifecycle->assign($application, $oldKavling);
+
+        app(ConsumerApplicationLifecycleService::class)->pindahKavling($application->fresh(), $targetKavling, $actor);
+
+        $current = $application->fresh();
+        $event = $current->stageEvents()->where('event_type', 'PINDAH_KAVLING')->sole();
+        $this->assertSame('transaction_event', $event->stage);
+        $this->assertSame($targetKavling->id, $event->metadata['kavling_id']);
+        $this->assertSame($targetKavling->id, $current->kavling_id);
+        $this->assertDatabaseHas('activity_log', ['event' => 'consumer_kavling_moved', 'subject_id' => $current->id, 'causer_id' => $actor->id]);
+    }
+
+    /** BR-34: Pindah Kavling preserves assignment on occupied target failure and writes no event. */
+    public function test_br34_pindah_kavling_occupied_target_keeps_old_kavling_and_writes_no_event(): void
+    {
+        [$application, $actor] = $this->applicationAndActor('superadmin');
+        $lifecycle = app(ConsumerKavlingLifecycleService::class);
+        $oldKavling = Kavling::create(['project_id' => $application->project_id, 'kavling_code' => 'A-21', 'name' => 'A-21']);
+        $targetKavling = Kavling::create(['project_id' => $application->project_id, 'kavling_code' => 'A-22', 'name' => 'A-22']);
+        $lifecycle->assign($application, $oldKavling);
+        $occupiedApplication = ConsumerApplication::factory()->create(['project_id' => $application->project_id]);
+        $lifecycle->assign($occupiedApplication, $targetKavling);
+
+        try {
+            app(ConsumerApplicationLifecycleService::class)->pindahKavling($application->fresh(), $targetKavling, $actor);
+            $this->fail('Kavling tujuan terisi seharusnya ditolak.');
+        } catch (DomainException $exception) {
+            $this->assertSame('Kavling tujuan sudah memiliki assignment aktif.', $exception->getMessage());
+        }
+
+        $current = $application->fresh();
+        $this->assertSame($oldKavling->id, $current->kavling_id);
+        $this->assertSame('active', ConsumerKavlingAssignment::query()
+            ->where('consumer_application_id', $application->id)
+            ->where('kavling_id', $oldKavling->id)
+            ->sole()
+            ->assignment_status);
+        $this->assertSame(0, $current->stageEvents()->where('event_type', 'PINDAH_KAVLING')->count());
     }
 
     public function test_ganti_konsumen_retry_returns_existing_replacement_without_creating_another_application(): void
@@ -182,9 +320,16 @@ class ConsumerLifecycleOrchestrationTest extends TestCase
     }
 
     /** @return array{0: ConsumerApplication, 1: User} */
-    private function applicationAndActor(string $role = 'staff'): array
+    private function disableTransactionEventsV3(): void
+    {
+        AppSetting::query()->updateOrCreate(['key' => 'transaction_events_v3'], ['value' => false, 'group' => 'feature_flags']);
+        app(AppSettingResolver::class)->forget('transaction_events_v3');
+    }
+
+    private function applicationAndActor(string $role = 'superadmin'): array
     {
         $application = ConsumerApplication::factory()->create();
+        BranchMigrationState::query()->updateOrCreate(['branch_id' => $application->branch_id], ['state' => BranchMigrationState::STATE_PARALEL]);
         $actor = User::factory()->create([
             'role_id' => Role::query()->where('slug', $role)->value('id'),
             'branch_id' => $application->branch_id,

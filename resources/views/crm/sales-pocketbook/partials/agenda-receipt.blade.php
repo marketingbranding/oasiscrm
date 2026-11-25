@@ -1,12 +1,16 @@
 @php
     $today = \Carbon\CarbonImmutable::today(config('app.timezone'));
-    $isWeekend = $receiptSummary['is_weekend'];
+    $isWeekendDay = $receiptSummary['is_weekend'];
+    $isFreeDay = $receiptSummary['schedule']['is_free_day'];
+    $isWeekend = $isWeekendDay;
+    $freeDayLabel = $isWeekendDay ? 'akhir pekan' : 'hari libur';
+    $freeDayTitle = $isWeekendDay ? 'Akhir pekan' : 'Hari libur';
     $isAllAgendas = ($agendaView ?? 'day') === 'all';
-    $hasDraftAgendas = ! $isAllAgendas && ! $daySubmission && ! $isWeekend && $agendas->isNotEmpty();
+    $hasDraftAgendas = ! $isAllAgendas && ! $daySubmission && ! $isFreeDay && $agendas->isNotEmpty();
     $isToday = $agendaDate->isSameDay($today);
     $tomorrow = $today->addDay();
     $isTomorrow = $agendaDate->isSameDay($tomorrow);
-    $agendaSectionLabelId = $isWeekend ? 'agenda-weekend-title' : 'agenda-workspace-title';
+    $agendaSectionLabelId = $isWeekendDay ? 'agenda-weekend-title' : ($isFreeDay ? 'agenda-free-day-title' : 'agenda-workspace-title');
     $schedule = $receiptSummary['schedule'];
     $agendaStatuses = [
         'planned' => ['Menunggu', 'pending'],
@@ -27,21 +31,21 @@
 
         return sprintf('%02d:%02d', intdiv($minutes, 60), $minutes % 60);
     };
-    $isBreakAgenda = static function ($agenda) use ($isWeekend, $schedule, $toMinutes): bool {
-        if ($isWeekend || blank($agenda->start_time) || blank($agenda->end_time)) {
+    $isBreakAgenda = static function ($agenda) use ($isFreeDay, $schedule, $toMinutes): bool {
+        if ($isFreeDay || blank($agenda->start_time) || blank($agenda->end_time)) {
             return false;
         }
 
         return $toMinutes((string) $agenda->start_time) < $toMinutes((string) $schedule['break_end'])
             && $toMinutes((string) $agenda->end_time) > $toMinutes((string) $schedule['break_start']);
     };
-    $effectiveIntervalMinutes = static function (?int $startMinute, ?int $endMinute) use ($isWeekend, $schedule): int {
+    $effectiveIntervalMinutes = static function (?int $startMinute, ?int $endMinute) use ($isFreeDay, $schedule): int {
         if ($startMinute === null || $endMinute === null) {
             return 0;
         }
 
         $duration = max(0, $endMinute - $startMinute);
-        if ($duration === 0 || $isWeekend) {
+        if ($duration === 0 || $isFreeDay) {
             return $duration;
         }
 
@@ -50,7 +54,7 @@
 
         return max(0, $duration - max(0, min($endMinute, $breakEnd) - max($startMinute, $breakStart)));
     };
-    $freeMinutes = ! $isWeekend && $lastEnd ? $effectiveIntervalMinutes($lastEnd, $toMinutes($schedule['end_time'])) : 0;
+    $freeMinutes = ! $isFreeDay && $lastEnd ? $effectiveIntervalMinutes($lastEnd, $toMinutes($schedule['end_time'])) : 0;
     $agendaSlotData = $agendas->map(fn ($agenda): array => [
         'id' => $agenda->id,
         'startTime' => $agenda->start_time ? substr((string) $agenda->start_time, 0, 5) : null,
@@ -63,8 +67,8 @@
     $hasOldStart = filled(old('start_time'));
     $defaultStartMinutes = $hasOldStart
         ? $toMinutes((string) old('start_time'))
-        : ($isWeekend ? null : ($lastEnd ?: $toMinutes($schedule['start_time'])));
-    if (! $hasOldStart && ! $isWeekend && $defaultStartMinutes !== null) {
+        : ($isFreeDay ? null : ($lastEnd ?: $toMinutes($schedule['start_time'])));
+    if (! $hasOldStart && ! $isFreeDay && $defaultStartMinutes !== null) {
         $breakStart = $toMinutes((string) $schedule['break_start']);
         $breakEnd = $toMinutes((string) $schedule['break_end']);
         if (($defaultStartMinutes >= $breakStart && $defaultStartMinutes < $breakEnd)
@@ -75,16 +79,18 @@
     $defaultEndMinutes = $defaultStartMinutes !== null ? $defaultStartMinutes + $defaultDuration : null;
     $defaultStart = $defaultStartMinutes !== null ? $formatMinutes($defaultStartMinutes) : '';
     $defaultEnd = $defaultEndMinutes !== null ? $formatMinutes($defaultEndMinutes) : '';
-    $defaultRemaining = ! $isWeekend && $defaultEndMinutes !== null
+    $defaultRemaining = ! $isFreeDay && $defaultEndMinutes !== null
         ? max(0, $receiptSummary['target_minutes'] - $receiptSummary['normal_minutes'] - $effectiveIntervalMinutes($defaultStartMinutes, $defaultEndMinutes))
         : null;
 @endphp
 
 <section id="agenda-list" class="sales-receipt-workspace {{ $daySubmission ? 'is-submitted-mode' : '' }}" aria-labelledby="{{ $agendaSectionLabelId }}">
-    @if($isWeekend)
+    @if($isWeekendDay)
         <span id="agenda-weekend-title" class="sr-only">Rencana akhir pekan</span>
+    @elseif($isFreeDay)
+        <span id="agenda-free-day-title" class="sr-only">Rencana hari libur</span>
     @else
-        <span id="agenda-workspace-title" class="sr-only">Agenda {{ $agendaDate->locale('id')->translatedFormat('l, d M Y') }}</span>
+        <span id="agenda-workspace-title" class="sr-only">Rencana Harian Sales {{ $agendaDate->locale('id')->translatedFormat('l, d M Y') }}</span>
     @endif
     @include('crm.sales-pocketbook.partials.agenda-week-navigation')
 
@@ -96,19 +102,19 @@
 
     @if($isAllAgendas)
         @include('crm.sales-pocketbook.partials.agenda-history')
-    @elseif($isWeekend && ! $daySubmission && $agendas->isNotEmpty())
-        @include('crm.sales-pocketbook.partials.agenda-weekend-list')
+    @elseif($isFreeDay && ! $daySubmission && $agendas->isNotEmpty())
+        @include('crm.sales-pocketbook.partials.agenda-weekend-list', ['freeDayLabel' => $freeDayLabel])
     @else
         @if($daySubmission)
-            <div class="sales-submitted-plan {{ $isWeekend ? 'is-weekend' : '' }}" data-tour-target="work-summary">
-                 <div class="sales-submitted-meter"><strong>{{ $receiptSummary['target_minutes'] ? $receiptSummary['target_minutes'].' / '.$receiptSummary['target_minutes'].' menit' : 'Akhir pekan · '.$receiptSummary['normal_minutes'].' menit' }}</strong><span>{{ $isWeekend ? 'Tersimpan langsung' : 'Terkirim ke Koordinator' }}</span>@if($isWeekend)<b class="sales-weekend-inline-stamp">AKHIR PEKAN</b>@endif</div>
-                <p class="sales-submitted-note">{{ $isWeekend ? 'Akhir pekan bebas jam dan menit.' : 'Waktu, judul, kategori, dan lokasi agenda terjadwal tidak dapat diubah.' }}</p>
+            <div class="sales-submitted-plan {{ $isFreeDay ? 'is-weekend' : '' }}" data-tour-target="work-summary">
+                 <div class="sales-submitted-meter"><strong>{{ $receiptSummary['target_minutes'] ? $receiptSummary['target_minutes'].' / '.$receiptSummary['target_minutes'].' menit' : ucfirst($freeDayLabel).' · '.$receiptSummary['normal_minutes'].' menit' }}</strong><span>{{ $isFreeDay ? 'Tersimpan langsung' : 'Terkirim ke Koordinator' }}</span>@if($isFreeDay)<b class="sales-weekend-inline-stamp">{{ strtoupper($freeDayLabel) }}</b>@endif</div>
+                <p class="sales-submitted-note">{{ $isFreeDay ? ucfirst($freeDayLabel).' bebas jam dan menit.' : 'Waktu, judul, kategori, dan lokasi agenda terjadwal tidak dapat diubah.' }}</p>
                 @if($receiptSummary['target_minutes'])<div class="sales-submitted-meter-track"><span style="width:100%"></span></div>@endif
-                <div class="sales-submitted-count">{{ $receiptSummary['completed_count'] }} dari {{ $receiptSummary['agenda_count'] }} agenda selesai</div>
+                <div class="sales-submitted-count">{{ $receiptSummary['completed_count'] }} dari {{ $receiptSummary['agenda_count'] }} kegiatan selesai</div>
                 <ol class="sales-submitted-list">
                     @php $breakRendered = false; @endphp
                     @foreach($agendas as $agenda)
-                        @if(! $isWeekend && ! $breakRendered && filled($agenda->start_time) && $toMinutes((string) $agenda->start_time) >= $toMinutes($schedule['break_end']))
+                        @if(! $isFreeDay && ! $breakRendered && filled($agenda->start_time) && $toMinutes((string) $agenda->start_time) >= $toMinutes($schedule['break_end']))
                             @php $breakRendered = true; @endphp
                             <li class="sales-agenda-break-row">Istirahat {{ $schedule['break_start'] }}–{{ $schedule['break_end'] }}</li>
                         @endif
@@ -123,10 +129,10 @@
                              $breakAgenda = $isBreakAgenda($agenda);
                              $agendaLabels = [];
                              if ($agenda->is_outside_schedule) {
-                                 $agendaLabels[] = 'Agenda tambahan · di luar target';
+                                 $agendaLabels[] = 'Kegiatan tambahan · di luar target';
                              }
                              if ($breakAgenda) {
-                                 $agendaLabels[] = 'Agenda jam istirahat';
+                                 $agendaLabels[] = 'Kegiatan jam istirahat';
                              }
                              if ($agendaLabels === []) {
                                  $agendaLabels[] = $agenda->sales_activity_category ?: 'Lainnya';
@@ -138,31 +144,31 @@
                         </li>
                     @endforeach
                 </ol>
-                @if($isWeekend)<div class="sales-receipt-weekend-total"><span>TOTAL {{ $receiptSummary['normal_minutes'] }} MENIT</span><span>TANPA TARGET</span></div>@endif
+                @if($isFreeDay)<div class="sales-receipt-weekend-total"><span>TOTAL {{ $receiptSummary['normal_minutes'] }} MENIT</span><span>TANPA TARGET</span></div>@endif
             </div>
             @if($project)
-                <div id="agenda-input" class="sales-receipt-add-panel sales-reference-bottom-action" data-tour-target="add-plan-action"><button type="button" class="sales-receipt-add-trigger" @click="{{ $isWeekend ? 'openAgendaSheet($event)' : 'openAgendaPreview($event)' }}" aria-haspopup="dialog" aria-controls="{{ $isWeekend ? 'sales-agenda-create-sheet' : 'sales-agenda-receipt-preview' }}"><span>+ Tambah rencana {{ $isWeekend ? 'akhir pekan' : 'hari ini' }}</span></button></div>
+                <div id="agenda-input" class="sales-receipt-add-panel sales-reference-bottom-action" data-tour-target="add-plan-action"><button type="button" class="sales-receipt-add-trigger" @click="{{ $isFreeDay ? 'openAgendaSheet($event)' : 'openAgendaPreview($event)' }}" aria-haspopup="dialog" aria-controls="{{ $isFreeDay ? 'sales-agenda-create-sheet' : 'sales-agenda-receipt-preview' }}"><span>+ Tambah rencana {{ $isFreeDay ? $freeDayLabel : 'hari ini' }}</span></button></div>
             @endif
         @else
-            <section class="sales-reference-summary {{ $isWeekend ? 'is-weekend' : '' }}" aria-label="Ringkasan {{ $isWeekend ? 'rencana akhir pekan' : 'jam kerja harian' }}" data-tour-target="work-summary">
-                @if($isWeekend)
-                    <div class="sales-reference-summary-heading"><span>Akhir pekan · bebas</span><strong>Tanpa target</strong><small>Jam dan durasi bebas · buat rencana bila ada usaha ekstra</small><b class="sales-weekend-inline-stamp">AKHIR PEKAN</b></div>
+            <section class="sales-reference-summary {{ $isFreeDay ? 'is-weekend' : '' }}" aria-label="Ringkasan {{ $isFreeDay ? $freeDayLabel : 'jam kerja harian' }}" data-tour-target="work-summary">
+                @if($isFreeDay)
+                    <div class="sales-reference-summary-heading"><span>{{ $freeDayTitle }} · bebas</span><strong>Tanpa target</strong><small>Jam dan durasi bebas · buat rencana bila ada usaha ekstra</small><b class="sales-weekend-inline-stamp">{{ strtoupper($freeDayTitle) }}</b></div>
                 @else
                      <div class="sales-reference-summary-heading"><span>Jam kerja {{ $agendaDate->locale('id')->translatedFormat('l') }}</span><strong>{{ $schedule['start_time'] }}–{{ $schedule['end_time'] }}</strong><small>Istirahat {{ $schedule['break_start'] }}–{{ $schedule['break_end'] }}</small></div>
                     <div class="sales-reference-progress"><div><span>{{ $receiptSummary['normal_minutes'] }} / {{ $receiptSummary['target_minutes'] }} menit</span><strong>target hari ini</strong></div><div class="sales-reference-progress-track" role="progressbar" aria-label="Progress rencana hari ini" aria-valuemin="0" aria-valuemax="{{ $receiptSummary['target_minutes'] }}" aria-valuenow="{{ $receiptSummary['normal_minutes'] }}"><span style="width: {{ min(100, ($receiptSummary['normal_minutes'] / max(1, $receiptSummary['target_minutes'])) * 100) }}%"></span></div></div>
                 @endif
             </section>
              @if($hasDraftAgendas)
-                 <div class="sales-reference-empty" data-tour-target="agenda-row" role="status"><div class="sales-reference-empty-mark" aria-hidden="true">✓</div><strong>Draft agenda tersimpan</strong><span>{{ $agendas->total() }} agenda belum dikirim ke Koordinator.</span></div>
+                 <div class="sales-reference-empty" data-tour-target="agenda-row" role="status"><div class="sales-reference-empty-mark" aria-hidden="true">✓</div><strong>Draft rencana tersimpan</strong><span>{{ $agendas->total() }} kegiatan belum dikirim ke Koordinator.</span></div>
              @else
-                 <div class="sales-reference-empty" data-tour-target="agenda-row" role="status"><div class="sales-reference-empty-mark" aria-hidden="true">＋</div><strong>{{ $isWeekend ? 'Belum ada rencana akhir pekan' : 'Belum ada rencana hari ini' }}</strong><span>{{ $isWeekend ? 'Tambahkan aktivitas bila ada rencana usaha ekstra.' : 'Tulis rencana kerja 480 menit di struk, lalu sobek dan kirim ke Koordinator.' }}</span><span class="sr-only">Belum ada agenda</span></div>
+                 <div class="sales-reference-empty" data-tour-target="agenda-row" role="status"><div class="sales-reference-empty-mark" aria-hidden="true">＋</div><strong>{{ $isFreeDay ? 'Belum ada rencana '.$freeDayLabel : 'Belum ada rencana hari ini' }}</strong><span>{{ $isFreeDay ? 'Tambahkan aktivitas bila ada rencana usaha ekstra.' : 'Tulis rencana kerja 480 menit di struk, lalu sobek dan kirim ke Koordinator.' }}</span><span class="sr-only">Belum ada agenda</span></div>
              @endif
-            @if(! $isWeekend && $incompletePreviousAgendas->isNotEmpty() && $isToday)
-                <div class="sales-receipt-warning" role="status"><strong>{{ $incompletePreviousAgendas->count() }} rencana kemarin belum lengkap</strong><span>{{ $incompletePreviousAgendas->count() }} agenda belum ada bukti foto · lengkapi sekarang</span></div>
+            @if(! $isFreeDay && $incompletePreviousAgendas->isNotEmpty() && $isToday)
+                <div class="sales-receipt-warning" role="status"><strong>{{ $incompletePreviousAgendas->count() }} rencana kemarin belum lengkap</strong><span>{{ $incompletePreviousAgendas->count() }} kegiatan belum ada bukti foto · lengkapi sekarang</span></div>
             @endif
             @if($project)
                  <div id="agenda-input" class="sales-receipt-add-panel sales-reference-bottom-action" data-tour-target="add-plan-action">
-                     @if(! $isWeekend && ! $daySubmission && $receiptSummary['normal_minutes'] === $receiptSummary['target_minutes'])
+                     @if(! $isFreeDay && ! $daySubmission && $receiptSummary['normal_minutes'] === $receiptSummary['target_minutes'])
                          <form method="POST" action="{{ route('sales-agendas.submit') }}" class="sales-receipt-submit-form sales-receipt-submit-form--workspace" data-receipt-submit>
                              @csrf
                              <input type="hidden" name="scheduled_date" value="{{ $agendaDate->toDateString() }}">
@@ -170,7 +176,7 @@
                              <button type="submit" class="crm-button crm-button--primary crm-button--lg" data-accent="sales">Sobek &amp; kirim ke Koordinator</button>
                          </form>
                      @else
-                         <button type="button" class="sales-receipt-add-trigger" @click="{{ $isWeekend ? 'openAgendaSheet($event)' : ($hasDraftAgendas ? 'openAgendaPreview($event, true)' : 'openAgendaPreview($event)') }}" aria-haspopup="dialog" aria-controls="{{ $isWeekend ? 'sales-agenda-create-sheet' : 'sales-agenda-receipt-preview' }}"><span>{{ $hasDraftAgendas ? 'Lanjutkan Draft' : '+ Tambah rencana '.($isWeekend ? 'akhir pekan' : 'hari ini') }}</span></button>
+                         <button type="button" class="sales-receipt-add-trigger" @click="{{ $isFreeDay ? 'openAgendaSheet($event)' : ($hasDraftAgendas ? 'openAgendaPreview($event, true)' : 'openAgendaPreview($event)') }}" aria-haspopup="dialog" aria-controls="{{ $isFreeDay ? 'sales-agenda-create-sheet' : 'sales-agenda-receipt-preview' }}"><span>{{ $hasDraftAgendas ? 'Lanjutkan Draft' : '+ Tambah rencana '.($isFreeDay ? $freeDayLabel : 'hari ini') }}</span></button>
                      @endif
                  </div>
             @endif
@@ -184,7 +190,7 @@
         </a>
     @endif
 
-    @if(! $isAllAgendas && ! $isWeekend && $project)
+    @if(! $isAllAgendas && ! $isFreeDay && $project)
         @include('crm.sales-pocketbook.partials.agenda-receipt-canvas', ['isReceiptPreview' => true])
     @endif
 

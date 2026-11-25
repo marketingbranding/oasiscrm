@@ -165,8 +165,9 @@ class SalesProjectAssignmentTest extends TestCase
     public function test_non_sales_user_can_receive_project_assignments(): void
     {
         [$admin, , $branch, $project] = $this->assignmentContext();
-        $adminRole = Role::firstOrCreate(['slug' => 'admin'], ['name' => 'Admin', 'is_superadmin' => false]);
+        $adminRole = Role::where('slug', 'staff')->firstOrFail();
         $payload = $this->salesPayload($adminRole, $branch, [$project->id]);
+        $payload['staff_type'] = 'admin_cabang';
 
         $this->actingAs($admin)->post(route('admin-users.store'), $payload)
             ->assertRedirect();
@@ -238,6 +239,7 @@ class SalesProjectAssignmentTest extends TestCase
             'name' => 'Sales User',
             'email' => 'sales@example.com',
             'role_id' => $role->id,
+            'staff_type' => $role->slug === 'staff' ? 'admin_cabang' : null,
             'branch_id' => $branch->id,
             'branch_ids' => [$branch->id],
             'assigned_project_ids' => $projectIds,

@@ -22,10 +22,13 @@ class ConsumerEntryService
         private readonly OrganizationScopeService $scope,
         private readonly ConsumerOperationalService $operational,
         private readonly ConsumerKavlingLifecycleService $kavlingLifecycle,
+        private readonly BranchMigrationStateService $migrationStates,
+        private readonly ConsumerLeadLinkCarryOverService $leadLinkCarryOver,
     ) {}
 
     public function create(array $data, User $actor, bool $skipAuthorization = false): ConsumerApplication
     {
+        $this->migrationStates->assertOasisConsumerInputAllowed((int) $data['branch_id']);
         if (! $skipAuthorization) {
             $this->assertManageScope($actor, (int) $data['branch_id'], (int) $data['project_id']);
         }
@@ -55,7 +58,9 @@ class ConsumerEntryService
                 'current_process_source' => $historical ? 'historical_entry' : 'operational',
                 'entry_mode' => $data['entry_mode'] ?? 'new',
                 'acquisition_source' => $acquisitionSource,
-                'transaction_status' => $data['transaction_status'] ?? 'LANJUT',
+                'transaction_status' => $historical
+                    ? ($data['transaction_status'] ?? 'LANJUT')
+                    : ConsumerApplication::validateNewTransactionStatus($data['transaction_status'] ?? 'LANJUT'),
                 'historical_entered_at' => $historical ? now() : null,
                 'historical_entered_by' => $historical ? $actor->id : null,
                 'notes' => $data['notes'] ?? null,
@@ -64,6 +69,8 @@ class ConsumerEntryService
             if ($paymentMethod === 'cash') {
                 $this->markCashNotApplicable($application, $actor);
             }
+
+            $this->leadLinkCarryOver->carryApplication($application);
 
             return $application->fresh(['customer', 'kavling', 'project', 'sales']);
         });

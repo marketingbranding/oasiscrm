@@ -19,7 +19,7 @@ class UpdatePromoRequest extends FormRequest
         return $promo instanceof Promo
             && $this->user()->can('update', $promo)
             && ($this->user()->isSuperadmin() || $branchId === (int) $promo->branch_id)
-            && (! $this->user()->hasPrimaryRole('admin') || $branchId === (int) $this->user()->branch_id)
+            && (! $this->user()->isAdminCabang() || $branchId === (int) $this->user()->branch_id)
             && app(PromoAccessService::class)->canManageBranch($this->user(), $branchId);
     }
 

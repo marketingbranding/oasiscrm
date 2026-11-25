@@ -3,18 +3,24 @@
 namespace Tests\Feature;
 
 use App\Models\Branch;
+use App\Models\BranchMigrationState;
 use App\Models\ConsumerApplication;
 use App\Models\ConsumerKavlingAssignment;
+use App\Models\ConsumerLeadLinkDecision;
 use App\Models\ConsumerMigrationReconciliation;
 use App\Models\ConsumerStageEvent;
 use App\Models\Kavling;
+use App\Models\KonsumenProgressSheetRow;
 use App\Models\LeadMaster;
 use App\Models\Role;
 use App\Models\User;
 use App\Services\ConsumerKavlingLifecycleService;
+use App\Services\ConsumerLeadLinkDecisionService;
+use App\Services\ConsumerLeadLinkSubjectResolver;
 use App\Services\ConsumerMigrationReconciliationService;
 use App\Services\ConsumerOperationalService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 use Tests\TestCase;
 
@@ -33,7 +39,22 @@ class ConsumerMigrationReconciliationTest extends TestCase
         parent::setUp();
         $this->branch = Branch::create(['code' => 'MGL', 'name' => 'Magelang', 'is_active' => true]);
         $this->project = LeadMaster::create(['branch_id' => $this->branch->id, 'project_name' => 'Proyek Migrasi', 'is_active' => true]);
+        BranchMigrationState::query()->create(['branch_id' => $this->branch->id, 'state' => BranchMigrationState::STATE_PARALEL]);
         $this->admin = User::factory()->create(['role_id' => Role::where('slug', 'superadmin')->value('id'), 'branch_id' => $this->branch->id, 'email_verified_at' => now(), 'password_changed_at' => now()]);
+    }
+
+    public function test_br_d32_reconciliation_permission_preserves_previous_manage_access(): void
+    {
+        $manageId = DB::table('permissions')->where('slug', 'consumer_progress.manage')->value('id');
+        $this->assertNotNull($manageId);
+        $reconcileId = DB::table('permissions')->where('slug', 'consumer_migration.reconcile')->value('id');
+
+        $this->assertNotNull($reconcileId);
+        $this->assertContains(
+            $this->admin->role_id,
+            DB::table('role_permission')->where('permission_id', $reconcileId)->pluck('role_id')->all(),
+        );
+        $this->assertTrue($this->admin->hasPermission('consumer_migration.reconcile'));
     }
 
     public function test_pending_queue_and_resolved_item_scope(): void
@@ -43,6 +64,28 @@ class ConsumerMigrationReconciliationTest extends TestCase
         app(ConsumerMigrationReconciliationService::class)->apply($item, $this->admin, ['decision' => 'REJECT', 'new_customer_name' => 'Konsumen Baru']);
         $this->assertCount(0, app(ConsumerMigrationReconciliationService::class)->visibleQuery($this->admin)->get());
         $this->assertSame('RESOLVED', $item->fresh()->reconciliation_status);
+    }
+
+    public function test_br_carry_over_reconciliation_moves_existing_decision_to_application(): void
+    {
+        [$item, $app] = $this->context();
+        $row = KonsumenProgressSheetRow::create(['branch_id' => $item->branch_id, 'sheet_id' => 'migration-sheet', 'sheet_name' => 'data_konsumen', 'row_hash' => 'migration-row', 'row_data' => ['[SYS] ID Konsumen' => $item->source_customer_ref, 'Proyek' => $this->project->project_name]]);
+        $subject = app(ConsumerLeadLinkSubjectResolver::class)->fromSheetRow($row, $item->project_id, null);
+        app(ConsumerLeadLinkDecisionService::class)->decideForSubject($subject, ConsumerLeadLinkDecision::STATUS_LEGACY, null, ['reason' => 'Sheet'], $this->admin);
+
+        app(ConsumerMigrationReconciliationService::class)->apply($item, $this->admin, ['decision' => 'REJECT', 'new_customer_name' => 'Carry Customer']);
+
+        $this->assertDatabaseHas('consumer_lead_link_decisions', ['subject_key' => 'application:'.$app->id, 'status' => ConsumerLeadLinkDecision::STATUS_LEGACY, 'is_active' => true]);
+    }
+
+    public function test_br_carry_over_reconciliation_without_source_customer_ref_does_not_move_decision(): void
+    {
+        [$item, $app] = $this->context();
+        $item->update(['source_customer_ref' => null]);
+
+        app(ConsumerMigrationReconciliationService::class)->apply($item, $this->admin, ['decision' => 'REJECT', 'new_customer_name' => 'No Ref Customer']);
+
+        $this->assertDatabaseMissing('consumer_lead_link_decisions', ['subject_key' => 'application:'.$app->id]);
     }
 
     public function test_lanjut_creates_customer_and_active_assignment(): void
@@ -104,7 +147,7 @@ class ConsumerMigrationReconciliationTest extends TestCase
         $project = $suffix === '' ? $this->project : LeadMaster::create(['branch_id' => $this->branch->id, 'project_name' => 'Proyek '.$suffix, 'is_active' => true]);
         $kavling = Kavling::create(['project_id' => $project->id, 'kavling_code' => 'A-'.$suffix.'01', 'name' => 'A-'.$suffix.'01']);
         $app = ConsumerApplication::create(['branch_id' => $this->branch->id, 'project_id' => $project->id, 'application_status' => 'migration_pending', 'id_kavling' => $kavling->name]);
-        $item = ConsumerMigrationReconciliation::create(['consumer_application_id' => $app->id, 'branch_id' => $this->branch->id, 'project_id' => $project->id, 'source_system' => 'marison_v2', 'source_transaction_id' => 'TRX-'.$suffix.uniqid(), 'source_current_kavling' => $kavling->name, 'reconciliation_status' => 'PENDING', 'source_payload_hash' => hash('sha256', $app->id)]);
+        $item = ConsumerMigrationReconciliation::create(['consumer_application_id' => $app->id, 'branch_id' => $this->branch->id, 'project_id' => $project->id, 'source_system' => 'marison_v2', 'source_transaction_id' => 'TRX-'.$suffix.uniqid(), 'source_customer_ref' => 'KONS-'.$suffix.uniqid(), 'source_current_kavling' => $kavling->name, 'reconciliation_status' => 'PENDING', 'source_payload_hash' => hash('sha256', $app->id)]);
 
         return [$item, $app, $kavling];
     }

@@ -11,6 +11,7 @@ use App\Models\ConsumerWarranty;
 use App\Models\SalesLead;
 use App\Models\User;
 use App\Models\UserNotification;
+use App\Services\BranchMigrationStateService;
 use App\Services\ConsumerDatabaseWorkspaceService;
 use App\Services\ConsumerEntryService;
 use App\Services\ConsumerNupService;
@@ -63,6 +64,7 @@ final class WorkspaceController extends Controller
         private readonly ConsumerOperationalService $consumerOperations,
         private readonly ConsumerProcessService $consumerProcesses,
         private readonly ConsumerNupService $nups,
+        private readonly BranchMigrationStateService $migrationStates,
         private readonly OrganizationScopeService $organizationScope,
         private readonly WorkspaceAccessService $workspaceAccess,
     ) {}
@@ -82,8 +84,8 @@ final class WorkspaceController extends Controller
             ->count();
 
         return view('workspace-v2.dashboard.index', [
-            'activeTransactions' => (clone $applications)->whereNotIn('consumer_status', ['Mundur', 'Reject'])->count(),
-            'completedTransactions' => (clone $applications)->whereIn('transaction_status', ['SELESAI', 'selesai', 'completed'])->count(),
+            'activeTransactions' => (clone $applications)->where('transaction_status', 'LANJUT')->count(),
+            'completedTransactions' => $this->completedApplications($applications)->count(),
             'attentionCount' => $issues + $overdue,
             'processCounts' => (clone $applications)
                 ->selectRaw("COALESCE(NULLIF(current_process, ''), NULLIF(current_stage, ''), 'data_konsumen') as process_key, COUNT(*) as total")
@@ -125,7 +127,15 @@ final class WorkspaceController extends Controller
     {
         $this->authorizeConsumerView($request->user());
 
-        return response()->json(['ok' => true, 'data' => $this->consumerWorkspace->detail($request->user(), $consumerApplication)]);
+        $detail = $this->consumerWorkspace->detail($request->user(), $consumerApplication);
+        $canInput = $this->migrationStates->allowsOasisConsumerInput((int) $consumerApplication->branch_id);
+        $detail['can_input'] = $canInput;
+        $detail['actions'] = [
+            'return_to_nup' => $canInput ? route('consumer-nups.return', $consumerApplication) : null,
+            'resolve_issue' => $canInput ? route('consumer-issues.resolve', ['consumerIssue' => '__ISSUE__']) : null,
+        ];
+
+        return response()->json(['ok' => true, 'data' => $detail]);
     }
 
     public function consumerForm(Request $request): View
@@ -185,7 +195,7 @@ final class WorkspaceController extends Controller
     {
         $this->authorizeSalesView($request->user());
         $search = trim($request->string('search')->toString());
-        $query = SalesLead::query()->visibleTo($request->user())->with(['branch', 'project', 'sales']);
+        $query = SalesLead::query()->visibleTo($request->user())->activeForLeadViews()->with(['branch', 'project', 'sales']);
         $query->when($search !== '', fn (Builder $builder): Builder => $builder->where(function (Builder $nested) use ($search): void {
             $nested->where('customer_name', 'like', "%{$search}%")
                 ->orWhere('phone', 'like', "%{$search}%")
@@ -223,7 +233,7 @@ final class WorkspaceController extends Controller
         $applications = $this->scopedApplications($request);
 
         $data = match ($workspace) {
-            'mundur' => (clone $applications)->where('consumer_status', 'Mundur')->with(['customer', 'project', 'kavling', 'sales'])->latest('updated_at')->paginate(25)->withQueryString(),
+            'mundur' => (clone $applications)->where('transaction_status', 'MUNDUR')->with(['customer', 'project', 'kavling', 'sales'])->latest('updated_at')->paginate(25)->withQueryString(),
             'selesai' => $this->consumerProcesses->completedQuery($request->user())->with(['customer', 'project', 'kavling', 'sales'])->latest('updated_at')->paginate(25)->withQueryString(),
             'kendala' => ConsumerIssue::query()->with(['application.customer', 'application.project', 'pic'])->whereIn('consumer_application_id', $applications->clone()->select('consumer_applications.id'))->latest('opened_at')->paginate(25)->withQueryString(),
             'garansi' => ConsumerWarranty::query()->with(['application.customer', 'application.project', 'application.kavling'])->whereIn('consumer_application_id', $applications->clone()->select('consumer_applications.id'))->latest('created_at')->paginate(25)->withQueryString(),
@@ -253,8 +263,8 @@ final class WorkspaceController extends Controller
 
         return view('workspace-v2.reports.index', [
             'total' => (clone $applications)->count(),
-            'active' => (clone $applications)->whereNotIn('consumer_status', ['Mundur', 'Reject'])->count(),
-            'completed' => (clone $applications)->whereIn('transaction_status', ['SELESAI', 'selesai', 'completed'])->count(),
+            'active' => (clone $applications)->where('transaction_status', 'LANJUT')->count(),
+            'completed' => $this->completedApplications($applications)->count(),
             'branches' => $this->workspaceAccess->accessibleBranches($request->user()),
         ]);
     }
@@ -292,7 +302,7 @@ final class WorkspaceController extends Controller
     private function authorizeConsumerManage(User $user): void
     {
         abort_unless(
-            $user->hasPermission('consumer_progress.manage') && $user->hasScopedPermission('consumer_progress', 'manage'),
+            $user->hasPermission('consumer_progress.manage'),
             Response::HTTP_FORBIDDEN,
         );
     }
@@ -301,6 +311,12 @@ final class WorkspaceController extends Controller
     private function scopedApplications(Request $request): Builder
     {
         return $this->consumerOperations->visibleQuery($request->user(), $this->organizationScope);
+    }
+
+    /** @param Builder<ConsumerApplication> $applications */
+    private function completedApplications(Builder $applications): Builder
+    {
+        return $this->consumerProcesses->applyCompletedFilter($applications);
     }
 
     /** @return list<array<string, mixed>> */

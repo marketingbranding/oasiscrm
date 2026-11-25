@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Models\Traits\LogsActivity;
+use App\Services\DanaTalanganPaymentService;
 use App\Services\OrganizationScopeService;
 use App\Support\DanaTalanganMoney;
 use Illuminate\Database\Eloquent\Builder;
@@ -15,6 +16,22 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 class DanaTalangan extends Model
 {
     use LogsActivity, SoftDeletes;
+
+    protected static function booted(): void
+    {
+        static::saved(function (self $record): void {
+            if ($record->wasChanged('status') && ! $record->wasChanged('status_auto_lunas')) {
+                $record->newQuery()->whereKey($record->getKey())->update([
+                    'status_auto_lunas' => false,
+                    'status_before_auto_lunas' => null,
+                ]);
+            }
+
+            if ($record->wasChanged('nominal')) {
+                app(DanaTalanganPaymentService::class)->recalculateStatus($record->fresh());
+            }
+        });
+    }
 
     protected $fillable = [
         'oasis_sync_id',
@@ -45,7 +62,13 @@ class DanaTalangan extends Model
         'konfirmasi_keuangan',
         'branch_id',
         'project_id',
+        'consumer_application_id',
+        'kavling_id',
+        'id_transaksi',
+        'id_psjb',
         'status',
+        'status_auto_lunas',
+        'status_before_auto_lunas',
         'created_by',
         'updated_by',
     ];
@@ -58,6 +81,7 @@ class DanaTalangan extends Model
             'nominal' => 'decimal:2',
             'pinjam_nama' => 'boolean',
             'konfirmasi_keuangan' => 'boolean',
+            'status_auto_lunas' => 'boolean',
             'umur' => 'integer',
             'last_synced_field_hashes' => 'array',
             'delivery_attempted_at' => 'datetime',
@@ -86,6 +110,16 @@ class DanaTalangan extends Model
         return $this->belongsTo(LeadMaster::class, 'project_id');
     }
 
+    public function consumerApplication(): BelongsTo
+    {
+        return $this->belongsTo(ConsumerApplication::class);
+    }
+
+    public function kavling(): BelongsTo
+    {
+        return $this->belongsTo(Kavling::class);
+    }
+
     public function creator(): BelongsTo
     {
         return $this->belongsTo(User::class, 'created_by');
@@ -109,6 +143,11 @@ class DanaTalangan extends Model
     public function reconciliationItems(): HasMany
     {
         return $this->hasMany(DanaTalanganReconciliationItem::class);
+    }
+
+    public function payments(): HasMany
+    {
+        return $this->hasMany(DanaTalanganPayment::class);
     }
 
     protected function activityLabel(): string

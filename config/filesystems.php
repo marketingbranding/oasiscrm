@@ -52,6 +52,13 @@ return [
             'report' => false,
         ],
 
+        'database_backups' => [
+            'driver' => env('OASIS_BACKUP_DISK_DRIVER', 'local'),
+            'root' => env('OASIS_BACKUP_DISK_ROOT', storage_path('backups')),
+            'throw' => true,
+            'report' => false,
+        ],
+
         'public' => [
             'driver' => 'local',
             'root' => storage_path('app/public'),

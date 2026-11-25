@@ -18,7 +18,10 @@
 /graphify-out/
 /app/graphify-out/
 /.opencode/
+/.superpowers/sdd/
+/.playwright-mcp/
 /node_modules
+/tasks/
 /public/fonts-manifest.dev.json
 /public/hot
 /public/storage

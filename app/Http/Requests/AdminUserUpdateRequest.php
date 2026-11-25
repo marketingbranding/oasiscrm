@@ -28,6 +28,8 @@ class AdminUserUpdateRequest extends FormRequest
     public function rules(): array
     {
         $target = $this->route('admin_user');
+        $role = Role::query()->find($this->input('role_id'));
+        $requiresStaffType = $role?->slug === 'staff';
 
         return [
             'expected_updated_at' => ['required', 'string'],
@@ -35,6 +37,8 @@ class AdminUserUpdateRequest extends FormRequest
             'email' => ['required', 'email', 'max:255', Rule::unique(User::class, 'email')->ignore($target)],
             'phone' => ['nullable', 'string', 'max:20'],
             'role_id' => ['required', Rule::exists(Role::class, 'id')->where('is_active', true)],
+            'staff_type' => [$requiresStaffType ? 'required' : 'nullable', 'string', 'max:50'],
+            'scope_level' => ['nullable', Rule::in(['pusat', 'cabang', 'tim', 'khusus'])],
             'sales_category' => ['nullable', Rule::enum(SalesCategory::class)],
             'branch_id' => ['required', Rule::exists(Branch::class, 'id')->where('is_active', true)],
             'branch_ids' => ['nullable', 'array'],
@@ -51,6 +55,18 @@ class AdminUserUpdateRequest extends FormRequest
     public function after(): array
     {
         return [function (Validator $validator) {
+            $role = Role::find($this->input('role_id'));
+            if ($role !== null) {
+                foreach (app(UserAdministrationService::class)->validateRoleAttributes(
+                    $role,
+                    $this->input('staff_type'),
+                    $this->input('scope_level'),
+                    in_array(Role::query()->whereKey($this->route('admin_user')?->role_id)->value('slug'), ['admin', 'sas', 'sam'], true),
+                ) as $field => $message) {
+                    $validator->errors()->add($field, $message);
+                }
+            }
+
             if ($validator->errors()->has('coordinator_sales_ids')) {
                 return;
             }

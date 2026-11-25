@@ -69,6 +69,45 @@ class ReportingHierarchyService
         return $user->refresh();
     }
 
+    public function distance(User $viewer, int $targetUserId): ?int
+    {
+        if ((int) $viewer->id === $targetUserId) {
+            return 0;
+        }
+
+        $effectiveMode = $this->mode->modeFor($viewer, $viewer->branch_id);
+        if ($effectiveMode === 'graph') {
+            try {
+                $ancestorIds = $this->graph->ancestors(User::query()->findOrFail($targetUserId), strict: true)
+                    ->pluck('id')->map(fn ($id): int => (int) $id)->all();
+
+                $distance = array_search((int) $viewer->id, $ancestorIds, true);
+
+                return $distance === false ? null : $distance + 1;
+            } catch (Throwable) {
+                return null;
+            }
+        }
+
+        $currentId = $targetUserId;
+        $visited = [];
+        for ($distance = 1; $distance <= 100; $distance++) {
+            if (isset($visited[$currentId])) {
+                return null;
+            }
+            $visited[$currentId] = true;
+            $currentId = User::query()->whereKey($currentId)->value('supervisor_user_id');
+            if ($currentId === null) {
+                return null;
+            }
+            if ((int) $currentId === (int) $viewer->id) {
+                return $distance;
+            }
+        }
+
+        return null;
+    }
+
     /** @return array<int> */
     public function descendantIds(User $supervisor, int $depthLimit = 100, ?int $branchId = null): array
     {

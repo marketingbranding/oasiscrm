@@ -16,6 +16,7 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\Relations\MorphMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
@@ -24,6 +25,9 @@ use Illuminate\Support\Facades\Schema;
     'email',
     'password',
     'role_id',
+    'sales_type',
+    'staff_type',
+    'scope_level',
     'branch_id',
     'organization_unit_id',
     'phone',
@@ -48,6 +52,8 @@ use Illuminate\Support\Facades\Schema;
 #[Hidden(['password', 'remember_token'])]
 class User extends Authenticatable implements MustVerifyEmail
 {
+    private ?Collection $resolvedPermissionSlugs = null;
+
     /** @use HasFactory<UserFactory> */
     use HasFactory, Notifiable;
 
@@ -74,6 +80,10 @@ class User extends Authenticatable implements MustVerifyEmail
         });
 
         static::saved(function (User $user) {
+            if ($user->wasChanged(['role_id', 'staff_type'])) {
+                $user->resolvedPermissionSlugs = null;
+            }
+
             if (! $user->branch_id || ! ($user->wasRecentlyCreated || $user->wasChanged('branch_id')) || ! Schema::hasTable('branch_user')) {
                 return;
             }
@@ -113,6 +123,9 @@ class User extends Authenticatable implements MustVerifyEmail
             'password' => 'hashed',
             'is_active' => 'boolean',
             'must_change_password' => 'boolean',
+            'sales_type' => 'string',
+            'staff_type' => 'string',
+            'scope_level' => 'string',
         ];
     }
 
@@ -300,6 +313,12 @@ class User extends Authenticatable implements MustVerifyEmail
         return $this->hasPrimaryRole('sales');
     }
 
+    public function isAdminCabang(): bool
+    {
+        return $this->hasPrimaryRole('admin')
+            || ($this->hasPrimaryRole('staff') && $this->staff_type === 'admin_cabang');
+    }
+
     public function hasPrimaryRole(string|array $roles): bool
     {
         return in_array($this->role?->slug, (array) $roles, true);
@@ -315,8 +334,38 @@ class User extends Authenticatable implements MustVerifyEmail
             return true;
         }
 
+        return $this->permissionSlugs()->contains($permission);
+    }
+
+    /** @return Collection<int, string> */
+    private function permissionSlugs(): Collection
+    {
+        if ($this->resolvedPermissionSlugs !== null) {
+            return $this->resolvedPermissionSlugs;
+        }
+
+        if ($this->hasPrimaryRole('staff') && $this->staff_type !== null) {
+            $legacyRoleSlug = match ($this->staff_type) {
+                'admin_cabang' => 'admin',
+                'sales' => 'sas',
+                'marketing' => 'sam',
+                'umum' => 'staff',
+                default => null,
+            };
+
+            if ($legacyRoleSlug === null) {
+                return collect();
+            }
+
+            return $this->resolvedPermissionSlugs = Role::query()
+                ->with('permissions')
+                ->where('slug', $legacyRoleSlug)
+                ->first()?->permissions
+                ->pluck('slug') ?? collect();
+        }
+
         // V1 intentionally has no per-user overrides or supplemental-role grants.
-        return $this->role?->permissions->contains('slug', $permission) ?? false;
+        return $this->resolvedPermissionSlugs = $this->role?->permissions->pluck('slug') ?? collect();
     }
 
     public function hasAnyPermission(array $permissions): bool

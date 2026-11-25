@@ -7,7 +7,7 @@ class PermissionCatalog
     private const GROUP_DESCRIPTIONS = [
         'Pengguna' => 'Aksi untuk mengelola akun, akses, dan penugasan pengguna.',
         'Buku Saku Sales' => 'Akses data dan alur kerja lead serta aktivitas sales.',
-        'Work Planner' => 'Akses tugas, agenda, dan konten pekerjaan.',
+        'Tugas & Konten' => 'Akses tugas, agenda, dan konten pekerjaan.',
         'Database' => 'Akses data operasional yang tersimpan dari Database.',
         'Progress Konsumen' => 'Akses tahapan dan data proses konsumen.',
         'Dana Talangan' => 'Akses data dan proses Dana Talangan.',
@@ -19,7 +19,7 @@ class PermissionCatalog
 
     private const MODULES = [
         'sales_pocketbook' => ['Buku Saku Sales', ['own', 'team', 'assigned', 'project', 'branch', 'all'], true],
-        'work_planner' => ['Work Planner', ['own', 'team', 'assigned', 'project', 'branch', 'all'], true],
+        'work_planner' => ['Tugas & Konten', ['own', 'team', 'assigned', 'project', 'branch', 'all'], true],
         'database' => ['Database', ['assigned', 'project', 'branch', 'all'], true],
         'consumer_progress' => ['Progress Konsumen', ['team', 'assigned', 'project', 'branch', 'all'], true],
         'bridge_fund' => ['Dana Talangan', ['assigned', 'project', 'branch', 'all'], true],
@@ -88,10 +88,10 @@ class PermissionCatalog
             ['name' => 'Mengelola Daily Plan tim', 'slug' => 'sales_daily_plans.manage_team', 'description' => 'Mengubah planning Daily Plan TEAM yang sudah dikirim.', 'group_name' => 'Daily Plan Sales'],
             ['name' => 'Mengirim Daily Plan sendiri', 'slug' => 'sales_daily_plans.submit_own', 'description' => 'Mengirim Daily Plan sendiri setelah total efektif tepat 420 menit.', 'group_name' => 'Daily Plan Sales'],
             ['name' => 'Mengatur target Lead Sales', 'slug' => 'sales_pocketbook.targets_manage', 'description' => 'Menetapkan target Lead bulanan per Sales.', 'group_name' => 'Buku Saku Sales'],
-            ['name' => 'Membuat Work Planner', 'slug' => 'work_planner.create', 'description' => 'Membuat item Work Planner.', 'group_name' => 'Work Planner'],
-            ['name' => 'Memperbarui Work Planner', 'slug' => 'work_planner.update', 'description' => 'Memperbarui item Work Planner sesuai lingkup akses.', 'group_name' => 'Work Planner'],
-            ['name' => 'Menetapkan Work Planner', 'slug' => 'work_planner.assign', 'description' => 'Menetapkan item Work Planner kepada pengguna lain.', 'group_name' => 'Work Planner'],
-            ['name' => 'Mengekspor Work Planner', 'slug' => 'work_planner.export', 'description' => 'Mengekspor data Work Planner sesuai lingkup akses.', 'group_name' => 'Work Planner'],
+            ['name' => 'Membuat Tugas & Konten', 'slug' => 'work_planner.create', 'description' => 'Membuat item Tugas & Konten.', 'group_name' => 'Tugas & Konten'],
+            ['name' => 'Memperbarui Tugas & Konten', 'slug' => 'work_planner.update', 'description' => 'Memperbarui item Tugas & Konten sesuai lingkup akses.', 'group_name' => 'Tugas & Konten'],
+            ['name' => 'Menetapkan Tugas & Konten', 'slug' => 'work_planner.assign', 'description' => 'Menetapkan item Tugas & Konten kepada pengguna lain.', 'group_name' => 'Tugas & Konten'],
+            ['name' => 'Mengekspor Tugas & Konten', 'slug' => 'work_planner.export', 'description' => 'Mengekspor data Tugas & Konten sesuai lingkup akses.', 'group_name' => 'Tugas & Konten'],
             ['name' => 'Melihat Database', 'slug' => 'database.view', 'description' => 'Melihat data Database sesuai lingkup akses.', 'group_name' => 'Database'],
             ['name' => 'Mengubah Database', 'slug' => 'database.edit', 'description' => 'Mengubah data Database sesuai lingkup akses.', 'group_name' => 'Database'],
             ['name' => 'Menyinkronkan Database', 'slug' => 'database.sync', 'description' => 'Menjalankan sinkronisasi Database sesuai kewenangan.', 'group_name' => 'Database'],
@@ -99,6 +99,7 @@ class PermissionCatalog
             ['name' => 'Mengelola Progress Konsumen', 'slug' => 'consumer_progress.manage', 'description' => 'Membuat dan memperbarui data konsumen serta proses penjualan sesuai lingkup akses.', 'group_name' => 'Progress Konsumen'],
             ['name' => 'Melihat NIK Konsumen', 'slug' => 'consumer_progress.reveal_nik', 'description' => 'Menampilkan NIK konsumen secara eksplisit sesuai lingkup akses.', 'group_name' => 'Progress Konsumen'],
             ['name' => 'Menyinkronkan Progress Konsumen', 'slug' => 'consumer_progress.sync', 'description' => 'Menjalankan sinkronisasi Progress Konsumen.', 'group_name' => 'Progress Konsumen'],
+            ['name' => 'Rekonsiliasi migrasi data konsumen', 'slug' => 'consumer_migration.reconcile', 'description' => 'Meninjau dan menerapkan rekonsiliasi migrasi data konsumen.', 'group_name' => 'Progress Konsumen'],
             ['name' => 'Melihat Dana Talangan', 'slug' => 'bridge_fund.view', 'description' => 'Melihat Dana Talangan sesuai lingkup akses.', 'group_name' => 'Dana Talangan'],
             ['name' => 'Mengelola Dana Talangan', 'slug' => 'bridge_fund.manage', 'description' => 'Mengelola Dana Talangan sesuai lingkup akses.', 'group_name' => 'Dana Talangan'],
             ['name' => 'Mengekspor Dana Talangan', 'slug' => 'bridge_fund.export', 'description' => 'Mengekspor Dana Talangan sesuai lingkup akses.', 'group_name' => 'Dana Talangan'],
@@ -154,6 +155,8 @@ class PermissionCatalog
             ['name' => 'Melihat log aktivitas', 'slug' => 'activity_logs.view', 'description' => 'Melihat catatan aktivitas pengguna dan sistem.', 'group_name' => 'Administrasi Sistem'],
             ['name' => 'Melewati pemeliharaan operasional', 'slug' => 'system.maintenance_bypass', 'description' => 'Tetap mengakses OASIS selama pemeliharaan operasional berlangsung.', 'group_name' => 'Administrasi Sistem'],
             ['name' => 'Mengelola pemeliharaan operasional', 'slug' => 'system.maintenance_manage', 'description' => 'Mengaktifkan dan menonaktifkan pemeliharaan operasional OASIS.', 'group_name' => 'Administrasi Sistem'],
+            ['name' => 'Mengelola pengaturan aturan', 'slug' => 'system.settings_manage', 'description' => 'Melihat dan mengubah pengaturan aturan serta feature flag OASIS.', 'group_name' => 'Administrasi Sistem'],
+            ['name' => 'Mengelola status migrasi cabang', 'slug' => 'system.branch_migration_manage', 'description' => 'Melihat dan mengubah status migrasi data per cabang.', 'group_name' => 'Administrasi Sistem'],
         ];
     }
 
@@ -170,6 +173,16 @@ class PermissionCatalog
         $branchMonitoringModules = ['sales_pocketbook'];
         $branchMutableModules = ['work_planner', 'database', 'consumer_progress', 'bridge_fund'];
         $comments = ['comments.view', 'comments.create', 'comments.reply', 'comments.update_own', 'comments.delete_own', 'comments.mention'];
+
+        $manager = [
+            ...$scoped($allModules, ['assigned', 'branch'], ['view', 'export']),
+            ...$scoped(['sales_pocketbook'], ['assigned', 'branch'], ['manage']),
+            'sales_pocketbook.export', 'work_planner.create', 'work_planner.update', 'work_planner.assign',
+            'sales_pocketbook.sync', 'sales_pocketbook.reconcile',
+            'work_planner.export', 'database.view', 'consumer_progress.view', 'bridge_fund.view', 'bridge_fund.export',
+            'sales_targets.view_branch', 'sales_daily_plans.view_branch',
+            ...$comments,
+        ];
 
         return [
             'sales' => [
@@ -199,15 +212,8 @@ class PermissionCatalog
                 'sales_targets.view_branch', 'sales_daily_plans.view_branch',
                 ...$comments,
             ],
-            'manager' => [
-                ...$scoped($allModules, ['assigned', 'branch'], ['view', 'export']),
-                ...$scoped(['sales_pocketbook'], ['assigned', 'branch'], ['manage']),
-                'sales_pocketbook.export', 'work_planner.create', 'work_planner.update', 'work_planner.assign',
-                'sales_pocketbook.sync', 'sales_pocketbook.reconcile',
-                'work_planner.export', 'database.view', 'consumer_progress.view', 'bridge_fund.view', 'bridge_fund.export',
-                'sales_targets.view_branch', 'sales_daily_plans.view_branch',
-                ...$comments,
-            ],
+            'manager' => $manager,
+            'ass_manager' => $manager,
             'branch_manager' => [
                 'users.view', 'users.create', 'users.invite', 'users.update', 'users.reset_password', 'users.export',
                 'users.assign_branches', 'users.assign_projects', 'users.assign_supervisor',

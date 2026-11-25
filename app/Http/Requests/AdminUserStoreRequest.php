@@ -7,6 +7,7 @@ use App\Models\Branch;
 use App\Models\LeadMaster;
 use App\Models\Role;
 use App\Models\User;
+use App\Services\UserAdministrationService;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Rules\Password;
@@ -35,6 +36,7 @@ class AdminUserStoreRequest extends FormRequest
     {
         $role = Role::query()->find($this->input('role_id'));
         $requiresBranch = $role?->slug !== 'superadmin';
+        $requiresStaffType = $role?->slug === 'staff';
         $requiresCoordinator = $role?->slug === 'sales';
 
         return [
@@ -42,6 +44,8 @@ class AdminUserStoreRequest extends FormRequest
             'email' => ['required', 'email', 'max:255', Rule::unique(User::class, 'email')],
             'phone' => ['nullable', 'string', 'max:20'],
             'role_id' => ['required', Rule::exists(Role::class, 'id')->where('is_active', true)],
+            'staff_type' => [$requiresStaffType ? 'required' : 'nullable', 'string', 'max:50'],
+            'scope_level' => ['nullable', Rule::in(['pusat', 'cabang', 'tim', 'khusus'])],
             'sales_category' => ['nullable', Rule::enum(SalesCategory::class)],
             'branch_id' => ['nullable', Rule::exists(Branch::class, 'id')->where('is_active', true)],
             'branch_ids' => [Rule::prohibitedIf(fn (): bool => blank($this->input('branch_id'))), 'nullable', 'array'],
@@ -73,6 +77,14 @@ class AdminUserStoreRequest extends FormRequest
 
             if ($role === null) {
                 return;
+            }
+
+            foreach (app(UserAdministrationService::class)->validateRoleAttributes(
+                $role,
+                $this->input('staff_type'),
+                $this->input('scope_level'),
+            ) as $field => $message) {
+                $validator->errors()->add($field, $message);
             }
 
             if ($role->slug !== 'superadmin' && blank($this->input('branch_id'))) {

@@ -12,14 +12,17 @@ use App\Models\SalesLead;
 use App\Models\SalesLeadLifecycleReconciliationItem;
 use App\Models\SalesLeadLifecycleSyncStatus;
 use App\Models\User;
+use App\Services\LeadAttentionService;
 use App\Services\OrganizationScopeService;
 use App\Services\SalesDailyReminderService;
 use App\Services\SalesLeadSheetOptionService;
 use App\Services\SalesLeadSyncService;
 use App\Services\SalesLeadTargetService;
+use App\Services\SalesMonitoringProjectionService;
 use App\Services\SalesTeamScopeService;
 use App\Services\SalesWeeklyMetricsService;
 use App\Services\WorkspaceAccessService;
+use App\Support\FeatureFlag;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
@@ -36,6 +39,8 @@ class SalesPocketbookController extends Controller
         private readonly SalesLeadTargetService $leadTargets,
         private readonly OrganizationScopeService $organizationScope,
         private readonly SalesTeamScopeService $salesTeamScope,
+        private readonly SalesMonitoringProjectionService $projection,
+        private readonly LeadAttentionService $leadAttention,
     ) {}
 
     public function index(Request $request)
@@ -55,7 +60,7 @@ class SalesPocketbookController extends Controller
             return app(SupervisorSalesPocketbookController::class)->index($request);
         }
 
-        if ($user->hasPrimaryRole('admin')) {
+        if ($user->isAdminCabang()) {
             return app(AdminSalesPocketbookController::class)->index($request);
         }
 
@@ -103,7 +108,7 @@ class SalesPocketbookController extends Controller
             : null;
         $visibleSalesIds = $managerHierarchy
             ? $managerHierarchy['sales']->pluck('id')->map(fn ($id) => (int) $id)->all()
-            : $this->organizationScope->visibleUserIds($user, 'sales_pocketbook');
+            : $this->organizationScope->visibleUserIds($user, 'sales_pocketbook', 'view', 'sales_leads');
         $canonicalScope = $managerHierarchy ? ['owner_ids' => $visibleSalesIds, 'branch_ids' => $allowedBranchIds, 'project_ids' => $allowedProjectIds] : null;
         $branches = $this->workspaceAccess->accessibleBranches($user)->whereIn('id', $allowedBranchIds)->values();
         $projects = $this->workspaceAccess->accessibleProjects($user)->whereIn('id', $allowedProjectIds)->where('is_active', true)->values();
@@ -146,14 +151,17 @@ class SalesPocketbookController extends Controller
 
         $reportMetric = $request->query('report_metric');
         $filterLeadPeriod = $reportMetric || $request->filled('period_type') || $request->filled('week') || ($request->filled('date_from') && $request->filled('date_to'));
-        $leads = ($canonicalScope
+        $leadQuery = $canonicalScope
             ? $this->weeklyMetrics->canonicalLeadQuery($canonicalScope)
-            : SalesLead::query()->visibleTo($user)->whereIn('sales_user_id', $visibleSalesIds))
+            : $this->leadAttention->decorate(SalesLead::query()->visibleTo($user)->whereIn('sales_user_id', $visibleSalesIds)->activeForLeadViews());
+        $leads = $leadQuery
             ->with([
                 'branch:id,name,sheet_id', 'project:id,project_name,is_nup_eligible', 'sales:id,name,supervisor_user_id',
                 'leadSource:id,name,is_active', 'siteVisits' => fn ($query) => $query->latest('id'),
                 'consumerLinks' => fn ($query) => $query->latest('id'), 'slikAttempts' => fn ($query) => $query->latest('id'),
-                'freelanceLinks' => fn ($query) => $query->latest('id'), 'akadLinks' => fn ($query) => $query->latest('id'),
+                'freelanceLinks' => fn ($query) => $query->latest('id'),
+                'akadLinks' => fn ($query) => $query->latest('id'),
+                'consumerLinks.consumerApplication.documents',
             ])
             ->withCount('comments')
             ->when($selectedBranchId, fn (Builder $query) => $query->where('branch_id', $selectedBranchId))
@@ -163,16 +171,12 @@ class SalesPocketbookController extends Controller
             ->when($filterLeadPeriod, fn (Builder $query) => $query
                 ->whereDate($reportMetric ? SalesWeeklyMetricsService::METRIC_COLUMNS[$reportMetric] : 'lead_date', '>=', $reportPeriod['start']->toDateString())
                 ->whereDate($reportMetric ? SalesWeeklyMetricsService::METRIC_COLUMNS[$reportMetric] : 'lead_date', '<=', $reportPeriod['end']->toDateString()))
+            ->when($request->boolean('needs_attention'), fn (Builder $query) => $this->leadAttention->whereNeedsAttention($query))
             ->when($request->filled('stage'), function (Builder $query) use ($request) {
-                $stage = (string) $request->query('stage');
-                abort_unless(array_key_exists($stage, SalesLead::STAGES), 422);
-                $query->whereNotNull($stage);
-                $later = array_slice(SalesLead::STAGE_ORDER, array_search($stage, SalesLead::STAGE_ORDER, true) + 1);
-                foreach ($later as $laterStage) {
-                    $query->whereNull($laterStage);
-                }
+                $this->applyStageFilter($query, (string) $request->query('stage'));
             })
             ->latest('lead_date')->latest('id')->paginate(20)->withQueryString();
+        $leads->setCollection($this->projection->projectCollection($user, 'lead', $leads->getCollection(), 'sales_user_id'));
 
         $agendaDateFrom = $reportPeriod['start']->toDateString();
         $agendaDateTo = $reportPeriod['end']->toDateString();
@@ -197,6 +201,7 @@ class SalesPocketbookController extends Controller
             ->when($agendaDateFrom && ! $missingAgendaResultDrilldown, fn (Builder $query) => $query->whereDate($completedAgendaDrilldown ? 'completed_at' : 'scheduled_date', '>=', $agendaDateFrom))
             ->when($agendaDateTo && ! $missingAgendaResultDrilldown, fn (Builder $query) => $query->whereDate($completedAgendaDrilldown ? 'completed_at' : 'scheduled_date', '<=', $agendaDateTo))
             ->orderBy('scheduled_date')->orderBy('start_time')->paginate(20, ['*'], 'agenda_page')->withQueryString();
+        $agendas->setCollection($this->projection->projectCollection($user, 'agenda', $agendas->getCollection(), 'owner_user_id'));
 
         $defaultProject = $this->workspaceAccess->resolveRequestedProject($user, $request->query('project_id'));
         $reportFilters = array_filter([
@@ -287,7 +292,7 @@ class SalesPocketbookController extends Controller
         $coordinators = User::query()->where('is_active', true)->whereIn('id', $visibleSalesIds)
             ->whereHas('role', fn (Builder $query) => $query->whereIn('slug', ['sales_coordinator', 'supervisor', 'manager', 'branch_manager']))
             ->orderBy('name')->get(['id', 'name', 'branch_id']);
-        $sourceOptionQuery = SalesLead::query()->visibleTo($user)
+        $sourceOptionQuery = SalesLead::query()->visibleTo($user)->activeForLeadViews()
             ->whereIn('sales_user_id', $visibleSalesIds)
             ->when($selectedBranchId, fn (Builder $query) => $query->where('branch_id', $selectedBranchId))
             ->when($selectedProjectId, fn (Builder $query) => $query->where('project_id', $selectedProjectId))
@@ -379,7 +384,7 @@ class SalesPocketbookController extends Controller
             : null;
         $visibleSalesIds = $managerHierarchy
             ? $managerHierarchy['sales']->pluck('id')->map(fn ($id) => (int) $id)->all()
-            : $this->organizationScope->visibleUserIds($user, 'sales_pocketbook', 'export');
+            : $this->organizationScope->visibleUserIds($user, 'sales_pocketbook', 'export', 'sales_leads');
         $canonicalScope = $managerHierarchy ? ['owner_ids' => $visibleSalesIds, 'branch_ids' => $allowedBranchIds, 'project_ids' => $allowedProjectIds] : null;
         $branches = $this->workspaceAccess->accessibleBranches($user)->whereIn('id', $allowedBranchIds)->values();
         $projects = $this->workspaceAccess->accessibleProjects($user)->whereIn('id', $allowedProjectIds)->where('is_active', true)->values();
@@ -427,7 +432,8 @@ class SalesPocketbookController extends Controller
             'branch_id' => $branchId,
             'project_id' => $projectId,
             'sales_user_id' => $salesId,
-        ]);
+            'needs_attention' => $request->boolean('needs_attention'),
+        ], fn (mixed $value): bool => $value !== null && $value !== false);
         $reportMetric = $request->query('report_metric');
         $leadDateColumn = $reportMetric ? SalesWeeklyMetricsService::METRIC_COLUMNS[$reportMetric] : 'lead_date';
         $completedAgendaDrilldown = $request->boolean('report_agenda_completed');
@@ -436,22 +442,18 @@ class SalesPocketbookController extends Controller
         $leads = ($canonicalScope
             ? $this->weeklyMetrics->canonicalLeadQuery($canonicalScope, $filters)
             : $this->weeklyMetrics->leadQuery($user, $filters)->whereIn('sales_user_id', $visibleSalesIds))
-            ->with(['branch:id,name', 'project:id,project_name', 'sales:id,name', 'leadSource:id,name'])
+            ->with(['branch:id,name', 'project:id,project_name', 'sales:id,name', 'leadSource:id,name', 'latestStatusHistory:id,sales_lead_id,status,changed_at'])
             ->whereDate($leadDateColumn, '>=', $period['start']->toDateString())
             ->whereDate($leadDateColumn, '<=', $period['end']->toDateString())
             ->when($leadSourceFilter, fn (Builder $query) => $query->whereEffectiveSource($leadSourceFilter))
+            ->when($request->boolean('needs_attention'), fn (Builder $query) => $this->leadAttention->whereNeedsAttention($query))
             ->when($request->filled('stage'), function (Builder $query) use ($request) {
-                $stage = (string) $request->query('stage');
-                abort_unless(array_key_exists($stage, SalesLead::STAGES), 422);
-                $query->whereNotNull($stage);
-                $laterStages = array_slice(SalesLead::STAGE_ORDER, array_search($stage, SalesLead::STAGE_ORDER, true) + 1);
-                foreach ($laterStages as $laterStage) {
-                    $query->whereNull($laterStage);
-                }
+                $this->applyStageFilter($query, (string) $request->query('stage'));
             })
             ->orderBy('lead_date')
             ->orderBy('id')
             ->get();
+        $leads = $this->projection->projectCollection($user, 'lead', $leads, 'sales_user_id');
 
         $agendas = ($canonicalScope
             ? $this->weeklyMetrics->canonicalAgendaQuery($canonicalScope, $filters)
@@ -465,6 +467,7 @@ class SalesPocketbookController extends Controller
             ->orderBy('scheduled_date')
             ->orderBy('start_time')
             ->get();
+        $agendas = $this->projection->projectCollection($user, 'agenda', $agendas, 'owner_user_id');
 
         $weeklyRows = $this->weeklyMetrics->monitoringRows($user, $period, $salesUsers, $projects, $filters);
         if ($leads->isEmpty() && $agendas->isEmpty()) {
@@ -523,7 +526,8 @@ class SalesPocketbookController extends Controller
             'sales_user_id' => ['nullable', 'integer'],
             'lead_source' => ['nullable', 'string', 'max:255'],
             'lead_source_id' => ['nullable', 'integer', 'exists:lead_sources,id'],
-            'stage' => ['nullable', Rule::in(array_keys(SalesLead::STAGES))],
+            'stage' => ['nullable', 'string'],
+            'needs_attention' => ['nullable', 'boolean'],
             'period_type' => ['nullable', 'required_with:week,date_from,date_to', Rule::in(['week', 'custom'])],
             'week' => ['nullable', 'date', 'required_if:period_type,week', 'prohibited_if:period_type,custom'],
             'date_from' => ['nullable', 'date', 'required_if:period_type,custom', 'prohibited_if:period_type,week'],
@@ -532,6 +536,33 @@ class SalesPocketbookController extends Controller
             'report_agenda_completed' => ['nullable', 'boolean'],
             'report_agenda_missing_result' => ['nullable', 'boolean'],
         ];
+    }
+
+    private function applyStageFilter(Builder $query, string $stage): void
+    {
+        $scope = FeatureFlag::branchScope('lead_stages_v3');
+        $isV3Stage = array_key_exists($stage, SalesLead::STAGE_V3_LABELS);
+        $isLegacyStage = array_key_exists($stage, SalesLead::STAGES);
+        abort_unless($isV3Stage || $isLegacyStage, 422);
+
+        if ($isV3Stage) {
+            abort_unless($scope === 'all' || is_array($scope), 422);
+            $query->where('lead_stage', $stage);
+            if (is_array($scope)) {
+                $query->whereIn('branch_id', $scope);
+            }
+
+            return;
+        }
+
+        abort_unless($scope === 'none' || is_array($scope), 422);
+        $query->whereNotNull($stage);
+        if (is_array($scope)) {
+            $query->whereNotIn('branch_id', $scope);
+        }
+        foreach (array_slice(SalesLead::STAGE_ORDER, array_search($stage, SalesLead::STAGE_ORDER, true) + 1) as $laterStage) {
+            $query->whereNull($laterStage);
+        }
     }
 
     private function leadSourceFilter(Request $request): ?string

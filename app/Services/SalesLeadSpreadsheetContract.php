@@ -31,7 +31,7 @@ class SalesLeadSpreadsheetContract
                     'aktivitas_lead' => ['type' => 'select', 'strict' => true],
                     'proyek' => ['type' => 'select', 'strict' => true],
                     'sales_pic' => ['type' => 'select', 'strict' => false],
-                    'status_lead' => ['type' => 'select', 'strict' => true, 'values' => ['No Respon', 'Diskusi', 'Tatap Muka', 'Cek Lokasi', 'UTJ', 'Tidak Lolos BI Checking', 'Cek Slik', 'Jadi Freelance', 'Akad']],
+                    'status_lead' => ['type' => 'select', 'strict' => true, 'values' => ['No Respon', 'Diskusi', 'Tatap Muka', 'Cek Lokasi', 'UTJ', 'Gugur', 'Tidak Lolos BI Checking', 'Cek Slik', 'Jadi Freelance', 'Akad']],
                 ],
                 ['nama_promo' => ['nama_promo', 'id_promo']],
             ),
@@ -181,6 +181,26 @@ class SalesLeadSpreadsheetContract
             : trim($value);
     }
 
+    public function statusForLead(SalesLead $lead, ?ResolvedSalesLeadSpreadsheetContract $contract = null): ?string
+    {
+        $status = match ($lead->resolveStageV3()) {
+            'utj' => 'UTJ',
+            'gugur' => 'Gugur',
+            'dihubungi' => 'Diskusi',
+            'tatap_muka' => 'Tatap Muka',
+            'survey' => 'Cek Lokasi',
+            default => 'No Respon',
+        };
+
+        if ($status === 'Gugur' && $contract !== null && ! collect($contract->validationOptions['status_lead'] ?? [])->contains(
+            fn (string $option): bool => $this->normalizeValidationValue('status_lead', $option) === 'gugur',
+        )) {
+            return null;
+        }
+
+        return $status;
+    }
+
     public function valueForWrite(ResolvedSalesLeadSpreadsheetContract $contract, string $header, mixed $value): mixed
     {
         if (! is_string($value)) {
@@ -275,7 +295,13 @@ class SalesLeadSpreadsheetContract
                     $expected['values'],
                 );
                 sort($expectedValues);
-                if ($actualValues !== $expectedValues) {
+                $legacyStatusValues = ['akad', 'cek lokasi', 'cek_slik', 'diskusi', 'jadi freelance', 'no respon', 'tatap muka', 'tidak lolos bi checking', 'utj'];
+                $legacyStatusValuesWithGugur = [...$legacyStatusValues, 'gugur'];
+                sort($legacyStatusValues);
+                sort($legacyStatusValuesWithGugur);
+                $isCompatibleLegacyStatus = $header === 'status_lead'
+                    && in_array($actualValues, [$legacyStatusValues, $legacyStatusValuesWithGugur], true);
+                if ($actualValues !== $expectedValues && ! $isCompatibleLegacyStatus) {
                     throw SalesLeadSpreadsheetContractException::validationInvalid($definition->sheetName, $header);
                 }
             }

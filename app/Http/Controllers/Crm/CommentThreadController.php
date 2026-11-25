@@ -28,7 +28,7 @@ class CommentThreadController extends Controller
         $context = match ($alias) {
             'sales-lead' => ['title' => 'Diskusi Lead Sales', 'module' => 'Buku Saku Sales', 'color' => '#fcc20f'],
             'sales-agenda' => ['title' => 'Diskusi Agenda Sales', 'module' => 'Buku Saku Sales', 'color' => '#fcc20f'],
-            'planner-item' => ['title' => 'Diskusi Work Planner', 'module' => 'Work Planner', 'color' => '#b3bd95'],
+            'planner-item' => ['title' => 'Diskusi Tugas & Konten', 'module' => 'Tugas & Konten', 'color' => '#b3bd95'],
             'expense' => ['title' => 'Diskusi Pengeluaran', 'module' => 'Pengeluaran', 'color' => '#b3bd95'],
             'bridge-fund' => ['title' => 'Diskusi Dana Talangan', 'module' => 'Dana Talangan', 'color' => '#f1c40f'],
         };

@@ -4,7 +4,9 @@ namespace Tests\Feature;
 
 use App\Enums\SalesLeadStatus;
 use App\Exceptions\SalesLeadSpreadsheetContractException;
+use App\Models\AppSetting;
 use App\Models\Branch;
+use App\Models\BranchMigrationState;
 use App\Models\LeadMaster;
 use App\Models\Role;
 use App\Models\SalesCoordinatorSales;
@@ -12,6 +14,7 @@ use App\Models\SalesLead;
 use App\Models\SalesLeadConsumerLink;
 use App\Models\SalesLeadSlikAttempt;
 use App\Models\User;
+use App\Services\AppSettingResolver;
 use App\Services\SalesLeadLifecycleService;
 use App\Services\SalesLeadSpreadsheetWriter;
 use App\ValueObjects\SalesLeadSpreadsheetWriteResult;
@@ -106,9 +109,36 @@ class SalesLeadLifecycleOperationsTest extends TestCase
         ])->assertRedirect()->assertSessionHasErrors('branch_id');
     }
 
+    public function test_br23_pre_utj_conversion_requires_exception_reason_and_records_audit_metadata(): void
+    {
+        AppSetting::query()->updateOrCreate(['key' => 'lead_stages_v3'], ['value' => true, 'group' => 'feature_flags']);
+        app(AppSettingResolver::class)->forget('lead_stages_v3');
+        [$project, $sales, $lead] = array_slice($this->context(), 1);
+        $admin = $this->user('admin', $lead->branch, 'Admin Cabang');
+        $admin->assignedProjects()->attach($project->id, ['is_primary' => true, 'is_active' => true]);
+        $this->mockAppendWriter();
+
+        $payload = ['project_id' => $project->id, 'nik' => '0123456789012345', 'id_kavling' => 'A-1'];
+        $this->actingAs($admin)->postJson(route('sales-leads.consumer.store', $lead), $payload)->assertUnprocessable()->assertJsonValidationErrors('pre_utj_exception_reason');
+        $this->actingAs($admin)->postJson(route('sales-leads.consumer.store', $lead), $payload + ['pre_utj_exception_reason' => 'Persetujuan khusus'])->assertOk();
+        $this->assertSame(['pre_utj_exception' => true, 'exception_reason' => 'Persetujuan khusus'], SalesLeadConsumerLink::firstOrFail()->metadata);
+    }
+
+    public function test_br23_primary_sales_with_supplemental_role_cannot_convert_pre_utj_by_direct_json_or_url(): void
+    {
+        AppSetting::query()->updateOrCreate(['key' => 'lead_stages_v3'], ['value' => true, 'group' => 'feature_flags']);
+        app(AppSettingResolver::class)->forget('lead_stages_v3');
+        [$project, $sales, $lead] = array_slice($this->context(), 1);
+        $sales->roles()->attach(Role::query()->where('slug', 'admin')->value('id'));
+        $payload = ['project_id' => $project->id, 'nik' => '0123456789012345', 'id_kavling' => 'A-1', 'pre_utj_exception_reason' => 'Bypass'];
+        $this->actingAs($sales)->postJson(route('sales-leads.consumer.store', $lead), $payload)->assertForbidden();
+        $this->actingAs($sales)->from(route('sales-pocketbook.index'))->post(route('sales-leads.consumer.store', $lead), $payload)->assertForbidden();
+    }
+
     public function test_consumer_enforces_nik_rules_preserves_leading_zero_and_blocks_branch_duplicate(): void
     {
         [, $project, $sales, $lead] = $this->context();
+        $lead->update(['lead_stage' => 'utj']);
         $this->mockAppendWriter();
 
         $this->actingAs($sales)->from(route('sales-pocketbook.index'))->post(route('sales-leads.consumer.store', $lead), [
@@ -456,6 +486,7 @@ class SalesLeadLifecycleOperationsTest extends TestCase
     {
         $branch = Branch::create(['name' => 'Branch '.Str::random(6), 'code' => strtoupper(Str::random(5)), 'sheet_id' => 'sheet-'.Str::random(8), 'is_active' => true]);
         $project = LeadMaster::create(['branch_id' => $branch->id, 'project_name' => 'Project '.Str::random(6), 'is_active' => true]);
+        BranchMigrationState::query()->create(['branch_id' => $branch->id, 'state' => BranchMigrationState::STATE_PARALEL]);
         $sales = $this->user('manager', $branch, 'Manager '.Str::random(5));
         $sales->assignedProjects()->attach($project->id, ['is_primary' => true, 'is_active' => true]);
         $lead = $this->lead($sales, $project);

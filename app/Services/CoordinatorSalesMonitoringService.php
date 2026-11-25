@@ -10,6 +10,7 @@ use App\Models\SalesLeadStatusHistory;
 use App\Models\User;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Facades\DB;
 
 class CoordinatorSalesMonitoringService
 {
@@ -19,6 +20,8 @@ class CoordinatorSalesMonitoringService
         private readonly OrganizationScopeService $organizationScope,
         private readonly WorkspaceAccessService $workspaceAccess,
         private readonly SalesAgendaReceiptService $receiptService,
+        private readonly SalesMonitoringProjectionService $projection,
+        private readonly LeadAttentionService $leadAttention,
     ) {}
 
     public function canViewAgenda(User $actor, ContentItem $agenda): bool
@@ -31,13 +34,17 @@ class CoordinatorSalesMonitoringService
             return false;
         }
 
-        return $this->salesTeamScope->contains($actor, (int) $agenda->owner_user_id);
+        return in_array((int) $agenda->owner_user_id, $this->organizationScope->specialGrantUserIds($actor, 'sales_daily_plans'), true)
+            || $this->salesTeamScope->contains($actor, (int) $agenda->owner_user_id);
+
     }
 
     public function canManageAgenda(User $actor, ContentItem $agenda): bool
     {
         return $actor->hasPermission('sales_pocketbook.manage_team')
-            && $this->canViewAgenda($actor, $agenda);
+            && $this->canViewAgenda($actor, $agenda)
+            && (in_array((int) $agenda->owner_user_id, $this->organizationScope->specialGrantUserIds($actor, 'sales_daily_plans', 'edit'), true)
+                || $this->salesTeamScope->contains($actor, (int) $agenda->owner_user_id));
     }
 
     public function weeklyIncompleteAgendas(User $actor, ?CarbonImmutable $referenceDate = null)
@@ -45,7 +52,7 @@ class CoordinatorSalesMonitoringService
         abort_unless($this->coordinatorTeam->isCoordinator($actor), 403);
 
         $today = ($referenceDate ?? CarbonImmutable::today(config('app.timezone')))->startOfDay();
-        $scope = $this->scope($actor);
+        $scope = $this->scope($actor, 'sales_daily_plans');
         $salesUsers = $this->salesUsers($actor, $scope);
         $salesIds = $salesUsers->pluck('id')->map(fn ($id) => (int) $id)->all();
 
@@ -64,13 +71,13 @@ class CoordinatorSalesMonitoringService
             ->orderBy('start_time')
             ->get();
 
-        return $agendas->groupBy('owner_user_id')->map(function ($items) {
+        return $agendas->groupBy('owner_user_id')->map(function ($items) use ($actor) {
             $items->each(function (ContentItem $agenda): void {
                 $agenda->setAttribute('missing_result', blank($agenda->activity_result));
                 $agenda->setAttribute('missing_evidence', $agenda->evidence->whereNull('purged_at')->isEmpty());
             });
 
-            return $items;
+            return $this->projection->projectCollection($actor, 'agenda', $items, 'owner_user_id');
         })->sortKeys();
     }
 
@@ -79,8 +86,8 @@ class CoordinatorSalesMonitoringService
         abort_unless($this->coordinatorTeam->isCoordinator($actor), 403);
 
         $date = ($referenceDate ?? CarbonImmutable::today(config('app.timezone')))->startOfDay();
-        $scope = $this->scope($actor);
-        $salesUsers = $this->salesUsers($actor, $scope);
+        $scope = $this->scope($actor, 'sales_daily_plans');
+        $salesUsers = $this->salesUsers($actor, $scope, 'sales_daily_plans');
         if ($requestedSalesId !== null) {
             abort_unless($salesUsers->contains('id', $requestedSalesId), 403);
             $salesUsers = $salesUsers->where('id', $requestedSalesId)->values();
@@ -90,7 +97,8 @@ class CoordinatorSalesMonitoringService
             ->with(['evidence', 'rescheduledFrom:id,scheduled_date'])
             ->orderBy('start_time')
             ->get()
-            ->groupBy('owner_user_id');
+            ->groupBy('owner_user_id')
+            ->map(fn ($items) => $this->projection->projectCollection($actor, 'agenda', $items, 'owner_user_id'));
         $incompleteBySales = $this->weeklyIncompleteAgendas($actor, $date);
         $cards = $salesUsers->map(function (User $sales) use ($date, $incompleteBySales, $agendaItems): array {
             $summary = $this->receiptService->summarize($sales, $date);
@@ -123,7 +131,7 @@ class CoordinatorSalesMonitoringService
         abort_unless($this->coordinatorTeam->isCoordinator($actor), 403);
 
         $scope = $this->scope($actor);
-        $sales = $this->salesUsers($actor, $scope)->firstWhere('id', $salesId);
+        $sales = $this->salesUsers($actor, $scope, 'sales_daily_plans')->firstWhere('id', $salesId);
         abort_unless($sales, 403);
 
         $date = ($selectedDate ?? CarbonImmutable::today(config('app.timezone')))->startOfDay();
@@ -132,11 +140,18 @@ class CoordinatorSalesMonitoringService
         $agendas = $this->agendaBase([$salesId], $scope, ['from' => $weekStart, 'to' => $weekEnd])
             ->with(['evidence', 'branch:id,name', 'salesProject:id,project_name'])
             ->orderBy('scheduled_date')->orderBy('start_time')->get();
-        $days = collect(range(0, 6))->map(function (int $offset) use ($weekStart, $agendas): array {
+        $projectedAgendas = $this->projection->projectCollection($actor, 'agenda', $agendas, 'owner_user_id');
+        $days = collect(range(0, 6))->map(function (int $offset) use ($weekStart, $projectedAgendas): array {
             $day = $weekStart->addDays($offset);
-            $items = $agendas->filter(fn (ContentItem $agenda): bool => $agenda->scheduled_date?->isSameDay($day));
-            $incomplete = $items->contains(fn (ContentItem $agenda): bool => ! in_array($agenda->status, ['cancelled', 'rescheduled'], true)
-                && (blank($agenda->activity_result) || $agenda->evidence->whereNull('purged_at')->isEmpty()));
+            $items = $projectedAgendas->filter(fn (mixed $agenda): bool => CarbonImmutable::parse((string) data_get($agenda, 'scheduled_date', data_get($agenda, 'date')))->isSameDay($day));
+            $incomplete = $items->contains(function (mixed $agenda): bool {
+                if ($agenda instanceof ContentItem) {
+                    return ! in_array($agenda->status, ['cancelled', 'rescheduled'], true)
+                        && (blank($agenda->activity_result) || $agenda->evidence->whereNull('purged_at')->isEmpty());
+                }
+
+                return ! (bool) data_get($agenda, 'submitted', false);
+            });
 
             return [
                 'date' => $day,
@@ -145,14 +160,17 @@ class CoordinatorSalesMonitoringService
             ];
         });
 
+        $selectedAgendas = $projectedAgendas->filter(fn (mixed $agenda): bool => CarbonImmutable::parse((string) data_get($agenda, 'scheduled_date', data_get($agenda, 'date')))->isSameDay($date))->values();
+        $backlog = $agendas->filter(fn (ContentItem $agenda): bool => $agenda->scheduled_date?->lt($date)
+            && ! in_array($agenda->status, ['cancelled', 'rescheduled'], true)
+            && (blank($agenda->activity_result) || $agenda->evidence->whereNull('purged_at')->isEmpty()))->values();
+
         return [
             'sales' => $sales,
             'selected_date' => $date,
             'week' => $days,
-            'agendas' => $agendas->filter(fn (ContentItem $agenda): bool => $agenda->scheduled_date?->isSameDay($date))->values(),
-            'backlog' => $agendas->filter(fn (ContentItem $agenda): bool => $agenda->scheduled_date?->lt($date)
-                && ! in_array($agenda->status, ['cancelled', 'rescheduled'], true)
-                && (blank($agenda->activity_result) || $agenda->evidence->whereNull('purged_at')->isEmpty()))->values(),
+            'agendas' => $selectedAgendas,
+            'backlog' => $this->projection->projectCollection($actor, 'agenda', $backlog, 'owner_user_id'),
         ];
     }
 
@@ -161,8 +179,8 @@ class CoordinatorSalesMonitoringService
         abort_unless($this->coordinatorTeam->isCoordinator($actor), 403);
 
         $period = $this->period($filters);
-        $scope = $this->scope($actor);
-        $filterSalesUsers = $this->salesUsers($actor, $scope);
+        $scope = $this->scope($actor, 'sales_leads');
+        $filterSalesUsers = $this->salesUsers($actor, $scope, 'sales_leads');
         $salesId = filled($filters['sales_id'] ?? null) ? (int) $filters['sales_id'] : null;
 
         abort_if($salesId && ! $filterSalesUsers->contains('id', $salesId), 403);
@@ -194,24 +212,55 @@ class CoordinatorSalesMonitoringService
             ->with(['owner:id,name', 'branch:id,name', 'salesProject:id,project_name', 'evidence'])
             ->orderByDesc('scheduled_date')->orderByDesc('id');
         $leads = $this->leadBase($salesIds, $scope)
+            ->when(in_array($filters['focus'] ?? null, ['attention', 'stale'], true), fn (Builder $query) => $this->leadAttention->attentionQueryFor($query))
+            ->when(! in_array($filters['focus'] ?? null, ['attention', 'stale'], true), fn (Builder $query) => $this->leadAttention->decorate($query))
             ->whereDate('lead_date', '>=', $period['from']->toDateString())
             ->whereDate('lead_date', '<=', $period['to']->toDateString())
-            ->with(['branch:id,name', 'project:id,project_name', 'sales:id,name', 'leadSource:id,name'])
+            ->with([
+                'branch:id,name',
+                'project:id,project_name',
+                'sales:id,name',
+                'leadSource:id,name',
+                'latestStatusHistory:id,sales_lead_id,status,changed_at',
+            ])
             ->latest('lead_date')->latest('id');
-        $staleDays = max(1, min(14, (int) ($filters['stale_days'] ?? 2)));
-        $actionableLeads = $this->leadBase($salesIds, $scope)
-            ->whereIn('current_status', array_map(fn (SalesLeadStatus $status): string => $status->value, SalesLeadStatus::MANUAL))
-            ->where('updated_at', '<=', now(config('app.timezone'))->subDays($staleDays))
-            ->with(['branch:id,name', 'project:id,project_name', 'sales:id,name'])
-            ->latest('updated_at')->get();
-        $failedSyncLeads = $this->leadBase($salesIds, $scope)
+        $staleDays = $this->leadAttention->staleDays();
+        $actionableLeads = $this->leadAttention->attentionQueryFor($this->leadBase($salesIds, $scope))
+            ->with([
+                'branch:id,name',
+                'project:id,project_name',
+                'sales:id,name',
+            ])
+            ->latest('lead_date')->get();
+        $failedSyncLeads = $this->leadAttention->decorate($this->leadBase($salesIds, $scope))
             ->where('sync_status', 'sync_failed')
-            ->with(['branch:id,name', 'project:id,project_name', 'sales:id,name'])
-            ->latest('updated_at')->get();
+            ->with([
+                'branch:id,name',
+                'project:id,project_name',
+                'sales:id,name',
+            ])
+            ->latest('lead_date')->get();
+        $actionableLeads = $this->projection->projectCollection($actor, 'lead', $actionableLeads, 'sales_user_id');
+        $failedSyncLeads = $this->projection->projectCollection($actor, 'lead', $failedSyncLeads, 'sales_user_id');
+
+        $leadsCollection = $paginate
+            ? $leads->paginate(20, ['*'], 'lead_page')->withQueryString()
+            : $leads->get();
+        $agendasCollection = $paginate
+            ? $agendas->paginate(15, ['*'], 'agenda_page')->withQueryString()
+            : $agendas->get();
+        if ($paginate) {
+            $leadsCollection->setCollection($this->projection->projectCollection($actor, 'lead', $leadsCollection->getCollection(), 'sales_user_id'));
+            $agendasCollection->setCollection($this->projection->projectCollection($actor, 'agenda', $agendasCollection->getCollection(), 'owner_user_id'));
+        } else {
+            $leadsCollection = $this->projection->projectCollection($actor, 'lead', $leadsCollection, 'sales_user_id');
+            $agendasCollection = $this->projection->projectCollection($actor, 'agenda', $agendasCollection, 'owner_user_id');
+        }
 
         $result = [
             'period' => $period,
             'filters' => [
+                'focus' => $filters['focus'] ?? null,
                 'period' => $period['key'],
                 'date_from' => $period['from']->toDateString(),
                 'date_to' => $period['to']->toDateString(),
@@ -219,6 +268,7 @@ class CoordinatorSalesMonitoringService
             ],
             'salesUsers' => $filterSalesUsers,
             'actionableLeads' => $actionableLeads,
+            'attentionCount' => $this->leadAttention->attentionQueryFor($this->leadBase($salesIds, $scope))->count(),
             'failedSyncLeads' => $failedSyncLeads,
             'staleDays' => $staleDays,
             'selectedSalesUsers' => $salesUsers,
@@ -229,15 +279,16 @@ class CoordinatorSalesMonitoringService
                 'utj' => $salesRows->sum('utj'),
             ],
             'salesRows' => $salesRows,
-            'leads' => $paginate
-                ? $leads->paginate(20, ['*'], 'lead_page')->withQueryString()
-                : $leads->get(),
-            'agendas' => $paginate
-                ? $agendas->paginate(15, ['*'], 'agenda_page')->withQueryString()
-                : $agendas->get(),
+            'leads' => $leadsCollection,
+            'agendas' => $agendasCollection,
         ];
         if (! $paginate) {
-            $result['exportData'] = (clone $leads)->reorder('lead_date')->orderBy('id')->get();
+            $result['exportData'] = $this->projection->projectCollection(
+                $actor,
+                'lead',
+                (clone $leads)->reorder('lead_date')->orderBy('id')->get(),
+                'sales_user_id',
+            );
         }
 
         return $result;
@@ -264,20 +315,28 @@ class CoordinatorSalesMonitoringService
         return compact('key', 'from', 'to');
     }
 
-    private function scope(User $actor): array
+    private function scope(User $actor, string $grantModule = 'sales_leads'): array
     {
         $branchIds = array_values(array_intersect(
-            $this->organizationScope->branchIds($actor, 'sales_pocketbook', 'view'),
+            $this->organizationScope->branchIds($actor, 'sales_pocketbook', 'view', $grantModule),
             $this->workspaceAccess->accessibleBranchIds($actor),
         ));
-        $salesIds = $this->salesTeamScope->for($actor)['sales']->pluck('id');
+        $salesIds = collect($this->salesTeamScope->for($actor)['sales']->pluck('id')->all());
+        $salesIds = $salesIds->merge($this->organizationScope->specialGrantUserIds($actor, $grantModule))->unique()->values();
         $today = today()->toDateString();
 
+        $grantedUserIds = $this->organizationScope->specialGrantUserIds($actor, $grantModule);
+        $grantedBranchIds = User::query()->whereIn('id', $grantedUserIds)->pluck('branch_id')->map(fn ($id): int => (int) $id)->all();
+        $workspaceProjectIds = $this->workspaceAccess->accessibleProjectIds($actor);
+        $grantedProjectIds = $grantedUserIds === [] ? [] : DB::table('project_user')
+            ->whereIn('user_id', $grantedUserIds)->where('is_active', true)->whereIn('project_id', $workspaceProjectIds)
+            ->pluck('project_id')->map(fn ($id): int => (int) $id)->all();
+
         return [
-            'branch_ids' => $branchIds,
+            'branch_ids' => array_values(array_unique([...$branchIds, ...$grantedBranchIds])),
             'project_ids' => LeadMaster::query()
-                ->whereIn('branch_id', $branchIds)
-                ->whereIn('id', $this->workspaceAccess->accessibleProjectIds($actor))
+                ->whereIn('branch_id', array_values(array_unique([...$branchIds, ...$grantedBranchIds])))
+                ->whereIn('id', [...$workspaceProjectIds, ...$grantedProjectIds])
                 ->where('is_active', true)
                 ->whereHas('assignedUsers', fn ($query) => $query
                     ->whereIn('users.id', $salesIds)
@@ -288,7 +347,7 @@ class CoordinatorSalesMonitoringService
         ];
     }
 
-    private function salesUsers(User $actor, array $scope)
+    private function salesUsers(User $actor, array $scope, string $grantModule = 'sales_leads')
     {
         $today = today()->toDateString();
         $assignment = fn ($query) => $query
@@ -297,7 +356,9 @@ class CoordinatorSalesMonitoringService
             ->where('project_user.is_active', true)
             ->where(fn ($query) => $query->whereNull('project_user.assignment_start_date')->orWhereDate('project_user.assignment_start_date', '<=', $today))
             ->where(fn ($query) => $query->whereNull('project_user.assignment_end_date')->orWhereDate('project_user.assignment_end_date', '>=', $today));
-        $teamSalesIds = $this->salesTeamScope->displayedFor($actor, $scope['branch_ids'], $scope['project_ids'])['sales']->pluck('id');
+        $teamSalesIds = $this->salesTeamScope->displayedFor($actor, $scope['branch_ids'], $scope['project_ids'])['sales']->pluck('id')
+            ->merge($this->organizationScope->specialGrantUserIds($actor, $grantModule))
+            ->unique();
 
         $sales = User::query()
             ->whereIn('users.id', $teamSalesIds)
@@ -317,7 +378,7 @@ class CoordinatorSalesMonitoringService
 
     private function leadBase(array $salesIds, array $scope): Builder
     {
-        return SalesLead::query()
+        return SalesLead::query()->activeForLeadViews()
             ->whereIn('sales_user_id', $salesIds)
             ->whereIn('branch_id', $scope['branch_ids'])
             ->whereIn('project_id', $scope['project_ids']);

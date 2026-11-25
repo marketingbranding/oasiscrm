@@ -2,17 +2,22 @@
 
 namespace App\Services;
 
+use App\Data\ConsumerLeadLinkSubject;
 use App\Models\ActivityLog;
 use App\Models\Branch;
 use App\Models\ConsumerApplication;
 use App\Models\ConsumerBankProcess;
+use App\Models\ConsumerLeadLinkDecision;
+use App\Models\ConsumerNup;
 use App\Models\ConsumerStageEvent;
 use App\Models\Customer;
+use App\Models\KonsumenProgressSheetRow;
 use App\Models\LeadMaster;
 use App\Models\User;
 use App\Support\ConsumerIdentity;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
+use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
 use Symfony\Component\HttpFoundation\Response;
@@ -22,7 +27,9 @@ final class ConsumerDatabaseWorkspaceService
     public function __construct(
         private readonly OrganizationScopeService $organizationScope,
         private readonly WorkspaceAccessService $workspaceAccess,
+        private readonly BranchMigrationStateService $migrationStates,
         private readonly KonsumenPipelineService $pipeline,
+        private readonly ConsumerLeadLinkSuggestionService $leadLinkSuggestions,
     ) {}
 
     /** @return array<string, mixed> */
@@ -43,6 +50,9 @@ final class ConsumerDatabaseWorkspaceService
         $applications = $this->query($user, $branchIds, $projectIds, $selectedBranch, $selectedProject, $request)
             ->paginate(25)
             ->withQueryString();
+        $selectedLinkStatus = $request->string('link_status')->toString();
+        $linkSubjectResult = $this->linkSubjects($user, $branchIds, $projectIds, $selectedBranch, $selectedProject, $request, $selectedLinkStatus);
+        $linkSubjects = $linkSubjectResult['items'];
         $salesOptions = $this->salesOptions($user, $branchIds, $projectIds, $selectedBranch, $selectedProject);
         $bankOptions = $this->bankOptions($branchIds, $projectIds, $selectedBranch, $selectedProject, $user);
         $selectedSales = $request->integer('sales_id') ?: null;
@@ -67,8 +77,19 @@ final class ConsumerDatabaseWorkspaceService
             'selectedSales' => $selectedSales,
             'selectedBank' => $selectedBank,
             'applications' => $applications,
+            'linkSubjects' => $linkSubjects,
+            'linkSubjectTotals' => $linkSubjectResult['totals'],
+            'linkSubjectPaginator' => $linkSubjectResult['paginator'],
             'search' => trim($request->string('search')->toString()),
             'selectedStatus' => $request->string('status')->toString(),
+            'selectedLinkStatus' => $selectedLinkStatus,
+            'linkStatusOptions' => [
+                'undecided' => 'Belum diputuskan',
+                'linked' => 'Tertaut',
+                'without_lead' => 'Tanpa Lead',
+                'legacy' => 'Data Lama',
+                'empty_id' => 'ID kosong',
+            ],
             'selectedStage' => $request->string('stage')->toString(),
             'selectedSort' => $this->sortValue($request),
             'selectedPaymentMethod' => $request->string('payment_method')->toString(),
@@ -90,6 +111,57 @@ final class ConsumerDatabaseWorkspaceService
         ];
     }
 
+    /** @return array{items: Collection<int, array<string, mixed>>, totals: array<string, int>, paginator: LengthAwarePaginator} */
+    private function linkSubjects(User $user, array $branchIds, array $projectIds, ?Branch $branch, ?LeadMaster $project, Request $request, string $status): array
+    {
+        if ($branch === null) {
+            return [
+                'items' => collect(),
+                'totals' => ['undecided' => 0, 'linked' => 0, 'without_lead' => 0, 'legacy' => 0, 'empty_id' => 0],
+                'paginator' => new LengthAwarePaginator([], 0, 50, 1, ['path' => $request->url(), 'query' => $request->query()]),
+            ];
+        }
+
+        $resolver = app(ConsumerLeadLinkSubjectResolver::class);
+        $scopedProjectIds = array_values(array_intersect($projectIds, $this->organizationScope->projectIds($user, 'consumer_progress', 'view')));
+        $rows = KonsumenProgressSheetRow::query()->where('branch_id', $branch->id)->where('sheet_name', 'data_konsumen')->orderByDesc('id')->get();
+        $maps = $resolver->lookupMaps($rows, $scopedProjectIds);
+        $sheetSubjects = $rows->map(function (KonsumenProgressSheetRow $row) use ($maps, $resolver): ConsumerLeadLinkSubject {
+            $data = collect($row->row_data ?? [])->mapWithKeys(fn ($value, $key): array => [Str::lower(trim((string) $key)) => is_scalar($value) ? trim((string) $value) : '']);
+            $projectName = Str::lower($data->get('proyek', $data->get('project', $data->get('project_name', ''))));
+            $salesName = Str::lower($data->get('sales', $data->get('nama sales', $data->get('sales_pic', ''))));
+
+            return $resolver->fromSheetRow($row, $maps['project_ids'][$projectName] ?? null, $maps['sales_ids'][$salesName] ?? null, false);
+        })->filter(fn (ConsumerLeadLinkSubject $subject): bool => $subject->projectId !== null && in_array($subject->projectId, $scopedProjectIds, true) && ($project === null || $subject->projectId === $project->id));
+        $nupSubjects = ConsumerNup::query()->with('customer')->where('branch_id', $branch->id)->when($project, fn (Builder $query): Builder => $query->where('project_id', $project->id))->whereIn('project_id', $scopedProjectIds)->get()->map(fn (ConsumerNup $nup): ConsumerLeadLinkSubject => $resolver->fromNup($nup));
+        $subjects = $sheetSubjects->merge($nupSubjects)->map(fn (ConsumerLeadLinkSubject $subject): array => [
+            'source' => $subject->subjectType, 'subject_key' => $subject->subjectKey(), 'subject_id' => $subject->subjectId ?? $subject->sheetRowId, 'name' => $subject->name, 'project_id' => $subject->projectId, 'branch_id' => $subject->branchId, 'decidable' => $subject->isDecidable, 'note' => $subject->note,
+        ])->values();
+        $statuses = ConsumerLeadLinkDecision::query()
+            ->with('salesLead:id,customer_name')
+            ->whereIn('subject_key', $subjects->pluck('subject_key'))
+            ->where('is_active', true)
+            ->get(['subject_key', 'status', 'sales_lead_id'])
+            ->keyBy('subject_key');
+        $subjects = $subjects->map(function (array $subject) use ($statuses): array {
+            $decision = $statuses->get($subject['subject_key']);
+            $subject['decision_status'] = $decision?->status;
+            $subject['decision_lead_name'] = $decision?->salesLead?->customer_name;
+
+            return $subject;
+        });
+        $totals = ['undecided' => $subjects->filter(fn (array $subject): bool => $subject['decidable'] && $subject['decision_status'] === null)->count(), 'linked' => $subjects->where('decision_status', 'linked')->count(), 'without_lead' => $subjects->where('decision_status', 'without_lead')->count(), 'legacy' => $subjects->where('decision_status', 'legacy')->count(), 'empty_id' => $subjects->where('decidable', false)->count()];
+        $filtered = $status === '' ? $subjects : $subjects->filter(fn (array $subject): bool => match ($status) {
+            'undecided' => $subject['decidable'] && $subject['decision_status'] === null,
+            'empty_id' => ! $subject['decidable'],
+            default => $subject['decision_status'] === $status,
+        });
+        $page = max(1, $request->integer('link_page', 1));
+        $paginator = new LengthAwarePaginator($filtered->forPage($page, 50)->values(), $filtered->count(), 50, $page, ['path' => $request->url(), 'query' => $request->query()]);
+
+        return ['items' => collect($paginator->items()), 'totals' => $totals, 'paginator' => $paginator];
+    }
+
     /** @return array<string, mixed> */
     public function detail(User $user, ConsumerApplication $application): array
     {
@@ -101,7 +173,7 @@ final class ConsumerDatabaseWorkspaceService
             'customer:id,name,phone',
             'sales:id,name',
             'kavling:id,project_id,name,kavling_code',
-            'stageEvents:id,consumer_application_id,stage,event_date,status,decision,occurred_at,completed_at,notes,reason',
+            'processStageEvents:id,consumer_application_id,event_type,stage,event_date,status,decision,occurred_at,completed_at,notes,reason',
             'bankProcesses:id,consumer_application_id,attempt_no,bank_name,status,response_type,no_sp3k,approved_plafond,approved_tenor,sp3k_at,rejected_at,rejection_reason,submitted_at,verified_at',
             'psjbs:id,consumer_application_id,consumer_stage_event_id,id_psjb,tanggal_psjb,status',
             'ppjbDevelopers:id,consumer_application_id,consumer_stage_event_id,tanggal_sp3k,tanggal_ttd_ppjb,status',
@@ -110,6 +182,10 @@ final class ConsumerDatabaseWorkspaceService
             'warranties:id,consumer_application_id,consumer_bast_record_id,status_komplain,tanggal_selesai,status_garansi,detail_garansi',
             'issues:id,consumer_application_id,process_key,category,description,status,opened_at,resolution,resolved_at,pic_user_id',
             'processApplicabilities:id,consumer_application_id,process_key,applicability,reason',
+            'linkDecisions' => fn ($query) => $query
+                ->with(['salesLead:id,customer_name,sales_user_id', 'decidedBy:id,name'])
+                ->latest('decided_at')
+                ->latest('id'),
         ]);
 
         $stageLabels = [
@@ -122,6 +198,11 @@ final class ConsumerDatabaseWorkspaceService
         $ppjbByEvent = $application->ppjbDevelopers->keyBy('consumer_stage_event_id');
         $akadByEvent = $application->akadRecords->keyBy('consumer_stage_event_id');
         $bastByEvent = $application->bastRecords->keyBy('consumer_stage_event_id');
+        $linkDecisionAudits = ActivityLog::query()
+            ->where('subject_type', ConsumerApplication::class)
+            ->where('subject_id', $application->id)
+            ->where('event', 'consumer_lead_link_decision_confirmed')
+            ->get(['properties']);
         $activities = ActivityLog::query()
             ->with('causer:id,name')
             ->where('subject_type', ConsumerApplication::class)
@@ -139,7 +220,47 @@ final class ConsumerDatabaseWorkspaceService
             ->values()
             ->all();
 
+        $leadLinkDecisions = $application->linkDecisions;
+        $activeLeadLinkDecision = $leadLinkDecisions->firstWhere('is_active', true);
+        $leadLinkHistory = $leadLinkDecisions->map(function (ConsumerLeadLinkDecision $decision) use ($linkDecisionAudits): array {
+            $audit = $linkDecisionAudits->first(fn (ActivityLog $activity): bool => (int) data_get($activity->properties, 'decision_id') === (int) $decision->id);
+
+            return [
+                'id' => $decision->id,
+                'status' => $decision->status,
+                'sales_lead_id' => $decision->sales_lead_id,
+                'lead_name' => $decision->salesLead?->customer_name,
+                'reason' => $decision->reason,
+                'legacy_anchor' => data_get($audit?->properties, 'legacy_anchor'),
+                'decided_by' => $decision->decidedBy?->name,
+                'decided_at' => $decision->decided_at?->toIso8601String(),
+                'is_active' => (bool) $decision->is_active,
+            ];
+        })->values()->all();
+
         return [
+            'can_input' => $this->migrationStates->allowsOasisConsumerInput((int) $application->branch_id),
+            'lead_link' => [
+                'consumer' => [
+                    'id' => $application->id,
+                    'id_transaksi' => $application->id_transaksi,
+                    'customer_name' => $application->customer?->name,
+                    'project' => $application->project?->project_name,
+                    'branch' => $application->branch?->name,
+                ],
+                'suggestions' => $this->leadLinkSuggestions->suggest($application, $user, 10)->map(fn (array $suggestion): array => [
+                    'lead_id' => $suggestion['lead_id'],
+                    'lead_name' => $suggestion['lead']->customer_name,
+                    'sales_name' => $suggestion['lead']->sales?->name,
+                    'score' => $suggestion['score'],
+                    'rationale' => $suggestion['rationale'],
+                ])->values()->all(),
+                'current' => $activeLeadLinkDecision ? $leadLinkHistory[array_search($activeLeadLinkDecision->id, array_column($leadLinkHistory, 'id'), true)] : null,
+                'history' => $leadLinkHistory,
+                'allowed_actions' => [
+                    'can_decide' => $this->canManageApplication($user, $application) && $this->migrationStates->allowsOasisConsumerInput((int) $application->branch_id),
+                ],
+            ],
             'overview' => [
                 'id' => $application->id,
                 'id_transaksi' => $application->id_transaksi,
@@ -162,7 +283,7 @@ final class ConsumerDatabaseWorkspaceService
                 'akad_date' => $application->akad_date?->toDateString(),
                 'updated_at' => $application->updated_at?->toIso8601String(),
             ],
-            'process' => $application->stageEvents->sortByDesc('occurred_at')->map(function (ConsumerStageEvent $event) use ($stageLabels, $psjbByEvent, $ppjbByEvent, $akadByEvent, $bastByEvent): array {
+            'process' => $application->processStageEvents->sortByDesc('occurred_at')->map(function (ConsumerStageEvent $event) use ($stageLabels, $psjbByEvent, $ppjbByEvent, $akadByEvent, $bastByEvent): array {
                 $summary = match ($event->stage) {
                     'PSJB' => ($psjbByEvent->get($event->id)?->id_psjb ? 'ID PSJB: '.$psjbByEvent->get($event->id)->id_psjb : null),
                     'ppjb_dev' => $ppjbByEvent->get($event->id)?->tanggal_ttd_ppjb?->format('d M Y') ? 'PPJB ditandatangani '.$ppjbByEvent->get($event->id)->tanggal_ttd_ppjb->format('d M Y') : null,
@@ -198,7 +319,7 @@ final class ConsumerDatabaseWorkspaceService
                 'verified_at' => $attempt->verified_at?->toIso8601String(),
             ])->values()->all(),
             'counts' => [
-                'process' => $application->stageEvents->count(),
+                'process' => $application->processStageEvents->count(),
                 'payment' => $application->bankProcesses->count(),
                 'files' => $application->documents()->count(),
                 'activity' => count($activities),
@@ -214,7 +335,25 @@ final class ConsumerDatabaseWorkspaceService
                 ->all(),
             'activity' => $activities,
             'warranty' => $application->warranties->map(fn ($warranty): array => ['status_komplain' => $warranty->status_komplain, 'status_garansi' => $warranty->status_garansi, 'tanggal_selesai' => $warranty->tanggal_selesai?->toDateString(), 'detail_garansi' => $warranty->detail_garansi])->values()->all(),
-            'issues' => $application->issues->map(fn ($issue): array => ['process' => $issue->process_key, 'category' => $issue->category, 'description' => $issue->description, 'status' => $issue->status, 'opened_at' => $issue->opened_at?->toIso8601String(), 'resolution' => $issue->resolution])->values()->all(),
+            'issues' => $application->issues->map(fn ($issue): array => ['id' => $issue->id, 'process' => $issue->process_key, 'category' => $issue->category, 'description' => $issue->description, 'status' => $issue->status, 'opened_at' => $issue->opened_at?->toIso8601String(), 'resolution' => $issue->resolution])->values()->all(),
+            'nup_history' => ConsumerNup::query()
+                ->where('customer_id', $application->customer_id)
+                ->where('branch_id', $application->branch_id)
+                ->with(['sourceApplication:id,id_transaksi,kavling_id,id_kavling,transaction_status', 'sourceApplication.kavling:id,project_id,name,kavling_code', 'convertedApplication:id,id_transaksi,kavling_id,id_kavling,transaction_status', 'convertedApplication.kavling:id,project_id,name,kavling_code', 'issue:id,description'])
+                ->orderBy('registered_at')
+                ->orderBy('id')
+                ->get()
+                ->map(fn (ConsumerNup $nup): array => [
+                    'id' => $nup->id,
+                    'nup_number' => $nup->nup_number,
+                    'registered_at' => $nup->registered_at?->toDateString(),
+                    'entry_type' => $nup->provenanceType(),
+                    'reason' => $nup->notes ?: $nup->issue?->description,
+                    'source_transaction' => $nup->sourceApplication?->id_transaksi,
+                    'source_kavling' => $nup->sourceApplication?->kavling?->kavling_code ?: $nup->sourceApplication?->kavling?->name ?: $nup->sourceApplication?->id_kavling,
+                    'converted_transaction' => $nup->convertedApplication?->id_transaksi,
+                    'converted_kavling' => $nup->convertedApplication?->kavling?->kavling_code ?: $nup->convertedApplication?->kavling?->name ?: $nup->convertedApplication?->id_kavling,
+                ])->values()->all(),
         ];
     }
 
@@ -230,7 +369,7 @@ final class ConsumerDatabaseWorkspaceService
                 'kavling:id,project_id,name,kavling_code',
                 'bankProcesses:id,consumer_application_id,attempt_no,bank_name,status,response_type',
             ])
-            ->withCount(['stageEvents', 'bankProcesses', 'documents']);
+            ->withCount(['processStageEvents', 'bankProcesses', 'documents']);
 
         $search = trim($request->string('search')->toString());
         if ($search !== '') {
@@ -377,7 +516,13 @@ final class ConsumerDatabaseWorkspaceService
             'confirmed' => 'Dikonfirmasi',
             'lanjut' => 'Lanjut',
             'mundur' => 'Mundur',
-            'pindah kavling' => 'Pindah Kavling',
+            'pindah kavling', 'pindah_kavling' => 'Pindah Kavling',
+            'ganti_nama' => 'Ganti Nama',
+            'ganti_bank' => 'Ganti Bank',
+            'diganti_konsumen' => 'Diganti Konsumen',
+            'kembali_ke_nup' => 'Kembali ke NUP',
+            'koreksi_data' => 'Koreksi Data',
+            'ditutup' => 'Ditutup',
             'replaced' => 'Diganti',
             default => Str::headline((string) $value),
         };
@@ -424,10 +569,27 @@ final class ConsumerDatabaseWorkspaceService
 
     private function canViewApplication(User $user, ConsumerApplication $application): bool
     {
+        $action = $this->canManageApplication($user, $application) ? 'manage' : 'view';
+
         return $this->organizationScope->allowsProjectRecord(
             $user,
             'consumer_progress',
-            'view',
+            $action,
+            (int) $application->branch_id,
+            $application->project_id,
+        );
+    }
+
+    private function canManageApplication(User $user, ConsumerApplication $application): bool
+    {
+        if (! $user->hasPermission('consumer_progress.manage') && ! $user->hasScopedPermission('consumer_progress', 'manage')) {
+            return false;
+        }
+
+        return $this->organizationScope->allowsProjectRecord(
+            $user,
+            'consumer_progress',
+            'manage',
             (int) $application->branch_id,
             $application->project_id,
         );

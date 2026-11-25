@@ -18,6 +18,7 @@ class UserNotification extends Model
         'comment_id',
         'actor_user_id',
         'data',
+        'dedupe_key',
         'read_at',
     ];
 

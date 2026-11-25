@@ -1,0 +1,48 @@
+{
+  "captured_at": "2026-11-20",
+  "basis": "Database permission state before PRD v3 role merge",
+  "permission_resolution": "User::hasPermission() reads primary role permissions only; supplemental role_user memberships do not grant permissions.",
+  "users": {
+    "admin": [
+      {"id": 4, "primary_role": "admin", "supplemental_roles": []},
+      {"id": 18, "primary_role": "admin", "supplemental_roles": []},
+      {"id": 41, "primary_role": "admin", "supplemental_roles": []}
+    ],
+    "sam": [
+      {"id": 39, "primary_role": "sam", "supplemental_roles": []}
+    ],
+    "sas": [
+      {"id": 38, "primary_role": "sas", "supplemental_roles": []}
+    ],
+    "staff": [
+      {"id": 19, "primary_role": "staff", "supplemental_roles": []},
+      {"id": 42, "primary_role": "staff", "supplemental_roles": []}
+    ]
+  },
+  "effective_permissions_by_primary_role": {
+    "admin": [
+      "bridge_fund.export", "bridge_fund.export_branch", "bridge_fund.manage", "bridge_fund.manage_branch", "bridge_fund.sync_branch", "bridge_fund.view", "bridge_fund.view_branch",
+      "comments.create", "comments.delete_own", "comments.mention", "comments.reply", "comments.update_own", "comments.view",
+      "consumer_progress.export_branch", "consumer_progress.manage_branch", "consumer_progress.sync", "consumer_progress.sync_branch", "consumer_progress.view", "consumer_progress.view_branch",
+      "database.edit", "database.export_branch", "database.manage_branch", "database.sync", "database.sync_branch", "database.view", "database.view_branch",
+      "promo.manage",
+      "sales_pocketbook.export", "sales_pocketbook.export_branch", "sales_pocketbook.reconcile", "sales_pocketbook.sync", "sales_pocketbook.view_branch",
+      "users.assign_branches", "users.assign_projects", "users.assign_supervisor", "users.create", "users.invite", "users.propose_sales", "users.reset_password", "users.update", "users.view",
+      "work_planner.assign", "work_planner.create", "work_planner.export", "work_planner.export_branch", "work_planner.manage_branch", "work_planner.update", "work_planner.view_branch"
+    ],
+    "sam": [
+      "sales_daily_plans.view_branch", "sales_pocketbook.export", "sales_pocketbook.export_branch", "sales_pocketbook.view_branch", "sales_targets.view_branch"
+    ],
+    "sas": [
+      "sales_daily_plans.view_branch", "sales_pocketbook.export", "sales_pocketbook.export_branch", "sales_pocketbook.view_branch", "sales_targets.view_branch"
+    ],
+    "staff": [
+      "bridge_fund.manage", "bridge_fund.manage_assigned", "bridge_fund.view", "bridge_fund.view_assigned",
+      "comments.create", "comments.delete_own", "comments.mention", "comments.reply", "comments.update_own", "comments.view",
+      "consumer_progress.manage_assigned", "consumer_progress.view", "consumer_progress.view_assigned",
+      "database.edit", "database.manage_assigned", "database.view", "database.view_assigned",
+      "expenses.manage_assigned", "expenses.view_assigned",
+      "work_planner.create", "work_planner.manage_own", "work_planner.update", "work_planner.view_own"
+    ]
+  }
+}

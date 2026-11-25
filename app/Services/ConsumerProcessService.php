@@ -7,6 +7,7 @@ use App\Models\ConsumerApplication;
 use App\Models\ConsumerIssue;
 use App\Models\ConsumerWarranty;
 use App\Models\User;
+use App\Support\FeatureFlag;
 use DomainException;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Database\Eloquent\Builder;
@@ -24,10 +25,12 @@ class ConsumerProcessService
     public function __construct(
         private readonly OrganizationScopeService $scope,
         private readonly ConsumerOperationalService $operational,
+        private readonly BranchMigrationStateService $migrationStates,
     ) {}
 
     public function recordWarranty(ConsumerApplication $application, array $data, User $actor): ConsumerWarranty
     {
+        $this->migrationStates->assertOasisConsumerInputAllowed((int) $application->branch_id);
         $this->authorize($actor, $application);
         if (! $application->bastRecords()->exists()) {
             throw new DomainException('Form Garansi hanya dapat dicatat setelah BAST.');
@@ -63,7 +66,7 @@ class ConsumerProcessService
             $updates = ['current_process' => 'garansi', 'current_process_source' => 'operational'];
             if (in_array($warranty->status_garansi, ['Selesai', 'Tidak Ada Komplain'], true)) {
                 $updates['current_process'] = 'selesai';
-                $updates['transaction_status'] = 'SELESAI';
+                $updates['transaction_status'] = FeatureFlag::enabledForBranch('transaction_events_v3', $application->branch_id) ? 'LANJUT' : 'SELESAI';
                 $updates['consumer_status'] = 'Selesai';
             }
             $application->update($updates);
@@ -75,6 +78,7 @@ class ConsumerProcessService
 
     public function createIssue(ConsumerApplication $application, array $data, User $actor): ConsumerIssue
     {
+        $this->migrationStates->assertOasisConsumerInputAllowed((int) $application->branch_id);
         $this->authorize($actor, $application);
         $this->assertPicScope($application, $data, $actor);
 
@@ -93,6 +97,7 @@ class ConsumerProcessService
     public function resolveIssue(ConsumerIssue $issue, array $data, User $actor): ConsumerIssue
     {
         $issue->loadMissing('application');
+        $this->migrationStates->assertOasisConsumerInputAllowed((int) $issue->application->branch_id);
         $this->authorize($actor, $issue->application);
         $issue->update(['status' => 'resolved', 'resolution' => $data['resolution'], 'resolved_at' => now(), 'resolved_by' => $actor->id]);
         $this->audit($actor, $issue->application, 'consumer_issue_resolved', ['issue_id' => $issue->id], ['resolution' => $issue->resolution], 'manual');
@@ -110,12 +115,20 @@ class ConsumerProcessService
             ->whereIn('branch_id', $branchIds)
             ->when($this->scope->requiresProjectScope($user, 'consumer_progress'), fn (Builder $query): Builder => $query->whereIn('project_id', $projectIds))
             ->when(! $this->scope->requiresProjectScope($user, 'consumer_progress'), fn (Builder $query): Builder => $query->where(fn (Builder $nested): Builder => $nested->whereNull('project_id')->orWhereIn('project_id', $projectIds)))
-            ->where(function (Builder $query): void {
-                $query->where('transaction_status', 'SELESAI')
-                    ->orWhere(function (Builder $nested): void {
-                        $nested->whereHas('bastRecords')->whereHas('warranties', fn (Builder $warranty): Builder => $warranty->whereIn('status_garansi', ['Selesai', 'Tidak Ada Komplain']));
-                    });
-            });
+            ->tap(fn (Builder $query): Builder => $this->applyCompletedFilter($query));
+    }
+
+    /** @param Builder<ConsumerApplication> $query */
+    public function applyCompletedFilter(Builder $query): Builder
+    {
+        return $query->where(function (Builder $nested): void {
+            $nested->whereIn('transaction_status', ['SELESAI', 'selesai', 'COMPLETED', 'completed'])
+                ->orWhere(function (Builder $active): void {
+                    $active->where('transaction_status', 'LANJUT')
+                        ->whereHas('bastRecords')
+                        ->whereHas('warranties', fn (Builder $warranty): Builder => $warranty->whereIn('status_garansi', ['Selesai', 'Tidak Ada Komplain']));
+                });
+        });
     }
 
     private function authorize(User $actor, ConsumerApplication $application): void

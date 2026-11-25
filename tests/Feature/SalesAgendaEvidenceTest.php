@@ -15,11 +15,12 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
+use Tests\Concerns\FreezesSalesAgendaTime;
 use Tests\TestCase;
 
 class SalesAgendaEvidenceTest extends TestCase
 {
-    use RefreshDatabase;
+    use FreezesSalesAgendaTime, RefreshDatabase;
 
     public function test_sales_can_create_agenda_with_zero_one_or_two_photos_and_initial_result(): void
     {
@@ -56,7 +57,7 @@ class SalesAgendaEvidenceTest extends TestCase
         $this->assertSame(3, ActivityLog::where('event', 'agenda_evidence_uploaded')->count());
         $this->assertSame(1, ActivityLog::where('event', 'agenda_result_recorded')->where('subject_id', $agendas[1]->id)->count());
         $audit = ActivityLog::where('event', 'agenda_evidence_uploaded')->firstOrFail();
-        $this->assertSame('Bukti foto Agenda Sales diunggah.', $audit->description);
+        $this->assertSame('Bukti foto Kegiatan Sales diunggah.', $audit->description);
         $this->assertSame($sales->id, $audit->causer_id);
         $this->assertSame(SalesAgendaEvidence::class, $audit->subject_type);
     }

@@ -80,13 +80,13 @@ class SalesFeeReportService
             ->where('scheduled_date', '>=', $filters['date_from'])
             ->where('scheduled_date', '<', $dateToExclusive)
             ->orderBy('scheduled_date')->orderBy('id')->get();
-        $leads = SalesLead::query()->with('project')
+        $leads = SalesLead::query()->activeForLeadViews()->with('project')
             ->where('branch_id', $access['branchId'])
             ->where('sales_user_id', $salesUser->id)->where('project_id', $project->id)
             ->where('lead_date', '>=', $filters['date_from'])
             ->where('lead_date', '<', $dateToExclusive)
             ->orderBy('lead_date')->orderBy('id')->get();
-        $lifecycleLeads = SalesLead::query()
+        $lifecycleLeads = SalesLead::query()->activeForLeadViews()
             ->with(['statusHistories' => fn ($query) => $query
                 ->whereIn('status', [SalesLeadStatus::FaceToFace->value, SalesLeadStatus::SiteVisit->value, SalesLeadStatus::Utj->value])
                 ->orderBy('changed_at')
@@ -146,7 +146,7 @@ class SalesFeeReportService
 
     private function access(User $actor, array $filters): array
     {
-        abort_unless($actor->hasPrimaryRole('admin') || $actor->isSuperadmin(), 403);
+        abort_unless($actor->isAdminCabang() || $actor->isSuperadmin(), 403);
         $branchIds = array_values(array_intersect(
             $this->scope->branchIds($actor, 'sales_pocketbook', 'export'),
             $this->workspace->accessibleBranchIds($actor),
@@ -162,7 +162,7 @@ class SalesFeeReportService
                 $this->workspace->accessibleProjectIds($actor),
             ))
             ->pluck('id')->map(fn ($id) => (int) $id)->all();
-        $visibleUserIds = $this->scope->visibleUserIds($actor, 'sales_pocketbook', 'export');
+        $visibleUserIds = $this->scope->visibleUserIds($actor, 'sales_pocketbook', 'export', 'sales_leads');
         $salesIds = User::query()->where('branch_id', $branchId)->where('is_active', true)->whereIn('id', $visibleUserIds)
             ->whereHas('role', fn ($query) => $query->where('slug', 'sales')->where('is_active', true))
             ->pluck('id')->map(fn ($id) => (int) $id)->all();
@@ -225,7 +225,7 @@ class SalesFeeReportService
     {
         $dateToExclusive = $this->dateToExclusive($filters);
 
-        return SalesLead::query()->where('branch_id', $branchId)
+        return SalesLead::query()->activeForLeadViews()->where('branch_id', $branchId)
             ->whereIn('sales_user_id', $salesIds)->whereIn('project_id', $projectIds)
             ->where('lead_date', '>=', $filters['date_from'])
             ->where('lead_date', '<', $dateToExclusive)

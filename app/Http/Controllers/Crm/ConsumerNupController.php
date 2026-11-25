@@ -4,6 +4,8 @@ namespace App\Http\Controllers\Crm;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\ConsumerNupRequest;
+use App\Models\ConsumerApplication;
+use App\Models\ConsumerIssue;
 use App\Models\ConsumerNup;
 use App\Services\ConsumerNupService;
 use App\Services\WorkspaceAccessService;
@@ -18,7 +20,7 @@ class ConsumerNupController extends Controller
 
     public function index(Request $request): View
     {
-        $query = $this->nups->visibleQuery($request->user());
+        $query = $this->nups->visibleQuery($request->user())->with('convertedApplication');
         $search = trim($request->string('search')->toString());
         $query->when($search !== '', fn ($builder) => $builder->where(function ($nested) use ($search): void {
             $nested->where('nup_number', 'like', "%{$search}%")
@@ -43,6 +45,17 @@ class ConsumerNupController extends Controller
         }
 
         return redirect()->route('consumer-nups.index')->with('success', 'NUP berhasil dicatat.');
+    }
+
+    public function returnToNup(ConsumerNupRequest $request, ConsumerApplication $consumerApplication): RedirectResponse|JsonResponse
+    {
+        $data = $request->validated();
+        $nup = $this->nups->returnFromTransaction($consumerApplication, ConsumerIssue::query()->findOrFail($data['issue_id']), $data, $request->user());
+        if ($request->expectsJson()) {
+            return response()->json(['ok' => true, 'message' => 'Transaksi berhasil dikembalikan ke NUP.', 'data' => ['id' => $nup->id]], 201);
+        }
+
+        return redirect()->route('consumer-nups.index')->with('success', 'Transaksi berhasil dikembalikan ke NUP.');
     }
 
     public function convert(ConsumerNupRequest $request, ConsumerNup $consumerNup): RedirectResponse|JsonResponse

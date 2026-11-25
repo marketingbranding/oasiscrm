@@ -32,8 +32,8 @@ class RolePermissionTest extends TestCase
             'branch_manager' => 'Branch Manager',
             'pusat' => 'Tim Pusat',
             'superadmin' => 'Super Admin',
-            'admin' => 'Admin',
-            'staff' => 'Staff',
+            'admin' => 'Staff Admin · Admin Cabang',
+            'staff' => 'Staff Admin · Umum',
         ];
 
         foreach ($expected as $slug => $name) {

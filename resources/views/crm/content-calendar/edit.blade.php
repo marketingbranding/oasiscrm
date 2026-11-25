@@ -1,7 +1,7 @@
 @extends('layouts.crm')
-@section('title', 'Edit Work Planner - Oasis CRM')
+@section('title', 'Edit Tugas & Konten - Oasis CRM')
 @section('content')
-<x-crm.page-header variant="canonical" eyebrow="Work Planner" title="Edit Item" description="Perbarui item dengan perlindungan konflik kolaborasi dan validasi server.">
+<x-crm.page-header variant="canonical" eyebrow="Tugas & Konten" title="Edit Item" description="Perbarui item dengan perlindungan konflik kolaborasi dan validasi server.">
     <x-slot:actions>
         <x-crm.button variant="secondary" :href="route('content-calendar.index', ['view' => request('view', 'today')])">Kembali</x-crm.button>
     </x-slot:actions>

@@ -26,13 +26,13 @@ class LegacyConsumerReadService
             ->orderBy('id')
             ->get(['sheet_name', 'row_data']);
 
-        $byKavling = [];
+        $byIdentity = [];
         $customers = [];
         foreach ($rows->where('sheet_name', 'data_konsumen') as $row) {
             $data = $this->data($row->row_data);
             $key = $this->value($data, ['id_kavling', 'id kavling', 'kavling', 'kav']);
             if ($key !== '') {
-                $customers[$key] = $data;
+                $customers[$key][] = $data;
             }
         }
 
@@ -43,6 +43,7 @@ class LegacyConsumerReadService
         ]))->all();
         $sales = User::query()->where('branch_id', $branch->id)->get()->keyBy(fn (User $user) => Str::lower($user->name));
         $unknownStages = [];
+        $stageRows = [];
         foreach ($rows->whereNotIn('sheet_name', ['data_konsumen']) as $row) {
             $data = $this->data($row->row_data);
             $key = $this->value($data, ['id_kavling', 'id kavling', 'kavling', 'kav']);
@@ -52,53 +53,68 @@ class LegacyConsumerReadService
 
                 continue;
             }
-            $rank = $stageOrder[$canonicalStage] ?? -1;
-            $currentRank = $stageOrder[$byKavling[$key][0] ?? null] ?? -1;
-            if ($key !== '' && $rank >= $currentRank) {
-                $byKavling[$key] = [$canonicalStage, $data];
-            }
+            $stageRows[$key][] = [$canonicalStage, $data];
         }
 
         $records = [];
-        foreach ($customers as $kavling => $customer) {
-            [$sheet, $stageData] = $byKavling[$kavling] ?? [null, []];
-            $name = $this->value($customer, ['nama_konsumen', 'nama konsumen', 'nama']);
-            if ($name === '') {
-                continue;
-            }
-            $stage = $sheet ?: null;
-            $projectName = $this->value($customer, ['project_name', 'proyek', 'project']);
-            $kavlingModel = $kavlings[Str::lower($kavling)] ?? null;
-            if (! $this->matchProject($project, $projectName, $kavlingModel)) {
-                continue;
-            }
-            $salesName = $this->value($stageData + $customer, ['sales', 'sales_pic', 'nama_sales', 'sales name']);
-            $salesModel = $salesName === '' ? null : $sales->get(Str::lower($salesName));
-            $bank = $this->value($stageData + $customer, ['bank', 'nama_bank', 'bank_name']);
-            $bankStatus = $this->value($stageData + $customer, ['status_bank', 'bank_status']);
-            $external = $this->value($customer, ['external_id', 'external_key', 'id_konsumen', 'id_customer', 'id_lead']);
-            $legacyKey = $external !== '' ? 'external:'.Str::lower($external) : 'kavling:'.Str::lower($kavling);
+        foreach ($customers as $kavling => $customerRows) {
+            $stageCandidates = $stageRows[$kavling] ?? [];
+            foreach ($customerRows as $customer) {
+                $transactionId = $this->value($customer, ['id_transaksi', 'id transaksi']);
+                $psjbId = $this->value($customer, ['id_psjb', 'id psjb']);
+                $matchingStages = array_values(array_filter($stageCandidates, fn (array $candidate): bool => ($transactionId !== '' && $this->value($candidate[1], ['id_transaksi', 'id transaksi']) === $transactionId) || ($psjbId !== '' && $this->value($candidate[1], ['id_psjb', 'id psjb']) === $psjbId)));
+                if ($matchingStages === [] && count($customerRows) === 1) {
+                    $matchingStages = $stageCandidates;
+                }
+                usort($matchingStages, fn (array $left, array $right): int => ($stageOrder[$right[0]] ?? -1) <=> ($stageOrder[$left[0]] ?? -1));
+                [$sheet, $stageData] = $matchingStages[0] ?? [null, []];
+                $name = $this->value($customer, ['nama_konsumen', 'nama konsumen', 'nama']);
+                if ($name === '') {
+                    continue;
+                }
+                $stage = $sheet ?: null;
+                $projectName = $this->value($customer, ['project_name', 'proyek', 'project']);
+                $kavlingModel = $kavlings[Str::lower($kavling)] ?? null;
+                if (! $this->matchProject($project, $projectName, $kavlingModel)) {
+                    continue;
+                }
+                $salesName = $this->value($stageData + $customer, ['sales', 'sales_pic', 'nama_sales', 'sales name']);
+                $salesModel = $salesName === '' ? null : $sales->get(Str::lower($salesName));
+                $bank = $this->value($stageData + $customer, ['bank', 'nama_bank', 'bank_name']);
+                $bankStatus = $this->value($stageData + $customer, ['status_bank', 'bank_status']);
+                $external = $this->value($customer, ['external_id', 'external_key', 'id_konsumen', 'id_customer', 'id_lead']);
+                $transactionId = $this->value($customer, ['id_transaksi', 'id transaksi']);
+                $consumerId = $this->value($customer, ['id_konsumen', 'id konsumen', 'id_kons']);
+                $psjbId = $this->value($stageData + $customer, ['id_psjb', 'id psjb']);
+                $legacyKey = $external !== '' ? 'external:'.Str::lower($external) : 'kavling:'.Str::lower($kavling);
 
-            $records[] = new ConsumerComparisonRecord(
-                legacyKey: $legacyKey,
-                localApplicationId: null,
-                customerName: $name,
-                phone: $this->phone($this->value($customer, ['no_hp', 'no hp', 'phone', 'nomor hp'])),
-                branchId: $branch->id,
-                projectId: $project->id,
-                salesLabel: $salesName ?: null,
-                salesUserId: $salesModel?->id,
-                kavlingLabel: $kavling,
-                kavlingId: $kavlingModel?->id,
-                applicationStatus: null,
-                currentStage: $stage,
-                bookingDate: $this->date($this->value($customer, ['tanggal_booking', 'booking_date'])),
-                akadDate: $this->date($this->value($stageData + $customer, ['tanggal_akad', 'akad_date', 'tgl_akad'])),
-                bankName: $bank ?: null,
-                bankStatus: $bankStatus ?: null,
-                values: ['project_name' => $projectName ?: null],
-                notes: $unknownStages === [] ? [] : ['Tahap legacy tidak dikenal: '.implode(', ', array_keys($unknownStages)).'.'],
-            );
+                $records[] = new ConsumerComparisonRecord(
+                    legacyKey: $legacyKey,
+                    localApplicationId: null,
+                    customerName: $name,
+                    phone: $this->phone($this->value($customer, ['no_hp', 'no hp', 'phone', 'nomor hp'])),
+                    branchId: $branch->id,
+                    projectId: $project->id,
+                    salesLabel: $salesName ?: null,
+                    salesUserId: $salesModel?->id,
+                    kavlingLabel: $kavling,
+                    kavlingId: $kavlingModel?->id,
+                    applicationStatus: $this->value($stageData + $customer, ['transaction_status', 'status_transaksi', 'status transaksi']) ?: null,
+                    transactionId: $transactionId ?: null,
+                    consumerId: $consumerId ?: null,
+                    psjbId: $psjbId ?: null,
+                    currentStage: $stage,
+                    bookingDate: $this->date($this->value($customer, ['tanggal_booking', 'booking_date'])),
+                    akadDate: $this->date($this->value($stageData + $customer, ['tanggal_akad', 'akad_date', 'tgl_akad'])),
+                    bankName: $bank ?: null,
+                    bankStatus: $bankStatus ?: null,
+                    values: ['project_name' => $projectName ?: null],
+                    notes: array_values(array_filter([
+                        ...($unknownStages === [] ? [] : ['Tahap legacy tidak dikenal: '.implode(', ', array_keys($unknownStages)).'.']),
+                        $stageCandidates !== [] && $matchingStages === [] ? 'Tahap legacy tidak dapat dipetakan ke konsumen karena terdapat beberapa baris pada kavling yang sama.' : null,
+                    ])),
+                );
+            }
         }
 
         return $records;

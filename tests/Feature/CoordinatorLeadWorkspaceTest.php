@@ -66,9 +66,9 @@ class CoordinatorLeadWorkspaceTest extends TestCase
         $this->actingAs($actor)->get(route('changelogs.index'))->assertOk()->assertSeeText($title);
     }
 
-    public function test_controller_exposes_workspace_export_and_push_actions(): void
+    public function test_controller_exposes_workspace_export_push_and_transfer_actions(): void
     {
-        foreach (['index', 'export', 'push'] as $method) {
+        foreach (['index', 'export', 'push', 'transfer'] as $method) {
             $this->assertTrue((new ReflectionMethod(CoordinatorSalesLeadWorkspaceController::class, $method))->isPublic());
         }
     }
@@ -77,7 +77,7 @@ class CoordinatorLeadWorkspaceTest extends TestCase
     {
         $view = file_get_contents(resource_path('views/crm/sales-pocketbook/coordinator-leads.blade.php'));
 
-        foreach (['Lead Baru', 'Tatap Muka', 'Cek Lokasi', 'UTJ', 'Performa Sales', 'Agenda Sales Tim', 'Nama Promo', '<th>Lokasi</th><th>Hasil</th><th>Status</th>', 'Belum ada aktivitas pada periode ini.', 'Pilih sumber lead', 'Pilih promo', 'Pilih Sales', "'today' => 'Hari ini'", "'lead' => 'Lead'", "'report' => 'Laporan'", 'Perlu diupdate', 'Semua agenda sudah diupdate', '480 menit'] as $label) {
+        foreach (['Lead tanpa pemilik aktif', 'Alih Lead', 'Pilih alasan', 'Lead Baru', 'Tatap Muka', 'Cek Lokasi', 'UTJ', 'Performa Sales', 'Rencana Harian Tim', 'Nama Promo', '<th>Lokasi</th><th>Hasil</th><th>Status</th>', 'Belum ada aktivitas pada periode ini.', 'Pilih sumber lead', 'Pilih promo', 'Pilih Sales', "'today' => 'Hari ini'", "'lead' => 'Lead'", "'report' => 'Laporan'", 'Perlu diupdate', 'Semua agenda sudah diupdate', '480 menit'] as $label) {
             $this->assertStringContainsString($label, $view);
         }
         foreach (['BELUM SYNC', 'TERSYNC', 'PERLU SYNC ULANG', 'SYNC GAGAL', 'ID Promo', 'sales-leads.options', 'Tatap Muka Konsumen', '>Survey<', 'Survey Lokasi'] as $label) {
@@ -90,6 +90,7 @@ class CoordinatorLeadWorkspaceTest extends TestCase
         }
         $this->assertStringContainsString('$statuses as $status', $view);
         $this->assertStringContainsString("route('sales-leads.edit'", $view);
+        $this->assertStringContainsString("route('coordinator-leads.transfers.store'", $view);
         foreach (['id="coordinator-team-agenda"', 'id="coordinator-team-leads"', 'id="coordinator-report-summary"', 'id="coordinator-performance"', 'id="monitor-date-from"', 'id="monitor-date-to"', 'id="coordinator-lead-date"', 'data-horizontal-tabs', 'crm-horizontal-tabs', 'aria-current="page"'] as $contract) {
             $this->assertStringContainsString($contract, $view);
         }
@@ -102,6 +103,18 @@ class CoordinatorLeadWorkspaceTest extends TestCase
         }
         $this->assertStringNotContainsString('name="period" value="{{ $filters[\'period\'] }}">Terapkan', $view);
         $this->assertStringNotContainsString('type="date"', $view);
+    }
+
+    public function test_lead_team_table_exposes_aligned_cells_and_transfer_visibility_contract(): void
+    {
+        $view = file_get_contents(resource_path('views/crm/sales-pocketbook/coordinator-leads.blade.php'));
+
+        $this->assertStringContainsString('<th>Pilih</th><th>Tanggal</th><th>Konsumen</th>', $view);
+        $this->assertStringContainsString("<td>-</td><td>{{ \$lead['lead_date']", $view);
+        $this->assertStringContainsString('<td>{{ $lead->customer_name }}</td><td>{{ $lead->sales?->name }}</td>', $view);
+        $this->assertStringContainsString('@if($canTransferTeam)', $view);
+        $this->assertStringContainsString('@if($canManageQueue)', $view);
+        $this->assertStringContainsString('colspan="10"', $view);
     }
 
     public function test_lead_team_table_exposes_safe_sync_status_contract(): void

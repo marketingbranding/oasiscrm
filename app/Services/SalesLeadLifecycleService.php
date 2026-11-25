@@ -11,6 +11,7 @@ use App\Models\SalesLeadSiteVisit;
 use App\Models\SalesLeadSlikAttempt;
 use App\Models\SalesLeadStatusHistory;
 use App\Models\User;
+use App\Support\FeatureFlag;
 use Carbon\CarbonInterface;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -131,8 +132,13 @@ class SalesLeadLifecycleService
         ?CarbonInterface $changedAt = null,
         ?string $operationUuid = null,
     ): SalesLead {
+        if (FeatureFlag::enabledForBranch('lead_stages_v3', $lead->branch_id)) {
+            throw ValidationException::withMessages(['status' => 'Status manual lama tidak tersedia saat Tahap Lead v3 aktif.']);
+        }
+
         return DB::transaction(function () use ($lead, $status, $actor, $changedAt, $operationUuid): SalesLead {
             $locked = SalesLead::query()->lockForUpdate()->findOrFail($lead->id);
+            $this->assertV3MutationAllowed($locked, $actor);
             $target = SalesLeadStatus::fromInput($status);
             $this->assertTransitionAllowed($locked, $target);
             $changedAt ??= now();
@@ -228,6 +234,7 @@ class SalesLeadLifecycleService
     {
         return DB::transaction(function () use ($lead, $actor, $operationUuid): SalesLead {
             $locked = SalesLead::query()->lockForUpdate()->findOrFail($lead->id);
+            $this->assertV3MutationAllowed($locked, $actor);
             $existing = SalesLeadStatusHistory::query()
                 ->where('branch_id', $locked->branch_id)
                 ->where('operation_uuid', $operationUuid)
@@ -265,7 +272,7 @@ class SalesLeadLifecycleService
         $operationUuid = $this->operationUuid($data);
 
         return DB::transaction(function () use ($lead, $data, $actor, $operationUuid): SalesLeadSiteVisit {
-            $locked = $this->lockLead($lead);
+            $locked = $this->lockLead($lead, $actor);
             if ($existing = $this->existingOperation(SalesLeadSiteVisit::class, $locked, $operationUuid)) {
                 return $existing;
             }
@@ -312,7 +319,7 @@ class SalesLeadLifecycleService
     public function updateSiteVisit(SalesLead $lead, SalesLeadSiteVisit $visit, array $data, User $actor): SalesLeadSiteVisit
     {
         return DB::transaction(function () use ($lead, $visit, $data, $actor): SalesLeadSiteVisit {
-            $locked = $this->lockLead($lead);
+            $locked = $this->lockLead($lead, $actor);
             $lockedVisit = SalesLeadSiteVisit::query()->lockForUpdate()->findOrFail($visit->id);
             if ((int) $lockedVisit->sales_lead_id !== (int) $locked->id) {
                 abort(404);
@@ -364,13 +371,17 @@ class SalesLeadLifecycleService
         $operationUuid = $this->operationUuid($data);
 
         return DB::transaction(function () use ($lead, $data, $actor, $operationUuid): SalesLeadConsumerLink {
-            $locked = $this->lockLead($lead);
+            $locked = $this->lockLead($lead, $actor);
             if ($existing = $this->existingOperation(SalesLeadConsumerLink::class, $locked, $operationUuid)) {
                 return $existing;
             }
             $project = $locked->project()->first();
             if ($project === null || (int) $project->branch_id !== (int) $locked->branch_id) {
                 throw ValidationException::withMessages(['project_id' => 'Proyek lead tidak valid untuk cabang ini.']);
+            }
+            $preUtj = FeatureFlag::enabledForBranch('lead_stages_v3', $lead->branch_id) && $locked->resolveStageV3() !== 'utj';
+            if ($preUtj && blank($data['pre_utj_exception_reason'] ?? null)) {
+                throw ValidationException::withMessages(['pre_utj_exception_reason' => 'Alasan wajib diisi untuk konversi sebelum UTJ.']);
             }
             $sheetName = $project->is_nup_eligible ? 'data_konsumen_nup' : 'data_konsumen';
             if ($locked->consumerLinks()->where('sheet_type', $sheetName)->where('status', 'completed')->exists()) {
@@ -422,8 +433,17 @@ class SalesLeadLifecycleService
                 'nik' => $data['nik'],
                 'id_kavling' => $data['id_kavling'] ?? null,
                 'payload' => $fields,
+                'metadata' => $preUtj ? ['pre_utj_exception' => true, 'exception_reason' => $data['pre_utj_exception_reason']] : null,
                 'converted_at' => now(),
             ]);
+            if ($preUtj) {
+                $locked->logSalesActivity('consumer_converted_before_utj', [
+                    'branch_id' => $locked->branch_id,
+                    'project_id' => $locked->project_id,
+                    'sales_user_id' => $locked->sales_user_id,
+                    'reason' => $data['pre_utj_exception_reason'],
+                ]);
+            }
             if ($sheetName === 'data_konsumen') {
                 $locked->update([
                     'consumer_converted_at' => now(),
@@ -445,7 +465,7 @@ class SalesLeadLifecycleService
         $operationUuid = $this->operationUuid($data);
 
         return DB::transaction(function () use ($lead, $data, $actor, $operationUuid): SalesLeadSlikAttempt {
-            $locked = $this->lockLead($lead);
+            $locked = $this->lockLead($lead, $actor);
             if ($existing = $this->existingOperation(SalesLeadSlikAttempt::class, $locked, $operationUuid)) {
                 return $existing;
             }
@@ -495,7 +515,7 @@ class SalesLeadLifecycleService
         $operationUuid = $this->operationUuid($data);
 
         return DB::transaction(function () use ($lead, $attempt, $data, $actor, $operationUuid): SalesLeadSlikAttempt {
-            $locked = $this->lockLead($lead);
+            $locked = $this->lockLead($lead, $actor);
             $lockedAttempt = SalesLeadSlikAttempt::query()->lockForUpdate()->findOrFail($attempt->id);
             if ((int) $lockedAttempt->sales_lead_id !== (int) $locked->id || (int) $lockedAttempt->branch_id !== (int) $locked->branch_id) {
                 throw ValidationException::withMessages(['slik_attempt_id' => 'Pengajuan SLIK tidak sesuai dengan lead.']);
@@ -534,7 +554,7 @@ class SalesLeadLifecycleService
         $operationUuid = $this->operationUuid($data);
 
         return DB::transaction(function () use ($lead, $data, $actor, $operationUuid): SalesLeadFreelanceLink {
-            $locked = $this->lockLead($lead);
+            $locked = $this->lockLead($lead, $actor);
             if ($existing = $this->existingOperation(SalesLeadFreelanceLink::class, $locked, $operationUuid)) {
                 return $existing;
             }
@@ -643,14 +663,26 @@ class SalesLeadLifecycleService
         });
     }
 
-    private function lockLead(SalesLead $lead): SalesLead
+    private function lockLead(SalesLead $lead, ?User $actor = null): SalesLead
     {
         $locked = SalesLead::query()->with(['project', 'sales.supervisor'])->lockForUpdate()->findOrFail($lead->id);
+        $this->assertV3MutationAllowed($locked, $actor);
         if ((int) $locked->branch_id !== (int) $lead->branch_id || (int) $locked->project_id !== (int) $lead->project_id) {
             throw ValidationException::withMessages(['lead' => 'Data organisasi lead telah berubah. Muat ulang halaman.']);
         }
 
         return $locked;
+    }
+
+    private function assertV3MutationAllowed(SalesLead $lead, ?User $actor = null): void
+    {
+        if (! FeatureFlag::enabledForBranch('lead_stages_v3', $lead->branch_id)) {
+            return;
+        }
+
+        if ($lead->lead_stage === 'gugur' || ($lead->lead_stage === 'utj' && $actor?->isSales())) {
+            throw ValidationException::withMessages(['lead' => 'Lead setelah UTJ tidak dapat diubah oleh alur Lead.']);
+        }
     }
 
     private function existingOperation(string $model, SalesLead $lead, string $operationUuid): ?object

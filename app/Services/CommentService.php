@@ -51,6 +51,7 @@ class CommentService
                 'parent_id' => $parent?->id,
                 'body' => $body,
                 'body_plain' => $body,
+                'source' => 'human',
                 'lock_version' => 0,
             ]);
             $comment->setRelation('commentable', $target);

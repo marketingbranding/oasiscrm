@@ -97,7 +97,7 @@ class AdminUserImportFoundationTest extends TestCase
         $this->assertSame(['IMPORT USER', 'REFERENSI'], $workbook->getSheetNames());
         $import = $workbook->getSheetByName('IMPORT USER');
         $reference = $workbook->getSheetByName('REFERENSI');
-        $this->assertSame(UserImportTemplateExport::HEADERS, $import->rangeToArray('A1:J1')[0]);
+        $this->assertSame(UserImportTemplateExport::HEADERS, $import->rangeToArray('A1:L1')[0]);
         $this->assertSame([
             UserImportTemplateExport::EXAMPLE_MARKER, 'contoh@oasis.test', 'sales', 'Cabang Contoh',
             'Cabang A; Cabang B', 'Proyek Contoh', 'Proyek A; Proyek B',
@@ -106,8 +106,8 @@ class AdminUserImportFoundationTest extends TestCase
         foreach (range('A', 'J') as $column) {
             $this->assertSame(DataType::TYPE_STRING, $import->getCell($column.'2')->getDataType());
         }
-        $this->assertSame(UserImportTemplateExport::ROLE_SLUGS, array_column($reference->rangeToArray('A3:A8'), 0));
-        $this->assertNotContains('superadmin', array_column($reference->rangeToArray('A3:A8'), 0));
+        $this->assertSame(UserImportTemplateExport::ROLE_SLUGS, array_column($reference->rangeToArray('A3:A9'), 0));
+        $this->assertNotContains('superadmin', array_column($reference->rangeToArray('A3:A9'), 0));
         $this->assertSame(['pending_invitation', 'invited', 'active'], array_column($reference->rangeToArray('D3:D5'), 0));
         $this->assertSame('Solo', $reference->getCell('G3')->getValue());
         $this->assertSame('SLO', $reference->getCell('H3')->getValue());
@@ -115,13 +115,13 @@ class AdminUserImportFoundationTest extends TestCase
         $this->assertSame('Oasis Solo', $reference->getCell('K3')->getValue());
         $this->assertStringContainsString('BELUM DIDUKUNG', $reference->getCell('E5')->getValue());
 
-        foreach (['C2' => '$A$3:$A$8', 'C501' => '$A$3:$A$8', 'D2' => '$G$3:$G$3', 'D501' => '$G$3:$G$3', 'I2' => '$D$3:$D$5', 'I501' => '$D$3:$D$5'] as $cell => $expectedRange) {
+        foreach (['C2' => '$A$3:$A$9', 'C501' => '$A$3:$A$9', 'K2' => '$N$3:$N$6', 'K501' => '$N$3:$N$6', 'L2' => '$P$3:$P$6', 'L501' => '$P$3:$P$6', 'D2' => '$G$3:$G$3', 'D501' => '$G$3:$G$3'] as $cell => $expectedRange) {
             $validation = $import->getCell($cell)->getDataValidation();
             $this->assertSame(DataValidation::TYPE_LIST, $validation->getType());
             $this->assertStringContainsString($expectedRange, $validation->getFormula1());
         }
         $this->assertSame('A2', $import->getFreezePane());
-        $this->assertSame('A1:J501', $import->getAutoFilter()->getRange());
+        $this->assertSame('A1:L501', $import->getAutoFilter()->getRange());
         $workbook->disconnectWorksheets();
     }
 

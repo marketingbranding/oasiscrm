@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\Promo;
 use App\Models\User;
+use App\Support\FeatureFlag;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Str;
 use LogicException;
@@ -28,12 +29,18 @@ class NavigationService
             ], direct: true),
             $this->group('activities', 'Aktivitas', 'calendar', [
                 ! $isSales && $user->hasScopedPermission('work_planner')
-                    ? $this->item('Work Planner', 'content-calendar.index', 'calendar', 'planner', ['content-calendar.*'], $routeName, 'work_planner', $moduleMaintenance)
+                    ? $this->item('Tugas & Konten', 'content-calendar.index', 'calendar', 'planner', ['content-calendar.*'], $routeName, 'work_planner', $moduleMaintenance)
                     : null,
             ]),
             $this->group('sales', 'Sales', 'sales', [
                 $user->hasScopedPermission('sales_pocketbook')
                     ? $this->item('Buku Saku Sales', 'sales-pocketbook.index', 'sales', 'sales', ['sales-pocketbook.*', 'sales-leads.*', 'sales-agendas.*', 'sales-reminders.*'], $routeName, 'sales_pocketbook', $moduleMaintenance)
+                    : null,
+                ! $isSales && FeatureFlag::enabled('org_hierarchical_monitoring') && ($user->hasPermission('sales_pocketbook.view_team') || $user->hasPermission('sales_pocketbook.view_branch'))
+                    ? $this->item('Riwayat Tim', 'team-history.index', 'history', 'sales', ['team-history.*'], $routeName, 'sales_pocketbook', $moduleMaintenance)
+                    : null,
+                ! $isSales && ($user->isSuperadmin() || ($user->hasPrimaryRole('sales_coordinator') && $user->hasPermission('sales_pocketbook.manage_team')))
+                    ? $this->item('Antrean Lead', 'sales-leads.unowned-queue', 'sales', 'sales', ['sales-leads.unowned-queue'], $routeName, 'sales_pocketbook', $moduleMaintenance)
                     : null,
                 ! $isSales && config('oasis.consumer_progress_operational_enabled') && $user->hasPermission('consumer_progress.view') && $user->hasScopedPermission('consumer_progress')
                     ? $this->item('Database Konsumen', 'consumer-database.workspace', 'customers', 'consumer-progress', ['consumer-database.*'], $routeName, 'consumer_progress', $moduleMaintenance)
@@ -65,7 +72,7 @@ class NavigationService
                 ! $isSales && $user->hasPermission('feedback_reports.review')
                     ? $this->item('Review Laporan', 'feedback-reports.index', 'report', 'reports', ['feedback-reports.index', 'feedback-reports.show', 'feedback-reports.review'], $routeName, 'feedback_reports', $moduleMaintenance)
                     : null,
-                ($user->hasPrimaryRole('admin') || $user->isSuperadmin())
+                ($user->isAdminCabang() || $user->isSuperadmin())
                     && $user->hasPermission('sales_pocketbook.export')
                     && $user->hasScopedPermission('sales_pocketbook', 'export')
                     ? $this->item('Laporan Fee Sales', 'sales-fee-reports.index', 'report', 'reports', ['sales-fee-reports.*'], $routeName, null, $moduleMaintenance)
@@ -104,9 +111,15 @@ class NavigationService
                 ! $isSales && $user->hasPermission('system.maintenance_manage')
                     ? $this->item('Maintenance', 'admin.maintenance.index', 'health', 'administration', ['admin.maintenance.*'], $routeName, null, $moduleMaintenance)
                     : null,
-                ! $isSales && $user->can('viewDesignSystem')
-                    ? $this->item('Design System', 'admin.design-system', 'administration', 'administration', ['admin.design-system'], $routeName, null, $moduleMaintenance)
-                    : null,
+                ! $isSales && $user->isSuperadmin() && $user->hasPermission('system.settings_manage')
+                     ? $this->item('Pengaturan Aturan', 'admin.app-settings.index', 'administration', 'administration', ['admin.app-settings.*'], $routeName, null, $moduleMaintenance)
+                     : null,
+                ! $isSales && $user->isSuperadmin() && $user->hasPermission('system.settings_manage')
+                      ? $this->item('Izin Akses Khusus', 'admin.access-grants.index', 'administration', 'administration', ['admin.access-grants.*'], $routeName, null, $moduleMaintenance)
+                      : null,
+                $user->can('viewDesignSystem')
+                   ? $this->item('Design System', 'admin.design-system', 'administration', 'administration', ['admin.design-system'], $routeName, null, $moduleMaintenance)
+                   : null,
                 ! $isSales
                     ? $this->item('Changelog', 'changelogs.index', 'changelog', 'administration', ['changelogs.*'], $routeName, null, $moduleMaintenance)
                     : null,

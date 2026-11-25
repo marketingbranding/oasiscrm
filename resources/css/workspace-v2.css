@@ -162,6 +162,14 @@
 .workspace-v2-action-menu > div .workspace-v2-button { justify-content: flex-start; border-color: transparent; }
 .workspace-v2-applicability-note { border-left: 3px solid var(--w2-yellow); background: #fff9dc; margin: 14px 0 0; padding: 9px 11px; color: #5d531d; font-size: 12px; line-height: 1.4; }
 @media (max-width: 767px) {
+    .workspace-v2-content { min-width: 0; overflow-x: hidden; }
+    .workspace-v2-page-header > div { min-width: 0; width: 100%; }
+    .workspace-v2-page-header h1, .workspace-v2-page-header p { overflow-wrap: anywhere; }
+    .workspace-v2-toolbar--compact { min-width: 0; }
+    .workspace-v2-search { box-sizing: border-box; width: 100%; min-width: 0; }
+    .workspace-v2-popover, .workspace-v2-popover > summary { box-sizing: border-box; min-width: 0; }
+    .workspace-v2-popover-panel { max-width: 100%; overflow-x: hidden; }
+    .workspace-v2-drawer-header, .workspace-v2-drawer-body { padding-inline: 16px; }
     .workspace-v2-mobile-cards { display: flex; flex-direction: column; }
     .workspace-v2-pagination { align-items: stretch; flex-direction: column; }
     .workspace-v2-pagination nav { justify-content: flex-start; }

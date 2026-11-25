@@ -268,6 +268,8 @@ class WorkspaceV2FrontendTest extends TestCase
         $this->assertStringContainsString('Tindakan', $script);
         $this->assertStringContainsString('@media (min-width: 768px)', $styles);
         $this->assertStringContainsString('.workspace-v2-sidebar-close { display: none !important; }', $styles);
+        $this->assertStringContainsString('.workspace-v2-content { min-width: 0; overflow-x: hidden; }', $styles);
+        $this->assertStringContainsString('.workspace-v2-drawer-header, .workspace-v2-drawer-body { padding-inline: 16px; }', $styles);
         $this->assertDatabaseHas('changelogs', ['version' => null, 'title' => 'Penyempurnaan UAT Workspace V2']);
     }
 

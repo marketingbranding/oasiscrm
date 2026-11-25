@@ -55,7 +55,11 @@ return new class extends Migration
                 DB::statement('ALTER TABLE consumer_lead_link_decisions ADD active_subject_key VARCHAR(255) GENERATED ALWAYS AS (IF(is_active = 1, subject_key, NULL)) STORED');
             }
             if (! Schema::hasColumn('consumer_lead_link_decisions', 'active_lead_key')) {
-                DB::statement("ALTER TABLE consumer_lead_link_decisions ADD active_lead_key BIGINT GENERATED ALWAYS AS (IF(is_active = 1 AND status = 'linked', sales_lead_id, NULL)) STORED");
+                DB::statement('ALTER TABLE consumer_lead_link_decisions ADD sales_lead_unique_source BIGINT NULL');
+                DB::statement('UPDATE consumer_lead_link_decisions SET sales_lead_unique_source = sales_lead_id');
+                DB::statement('CREATE TRIGGER clld_sync_lead_unique_insert BEFORE INSERT ON consumer_lead_link_decisions FOR EACH ROW SET NEW.sales_lead_unique_source = NEW.sales_lead_id');
+                DB::statement('CREATE TRIGGER clld_sync_lead_unique_update BEFORE UPDATE ON consumer_lead_link_decisions FOR EACH ROW SET NEW.sales_lead_unique_source = NEW.sales_lead_id');
+                DB::statement("ALTER TABLE consumer_lead_link_decisions ADD active_lead_key BIGINT GENERATED ALWAYS AS (IF(is_active = 1 AND status = 'linked', sales_lead_unique_source, NULL)) STORED");
             }
             $this->createIndexIfMissing(self::ACTIVE_SUBJECT_INDEX, 'active_subject_key');
             $this->createIndexIfMissing(self::ACTIVE_LEAD_INDEX, 'active_lead_key');

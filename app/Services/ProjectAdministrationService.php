@@ -117,7 +117,7 @@ class ProjectAdministrationService
                 $dependencies = $this->moveDependencies($locked);
                 if ($dependencies !== []) {
                     throw ValidationException::withMessages([
-                        'branch_id' => 'Proyek tidak dapat dipindahkan karena masih memiliki dependensi: '.implode(', ', $dependencies).'.',
+                        'branch_id' => 'Proyek tidak dapat dipindahkan di Edit Proyek karena masih memiliki dependensi: '.implode(', ', $dependencies).'. Gunakan Wizard Pindah Proyek Antar Cabang.',
                     ]);
                 }
             }

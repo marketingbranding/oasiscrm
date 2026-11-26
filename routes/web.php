@@ -43,6 +43,7 @@ use App\Http\Controllers\Crm\OperationalMaintenanceController;
 use App\Http\Controllers\Crm\OrganizationWorkspaceController;
 use App\Http\Controllers\Crm\PresenceController;
 use App\Http\Controllers\Crm\ProjectController;
+use App\Http\Controllers\Crm\ProjectTransferController;
 use App\Http\Controllers\Crm\PromoController;
 use App\Http\Controllers\Crm\PromoImportController;
 use App\Http\Controllers\Crm\RoleAdministrationController;
@@ -485,6 +486,9 @@ Route::middleware(['auth', 'active', 'verified', 'password.changed', 'operationa
     });
     Route::middleware(['permission:projects.manage', 'system.admin:projects'])->group(function () {
         Route::bind('project', fn ($v) => LeadMaster::findOrFail($v));
+        Route::get('/projects/transfer/create', [ProjectTransferController::class, 'create'])->middleware(['not.impersonating', 'module.maintenance:projects'])->name('projects.transfer.create');
+        Route::post('/projects/transfer/preview', [ProjectTransferController::class, 'preview'])->middleware(['not.impersonating', 'module.maintenance:projects'])->name('projects.transfer.preview');
+        Route::post('/projects/transfer', [ProjectTransferController::class, 'store'])->middleware(['not.impersonating', 'module.maintenance:projects'])->name('projects.transfer.store');
         Route::resource('projects', ProjectController::class)
             ->middleware('module.maintenance:projects')
             ->middlewareFor(['store', 'update', 'destroy'], 'not.impersonating');

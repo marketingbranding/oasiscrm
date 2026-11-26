@@ -28,6 +28,9 @@
                 <a href="{{ route('projects.create') }}" class="bg-[#5d8e8e] text-white px-4 py-1.5 text-sm font-[Helvetica] font-bold border-2 border-black rounded-none hover:bg-[#4a7a7a]">
                     + Proyek Baru
                 </a>
+                <a href="{{ route('projects.transfer.create') }}" class="bg-black text-white px-4 py-1.5 text-sm font-[Helvetica] font-bold border-2 border-black rounded-none hover:bg-gray-800">
+                    Pindah Proyek
+                </a>
             </div>
         </form>
     </div>

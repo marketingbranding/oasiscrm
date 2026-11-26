@@ -12,6 +12,7 @@ class ProjectTransferItem extends Model
         'table_name',
         'row_id',
         'old_values',
+        'was_created',
         'old_updated_at',
     ];
 

@@ -98,6 +98,19 @@ Jika migrate produksi gagal di tengah: hentikan rilis dan jangan mengulangi migr
 5. Reconcile queue, audit log, storage bukti, dan status sinkronisasi.
 6. Catat insiden, dampak, keputusan, dan perbaikan sebelum membuka maintenance.
 
+## Prosedur terpisah — Pindah proyek antar cabang (WP-3.1-PC)
+
+Owner menjalankan setelah rilis Fase 1+2, bukan agent.
+
+1. Backup database, storage bukti, `.env` terenkripsi, dan konfigurasi web server. Uji restore.
+2. Buat cabang tujuan melalui Kelola Cabang, aktifkan, isi `sheet_id` asli yang berbeda dari cabang asal. Wizard tidak membuat cabang.
+3. Aktifkan maintenance untuk modul terkait pada kedua cabang. Jalankan dry-run wizard.
+4. Owner review dampak tabel, blocker, warning, mapping user, branch-only data, dan risiko duplikasi konsumen manual di Sheet tujuan.
+5. Konfirmasi dengan mengetik nama cabang tujuan. Jalankan eksekusi satu transaksi. Batch menyimpan snapshot untuk rollback.
+6. Jalankan parity/cache rebuild kedua cabang. Pastikan cabang yang tidak terlibat punya hasil parity sama seperti sebelum pemindahan.
+7. Rollback hanya bila kriteria lulus: row belum berubah setelah batch, cache/parity gagal, mismatch branch/proyek, duplicate identity, atau error pengiriman. Rollback menampilkan ID row yang berubah dan menolak overwrite.
+8. Owner membuka maintenance setelah parity dan invariant lulus. Catat batch ID, hasil, durasi, dan keputusan.
+
 ## Cutover per cabang
 
 Sebelum cutover cabang, selesaikan atau terima secara tertulis: 39 konflik kavling, 245 transaksi perlu tinjau, 20 Dana Talangan tidak ditemukan, dan unresolved struktur organisasi. Jalankan ulang seluruh pemeriksaan pada data terbaru; hasil gladi hanya acuan.

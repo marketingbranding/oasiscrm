@@ -31,7 +31,8 @@ return new class extends Migration
             $table->foreignId('batch_id')->constrained('project_transfer_batches')->cascadeOnDelete();
             $table->string('table_name', 64);
             $table->unsignedBigInteger('row_id');
-            $table->json('old_values');
+            $table->json('old_values')->nullable();
+            $table->boolean('was_created')->default(false);
             $table->timestamp('old_updated_at')->nullable();
             $table->timestamps();
 

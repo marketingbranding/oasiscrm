@@ -106,8 +106,12 @@ final class ProjectTransferService
                 $this->snapshotUpdate($batch, 'lead_master', $project->id, ['branch_id' => $lockedTarget->id]);
             }
             foreach (self::PROJECT_TABLES as $table => $projectColumn) {
+                if ($table === 'sales_leads') {
+                    continue;
+                }
                 $this->moveProjectRows($batch, $table, $projectColumn, $projects->pluck('id')->all(), $lockedTarget->id);
             }
+            $this->moveProjectRows($batch, 'sales_leads', 'project_id', $projects->pluck('id')->all(), $lockedTarget->id);
             $this->moveLeadChildren($batch, $projects->pluck('id')->all(), $lockedTarget->id);
             $this->moveUsers($batch, $lockedSource->id, $lockedTarget->id, $projects->pluck('id')->all(), $userMapping);
             $this->copyMigrationState($batch, $lockedSource->id, $lockedTarget->id);
@@ -178,12 +182,7 @@ final class ProjectTransferService
 
     private function moveLeadChildren(ProjectTransferBatch $batch, array $projectIds, int $targetBranchId): void
     {
-        $leadRows = DB::table('sales_leads')->whereIn('project_id', $projectIds)->get();
-        $leadIds = $leadRows->pluck('id');
-        foreach ($leadRows as $row) {
-            $this->snapshot($batch, 'sales_leads', $row->id, (array) $row);
-            DB::table('sales_leads')->where('id', $row->id)->update(['branch_id' => $targetBranchId]);
-        }
+        $leadIds = DB::table('sales_leads')->whereIn('project_id', $projectIds)->pluck('id');
         foreach (['sales_lead_status_histories', 'sales_lead_stage_histories', 'sales_lead_site_visits', 'sales_lead_slik_attempts', 'sales_lead_consumer_links', 'sales_lead_freelance_links', 'sales_lead_akad_links'] as $table) {
             if (! DB::getSchemaBuilder()->hasTable($table)) {
                 continue;

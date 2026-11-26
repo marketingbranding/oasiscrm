@@ -31,25 +31,27 @@ Cabang lain yang tersedia: ID 1 KC MALANG, 2 KC MADIUN, 3 KC SOLO, 4 KC MAGELANG
 
 ## 3. Dampak data per proyek
 
-| Tabel / relasi | Proyek 27 Kandeman | Proyek 28 Tegal | Proyek 29 Pekalongan | Proyek 30 Sarengat | Aturan kepemilikan |
-|---|---:|---:|---:|---:|---|
-| `kavlings` | 403 | 245 | 0 | 0 | ikut proyek; seluruh riwayat status/assignment ikut |
-| `project_user` | 7 | 6 | 0 | 0 | mapping user wajib ditinjau manual |
-| `sales_leads` | 549 | 805 | 0 | 0 | ikut proyek; identitas `id`/`external_sync_id` tidak berubah |
-| `sales_lead_status_histories` melalui Lead | 564 | 829 | 0 | 0 | histori ikut; tidak dibuat histori baru |
-| `sales_lead_site_visits` melalui Lead | 1 | 9 | 0 | 0 | histori ikut |
-| `consumer_applications` | 0 | 0 | 0 | 0 | tidak ada pada DB gladi |
-| `consumer_nups` | 0 | 0 | 0 | 0 | tidak ada pada DB gladi |
-| `content_items.sales_project_id` | 1.383 | 1.023 | 0 | 0 | ikut proyek; `branch_id` wajib konsisten |
-| `dana_talangans.project_id` | 12 | 0 | 0 | 0 | ikut relasi proyek, tetapi bridge Sheet global |
-| `expenses.project_id` | 0 | 0 | 0 | 0 | ikut proyek bila ada |
-| `consumer_import_batches` | 0 | 0 | 0 | 0 | tidak ada pada DB gladi |
-| `consumer_migration_reconciliations` | 0 | 0 | 0 | 0 | tidak ada pada DB gladi |
-| `organization_assignments.project_id` | 0 | 0 | 0 | 0 | tidak ada assignment project-scoped |
+| Tabel / relasi | Proyek 28 Tegal | Aturan kepemilikan |
+|---|---:|---|
+| `kavlings` | 245 | ikut proyek; seluruh riwayat status/assignment ikut |
+| `project_user` | 6 | mapping user ditentukan owner saat eksekusi |
+| `sales_leads` | 805 | ikut proyek; identitas `id`/`external_sync_id` tidak berubah |
+| `sales_lead_status_histories` melalui Lead | 829 | histori ikut; tidak dibuat histori baru |
+| `sales_lead_site_visits` melalui Lead | 9 | histori ikut |
+| `consumer_applications` | 0 | tidak ada pada DB gladi |
+| `consumer_nups` | 0 | tidak ada pada DB gladi |
+| `content_items.sales_project_id` | 1.023 | ikut proyek; `branch_id` wajib konsisten |
+| `dana_talangans.project_id` | 0 | tidak ada pada proyek 28; bila ada pada proyek lain, branch OASIS ikut tetapi Sheet tetap global |
+| `expenses.project_id` | 0 | ikut proyek bila ada |
+| `consumer_import_batches` | 0 | tidak ada pada DB gladi |
+| `consumer_migration_reconciliations` | 0 | tidak ada pada DB gladi |
+| `organization_assignments.project_id` | 0 | tidak ada assignment project-scoped |
 
-Ringkasan dua proyek aktif: 648 kavling, 13 assignment proyek, 1.354 Lead, 1.393 histori status Lead, 10 kunjungan lokasi, 2.406 agenda/kegiatan, dan 12 Dana Talangan.
+Ringkasan proyek 28: 245 kavling, 6 assignment proyek, 805 Lead, 829 histori status Lead, 9 kunjungan lokasi, 1.023 agenda/kegiatan, dan 0 Dana Talangan.
 
-Tidak ditemukan ketidaksesuaian `branch_id` versus branch proyek pada `sales_leads`, `consumer_applications`, `content_items`, atau `dana_talangans` untuk proyek 27–30.
+Contoh mapping gladi: 5 `sales` dan 1 `sales_coordinator` yang hanya ditugaskan ke proyek 28 = Pindah; user lain yang juga terkait proyek 27 atau branch-only = Tetap. Tidak ada user pada contoh ini yang dipetakan Keduanya. Mapping aktual tetap diisi owner saat wizard eksekusi.
+
+Tidak ditemukan ketidaksesuaian `branch_id` versus branch proyek pada `sales_leads`, `consumer_applications`, `content_items`, atau `dana_talangans` untuk proyek 28.
 
 ## 4. Data cabang dan data tanpa proyek
 
@@ -57,12 +59,12 @@ Baris cabang 7 yang ditemukan:
 
 | Tabel | Baris cabang 7 | Keputusan awal |
 |---|---:|---|
-| `lead_master` | 5 | hanya proyek yang dipilih ikut wizard |
-| `users` | 14 | tidak ikut otomatis; owner memilih Pindah/Tetap/Keduanya |
+| `lead_master` | 1 proyek aktif dipilih (`28`) | hanya proyek 28 ikut wizard |
+| `users` | 14 | contoh gladi: 6 user project-only Tegal Pindah; 8 user lain Tetap |
 | `branch_user` | 14 | keanggotaan cabang dipetakan terpisah dari `project_user` |
-| `content_items` | 2.406 | semua punya `sales_project_id`; aman dikelompokkan per proyek |
-| `dana_talangans` | 12 | semua punya `project_id`; tetap tunduk pada bridge global |
-| `sales_leads` | 1.354 | semua punya `project_id` |
+| `content_items` | 1.023 | semua row proyek 28 punya `sales_project_id`; ikut proyek |
+| `dana_talangans` | 0 | tidak ada row proyek 28; data global lama di luar WP ini |
+| `sales_leads` | 805 | semua row proyek 28 ikut proyek |
 | `sales_daily_plans` | 2 | branch-only; jangan pindah otomatis bersama proyek |
 | `promos` | 12 | branch-only; jangan pindah otomatis bersama proyek |
 | `sales_agenda_evidence_archives` | 5 | branch/week archive; perlu kebijakan eksplisit, bukan tebak proyek |
@@ -194,23 +196,24 @@ Kedua sistem tetap terpisah.
 
 - `database_sheet_records`: 7.425 row cabang 7, seluruhnya memakai `sheet_id` cabang 7 dan status `synced`.
 - `konsumen_progress_sheet_rows`: 4.845 row cabang 7, seluruhnya memakai `sheet_id` cabang 7.
-- ID spreadsheet cabang disimpan di DB tetapi sengaja tidak ditulis dalam laporan; sumber Tegal saat ini adalah spreadsheet cabang 7, bukan spreadsheet cabang terpisah.
+- ID spreadsheet cabang disimpan di DB tetapi sengaja tidak ditulis dalam laporan; sumber Tegal saat ini adalah spreadsheet cabang 7. Pada gladi Tahap B, KC TEGAL dibuat dengan `sheet_id` dummy yang jelas ditandai; wizard tidak membuat cabang.
 - Status `database_sheet_sync_statuses`: `success`.
 - Status `konsumen_progress_sync_statuses`: `success`.
-- `branch_migration_states`: `sheet`.
+- `branch_migration_states`: `sheet` dan nilai ini disalin ke cabang tujuan; nilai lama dicatat dalam batch agar bisa dibatalkan.
 
-Row cache tidak boleh dibagi per proyek hanya dari nomor baris atau string nama. Wizard perlu matching terstruktur per `oasis_sync_id`, identitas domain, dan kontrak tab. Parity pascapindah dihitung terhadap spreadsheet cabang tujuan memakai `sheet_id` cabang tujuan.
+Cache tidak dipindah. Setelah pemindahan, cache cabang tujuan dibangun ulang dari `sheet_id` tujuan dan cache cabang asal dari `sheet_id` asal. Tampilan/parity hanya memakai row untuk proyek yang dimiliki cabang OASIS masing-masing. Row di Sheet asal untuk proyek 28 dilaporkan sebagai `baris proyek milik cabang lain`, jumlah saja, bukan error.
+
+Kode saat ini belum menerapkan seluruh aturan itu: cache di-scope dengan `branch_id`/`sheet_id`, sedangkan filtering project ownership dan pelaporan row milik cabang lain belum menjadi kontrak umum pada query parity/tampilan. Tahap B perlu mengubah service query/cache rebuild/parity agar menerima ownership proyek OASIS; jangan memindahkan row cache atau memakai row number/nama sebagai identitas.
 
 ### Lead
 
-- Semua 1.354 Lead cabang 7 berstatus `pending_create`.
-- Semua memiliki `external_sync_id`, tetapi `last_synced_at` dan `delivery_attempted_at` belum terisi.
-- Kandeman: 549 Lead pending delivery.
-- Tegal: 805 Lead pending delivery.
-- Tidak ada `remote_target_branch_id` pada hasil DB 11.8 ini.
+- Proyek 28 memiliki 805 Lead, semuanya `pending_create`.
+- Semua memiliki `external_sync_id`, tetapi `last_synced_at`, `delivery_attempted_at`, dan `remote_target_branch_id` belum terisi.
+- Tidak ada Lead proyek 28 yang sudah terkirim, tidak ada kiriman sedang berjalan yang terdeteksi dari kolom delivery, dan tidak ada jumlah external sync kosong.
+- `pending_create` berasal dari jalur create Lead yang menetapkan `sync_status = pending_create`; worker hanya memilih `pending_create`, `pending_update`, dan `sync_failed`. Karena `last_synced_at` null, jalur update juga mempertahankan `pending_create`.
 - Angka ini dibaca ulang pada MariaDB 11.8.10 port 3307 dengan `read_only=1`; tidak ada baris yang ditulis.
 
-Artinya, pemindahan tidak boleh menganggap Lead sudah terkirim ke Sheet. Tahap B wajib membekukan/menjadwalkan ulang delivery, menetapkan target branch/sheet tujuan secara eksplisit, lalu memverifikasi idempotensi sebelum queue dibuka.
+Keputusan owner: `pending_create` bukan blocker. Setelah pindah, 805 Lead dikirim melalui Sheet cabang tujuan. Blocker eksekusi hanya: `delivery_attempted_at` tanpa hasil akhir, outbox/antrian aktif, atau Lead yang sudah terkirim (`last_synced_at`/hasil remote). Jika jumlah blocker itu bukan nol, wizard menampilkan jumlah dan menolak eksekusi sampai penanganannya diputuskan.
 
 ### Dana Talangan
 
@@ -224,17 +227,29 @@ Dana Talangan memakai satu Sheet global, bukan Sheet per cabang.
 
 Pemindahan proyek tidak boleh mengganti `remote_target_spreadsheet_id` menjadi Sheet cabang tujuan. Baris Talangan tetap di Sheet global; perubahan branch/project OASIS harus direkonsiliasi dan diaudit.
 
-## 7. Blocker dan risiko Tahap B
+## 7. Keputusan owner dan blocker tersisa saat eksekusi
 
-Blocker minimum sebelum eksekusi:
+Keputusan owner untuk WP ini:
 
-1. Cabang tujuan belum ditentukan; jangan memakai nama proyek sebagai pengganti cabang.
-2. 1.354 Lead masih pending delivery; perlu strategi queue dan target Sheet.
-3. Cache Database/Konsumen Progress belum dapat dipetakan aman per proyek hanya dari metadata yang tersedia.
-4. 12 Dana Talangan memakai bridge global dengan status partial/conflict.
-5. User mapping Pindah/Tetap/Keduanya belum disetujui owner.
-6. Data branch-only belum punya keputusan ikut/tetap.
-7. DB angka ini MariaDB 10.4.32 port 3306, bukan environment MariaDB 11.8.10 port 3307 yang menjadi acuan release.
+- Hanya proyek 28 (`Marison Tegal`) yang dipindah. Proyek 27 dan proyek lain tetap di cabang 7.
+- Cabang tujuan KC TEGAL dibuat lebih dahulu lewat fitur kelola cabang, aktif, punya `sheet_id`, dan `sheet_id` berbeda dari cabang 7. Wizard tidak membuat cabang.
+- Wizard boleh multi-proyek, tetapi gladi memakai satu proyek: 28.
+- Cache tidak dipindah; kedua cache dibangun ulang dari Sheet masing-masing.
+- Data branch-only tetap di cabang asal dan hanya tampil sebagai informasi: 2 Rencana Harian, 12 Promo, 5 arsip bukti.
+- State migrasi cabang tujuan dimulai sama dengan state cabang asal dan dicatat dalam batch.
+- Dana Talangan proyek 28 = 0; conflict/pending global lama dicatat, bukan blocker WP ini.
+- Rollback wajib menolak row yang `updated_at`-nya lebih baru dari waktu batch dan menampilkan daftar row tersebut.
+
+Blocker yang tersisa saat **eksekusi**, bukan saat membangun fitur:
+
+1. KC TEGAL belum dibuat/diaktifkan dengan `sheet_id` tujuan yang berbeda dari sheet asal.
+2. Mapping user wizard belum lengkap. Contoh gladi: 6 user project-only Tegal Pindah (5 `sales`, 1 `sales_coordinator`), 8 user lain Tetap. Mapping aktual owner wajib isi saat eksekusi.
+3. Relasi organisasi yang terputus akibat mapping user belum diputuskan owner.
+4. Dry-run harus menemukan nol mismatch branch/proyek, bentrok kavling, duplicate sync identity, dan siklus organisasi.
+5. Dry-run harus menemukan nol Lead yang sedang dikirim, berada di outbox/antrian aktif, atau sudah terkirim. `pending_create` tanpa delivery attempt bukan blocker.
+6. Cache tujuan harus berhasil dibangun ulang dari Sheet tujuan; cache asal harus dibangun ulang dari Sheet asal; row proyek 28 pada Sheet asal hanya informasi `baris proyek milik cabang lain`.
+7. Nilai `branch_migration_states` asal harus tersalin dan tersimpan di batch sebelum eksekusi.
+8. Owner harus menyetujui preview, durasi maintenance, batch rollback, dan parity pascapindah.
 
 ## 8. Usulan desain Tahap B
 
@@ -296,14 +311,6 @@ Tahap B wajib memiliki Feature/Unit test untuk:
 
 Gladi harus memakai salinan DB dengan engine/versi target MariaDB 11.8.10, integrasi eksternal mock/non-production, dan dataset uji ber-prefix `UAT-`. Agent tidak menjalankan cutover production.
 
-## 9. Keputusan owner yang diperlukan
+## 9. Status persetujuan
 
-1. Cabang tujuan untuk Kandeman/Tegal.
-2. Apakah proyek 27 dan 28 dipindah bersama atau terpisah.
-3. Mapping 14 user cabang 7 dan user lain yang muncul pada relasi proyek: Pindah/Tetap/Keduanya.
-4. Kebijakan 2 Rencana Harian, 12 Promo, 5 arsip bukti, dan data branch-only lain.
-5. Perlakuan 1.354 Lead pending delivery.
-6. Perlakuan 12 Dana Talangan global dan 15 global conflict yang sudah ada.
-7. Persetujuan desain wizard, maintenance dua cabang, batch rollback, dan parity.
-
-Tahap B tidak dimulai sebelum keputusan di atas disetujui.
+Keputusan owner pada WP ini sudah dicatat di bagian 7. Tahap B tetap belum dimulai. Menunggu persetujuan eksplisit untuk mulai implementasi setelah dokumen ini direview.

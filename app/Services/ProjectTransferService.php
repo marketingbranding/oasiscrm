@@ -104,7 +104,6 @@ final class ProjectTransferService
 
             foreach ($projects as $project) {
                 $this->snapshotUpdate($batch, 'lead_master', $project->id, ['branch_id' => $lockedTarget->id]);
-                DB::table('lead_master')->where('id', $project->id)->update(['branch_id' => $lockedTarget->id]);
             }
             foreach (self::PROJECT_TABLES as $table => $projectColumn) {
                 $this->moveProjectRows($batch, $table, $projectColumn, $projects->pluck('id')->all(), $lockedTarget->id);
@@ -170,10 +169,7 @@ final class ProjectTransferService
         $rows = DB::table($table)->whereIn($column, $projectIds)->get();
         foreach ($rows as $row) {
             $values = (array) $row;
-            if (array_key_exists('branch_id', $values)) {
-                $values['branch_id'] = $targetBranchId;
-            }
-            $this->snapshot($batch, $table, $row->id, $values);
+            $this->snapshot($batch, $table, $row->id, (array) $row);
             if (array_key_exists('branch_id', $values)) {
                 DB::table($table)->where('id', $row->id)->update(['branch_id' => $targetBranchId]);
             }
@@ -182,7 +178,12 @@ final class ProjectTransferService
 
     private function moveLeadChildren(ProjectTransferBatch $batch, array $projectIds, int $targetBranchId): void
     {
-        $leadIds = DB::table('sales_leads')->whereIn('project_id', $projectIds)->pluck('id');
+        $leadRows = DB::table('sales_leads')->whereIn('project_id', $projectIds)->get();
+        $leadIds = $leadRows->pluck('id');
+        foreach ($leadRows as $row) {
+            $this->snapshot($batch, 'sales_leads', $row->id, (array) $row);
+            DB::table('sales_leads')->where('id', $row->id)->update(['branch_id' => $targetBranchId]);
+        }
         foreach (['sales_lead_status_histories', 'sales_lead_stage_histories', 'sales_lead_site_visits', 'sales_lead_slik_attempts', 'sales_lead_consumer_links', 'sales_lead_freelance_links', 'sales_lead_akad_links'] as $table) {
             if (! DB::getSchemaBuilder()->hasTable($table)) {
                 continue;
@@ -206,7 +207,10 @@ final class ProjectTransferService
                 throw ValidationException::withMessages(['user_mapping' => 'Mapping user tidak valid.']);
             }
             if ($decision === 'tetap') {
-                DB::table('project_user')->whereIn('project_id', $projectIds)->where('user_id', $userId)->update(['is_active' => false]);
+                foreach (DB::table('project_user')->whereIn('project_id', $projectIds)->where('user_id', $userId)->get() as $assignment) {
+                    $this->snapshot($batch, 'project_user', $assignment->id, (array) $assignment);
+                }
+                DB::table('project_user')->whereIn('project_id', $projectIds)->where('user_id', $userId)->update(['is_active' => false, 'updated_at' => now()]);
             }
             if ($decision !== 'tetap') {
                 $user = DB::table('users')->where('id', $userId)->first();

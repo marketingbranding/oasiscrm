@@ -154,7 +154,7 @@ Tabel project-scoped tanpa `branch_id`: `kavlings` 648 row pada proyek 27–30 d
 | User-derived | `users`, `branch_user`, `sales_sheet_identities`, `user_presences`, `organization_assignments` branch-scoped, `organization_units` | membership/user aktif atau assignment | tidak / opsional | hanya sesuai mapping Pindah/Tetap/Keduanya; bukan otomatis |
 | Branch-only operational | `branch_migration_states`, `database_sheet_sync_statuses`, `konsumen_progress_sync_statuses`, `sales_daily_plans`, `promos`, `promo_import_batches`, `sales_agenda_evidence_archives`, `holidays`, `feedback_reports` | branch dipilih/diisi proses modul | tidak / opsional | tetap asal kecuali owner memilih paket branch-only |
 | Spreadsheet/cache-derived | `database_sheet_records`, `konsumen_progress_sheet_rows`, `db_v2_*`, `sales_sheet_identities` | sheet/cabang saat sync | tidak stabil atau tidak ada | tidak dipindah berdasarkan row number/nama; re-sync/matching terstruktur |
-| Global/external | `dana_talangan_sync_statuses`, `dana_talangan_reconciliation_items`, `activity_log`, `comments`, `comment_revisions`, `comment_moderations` | global atau polymorphic subject | relasi tidak seragam | tetap global; audit ikut melalui subject/batch; Dana Talangan blocker sampai rekonsiliasi |
+| Global/external | `dana_talangan_sync_statuses`, `dana_talangan_reconciliation_items`, `activity_log`, `comments`, `comment_revisions`, `comment_moderations` | global atau polymorphic subject | relasi tidak seragam | tetap global; audit ikut melalui subject/batch; Dana Talangan hanya blocker bila proyek yang dipindah punya row berstatus `conflict` |
 
 Kolom `active_branch_id` pada `feedback_reports` adalah konteks laporan aktif, bukan kepemilikan proyek. `sales_leads.remote_target_branch_id` adalah target kirim spreadsheet, bukan branch owner; wajib dipisahkan dalam batch. `branch_id` tidak boleh dipercaya sendirian jika ada `project_id`: validator wajib menolak mismatch.
 
@@ -203,13 +203,15 @@ Kedua sistem tetap terpisah.
 
 Cache tidak dipindah. Setelah pemindahan, cache cabang tujuan dibangun ulang dari `sheet_id` tujuan dan cache cabang asal dari `sheet_id` asal. Tampilan/parity hanya memakai row untuk proyek yang dimiliki cabang OASIS masing-masing. Row di Sheet asal untuk proyek 28 dilaporkan sebagai `baris proyek milik cabang lain`, jumlah saja, bukan error.
 
+Risiko di luar WP ini: saat 805 Lead Tegal nanti dikirim ke Sheet Tegal, cek lebih dulu apakah konsumen yang sama sudah diinput manual di Sheet Tegal agar tidak terjadi duplikasi.
+
 Kode saat ini belum menerapkan seluruh aturan itu: cache di-scope dengan `branch_id`/`sheet_id`, sedangkan filtering project ownership dan pelaporan row milik cabang lain belum menjadi kontrak umum pada query parity/tampilan. Tahap B perlu mengubah service query/cache rebuild/parity agar menerima ownership proyek OASIS; jangan memindahkan row cache atau memakai row number/nama sebagai identitas.
 
 ### Lead
 
 - Proyek 28 memiliki 805 Lead, semuanya `pending_create`.
 - Semua memiliki `external_sync_id`, tetapi `last_synced_at`, `delivery_attempted_at`, dan `remote_target_branch_id` belum terisi.
-- Tidak ada Lead proyek 28 yang sudah terkirim, tidak ada kiriman sedang berjalan yang terdeteksi dari kolom delivery, dan tidak ada jumlah external sync kosong.
+- Tidak ada Lead proyek 28 yang sudah terkirim. Definisi terkirim: `last_synced_at` terisi atau ada hasil remote; `external_sync_id` saja bukan bukti terkirim. Tidak ada kiriman sedang berjalan yang terdeteksi dari kolom delivery.
 - `pending_create` berasal dari jalur create Lead yang menetapkan `sync_status = pending_create`; worker hanya memilih `pending_create`, `pending_update`, dan `sync_failed`. Karena `last_synced_at` null, jalur update juga mempertahankan `pending_create`.
 - Angka ini dibaca ulang pada MariaDB 11.8.10 port 3307 dengan `read_only=1`; tidak ada baris yang ditulis.
 
@@ -276,9 +278,8 @@ Tolak eksekusi bila ada:
 - duplicate holder kavling aktif/terjual;
 - identity Sheet ambigu atau target `sheet_id` kosong saat diperlukan;
 - Lead sync identity duplicate pada scope tujuan;
-- pending delivery tanpa rencana retarget yang disetujui;
-- cache Sheet tanpa identity stabil yang bisa diparitas-kan;
-- Dana Talangan global conflict yang terdampak;
+- `delivery_attempted_at` terisi tanpa hasil akhir, outbox/antrian aktif, atau Lead sudah terkirim (`last_synced_at` terisi atau ada hasil remote); `external_sync_id` saja bukan bukti terkirim;
+- Dana Talangan proyek yang dipindah memiliki row berstatus `conflict` (proyek 28: 0);
 - user mapping belum lengkap;
 - assignment organisasi menghasilkan cycle atau scope di luar actor;
 - wizard dipanggil saat impersonate;
@@ -291,8 +292,8 @@ Tolak eksekusi bila ada:
 - Batch ID dan snapshot nilai lama sebelum setiap batch.
 - Pindahkan seluruh riwayat terkait; jangan membuat histori palsu.
 - Simpan ActivityLog dengan actor, batch, asal/tujuan, jumlah per tabel, hash, dan keputusan user mapping.
-- Commit per batch hanya bila desain rollback batch disetujui; jika satu batch gagal, hentikan queue dan rollback batch itu dari snapshot. Jangan membuat rollback parsial diam-diam.
-- Setelah commit: jalankan parity terhadap Sheet cabang tujuan, audit relasi organisasi, dan verifikasi invariant kavling/Lead/transaksi.
+- Satu transaksi DB mencakup seluruh pemindahan; semua berhasil atau semua gagal. Batch adalah satu catatan pemindahan berisi snapshot nilai lama untuk rollback, bukan commit terpisah.
+- Setelah transaksi: jalankan parity terhadap Sheet cabang tujuan, audit relasi organisasi, dan verifikasi invariant kavling/Lead/transaksi.
 - Buka maintenance dan queue hanya setelah smoke test serta approval owner.
 
 ### Tes dan gladi

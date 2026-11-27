@@ -40,5 +40,11 @@ return new class extends Migration
                 ->where('description', 'Memperkuat pemulihan batch, snapshot rollback, kepemilikan data Sheet, dan identitas cache setelah pemindahan proyek.')
                 ->delete();
         }
+
+        if (Schema::hasColumn('project_transfer_items', 'new_values')) {
+            Schema::table('project_transfer_items', function (Blueprint $table): void {
+                $table->dropColumn('new_values');
+            });
+        }
     }
 };

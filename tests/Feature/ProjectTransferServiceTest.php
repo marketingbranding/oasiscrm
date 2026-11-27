@@ -260,6 +260,87 @@ class ProjectTransferServiceTest extends TestCase
         $this->assertSame([], $preview['blockers']);
     }
 
+    public function test_remote_target_without_sync_timestamp_does_not_block_transfer(): void
+    {
+        $source = $this->branch('Batang', 'BAT', 'sheet-batang');
+        $target = $this->branch('Tegal', 'TEG', 'sheet-tegal');
+        $project = LeadMaster::query()->create(['branch_id' => $source->id, 'project_name' => 'UAT-Tegal', 'is_active' => true]);
+        $sales = $this->user('sales', $source);
+        DB::table('sales_leads')->insert([
+            'branch_id' => $source->id,
+            'project_id' => $project->id,
+            'sales_user_id' => $sales->id,
+            'lead_date' => today(),
+            'customer_name' => 'UAT-Lead',
+            'sync_status' => 'pending_create',
+            'remote_target_branch_id' => $target->id,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $preview = app(ProjectTransferService::class)->preview($this->user('superadmin', $source), $source, $target, [$project->id], [$sales->id => 'tetap']);
+
+        $this->assertNotContains('Lead proyek sudah terkirim ke spreadsheet.', $preview['blockers']);
+    }
+
+    public function test_locked_recheck_rejects_lead_sent_after_preview(): void
+    {
+        $source = $this->branch('Batang', 'BAT', 'sheet-batang');
+        $target = $this->branch('Tegal', 'TEG', 'sheet-tegal');
+        $project = LeadMaster::query()->create(['branch_id' => $source->id, 'project_name' => 'UAT-Tegal', 'is_active' => true]);
+        $sales = $this->user('sales', $source);
+        $leadId = DB::table('sales_leads')->insertGetId([
+            'branch_id' => $source->id,
+            'project_id' => $project->id,
+            'sales_user_id' => $sales->id,
+            'lead_date' => today(),
+            'customer_name' => 'UAT-Lead',
+            'sync_status' => 'pending_create',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $service = app(ProjectTransferService::class);
+        $preview = $service->preview($this->user('superadmin', $source), $source, $target, [$project->id], [$sales->id => 'tetap']);
+        $this->assertSame([], $preview['blockers']);
+        DB::table('sales_leads')->where('id', $leadId)->update(['last_synced_at' => now(), 'sync_status' => 'synced']);
+
+        $this->expectException(ValidationException::class);
+        $service->execute($this->user('superadmin', $source), $source, $target, [$project->id], [$sales->id => 'tetap']);
+    }
+
+    public function test_reconciliation_child_moves_with_lead_branch(): void
+    {
+        $source = $this->branch('Batang', 'BAT', 'sheet-batang');
+        $target = $this->branch('Tegal', 'TEG', 'sheet-tegal');
+        $project = LeadMaster::query()->create(['branch_id' => $source->id, 'project_name' => 'UAT-Tegal', 'is_active' => true]);
+        $sales = $this->user('sales', $source);
+        DB::table('project_user')->insert(['project_id' => $project->id, 'user_id' => $sales->id, 'is_active' => true, 'is_primary' => true, 'created_at' => now(), 'updated_at' => now()]);
+        $leadId = DB::table('sales_leads')->insertGetId([
+            'branch_id' => $source->id,
+            'project_id' => $project->id,
+            'sales_user_id' => $sales->id,
+            'lead_date' => today(),
+            'customer_name' => 'UAT-Lead',
+            'sync_status' => 'pending_create',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $reconciliationId = DB::table('sales_lead_lifecycle_reconciliation_items')->insertGetId([
+            'branch_id' => $source->id,
+            'sales_lead_id' => $leadId,
+            'entity_type' => 'lead',
+            'identity_key' => 'UAT-Lead',
+            'issue_code' => 'test_issue',
+            'status' => 'open',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        app(ProjectTransferService::class)->execute($this->user('superadmin', $source), $source, $target, [$project->id], [$sales->id => 'tetap']);
+
+        $this->assertDatabaseHas('sales_lead_lifecycle_reconciliation_items', ['id' => $reconciliationId, 'branch_id' => $target->id]);
+    }
+
     public function test_sent_lead_blocks_transfer(): void
     {
         $source = $this->branch('Batang', 'BAT', 'sheet-batang');

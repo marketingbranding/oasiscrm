@@ -153,6 +153,7 @@ final class ProjectTransferService
                 if ($projects->count() !== count(array_unique(array_map('intval', $projectIds)))) {
                     throw ValidationException::withMessages(['project_ids' => 'Semua proyek harus berada di cabang asal.']);
                 }
+                $this->assertTransferableLocked($projects->pluck('id')->all(), $lockedSource->id);
 
                 $batch = ProjectTransferBatch::query()->create([
                     'source_branch_id' => $lockedSource->id,
@@ -392,14 +393,11 @@ final class ProjectTransferService
     private function moveLeadChildren(ProjectTransferBatch $batch, array $projectIds, int $sourceBranchId, int $targetBranchId): void
     {
         $leadIds = DB::table('sales_leads')->whereIn('project_id', $projectIds)->lockForUpdate()->pluck('id');
-        foreach (['sales_lead_status_histories', 'sales_lead_stage_histories', 'sales_lead_site_visits', 'sales_lead_slik_attempts', 'sales_lead_consumer_links', 'sales_lead_freelance_links', 'sales_lead_akad_links'] as $table) {
+        foreach (['sales_lead_status_histories', 'sales_lead_stage_histories', 'sales_lead_site_visits', 'sales_lead_slik_attempts', 'sales_lead_consumer_links', 'sales_lead_freelance_links', 'sales_lead_akad_links', 'sales_lead_lifecycle_reconciliation_items'] as $table) {
             if (! Schema::hasTable($table) || ! Schema::hasColumn($table, 'sales_lead_id')) {
                 continue;
             }
             $query = DB::table($table)->whereIn('sales_lead_id', $leadIds);
-            if (Schema::hasColumn($table, 'deleted_at')) {
-                $query->whereNull('deleted_at');
-            }
             foreach ($query->lockForUpdate()->get() as $row) {
                 $values = (array) $row;
                 if (array_key_exists('branch_id', $values)) {
@@ -623,9 +621,7 @@ final class ProjectTransferService
 
     private function hasSentLead(array $projectIds): bool
     {
-        return DB::table('sales_leads')->whereIn('project_id', $projectIds)->where(function ($query): void {
-            $query->whereNotNull('last_synced_at')->orWhereNotNull('remote_target_branch_id');
-        })->exists();
+        return DB::table('sales_leads')->whereIn('project_id', $projectIds)->whereNotNull('last_synced_at')->exists();
     }
 
     private function hasAttemptedDelivery(array $projectIds): bool
@@ -649,6 +645,25 @@ final class ProjectTransferService
             ->whereNull('deleted_at')
             ->whereIn('sync_status', ['pending_update', 'pending_delete', 'sync_failed', 'syncing', 'conflict'])
             ->exists();
+    }
+
+    private function assertTransferableLocked(array $projectIds, int $sourceBranchId): void
+    {
+        $leads = DB::table('sales_leads')->whereIn('project_id', $projectIds)->lockForUpdate()->get();
+        if ($leads->contains(fn ($lead): bool => $lead->last_synced_at !== null)) {
+            throw ValidationException::withMessages(['transfer' => ['Lead proyek sudah terkirim ke spreadsheet.']]);
+        }
+        if ($leads->contains(fn ($lead): bool => $lead->delivery_attempted_at !== null && $lead->last_synced_at === null)) {
+            throw ValidationException::withMessages(['transfer' => ['Lead memiliki delivery_attempted_at tanpa hasil akhir.']]);
+        }
+        if ($leads->contains(fn ($lead): bool => in_array($lead->sync_status, ['pending_update', 'pending_delete', 'sync_failed', 'syncing', 'conflict'], true))) {
+            throw ValidationException::withMessages(['transfer' => ['Lead masih memiliki pengiriman atau rekonsiliasi aktif.']]);
+        }
+        foreach ($leads as $lead) {
+            if ((int) $lead->branch_id !== $sourceBranchId) {
+                throw ValidationException::withMessages(['transfer' => ['Data sales_leads memiliki branch_id yang tidak sesuai cabang asal.']]);
+            }
+        }
     }
 
     /** @return list<string> */

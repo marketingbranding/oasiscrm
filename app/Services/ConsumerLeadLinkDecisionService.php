@@ -165,7 +165,8 @@ final class ConsumerLeadLinkDecisionService
         }
         if ($subject->subjectType === ConsumerLeadLinkDecision::SUBJECT_SHEET) {
             $row = KonsumenProgressSheetRow::query()->findOrFail($subject->sheetRowId);
-            if ($row->ownership_status === 'foreign') {
+            $branch = Branch::query()->findOrFail($subject->branchId);
+            if (! $this->ownership->allowsOperationalRow($branch, $row->ownership_status, $row->row_data ?? [])) {
                 throw new AuthorizationException('Baris Sheet berada di luar kepemilikan operasional cabang.');
             }
         }

@@ -21,7 +21,7 @@ class ProjectTransferController extends Controller
         $this->authorizeOwner();
 
         return view('crm.projects.transfer', [
-            'branches' => Branch::query()->where('is_active', true)->with(['users' => fn ($query) => $query->wherePivot('is_current', true)->orderBy('name')])->orderBy('name')->get(['id', 'name', 'sheet_id']),
+            'branches' => Branch::query()->where('is_active', true)->with(['users' => fn ($query) => $query->where('users.is_active', true)->wherePivot('is_current', true)->orderBy('name')])->orderBy('name')->get(['id', 'name', 'sheet_id']),
             'projects' => LeadMaster::query()->where('is_active', true)->with(['assignedUsers' => fn ($query) => $query->wherePivot('is_active', true)->select('users.id')])->orderBy('project_name')->get(['id', 'branch_id', 'project_name']),
         ]);
     }

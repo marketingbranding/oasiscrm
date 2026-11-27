@@ -424,13 +424,16 @@ class ProjectTransferServiceTest extends TestCase
         $target = $this->branch('Tegal', 'TEG', 'sheet-tegal');
         $project = LeadMaster::query()->create(['branch_id' => $source->id, 'project_name' => 'UAT-Tegal', 'is_active' => true]);
         $sales = $this->user('sales', $source);
-        $injected = false;
-        DB::listen(function ($query) use (&$injected, $project, $source, $sales): void {
-            if ($injected || ! str_contains(strtolower($query->sql), 'from "sales_leads"') || ! str_contains(strtolower($query->sql), 'select *')) {
+        $seenLeadScans = 0;
+        DB::listen(function ($query) use (&$seenLeadScans, $project, $source, $sales): void {
+            if (! str_contains(strtolower($query->sql), 'select * from "sales_leads"')) {
                 return;
             }
 
-            $injected = true;
+            $seenLeadScans++;
+            if ($seenLeadScans !== 2) {
+                return;
+            }
             DB::table('sales_leads')->insert([
                 'branch_id' => $source->id,
                 'project_id' => $project->id,
@@ -456,13 +459,16 @@ class ProjectTransferServiceTest extends TestCase
         $target = $this->branch('Tegal', 'TEG', 'sheet-tegal');
         $project = LeadMaster::query()->create(['branch_id' => $source->id, 'project_name' => 'UAT-Tegal', 'is_active' => true]);
         $sales = $this->user('sales', $source);
-        $injected = false;
-        DB::listen(function ($query) use (&$injected, $project, $target, $sales): void {
-            if ($injected || ! str_contains(strtolower($query->sql), 'from "sales_leads"') || ! str_contains(strtolower($query->sql), 'select *')) {
+        $seenLeadScans = 0;
+        DB::listen(function ($query) use (&$seenLeadScans, $project, $target, $sales): void {
+            if (! str_contains(strtolower($query->sql), 'select * from "sales_leads"')) {
                 return;
             }
 
-            $injected = true;
+            $seenLeadScans++;
+            if ($seenLeadScans !== 2) {
+                return;
+            }
             DB::table('sales_leads')->insert([
                 'branch_id' => $target->id,
                 'project_id' => $project->id,

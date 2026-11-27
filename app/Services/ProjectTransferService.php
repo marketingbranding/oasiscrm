@@ -107,15 +107,9 @@ final class ProjectTransferService
         $this->assertMapping($source->id, $projectIds, $userMapping);
         $maintenance = app(ModuleMaintenanceService::class);
         $maintenanceStarted = [];
-        foreach (self::MAINTENANCE_MODULES as $module) {
-            if ($maintenance->isUnderMaintenance($module)) {
-                continue;
-            }
-            $maintenance->enable($module, $actor, ['message' => 'Pemindahan proyek antar cabang sedang berjalan.']);
-            $maintenanceStarted[] = $module;
-        }
 
         try {
+            $this->enableTransferMaintenance($maintenance, $actor, 'Pemindahan proyek antar cabang sedang berjalan.', $maintenanceStarted);
             $normalizedProjectIds = array_values(array_unique(array_map('intval', $projectIds)));
             sort($normalizedProjectIds);
             $userMapping = is_array($userMapping) ? array_map('strval', $userMapping) : [];
@@ -178,7 +172,7 @@ final class ProjectTransferService
                 }
                 $this->moveProjectRows($batch, 'sales_leads', 'project_id', $projects->pluck('id')->all(), $lockedSource->id, $lockedTarget->id);
                 $this->moveLeadChildren($batch, $projects->pluck('id')->all(), $lockedSource->id, $lockedTarget->id);
-                $this->sweepLateProjectRows($batch, $projects->pluck('id')->all(), $lockedSource->id, $lockedTarget->id);
+                $this->finalSweep($batch, $projects->pluck('id')->all(), $lockedSource->id, $lockedTarget->id);
                 $this->moveProjectMemberships($batch, $projects->pluck('id')->all(), $lockedTarget->id, $userMapping);
                 $this->moveUsers($batch, $lockedSource->id, $lockedTarget->id, $projects->pluck('id')->all(), $userMapping);
                 $this->copyMigrationState($batch, $lockedSource->id, $lockedTarget->id);
@@ -278,15 +272,9 @@ final class ProjectTransferService
         $this->authorizeActor($actor);
         $maintenance = app(ModuleMaintenanceService::class);
         $maintenanceStarted = [];
-        foreach (self::MAINTENANCE_MODULES as $module) {
-            if ($maintenance->isUnderMaintenance($module)) {
-                continue;
-            }
-            $maintenance->enable($module, $actor, ['message' => 'Pembatalan pemindahan proyek sedang berjalan.']);
-            $maintenanceStarted[] = $module;
-        }
 
         try {
+            $this->enableTransferMaintenance($maintenance, $actor, 'Pembatalan pemindahan proyek sedang berjalan.', $maintenanceStarted);
             DB::transaction(function () use ($actor, $batch): void {
                 $locked = ProjectTransferBatch::query()->lockForUpdate()->findOrFail($batch->id);
                 if ($locked->rolled_back_at !== null) {
@@ -330,10 +318,9 @@ final class ProjectTransferService
         }
     }
 
-    /** @return list<string> */
-    private function enableTransferMaintenance(ModuleMaintenanceService $maintenance, User $actor, string $message): array
+    /** @param list<string> $started */
+    private function enableTransferMaintenance(ModuleMaintenanceService $maintenance, User $actor, string $message, array &$started): void
     {
-        $started = [];
         foreach (self::MAINTENANCE_MODULES as $module) {
             if ($maintenance->isUnderMaintenance($module)) {
                 continue;
@@ -341,8 +328,6 @@ final class ProjectTransferService
             $maintenance->enable($module, $actor, ['message' => $message]);
             $started[] = $module;
         }
-
-        return $started;
     }
 
     /** @param list<string> $started */
@@ -386,15 +371,18 @@ final class ProjectTransferService
         }
         $query = DB::table($table)->whereIn($column, $projectIds);
         $allRows = $query->lockForUpdate()->get();
-        if ($validateBranch && Schema::hasColumn($table, 'branch_id') && $allRows->contains(fn ($row): bool => $row->branch_id === null || (int) $row->branch_id !== $sourceBranchId)) {
+        if ($validateBranch && Schema::hasColumn($table, 'branch_id') && $allRows->contains(fn ($row): bool => ! $batch->items()->where('table_name', $table)->where('row_id', (int) $row->id)->exists() && ($row->branch_id === null || (int) $row->branch_id !== $sourceBranchId))) {
             throw ValidationException::withMessages(['transfer' => "Data {$table} memiliki branch_id yang tidak sesuai cabang asal."]);
         }
         $rows = Schema::hasColumn($table, 'branch_id')
-            ? $allRows->filter(fn ($row): bool => (int) $row->branch_id === $sourceBranchId)
+            ? $allRows->filter(fn ($row): bool => (int) $row->branch_id === $sourceBranchId || $batch->items()->where('table_name', $table)->where('row_id', (int) $row->id)->exists())
             : $allRows;
         foreach ($rows as $row) {
             $values = (array) $row;
             if (array_key_exists('branch_id', $values)) {
+                if ($batch->items()->where('table_name', $table)->where('row_id', (int) $row->id)->exists()) {
+                    continue;
+                }
                 $updates = ['branch_id' => $targetBranchId];
                 if ($table === 'organization_assignments' && Schema::hasColumn($table, 'organization_unit_id') && Schema::hasTable('organization_units')) {
                     $updates['organization_unit_id'] = DB::table('organization_units')->where('branch_id', $targetBranchId)->value('id');
@@ -409,18 +397,10 @@ final class ProjectTransferService
         }
     }
 
-    private function sweepLateProjectRows(ProjectTransferBatch $batch, array $projectIds, int $sourceBranchId, int $targetBranchId): void
-    {
-        foreach (self::PROJECT_TABLES as $table => $projectColumn) {
-            $this->moveProjectRows($batch, $table, $projectColumn, $projectIds, $sourceBranchId, $targetBranchId, false);
-        }
-        $this->moveLeadChildren($batch, $projectIds, $sourceBranchId, $targetBranchId, false);
-    }
-
     private function moveLeadChildren(ProjectTransferBatch $batch, array $projectIds, int $sourceBranchId, int $targetBranchId, bool $validateBranch = true): void
     {
         $leadIds = DB::table('sales_leads')->whereIn('project_id', $projectIds)->lockForUpdate()->pluck('id');
-        foreach (['sales_lead_status_histories', 'sales_lead_stage_histories', 'sales_lead_site_visits', 'sales_lead_slik_attempts', 'sales_lead_consumer_links', 'sales_lead_freelance_links', 'sales_lead_akad_links', 'sales_lead_lifecycle_reconciliation_items'] as $table) {
+        foreach (['sales_lead_status_histories', 'sales_lead_stage_histories', 'sales_lead_site_visits', 'sales_lead_slik_attempts', 'sales_lead_consumer_links', 'sales_lead_freelance_links', 'sales_lead_akad_links', 'sales_lead_lifecycle_reconciliation_items', 'sales_lead_transfers', 'sales_lead_unowned_queues', 'consumer_lead_link_decisions'] as $table) {
             if (! Schema::hasTable($table) || ! Schema::hasColumn($table, 'sales_lead_id')) {
                 continue;
             }
@@ -428,6 +408,9 @@ final class ProjectTransferService
             foreach ($query->lockForUpdate()->get() as $row) {
                 $values = (array) $row;
                 if (array_key_exists('branch_id', $values)) {
+                    if ($batch->items()->where('table_name', $table)->where('row_id', (int) $row->id)->exists()) {
+                        continue;
+                    }
                     if ($validateBranch && ($row->branch_id === null || (int) $row->branch_id !== $sourceBranchId)) {
                         throw ValidationException::withMessages(['transfer' => "Data {$table} memiliki branch_id yang tidak sesuai cabang asal."]);
                     }

@@ -110,6 +110,39 @@ class SheetProjectOwnershipTest extends TestCase
 
         $this->assertFalse($service->allowsOperationalRow($source, 'owned', ['project_name' => 'Proyek Pindah']));
         $this->assertTrue($service->allowsOperationalRow($target, 'unmapped', ['project_name' => 'Proyek Pindah']));
+        $this->assertTrue($service->allowsOperationalRow($target, 'foreign', ['project_name' => 'Proyek Pindah']));
+    }
+
+    public function test_br31_sequential_transfers_use_latest_active_transfer(): void
+    {
+        $firstSource = $this->branch('Asal 1', 'AS1', 'sheet-asal-1');
+        $secondSource = $this->branch('Asal 2', 'AS2', 'sheet-asal-2');
+        $target = $this->branch('Tujuan', 'TJN', 'sheet-tujuan');
+        $actor = User::factory()->create(['role_id' => Role::query()->where('slug', 'superadmin')->value('id')]);
+        $project = LeadMaster::create(['branch_id' => $target->id, 'project_name' => 'Proyek Berantai', 'is_active' => true]);
+        ProjectTransferBatch::query()->create([
+            'source_branch_id' => $firstSource->id,
+            'target_branch_id' => $target->id,
+            'created_by' => $actor->id,
+            'project_ids' => [$project->id],
+            'user_mapping' => [],
+            'status' => 'completed',
+            'executed_at' => now()->subMinute(),
+        ]);
+        ProjectTransferBatch::query()->create([
+            'source_branch_id' => $target->id,
+            'target_branch_id' => $secondSource->id,
+            'created_by' => $actor->id,
+            'project_ids' => [$project->id],
+            'user_mapping' => [],
+            'status' => 'committed',
+            'executed_at' => now(),
+        ]);
+
+        $service = app(SheetProjectOwnershipService::class);
+
+        $this->assertFalse($service->allowsOperationalRow($target, 'owned', ['project_name' => 'Proyek Berantai']));
+        $this->assertTrue($service->allowsOperationalRow($secondSource, 'foreign', ['project_name' => 'Proyek Berantai']));
     }
 
     public function test_br31_rolled_back_transfer_uses_current_project_owner(): void

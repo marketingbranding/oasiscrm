@@ -26,7 +26,7 @@ class LegacyConsumerReadService
             ->where('branch_id', $branch->id)
             ->orderBy('id')
             ->get(['sheet_name', 'row_data', 'ownership_status'])
-            ->filter(fn (KonsumenProgressSheetRow $row): bool => $row->ownership_status !== 'foreign');
+            ->filter(fn (KonsumenProgressSheetRow $row): bool => $this->ownership->allowsOperationalRow($branch, $row->ownership_status, $row->row_data ?? []));
 
         $byIdentity = [];
         $customers = [];
@@ -141,7 +141,7 @@ class LegacyConsumerReadService
             ->where('branch_id', $branch->id)
             ->where('sheet_name', 'data_konsumen')
             ->get(['row_data', 'ownership_status']) as $row) {
-            if ($row->ownership_status === 'foreign') {
+            if (! $this->ownership->allowsOperationalRow($branch, $row->ownership_status, $row->row_data ?? [])) {
                 continue;
             }
             $name = $this->value($this->data($row->row_data), ['project_name', 'proyek', 'project']);

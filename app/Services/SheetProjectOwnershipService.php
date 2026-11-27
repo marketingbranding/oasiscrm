@@ -12,6 +12,12 @@ final class SheetProjectOwnershipService
     /** @var array<int, array{owned: array<string, array<int, true>>, all: array<string, array<int, true>>, has_branch_scoped_projects: bool}> */
     private array $labelsByBranch = [];
 
+    /** @var array<string, array<int, LeadMaster>>|null */
+    private ?array $projectCatalog = null;
+
+    /** @var array<int, ProjectTransferBatch|null>|null */
+    private ?array $latestTransfers = null;
+
     /** @return array{rows: array<int, array>, row_indexes: array<int, int>, all_rows: array<int, array>, all_row_indexes: array<int, int>, statuses: array<int, string>, foreign_project_rows: int, unmapped_project_rows: int} */
     public function filterRows(Branch $branch, array $rows): array
     {
@@ -72,7 +78,7 @@ final class SheetProjectOwnershipService
     {
         $project = $this->resolveUniqueProject($row);
         if ($project === null) {
-            return $this->isOperationallyOwned($branch, $row);
+            return $status === null || $this->isOperationallyOwned($branch, $row);
         }
 
         $transfer = $this->latestTransfer($project);
@@ -91,26 +97,44 @@ final class SheetProjectOwnershipService
         }
 
         $normalized = $this->normalize($label);
-        $projects = LeadMaster::query()
-            ->where('is_active', true)
-            ->get(['id', 'branch_id', 'project_name', 'sheet_project_name', 'sheet_project_aliases'])
-            ->filter(function (LeadMaster $project) use ($normalized): bool {
-                $labels = [$project->project_name, $project->sheet_project_name, ...($project->sheet_project_aliases ?? [])];
+        $catalog = $this->projectCatalog();
 
-                return collect($labels)->contains(fn ($label): bool => $this->normalize((string) $label) === $normalized);
-            });
-
-        return $projects->count() === 1 ? $projects->first() : null;
+        return count($catalog[$normalized] ?? []) === 1 ? array_values($catalog[$normalized])[0] : null;
     }
 
     private function latestTransfer(LeadMaster $project): ?ProjectTransferBatch
     {
-        return ProjectTransferBatch::query()
+        $this->latestTransfers ??= [];
+        if (array_key_exists($project->id, $this->latestTransfers)) {
+            return $this->latestTransfers[$project->id];
+        }
+
+        return $this->latestTransfers[$project->id] = ProjectTransferBatch::query()
             ->whereJsonContains('project_ids', $project->id)
             ->whereNotNull('executed_at')
             ->latest('executed_at')
             ->latest('id')
             ->first(['source_branch_id', 'target_branch_id', 'rolled_back_at', 'status']);
+    }
+
+    /** @return array<string, array<int, LeadMaster>> */
+    private function projectCatalog(): array
+    {
+        if ($this->projectCatalog !== null) {
+            return $this->projectCatalog;
+        }
+
+        $catalog = [];
+        foreach (LeadMaster::query()->where('is_active', true)->get(['id', 'branch_id', 'project_name', 'sheet_project_name', 'sheet_project_aliases']) as $project) {
+            foreach ([$project->project_name, $project->sheet_project_name, ...($project->sheet_project_aliases ?? [])] as $label) {
+                $normalized = $this->normalize((string) $label);
+                if ($normalized !== '') {
+                    $catalog[$normalized][$project->id] = $project;
+                }
+            }
+        }
+
+        return $this->projectCatalog = $catalog;
     }
 
     public function isOperationallyOwned(Branch $branch, array $row): bool

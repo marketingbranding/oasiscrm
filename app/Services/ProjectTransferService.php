@@ -17,6 +17,9 @@ use Throwable;
 
 final class ProjectTransferService
 {
+    /** @var list<string> */
+    private const MAINTENANCE_MODULES = ['projects', 'sales_pocketbook', 'consumer_progress', 'database'];
+
     /** @var array<string, string> */
     private const PROJECT_TABLES = [
         'kavlings' => 'project_id',
@@ -106,13 +109,13 @@ final class ProjectTransferService
         $this->validateBranches($source, $target);
         $this->assertMapping($source->id, $projectIds, $userMapping);
         $maintenance = app(ModuleMaintenanceService::class);
-        $alreadyMaintained = $maintenance->isUnderMaintenance('projects');
-        if ($alreadyMaintained && ! $actor->isSuperadmin()) {
-            throw new AuthorizationException('Pemindahan proyek tidak dapat dimulai saat modul sedang dalam pemeliharaan.');
-        }
-        $maintenanceStarted = $actor->isSuperadmin() && ! $alreadyMaintained;
-        if ($maintenanceStarted) {
-            $maintenance->enable('projects', $actor, ['message' => 'Pemindahan proyek antar cabang sedang berjalan.']);
+        $maintenanceStarted = [];
+        foreach (self::MAINTENANCE_MODULES as $module) {
+            if ($maintenance->isUnderMaintenance($module)) {
+                continue;
+            }
+            $maintenance->enable($module, $actor, ['message' => 'Pemindahan proyek antar cabang sedang berjalan.']);
+            $maintenanceStarted[] = $module;
         }
 
         try {
@@ -181,6 +184,7 @@ final class ProjectTransferService
                 $this->moveProjectMemberships($batch, $projects->pluck('id')->all(), $lockedTarget->id, $userMapping);
                 $this->moveUsers($batch, $lockedSource->id, $lockedTarget->id, $projects->pluck('id')->all(), $userMapping);
                 $this->copyMigrationState($batch, $lockedSource->id, $lockedTarget->id);
+                $this->sweepLateProjectRows($batch, $projects->pluck('id')->all(), $lockedSource->id, $lockedTarget->id);
                 $batch->update(['executed_at' => now()]);
 
                 ActivityLog::query()->create([
@@ -208,8 +212,8 @@ final class ProjectTransferService
 
             return ['batch' => $batch->fresh('items'), 'impact' => $batch->impact_summary];
         } finally {
-            if ($maintenanceStarted) {
-                $maintenance->disable('projects', $actor);
+            foreach ($maintenanceStarted as $module) {
+                $maintenance->disable($module, $actor);
             }
         }
     }
@@ -278,13 +282,13 @@ final class ProjectTransferService
     {
         $this->authorizeActor($actor);
         $maintenance = app(ModuleMaintenanceService::class);
-        $alreadyMaintained = $maintenance->isUnderMaintenance('projects');
-        if ($alreadyMaintained && ! $actor->isSuperadmin()) {
-            throw new AuthorizationException('Pembatalan pemindahan proyek tidak dapat dimulai saat modul sedang dalam pemeliharaan.');
-        }
-        $maintenanceStarted = $actor->isSuperadmin() && ! $alreadyMaintained;
-        if ($maintenanceStarted) {
-            $maintenance->enable('projects', $actor, ['message' => 'Pembatalan pemindahan proyek sedang berjalan.']);
+        $maintenanceStarted = [];
+        foreach (self::MAINTENANCE_MODULES as $module) {
+            if ($maintenance->isUnderMaintenance($module)) {
+                continue;
+            }
+            $maintenance->enable($module, $actor, ['message' => 'Pembatalan pemindahan proyek sedang berjalan.']);
+            $maintenanceStarted[] = $module;
         }
 
         try {
@@ -327,8 +331,8 @@ final class ProjectTransferService
                 ]);
             });
         } finally {
-            if ($maintenanceStarted) {
-                $maintenance->disable('projects', $actor);
+            foreach ($maintenanceStarted as $module) {
+                $maintenance->disable($module, $actor);
             }
         }
     }
@@ -359,14 +363,14 @@ final class ProjectTransferService
         return LeadMaster::query()->where('branch_id', $source->id)->whereIn('id', $ids)->where('is_active', true)->get();
     }
 
-    private function moveProjectRows(ProjectTransferBatch $batch, string $table, string $column, array $projectIds, int $sourceBranchId, int $targetBranchId): void
+    private function moveProjectRows(ProjectTransferBatch $batch, string $table, string $column, array $projectIds, int $sourceBranchId, int $targetBranchId, bool $validateBranch = true): void
     {
         if (! Schema::hasTable($table) || ! Schema::hasColumn($table, $column)) {
             return;
         }
         $query = DB::table($table)->whereIn($column, $projectIds);
         $allRows = $query->lockForUpdate()->get();
-        if (Schema::hasColumn($table, 'branch_id') && $allRows->contains(fn ($row): bool => $row->branch_id === null || (int) $row->branch_id !== $sourceBranchId)) {
+        if ($validateBranch && Schema::hasColumn($table, 'branch_id') && $allRows->contains(fn ($row): bool => $row->branch_id === null || (int) $row->branch_id !== $sourceBranchId)) {
             throw ValidationException::withMessages(['transfer' => "Data {$table} memiliki branch_id yang tidak sesuai cabang asal."]);
         }
         $rows = Schema::hasColumn($table, 'branch_id')
@@ -383,13 +387,21 @@ final class ProjectTransferService
                     $updates['updated_at'] = now();
                 }
                 $this->snapshotAndUpdate($batch, $table, (int) $row->id, $values, $updates);
-            } else {
+            } elseif (! $batch->items()->where('table_name', $table)->where('row_id', (int) $row->id)->exists()) {
                 $this->snapshot($batch, $table, (int) $row->id, $values);
             }
         }
     }
 
-    private function moveLeadChildren(ProjectTransferBatch $batch, array $projectIds, int $sourceBranchId, int $targetBranchId): void
+    private function sweepLateProjectRows(ProjectTransferBatch $batch, array $projectIds, int $sourceBranchId, int $targetBranchId): void
+    {
+        foreach (self::PROJECT_TABLES as $table => $projectColumn) {
+            $this->moveProjectRows($batch, $table, $projectColumn, $projectIds, $sourceBranchId, $targetBranchId, false);
+        }
+        $this->moveLeadChildren($batch, $projectIds, $sourceBranchId, $targetBranchId, false);
+    }
+
+    private function moveLeadChildren(ProjectTransferBatch $batch, array $projectIds, int $sourceBranchId, int $targetBranchId, bool $validateBranch = true): void
     {
         $leadIds = DB::table('sales_leads')->whereIn('project_id', $projectIds)->lockForUpdate()->pluck('id');
         foreach (['sales_lead_status_histories', 'sales_lead_stage_histories', 'sales_lead_site_visits', 'sales_lead_slik_attempts', 'sales_lead_consumer_links', 'sales_lead_freelance_links', 'sales_lead_akad_links', 'sales_lead_lifecycle_reconciliation_items'] as $table) {
@@ -400,15 +412,17 @@ final class ProjectTransferService
             foreach ($query->lockForUpdate()->get() as $row) {
                 $values = (array) $row;
                 if (array_key_exists('branch_id', $values)) {
-                    if ($row->branch_id === null || (int) $row->branch_id !== $sourceBranchId) {
+                    if ($validateBranch && ($row->branch_id === null || (int) $row->branch_id !== $sourceBranchId)) {
                         throw ValidationException::withMessages(['transfer' => "Data {$table} memiliki branch_id yang tidak sesuai cabang asal."]);
                     }
                     $updates = ['branch_id' => $targetBranchId];
                     if (array_key_exists('updated_at', $values)) {
                         $updates['updated_at'] = now();
                     }
-                    $this->snapshotAndUpdate($batch, $table, (int) $row->id, $values, $updates);
-                } else {
+                    if (! $batch->items()->where('table_name', $table)->where('row_id', (int) $row->id)->exists()) {
+                        $this->snapshotAndUpdate($batch, $table, (int) $row->id, $values, $updates);
+                    }
+                } elseif (! $batch->items()->where('table_name', $table)->where('row_id', (int) $row->id)->exists()) {
                     $this->snapshot($batch, $table, (int) $row->id, $values);
                 }
             }

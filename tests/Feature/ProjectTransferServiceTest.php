@@ -390,6 +390,91 @@ class ProjectTransferServiceTest extends TestCase
         app(ProjectTransferService::class)->execute($actor, $source, $target, [$project->id], [$sales->id => 'tetap']);
     }
 
+    public function test_br31_late_project_row_is_moved_and_snapshotted_before_execute_returns(): void
+    {
+        $source = $this->branch('Batang', 'BAT', 'sheet-batang');
+        $target = $this->branch('Tegal', 'TEG', 'sheet-tegal');
+        $project = LeadMaster::query()->create(['branch_id' => $source->id, 'project_name' => 'UAT-Tegal', 'is_active' => true]);
+        $injected = false;
+        DB::listen(function ($query) use (&$injected, $project, $source): void {
+            if ($injected || ! str_contains(strtolower($query->sql), 'from "kavlings"') || ! str_contains(strtolower($query->sql), 'select *')) {
+                return;
+            }
+
+            $injected = true;
+            DB::table('kavlings')->insert([
+                'project_id' => $project->id,
+                'branch_id' => $source->id,
+                'kavling_code' => 'LATE-01',
+                'name' => 'Late row',
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+        });
+
+        $result = app(ProjectTransferService::class)->execute($this->user('superadmin', $source), $source, $target, [$project->id], []);
+        $row = DB::table('kavlings')->where('kavling_code', 'LATE-01')->first();
+
+        $this->assertSame($target->id, $row->branch_id);
+        $this->assertDatabaseHas('project_transfer_items', ['batch_id' => $result['batch']->id, 'table_name' => 'kavlings', 'row_id' => $row->id]);
+    }
+
+    public function test_br31_invalid_late_project_row_rolls_back_all_transfer_mutations(): void
+    {
+        $source = $this->branch('Batang', 'BAT', 'sheet-batang');
+        $target = $this->branch('Tegal', 'TEG', 'sheet-tegal');
+        $project = LeadMaster::query()->create(['branch_id' => $source->id, 'project_name' => 'UAT-Tegal', 'is_active' => true]);
+        $injected = false;
+        DB::listen(function ($query) use (&$injected, $project, $target): void {
+            if ($injected || ! str_contains(strtolower($query->sql), 'from "kavlings"') || ! str_contains(strtolower($query->sql), 'select *')) {
+                return;
+            }
+
+            $injected = true;
+            DB::table('kavlings')->insert([
+                'project_id' => $project->id,
+                'branch_id' => $target->id,
+                'kavling_code' => 'INVALID-LATE-01',
+                'name' => 'Invalid late row',
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+        });
+
+        $this->expectException(ValidationException::class);
+        app(ProjectTransferService::class)->execute($this->user('superadmin', $source), $source, $target, [$project->id], []);
+
+        $this->assertDatabaseHas('lead_master', ['id' => $project->id, 'branch_id' => $source->id]);
+        $this->assertDatabaseCount('project_transfer_batches', 0);
+        $this->assertDatabaseMissing('kavlings', ['kavling_code' => 'INVALID-LATE-01']);
+    }
+
+    public function test_transfer_br31_enables_all_configured_modules_and_preserves_pre_enabled_modules(): void
+    {
+        $source = $this->branch('Batang', 'BAT', 'sheet-batang');
+        $target = $this->branch('Tegal', 'TEG', 'sheet-tegal');
+        $project = LeadMaster::query()->create(['branch_id' => $source->id, 'project_name' => 'UAT-Tegal', 'is_active' => true]);
+        $actor = $this->user('superadmin', $source);
+        $maintenance = app(\App\Services\ModuleMaintenanceService::class);
+        $maintenance->enable('database', $actor, []);
+        $observed = false;
+        DB::listen(function ($query) use (&$observed): void {
+            if ($observed || ! str_contains(strtolower($query->sql), 'from "lead_master"')) {
+                return;
+            }
+
+            $observed = true;
+            $this->assertSame(['database' => true, 'sales_pocketbook' => true, 'promo' => false, 'consumer_progress' => true, 'dana_talangan' => false, 'work_planner' => false, 'feedback_reports' => false, 'users' => false, 'branches' => false, 'projects' => true, 'kavling' => false], app(\App\Services\ModuleMaintenanceService::class)->enabledMap());
+        });
+
+        app(ProjectTransferService::class)->execute($actor, $source, $target, [$project->id], []);
+
+        $this->assertTrue($maintenance->isUnderMaintenance('database'));
+        $this->assertFalse($maintenance->isUnderMaintenance('sales_pocketbook'));
+        $this->assertFalse($maintenance->isUnderMaintenance('consumer_progress'));
+        $this->assertFalse($maintenance->isUnderMaintenance('projects'));
+    }
+
     private function branch(string $name, string $code, string $sheetId): Branch
     {
         return Branch::query()->create(['name' => $name, 'code' => $code, 'sheet_id' => $sheetId, 'is_active' => true]);

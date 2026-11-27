@@ -78,7 +78,9 @@ final class SheetProjectOwnershipService
     {
         $project = $this->resolveUniqueProject($row);
         if ($project === null) {
-            return $status === null || $this->isOperationallyOwned($branch, $row);
+            return $this->projectLabel($row) === '' && $status === null
+                ? true
+                : $this->isOperationallyOwned($branch, $row);
         }
 
         $transfer = $this->latestTransfer($project);

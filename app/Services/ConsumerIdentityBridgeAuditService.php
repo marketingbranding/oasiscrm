@@ -10,7 +10,10 @@ use Illuminate\Support\Str;
 
 final class ConsumerIdentityBridgeAuditService
 {
-    public function __construct(private readonly ProjectIdentityResolver $projects) {}
+    public function __construct(
+        private readonly ProjectIdentityResolver $projects,
+        private readonly SheetProjectOwnershipService $ownership,
+    ) {}
 
     public function audit(Branch $branch, LeadMaster $project): array
     {

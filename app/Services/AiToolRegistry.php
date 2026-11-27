@@ -24,6 +24,7 @@ class AiToolRegistry
         private readonly WorkspaceAccessService $workspaceAccess,
         private readonly OrganizationScopeService $organizationScope,
         private readonly LeadAttentionService $leadAttention,
+        private readonly SheetProjectOwnershipService $ownership,
     ) {}
 
     public function allowedToolNames(): array
@@ -532,7 +533,9 @@ class AiToolRegistry
                 ->whereNull('oasis_deleted_at')
                 ->whereRaw('LOWER(row_data) LIKE ?', ['%'.$term.'%'])
                 ->take(50)
+                ->with('branch:id')
                 ->get()
+                ->filter(fn (DatabaseSheetRecord $row): bool => $this->ownership->isOperationallyOwned($row->branch, $row->row_data ?? []))
                 ->filter(fn (DatabaseSheetRecord $row) => $this->projectAllowed($user, 'database', $row->branch_id, $this->firstValue($row->row_data ?? [], ['project_name', 'proyek', 'project'])))
                 ->take(10)
                 ->map(fn (DatabaseSheetRecord $row) => $this->serializeDatabaseRecord($row))

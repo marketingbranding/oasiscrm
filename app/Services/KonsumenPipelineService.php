@@ -9,6 +9,8 @@ use Illuminate\Support\Str;
 
 class KonsumenPipelineService
 {
+    public function __construct(private readonly SheetProjectOwnershipService $ownership) {}
+
     public const STAGES = [
         'bi_checking' => 'BI Checking',
         'PSJB' => 'PSJB',
@@ -172,6 +174,9 @@ class KonsumenPipelineService
             ->get(['sheet_name', 'row_data']);
 
         foreach ($rows as $row) {
+            if (! $this->ownership->isOperationallyOwned($branch, $row->row_data ?? [])) {
+                continue;
+            }
             $rowsBySheet[$row->sheet_name][] = $row->row_data ?? [];
         }
 

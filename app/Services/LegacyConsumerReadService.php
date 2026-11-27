@@ -16,6 +16,7 @@ class LegacyConsumerReadService
     public function __construct(
         private readonly KonsumenPipelineService $pipeline,
         private readonly ProjectIdentityResolver $projects,
+        private readonly SheetProjectOwnershipService $ownership,
     ) {}
 
     /** @return array<int, ConsumerComparisonRecord> */
@@ -24,7 +25,8 @@ class LegacyConsumerReadService
         $rows = KonsumenProgressSheetRow::query()
             ->where('branch_id', $branch->id)
             ->orderBy('id')
-            ->get(['sheet_name', 'row_data']);
+            ->get(['sheet_name', 'row_data'])
+            ->filter(fn (KonsumenProgressSheetRow $row): bool => $this->ownership->isOperationallyOwned($branch, $row->row_data ?? []));
 
         $byIdentity = [];
         $customers = [];

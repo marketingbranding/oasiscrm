@@ -33,13 +33,14 @@ class KonsumenProgressSyncService
         'bast',
     ];
 
-    public function __construct(private GoogleSheetsApiService $googleSheets, ?SyncLockService $locks = null, private ?BranchMigrationStateService $migrationStates = null)
+    public function __construct(private GoogleSheetsApiService $googleSheets, ?SyncLockService $locks = null, private ?BranchMigrationStateService $migrationStates = null, private ?SheetProjectOwnershipService $ownership = null)
     {
         $this->locks = $locks ?? app(SyncLockService::class);
         $this->migrationStates ??= app(BranchMigrationStateService::class);
+        $this->ownership ??= app(SheetProjectOwnershipService::class);
     }
 
-    public function syncBranch(Branch $branch, ?int $initiatedBy = null): array
+    public function syncBranch(Branch $branch, ?int $initiatedBy = null, bool $acquireLock = true): array
     {
         if (! $this->migrationStates->allowsSheetSync($branch)) {
             $this->migrationStates->logSkip($branch, 'konsumen_progress');
@@ -47,7 +48,9 @@ class KonsumenProgressSyncService
             return ['ok' => true, 'status' => 'skipped', 'branch' => $branch->name, 'message' => 'Cabang berstatus oasis_penuh.', 'reason' => 'oasis_penuh', 'summary' => []];
         }
 
-        return $this->locks->run('konsumen-progress:branch:'.$branch->id, fn () => $this->performSync($branch, $initiatedBy));
+        return $acquireLock
+            ? $this->locks->run('konsumen-progress:branch:'.$branch->id, fn () => $this->performSync($branch, $initiatedBy))
+            : $this->performSync($branch, $initiatedBy);
     }
 
     private function performSync(Branch $branch, ?int $initiatedBy): array
@@ -93,9 +96,12 @@ class KonsumenProgressSyncService
 
                 foreach (self::SHEETS as $sheetName) {
                     $rows = $sheetRows[$sheetName] ?? [];
-                    $summary[$sheetName] = count($rows);
+                    $filtered = $this->ownership->filterRows($branch, $rows);
+                    $summary[$sheetName] = count($filtered['rows']);
+                    $summary[$sheetName.'_foreign_project_rows'] = $filtered['foreign_project_rows'];
+                    $summary[$sheetName.'_unmapped_project_rows'] = $filtered['unmapped_project_rows'];
 
-                    foreach (array_chunk($this->buildInsertRows($branch, $sheetName, $rows, $syncedAt), 500) as $chunk) {
+                    foreach (array_chunk($this->buildInsertRows($branch, $sheetName, $filtered['rows'], $filtered['row_indexes'], $syncedAt), 500) as $chunk) {
                         if (! empty($chunk)) {
                             KonsumenProgressSheetRow::insert($chunk);
                         }
@@ -135,14 +141,14 @@ class KonsumenProgressSyncService
         return $query->get()->map(fn (Branch $branch) => $this->syncBranch($branch))->all();
     }
 
-    private function buildInsertRows(Branch $branch, string $sheetName, array $rows, $syncedAt): array
+    private function buildInsertRows(Branch $branch, string $sheetName, array $rows, array $rowIndexes, $syncedAt): array
     {
-        return array_map(function (array $row, int $index) use ($branch, $sheetName, $syncedAt) {
+        return array_map(function (array $row, int $index) use ($branch, $sheetName, $rowIndexes, $syncedAt) {
             return [
                 'branch_id' => $branch->id,
                 'sheet_id' => $branch->sheet_id,
                 'sheet_name' => $sheetName,
-                'row_hash' => hash('sha256', $sheetName.'|'.$index.'|'.json_encode($row)),
+                'row_hash' => hash('sha256', $sheetName.'|'.($rowIndexes[$index] ?? $index)),
                 'row_data' => json_encode($row),
                 'synced_at' => $syncedAt,
                 'created_at' => now(),

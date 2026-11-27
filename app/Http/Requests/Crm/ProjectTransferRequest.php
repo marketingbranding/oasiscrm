@@ -21,8 +21,7 @@ class ProjectTransferRequest extends FormRequest
             'project_ids.*' => ['integer', 'distinct', 'exists:lead_master,id'],
             'user_mapping' => ['array'],
             'user_mapping.*' => [Rule::in(['pindah', 'tetap', 'keduanya'])],
-            'confirmation' => ['nullable', 'string'],
-            'target_branch_name' => ['nullable', 'string'],
+            'confirmation' => ['nullable', 'string', 'max:255'],
         ];
     }
 }

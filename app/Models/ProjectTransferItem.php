@@ -12,6 +12,7 @@ class ProjectTransferItem extends Model
         'table_name',
         'row_id',
         'old_values',
+        'new_values',
         'was_created',
         'old_updated_at',
     ];
@@ -20,6 +21,7 @@ class ProjectTransferItem extends Model
     {
         return [
             'old_values' => 'array',
+            'new_values' => 'array',
             'old_updated_at' => 'datetime',
         ];
     }

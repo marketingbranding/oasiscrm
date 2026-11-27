@@ -16,6 +16,7 @@ use App\Services\DatabaseSheetWriteService;
 use App\Services\OptimisticLockService;
 use App\Services\OrganizationScopeService;
 use App\Services\PresenceService;
+use App\Services\SheetProjectOwnershipService;
 use App\Services\SyncResponseService;
 use App\Services\WorkspaceAccessService;
 use Illuminate\Http\Request;
@@ -45,6 +46,7 @@ class DatabaseController extends Controller
         private readonly PresenceService $presence,
         private readonly SyncResponseService $syncResponses,
         private readonly OrganizationScopeService $organizationScope,
+        private readonly SheetProjectOwnershipService $ownership,
     ) {}
 
     public function index(Request $request)
@@ -89,6 +91,8 @@ class DatabaseController extends Controller
                     'column_metadata',
                     'updated_at',
                 ])
+                ->filter(fn (DatabaseSheetRecord $record): bool => $this->ownership->isOwnedOrUnmapped($selectedBranch, $record->row_data ?? []))
+                ->values()
                 ->all();
         }
 
@@ -180,7 +184,9 @@ class DatabaseController extends Controller
             ->where('sheet_name', $sheetName)
             ->whereNull('oasis_deleted_at')
             ->orderBy('row_number')
-            ->get(['id', 'row_number', 'oasis_sync_id', 'row_data', 'headers', 'formula_columns', 'column_metadata', 'updated_at']);
+            ->get(['id', 'row_number', 'oasis_sync_id', 'row_data', 'headers', 'formula_columns', 'column_metadata', 'updated_at'])
+            ->filter(fn (DatabaseSheetRecord $record): bool => $this->ownership->isOwnedOrUnmapped($branch, $record->row_data ?? []))
+            ->values();
 
         $sample = $rows->first();
         $headers = $sample ? $sample->headers : [];
@@ -300,6 +306,7 @@ class DatabaseController extends Controller
             $recordWasReplaced = (bool) $record;
         }
         abort_unless($record, 404);
+        abort_unless($this->ownership->isOwnedOrUnmapped($record->branch, $record->row_data ?? []), 404);
         self::authorizeSupportedSheet($record->sheet_name);
 
         $branch = $record->branch;
@@ -377,6 +384,7 @@ class DatabaseController extends Controller
             return back()->with('error', 'Branch tidak ditemukan.');
         }
 
+        abort_unless($this->ownership->isOwnedOrUnmapped($branch, $record->row_data ?? []), 404);
         $user = Auth::user();
         abort_unless($user->hasPermission('database.edit'), 403);
         abort_unless(in_array((int) $branch->id, $this->organizationScope->branchIds($user, 'database', 'manage'), true), 403);
@@ -445,7 +453,13 @@ class DatabaseController extends Controller
 
     private function currentState(Branch $branch): array
     {
-        $rows = DatabaseSheetRecord::query()->where('branch_id', $branch->id)->where('sheet_name', 'data_konsumen')->whereNull('oasis_deleted_at')->orderBy('row_number')->get(['row_number', 'headers', 'formula_columns', 'row_data']);
+        $rows = DatabaseSheetRecord::query()
+            ->where('branch_id', $branch->id)
+            ->where('sheet_name', 'data_konsumen')
+            ->whereNull('oasis_deleted_at')
+            ->orderBy('row_number')
+            ->get(['row_number', 'headers', 'formula_columns', 'row_data'])
+            ->filter(fn (DatabaseSheetRecord $record): bool => $this->ownership->isOwnedOrUnmapped($branch, $record->row_data ?? []));
         $latest = [];
         foreach ($rows as $row) {
             if (in_array('no_ktp', $row->formula_columns ?? [], true)) {

@@ -23,6 +23,7 @@ final class ConsumerLeadLinkDecisionService
     public function __construct(
         private readonly OrganizationScopeService $organizationScope,
         private readonly BranchMigrationStateService $branchMigrationState,
+        private readonly SheetProjectOwnershipService $ownership,
     ) {}
 
     private const MAX_REASON_LENGTH = 2000;
@@ -132,7 +133,7 @@ final class ConsumerLeadLinkDecisionService
             $rowQuery->lockForUpdate();
             $nupQuery->lockForUpdate();
         }
-        $rows = $rowQuery->get();
+        $rows = $rowQuery->get()->filter(fn (KonsumenProgressSheetRow $row): bool => $this->ownership->isOperationallyOwned(Branch::query()->findOrFail($branchId), $row->row_data ?? []));
         $nups = $nupQuery->get();
         $resolver = app(ConsumerLeadLinkSubjectResolver::class);
         $projectIds = $nups->pluck('project_id')->filter()->merge([$projectId])->filter()->unique()->values()->all();

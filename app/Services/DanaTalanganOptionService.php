@@ -9,10 +9,15 @@ use Throwable;
 
 class DanaTalanganOptionService
 {
+    private readonly SheetProjectOwnershipService $ownership;
+
     public function __construct(
         private GoogleSheetsApiService $googleSheets,
         private readonly ProjectIdentityResolver $projects,
-    ) {}
+        ?SheetProjectOwnershipService $ownership = null,
+    ) {
+        $this->ownership = $ownership ?? app(SheetProjectOwnershipService::class);
+    }
 
     public function kavlings(Branch $branch, string $projectName): array
     {
@@ -65,7 +70,9 @@ class DanaTalanganOptionService
         $cachedRows = DatabaseSheetRecord::where('branch_id', $branch->id)
             ->where('sheet_name', 'data_kav')
             ->orderBy('row_number')
-            ->pluck('row_data')
+            ->get(['row_data'])
+            ->filter(fn (DatabaseSheetRecord $row): bool => $this->ownership->isOperationallyOwned($branch, $row->row_data ?? []))
+            ->map(fn (DatabaseSheetRecord $row): array => $row->row_data ?? [])
             ->all();
         if (! empty($cachedRows)) {
             return $cachedRows;

@@ -40,4 +40,28 @@ class SyncLockService
             $lock->release();
         }
     }
+
+    public function runManyOrThrow(array $keys, callable $callback, int $seconds = 600): mixed
+    {
+        $locks = [];
+        foreach (array_values(array_unique($keys)) as $key) {
+            $lock = Cache::lock('oasis:sync:'.$key, $seconds);
+            if (! $lock->get()) {
+                foreach (array_reverse($locks) as $held) {
+                    $held->release();
+                }
+
+                throw new \DomainException('Sinkronisasi untuk scope ini sedang berjalan.');
+            }
+            $locks[] = $lock;
+        }
+
+        try {
+            return $callback();
+        } finally {
+            foreach (array_reverse($locks) as $lock) {
+                $lock->release();
+            }
+        }
+    }
 }

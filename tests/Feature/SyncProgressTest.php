@@ -115,6 +115,18 @@ class SyncProgressTest extends TestCase
         $this->assertSame($user->id, $status->initiated_by);
     }
 
+    public function test_konsumen_row_identity_ignores_content_changes(): void
+    {
+        [$branch] = $this->branchAndUser();
+        $service = new KonsumenProgressSyncService(Mockery::mock(GoogleSheetsApiService::class));
+        $method = new \ReflectionMethod($service, 'buildInsertRows');
+        $method->setAccessible(true);
+        $first = $method->invoke($service, $branch, 'data_konsumen', [['nama' => 'Lama']], [4], now())[0]['row_hash'];
+        $second = $method->invoke($service, $branch, 'data_konsumen', [['nama' => 'Baru']], [4], now())[0]['row_hash'];
+
+        $this->assertSame($first, $second);
+    }
+
     public function test_partial_and_stalled_states_are_not_reported_as_success(): void
     {
         $responses = app(SyncResponseService::class);

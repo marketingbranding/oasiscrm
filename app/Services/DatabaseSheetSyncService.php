@@ -6,7 +6,6 @@ use App\Models\Branch;
 use App\Models\DatabaseSheetRecord;
 use App\Models\DatabaseSheetSyncStatus;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Str;
 use Throwable;
 
 class DatabaseSheetSyncService
@@ -15,13 +14,14 @@ class DatabaseSheetSyncService
 
     private SyncLockService $locks;
 
-    public function __construct(private GoogleSheetsApiService $googleSheets, ?SyncLockService $locks = null, private ?BranchMigrationStateService $migrationStates = null)
+    public function __construct(private GoogleSheetsApiService $googleSheets, ?SyncLockService $locks = null, private ?BranchMigrationStateService $migrationStates = null, private ?SheetProjectOwnershipService $ownership = null)
     {
         $this->locks = $locks ?? app(SyncLockService::class);
         $this->migrationStates ??= app(BranchMigrationStateService::class);
+        $this->ownership ??= app(SheetProjectOwnershipService::class);
     }
 
-    public function syncBranch(Branch $branch, ?int $initiatedBy = null): array
+    public function syncBranch(Branch $branch, ?int $initiatedBy = null, bool $acquireLock = true): array
     {
         if (! $this->migrationStates->allowsSheetSync($branch)) {
             $this->migrationStates->logSkip($branch, 'database');
@@ -29,7 +29,9 @@ class DatabaseSheetSyncService
             return ['ok' => true, 'status' => 'skipped', 'branch' => $branch->name, 'message' => 'Cabang berstatus oasis_penuh.', 'reason' => 'oasis_penuh', 'summary' => []];
         }
 
-        return $this->locks->run('database:branch:'.$branch->id, fn () => $this->performSync($branch, $initiatedBy));
+        return $acquireLock
+            ? $this->locks->run('database:branch:'.$branch->id, fn () => $this->performSync($branch, $initiatedBy))
+            : $this->performSync($branch, $initiatedBy);
     }
 
     private function performSync(Branch $branch, ?int $initiatedBy): array
@@ -77,9 +79,11 @@ class DatabaseSheetSyncService
                     $formulaColumns = $this->formulaColumns($headers, $formulas);
                     $columnMetadata = $this->metadataForHeaders($headers, $metadataBySheet[$sheetName] ?? []);
                     $insertRows = $this->buildRecords($branch, $sheetName, $headers, $values, $formulaColumns, $columnMetadata, $syncedAt);
-                    $summary[$sheetName] = count($insertRows);
+                    $summary[$sheetName] = count($insertRows['rows']);
+                    $summary[$sheetName.'_foreign_project_rows'] = $insertRows['foreign_project_rows'];
+                    $summary[$sheetName.'_unmapped_project_rows'] = $insertRows['unmapped_project_rows'];
 
-                    foreach (array_chunk($insertRows, 500) as $chunk) {
+                    foreach (array_chunk($insertRows['rows'], 500) as $chunk) {
                         if (! empty($chunk)) {
                             DatabaseSheetRecord::insert($chunk);
                         }
@@ -154,7 +158,7 @@ class DatabaseSheetSyncService
 
     private function buildRecords(Branch $branch, string $sheetName, array $headers, array $values, array $formulaColumns, array $columnMetadata, $syncedAt): array
     {
-        $records = [];
+        $rawRows = [];
         foreach (array_slice($values, 1) as $offset => $cells) {
             $rowData = [];
             foreach ($headers as $index => $header) {
@@ -165,14 +169,21 @@ class DatabaseSheetSyncService
                 continue;
             }
 
-            $syncId = ($rowData['oasis_sync_id'] ?? '') ?: (string) Str::uuid();
-            $deletedAt = $this->validDeletedAt($rowData['oasis_deleted_at'] ?? '');
+            $rawRows[] = ['row_number' => $offset + 2, 'row_data' => $rowData];
+        }
 
+        $filtered = $this->ownership->filterRows($branch, array_column($rawRows, 'row_data'));
+        $records = [];
+        foreach ($filtered['row_indexes'] as $rawIndex) {
+            $rawRow = $rawRows[$rawIndex];
+            $rowData = $rawRow['row_data'];
+            $syncId = ($rowData['oasis_sync_id'] ?? '') ?: hash('sha256', $branch->id.'|'.$sheetName.'|'.$rawRow['row_number']);
+            $deletedAt = $this->validDeletedAt($rowData['oasis_deleted_at'] ?? '');
             $records[] = [
                 'branch_id' => $branch->id,
                 'sheet_id' => $branch->sheet_id,
                 'sheet_name' => $sheetName,
-                'row_number' => $offset + 2,
+                'row_number' => $rawRow['row_number'],
                 'oasis_sync_id' => $syncId,
                 'headers' => json_encode($headers),
                 'row_data' => json_encode($rowData),
@@ -186,7 +197,11 @@ class DatabaseSheetSyncService
             ];
         }
 
-        return $records;
+        return [
+            'rows' => $records,
+            'foreign_project_rows' => $filtered['foreign_project_rows'],
+            'unmapped_project_rows' => $filtered['unmapped_project_rows'],
+        ];
     }
 
     private function metadataForHeaders(array $headers, array $metadataByIndex): array

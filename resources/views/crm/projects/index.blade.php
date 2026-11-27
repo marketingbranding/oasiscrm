@@ -31,6 +31,9 @@
                 <a href="{{ route('projects.transfer.create') }}" class="bg-black text-white px-4 py-1.5 text-sm font-[Helvetica] font-bold border-2 border-black rounded-none hover:bg-gray-800">
                     Pindah Proyek
                 </a>
+                <a href="{{ route('projects.transfer.history') }}" class="bg-white text-black px-4 py-1.5 text-sm font-[Helvetica] font-bold border-2 border-black rounded-none">
+                    Riwayat Pindah
+                </a>
             </div>
         </form>
     </div>

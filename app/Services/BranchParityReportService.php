@@ -17,6 +17,7 @@ final class BranchParityReportService
         private readonly ConsumerReadinessService $readiness,
         private readonly LegacyConsumerReadService $legacy,
         private readonly LocalConsumerReadService $local,
+        private readonly SheetProjectOwnershipService $ownership,
     ) {}
 
     public function report(Branch $branch): BranchParityReport
@@ -45,6 +46,7 @@ final class BranchParityReportService
             ]));
         }
 
+        $foreignRows = KonsumenProgressSheetRow::query()->where('branch_id', $branch->id)->get()->filter(fn (KonsumenProgressSheetRow $row): bool => ! $this->ownership->isOperationallyOwned($branch, $row->row_data ?? []))->count();
         $applications = ConsumerApplication::query()->where('branch_id', $branch->id)->get();
         $statusCounts = $applications->countBy(fn (ConsumerApplication $application): string => $application->canonicalTransactionStatus());
         $occupied = $applications->filter(fn (ConsumerApplication $application): bool => $application->kavling_id !== null && $application->canonicalTransactionStatus() === 'LANJUT')->pluck('kavling_id')->unique()->count();
@@ -53,7 +55,8 @@ final class BranchParityReportService
             'akad_by_month' => $applications->whereNotNull('akad_date')->countBy(fn (ConsumerApplication $application): string => $application->akad_date->format('Y-m')),
             'last_process' => $applications->countBy(fn (ConsumerApplication $application): string => (string) ($application->current_stage ?: 'BELUM ADA')),
             'occupied_kavling' => $occupied,
-            'sheet_rows' => KonsumenProgressSheetRow::query()->where('branch_id', $branch->id)->count(),
+            'sheet_rows' => KonsumenProgressSheetRow::query()->where('branch_id', $branch->id)->count() - $foreignRows,
+            'foreign_project_rows' => $foreignRows,
             'oasis_transactions' => $applications->count(),
             'per_side' => $sideMetrics,
             'delta' => $this->metricDelta($sideMetrics),
@@ -64,6 +67,7 @@ final class BranchParityReportService
             'oasis_only' => $comparisonSummary['local_only'],
             'unavailable' => $branch->sheet_id ? 0 : 1,
             'duplicate' => $comparisonSummary['ambiguous'],
+            'foreign_project_rows' => $foreignRows,
         ];
         $sync = KonsumenProgressSyncStatus::query()->where('branch_id', $branch->id)->latest('finished_at')->first();
         $fresh = $sync?->status === 'success' && $sync->finished_at?->gte(now()->subHours(24));

@@ -8,8 +8,8 @@
     <div class="border-2 border-black bg-white" x-data="projectTransfer({
         previewUrl: @js(route('projects.transfer.preview')),
         storeUrl: @js(route('projects.transfer.store')),
-        branches: @js($branches->map(fn ($branch) => ['id' => $branch->id, 'name' => $branch->name, 'sheet_id' => $branch->sheet_id])->values()),
-        projects: @js($projects->map(fn ($project) => ['id' => $project->id, 'branch_id' => $project->branch_id, 'name' => $project->project_name, 'users' => $project->assignedUsers->map(fn ($user) => ['id' => $user->id, 'name' => $user->name])->values()])->values()),
+        branches: @js($branches->map(fn ($branch) => ['id' => $branch->id, 'name' => $branch->name, 'sheet_id' => $branch->sheet_id, 'users' => $branch->users->map(fn ($user) => ['id' => $user->id, 'name' => $user->name])->values()])->values()),
+        projects: @js($projects->map(fn ($project) => ['id' => $project->id, 'branch_id' => $project->branch_id, 'name' => $project->project_name, 'user_ids' => $project->assignedUsers->pluck('id')->values()])->values()),
     })" @keydown.escape.window="closeErrors()">
         <div class="bg-black text-white px-4 py-2 font-[Helvetica] font-bold text-xs uppercase">Wizard Tahap B</div>
         <form class="p-4 sm:p-6 space-y-5" @submit.prevent="submit">
@@ -47,7 +47,7 @@
 
             <div class="border-2 border-black bg-white p-3 space-y-2">
                 <h2 class="font-[Helvetica] font-bold uppercase text-sm">Mapping user</h2>
-                <p class="text-sm">Pilih keputusan untuk setiap user proyek. Role dan permission tidak berubah.</p>
+                <p class="text-sm">Semua user aktif cabang asal tampil. Default Tetap. Role dan permission tidak berubah.</p>
                 <template x-for="user in mappedUsers" :key="user.id">
                     <div class="flex flex-wrap items-center justify-between gap-2 border-t border-black pt-2">
                         <span x-text="user.name"></span>
@@ -90,7 +90,10 @@ function projectTransfer(config) {
     return {
         ...config, sourceId: '', targetId: '', projectIds: [], userMapping: {}, confirmation: '', previewData: null, busy: false, error: '',
         get sourceProjects() { return this.projects.filter(project => String(project.branch_id) === String(this.sourceId)); },
-        get mappedUsers() { const users = this.sourceProjects.filter(project => this.projectIds.includes(String(project.id)) || this.projectIds.includes(project.id)).flatMap(project => project.users || []); return [...new Map(users.map(user => [user.id, user])).values()]; },
+        get mappedUsers() {
+            const userIds = new Set(this.sourceProjects.flatMap(project => project.user_ids || []).map(String));
+            return (this.branches.find(branch => String(branch.id) === String(this.sourceId))?.users || []).filter(user => userIds.has(String(user.id)));
+        },
         get targetName() { return this.branches.find(branch => String(branch.id) === String(this.targetId))?.name || ''; },
         get canPreview() { return this.sourceId && this.targetId && this.projectIds.length && this.sourceId !== this.targetId; },
         get canSubmit() { return this.previewData && this.previewData.blockers.length === 0 && this.confirmation === this.targetName; },
@@ -104,7 +107,7 @@ function projectTransfer(config) {
             return data;
         },
         async preview() { this.syncMapping(); this.busy = true; this.error = ''; try { this.previewData = await this.request(this.previewUrl, {source_branch_id: this.sourceId, target_branch_id: this.targetId, project_ids: this.projectIds, user_mapping: this.userMapping}); } catch (error) { this.error = error.message; } finally { this.busy = false; } },
-        async submit() { this.syncMapping(); this.busy = true; this.error = ''; try { await this.request(this.storeUrl, {source_branch_id: this.sourceId, target_branch_id: this.targetId, project_ids: this.projectIds, user_mapping: this.userMapping, confirmation: this.confirmation, target_branch_name: this.targetName}); window.location.href = '{{ route('projects.index') }}'; } catch (error) { this.error = error.message; } finally { this.busy = false; } },
+        async submit() { this.syncMapping(); this.busy = true; this.error = ''; try { await this.request(this.storeUrl, {source_branch_id: this.sourceId, target_branch_id: this.targetId, project_ids: this.projectIds, user_mapping: this.userMapping, confirmation: this.confirmation}); window.location.href = '{{ route('projects.index') }}'; } catch (error) { this.error = error.message; } finally { this.busy = false; } },
     };
 }
 </script>

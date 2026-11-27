@@ -487,8 +487,11 @@ Route::middleware(['auth', 'active', 'verified', 'password.changed', 'operationa
     Route::middleware(['permission:projects.manage', 'system.admin:projects'])->group(function () {
         Route::bind('project', fn ($v) => LeadMaster::findOrFail($v));
         Route::get('/projects/transfer/create', [ProjectTransferController::class, 'create'])->middleware(['not.impersonating', 'module.maintenance:projects'])->name('projects.transfer.create');
+        Route::get('/projects/transfer/history', [ProjectTransferController::class, 'history'])->middleware(['not.impersonating', 'module.maintenance:projects'])->name('projects.transfer.history');
         Route::post('/projects/transfer/preview', [ProjectTransferController::class, 'preview'])->middleware(['not.impersonating', 'module.maintenance:projects'])->name('projects.transfer.preview');
         Route::post('/projects/transfer', [ProjectTransferController::class, 'store'])->middleware(['not.impersonating', 'module.maintenance:projects'])->name('projects.transfer.store');
+        Route::post('/projects/transfer/{batch}/rollback', [ProjectTransferController::class, 'rollback'])->middleware(['not.impersonating', 'module.maintenance:projects'])->name('projects.transfer.rollback');
+        Route::post('/projects/transfer/{batch}/rebuild', [ProjectTransferController::class, 'rebuild'])->middleware(['not.impersonating', 'module.maintenance:projects'])->name('projects.transfer.rebuild');
         Route::resource('projects', ProjectController::class)
             ->middleware('module.maintenance:projects')
             ->middlewareFor(['store', 'update', 'destroy'], 'not.impersonating');

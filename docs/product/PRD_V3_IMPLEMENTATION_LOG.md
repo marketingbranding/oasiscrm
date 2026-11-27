@@ -58,7 +58,7 @@ PRD sumber kebenaran: `docs/product/PRD_OASIS_CRM_V3.md` versi 3.3 (D30–D33)
 | WP-2.9 | 2 | Penautan Lead ↔ Konsumen | Merged ke fase-2 pada `dea710e` melalui merge `--no-ff`; review diterima, kandidat HP diprioritaskan, cakupan Sheet dicatat. | BR terkait penautan Lead ↔ Konsumen |
 | WP-2.9b | 2 | Penautan Lead untuk cermin Sheet dan NUP | Merged ke fase-2 pada `15bdbde` melalui merge `--no-ff`; carry-over lima jalur teruji dan browser lengkap dipindah ke WP-2.7. | BR terkait penautan Lead ↔ Konsumen |
 | WP-3.1 | 3 | WhatsApp satu nomor | Belum mulai | BR-60–BR-64 |
-| WP-3.1-PC | 3 | Pemetaan pindah proyek antar cabang, Tahap A | Tahap A selesai; keputusan owner dicatat; Tahap B belum dimulai | PRD §9.3; proyek 28, cabang tujuan eksplisit, cache rebuild, rollback guarded |
+| WP-3.1-PC | 3 | Pemetaan pindah proyek antar cabang, Tahap A/B | Backend/UI berjalan; verifikasi dan gladi MariaDB belum selesai; produksi belum dieksekusi | PRD §9.3; proyek 28, cabang tujuan eksplisit, cache rebuild, rollback guarded |
 
 #### Keputusan owner WP-3.1-PC — 26 November 2026
 
@@ -73,7 +73,8 @@ PRD sumber kebenaran: `docs/product/PRD_OASIS_CRM_V3.md` versi 3.3 (D30–D33)
 - State migrasi tujuan dimulai sama dengan state asal; nilai lama masuk snapshot batch.
 - Mapping user diisi owner saat eksekusi. Contoh gladi: 5 `sales` + 1 `sales_coordinator` Pindah; user lain Tetap. Relasi organisasi terputus tetap blocker sampai diputuskan.
 - Rollback batch wajib menolak row yang `updated_at`-nya lebih baru dari waktu batch dan menampilkan daftar row, tidak menimpa diam-diam.
-- Blocker eksekusi tersisa: cabang tujuan belum dibuat/diisi Sheet, mapping user dan keputusan relasi belum lengkap, dry-run mismatch/identity/duplicate/cycle belum nol, cache rebuild belum lulus, snapshot state belum tersimpan, dan approval preview/maintenance/parity belum ada. Tahap B belum dimulai.
+- Tahap B menambah wizard owner-only, batch/snapshot transfer, mapping Pindah/Tetap/Keduanya, filter ownership Sheet, rebuild cache terisolasi, parity foreign-row count, guarded rollback, dan route history. `Keduanya` mempertahankan `users.branch_id` asal karena model hanya punya satu primary branch; membership tujuan aktif. Verifikasi fokus berjalan, tetapi suite penuh, build frontend, gladi MariaDB, dan UAT belum selesai. Cutover produksi tidak dijalankan.
+- Review lanjutan: authorization actor dipaksa pada preview/rebuild/rollback; batch memakai status `committed`, `completed`, dan `cache_failed`; rollback membandingkan snapshot pasca-transfer dan menolak batch parsial; mapping user dibatasi assignment aktif proyek terpilih; label Sheet ambigu/foreign diblokir dari jalur operasional, sementara row asing/unmapped tetap tersedia untuk audit; hash Konsumen Progress mempertahankan nomor row Sheet asli. Full suite Windows tetap macet tanpa output pada proses tunggal; bukti chunked: 207 tests, 206 passed, 1 skipped, 993 assertions. MariaDB 11.8.10 gladi blocked karena binary tidak tersedia.
 
 
 ### Verifikasi WP-2.9b — 24 November 2026

@@ -9,6 +9,8 @@ use Illuminate\Database\Eloquent\Collection;
 
 class DatabaseConsumerDetailService
 {
+    public function __construct(private readonly SheetProjectOwnershipService $ownership) {}
+
     public const HISTORY_SHEETS = [
         'bi_checking' => 'BI Checking',
         'PSJB' => 'PSJB',
@@ -150,7 +152,7 @@ class DatabaseConsumerDetailService
             ->whereNull('oasis_deleted_at')
             ->first($this->columns());
 
-        if (! $record) {
+        if (! $record || ! $this->ownership->isOperationallyOwned($branch, $record->row_data ?? [])) {
             throw $this->error('consumer_not_found', 'Detail konsumen tidak ditemukan.', 404);
         }
 
@@ -226,7 +228,10 @@ class DatabaseConsumerDetailService
             ->limit($limit)
             ->get($this->columns());
 
-        return $rows->filter(fn (DatabaseSheetRecord $row) => in_array($this->value($row, $field), $values, true))->values();
+        return $rows
+            ->filter(fn (DatabaseSheetRecord $row): bool => in_array($this->value($row, $field), $values, true))
+            ->filter(fn (DatabaseSheetRecord $row): bool => $this->ownership->isOperationallyOwned($branch, $row->row_data ?? []))
+            ->values();
     }
 
     private function assertProducedIdsBelongToRows(Branch $branch, string $sheetName, string $field, Collection $rows): void

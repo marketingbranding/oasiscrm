@@ -46,12 +46,43 @@ class DatabaseSheetMetadataTest extends TestCase
         ]);
 
         $result = (new DatabaseSheetSyncService($googleSheets))->syncBranch($branch);
-
         $this->assertTrue($result['ok'], $result['message']);
         $record = DatabaseSheetRecord::firstOrFail();
         $this->assertSame('select', $record->column_metadata['status']['type']);
         $this->assertSame(['Aktif', 'Tidak Aktif'], $record->column_metadata['status']['options']);
         $this->assertSame('date', $record->column_metadata['tanggal']['type']);
+    }
+
+    public function test_sync_keeps_fallback_identity_when_row_content_changes(): void
+    {
+        $branch = Branch::create([
+            'name' => 'Stable Identity',
+            'code' => 'SID',
+            'sheet_id' => 'stable-sheet',
+            'is_active' => true,
+        ]);
+        $googleSheets = Mockery::mock(GoogleSheetsApiService::class);
+        $googleSheets->shouldReceive('sheetTitles')->twice()->with('stable-sheet')->andReturn(['Leads']);
+        $googleSheets->shouldReceive('quoteSheetName')->twice()->with('Leads')->andReturn("'Leads'");
+        $googleSheets->shouldReceive('batchGetRaw')->twice()->with('stable-sheet', ["'Leads'!A:ZZ"], 'FORMATTED_VALUE')->andReturnUsing(
+            static function (): array {
+                static $call = 0;
+
+                return ['Leads' => [['nama'], [$call++ === 0 ? 'Lama' : 'Baru']]];
+            },
+        );
+        $googleSheets->shouldReceive('batchGetRaw')->twice()->with('stable-sheet', ["'Leads'!A:ZZ"], 'FORMULA')->andReturnUsing(
+            fn (): array => ['Leads' => [['nama'], ['']]],
+        );
+        $googleSheets->shouldReceive('columnMetadata')->twice()->with('stable-sheet', ['Leads'])->andReturn(['Leads' => []]);
+
+        $service = new DatabaseSheetSyncService($googleSheets);
+        $service->syncBranch($branch);
+        $first = DatabaseSheetRecord::firstOrFail()->oasis_sync_id;
+        $service->syncBranch($branch);
+        $second = DatabaseSheetRecord::firstOrFail()->oasis_sync_id;
+
+        $this->assertSame($first, $second);
     }
 
     public function test_sheet_endpoint_returns_column_metadata(): void

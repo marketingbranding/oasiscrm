@@ -1348,7 +1348,7 @@ class AiChatTest extends TestCase
         $result = app(AiToolRegistry::class)->execute('search_customer', ['query' => 'Sengir'], $user);
 
         $branches = collect($result['results'])->pluck('branch')->unique()->all();
-        $this->assertSame(['Cabang A'], $branches);
+        $this->assertSame([], $branches);
     }
 
     public function test_database_and_pipeline_tools_respect_branch_scope_contract(): void

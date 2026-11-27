@@ -141,7 +141,7 @@ class LegacyConsumerReadService
             ->where('branch_id', $branch->id)
             ->where('sheet_name', 'data_konsumen')
             ->get(['row_data', 'ownership_status']) as $row) {
-            if (! $this->ownership->allowsOperationalRow($branch, $row->ownership_status, $row->row_data ?? [])) {
+            if ($row->ownership_status === 'foreign') {
                 continue;
             }
             $name = $this->value($this->data($row->row_data), ['project_name', 'proyek', 'project']);

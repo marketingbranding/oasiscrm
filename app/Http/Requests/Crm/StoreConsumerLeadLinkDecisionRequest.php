@@ -9,6 +9,7 @@ use App\Models\ConsumerNup;
 use App\Models\KonsumenProgressSheetRow;
 use App\Services\ConsumerLeadLinkSubjectResolver;
 use App\Services\OrganizationScopeService;
+use App\Services\SheetProjectOwnershipService;
 use Illuminate\Contracts\Validation\Validator;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
@@ -55,10 +56,14 @@ class StoreConsumerLeadLinkDecisionRequest extends FormRequest
         }
 
         $resolver = app(ConsumerLeadLinkSubjectResolver::class);
+        $row = $type === 'sheet' ? KonsumenProgressSheetRow::query()->findOrFail((int) $id) : null;
+        if ($row !== null && ! app(SheetProjectOwnershipService::class)->allowsOperationalRow($row->branch, $row->ownership_status, $row->row_data ?? [])) {
+            return null;
+        }
 
         return match ($type) {
             'nup' => $resolver->fromNup(ConsumerNup::query()->with('customer')->findOrFail((int) $id)),
-            'sheet' => $resolver->fromSheetRow(KonsumenProgressSheetRow::query()->findOrFail((int) $id)),
+            'sheet' => $resolver->fromSheetRow($row),
             default => null,
         };
     }

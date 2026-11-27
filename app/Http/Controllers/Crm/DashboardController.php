@@ -314,7 +314,9 @@ class DashboardController extends Controller
             $query->whereIn('branch_id', Branch::where('is_active', true)->pluck('id'));
         }
 
-        $rows = $query->get(['branch_id', 'sheet_name', 'row_data']);
+        $rows = $query->where(function ($query): void {
+            $query->whereNull('ownership_status')->orWhere('ownership_status', 'owned');
+        })->get(['branch_id', 'sheet_name', 'row_data']);
 
         $rowsBySheet = [];
         foreach ($rows as $row) {

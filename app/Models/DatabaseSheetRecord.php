@@ -18,6 +18,7 @@ class DatabaseSheetRecord extends Model
         'formula_columns',
         'column_metadata',
         'sync_status',
+        'ownership_status',
         'last_sync_error',
         'last_synced_at',
         'oasis_deleted_at',

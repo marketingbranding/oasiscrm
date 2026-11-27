@@ -46,7 +46,9 @@ final class BranchParityReportService
             ]));
         }
 
-        $foreignRows = KonsumenProgressSheetRow::query()->where('branch_id', $branch->id)->get()->filter(fn (KonsumenProgressSheetRow $row): bool => ! $this->ownership->isOperationallyOwned($branch, $row->row_data ?? []))->count();
+        $ownershipRows = KonsumenProgressSheetRow::query()->where('branch_id', $branch->id)->get()->map(fn (KonsumenProgressSheetRow $row): string => $this->ownership->classify($branch, $row->ownership_status, $row->row_data ?? []));
+        $foreignRows = $ownershipRows->countBy()->get('foreign', 0);
+        $unmappedRows = $ownershipRows->countBy()->get('unmapped', 0);
         $applications = ConsumerApplication::query()->where('branch_id', $branch->id)->get();
         $statusCounts = $applications->countBy(fn (ConsumerApplication $application): string => $application->canonicalTransactionStatus());
         $occupied = $applications->filter(fn (ConsumerApplication $application): bool => $application->kavling_id !== null && $application->canonicalTransactionStatus() === 'LANJUT')->pluck('kavling_id')->unique()->count();
@@ -55,8 +57,9 @@ final class BranchParityReportService
             'akad_by_month' => $applications->whereNotNull('akad_date')->countBy(fn (ConsumerApplication $application): string => $application->akad_date->format('Y-m')),
             'last_process' => $applications->countBy(fn (ConsumerApplication $application): string => (string) ($application->current_stage ?: 'BELUM ADA')),
             'occupied_kavling' => $occupied,
-            'sheet_rows' => KonsumenProgressSheetRow::query()->where('branch_id', $branch->id)->count() - $foreignRows,
+            'sheet_rows' => $ownershipRows->count() - $foreignRows,
             'foreign_project_rows' => $foreignRows,
+            'unmapped_project_rows' => $unmappedRows,
             'oasis_transactions' => $applications->count(),
             'per_side' => $sideMetrics,
             'delta' => $this->metricDelta($sideMetrics),
@@ -75,7 +78,7 @@ final class BranchParityReportService
         if (! $complete) {
             $summary['alasan_tidak_lengkap'] = $metrics['sheet_rows'] === 0 ? 'Cermin sheet kosong.' : 'Sinkronisasi terakhir tidak sukses atau sudah basi.';
         }
-        $status = ! $complete ? 'TIDAK_LENGKAP' : (array_sum(array_diff_key($summary, ['alasan_tidak_lengkap' => true])) === 0 ? 'LULUS' : 'GAGAL');
+        $status = ! $complete ? 'TIDAK_LENGKAP' : ($differences->isEmpty() ? 'LULUS' : 'GAGAL');
 
         $differences = $differences->values()->all();
         ConsumerParitySnapshot::create([

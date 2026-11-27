@@ -89,9 +89,10 @@ class DatabaseController extends Controller
                     'row_data',
                     'formula_columns',
                     'column_metadata',
+                    'ownership_status',
                     'updated_at',
                 ])
-                ->filter(fn (DatabaseSheetRecord $record): bool => $this->ownership->isOwnedOrUnmapped($selectedBranch, $record->row_data ?? []))
+                ->filter(fn (DatabaseSheetRecord $record): bool => $this->ownership->allowsOperationalRow($selectedBranch, $record->ownership_status, $record->row_data ?? []))
                 ->values()
                 ->all();
         }
@@ -184,8 +185,8 @@ class DatabaseController extends Controller
             ->where('sheet_name', $sheetName)
             ->whereNull('oasis_deleted_at')
             ->orderBy('row_number')
-            ->get(['id', 'row_number', 'oasis_sync_id', 'row_data', 'headers', 'formula_columns', 'column_metadata', 'updated_at'])
-            ->filter(fn (DatabaseSheetRecord $record): bool => $this->ownership->isOwnedOrUnmapped($branch, $record->row_data ?? []))
+            ->get(['id', 'row_number', 'oasis_sync_id', 'row_data', 'headers', 'formula_columns', 'column_metadata', 'ownership_status', 'updated_at'])
+            ->filter(fn (DatabaseSheetRecord $record): bool => $this->ownership->allowsOperationalRow($branch, $record->ownership_status, $record->row_data ?? []))
             ->values();
 
         $sample = $rows->first();
@@ -306,7 +307,7 @@ class DatabaseController extends Controller
             $recordWasReplaced = (bool) $record;
         }
         abort_unless($record, 404);
-        abort_unless($this->ownership->isOwnedOrUnmapped($record->branch, $record->row_data ?? []), 404);
+        abort_unless($this->ownership->allowsOperationalRow($record->branch, $record->ownership_status, $record->row_data ?? []), 404);
         self::authorizeSupportedSheet($record->sheet_name);
 
         $branch = $record->branch;
@@ -384,7 +385,7 @@ class DatabaseController extends Controller
             return back()->with('error', 'Branch tidak ditemukan.');
         }
 
-        abort_unless($this->ownership->isOwnedOrUnmapped($branch, $record->row_data ?? []), 404);
+        abort_unless($this->ownership->allowsOperationalRow($branch, $record->ownership_status, $record->row_data ?? []), 404);
         $user = Auth::user();
         abort_unless($user->hasPermission('database.edit'), 403);
         abort_unless(in_array((int) $branch->id, $this->organizationScope->branchIds($user, 'database', 'manage'), true), 403);
@@ -458,8 +459,8 @@ class DatabaseController extends Controller
             ->where('sheet_name', 'data_konsumen')
             ->whereNull('oasis_deleted_at')
             ->orderBy('row_number')
-            ->get(['row_number', 'headers', 'formula_columns', 'row_data'])
-            ->filter(fn (DatabaseSheetRecord $record): bool => $this->ownership->isOwnedOrUnmapped($branch, $record->row_data ?? []));
+            ->get(['row_number', 'headers', 'formula_columns', 'row_data', 'ownership_status'])
+            ->filter(fn (DatabaseSheetRecord $record): bool => $this->ownership->allowsOperationalRow($branch, $record->ownership_status, $record->row_data ?? []));
         $latest = [];
         foreach ($rows as $row) {
             if (in_array('no_ktp', $row->formula_columns ?? [], true)) {

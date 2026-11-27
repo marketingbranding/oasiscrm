@@ -171,13 +171,22 @@ class KonsumenPipelineService
             ->where('branch_id', $branch->id)
             ->whereIn('sheet_name', self::SHEETS)
             ->orderBy('id')
-            ->get(['sheet_name', 'row_data']);
+            ->get(['sheet_name', 'row_data', 'ownership_status']);
+        $operationalRows = $rows->filter(fn (KonsumenProgressSheetRow $row): bool => $this->ownership->allowsOperationalRow($branch, $row->ownership_status, $row->row_data ?? []));
+        $operationalCustomerIds = $operationalRows
+            ->where('sheet_name', 'data_konsumen')
+            ->mapWithKeys(fn (KonsumenProgressSheetRow $row): array => [$this->idKavling($row->row_data ?? []) => true])
+            ->filter(fn (bool $exists, string $idKavling): bool => $idKavling !== '');
 
         foreach ($rows as $row) {
-            if (! $this->ownership->isOperationallyOwned($branch, $row->row_data ?? [])) {
+            $data = $row->row_data ?? [];
+            $isLegacyStageRow = $row->ownership_status === null
+                && $row->sheet_name !== 'data_konsumen'
+                && isset($operationalCustomerIds[$this->idKavling($data)]);
+            if (! $this->ownership->allowsOperationalRow($branch, $row->ownership_status, $data) && ! $isLegacyStageRow) {
                 continue;
             }
-            $rowsBySheet[$row->sheet_name][] = $row->row_data ?? [];
+            $rowsBySheet[$row->sheet_name][] = $data;
         }
 
         return $rowsBySheet;

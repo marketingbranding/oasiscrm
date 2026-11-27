@@ -31,6 +31,20 @@ class SheetProjectOwnershipTest extends TestCase
         $this->assertSame(1, $result['foreign_project_rows']);
         $this->assertSame(1, $result['unmapped_project_rows']);
         $this->assertSame('Proyek Lain', $project->project_name);
+        $this->assertSame(['foreign', 'unmapped', 'unmapped'], $result['statuses']);
+    }
+
+    public function test_br31_foreign_rows_are_retained_only_in_audit_output(): void
+    {
+        $branch = $this->branch('Asal', 'ASL', 'sheet-asal');
+        $foreignBranch = $this->branch('Lain', 'LAIN', 'sheet-lain');
+        LeadMaster::create(['branch_id' => $foreignBranch->id, 'project_name' => 'Proyek Lain', 'is_active' => true]);
+
+        $result = app(SheetProjectOwnershipService::class)->filterRows($branch, [['project_name' => 'Proyek Lain']]);
+
+        $this->assertSame([], $result['rows']);
+        $this->assertSame([['project_name' => 'Proyek Lain']], $result['all_rows']);
+        $this->assertSame(['foreign'], $result['statuses']);
     }
 
     public function test_br31_ambiguous_project_label_is_excluded_from_operational_rows(): void
@@ -46,6 +60,14 @@ class SheetProjectOwnershipTest extends TestCase
         $this->assertSame(1, $result['foreign_project_rows']);
     }
 
+    public function test_br31_unlabeled_row_is_not_operationally_owned_when_catalog_is_branch_scoped(): void
+    {
+        $branch = $this->branch('Asal', 'ASL', 'sheet-asal');
+        LeadMaster::create(['branch_id' => $branch->id, 'project_name' => 'Proyek Asal', 'is_active' => true]);
+
+        $this->assertFalse(app(SheetProjectOwnershipService::class)->isOperationallyOwned($branch, ['nama' => 'Tanpa proyek']));
+    }
+
     public function test_br31_unknown_project_label_is_not_operationally_owned_when_catalog_is_branch_scoped(): void
     {
         $branch = $this->branch('Asal', 'ASL', 'sheet-asal');
@@ -56,7 +78,7 @@ class SheetProjectOwnershipTest extends TestCase
         $this->assertFalse(app(SheetProjectOwnershipService::class)->isOperationallyOwned($branch, ['project_name' => 'Belum Terdaftar']));
     }
 
-    public function test_br31_database_sheet_and_pipeline_reads_keep_unmapped_rows_without_foreign_rows(): void
+    public function test_br31_database_sheet_and_pipeline_reads_exclude_unmapped_and_foreign_rows(): void
     {
         $branch = $this->branch('Asal', 'ASL', 'sheet-asal');
         $foreignBranch = $this->branch('Lain', 'LAIN', 'sheet-lain');
@@ -70,6 +92,7 @@ class SheetProjectOwnershipTest extends TestCase
             'headers' => ['project_name'],
             'formula_columns' => [],
             'column_metadata' => [],
+            'ownership_status' => 'foreign',
         ]);
         DatabaseSheetRecord::create([
             'branch_id' => $branch->id,
@@ -80,12 +103,13 @@ class SheetProjectOwnershipTest extends TestCase
             'headers' => ['nama'],
             'formula_columns' => [],
             'column_metadata' => [],
+            'ownership_status' => 'unmapped',
         ]);
 
         $user = User::factory()->create(['role_id' => Role::query()->where('slug', 'superadmin')->value('id'), 'password_changed_at' => now()]);
         $response = $this->actingAs($user)->getJson(route('database.sheet', ['branchId' => $branch->id, 'sheetName' => 'data_konsumen']));
 
-        $response->assertOk()->assertJsonCount(1, 'records')->assertJsonPath('records.0.row_number', 3);
+        $response->assertOk()->assertJsonCount(0, 'records');
     }
 
     private function branch(string $name, string $code, string $sheetId): Branch

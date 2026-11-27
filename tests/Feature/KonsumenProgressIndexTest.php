@@ -192,6 +192,37 @@ class KonsumenProgressIndexTest extends TestCase
         $response->assertOk()->assertViewHas('readSource', 'legacy')->assertSee('Legacy Budi')->assertDontSee('Local Budi');
     }
 
+    public function test_br31_legacy_pipeline_excludes_foreign_customer_with_unlabeled_stage_row(): void
+    {
+        [$branch, $user] = $this->branchAndUser();
+        $foreignBranch = Branch::create([
+            'name' => 'Foreign '.str()->random(4),
+            'code' => 'F'.str()->upper(str()->random(2)),
+            'is_active' => true,
+            'sheet_id' => 'sheet-foreign',
+        ]);
+        LeadMaster::create(['branch_id' => $foreignBranch->id, 'project_name' => 'Foreign Project', 'is_active' => true]);
+        KonsumenProgressSheetRow::create([
+            'branch_id' => $branch->id,
+            'sheet_id' => $branch->sheet_id,
+            'sheet_name' => 'data_konsumen',
+            'row_hash' => 'foreign-customer-'.$branch->id,
+            'row_data' => ['id_kavling' => 'F-01', 'nama_konsumen' => 'Foreign Budi', 'project_name' => 'Foreign Project'],
+        ]);
+        KonsumenProgressSheetRow::create([
+            'branch_id' => $branch->id,
+            'sheet_id' => $branch->sheet_id,
+            'sheet_name' => 'akad',
+            'row_hash' => 'foreign-stage-'.$branch->id,
+            'row_data' => ['id_kavling' => 'F-01'],
+        ]);
+
+        $response = $this->actingAs($user)->get(route('konsumen-progress.index'));
+
+        $response->assertOk()->assertDontSee('Foreign Budi');
+        $this->assertSame(0, array_sum(array_map('count', $response->viewData('pipeline'))));
+    }
+
     public function test_local_mode_renders_local_application_and_stage_counts_once(): void
     {
         config(['oasis.consumer_progress_read_source' => 'local']);

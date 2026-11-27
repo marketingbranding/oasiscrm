@@ -38,7 +38,10 @@ final class ConsumerIdentityBridgeAuditService
         $counts = array_fill_keys($fields, 0) + ['phone' => 0, 'kavling' => 0, 'status' => 0, 'nik' => 0];
 
         $identityIssues = ['project_ambiguous' => ['count' => 0, 'rows' => []], 'project_not_found' => ['count' => 0, 'rows' => []]];
-        foreach (KonsumenProgressSheetRow::where('branch_id', $branch->id)->where('sheet_name', 'data_konsumen')->get(['row_data']) as $row) {
+        foreach (KonsumenProgressSheetRow::where('branch_id', $branch->id)->where('sheet_name', 'data_konsumen')->get(['row_data', 'ownership_status']) as $row) {
+            if ($row->ownership_status === 'foreign') {
+                continue;
+            }
             $data = $this->normalized($row->row_data ?? []);
             $projectName = $data['project_name'] ?? $data['proyek'] ?? $data['project'] ?? '';
             if ($projectName !== '') {

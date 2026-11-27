@@ -82,7 +82,7 @@ class KonsumenProgressSyncService
 
         try {
             $ranges = array_map(fn ($sheet) => $this->quoteSheetName($sheet).'!A:Z', self::SHEETS);
-            $sheetRows = $this->googleSheets->batchGet($branch->sheet_id, $ranges);
+            $sheetRows = $this->googleSheets->batchGetWithRowNumbers($branch->sheet_id, $ranges);
             foreach (self::SHEETS as $sheetName) {
                 if (! array_key_exists($sheetName, $sheetRows)) {
                     throw new \RuntimeException('Respons Google Sheets tidak lengkap. Cache lokal tidak diubah.');
@@ -95,13 +95,13 @@ class KonsumenProgressSyncService
                 KonsumenProgressSheetRow::where('branch_id', $branch->id)->delete();
 
                 foreach (self::SHEETS as $sheetName) {
-                    $rows = $sheetRows[$sheetName] ?? [];
-                    $filtered = $this->ownership->filterRows($branch, $rows);
+                    $sheet = $sheetRows[$sheetName] ?? ['rows' => [], 'row_indexes' => []];
+                    $filtered = $this->ownership->filterRows($branch, $sheet['rows']);
                     $summary[$sheetName] = count($filtered['rows']);
                     $summary[$sheetName.'_foreign_project_rows'] = $filtered['foreign_project_rows'];
                     $summary[$sheetName.'_unmapped_project_rows'] = $filtered['unmapped_project_rows'];
 
-                    foreach (array_chunk($this->buildInsertRows($branch, $sheetName, $filtered['rows'], $filtered['row_indexes'], $syncedAt), 500) as $chunk) {
+                    foreach (array_chunk($this->buildInsertRows($branch, $sheetName, $filtered['all_rows'], $sheet['row_indexes'], $filtered['statuses'], $syncedAt), 500) as $chunk) {
                         if (! empty($chunk)) {
                             KonsumenProgressSheetRow::insert($chunk);
                         }
@@ -141,14 +141,15 @@ class KonsumenProgressSyncService
         return $query->get()->map(fn (Branch $branch) => $this->syncBranch($branch))->all();
     }
 
-    private function buildInsertRows(Branch $branch, string $sheetName, array $rows, array $rowIndexes, $syncedAt): array
+    private function buildInsertRows(Branch $branch, string $sheetName, array $rows, array $rowIndexes, array $statuses, $syncedAt): array
     {
-        return array_map(function (array $row, int $index) use ($branch, $sheetName, $rowIndexes, $syncedAt) {
+        return array_map(function (array $row, int $index) use ($branch, $sheetName, $rowIndexes, $statuses, $syncedAt) {
             return [
                 'branch_id' => $branch->id,
                 'sheet_id' => $branch->sheet_id,
                 'sheet_name' => $sheetName,
                 'row_hash' => hash('sha256', $sheetName.'|'.($rowIndexes[$index] ?? $index)),
+                'ownership_status' => $statuses[$index] ?? 'owned',
                 'row_data' => json_encode($row),
                 'synced_at' => $syncedAt,
                 'created_at' => now(),

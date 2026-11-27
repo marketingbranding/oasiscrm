@@ -104,7 +104,7 @@ class SyncProgressTest extends TestCase
     {
         [$branch, $user] = $this->branchAndUser();
         $google = Mockery::mock(GoogleSheetsApiService::class);
-        $google->shouldReceive('batchGet')->once()->andThrow(new RuntimeException('Google unavailable'));
+        $google->shouldReceive('batchGetWithRowNumbers')->once()->andThrow(new RuntimeException('Google unavailable'));
 
         $result = (new KonsumenProgressSyncService($google))->syncBranch($branch, $user->id);
 
@@ -121,8 +121,8 @@ class SyncProgressTest extends TestCase
         $service = new KonsumenProgressSyncService(Mockery::mock(GoogleSheetsApiService::class));
         $method = new \ReflectionMethod($service, 'buildInsertRows');
         $method->setAccessible(true);
-        $first = $method->invoke($service, $branch, 'data_konsumen', [['nama' => 'Lama']], [4], now())[0]['row_hash'];
-        $second = $method->invoke($service, $branch, 'data_konsumen', [['nama' => 'Baru']], [4], now())[0]['row_hash'];
+        $first = $method->invoke($service, $branch, 'data_konsumen', [['nama' => 'Lama']], [4], ['owned'], now())[0]['row_hash'];
+        $second = $method->invoke($service, $branch, 'data_konsumen', [['nama' => 'Baru']], [4], ['owned'], now())[0]['row_hash'];
 
         $this->assertSame($first, $second);
     }

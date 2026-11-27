@@ -31,6 +31,7 @@ final class ProjectTransferService
         'sales_onboarding_proposals' => 'project_id',
         'marison_project_mappings' => 'oasis_project_id',
         'marison_import_transactions' => 'resolved_project_id',
+        'organization_assignments' => 'project_id',
     ];
 
     /** @return array<string, mixed> */
@@ -364,22 +365,20 @@ final class ProjectTransferService
             return;
         }
         $query = DB::table($table)->whereIn($column, $projectIds);
-        if (Schema::hasColumn($table, 'branch_id')) {
-            $query->where('branch_id', $sourceBranchId);
-        }
-        if (Schema::hasColumn($table, 'deleted_at')) {
-            $query->whereNull('deleted_at');
-        }
-        $rows = $query->lockForUpdate()->get();
-        if (Schema::hasColumn($table, 'branch_id') && DB::table($table)->whereIn($column, $projectIds)->where(function ($query) use ($sourceBranchId): void {
-            $query->whereNull('branch_id')->orWhere('branch_id', '!=', $sourceBranchId);
-        })->exists()) {
+        $allRows = $query->lockForUpdate()->get();
+        if (Schema::hasColumn($table, 'branch_id') && $allRows->contains(fn ($row): bool => $row->branch_id === null || (int) $row->branch_id !== $sourceBranchId)) {
             throw ValidationException::withMessages(['transfer' => "Data {$table} memiliki branch_id yang tidak sesuai cabang asal."]);
         }
+        $rows = Schema::hasColumn($table, 'branch_id')
+            ? $allRows->filter(fn ($row): bool => (int) $row->branch_id === $sourceBranchId)
+            : $allRows;
         foreach ($rows as $row) {
             $values = (array) $row;
             if (array_key_exists('branch_id', $values)) {
                 $updates = ['branch_id' => $targetBranchId];
+                if ($table === 'organization_assignments' && Schema::hasColumn($table, 'organization_unit_id') && Schema::hasTable('organization_units')) {
+                    $updates['organization_unit_id'] = DB::table('organization_units')->where('branch_id', $targetBranchId)->value('id');
+                }
                 if (array_key_exists('updated_at', $values)) {
                     $updates['updated_at'] = now();
                 }
@@ -422,7 +421,7 @@ final class ProjectTransferService
             return;
         }
 
-        $assignments = DB::table('project_user')->whereIn('project_id', $projectIds)->lockForUpdate()->get();
+        $assignments = DB::table('project_user')->whereIn('project_id', $projectIds)->where('is_active', true)->lockForUpdate()->get();
         foreach ($assignments as $assignment) {
             $decision = $mapping[(string) $assignment->user_id] ?? $mapping[$assignment->user_id] ?? null;
             if (! in_array($decision, ['pindah', 'tetap', 'keduanya'], true)) {
@@ -469,7 +468,17 @@ final class ProjectTransferService
             if ($decision !== 'tetap' && $membership !== null) {
                 $user = DB::table('users')->where('id', $userId)->lockForUpdate()->first();
                 if ($decision === 'pindah') {
-                    $this->snapshotAndUpdate($batch, 'users', $userId, (array) $user, ['branch_id' => $targetId, 'updated_at' => now()]);
+                    $updates = ['branch_id' => $targetId, 'updated_at' => now()];
+                    if (Schema::hasColumn('users', 'organization_unit_id')) {
+                        $updates['organization_unit_id'] = Schema::hasTable('organization_units')
+                            ? DB::table('organization_units')->where('branch_id', $targetId)->value('id')
+                            : null;
+                        if ($updates['organization_unit_id'] === null) {
+                            throw ValidationException::withMessages(['transfer' => 'Cabang tujuan belum memiliki unit organisasi.']);
+                        }
+                    }
+                    $this->snapshotAndUpdate($batch, 'users', $userId, (array) $user, $updates);
+                    $this->moveUserOrganizationAssignments($batch, $userId, $sourceId, $targetId);
                 } else {
                     $this->snapshot($batch, 'users', $userId, (array) $user);
                 }
@@ -507,6 +516,29 @@ final class ProjectTransferService
                     ]);
                 }
             }
+        }
+    }
+
+    private function moveUserOrganizationAssignments(ProjectTransferBatch $batch, int $userId, int $sourceId, int $targetId): void
+    {
+        if (! Schema::hasTable('organization_assignments')) {
+            return;
+        }
+
+        $assignments = DB::table('organization_assignments')
+            ->where('user_id', $userId)
+            ->where('is_active', true)
+            ->where(function ($query) use ($sourceId): void {
+                $query->where('branch_id', $sourceId)->orWhereNull('branch_id');
+            })
+            ->lockForUpdate()
+            ->get();
+        foreach ($assignments as $assignment) {
+            $updates = ['branch_id' => $targetId, 'updated_at' => now()];
+            if (Schema::hasColumn('organization_assignments', 'organization_unit_id') && Schema::hasTable('organization_units')) {
+                $updates['organization_unit_id'] = DB::table('organization_units')->where('branch_id', $targetId)->value('id');
+            }
+            $this->snapshotAndUpdate($batch, 'organization_assignments', (int) $assignment->id, (array) $assignment, $updates);
         }
     }
 

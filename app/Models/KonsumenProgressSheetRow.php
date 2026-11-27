@@ -12,6 +12,7 @@ class KonsumenProgressSheetRow extends Model
         'sheet_id',
         'sheet_name',
         'row_hash',
+        'ownership_status',
         'row_data',
         'synced_at',
     ];

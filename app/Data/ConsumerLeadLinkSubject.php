@@ -37,7 +37,9 @@ final readonly class ConsumerLeadLinkSubject
     {
         return match ($this->subjectType) {
             'application', 'nup' => $this->subjectType.':'.$this->subjectId,
-            'sheet' => 'sheet:'.$this->branchId.':'.$this->legacyConsumerKey,
+            'sheet' => $this->legacyConsumerKey === null
+                ? throw new \LogicException('Sheet row tidak memiliki ID Konsumen yang dapat ditautkan.')
+                : 'sheet:'.$this->branchId.':'.$this->legacyConsumerKey,
             default => throw new \LogicException('Jenis subjek penautan Lead tidak valid.'),
         };
     }

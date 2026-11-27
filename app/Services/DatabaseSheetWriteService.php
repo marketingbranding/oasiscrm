@@ -52,6 +52,7 @@ class DatabaseSheetWriteService
                 'oasis_sync_id' => $record->oasis_sync_id ?: $rowData['oasis_sync_id'],
                 'row_data' => $rowData,
                 'sync_status' => 'synced',
+                'ownership_status' => 'owned',
                 'last_sync_error' => null,
                 'last_synced_at' => now(),
             ]);
@@ -122,6 +123,7 @@ class DatabaseSheetWriteService
                 'formula_columns' => $formulaColumns,
                 'column_metadata' => $columnMetadata,
                 'sync_status' => 'synced',
+                'ownership_status' => 'owned',
                 'last_synced_at' => now(),
             ]);
 
@@ -160,6 +162,7 @@ class DatabaseSheetWriteService
                 'oasis_deleted_at' => $deletedAt,
                 'oasis_deleted_by' => $userId,
                 'sync_status' => 'synced',
+                'ownership_status' => 'owned',
                 'last_sync_error' => null,
                 'last_synced_at' => now(),
             ]);

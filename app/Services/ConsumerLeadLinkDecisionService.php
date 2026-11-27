@@ -133,7 +133,8 @@ final class ConsumerLeadLinkDecisionService
             $rowQuery->lockForUpdate();
             $nupQuery->lockForUpdate();
         }
-        $rows = $rowQuery->get()->filter(fn (KonsumenProgressSheetRow $row): bool => $this->ownership->isOperationallyOwned(Branch::query()->findOrFail($branchId), $row->row_data ?? []));
+        $branch = Branch::query()->findOrFail($branchId);
+        $rows = $rowQuery->get()->filter(fn (KonsumenProgressSheetRow $row): bool => $this->ownership->allowsOperationalRow($branch, $row->ownership_status, $row->row_data ?? []))->filter(fn (KonsumenProgressSheetRow $row): bool => app(ConsumerLeadLinkSubjectResolver::class)->fromSheetRow($row)->isDecidable);
         $nups = $nupQuery->get();
         $resolver = app(ConsumerLeadLinkSubjectResolver::class);
         $projectIds = $nups->pluck('project_id')->filter()->merge([$projectId])->filter()->unique()->values()->all();
@@ -161,6 +162,12 @@ final class ConsumerLeadLinkDecisionService
     ): ConsumerLeadLinkDecision {
         if (! $subject->isDecidable) {
             throw ValidationException::withMessages(['subject' => $subject->note ?? 'Subjek tidak dapat diputuskan.']);
+        }
+        if ($subject->subjectType === ConsumerLeadLinkDecision::SUBJECT_SHEET) {
+            $row = KonsumenProgressSheetRow::query()->findOrFail($subject->sheetRowId);
+            if ($row->ownership_status === 'foreign') {
+                throw new AuthorizationException('Baris Sheet berada di luar kepemilikan operasional cabang.');
+            }
         }
 
         if ($subject->subjectType === ConsumerLeadLinkDecision::SUBJECT_APPLICATION) {

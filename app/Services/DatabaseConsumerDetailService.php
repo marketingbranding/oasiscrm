@@ -152,7 +152,7 @@ class DatabaseConsumerDetailService
             ->whereNull('oasis_deleted_at')
             ->first($this->columns());
 
-        if (! $record || ! $this->ownership->isOperationallyOwned($branch, $record->row_data ?? [])) {
+        if (! $record || ! $this->ownership->allowsOperationalRow($branch, $record->ownership_status, $record->row_data ?? [])) {
             throw $this->error('consumer_not_found', 'Detail konsumen tidak ditemukan.', 404);
         }
 
@@ -230,7 +230,7 @@ class DatabaseConsumerDetailService
 
         return $rows
             ->filter(fn (DatabaseSheetRecord $row): bool => in_array($this->value($row, $field), $values, true))
-            ->filter(fn (DatabaseSheetRecord $row): bool => $this->ownership->isOperationallyOwned($branch, $row->row_data ?? []))
+            ->filter(fn (DatabaseSheetRecord $row): bool => $this->ownership->allowsOperationalRow($branch, $row->ownership_status, $row->row_data ?? []))
             ->values();
     }
 
@@ -273,7 +273,7 @@ class DatabaseConsumerDetailService
 
     private function columns(): array
     {
-        return ['id', 'sheet_name', 'row_number', 'headers', 'row_data', 'updated_at'];
+        return ['id', 'sheet_name', 'row_number', 'headers', 'row_data', 'ownership_status', 'updated_at'];
     }
 
     private function diagnostic(string $code, DatabaseSheetRecord $row, string $message): array

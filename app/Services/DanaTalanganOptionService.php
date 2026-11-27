@@ -70,8 +70,8 @@ class DanaTalanganOptionService
         $cachedRows = DatabaseSheetRecord::where('branch_id', $branch->id)
             ->where('sheet_name', 'data_kav')
             ->orderBy('row_number')
-            ->get(['row_data'])
-            ->filter(fn (DatabaseSheetRecord $row): bool => $this->ownership->isOperationallyOwned($branch, $row->row_data ?? []))
+            ->get(['row_data', 'ownership_status'])
+            ->filter(fn (DatabaseSheetRecord $row): bool => $this->ownership->allowsOperationalRow($branch, $row->ownership_status, $row->row_data ?? []))
             ->map(fn (DatabaseSheetRecord $row): array => $row->row_data ?? [])
             ->all();
         if (! empty($cachedRows)) {

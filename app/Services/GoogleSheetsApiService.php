@@ -58,6 +58,24 @@ class GoogleSheetsApiService
         return $result;
     }
 
+    /** @return array<string, array{rows: array<int, array>, row_indexes: array<int, int>}> */
+    public function batchGetWithRowNumbers(string $spreadsheetId, array $ranges): array
+    {
+        $response = $this->sheets->spreadsheets_values->batchGet($spreadsheetId, [
+            'ranges' => $ranges,
+            'majorDimension' => 'ROWS',
+        ]);
+
+        $result = [];
+        foreach ($response->getValueRanges() as $valueRange) {
+            $range = $valueRange->getRange();
+            $sheetName = $this->sheetNameFromRange($range);
+            $result[$sheetName] = $this->valuesToRowsWithIndexes($valueRange->getValues() ?? []);
+        }
+
+        return $result;
+    }
+
     public function sheetTitles(string $spreadsheetId): array
     {
         $spreadsheet = $this->sheets->spreadsheets->get($spreadsheetId, [
@@ -517,7 +535,7 @@ class GoogleSheetsApiService
     {
         $sheet = explode('!', $range, 2)[0];
 
-        return trim($sheet, "'");
+        return str_replace("''", "'", trim($sheet, "'"));
     }
 
     private function batchGetRanges(string $spreadsheetId, array $ranges): array
@@ -606,8 +624,14 @@ class GoogleSheetsApiService
 
     private function valuesToRows(array $values): array
     {
+        return $this->valuesToRowsWithIndexes($values)['rows'];
+    }
+
+    /** @return array{rows: array<int, array<string, string>>, row_indexes: array<int, int>} */
+    private function valuesToRowsWithIndexes(array $values): array
+    {
         if (count($values) < 2) {
-            return [];
+            return ['rows' => [], 'row_indexes' => []];
         }
 
         $rawHeaders = array_shift($values);
@@ -628,7 +652,8 @@ class GoogleSheetsApiService
         }
 
         $rows = [];
-        foreach ($values as $cells) {
+        $rowIndexes = [];
+        foreach ($values as $offset => $cells) {
             $row = [];
             foreach ($headers as $index => $header) {
                 if ($header === null) {
@@ -638,9 +663,10 @@ class GoogleSheetsApiService
             }
             if (count(array_filter($row, fn ($value) => $value !== '')) > 0) {
                 $rows[] = $row;
+                $rowIndexes[] = $offset + 2;
             }
         }
 
-        return $rows;
+        return ['rows' => $rows, 'row_indexes' => $rowIndexes];
     }
 }

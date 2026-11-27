@@ -18,6 +18,7 @@ use App\Services\ConsumerLeadLinkDecisionService;
 use App\Services\ConsumerLeadLinkSubjectResolver;
 use App\Services\ConsumerLeadLinkSuggestionService;
 use App\Services\OrganizationScopeService;
+use App\Services\SheetProjectOwnershipService;
 use App\Services\WorkspaceAccessService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -83,11 +84,16 @@ final class ConsumerDatabaseController extends Controller
     public function linkSubjectLeadOptions(Request $request, string $subjectType, int $subjectId): JsonResponse
     {
         $resolver = app(ConsumerLeadLinkSubjectResolver::class);
+        $subjectRow = $subjectType === 'sheet' ? KonsumenProgressSheetRow::query()->findOrFail($subjectId) : null;
+        if ($subjectRow !== null) {
+            abort_unless(app(SheetProjectOwnershipService::class)->allowsOperationalRow($subjectRow->branch, $subjectRow->ownership_status, $subjectRow->row_data ?? []), 404);
+        }
         $subject = match ($subjectType) {
             'nup' => $resolver->fromNup(ConsumerNup::query()->with('customer')->findOrFail($subjectId)),
-            'sheet' => $resolver->fromSheetRow(KonsumenProgressSheetRow::query()->findOrFail($subjectId)),
+            'sheet' => $resolver->fromSheetRow($subjectRow),
             default => abort(404),
         };
+        abort_unless($subjectType !== 'sheet' || $subject->isDecidable, 404);
         abort_unless($request->user()->isAccountActive() && $request->user()->hasPermission('consumer_progress.view') && $this->organizationScope->allowsProjectRecord($request->user(), 'consumer_progress', 'view', $subject->branchId, $subject->projectId), 403);
         $search = trim((string) $request->query('search', ''));
         if (mb_strlen($search) < 2) {
@@ -103,11 +109,16 @@ final class ConsumerDatabaseController extends Controller
     public function showLinkSubject(Request $request, string $subjectType, int $subjectId): JsonResponse
     {
         $resolver = app(ConsumerLeadLinkSubjectResolver::class);
+        $subjectRow = $subjectType === 'sheet' ? KonsumenProgressSheetRow::query()->findOrFail($subjectId) : null;
+        if ($subjectRow !== null) {
+            abort_unless(app(SheetProjectOwnershipService::class)->allowsOperationalRow($subjectRow->branch, $subjectRow->ownership_status, $subjectRow->row_data ?? []), 404);
+        }
         $subject = match ($subjectType) {
             'nup' => $resolver->fromNup(ConsumerNup::query()->with('customer')->findOrFail($subjectId)),
-            'sheet' => $resolver->fromSheetRow(KonsumenProgressSheetRow::query()->findOrFail($subjectId)),
+            'sheet' => $resolver->fromSheetRow($subjectRow),
             default => abort(404),
         };
+        abort_unless($subjectType !== 'sheet' || $subject->isDecidable, 404);
         abort_unless($request->user()->isAccountActive() && $request->user()->hasPermission('consumer_progress.view') && $this->organizationScope->allowsProjectRecord($request->user(), 'consumer_progress', 'view', $subject->branchId, $subject->projectId), 403);
         $decisions = ConsumerLeadLinkDecision::query()->with('salesLead:id,customer_name')->where('subject_key', $subject->subjectKey())->latest('decided_at')->get();
         $active = $decisions->firstWhere('is_active', true);

@@ -125,7 +125,7 @@ final class ConsumerDatabaseWorkspaceService
 
         $resolver = app(ConsumerLeadLinkSubjectResolver::class);
         $scopedProjectIds = array_values(array_intersect($projectIds, $this->organizationScope->projectIds($user, 'consumer_progress', 'view')));
-        $rows = KonsumenProgressSheetRow::query()->where('branch_id', $branch->id)->where('sheet_name', 'data_konsumen')->orderByDesc('id')->get()->filter(fn (KonsumenProgressSheetRow $row): bool => $this->ownership->isOperationallyOwned($branch, $row->row_data ?? []));
+        $rows = KonsumenProgressSheetRow::query()->where('branch_id', $branch->id)->where('sheet_name', 'data_konsumen')->orderByDesc('id')->get()->filter(fn (KonsumenProgressSheetRow $row): bool => $this->ownership->allowsOperationalRow($branch, $row->ownership_status, $row->row_data ?? []));
         $maps = $resolver->lookupMaps($rows, $scopedProjectIds);
         $sheetSubjects = $rows->map(function (KonsumenProgressSheetRow $row) use ($maps, $resolver): ConsumerLeadLinkSubject {
             $data = collect($row->row_data ?? [])->mapWithKeys(fn ($value, $key): array => [Str::lower(trim((string) $key)) => is_scalar($value) ? trim((string) $value) : '']);

@@ -535,7 +535,7 @@ class AiToolRegistry
                 ->take(50)
                 ->with('branch:id')
                 ->get()
-                ->filter(fn (DatabaseSheetRecord $row): bool => $this->ownership->isOperationallyOwned($row->branch, $row->row_data ?? []))
+                ->filter(fn (DatabaseSheetRecord $row): bool => $this->ownership->allowsOperationalRow($row->branch, $row->ownership_status, $row->row_data ?? []))
                 ->filter(fn (DatabaseSheetRecord $row) => $this->projectAllowed($user, 'database', $row->branch_id, $this->firstValue($row->row_data ?? [], ['project_name', 'proyek', 'project'])))
                 ->take(10)
                 ->map(fn (DatabaseSheetRecord $row) => $this->serializeDatabaseRecord($row))

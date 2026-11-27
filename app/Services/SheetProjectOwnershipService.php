@@ -8,7 +8,10 @@ use Illuminate\Support\Str;
 
 final class SheetProjectOwnershipService
 {
-    /** @return array{rows: array<int, array>, row_indexes: array<int, int>, foreign_project_rows: int, unmapped_project_rows: int} */
+    /** @var array<int, array{owned: array<string, array<int, true>>, all: array<string, array<int, true>>, has_branch_scoped_projects: bool}> */
+    private array $labelsByBranch = [];
+
+    /** @return array{rows: array<int, array>, row_indexes: array<int, int>, all_rows: array<int, array>, all_row_indexes: array<int, int>, statuses: array<int, string>, foreign_project_rows: int, unmapped_project_rows: int} */
     public function filterRows(Branch $branch, array $rows): array
     {
         $labels = $this->labelsForBranch($branch);
@@ -16,31 +19,37 @@ final class SheetProjectOwnershipService
         $all = $labels['all'];
         $kept = [];
         $rowIndexes = [];
+        $allRows = [];
+        $allRowIndexes = [];
+        $allStatuses = [];
         $foreign = 0;
         $unmapped = 0;
 
         foreach ($rows as $index => $row) {
             $label = $this->projectLabel($row);
-            if ($label === '') {
-                $rowIndexes[] = (int) $index;
-                $kept[] = $row;
-
-                continue;
+            $status = 'unmapped';
+            if ($label !== '') {
+                $normalized = $this->normalize($label);
+                if (count($owned[$normalized] ?? []) >= 1 && count($all[$normalized] ?? []) === 1) {
+                    $status = 'owned';
+                } elseif (isset($all[$normalized])) {
+                    $status = 'foreign';
+                    $foreign++;
+                } else {
+                    $unmapped++;
+                }
             }
 
-            $normalized = $this->normalize($label);
-            if (count($owned[$normalized] ?? []) >= 1 && count($all[$normalized] ?? []) === 1) {
+            $allRows[] = $row;
+            $allRowIndexes[] = (int) $index;
+            $allStatuses[] = $status;
+            if ($status !== 'foreign') {
                 $rowIndexes[] = (int) $index;
-                $kept[] = $row;
-            } elseif (isset($all[$normalized])) {
-                $foreign++;
-            } else {
-                $unmapped++;
                 $kept[] = $row;
             }
         }
 
-        return ['rows' => $kept, 'row_indexes' => $rowIndexes, 'foreign_project_rows' => $foreign, 'unmapped_project_rows' => $unmapped];
+        return ['rows' => $kept, 'row_indexes' => $rowIndexes, 'all_rows' => $allRows, 'all_row_indexes' => $allRowIndexes, 'statuses' => $allStatuses, 'foreign_project_rows' => $foreign, 'unmapped_project_rows' => $unmapped];
     }
 
     public function isOwnedOrUnmapped(Branch $branch, array $row): bool
@@ -48,15 +57,30 @@ final class SheetProjectOwnershipService
         return $this->filterRows($branch, [$row])['rows'] !== [];
     }
 
+    public function isOperationallyOwnedByStatus(?string $status): bool
+    {
+        return $status === 'owned';
+    }
+
+    public function classify(Branch $branch, ?string $status, array $row): string
+    {
+        return $status ?? ($this->filterRows($branch, [$row])['statuses'][0] ?? 'unmapped');
+    }
+
+    public function allowsOperationalRow(Branch $branch, ?string $status, array $row): bool
+    {
+        return $status === 'owned' || ($status === null && $this->isOperationallyOwned($branch, $row));
+    }
+
     public function isOperationallyOwned(Branch $branch, array $row): bool
     {
         $label = $this->projectLabel($row);
+        $labels = $this->labelsForBranch($branch);
         if ($label === '') {
-            return true;
+            return ! $labels['has_branch_scoped_projects'];
         }
 
         $normalized = $this->normalize($label);
-        $labels = $this->labelsForBranch($branch);
 
         return ! $labels['has_branch_scoped_projects'] || (isset($labels['all'][$normalized])
             && count($labels['owned'][$normalized] ?? []) === 1
@@ -66,7 +90,11 @@ final class SheetProjectOwnershipService
     /** @return array{owned: array<string, array<int, true>>, all: array<string, array<int, true>>, has_branch_scoped_projects: bool} */
     private function labelsForBranch(Branch $branch): array
     {
-        return (function () use ($branch): array {
+        if (isset($this->labelsByBranch[$branch->id])) {
+            return $this->labelsByBranch[$branch->id];
+        }
+
+        return $this->labelsByBranch[$branch->id] = (function () use ($branch): array {
             $projects = LeadMaster::query()
                 ->where('is_active', true)
                 ->get(['id', 'branch_id', 'project_name', 'sheet_project_name', 'sheet_project_aliases']);

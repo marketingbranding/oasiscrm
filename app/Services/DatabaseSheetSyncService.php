@@ -79,7 +79,7 @@ class DatabaseSheetSyncService
                     $formulaColumns = $this->formulaColumns($headers, $formulas);
                     $columnMetadata = $this->metadataForHeaders($headers, $metadataBySheet[$sheetName] ?? []);
                     $insertRows = $this->buildRecords($branch, $sheetName, $headers, $values, $formulaColumns, $columnMetadata, $syncedAt);
-                    $summary[$sheetName] = count($insertRows['rows']);
+                    $summary[$sheetName] = count($insertRows['rows']) - $insertRows['foreign_project_rows'] - $insertRows['unmapped_project_rows'];
                     $summary[$sheetName.'_foreign_project_rows'] = $insertRows['foreign_project_rows'];
                     $summary[$sheetName.'_unmapped_project_rows'] = $insertRows['unmapped_project_rows'];
 
@@ -174,7 +174,7 @@ class DatabaseSheetSyncService
 
         $filtered = $this->ownership->filterRows($branch, array_column($rawRows, 'row_data'));
         $records = [];
-        foreach ($filtered['row_indexes'] as $rawIndex) {
+        foreach ($filtered['all_row_indexes'] as $filteredIndex => $rawIndex) {
             $rawRow = $rawRows[$rawIndex];
             $rowData = $rawRow['row_data'];
             $syncId = ($rowData['oasis_sync_id'] ?? '') ?: hash('sha256', $branch->id.'|'.$sheetName.'|'.$rawRow['row_number']);
@@ -190,6 +190,8 @@ class DatabaseSheetSyncService
                 'formula_columns' => json_encode($formulaColumns),
                 'column_metadata' => json_encode($columnMetadata),
                 'sync_status' => 'synced',
+                'ownership_status' => $filtered['statuses'][$filteredIndex],
+                'last_sync_error' => $filtered['statuses'][$filteredIndex] === 'foreign' ? 'Project bukan milik cabang; hanya arsip audit.' : null,
                 'last_synced_at' => $syncedAt,
                 'oasis_deleted_at' => $deletedAt,
                 'created_at' => now(),

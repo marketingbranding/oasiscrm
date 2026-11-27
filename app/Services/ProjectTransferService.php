@@ -88,9 +88,6 @@ final class ProjectTransferService
         if ($projects->isEmpty()) {
             $blockers[] = 'Proyek tidak ditemukan pada cabang asal.';
         }
-        if ($this->missingUserMapping($projects->pluck('id')->all(), $userMapping, $source->id)) {
-            $blockers[] = 'Mapping user proyek belum lengkap.';
-        }
 
         return [
             'source_branch_id' => $source->id,
@@ -181,10 +178,10 @@ final class ProjectTransferService
                 }
                 $this->moveProjectRows($batch, 'sales_leads', 'project_id', $projects->pluck('id')->all(), $lockedSource->id, $lockedTarget->id);
                 $this->moveLeadChildren($batch, $projects->pluck('id')->all(), $lockedSource->id, $lockedTarget->id);
+                $this->sweepLateProjectRows($batch, $projects->pluck('id')->all(), $lockedSource->id, $lockedTarget->id);
                 $this->moveProjectMemberships($batch, $projects->pluck('id')->all(), $lockedTarget->id, $userMapping);
                 $this->moveUsers($batch, $lockedSource->id, $lockedTarget->id, $projects->pluck('id')->all(), $userMapping);
                 $this->copyMigrationState($batch, $lockedSource->id, $lockedTarget->id);
-                $this->sweepLateProjectRows($batch, $projects->pluck('id')->all(), $lockedSource->id, $lockedTarget->id);
                 $batch->update(['executed_at' => now()]);
 
                 ActivityLog::query()->create([
@@ -212,9 +209,7 @@ final class ProjectTransferService
 
             return ['batch' => $batch->fresh('items'), 'impact' => $batch->impact_summary];
         } finally {
-            foreach ($maintenanceStarted as $module) {
-                $maintenance->disable($module, $actor);
-            }
+            $this->disableTransferMaintenance($maintenance, $actor, $maintenanceStarted);
         }
     }
 
@@ -331,9 +326,30 @@ final class ProjectTransferService
                 ]);
             });
         } finally {
-            foreach ($maintenanceStarted as $module) {
-                $maintenance->disable($module, $actor);
+            $this->disableTransferMaintenance($maintenance, $actor, $maintenanceStarted);
+        }
+    }
+
+    /** @return list<string> */
+    private function enableTransferMaintenance(ModuleMaintenanceService $maintenance, User $actor, string $message): array
+    {
+        $started = [];
+        foreach (self::MAINTENANCE_MODULES as $module) {
+            if ($maintenance->isUnderMaintenance($module)) {
+                continue;
             }
+            $maintenance->enable($module, $actor, ['message' => $message]);
+            $started[] = $module;
+        }
+
+        return $started;
+    }
+
+    /** @param list<string> $started */
+    private function disableTransferMaintenance(ModuleMaintenanceService $maintenance, User $actor, array $started): void
+    {
+        foreach ($started as $module) {
+            $maintenance->disable($module, $actor);
         }
     }
 
@@ -427,6 +443,14 @@ final class ProjectTransferService
                 }
             }
         }
+    }
+
+    private function finalSweep(ProjectTransferBatch $batch, array $projectIds, int $sourceBranchId, int $targetBranchId): void
+    {
+        foreach (self::PROJECT_TABLES as $table => $projectColumn) {
+            $this->moveProjectRows($batch, $table, $projectColumn, $projectIds, $sourceBranchId, $targetBranchId);
+        }
+        $this->moveLeadChildren($batch, $projectIds, $sourceBranchId, $targetBranchId);
     }
 
     private function moveProjectMemberships(ProjectTransferBatch $batch, array $projectIds, int $targetBranchId, array $mapping): void
@@ -621,11 +645,6 @@ final class ProjectTransferService
             'was_created' => false,
             'old_updated_at' => $old['updated_at'] ?? null,
         ]);
-    }
-
-    private function missingUserMapping(array $projectIds, array $mapping, ?int $sourceBranchId = null): bool
-    {
-        return false;
     }
 
     private function assertMapping(int $sourceBranchId, array $projectIds, array $mapping): void

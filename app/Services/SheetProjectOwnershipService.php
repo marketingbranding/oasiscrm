@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\Branch;
 use App\Models\LeadMaster;
+use App\Models\ProjectTransferBatch;
 use Illuminate\Support\Str;
 
 final class SheetProjectOwnershipService
@@ -69,7 +70,47 @@ final class SheetProjectOwnershipService
 
     public function allowsOperationalRow(Branch $branch, ?string $status, array $row): bool
     {
-        return $status === 'owned' || ($status === null && $this->isOperationallyOwned($branch, $row));
+        $project = $this->resolveUniqueProject($row);
+        if ($project === null) {
+            return $this->isOperationallyOwned($branch, $row);
+        }
+
+        $transfer = $this->latestTransfer($project);
+        if ($transfer === null || $transfer->rolled_back_at !== null || ! in_array($transfer->status, ['committed', 'completed', 'cache_failed'], true)) {
+            return $project->branch_id !== null && (int) $project->branch_id === (int) $branch->id;
+        }
+
+        return (int) $transfer->target_branch_id === (int) $branch->id;
+    }
+
+    private function resolveUniqueProject(array $row): ?LeadMaster
+    {
+        $label = $this->projectLabel($row);
+        if ($label === '') {
+            return null;
+        }
+
+        $normalized = $this->normalize($label);
+        $projects = LeadMaster::query()
+            ->where('is_active', true)
+            ->get(['id', 'branch_id', 'project_name', 'sheet_project_name', 'sheet_project_aliases'])
+            ->filter(function (LeadMaster $project) use ($normalized): bool {
+                $labels = [$project->project_name, $project->sheet_project_name, ...($project->sheet_project_aliases ?? [])];
+
+                return collect($labels)->contains(fn ($label): bool => $this->normalize((string) $label) === $normalized);
+            });
+
+        return $projects->count() === 1 ? $projects->first() : null;
+    }
+
+    private function latestTransfer(LeadMaster $project): ?ProjectTransferBatch
+    {
+        return ProjectTransferBatch::query()
+            ->whereJsonContains('project_ids', $project->id)
+            ->whereNotNull('executed_at')
+            ->latest('executed_at')
+            ->latest('id')
+            ->first(['source_branch_id', 'target_branch_id', 'rolled_back_at', 'status']);
     }
 
     public function isOperationallyOwned(Branch $branch, array $row): bool

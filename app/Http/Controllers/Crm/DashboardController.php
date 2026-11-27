@@ -15,6 +15,7 @@ use App\Services\KonsumenProgressSyncService;
 use App\Services\OrganizationScopeService;
 use App\Services\ProjectIdentityResolver;
 use App\Services\SalesWeeklyMetricsService;
+use App\Services\SheetProjectOwnershipService;
 use App\Services\WorkspaceAccessService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -27,6 +28,7 @@ class DashboardController extends Controller
         private readonly SalesWeeklyMetricsService $weeklyMetrics,
         private readonly DashboardConsumerMetricsService $consumerMetrics,
         private readonly ProjectIdentityResolver $projectIdentities,
+        private readonly SheetProjectOwnershipService $ownership,
     ) {}
 
     public function index(Request $request)
@@ -314,9 +316,9 @@ class DashboardController extends Controller
             $query->whereIn('branch_id', Branch::where('is_active', true)->pluck('id'));
         }
 
-        $rows = $query->where(function ($query): void {
-            $query->whereNull('ownership_status')->orWhere('ownership_status', 'owned');
-        })->get(['branch_id', 'sheet_name', 'row_data']);
+        $rows = $query->with('branch')->get(['branch_id', 'sheet_name', 'ownership_status', 'row_data'])
+            ->filter(fn (KonsumenProgressSheetRow $row): bool => $row->branch !== null
+                && $this->ownership->allowsOperationalRow($row->branch, $row->ownership_status, $row->row_data ?? []));
 
         $rowsBySheet = [];
         foreach ($rows as $row) {

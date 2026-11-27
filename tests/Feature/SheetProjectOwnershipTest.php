@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\Branch;
 use App\Models\DatabaseSheetRecord;
 use App\Models\LeadMaster;
+use App\Models\ProjectTransferBatch;
 use App\Models\Role;
 use App\Models\User;
 use App\Services\SheetProjectOwnershipService;
@@ -76,6 +77,96 @@ class SheetProjectOwnershipTest extends TestCase
         LeadMaster::create(['branch_id' => $otherBranch->id, 'project_name' => 'Proyek Lain', 'is_active' => true]);
 
         $this->assertFalse(app(SheetProjectOwnershipService::class)->isOperationallyOwned($branch, ['project_name' => 'Belum Terdaftar']));
+    }
+
+    public function test_br31_unique_project_ignores_stale_cache_status_for_current_owner(): void
+    {
+        $branch = $this->branch('Asal', 'ASL', 'sheet-asal');
+        LeadMaster::create(['branch_id' => $branch->id, 'project_name' => 'Proyek Asal', 'is_active' => true]);
+
+        $service = app(SheetProjectOwnershipService::class);
+
+        $this->assertTrue($service->allowsOperationalRow($branch, 'foreign', ['project_name' => 'Proyek Asal']));
+        $this->assertTrue($service->allowsOperationalRow($branch, 'unmapped', ['project_name' => 'Proyek Asal']));
+    }
+
+    public function test_br31_active_transfer_uses_latest_owner_not_cache_status(): void
+    {
+        $source = $this->branch('Asal', 'ASL', 'sheet-asal');
+        $target = $this->branch('Tujuan', 'TJN', 'sheet-tujuan');
+        $actor = User::factory()->create(['role_id' => Role::query()->where('slug', 'superadmin')->value('id')]);
+        $project = LeadMaster::create(['branch_id' => $target->id, 'project_name' => 'Proyek Pindah', 'is_active' => true]);
+        ProjectTransferBatch::query()->create([
+            'source_branch_id' => $source->id,
+            'target_branch_id' => $target->id,
+            'created_by' => $actor->id,
+            'project_ids' => [$project->id],
+            'user_mapping' => [],
+            'status' => 'cache_failed',
+            'executed_at' => now(),
+        ]);
+
+        $service = app(SheetProjectOwnershipService::class);
+
+        $this->assertFalse($service->allowsOperationalRow($source, 'owned', ['project_name' => 'Proyek Pindah']));
+        $this->assertTrue($service->allowsOperationalRow($target, 'unmapped', ['project_name' => 'Proyek Pindah']));
+    }
+
+    public function test_br31_rolled_back_transfer_uses_current_project_owner(): void
+    {
+        $source = $this->branch('Asal', 'ASL', 'sheet-asal');
+        $target = $this->branch('Tujuan', 'TJN', 'sheet-tujuan');
+        $actor = User::factory()->create(['role_id' => Role::query()->where('slug', 'superadmin')->value('id')]);
+        $project = LeadMaster::create(['branch_id' => $source->id, 'project_name' => 'Proyek Kembali', 'is_active' => true]);
+        ProjectTransferBatch::query()->create([
+            'source_branch_id' => $source->id,
+            'target_branch_id' => $target->id,
+            'created_by' => $actor->id,
+            'project_ids' => [$project->id],
+            'user_mapping' => [],
+            'status' => 'rolled_back',
+            'executed_at' => now(),
+            'rolled_back_at' => now(),
+        ]);
+
+        $service = app(SheetProjectOwnershipService::class);
+
+        $this->assertTrue($service->allowsOperationalRow($source, 'foreign', ['project_name' => 'Proyek Kembali']));
+        $this->assertFalse($service->allowsOperationalRow($target, 'owned', ['project_name' => 'Proyek Kembali']));
+    }
+
+    public function test_br31_unknown_and_ambiguous_labels_do_not_get_guessed(): void
+    {
+        $branch = $this->branch('Asal', 'ASL', 'sheet-asal');
+        $otherBranch = $this->branch('Lain', 'LAIN', 'sheet-lain');
+        LeadMaster::create(['branch_id' => $branch->id, 'project_name' => 'Nama Sama', 'is_active' => true]);
+        LeadMaster::create(['branch_id' => $otherBranch->id, 'project_name' => 'Nama Sama', 'is_active' => true]);
+        $service = app(SheetProjectOwnershipService::class);
+
+        $this->assertFalse($service->allowsOperationalRow($branch, 'unmapped', ['project_name' => 'Tidak Terdaftar']));
+        $this->assertFalse($service->allowsOperationalRow($branch, 'foreign', ['project_name' => 'Nama Sama']));
+    }
+
+    public function test_br31_database_sheet_reads_use_current_project_ownership_not_stale_status(): void
+    {
+        $branch = $this->branch('Asal', 'ASL', 'sheet-asal');
+        LeadMaster::create(['branch_id' => $branch->id, 'project_name' => 'Proyek Asal', 'is_active' => true]);
+        DatabaseSheetRecord::create([
+            'branch_id' => $branch->id,
+            'sheet_id' => $branch->sheet_id,
+            'sheet_name' => 'data_konsumen',
+            'row_number' => 2,
+            'row_data' => ['project_name' => 'Proyek Asal'],
+            'headers' => ['project_name'],
+            'formula_columns' => [],
+            'column_metadata' => [],
+            'ownership_status' => 'unmapped',
+        ]);
+        $user = User::factory()->create(['role_id' => Role::query()->where('slug', 'superadmin')->value('id'), 'password_changed_at' => now()]);
+
+        $response = $this->actingAs($user)->getJson(route('database.sheet', ['branchId' => $branch->id, 'sheetName' => 'data_konsumen']));
+
+        $response->assertOk()->assertJsonCount(1, 'records');
     }
 
     public function test_br31_database_sheet_and_pipeline_reads_exclude_unmapped_and_foreign_rows(): void

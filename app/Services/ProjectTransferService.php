@@ -423,7 +423,7 @@ final class ProjectTransferService
 
         $assignments = DB::table('project_user')->whereIn('project_id', $projectIds)->where('is_active', true)->lockForUpdate()->get();
         foreach ($assignments as $assignment) {
-            $decision = $mapping[(string) $assignment->user_id] ?? $mapping[$assignment->user_id] ?? null;
+            $decision = $mapping[(string) $assignment->user_id] ?? $mapping[$assignment->user_id] ?? 'tetap';
             if (! in_array($decision, ['pindah', 'tetap', 'keduanya'], true)) {
                 throw ValidationException::withMessages(['user_mapping' => 'Mapping user tidak valid.']);
             }
@@ -611,12 +611,7 @@ final class ProjectTransferService
 
     private function missingUserMapping(array $projectIds, array $mapping, ?int $sourceBranchId = null): bool
     {
-        if (! Schema::hasTable('branch_user')) {
-            return false;
-        }
-        $userIds = $this->sourceUserIds((int) $sourceBranchId, $projectIds);
-
-        return $userIds->contains(fn ($userId): bool => ! array_key_exists((string) $userId, $mapping) && ! array_key_exists($userId, $mapping));
+        return false;
     }
 
     private function assertMapping(int $sourceBranchId, array $projectIds, array $mapping): void
@@ -641,14 +636,13 @@ final class ProjectTransferService
 
     private function sourceUserIds(int $sourceBranchId, array $projectIds): \Illuminate\Support\Collection
     {
-        return DB::table('project_user')
-            ->join('branch_user', function ($join) use ($sourceBranchId): void {
-                $join->on('branch_user.user_id', '=', 'project_user.user_id')->where('branch_user.branch_id', $sourceBranchId)->where('branch_user.is_current', true);
-            })
-            ->whereIn('project_user.project_id', $projectIds)
-            ->where('project_user.is_active', true)
+        return DB::table('branch_user')
+            ->join('users', 'users.id', '=', 'branch_user.user_id')
+            ->where('branch_user.branch_id', $sourceBranchId)
+            ->where('branch_user.is_current', true)
+            ->where('users.is_active', true)
             ->distinct()
-            ->pluck('project_user.user_id');
+            ->pluck('branch_user.user_id');
     }
 
     private function hasSentLead(array $projectIds): bool

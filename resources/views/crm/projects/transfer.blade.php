@@ -91,8 +91,7 @@ function projectTransfer(config) {
         ...config, sourceId: '', targetId: '', projectIds: [], userMapping: {}, confirmation: '', previewData: null, busy: false, error: '',
         get sourceProjects() { return this.projects.filter(project => String(project.branch_id) === String(this.sourceId)); },
         get mappedUsers() {
-            const userIds = new Set(this.sourceProjects.flatMap(project => project.user_ids || []).map(String));
-            return (this.branches.find(branch => String(branch.id) === String(this.sourceId))?.users || []).filter(user => userIds.has(String(user.id)));
+            return this.branches.find(branch => String(branch.id) === String(this.sourceId))?.users || [];
         },
         get targetName() { return this.branches.find(branch => String(branch.id) === String(this.targetId))?.name || ''; },
         get canPreview() { return this.sourceId && this.targetId && this.projectIds.length && this.sourceId !== this.targetId; },

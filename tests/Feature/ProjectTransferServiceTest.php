@@ -61,6 +61,31 @@ class ProjectTransferServiceTest extends TestCase
         $this->assertSame($target->id, DB::table('users')->where('id', $sales->id)->value('branch_id'));
     }
 
+    public function test_br31_active_branch_user_without_project_assignment_defaults_to_tetap_and_can_move_without_role_change(): void
+    {
+        $source = $this->branch('Batang', 'BAT', 'sheet-batang');
+        $target = $this->branch('Tegal', 'TEG', 'sheet-tegal');
+        $project = LeadMaster::query()->create(['branch_id' => $source->id, 'project_name' => 'UAT-Tegal', 'is_active' => true]);
+        $supervisor = $this->user('supervisor', $source);
+        $roleId = $supervisor->role_id;
+
+        $preview = app(ProjectTransferService::class)->preview($this->user('superadmin', $source), $source, $target, [$project->id], []);
+        $this->assertSame([], $preview['blockers']);
+
+        app(ProjectTransferService::class)->execute($this->user('superadmin', $source), $source, $target, [$project->id], [$supervisor->id => 'pindah']);
+
+        $this->assertDatabaseHas('users', ['id' => $supervisor->id, 'branch_id' => $target->id, 'role_id' => $roleId]);
+        $this->assertDatabaseHas('branch_user', [
+            'user_id' => $supervisor->id,
+            'branch_id' => $target->id,
+            'is_current' => true,
+            'can_view' => true,
+            'can_edit' => true,
+            'can_sync' => true,
+            'can_manage_members' => false,
+        ]);
+    }
+
     public function test_project_membership_mapping_preserves_keduanya_and_archives_tetap_assignment(): void
     {
         $source = $this->branch('Batang', 'BAT', 'sheet-batang');
